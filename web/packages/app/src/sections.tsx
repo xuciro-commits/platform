@@ -29,6 +29,7 @@ import { recordSlot, filterOwner, filtersForOwner, filterSessionBindings, select
 import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
+const HistogramRenderer=lazy(()=>import("./widgets/Histogram").then(module=>({default:module.HistogramRenderer})));
 const TermCountsRenderer=lazy(()=>import("./widgets/TermCounts").then(module=>({default:module.TermCountsRenderer})));
 const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
 const RecordPickerRenderer=lazy(()=>import("./widgets/RecordPicker").then(module=>({default:module.RecordPickerRenderer})));
@@ -414,6 +415,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
+ histogram:({page,section,window,aggregateScope})=>{const {source}=useHost();return <HistogramRenderer object={objectOf(page,section)} window={window} fields={section.histogram} label={section.title||t("Histogram")} info={source.entity(objectOf(page,section))} source={source.aggregate?{aggregate:source.aggregate,scope:aggregateScope??source.scope,revision:source.revision}:undefined}/>;},
  "term-counts":({page,section,window,aggregateScope})=>{const {source}=useHost();return <TermCountsRenderer object={objectOf(page,section)} window={window} field={section.group??""} label={section.title||t("Term counts")} info={source.entity(objectOf(page,section))} source={source.aggregate?{aggregate:source.aggregate,scope:aggregateScope??source.scope,revision:source.revision}:undefined}/>;},
  "record-picker":({page,section,window,selected,enabled,onSelect,pickerValue,onPickerID,pickerConfirmation})=><RecordPickerRenderer type={objectOf(page,section)} window={window} fields={section.recordPicker} title={section.title||t("Record picker")} selected={selected} enabled={enabled} confirmation={section.pickerValueVariable?pickerConfirmation:undefined} value={section.pickerValueVariable?pickerValue:undefined} onSelect={onPickerID??onSelect}/>,
  spacer:({section})=><SpacerRenderer config={section.spacer}/>,

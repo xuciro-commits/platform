@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Histogram": "直方图",
+ "Histogram field or bins are unavailable or incompatible.": "直方图字段或箱数不可用或不兼容。",
+ "Histogram could not be loaded.": "无法读取直方图。",
+ "Loading histogram…": "正在读取直方图…",
+ "Distribution covers all matching authorized records.": "分布覆盖全部匹配的授权记录。",
+
  "Term counts": "词条计数",
  "Term count field is unavailable or incompatible.": "词条计数字段不可用或不兼容。",
  "Term counts could not be loaded.": "无法读取词条计数。",

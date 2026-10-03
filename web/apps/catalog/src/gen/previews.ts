@@ -52,6 +52,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/form": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Forms })),
   "ui/gauge": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.GaugeExample })),
   "ui/graph": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Graphs })),
+  "ui/histogram": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.HistogramExample })),
   "ui/input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Inputs })),
   "ui/layout-region": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SizedLayouts })),
   "ui/lifecycle": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Lifecycle })),

@@ -51,7 +51,7 @@ export type ChartSpec = {
 
 /** A host aggregate's answer (`GET /v1/aggregates/<type>`). */
 export type AggregateColumn = { name: string; title: string; kind: "group" | "measure"; type: MeasureType; field?: string; money?: boolean };
-export type AggregateData = { columns: AggregateColumn[]; rows: Record<string, unknown>[] };
+export type AggregateData = { histogram?:Api.HistogramResult; columns: AggregateColumn[]; rows: Record<string, unknown>[] };
 export type AggregateQuery = Omit<Api.AggregateQuery,"domain"> & {domain?:unknown[]};
 
 export const markOf = (spec: ChartSpec) => (typeof spec.mark === "string" ? { type: spec.mark } : spec.mark);

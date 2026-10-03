@@ -9,7 +9,8 @@
     "./styles.css": "./src/styles.css",
     "./range": "./src/components/range.ts",
     "./choices": "./src/components/choice.ts",
-    "./date": "./src/components/date.ts"
+    "./date": "./src/components/date.ts",
+    "./histogram": "./src/components/histogram-data.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

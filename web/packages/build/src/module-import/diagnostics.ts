@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "histogram-binding":"Map an original integer or decimal field, scoped query plan and 1–64 integer bins. Coercion, executable sources and unsupported settings are refused.",
+ "native-histogram":"Bins count all matching authorized numeric values, with missing values reported separately. Integer precision and exact rational boundaries are preserved; decimals retain native storage precision. Empty data has no fake range; constant data uses one closed interval. Source Number-to-zero coercion and window-only counts are not imported.",
  "terms-binding":"Map an original visible text or choice field and scoped query plan. Count-name collisions, coercion, executable sources and unsupported settings are refused.",
  "native-prominent-terms":"Counts come from all matching authorized records, not the current window. Up to 64 complete groups are frequency-scaled; excess groups are refused. Ties keep host group order; empty text, null and literal dashes remain distinct. Labels are literal and no source prototype-key counter executes.",
  "exploration-search-binding":"Bind original page or overlay text state to a same-owner query search. Unbound, executable, coerced and unsupported source settings are refused.",

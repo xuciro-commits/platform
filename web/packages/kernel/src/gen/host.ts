@@ -93,11 +93,13 @@ export type AgentRunRecord = {
 };
 
 export type Aggregate = {
+  histogram?: HistogramResult;
   columns: Column[];
   rows: Record<string, unknown>[];
 };
 
 export type AggregateQuery = {
+  histogram?: HistogramQuery;
   maxRows?: number;
   traversal?: LinkTraversal;
   set?: QuerySet;
@@ -644,6 +646,28 @@ export type FunctionRun = {
   withheld?: boolean;
 };
 
+export type HistogramBucket = {
+  lower: string;
+  upper: string;
+  upperInclusive: boolean;
+  count: number;
+};
+
+export type HistogramQuery = {
+  field: string;
+  bins: number;
+};
+
+export type HistogramResult = {
+  field: string;
+  requestedBins: number;
+  valid: number;
+  missing: number;
+  minimum: string;
+  maximum: string;
+  buckets: HistogramBucket[];
+};
+
 export type Hit = {
   type: string;
   id: string;
@@ -968,6 +992,11 @@ export type PageGauge = {
   warnAt?: number;
   label?: string;
   suffix?: string;
+};
+
+export type PageHistogram = {
+  field: string;
+  bins: number;
 };
 
 export type PageInlineEdit = {
@@ -1482,6 +1511,7 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  histogram?: PageHistogram;
   inputKind?: string;
   pickerValueVariable?: string;
   recordPicker?: PageRecordPicker;
@@ -1842,7 +1872,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.67",
+  "uiProfile": "platform.page.v2.68",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4587,6 +4617,60 @@ export const pageUIManifest = {
           "scope-close"
         ]
       }
+    },
+    {
+      "componentID": "histogram",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.68",
+      "title": "Histogram",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "records",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.68"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "hidden": "unmount",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -4656,7 +4740,8 @@ export const pageUIManifest = {
     "platform.page.v2.64",
     "platform.page.v2.65",
     "platform.page.v2.66",
-    "platform.page.v2.67"
+    "platform.page.v2.67",
+    "platform.page.v2.68"
   ],
   "runtime": {
     "scope": "page",
@@ -5196,6 +5281,10 @@ export const pageUIManifest = {
     "terms": {
       "requiredUIProfile": "platform.page.v2.67",
       "maxGroups": 64
+    },
+    "histogram": {
+      "requiredUIProfile": "platform.page.v2.68",
+      "maxBins": 64
     }
   },
   "layout": {

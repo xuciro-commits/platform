@@ -1,5 +1,15 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Histogram": "直方图",
+ "Numeric distribution": "数值分布",
+ "Present complete caller-owned bins with exact bounds, counts and missing-value disclosure.": "呈现调用方拥有的完整分箱、精确边界、计数及缺值说明。",
+ "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records.": "调用方拥有授权完整分箱；控件校验区间和计数，不重新分箱，也不写入记录。",
+ "Histogram result is invalid or incomplete.": "直方图结果无效或不完整。",
+ "No numeric values in the matching records.": "匹配记录中没有有效数值。",
+ "Missing values excluded: {count}": "已排除缺值：{count}",
+ "{count} numeric values · {bins} bins": "{count} 个有效数值 · {bins} 个箱",
+ "Constant values share one closed interval.": "常量值共用一个闭区间。",
+
  "Counted term labels": "计数词条标签",
  "Present complete caller-owned counts as bounded frequency-scaled literal labels.": "将调用方拥有的完整计数呈现为有界、按频次缩放的字面词条标签。",
  "The caller owns authorized complete counts and stable order. Empty text and null remain distinct; this control performs no queries or mutations.": "调用方拥有授权完整计数和稳定顺序；空文本与空值保持区分，此控件不查询或修改数据。",

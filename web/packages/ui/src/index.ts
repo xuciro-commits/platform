@@ -1,3 +1,5 @@
+export {Histogram} from "./components/Histogram";
+export {validHistogram} from "./components/histogram-data";
 export {TermCounts,type TermCount} from "./components/TermCounts";
 export {SearchInput} from "./components/SearchInput";
 export { t, language, languages, setLanguage, register, type Dictionary } from "./i18n";

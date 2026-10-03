@@ -40,3 +40,7 @@ test("a bounded direct aggregate posts its row budget and never retries as an un
  const fetcher=vi.fn(async(url:string,options:RequestInit)=>{expect(url).toBe("https://test.invalid/v1/aggregates/sample.note/query");expect(options.method).toBe("POST");expect(JSON.parse(String(options.body))).toEqual(query);return new Response("Budget refused",{status:400});});vi.stubGlobal("fetch",fetcher);
  await expect(client().aggregate("sample.note",query)).rejects.toThrow("HTTP 400");expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+test("a histogram request always posts its complete predicates and bin contract",async()=>{
+ const query={histogram:{field:"pressure",bins:12},domain:[["status","=","active"]],search:"asset"};const fetcher=vi.fn(async(url:string,options:RequestInit)=>{expect(url).toBe("https://test.invalid/v1/aggregates/sample.note/query");expect(options.method).toBe("POST");expect(JSON.parse(String(options.body))).toEqual(query);return new Response(JSON.stringify({columns:[],rows:[],histogram:{}}));});vi.stubGlobal("fetch",fetcher);await client().aggregate("sample.note",query);expect(fetcher).toHaveBeenCalledTimes(1);
+});

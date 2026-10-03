@@ -753,7 +753,7 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 		}
 		asset, ok := lookup[ref]
 		info, err := queryObjectDescriptor(asset.Body)
-		if !ok || err != nil || page.Document == nil || s.CheckTimeline(info) != nil || s.CheckKanban(info) != nil || s.CheckStatusTracker(info) != nil || s.CheckMetricPresentation(info) != nil || s.CheckRecordList(info) != nil || s.CheckRecordChart(info) != nil || s.CheckRecordEvents(info) != nil || s.CheckRecordPicker(info) != nil || s.CheckLeaderboard(info) != nil || s.CheckTerms(info) != nil || s.CheckSummary(info) != nil || s.CheckRecordGantt(info) != nil || s.CheckRecordCalendar(info) != nil {
+		if !ok || err != nil || page.Document == nil || s.CheckTimeline(info) != nil || s.CheckKanban(info) != nil || s.CheckStatusTracker(info) != nil || s.CheckMetricPresentation(info) != nil || s.CheckRecordList(info) != nil || s.CheckRecordChart(info) != nil || s.CheckRecordEvents(info) != nil || s.CheckRecordPicker(info) != nil || s.CheckLeaderboard(info) != nil || s.CheckHistogram(info) != nil || s.CheckTerms(info) != nil || s.CheckSummary(info) != nil || s.CheckRecordGantt(info) != nil || s.CheckRecordCalendar(info) != nil {
 			return fmt.Errorf("frozen %s schema is unavailable", s.Widget)
 		}
 	}

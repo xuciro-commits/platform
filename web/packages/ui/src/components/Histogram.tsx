@@ -1,0 +1,10 @@
+import {useState} from "react";
+import type {Api} from "@platform/kernel";
+import {t} from "../i18n";
+import {validHistogram} from "./histogram-data";
+export function Histogram({value,label}:{value:Api.HistogramResult;label:string}){
+ const [active,setActive]=useState<number|undefined>();if(!validHistogram(value))return <p role="alert">{t("Histogram result is invalid or incomplete.")}</p>;
+ if(!value.valid)return <div className="grid gap-1"><p role="status">{t("No numeric values in the matching records.")}</p>{value.missing>0&&<p className="text-xs text-muted">{t("Missing values excluded: {count}",{count:value.missing})}</p>}</div>;
+ const maximum=Math.max(1,...value.buckets.map(b=>b.count)),range=(i:number)=>{const b=value.buckets[i]!;return `${b.lower} ≤ x ${b.upperInclusive?"≤":"<"} ${b.upper}: ${b.count}`;};
+ return <div className="grid min-w-0 gap-2"><ul aria-label={label} className="flex h-32 min-w-0 list-none items-end gap-0.5">{value.buckets.map((bucket,i)=><li key={i} tabIndex={0} aria-label={range(i)} onMouseEnter={()=>setActive(i)} onMouseLeave={()=>setActive(undefined)} onFocus={()=>setActive(i)} onBlur={()=>setActive(undefined)} className="min-w-0 flex-1 bg-primary/80 focus-visible:outline-2 focus-visible:outline-ring" style={{height:`${100*bucket.count/maximum}%`,minHeight:1}}><span className="sr-only">{range(i)}</span></li>)}</ul><div className="flex min-w-0 justify-between gap-2 text-xs text-muted"><span className="min-w-0 break-all">{value.minimum}</span><span className="min-w-0 break-all text-right">{value.maximum}</span></div><p role="status" className="break-words text-xs">{active!==undefined&&value.buckets[active]?range(active):t("{count} numeric values · {bins} bins",{count:value.valid,bins:value.buckets.length})}</p>{value.minimum===value.maximum&&<p className="text-xs text-muted">{t("Constant values share one closed interval.")}</p>}{value.missing>0&&<p className="text-xs text-muted">{t("Missing values excluded: {count}",{count:value.missing})}</p>}</div>;
+}

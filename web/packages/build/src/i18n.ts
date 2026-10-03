@@ -2,6 +2,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Histogram": "直方图",
+ "Histogram numeric field": "直方图数值字段",
+ "Histogram bin count": "直方图箱数",
+ "Histogram query window": "直方图查询窗口",
+ "Use complete authorized numeric values. Missing values are excluded; constant values share one bin.": "使用完整授权数值；缺值排除，常量值共用一个箱。",
+ "Map an original integer or decimal field, scoped query plan and 1–64 integer bins. Coercion, executable sources and unsupported settings are refused.": "映射原整数或decimal字段、局部查询计划及1至64的整数箱数；强制转换、执行来源及不支持的设置会被拒绝。",
+ "Bins count all matching authorized numeric values, with missing values reported separately. Integer precision and exact rational boundaries are preserved; decimals retain native storage precision. Empty data has no fake range; constant data uses one closed interval. Source Number-to-zero coercion and window-only counts are not imported.": "分箱计数覆盖全部匹配授权数值，并单独报告缺值；整数精度和有理数边界保留，decimal沿用原存储精度；空数据不造范围，常量使用一个闭区间；不导入来源强制置零和只按窗口计数的逻辑。",
+
  "Term counts": "词条计数",
  "Term count field": "词条计数字段",
  "Term query window": "词条查询窗口",

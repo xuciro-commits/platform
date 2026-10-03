@@ -446,6 +446,10 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := s.CheckLeaderboard(info); err != nil {
 				return err
 			}
+		case "histogram":
+			if err := s.CheckHistogram(info); err != nil {
+				return err
+			}
 		case "term-counts":
 			if err := s.CheckTerms(info); err != nil {
 				return err

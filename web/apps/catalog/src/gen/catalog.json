@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:37e75a84eea58be1",
+  "revision": "sha256:8e6c322e463c853d",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1599,6 +1599,33 @@
       ]
     },
     {
+      "id": "ui/histogram",
+      "owner": "@platform/ui",
+      "name": "Numeric distribution",
+      "summary": "Present complete caller-owned bins with exact bounds, counts and missing-value disclosure.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/Histogram.tsx",
+      "exports": [
+        "Histogram",
+        "validHistogram"
+      ],
+      "example": "HistogramExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "histogram",
+        "distribution",
+        "bins"
+      ],
+      "constraints": [
+        "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records."
+      ]
+    },
+    {
       "id": "ui/input",
       "owner": "@platform/ui",
       "name": "Input controls",
@@ -2825,6 +2852,7 @@
       "Multiple choices": "多项选择",
       "Named record selections keep same-object lists independent; parent bindings scope related sections.": "具名记录选择让同一对象的多个列表互不干扰；父来源绑定限定关联区块的范围。",
       "Notifications": "通知",
+      "Numeric distribution": "数值分布",
       "Object design workbench": "对象设计工作台",
       "Observe relationships and execution paths through the shared canvas.": "通过共享画布观察关系和执行路径。",
       "Offset datetime input": "带偏移的日期时间输入",
@@ -2849,6 +2877,7 @@
       "Present caller-owned plain text with an accessible semantic tone.": "以可访问的语义色调呈现调用方拥有的纯文本。",
       "Present caller-owned static choices as a select, radio group or segmented control.": "以下拉、单选组或分段控件呈现调用方拥有的静态选项。",
       "Present caller-owned string selections through shared toggles without dropping unmatched values.": "通过共享多选控件呈现调用方拥有的字符串集合，不丢弃未匹配值。",
+      "Present complete caller-owned bins with exact bounds, counts and missing-value disclosure.": "呈现调用方拥有的完整分箱、精确边界、计数及缺值说明。",
       "Present complete caller-owned counts as bounded frequency-scaled literal labels.": "将调用方拥有的完整计数呈现为有界、按频次缩放的字面词条标签。",
       "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
       "Present ordered original business events with explicit time and severity tones.": "以显式时间及严重度色调呈现排序后的原业务事件。",
@@ -2920,6 +2949,7 @@
       "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
       "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.": "92 类型迁移清单不授予运行资格。八种源组件已有有限配置方案，未支持配置阻止应用。",
+      "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records.": "调用方拥有授权完整分箱；控件校验区间和计数，不重新分箱，也不写入记录。",
       "The caller owns authorized complete counts and stable order. Empty text and null remain distinct; this control performs no queries or mutations.": "调用方拥有授权完整计数和稳定顺序；空文本与空值保持区分，此控件不查询或修改数据。",
       "The caller owns authorized options, counts and typed selected values.": "调用方管理授权选项、计数和类型化选中值。",
       "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
@@ -3079,6 +3109,7 @@
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/HistogramInspector.tsx",
       "web/packages/build/src/page-editor/widgets/InlineActionInspector.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",
@@ -3173,6 +3204,7 @@
       "web/packages/app/src/widgets/DateInput.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/Gauge.tsx",
+      "web/packages/app/src/widgets/Histogram.tsx",
       "web/packages/app/src/widgets/Kanban.tsx",
       "web/packages/app/src/widgets/Leaderboard.tsx",
       "web/packages/app/src/widgets/Notice.tsx",
@@ -3441,6 +3473,9 @@
     "ui/gauge": [
       "web/packages/app/src/widgets/Gauge.tsx",
       "web/packages/build/src/editor.tsx"
+    ],
+    "ui/histogram": [
+      "web/packages/app/src/widgets/Histogram.tsx"
     ],
     "ui/record-kanban": [
       "web/packages/app/src/widgets/Kanban.tsx"

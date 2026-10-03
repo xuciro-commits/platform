@@ -43,6 +43,10 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Histogram struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+		MaxBins           int    `json:"maxBins"`
+	} `json:"histogram"`
 	Terms struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 		MaxGroups         int    `json:"maxGroups"`

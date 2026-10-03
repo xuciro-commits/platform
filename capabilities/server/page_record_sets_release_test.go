@@ -345,6 +345,12 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	termsRoot := doc.Nodes[doc.Root]
 	termsRoot.Children = append(termsRoot.Children, "terms")
 	doc.Nodes[doc.Root] = termsRoot
+	histIndex := len(sections)
+	sections = append(sections, build.Section{ID: "hist", Widget: "histogram", ConfigVersion: 1, CollectionVariable: "pickerWindow", Histogram: &platform.PageHistogram{Field: "amount", Bins: 12}})
+	doc.Nodes["hist"] = platform.PageLayoutNode{Kind: "widget", Section: "hist"}
+	histRoot := doc.Nodes[doc.Root]
+	histRoot.Children = append(histRoot.Children, "hist")
+	doc.Nodes[doc.Root] = histRoot
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -370,6 +376,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[histIndex].Histogram = &platform.PageHistogram{Field: "sensitive", Bins: 2}
 	sections[termsIndex].Group = "secret"
 	sections[searchIndex].InputKind = ""
 	doc.Variables["searchState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("later draft")}
@@ -491,6 +498,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					}
 					if !alertFound || member.ID == builder.ID && privateAlerts != 1 || member.ID != builder.ID && privateAlerts != 0 {
 						t.Fatal("frozen alert config, count binding or private dependency changed")
+					}
+					histFound := false
+					for _, section := range d.Page.Sections {
+						if section.ID == "hist" {
+							histFound = section.Histogram != nil && section.Histogram.Field == "amount" && section.Histogram.Bins == 12 && section.CollectionVariable == "pickerWindow"
+						}
+					}
+					if !histFound {
+						t.Fatal("frozen histogram field, bins or plan changed")
 					}
 					termsFound := false
 					for _, section := range d.Page.Sections {

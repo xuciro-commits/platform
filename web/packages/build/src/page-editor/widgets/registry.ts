@@ -1,3 +1,4 @@
+import {HistogramInspector} from "./HistogramInspector";
 import {TermsInspector} from "./TermsInspector";
 import {SpacerInspector} from "./SpacerInspector";
 import {SeparatorInspector} from "./SeparatorInspector";
@@ -36,6 +37,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ histogram:{configVersion:1,bindings:HistogramInspector},
  "term-counts":{configVersion:1,bindings:TermsInspector},
  "record-picker":{configVersion:1,bindings:RecordPickerInspector},
  spacer:{configVersion:1,bindings:SpacerInspector},

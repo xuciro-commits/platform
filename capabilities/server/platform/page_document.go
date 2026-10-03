@@ -96,6 +96,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.Widget == "record-leaderboard" || s.Leaderboard != nil {
 				return fmt.Errorf("leaderboard needs a document")
 			}
+			if s.Widget == "histogram" || s.Histogram != nil {
+				return fmt.Errorf("histogram requires a page document")
+			}
 			if s.Widget == "term-counts" {
 				return fmt.Errorf("term counts require a page document")
 			}
@@ -231,6 +234,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkLeaderboard(section); err != nil {
+			return err
+		}
+		if err := d.checkHistogram(section); err != nil {
 			return err
 		}
 		if err := d.checkTerms(section); err != nil {

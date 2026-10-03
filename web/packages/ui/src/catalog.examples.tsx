@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -351,3 +351,5 @@ export function SpacerExample(){return <div className="grid"><p>{t("Operator ins
 export function SearchInputExample(){const [value,setValue]=useState("");return <SearchInput aria-label="Asset search" value={value} onChange={setValue} scope={["Assets"]}/>;}
 
 export function TermCountsExample(){return <TermCounts label="Status terms" terms={[{value:"Active",count:24},{value:"Warning",count:8},{value:"",count:2},{value:null,count:1}]}/>;}
+
+export function HistogramExample(){return <Histogram label="Values" value={{field:"value",requestedBins:3,valid:8,missing:1,minimum:"0",maximum:"1",buckets:[{lower:"0",upper:"1/3",upperInclusive:false,count:2},{lower:"1/3",upper:"2/3",upperInclusive:false,count:5},{lower:"2/3",upper:"1",upperInclusive:true,count:1}]}}/>;}
