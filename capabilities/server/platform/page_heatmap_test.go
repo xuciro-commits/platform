@@ -57,7 +57,7 @@ func TestFrozenAnalysisWidgetsCheckOriginalFieldSchemas(t *testing.T) {
 	for _, tc := range []struct {
 		section Section
 		missing string
-	}{{Section{Widget: "heatmap", Group: "state", ColumnGroup: "priority", Measure: "count"}, "priority"}, {Section{Widget: "record-scatter", Scatter: &PageRecordScatter{XField: "x", YField: "y", ColorField: "state", LabelField: "name"}}, "x"}, {Section{Widget: "histogram", Histogram: &PageHistogram{Field: "amount", Bins: 4}}, "amount"}, {Section{Widget: "term-counts", Group: "name"}, "name"}, {Section{Widget: "treemap", Group: "name"}, "name"}, {Section{Widget: "sparkline-kpi", CollectionVariable: "window", Sparkline: &PageSparkline{Field: "x"}}, "x"}} {
+	}{{Section{Widget: "heatmap", Group: "state", ColumnGroup: "priority", Measure: "count"}, "priority"}, {Section{Widget: "record-scatter", Scatter: &PageRecordScatter{XField: "x", YField: "y", ColorField: "state", LabelField: "name"}}, "x"}, {Section{Widget: "histogram", Histogram: &PageHistogram{Field: "amount", Bins: 4}}, "amount"}, {Section{Widget: "term-counts", Group: "name"}, "name"}, {Section{Widget: "treemap", Group: "name"}, "name"}, {Section{Widget: "record-card", RecordCard: &PageRecordCard{LabelField: "name", Tone: "info"}}, "name"}, {Section{Widget: "sparkline-kpi", CollectionVariable: "window", Sparkline: &PageSparkline{Field: "x"}}, "x"}} {
 		t.Run(tc.section.Widget, func(t *testing.T) {
 			p := Page{Object: ref, Document: &PageDocument{}, Sections: []Section{tc.section}}
 			lookup := map[AssetRef]ReleaseAsset{ref: {Ref: ref, Body: Raw(EntityInfo{Type: "sample.note", Fields: fields})}}

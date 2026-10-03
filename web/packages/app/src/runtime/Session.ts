@@ -58,6 +58,8 @@ export class PageSessionStore {
   private listeners = new Set<() => void>();
   private viewCache=new Map<string,RecordView>();
   private recordCache = new Map<string, EntityRecord>();
+  private confirmedEpoch=new Map<string,number>();
+  confirmedSelected(key:string):EntityRecord|undefined {return !this.disposed&&this.state.records[key]?.status==="value"&&this.confirmedEpoch.get(key)===this.recordEpoch.get(key)?this.recordCache.get(key):undefined;}
   private recordEpoch = new Map<string, number>();
   private selectionSetCache=new Map<string,EntityRecord[]>();
   private selectionSetEpoch=new Map<string,number>();
@@ -199,7 +201,7 @@ export class PageSessionStore {
     const records = { ...this.state.records }, visited = new Set<string>();
     const remove = (key: string) => {
       if (visited.has(key)) return;
-      visited.add(key);this.selectionSetEpoch.set(key,(this.selectionSetEpoch.get(key)??0)+1);this.selectionSetCache.delete(key);if(this.state.recordSets[key])this.state={...this.state,recordSets:{...this.state.recordSets,[key]:{status:"empty"}}}; records[key] = { status: "empty" }; this.recordCache.delete(key);this.selectionQueries.delete(key);
+      visited.add(key);this.confirmedEpoch.delete(key);this.selectionSetEpoch.set(key,(this.selectionSetEpoch.get(key)??0)+1);this.selectionSetCache.delete(key);if(this.state.recordSets[key])this.state={...this.state,recordSets:{...this.state.recordSets,[key]:{status:"empty"}}}; records[key] = { status: "empty" }; this.recordCache.delete(key);this.selectionQueries.delete(key);
       this.recordEpoch.set(key, (this.recordEpoch.get(key) ?? 0) + 1);
       for (const child of this.plan.children.get(key) ?? []) remove(child);
     };
@@ -267,13 +269,13 @@ export class PageSessionStore {
   }
   private async read(key: string, reference: RecordReference,selectable=false) {
     const epoch = (this.recordEpoch.get(key) ?? 0) + 1, source = this.source, scope = source.scope;
-    this.recordEpoch.set(key, epoch);
+    this.confirmedEpoch.delete(key);this.recordEpoch.set(key, epoch);
     this.publish({ records: { ...this.state.records, [key]: { status: "pending", value: reference } } });
     try {
       const view = await source.get(reference.object, reference.id);
       if (this.disposed || source !== this.source || source.scope !== scope || this.recordEpoch.get(key) !== epoch) return;
       if (view.record.id !== reference.id || selectable&&view.record.archived) throw new Error("Record identity mismatch or unavailable selection");
-      this.recordCache.set(key, view.record);this.cacheView(JSON.stringify([reference.object,reference.id]),view);
+      this.confirmedEpoch.set(key,epoch);this.recordCache.set(key, view.record);this.cacheView(JSON.stringify([reference.object,reference.id]),view);
       this.publish({ records: { ...this.state.records, [key]: { status: "value", value: reference } } });
       return view.record;
     } catch (error) {
@@ -360,6 +362,6 @@ export class PageSessionStore {
     this.disposed = true;this.selectionSetCache.clear();for(const [key,epoch] of this.selectionSetEpoch)this.selectionSetEpoch.set(key,epoch+1);this.externalMembers.clear(); this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear();this.queryData.clear(); this.recordCache.clear();this.viewCache.clear();this.selectionQueries.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
     for (const [key, epoch] of this.recordEpoch) this.recordEpoch.set(key, epoch + 1);
     this.state = { aggregates:{}, views:{}, scalars: {}, items: {}, records: {},recordSets:{}, filters: {}, queries: {} };
-    this.listeners.clear();
+    this.confirmedEpoch.clear();this.listeners.clear();
   }
 }

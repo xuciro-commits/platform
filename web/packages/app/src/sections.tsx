@@ -43,6 +43,7 @@ const BooleanInputRenderer=lazy(()=>import("./widgets/BooleanInput").then(module
 const RangeRenderer=lazy(()=>import("./widgets/Range").then(module=>({default:module.RangeRenderer})));
 const LeaderboardRenderer=lazy(()=>import("./widgets/Leaderboard").then(module=>({default:module.LeaderboardRenderer})));
 const SummaryRenderer=lazy(()=>import("./widgets/Summary").then(module=>({default:module.SummaryRenderer})));
+const RecordCardRenderer=lazy(()=>import("./widgets/RecordCard").then(module=>({default:module.RecordCardRenderer})));
 const SparklineRenderer=lazy(()=>import("./widgets/Sparkline").then(module=>({default:module.SparklineRenderer})));
 const GaugeRenderer=lazy(()=>import("./widgets/Gauge").then(module=>({default:module.GaugeRenderer})));
 const ProgressRenderer=lazy(()=>import("./widgets/Progress").then(module=>({default:module.ProgressRenderer})));
@@ -65,7 +66,7 @@ type Section = NonNullable<Page["sections"]>[number];
 type Narrowed = Record<string, Record<string, unknown>>;
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
-type Bound = {sparklineValue?:VariableResult;groupValue?:VariableResult;onGroupFilter?:(value?:string)=>void;onHeatmap?:(row?:string,column?:string)=>void;pickerConfirmation?:"empty"|"pending"|"value"|"error";pickerValue?:VariableResult;onPickerID?:(record?:EntityRecord)=>void;alertValue?:VariableResult;dateValue?:VariableResult;onDate?:(value:string)=>void;choiceSetValue?:VariableResult;onChoiceSet?:(value:string[])=>void;choiceValue?:VariableResult;onChoice?:(value:string)=>void;booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
+type Bound = {cardRecord?:EntityRecord;cardStatus?:"empty"|"pending"|"value"|"error";sparklineValue?:VariableResult;groupValue?:VariableResult;onGroupFilter?:(value?:string)=>void;onHeatmap?:(row?:string,column?:string)=>void;pickerConfirmation?:"empty"|"pending"|"value"|"error";pickerValue?:VariableResult;onPickerID?:(record?:EntityRecord)=>void;alertValue?:VariableResult;dateValue?:VariableResult;onDate?:(value:string)=>void;choiceSetValue?:VariableResult;onChoiceSet?:(value:string[])=>void;choiceValue?:VariableResult;onChoice?:(value:string)=>void;booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
   onControl?:(id:string)=>void;controlBound?:(id:string)=>boolean;
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
@@ -445,6 +446,7 @@ const widgets = createWidgetRegistry<Bound>({
  "button-group":({section,onControl,controlBound,enabled})=><ButtonGroup buttons={section.buttons??[]} label={section.title||t("Button group")} onActivate={id=>onControl?.(id)} isBound={controlBound??(()=>false)} enabled={enabled}/>,
  "status-tracker":StatusTrackerWidget,
  "record-links":RecordLinksWidget,
+ "record-card":({page,section,cardRecord,cardStatus})=>{const {source}=useHost();return <RecordCardRenderer record={cardRecord} status={cardStatus} info={source.entity(objectOf(page,section))} fields={section.fields??[]} config={section.recordCard}/>;},
  "record-view":RecordViewWidget,
   kanban:KanbanAdapter,
   "record-timeline":RecordTimelineAdapter,
@@ -619,6 +621,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         choiceValue={values[section.choiceVariable??""]} onChoice={section.widget==="choice-input"&&section.choiceVariable?(value)=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch||typeof value!=="string"||!(section.choiceInput?.options.includes(value)||value===""&&section.choiceInput?.variant==="select"))return;writeState(section.choiceVariable!,value,overlay);}:undefined}
         booleanInput={values[section.booleanVariable??""]} onBoolean={section.widget==="boolean-input"&&section.booleanVariable?(checked)=>{if(context||enabled===false||typeof checked!=="boolean"||overlay&&session.overlayEpoch(overlay)!==epoch)return;writeState(section.booleanVariable!,checked,overlay);}:undefined}
         rangeLower={values[section.rangeMinVariable??""]} rangeUpper={values[section.rangeMaxVariable??""]}
+        cardRecord={section.widget==="record-card"?(()=>{const v=initialVariables[section.recordVariable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);return producer?session.confirmedSelected(selectionSlot(page,producer)):undefined;})():undefined} cardStatus={section.widget==="record-card"?(()=>{const v=initialVariables[section.recordVariable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);return producer?snapshot.records[selectionSlot(page,producer)]?.status:undefined;})():undefined}
         sparklineValue={values[section.sparklineDecimalVariable??section.sparklineNumberVariable??""]}
         groupValue={values[section.groupValueVariable??section.groupSetVariable??""]} onGroupFilter={section.widget==="treemap"&&(section.groupValueVariable||section.groupSetVariable)?value=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;const id=section.groupValueVariable??section.groupSetVariable!,v=initialVariables[id],next=v?.type==="string-set"?{kind:"string-set" as const,values:value===undefined?[]:[value]}:value??"";if(!v||v.mode!=="state"||!(v.scope==="page"||v.scope==="overlay"&&v.owner===overlay)||!scalarAssignable(v.type,next,pageVariableContract.maxStringBytes,pageVariableContract.decimal.maxBytes))return;writeState(id,next,overlay);}:undefined}
         onHeatmap={section.widget==="heatmap"&&(section.rowValueVariable||section.rowSetVariable||section.columnValueVariable||section.columnSetVariable)?(row,column)=>{

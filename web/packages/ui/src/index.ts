@@ -83,3 +83,5 @@ export {CountMatrix,countMatrix} from "./charts/CountMatrix";
 export {CountTreemap,treemapRectangles} from "./charts/CountTreemap";
 
 export {RecordSparkline,recordSparklinePoints} from "./records/RecordSparkline";
+
+export {RecordCard} from "./records/RecordCard";

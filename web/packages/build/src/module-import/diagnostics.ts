@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "record-card-binding":"Map the original record producer, visible title or ID, at most four scalar properties and a semantic accent tone.",
+ "native-record-card":"ObjectCard reads the original confirmed record resource. Title, prominent properties and accent are explicitly mapped; stable IDs and original field formatting remain. Private titles hide the card, private properties are removed, and old or unconfirmed objects are not displayed. Source OntologyMeta and raw colors are not copied.",
+
  "sparkline-binding":"Map an original scalar and optional numeric record field in a compatible ordered query window. Labels and suffixes are bounded text.",
  "sparkline-scalar":"Sparkline requires an original numeric source with an explicit count or number binding.",
  "sparkline-count":"Bind the original complete count without converting its decimal identity to a JavaScript number.",

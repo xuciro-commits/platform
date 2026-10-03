@@ -137,6 +137,9 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		if section.Widget == "record-card" && sectionOwners[section.ID] != "" {
+			return fmt.Errorf("record card does not enter a loop")
+		}
 		for _, id := range []string{section.SparklineDecimalVariable, section.SparklineNumberVariable} {
 			if !accessible(id, "", sectionOverlays[section.ID]) || section.Widget == "sparkline-kpi" && sectionOwners[section.ID] != "" {
 				return fmt.Errorf("sparkline KPI needs its original page or overlay owner")

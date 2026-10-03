@@ -69,6 +69,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/progress": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ProgressExample })),
   "ui/range-input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RangeInputExample })),
   "ui/record-calendar": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordCalendarExample })),
+  "ui/record-card": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordCardExample })),
   "ui/record-cards": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordCardsExample })),
   "ui/record-chart": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordChartExample })),
   "ui/record-events": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordEventsExample })),

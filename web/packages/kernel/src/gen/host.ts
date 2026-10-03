@@ -1129,6 +1129,11 @@ export type PageRecordCalendar = {
   initialMonth: string;
 };
 
+export type PageRecordCard = {
+  labelField: string;
+  tone: string;
+};
+
 export type PageRecordChart = {
   mark: string;
   xField: string;
@@ -1521,6 +1526,7 @@ export type Section = {
   recordGantt?: PageRecordGantt;
   recordCalendar?: PageRecordCalendar;
   recordEvents?: PageRecordEvents;
+  recordCard?: PageRecordCard;
   sparkline?: PageSparkline;
   sparklineDecimalVariable?: string;
   sparklineNumberVariable?: string;
@@ -1895,7 +1901,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.72",
+  "uiProfile": "platform.page.v2.73",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5042,6 +5048,87 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "record-card",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.73",
+      "title": "Record card",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "recordCard": {
+          "labelField": "id",
+          "tone": "info"
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "selectionMode": "read",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordCard": {
+            "type": "object",
+            "properties": {
+              "labelField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "info",
+                  "success",
+                  "warning",
+                  "danger"
+                ]
+              }
+            },
+            "required": [
+              "labelField",
+              "tone"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.73"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -5116,7 +5203,8 @@ export const pageUIManifest = {
     "platform.page.v2.69",
     "platform.page.v2.70",
     "platform.page.v2.71",
-    "platform.page.v2.72"
+    "platform.page.v2.72",
+    "platform.page.v2.73"
   ],
   "runtime": {
     "scope": "page",
@@ -5295,7 +5383,8 @@ export const pageUIManifest = {
         "inline-action",
         "record-view",
         "record-links",
-        "status-tracker"
+        "status-tracker",
+        "record-card"
       ],
       "presentationWidgets": [
         "text",
@@ -5681,6 +5770,17 @@ export const pageUIManifest = {
     "sparkline": {
       "requiredUIProfile": "platform.page.v2.72",
       "maxPoints": 30
+    },
+    "recordCard": {
+      "requiredUIProfile": "platform.page.v2.73",
+      "maxFields": 4,
+      "tones": [
+        "neutral",
+        "info",
+        "success",
+        "warning",
+        "danger"
+      ]
     }
   },
   "layout": {

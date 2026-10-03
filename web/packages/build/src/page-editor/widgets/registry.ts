@@ -1,3 +1,4 @@
+import {RecordCardInspector} from "./RecordCardInspector";
 import {SparklineInspector} from "./SparklineInspector";
 import {TreemapInspector} from "./TreemapInspector";
 import {HeatmapInspector} from "./HeatmapInspector";
@@ -41,6 +42,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "record-card":{configVersion:1,bindings:RecordCardInspector},
  "sparkline-kpi":{configVersion:1,bindings:SparklineInspector},
  treemap:{configVersion:1,bindings:TreemapInspector},
  heatmap:{configVersion:1,bindings:HeatmapInspector},

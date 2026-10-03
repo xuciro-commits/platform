@@ -1,5 +1,14 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Record card": "记录卡片",
+ "Record card fields, title or identity are unavailable or incompatible.": "记录卡片字段、标题或身份不可用或不兼容。",
+ "Record card title is incompatible with its original field.": "记录卡片标题与原字段不兼容。",
+ "The record card could not be loaded.": "无法加载记录卡片。",
+ "No confirmed record for this card.": "卡片尚无已确认记录。",
+ "Record card configuration is unavailable.": "记录卡片配置不可用。",
+ "Confirmed record summary": "已确认记录摘要",
+ "Present an original confirmed record through shared card and field formatters with explicit identity and properties.": "通过共享卡片及字段格式器呈现原已确认记录、显式身份及属性。",
+ "The caller confirms original record access and supplies permission-filtered metadata. Titles and properties remain in their original field owners; the card performs no reads or writes.": "调用方确认原记录访问并提供权限裁剪元数据；标题及属性保持原字段归属，卡片不读写记录。",
  "Sparkline KPI": "迷你线KPI",
  "Ordered record sparkline": "有序记录迷你线",
  "Sparkline record fields, identities or values are unavailable or incompatible.": "迷你线记录字段、身份或值不可用或不兼容。",

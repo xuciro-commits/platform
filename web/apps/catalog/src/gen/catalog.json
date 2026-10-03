@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:1b0b135398525dfd",
+  "revision": "sha256:a19e098898a93f68",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2070,6 +2070,36 @@
       ]
     },
     {
+      "id": "ui/record-card",
+      "owner": "@platform/ui",
+      "name": "Confirmed record summary",
+      "summary": "Present an original confirmed record through shared card and field formatters with explicit identity and properties.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordCard.tsx",
+      "exports": [
+        "RecordCard"
+      ],
+      "example": "RecordCardExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "record",
+        "card",
+        "identity",
+        "properties"
+      ],
+      "dependencies": [
+        "ui/entity-card"
+      ],
+      "constraints": [
+        "The caller confirms original record access and supplies permission-filtered metadata. Titles and properties remain in their original field owners; the card performs no reads or writes."
+      ]
+    },
+    {
       "id": "ui/record-cards",
       "owner": "@platform/ui",
       "name": "Record cards",
@@ -2897,6 +2927,7 @@
       "Compose app navigation, routed tabs, commands and session context in one shell.": "在同一外壳中装配应用导航、路由标签页、命令与会话上下文。",
       "Compose nodes through typed ports with one shared graph interaction model.": "通过类型化端口装配节点，使用统一的图交互模型。",
       "Compose typed platform blocks with the existing native workflow editor and shared canvas.": "用现有原生流程编辑器和共享画布装配类型化平台区块。",
+      "Confirmed record summary": "已确认记录摘要",
       "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions.": "通过工作区 Host 接入。目录预览使用本地示例，不授予权限。",
       "Content tabs": "内容标签页",
       "Context commands": "上下文命令",
@@ -2991,6 +3022,7 @@
       "Plot original numeric record coordinates and retain independently selectable stable identities.": "绘制原记录数值坐标，保留可独立选择的稳定身份。",
       "Present a caller-owned scalar and original ordered record values without inventing time or replacing missing data.": "呈现调用方拥有的标量及原有序记录值，不虚构时间或替换缺值。",
       "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
+      "Present an original confirmed record through shared card and field formatters with explicit identity and properties.": "通过共享卡片及字段格式器呈现原已确认记录、显式身份及属性。",
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
       "Present caller-owned plain text with an accessible semantic tone.": "以可访问的语义色调呈现调用方拥有的纯文本。",
       "Present caller-owned static choices as a select, radio group or segmented control.": "以下拉、单选组或分段控件呈现调用方拥有的静态选项。",
@@ -3068,6 +3100,7 @@
       "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
       "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.": "92 类型迁移清单不授予运行资格。八种源组件已有有限配置方案，未支持配置阻止应用。",
+      "The caller confirms original record access and supplies permission-filtered metadata. Titles and properties remain in their original field owners; the card performs no reads or writes.": "调用方确认原记录访问并提供权限裁剪元数据；标题及属性保持原字段归属，卡片不读写记录。",
       "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records.": "调用方拥有授权完整分箱；控件校验区间和计数，不重新分箱，也不写入记录。",
       "The caller owns authorized complete counts and filter writes. Layout never inflates small groups, reads records or writes business data.": "调用方拥有完整授权计数与筛选写入；布局不放大小分组、不读记录、不写业务数据。",
       "The caller owns authorized complete counts and stable order. Empty text and null remain distinct; this control performs no queries or mutations.": "调用方拥有授权完整计数和稳定顺序；空文本与空值保持区分，此控件不查询或修改数据。",
@@ -3243,6 +3276,7 @@
       "web/packages/build/src/page-editor/widgets/ProgressInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RangeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordCalendarInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordCardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordEventsInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordGanttInspector.tsx",
@@ -3340,6 +3374,7 @@
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/Range.tsx",
       "web/packages/app/src/widgets/RecordCalendar.tsx",
+      "web/packages/app/src/widgets/RecordCard.tsx",
       "web/packages/app/src/widgets/RecordEvents.tsx",
       "web/packages/app/src/widgets/RecordGantt.tsx",
       "web/packages/app/src/widgets/RecordPicker.tsx",
@@ -3625,6 +3660,9 @@
     "ui/record-calendar": [
       "web/packages/app/src/widgets/RecordCalendar.tsx"
     ],
+    "ui/record-card": [
+      "web/packages/app/src/widgets/RecordCard.tsx"
+    ],
     "ui/record-chart": [
       "web/packages/app/src/widgets/RecordChart.tsx"
     ],
@@ -3699,6 +3737,7 @@
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordCardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordListInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordViewInspector.tsx",
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",

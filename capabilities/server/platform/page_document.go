@@ -123,6 +123,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.ChartVariant != "" {
 				return fmt.Errorf("chart variant requires a document")
 			}
+			if s.Widget == "record-card" || s.RecordCard != nil {
+				return fmt.Errorf("record card requires a page document")
+			}
 			if s.Widget == "sparkline-kpi" || s.Sparkline != nil || s.SparklineDecimalVariable != "" || s.SparklineNumberVariable != "" {
 				return fmt.Errorf("sparkline KPI requires a page document")
 			}
@@ -282,6 +285,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkRecordEvents(section); err != nil {
+			return err
+		}
+		if err := d.checkRecordCard(section); err != nil {
 			return err
 		}
 		if err := d.checkSparkline(section); err != nil {

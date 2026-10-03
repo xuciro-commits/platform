@@ -107,6 +107,7 @@ type Section struct {
 	RecordGantt              *PageRecordGantt        `json:"recordGantt,omitempty"`
 	RecordCalendar           *PageRecordCalendar     `json:"recordCalendar,omitempty"`
 	RecordEvents             *PageRecordEvents       `json:"recordEvents,omitempty"`
+	RecordCard               *PageRecordCard         `json:"recordCard,omitempty"`
 	Sparkline                *PageSparkline          `json:"sparkline,omitempty"`
 	SparklineDecimalVariable string                  `json:"sparklineDecimalVariable,omitempty"`
 	SparklineNumberVariable  string                  `json:"sparklineNumberVariable,omitempty"`

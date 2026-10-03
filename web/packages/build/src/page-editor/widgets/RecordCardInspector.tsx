@@ -1,0 +1,8 @@
+import {Select,Toggles,t} from "@platform/ui";
+import {pageVariableContract} from "@platform/app";
+import type {AuthoringSection} from "../draft";
+import type {TableInspectorPorts} from "./TableInspector";
+export function RecordCardInspector({section,info,onChange}:Omit<TableInspectorPorts,"section"|"onChange">&{section:AuthoringSection;onChange:(patch:Partial<AuthoringSection>)=>void}) {
+ const c=section.recordCard??{labelField:"id",tone:"info"};
+ return <><label className="grid gap-1 text-xs">{t("Card title field")}<Select value={c.labelField} onChange={e=>onChange({recordCard:{...c,labelField:e.target.value}})}><option value="id">{t("Record ID")}</option>{info?.fields.filter(f=>["text","longtext","choice","reference"].includes(f.type)).map(f=><option key={f.name} value={f.name}>{f.title}</option>)}</Select></label><label className="grid gap-1 text-xs">{t("Card accent tone")}<Select value={c.tone} onChange={e=>onChange({recordCard:{...c,tone:e.target.value}})}>{pageVariableContract.recordCard.tones.map(tone=><option key={tone} value={tone}>{t(tone)}</option>)}</Select></label><fieldset className="grid gap-1 text-xs"><legend>{t("Card summary fields")}</legend><Toggles options={(info?.fields??[]).filter(f=>["text","longtext","choice","reference","integer","decimal","money","date","datetime","boolean"].includes(f.type)).map(f=>({value:f.name,label:f.title}))} value={section.fields??[]} onChange={fields=>onChange({fields})}/></fieldset><p className="text-xs text-muted">{t("Use an original confirmed record resource and at most four formatted properties. Private titles hide the card; private properties are removed.")}</p></>;
+}

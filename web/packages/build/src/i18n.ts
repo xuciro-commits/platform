@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Record card": "记录卡片",
+ "Card accent tone": "卡片强调色调",
+ "Map object card {widget}": "映射对象卡片{widget}",
+ "Use an original confirmed record resource and at most four formatted properties. Private titles hide the card; private properties are removed.": "使用原已确认记录资源及最多四个格式化属性；私有标题使整张卡片隐藏，私有属性会被移除。",
+ "Bind an original record resource, title and at most four card properties before saving.": "保存前绑定原记录资源、标题及最多四个卡片属性。",
+ "Map the original record producer, visible title or ID, at most four scalar properties and a semantic accent tone.": "映射原记录生产者、可见标题或ID、最多四个标量属性及语义强调色调。",
+ "ObjectCard reads the original confirmed record resource. Title, prominent properties and accent are explicitly mapped; stable IDs and original field formatting remain. Private titles hide the card, private properties are removed, and old or unconfirmed objects are not displayed. Source OntologyMeta and raw colors are not copied.": "ObjectCard读取原已确认记录资源；显式映射标题、突出属性及强调色，保留稳定ID和原字段格式；私有标题使卡片隐藏，私有属性移除，不显示旧对象或未确认对象；不复制来源OntologyMeta及原始颜色。",
  "Sparkline KPI": "迷你线KPI",
  "Sparkline scalar variable": "迷你线标量变量",
  "Choose a scalar variable": "选择标量变量",
@@ -1733,6 +1740,13 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Record card": "记录卡片",
+ "Card accent tone": "卡片强调色调",
+ "Map object card {widget}": "映射对象卡片{widget}",
+ "Use an original confirmed record resource and at most four formatted properties. Private titles hide the card; private properties are removed.": "使用原已确认记录资源及最多四个格式化属性；私有标题使整张卡片隐藏，私有属性会被移除。",
+ "Bind an original record resource, title and at most four card properties before saving.": "保存前绑定原记录资源、标题及最多四个卡片属性。",
+ "Map the original record producer, visible title or ID, at most four scalar properties and a semantic accent tone.": "映射原记录生产者、可见标题或ID、最多四个标量属性及语义强调色调。",
+ "ObjectCard reads the original confirmed record resource. Title, prominent properties and accent are explicitly mapped; stable IDs and original field formatting remain. Private titles hide the card, private properties are removed, and old or unconfirmed objects are not displayed. Source OntologyMeta and raw colors are not copied.": "ObjectCard读取原已确认记录资源；显式映射标题、突出属性及强调色，保留稳定ID和原字段格式；私有标题使卡片隐藏，私有属性移除，不显示旧对象或未确认对象；不复制来源OntologyMeta及原始颜色。",
  "Sparkline KPI": "迷你线KPI",
  "Sparkline scalar variable": "迷你线标量变量",
  "Choose a scalar variable": "选择标量变量",
