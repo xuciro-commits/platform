@@ -1515,6 +1515,8 @@ export type Section = {
   recordGantt?: PageRecordGantt;
   recordCalendar?: PageRecordCalendar;
   recordEvents?: PageRecordEvents;
+  groupValueVariable?: string;
+  groupSetVariable?: string;
   rowValueVariable?: string;
   rowSetVariable?: string;
   columnValueVariable?: string;
@@ -1884,7 +1886,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.70",
+  "uiProfile": "platform.page.v2.71",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4875,6 +4877,79 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "treemap",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.71",
+      "title": "Treemap",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "records",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.71"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "groupValue",
+          "bindingField": "groupValueVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.71"
+        },
+        {
+          "id": "groupSet",
+          "bindingField": "groupSetVariable",
+          "type": "string-set",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.71"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "hidden": "unmount",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -4947,7 +5022,8 @@ export const pageUIManifest = {
     "platform.page.v2.67",
     "platform.page.v2.68",
     "platform.page.v2.69",
-    "platform.page.v2.70"
+    "platform.page.v2.70",
+    "platform.page.v2.71"
   ],
   "runtime": {
     "scope": "page",
@@ -5505,6 +5581,9 @@ export const pageUIManifest = {
       "requiredUIProfile": "platform.page.v2.70",
       "maxAxis": 64,
       "maxCells": 4096
+    },
+    "treemap": {
+      "requiredUIProfile": "platform.page.v2.71"
     }
   },
   "layout": {

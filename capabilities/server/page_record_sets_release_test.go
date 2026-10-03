@@ -370,6 +370,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		root.Children = append(root.Children, spec.id)
 		doc.Nodes[doc.Root] = root
 	}
+	treemapIndex := len(sections)
+	doc.Variables["treegroup"] = platform.PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: platform.Raw(map[string]any{"kind": "string-set", "values": []string{"original"}})}
+	for _, spec := range []struct{ id, group string }{{"treemap", "name"}, {"hiddenTreemap", "secret"}} {
+		sections = append(sections, build.Section{ID: spec.id, Widget: "treemap", ConfigVersion: 1, CollectionVariable: "pickerWindow", Group: spec.group, GroupSetVariable: "treegroup"})
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -395,6 +404,9 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[treemapIndex].GroupSetVariable = ""
+	sections[treemapIndex].Group = "secret"
+	doc.Variables["treegroup"] = platform.PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: platform.Raw(map[string]any{"kind": "string-set", "values": []string{"later"}})}
 	sections[heatmapIndex].ColumnSetVariable = ""
 	sections[heatmapIndex].Group = "secret"
 	doc.Variables["heatrow"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("later row")}
@@ -521,6 +533,18 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					}
 					if !alertFound || member.ID == builder.ID && privateAlerts != 1 || member.ID != builder.ID && privateAlerts != 0 {
 						t.Fatal("frozen alert config, count binding or private dependency changed")
+					}
+					treemapFound, privateTreemap := false, 0
+					for _, section := range d.Page.Sections {
+						if section.ID == "treemap" {
+							treemapFound = section.Group == "name" && section.GroupSetVariable == "treegroup" && section.CollectionVariable == "pickerWindow" && string(d.Page.Document.Variables["treegroup"].Initial) == `{"kind":"string-set","values":["original"]}`
+						}
+						if section.ID == "hiddenTreemap" {
+							privateTreemap++
+						}
+					}
+					if !treemapFound || member.ID == builder.ID && privateTreemap != 1 || member.ID != builder.ID && privateTreemap != 0 {
+						t.Fatal("frozen treemap grouping, output or member projection changed")
 					}
 					heatmapFound, privateHeatmap := false, 0
 					for _, section := range d.Page.Sections {

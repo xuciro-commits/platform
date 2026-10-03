@@ -107,6 +107,8 @@ type Section struct {
 	RecordGantt           *PageRecordGantt        `json:"recordGantt,omitempty"`
 	RecordCalendar        *PageRecordCalendar     `json:"recordCalendar,omitempty"`
 	RecordEvents          *PageRecordEvents       `json:"recordEvents,omitempty"`
+	GroupValueVariable    string                  `json:"groupValueVariable,omitempty"`
+	GroupSetVariable      string                  `json:"groupSetVariable,omitempty"`
 	RowValueVariable      string                  `json:"rowValueVariable,omitempty"`
 	RowSetVariable        string                  `json:"rowSetVariable,omitempty"`
 	ColumnValueVariable   string                  `json:"columnValueVariable,omitempty"`

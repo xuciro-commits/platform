@@ -25,6 +25,7 @@ function requirements(module:SourceModule|undefined){
   if(w.type==="PivotTable")for(const key of ["rows","cols"])property(external(text(w.config.objectSetVarId)),text(w.config[key]));
   if(w.type==="KanbanBoard")property(external(text(w.config.objectSetVarId)),text(w.config.groupBy));
   if(w.type==="Leaderboard")property(external(text(w.config.objectSetVarId)),text(w.config.property));
+  if(w.type==="Treemap")property(external(text(w.config.objectSetVarId)),text(w.config.groupBy));
   if(w.type==="Heatmap")for(const key of ["rows","cols"])property(external(text(w.config.objectSetVarId)),text(w.config[key]));
   if(w.type==="ScatterPlot"){for(const key of ["x","y"])property(external(text(w.config.objectSetVarId)),text(w.config[key]));property(external(text(w.config.objectSetVarId)),w.config.colorBy==null?"status":text(w.config.colorBy));}
   if(w.type==="Histogram")property(external(text(w.config.objectSetVarId)),text(w.config.property));

@@ -1,5 +1,16 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Treemap": "树图",
+ "Treemap groups": "树图分组",
+ "Treemap counts or geometry are invalid or exceed their budget.": "树图计数或几何无效或超过预算。",
+ "{count} matching records · rectangle area follows group count": "{count}条匹配记录 · 矩形面积按分组计数",
+ "No groups in the matching records.": "匹配记录中没有分组。",
+ "Hover or focus a group to inspect its original count and share.": "悬停或聚焦分组以查看原计数及占比。",
+ "Clear group filter": "清空分组筛选",
+ "Small rectangles keep their true area and remain available in the group list. Missing groups cannot be written to text filters.": "小矩形保留真实面积，并可从分组列表选择；缺值分组不能写入文本筛选。",
+ "Authorized proportional treemap": "授权比例树图",
+ "Partition caller-owned complete group counts into proportional rectangles with independently accessible groups.": "把调用方拥有的完整分组计数划分为比例矩形，保留独立的可访问分组。",
+ "The caller owns authorized complete counts and filter writes. Layout never inflates small groups, reads records or writes business data.": "调用方拥有完整授权计数与筛选写入；布局不放大小分组、不读记录、不写业务数据。",
  "Count matrix": "计数矩阵",
  "Complete typed count matrix": "完整类型化计数矩阵",
  "Present original complete counts with distinct axis identities and optional controlled heatmap selection.": "呈现原完整计数、独立轴身份与可选的受控热图选择。",

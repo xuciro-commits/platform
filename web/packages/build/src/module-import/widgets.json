@@ -557,9 +557,9 @@
       "sourceType": "Treemap",
       "sourceCategory": "Analytics",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "treemap",
+      "reason": "complete-count-proportional-area-filter-profile"
     },
     {
       "sourceType": "Calendar",

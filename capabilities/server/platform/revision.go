@@ -744,7 +744,7 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 		}
 	}
 	for _, s := range page.Sections {
-		if s.Widget != "heatmap" && s.Widget != "record-scatter" && s.Widget != "histogram" && s.Widget != "term-counts" && s.Widget != "record-timeline" && s.Widget != "kanban" && s.Widget != "status-tracker" && s.Widget != "record-list" && s.Widget != "record-chart" && s.Widget != "record-events" && s.Widget != "record-picker" && s.Widget != "record-leaderboard" && s.Widget != "summary-stats" && s.Widget != "record-gantt" && s.Widget != "record-calendar" && s.MetricPresentation == nil {
+		if s.Widget != "treemap" && s.Widget != "heatmap" && s.Widget != "record-scatter" && s.Widget != "histogram" && s.Widget != "term-counts" && s.Widget != "record-timeline" && s.Widget != "kanban" && s.Widget != "status-tracker" && s.Widget != "record-list" && s.Widget != "record-chart" && s.Widget != "record-events" && s.Widget != "record-picker" && s.Widget != "record-leaderboard" && s.Widget != "summary-stats" && s.Widget != "record-gantt" && s.Widget != "record-calendar" && s.MetricPresentation == nil {
 			continue
 		}
 		ref := s.Object

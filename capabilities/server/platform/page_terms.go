@@ -7,7 +7,7 @@ import (
 )
 
 func (d *PageDocument) checkTerms(s Section) error {
-	if s.Widget != "term-counts" {
+	if s.Widget != "term-counts" && s.Widget != "treemap" {
 		return nil
 	}
 	v := d.Variables[s.CollectionVariable]
@@ -17,7 +17,7 @@ func (d *PageDocument) checkTerms(s Section) error {
 	return nil
 }
 func (s Section) CheckTerms(info EntityInfo) error {
-	if s.Widget != "term-counts" {
+	if s.Widget != "term-counts" && s.Widget != "treemap" {
 		return nil
 	}
 	f, ok := info.Field(s.Group)

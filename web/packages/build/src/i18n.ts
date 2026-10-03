@@ -2,6 +2,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Treemap": "树图",
+ "Treemap query window": "树图查询窗口",
+ "Treemap grouping field": "树图分组字段",
+ "Treemap group filter output": "树图分组筛选输出",
+ "Rectangle area follows complete authorized group counts. Selection writes the original declared state; no minimum area inflates small groups.": "矩形面积按完整授权分组计数；选择写入原声明状态，不以最小面积放大小分组。",
+ "Bind a visible treemap group, original query window and exclusive output type before saving.": "保存前绑定可见树图分组、原查询窗口及独占输出类型。",
+ "Map an original text or choice group, an authorized plan and an optional original string or string-set state in the same owner.": "映射原文本/选项分组、授权计划及可选同拥有者的原string或string-set状态。",
+ "Treemap uses complete authorized group counts and proportional rectangle areas without minimum-size inflation. Typed groups preserve missing, empty and literal values; small groups remain accessible in the list. Selection uses the declared state type. Source object accumulation, array-only counts and guessed array types are not imported.": "树图使用完整授权分组计数与比例矩形面积，不以最小尺寸放大；类型化分组保留缺值、空文本和字面值，小分组可从列表访问；选择按声明状态类型写入，不导入来源普通对象累加、只按数组计数和猜测数组类型的逻辑。",
  "Heatmap": "热图",
  "Heatmap row field": "热图行字段",
  "Heatmap column field": "热图列字段",
@@ -1712,6 +1720,14 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Treemap": "树图",
+ "Treemap query window": "树图查询窗口",
+ "Treemap grouping field": "树图分组字段",
+ "Treemap group filter output": "树图分组筛选输出",
+ "Rectangle area follows complete authorized group counts. Selection writes the original declared state; no minimum area inflates small groups.": "矩形面积按完整授权分组计数；选择写入原声明状态，不以最小面积放大小分组。",
+ "Bind a visible treemap group, original query window and exclusive output type before saving.": "保存前绑定可见树图分组、原查询窗口及独占输出类型。",
+ "Map an original text or choice group, an authorized plan and an optional original string or string-set state in the same owner.": "映射原文本/选项分组、授权计划及可选同拥有者的原string或string-set状态。",
+ "Treemap uses complete authorized group counts and proportional rectangle areas without minimum-size inflation. Typed groups preserve missing, empty and literal values; small groups remain accessible in the list. Selection uses the declared state type. Source object accumulation, array-only counts and guessed array types are not imported.": "树图使用完整授权分组计数与比例矩形面积，不以最小尺寸放大；类型化分组保留缺值、空文本和字面值，小分组可从列表访问；选择按声明状态类型写入，不导入来源普通对象累加、只按数组计数和猜测数组类型的逻辑。",
  "Heatmap": "热图",
  "Heatmap row field": "热图行字段",
  "Heatmap column field": "热图列字段",

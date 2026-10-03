@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -357,3 +357,5 @@ export function HistogramExample(){return <Histogram label="Values" value={{fiel
 export function RecordScatterExample(){const info:EntityInfo={...demoInfo,fields:[{name:"title",title:"Title",type:"text"},{name:"x",title:"Pressure",type:"decimal"},{name:"y",title:"Exposure",type:"decimal"},{name:"status",title:"Status",type:"text"}]};return <RecordScatter records={[{id:"A",revision:1,created:stamp,changed:stamp,title:"Pump A",x:10,y:50,status:"Open"},{id:"B",revision:1,created:stamp,changed:stamp,title:"Pump B",x:10,y:50,status:"Closed"},{id:"C",revision:1,created:stamp,changed:stamp,title:"Pump C",x:20,y:80,status:"Open"}]} info={info} fields={{xField:"x",yField:"y",colorField:"status",labelField:"title"}} onSelect={()=>{}}/>;}
 
 export function CountMatrixExample(){return <CountMatrix heatmap rows="status" columns="priority" data={{columns:[{name:"status",title:"Status",kind:"group",type:"nominal"},{name:"priority",title:"Priority",kind:"group",type:"nominal"},{name:"count",title:"Count",kind:"measure",type:"quantitative"}],rows:[{status:"Open",priority:"High",count:8},{status:"Closed",priority:"Low",count:3}]}} onSelect={()=>{}}/>;}
+
+export function CountTreemapExample(){return <CountTreemap label="Assets by status" terms={[{value:"Active",count:64},{value:"Warning",count:24},{value:"Offline",count:8},{value:"Maintenance",count:3},{value:"Small group",count:1}]} onSelect={()=>{}}/>;}

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:8a35c6eb8cc30af1",
+  "revision": "sha256:0a9ca416662923d4",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1126,6 +1126,34 @@
       ],
       "constraints": [
         "The caller owns complete authorized counts and filter writes. Missing, empty and literal values remain distinct; no grouping, truncation or record reads happen here."
+      ]
+    },
+    {
+      "id": "ui/count-treemap",
+      "owner": "@platform/ui",
+      "name": "Authorized proportional treemap",
+      "summary": "Partition caller-owned complete group counts into proportional rectangles with independently accessible groups.",
+      "layer": 3,
+      "source": "web/packages/ui/src/charts/CountTreemap.tsx",
+      "exports": [
+        "CountTreemap",
+        "treemapRectangles"
+      ],
+      "example": "CountTreemapExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "treemap",
+        "area",
+        "count",
+        "filter"
+      ],
+      "constraints": [
+        "The caller owns authorized complete counts and filter writes. Layout never inflates small groups, reads records or writes business data."
       ]
     },
     {
@@ -2805,6 +2833,7 @@
       "Authorized event list": "受权事件列表",
       "Authorized lifecycle board": "授权生命周期看板",
       "Authorized numeric gauge": "授权数值仪表",
+      "Authorized proportional treemap": "授权比例树图",
       "Authorized record calendar": "受权记录日历",
       "Authorized record detail": "受权记录详情",
       "Authorized record leaderboard": "授权记录排行榜",
@@ -2923,6 +2952,7 @@
       "Organize navigation and shared published objects, workflows and functions with the original application editor.": "使用原应用编辑器组织导航及共享的已发布对象、流程和函数。",
       "Page header": "页面标题区",
       "Page workspace and preview": "页面工作台与预览",
+      "Partition caller-owned complete group counts into proportional rectangles with independently accessible groups.": "把调用方拥有的完整分组计数划分为比例矩形，保留独立的可访问分组。",
       "Pass a scoped RecordSource; this layout does not define a business entity.": "传入限定范围的 RecordSource；布局不定义业务实体。",
       "Pending": "待处理",
       "Pick a local file through a shared button; the caller owns upload.": "通过共享按钮选择本地文件，上传由调用方负责。",
@@ -3009,6 +3039,7 @@
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
       "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.": "92 类型迁移清单不授予运行资格。八种源组件已有有限配置方案，未支持配置阻止应用。",
       "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records.": "调用方拥有授权完整分箱；控件校验区间和计数，不重新分箱，也不写入记录。",
+      "The caller owns authorized complete counts and filter writes. Layout never inflates small groups, reads records or writes business data.": "调用方拥有完整授权计数与筛选写入；布局不放大小分组、不读记录、不写业务数据。",
       "The caller owns authorized complete counts and stable order. Empty text and null remain distinct; this control performs no queries or mutations.": "调用方拥有授权完整计数和稳定顺序；空文本与空值保持区分，此控件不查询或修改数据。",
       "The caller owns authorized options, counts and typed selected values.": "调用方管理授权选项、计数和类型化选中值。",
       "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
@@ -3196,6 +3227,7 @@
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TermsInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TitleInspectors.tsx",
+      "web/packages/build/src/page-editor/widgets/TreemapInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
@@ -3584,6 +3616,9 @@
     ],
     "ui/summary-statistics": [
       "web/packages/app/src/widgets/Summary.tsx"
+    ],
+    "ui/count-treemap": [
+      "web/packages/app/src/widgets/TermCounts.tsx"
     ],
     "ui/term-counts": [
       "web/packages/app/src/widgets/TermCounts.tsx"

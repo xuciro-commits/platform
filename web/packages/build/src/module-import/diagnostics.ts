@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "treemap-binding":"Map an original text or choice group, an authorized plan and an optional original string or string-set state in the same owner.",
+ "native-treemap":"Treemap uses complete authorized group counts and proportional rectangle areas without minimum-size inflation. Typed groups preserve missing, empty and literal values; small groups remain accessible in the list. Selection uses the declared state type. Source object accumulation, array-only counts and guessed array types are not imported.",
+
  "heatmap-binding":"Map two distinct original text or choice axes, an authorized plan and exclusive string or string-set states in the same owner.",
  "native-heatmap":"Heatmap counts the complete authorized set through the original pivot aggregate. Typed axes distinguish missing, empty and literal values. Cell filters use declared state types and update together; missing groups cannot be written to text filters. Source array counts, concatenated keys and variable-name type guesses are not imported.",
 
