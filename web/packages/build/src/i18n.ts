@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Allow clearing all selections": "允许清空全部选择",
+ "Map exploration choices {variable}": "映射探索筛选选项 {variable}",
+ "Original value for {option}": "{option} 对应的原业务值",
+ "Map all four fixed source values explicitly. Initial selections and controls sharing this variable use the same original values.": "显式映射全部四个固定源值；初始选择及共用此变量的控件使用同一组原业务值。",
+ "Map all four exploration choices to unique original values and an original scoped string-set state. Choice fields must contain the mapped values; unsupported consumers and lossy initial collisions are refused.": "将四个探索选项映射到唯一原业务值及原局部字符串集合状态；枚举字段须包含映射值，不支持的消费者和有损初值碰撞会被拒绝。",
+ "The fixed source filter uses original shared toggles and string-set query state. Known initial values and shared static options use the explicit mapping; unmatched selections remain until changed. Clear explicitly removes the whole set, including unmatched values, without changing business records.": "固定源筛选使用原共享标签及字符串集合查询状态；已知初值和共用静态选项按显式映射转换，未匹配选择保留至明确修改；清空会明确移除包括未匹配值在内的整个集合，不修改业务记录。",
+
  "Optional personnel query": "可选人员查询",
  "Bind picker ID output to original text state with the same query owner before saving.": "保存前，请将选择器 ID 输出绑定到与查询同一拥有作用域的原文本状态。",
  "Map an original business personnel object and visible title field to a same-owner string state. Candidates use a fixed ID-sorted window and original authorization.": "将原业务人员对象和可见标题字段映射到同一拥有作用域的字符串状态；候选沿固定 ID 顺序窗口和原授权读取。",

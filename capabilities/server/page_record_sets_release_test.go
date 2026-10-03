@@ -243,7 +243,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	multiRoot := doc.Nodes[doc.Root]
 	multiRoot.Children = append(multiRoot.Children, "multiInput")
 	doc.Nodes[doc.Root] = multiRoot
-	sections = append(sections, build.Section{ID: "multiInput", Widget: "choice-input", ConfigVersion: 1, ChoiceSetVariable: "multiState", ChoiceInput: &platform.PageChoiceInput{Variant: "multiple", Options: []string{"Open", "Closed"}}})
+	sections = append(sections, build.Section{ID: "multiInput", Widget: "choice-input", ConfigVersion: 1, ChoiceSetVariable: "multiState", ChoiceInput: &platform.PageChoiceInput{Clearable: true, Variant: "multiple", Options: []string{"Open", "Closed"}}})
 	dateLabel := "Frozen date"
 	doc.Variables["dateState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("2028-02-29")}
 	doc.Nodes["dateInput"] = platform.PageLayoutNode{Kind: "widget", Section: "dateInput"}
@@ -506,7 +506,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					for _, s := range d.Page.Sections {
 						if s.ID == "multiInput" {
 							c := s.ChoiceInput
-							multiFound = s.ChoiceSetVariable == "multiState" && s.ChoiceVariable == "" && c != nil && c.Variant == "multiple" && len(c.Options) == 2 && c.Options[0] == "Open" && c.Options[1] == "Closed"
+							multiFound = s.ChoiceSetVariable == "multiState" && s.ChoiceVariable == "" && c != nil && c.Variant == "multiple" && c.Clearable && len(c.Options) == 2 && c.Options[0] == "Open" && c.Options[1] == "Closed"
 						}
 					}
 					if !multiFound || string(d.Page.Document.Variables["multiState"].Initial) != `{"kind":"string-set","values":["retired","Open"]}` {

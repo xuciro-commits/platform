@@ -76,6 +76,7 @@ type pageRuntimeContract struct {
 		MaxOptions                int      `json:"maxOptions"`
 		MaxOptionBytes            int      `json:"maxOptionBytes"`
 		MultipleRequiredUIProfile string   `json:"multipleRequiredUIProfile"`
+		ClearRequiredUIProfile    string   `json:"clearRequiredUIProfile"`
 		MaxSelected               int      `json:"maxSelected"`
 	} `json:"choiceInput"`
 	BooleanInput struct {

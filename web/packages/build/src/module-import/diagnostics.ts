@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "exploration-binding":"Map all four exploration choices to unique original values and an original scoped string-set state. Choice fields must contain the mapped values; unsupported consumers and lossy initial collisions are refused.",
+ "native-exploration-filter":"The fixed source filter uses original shared toggles and string-set query state. Known initial values and shared static options use the explicit mapping; unmatched selections remain until changed. Clear explicitly removes the whole set, including unmatched values, without changing business records.",
  "spacer-profile":"Spacers require a finite nonnegative static size within the original layout budget and supported profile. String coercion, dynamic or executable configuration and invalid sizes are refused.",
  "native-spacer":"The Spacer maps to one original controlled blank region: default 16, explicit zero and fractional sizes are retained. It has no accessible content or focus target. Its own height is separate from the parent container gap, and original visibility, ownership and frozen delivery remain.",
  "separator-profile":"Separators require an optional static plain label within its UTF-8 budget and the supported profile. Unknown fields, executable configuration and incompatible values are refused.",

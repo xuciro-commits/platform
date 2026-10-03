@@ -913,6 +913,7 @@ export type PageButton = {
 };
 
 export type PageChoiceInput = {
+  clearable?: boolean;
   variant: string;
   options: string[];
   label?: string;
@@ -1840,7 +1841,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.64",
+  "uiProfile": "platform.page.v2.65",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4587,7 +4588,8 @@ export const pageUIManifest = {
     "platform.page.v2.61",
     "platform.page.v2.62",
     "platform.page.v2.63",
-    "platform.page.v2.64"
+    "platform.page.v2.64",
+    "platform.page.v2.65"
   ],
   "runtime": {
     "scope": "page",
@@ -5082,7 +5084,8 @@ export const pageUIManifest = {
       "maxOptions": 64,
       "maxOptionBytes": 256,
       "multipleRequiredUIProfile": "platform.page.v2.56",
-      "maxSelected": 64
+      "maxSelected": 64,
+      "clearRequiredUIProfile": "platform.page.v2.65"
     },
     "dateInput": {
       "requiredUIProfile": "platform.page.v2.57",

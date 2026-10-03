@@ -107,3 +107,27 @@ func TestMultipleChoiceOriginalSetProfileAndPorts(t *testing.T) {
 		t.Fatal("readonly set accepted")
 	}
 }
+
+func TestChoiceSetClearRequiresMultipleProfile(t *testing.T) {
+	p := queryPlanPage()
+	d := p.Document
+	d.Variables["pick"] = PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: Raw(map[string]any{"kind": "string-set", "values": []string{"retired", "A"}})}
+	s := Section{ID: "clear", Widget: "choice-input", ConfigVersion: 1, ChoiceSetVariable: "pick", ChoiceInput: &PageChoiceInput{Variant: "multiple", Options: []string{"A", "B"}, Clearable: true}}
+	if err := d.checkChoiceInput(s); err != nil {
+		t.Fatal(err)
+	}
+	d.UIProfile = "platform.page.v2.64"
+	if d.checkChoiceInput(s) == nil {
+		t.Fatal("old profile accepted full clear")
+	}
+	s.ChoiceInput.Clearable = false
+	if err := d.checkChoiceInput(s); err != nil {
+		t.Fatal("legacy multiple failed", err)
+	}
+	d.UIProfile = PageUIProfile()
+	s.ChoiceInput.Clearable = true
+	s.ChoiceInput.Variant = "select"
+	if d.checkChoiceInput(s) == nil {
+		t.Fatal("single choice accepted full clear")
+	}
+}

@@ -1,5 +1,8 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Optional whole-set clearing removes all selected values, including unmatched values.": "可选整组清空会移除全部已选值，包括未匹配的值。",
+ "Clear selections": "清空选择",
+
  "Spacer": "空白",
  "Controlled blank space": "受控空白",
  "Reserve one caller-owned blank region independently of container gaps.": "保留一处调用方拥有的空白区域，与容器间距独立。",

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:fd95553fb549dc18",
+  "revision": "sha256:ef0552d15ae7b53b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1760,10 +1760,12 @@
         "string-set"
       ],
       "dependencies": [
-        "ui/toggles"
+        "ui/toggles",
+        "ui/button"
       ],
       "constraints": [
-        "The caller owns the original string set and query conditions. Toggles change one declared choice and preserve unmatched selections."
+        "The caller owns the original string set and query conditions. Toggles change one declared choice and preserve unmatched selections.",
+        "Optional whole-set clearing removes all selected values, including unmatched values."
       ]
     },
     {
@@ -2773,6 +2775,7 @@
       "Only the canonical action owner may authorize and apply a transition.": "只有规范动作的归属方可以授权并应用状态跃迁。",
       "Open": "打开",
       "Open this full-window preview separately; its shell owns routes and saved layout.": "单独打开全窗口预览；外壳负责路由与保存的布局。",
+      "Optional whole-set clearing removes all selected values, including unmatched values.": "可选整组清空会移除全部已选值，包括未匹配的值。",
       "Ordered record chart": "按序逐记录图表",
       "Organize navigation and shared published objects, workflows and functions with the original application editor.": "使用原应用编辑器组织导航及共享的已发布对象、流程和函数。",
       "Page header": "页面标题区",
@@ -3072,6 +3075,7 @@
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
+      "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",

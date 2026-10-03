@@ -437,9 +437,9 @@
       "sourceType": "ExplorationFilter",
       "sourceCategory": "Filtering",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "choice-input",
+      "reason": "explicit-multiple-state-clear-profile"
     },
     {
       "sourceType": "ExplorationSearch",

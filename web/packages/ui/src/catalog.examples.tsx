@@ -336,7 +336,7 @@ export function SwitchExample(){const [on,setOn]=useState(false);return <Switch 
 
 export function ChoiceInputExample(){const [value,setValue]=useState("");return <ChoiceInput value={value} options={["Open","In progress","Done"]} variant="segments" label="Status" title="Task status" onChange={setValue}/>;}
 
-export function MultipleChoiceInputExample(){const [value,setValue]=useState(["Open"]);return <MultipleChoiceInput value={value} options={["Open","In progress","Done"]} label="Status" title="Task status" onChange={setValue}/>;}
+export function MultipleChoiceInputExample(){const [value,setValue]=useState(["Open"]);return <MultipleChoiceInput clearable value={value} options={["Open","In progress","Done"]} label="Status" title="Task status" onChange={setValue}/>;}
 
 export function DateInputExample(){const [value,setValue]=useState("2028-02-29");return <DateInput value={value} title="Business date" label="Date" onChange={setValue}/>;}
 

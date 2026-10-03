@@ -58,6 +58,8 @@
 
 日期输入：添加“Date input / 日期输入”，绑定原 page/Overlay 的string state并设置可选标签；源DateInput的date/string静态变量同样映射原文本。日期保留YYYY-MM-DD与业务日期语义，范围0001–9999，支持真实闰日；清空不设默认日期。外部TextInput写入无效日期后，日期组件保留草稿并提供修正文本输入；修正或“Clear date / 清空日期”显式替换原状态。在原Query plans条件勾选“Read text as a civil date / 将文本读取为业务日期”，条件字段须date、变量须string，与数字转换互斥；无效日期在读取前拒绝，optional空值跳过。原状态/标签/asDate条件随冻结发布，原启用、查询选择及浮层关闭清理保持；范围见[ADR-0046 §6.52](ADR/0046-application-studio-fusion.md#652-dateinput的原日期草稿与civil条件)。
 
+探索筛选标签：导入ExplorationFilter时，在“Map exploration choices / 映射探索筛选选项”为固定Active/Warning/Offline/Maintenance逐项填写唯一原业务值。同变量的初始选择和其他多选控件共用映射，原IN条件与FilterList保持同值；枚举字段须包含全部映射值，未匹配初值保留，有损重复转换会拒绝导入。原多选检查器可声明“Allow clearing all selections / 允许清空全部选择”，此配置仅适用于multiple及v2.65；“Clear selections / 清空选择”一次将整个原集合写为空，明确移除未知项、恢复可选空条件，逐项切换仍保留未知值。禁用时不写入，原查询权限/浮层清理及Save→冻结候选→激活路径保持。范围见[ADR-0046 §6.61](ADR/0046-application-studio-fusion.md#661-explorationfilter的原集合筛选标签与显式清空)。
+
 业务人员选择：导入UserSelect时，在“Map people picker / 映射人员选择器”选择已有业务人员对象、可读标题和可选的固定查询版本；源姓名筛选字段须映射到引用该人员对象的原reference。原记录选择器的“Confirmed ID output / 经确认的 ID 输出”可绑定同页面/浮层的string state；单记录授权确认后才写稳定ID，姓名只用于显示，Clear写空值，未匹配初值保留，不自动按姓名找人。候选沿原20项ID窗口和原权限搜索；拒绝读取不清空原筛选值，关闭浮层/查询变化/其他输入使旧确认失效。登录成员目录另行适配，完整源默认模块的不兼容消费者须显式修正。沿原Save→冻结候选→激活交付，范围见[ADR-0046 §6.60](ADR/0046-application-studio-fusion.md#660-原记录选择器的稳定id输出与人员目录映射)。
 
 单处空白：添加“Spacer / 空白”，在“Blank region size (px) / 空白区域尺寸（px）”声明0至4096的有限尺寸，小数和0保留，缺尺寸不能保存。尺寸只控制这一处空白，自身不可收缩、不提供文字/角色/焦点，普通区域最小32px不适用；父容器gap仍单独设置，0不会移除父容器已有gap。来源Spacer缺省/null按来源默认16，显式0/小数保持，字符串强制转换、负数/非有限/超限与动态设置须修正。来源Section或原布局检查器控制显示；尺寸和条件沿保存→冻结→激活/恢复，完整Overlay复制保持尺寸并重写原显示状态。范围见[ADR-0046 §6.59](ADR/0046-application-studio-fusion.md#659-spacer的原受控单处空白与零尺寸)。
