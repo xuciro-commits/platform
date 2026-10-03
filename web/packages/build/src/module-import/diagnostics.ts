@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "range-profile":"Range sliders need distinct original numeric text states, bounded decimal limits, and an integral step grid of at most 10000 ticks.",
+ "native-range-drafts":"The range shares the original numeric input drafts and optional query bounds. Empty and invalid text is preserved; Clear updates both states atomically. Movement emits exact decimal steps and clamps to the other bound.",
  "leaderboard-binding":"Map an original numeric ranking field and visible title, and choose a supported ranking limit and direction.",
  "leaderboard-order":"The retained named query owns an ordering that does not match this ranking.",
  "leaderboard-profile":"Leaderboard requires the supported original Top-N query profile.",

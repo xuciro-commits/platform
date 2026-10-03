@@ -210,6 +210,13 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 		sections = append(sections, build.Section{ID: spec.id, Widget: "record-leaderboard", ConfigVersion: 1, CollectionVariable: window, Leaderboard: &platform.PageLeaderboard{ValueField: spec.value, LabelField: spec.label, Limit: 8}})
 	}
+	doc.Variables["rangeMin"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("")}
+	doc.Variables["rangeMax"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("")}
+	doc.Nodes["range"] = platform.PageLayoutNode{Kind: "widget", Section: "range"}
+	rangeRoot := doc.Nodes[doc.Root]
+	rangeRoot.Children = append(rangeRoot.Children, "range")
+	doc.Nodes[doc.Root] = rangeRoot
+	sections = append(sections, build.Section{ID: "range", Widget: "range-input", ConfigVersion: 1, RangeMinVariable: "rangeMin", RangeMaxVariable: "rangeMax", RangeInput: &platform.PageRangeInput{Min: "0", Max: "45", Step: "1", Label: "Pressure", Unit: "bar"}})
 	doc.Variables["rankRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "rank"}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
@@ -236,6 +243,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[50].RangeInput = &platform.PageRangeInput{Min: "-100", Max: "100", Step: "2", Label: "Later pressure", Unit: "kPa"}
 	sections[47].Leaderboard = &platform.PageLeaderboard{ValueField: "amount", LabelField: "id", Limit: 4, Ascending: true}
 	rankQuery := doc.Queries["rankQuery"]
 	rankQuery.Sort = []string{"amount", "id"}
@@ -266,6 +274,16 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					rangeFound := false
+					for _, s := range d.Page.Sections {
+						if s.ID == "range" {
+							r := s.RangeInput
+							rangeFound = r != nil && r.Min == "0" && r.Max == "45" && r.Step == "1" && r.Label == "Pressure" && r.Unit == "bar" && s.RangeMinVariable == "rangeMin" && s.RangeMaxVariable == "rangeMax"
+						}
+					}
+					if !rangeFound || string(d.Page.Document.Variables["rangeMin"].Initial) != `""` {
+						t.Fatal("frozen range or original draft state changed")
+					}
 					rank, privateRanks := false, 0
 					for _, s := range d.Page.Sections {
 						if s.ID == "rank" {

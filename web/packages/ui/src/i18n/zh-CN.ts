@@ -1,5 +1,14 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Any bound": "不限",
+ "Minimum": "最小值",
+ "Maximum": "最大值",
+ "{label} {side}": "{label} {side}",
+ "Clear range": "清空范围",
+ "Range drafts must be valid ordered values on the configured step grid. Edit the original inputs or clear both bounds.": "范围草稿须为配置步长上的有效有序值。请编辑原输入或清空两个边界。",
+ "Exact decimal range input": "精确十进制范围输入",
+ "Edit two original text drafts on an exact decimal tick grid and clear them atomically.": "在精确十进制刻度上编辑两个原文本草稿并原子清空。",
+ "The caller owns the original state pair and query conditions. Empty or invalid drafts are never replaced by bounds.": "调用方拥有原状态对和查询条件。空值或无效草稿不会被替换为边界。",
  "Open record": "打开记录",
  "Select original records from a caller-owned grid or list window.": "在调用方拥有的网格或列表窗口中选择原记录。",
  "Card fields come from permission-filtered metadata; the caller owns reads, selection and navigation.": "卡片字段来自权限裁剪后的元数据，调用方负责读取、选择及导航。",

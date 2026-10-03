@@ -59,6 +59,7 @@ export {RecordEvents,recordEventRows} from "./records/RecordEvents";
 export {RecordCalendar,calendarRecords,adjacentCalendarMonth,validCalendarMonth,type CalendarFields} from "./records/RecordCalendar";
 export {RecordGantt,recordGanttRows,ganttRange} from "./records/RecordGantt";
 export {Progress,progressRatio} from "./components/Progress";
+export {RangeInput,rangeGrid,rangeDrafts} from "./components/RangeInput";
 export {Gauge,gaugeModel} from "./components/Gauge";
 export {SummaryStatistics,type StatisticsValue} from "./components/SummaryStatistics";
 export {RecordLeaderboard,leaderboardRows} from "./records/RecordLeaderboard";

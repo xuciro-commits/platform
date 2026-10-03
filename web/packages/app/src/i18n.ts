@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Range input": "范围输入",
+ "Range inputs are unavailable in this scope.": "范围输入在此作用域不可用。",
  "Ranking window is unavailable.": "排名窗口不可用。",
  "Ranking window ordering or bounds changed.": "排名窗口的顺序或范围已改变。",
  "Statistics are unavailable or loading.": "统计不可用或正在加载。",

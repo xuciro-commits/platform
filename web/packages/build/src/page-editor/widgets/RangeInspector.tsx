@@ -1,0 +1,8 @@
+import {Input,Select,t} from "@platform/ui";
+import type {Api} from "@platform/kernel";
+import {variableAccessible} from "../../page-layout";
+import type {AuthoringSection} from "../draft";
+export function RangeInspector({section,document,overlay,itemOwner,onChange}:{section:AuthoringSection;document:Api.PageDocument;overlay?:string;itemOwner?:string;onChange:(patch:Partial<AuthoringSection>)=>void}){
+ const fields=section.rangeInput??{min:"0",max:"100",step:"1"},update=(patch:Partial<Api.PageRangeInput>)=>onChange({rangeInput:{...fields,...patch}});
+ return <>{(["rangeMinVariable","rangeMaxVariable"] as const).map((key,index)=><label key={key} className="grid gap-1 text-xs">{t(index===0?"Range minimum variable":"Range maximum variable")}<Select value={section[key]??""} onChange={e=>onChange({[key]:e.target.value||undefined})}><option value="">{t("Choose a text state variable")}</option>{Object.entries(document.variables??{}).filter(([,v])=>!itemOwner&&v.type==="string"&&v.mode==="state"&&["page","overlay"].includes(v.scope)&&variableAccessible(v,undefined,overlay)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>)}{(["label","min","max","step","unit"] as const).map(key=><label key={key} className="grid gap-1 text-xs">{t(({label:"Range label",min:"Range minimum",max:"Range maximum",step:"Range step",unit:"Range unit"})[key])}<Input maxLength={key==="label"?1024:key==="unit"?64:128} value={fields[key]??""} onChange={e=>update({[key]:e.target.value||(["label","unit"].includes(key)?undefined:"")})}/></label>)}<p className="text-xs text-muted">{t("Reuse the original numeric text inputs. Empty bounds remain absent query conditions; Clear updates both bounds together.")}</p></>;
+}

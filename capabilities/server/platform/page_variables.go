@@ -43,6 +43,10 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	RangeInput struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+		MaxTicks          int    `json:"maxTicks"`
+	} `json:"rangeInput"`
 	Leaderboard struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 		MaxRanks          int    `json:"maxRanks"`

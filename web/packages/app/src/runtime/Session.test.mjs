@@ -207,3 +207,7 @@ test("recreating a scoped source wrapper preserves one read until its revision c
  await reader.list("sample.parent",query);store.updateSource({...source});await reader.list("sample.parent",query);assert.equal(reads,1);
  store.updateSource({...source,revision:1});await reader.list("sample.parent",query);assert.equal(reads,2);
 });
+
+test("paired range Clear publishes one original snapshot and member replacement retires both drafts",()=>{
+ const source={scope:"one",entity:()=>({fields:[]}),get:async(_type,id)=>({record:record(id)}),list:async()=>({records:[],total:0})},store=new PageSessionStore(source,plan());store.setScalars({lower:"10",upper:"20"});const snapshots=[];store.subscribe(()=>snapshots.push({...store.snapshot().scalars}));store.setScalars({lower:"",upper:""});assert.deepEqual(snapshots,[{lower:"",upper:""}]);store.setScalars({lower:"10",upper:"20"});store.updateSource({...source,scope:"two"});assert.equal(store.snapshot().scalars.lower,undefined);assert.equal(store.snapshot().scalars.upper,undefined);
+});

@@ -1065,6 +1065,14 @@ export type PageQuerySet = {
   inputs: string[];
 };
 
+export type PageRangeInput = {
+  min: string;
+  max: string;
+  step: string;
+  label?: string;
+  unit?: string;
+};
+
 export type PageRecordCalendar = {
   dateField: string;
   labelField: string;
@@ -1440,6 +1448,9 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  rangeInput?: PageRangeInput;
+  rangeMinVariable?: string;
+  rangeMaxVariable?: string;
   leaderboard?: PageLeaderboard;
   summaryField?: string;
   statisticsVariable?: string;
@@ -1779,7 +1790,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.51",
+  "uiProfile": "platform.page.v2.52",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3888,6 +3899,64 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "range-input",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.52",
+      "title": "Range input",
+      "category": "Inputs",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [],
+      "outputPorts": [
+        {
+          "id": "min",
+          "bindingField": "rangeMinVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.52"
+        },
+        {
+          "id": "max",
+          "bindingField": "rangeMaxVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.52"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -3941,7 +4010,8 @@ export const pageUIManifest = {
     "platform.page.v2.48",
     "platform.page.v2.49",
     "platform.page.v2.50",
-    "platform.page.v2.51"
+    "platform.page.v2.51",
+    "platform.page.v2.52"
   ],
   "runtime": {
     "scope": "page",
@@ -4408,6 +4478,10 @@ export const pageUIManifest = {
     "leaderboard": {
       "requiredUIProfile": "platform.page.v2.51",
       "maxRanks": 32
+    },
+    "rangeInput": {
+      "requiredUIProfile": "platform.page.v2.52",
+      "maxTicks": 10000
     }
   },
   "layout": {

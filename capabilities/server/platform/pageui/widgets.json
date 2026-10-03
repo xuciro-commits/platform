@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.51",
+  "uiProfile": "platform.page.v2.52",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2108,6 +2108,64 @@
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "range-input",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.52",
+      "title": "Range input",
+      "category": "Inputs",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [],
+      "outputPorts": [
+        {
+          "id": "min",
+          "bindingField": "rangeMinVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.52"
+        },
+        {
+          "id": "max",
+          "bindingField": "rangeMaxVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.52"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -2161,7 +2219,8 @@
     "platform.page.v2.48",
     "platform.page.v2.49",
     "platform.page.v2.50",
-    "platform.page.v2.51"
+    "platform.page.v2.51",
+    "platform.page.v2.52"
   ],
   "runtime": {
     "scope": "page",
@@ -2628,6 +2687,10 @@
     "leaderboard": {
       "requiredUIProfile": "platform.page.v2.51",
       "maxRanks": 32
+    },
+    "rangeInput": {
+      "requiredUIProfile": "platform.page.v2.52",
+      "maxTicks": 10000
     }
   },
   "layout": {

@@ -1,3 +1,4 @@
+import {RangeInspector} from "./RangeInspector";
 import {LeaderboardInspector} from "./LeaderboardInspector";
 import {SummaryInspector} from "./SummaryInspector";
 import {GaugeInspector} from "./GaugeInspector";
@@ -26,6 +27,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "range-input":{configVersion:1,bindings:RangeInspector},
  "record-leaderboard":{configVersion:1,bindings:LeaderboardInspector},
  "summary-stats":{configVersion:1,bindings:SummaryInspector},
  gauge:{configVersion:1,bindings:GaugeInspector},

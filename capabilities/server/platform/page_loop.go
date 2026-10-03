@@ -137,6 +137,9 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		if !accessible(section.RangeMinVariable, "", sectionOverlays[section.ID]) || !accessible(section.RangeMaxVariable, "", sectionOverlays[section.ID]) || section.Widget == "range-input" && sectionOwners[section.ID] != "" {
+			return fmt.Errorf("range drafts cannot escape their scope or enter a loop")
+		}
 		if !accessible(section.StatisticsVariable, "", sectionOverlays[section.ID]) || section.Widget == "summary-stats" && sectionOwners[section.ID] != "" {
 			return fmt.Errorf("summary cannot escape its scope or enter a loop")
 		}

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:01b829db3b8c303b",
+  "revision": "sha256:2d09dc0e250b72f1",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1761,6 +1761,34 @@
       ]
     },
     {
+      "id": "ui/range-input",
+      "owner": "@platform/ui",
+      "name": "Exact decimal range input",
+      "summary": "Edit two original text drafts on an exact decimal tick grid and clear them atomically.",
+      "layer": 3,
+      "source": "web/packages/ui/src/components/RangeInput.tsx",
+      "exports": [
+        "RangeInput",
+        "rangeGrid",
+        "rangeDrafts"
+      ],
+      "example": "RangeInputExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "range",
+        "input",
+        "decimal"
+      ],
+      "constraints": [
+        "The caller owns the original state pair and query conditions. Empty or invalid drafts are never replaced by bounds."
+      ]
+    },
+    {
       "id": "ui/record-calendar",
       "owner": "@platform/ui",
       "name": "Authorized record calendar",
@@ -2461,6 +2489,7 @@
       "Each control has a stable identity; the caller owns its binding, permissions and execution.": "每个控件具有稳定身份，其绑定、权限及执行由调用方拥有。",
       "Edit declared entity fields using their shared validators and editors.": "使用共享校验器和编辑器编辑已声明的实体字段。",
       "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
+      "Edit two original text drafts on an exact decimal tick grid and clear them atomically.": "在精确十进制刻度上编辑两个原文本草稿并原子清空。",
       "Editing": "编辑中",
       "Editor workbench": "编辑工作台",
       "Empty": "空状态",
@@ -2468,6 +2497,7 @@
       "Entity form": "实体表单",
       "Error": "错误",
       "Exact decimal progress": "精确十进制进度",
+      "Exact decimal range input": "精确十进制范围输入",
       "Expanded": "展开",
       "Facet choices": "分面多选",
       "File picker": "文件选择器",
@@ -2601,6 +2631,7 @@
       "The caller owns the original five-measure answer. Counts remain exact; missing numeric measures remain empty.": "调用方拥有原五度量答复。计数保持精确，缺失数值度量保持为空。",
       "The caller owns the original numeric result and complete set. The gauge does not substitute zero for empty or denied values.": "调用方拥有原数值结果与完整集合，仪表不将空值或拒绝值替换为零。",
       "The caller owns the original scalars and complete-set count. Invalid values never become zero or a denominator of one.": "调用方拥有原标量与完整集合计数，无效值不替换为零或分母一。",
+      "The caller owns the original state pair and query conditions. Empty or invalid drafts are never replaced by bounds.": "调用方拥有原状态对和查询条件。空值或无效草稿不会被替换为边界。",
       "The caller owns the ranked query and record authorization. This component does not sort an unranked window or write records.": "调用方拥有排名查询与记录授权。此组件不对未排序窗口排名，也不写入记录。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
@@ -2737,6 +2768,7 @@
       "web/packages/build/src/page-editor/widgets/MetricInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ProgressInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RangeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordCalendarInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordEventsInspector.tsx",
@@ -2816,6 +2848,7 @@
       "web/packages/app/src/widgets/Pivot.tsx",
       "web/packages/app/src/widgets/Progress.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
+      "web/packages/app/src/widgets/Range.tsx",
       "web/packages/app/src/widgets/RecordCalendar.tsx",
       "web/packages/app/src/widgets/RecordEvents.tsx",
       "web/packages/app/src/widgets/RecordGantt.tsx",
@@ -3060,6 +3093,10 @@
     ],
     "ui/progress": [
       "web/packages/app/src/widgets/Progress.tsx",
+      "web/packages/build/src/editor.tsx"
+    ],
+    "ui/range-input": [
+      "web/packages/app/src/widgets/Range.tsx",
       "web/packages/build/src/editor.tsx"
     ],
     "ui/record-calendar": [

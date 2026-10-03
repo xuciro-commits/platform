@@ -6,7 +6,8 @@
     ".": "./src/index.ts",
     "./catalog": "./src/catalog.ts",
     "./catalog/examples": "./src/catalog.examples.tsx",
-    "./styles.css": "./src/styles.css"
+    "./styles.css": "./src/styles.css",
+    "./range": "./src/components/range.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

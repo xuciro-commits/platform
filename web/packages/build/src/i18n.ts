@@ -2,6 +2,18 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Range input": "范围输入",
+ "Range minimum variable": "范围最小值变量",
+ "Range maximum variable": "范围最大值变量",
+ "Range label": "范围标签",
+ "Range minimum": "范围最小值",
+ "Range maximum": "范围最大值",
+ "Range step": "范围步长",
+ "Range unit": "范围单位",
+ "Reuse the original numeric text inputs. Empty bounds remain absent query conditions; Clear updates both bounds together.": "复用原数值文本输入。空边界不加入查询条件；清空会同时更新两个边界。",
+ "Bind distinct text states with one owner and a valid decimal range before saving.": "保存前请绑定同一拥有者的两个不同文本状态及有效十进制范围。",
+ "Range sliders need distinct original numeric text states, bounded decimal limits, and an integral step grid of at most 10000 ticks.": "范围滑块需要两个不同原数值文本状态、有界十进制边界及最多 10000 个整数刻度。",
+ "The range shares the original numeric input drafts and optional query bounds. Empty and invalid text is preserved; Clear updates both states atomically. Movement emits exact decimal steps and clamps to the other bound.": "范围共享原数值输入草稿及可选查询边界。空值和无效文本保留；清空原子更新两个状态。移动输出精确十进制步长并限制在另一边界内。",
  "Break equal values by record ID": "同值按记录 ID 排序",
  "Record leaderboard": "记录排行榜",
  "Ranking query window": "排名查询窗口",

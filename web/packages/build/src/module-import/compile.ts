@@ -1,3 +1,4 @@
+import {rangeGrid} from "@platform/ui/range";
 import {pageUIManifest,type Api} from "@platform/kernel";
 import type {PageDraft,AuthoringSection} from "../page-editor/draft";
 import {workshopMapping,workshopMigrationCatalog} from "./catalog";
@@ -159,6 +160,14 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
   }
   if(w.type==="HeaderText"){safeKeys(config,["text","variant"],`${path}/config`);section.text=text(config.text);section.headingLevel=text(config.variant)||"h2";if(typeof config.text!=="string"||!section.text.trim()||new TextEncoder().encode(section.text).length>pageUIManifest.runtime.titles.maxTextBytes||config.variant!==undefined&&typeof config.variant!=="string"||!(pageUIManifest.runtime.titles.headingLevels as readonly string[]).includes(section.headingLevel))issue(`${path}/config`,"title-profile");}
   if(w.type==="ObjectSetTitle"){safeKeys(config,["objectSetVarId"],`${path}/config`);const source=text(config.objectSetVarId);section.collectionVariable=variable(source,context,`${path}/config/objectSetVarId`);const input=document.variables![section.collectionVariable],query=input?.source?.query,external=queryObjects.get(source)||"",e=entity(external,`${path}/config/objectSetVarId`);section.object=e?.type===target.object?undefined:e?.type;section.title=text(vars.get(source)?.name)||source;section.countVariable=id("count",source);document.variables![section.countVariable]={title:section.title,scope:context.kind,owner:context.owner,type:"decimal",mode:"aggregate",source:{kind:"count",query}};if(!query)issue(`${path}/config/objectSetVarId`,"title-profile");issue(`${path}/config`,"native-collection-title",false);}
+  if(w.type==="RangeSlider"){
+   safeKeys(config,["minVarId","maxVarId","min","max","step","label","unit"],`${path}/config`);
+   const lower=text(config.minVarId),upper=text(config.maxVarId),min=config.min??0,max=config.max??100,step=config.step??1;
+   section.rangeMinVariable=variable(lower,context,`${path}/config/minVarId`);section.rangeMaxVariable=variable(upper,context,`${path}/config/maxVarId`);
+   section.rangeInput={min:String(min),max:String(max),step:String(step),label:config.label===undefined?w.name:text(config.label),...config.unit!==undefined?{unit:text(config.unit)}:{}};
+   if(lower===upper||[lower,upper].some(id=>vars.get(id)?.type!=="numeric"||vars.get(id)?.definitionKind!=="static")||[min,max,step].some(v=>typeof v!=="number"||!Number.isFinite(v))||!rangeGrid(String(min),String(max),String(step))||config.label!==undefined&&(typeof config.label!=="string"||new TextEncoder().encode(text(config.label)).length>1024)||config.unit!==undefined&&(typeof config.unit!=="string"||new TextEncoder().encode(text(config.unit)).length>64))issue(`${path}/config`,"range-profile");
+   if(Number(target.profile.split(".").at(-1))<52)issue(path,"range-profile");issue(`${path}/config`,"native-range-drafts",false);
+  }
   if(w.type==="Leaderboard"){
    safeKeys(config,["objectSetVarId","property","limit","ascending","activeVarId"],`${path}/config`);const input=text(config.objectSetVarId),collection=variable(input,context,`${path}/config/objectSetVarId`),resource=document.variables![collection],external=queryObjects.get(input)||"",e=entity(external,`${path}/config/objectSetVarId`),base=resource?.source?.query?document.queries![resource.source.query]:undefined,value=field(external,text(config.property),`${path}/config/property`),binding=own(bindings.leaderboards??{},sourceID),label=obj(binding)?text(binding.labelField):"",limit=config.limit??8,ascending=config.ascending===true,sort=[`${ascending?"":"-"}${value}`,"id"];
    section.object=e?.type===target.object?undefined:e?.type;section.leaderboard={valueField:value,labelField:label,limit:typeof limit==="number"?limit:0,ascending};
