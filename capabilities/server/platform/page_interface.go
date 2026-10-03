@@ -161,6 +161,11 @@ func (p Page) NavigationTargets() []AssetRef {
 }
 
 func (p Page) CheckRecordPorts() error {
+	for _, s := range p.Sections {
+		if err := p.CheckRecordComparisonBinding(s); err != nil {
+			return err
+		}
+	}
 	if p.Document == nil || p.Document.Interface == nil {
 		return nil
 	}

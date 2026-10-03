@@ -399,6 +399,14 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		root.Children = append(root.Children, spec.id)
 		doc.Nodes[doc.Root] = root
 	}
+	comparisonIndex := len(sections)
+	for _, spec := range []struct{ id, label string }{{"comparison", "name"}, {"hiddenComparison", "secret"}} {
+		sections = append(sections, build.Section{ID: spec.id, Widget: "record-comparison", ConfigVersion: 1, RecordSetVariable: "picked", RecordComparison: &platform.PageRecordComparison{LabelField: spec.label}, Fields: []string{"amount", "secret"}})
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -426,6 +434,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
 	sections[recordCardIndex].RecordCard = &platform.PageRecordCard{LabelField: "id", Tone: "neutral"}
 	sections[recordCardIndex].Fields = nil
+	sections[comparisonIndex].RecordComparison = &platform.PageRecordComparison{LabelField: "id"}
+	sections[comparisonIndex].Fields = []string{"name"}
 	sections[sparklineIndex].Sparkline = &platform.PageSparkline{Field: "sensitive", Suffix: "later"}
 	sections[treemapIndex].GroupSetVariable = ""
 	sections[treemapIndex].Group = "secret"
@@ -569,6 +579,19 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					}
 					if !recordCardFound || member.ID == builder.ID && privateRecordCards != 1 || member.ID != builder.ID && privateRecordCards != 0 {
 						t.Fatal("frozen card title, fields, record producer or member projection changed")
+					}
+					comparisonFound, privateComparisons := false, 0
+					for _, section := range d.Page.Sections {
+						if section.ID == "comparison" {
+							c := section.RecordComparison
+							comparisonFound = c != nil && c.LabelField == "name" && section.RecordSetVariable == "picked" && len(section.Fields) == map[bool]int{true: 2, false: 1}[member.ID == builder.ID] && section.Fields[0] == "amount"
+						}
+						if section.ID == "hiddenComparison" {
+							privateComparisons++
+						}
+					}
+					if !comparisonFound || member.ID == builder.ID && privateComparisons != 1 || member.ID != builder.ID && privateComparisons != 0 {
+						t.Fatal("frozen comparison title, fields, original multi-record producer or member projection changed")
 					}
 					sparklineFound, numberSparkline, privateSparkline := false, false, 0
 					for _, section := range d.Page.Sections {

@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Comparison title field": "比较标题字段",
+ "Comparison fields": "比较字段",
+ "Input record set binding": "输入记录集绑定",
+ "Choose an original multi-selection": "选择原多选记录资源",
+ "Map object comparison {widget}": "映射对象比较{widget}",
+ "Compare 2–4 original confirmed records. Select up to 64 scalar fields; differences use field types and values, and formatting stays with the original field owner.": "比较2–4条原已确认记录，最多选择64个标量字段；按字段类型和值标记差异，沿用原字段的格式化规则。",
+ "Bind an original multi-selection resource, title and 1–64 comparison fields before saving.": "保存前绑定原多选记录资源、标题及1–64个比较字段。",
+ "Bind the original multiple-selection ObjectTable output in the same page or overlay.": "绑定同一页面或浮层内原ObjectTable的多选输出。",
+ "Map an original record set, visible title or ID, and 1–64 unique scalar comparison fields.": "映射原记录集、可见标题或ID以及1–64个不重复的标量比较字段。",
+ "ObjectComparison reads 2–4 original confirmed records with stable IDs and original field formatting. Differences compare typed values; larger selections require correction and are never silently truncated. Private titles hide the comparison, private fields are removed, and source object arrays or OntologyMeta are not copied.": "ObjectComparison读取2–4条原已确认记录，保留稳定ID和原字段格式；按类型比较值，超额选择需修正且不会静默截断。私有标题使整个比较隐藏，私有字段移除，不复制来源对象数组及OntologyMeta。",
  "Record card": "记录卡片",
  "Card accent tone": "卡片强调色调",
  "Map object card {widget}": "映射对象卡片{widget}",

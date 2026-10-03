@@ -72,6 +72,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/record-card": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordCardExample })),
   "ui/record-cards": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordCardsExample })),
   "ui/record-chart": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordChartExample })),
+  "ui/record-comparison": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordComparisonExample })),
   "ui/record-events": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordEventsExample })),
   "ui/record-form": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordForms })),
   "ui/record-gantt": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordGanttExample })),

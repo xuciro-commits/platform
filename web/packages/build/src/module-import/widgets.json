@@ -501,9 +501,9 @@
       "sourceType": "ObjectComparison",
       "sourceCategory": "Ontology & workflow",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-comparison",
+      "reason": "confirmed-original-typed-record-set-comparison-profile"
     },
     {
       "sourceType": "Histogram",

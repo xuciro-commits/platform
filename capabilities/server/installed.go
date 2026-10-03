@@ -450,6 +450,10 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := s.CheckHistogram(info); err != nil {
 				return err
 			}
+		case "record-comparison":
+			if err := s.CheckRecordComparison(info); err != nil {
+				return err
+			}
 		case "record-card":
 			if err := s.CheckRecordCard(info); err != nil {
 				return err

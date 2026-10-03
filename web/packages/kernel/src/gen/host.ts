@@ -1140,6 +1140,10 @@ export type PageRecordChart = {
   yField: string;
 };
 
+export type PageRecordComparison = {
+  labelField: string;
+};
+
 export type PageRecordEvents = {
   timeField: string;
   titleField: string;
@@ -1526,6 +1530,8 @@ export type Section = {
   recordGantt?: PageRecordGantt;
   recordCalendar?: PageRecordCalendar;
   recordEvents?: PageRecordEvents;
+  recordComparison?: PageRecordComparison;
+  recordSetVariable?: string;
   recordCard?: PageRecordCard;
   sparkline?: PageSparkline;
   sparklineDecimalVariable?: string;
@@ -1901,7 +1907,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.73",
+  "uiProfile": "platform.page.v2.74",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5129,6 +5135,76 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "record-comparison",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.74",
+      "title": "Record comparison",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "recordComparison": {
+          "labelField": "id"
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "fields",
+        "record-set-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordComparison": {
+            "type": "object",
+            "properties": {
+              "labelField": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "labelField"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "records",
+          "bindingField": "recordSetVariable",
+          "type": "record-set",
+          "requiredUIProfile": "platform.page.v2.74"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -5204,7 +5280,8 @@ export const pageUIManifest = {
     "platform.page.v2.70",
     "platform.page.v2.71",
     "platform.page.v2.72",
-    "platform.page.v2.73"
+    "platform.page.v2.73",
+    "platform.page.v2.74"
   ],
   "runtime": {
     "scope": "page",
@@ -5781,6 +5858,13 @@ export const pageUIManifest = {
         "warning",
         "danger"
       ]
+    },
+    "recordComparison": {
+      "requiredUIProfile": "platform.page.v2.74",
+      "minRecords": 2,
+      "maxRecords": 4,
+      "maxFields": 64,
+      "minFields": 1
     }
   },
   "layout": {

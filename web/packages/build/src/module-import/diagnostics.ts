@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "comparison-producer":"Bind the original multiple-selection ObjectTable output in the same page or overlay.",
+ "record-comparison-binding":"Map an original record set, visible title or ID, and 1–64 unique scalar comparison fields.",
+ "native-record-comparison":"ObjectComparison reads 2–4 original confirmed records with stable IDs and original field formatting. Differences compare typed values; larger selections require correction and are never silently truncated. Private titles hide the comparison, private fields are removed, and source object arrays or OntologyMeta are not copied.",
  "record-card-binding":"Map the original record producer, visible title or ID, at most four scalar properties and a semantic accent tone.",
  "native-record-card":"ObjectCard reads the original confirmed record resource. Title, prominent properties and accent are explicitly mapped; stable IDs and original field formatting remain. Private titles hide the card, private properties are removed, and old or unconfirmed objects are not displayed. Source OntologyMeta and raw colors are not copied.",
 

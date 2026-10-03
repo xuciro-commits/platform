@@ -131,6 +131,13 @@ type pageRuntimeContract struct {
 		RequiredUIProfile string   `json:"requiredUIProfile"`
 		Variants          []string `json:"variants"`
 	} `json:"chartPresentation"`
+	RecordComparison struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+		MinRecords        int    `json:"minRecords"`
+		MaxRecords        int    `json:"maxRecords"`
+		MinFields         int    `json:"minFields"`
+		MaxFields         int    `json:"maxFields"`
+	} `json:"recordComparison"`
 	RecordCard struct {
 		RequiredUIProfile string   `json:"requiredUIProfile"`
 		MaxFields         int      `json:"maxFields"`

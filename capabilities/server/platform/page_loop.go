@@ -137,6 +137,12 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		if section.RecordSetVariable != "" {
+			v := d.Variables[section.RecordSetVariable]
+			if sectionOwners[section.ID] != "" || !accessible(section.RecordSetVariable, "", sectionOverlays[section.ID]) || (v.Scope == "page" && sectionOverlays[section.ID] != "") || (v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID]) {
+				return fmt.Errorf("record comparison needs its original page or overlay owner and does not enter a loop")
+			}
+		}
 		if section.Widget == "record-card" && sectionOwners[section.ID] != "" {
 			return fmt.Errorf("record card does not enter a loop")
 		}

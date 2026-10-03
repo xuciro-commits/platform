@@ -1,3 +1,4 @@
+import {RecordComparisonInspector} from "./RecordComparisonInspector";
 import {RecordCardInspector} from "./RecordCardInspector";
 import {SparklineInspector} from "./SparklineInspector";
 import {TreemapInspector} from "./TreemapInspector";
@@ -42,6 +43,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "record-comparison":{configVersion:1,bindings:RecordComparisonInspector},
  "record-card":{configVersion:1,bindings:RecordCardInspector},
  "sparkline-kpi":{configVersion:1,bindings:SparklineInspector},
  treemap:{configVersion:1,bindings:TreemapInspector},

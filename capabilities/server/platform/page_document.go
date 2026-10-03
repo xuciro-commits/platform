@@ -123,6 +123,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.ChartVariant != "" {
 				return fmt.Errorf("chart variant requires a document")
 			}
+			if s.Widget == "record-comparison" || s.RecordComparison != nil || s.RecordSetVariable != "" {
+				return fmt.Errorf("record comparison requires a page document")
+			}
 			if s.Widget == "record-card" || s.RecordCard != nil {
 				return fmt.Errorf("record card requires a page document")
 			}
@@ -285,6 +288,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkRecordEvents(section); err != nil {
+			return err
+		}
+		if err := d.checkRecordComparison(section); err != nil {
 			return err
 		}
 		if err := d.checkRecordCard(section); err != nil {
@@ -667,7 +673,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		if node.Kind == "widget" {
 			for _, s := range sections {
 				if s.ID == node.Section {
-					for _, id := range []string{s.SparklineDecimalVariable, s.SparklineNumberVariable, s.GroupValueVariable, s.GroupSetVariable, s.RowValueVariable, s.RowSetVariable, s.ColumnValueVariable, s.ColumnSetVariable, s.PickerValueVariable, s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
+					for _, id := range []string{s.RecordSetVariable, s.SparklineDecimalVariable, s.SparklineNumberVariable, s.GroupValueVariable, s.GroupSetVariable, s.RowValueVariable, s.RowSetVariable, s.ColumnValueVariable, s.ColumnSetVariable, s.PickerValueVariable, s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
 						if id != "" {
 							if _, ok := variables[id]; !ok {
 								return false

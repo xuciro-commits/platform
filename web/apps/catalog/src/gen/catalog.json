@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:a19e098898a93f68",
+  "revision": "sha256:0a4f9c84c7d1b9a9",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2160,6 +2160,33 @@
       ]
     },
     {
+      "id": "ui/record-comparison",
+      "owner": "@platform/ui",
+      "name": "Confirmed record comparison",
+      "summary": "Compare two to four complete original records with typed differences, stable identities and original field formatting.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordComparison.tsx",
+      "exports": [
+        "RecordComparison"
+      ],
+      "example": "RecordComparisonExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "record",
+        "comparison",
+        "identity",
+        "properties"
+      ],
+      "constraints": [
+        "The caller confirms every original record and supplies permission-filtered metadata. Values are compared by their declared scalar types; presentation performs no reads or writes and never truncates the selection."
+      ]
+    },
+    {
       "id": "ui/record-events",
       "owner": "@platform/ui",
       "name": "Authorized event list",
@@ -2923,10 +2950,12 @@
       "Collapsed": "收起",
       "Collection title": "集合标题",
       "Compare aggregate groups with totals and explicit drill-down.": "比较聚合分组，展示合计并提供明确的下钻。",
+      "Compare two to four complete original records with typed differences, stable identities and original field formatting.": "对比两到四条完整原记录，保留类型差异、稳定身份及原字段格式。",
       "Complete typed count matrix": "完整类型化计数矩阵",
       "Compose app navigation, routed tabs, commands and session context in one shell.": "在同一外壳中装配应用导航、路由标签页、命令与会话上下文。",
       "Compose nodes through typed ports with one shared graph interaction model.": "通过类型化端口装配节点，使用统一的图交互模型。",
       "Compose typed platform blocks with the existing native workflow editor and shared canvas.": "用现有原生流程编辑器和共享画布装配类型化平台区块。",
+      "Confirmed record comparison": "已确认记录对比",
       "Confirmed record summary": "已确认记录摘要",
       "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions.": "通过工作区 Host 接入。目录预览使用本地示例，不授予权限。",
       "Content tabs": "内容标签页",
@@ -3100,6 +3129,7 @@
       "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
       "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.": "92 类型迁移清单不授予运行资格。八种源组件已有有限配置方案，未支持配置阻止应用。",
+      "The caller confirms every original record and supplies permission-filtered metadata. Values are compared by their declared scalar types; presentation performs no reads or writes and never truncates the selection.": "调用方确认每条原记录并提供权限裁剪元数据；值按声明的标量类型对比，展示不读写记录且不截断选择。",
       "The caller confirms original record access and supplies permission-filtered metadata. Titles and properties remain in their original field owners; the card performs no reads or writes.": "调用方确认原记录访问并提供权限裁剪元数据；标题及属性保持原字段归属，卡片不读写记录。",
       "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records.": "调用方拥有授权完整分箱；控件校验区间和计数，不重新分箱，也不写入记录。",
       "The caller owns authorized complete counts and filter writes. Layout never inflates small groups, reads records or writes business data.": "调用方拥有完整授权计数与筛选写入；布局不放大小分组、不读记录、不写业务数据。",
@@ -3278,6 +3308,7 @@
       "web/packages/build/src/page-editor/widgets/RecordCalendarInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordCardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordChartInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordComparisonInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordEventsInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordGanttInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
@@ -3375,6 +3406,7 @@
       "web/packages/app/src/widgets/Range.tsx",
       "web/packages/app/src/widgets/RecordCalendar.tsx",
       "web/packages/app/src/widgets/RecordCard.tsx",
+      "web/packages/app/src/widgets/RecordComparison.tsx",
       "web/packages/app/src/widgets/RecordEvents.tsx",
       "web/packages/app/src/widgets/RecordGantt.tsx",
       "web/packages/app/src/widgets/RecordPicker.tsx",
@@ -3666,6 +3698,9 @@
     "ui/record-chart": [
       "web/packages/app/src/widgets/RecordChart.tsx"
     ],
+    "ui/record-comparison": [
+      "web/packages/app/src/widgets/RecordComparison.tsx"
+    ],
     "ui/record-events": [
       "web/packages/app/src/widgets/RecordEvents.tsx"
     ],
@@ -3738,6 +3773,7 @@
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordCardInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordComparisonInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordListInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordViewInspector.tsx",
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",
