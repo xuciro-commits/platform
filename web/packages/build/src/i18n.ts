@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Spacer": "空白",
+ "Blank region size (px)": "空白区域尺寸（px）",
+ "The size controls this blank region only. Zero and fractions are preserved; parent container gaps are configured separately. Blank space has no accessible content or focus target.": "尺寸只控制此处空白。零值和小数保留，父容器间距另行设置。空白没有无障碍内容或焦点。",
+ "Declare a finite nonnegative spacer size within the layout budget before saving.": "保存前请声明符合布局预算的有限非负空白尺寸。",
+ "Spacers require a finite nonnegative static size within the original layout budget and supported profile. String coercion, dynamic or executable configuration and invalid sizes are refused.": "空白需要符合原布局预算的有限非负静态尺寸及受支持的版本。字符串强制转换、动态或执行配置与无效尺寸拒绝。",
+ "The Spacer maps to one original controlled blank region: default 16, explicit zero and fractional sizes are retained. It has no accessible content or focus target. Its own height is separate from the parent container gap, and original visibility, ownership and frozen delivery remain.": "Spacer 映射原受控单处空白：默认16、显式零和小数尺寸保留。它没有无障碍内容或焦点，自身高度与父容器间距独立；原显示条件、拥有者和冻结交付保持。",
+
  "Separator": "分隔",
  "Show separator label": "显示分隔标签",
  "Separator label": "分隔标签",
@@ -1644,6 +1651,13 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Spacer": "空白",
+ "Blank region size (px)": "空白区域尺寸（px）",
+ "The size controls this blank region only. Zero and fractions are preserved; parent container gaps are configured separately. Blank space has no accessible content or focus target.": "尺寸只控制此处空白。零值和小数保留，父容器间距另行设置。空白没有无障碍内容或焦点。",
+ "Declare a finite nonnegative spacer size within the layout budget before saving.": "保存前请声明符合布局预算的有限非负空白尺寸。",
+ "Spacers require a finite nonnegative static size within the original layout budget and supported profile. String coercion, dynamic or executable configuration and invalid sizes are refused.": "空白需要符合原布局预算的有限非负静态尺寸及受支持的版本。字符串强制转换、动态或执行配置与无效尺寸拒绝。",
+ "The Spacer maps to one original controlled blank region: default 16, explicit zero and fractional sizes are retained. It has no accessible content or focus target. Its own height is separate from the parent container gap, and original visibility, ownership and frozen delivery remain.": "Spacer 映射原受控单处空白：默认16、显式零和小数尺寸保留。它没有无障碍内容或焦点，自身高度与父容器间距独立；原显示条件、拥有者和冻结交付保持。",
+
  "Separator": "分隔",
  "Show separator label": "显示分隔标签",
  "Separator label": "分隔标签",

@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Spacer": "空白",
+ "Spacer configuration is unavailable or incompatible.": "空白配置不可用或不兼容。",
+
  "Separator": "分隔",
  "Separator configuration is unavailable or incompatible.": "分隔配置不可用或不兼容。",
 
@@ -338,6 +341,9 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Spacer": "空白",
+ "Spacer configuration is unavailable or incompatible.": "空白配置不可用或不兼容。",
+
  "Separator": "分隔",
  "Separator configuration is unavailable or incompatible.": "分隔配置不可用或不兼容。",
 

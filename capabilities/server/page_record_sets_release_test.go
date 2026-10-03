@@ -311,6 +311,23 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 		sections = append(sections, build.Section{ID: spec.id, Widget: "separator", ConfigVersion: 1, Separator: &platform.PageSeparator{Label: spec.label}})
 	}
+	spacerIndex := len(sections)
+	spacerSize := 16.25
+	zeroSpacer := 0.0
+	for _, spec := range []struct {
+		id   string
+		size *float64
+	}{{"spacerInput", &spacerSize}, {"zeroSpacer", &zeroSpacer}, {"hiddenSpacer", &spacerSize}} {
+		node := platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		if spec.id == "hiddenSpacer" {
+			node.VisibleWhen = "privateNoticeVisible"
+		}
+		doc.Nodes[spec.id] = node
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "spacer", ConfigVersion: 1, Spacer: &platform.PageSpacer{Size: spec.size}})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -337,6 +354,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
 	sections[56].RecordPicker = &platform.PageRecordPicker{LabelField: "id"}
+	sections[spacerIndex].Spacer = &platform.PageSpacer{Size: &zeroSpacer}
 	sections[separatorIndex].Separator = &platform.PageSeparator{Label: &emptyNoticeTitle}
 	sections[noticeIndex].Notice = &platform.PageNotice{Title: &emptyNoticeTitle, Tone: "danger", Message: "Later note"}
 	sections[alertIndex].AlertBanner = &platform.PageAlertBanner{Threshold: "999", Tone: "info", Message: "Later alert"}
@@ -392,6 +410,21 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					blankFound, zeroFound, privateBlanks := false, false, 0
+					for _, section := range d.Page.Sections {
+						if section.ID == "spacerInput" {
+							blankFound = section.Spacer != nil && section.Spacer.Size != nil && *section.Spacer.Size == 16.25
+						}
+						if section.ID == "zeroSpacer" {
+							zeroFound = section.Spacer != nil && section.Spacer.Size != nil && *section.Spacer.Size == 0
+						}
+						if section.ID == "hiddenSpacer" {
+							privateBlanks++
+						}
+					}
+					if !blankFound || !zeroFound || member.ID == builder.ID && privateBlanks != 1 || member.ID != builder.ID && privateBlanks != 0 {
+						t.Fatal("frozen spacer fraction/zero or display permission changed")
+					}
 					lineFound, emptyLineFound, absentLineFound, privateLines := false, false, false, 0
 					for _, section := range d.Page.Sections {
 						if section.ID == "separatorInput" {

@@ -17,6 +17,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "app/records": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.RecordsExample })),
   "app/semantic-selection": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.SemanticSelectionExample })),
   "foundation/semantic-tokens": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Tokens })),
+  "layout/spacer": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SpacerExample })),
   "pattern/master-detail": () => import("@pkg/build/catalog/examples").then((module) => ({ default: module.MasterDetailExample })),
   "pattern/workspace": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.WorkspaceShell })),
   "scenario/application-studio": () => import("@pkg/build/catalog/examples").then((module) => ({ default: module.ApplicationStudioExample })),

@@ -1,5 +1,10 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Spacer": "空白",
+ "Controlled blank space": "受控空白",
+ "Reserve one caller-owned blank region independently of container gaps.": "保留一处调用方拥有的空白区域，与容器间距独立。",
+ "The document owner validates finite sizes against the original layout budget. Zero is preserved; the region is hidden from accessibility and is not a focus target.": "文档拥有者按原布局预算验证有限尺寸。零值保留，空白不进入无障碍内容或焦点。",
+
  "Separator": "分隔",
  "Operator instructions": "操作说明",
  "Semantic separator": "语义分隔",

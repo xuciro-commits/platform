@@ -1157,6 +1157,10 @@ export type PageSeparator = {
   label?: string;
 };
 
+export type PageSpacer = {
+  size?: number;
+};
+
 export type PageStatusTracker = {
   field: string;
   stages: string[];
@@ -1478,6 +1482,7 @@ export type Section = {
   recordList?: PageRecordList;
   headingLevel?: string;
   recordPicker?: PageRecordPicker;
+  spacer?: PageSpacer;
   separator?: PageSeparator;
   notice?: PageNotice;
   alertValueVariable?: string;
@@ -1834,7 +1839,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.62",
+  "uiProfile": "platform.page.v2.63",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4457,6 +4462,56 @@ export const pageUIManifest = {
       "layoutPreferences": {
         "frame": "inline"
       }
+    },
+    {
+      "componentID": "spacer",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.63",
+      "title": "Spacer",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "spacer": {
+          "size": 16
+        }
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "spacer": {
+            "type": "object",
+            "properties": {
+              "size": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 4096
+              }
+            },
+            "required": [
+              "size"
+            ]
+          }
+        }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      }
     }
   ],
   "supportedProfiles": [
@@ -4521,7 +4576,8 @@ export const pageUIManifest = {
     "platform.page.v2.59",
     "platform.page.v2.60",
     "platform.page.v2.61",
-    "platform.page.v2.62"
+    "platform.page.v2.62",
+    "platform.page.v2.63"
   ],
   "runtime": {
     "scope": "page",
@@ -5049,6 +5105,9 @@ export const pageUIManifest = {
     "separator": {
       "requiredUIProfile": "platform.page.v2.62",
       "maxLabelBytes": 1024
+    },
+    "spacer": {
+      "requiredUIProfile": "platform.page.v2.63"
     }
   },
   "layout": {

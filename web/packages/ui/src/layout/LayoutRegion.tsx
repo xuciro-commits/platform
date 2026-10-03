@@ -4,6 +4,11 @@ import {cn} from "../lib/cn";
 
 export type LayoutSize=Api.PageLayoutSize;
 
+/** One blank region. The document owner validates size; parent gaps stay independent. */
+export function Spacer({size}:{size:number}){
+ return <div aria-hidden="true" className="min-w-0 shrink-0" style={{height:size}}/>;
+}
+
 /** Presentation dimensions only. The document owner validates the budget and
  * parent compatibility; region sizing never changes a child's data or identity. */
 export function LayoutRegion({children,size,parent,label,fillHeight,fillWidth}: {children:ReactNode;size?:LayoutSize;parent?:string;label?:string;fillHeight?:boolean;fillWidth?:boolean}) {

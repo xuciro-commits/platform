@@ -637,9 +637,9 @@
       "sourceType": "Spacer",
       "sourceCategory": "Layout & content",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "spacer",
+      "reason": "bounded-controlled-spacer-profile"
     },
     {
       "sourceType": "ImageWidget",

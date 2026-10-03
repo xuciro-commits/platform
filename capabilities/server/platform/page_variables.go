@@ -43,6 +43,9 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Spacer struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+	} `json:"spacer"`
 	Separator struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 		MaxLabelBytes     int    `json:"maxLabelBytes"`

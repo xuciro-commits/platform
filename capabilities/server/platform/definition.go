@@ -111,6 +111,7 @@ type Section struct {
 	RecordList            *PageRecordList         `json:"recordList,omitempty"`
 	HeadingLevel          string                  `json:"headingLevel,omitempty"`
 	RecordPicker          *PageRecordPicker       `json:"recordPicker,omitempty"`
+	Spacer                *PageSpacer             `json:"spacer,omitempty"`
 	Separator             *PageSeparator          `json:"separator,omitempty"`
 	Notice                *PageNotice             `json:"notice,omitempty"`
 	AlertValueVariable    string                  `json:"alertValueVariable,omitempty"`

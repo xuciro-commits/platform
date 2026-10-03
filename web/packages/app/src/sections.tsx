@@ -30,6 +30,7 @@ import { pageVariableContract, usePageVariables, usePageSession } from "./runtim
 
 const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
 const RecordPickerRenderer=lazy(()=>import("./widgets/RecordPicker").then(module=>({default:module.RecordPickerRenderer})));
+const SpacerRenderer=lazy(()=>import("./widgets/Spacer").then(module=>({default:module.SpacerRenderer})));
 const SeparatorRenderer=lazy(()=>import("./widgets/Separator").then(module=>({default:module.SeparatorRenderer})));
 const NoticeRenderer=lazy(()=>import("./widgets/Notice").then(module=>({default:module.NoticeRenderer})));
 const AlertRenderer=lazy(()=>import("./widgets/Alert").then(module=>({default:module.AlertRenderer})));
@@ -412,6 +413,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
  "record-picker":({page,section,window,selected,enabled,onSelect})=><RecordPickerRenderer type={objectOf(page,section)} window={window} fields={section.recordPicker} title={section.title||t("Record picker")} selected={selected} enabled={enabled} onSelect={onSelect}/>,
+ spacer:({section})=><SpacerRenderer config={section.spacer}/>,
  separator:({section})=><SeparatorRenderer config={section.separator} name={section.title||t("Separator")}/>,
  notice:({section})=><NoticeRenderer config={section.notice} label={section.title||t("Notice")}/>,
  "alert-banner":({section,alertValue})=><AlertRenderer value={alertValue} config={section.alertBanner} title={section.title||t("Alert banner")}/>,

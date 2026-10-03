@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.Widget == "spacer" || s.Spacer != nil {
+				return fmt.Errorf("spacer requires a document")
+			}
 			if s.Widget == "separator" || s.Separator != nil {
 				return fmt.Errorf("separator requires a document")
 			}
@@ -225,6 +228,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkGauge(section); err != nil {
+			return err
+		}
+		if err := d.checkSpacer(section); err != nil {
 			return err
 		}
 		if err := d.checkSeparator(section); err != nil {

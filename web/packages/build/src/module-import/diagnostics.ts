@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "spacer-profile":"Spacers require a finite nonnegative static size within the original layout budget and supported profile. String coercion, dynamic or executable configuration and invalid sizes are refused.",
+ "native-spacer":"The Spacer maps to one original controlled blank region: default 16, explicit zero and fractional sizes are retained. It has no accessible content or focus target. Its own height is separate from the parent container gap, and original visibility, ownership and frozen delivery remain.",
  "separator-profile":"Separators require an optional static plain label within its UTF-8 budget and the supported profile. Unknown fields, executable configuration and incompatible values are refused.",
  "native-separator":"The Divider maps to an original horizontal semantic separator. Missing or empty labels remain visually empty; widget identity supplies its accessible name. Labels and HTML stay literal, with original visibility, ownership and frozen delivery.",
  "notice-profile":"Notices require a static optional title, plain text and a supported semantic tone within the declared UTF-8 budgets. Unknown configurations, executable inputs and old profiles are refused.",
