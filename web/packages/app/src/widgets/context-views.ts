@@ -1,6 +1,6 @@
 import type {Api} from "@platform/kernel";
 import type {PageSessionStore,PageSessionSnapshot} from "../runtime/Session";
-import {selectionSlot,sectionOverlay} from "../runtime/resources";
+import {recordResourceSlot,sectionOverlay} from "../runtime/resources";
 
 export const currentContextRead=(hostScope:string|undefined,readScope:string|undefined)=>hostScope===readScope;
 
@@ -9,8 +9,8 @@ export function originalContextSlot(page:Api.Page,section:Api.Section,variable:s
  const v=page.document?.variables?.[variable??""];
  if(!variable||v?.type!=="record"||v.mode!=="resource"||v.source?.kind!=="record")return;
  const producer=page.sections?.find(s=>s.id===v.source?.section);
- if(!producer||!["table","record-list","record-timeline","kanban","record-calendar","record-picker","record-leaderboard","record-scatter"].includes(producer.widget)||sectionOverlay(page,section.id??"")!==sectionOverlay(page,producer.id??""))return;
- return selectionSlot(page,producer);
+ if(!producer||!["table","record-list","resource-list","graph-explorer","record-timeline","kanban","record-calendar","record-picker","record-leaderboard","record-scatter"].includes(producer.widget)||sectionOverlay(page,section.id??"")!==sectionOverlay(page,producer.id??""))return;
+ return recordResourceSlot(page,variable);
 }
 export function confirmedContext(page:Api.Page,section:Api.Section,variable:string|undefined,session:PageSessionStore,snapshot:PageSessionSnapshot) {
  const slot=originalContextSlot(page,section,variable);

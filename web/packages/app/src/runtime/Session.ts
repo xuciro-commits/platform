@@ -255,7 +255,7 @@ export class PageSessionStore {
   selectReference(key: string, reference?: RecordReference) {
     if (this.disposed || !this.plan.objects.has(key) || reference && (reference.object !== this.plan.objects.get(key) || !reference.id)) return;
     this.publish({ records: this.clear([key]), queries: this.invalidate([key]) });
-    if (reference) void this.read(key, reference);
+    if (reference) return this.read(key, reference);
   }
   filter(object: string, field: string, value: unknown, owner?:string) {
     const filterKey=owner?`overlay:${owner}/${object}`:object;

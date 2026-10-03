@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if explorationWidget(s.Widget) || s.ResourceList != nil || s.AssetDirectory != nil || s.GraphExplorer != nil || s.VertexGraph != nil {
+				return fmt.Errorf("exploration requires a page document")
+			}
 			if contextView(s.Widget) || s.Breadcrumb != nil || s.Avatar != nil || s.Image != nil {
 				return fmt.Errorf("context views require a page document")
 			}
@@ -302,6 +305,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		if err := d.checkRecordEvents(section); err != nil {
 			return err
 		}
+		if err := d.checkExploration(section); err != nil {
+			return err
+		}
 		if err := d.checkContextViews(section); err != nil {
 			return err
 		}
@@ -386,6 +392,16 @@ func (d *PageDocument) Check(sections []Section) error {
 		for _, section := range sections {
 			for _, resource := range pageWidgets.Runtime.Resources {
 				if section.ID == variable.Source.Section && (section.Widget == resource.Widget || PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordList.RequiredUIProfile) && slices.Contains(resource.Widgets, section.Widget)) && variable.Source.Kind == resource.Kind {
+					if resource.Kind == "record" {
+						if section.Widget == "graph-explorer" {
+							matched := section.GraphExplorer != nil && slices.ContainsFunc(section.GraphExplorer.Outputs, func(o PageGraphOutput) bool { return o.ID == variable.Source.Port && o.Variable == id })
+							if !matched {
+								return fmt.Errorf("graph record source needs its declared original typed port")
+							}
+						} else if variable.Source.Port != "" {
+							return fmt.Errorf("only a graph producer declares a record output port")
+						}
+					}
 					if resource.Kind == "records" && section.SelectionSetVariable != id {
 						return fmt.Errorf("record-set needs its explicit table producer")
 					}
@@ -551,6 +567,13 @@ func (d *PageDocument) Check(sections []Section) error {
 				dependencies = append(dependencies, variable.Source.Variable)
 			}
 			dependencies = append(dependencies, controls[variable.Source.Section]...)
+			if variable.Source.Kind == "record" {
+				for _, s := range sections {
+					if s.ID == variable.Source.Section && s.Widget == "graph-explorer" {
+						dependencies = append(dependencies, s.RecordVariable)
+					}
+				}
+			}
 			if variable.Source.Kind == "filter" {
 				for _, s := range sections {
 
@@ -605,6 +628,17 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 	}
 	variables := map[string]PageVariable{}
 	for id, variable := range d.Variables {
+		if variable.Source != nil && variable.Source.Port != "" {
+			found := false
+			for _, s := range sections {
+				if s.ID == variable.Source.Section && s.GraphExplorer != nil && slices.ContainsFunc(s.GraphExplorer.Outputs, func(o PageGraphOutput) bool { return o.Variable == id && o.ID == variable.Source.Port }) {
+					found = true
+				}
+			}
+			if !found {
+				continue
+			}
+		}
 		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || (variable.Source.Kind == "plan" || variable.Mode == "aggregate") || variable.Source.Kind == "property") || allowed[variable.Source.Section] {
 			variables[id] = variable
 		}
@@ -697,6 +731,13 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 			for _, s := range sections {
 
 				if s.ID == node.Section {
+					for _, id := range s.ExplorationVariables() {
+						if id != "" {
+							if _, ok := variables[id]; !ok {
+								return false
+							}
+						}
+					}
 					for _, id := range s.ContextViewVariables() {
 						if id != "" {
 							if _, ok := variables[id]; !ok {

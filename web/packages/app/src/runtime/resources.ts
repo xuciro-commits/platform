@@ -4,6 +4,13 @@ import { variablePlan } from "./query-plans";
 import type { VariableResult } from "./variables";
 
 export const recordSlot = (object: string, name?: string, overlay?:string) => `${overlay?`overlay:${overlay}/`:""}${name ? `selection:${name}` : "object"}/${object}`;
+export const graphOutputSlot=(page:Api.Page,section:Api.Section,port:string)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-output/${section.id??""}/${port}`;
+export function recordResourceSlot(page:Api.Page,variable:string|undefined):string|undefined {
+ const source=page.document?.variables?.[variable??""]?.source,producer=page.sections?.find(s=>s.id===source?.section);
+ if(!source||source.kind!=="record"||!producer)return;
+ if(source.port)return producer.widget==="graph-explorer"&&producer.graphExplorer?.outputs?.some(o=>o.id===source.port&&o.variable===variable)?graphOutputSlot(page,producer,source.port):undefined;
+ return selectionSlot(page,producer);
+}
 
 /** Presentation ownership comes from the one layout document. */
 export function sectionOverlay(page:Api.Page,section:string):string|undefined {
@@ -15,7 +22,7 @@ export function selectionSlot(page:Api.Page,section:Api.Section,parent=false):st
  const object=parent?(section.parentSelection?page.selections?.find((s)=>s.name===section.parentSelection)?.object.name??"":page.object.name):section.object?.name||page.object.name;
  const name=parent?section.parentSelection:section.selection,owner=sectionOverlay(page,section.id??"");
  const scoped=Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=11;
- const local=scoped&&owner&&(page.sections??[]).some((s)=>["table","record-timeline","kanban","record-list","record-calendar","record-picker","record-leaderboard","record-scatter"].includes(s.widget)&&(s.object?.name||page.object.name)===object&&(s.selection??"")===(name??"")&&sectionOverlay(page,s.id??"")===owner);
+ const local=scoped&&owner&&(page.sections??[]).some((s)=>["table","record-timeline","kanban","record-list","resource-list","record-calendar","record-picker","record-leaderboard","record-scatter"].includes(s.widget)&&(s.object?.name||page.object.name)===object&&(s.selection??"")===(name??"")&&sectionOverlay(page,s.id??"")===owner);
  return recordSlot(object,name,local?owner:undefined);
 }
 export const selectionSetSlot=(page:Api.Page,section:Api.Section)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-set/${section.id??""}`;
@@ -44,7 +51,7 @@ export function overlaySessionScopes(page:Api.Page) {
   const sections=(page.sections??[]).filter((s)=>[...nodes].some((id)=>document?.nodes[id]?.section===s.id));
   return [owner,{
    queries:new Set([...sections.map((s)=>s.id??""),...Object.entries(document?.queries??{}).filter(([,q])=>q.owner===owner).map(([id])=>`plan/${id}`)]),
-   selections:new Set(sections.flatMap(s=>[selectionSlot(page,s),...(s.selectionSetVariable?[selectionSetSlot(page,s)]:[])]).filter((key)=>key.startsWith(`overlay:${owner}/`))),
+   selections:new Set(sections.flatMap(s=>[selectionSlot(page,s),...(s.graphExplorer?.outputs??[]).map(o=>graphOutputSlot(page,s,o.id)),...(s.selectionSetVariable?[selectionSetSlot(page,s)]:[])]).filter((key)=>key.startsWith(`overlay:${owner}/`))),
    filters:new Set(sections.filter((s)=>s.widget==="filter").map((s)=>filterSlot(s.object?.name||page.object.name,filterOwner(page,s))).filter((key)=>key.startsWith(`overlay:${owner}/`))),
    loops:new Set([...nodes].filter((id)=>document?.nodes[id]?.kind==="loop")),
   }];
@@ -61,10 +68,10 @@ export function resourceVariables(page: Api.Page, snapshot: PageSessionSnapshot)
     const section = page.sections?.find((section) => section.id === source.section);
     if (!section) return [[id, { status: "error", code: "Resource source is unavailable" } as VariableResult]];
     if(page.document?.unusedWidgets?.some(entry=>page.document?.nodes[entry.node]?.section===section.id))return [[id,{status:"empty"} as VariableResult]];
-    const object = section.object?.name || page.object.name;
+    const object = section.graphExplorer?.outputs?.find(o=>o.id===source.port)?.object.name ?? (section.object?.name || page.object.name);
     let value: VariableResult;
     if (source.kind === "record") {
-      const state = snapshot.records[selectionSlot(page,section)];
+      const slot=recordResourceSlot(page,id),state=slot?snapshot.records[slot]:undefined;
       value = state?.status === "value" ? { status: "value", value: { kind: "record", reference: state.value } }
         : state?.status === "pending" ? { status: "pending" } : state?.status === "error" ? { status: "error", code: "Resource read failed" } : { status: "empty" };
     } else if(source.kind==="records"){const state=snapshot.recordSets[selectionSetSlot(page,section)],payload={kind:"record-set" as const,object,records:state&&"value" in state?state.value??[]:[]};value=state?.status==="value"?{status:"value",value:payload}:state?.status==="pending"?{status:"pending"}:state?.status==="error"?{status:"error",code:"Selection read failed"}:{status:"empty",value:payload};

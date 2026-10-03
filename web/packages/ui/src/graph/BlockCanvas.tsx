@@ -82,7 +82,7 @@ function CanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onCo
     setFlowEdges((previous) => edges.map((edge) => ({
       id: edge.id, source: edge.source, sourceHandle: edge.sourcePort, target: edge.target, targetHandle: edge.targetPort,
       type: "block", selected: previous.find((old) => old.id === edge.id)?.selected,
-      markerEnd: { type: MarkerType.ArrowClosed, color: edge.tone ? `var(--tone-${edge.tone})` : "var(--muted)", width: 16, height: 16 },
+      markerEnd: edge.directed===false?undefined:{ type: MarkerType.ArrowClosed, color: edge.tone ? `var(--tone-${edge.tone})` : "var(--muted)", width: 16, height: 16 },
       deletable: false, data: { definition: edge, editable: editable && !!onInsert },
     })));
   }, [edges, editable, onInsert, setFlowEdges]);

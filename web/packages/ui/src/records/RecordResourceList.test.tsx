@@ -1,0 +1,16 @@
+import {cleanup,fireEvent,render,screen} from "@testing-library/react";
+import {afterEach,expect,test,vi} from "vitest";
+import {pageUIManifest} from "@platform/kernel";
+import {RecordResourceList} from "./RecordResourceList";
+import type {EntityInfo,EntityRecord} from "./Records";
+afterEach(cleanup);
+const info={type:"sample.asset",title:"Resources",fields:[{name:"name",title:"Name",type:"text"},{name:"status",title:"Status",type:"choice",choices:["active","warning"],choiceTitles:["Active original","Warning original"]}]} as EntityInfo;
+const record=(id:string):EntityRecord=>({id,revision:1,created:{},changed:{},name:"<b>Same resource</b>",status:"active",hidden:"Private"});
+test("resource rows preserve original order, duplicate names, real status mappings and exact controlled selection",()=>{
+ const rows=[record("B"),{...record("A"),status:"warning"}],select=vi.fn(),view=render(<RecordResourceList records={rows} info={info} labelField="name" statusField="status" statusTones={[{value:"active",tone:"success"},{value:"warning",tone:"warning"}]} total={80} selected="A" onSelect={select}/>);expect(screen.getByRole("status").textContent).toBe("Showing 2 of 80 resources.");expect(screen.getAllByText("<b>Same resource</b>")).toHaveLength(2);expect(view.container.querySelector("b")).toBeNull();expect(screen.getByText("Warning original").closest('[data-tone]')?.getAttribute("data-tone")).toBe("warning");const buttons=screen.getAllByRole("button");fireEvent.click(buttons[1]!);expect(select).toHaveBeenCalledWith(rows[1]);expect(buttons[1]!.getAttribute("aria-pressed")).toBe("true");expect(screen.queryByText("Private")).toBeNull();
+ view.rerender(<RecordResourceList records={rows} info={info} labelField="name" statusField="status" total={2} enabled={false} onSelect={select}/>);fireEvent.click(screen.getAllByRole("button")[0]!);expect(select).toHaveBeenCalledTimes(1);view.rerender(<RecordResourceList records={rows} info={info} labelField="name" statusField="status" total={2}/>);expect(screen.queryByRole("button")).toBeNull();
+});
+test("empty and missing original status remain explicit and field privacy, identity, totals and twelve-row budgets fail closed",()=>{
+ const props={records:[record("A")],info,labelField:"name",statusField:"status",total:1},view=render(<RecordResourceList {...props} records={[]} total={0}/>);expect(screen.getByText("No resources in this window.")).toBeTruthy();view.rerender(<RecordResourceList {...props} records={[{...record("A"),status:null}]}/>);expect(screen.getByText("No status provided")).toBeTruthy();
+ for(const patch of [{total:0},{records:[record("A"),record("A")],total:2},{labelField:"hidden"},{statusField:"hidden"},{records:[{...record("A"),status:false}]},{records:[{...record("A"),name:1}]},{records:[{...record("A"),archived:true}]},{statusTones:[{value:"active",tone:"danger"},{value:"active",tone:"success"}]},{records:Array.from({length:pageUIManifest.runtime.exploration.maxResourceWindow+1},(_,index)=>record(String(index))),total:40}]){view.rerender(<RecordResourceList {...props} {...patch} statusTones={(patch as {statusTones?:never}).statusTones}/>);expect(screen.getByRole("alert")).toBeTruthy();expect(screen.queryByRole("list")).toBeNull();}
+});

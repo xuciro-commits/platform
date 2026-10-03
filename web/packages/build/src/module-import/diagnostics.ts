@@ -1,5 +1,19 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "exploration-profile":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
+ "exploration-asset-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
+ "resource-list-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
+ "directory-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
+ "graph-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
+ "vertex-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
+ "graph-output-migration":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
+ "native-resource-list":"The original source configuration remains in the report. Its resource window, published asset mappings, relation traversal and typed selection now use original platform owners.",
+ "native-asset-directory":"The original source configuration remains in the report. Its resource window, published asset mappings, relation traversal and typed selection now use original platform owners.",
+ "native-graph-explorer":"The original source configuration remains in the report. Its resource window, published asset mappings, relation traversal and typed selection now use original platform owners.",
+ "native-vertex-graph":"The original source configuration remains in the report. Its resource window, published asset mappings, relation traversal and typed selection now use original platform owners.",
+ "native-graph-ports":"The source heterotype selection and competing table writer are explicitly split. Existing consumers use the selected object port; every mapped graph object retains its own selection output and the table keeps a separate original producer.",
+ "native-graph-writer-split":"The source heterotype selection and competing table writer are explicitly split. Existing consumers use the selected object port; every mapped graph object retains its own selection output and the table keeps a separate original producer.",
+
  "static-image-profile":"Preserve a literal HTTP(S) or same-origin image URL, caption and finite height of 0–4096. Other schemes, credentials, whitespace, controls and malformed escapes are rejected.",
  "native-static-image":"The original image URL, caption and height are preserved. The browser renders that configured public source with cover fit; empty URLs stay unconfigured. It is not replaced by an attachment or a claim of frozen remote bytes.",
  "breadcrumb-binding":"Bind an existing published home page with its actual interface and no required inputs; map the optional original record title explicitly.",

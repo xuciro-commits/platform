@@ -1,3 +1,4 @@
+export {createRecordExploration,type RecordExplorationReader} from "./exploration/reader";
 import {createRecordCollaboration} from "./collaboration/service";
 export {createRecordCollaboration} from "./collaboration/service";
 export type {CollaborationTarget,CollaborationHost} from "./collaboration/service";

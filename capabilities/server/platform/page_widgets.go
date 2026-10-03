@@ -85,7 +85,7 @@ var pageWidgets = func() pageUIContract {
 			fields[port.BindingField] = true
 		}
 		for _, event := range widget.Events {
-			if !slices.Contains([]string{"click", "select"}, event.ID) || event.Payload != "void" || event.MaxBindings != 1 && !(widget.ComponentID == "button-group" && event.MaxBindings == manifest.Runtime.ButtonGroup.MaxButtons) || event.RequiredUIProfile != "" && !slices.Contains(manifest.SupportedProfiles, event.RequiredUIProfile) {
+			if !slices.Contains([]string{"click", "select"}, event.ID) || event.Payload != "void" || event.MaxBindings != 1 && !(widget.ComponentID == "button-group" && event.MaxBindings == manifest.Runtime.ButtonGroup.MaxButtons) && !(widget.ComponentID == "asset-directory" && event.MaxBindings == manifest.Runtime.Exploration.MaxDirectoryItems) || event.RequiredUIProfile != "" && !slices.Contains(manifest.SupportedProfiles, event.RequiredUIProfile) {
 				panic("unsupported page widget event")
 			}
 		}

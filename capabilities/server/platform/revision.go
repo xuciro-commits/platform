@@ -83,6 +83,7 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 			requires = append(requires, group.Object)
 		}
 		requires = append(requires, section.ServiceDependencies()...)
+		requires = append(requires, section.ExplorationReferences()...)
 		requires = append(requires, section.Actions...)
 		if section.InlineEdit != nil {
 			requires = append(requires, section.InlineEdit.Action)
@@ -513,6 +514,7 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 				required = append(required, group.Object)
 			}
 			required = append(required, section.ServiceDependencies()...)
+			required = append(required, section.ExplorationReferences()...)
 			required = append(required, section.Actions...)
 			if section.InlineEdit != nil {
 				required = append(required, section.InlineEdit.Action)
@@ -704,6 +706,12 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	for _, s := range page.Sections {
+		if err := page.CheckExplorationBinding(s); err != nil {
+			return err
+		}
+		if err := checkFrozenExploration(page, s, lookup); err != nil {
+			return err
+		}
 		if err := page.CheckContextViewBinding(s); err != nil {
 			return err
 		}
@@ -899,6 +907,9 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 				}
 			}
 			if err := page.CheckRecordPickerQuery(id, named); err != nil {
+				return err
+			}
+			if err := page.CheckResourceListQuery(id, named); err != nil {
 				return err
 			}
 			if err := page.CheckAvatarQuery(id, named, object); err != nil {

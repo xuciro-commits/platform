@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -389,3 +389,14 @@ export function RecordAvatarStackExample(){
  return <RecordAvatarStack records={records} info={info} labelField="name" detailFields={["shift"]} total={14}/>;
 }
 export function StaticImageExample(){return <StaticImage src={new URL("./catalog-image.svg",import.meta.url).href} alt={t("Catalog landscape")} caption={t("A real bundled image at its original static URL.")}/>;}
+
+export function RecordResourceListExample(){const [selected,setSelected]=useState("");return <RecordResourceList records={demoRows.slice(0,2)} info={demoInfo} labelField="name" statusField="state" total={12} statusTones={[{value:"open",tone:"info"},{value:"done",tone:"success"}]} selected={selected} onSelect={record=>setSelected(record.id)}/>;}
+export function SearchAroundExample(){
+ const root={object:demoInfo.type,record:demoRows[0]!,info:demoInfo,labelField:"name"},[path,setPath]=useState([root]),[active,setActive]=useState("original-related-v1"),[selected,setSelected]=useState<{object:string;id:string}>();
+ return <SearchAround path={path} relations={[{id:"original-related-v1",label:t("Related records"),total:12}]} activeRelation={active} window={{records:demoRows.slice(1),info:demoInfo,labelField:"name",total:12}} onBack={index=>setPath(path.slice(0,index+1))} onRelation={setActive} onTraverse={(object,record)=>setPath([...path,{object,record,info:demoInfo,labelField:"name"}])} onSelect={(object,record)=>setSelected({object,id:record.id})} selected={selected}/>;
+}
+export function AssetDirectoryExample(){return <AssetDirectory items={[{id:"page",label:"Operations / Assets",title:"Original resource workspace",asset:{ref:{app:"catalog",kind:"page",name:"assets"},sourceVersion:"retained-v1"}},{id:"query",label:"Datasets / telemetry_q3",title:"Original retained query",asset:{ref:{app:"catalog",kind:"query",name:"telemetry"},sourceVersion:"retained-v2"}}]}/>;}
+export function RecordNeighborhoodExample(){
+ const original=(id:string)=>({id,revision:1,created:stamp,changed:stamp}),info=(type:string)=>({...demoInfo,type,app:type.split(".")[0]!,title:type,display:"id",fields:[],lifecycle:undefined}) as EntityInfo;
+ return <RecordNeighborhood root={{object:"catalog.asset",record:original("ASSET-17"),info:info("catalog.asset"),labelField:"id"}} groups={[{id:"sensor-link-v1",records:[original("S-01"),original("S-02")],info:info("catalog.sensor"),bindingTitle:t("Sensors"),badge:"S",tone:"success",total:7,limit:4},{id:"alert-link-v1",records:[original("A-01")],info:info("catalog.alert"),bindingTitle:t("Alerts"),badge:"A",tone:"danger",total:5,limit:3}]}/>;
+}

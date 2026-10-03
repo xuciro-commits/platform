@@ -78,6 +78,9 @@ func (p Page) RecordVariableObject(variable string) string {
 	}
 	section := ""
 	if v.Source != nil {
+		if v.Source.Port != "" {
+			return p.GraphOutputObject(v.Source.Section, v.Source.Port, variable).Name
+		}
 		if v.Source.Kind == "record" {
 			section = v.Source.Section
 		} else if v.Source.Kind == "item" {
@@ -162,6 +165,9 @@ func (p Page) NavigationTargets() []AssetRef {
 
 func (p Page) CheckRecordPorts() error {
 	for _, s := range p.Sections {
+		if err := p.CheckExplorationBinding(s); err != nil {
+			return err
+		}
 		if err := p.CheckContextViewBinding(s); err != nil {
 			return err
 		}

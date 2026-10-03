@@ -104,6 +104,10 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	ResourceList             *PageResourceList       `json:"resourceList,omitempty"`
+	AssetDirectory           *PageAssetDirectory     `json:"assetDirectory,omitempty"`
+	GraphExplorer            *PageGraphExplorer      `json:"graphExplorer,omitempty"`
+	VertexGraph              *PageVertexGraph        `json:"vertexGraph,omitempty"`
 	Breadcrumb               *PageBreadcrumb         `json:"breadcrumb,omitempty"`
 	Avatar                   *PageAvatarStack        `json:"avatar,omitempty"`
 	Image                    *PageStaticImage        `json:"image,omitempty"`

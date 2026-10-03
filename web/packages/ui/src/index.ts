@@ -37,6 +37,7 @@ export { EntityCard, PropertyList } from "./components/EntityCard";
 export { PageHeader } from "./components/PageHeader";
 export { NotificationList, type NotificationItem, type NotificationListProps } from "./components/NotificationList";
 export {BreadcrumbTrail,type BreadcrumbTrailItem,type BreadcrumbTrailProps} from "./components/BreadcrumbTrail";
+export {AssetDirectory,type AssetDirectoryItem,type AssetDirectoryProps} from "./components/AssetDirectory";
 export {StaticImage,validStaticImage,validStaticImageURL,type StaticImageProps,type StaticImageConfig} from "./components/StaticImage";
 export { Sheet } from "./primitives/sheet";
 export { Workspace, useWorkspace, useViewCall, useUnsavedChanges, notify, type Launcher, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
@@ -90,6 +91,10 @@ export {RecordSparkline,recordSparklinePoints} from "./records/RecordSparkline";
 
 export {RecordCard} from "./records/RecordCard";
 export {RecordAvatarStack,type RecordAvatarStackProps} from "./records/RecordAvatarStack";
+export {RecordResourceList,type RecordResourceListProps,type ResourceStatusTone} from "./records/RecordResourceList";
+export {SearchAround,type SearchAroundProps,type SearchAroundPathEntry,type SearchAroundRelation,type SearchAroundWindow} from "./records/SearchAround";
+export {RecordNeighborhood,type RecordNeighborhoodProps,type RecordNeighborhoodGroup} from "./records/RecordNeighborhood";
+export {neighborhoodPositions,type NeighborhoodLayoutGroup} from "./graph/neighborhood";
 export {RecordComparison} from "./records/RecordComparison";
 export {ApprovalInbox,type ApprovalInboxProps,type ApprovalInboxRow} from "./records/ApprovalInbox";
 export type {RecordHistoryProps} from "./records/Records";

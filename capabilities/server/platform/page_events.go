@@ -49,13 +49,19 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 		found := false
 		group := false
 		breadcrumb := false
+		directory := false
 		for _, section := range sections {
 			if descriptor := widgetEvent(section.Widget, event.Event); section.ID == event.Source && descriptor != nil {
 				found = descriptor.RequiredUIProfile == "" || PageUIProfileSupports(d.UIProfile, descriptor.RequiredUIProfile)
 				group = section.Widget == "button-group"
 				breadcrumb = section.Widget == "breadcrumb"
+				directory = section.Widget == "asset-directory"
 				if group {
 					found = found && slices.ContainsFunc(section.Buttons, func(b PageButton) bool { return b.ID == event.Control })
+				} else if directory {
+					found = found && event.Navigate != nil && !event.Return && len(event.Navigate.Inputs) == 0 && len(event.Navigate.Results) == 0 && section.AssetDirectory != nil && slices.ContainsFunc(section.AssetDirectory.Items, func(i PageAssetDirectoryItem) bool {
+						return i.ID == event.Control && i.Asset.Ref.Kind == AssetPage && i.Asset.Ref == event.Navigate.Page
+					})
 				} else if breadcrumb {
 					found = found && event.Control == "home" && event.Navigate != nil && !event.Return && len(event.Navigate.Inputs) == 0 && len(event.Navigate.Results) == 0
 				} else if event.Control != "" {

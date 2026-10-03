@@ -1,3 +1,4 @@
+import {ResourceListInspector,AssetDirectoryInspector,GraphExplorerInspector,VertexGraphInspector} from "./ExplorationInspectors";
 import {BreadcrumbInspector,BreadcrumbHomeInspector,AvatarInspector,ImageInspector} from "./ContextInspectors";
 import {HistoryInspector,WorkViewsInspector} from "./WorkViewsInspector";
 import {CollaborationInspector} from "./CollaborationInspector";
@@ -47,6 +48,10 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "resource-list":{configVersion:1,bindings:ResourceListInspector},
+ "asset-directory":{configVersion:1,bindings:AssetDirectoryInspector},
+ "graph-explorer":{configVersion:1,bindings:GraphExplorerInspector},
+ "vertex-graph":{configVersion:1,bindings:VertexGraphInspector},
  breadcrumb:{configVersion:1,bindings:BreadcrumbInspector,events:BreadcrumbHomeInspector},
  "avatar-stack":{configVersion:1,bindings:AvatarInspector},
  "static-image":{configVersion:1,bindings:ImageInspector},

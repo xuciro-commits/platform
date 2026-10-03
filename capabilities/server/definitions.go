@@ -467,6 +467,26 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						avatar.DetailFields = slices.DeleteFunc(slices.Clone(avatar.DetailFields), func(name string) bool { _, ok := shown.Field(name); return name != "id" && !ok })
 						section.Avatar = &avatar
 					}
+					if section.CheckResourceList(shown) != nil {
+						continue
+					}
+					projected, ok := page.ProjectExploration(section, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+						e, ok := entities[ref.Name]
+						return e, ok && e.App == ref.App
+					}, func(b platform.AssetBinding) (platform.LinkType, bool) {
+						for _, d := range t.definitions {
+							if d.Ref == b.Ref {
+								if selected := d.LinkVersion(b.SourceVersion); selected != nil && selected.LinkType != nil {
+									return *selected.LinkType, true
+								}
+							}
+						}
+						return platform.LinkType{}, false
+					})
+					if !ok {
+						continue
+					}
+					section = projected
 					if section.CheckContextViews(shown) != nil {
 						continue
 					}
@@ -668,7 +688,7 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 								named = nil
 							}
 						}
-						if page.CheckAvatarQuery(id, named, info) == nil && page.CheckQuerySchema(q, info, named) == nil && (named == nil || named.LinkType != nil || named.Query != nil && checkNamedQuery(*named.Query, info) == nil) {
+						if page.CheckResourceListQuery(id, named) == nil && page.CheckAvatarQuery(id, named, info) == nil && page.CheckQuerySchema(q, info, named) == nil && (named == nil || named.LinkType != nil || named.Query != nil && checkNamedQuery(*named.Query, info) == nil) {
 							doc.Queries[id] = q
 						}
 					}
@@ -837,6 +857,7 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 		def.Application = &application
 		out = append(out, def)
 	}
+	out = filterExplorationAssets(out)
 	slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	for i := range out {
 		if out[i].Requires == nil {

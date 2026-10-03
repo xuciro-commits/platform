@@ -929,6 +929,16 @@ export type PageAlertBanner = {
   message: string;
 };
 
+export type PageAssetDirectory = {
+  items: PageAssetDirectoryItem[];
+};
+
+export type PageAssetDirectoryItem = {
+  id: string;
+  label: string;
+  asset: AssetBinding;
+};
+
 export type PageAvatarStack = {
   labelField: string;
   detailFields?: string[];
@@ -1008,6 +1018,28 @@ export type PageGauge = {
   suffix?: string;
 };
 
+export type PageGraphExplorer = {
+  objects: PageGraphObject[];
+  relations: PageGraphRelation[];
+  outputs?: PageGraphOutput[];
+};
+
+export type PageGraphObject = {
+  object: AssetRef;
+  labelField: string;
+};
+
+export type PageGraphOutput = {
+  id: string;
+  object: AssetRef;
+  variable: string;
+};
+
+export type PageGraphRelation = {
+  id: string;
+  binding: AssetBinding;
+};
+
 export type PageHistogram = {
   field: string;
   bins: number;
@@ -1076,6 +1108,15 @@ export type PageNavigation = {
   interfaceVersion: number;
   inputs?: Record<string, PageValue>;
   results?: Record<string, string>;
+};
+
+export type PageNeighborhoodGroup = {
+  id: string;
+  binding: AssetBinding;
+  direction: string;
+  limit: number;
+  badge: string;
+  tone: string;
 };
 
 export type PageNotice = {
@@ -1201,7 +1242,14 @@ export type PageRecordView = {
   tabs: string[];
 };
 
+export type PageResourceList = {
+  labelField: string;
+  statusField: string;
+  statusTones?: PageEventTone[];
+};
+
 export type PageResourceSource = {
+  port?: string;
   measure?: string;
   field?: string;
   fields?: string[];
@@ -1265,6 +1313,10 @@ export type PageVariable = {
   initial?: unknown;
   expression?: PageExpression;
   source?: PageResourceSource;
+};
+
+export type PageVertexGraph = {
+  groups: PageNeighborhoodGroup[];
 };
 
 export type Passage = {
@@ -1547,6 +1599,10 @@ export type SavedView = {
 };
 
 export type Section = {
+  resourceList?: PageResourceList;
+  assetDirectory?: PageAssetDirectory;
+  graphExplorer?: PageGraphExplorer;
+  vertexGraph?: PageVertexGraph;
   breadcrumb?: PageBreadcrumb;
   avatar?: PageAvatarStack;
   image?: PageStaticImage;
@@ -1934,7 +1990,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.78",
+  "uiProfile": "platform.page.v2.79",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5852,6 +5908,237 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "resource-list",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.79",
+      "title": "Resource list",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "collection-variable"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.79"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "asset-directory",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.79",
+      "title": "Asset directory",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "events": [
+        {
+          "id": "click",
+          "payload": "void",
+          "required": false,
+          "maxBindings": 4,
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ]
+    },
+    {
+      "componentID": "graph-explorer",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.79",
+      "title": "Search around",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "record-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.79"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "vertex-graph",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.79",
+      "title": "Neighborhood graph",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "record-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -5932,7 +6219,8 @@ export const pageUIManifest = {
     "platform.page.v2.75",
     "platform.page.v2.76",
     "platform.page.v2.77",
-    "platform.page.v2.78"
+    "platform.page.v2.78",
+    "platform.page.v2.79"
   ],
   "runtime": {
     "scope": "page",
@@ -6095,6 +6383,16 @@ export const pageUIManifest = {
         "kind": "record",
         "type": "record",
         "widget": "record-scatter"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "resource-list"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "graph-explorer"
       }
     ],
     "loop": {
@@ -6550,6 +6848,16 @@ export const pageUIManifest = {
       "maxCaptionBytes": 4096,
       "maxImageHeight": 4096,
       "defaultImageHeight": 160
+    },
+    "exploration": {
+      "requiredUIProfile": "platform.page.v2.79",
+      "maxResourceWindow": 12,
+      "maxDirectoryItems": 4,
+      "maxObjects": 8,
+      "maxRelations": 12,
+      "maxPath": 8,
+      "maxWindow": 20,
+      "maxNeighborhoodRecords": 7
     }
   },
   "layout": {

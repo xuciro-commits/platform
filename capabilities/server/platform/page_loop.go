@@ -137,6 +137,17 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		if explorationWidget(section.Widget) {
+			if sectionOwners[section.ID] != "" {
+				return fmt.Errorf("exploration does not enter a loop")
+			}
+			for _, id := range section.ExplorationVariables() {
+				v := d.Variables[id]
+				if v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
+					return fmt.Errorf("exploration needs its exact original page or overlay owner")
+				}
+			}
+		}
 		if contextView(section.Widget) {
 			if sectionOwners[section.ID] != "" {
 				return fmt.Errorf("context views do not enter a loop")
@@ -253,7 +264,7 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 		if section.RecordVariable != "" {
 			v := d.Variables[section.RecordVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") || (owner == "" || v.Scope != "loop-item" || v.Owner != owner) && !(v.Scope == "page" && v.Mode == "input") && !(v.Scope == "application" && v.Mode == "shared" && v.Source != nil && v.Source.Object != nil && PageUIProfileSupports(d.UIProfile, "platform.page.v2.14")) && !(v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && accessible(section.RecordVariable, "", sectionOverlays[section.ID]) && PageUIProfileSupports(d.UIProfile, "platform.page.v2.11")) || v.Type != "record" || section.Selection != "" || !slices.Contains(contract.RecordWidgets, section.Widget) && section.Widget != "breadcrumb" {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") || (owner == "" || v.Scope != "loop-item" || v.Owner != owner) && !(v.Scope == "page" && v.Mode == "input") && !(v.Scope == "application" && v.Mode == "shared" && v.Source != nil && v.Source.Object != nil && PageUIProfileSupports(d.UIProfile, "platform.page.v2.14")) && !(v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && accessible(section.RecordVariable, "", sectionOverlays[section.ID]) && PageUIProfileSupports(d.UIProfile, "platform.page.v2.11")) || v.Type != "record" || section.Selection != "" || !slices.Contains(contract.RecordWidgets, section.Widget) && section.Widget != "breadcrumb" && section.Widget != "graph-explorer" && section.Widget != "vertex-graph" {
 				return fmt.Errorf("page section %s record binding escapes its loop scope", section.ID)
 			}
 		}

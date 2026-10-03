@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:26f341506cba4e09",
+  "revision": "sha256:945f7a1a28efd694",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -526,6 +526,42 @@
       "snippet": "import { RecordDetail } from \"@platform/app\";\n<RecordDetail type=\"your.object\" id={selectedID} />"
     },
     {
+      "id": "app/record-exploration",
+      "owner": "@platform/app",
+      "name": "Original record exploration",
+      "summary": "Traverse retained original relationships, confirm every record and preserve authorized window totals.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "record",
+        "binding",
+        "host"
+      ],
+      "source": "web/packages/app/src/exploration/reader.ts",
+      "exports": [
+        "createRecordExploration"
+      ],
+      "example": "RecordDetailExample",
+      "constraints": [
+        "The bounded path and original traversal reader grant no extra record access. Counts retain original totals; typed output ports keep heterogeneous records separate."
+      ],
+      "type": "RecordExplorationReader",
+      "dependencies": [
+        "app/record-detail",
+        "ui/graph"
+      ],
+      "states": [
+        "Confirming",
+        "Refused",
+        "Retired"
+      ]
+    },
+    {
       "id": "app/records",
       "owner": "@platform/app",
       "name": "Authorized record list",
@@ -979,6 +1015,37 @@
       ],
       "constraints": [
         "The caller owns offered tasks, original request reads, action permission, submission and async state. Task and request IDs and revisions remain separate; unreadable or incompatible requests cannot expose approval actions."
+      ]
+    },
+    {
+      "id": "ui/asset-directory",
+      "owner": "@platform/ui",
+      "name": "Retained asset directory",
+      "summary": "Present literal directory entries with their actual retained asset identity and version.",
+      "layer": 3,
+      "source": "web/packages/ui/src/components/AssetDirectory.tsx",
+      "exports": [
+        "AssetDirectory"
+      ],
+      "example": "AssetDirectoryExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "directory",
+        "assets",
+        "version",
+        "navigation"
+      ],
+      "type": "AssetDirectoryProps",
+      "dependencies": [
+        "ui/button"
+      ],
+      "constraints": [
+        "The caller maps actual discoverable assets and authorizes page navigation. Source placeholder names do not create resources, URLs or implicit bindings; non-page entries remain read-only."
       ]
     },
     {
@@ -2765,6 +2832,37 @@
       ]
     },
     {
+      "id": "ui/record-neighborhood",
+      "owner": "@platform/ui",
+      "name": "Original record neighborhood",
+      "summary": "Arrange original bounded relationship groups around their confirmed record through the shared graph canvas.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordNeighborhood.tsx",
+      "exports": [
+        "RecordNeighborhood"
+      ],
+      "example": "RecordNeighborhoodExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "graph",
+        "neighborhood",
+        "relations",
+        "records"
+      ],
+      "type": "RecordNeighborhoodProps",
+      "dependencies": [
+        "ui/graph"
+      ],
+      "constraints": [
+        "The caller supplies authorized root and relationship windows with complete totals. The shared canvas preserves circular badges and original half-ellipse groups; it never guesses foreign-key joins or reads records."
+      ]
+    },
+    {
       "id": "ui/record-page",
       "owner": "@platform/ui",
       "name": "Record detail and history",
@@ -2953,6 +3051,38 @@
       ]
     },
     {
+      "id": "ui/resource-list",
+      "owner": "@platform/ui",
+      "name": "Original resource rows",
+      "summary": "Present twelve original record rows with their real titles, statuses and caller-owned selection.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordResourceList.tsx",
+      "exports": [
+        "RecordResourceList"
+      ],
+      "example": "RecordResourceListExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "resources",
+        "records",
+        "status",
+        "selection"
+      ],
+      "type": "RecordResourceListProps",
+      "dependencies": [
+        "ui/button",
+        "ui/status"
+      ],
+      "constraints": [
+        "The caller owns the authorized first window, complete total, visible title/status fields and output confirmation. Duplicate names retain original record IDs; the list performs no reads or writes."
+      ]
+    },
+    {
       "id": "ui/retro-button",
       "owner": "@platform/ui",
       "name": "Retro button",
@@ -2983,6 +3113,42 @@
         "Keyboard focus"
       ],
       "snippet": "import { RetroButton } from \"@platform/ui\";\n<RetroButton variant=\"default\">RUN</RetroButton>"
+    },
+    {
+      "id": "ui/search-around",
+      "owner": "@platform/ui",
+      "name": "Interactive Search Around",
+      "summary": "Explore original relationship counts, walk and return along a controlled record path, and independently select output records.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/SearchAround.tsx",
+      "exports": [
+        "SearchAround"
+      ],
+      "example": "SearchAroundExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "relations",
+        "traverse",
+        "path",
+        "records"
+      ],
+      "type": "SearchAroundProps",
+      "dependencies": [
+        "ui/button"
+      ],
+      "states": [
+        "Pending",
+        "Refused",
+        "Read only"
+      ],
+      "constraints": [
+        "The caller owns the original root, retained relationship reads, typed result windows, path and confirmed outputs. Unknown or refused counts never become zero; callbacks preserve original object and record identities."
+      ]
     },
     {
       "id": "ui/search-input",
@@ -3370,6 +3536,7 @@
       "Application sessions": "应用会话",
       "Applications reuse Workspace; app navigation and views come from their AppUI declaration.": "应用复用 Workspace；应用导航与视图由各自的 AppUI 声明提供。",
       "Arrange a library, canvas and inspector with keyboard and pointer pane resizing.": "组合组件库、画布与检查器，支持键盘和指针调整面板宽度。",
+      "Arrange original bounded relationship groups around their confirmed record through the shared graph canvas.": "通过共享图画布将原有界关系分组排列在已确认记录周围。",
       "Arrange weighted regions with bounded dimensions and local scrolling, stacking columns in narrow containers.": "以有界尺寸与局部滚动安排带权重的区域，在窄容器中堆叠列。",
       "Ask for a bounded decision with focus trapping and a labelled title.": "用限制焦点范围、带标题的对话框完成有界决策。",
       "Author fixed record conditions and retain explicit query versions for shared page plans.": "编写固定记录条件，保留共享页面计划的明确查询版本。",
@@ -3460,6 +3627,7 @@
       "Exact decimal progress": "精确十进制进度",
       "Exact decimal range input": "精确十进制范围输入",
       "Expanded": "展开",
+      "Explore original relationship counts, walk and return along a controlled record path, and independently select output records.": "探索原关系计数，沿受控记录路径前进及返回，并独立选择输出记录。",
       "Facet choices": "分面多选",
       "File picker": "文件选择器",
       "Flow layout and toolbar": "流式布局与工具栏",
@@ -3479,6 +3647,7 @@
       "Inspect or edit details while keeping the underlying task in view.": "查看或编辑详情，同时保留原任务的上下文。",
       "Inspect the original run trace, structured drafts and cross-application execution links.": "查看原运行轨迹、结构化草稿和跨应用执行关系。",
       "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs.": "已安装区块、版本、权限、测试和激活均来自已连接的原能力 API。",
+      "Interactive Search Around": "交互式关系探索",
       "Invalid": "无效",
       "Isolated": "隔离",
       "Keep record browsing and focused detail in one responsive task frame.": "在响应式任务框架中同时保留记录浏览与聚焦详情。",
@@ -3513,7 +3682,10 @@
       "Organize navigation and shared published objects, workflows and functions with the original application editor.": "使用原应用编辑器组织导航及共享的已发布对象、流程和函数。",
       "Original approval tasks": "原审批任务",
       "Original navigation trail": "原导航路径",
+      "Original record exploration": "原记录探索",
       "Original record journal": "原记录日志",
+      "Original record neighborhood": "原记录邻域",
+      "Original resource rows": "原资源行",
       "Original scalar and record sparkline": "原标量与记录迷你线",
       "Page header": "页面标题区",
       "Page workspace and preview": "页面工作台与预览",
@@ -3537,6 +3709,7 @@
       "Present complete caller-owned counts as bounded frequency-scaled literal labels.": "将调用方拥有的完整计数呈现为有界、按频次缩放的字面词条标签。",
       "Present complete original scalar counts as fixed-size tags with optional caller-owned group selection.": "以固定字号标签呈现完整原标量计数，并可由调用方控制分组选择。",
       "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
+      "Present literal directory entries with their actual retained asset identity and version.": "展示原始目录条目及其实际保留资源身份和版本。",
       "Present ordered original business events with explicit time and severity tones.": "以显式时间及严重度色调呈现排序后的原业务事件。",
       "Present original change IDs, schemas, actors and field changes in their supplied order with an explicit display window.": "按提供顺序呈现原变更身份、决策名称、操作者及字段变更，并明确展示窗口。",
       "Present original complete counts with distinct axis identities and optional controlled heatmap selection.": "呈现原完整计数、独立轴身份与可选的受控热图选择。",
@@ -3544,6 +3717,7 @@
       "Present original navigation identities and a controlled current location with literal labels and record details.": "呈现原导航身份、受控当前位置及原始标签和记录详情。",
       "Present original ordered business intervals on an explicit fixed UTC range.": "在显式固定 UTC 范围呈现原排序业务区间。",
       "Present original persisted comments and a caller-owned draft whose confirmation belongs to the host.": "呈现原持久化评论及调用方持有的草稿，提交确认由宿主负责。",
+      "Present twelve original record rows with their real titles, statuses and caller-owned selection.": "展示十二条原记录的真实标题、状态及调用方控制的选择。",
       "Pressed": "按下",
       "Published code function call": "已发布代码函数调用",
       "Queries use the original record reader and member permissions. Pages explicitly choose a retained source version; later drafts and publications do not replace it.": "查询使用原记录读取与成员权限；页面明确选择保留的来源版本，后续草稿与发布不会替换它。",
@@ -3577,6 +3751,7 @@
       "Render the existing chart specification over the member’s permitted aggregates.": "用原图表规范展示当前成员有权读取的聚合数据。",
       "Reserve one caller-owned blank region independently of container gaps.": "保留一处调用方拥有的空白区域，与容器间距独立。",
       "Results come from the current member’s host. The offline example searches synthetic records only.": "结果来自当前成员的宿主。离线示例只搜索合成记录。",
+      "Retained asset directory": "保留版本资源目录",
       "Retired": "已退役",
       "Retro button": "复古实体按键",
       "Reusable query workbench": "复用查询设计台",
@@ -3622,8 +3797,10 @@
       "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
       "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.": "92 类型迁移清单不授予运行资格。八种源组件已有有限配置方案，未支持配置阻止应用。",
+      "The bounded path and original traversal reader grant no extra record access. Counts retain original totals; typed output ports keep heterogeneous records separate.": "有界路径和原遍历读取器不授予额外记录访问权限；计数保留原总数，带类型输出端口保持异构记录独立。",
       "The caller confirms every original record and supplies permission-filtered metadata. Values are compared by their declared scalar types; presentation performs no reads or writes and never truncates the selection.": "调用方确认每条原记录并提供权限裁剪元数据；值按声明的标量类型对比，展示不读写记录且不截断选择。",
       "The caller confirms original record access and supplies permission-filtered metadata. Titles and properties remain in their original field owners; the card performs no reads or writes.": "调用方确认原记录访问并提供权限裁剪元数据；标题及属性保持原字段归属，卡片不读写记录。",
+      "The caller maps actual discoverable assets and authorizes page navigation. Source placeholder names do not create resources, URLs or implicit bindings; non-page entries remain read-only.": "调用方映射实际可发现资源并授权页面导航；源占位名称不创建资源、地址或隐式绑定，非页面条目保持只读。",
       "The caller owns attachment authorization and the original page string. The lazy renderer uses bundled PDF.js, its same-version worker and fixed font assets; actual page and pixel budgets apply. PDF-provided URLs, scripts, forms, XFA and annotations are not activated.": "调用方负责附件授权及原页码字符串；按需加载的渲染器使用内置PDF.js、同版本工作线程和固定字体资产，并施加实际页数及像素预算。不激活PDF提供的地址、脚本、表单、XFA或注释。",
       "The caller owns authorization, the original bounded comment window, total and persistence. Unknown totals remain explicit; the presenter never invents authors, timestamps, comments or confirmations.": "调用方负责授权、原有界评论窗口、总数及持久化；未知总数明确显示，展示组件不编造作者、时间、评论或确认结果。",
       "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records.": "调用方拥有授权完整分箱；控件校验区间和计数，不重新分箱，也不写入记录。",
@@ -3646,6 +3823,7 @@
       "The caller owns text, object scope and authorized reads. This control performs no queries and does not promise global ontology search.": "调用方拥有文本、对象范围及授权读取；此控件不查询数据，也不声称全本体搜索。",
       "The caller owns the actual File, bytes upload, attach decision and confirmed metadata. Refusal preserves the selected file; this control reports no simulated progress or local filename as a confirmed attachment.": "调用方持有实际文件并负责字节上传、挂载决策及已确认元数据；拒绝时保留所选文件，组件不报告模拟进度或将本地文件名当作已确认附件。",
       "The caller owns the authorized complete count and clears obsolete values.": "调用方负责受权完整计数并清理过期值。",
+      "The caller owns the authorized first window, complete total, visible title/status fields and output confirmation. Duplicate names retain original record IDs; the list performs no reads or writes.": "调用方负责已授权首个窗口、完整总数、可见标题及状态字段和输出确认；重复名称保留原记录身份，列表不执行读写。",
       "The caller owns the authorized window and business time; the list does not create events or read another collection.": "调用方拥有受权窗口和业务时间；列表不创建事件或读取另一集合。",
       "The caller owns the authorized window; this presentation does not reorder records, filter by the viewport, or write dates.": "调用方拥有授权窗口；此呈现不重排记录，不按视窗筛选，也不写入日期。",
       "The caller owns the boolean and its effects; this control does not coerce unrelated values or write records.": "调用方拥有布尔值及其效果；控件不强制转换无关值或写入记录。",
@@ -3658,6 +3836,7 @@
       "The caller owns the original date text and query conditions. Invalid drafts remain visible; no local timezone or timestamp conversion is applied.": "调用方拥有原日期文本及查询条件。无效草稿保持可见，不应用本地时区或时间点转换。",
       "The caller owns the original five-measure answer. Counts remain exact; missing numeric measures remain empty.": "调用方拥有原五度量答复。计数保持精确，缺失数值度量保持为空。",
       "The caller owns the original numeric result and complete set. The gauge does not substitute zero for empty or denied values.": "调用方拥有原数值结果与完整集合，仪表不将空值或拒绝值替换为零。",
+      "The caller owns the original root, retained relationship reads, typed result windows, path and confirmed outputs. Unknown or refused counts never become zero; callbacks preserve original object and record identities.": "调用方负责原起点、保留版本关系读取、带类型结果窗口、路径及已确认输出；未知或拒绝计数不变为零，回调保留原对象和记录身份。",
       "The caller owns the original scalars and complete-set count. Invalid values never become zero or a denominator of one.": "调用方拥有原标量与完整集合计数，无效值不替换为零或分母一。",
       "The caller owns the original state pair and query conditions. Empty or invalid drafts are never replaced by bounds.": "调用方拥有原状态对和查询条件。空值或无效草稿不会被替换为边界。",
       "The caller owns the original string set and query conditions. Toggles change one declared choice and preserve unmatched selections.": "调用方拥有原字符串集合及查询条件。多选控件修改一个声明选项并保留未匹配值。",
@@ -3666,6 +3845,7 @@
       "The caller supplies authorized bytes and confirmed attachment metadata. Only PNG, JPEG, GIF and WebP with bounded matching dimensions render inline; other formats keep metadata and downloads. Object URLs retire with bytes, scope or unmount.": "调用方提供授权字节及已确认附件元数据；只有尺寸符合预算及文件头的PNG、JPEG、GIF、WebP内联显示，其他格式保留元数据和下载。对象地址随字节、作用域变更或卸载退役。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
+      "The caller supplies authorized root and relationship windows with complete totals. The shared canvas preserves circular badges and original half-ellipse groups; it never guesses foreign-key joins or reads records.": "调用方提供已授权起点、关系窗口及完整总数；共享画布保留圆形标记和原半椭圆分组，不猜测外键连接或读取记录。",
       "The caller supplies validated dimensions and parent axes; layout grants no business access.": "调用方提供已验证的尺寸与父轴；布局不授予业务访问权限。",
       "The canvas owns interaction; its caller owns graph semantics, validation and persistence.": "画布负责交互；调用方负责图语义、校验和持久化。",
       "The document owner validates finite sizes against the original layout budget. Zero is preserved; the region is hidden from accessibility and is not a focus target.": "文档拥有者按原布局预算验证有限尺寸。零值保留，空白不进入无障碍内容或焦点。",
@@ -3683,6 +3863,7 @@
       "This search currently has no dedicated error or pending feedback; callers must not claim otherwise.": "当前搜索没有专门的错误或等待反馈；调用方须如实说明。",
       "Toggle one caller-owned boolean with explicit checked and disabled states.": "切换调用方拥有的单个布尔值，显式呈现选中与禁用状态。",
       "Touch": "触摸",
+      "Traverse retained original relationships, confirm every record and preserve authorized window totals.": "遍历保留版本的原关系，确认每条记录并保留已授权窗口总数。",
       "Typed block canvas": "类型化节点画布",
       "Typed field vocabulary": "类型化字段词汇",
       "Typed filters": "类型化筛选",
@@ -3741,6 +3922,7 @@
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/ButtonGroupInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
       "web/packages/build/src/process.tsx",
@@ -3802,6 +3984,7 @@
       "web/packages/build/src/page-editor/widgets/ContextInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/DateInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/HeatmapInspector.tsx",
@@ -3874,6 +4057,7 @@
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/NoticeInspector.tsx",
@@ -3906,6 +4090,7 @@
       "web/packages/app/src/widgets/ChoiceInput.tsx",
       "web/packages/app/src/widgets/ContextViews.tsx",
       "web/packages/app/src/widgets/DateInput.tsx",
+      "web/packages/app/src/widgets/Exploration.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/Gauge.tsx",
       "web/packages/app/src/widgets/Histogram.tsx",
@@ -4188,6 +4373,18 @@
     "ui/date-input": [
       "web/packages/app/src/widgets/DateInput.tsx"
     ],
+    "ui/resource-list": [
+      "web/packages/app/src/widgets/Exploration.tsx"
+    ],
+    "ui/search-around": [
+      "web/packages/app/src/widgets/Exploration.tsx"
+    ],
+    "ui/asset-directory": [
+      "web/packages/app/src/widgets/Exploration.tsx"
+    ],
+    "ui/record-neighborhood": [
+      "web/packages/app/src/widgets/Exploration.tsx"
+    ],
     "ui/facet-choices": [
       "web/packages/app/src/widgets/Facets.tsx"
     ],
@@ -4320,6 +4517,7 @@
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/page-editor/widgets/ContextInspectors.tsx",
+      "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordCardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordComparisonInspector.tsx",
@@ -4432,6 +4630,7 @@
         "languages",
         "layout",
         "measurable",
+        "neighborhoodPositions",
         "notify",
         "parseInline",
         "recordSchema",
@@ -4458,6 +4657,8 @@
         "AggregateQuery",
         "ApprovalInboxProps",
         "ApprovalInboxRow",
+        "AssetDirectoryItem",
+        "AssetDirectoryProps",
         "AttachedFile",
         "Attachment",
         "AttachmentPreviewProps",
@@ -4510,6 +4711,7 @@
         "MenuItem",
         "Money",
         "NavSection",
+        "NeighborhoodLayoutGroup",
         "NodeCatalog",
         "NodeKind",
         "NodePort",
@@ -4527,14 +4729,22 @@
         "RecordCommentsProps",
         "RecordEditPort",
         "RecordHistoryProps",
+        "RecordNeighborhoodGroup",
+        "RecordNeighborhoodProps",
         "RecordPageData",
         "RecordQuery",
+        "RecordResourceListProps",
         "RecordSelectionPort",
         "RecordSource",
         "RecordUploaderProps",
         "RecordView",
+        "ResourceStatusTone",
         "RetroButtonProps",
         "Route",
+        "SearchAroundPathEntry",
+        "SearchAroundProps",
+        "SearchAroundRelation",
+        "SearchAroundWindow",
         "Session",
         "ShellCommand",
         "State",
@@ -4608,6 +4818,7 @@
         "PageVariableValue",
         "Passage",
         "PropertyRef",
+        "RecordExplorationReader",
         "ReferenceRelationRef",
         "RunDraft",
         "RunSignal",

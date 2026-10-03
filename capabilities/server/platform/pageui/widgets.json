@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.78",
+  "uiProfile": "platform.page.v2.79",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3917,6 +3917,237 @@
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "resource-list",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.79",
+      "title": "Resource list",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "collection-variable"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.79"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "asset-directory",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.79",
+      "title": "Asset directory",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "events": [
+        {
+          "id": "click",
+          "payload": "void",
+          "required": false,
+          "maxBindings": 4,
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ]
+    },
+    {
+      "componentID": "graph-explorer",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.79",
+      "title": "Search around",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "record-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.79"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "vertex-graph",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.79",
+      "title": "Neighborhood graph",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "record-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -3997,7 +4228,8 @@
     "platform.page.v2.75",
     "platform.page.v2.76",
     "platform.page.v2.77",
-    "platform.page.v2.78"
+    "platform.page.v2.78",
+    "platform.page.v2.79"
   ],
   "runtime": {
     "scope": "page",
@@ -4160,6 +4392,16 @@
         "kind": "record",
         "type": "record",
         "widget": "record-scatter"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "resource-list"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "graph-explorer"
       }
     ],
     "loop": {
@@ -4615,6 +4857,16 @@
       "maxCaptionBytes": 4096,
       "maxImageHeight": 4096,
       "defaultImageHeight": 160
+    },
+    "exploration": {
+      "requiredUIProfile": "platform.page.v2.79",
+      "maxResourceWindow": 12,
+      "maxDirectoryItems": 4,
+      "maxObjects": 8,
+      "maxRelations": 12,
+      "maxPath": 8,
+      "maxWindow": 20,
+      "maxNeighborhoodRecords": 7
     }
   },
   "layout": {

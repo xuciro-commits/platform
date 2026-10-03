@@ -1,6 +1,6 @@
 import type {Api} from "@platform/kernel";
 
-type Section = {avatar?:{contextVariable?:string;contextCollectionVariable?:string};commentDraftVariable?:string;fileVariable?:string;pdfPageVariable?:string;recordSetVariable?:string;sparklineDecimalVariable?:string;sparklineNumberVariable?:string;groupValueVariable?:string;groupSetVariable?:string;rowValueVariable?:string;rowSetVariable?:string;columnValueVariable?:string;columnSetVariable?:string;pickerValueVariable?:string;alertValueVariable?:string;dateVariable?:string;choiceSetVariable?:string;choiceVariable?:string;booleanVariable?:string;rangeMinVariable?:string;rangeMaxVariable?:string;statisticsVariable?:string;gaugeValueVariable?:string;progressValueVariable?:string;progressTotalVariable?:string;countVariable?:string;selectionSetVariable?:string;facets?:Api.PageFacet[];filterSearchVariable?:string;id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
+type Section = {graphExplorer?:Api.PageGraphExplorer;avatar?:{contextVariable?:string;contextCollectionVariable?:string};commentDraftVariable?:string;fileVariable?:string;pdfPageVariable?:string;recordSetVariable?:string;sparklineDecimalVariable?:string;sparklineNumberVariable?:string;groupValueVariable?:string;groupSetVariable?:string;rowValueVariable?:string;rowSetVariable?:string;columnValueVariable?:string;columnSetVariable?:string;pickerValueVariable?:string;alertValueVariable?:string;dateVariable?:string;choiceSetVariable?:string;choiceVariable?:string;booleanVariable?:string;rangeMinVariable?:string;rangeMaxVariable?:string;statisticsVariable?:string;gaugeValueVariable?:string;progressValueVariable?:string;progressTotalVariable?:string;countVariable?:string;selectionSetVariable?:string;facets?:Api.PageFacet[];filterSearchVariable?:string;id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
 type Draft<S extends Section> = {document:Api.PageDocument;sections:S[];selections:Api.SelectionVariable[]};
 export type LayoutClipboard<S extends Section> = {draft:Draft<S>;root:string;object:string;overlay?:string};
 export type ClipboardIssue = "unsupported" | "scope" | "invalid" | "dependencies" | "budget" | "tab-binding" | "overlay-entry";
@@ -66,6 +66,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  for(const section of sections)for(const facet of section.facets??[])addVariable(facet.variable);
  for(const section of sections)for(const key of sectionFields)if(section[key])addVariable(section[key]!);
  for(const section of sections)for(const value of [section.avatar?.contextVariable,section.avatar?.contextCollectionVariable])if(value)addVariable(value);
+ for(const section of sections)for(const output of section.graphExplorer?.outputs??[])addVariable(output.variable);
  const locallyRead=new Set(variables);
  for(const event of events){if(event.target)addVariable(event.target);Object.values(event.navigate?.inputs??{}).flatMap(valueRefs).forEach(addVariable);Object.values(event.navigate?.results??{}).forEach(addVariable);}
  if(missing.value)return {issue:"invalid"};
@@ -114,6 +115,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  for(const s of sections)if(limits.selectionWriters.includes(s.widget)&&!s.selectionVariable){const type=s.object||object,key=slot(type,s.selection);if(!selectionMap.has(key)){const name=newID("selection");selectionMap.set(key,name);addedSelections.push({name,object:{app:type.split(".")[0]!,kind:"object",name:type}});}}
  const rewritten=sections.map(source=>{const s=structuredClone(source);s.id=sectionMap.get(s.id!)!;
   for(const key of sectionFields)if(s[key])s[key]=variableMap.get(s[key]!)??s[key];
+  if(s.graphExplorer)s.graphExplorer.outputs=s.graphExplorer.outputs?.map(o=>({...o,variable:variableMap.get(o.variable)??o.variable}));
   if(s.avatar){if(s.avatar.contextVariable)s.avatar.contextVariable=variableMap.get(s.avatar.contextVariable)??s.avatar.contextVariable;if(s.avatar.contextCollectionVariable)s.avatar.contextCollectionVariable=variableMap.get(s.avatar.contextCollectionVariable)??s.avatar.contextCollectionVariable;}
   if(s.facets)s.facets=s.facets.map(f=>({...f,variable:variableMap.get(f.variable)??f.variable}));
   const own=selectionMap.get(slot(s.object||object,s.selection));if(own&&limits.selectionWidgets.includes(s.widget)&&!s.recordVariable&&!s.selectionVariable)s.selection=own;

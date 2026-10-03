@@ -116,9 +116,15 @@ func (p Page) RecordResourceObject(variable string) AssetRef {
 	if v.Type != "record" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "record" {
 		return AssetRef{}
 	}
+	if v.Source.Port != "" {
+		return p.GraphOutputObject(v.Source.Section, v.Source.Port, variable)
+	}
 	for _, s := range p.Sections {
 		if s.ID != v.Source.Section {
 			continue
+		}
+		if s.Widget == "graph-explorer" {
+			return AssetRef{}
 		}
 		compatible := false
 		for _, resource := range pageWidgets.Runtime.Resources {

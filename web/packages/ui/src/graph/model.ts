@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Tone } from "../components/StatusTag";
 
 export type CanvasPosition = { x: number; y: number };
+export type CirclePresentation = {badge:string;size:number};
 export type NodePort = {
   id: string; label: string; type: string; limit?: number;
   /** Control ports determine execution order; data ports bind typed values. */
@@ -22,10 +23,13 @@ export type CanvasNode = {
   id: string; kind: string; label: string; detail?: string; position: CanvasPosition;
   version?: string; status?: BlockStatus; diagnostics?: BlockDiagnostic[]; collapsed?: boolean;
   tone?: Tone; current?: boolean; compact?: boolean;
+  /** A read-only graph's visual badge; it is never a semantic node identity. */
+  circle?:CirclePresentation;
 };
 export type CanvasEdge = {
   id: string; source: string; sourcePort: string; target: string; targetPort: string;
   label?: string; channel?: "control" | "data"; tone?: Tone; dashed?: boolean;
+  directed?:boolean;
 };
 export type NodeCatalog = readonly NodeKind[];
 export type CanvasAddContext = {

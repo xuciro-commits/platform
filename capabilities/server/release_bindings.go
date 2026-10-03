@@ -71,6 +71,7 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 				return err
 			}
 			for _, section := range page.Sections {
+				bindings = append(bindings, section.ExplorationBindings()...)
 				if section.Function != nil {
 					bindings = append(bindings, *section.Function)
 				}
@@ -87,7 +88,7 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 			}
 		}
 		for _, binding := range bindings {
-			if binding.Ref.Kind != platform.AssetPropertyType && binding.Ref.Kind != platform.AssetLinkType && binding.Ref.Kind != platform.AssetQuery && binding.Ref.Kind != platform.AssetFunction && binding.Ref.Kind != platform.AssetCompute || binding.SourceVersion == "" {
+			if binding.Ref.Check() != nil || binding.SourceVersion == "" {
 				return fmt.Errorf("%s has an invalid version binding", ref)
 			}
 			if prior := pins[binding.Ref]; prior != "" && prior != binding.SourceVersion {
@@ -118,6 +119,9 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 		}
 		if slices.Contains(fixed, ref) {
 			return platform.ReleaseCandidate{}, fmt.Errorf("asset %s differs from the version pinned by its dependents", ref)
+		}
+		if !slices.Contains([]platform.AssetKind{platform.AssetPropertyType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute}, ref.Kind) {
+			return platform.ReleaseCandidate{}, fmt.Errorf("asset %s has no retained source version %s", ref, version)
 		}
 		var asset platform.ReleaseAsset
 		var err error

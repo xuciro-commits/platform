@@ -24,6 +24,7 @@ type PageVariable struct {
 // PageResourceSource names a typed widget output, loop item or application
 // presentation port. Widget sources retain their original read boundary.
 type PageResourceSource struct {
+	Port     string    `json:"port,omitempty"`
 	Measure  string    `json:"measure,omitempty"`
 	Field    string    `json:"field,omitempty"`
 	Fields   []string  `json:"fields,omitempty"`
@@ -43,6 +44,16 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Exploration struct {
+		RequiredUIProfile      string `json:"requiredUIProfile"`
+		MaxResourceWindow      int    `json:"maxResourceWindow"`
+		MaxDirectoryItems      int    `json:"maxDirectoryItems"`
+		MaxObjects             int    `json:"maxObjects"`
+		MaxRelations           int    `json:"maxRelations"`
+		MaxPath                int    `json:"maxPath"`
+		MaxWindow              int    `json:"maxWindow"`
+		MaxNeighborhoodRecords int    `json:"maxNeighborhoodRecords"`
+	} `json:"exploration"`
 	ContextViews struct {
 		RequiredUIProfile  string `json:"requiredUIProfile"`
 		MaxAvatarWindow    int    `json:"maxAvatarWindow"`
@@ -407,6 +418,9 @@ func (d *PageDocument) CheckVariables() error {
 		}
 		if v.Type == "number" && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Gauge.RequiredUIProfile) || !slices.Contains([]string{"aggregate", "constant", "derived"}, v.Mode) || v.Scope == "application") {
 			return fail("number needs its read-only scoped profile")
+		}
+		if v.Source != nil && v.Source.Port != "" && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Exploration.RequiredUIProfile) || !pageNodeID.MatchString(v.Source.Port) || v.Type != "record" || v.Mode != "resource" || v.Source.Kind != "record" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
+			return fail("record output port needs its scoped finite graph profile")
 		}
 		if v.Source != nil && v.Source.Measure != "" && (v.Mode != "aggregate" || v.Source.Kind != "aggregate" && v.Source.Kind != "statistics") {
 			return fail("measure needs an aggregate scalar")

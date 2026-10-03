@@ -365,9 +365,9 @@
       "sourceType": "VertexGraph",
       "sourceCategory": "Embed",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "vertex-graph",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "NotepadEmbed",
@@ -421,17 +421,17 @@
       "sourceType": "ResourceList",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "resource-list",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "LinkedCompass",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "asset-directory",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "ExplorationFilter",
@@ -677,9 +677,9 @@
       "sourceType": "GraphExplorer",
       "sourceCategory": "Ontology & workflow",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "graph-explorer",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "SummaryStats",

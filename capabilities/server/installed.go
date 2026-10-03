@@ -300,7 +300,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 			info = shown
 		}
-		if len(s.CollaborationDependencies()) > 0 || s.HistoryLimit > 0 || s.Widget == "avatar-stack" || s.Widget == "breadcrumb" && s.RecordVariable != "" {
+		if len(s.CollaborationDependencies()) > 0 || s.HistoryLimit > 0 || s.Widget == "avatar-stack" || s.Widget == "resource-list" || s.Widget == "graph-explorer" || s.Widget == "vertex-graph" || s.Widget == "breadcrumb" && s.RecordVariable != "" {
 			object := s.Object
 			if object.Name == "" {
 				object = p.Object
@@ -316,8 +316,42 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return fmt.Errorf("%s: avatar original context owner is unavailable", where)
 			}
 		}
+		if err := s.CheckResourceList(info); err != nil {
+			return err
+		}
+		if err := p.CheckExplorationSchema(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+			actual, ok := t.entity(ref.Name)
+			return actual, ok && actual.App == ref.App
+		}, func(b platform.AssetBinding) (platform.LinkType, bool) {
+			for _, d := range t.definitions {
+				if d.Ref == b.Ref {
+					if selected := d.LinkVersion(b.SourceVersion); selected != nil && selected.LinkType != nil {
+						return *selected.LinkType, true
+					}
+				}
+			}
+			return platform.LinkType{}, false
+		}); err != nil {
+			return fmt.Errorf("%s: %w", where, err)
+		}
+		if s.AssetDirectory != nil {
+			for _, item := range s.AssetDirectory.Items {
+				if !explorationAssetAvailable(t.definitions, item.Asset) {
+					return fmt.Errorf("%s: directory published asset is unavailable", where)
+				}
+			}
+		}
 		if err := s.CheckContextViews(info); err != nil {
 			return fmt.Errorf("%s: %w", where, err)
+		}
+		if p.Document != nil {
+			v := p.Document.Variables[s.RecordVariable]
+			if v.Source != nil && v.Source.Port != "" {
+				ref := p.RecordResourceObject(s.RecordVariable)
+				if ref.App != info.App || ref.Name != info.Type {
+					return fmt.Errorf("%s: graph output consumer does not match its actual entity owner", where)
+				}
+			}
 		}
 		if s.RecordVariable != "" {
 			producer := p.Document.LoopRecordSource(s.RecordVariable)
@@ -487,7 +521,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := s.CheckHistogram(info); err != nil {
 				return err
 			}
-		case "breadcrumb", "avatar-stack", "static-image":
+		case "breadcrumb", "avatar-stack", "static-image", "resource-list", "asset-directory", "graph-explorer", "vertex-graph":
 			// Their finite bindings and original field schema were checked above.
 		case "record-comparison":
 			if err := s.CheckRecordComparison(info); err != nil {
