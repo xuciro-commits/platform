@@ -15,7 +15,7 @@ export function selectionSlot(page:Api.Page,section:Api.Section,parent=false):st
  const object=parent?(section.parentSelection?page.selections?.find((s)=>s.name===section.parentSelection)?.object.name??"":page.object.name):section.object?.name||page.object.name;
  const name=parent?section.parentSelection:section.selection,owner=sectionOverlay(page,section.id??"");
  const scoped=Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=11;
- const local=scoped&&owner&&(page.sections??[]).some((s)=>["table","record-timeline","kanban","record-list","record-calendar","record-picker","record-leaderboard"].includes(s.widget)&&(s.object?.name||page.object.name)===object&&(s.selection??"")===(name??"")&&sectionOverlay(page,s.id??"")===owner);
+ const local=scoped&&owner&&(page.sections??[]).some((s)=>["table","record-timeline","kanban","record-list","record-calendar","record-picker","record-leaderboard","record-scatter"].includes(s.widget)&&(s.object?.name||page.object.name)===object&&(s.selection??"")===(name??"")&&sectionOverlay(page,s.id??"")===owner);
  return recordSlot(object,name,local?owner:undefined);
 }
 export const selectionSetSlot=(page:Api.Page,section:Api.Section)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-set/${section.id??""}`;

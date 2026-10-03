@@ -1,5 +1,17 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "The selected record could not be confirmed.": "无法确认所选记录的访问权限。",
+ "Record scatter plot": "记录散点图",
+ "Scatter fields, record identities or numeric values are unavailable or incompatible.": "散点字段、记录身份或数值不可用或不兼容。",
+ "{points} plotted records · {missing} records with missing coordinates": "已绘制{points}条记录 · {missing}条记录缺少坐标",
+ "No records with both coordinates in this window.": "当前窗口中没有同时具备两个坐标的记录。",
+ "Scatter categories": "散点分类",
+ "Hover or focus a point; select a record to inspect it.": "悬停或聚焦散点；选择记录以查看详情。",
+ "Individual records, including overlapping points": "独立记录（含重叠点）",
+ "This scatter plot shows individual records in the current authorized query window.": "散点图显示当前授权查询窗口中的独立记录。",
+ "Authorized record scatter plot": "授权记录散点图",
+ "Plot original numeric record coordinates and retain independently selectable stable identities.": "绘制原记录数值坐标，保留可独立选择的稳定身份。",
+ "The caller owns the ordered authorized window and confirmation. Missing coordinates are excluded; invalid values refuse the plot, and overlapping points remain separate records.": "调用方拥有有序授权窗口与选择确认；缺值坐标排除，无效值拒绝绘制，重叠点仍是独立记录。",
  "Histogram": "直方图",
  "Numeric distribution": "数值分布",
  "Present complete caller-owned bins with exact bounds, counts and missing-value disclosure.": "呈现调用方拥有的完整分箱、精确边界、计数及缺值说明。",

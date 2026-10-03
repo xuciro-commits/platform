@@ -75,3 +75,5 @@ export {RangeInput,rangeGrid,rangeDrafts} from "./components/RangeInput";
 export {Gauge,gaugeModel} from "./components/Gauge";
 export {SummaryStatistics,type StatisticsValue} from "./components/SummaryStatistics";
 export {RecordLeaderboard,leaderboardRows} from "./records/RecordLeaderboard";
+
+export {RecordScatter,scatterPoints} from "./records/RecordScatter";

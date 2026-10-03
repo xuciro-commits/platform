@@ -123,6 +123,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.ChartVariant != "" {
 				return fmt.Errorf("chart variant requires a document")
 			}
+			if s.Widget == "record-scatter" || s.Scatter != nil {
+				return fmt.Errorf("record scatter needs a document")
+			}
 			if s.Widget == "record-chart" || s.RecordChart != nil {
 				return fmt.Errorf("record chart requires a document")
 			}
@@ -270,6 +273,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkRecordEvents(section); err != nil {
+			return err
+		}
+		if err := d.checkScatter(section); err != nil {
 			return err
 		}
 		if err := d.checkRecordChart(section); err != nil {

@@ -517,9 +517,9 @@
       "sourceType": "ScatterPlot",
       "sourceCategory": "Analytics",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-scatter",
+      "reason": "authorized-original-record-point-profile"
     },
     {
       "sourceType": "Heatmap",

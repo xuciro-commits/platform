@@ -17,6 +17,7 @@ import {RecordListInspector} from "./RecordListInspector";
 import {RecordCalendarInspector} from "./RecordCalendarInspector";
 import {RecordGanttInspector} from "./RecordGanttInspector";
 import {RecordEventsInspector} from "./RecordEventsInspector";
+import {ScatterInspector} from "./ScatterInspector";
 import {RecordChartInspector} from "./RecordChartInspector";
 import {HeadingInspector,CollectionTitleInspector} from "./TitleInspectors";
 import {MetricInspector} from "./MetricInspector";
@@ -55,6 +56,7 @@ const inspectors = {
  "record-gantt":{configVersion:1,bindings:RecordGanttInspector},
  "record-calendar":{configVersion:1,bindings:RecordCalendarInspector},
  "record-events":{configVersion:1,bindings:RecordEventsInspector},
+ "record-scatter":{configVersion:1,bindings:ScatterInspector},
  "record-chart":{configVersion:1,bindings:RecordChartInspector},
  "record-list":{configVersion:1,bindings:RecordListInspector},
  heading:{configVersion:1,bindings:HeadingInspector},

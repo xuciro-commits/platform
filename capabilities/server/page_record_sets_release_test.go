@@ -6,6 +6,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
 	"platformserver/platform"
+	"strings"
 	"testing"
 	"time"
 )
@@ -351,6 +352,14 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	histRoot := doc.Nodes[doc.Root]
 	histRoot.Children = append(histRoot.Children, "hist")
 	doc.Nodes[doc.Root] = histRoot
+	scatterIndex := len(sections)
+	for _, spec := range []struct{ id, x, y, color, label string }{{"scatter", "amount", "amount", "severity", "name"}, {"hiddenScatterX", "sensitive", "amount", "severity", "name"}, {"hiddenScatterY", "amount", "sensitive", "severity", "name"}, {"hiddenScatterColor", "amount", "amount", "privateseverity", "name"}, {"hiddenScatterTitle", "amount", "amount", "severity", "secret"}} {
+		sections = append(sections, build.Section{ID: spec.id, Widget: "record-scatter", ConfigVersion: 1, CollectionVariable: "pickerWindow", Scatter: &platform.PageRecordScatter{XField: spec.x, YField: spec.y, ColorField: spec.color, LabelField: spec.label}})
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -376,6 +385,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[scatterIndex].Scatter = &platform.PageRecordScatter{XField: "sensitive", YField: "sensitive", ColorField: "privateseverity", LabelField: "secret"}
 	sections[histIndex].Histogram = &platform.PageHistogram{Field: "sensitive", Bins: 2}
 	sections[termsIndex].Group = "secret"
 	sections[searchIndex].InputKind = ""
@@ -498,6 +508,19 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					}
 					if !alertFound || member.ID == builder.ID && privateAlerts != 1 || member.ID != builder.ID && privateAlerts != 0 {
 						t.Fatal("frozen alert config, count binding or private dependency changed")
+					}
+					scatterFound, privateScatter := false, 0
+					for _, section := range d.Page.Sections {
+						if section.ID == "scatter" {
+							c := section.Scatter
+							scatterFound = c != nil && c.XField == "amount" && c.YField == "amount" && c.ColorField == "severity" && c.LabelField == "name" && section.CollectionVariable == "pickerWindow"
+						}
+						if strings.HasPrefix(section.ID, "hiddenScatter") {
+							privateScatter++
+						}
+					}
+					if !scatterFound || member.ID == builder.ID && privateScatter != 4 || member.ID != builder.ID && privateScatter != 0 {
+						t.Fatal("frozen scatter fields or member projection changed")
 					}
 					histFound := false
 					for _, section := range d.Page.Sections {

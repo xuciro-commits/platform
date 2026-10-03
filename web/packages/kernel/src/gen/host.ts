@@ -1167,6 +1167,13 @@ export type PageRecordPicker = {
   label?: string;
 };
 
+export type PageRecordScatter = {
+  xField: string;
+  yField: string;
+  colorField: string;
+  labelField: string;
+};
+
 export type PageRecordView = {
   tabs: string[];
 };
@@ -1508,6 +1515,7 @@ export type Section = {
   recordGantt?: PageRecordGantt;
   recordCalendar?: PageRecordCalendar;
   recordEvents?: PageRecordEvents;
+  scatter?: PageRecordScatter;
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
@@ -1872,7 +1880,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.68",
+  "uiProfile": "platform.page.v2.69",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4671,6 +4679,93 @@ export const pageUIManifest = {
           "scope-close"
         ]
       }
+    },
+    {
+      "componentID": "record-scatter",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.69",
+      "title": "Record scatter plot",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "scatter": {
+          "xField": "",
+          "yField": "",
+          "colorField": "",
+          "labelField": "id"
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "scatter": {
+            "type": "object",
+            "properties": {
+              "xField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "yField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "colorField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "labelField": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "xField",
+              "yField",
+              "colorField",
+              "labelField"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.69"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -4741,7 +4836,8 @@ export const pageUIManifest = {
     "platform.page.v2.65",
     "platform.page.v2.66",
     "platform.page.v2.67",
-    "platform.page.v2.68"
+    "platform.page.v2.68",
+    "platform.page.v2.69"
   ],
   "runtime": {
     "scope": "page",
@@ -4899,6 +4995,11 @@ export const pageUIManifest = {
         "kind": "record",
         "type": "record",
         "widget": "record-picker"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "record-scatter"
       }
     ],
     "loop": {
@@ -5285,6 +5386,10 @@ export const pageUIManifest = {
     "histogram": {
       "requiredUIProfile": "platform.page.v2.68",
       "maxBins": 64
+    },
+    "recordScatter": {
+      "requiredUIProfile": "platform.page.v2.69",
+      "maxPoints": 100
     }
   },
   "layout": {

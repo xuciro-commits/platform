@@ -107,6 +107,7 @@ type Section struct {
 	RecordGantt           *PageRecordGantt        `json:"recordGantt,omitempty"`
 	RecordCalendar        *PageRecordCalendar     `json:"recordCalendar,omitempty"`
 	RecordEvents          *PageRecordEvents       `json:"recordEvents,omitempty"`
+	Scatter               *PageRecordScatter      `json:"scatter,omitempty"`
 	RecordChart           *PageRecordChart        `json:"recordChart,omitempty"`
 	RecordList            *PageRecordList         `json:"recordList,omitempty"`
 	HeadingLevel          string                  `json:"headingLevel,omitempty"`

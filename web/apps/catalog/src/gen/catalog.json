@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:8e6c322e463c853d",
+  "revision": "sha256:8527a7e26e8bafca",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2325,6 +2325,33 @@
       ]
     },
     {
+      "id": "ui/record-scatter",
+      "owner": "@platform/ui",
+      "name": "Authorized record scatter plot",
+      "summary": "Plot original numeric record coordinates and retain independently selectable stable identities.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordScatter.tsx",
+      "exports": [
+        "RecordScatter",
+        "scatterPoints"
+      ],
+      "example": "RecordScatterExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "scatter",
+        "records",
+        "selection"
+      ],
+      "constraints": [
+        "The caller owns the ordered authorized window and confirmation. Missing coordinates are excluded; invalid values refuse the plot, and overlapping points remain separate records."
+      ]
+    },
+    {
       "id": "ui/record-timeline",
       "owner": "@platform/ui",
       "name": "Authorized record timeline",
@@ -2754,6 +2781,7 @@
       "Authorized record detail": "受权记录详情",
       "Authorized record leaderboard": "授权记录排行榜",
       "Authorized record list": "受权记录列表",
+      "Authorized record scatter plot": "授权记录散点图",
       "Authorized record timeline": "授权记录时间轴",
       "Authorized summary statistics": "授权汇总统计",
       "Authorized task Gantt": "授权任务甘特图",
@@ -2872,6 +2900,7 @@
       "Picking a file does not upload or publish it.": "选择文件不会上传或发布该文件。",
       "Pivot table": "透视表",
       "Plot original authorized records without merging equal axis labels or reading another collection.": "绘制原受权记录，不合并相同坐标标签，也不读取另一集合。",
+      "Plot original numeric record coordinates and retain independently selectable stable identities.": "绘制原记录数值坐标，保留可独立选择的稳定身份。",
       "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
       "Present caller-owned plain text with an accessible semantic tone.": "以可访问的语义色调呈现调用方拥有的纯文本。",
@@ -2964,6 +2993,7 @@
       "The caller owns the bounded window and record authorization; the calendar never writes dates or reads another collection.": "调用方拥有有界窗口和记录授权；日历不写日期或读取另一集合。",
       "The caller owns the condition and message. This component performs no queries, template execution or notification delivery.": "调用方拥有条件及消息，本组件不执行查询、模板代码或通知发送。",
       "The caller owns the label and visibility. The separator is horizontal and noninteractive, without data reads or text evaluation.": "调用方拥有标签及显示条件。分隔为横向、不可交互，不读取数据或执行文本。",
+      "The caller owns the ordered authorized window and confirmation. Missing coordinates are excluded; invalid values refuse the plot, and overlapping points remain separate records.": "调用方拥有有序授权窗口与选择确认；缺值坐标排除，无效值拒绝绘制，重叠点仍是独立记录。",
       "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes.": "调用方拥有排序窗口、字段权限和点数预算；此图表不读取或写入数据。",
       "The caller owns the original date text and query conditions. Invalid drafts remain visible; no local timezone or timestamp conversion is applied.": "调用方拥有原日期文本及查询条件。无效草稿保持可见，不应用本地时区或时间点转换。",
       "The caller owns the original five-measure answer. Counts remain exact; missing numeric measures remain empty.": "调用方拥有原五度量答复。计数保持精确，缺失数值度量保持为空。",
@@ -3126,6 +3156,7 @@
       "web/packages/build/src/page-editor/widgets/RecordListInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordPickerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/ScatterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SeparatorInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SpacerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",
@@ -3506,6 +3537,9 @@
     "ui/record-gantt": [
       "web/packages/app/src/widgets/RecordGantt.tsx",
       "web/packages/build/src/editor.tsx"
+    ],
+    "ui/record-scatter": [
+      "web/packages/app/src/widgets/RecordScatter.tsx"
     ],
     "ui/record-timeline": [
       "web/packages/app/src/widgets/RecordTimeline.tsx"

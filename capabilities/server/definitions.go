@@ -471,6 +471,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					if section.CheckRecordEvents(shown) != nil {
 						continue
 					}
+					if section.CheckScatter(shown) != nil {
+						continue
+					}
 					if section.CheckRecordChart(shown) != nil {
 						continue
 					}

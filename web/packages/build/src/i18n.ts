@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Scatter query window": "散点查询窗口",
+ "Scatter X field": "散点X字段",
+ "Scatter Y field": "散点Y字段",
+ "Scatter color field": "散点颜色字段",
+ "Scatter title field": "散点标题字段",
+ "Map scatter plot {widget}": "映射散点图{widget}",
+ "Use an ordered original window of at most 100 records. Missing coordinates are excluded, and overlapping points keep independent record identities.": "使用至多100条记录的原有序窗口；缺值坐标排除，重叠点保留独立记录身份。",
+ "Bind visible scatter fields and an ordered original window of at most 100 records before saving.": "保存前绑定可见散点字段与至多100条记录的原有序窗口。",
+ "Map original numeric coordinates, text or choice colors, an explicit record title and a compatible ordered query window.": "映射原数值坐标、文本或选项颜色、显式记录标题与兼容的有序查询窗口。",
+ "The scatter plot retains individual IDs in a paged authorized window of at most 100 records. Missing coordinates are excluded, invalid numbers are refused, and overlapping records remain separately selectable. Source coercion and its 400-record array slice are not imported.": "散点图在至多100条记录的分页授权窗口中保留独立ID；缺值坐标排除，无效数值拒绝，重叠记录可分别选择；不导入来源强制转换及400条数组切片。",
  "Histogram": "直方图",
  "Histogram numeric field": "直方图数值字段",
  "Histogram bin count": "直方图箱数",
@@ -1692,6 +1702,16 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Scatter query window": "散点查询窗口",
+ "Scatter X field": "散点X字段",
+ "Scatter Y field": "散点Y字段",
+ "Scatter color field": "散点颜色字段",
+ "Scatter title field": "散点标题字段",
+ "Map scatter plot {widget}": "映射散点图{widget}",
+ "Use an ordered original window of at most 100 records. Missing coordinates are excluded, and overlapping points keep independent record identities.": "使用至多100条记录的原有序窗口；缺值坐标排除，重叠点保留独立记录身份。",
+ "Bind visible scatter fields and an ordered original window of at most 100 records before saving.": "保存前绑定可见散点字段与至多100条记录的原有序窗口。",
+ "Map original numeric coordinates, text or choice colors, an explicit record title and a compatible ordered query window.": "映射原数值坐标、文本或选项颜色、显式记录标题与兼容的有序查询窗口。",
+ "The scatter plot retains individual IDs in a paged authorized window of at most 100 records. Missing coordinates are excluded, invalid numbers are refused, and overlapping records remain separately selectable. Source coercion and its 400-record array slice are not imported.": "散点图在至多100条记录的分页授权窗口中保留独立ID；缺值坐标排除，无效数值拒绝，重叠记录可分别选择；不导入来源强制转换及400条数组切片。",
  "Spacer": "空白",
  "Blank region size (px)": "空白区域尺寸（px）",
  "The size controls this blank region only. Zero and fractions are preserved; parent container gaps are configured separately. Blank space has no accessible content or focus target.": "尺寸只控制此处空白。零值和小数保留，父容器间距另行设置。空白没有无障碍内容或焦点。",
