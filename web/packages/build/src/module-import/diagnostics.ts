@@ -1,5 +1,12 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "work-migration-required":"Choose this widget's explicit migration to the original caller approval inbox, member notifications or selected-record history. Each source has different semantics.",
+ "work-source-profile":"Retain only well-formed nonexecuting source hints. Business sources, action names and status filters do not become platform Work or notification services automatically.",
+ "work-record-binding":"Map the actual compatible active-record producer in the same page or overlay; bounded history requires its original confirmed record resource.",
+ "work-source-hints-retained":"Source object collection, status filter and business action references are retained in the source report only. The explicitly chosen original platform service defines the actual records and decisions.",
+ "native-approval-inbox":"The explicitly migrated inbox reads the caller's actual offered approval tasks and operates on original approval request IDs through the Work service. Source not-Done rows and direct complete or cancel actions are not executed as approvals.",
+ "native-notification-feed":"The explicitly migrated feed reads the current member's original notifications and marks or opens them through their original service. Source local session action logs, random IDs and simulated actors are not imported as notifications.",
+ "native-record-history":"The explicitly migrated timeline reads actual journal history of the original confirmed record, with original change IDs, actors and timestamps. Source alert objects and invented raise or acknowledge events are not treated as accepted history.",
  "collaboration-record-binding":"Explicitly map an original active-record resource and compatible producer in the same page or overlay.",
  "collaboration-state-owner":"A shared collaboration state must have one original record binding, purpose and page or overlay owner.",
  "collaboration-file-owner":"A shared upload output must use one original record owner; fixed file IDs cannot initialize an upload lease.",

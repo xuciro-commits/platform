@@ -44,6 +44,7 @@ const RangeRenderer=lazy(()=>import("./widgets/Range").then(module=>({default:mo
 const LeaderboardRenderer=lazy(()=>import("./widgets/Leaderboard").then(module=>({default:module.LeaderboardRenderer})));
 const SummaryRenderer=lazy(()=>import("./widgets/Summary").then(module=>({default:module.SummaryRenderer})));
 const RecordCollaborationRenderer=lazy(()=>import("./widgets/RecordCollaboration").then(module=>({default:module.RecordCollaborationRenderer})));
+const WorkViewsRenderer=lazy(()=>import("./widgets/WorkViews").then(module=>({default:module.WorkViewsRenderer})));
 const RecordComparisonRenderer=lazy(()=>import("./widgets/RecordComparison").then(module=>({default:module.RecordComparisonRenderer})));
 const RecordCardRenderer=lazy(()=>import("./widgets/RecordCard").then(module=>({default:module.RecordCardRenderer})));
 const SparklineRenderer=lazy(()=>import("./widgets/Sparkline").then(module=>({default:module.SparklineRenderer})));
@@ -68,7 +69,7 @@ type Section = NonNullable<Page["sections"]>[number];
 type Narrowed = Record<string, Record<string, unknown>>;
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
-type Bound = {collaborationRecord?:EntityRecord;collaborationReference?:import("./runtime/Session").RecordReference;collaborationStatus?:"empty"|"pending"|"value"|"error";collaborationSlot?:string;commentDraft?:VariableResult;fileValue?:VariableResult;pdfPageValue?:VariableResult;onCommentDraft?:(value:string)=>void;onFileID?:(value:string)=>void;onPdfPage?:(value:string)=>void;comparisonRecords?:EntityRecord[];comparisonStatus?:"empty"|"pending"|"value"|"error";cardRecord?:EntityRecord;cardStatus?:"empty"|"pending"|"value"|"error";sparklineValue?:VariableResult;groupValue?:VariableResult;onGroupFilter?:(value?:string)=>void;onHeatmap?:(row?:string,column?:string)=>void;pickerConfirmation?:"empty"|"pending"|"value"|"error";pickerValue?:VariableResult;onPickerID?:(record?:EntityRecord)=>void;alertValue?:VariableResult;dateValue?:VariableResult;onDate?:(value:string)=>void;choiceSetValue?:VariableResult;onChoiceSet?:(value:string[])=>void;choiceValue?:VariableResult;onChoice?:(value:string)=>void;booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
+type Bound = {collaborationRecord?:EntityRecord;collaborationReference?:import("./runtime/Session").RecordReference;collaborationStatus?:"empty"|"pending"|"value"|"error";collaborationSlot?:string;commentDraft?:VariableResult;fileValue?:VariableResult;pdfPageValue?:VariableResult;onCommentDraft?:(value:string)=>void;onFileID?:(value:string)=>void;onPdfPage?:(value:string)=>void;comparisonRecords?:EntityRecord[];comparisonStatus?:"empty"|"pending"|"value"|"error";confirmedRecord?:EntityRecord;recordStatus?:"empty"|"pending"|"value"|"error";sparklineValue?:VariableResult;groupValue?:VariableResult;onGroupFilter?:(value?:string)=>void;onHeatmap?:(row?:string,column?:string)=>void;pickerConfirmation?:"empty"|"pending"|"value"|"error";pickerValue?:VariableResult;onPickerID?:(record?:EntityRecord)=>void;alertValue?:VariableResult;dateValue?:VariableResult;onDate?:(value:string)=>void;choiceSetValue?:VariableResult;onChoiceSet?:(value:string[])=>void;choiceValue?:VariableResult;onChoice?:(value:string)=>void;booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
   onControl?:(id:string)=>void;controlBound?:(id:string)=>boolean;
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
@@ -325,25 +326,28 @@ function FormWidget({ page, section, live, master }: Bound) {
 /** The selected record as its page reads it: history, tasks waiting on it. */
 function useRecordView(type: string, id?: string, readSource?: RecordSource) {
   const host = useHost(), source = readSource ?? host.source;
-  const [view, setView] = useState<RecordView>();
+  const key=JSON.stringify([host.source.scope,source.scope,source.revision,type,id]),[result,setResult]=useState<{key:string;view?:RecordView;error?:string}>();
   useEffect(() => {
     let current = true;
-    setView(undefined);
-    if (id) source.get(type, id).then((value) => { if (current) setView(value); }, () => { if (current) setView(undefined); });
+    setResult(undefined);
+    if(id&&source.scope===host.source.scope)void source.get(type,id).then(value=>{if(value.record.id!==id)throw Error("Record identity mismatch");if(current)setResult({key,view:value});}).catch(error=>{if(current)setResult({key,error:error instanceof Error?error.message:String(error)});});
     return () => { current = false; };
-  }, [source, type, id, source.revision]);
-  return view;
+  }, [key]);
+  return result?.key===key?result:undefined;
 }
 
 /** The timeline (16b): the selected record's history from the journal. */
-function TimelineWidget({ page, section, selected, readSource }: Bound) {
+function TimelineWidget({ page, section, selected, readSource,session,confirmedRecord,recordStatus }: Bound) {
   const { source } = useHost();
   const type = objectOf(page, section);
   const info = source.entity(type);
-  const view = useRecordView(type, selected?.id, readSource);
-  if (!selected) return <p className="text-sm text-muted">{t("Select a record to see what happened to it.")}</p>;
-  if (!view || !info) return <p className="text-sm text-muted">{t("Loading…")}</p>;
-  return <RecordHistory info={info} history={view.history} heading={false} />;
+  const original=section.historyLimit?confirmedRecord:selected,result=useRecordView(type,original?.id,readSource??session?.readSource());
+  if(section.historyLimit&&recordStatus==="error")return <Panel role="alert">{t("The original record history could not be read.")}</Panel>;
+  if(section.historyLimit&&recordStatus==="pending")return <p role="status">{t("Confirming record access…")}</p>;
+  if (!original) return <p role="status" className="text-sm text-muted">{t("Select a record to see what happened to it.")}</p>;
+  if(result?.error)return <Panel role="alert">{t("The original record history could not be read.")}</Panel>;
+  if (!result?.view || !info) return <p role="status" className="text-sm text-muted">{t("Loading…")}</p>;
+  return <RecordHistory info={info} history={result.view.history} heading={false} limit={section.historyLimit||undefined} total={result.view.history.length} recordID={original.id} recordRevision={result.view.record.revision}/>;
 }
 
 /** The tasks (16b): what waits on the selected record for this member — approvals
@@ -351,8 +355,9 @@ function TimelineWidget({ page, section, selected, readSource }: Bound) {
 function TasksWidget({ page, section, selected, live, readSource }: Bound) {
   const { can, decide } = useHost();
   const type = objectOf(page, section);
-  const view = useRecordView(type, selected?.id, readSource);
+  const result = useRecordView(type, selected?.id, readSource),view=result?.view;
   if (!selected) return <p className="text-sm text-muted">{t("Select a record to see what waits on it.")}</p>;
+  if(result?.error)return <Panel role="alert">{t("The original record work could not be read.")}</Panel>;
   if (!view) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   if (view.tasks.length === 0) return <p className="text-sm text-muted">{t("Nothing waits on it.")}</p>;
   const answer = live && can("work.task.complete")
@@ -423,6 +428,8 @@ function CollaborationWidget({section,collaborationRecord,collaborationReference
  return <RecordCollaborationRenderer kind={section.widget} label={section.title||t("Record collaboration")} record={collaborationRecord} reference={collaborationReference} status={collaborationStatus} slot={collaborationSlot} bindingEpoch={collaborationSlot?session?.recordBindingEpoch(collaborationSlot):undefined} session={session} readSource={session?.readSource()} draft={commentDraft} fileValue={fileValue} pageValue={pdfPageValue} onDraft={onCommentDraft} onFileID={onFileID} onPage={onPdfPage} enabled={enabled} live={live}/>;
 }
 const widgets = createWidgetRegistry<Bound>({
+ "approval-inbox":({section,session,enabled,live})=><WorkViewsRenderer kind="approval-inbox" label={section.title||t("Approval inbox")} readSource={session?.readSource()} enabled={enabled} live={live}/>,
+ "notification-feed":({section,session,enabled,live})=><WorkViewsRenderer kind="notification-feed" label={section.title||t("Notifications")} readSource={session?.readSource()} enabled={enabled} live={live}/>,
  "record-comments":CollaborationWidget,"record-uploader":CollaborationWidget,"media-preview":CollaborationWidget,"pdf-viewer":CollaborationWidget,
  histogram:({page,section,window,aggregateScope})=>{const {source}=useHost();return <HistogramRenderer object={objectOf(page,section)} window={window} fields={section.histogram} label={section.title||t("Histogram")} info={source.entity(objectOf(page,section))} source={source.aggregate?{aggregate:source.aggregate,scope:aggregateScope??source.scope,revision:source.revision}:undefined}/>;},
  "sparkline-kpi":({page,section,window,sparklineValue})=>{const {source}=useHost();return <SparklineRenderer value={sparklineValue} window={window} info={source.entity(objectOf(page,section))} fields={section.sparkline} title={section.title||t("Sparkline KPI")}/>;},
@@ -454,7 +461,7 @@ const widgets = createWidgetRegistry<Bound>({
  "status-tracker":StatusTrackerWidget,
  "record-links":RecordLinksWidget,
  "record-comparison":({page,section,comparisonRecords,comparisonStatus})=>{const {source}=useHost();return <RecordComparisonRenderer records={comparisonRecords??[]} status={comparisonStatus} info={source.entity(objectOf(page,section))} fields={section.fields??[]} config={section.recordComparison}/>;},
- "record-card":({page,section,cardRecord,cardStatus})=>{const {source}=useHost();return <RecordCardRenderer record={cardRecord} status={cardStatus} info={source.entity(objectOf(page,section))} fields={section.fields??[]} config={section.recordCard}/>;},
+ "record-card":({page,section,confirmedRecord,recordStatus})=>{const {source}=useHost();return <RecordCardRenderer record={confirmedRecord} status={recordStatus} info={source.entity(objectOf(page,section))} fields={section.fields??[]} config={section.recordCard}/>;},
  "record-view":RecordViewWidget,
   kanban:KanbanAdapter,
   "record-timeline":RecordTimelineAdapter,
@@ -640,7 +647,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         onFileID={section.fileVariable&&initialVariables[section.fileVariable]?.mode==="state"?value=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;writeState(section.fileVariable!,value,overlay);}:undefined}
         onPdfPage={section.pdfPageVariable?value=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;writeState(section.pdfPageVariable!,value,overlay);}:undefined}
         comparisonRecords={section.widget==="record-comparison"?(()=>{const v=initialVariables[section.recordSetVariable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);if(!producer)return [];const slot=selectionSetSlot(page,producer);return snapshot.recordSets[slot]?.status==="value"?session.selectedSet(slot):[];})():undefined} comparisonStatus={section.widget==="record-comparison"?(()=>{const v=initialVariables[section.recordSetVariable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);return producer?snapshot.recordSets[selectionSetSlot(page,producer)]?.status:undefined;})():undefined}
-        cardRecord={section.widget==="record-card"?(()=>{const v=initialVariables[section.recordVariable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);return producer?session.confirmedSelected(selectionSlot(page,producer)):undefined;})():undefined} cardStatus={section.widget==="record-card"?(()=>{const v=initialVariables[section.recordVariable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);return producer?snapshot.records[selectionSlot(page,producer)]?.status:undefined;})():undefined}
+        confirmedRecord={section.widget==="record-card"||section.widget==="timeline"&&!!section.historyLimit?(()=>{const v=initialVariables[section.recordVariable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);return producer?session.confirmedSelected(selectionSlot(page,producer)):undefined;})():undefined} recordStatus={section.widget==="record-card"||section.widget==="timeline"&&!!section.historyLimit?(()=>{const v=initialVariables[section.recordVariable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);return producer?snapshot.records[selectionSlot(page,producer)]?.status:undefined;})():undefined}
         sparklineValue={values[section.sparklineDecimalVariable??section.sparklineNumberVariable??""]}
         groupValue={values[section.groupValueVariable??section.groupSetVariable??""]} onGroupFilter={["treemap","tag-counts"].includes(section.widget)&&(section.groupValueVariable||section.groupSetVariable)?value=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;const id=section.groupValueVariable??section.groupSetVariable!,v=initialVariables[id],next=v?.type==="string-set"?{kind:"string-set" as const,values:value===undefined?[]:[value]}:value??"";if(!v||v.mode!=="state"||!(v.scope==="page"||v.scope==="overlay"&&v.owner===overlay)||!scalarAssignable(v.type,next,pageVariableContract.maxStringBytes,pageVariableContract.decimal.maxBytes))return;writeState(id,next,overlay);}:undefined}
         onHeatmap={section.widget==="heatmap"&&(section.rowValueVariable||section.rowSetVariable||section.columnValueVariable||section.columnSetVariable)?(row,column)=>{

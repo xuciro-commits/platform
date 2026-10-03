@@ -1,0 +1,17 @@
+import {cleanup,fireEvent,render,screen,within} from "@testing-library/react";
+import {afterEach,expect,test,vi} from "vitest";
+import {NotificationList} from "./NotificationList";
+afterEach(cleanup);
+const items=[{id:"N-A",title:"Same <b>title</b>",body:"Original body",at:"2026-10-03T12:00:00.123456789Z",read:false,app:"build",ref:"build.drawing/A"},{id:"N-B",title:"Same <b>title</b>",at:"2026-10-02T12:00:00Z",read:true,app:"work",ref:"work.task/B"}];
+test("notifications retain original IDs/target/time and only caller confirmation changes read state",()=>{
+ const read=vi.fn(),open=vi.fn(),view=render(<NotificationList items={items} onRead={read} onOpen={open} total={2}/>);expect(screen.getAllByText("Same <b>title</b>")).toHaveLength(2);expect(view.container.querySelector("b")).toBeNull();expect(screen.getByText("N-A · build.drawing/A")).toBeTruthy();expect(screen.getByText(items[0]!.at)).toBeTruthy();fireEvent.click(screen.getByRole("button",{name:"Mark read"}));expect(read).toHaveBeenCalledWith(items[0]);expect(screen.getByRole("button",{name:"Mark read"})).toBeTruthy();fireEvent.click(screen.getAllByText("Same <b>title</b>")[1]!.closest("button")!);expect(open).toHaveBeenCalledWith(items[1]);
+ view.rerender(<NotificationList items={items.map(item=>({...item,read:true}))} onRead={read}/>);expect(screen.queryByRole("button",{name:"Mark read"})).toBeNull();
+});
+test("readonly, disabled or busy notifications cannot mark read/open and refusal preserves original unread data",()=>{
+ const read=vi.fn(),open=vi.fn(),view=render(<NotificationList items={items}/>);expect(screen.queryByRole("button",{name:"Mark read"})).toBeNull();expect(screen.getAllByRole("button").every(button=>(button as HTMLButtonElement).disabled)).toBe(true);
+ view.rerender(<NotificationList items={items} onRead={read} onOpen={open} enabled={false}/>);fireEvent.click(screen.getByRole("button",{name:"Mark read"}));expect(read).not.toHaveBeenCalled();fireEvent.click(screen.getAllByText("Same <b>title</b>")[0]!.closest("button")!);expect(open).not.toHaveBeenCalled();
+ view.rerender(<NotificationList items={items} onRead={read} busyIDs={["N-A"]}/>);expect((screen.getByRole("button",{name:"Confirming read…"}) as HTMLButtonElement).disabled).toBe(true);view.rerender(<NotificationList items={items} onRead={read} errors={{"N-A":"Read was refused"}}/>);expect(screen.getByRole("alert").textContent).toBe("Read was refused");expect((screen.getByRole("button",{name:"Mark read"}) as HTMLButtonElement).disabled).toBe(false);
+});
+test("explicit notification window limits preserve supplied order/counts and legacy omission keeps all loaded rows",()=>{
+ const rows=Array.from({length:60},(_,index)=>({...items[0]!,id:`N-${index}`,title:`Title ${index}`})),view=render(<NotificationList items={rows} limit={2}/>);expect(screen.getAllByRole("listitem")).toHaveLength(2);expect(screen.getByRole("status").textContent).toBe("Showing 2 of 60 loaded notifications; the complete total is unavailable.");expect(within(screen.getAllByRole("listitem")[0]!).getByText("Title 0")).toBeTruthy();view.rerender(<NotificationList items={rows}/>);expect(screen.getAllByRole("listitem")).toHaveLength(60);view.rerender(<NotificationList items={rows} limit={41}/>);expect(screen.getByRole("alert")).toBeTruthy();view.rerender(<NotificationList items={[items[0]!,items[0]!]}/>);expect(screen.getByRole("alert")).toBeTruthy();
+});

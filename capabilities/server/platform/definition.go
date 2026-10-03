@@ -104,6 +104,7 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	HistoryLimit             int                     `json:"historyLimit,omitempty"`
 	CommentDraftVariable     string                  `json:"commentDraftVariable,omitempty"`
 	FileVariable             string                  `json:"fileVariable,omitempty"`
 	PdfPageVariable          string                  `json:"pdfPageVariable,omitempty"`

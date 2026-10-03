@@ -231,7 +231,13 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 	parentBindings := map[string]string{}
 	for i, s := range p.Sections {
 		where := fmt.Sprintf("page %s, section %d (%s)", p.Name, i+1, s.Widget)
-		if err := s.CheckCollaborationServices(func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+		if owner, read := s.WorkViewRead(); read != "" {
+			app := t.owner["read:"+read]
+			if app == nil || app.Manifest().ID != owner {
+				return fmt.Errorf("%s: caller work read %s is unavailable", where, read)
+			}
+		}
+		if err := s.CheckServices(func(ref platform.AssetRef) (platform.EntityInfo, bool) {
 			info, ok := t.entity(ref.Name)
 			return info, ok && info.App == ref.App
 		}, func(ref platform.AssetRef) (platform.Action, bool) {
@@ -294,7 +300,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 			info = shown
 		}
-		if len(s.CollaborationDependencies()) > 0 {
+		if len(s.CollaborationDependencies()) > 0 || s.HistoryLimit > 0 {
 			object := s.Object
 			if object.Name == "" {
 				object = p.Object

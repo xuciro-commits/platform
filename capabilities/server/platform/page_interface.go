@@ -162,6 +162,9 @@ func (p Page) NavigationTargets() []AssetRef {
 
 func (p Page) CheckRecordPorts() error {
 	for _, s := range p.Sections {
+		if err := p.CheckHistoryBinding(s); err != nil {
+			return err
+		}
 		if err := p.CheckCollaborationBinding(s); err != nil {
 			return err
 		}

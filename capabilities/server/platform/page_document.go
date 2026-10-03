@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if workFeed(s.Widget) || s.HistoryLimit != 0 {
+				return fmt.Errorf("work views require a page document")
+			}
 			if collaborationWidget(s.Widget) || s.CommentDraftVariable != "" || s.FileVariable != "" || s.PdfPageVariable != "" {
 				return fmt.Errorf("collaboration requires a page document")
 			}
@@ -294,6 +297,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkRecordEvents(section); err != nil {
+			return err
+		}
+		if err := d.checkWorkViews(section); err != nil {
 			return err
 		}
 		if err := d.checkCollaboration(section); err != nil {

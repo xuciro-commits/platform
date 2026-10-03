@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.76",
+  "uiProfile": "platform.page.v2.77",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -548,6 +548,11 @@
               "full",
               "half"
             ]
+          },
+          "historyLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
           }
         }
       },
@@ -3633,6 +3638,108 @@
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "approval-inbox",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.77",
+      "title": "Approval inbox",
+      "category": "Work",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.77"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "notification-feed",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.77",
+      "title": "Notification feed",
+      "category": "Work",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.77"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -3711,7 +3818,8 @@
     "platform.page.v2.73",
     "platform.page.v2.74",
     "platform.page.v2.75",
-    "platform.page.v2.76"
+    "platform.page.v2.76",
+    "platform.page.v2.77"
   ],
   "runtime": {
     "scope": "page",
@@ -4312,6 +4420,13 @@
       "maxImagePixels": 16777216,
       "maxPDFPixels": 16777216,
       "maxPDFPages": 1000
+    },
+    "workViews": {
+      "requiredUIProfile": "platform.page.v2.77",
+      "maxApprovalsWindow": 25,
+      "maxNotificationsWindow": 40,
+      "maxHistoryWindow": 100,
+      "defaultHistoryWindow": 18
     }
   },
   "layout": {

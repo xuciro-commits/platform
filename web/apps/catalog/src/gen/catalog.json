@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:acc43747da4b4c2b",
+  "revision": "sha256:dc3e2fc972671cd7",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -594,6 +594,44 @@
       ]
     },
     {
+      "id": "app/work-views",
+      "owner": "@platform/app",
+      "name": "Caller work services",
+      "summary": "Confirm offered approval requests and use the member's original approval and notification decisions.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "record",
+        "binding",
+        "host"
+      ],
+      "source": "web/packages/app/src/work/service.ts",
+      "exports": [
+        "createWorkViews"
+      ],
+      "example": "RecordDetailExample",
+      "constraints": [
+        "The original inbox offers tasks; request IDs and revisions authorize approval decisions. Retiring a view never cancels a queued decision."
+      ],
+      "type": "WorkViewsHost",
+      "dependencies": [
+        "app/decision-confirmation",
+        "ui/tasks",
+        "ui/notifications"
+      ],
+      "states": [
+        "Confirming",
+        "Pending",
+        "Refused",
+        "Retired"
+      ]
+    },
+    {
       "id": "foundation/semantic-tokens",
       "owner": "@platform/ui",
       "name": "Semantic tokens",
@@ -909,6 +947,38 @@
         "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.",
         "The local example compiles synthetic source data without a host. Import applies only an undoable page draft; save, permissions and release validation stay with their original owners.",
         "Download the original JSON and mapping report before leaving the editor. Reports remain in the current editing scope until it closes or its member changes."
+      ]
+    },
+    {
+      "id": "ui/approval-inbox",
+      "owner": "@platform/ui",
+      "name": "Original approval tasks",
+      "summary": "Compose each offered task with its authorized original request and caller-owned approval decisions.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/ApprovalInbox.tsx",
+      "exports": [
+        "ApprovalInbox"
+      ],
+      "example": "ApprovalInboxExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "approval",
+        "inbox",
+        "request",
+        "revision"
+      ],
+      "type": "ApprovalInboxProps",
+      "dependencies": [
+        "ui/button",
+        "ui/status"
+      ],
+      "constraints": [
+        "The caller owns offered tasks, original request reads, action permission, submission and async state. Task and request IDs and revisions remain separate; unreadable or incompatible requests cannot expose approval actions."
       ]
     },
     {
@@ -2036,7 +2106,12 @@
       "states": [
         "Empty",
         "Read",
-        "Unread"
+        "Unread",
+        "Pending",
+        "Refused"
+      ],
+      "constraints": [
+        "The caller owns authorized original notifications, read decisions and navigation. Optional limits disclose the loaded range; read state changes only when the caller supplies confirmed data. Read-only or busy controls cannot initiate writes."
       ]
     },
     {
@@ -2475,6 +2550,34 @@
       ]
     },
     {
+      "id": "ui/record-history",
+      "owner": "@platform/ui",
+      "name": "Original record journal",
+      "summary": "Present original change IDs, schemas, actors and field changes in their supplied order with an explicit display window.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/Records.tsx",
+      "exports": [
+        "RecordHistory"
+      ],
+      "example": "RecordHistoryExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "history",
+        "journal",
+        "record",
+        "actor"
+      ],
+      "type": "RecordHistoryProps",
+      "constraints": [
+        "The caller owns confirmed record reads and field metadata. Optional display limits disclose the loaded range and total; omitting a limit retains all supplied changes. No per-change revision or session action log is fabricated."
+      ]
+    },
+    {
       "id": "ui/record-kanban",
       "owner": "@platform/ui",
       "name": "Authorized lifecycle board",
@@ -2611,8 +2714,7 @@
       "source": "web/packages/ui/src/records/Records.tsx",
       "exports": [
         "RecordPage",
-        "RecordLinks",
-        "RecordHistory"
+        "RecordLinks"
       ],
       "example": "RecordDetails",
       "authority": "api",
@@ -2631,7 +2733,8 @@
       "dependencies": [
         "ui/entity-card",
         "ui/lifecycle",
-        "ui/tasks"
+        "ui/tasks",
+        "ui/record-history"
       ],
       "constraints": [
         "Visibility and allowed actions come from the scoped source and caller."
@@ -3203,6 +3306,7 @@
       "Build filters from the entity's declared fields and operators.": "从实体声明的字段和操作符构建筛选条件。",
       "Button": "按钮",
       "Button group": "按钮组",
+      "Caller work services": "调用者工作服务",
       "Capture the original record and a current lease. Confirmed metadata never substitutes for authorized byte reads; queued decisions remain durable after a view retires.": "捕获原记录及当前作用域确认；已确认元数据不能代替受权字节读取，视图退役后已排队决策仍保持持久语义。",
       "Card fields come from permission-filtered metadata; the caller owns reads, selection and navigation.": "卡片字段来自权限裁剪后的元数据，调用方负责读取、选择及导航。",
       "Cards and panels": "卡片与面板",
@@ -3219,8 +3323,10 @@
       "Compare two to four complete original records with typed differences, stable identities and original field formatting.": "对比两到四条完整原记录，保留类型差异、稳定身份及原字段格式。",
       "Complete typed count matrix": "完整类型化计数矩阵",
       "Compose app navigation, routed tabs, commands and session context in one shell.": "在同一外壳中装配应用导航、路由标签页、命令与会话上下文。",
+      "Compose each offered task with its authorized original request and caller-owned approval decisions.": "将每条待办任务与其已授权原请求及调用方控制的审批决策组合。",
       "Compose nodes through typed ports with one shared graph interaction model.": "通过类型化端口装配节点，使用统一的图交互模型。",
       "Compose typed platform blocks with the existing native workflow editor and shared canvas.": "用现有原生流程编辑器和共享画布装配类型化平台区块。",
+      "Confirm offered approval requests and use the member's original approval and notification decisions.": "确认已提供的审批请求，并使用成员的原审批和通知决策。",
       "Confirmed": "已确认",
       "Confirmed record comparison": "已确认记录对比",
       "Confirmed record summary": "已确认记录摘要",
@@ -3310,6 +3416,8 @@
       "Optional whole-set clearing removes all selected values, including unmatched values.": "可选整组清空会移除全部已选值，包括未匹配的值。",
       "Ordered record chart": "按序逐记录图表",
       "Organize navigation and shared published objects, workflows and functions with the original application editor.": "使用原应用编辑器组织导航及共享的已发布对象、流程和函数。",
+      "Original approval tasks": "原审批任务",
+      "Original record journal": "原记录日志",
       "Original scalar and record sparkline": "原标量与记录迷你线",
       "Page header": "页面标题区",
       "Page workspace and preview": "页面工作台与预览",
@@ -3334,6 +3442,7 @@
       "Present complete original scalar counts as fixed-size tags with optional caller-owned group selection.": "以固定字号标签呈现完整原标量计数，并可由调用方控制分组选择。",
       "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
       "Present ordered original business events with explicit time and severity tones.": "以显式时间及严重度色调呈现排序后的原业务事件。",
+      "Present original change IDs, schemas, actors and field changes in their supplied order with an explicit display window.": "按提供顺序呈现原变更身份、决策名称、操作者及字段变更，并明确展示窗口。",
       "Present original complete counts with distinct axis identities and optional controlled heatmap selection.": "呈现原完整计数、独立轴身份与可选的受控热图选择。",
       "Present original host-ranked Top-N records and emit their original identities.": "呈现原宿主排序的 Top-N 记录，并输出原身份。",
       "Present original ordered business intervals on an explicit fixed UTC range.": "在显式固定 UTC 范围呈现原排序业务区间。",
@@ -3423,10 +3532,13 @@
       "The caller owns authorized complete counts and filter writes. Null, empty and literal groups retain their original identities; missing groups cannot be written to text filters. No array expansion, string coercion or record reads happen here.": "调用方持有授权完整计数与筛选写入；缺值、空文本及字面分组保留原身份，缺值分组不能写入文本筛选。组件不展开数组、不强制转换字符串，也不读取记录。",
       "The caller owns authorized complete counts and stable order. Empty text and null remain distinct; this control performs no queries or mutations.": "调用方拥有授权完整计数和稳定顺序；空文本与空值保持区分，此控件不查询或修改数据。",
       "The caller owns authorized options, counts and typed selected values.": "调用方管理授权选项、计数和类型化选中值。",
+      "The caller owns authorized original notifications, read decisions and navigation. Optional limits disclose the loaded range; read state changes only when the caller supplies confirmed data. Read-only or busy controls cannot initiate writes.": "调用方负责已授权原通知、已读决策及导航；可选限制说明已加载范围，已读状态仅随调用方提供的已确认数据变化。只读或忙碌控件不发起写入。",
       "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
       "The caller owns complete authorized counts and filter writes. Missing, empty and literal values remain distinct; no grouping, truncation or record reads happen here.": "调用方拥有完整授权计数与筛选写入；缺值、空文本和字面值保持独立；此处不分组、不截断、不读记录。",
+      "The caller owns confirmed record reads and field metadata. Optional display limits disclose the loaded range and total; omitting a limit retains all supplied changes. No per-change revision or session action log is fabricated.": "调用方负责已确认记录读取及字段元数据；可选展示限制说明已加载范围及总数，省略限制时保留所有已提供变更。不编造逐条修订或会话操作日志。",
       "The caller owns current state and optional writes. Duplicate labels retain distinct values; empty or unmatched state has no current choice. Step position makes no business workflow claim and tabs do not invent panel content.": "调用方持有当前状态及可选写入；重名标签保留不同值，空状态或不匹配状态没有当前选项。步骤位置不声明业务流程进度，标签页不生成面板内容。",
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
+      "The caller owns offered tasks, original request reads, action permission, submission and async state. Task and request IDs and revisions remain separate; unreadable or incompatible requests cannot expose approval actions.": "调用方负责待办任务、原请求读取、操作权限、提交及异步状态；任务与请求身份及修订保持独立，不可读或不兼容的请求不提供审批操作。",
       "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒，无效草稿可修正。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The caller owns scalar precision, authorized window and field metadata. Missing values break the line; points retain stable IDs and never read or write records.": "调用方拥有标量精度、授权窗口与字段元数据；缺值断线，点保留稳定ID，不读写记录。",
@@ -3460,6 +3572,7 @@
       "The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.": "本地示例使用合成应用资源；保存、发布与导航操作均不会连接宿主。",
       "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.": "本地示例使用合成查询与对象描述，保存和发布无法访问宿主。",
       "The offline preview shows the binding only and never executes Wasm or reads tenant data.": "离线预览仅展示绑定，不执行 Wasm 或读取租户数据。",
+      "The original inbox offers tasks; request IDs and revisions authorize approval decisions. Retiring a view never cancels a queued decision.": "原收件箱提供任务；审批决策使用请求身份与版本。视图退役不会取消已排队的决策。",
       "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.": "产物是 build.page 草稿；不会直接发布、生成租户 TSX 或绕过发布校验。",
       "The same list-detail descriptor serves a live workspace and a read-only sample preview.": "同一列表详情声明用于实际工作台和只读样例预览。",
       "The selector returns typed references. Host validation and original permissions remain authoritative.": "选择器返回类型化引用；宿主校验和原权限仍为准。",
@@ -3619,6 +3732,7 @@
       "web/packages/build/src/page-editor/widgets/TermsInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TitleInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/TreemapInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/WorkViewsInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
@@ -3712,6 +3826,7 @@
       "web/packages/app/src/widgets/Summary.tsx",
       "web/packages/app/src/widgets/Table.tsx",
       "web/packages/app/src/widgets/TermCounts.tsx",
+      "web/packages/app/src/widgets/WorkViews.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/catalog.examples.tsx",
       "web/packages/build/src/code.tsx",
@@ -3901,6 +4016,9 @@
     "ui/virtual-stack": [
       "web/packages/app/src/runtime/LoopRuntime.tsx"
     ],
+    "ui/record-history": [
+      "web/packages/app/src/sections.tsx"
+    ],
     "ui/search-input": [
       "web/packages/app/src/sections.tsx"
     ],
@@ -4042,6 +4160,13 @@
     "ui/term-counts": [
       "web/packages/app/src/widgets/TermCounts.tsx"
     ],
+    "ui/approval-inbox": [
+      "web/packages/app/src/widgets/WorkViews.tsx"
+    ],
+    "ui/notifications": [
+      "web/packages/app/src/widgets/WorkViews.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
     "app/composed-page": [
       "web/packages/build/src/catalog.examples.tsx",
       "web/packages/build/src/editor.tsx",
@@ -4167,9 +4292,6 @@
     ],
     "app/knowledge-search": [
       "web/apps/workspace/src/chrome.tsx"
-    ],
-    "ui/notifications": [
-      "web/apps/workspace/src/chrome.tsx"
     ]
   },
   "api": {
@@ -4220,6 +4342,8 @@
         "AggregateData",
         "AggregateOp",
         "AggregateQuery",
+        "ApprovalInboxProps",
+        "ApprovalInboxRow",
         "AttachedFile",
         "Attachment",
         "AttachmentPreviewProps",
@@ -4274,6 +4398,7 @@
         "NodeKind",
         "NodePort",
         "NotificationItem",
+        "NotificationListProps",
         "Operator",
         "Option",
         "Options",
@@ -4284,6 +4409,7 @@
         "RecordComment",
         "RecordCommentsProps",
         "RecordEditPort",
+        "RecordHistoryProps",
         "RecordPageData",
         "RecordQuery",
         "RecordSelectionPort",
@@ -4374,7 +4500,8 @@
         "WidgetContract",
         "WidgetID",
         "WidgetImplementation",
-        "WidgetRegistry"
+        "WidgetRegistry",
+        "WorkViewsHost"
       ]
     },
     "@pkg/build": {

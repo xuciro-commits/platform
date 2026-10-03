@@ -2,6 +2,7 @@ import {createRecordCollaboration} from "./collaboration/service";
 export {createRecordCollaboration} from "./collaboration/service";
 export type {CollaborationTarget,CollaborationHost} from "./collaboration/service";
 export {confirmedDecision} from "./collaboration/decision";
+export {createWorkViews,type WorkViewsHost} from "./work/service";
 export {searchInputObjects} from "./widgets/search-input";
 // The app API of the workspace (ADR-0018), the browser's counterpart of
 // platformserver/platform: an app's UI declares itself with defineApp and

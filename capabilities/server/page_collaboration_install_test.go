@@ -10,7 +10,7 @@ import (
 )
 
 func TestCollaborationInstallChecksActualRecordOwner(t *testing.T) {
-	for _, widget := range []string{"record-comments", "record-uploader", "media-preview", "pdf-viewer"} {
+	for _, widget := range []string{"record-comments", "record-uploader", "media-preview", "pdf-viewer", "timeline"} {
 		t.Run(widget, func(t *testing.T) {
 			owner := relations.New("collaboration-owner")
 			tenant, err := NewTenant("collaboration-owner", NewConsole("collaboration-owner"), owner, files.New("collaboration-owner"))
@@ -28,6 +28,8 @@ func TestCollaborationInstallChecksActualRecordOwner(t *testing.T) {
 				case "pdf-viewer":
 					section.FileVariable = "file"
 					section.PdfPageVariable = "page"
+				case "timeline":
+					section.HistoryLimit = 18
 				}
 				return platform.Page{Name: "collaboration-owner", Object: object, Layout: "composed", Sections: []platform.Section{{ID: "table", Widget: "table", ConfigVersion: 1, Object: object, Fields: []string{"text"}}, section}, Document: &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"table", "collaboration"}}, "table": {Kind: "widget", Section: "table"}, "collaboration": {Kind: "widget", Section: "collaboration"}}, Variables: map[string]platform.PageVariable{
 					"active": {Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "table"}},

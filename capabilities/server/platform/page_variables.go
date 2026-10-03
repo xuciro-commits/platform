@@ -43,6 +43,13 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	WorkViews struct {
+		RequiredUIProfile      string `json:"requiredUIProfile"`
+		MaxApprovalsWindow     int    `json:"maxApprovalsWindow"`
+		MaxNotificationsWindow int    `json:"maxNotificationsWindow"`
+		MaxHistoryWindow       int    `json:"maxHistoryWindow"`
+		DefaultHistoryWindow   int    `json:"defaultHistoryWindow"`
+	} `json:"workViews"`
 	Collaboration struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 		MaxCommentsWindow int    `json:"maxCommentsWindow"`

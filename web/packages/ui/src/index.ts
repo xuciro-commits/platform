@@ -35,7 +35,7 @@ export type { FieldType, EditorProps, Operator, Option, Attachment } from "./fie
 export { defineEntity, columnsFor, recordSchema, applyFilters, valueOf, FilterBar, type Entity, type Filter } from "./fields/entity";
 export { EntityCard, PropertyList } from "./components/EntityCard";
 export { PageHeader } from "./components/PageHeader";
-export { NotificationList, type NotificationItem } from "./components/NotificationList";
+export { NotificationList, type NotificationItem, type NotificationListProps } from "./components/NotificationList";
 export { Sheet } from "./primitives/sheet";
 export { Workspace, useWorkspace, useViewCall, useUnsavedChanges, notify, type Launcher, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
@@ -88,6 +88,8 @@ export {RecordSparkline,recordSparklinePoints} from "./records/RecordSparkline";
 
 export {RecordCard} from "./records/RecordCard";
 export {RecordComparison} from "./records/RecordComparison";
+export {ApprovalInbox,type ApprovalInboxProps,type ApprovalInboxRow} from "./records/ApprovalInbox";
+export type {RecordHistoryProps} from "./records/Records";
 export {RecordComments,type RecordCommentsProps} from "./records/RecordComments";
 export {RecordUploader,type RecordUploaderProps} from "./records/RecordUploader";
 export {MediaPreview,type AttachmentPreviewProps} from "./records/MediaPreview";

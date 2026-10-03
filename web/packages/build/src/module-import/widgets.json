@@ -245,9 +245,9 @@
       "sourceType": "ActionLogTimeline",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
+      "status": "profile",
       "target": "timeline",
-      "reason": "config-or-capability-profile-required"
+      "reason": "explicit-confirmed-original-record-history-migration-profile"
     },
     {
       "sourceType": "ButtonGroup",
@@ -661,17 +661,17 @@
       "sourceType": "NotificationFeed",
       "sourceCategory": "Ontology & workflow",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": "notifications",
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "notification-feed",
+      "reason": "explicit-caller-notification-service-migration-profile"
     },
     {
       "sourceType": "ApprovalInbox",
       "sourceCategory": "Ontology & workflow",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": "inbox",
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "approval-inbox",
+      "reason": "explicit-caller-approval-service-migration-profile"
     },
     {
       "sourceType": "GraphExplorer",

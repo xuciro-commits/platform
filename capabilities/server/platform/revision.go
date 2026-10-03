@@ -82,7 +82,7 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 		for _, group := range section.RecordLinks {
 			requires = append(requires, group.Object)
 		}
-		requires = append(requires, section.CollaborationDependencies()...)
+		requires = append(requires, section.ServiceDependencies()...)
 		requires = append(requires, section.Actions...)
 		if section.InlineEdit != nil {
 			requires = append(requires, section.InlineEdit.Action)
@@ -512,7 +512,7 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 			for _, group := range section.RecordLinks {
 				required = append(required, group.Object)
 			}
-			required = append(required, section.CollaborationDependencies()...)
+			required = append(required, section.ServiceDependencies()...)
 			required = append(required, section.Actions...)
 			if section.InlineEdit != nil {
 				required = append(required, section.InlineEdit.Action)
@@ -704,10 +704,35 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	for _, s := range page.Sections {
+		if err := page.CheckHistoryBinding(s); err != nil {
+			return err
+		}
+		if s.HistoryLimit > 0 {
+			ref := s.Object
+			if ref.Name == "" {
+				ref = page.Object
+			}
+			asset, ok := lookup[ref]
+			var identity struct {
+				Type   string      `json:"type"`
+				App    string      `json:"app"`
+				Entity *EntityInfo `json:"entity"`
+			}
+			err := json.Unmarshal(asset.Body, &identity)
+			owner, typ := identity.App, identity.Type
+			if identity.Entity != nil {
+				owner, typ = identity.Entity.App, identity.Entity.Type
+			} else if owner == "" {
+				owner, _, _ = strings.Cut(typ, ".") // the native builder object descriptor
+			}
+			if !ok || err != nil || identity.Type != typ || typ != ref.Name || owner != ref.App {
+				return fmt.Errorf("frozen history object does not match its actual entity owner")
+			}
+		}
 		if err := page.CheckCollaborationBinding(s); err != nil {
 			return err
 		}
-		if err := s.CheckCollaborationServices(func(ref AssetRef) (EntityInfo, bool) {
+		if err := s.CheckServices(func(ref AssetRef) (EntityInfo, bool) {
 			asset, ok := lookup[ref]
 			var descriptor struct {
 				Type   string      `json:"type"`

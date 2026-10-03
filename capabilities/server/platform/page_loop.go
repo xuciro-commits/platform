@@ -137,7 +137,10 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
-		if collaborationWidget(section.Widget) {
+		if workFeed(section.Widget) && sectionOwners[section.ID] != "" {
+			return fmt.Errorf("caller work feeds do not enter a loop")
+		}
+		if collaborationWidget(section.Widget) || section.HistoryLimit > 0 {
 			v := d.Variables[section.RecordVariable]
 			if sectionOwners[section.ID] != "" || v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
 				return fmt.Errorf("collaboration needs its original page or overlay owner and does not enter a loop")

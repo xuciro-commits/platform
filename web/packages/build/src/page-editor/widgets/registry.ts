@@ -1,3 +1,4 @@
+import {HistoryInspector,WorkViewsInspector} from "./WorkViewsInspector";
 import {CollaborationInspector} from "./CollaborationInspector";
 import {TagCountsInspector} from "./TagCountsInspector";
 import {RecordComparisonInspector} from "./RecordComparisonInspector";
@@ -45,6 +46,9 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "approval-inbox":{configVersion:1,bindings:WorkViewsInspector},
+ "notification-feed":{configVersion:1,bindings:WorkViewsInspector},
+ timeline:{configVersion:1,bindings:HistoryInspector},
  "record-comments":{configVersion:1,bindings:CollaborationInspector},
  "record-uploader":{configVersion:1,bindings:CollaborationInspector},
  "media-preview":{configVersion:1,bindings:CollaborationInspector},

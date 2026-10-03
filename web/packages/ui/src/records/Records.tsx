@@ -359,29 +359,36 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   );
 }
 
-/** A record's history from the journal: who changed what, newest last. Its
+export type RecordHistoryProps={info:EntityInfo;history?:readonly RecordChange[];heading?:boolean;label?:string;limit?:number;total?:number;loadedCount?:number;recordID?:string;recordRevision?:number};
+/** A record's original journal order: who changed what. Its
  *  page shows it, and so does a composed page's timeline (ADR-0035 16b). */
-export function RecordHistory({ info, history = [], heading = true }: { info: EntityInfo; history?: RecordView["history"]; heading?: boolean }) {
+export function RecordHistory({info,history=[],heading=true,label,limit,total,loadedCount=history.length,recordID,recordRevision}:RecordHistoryProps) {
+  if(!Array.isArray(history)||limit!==undefined&&(!Number.isSafeInteger(limit)||limit<1||limit>pageUIManifest.runtime.workViews.maxHistoryWindow)||!Number.isSafeInteger(loadedCount)||loadedCount<history.length||total!==undefined&&(!Number.isSafeInteger(total)||total<loadedCount)||recordID!==undefined&&(typeof recordID!=="string"||!recordID)||recordRevision!==undefined&&(!Number.isSafeInteger(recordRevision)||recordRevision<0)||history.some((change:RecordChange)=>!change||typeof change.change!=="string"||!change.change||typeof change.schema!=="string"||!change.schema||typeof change.by!=="string"||typeof change.at!=="string"||!change.at||!Array.isArray(change.fields)||change.fields.some((field:Api.FieldChange)=>!field||typeof field.field!=="string"||!field.field)))return <p role="alert">{t("The original record history is unavailable or incompatible.")}</p>;
+  const visible:readonly RecordChange[]=limit===undefined?history:history.slice(0,limit),range=limit!==undefined||total!==undefined||loadedCount!==history.length;
+  const occurrences=new Map<string,number>();
   return (
-    <section aria-label={t("History")}>
-      {heading && <h2 className="mb-1 flex items-center gap-1 text-sm font-semibold"><HistoryIcon className="size-3.5" />{t("History")}</h2>}
-      {(history ?? []).length === 0 && <p className="text-sm text-muted">{t("No changes yet.")}</p>}
-      <ol className="grid gap-2">
-        {(history ?? []).map((h, i) => (
-          <li key={`${h.change}:${i}`} className="rounded-md border border-border bg-surface p-2 text-xs">
-            <div className="flex gap-2"><span className="font-mono">{h.schema}</span><span className="text-muted">{h.by} · {new Date(h.at).toLocaleString()}</span></div>
+    <section aria-label={label??t("History")} className="grid min-w-0 gap-2">
+      {heading && <h2 className="flex items-center gap-1 text-sm font-semibold"><HistoryIcon className="size-3.5" />{label??t("History")}</h2>}
+      {(recordID!==undefined||recordRevision!==undefined)&&<p className="break-all font-mono text-xs text-muted">{recordID}{recordRevision!==undefined?` · ${t("Revision {revision}",{revision:recordRevision})}`:""}</p>}
+      {range&&<p role="status" className="text-xs text-muted">{total===undefined?t("Showing {shown} of {loaded} loaded changes; the complete total is unavailable.",{shown:visible.length,loaded:loadedCount}):t("Showing {shown} of {total} changes.",{shown:visible.length,total})}</p>}
+      {visible.length===0&&<p className="text-sm text-muted">{t("No changes yet.")}</p>}
+      <ol className="grid min-w-0 gap-2">
+        {visible.map(h => {const occurrence=occurrences.get(h.change)??0;occurrences.set(h.change,occurrence+1);return (
+          <li key={JSON.stringify([h.change,occurrence])} className="min-w-0 rounded-md border border-border bg-surface p-2 text-xs">
+            <div className="flex min-w-0 flex-wrap gap-2"><span className="break-all font-mono">{h.change}</span><span className="break-all font-mono">{h.schema}</span><span className="break-words text-muted">{h.by} · <time dateTime={h.at}>{h.at}</time></span></div>
             {h.fields.length > 0 && (
               <ul className="mt-1 grid gap-0.5">
                 {h.fields.map((f) => {
                   const declared = info.fields.find((x) => x.name === f.field);
-                  return <li key={f.field}><span className="text-muted">{declared?.title ?? f.field}</span>{" "}
+                  if(!declared&&!(f.field==="archived"&&[f.before,f.after].every(value=>value===undefined||typeof value==="boolean")))return null;
+                  return <li key={f.field} className="min-w-0 break-words"><span className="text-muted">{declared?.title ?? t("Archived")}</span>{" "}
                     {declared?.type === "lines" ? <LinesChange field={declared} before={f.before} after={f.after} />
                       : <>{f.before !== undefined && <><s className="text-muted">{shown(f.before)}</s> → </>}{shown(f.after)}</>}</li>;
                 })}
               </ul>
             )}
           </li>
-        ))}
+        );})}
       </ol>
     </section>
   );

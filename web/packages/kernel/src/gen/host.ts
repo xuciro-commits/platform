@@ -1528,6 +1528,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  historyLimit?: number;
   commentDraftVariable?: string;
   fileVariable?: string;
   pdfPageVariable?: string;
@@ -1911,7 +1912,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.76",
+  "uiProfile": "platform.page.v2.77",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2460,6 +2461,11 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "historyLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
           }
         }
       },
@@ -5545,6 +5551,108 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "approval-inbox",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.77",
+      "title": "Approval inbox",
+      "category": "Work",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.77"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "notification-feed",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.77",
+      "title": "Notification feed",
+      "category": "Work",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.77"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -5623,7 +5731,8 @@ export const pageUIManifest = {
     "platform.page.v2.73",
     "platform.page.v2.74",
     "platform.page.v2.75",
-    "platform.page.v2.76"
+    "platform.page.v2.76",
+    "platform.page.v2.77"
   ],
   "runtime": {
     "scope": "page",
@@ -6224,6 +6333,13 @@ export const pageUIManifest = {
       "maxImagePixels": 16777216,
       "maxPDFPixels": 16777216,
       "maxPDFPages": 1000
+    },
+    "workViews": {
+      "requiredUIProfile": "platform.page.v2.77",
+      "maxApprovalsWindow": 25,
+      "maxNotificationsWindow": 40,
+      "maxHistoryWindow": 100,
+      "defaultHistoryWindow": 18
     }
   },
   "layout": {
