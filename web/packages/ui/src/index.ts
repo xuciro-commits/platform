@@ -106,3 +106,5 @@ export type {AttachedFile,RecordComment} from "./records/Records";
 
 export {CollectionCounts,signedCounts} from "./charts/CollectionCounts";
 export {DerivedMean} from "./components/DerivedMean";
+
+export {RecordActionGrid,projectActionRows} from "./records/RecordActionGrid";

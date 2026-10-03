@@ -12,6 +12,9 @@ import {
   type FlowDefinition, type FlowInstanceData, type ChartSpec, type Route,
 } from "./index";
 import { WorkspaceContext } from "./shell/Workspace";
+import {RecordActionGrid} from "./records/RecordActionGrid";
+
+export function RecordActionGridExample(){return <RecordActionGrid records={demoRows} info={demoInfo} parameters={[{parameter:"amount",field:"quantity"}]} payload={[{name:"amount",type:"integer",description:"Amount",required:true}]} port={{schema:"sample.item.adjust",fields:["amount"],scope:"catalog",maxRows:50,preview:true,alwaysEditing:true,confirmation:{title:t("Review row actions"),description:t("Actions do not run while you compose.")},submit:async()=>({accepted:false})}}/>;}
 
 export function EditorPanels() {
   return <div className="flex h-[30rem] flex-col"><EditorWorkbench leftLabel={t("Library")} centerLabel={t("Canvas")} rightLabel={t("Inspector")}

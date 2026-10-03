@@ -293,9 +293,9 @@
       "sourceType": "ActionTable",
       "sourceCategory": "Action",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "action-table",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "AIPAnalyst",
@@ -373,17 +373,17 @@
       "sourceType": "NotepadEmbed",
       "sourceCategory": "Embed",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "notepad",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "MapTemplate",
       "sourceCategory": "Embed",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-list",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "FreeFormAnalysis",

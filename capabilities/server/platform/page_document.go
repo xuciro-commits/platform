@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.Widget == "action-table" || s.Widget == "notepad" || s.ActionTable != nil || s.NotepadVariable != "" {
+				return fmt.Errorf("record work requires a document")
+			}
 			if s.Widget == "collection-analysis" || s.Analysis != nil || s.AnalysisXVariable != "" || s.AnalysisYVariable != "" || s.AnalysisCountVariable != "" || s.AnalysisMeanVariable != "" {
 				return fmt.Errorf("analysis requires a page document")
 			}
@@ -276,6 +279,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkTerms(section); err != nil {
+			return err
+		}
+		if err := d.checkRecordWork(section); err != nil {
 			return err
 		}
 		if err := d.checkCollectionAnalysis(section); err != nil {
@@ -751,7 +757,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 							}
 						}
 					}
-					for _, id := range []string{s.AnalysisXVariable, s.AnalysisYVariable, s.AnalysisCountVariable, s.AnalysisMeanVariable, s.CommentDraftVariable, s.FileVariable, s.PdfPageVariable, s.RecordSetVariable, s.SparklineDecimalVariable, s.SparklineNumberVariable, s.GroupValueVariable, s.GroupSetVariable, s.RowValueVariable, s.RowSetVariable, s.ColumnValueVariable, s.ColumnSetVariable, s.PickerValueVariable, s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
+					for _, id := range []string{s.NotepadVariable, s.AnalysisXVariable, s.AnalysisYVariable, s.AnalysisCountVariable, s.AnalysisMeanVariable, s.CommentDraftVariable, s.FileVariable, s.PdfPageVariable, s.RecordSetVariable, s.SparklineDecimalVariable, s.SparklineNumberVariable, s.GroupValueVariable, s.GroupSetVariable, s.RowValueVariable, s.RowSetVariable, s.ColumnValueVariable, s.ColumnSetVariable, s.PickerValueVariable, s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
 						if id != "" {
 							if _, ok := variables[id]; !ok {
 								return false

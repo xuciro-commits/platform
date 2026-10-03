@@ -359,3 +359,5 @@ export type {DecimalValue as PageDecimalValue} from "./runtime/decimal";
 export {pageLayoutDiagnostics} from "./layout";
 
 export {tableEditableFields} from "./widgets/table-edit";
+
+export {createRecordActionSubmitter} from "./record-actions";

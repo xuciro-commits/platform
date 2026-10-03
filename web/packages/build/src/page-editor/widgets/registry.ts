@@ -1,3 +1,4 @@
+import {ActionTableInspector,NotepadInspector} from "./RecordWorkInspectors";
 import {CollectionAnalysisInspector} from "./CollectionAnalysisInspector";
 import {ResourceListInspector,AssetDirectoryInspector,GraphExplorerInspector,VertexGraphInspector} from "./ExplorationInspectors";
 import {BreadcrumbInspector,BreadcrumbHomeInspector,AvatarInspector,ImageInspector} from "./ContextInspectors";
@@ -49,6 +50,8 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "action-table":{configVersion:1,bindings:ActionTableInspector},
+ notepad:{configVersion:1,bindings:NotepadInspector},
  "collection-analysis":{configVersion:1,bindings:CollectionAnalysisInspector},
  "resource-list":{configVersion:1,bindings:ResourceListInspector},
  "asset-directory":{configVersion:1,bindings:AssetDirectoryInspector},

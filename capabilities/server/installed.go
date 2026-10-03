@@ -316,6 +316,22 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return fmt.Errorf("%s: avatar original context owner is unavailable", where)
 			}
 		}
+		if s.Widget == "action-table" {
+			if len(s.Actions) != 1 {
+				return fmt.Errorf("action table requires one original action")
+			}
+			owner := t.owner["action:"+s.Actions[0].Name]
+			if owner == nil {
+				return fmt.Errorf("action table action is unavailable")
+			}
+			a, ok := owner.Manifest().Actions.Action(s.Actions[0].Name)
+			if !ok {
+				return fmt.Errorf("action table action is unavailable")
+			}
+			if err := s.CheckActionTable(info, a); err != nil {
+				return err
+			}
+		}
 		if err := s.CheckCollectionAnalysis(info); err != nil {
 			return err
 		}

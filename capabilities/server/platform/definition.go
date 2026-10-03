@@ -104,6 +104,8 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	ActionTable              *PageActionTable        `json:"actionTable,omitempty"`
+	NotepadVariable          string                  `json:"notepadVariable,omitempty"`
 	Analysis                 *PageCollectionAnalysis `json:"analysis,omitempty"`
 	AnalysisXVariable        string                  `json:"analysisXVariable,omitempty"`
 	AnalysisYVariable        string                  `json:"analysisYVariable,omitempty"`

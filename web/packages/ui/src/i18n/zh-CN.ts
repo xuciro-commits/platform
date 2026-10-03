@@ -1,5 +1,15 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Original row action grid": "原行操作表格",
+ "Stage typed original action parameters, review row revisions and retain refused inputs.": "暂存类型化原动作参数、检查行版本并保留被拒绝的输入。",
+ "The caller owns original action permissions, all payload bindings and independent revision-bound decisions. Parameter projection never replaces record identity; closing the grid ends further submissions but does not cancel queued decisions.": "调用方管理原动作权限、全部参数绑定和绑定版本的独立决策。参数投影不替换记录身份；关闭表格后停止后续提交，不取消已排队决策。",
+  "Confirm row actions": "确认行操作",
+  "Review row actions": "检查行操作",
+  "Run {action} for the staged original records?": "对已暂存的原记录执行「{action}」？",
+  "Each row uses its original action and opened revision. Accepted requests may await approval; failed rows remain staged.": "每行使用原动作和打开时的版本。已接受的请求可能等待审批；失败行保留暂存内容。",
+  "No records in this original action window.": "原动作窗口中没有记录。",
+  "Original action parameters or record identities are unavailable or incompatible.": "原动作参数或记录身份不可用或不兼容。",
+
  "Collection analysis": "集合分析",
  "Collection analysis fields or configuration are unavailable.": "集合分析字段或配置不可用。",
  "Loading original collection statistics…": "正在读取原集合统计…",

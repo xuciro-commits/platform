@@ -8,7 +8,7 @@ export function collaborationRecordChoices(module:SourceModule|undefined,pageID:
  const owners=new Map<string,string|undefined>(),walk=(root:string,owner?:string,seen=new Set<string>())=>{if(seen.has(root))return;seen.add(root);for(const child of module.sections[root]?.children??[]){if(child.kind==="widget")owners.set(child.id,owner);else walk(child.id,owner,seen);}};
  const page=module.pages.find(p=>p.id===pageID);if(!page)return [];walk(page.rootSectionId);module.overlays.forEach(o=>walk(o.rootSectionId,o.id));module.unusedWidgetIds.forEach(id=>owners.set(id,undefined));if(!owners.has(widgetID))return [];
  return module.variables.flatMap(v=>{if(v.type!=="object"||v.definitionKind!=="widgetOutput"||v.widgetOutputKey!=="activeObject"||v.isInterface)return [];
-  const producers=Object.values(module.widgets).filter(w=>owners.has(w.id)&&!module.unusedWidgetIds.includes(w.id)&&owners.get(w.id)===owners.get(widgetID)&&["ObjectTable","ObjectList","KanbanBoard","Calendar","ObjectSelector","Leaderboard","ScatterPlot","ResourceList"].includes(w.type)&&w.config.activeVarId===v.id&&(w.type!=="ObjectTable"||v.widgetId===w.id));if(producers.length!==1)return [];
+  const producers=Object.values(module.widgets).filter(w=>owners.has(w.id)&&!module.unusedWidgetIds.includes(w.id)&&owners.get(w.id)===owners.get(widgetID)&&["ObjectTable","ObjectList","KanbanBoard","Calendar","ObjectSelector","Leaderboard","ScatterPlot","ResourceList","MapTemplate"].includes(w.type)&&w.config.activeVarId===v.id&&(w.type!=="ObjectTable"||v.widgetId===w.id));if(producers.length!==1)return [];
   const set=module.variables.find(value=>value.id===producers[0]!.config.objectSetVarId),external=text(object(set?.objectSet)?.objectType||set?.sourceObjectType);return external?[{id:v.id,title:v.name,object:external}]:[];
  });
 }
@@ -25,6 +25,8 @@ export function workshopRequirements(module:SourceModule|undefined){
   if(["ChartVega","ChartWaterfall"].includes(w.type))property(external(text(w.config.objectSetVarId)),"status");
   if(w.type==="DerivedSeries")property(external(text(w.config.objectSetVarId)),"pressure");
   if(w.type==="FreeFormAnalysis")for(const key of ["pressure","temperature","availability","revenueImpact"])property(external(text(w.config.objectSetVarId)),key);
+  if(w.type==="MapTemplate")property(external(text(w.config.objectSetVarId)),"name");
+  if(w.type==="ActionTable"&&text(w.config.actionId))actions.add(text(w.config.actionId));
   if(w.type==="ChartPie")property(external(text(w.config.objectSetVarId)),text(w.config.groupBy));
   if(w.type==="PivotTable")for(const key of ["rows","cols"])property(external(text(w.config.objectSetVarId)),text(w.config[key]));
   if(w.type==="KanbanBoard")property(external(text(w.config.objectSetVarId)),text(w.config.groupBy));

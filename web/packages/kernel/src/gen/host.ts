@@ -923,6 +923,15 @@ export type Page = {
   selections?: SelectionVariable[];
 };
 
+export type PageActionParameter = {
+  parameter: string;
+  field: string;
+};
+
+export type PageActionTable = {
+  parameters: PageActionParameter[];
+};
+
 export type PageAlertBanner = {
   threshold: string;
   tone: string;
@@ -1614,6 +1623,8 @@ export type SavedView = {
 };
 
 export type Section = {
+  actionTable?: PageActionTable;
+  notepadVariable?: string;
   analysis?: PageCollectionAnalysis;
   analysisXVariable?: string;
   analysisYVariable?: string;
@@ -2010,7 +2021,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.80",
+  "uiProfile": "platform.page.v2.81",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -6244,6 +6255,120 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "action-table",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.81",
+      "title": "Record action table",
+      "category": "Work",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "actions",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "summaryField": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.81",
+          "writable": false
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
+    },
+    {
+      "componentID": "notepad",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.81",
+      "title": "Session notepad",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "summaryField": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "text",
+          "bindingField": "notepadVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.81",
+          "writable": true
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -6326,7 +6451,8 @@ export const pageUIManifest = {
     "platform.page.v2.77",
     "platform.page.v2.78",
     "platform.page.v2.79",
-    "platform.page.v2.80"
+    "platform.page.v2.80",
+    "platform.page.v2.81"
   ],
   "runtime": {
     "scope": "page",
@@ -6759,7 +6885,8 @@ export const pageUIManifest = {
       "requiredUIProfile": "platform.page.v2.42",
       "layouts": [
         "grid",
-        "list"
+        "list",
+        "tiles"
       ],
       "maxFields": 4
     },
@@ -6969,6 +7096,12 @@ export const pageUIManifest = {
       "requiredUIProfile": "platform.page.v2.80",
       "maxGroups": 64,
       "maxRecords": 80
+    },
+    "recordWork": {
+      "requiredUIProfile": "platform.page.v2.81",
+      "maxActionRows": 50,
+      "maxTiles": 8,
+      "maxParameters": 16
     }
   },
   "layout": {

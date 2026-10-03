@@ -2,6 +2,10 @@
 export const diagnosticMessages:Record<string,string>={
  "exploration-profile":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
  "exploration-asset-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
+ "record-work-profile":"Bind original row action parameters, a bounded ID-ordered window, or an explicitly reviewed initial session note. Incompatible parameters, incomplete declarations and unsupported sources are refused.",
+ "native-row-actions":"Each staged row submits its original action and revision after review. Success clears that row, failure retains its baseline and inputs; approvals and business effects remain with the host.",
+ "native-record-tiles":"This source template presents eight original record tiles and an optional confirmed selection. It does not create a geographic map or replace competing record producers.",
+ "native-session-note":"The original sample note is explicitly reviewed initial text. Runtime edits belong to the page session and reset on reload or panel closure; no note backend or business work is created.",
  "collection-analysis-profile":"Map the four original numeric fields or status values and the explicit mean unit. Use the current analysis profile and an original plan; unsupported specifications and expressions are refused.",
  "native-collection-analysis":"This profile preserves fixed horizontal counts, signed category deltas/cumulative values, original count/mean, and 80-record axis choices. It does not run Vega or a time-series engine. Missing numeric values remain missing.",
  "resource-list-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",

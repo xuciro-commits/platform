@@ -148,6 +148,19 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 				}
 			}
 		}
+		if section.Widget == "action-table" || section.Widget == "notepad" || section.RecordList != nil && section.RecordList.Layout == "tiles" {
+			if sectionOwners[section.ID] != "" {
+				return fmt.Errorf("record work does not enter a loop")
+			}
+			id := section.CollectionVariable
+			if section.Widget == "notepad" {
+				id = section.NotepadVariable
+			}
+			v := d.Variables[id]
+			if !accessible(id, "", sectionOverlays[section.ID]) || v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
+				return fmt.Errorf("record work needs its exact original page or overlay owner")
+			}
+		}
 		if section.Widget == "collection-analysis" {
 			if sectionOwners[section.ID] != "" {
 				return fmt.Errorf("collection analysis does not enter a loop")

@@ -814,6 +814,40 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	}
 
 	for _, s := range page.Sections {
+		if s.Widget != "action-table" {
+			continue
+		}
+		ref := s.Object
+		if ref.Name == "" {
+			ref = page.Object
+		}
+		object, ok := lookup[ref]
+		info, err := queryObjectDescriptor(object.Body)
+		if !ok || err != nil || len(s.Actions) != 1 {
+			return fmt.Errorf("frozen action table object is unavailable")
+		}
+		asset, ok := lookup[s.Actions[0]]
+		var a Action
+		if !ok || json.Unmarshal(asset.Body, &a) != nil {
+			return fmt.Errorf("frozen action table action is unavailable")
+		}
+		var descriptor struct {
+			Action *Action `json:"action"`
+		}
+		if err := json.Unmarshal(asset.Body, &descriptor); err != nil {
+			return fmt.Errorf("frozen action table declaration is unavailable")
+		}
+		if descriptor.Action != nil {
+			if descriptor.Action.Schema != a.Schema || descriptor.Action.Target != a.Target {
+				return fmt.Errorf("frozen action table declaration identity differs")
+			}
+			a = *descriptor.Action
+		}
+		if err := s.CheckActionTable(info, a); err != nil {
+			return fmt.Errorf("frozen action table: %w", err)
+		}
+	}
+	for _, s := range page.Sections {
 		if s.Widget != "inline-action" {
 			continue
 		}
@@ -907,6 +941,9 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 				}
 			}
 			if err := page.CheckRecordPickerQuery(id, named); err != nil {
+				return err
+			}
+			if err := page.CheckRecordWorkQuery(id, named); err != nil {
 				return err
 			}
 			if err := page.CheckAnalysisQuery(id, named); err != nil {

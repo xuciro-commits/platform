@@ -502,6 +502,15 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					if section.CheckTerms(shown) != nil {
 						continue
 					}
+					if section.Widget == "action-table" {
+						if len(section.Actions) != 1 {
+							continue
+						}
+						a, offered := actions[section.Actions[0].Name]
+						if !offered || section.CheckActionTable(shown, a) != nil {
+							continue
+						}
+					}
 					if section.CheckCollectionAnalysis(shown) != nil {
 						if section.Analysis != nil && section.Analysis.Kind == "record-axes" && page.Document != nil {
 							doc := *page.Document

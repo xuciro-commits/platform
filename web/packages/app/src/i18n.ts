@@ -2,6 +2,19 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Record tiles": "记录卡片",
+ "Session notepad": "会话笔记",
+ "Original row decisions": "原行决策",
+ "Submit original typed row targets and revisions, preserving unanswered decision keys.": "提交类型化原行目标与版本，并保留未回答决策的原键。",
+ "The original host owns authorization, validation and approval. An unanswered row can only resend its original decision with identical payload and revision; retiring a window ends new submissions.": "原宿主管理授权、校验和审批。未回答的行仅能以相同参数和版本重发原决策；窗口退役后停止新提交。",
+  "Eight original record tiles in ID order; this is a selection view, not a geographic map.": "按 ID 顺序显示八条原记录卡片；此视图用于选择记录，不显示地理地图。",
+  "Fifty original records in ID order; each staged row is an independent revision-bound action.": "按 ID 顺序显示五十条原记录；每个暂存行都是绑定原版本的独立动作。",
+  "The original action window has ended.": "原动作窗口已结束。",
+  "The original row action or parameter bindings are unavailable.": "原行操作或参数绑定不可用。",
+  "The original session note is unavailable.": "原会话笔记不可用。",
+  "The original tile object is unavailable.": "原卡片对象不可用。",
+  "This note belongs to this page session. Reloading or closing its panel restores the published initial text.": "笔记属于当前页面会话。重新加载或关闭面板后恢复已发布的初始文字。",
+
  "Another decision for this request is already being confirmed.": "此请求的另一项决策正在确认中。",
  "You are not a current approver for this request.": "你不是此请求当前的审批人。",
  "Your approval is already recorded at this level. Other approvers are still awaited.": "本级已记录你的批准，仍在等待其他审批人。",

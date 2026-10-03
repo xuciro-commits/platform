@@ -2,6 +2,25 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Bind the original row action parameters, bounded tile/action window or note state before saving.": "保存前绑定原行操作参数、有界卡片或动作窗口及笔记状态。",
+  "Choose a readable original field": "选择可读取的原字段",
+  "Choose explicit note content": "明确选择笔记内容",
+  "Eight record tiles": "八条记录卡片",
+  "Keep the original sample note": "保留原示例笔记",
+  "Map every declared action parameter to its original seed field. Confirmation submits independent row targets and their opened revisions.": "将每个声明的动作参数映射到原初值字段。确认后按行提交独立目标及打开时的版本。",
+  "Map row action {widget}": "映射行操作 {widget}",
+  "Map session note {widget}": "映射会话笔记 {widget}",
+  "Note initial content": "笔记初始内容",
+  "Original row action": "原行操作",
+  "Original seed field for {parameter}": "{parameter} 的原初值字段",
+  "Record tiles": "记录卡片",
+  "Session note variable": "会话笔记变量",
+  "Session notepad": "会话笔记",
+  "Start with an empty note": "从空笔记开始",
+  "The published initial text belongs to Page variables; runtime edits belong to the original page or panel session.": "已发布初始文字归页面变量管理；运行时编辑属于原页面或面板会话。",
+  "The sample shift text is initial content, not live platform work. Edits remain in the page session.": "交班示例文字仅作为初始内容，不代表平台实时业务。编辑保留在页面会话中。",
+  "Use a separate 50-record ID-ordered query and map every original parameter. Row confirmation preserves opened revisions; failed requests stay staged.": "使用按 ID 排序的独立五十条记录查询，并映射每个原参数。逐行确认保留打开时的版本；失败请求继续暂存。",
+
  "Bind the original analysis fields, matching scalar or axis ports and query before saving.": "保存前绑定原分析字段、匹配的标量或坐标轴端口及查询。",
  "Map collection analysis {widget}": "映射集合分析组件{widget}",
  "Original analysis value {value}": "原分析业务值{value}",

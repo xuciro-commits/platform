@@ -8,7 +8,8 @@
     "./catalog/examples": "./src/catalog.examples.tsx",
     "./catalog/fixtures": "./src/catalog.fixtures.tsx",
     "./decimal": "./src/runtime/decimal.ts",
-    "./search": "./src/widgets/search-input.ts"
+    "./search": "./src/widgets/search-input.ts",
+    "./action-table": "./src/widgets/action-table.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

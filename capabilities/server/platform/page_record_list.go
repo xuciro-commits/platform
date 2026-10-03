@@ -19,6 +19,16 @@ func (d *PageDocument) checkRecordList(s Section) error {
 	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordList.RequiredUIProfile) || s.RecordList == nil || !slices.Contains(pageWidgets.Runtime.RecordList.Layouts, s.RecordList.Layout) || s.CollectionVariable == "" || len(s.Fields) > pageWidgets.Runtime.RecordList.MaxFields || len(s.Actions) > 0 {
 		return fmt.Errorf("record list needs its profile, bounded fields, layout and original window")
 	}
+	if s.RecordList.Layout == "tiles" {
+		v := d.Variables[s.CollectionVariable]
+		if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordWork.RequiredUIProfile) || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(s.Fields) > 0 {
+			return fmt.Errorf("tiles need their original bounded plan")
+		}
+		q := d.Queries[v.Source.Query]
+		if q.Limit != pageWidgets.Runtime.RecordWork.MaxTiles || q.Offset != 0 || !slices.Equal(q.Sort, []string{"id"}) {
+			return fmt.Errorf("tiles need an eight-record ID window")
+		}
+	}
 	return nil
 }
 func (s Section) CheckRecordList(info EntityInfo) error {
