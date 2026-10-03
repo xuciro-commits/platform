@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -349,3 +349,5 @@ export function SeparatorExample(){return <Separator name={t("Separator")} label
 export function SpacerExample(){return <div className="grid"><p>{t("Operator instructions")}</p><Spacer size={16}/><p>{t("Review the affected records before continuing.")}</p></div>;}
 
 export function SearchInputExample(){const [value,setValue]=useState("");return <SearchInput aria-label="Asset search" value={value} onChange={setValue} scope={["Assets"]}/>;}
+
+export function TermCountsExample(){return <TermCounts label="Status terms" terms={[{value:"Active",count:24},{value:"Warning",count:8},{value:"",count:2},{value:null,count:1}]}/>;}

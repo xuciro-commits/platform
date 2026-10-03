@@ -339,6 +339,12 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	doc.Nodes[doc.Root] = searchRoot
 	searchIndex := len(sections)
 	sections = append(sections, build.Section{ID: "searchInput", Widget: "input", ConfigVersion: 1, InputKind: "search"})
+	termsIndex := len(sections)
+	sections = append(sections, build.Section{ID: "terms", Widget: "term-counts", ConfigVersion: 1, CollectionVariable: "pickerWindow", Group: "name"})
+	doc.Nodes["terms"] = platform.PageLayoutNode{Kind: "widget", Section: "terms"}
+	termsRoot := doc.Nodes[doc.Root]
+	termsRoot.Children = append(termsRoot.Children, "terms")
+	doc.Nodes[doc.Root] = termsRoot
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -364,6 +370,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[termsIndex].Group = "secret"
 	sections[searchIndex].InputKind = ""
 	doc.Variables["searchState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("later draft")}
 	sections[56].PickerValueVariable = ""
@@ -484,6 +491,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					}
 					if !alertFound || member.ID == builder.ID && privateAlerts != 1 || member.ID != builder.ID && privateAlerts != 0 {
 						t.Fatal("frozen alert config, count binding or private dependency changed")
+					}
+					termsFound := false
+					for _, section := range d.Page.Sections {
+						if section.ID == "terms" {
+							termsFound = section.Group == "name" && section.CollectionVariable == "pickerWindow"
+						}
+					}
+					if !termsFound {
+						t.Fatal("frozen original term field or window changed")
 					}
 					searchFound := false
 					for _, section := range d.Page.Sections {

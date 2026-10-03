@@ -75,6 +75,16 @@ var buckets = map[string]func(time.Time) string{
 	"year":  func(t time.Time) string { return t.Format("2006") },
 }
 
+func aggregateGroupValue(v reflect.Value) any {
+	for v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return nil
+		}
+		v = v.Elem()
+	}
+	return v.Interface()
+}
+
 func (et *entityType) grouping(name string) (grouping, bool) {
 	field, bucket, bucketed := strings.Cut(name, ":")
 	date := func(v reflect.Value) (time.Time, bool) { return time.Time{}, false }
@@ -101,10 +111,10 @@ func (et *entityType) grouping(name string) (grouping, bool) {
 		switch f.Type {
 		case "date", "datetime", "text":
 			if f.Type == "text" && !bucketed {
-				return grouping{column: col, key: func(v reflect.Value) any { return v.FieldByIndex(f.Index).Interface() }}, true
+				return grouping{column: col, key: func(v reflect.Value) any { return aggregateGroupValue(v.FieldByIndex(f.Index)) }}, true
 			}
 			date = func(v reflect.Value) (time.Time, bool) { // text buckets by the date it starts with ("2026-10-01T09:00")
-				switch x := v.FieldByIndex(f.Index).Interface().(type) {
+				switch x := aggregateGroupValue(v.FieldByIndex(f.Index)).(type) {
 				case time.Time:
 					return x, !x.IsZero()
 				case string:
@@ -120,7 +130,7 @@ func (et *entityType) grouping(name string) (grouping, bool) {
 			if bucketed {
 				return grouping{}, false
 			}
-			return grouping{column: col, key: func(v reflect.Value) any { return v.FieldByIndex(f.Index).Interface() }}, true
+			return grouping{column: col, key: func(v reflect.Value) any { return aggregateGroupValue(v.FieldByIndex(f.Index)) }}, true
 		default:
 			return grouping{}, false
 		}
@@ -218,10 +228,11 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 		for i, g := range groups {
 			keys[i] = g.key(v)
 		}
-		k := fmt.Sprint(keys...)
-		if len(keys) > 1 {
-			k = fmt.Sprintf("%q", keys)
+		encoded, err := json.Marshal(keys)
+		if err != nil {
+			return Aggregate{}, invalid
 		}
+		k := string(encoded)
 		a := byKey[k]
 		if a == nil {
 			if maxRows > 0 && len(order) >= maxRows {

@@ -96,6 +96,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.Widget == "record-leaderboard" || s.Leaderboard != nil {
 				return fmt.Errorf("leaderboard needs a document")
 			}
+			if s.Widget == "term-counts" {
+				return fmt.Errorf("term counts require a page document")
+			}
 			if s.Widget == "summary-stats" || s.SummaryField != "" || s.StatisticsVariable != "" {
 				return fmt.Errorf("summary needs a document")
 			}
@@ -228,6 +231,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkLeaderboard(section); err != nil {
+			return err
+		}
+		if err := d.checkTerms(section); err != nil {
 			return err
 		}
 		if err := d.checkSummary(section); err != nil {

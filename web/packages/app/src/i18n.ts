@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Term counts": "词条计数",
+ "Term count field is unavailable or incompatible.": "词条计数字段不可用或不兼容。",
+ "Term counts could not be loaded.": "无法读取词条计数。",
+ "Loading term counts…": "正在读取词条计数…",
+ "Counts cover all matching authorized records; ties keep host group order.": "计数覆盖全部匹配的授权记录；并列项保持宿主分组顺序。",
+
  "Confirming record access…": "正在确认记录访问权限…",
  "The record could not be confirmed. The original ID is unchanged.": "无法确认该记录，原 ID 保持不变。",
  "Picker ID state is unavailable or incompatible.": "选择器 ID 状态不可用或类型不兼容。",

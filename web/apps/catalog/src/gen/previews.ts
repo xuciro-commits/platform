@@ -86,6 +86,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/summary-statistics": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SummaryStatisticsExample })),
   "ui/switch": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SwitchExample })),
   "ui/tasks": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.TaskInbox })),
+  "ui/term-counts": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.TermCountsExample })),
   "ui/toggles": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Choices })),
   "ui/tree": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Hierarchy })),
   "ui/virtual-stack": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.VirtualItems })),

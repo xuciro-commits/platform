@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Term counts": "词条计数",
+ "Term count field": "词条计数字段",
+ "Term query window": "词条查询窗口",
+ "Read complete authorized group counts. Record window paging does not limit the totals; excess groups are refused.": "读取完整授权分组计数；记录窗口分页不限制总数，超过分组预算会被拒绝。",
+ "Map an original visible text or choice field and scoped query plan. Count-name collisions, coercion, executable sources and unsupported settings are refused.": "映射原可见文本或枚举字段及局部查询计划；计数列名称冲突、强制转换、执行来源及不支持的设置会被拒绝。",
+ "Counts come from all matching authorized records, not the current window. Up to 64 complete groups are frequency-scaled; excess groups are refused. Ties keep host group order; empty text, null and literal dashes remain distinct. Labels are literal and no source prototype-key counter executes.": "计数来自全部匹配授权记录，而非当前窗口；最多64个完整分组按频次缩放，超额会拒绝；并列项保持宿主顺序，空文本、空值和字面破折号互相区分；标签按字面呈现，不执行来源原型键计数器。",
+
  "Bind search text to a query search in the same scope before saving.": "保存前，请将搜索文本绑定到同一作用域的查询搜索。",
  "Input presentation": "输入呈现",
  "Scoped record search": "有范围的记录搜索",

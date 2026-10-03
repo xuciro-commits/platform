@@ -1842,7 +1842,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.66",
+  "uiProfile": "platform.page.v2.67",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4529,6 +4529,64 @@ export const pageUIManifest = {
       "layoutPreferences": {
         "frame": "inline"
       }
+    },
+    {
+      "componentID": "term-counts",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.67",
+      "title": "Term counts",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "records",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.67"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "hidden": "unmount",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -4597,7 +4655,8 @@ export const pageUIManifest = {
     "platform.page.v2.63",
     "platform.page.v2.64",
     "platform.page.v2.65",
-    "platform.page.v2.66"
+    "platform.page.v2.66",
+    "platform.page.v2.67"
   ],
   "runtime": {
     "scope": "page",
@@ -5133,6 +5192,10 @@ export const pageUIManifest = {
     },
     "input": {
       "searchRequiredUIProfile": "platform.page.v2.66"
+    },
+    "terms": {
+      "requiredUIProfile": "platform.page.v2.67",
+      "maxGroups": 64
     }
   },
   "layout": {

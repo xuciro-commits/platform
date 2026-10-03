@@ -58,6 +58,8 @@
 
 日期输入：添加“Date input / 日期输入”，绑定原 page/Overlay 的string state并设置可选标签；源DateInput的date/string静态变量同样映射原文本。日期保留YYYY-MM-DD与业务日期语义，范围0001–9999，支持真实闰日；清空不设默认日期。外部TextInput写入无效日期后，日期组件保留草稿并提供修正文本输入；修正或“Clear date / 清空日期”显式替换原状态。在原Query plans条件勾选“Read text as a civil date / 将文本读取为业务日期”，条件字段须date、变量须string，与数字转换互斥；无效日期在读取前拒绝，optional空值跳过。原状态/标签/asDate条件随冻结发布，原启用、查询选择及浮层关闭清理保持；范围见[ADR-0046 §6.52](ADR/0046-application-studio-fusion.md#652-dateinput的原日期草稿与civil条件)。
 
+词条计数：添加“Term counts / 词条计数”，在“Term query window / 词条查询窗口”绑定原page/Overlay计划，在“Term count field / 词条计数字段”选择可读text/choice字段；来源ProminentTerms沿相同入口映射property，缺省/null按来源status。计数覆盖全部匹配授权记录，记录窗口分页和排序不改变总数；最多64个完整分组，超过预算拒绝，不显示部分统计。按频次降序，并列保持宿主组顺序，null、空文本、字面破折号与原型样式字符串保持不同身份，HTML标签按字面显示，只有字号随次数缩放；没有选择/业务写入。原条件、具名版本与字段权限保持，读取失败/新条件/拥有者退役不保留旧词条。沿原Save→冻结候选→激活/恢复，范围见[ADR-0046 §6.63](ADR/0046-application-studio-fusion.md#663-prominentterms的原完整集合词条计数)。
+
 探索搜索：导入ExplorationSearch时，源variableId须是原静态string，并由同一拥有作用域的原query.search实际声明消费。它与原TextInput、表格搜索计划共用同一状态；“Input presentation / 输入呈现”可选择“Scoped record search / 有范围的记录搜索”，没有正确绑定时不能保存。搜索框显示实际原对象复数范围，按原值查询已授权可搜索字段，保留具名版本/固定条件；不是全本体搜索。空文本恢复原条件，%/下划线/反斜杠保持字面含义，权限拒绝不抹掉输入、查询变化清理原选择，浮层关闭清理局部状态。沿原Save→冻结候选→激活交付，范围见[ADR-0046 §6.62](ADR/0046-application-studio-fusion.md#662-explorationsearch的原查询搜索呈现与真实对象范围)。
 
 探索筛选标签：导入ExplorationFilter时，在“Map exploration choices / 映射探索筛选选项”为固定Active/Warning/Offline/Maintenance逐项填写唯一原业务值。同变量的初始选择和其他多选控件共用映射，原IN条件与FilterList保持同值；枚举字段须包含全部映射值，未匹配初值保留，有损重复转换会拒绝导入。原多选检查器可声明“Allow clearing all selections / 允许清空全部选择”，此配置仅适用于multiple及v2.65；“Clear selections / 清空选择”一次将整个原集合写为空，明确移除未知项、恢复可选空条件，逐项切换仍保留未知值。禁用时不写入，原查询权限/浮层清理及Save→冻结候选→激活路径保持。范围见[ADR-0046 §6.61](ADR/0046-application-studio-fusion.md#661-explorationfilter的原集合筛选标签与显式清空)。

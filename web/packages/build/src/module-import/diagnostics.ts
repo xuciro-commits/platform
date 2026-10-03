@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "terms-binding":"Map an original visible text or choice field and scoped query plan. Count-name collisions, coercion, executable sources and unsupported settings are refused.",
+ "native-prominent-terms":"Counts come from all matching authorized records, not the current window. Up to 64 complete groups are frequency-scaled; excess groups are refused. Ties keep host group order; empty text, null and literal dashes remain distinct. Labels are literal and no source prototype-key counter executes.",
  "exploration-search-binding":"Bind original page or overlay text state to a same-owner query search. Unbound, executable, coerced and unsupported source settings are refused.",
  "native-exploration-search":"The source only writes text. The original query searches its authorized searchable fields with retained conditions, and the control shows its actual object scope. The source Ontology-wide placeholder is replaced; no cross-ontology search engine is imported.",
  "exploration-binding":"Map all four exploration choices to unique original values and an original scoped string-set state. Choice fields must contain the mapped values; unsupported consumers and lossy initial collisions are refused.",

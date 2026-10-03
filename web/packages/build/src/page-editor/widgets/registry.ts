@@ -1,3 +1,4 @@
+import {TermsInspector} from "./TermsInspector";
 import {SpacerInspector} from "./SpacerInspector";
 import {SeparatorInspector} from "./SeparatorInspector";
 import {NoticeInspector} from "./NoticeInspector";
@@ -35,6 +36,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "term-counts":{configVersion:1,bindings:TermsInspector},
  "record-picker":{configVersion:1,bindings:RecordPickerInspector},
  spacer:{configVersion:1,bindings:SpacerInspector},
  separator:{configVersion:1,bindings:SeparatorInspector},

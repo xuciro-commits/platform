@@ -25,6 +25,7 @@ function requirements(module:SourceModule|undefined){
   if(w.type==="PivotTable")for(const key of ["rows","cols"])property(external(text(w.config.objectSetVarId)),text(w.config[key]));
   if(w.type==="KanbanBoard")property(external(text(w.config.objectSetVarId)),text(w.config.groupBy));
   if(w.type==="Leaderboard")property(external(text(w.config.objectSetVarId)),text(w.config.property));
+  if(w.type==="ProminentTerms")property(external(text(w.config.objectSetVarId)),w.config.property==null?"status":text(w.config.property));
   if(w.type==="SummaryStats")property(external(text(w.config.objectSetVarId)),text(w.config.property));
   if(w.type==="Calendar")property(external(text(w.config.objectSetVarId)),text(w.config.dateProperty));
   if(w.type==="StatusTracker"){const variable=module?.variables.find(v=>v.id===w.config.objectVarId),producer=module?.widgets[text(variable?.widgetId)];property(external(text(producer?.config.objectSetVarId)),text(w.config.activeProp));}

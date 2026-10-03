@@ -453,9 +453,9 @@
       "sourceType": "ProminentTerms",
       "sourceCategory": "Filtering",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "term-counts",
+      "reason": "complete-original-text-group-count-profile"
     },
     {
       "sourceType": "ObjectSelector",

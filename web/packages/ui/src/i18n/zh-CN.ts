@@ -1,5 +1,12 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Counted term labels": "计数词条标签",
+ "Present complete caller-owned counts as bounded frequency-scaled literal labels.": "将调用方拥有的完整计数呈现为有界、按频次缩放的字面词条标签。",
+ "The caller owns authorized complete counts and stable order. Empty text and null remain distinct; this control performs no queries or mutations.": "调用方拥有授权完整计数和稳定顺序；空文本与空值保持区分，此控件不查询或修改数据。",
+ "Term counts are invalid or exceed their budget.": "词条计数无效或超过预算。",
+ "No terms in the matching records.": "匹配记录中没有词条。",
+ "Empty text": "空文本",
+
  "Scoped search input": "有范围的搜索输入",
  "Edit caller-owned search text and show the actual readable object scope.": "编辑调用方拥有的搜索文本，并显示实际可读对象范围。",
  "The caller owns text, object scope and authorized reads. This control performs no queries and does not promise global ontology search.": "调用方拥有文本、对象范围及授权读取；此控件不查询数据，也不声称全本体搜索。",

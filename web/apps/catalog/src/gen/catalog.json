@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:c925ba21a83df074",
+  "revision": "sha256:37e75a84eea58be1",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2599,6 +2599,33 @@
       ]
     },
     {
+      "id": "ui/term-counts",
+      "owner": "@platform/ui",
+      "name": "Counted term labels",
+      "summary": "Present complete caller-owned counts as bounded frequency-scaled literal labels.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/TermCounts.tsx",
+      "exports": [
+        "TermCounts"
+      ],
+      "example": "TermCountsExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "terms",
+        "count",
+        "labels"
+      ],
+      "type": "TermCount",
+      "constraints": [
+        "The caller owns authorized complete counts and stable order. Empty text and null remain distinct; this control performs no queries or mutations."
+      ]
+    },
+    {
       "id": "ui/toggles",
       "owner": "@platform/ui",
       "name": "Multiple choices",
@@ -2734,6 +2761,7 @@
       "Context commands": "上下文命令",
       "Controlled blank space": "受控空白",
       "Controlled page composition": "受控页面装配",
+      "Counted term labels": "计数词条标签",
       "Data table": "数据表格",
       "Declared action controls": "声明式动作控件",
       "Detail sheet": "详情侧栏",
@@ -2821,6 +2849,7 @@
       "Present caller-owned plain text with an accessible semantic tone.": "以可访问的语义色调呈现调用方拥有的纯文本。",
       "Present caller-owned static choices as a select, radio group or segmented control.": "以下拉、单选组或分段控件呈现调用方拥有的静态选项。",
       "Present caller-owned string selections through shared toggles without dropping unmatched values.": "通过共享多选控件呈现调用方拥有的字符串集合，不丢弃未匹配值。",
+      "Present complete caller-owned counts as bounded frequency-scaled literal labels.": "将调用方拥有的完整计数呈现为有界、按频次缩放的字面词条标签。",
       "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
       "Present ordered original business events with explicit time and severity tones.": "以显式时间及严重度色调呈现排序后的原业务事件。",
       "Present original host-ranked Top-N records and emit their original identities.": "呈现原宿主排序的 Top-N 记录，并输出原身份。",
@@ -2891,6 +2920,7 @@
       "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
       "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.": "92 类型迁移清单不授予运行资格。八种源组件已有有限配置方案，未支持配置阻止应用。",
+      "The caller owns authorized complete counts and stable order. Empty text and null remain distinct; this control performs no queries or mutations.": "调用方拥有授权完整计数和稳定顺序；空文本与空值保持区分，此控件不查询或修改数据。",
       "The caller owns authorized options, counts and typed selected values.": "调用方管理授权选项、计数和类型化选中值。",
       "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
@@ -3070,6 +3100,7 @@
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SummaryInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/TermsInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TitleInspectors.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
@@ -3158,6 +3189,7 @@
       "web/packages/app/src/widgets/Spacer.tsx",
       "web/packages/app/src/widgets/Summary.tsx",
       "web/packages/app/src/widgets/Table.tsx",
+      "web/packages/app/src/widgets/TermCounts.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/catalog.examples.tsx",
       "web/packages/build/src/code.tsx",
@@ -3452,6 +3484,9 @@
     "ui/summary-statistics": [
       "web/packages/app/src/widgets/Summary.tsx"
     ],
+    "ui/term-counts": [
+      "web/packages/app/src/widgets/TermCounts.tsx"
+    ],
     "app/composed-page": [
       "web/packages/build/src/catalog.examples.tsx",
       "web/packages/build/src/editor.tsx",
@@ -3696,6 +3731,7 @@
         "State",
         "StatisticsValue",
         "StatusRegistry",
+        "TermCount",
         "TimeUnit",
         "TimelineFields",
         "Tone",
