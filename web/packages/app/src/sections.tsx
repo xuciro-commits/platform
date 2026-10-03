@@ -31,6 +31,7 @@ import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
 const ExplorationRenderer=lazy(()=>import("./widgets/Exploration").then(module=>({default:module.ExplorationRenderer})));
+const CollectionAnalysisRenderer=lazy(()=>import("./widgets/CollectionAnalysis").then(module=>({default:module.CollectionAnalysisRenderer})));
 const ResourceListRenderer=lazy(()=>import("./widgets/Exploration").then(module=>({default:module.ResourceListRenderer})));
 const AssetDirectoryRenderer=lazy(()=>import("./widgets/Exploration").then(module=>({default:module.AssetDirectoryRenderer})));
 const BreadcrumbRenderer=lazy(()=>import("./widgets/ContextViews").then(module=>({default:module.BreadcrumbRenderer})));
@@ -438,6 +439,7 @@ function ExplorerWidget({page,section,session,explorationRoot,explorationStatus,
  const {source,definitions}=useHost();return <ExplorationRenderer kind={section.widget as "graph-explorer"|"vertex-graph"} config={section.graphExplorer} vertex={section.vertexGraph} root={explorationRoot} status={explorationStatus} rootObject={section.object?.name?section.object:page.object} source={session?.readSource()??source} definitions={definitions} identity={explorationIdentity??""} isActive={explorationActive??(()=>false)} onOutput={onGraphOutput} selected={graphSelected} enabled={enabled} label={section.title||t("Record exploration")} readCurrent={contextReadCurrent}/>;
 }
 const widgets = createWidgetRegistry<Bound>({
+ "collection-analysis":({page,section,window,aggregateScope,facetValues,onFacet,enabled})=>{const {source}=useHost();return <CollectionAnalysisRenderer config={section.analysis} object={objectOf(page,section)} info={source.entity(objectOf(page,section))} window={window} source={source.aggregate?{aggregate:source.aggregate,scope:aggregateScope??source.scope,revision:source.revision}:undefined} label={section.title||t("Collection analysis")} values={facetValues??{}} xVariable={section.analysisXVariable} yVariable={section.analysisYVariable} countVariable={section.analysisCountVariable} meanVariable={section.analysisMeanVariable} onAxis={onFacet} enabled={enabled}/>;},
  "resource-list":({page,section,window,collection,selected,onSelect,enabled,contextReadCurrent})=>{const {source}=useHost();return <ResourceListRenderer config={section.resourceList} window={window} collection={collection} info={source.entity(objectOf(page,section))} selected={selected} onSelect={onSelect} enabled={enabled} label={section.title||t("Resource list")} readCurrent={contextReadCurrent}/>;},
  "asset-directory":({section,onControl,controlBound,enabled})=>{const {definitions}=useHost(),pages=section.assetDirectory?.items.filter(i=>i.asset.ref.kind==="page")??[],canOpen=pages.some(i=>controlBound?.(i.id));return <AssetDirectoryRenderer config={section.assetDirectory} definitions={definitions} onOpen={canOpen?id=>{if(controlBound?.(id))onControl?.(id);}:undefined} canOpen={controlBound} enabled={enabled} label={section.title||t("Asset directory")}/>;},
  "graph-explorer":ExplorerWidget,"vertex-graph":ExplorerWidget,

@@ -22,6 +22,9 @@ export function workshopRequirements(module:SourceModule|undefined){
   if(w.type==="FilterList")for(const f of Array.isArray(w.config.facets)?w.config.facets:[])property(external(text(w.config.objectSetVarId)),text(object(f)?.property));
   if(w.type==="ObjectTable")for(const c of Array.isArray(w.config.columns)?w.config.columns:[])property(external(text(w.config.objectSetVarId)),text(object(c)?.key));
   if(w.type==="ChartXY")for(const key of ["xProperty","yProperty"])property(external(text(w.config.objectSetVarId)),text(w.config[key]));
+  if(["ChartVega","ChartWaterfall"].includes(w.type))property(external(text(w.config.objectSetVarId)),"status");
+  if(w.type==="DerivedSeries")property(external(text(w.config.objectSetVarId)),"pressure");
+  if(w.type==="FreeFormAnalysis")for(const key of ["pressure","temperature","availability","revenueImpact"])property(external(text(w.config.objectSetVarId)),key);
   if(w.type==="ChartPie")property(external(text(w.config.objectSetVarId)),text(w.config.groupBy));
   if(w.type==="PivotTable")for(const key of ["rows","cols"])property(external(text(w.config.objectSetVarId)),text(w.config[key]));
   if(w.type==="KanbanBoard")property(external(text(w.config.objectSetVarId)),text(w.config.groupBy));

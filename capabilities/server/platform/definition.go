@@ -104,6 +104,11 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	Analysis                 *PageCollectionAnalysis `json:"analysis,omitempty"`
+	AnalysisXVariable        string                  `json:"analysisXVariable,omitempty"`
+	AnalysisYVariable        string                  `json:"analysisYVariable,omitempty"`
+	AnalysisCountVariable    string                  `json:"analysisCountVariable,omitempty"`
+	AnalysisMeanVariable     string                  `json:"analysisMeanVariable,omitempty"`
 	ResourceList             *PageResourceList       `json:"resourceList,omitempty"`
 	AssetDirectory           *PageAssetDirectory     `json:"assetDirectory,omitempty"`
 	GraphExplorer            *PageGraphExplorer      `json:"graphExplorer,omitempty"`

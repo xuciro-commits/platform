@@ -929,6 +929,12 @@ export type PageAlertBanner = {
   message: string;
 };
 
+export type PageAnalysisStep = {
+  value: string;
+  label: string;
+  positive: boolean;
+};
+
 export type PageAssetDirectory = {
   items: PageAssetDirectoryItem[];
 };
@@ -965,6 +971,15 @@ export type PageChoiceInput = {
   options: string[];
   optionLabels?: string[];
   label?: string;
+};
+
+export type PageCollectionAnalysis = {
+  kind: string;
+  groupField?: string;
+  field?: string;
+  unit?: string;
+  fields?: string[];
+  steps?: PageAnalysisStep[];
 };
 
 export type PageDetailPresentation = {
@@ -1599,6 +1614,11 @@ export type SavedView = {
 };
 
 export type Section = {
+  analysis?: PageCollectionAnalysis;
+  analysisXVariable?: string;
+  analysisYVariable?: string;
+  analysisCountVariable?: string;
+  analysisMeanVariable?: string;
   resourceList?: PageResourceList;
   assetDirectory?: PageAssetDirectory;
   graphExplorer?: PageGraphExplorer;
@@ -1990,7 +2010,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.79",
+  "uiProfile": "platform.page.v2.80",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -6139,6 +6159,91 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "collection-analysis",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.80",
+      "title": "Collection analysis",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "summaryField": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.80"
+        },
+        {
+          "id": "x",
+          "bindingField": "analysisXVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.80",
+          "writable": true
+        },
+        {
+          "id": "y",
+          "bindingField": "analysisYVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.80",
+          "writable": true
+        },
+        {
+          "id": "count",
+          "bindingField": "analysisCountVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.80",
+          "writable": false
+        },
+        {
+          "id": "mean",
+          "bindingField": "analysisMeanVariable",
+          "type": "number",
+          "requiredUIProfile": "platform.page.v2.80",
+          "writable": false
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -6220,7 +6325,8 @@ export const pageUIManifest = {
     "platform.page.v2.76",
     "platform.page.v2.77",
     "platform.page.v2.78",
-    "platform.page.v2.79"
+    "platform.page.v2.79",
+    "platform.page.v2.80"
   ],
   "runtime": {
     "scope": "page",
@@ -6858,6 +6964,11 @@ export const pageUIManifest = {
       "maxPath": 8,
       "maxWindow": 20,
       "maxNeighborhoodRecords": 7
+    },
+    "collectionAnalysis": {
+      "requiredUIProfile": "platform.page.v2.80",
+      "maxGroups": 64,
+      "maxRecords": 80
     }
   },
   "layout": {

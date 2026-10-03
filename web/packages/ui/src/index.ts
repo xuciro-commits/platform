@@ -103,3 +103,6 @@ export {RecordUploader,type RecordUploaderProps} from "./records/RecordUploader"
 export {MediaPreview,type AttachmentPreviewProps} from "./records/MediaPreview";
 export {PdfViewer,type PdfViewerProps} from "./records/PdfViewer";
 export type {AttachedFile,RecordComment} from "./records/Records";
+
+export {CollectionCounts,signedCounts} from "./charts/CollectionCounts";
+export {DerivedMean} from "./components/DerivedMean";

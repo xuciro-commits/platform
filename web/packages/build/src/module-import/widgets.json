@@ -157,17 +157,17 @@
       "sourceType": "ChartVega",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "collection-analysis",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "ChartWaterfall",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "collection-analysis",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "Map",
@@ -349,9 +349,9 @@
       "sourceType": "DerivedSeries",
       "sourceCategory": "Embed",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "collection-analysis",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "QuiverDashboard",
@@ -389,9 +389,9 @@
       "sourceType": "FreeFormAnalysis",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "collection-analysis",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "TimeSeriesAnalysis",

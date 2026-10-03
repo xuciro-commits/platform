@@ -502,6 +502,16 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					if section.CheckTerms(shown) != nil {
 						continue
 					}
+					if section.CheckCollectionAnalysis(shown) != nil {
+						if section.Analysis != nil && section.Analysis.Kind == "record-axes" && page.Document != nil {
+							doc := *page.Document
+							doc.Variables = maps.Clone(doc.Variables)
+							delete(doc.Variables, section.AnalysisXVariable)
+							delete(doc.Variables, section.AnalysisYVariable)
+							page.Document = &doc
+						}
+						continue
+					}
 					if section.CheckSummary(shown) != nil {
 						continue
 					}

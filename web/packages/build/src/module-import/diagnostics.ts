@@ -2,6 +2,8 @@
 export const diagnosticMessages:Record<string,string>={
  "exploration-profile":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
  "exploration-asset-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
+ "collection-analysis-profile":"Map the four original numeric fields or status values and the explicit mean unit. Use the current analysis profile and an original plan; unsupported specifications and expressions are refused.",
+ "native-collection-analysis":"This profile preserves fixed horizontal counts, signed category deltas/cumulative values, original count/mean, and 80-record axis choices. It does not run Vega or a time-series engine. Missing numeric values remain missing.",
  "resource-list-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
  "directory-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
  "graph-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",

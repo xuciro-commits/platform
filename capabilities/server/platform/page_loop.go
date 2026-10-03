@@ -148,6 +148,20 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 				}
 			}
 		}
+		if section.Widget == "collection-analysis" {
+			if sectionOwners[section.ID] != "" {
+				return fmt.Errorf("collection analysis does not enter a loop")
+			}
+			for _, id := range section.AnalysisVariables() {
+				if id == "" {
+					continue
+				}
+				v := d.Variables[id]
+				if !accessible(id, "", sectionOverlays[section.ID]) || v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
+					return fmt.Errorf("analysis requires its exact original page or overlay owner")
+				}
+			}
+		}
 		if contextView(section.Widget) {
 			if sectionOwners[section.ID] != "" {
 				return fmt.Errorf("context views do not enter a loop")

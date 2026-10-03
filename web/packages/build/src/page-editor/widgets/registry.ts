@@ -1,3 +1,4 @@
+import {CollectionAnalysisInspector} from "./CollectionAnalysisInspector";
 import {ResourceListInspector,AssetDirectoryInspector,GraphExplorerInspector,VertexGraphInspector} from "./ExplorationInspectors";
 import {BreadcrumbInspector,BreadcrumbHomeInspector,AvatarInspector,ImageInspector} from "./ContextInspectors";
 import {HistoryInspector,WorkViewsInspector} from "./WorkViewsInspector";
@@ -48,6 +49,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "collection-analysis":{configVersion:1,bindings:CollectionAnalysisInspector},
  "resource-list":{configVersion:1,bindings:ResourceListInspector},
  "asset-directory":{configVersion:1,bindings:AssetDirectoryInspector},
  "graph-explorer":{configVersion:1,bindings:GraphExplorerInspector},

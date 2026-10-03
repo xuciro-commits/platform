@@ -300,7 +300,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 			info = shown
 		}
-		if len(s.CollaborationDependencies()) > 0 || s.HistoryLimit > 0 || s.Widget == "avatar-stack" || s.Widget == "resource-list" || s.Widget == "graph-explorer" || s.Widget == "vertex-graph" || s.Widget == "breadcrumb" && s.RecordVariable != "" {
+		if len(s.CollaborationDependencies()) > 0 || s.HistoryLimit > 0 || s.Widget == "avatar-stack" || s.Widget == "collection-analysis" || s.Widget == "resource-list" || s.Widget == "graph-explorer" || s.Widget == "vertex-graph" || s.Widget == "breadcrumb" && s.RecordVariable != "" {
 			object := s.Object
 			if object.Name == "" {
 				object = p.Object
@@ -315,6 +315,9 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if !ok || ref.Kind != platform.AssetObject || ref.App != actual.App || ref.Name != actual.Type {
 				return fmt.Errorf("%s: avatar original context owner is unavailable", where)
 			}
+		}
+		if err := s.CheckCollectionAnalysis(info); err != nil {
+			return err
 		}
 		if err := s.CheckResourceList(info); err != nil {
 			return err
