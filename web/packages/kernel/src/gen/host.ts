@@ -1454,6 +1454,7 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  choiceSetVariable?: string;
   choiceVariable?: string;
   choiceInput?: PageChoiceInput;
   booleanVariant?: string;
@@ -1801,7 +1802,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.55",
+  "uiProfile": "platform.page.v2.56",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4081,6 +4082,13 @@ export const pageUIManifest = {
           "type": "string",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.55"
+        },
+        {
+          "id": "selection",
+          "bindingField": "choiceSetVariable",
+          "type": "string-set",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.56"
         }
       ],
       "layoutPreferences": {
@@ -4152,7 +4160,8 @@ export const pageUIManifest = {
     "platform.page.v2.52",
     "platform.page.v2.53",
     "platform.page.v2.54",
-    "platform.page.v2.55"
+    "platform.page.v2.55",
+    "platform.page.v2.56"
   ],
   "runtime": {
     "scope": "page",
@@ -4636,10 +4645,13 @@ export const pageUIManifest = {
       "variants": [
         "select",
         "radio",
-        "segments"
+        "segments",
+        "multiple"
       ],
       "maxOptions": 64,
-      "maxOptionBytes": 256
+      "maxOptionBytes": 256,
+      "multipleRequiredUIProfile": "platform.page.v2.56",
+      "maxSelected": 64
     }
   },
   "layout": {

@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Choose a string-set state variable": "选择字符串集合状态变量",
+ "Multiple selection": "多选",
+ "Choices need an original text state, unique nonempty bounded static options, and the supported single-choice or string-set profile.": "选择需要原文本或字符串集合状态、唯一非空有界静态选项及受支持的单选或集合配置。",
+ "Multiple choices use the original string set and IN query condition. A toggle adds or removes one declared option while retaining unmatched selections; an empty set stays empty. Type and selection budgets are checked, and owned state retires on close.": "多选使用原字符串集合及 IN 查询条件。切换增删一个声明选项并保留未匹配项，空集合保持为空。类型和选择预算受校验，拥有的状态在关闭时清理。",
  "Choice input": "单选输入",
  "Choice state variable": "选择状态变量",
  "Choice presentation": "选择呈现",
@@ -14,7 +18,6 @@ register("zh-CN", {
  "Add choice": "添加选项",
  "Use unique nonempty static choices. Empty and unmatched original values remain unchanged until explicit selection.": "使用唯一且非空的静态选项。空值及未匹配原值保持到显式选择。",
  "Bind a scoped text state and valid static choices before saving.": "保存前请绑定有作用域的文本状态及有效静态选项。",
- "Choices need an original text state, unique nonempty bounded static options, and the supported select, radio or segmented profile.": "选择需要原文本状态、唯一非空有界静态选项及受支持的下拉、单选或分段配置。",
  "All presentations share the original string state and optional query condition. Empty and unmatched values remain explicit; no first choice is written automatically. Dropdowns can clear the value, radio groups use native keyboard and label behavior, and segments emit the declared choice. Overlay-owned state retires on close.": "各呈现共享原字符串状态及可选查询条件。空值和未匹配值明确保留，不自动写入首个选项。下拉可清空值，单选组使用原生键盘和标签行为，分段按钮输出声明选项。浮层拥有的状态在关闭时清理。",
  "Toggle switch": "开关",
  "Boolean presentation": "布尔呈现",

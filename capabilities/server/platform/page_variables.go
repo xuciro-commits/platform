@@ -44,10 +44,12 @@ type PageValue struct {
 }
 type pageRuntimeContract struct {
 	ChoiceInput struct {
-		RequiredUIProfile string   `json:"requiredUIProfile"`
-		Variants          []string `json:"variants"`
-		MaxOptions        int      `json:"maxOptions"`
-		MaxOptionBytes    int      `json:"maxOptionBytes"`
+		RequiredUIProfile         string   `json:"requiredUIProfile"`
+		Variants                  []string `json:"variants"`
+		MaxOptions                int      `json:"maxOptions"`
+		MaxOptionBytes            int      `json:"maxOptionBytes"`
+		MultipleRequiredUIProfile string   `json:"multipleRequiredUIProfile"`
+		MaxSelected               int      `json:"maxSelected"`
 	} `json:"choiceInput"`
 	BooleanInput struct {
 		RequiredUIProfile string   `json:"requiredUIProfile"`

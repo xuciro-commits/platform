@@ -1,6 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
- "choice-input-profile":"Choices need an original text state, unique nonempty bounded static options, and the supported select, radio or segmented profile.",
+ "native-multiple-choice":"Multiple choices use the original string set and IN query condition. A toggle adds or removes one declared option while retaining unmatched selections; an empty set stays empty. Type and selection budgets are checked, and owned state retires on close.",
+ "choice-input-profile":"Choices need an original text state, unique nonempty bounded static options, and the supported single-choice or string-set profile.",
  "native-choice-input":"All presentations share the original string state and optional query condition. Empty and unmatched values remain explicit; no first choice is written automatically. Dropdowns can clear the value, radio groups use native keyboard and label behavior, and segments emit the declared choice. Overlay-owned state retires on close.",
  "boolean-input-profile":"Boolean controls need an original boolean state, a bounded text label, and the supported boolean-input profile. Truthy coercion and executable values are not converted.",
  "native-boolean-input":"The control shares the original boolean state and its condition or query bindings. Values must be true or false; unavailable or incompatible values stay explicit. Overlay-owned states retire on close; the control does not write records. Checkbox presentation retains native checked, change and label-click semantics.",

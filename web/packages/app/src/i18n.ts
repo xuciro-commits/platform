@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Multiple choice input is unavailable or incompatible.": "多选输入不可用或不兼容。",
  "Choice input": "单选输入",
  "Choice input is unavailable or incompatible.": "单选输入不可用或不兼容。",
  "Boolean presentation is unsupported.": "布尔呈现不受支持。",

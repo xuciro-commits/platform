@@ -5,13 +5,15 @@ import { Button, type ButtonProps } from "./button";
 
 /** A row of values a person switches on and off: the fields a widget shows, the
  *  actions it offers, the tags of a record. One owner for the pattern (rule 11). */
-export function Toggles({ options, value = [], onChange, empty, className }: {
+export function Toggles({ options, value = [], onChange, empty, className, disabled, isDisabled }: {
   options: { value: string; label: string }[];
   value?: string[];
   onChange: (value: string[]) => void;
   /** What to say when there is nothing to choose from. */
   empty?: string;
   className?: string;
+  disabled?:boolean;
+  isDisabled?:(value:string)=>boolean;
 }) {
   if (options.length === 0 && empty) return <span className={cn("text-xs text-muted", className)}>{empty}</span>;
   return (
@@ -19,9 +21,9 @@ export function Toggles({ options, value = [], onChange, empty, className }: {
       {options.map((option) => {
         const on = value.includes(option.value);
         return (
-          <button key={option.value} type="button" aria-pressed={on}
+          <button key={option.value} type="button" aria-pressed={on} disabled={disabled||isDisabled?.(option.value)}
             onClick={() => onChange(on ? value.filter((x) => x !== option.value) : [...value, option.value])}
-            className={cn("rounded-sm border px-1.5 py-0.5 text-xs", on ? "border-primary bg-row-selected" : "border-border text-muted hover:bg-row-hover")}>
+            className={cn("min-w-0 break-words rounded-sm border px-1.5 py-0.5 text-xs disabled:opacity-50", on ? "border-primary bg-row-selected" : "border-border text-muted hover:bg-row-hover")}>
             {option.label}
           </button>
         );

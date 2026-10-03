@@ -1,5 +1,11 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Set choice input": "集合选择输入",
+ "Present caller-owned string selections through shared toggles without dropping unmatched values.": "通过共享多选控件呈现调用方拥有的字符串集合，不丢弃未匹配值。",
+ "The caller owns the original string set and query conditions. Toggles change one declared choice and preserve unmatched selections.": "调用方拥有原字符串集合及查询条件。多选控件修改一个声明选项并保留未匹配值。",
+ "Multiple choice configuration is unsupported.": "多选配置不受支持。",
+ "Selections outside the configured options are retained: {values}.": "保留不在配置选项内的选择：{values}。",
+ "Selection limit reached; remove a selection before adding another.": "已达到选择上限；请移除一个选择后再添加。",
  "Choice input": "单选输入",
  "Single choice input": "单选输入",
  "Present caller-owned static choices as a select, radio group or segmented control.": "以下拉、单选组或分段控件呈现调用方拥有的静态选项。",

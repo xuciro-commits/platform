@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.55",
+  "uiProfile": "platform.page.v2.56",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2279,6 +2279,13 @@
           "type": "string",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.55"
+        },
+        {
+          "id": "selection",
+          "bindingField": "choiceSetVariable",
+          "type": "string-set",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.56"
         }
       ],
       "layoutPreferences": {
@@ -2350,7 +2357,8 @@
     "platform.page.v2.52",
     "platform.page.v2.53",
     "platform.page.v2.54",
-    "platform.page.v2.55"
+    "platform.page.v2.55",
+    "platform.page.v2.56"
   ],
   "runtime": {
     "scope": "page",
@@ -2834,10 +2842,13 @@
       "variants": [
         "select",
         "radio",
-        "segments"
+        "segments",
+        "multiple"
       ],
       "maxOptions": 64,
-      "maxOptionBytes": 256
+      "maxOptionBytes": 256,
+      "multipleRequiredUIProfile": "platform.page.v2.56",
+      "maxSelected": 64
     }
   },
   "layout": {

@@ -237,6 +237,12 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	choiceRoot.Children = append(choiceRoot.Children, "choiceInput")
 	doc.Nodes[doc.Root] = choiceRoot
 	sections = append(sections, build.Section{ID: "choiceInput", Widget: "choice-input", ConfigVersion: 1, ChoiceVariable: "choiceState", ChoiceInput: &platform.PageChoiceInput{Variant: "segments", Options: []string{"Open", "Closed"}, Label: &choiceLabel}})
+	doc.Variables["multiState"] = platform.PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: platform.Raw(map[string]any{"kind": "string-set", "values": []string{"retired", "Open"}})}
+	doc.Nodes["multiInput"] = platform.PageLayoutNode{Kind: "widget", Section: "multiInput"}
+	multiRoot := doc.Nodes[doc.Root]
+	multiRoot.Children = append(multiRoot.Children, "multiInput")
+	doc.Nodes[doc.Root] = multiRoot
+	sections = append(sections, build.Section{ID: "multiInput", Widget: "choice-input", ConfigVersion: 1, ChoiceSetVariable: "multiState", ChoiceInput: &platform.PageChoiceInput{Variant: "multiple", Options: []string{"Open", "Closed"}}})
 	doc.Variables["rankRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "rank"}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
@@ -263,6 +269,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[54].ChoiceInput = &platform.PageChoiceInput{Variant: "multiple", Options: []string{"Other"}}
+	doc.Variables["multiState"] = platform.PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: platform.Raw(map[string]any{"kind": "string-set", "values": []string{"Other"}})}
 	laterChoiceLabel := "Later choice"
 	sections[53].ChoiceInput = &platform.PageChoiceInput{Variant: "select", Options: []string{"Other"}, Label: &laterChoiceLabel}
 	doc.Variables["choiceState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("Other")}
@@ -303,6 +311,16 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					multiFound := false
+					for _, s := range d.Page.Sections {
+						if s.ID == "multiInput" {
+							c := s.ChoiceInput
+							multiFound = s.ChoiceSetVariable == "multiState" && s.ChoiceVariable == "" && c != nil && c.Variant == "multiple" && len(c.Options) == 2 && c.Options[0] == "Open" && c.Options[1] == "Closed"
+						}
+					}
+					if !multiFound || string(d.Page.Document.Variables["multiState"].Initial) != `{"kind":"string-set","values":["retired","Open"]}` {
+						t.Fatal("frozen multi input or unmatched set changed")
+					}
 					choiceFound := false
 					for _, s := range d.Page.Sections {
 						if s.ID == "choiceInput" {

@@ -65,3 +65,45 @@ func TestChoiceInputOverlayCannotEscape(t *testing.T) {
 		t.Fatal("overlay choice escaped")
 	}
 }
+
+func TestMultipleChoiceOriginalSetProfileAndPorts(t *testing.T) {
+	p := queryPlanPage()
+	d := p.Document
+	d.Variables["pick"] = PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: Raw(map[string]any{"kind": "string-set", "values": []string{"retired"}})}
+	s := Section{ID: "multi", Widget: "choice-input", ConfigVersion: 1, ChoiceSetVariable: "pick", ChoiceInput: &PageChoiceInput{Variant: "multiple", Options: []string{"A", "B"}}}
+	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
+	root := d.Nodes[d.Root]
+	root.Children = append(root.Children, s.ID)
+	d.Nodes[d.Root] = root
+	p.Sections = append(p.Sections, s)
+	if err := d.Check(p.Sections); err != nil {
+		t.Fatal(err)
+	}
+	d.UIProfile = "platform.page.v2.55"
+	if d.Check(p.Sections) == nil {
+		t.Fatal("old profile accepted multiple")
+	}
+	d.UIProfile = PageUIProfile()
+	s.ChoiceVariable = "pick"
+	if d.checkChoiceInput(s) == nil {
+		t.Fatal("dual or coerced ports accepted")
+	}
+	s.ChoiceVariable = ""
+	s.ChoiceInput.Variant = "select"
+	if d.checkChoiceInput(s) == nil {
+		t.Fatal("single presentation accepted set port")
+	}
+	s.ChoiceInput.Variant = "multiple"
+	v := d.Variables["pick"]
+	v.Type = "record-set"
+	d.Variables["pick"] = v
+	if d.checkChoiceInput(s) == nil {
+		t.Fatal("record references coerced to choices")
+	}
+	v.Type = "string-set"
+	v.Mode = "constant"
+	d.Variables["pick"] = v
+	if d.checkChoiceInput(s) == nil {
+		t.Fatal("readonly set accepted")
+	}
+}

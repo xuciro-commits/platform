@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:a1ab158c17fa266c",
+  "revision": "sha256:d47efec794a626f9",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1655,6 +1655,35 @@
       "snippet": "import { MetalButton, LiquidButton } from \"@platform/ui\";\n<MetalButton variant=\"gold\">Confirm</MetalButton>"
     },
     {
+      "id": "ui/multiple-choice-input",
+      "owner": "@platform/ui",
+      "name": "Set choice input",
+      "summary": "Present caller-owned string selections through shared toggles without dropping unmatched values.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/MultipleChoiceInput.tsx",
+      "exports": [
+        "MultipleChoiceInput"
+      ],
+      "example": "MultipleChoiceInputExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "choice",
+        "multiple",
+        "string-set"
+      ],
+      "dependencies": [
+        "ui/toggles"
+      ],
+      "constraints": [
+        "The caller owns the original string set and query conditions. Toggles change one declared choice and preserve unmatched selections."
+      ]
+    },
+    {
       "id": "ui/notifications",
       "owner": "@platform/ui",
       "name": "Notifications",
@@ -2617,6 +2646,7 @@
       "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
       "Present caller-owned static choices as a select, radio group or segmented control.": "以下拉、单选组或分段控件呈现调用方拥有的静态选项。",
+      "Present caller-owned string selections through shared toggles without dropping unmatched values.": "通过共享多选控件呈现调用方拥有的字符串集合，不丢弃未匹配值。",
       "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
       "Present ordered original business events with explicit time and severity tones.": "以显式时间及严重度色调呈现排序后的原业务事件。",
       "Present original host-ranked Top-N records and emit their original identities.": "呈现原宿主排序的 Top-N 记录，并输出原身份。",
@@ -2662,6 +2692,7 @@
       "Selected": "已选中",
       "Semantic status tags": "语义状态标签",
       "Semantic tokens": "语义令牌",
+      "Set choice input": "集合选择输入",
       "Share declared presentation state across pages of one scoped application instance.": "在同一受控应用实例的页面间共享声明式展示状态。",
       "Shared": "共享",
       "Show a declared collection name and its caller-owned complete count.": "显示声明的集合名称及调用方提供的完整计数。",
@@ -2695,6 +2726,7 @@
       "The caller owns the original numeric result and complete set. The gauge does not substitute zero for empty or denied values.": "调用方拥有原数值结果与完整集合，仪表不将空值或拒绝值替换为零。",
       "The caller owns the original scalars and complete-set count. Invalid values never become zero or a denominator of one.": "调用方拥有原标量与完整集合计数，无效值不替换为零或分母一。",
       "The caller owns the original state pair and query conditions. Empty or invalid drafts are never replaced by bounds.": "调用方拥有原状态对和查询条件。空值或无效草稿不会被替换为边界。",
+      "The caller owns the original string set and query conditions. Toggles change one declared choice and preserve unmatched selections.": "调用方拥有原字符串集合及查询条件。多选控件修改一个声明选项并保留未匹配值。",
       "The caller owns the original string state, options and query conditions. Empty or unmatched values are preserved until explicit selection.": "调用方拥有原字符串状态、选项及查询条件。空值或未匹配值保留到显式选择。",
       "The caller owns the ranked query and record authorization. This component does not sort an unranked window or write records.": "调用方拥有排名查询与记录授权。此组件不对未排序窗口排名，也不写入记录。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
@@ -3148,6 +3180,9 @@
     ],
     "ui/switch": [
       "web/packages/app/src/widgets/BooleanInput.tsx"
+    ],
+    "ui/multiple-choice-input": [
+      "web/packages/app/src/widgets/ChoiceInput.tsx"
     ],
     "ui/choice-input": [
       "web/packages/app/src/widgets/ChoiceInput.tsx",
