@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.53",
+  "uiProfile": "platform.page.v2.54",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2196,6 +2196,13 @@
           "booleanLabel": {
             "type": "string",
             "maxLength": 1024
+          },
+          "booleanVariant": {
+            "type": "string",
+            "enum": [
+              "switch",
+              "checkbox"
+            ]
           }
         }
       },
@@ -2283,7 +2290,8 @@
     "platform.page.v2.50",
     "platform.page.v2.51",
     "platform.page.v2.52",
-    "platform.page.v2.53"
+    "platform.page.v2.53",
+    "platform.page.v2.54"
   ],
   "runtime": {
     "scope": "page",
@@ -2754,6 +2762,13 @@
     "rangeInput": {
       "requiredUIProfile": "platform.page.v2.52",
       "maxTicks": 10000
+    },
+    "booleanInput": {
+      "requiredUIProfile": "platform.page.v2.54",
+      "variants": [
+        "switch",
+        "checkbox"
+      ]
     }
   },
   "layout": {

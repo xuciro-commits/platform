@@ -224,6 +224,12 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	booleanRoot.Children = append(booleanRoot.Children, "booleanInput")
 	doc.Nodes[doc.Root] = booleanRoot
 	sections = append(sections, build.Section{ID: "booleanInput", Widget: "boolean-input", ConfigVersion: 1, BooleanVariable: "booleanFlag", BooleanLabel: &booleanLabel})
+	checkboxLabel := "Frozen checkbox"
+	doc.Nodes["checkboxInput"] = platform.PageLayoutNode{Kind: "widget", Section: "checkboxInput"}
+	checkboxRoot := doc.Nodes[doc.Root]
+	checkboxRoot.Children = append(checkboxRoot.Children, "checkboxInput")
+	doc.Nodes[doc.Root] = checkboxRoot
+	sections = append(sections, build.Section{ID: "checkboxInput", Widget: "boolean-input", ConfigVersion: 1, BooleanVariant: "checkbox", BooleanVariable: "booleanFlag", BooleanLabel: &checkboxLabel})
 	doc.Variables["rankRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "rank"}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
@@ -250,6 +256,9 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[52].BooleanVariant = "switch"
+	laterCheckboxLabel := "Later checkbox"
+	sections[52].BooleanLabel = &laterCheckboxLabel
 	laterBooleanLabel := "Later switch"
 	sections[51].BooleanLabel = &laterBooleanLabel
 	doc.Variables["booleanFlag"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: platform.Raw(true)}
@@ -284,6 +293,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					checkboxFound := false
+					for _, s := range d.Page.Sections {
+						if s.ID == "checkboxInput" {
+							checkboxFound = s.BooleanVariant == "checkbox" && s.BooleanVariable == "booleanFlag" && s.BooleanLabel != nil && *s.BooleanLabel == "Frozen checkbox"
+						}
+					}
+					if !checkboxFound {
+						t.Fatal("frozen checkbox variant, label or state binding changed")
+					}
 					booleanFound := false
 					for _, s := range d.Page.Sections {
 						if s.ID == "booleanInput" {

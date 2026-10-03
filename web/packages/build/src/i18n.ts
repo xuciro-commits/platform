@@ -2,14 +2,18 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Toggle switch": "开关",
+ "Boolean presentation": "布尔呈现",
+ "Checkbox": "复选框",
+ "Checkbox label": "复选框标签",
+ "The control writes the original boolean state. Visibility, enabled conditions and queries consume that same value.": "控件写入原布尔状态。显示、启用条件及查询消费同一值。",
+ "Boolean controls need an original boolean state, a bounded text label, and the supported boolean-input profile. Truthy coercion and executable values are not converted.": "布尔控件需要原布尔状态、有界文本标签及受支持的布尔输入配置。真值强制转换及可执行值不会被转换。",
+ "The control shares the original boolean state and its condition or query bindings. Values must be true or false; unavailable or incompatible values stay explicit. Overlay-owned states retire on close; the control does not write records. Checkbox presentation retains native checked, change and label-click semantics.": "控件共享原布尔状态及其条件或查询绑定。值须为 true 或 false；不可用或不兼容值明确提示。浮层拥有的状态在关闭时清理；控件不写入记录。复选框呈现保留原生选中、变更及标签点击语义。",
  "Boolean switch": "布尔开关",
  "Boolean state variable": "布尔状态变量",
  "Choose a boolean state variable": "选择布尔状态变量",
  "Switch label": "开关标签",
- "The switch writes the original boolean state. Visibility, enabled conditions and queries consume that same value.": "开关写入原布尔状态。显示、启用条件及查询消费同一值。",
  "Bind a boolean state with its original page or overlay owner before saving.": "保存前请绑定属于原页面或浮层拥有者的布尔状态。",
- "Switches need an original boolean state, a bounded text label, and the supported boolean-input profile. Truthy coercion and executable values are not converted.": "开关需要原布尔状态、有界文本标签及受支持的布尔输入配置。真值强制转换及可执行值不会被转换。",
- "The switch shares the original boolean state and its condition or query bindings. Values must be true or false; unavailable or incompatible values stay explicit. Overlay-owned states retire on close; the control does not write records.": "开关共享原布尔状态及其条件或查询绑定。值须为 true 或 false；不可用或不兼容值明确提示。浮层拥有的状态在关闭时清理；控件不写入记录。",
  "Range input": "范围输入",
  "Range minimum variable": "范围最小值变量",
  "Range maximum variable": "范围最大值变量",

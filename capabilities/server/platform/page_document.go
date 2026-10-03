@@ -63,7 +63,7 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
-			if s.Widget == "boolean-input" || s.BooleanVariable != "" || s.BooleanLabel != nil {
+			if s.Widget == "boolean-input" || s.BooleanVariable != "" || s.BooleanLabel != nil || s.BooleanVariant != "" {
 				return fmt.Errorf("boolean input requires a page document")
 			}
 			if s.Widget == "range-input" || s.RangeInput != nil || s.RangeMinVariable != "" || s.RangeMaxVariable != "" {

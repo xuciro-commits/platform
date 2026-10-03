@@ -43,6 +43,10 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	BooleanInput struct {
+		RequiredUIProfile string   `json:"requiredUIProfile"`
+		Variants          []string `json:"variants"`
+	} `json:"booleanInput"`
 	RangeInput struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 		MaxTicks          int    `json:"maxTicks"`

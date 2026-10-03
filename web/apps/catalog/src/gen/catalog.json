@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:0d8e01415095a9c5",
+  "revision": "sha256:6303dbe2535cd620",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2840,6 +2840,7 @@
     ],
     "ui/checkbox": [
       "web/packages/app/src/actions.tsx",
+      "web/packages/app/src/widgets/BooleanInput.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/function.tsx",

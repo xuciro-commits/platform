@@ -19,6 +19,25 @@ func TestBooleanInputOriginalStateProfileAndEmptyLabel(t *testing.T) {
 	if err := d.Check(p.Sections); err != nil {
 		t.Fatal(err)
 	}
+	d.UIProfile = "platform.page.v2.53"
+	if err := d.Check(p.Sections); err != nil {
+		t.Fatal("legacy switch rejected", err)
+	}
+	s.BooleanVariant = "checkbox"
+	p.Sections[len(p.Sections)-1] = s
+	if d.Check(p.Sections) == nil {
+		t.Fatal("checkbox accepted in legacy switch profile")
+	}
+	d.UIProfile = PageUIProfile()
+	if err := d.Check(p.Sections); err != nil {
+		t.Fatal(err)
+	}
+	s.BooleanVariant = "unknown"
+	if d.checkBooleanInput(s) == nil {
+		t.Fatal("unknown boolean presentation accepted")
+	}
+	s.BooleanVariant = ""
+	p.Sections[len(p.Sections)-1] = s
 	if !strings.Contains(string(Raw(s)), `"booleanLabel":""`) {
 		t.Fatal("intentional empty label lost")
 	}

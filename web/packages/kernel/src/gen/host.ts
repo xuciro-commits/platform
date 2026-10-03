@@ -1448,6 +1448,7 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  booleanVariant?: string;
   booleanVariable?: string;
   booleanLabel?: string;
   rangeInput?: PageRangeInput;
@@ -1792,7 +1793,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.53",
+  "uiProfile": "platform.page.v2.54",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3989,6 +3990,13 @@ export const pageUIManifest = {
           "booleanLabel": {
             "type": "string",
             "maxLength": 1024
+          },
+          "booleanVariant": {
+            "type": "string",
+            "enum": [
+              "switch",
+              "checkbox"
+            ]
           }
         }
       },
@@ -4076,7 +4084,8 @@ export const pageUIManifest = {
     "platform.page.v2.50",
     "platform.page.v2.51",
     "platform.page.v2.52",
-    "platform.page.v2.53"
+    "platform.page.v2.53",
+    "platform.page.v2.54"
   ],
   "runtime": {
     "scope": "page",
@@ -4547,6 +4556,13 @@ export const pageUIManifest = {
     "rangeInput": {
       "requiredUIProfile": "platform.page.v2.52",
       "maxTicks": 10000
+    },
+    "booleanInput": {
+      "requiredUIProfile": "platform.page.v2.54",
+      "variants": [
+        "switch",
+        "checkbox"
+      ]
     }
   },
   "layout": {

@@ -56,11 +56,13 @@
 
 布尔开关：添加“Boolean switch / 布尔开关”，绑定原 page/Overlay 的 boolean state，可配置“Switch label / 开关标签”及原“Enabled when / 启用条件”。标签缺失沿组件名，显式空显示标签仍保留组件的无障碍名称。多个开关绑定同一状态会同步，显示条件和原查询同样消费该值；false 是有效条件。点击、Enter、Space经原状态路径写入布尔值，禁用时不写入；无效/不可用值明确提示，控件不直接写业务记录。ToggleSwitch导入逐项保留variableId/label，原truthy coercion须审查，不将函数或只读值转成可写状态。配置与初值沿 Save→冻结候选→激活交付，浮层关闭清理拥有状态与旧选择；范围见[ADR-0046 §6.48](ADR/0046-application-studio-fusion.md#648-toggleswitch的原布尔输入与条件消费)。
 
+复选框：在同一“Boolean switch / 布尔开关”的“Boolean presentation / 布尔呈现”中选择“Checkbox / 复选框”，或导入源Checkbox。它复用原booleanVariable/初值与条件、共享Checkbox及原状态写入路径，标签点击和Space切换checked；与Switch绑定同一变量时同步。显式变体须v2.54，旧v2.53省略变体的Switch页面仍可交付。变体、标签、初值及条件沿原保存/冻结发布；空标签与拥有作用域清理保持，边界见[ADR-0046 §6.49](ADR/0046-application-studio-fusion.md#649-checkbox的同布尔端口呈现)。
+
 范围输入：添加“Range input / 范围输入”，选择同一 page/Overlay owner 的两个不同文本 state，填写规范十进制 min/max/step、标签与单位；刻度须整除且最多10000。它与原 NumericInput/Query plans 的可选 asDecimal 上下界条件共享状态。空值显示“不限”且不增加查询条件；移动输出精确十进制并夹紧到另一有效边界，无效/交叉/范围外/步长不匹配草稿保留并暂停滑块，原输入可修正。“Clear range / 清空范围”原子清空两值。RangeSlider导入逐项保留来源 minVarId/maxVarId、默认0/100/1及标签/单位；默认压力0–45 bar直接复用原查询。配置沿 Save→冻结候选→激活交付，浮层重开清理拥有的输入及选择；范围见[ADR-0046 §6.47](ADR/0046-application-studio-fusion.md#647-rangeslider的原双边界草稿与原子清空)。
 
 记录排行榜：添加“Record leaderboard / 记录排行榜”，选择原排名查询窗口、数值/标题字段、1–32条Top-N及方向。Query plans设相同limit、offset=0、数值字段方向排序，并勾选“Break equal values by record ID / 同值按记录 ID 排序”；原具名排序须相同。排名视图固定，共享表格也不能改其排序/分页；榜单只呈现原宿主顺序及原数值，点击记录供原详情/动作消费。Leaderboard导入创建独立排名计划、保留原条件及limit/方向并显式映射标题，activeVarId按单一实际记录生产者重写；多个写者拒绝。私有字段或读取拒绝不会保留旧排名，查询变化/Overlay重开会清理原选择。正式交付沿原Save→冻结候选→激活；范围见[ADR-0046 §6.46](ADR/0046-application-studio-fusion.md#646-leaderboard的原全集top-n与记录生产者)。
 
-导入外包页面：先新建或打开绑定已有对象的页面，点击“Import Workshop module / 导入 Workshop 模块”，选择源JSON文件或粘贴原文，再选择源页面。逐项映射已有平台对象、字段及原记录动作；可选同对象的精确保留查询版本。先检查定位诊断与原生展示/作用域差异，下载原始JSON和映射报告，再勾选审查确认并应用。应用替换当前未保存草稿，支持原Undo/Redo；仍需按原Save→Review release→冻结候选→Activate release交付。当前支持二十九类组件的有限配置，完整范围见[ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-两种输入一个规范模型)。有阻塞诊断时原草稿保持；全部原配置在报告中保留。同一编辑作用域可重新打开窗口下载上次应用的报告，关闭编辑器/切换成员后清理，离开前须下载。导入不创建对象或执行外包函数/流程，92类型清单不代表92项已经可运行。
+导入外包页面：先新建或打开绑定已有对象的页面，点击“Import Workshop module / 导入 Workshop 模块”，选择源JSON文件或粘贴原文，再选择源页面。逐项映射已有平台对象、字段及原记录动作；可选同对象的精确保留查询版本。先检查定位诊断与原生展示/作用域差异，下载原始JSON和映射报告，再勾选审查确认并应用。应用替换当前未保存草稿，支持原Undo/Redo；仍需按原Save→Review release→冻结候选→Activate release交付。当前支持三十类组件的有限配置，完整范围见[ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-两种输入一个规范模型)。有阻塞诊断时原草稿保持；全部原配置在报告中保留。同一编辑作用域可重新打开窗口下载上次应用的报告，关闭编辑器/切换成员后清理，离开前须下载。导入不创建对象或执行外包函数/流程，92类型清单不代表92项已经可运行。
 
 应用设计台默认进入工坊总览：点击能力卡片，或搜索/选择资产查看状态与关联；选中后打开编辑器、测试或发布审查，返回总览保留搜索与选择；工作流内可切换设计、测试、运行历史与发布。代码声明和租户定义共享应用 API、授权、组件及发布校验。客户不执行任意脚本。构建者拥有 `build.builder`；业务用户按对象/动作/字段权限操作，交付应用本身不增加权限。
 

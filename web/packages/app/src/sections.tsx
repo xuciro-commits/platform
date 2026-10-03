@@ -405,7 +405,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
- "boolean-input":({section,booleanInput,onBoolean,enabled})=><BooleanInputRenderer value={booleanInput} label={section.booleanLabel} title={section.title||t("Boolean switch")} enabled={enabled} onChange={onBoolean}/>,
+ "boolean-input":({section,booleanInput,onBoolean,enabled})=><BooleanInputRenderer value={booleanInput} label={section.booleanLabel} variant={section.booleanVariant} title={section.title||t("Boolean switch")} enabled={enabled} onChange={onBoolean}/>,
  "range-input":({section,rangeLower,rangeUpper,onRange})=><RangeRenderer lower={rangeLower} upper={rangeUpper} fields={section.rangeInput} title={section.title||t("Range input")} onChange={onRange}/>,
  "record-leaderboard":({page,section,window,selected,onSelect})=>{const {source}=useHost();return <LeaderboardRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.leaderboard} selected={selected} onSelect={onSelect}/>;},
  "summary-stats":({page,section,statisticsValue})=>{const {source}=useHost();return <SummaryRenderer value={statisticsValue} info={source.entity(objectOf(page,section))} field={section.summaryField}/>;},

@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Boolean presentation is unsupported.": "布尔呈现不受支持。",
  "Boolean switch": "布尔开关",
  "Boolean input is unavailable or incompatible.": "布尔输入不可用或不兼容。",
  "Range input": "范围输入",

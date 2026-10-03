@@ -31,11 +31,11 @@ export function Toggles({ options, value = [], onChange, empty, className }: {
 }
 
 /** A checkbox with its label; the label is the click target. */
-export function Checkbox({ checked, onChange, children, className, disabled }:
-  { checked: boolean; onChange: (checked: boolean) => void; children?: ReactNode; className?: string; disabled?: boolean }) {
+export function Checkbox({ checked, onChange, children, className, disabled, ariaLabel }:
+  { checked: boolean; onChange: (checked: boolean) => void; children?: ReactNode; className?: string; disabled?: boolean; ariaLabel?:string }) {
   return (
     <label className={cn("flex items-center gap-2", disabled && "opacity-50", className)}>
-      <input type="checkbox" className="accent-[var(--primary)]" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" aria-label={ariaLabel} className="accent-[var(--primary)]" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       {children}
     </label>
   );

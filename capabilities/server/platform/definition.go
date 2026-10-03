@@ -110,6 +110,7 @@ type Section struct {
 	RecordChart           *PageRecordChart        `json:"recordChart,omitempty"`
 	RecordList            *PageRecordList         `json:"recordList,omitempty"`
 	HeadingLevel          string                  `json:"headingLevel,omitempty"`
+	BooleanVariant        string                  `json:"booleanVariant,omitempty"`
 	BooleanVariable       string                  `json:"booleanVariable,omitempty"`
 	BooleanLabel          *string                 `json:"booleanLabel,omitempty"`
 	RangeInput            *PageRangeInput         `json:"rangeInput,omitempty"`

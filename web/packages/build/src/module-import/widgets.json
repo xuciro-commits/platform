@@ -90,9 +90,9 @@
       "sourceType": "Checkbox",
       "sourceCategory": "Filtering",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "boolean-input",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "DateInput",
