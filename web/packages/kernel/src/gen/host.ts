@@ -1448,6 +1448,8 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  booleanVariable?: string;
+  booleanLabel?: string;
   rangeInput?: PageRangeInput;
   rangeMinVariable?: string;
   rangeMaxVariable?: string;
@@ -1790,7 +1792,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.52",
+  "uiProfile": "platform.page.v2.53",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3957,6 +3959,68 @@ export const pageUIManifest = {
           "close"
         ]
       }
+    },
+    {
+      "componentID": "boolean-input",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.53",
+      "title": "Boolean switch",
+      "category": "Inputs",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "booleanLabel": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.53"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "value",
+          "bindingField": "booleanVariable",
+          "type": "boolean",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.53"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -4011,7 +4075,8 @@ export const pageUIManifest = {
     "platform.page.v2.49",
     "platform.page.v2.50",
     "platform.page.v2.51",
-    "platform.page.v2.52"
+    "platform.page.v2.52",
+    "platform.page.v2.53"
   ],
   "runtime": {
     "scope": "page",

@@ -41,6 +41,20 @@ export function Checkbox({ checked, onChange, children, className, disabled }:
   );
 }
 
+/** One caller-owned boolean, with native button keyboard activation. */
+export function Switch({checked,onChange,label,ariaLabel,disabled,className}:{
+  checked:boolean;onChange:(checked:boolean)=>void;label:string;ariaLabel?:string;disabled?:boolean;className?:string;
+}) {
+  return <button type="button" role="switch" aria-checked={checked} aria-label={ariaLabel} disabled={disabled}
+    onClick={()=>onChange(!checked)}
+    className={cn("flex min-w-0 items-center gap-2 rounded-sm text-left text-xs focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50",className)}>
+    <span aria-hidden="true" className={cn("relative h-4 w-8 shrink-0 rounded-full transition-colors",checked?"bg-primary":"bg-border")}>
+      <span className={cn("absolute left-0.5 top-0.5 size-3 rounded-full bg-white transition-transform",checked&&"translate-x-4")}/>
+    </span>
+    <span className="min-w-0 break-words">{label}</span>
+  </button>;
+}
+
 /** A form that submits on Enter and on its submit button, without reloading the page. */
 export function Form({ onSubmit, ...props }: Omit<FormHTMLAttributes<HTMLFormElement>, "onSubmit"> & { onSubmit: () => void }) {
   return <form {...props} onSubmit={(e) => { e.preventDefault(); onSubmit(); }} />;

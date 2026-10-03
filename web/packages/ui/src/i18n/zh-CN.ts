@@ -1,5 +1,8 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Boolean switch": "布尔开关",
+ "Toggle one caller-owned boolean with explicit checked and disabled states.": "切换调用方拥有的单个布尔值，显式呈现选中与禁用状态。",
+ "The caller owns the boolean and its effects; this control does not coerce unrelated values or write records.": "调用方拥有布尔值及其效果；控件不强制转换无关值或写入记录。",
  "Any bound": "不限",
  "Minimum": "最小值",
  "Maximum": "最大值",

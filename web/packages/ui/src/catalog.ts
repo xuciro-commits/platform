@@ -52,6 +52,7 @@ export const entries: CatalogEntry[] = [
     }),
   asset("ui/input", "Input controls", "Text, select and multiline controls for explicit labelled values.", 1,
     "primitives/input.tsx", ["Input", "Select", "Textarea"], "Inputs", { tags: ["text", "input", "select"], states: ["Enabled", "Disabled", "Invalid"] }),
+  asset("ui/switch","Boolean switch","Toggle one caller-owned boolean with explicit checked and disabled states.",1,"primitives/controls.tsx",["Switch"],"SwitchExample",{tags:["switch","boolean","input"],states:["Checked","Unchecked","Disabled"],constraints:["The caller owns the boolean and its effects; this control does not coerce unrelated values or write records."]}),
   asset("ui/checkbox", "Checkbox", "A labelled boolean choice with an explicit disabled state.", 1,
     "primitives/controls.tsx", ["Checkbox"], "Checkboxes", { states: ["Checked", "Unchecked", "Disabled"] }),
   asset("ui/panels", "Cards and panels", "Group related content with a shared heading, description and action area.", 2,

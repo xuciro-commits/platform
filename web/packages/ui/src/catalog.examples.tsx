@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -331,3 +331,5 @@ export function SummaryStatisticsExample(){return <SummaryStatistics value={{kin
 export function RecordLeaderboardExample(){const info:EntityInfo={...demoInfo,fields:[{name:"title",title:"Title",type:"text"},{name:"qty",title:"Exposure",type:"decimal"}]};return <RecordLeaderboard records={[{id:"A",revision:1,created:stamp,changed:stamp,title:"Pump A",qty:100},{id:"B",revision:1,created:stamp,changed:stamp,title:"Pump B",qty:50}]} total={20} info={info} fields={{valueField:"qty",labelField:"title",limit:8,ascending:false}} onSelect={()=>{}}/>;}
 
 export function RangeInputExample(){const [values,setValues]=useState<[string,string]>(["",""]);return <RangeInput lower={values[0]} upper={values[1]} min="0" max="45" step="1" label="Pressure" unit="bar" onChange={(lower,upper)=>setValues([lower,upper])}/>;}
+
+export function SwitchExample(){const [on,setOn]=useState(false);return <Switch label="Active assets" checked={on} onChange={setOn}/>;}

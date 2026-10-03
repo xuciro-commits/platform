@@ -217,6 +217,13 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	rangeRoot.Children = append(rangeRoot.Children, "range")
 	doc.Nodes[doc.Root] = rangeRoot
 	sections = append(sections, build.Section{ID: "range", Widget: "range-input", ConfigVersion: 1, RangeMinVariable: "rangeMin", RangeMaxVariable: "rangeMax", RangeInput: &platform.PageRangeInput{Min: "0", Max: "45", Step: "1", Label: "Pressure", Unit: "bar"}})
+	doc.Variables["booleanFlag"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: platform.Raw(false)}
+	booleanLabel := "Frozen switch"
+	doc.Nodes["booleanInput"] = platform.PageLayoutNode{Kind: "widget", Section: "booleanInput"}
+	booleanRoot := doc.Nodes[doc.Root]
+	booleanRoot.Children = append(booleanRoot.Children, "booleanInput")
+	doc.Nodes[doc.Root] = booleanRoot
+	sections = append(sections, build.Section{ID: "booleanInput", Widget: "boolean-input", ConfigVersion: 1, BooleanVariable: "booleanFlag", BooleanLabel: &booleanLabel})
 	doc.Variables["rankRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "rank"}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
@@ -243,6 +250,9 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	laterBooleanLabel := "Later switch"
+	sections[51].BooleanLabel = &laterBooleanLabel
+	doc.Variables["booleanFlag"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: platform.Raw(true)}
 	sections[50].RangeInput = &platform.PageRangeInput{Min: "-100", Max: "100", Step: "2", Label: "Later pressure", Unit: "kPa"}
 	sections[47].Leaderboard = &platform.PageLeaderboard{ValueField: "amount", LabelField: "id", Limit: 4, Ascending: true}
 	rankQuery := doc.Queries["rankQuery"]
@@ -274,6 +284,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					booleanFound := false
+					for _, s := range d.Page.Sections {
+						if s.ID == "booleanInput" {
+							booleanFound = s.BooleanVariable == "booleanFlag" && s.BooleanLabel != nil && *s.BooleanLabel == "Frozen switch"
+						}
+					}
+					if !booleanFound || string(d.Page.Document.Variables["booleanFlag"].Initial) != "false" {
+						t.Fatal("frozen switch or original boolean declaration changed")
+					}
 					rangeFound := false
 					for _, s := range d.Page.Sections {
 						if s.ID == "range" {

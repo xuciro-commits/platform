@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "boolean-input-profile":"Switches need an original boolean state, a bounded text label, and the supported boolean-input profile. Truthy coercion and executable values are not converted.",
+ "native-boolean-input":"The switch shares the original boolean state and its condition or query bindings. Values must be true or false; unavailable or incompatible values stay explicit. Overlay-owned states retire on close; the control does not write records.",
  "range-profile":"Range sliders need distinct original numeric text states, bounded decimal limits, and an integral step grid of at most 10000 ticks.",
  "native-range-drafts":"The range shares the original numeric input drafts and optional query bounds. Empty and invalid text is preserved; Clear updates both states atomically. Movement emits exact decimal steps and clamps to the other bound.",
  "leaderboard-binding":"Map an original numeric ranking field and visible title, and choose a supported ranking limit and direction.",

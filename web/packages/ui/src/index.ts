@@ -10,7 +10,7 @@ export { ContentTabs } from "./layout/ContentTabs";
 export {ButtonGroup} from "./components/ButtonGroup";
 export { FlowLayout } from "./layout/FlowLayout";
 export { VirtualStack } from "./layout/VirtualStack";
-export { Checkbox, Form, Disclosure, FilePicker, Toggles, Tree } from "./primitives/controls";
+export { Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree } from "./primitives/controls";
 export { Dialog } from "./primitives/dialog";
 export { StatusTag, Tag, defineStatuses, submissionStatuses, type StatusRegistry, type Tone } from "./components/StatusTag";
 export { DataTable, type DataTableProps } from "./components/DataTable";

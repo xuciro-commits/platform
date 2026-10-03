@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Boolean switch": "布尔开关",
+ "Boolean input is unavailable or incompatible.": "布尔输入不可用或不兼容。",
  "Range input": "范围输入",
  "Range inputs are unavailable in this scope.": "范围输入在此作用域不可用。",
  "Ranking window is unavailable.": "排名窗口不可用。",
