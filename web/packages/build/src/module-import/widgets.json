@@ -485,9 +485,9 @@
       "sourceType": "KanbanBoard",
       "sourceCategory": "Ontology & workflow",
       "owner": "@platform/app",
-      "status": "planned",
+      "status": "profile",
       "target": "kanban",
-      "reason": "config-or-capability-profile-required"
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "ObjectCard",

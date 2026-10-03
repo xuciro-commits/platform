@@ -32,7 +32,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	submit(build.ObjectType, "O", "create", map[string]any{"name": "note", "title": "Notes", "states": []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}, "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}, {Name: "amount", Title: "Amount", Type: "decimal"}, {Name: "sensitive", Title: "Sensitive", Type: "decimal", Read: []string{build.Builder}}}})
+	submit(build.ObjectType, "O", "create", map[string]any{"name": "note", "title": "Notes", "states": []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}, "actions": []build.Action{{Name: "finish", Title: "Finish board card", From: []string{"open"}, To: "done", Roles: []string{build.Builder}}}, "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}, {Name: "amount", Title: "Amount", Type: "decimal"}, {Name: "sensitive", Title: "Sensitive", Type: "decimal", Read: []string{build.Builder}}}})
 	submit(build.ObjectType, "O", "publish", map[string]any{})
 	submit(build.ObjectType, "private-object", "create", map[string]any{"name": "private", "title": "Private", "states": []build.State{{Name: "open", Title: "Private open"}, {Name: "done", Title: "Private done"}}, "access": []build.Access{{Role: build.User, Read: "none"}}, "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "parent", Title: "Parent", Type: "reference", Ref: "build.note", Inverse: "privateitems"}}})
 	submit(build.ObjectType, "private-object", "publish", map[string]any{})
@@ -143,6 +143,14 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 		sections = append(sections, build.Section{ID: spec.id, Widget: "pivot", ConfigVersion: 1, CollectionVariable: "metricWindow", Group: spec.row, ColumnGroup: spec.column, Measure: "count"})
 	}
+	for _, spec := range []struct{ id, label string }{{"board", "name"}, {"hiddenBoard", "secret"}} {
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "kanban", ConfigVersion: 1, CollectionVariable: "metricWindow", CardLabel: spec.label, Fields: []string{"name", "secret"}, Actions: []string{"build.note.finish"}})
+	}
+	doc.Variables["boardRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "board"}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -165,6 +173,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[17].RecordChart = &platform.PageRecordChart{Mark: "bar", XField: "id", YField: "amount"}
 	sections[20].ChartVariant = "pie"
 	sections[22].ColumnGroup = ""
+	sections[25].CardLabel = "id"
+	sections[25].Actions = nil
 	sections[10].Text = "Later heading"
 	sections[11].Title = "Later collection"
 	sections[8].MetricPresentation = &platform.PageMetricPresentation{Prefix: "Later", Formatter: "short", Variant: "tag", Tone: "danger"}
@@ -181,6 +191,25 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					board, hiddenBoard := false, false
+					for _, s := range d.Page.Sections {
+						if s.ID == "board" {
+							board = s.CardLabel == "name" && s.CollectionVariable == "metricWindow"
+							wantFields, wantActions := 2, 1
+							if member.ID == reader.ID {
+								wantFields, wantActions = 1, 0
+							}
+							if len(s.Fields) != wantFields || len(s.Actions) != wantActions {
+								t.Fatal("board optional fields or moves escaped member projection")
+							}
+						}
+						if s.ID == "hiddenBoard" {
+							hiddenBoard = true
+						}
+					}
+					if !board || hiddenBoard != (member.ID == builder.ID) || d.Page.Document.Variables["boardRecord"].Source.Section != "board" {
+						t.Fatal("frozen board or original record producer changed")
+					}
 					pivot, hiddenRow, hiddenColumn := false, false, false
 					for _, s := range d.Page.Sections {
 						switch s.ID {

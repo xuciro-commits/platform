@@ -434,6 +434,11 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						}
 						shown = other
 					}
+					section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool {
+						field, visible := shown.Field(name)
+						return !visible || section.Widget == "form" && (field.ReadOnly || !field.Writes(m.Roles[shown.App]))
+					})
+					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
 					if (section.Widget == "chart" || section.Widget == "metric" || section.Widget == "pivot") && !checkAggregateSection(section, shown) {
 						continue
 					}
@@ -499,10 +504,6 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 							continue
 						}
 					}
-					section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool {
-						field, visible := shown.Field(name)
-						return !visible || section.Widget == "form" && (field.ReadOnly || !field.Writes(m.Roles[shown.App]))
-					})
 					section.TableColumns = slices.DeleteFunc(slices.Clone(section.TableColumns), func(c platform.PageTableColumn) bool {
 						return c.Field != "id" && !slices.Contains(section.Fields, c.Field)
 					})
@@ -524,7 +525,6 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 							section.InlineEdit = &edit
 						}
 					}
-					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
 					if section.Widget == "inline-action" && len(section.Actions) != 1 {
 						continue
 					}

@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Map board {widget}": "映射看板 {widget}",
+ "Map original board move actions": "映射原看板移动动作",
+ "Source move {action} uses parameter {parameter}.": "来源移动动作 {action} 使用参数 {parameter}。",
+ "Map the board group to the original lifecycle and use supported source action and selection declarations.": "将看板分组映射到原生命周期，并使用受支持的来源动作和选择声明。",
+ "Choose an original card title and at most four unique visible scalar summary fields for the board.": "为看板选择原卡片标题及最多四个不重复的可见标量摘要字段。",
+ "A configured source move must map to at least one distinct original transition with one destination. Read-only sources cannot acquire move actions.": "已配置的来源移动必须映射到至少一个不重复且只有一个目标的原转换；只读来源不能获得移动动作。",
+ "Board lanes use the original lifecycle and authorized query window. Moves are limited to selected original transitions; their forms retain inputs, approvals and record revisions. Source parameter templates and record objects do not execute in the host.": "看板列使用原生命周期及受权查询窗口。移动限于选中的原转换，表单保留输入、审批及记录版本；来源参数模板和记录对象不在宿主中执行。",
  "Pivot import requires an original query collection, two categorical axes and an explicit count measure without additional settings or scripts.": "交叉表导入需要原查询集合、两个分类轴及显式 count 度量，不附带其他设置或脚本。",
  "Map both pivot axes to distinct original categorical fields visible to the current member.": "将交叉表双轴映射到当前成员可见且不同的原分类字段。",
  "The native pivot counts the complete authorized set, shows zero for absent count cells and provides row, column and grand totals. Field labels, ordering and read budgets use the original platform.": "原交叉表统计完整受权集合，对没有记录的 count 单元格显示零，提供行、列及总合计。字段标签、顺序和读取预算沿用原平台。",
@@ -35,7 +42,7 @@ register("zh-CN", {
  "Record cards need a supported grid or list layout and an original bounded query window.": "记录卡片需要受支持的网格或列表布局及原有界查询窗口。",
  "Choose an original card title and at most four visible scalar summary fields.": "选择原卡片标题及最多四个可见标量摘要字段。",
  "Cards show the original query window, explicit fields and lifecycle metadata. Selection is authorized by the original record owner; source asset-specific decoration is not copied.": "卡片显示原查询窗口、显式字段及生命周期元数据。选择由原记录拥有者授权，来源资产专用装饰不直接复制。",
- "The selected-page gallery becomes the sole producer of this source active variable. Multiple producers require distinct variables.": "选中页面的画廊成为该来源活动变量的唯一生产者；多个生产者需要不同变量。",
+ "The selected-page record widget becomes the sole producer of this source active variable. Multiple producers require distinct variables.": "选中页面的记录组件成为该来源活动变量的唯一生产者；多个生产者需要不同变量。",
  "Heading": "标题",
  "Collection title": "集合标题",
  "Heading text": "标题文字",

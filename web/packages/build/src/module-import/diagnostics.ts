@@ -1,5 +1,9 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "board-profile":"Map the board group to the original lifecycle and use supported source action and selection declarations.",
+ "board-binding":"Choose an original card title and at most four unique visible scalar summary fields for the board.",
+ "board-moves":"A configured source move must map to at least one distinct original transition with one destination. Read-only sources cannot acquire move actions.",
+ "native-board-moves":"Board lanes use the original lifecycle and authorized query window. Moves are limited to selected original transitions; their forms retain inputs, approvals and record revisions. Source parameter templates and record objects do not execute in the host.",
  "pivot-profile":"Pivot import requires an original query collection, two categorical axes and an explicit count measure without additional settings or scripts.",
  "pivot-binding":"Map both pivot axes to distinct original categorical fields visible to the current member.",
  "native-pivot-count":"The native pivot counts the complete authorized set, shows zero for absent count cells and provides row, column and grand totals. Field labels, ordering and read budgets use the original platform.",
@@ -15,7 +19,7 @@ export const diagnosticMessages:Record<string,string>={
  "record-list-profile":"Record cards need a supported grid or list layout and an original bounded query window.",
  "record-list-binding":"Choose an original card title and at most four visible scalar summary fields.",
  "native-record-cards":"Cards show the original query window, explicit fields and lifecycle metadata. Selection is authorized by the original record owner; source asset-specific decoration is not copied.",
- "native-list-selection":"The selected-page gallery becomes the sole producer of this source active variable. Multiple producers require distinct variables.",
+ "native-list-selection":"The selected-page record widget becomes the sole producer of this source active variable. Multiple producers require distinct variables.",
  "title-profile":"Headings need bounded plain text and a supported level; collection titles need an original query collection.",
  "native-collection-title":"Collection titles show the declared source collection name and its original complete count, with the original permissions, read budget and lifetime.",
  "metric-aggregate-profile":"Metric cards need one supported complete-collection count or explicitly mapped aggregate definition.",
