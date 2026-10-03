@@ -409,7 +409,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
  "record-picker":({page,section,window,selected,enabled,onSelect})=><RecordPickerRenderer type={objectOf(page,section)} window={window} fields={section.recordPicker} title={section.title||t("Record picker")} selected={selected} enabled={enabled} onSelect={onSelect}/>,
- "date-input":({section,dateValue,onDate,enabled})=><DateInputRenderer value={dateValue} label={section.dateLabel} title={section.title||t("Date input")} enabled={enabled} onChange={onDate}/>,
+ "date-input":({section,dateValue,onDate,enabled})=><DateInputRenderer value={dateValue} kind={section.dateKind} offset={section.dateOffset} label={section.dateLabel} title={section.title||t("Date input")} enabled={enabled} onChange={onDate}/>,
  "choice-input":({section,choiceValue,choiceSetValue,onChoice,onChoiceSet,enabled})=><ChoiceInputRenderer setValue={choiceSetValue} onSet={onChoiceSet} value={choiceValue} fields={section.choiceInput} title={section.title||t("Choice input")} enabled={enabled} onChange={onChoice}/>,
  "boolean-input":({section,booleanInput,onBoolean,enabled})=><BooleanInputRenderer value={booleanInput} label={section.booleanLabel} variant={section.booleanVariant} title={section.title||t("Boolean switch")} enabled={enabled} onChange={onBoolean}/>,
  "range-input":({section,rangeLower,rangeUpper,onRange})=><RangeRenderer lower={rangeLower} upper={rangeUpper} fields={section.rangeInput} title={section.title||t("Range input")} onChange={onRange}/>,

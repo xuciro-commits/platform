@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Invalid datetime value.": "无效日期时间。",
+
  "Picker title is unavailable.": "选择器标题不可用。",
  "Picker search exceeds its condition budget.": "选择器搜索超过条件预算。",
  "Record picker": "记录选择器",
@@ -324,6 +326,8 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Invalid datetime value.": "无效日期时间。",
+
 
 
   "Overlay variable needs a supported local value or resource": "浮层变量需要受支持的局部值或资源。",

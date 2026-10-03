@@ -1,5 +1,19 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Offset datetime input": "带偏移的日期时间输入",
+ "Edit caller-owned timestamp text without browser timezone conversion or precision truncation.": "编辑调用方拥有的时刻文本，不应用浏览器时区转换或精度截断。",
+ "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒，无效草稿可修正。",
+
+ "UTC offset": "UTC 偏移",
+ "{label} UTC offset": "{label} UTC 偏移",
+ "Fractional seconds": "分数秒",
+ "{label} fractional seconds": "{label} 分数秒",
+ "Invalid datetime draft": "无效日期时间草稿",
+ "{label} datetime draft": "{label} 日期时间草稿",
+ "Invalid datetime value. Use a real date and time with seconds and Z or a UTC offset; the original draft is retained.": "无效日期时间。请输入真实日期、时间和秒，并明确 Z 或 UTC 偏移；原草稿已保留。",
+ "Date and time use the displayed UTC offset, independently of your browser timezone.": "日期时间使用显示的 UTC 偏移，不随浏览器时区转换。",
+ "Clear datetime": "清空日期时间",
+
  "Date input": "日期输入",
  "Civil date input": "业务日期输入",
  "Edit original business date text with a native picker and explicit invalid draft repair.": "通过原生日期选择器及显式无效草稿修正编辑原业务日期文本。",

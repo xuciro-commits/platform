@@ -48,7 +48,8 @@ type pageRuntimeContract struct {
 		MaxCandidates     int    `json:"maxCandidates"`
 	} `json:"recordPicker"`
 	DateInput struct {
-		RequiredUIProfile string `json:"requiredUIProfile"`
+		RequiredUIProfile         string `json:"requiredUIProfile"`
+		DateTimeRequiredUIProfile string `json:"dateTimeRequiredUIProfile"`
 	} `json:"dateInput"`
 	ChoiceInput struct {
 		RequiredUIProfile         string   `json:"requiredUIProfile"`

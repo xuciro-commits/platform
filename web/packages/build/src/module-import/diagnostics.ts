@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "datetime-binding":"Choose an explicit UTC offset for datetime input. Only original static text with an empty, complete offset timestamp or complete local date and time is supported; conflicting offsets, date-only values and executable sources are refused.",
+ "native-datetime":"Original seconds, fractional seconds and UTC offsets are preserved. Complete local source values use the explicitly mapped offset, with omitted seconds set to 00. Browser timezone conversion and source truncation are not copied.",
  "native-object-dropdown-alias":"This source ObjectDropdown uses the same renderer as StringSelector and selects static strings. It maps to the original text choice state, not a record reference. Object selection remains a separate authorized record-picker contract.",
  "picker-binding":"Map an original visible record title and scoped query. Record pickers need a fixed 20-record ID-sorted window and compatible retained ordering.",
  "native-record-picker":"The picker searches the original authorized query and confirms original record identity before publishing selection. Candidates are bounded to 20 in host ID order; original title/ID predicates replace local array filtering, and declared search conditions remain fixed. Original conditions, versions and ownership remain; reads or scope changes retire old candidates and selection.",

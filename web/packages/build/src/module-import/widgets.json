@@ -469,9 +469,9 @@
       "sourceType": "DateTimePicker",
       "sourceCategory": "Filtering",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "date-input",
+      "reason": "bounded-explicit-offset-profile"
     },
     {
       "sourceType": "MultiSelector",

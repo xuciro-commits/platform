@@ -1060,6 +1060,7 @@ export type PageQuery = {
 
 export type PageQueryCondition = {
   optional?: boolean;
+  asDateTime?: boolean;
   asDate?: boolean;
   asDecimal?: boolean;
   field: string;
@@ -1461,6 +1462,8 @@ export type Section = {
   recordList?: PageRecordList;
   headingLevel?: string;
   recordPicker?: PageRecordPicker;
+  dateKind?: string;
+  dateOffset?: string;
   dateVariable?: string;
   dateLabel?: string;
   choiceSetVariable?: string;
@@ -1811,7 +1814,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.58",
+  "uiProfile": "platform.page.v2.59",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4142,6 +4145,17 @@ export const pageUIManifest = {
           "dateLabel": {
             "type": "string",
             "maxLength": 1024
+          },
+          "dateKind": {
+            "type": "string",
+            "enum": [
+              "date",
+              "datetime"
+            ]
+          },
+          "dateOffset": {
+            "type": "string",
+            "maxLength": 6
           }
         }
       },
@@ -4294,7 +4308,8 @@ export const pageUIManifest = {
     "platform.page.v2.55",
     "platform.page.v2.56",
     "platform.page.v2.57",
-    "platform.page.v2.58"
+    "platform.page.v2.58",
+    "platform.page.v2.59"
   ],
   "runtime": {
     "scope": "page",
@@ -4792,7 +4807,8 @@ export const pageUIManifest = {
       "maxSelected": 64
     },
     "dateInput": {
-      "requiredUIProfile": "platform.page.v2.57"
+      "requiredUIProfile": "platform.page.v2.57",
+      "dateTimeRequiredUIProfile": "platform.page.v2.59"
     },
     "recordPicker": {
       "requiredUIProfile": "platform.page.v2.58",

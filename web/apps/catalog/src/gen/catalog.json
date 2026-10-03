@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:bef21e1bb4ca4e1c",
+  "revision": "sha256:c5b91e3371dfbd43",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1133,6 +1133,36 @@
       ],
       "constraints": [
         "The caller owns the original date text and query conditions. Invalid drafts remain visible; no local timezone or timestamp conversion is applied."
+      ]
+    },
+    {
+      "id": "ui/datetime-input",
+      "owner": "@platform/ui",
+      "name": "Offset datetime input",
+      "summary": "Edit caller-owned timestamp text without browser timezone conversion or precision truncation.",
+      "layer": 1,
+      "source": "web/packages/ui/src/components/DateTimeInput.tsx",
+      "exports": [
+        "DateTimeInput",
+        "validTimestamp",
+        "validTimestampOffset",
+        "timestampParts",
+        "withTimestampOffset"
+      ],
+      "example": "DateTimeInputExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "datetime",
+        "offset",
+        "input"
+      ],
+      "constraints": [
+        "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable."
       ]
     },
     {
@@ -2604,6 +2634,7 @@
       "Display the original finite numeric aggregate with a bounded arc and warning threshold.": "以有界弧线和警告阈值显示原有限数值聚合。",
       "Download the original JSON and mapping report before leaving the editor. Reports remain in the current editing scope until it closes or its member changes.": "离开编辑器前请下载原 JSON 和映射报告。报告在当前编辑作用域内保留，关闭或切换成员时清理。",
       "Each control has a stable identity; the caller owns its binding, permissions and execution.": "每个控件具有稳定身份，其绑定、权限及执行由调用方拥有。",
+      "Edit caller-owned timestamp text without browser timezone conversion or precision truncation.": "编辑调用方拥有的时刻文本，不应用浏览器时区转换或精度截断。",
       "Edit declared entity fields using their shared validators and editors.": "使用共享校验器和编辑器编辑已声明的实体字段。",
       "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
       "Edit original business date text with a native picker and explicit invalid draft repair.": "通过原生日期选择器及显式无效草稿修正编辑原业务日期文本。",
@@ -2657,6 +2688,7 @@
       "Notifications": "通知",
       "Object design workbench": "对象设计工作台",
       "Observe relationships and execution paths through the shared canvas.": "通过共享画布观察关系和执行路径。",
+      "Offset datetime input": "带偏移的日期时间输入",
       "One action control with primary, quiet, destructive, link and row variants.": "一种动作控件，提供主要、弱化、危险、链接和列表行形态。",
       "One field type owns display, editing, validation, sorting and filtering.": "一种字段类型统一负责展示、编辑、校验、排序与筛选。",
       "Only the canonical action owner may authorize and apply a transition.": "只有规范动作的归属方可以授权并应用状态跃迁。",
@@ -2744,6 +2776,7 @@
       "The caller owns authorized options, counts and typed selected values.": "调用方管理授权选项、计数和类型化选中值。",
       "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
+      "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒，无效草稿可修正。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The caller owns the authorized complete count and clears obsolete values.": "调用方负责受权完整计数并清理过期值。",
       "The caller owns the authorized window and business time; the list does not create events or read another collection.": "调用方拥有受权窗口和业务时间；列表不创建事件或读取另一集合。",
@@ -3221,6 +3254,10 @@
     ],
     "ui/choice-input": [
       "web/packages/app/src/widgets/ChoiceInput.tsx",
+      "web/packages/build/src/editor.tsx"
+    ],
+    "ui/datetime-input": [
+      "web/packages/app/src/widgets/DateInput.tsx",
       "web/packages/build/src/editor.tsx"
     ],
     "ui/date-input": [

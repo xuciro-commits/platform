@@ -259,6 +259,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections = append(sections, build.Section{ID: "pickerInput", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "pickerWindow", RecordPicker: &platform.PageRecordPicker{LabelField: "name"}})
 	doc.Variables["pickerRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "pickerInput"}}
 	doc.Variables["rankRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "rank"}}
+	timeIndex := len(sections)
+	timeLabel := "Frozen datetime"
+	doc.Variables["timeState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("2028-02-29T08:30:45.123456789+08:00")}
+	doc.Nodes["timeInput"] = platform.PageLayoutNode{Kind: "widget", Section: "timeInput"}
+	timeRoot := doc.Nodes[doc.Root]
+	timeRoot.Children = append(timeRoot.Children, "timeInput")
+	doc.Nodes[doc.Root] = timeRoot
+	sections = append(sections, build.Section{ID: "timeInput", Widget: "date-input", ConfigVersion: 1, DateVariable: "timeState", DateLabel: &timeLabel, DateKind: "datetime", DateOffset: "+08:00"})
+	doc.Queries["timeQuery"] = platform.PageQuery{Object: platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.note"}, Limit: 20, Conditions: []platform.PageQueryCondition{{Field: "raised", Op: ">=", Value: platform.PageValue{Variable: "timeState"}, AsDateTime: true, Optional: true}}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -285,6 +294,12 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
 	sections[56].RecordPicker = &platform.PageRecordPicker{LabelField: "id"}
+	sections[timeIndex].DateKind = "date"
+	sections[timeIndex].DateOffset = ""
+	doc.Variables["timeState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("2027-01-01")}
+	laterTimeQuery := doc.Queries["timeQuery"]
+	laterTimeQuery.Conditions[0].AsDateTime = false
+	doc.Queries["timeQuery"] = laterTimeQuery
 	laterDateLabel := "Later date"
 	sections[55].DateLabel = &laterDateLabel
 	doc.Variables["dateState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("2026-01-01")}
@@ -338,6 +353,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					}
 					if !pickerFound || d.Page.Document.Variables["pickerRecord"].Source.Section != "pickerInput" {
 						t.Fatal("frozen picker binding or producer changed")
+					}
+					timeFound := false
+					for _, section := range d.Page.Sections {
+						if section.ID == "timeInput" {
+							timeFound = section.DateKind == "datetime" && section.DateOffset == "+08:00" && section.DateVariable == "timeState" && section.DateLabel != nil && *section.DateLabel == "Frozen datetime"
+						}
+					}
+					if !timeFound || string(d.Page.Document.Variables["timeState"].Initial) != `"2028-02-29T08:30:45.123456789+08:00"` || !d.Page.Document.Queries["timeQuery"].Conditions[0].AsDateTime {
+						t.Fatal("frozen datetime precision, interpretation or condition changed")
 					}
 					dateFound := false
 					for _, s := range d.Page.Sections {

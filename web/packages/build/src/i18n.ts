@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Date value kind": "日期值类型",
+ "Civil date": "业务日期",
+ "Date and time with UTC offset": "带 UTC 偏移的日期时间",
+ "Default UTC offset": "默认 UTC 偏移",
+ "Bind original date text. Datetimes retain seconds, fractional seconds and an explicit UTC offset; empty and invalid drafts remain explicit.": "绑定原日期文本。日期时间保留秒、分数秒及明确 UTC 偏移，空与无效草稿保持明确。",
+ "Read text as a datetime": "将文本读取为日期时间",
+ "Map datetime UTC offset {widget}": "映射日期时间 UTC 偏移 {widget}",
+ "Choose an explicit UTC offset for datetime input. Only original static text with an empty, complete offset timestamp or complete local date and time is supported; conflicting offsets, date-only values and executable sources are refused.": "请为日期时间明确选择 UTC 偏移。仅支持原静态文本的空值、完整带偏移时刻或完整本地日期时间；冲突偏移、仅日期和执行来源拒绝。",
+ "Original seconds, fractional seconds and UTC offsets are preserved. Complete local source values use the explicitly mapped offset, with omitted seconds set to 00. Browser timezone conversion and source truncation are not copied.": "保留原秒、分数秒与 UTC 偏移。完整本地来源值使用显式映射的偏移，缺省秒补00；不复制浏览器时区转换和来源截断。",
+
  "This source ObjectDropdown uses the same renderer as StringSelector and selects static strings. It maps to the original text choice state, not a record reference. Object selection remains a separate authorized record-picker contract.": "来源ObjectDropdown与StringSelector使用同一渲染器并选择静态字符串。它映射原文本选择状态，不是记录引用。对象选择仍归独立受权记录选择器契约。",
  "Record picker": "记录选择器",
  "Picker title field": "选择器标题字段",
@@ -1604,6 +1614,16 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Date value kind": "日期值类型",
+ "Civil date": "业务日期",
+ "Date and time with UTC offset": "带 UTC 偏移的日期时间",
+ "Default UTC offset": "默认 UTC 偏移",
+ "Bind original date text. Datetimes retain seconds, fractional seconds and an explicit UTC offset; empty and invalid drafts remain explicit.": "绑定原日期文本。日期时间保留秒、分数秒及明确 UTC 偏移，空与无效草稿保持明确。",
+ "Read text as a datetime": "将文本读取为日期时间",
+ "Map datetime UTC offset {widget}": "映射日期时间 UTC 偏移 {widget}",
+ "Choose an explicit UTC offset for datetime input. Only original static text with an empty, complete offset timestamp or complete local date and time is supported; conflicting offsets, date-only values and executable sources are refused.": "请为日期时间明确选择 UTC 偏移。仅支持原静态文本的空值、完整带偏移时刻或完整本地日期时间；冲突偏移、仅日期和执行来源拒绝。",
+ "Original seconds, fractional seconds and UTC offsets are preserved. Complete local source values use the explicitly mapped offset, with omitted seconds set to 00. Browser timezone conversion and source truncation are not copied.": "保留原秒、分数秒与 UTC 偏移。完整本地来源值使用显式映射的偏移，缺省秒补00；不复制浏览器时区转换和来源截断。",
+
   "Query scope": "查询作用域",
   "This widget reads the bound record selection.": "此组件读取绑定的记录选择。",
   "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.": "本地示例使用合成查询与对象描述，保存和发布无法访问宿主。",

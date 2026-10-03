@@ -1,4 +1,4 @@
-import {validCivilDate} from "@platform/ui/date";
+import {validCivilDate,validTimestamp} from "@platform/ui/date";
 import {isStringSet,parseDecimal,isDecimal,type NumberValue,type DecimalValue} from "./decimal";
 import type { Api, pageUIManifest } from "@platform/kernel";
 import type { EntityInfo, RecordQuery } from "@platform/ui";
@@ -107,8 +107,10 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
     let value = read(condition.value); if (value.status !== "value") return value;
     const f = field(condition.field);
     if(!f||!(contract.operators as readonly string[]).includes(condition.op)||["in","not in"].includes(condition.op)!==isStringSet(value.value)||condition.asDecimal&&(!condition.value.variable||variables[condition.value.variable]?.type!=="string"||typeof value.value!=="string"||!["integer","decimal"].includes(f.type))||!condition.asDecimal&&!compatible(condition.field,value)||condition.op==="like"&&!["text","choice"].includes(f.type)||["boolean","reference"].includes(f.type)&&!["=","!="].includes(condition.op))return failed("Query parameter type does not match its field.");
-    if(condition.asDate&&(condition.asDecimal||!condition.value.variable||variables[condition.value.variable]?.type!=="string"||typeof value.value!=="string"||f?.type!=="date"))return failed("Query parameter type does not match its field.");
+    if(condition.asDate&&(condition.asDecimal||condition.asDateTime||!condition.value.variable||variables[condition.value.variable]?.type!=="string"||typeof value.value!=="string"||f?.type!=="date"))return failed("Query parameter type does not match its field.");
+    if(condition.asDateTime&&(condition.asDate||condition.asDecimal||!condition.value.variable||variables[condition.value.variable]?.type!=="string"||typeof value.value!=="string"||f?.type!=="datetime"))return failed("Query parameter type does not match its field.");
     if(condition.optional&&(value.value===""||isStringSet(value.value)&&value.value.values.length===0))continue;
+    if(condition.asDateTime&&(typeof value.value!=="string"||!validTimestamp(value.value)))return failed("Invalid datetime value.");
     if(condition.asDate&&(typeof value.value!=="string"||!validCivilDate(value.value)))return failed("Invalid date value.");
     if(condition.asDecimal){if(typeof value.value!=="string")return failed("Query parameter type does not match its field.");const exact=parseDecimal(value.value);if(!exact)return failed("Invalid numeric value.");value={status:"value",value:exact};}
     if ((["in","not in"].includes(condition.op)!==isStringSet(value.value)) || !compatible(condition.field, value) || !(contract.operators as readonly string[]).includes(condition.op) || condition.op === "like" && !["text", "choice"].includes(f!.type) || ["boolean", "reference"].includes(f!.type) && !["=", "!="].includes(condition.op)) return failed("Query parameter type does not match its field.");

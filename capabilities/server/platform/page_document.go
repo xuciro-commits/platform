@@ -66,7 +66,7 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.Widget == "record-picker" || s.RecordPicker != nil {
 				return fmt.Errorf("record picker requires a page document")
 			}
-			if s.Widget == "date-input" || s.DateVariable != "" || s.DateLabel != nil {
+			if s.Widget == "date-input" || s.DateVariable != "" || s.DateLabel != nil || s.DateKind != "" || s.DateOffset != "" {
 				return fmt.Errorf("date input requires a page document")
 			}
 			if s.Widget == "choice-input" || s.ChoiceInput != nil || s.ChoiceVariable != "" || s.ChoiceSetVariable != "" {
