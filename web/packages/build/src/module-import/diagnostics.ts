@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "notice-profile":"Notices require a static optional title, plain text and a supported semantic tone within the declared UTF-8 budgets. Unknown configurations, executable inputs and old profiles are refused.",
+ "native-notice":"Callout primary maps to the original info tone; success, warning and danger are retained. Optional and empty titles remain distinct from the widget name. Text, HTML and {value} are literal, and static notes do not announce themselves as live alerts. Original visibility, ownership and frozen delivery remain.",
  "alert-profile":"Alert banners require an original exact decimal value, a bounded numeric threshold, an info/warning/danger tone and nonempty plain text. Unknown configurations and old profiles are refused.",
  "alert-scalar":"Alerts accept original static numeric text or complete-set count declarations. Invalid, executable and incompatible scalar sources are refused.",
  "alert-count":"Map the original complete-set count and explicit equality condition for this alert. Partial-window counts and non-count aggregates are not interchangeable.",

@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Notice": "说明",
+ "Notice configuration is unavailable or incompatible.": "说明配置不可用或不兼容。",
+
  "Alert banner": "条件提示",
  "Alert configuration is unavailable or incompatible.": "条件提示配置不可用或不兼容。",
  "Alert needs an exact decimal value.": "条件提示需要精确十进制值。",
@@ -332,6 +335,9 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Notice": "说明",
+ "Notice configuration is unavailable or incompatible.": "说明配置不可用或不兼容。",
+
  "Alert banner": "条件提示",
  "Alert configuration is unavailable or incompatible.": "条件提示配置不可用或不兼容。",
  "Alert needs an exact decimal value.": "条件提示需要精确十进制值。",

@@ -58,6 +58,8 @@
 
 日期输入：添加“Date input / 日期输入”，绑定原 page/Overlay 的string state并设置可选标签；源DateInput的date/string静态变量同样映射原文本。日期保留YYYY-MM-DD与业务日期语义，范围0001–9999，支持真实闰日；清空不设默认日期。外部TextInput写入无效日期后，日期组件保留草稿并提供修正文本输入；修正或“Clear date / 清空日期”显式替换原状态。在原Query plans条件勾选“Read text as a civil date / 将文本读取为业务日期”，条件字段须date、变量须string，与数字转换互斥；无效日期在读取前拒绝，optional空值跳过。原状态/标签/asDate条件随冻结发布，原启用、查询选择及浮层关闭清理保持；范围见[ADR-0046 §6.52](ADR/0046-application-studio-fusion.md#652-dateinput的原日期草稿与civil条件)。
 
+操作说明：添加“Notice / 说明”，在“Show notice title / 显示说明标题”选择是否声明标题，再编辑“Notice title / 说明标题”“Notice text / 说明文本”和“Notice tone / 说明色调”。标题缺省或空值不自动显示组件名；标题最多1024 UTF-8字节、正文最多4096字节，正文可空。HTML、Markdown和{value}按字面显示，静态note不作为实时告警宣读；组件名保持无障碍身份。Callout导入将primary/缺省映射info，success/warning/danger保留；显示条件在来源Section或原布局检查器声明，说明不绑定数据或发送通知。原配置沿保存→冻结→激活/恢复，完整浮层复制保持内容并重写原显示状态；范围见[ADR-0046 §6.57](ADR/0046-application-studio-fusion.md#657-callout的原纯文本说明与语义色调)。
+
 条件提示：添加“Alert banner / 条件提示”，选择“Alert value variable / 提示值变量”的原page/Overlay decimal变量，填写规范“Alert threshold / 提示阈值”、info/warning/danger“Alert tone / 提示色调”和非空“Alert message / 提示消息”（最多4096 UTF-8字节）。原值严格大于阈值才显示；首个{value}插入原精确文本，其余文字和HTML字样按字面呈现。原count覆盖完整受权集合，表格分页不改变提示；加载、不可用、拒绝或无效输入不变成零，也不保留旧消息。来源countOffline等聚合须在导入窗口明确映射原count及字段等值条件；静态numeric仍可与NumericInput共享原文本状态。配置及绑定沿保存→冻结→激活与原拥有作用域清理，不发送通知；范围见[ADR-0046 §6.56](ADR/0046-application-studio-fusion.md#656-alertbanner的原异常计数与精确条件提示)。
 
 日期时间：仍添加“Date input / 日期输入”，在“Date value kind / 日期值类型”选择“Date and time with UTC offset / 带 UTC 偏移的日期时间”，绑定原string state，并填写“Default UTC offset / 默认 UTC 偏移”（Z或±HH:MM，拒绝-00:00）。控件分别编辑本地年月日时分秒、UTC偏移和最多九位分数秒；既有偏移与精度保留，不随浏览器时区转换。空值不生成当前时刻，无效草稿显式修正或“Clear datetime / 清空日期时间”。查询勾选“Read text as a datetime / 将文本读取为日期时间”，只能绑定原datetime字段，与业务日期/数值转换互斥；无效值停止读取。DateTimePicker导入须逐项明确偏移：完整带偏移值原样保留，无偏移完整日期时间附加已选偏移，缺秒补00；仅日期或执行来源须修正。原kind/偏移/初值/条件沿保存→冻结→激活及拥有作用域清理；范围见[ADR-0046 §6.55](ADR/0046-application-studio-fusion.md#655-datetimepicker的显式偏移与原datetime查询)。
@@ -74,7 +76,7 @@
 
 记录排行榜：添加“Record leaderboard / 记录排行榜”，选择原排名查询窗口、数值/标题字段、1–32条Top-N及方向。Query plans设相同limit、offset=0、数值字段方向排序，并勾选“Break equal values by record ID / 同值按记录 ID 排序”；原具名排序须相同。排名视图固定，共享表格也不能改其排序/分页；榜单只呈现原宿主顺序及原数值，点击记录供原详情/动作消费。Leaderboard导入创建独立排名计划、保留原条件及limit/方向并显式映射标题，activeVarId按单一实际记录生产者重写；多个写者拒绝。私有字段或读取拒绝不会保留旧排名，查询变化/Overlay重开会清理原选择。正式交付沿原Save→冻结候选→激活；范围见[ADR-0046 §6.46](ADR/0046-application-studio-fusion.md#646-leaderboard的原全集top-n与记录生产者)。
 
-导入外包页面：先新建或打开绑定已有对象的页面，点击“Import Workshop module / 导入 Workshop 模块”，选择源JSON文件或粘贴原文，再选择源页面。逐项映射已有平台对象、字段及原记录动作；可选同对象的精确保留查询版本。先检查定位诊断与原生展示/作用域差异，下载原始JSON和映射报告，再勾选审查确认并应用。应用替换当前未保存草稿，支持原Undo/Redo；仍需按原Save→Review release→冻结候选→Activate release交付。当前支持三十九类组件的有限配置，完整范围见[ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-两种输入一个规范模型)。有阻塞诊断时原草稿保持；全部原配置在报告中保留。同一编辑作用域可重新打开窗口下载上次应用的报告，关闭编辑器/切换成员后清理，离开前须下载。导入不创建对象或执行外包函数/流程，92类型清单不代表92项已经可运行。
+导入外包页面：先新建或打开绑定已有对象的页面，点击“Import Workshop module / 导入 Workshop 模块”，选择源JSON文件或粘贴原文，再选择源页面。逐项映射已有平台对象、字段及原记录动作；可选同对象的精确保留查询版本。先检查定位诊断与原生展示/作用域差异，下载原始JSON和映射报告，再勾选审查确认并应用。应用替换当前未保存草稿，支持原Undo/Redo；仍需按原Save→Review release→冻结候选→Activate release交付。当前支持四十类组件的有限配置，完整范围见[ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-两种输入一个规范模型)。有阻塞诊断时原草稿保持；全部原配置在报告中保留。同一编辑作用域可重新打开窗口下载上次应用的报告，关闭编辑器/切换成员后清理，离开前须下载。导入不创建对象或执行外包函数/流程，92类型清单不代表92项已经可运行。
 
 应用设计台默认进入工坊总览：点击能力卡片，或搜索/选择资产查看状态与关联；选中后打开编辑器、测试或发布审查，返回总览保留搜索与选择；工作流内可切换设计、测试、运行历史与发布。代码声明和租户定义共享应用 API、授权、组件及发布校验。客户不执行任意脚本。构建者拥有 `build.builder`；业务用户按对象/动作/字段权限操作，交付应用本身不增加权限。
 

@@ -277,6 +277,24 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 		sections = append(sections, build.Section{ID: spec.id, Widget: "alert-banner", ConfigVersion: 1, AlertValueVariable: spec.variable, AlertBanner: alertConfig})
 	}
+	noticeIndex := len(sections)
+	emptyNoticeTitle := ""
+	for _, spec := range []struct {
+		id    string
+		title *string
+		tone  string
+	}{{"noticeInput", nil, "info"}, {"emptyNotice", &emptyNoticeTitle, "success"}, {"hiddenNotice", nil, "danger"}} {
+		node := platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		if spec.id == "hiddenNotice" {
+			node.VisibleWhen = "privateNoticeVisible"
+		}
+		doc.Nodes[spec.id] = node
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "notice", ConfigVersion: 1, Notice: &platform.PageNotice{Title: spec.title, Tone: spec.tone, Message: "<img src=x> {value} **literal**"}})
+	}
+	doc.Variables["privateNoticeVisible"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "derived", Expression: &platform.PageExpression{Op: "decimal-less", Args: []platform.PageValue{{Literal: platform.Raw(map[string]any{"kind": "decimal", "value": "0"})}, {Variable: "privateProgressCount"}}}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -303,6 +321,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
 	sections[56].RecordPicker = &platform.PageRecordPicker{LabelField: "id"}
+	sections[noticeIndex].Notice = &platform.PageNotice{Title: &emptyNoticeTitle, Tone: "danger", Message: "Later note"}
 	sections[alertIndex].AlertBanner = &platform.PageAlertBanner{Threshold: "999", Tone: "info", Message: "Later alert"}
 	sections[alertIndex].AlertValueVariable = "privateProgressCount"
 	sections[timeIndex].DateKind = "date"
@@ -356,6 +375,21 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					noticeFound, emptyNoticeFound, privateNotices := false, false, 0
+					for _, section := range d.Page.Sections {
+						if section.ID == "noticeInput" {
+							noticeFound = section.Notice != nil && section.Notice.Title == nil && section.Notice.Tone == "info" && section.Notice.Message == "<img src=x> {value} **literal**"
+						}
+						if section.ID == "emptyNotice" {
+							emptyNoticeFound = section.Notice != nil && section.Notice.Title != nil && *section.Notice.Title == "" && section.Notice.Tone == "success"
+						}
+						if section.ID == "hiddenNotice" {
+							privateNotices++
+						}
+					}
+					if !noticeFound || !emptyNoticeFound || member.ID == builder.ID && privateNotices != 1 || member.ID != builder.ID && privateNotices != 0 {
+						t.Fatal("frozen notice text, optional title, tone or display permission changed")
+					}
 					alertFound, privateAlerts := false, 0
 					for _, section := range d.Page.Sections {
 						if section.ID == "alertInput" {

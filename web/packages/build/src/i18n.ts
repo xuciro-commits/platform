@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Notice": "说明",
+ "Show notice title": "显示说明标题",
+ "Notice title": "说明标题",
+ "Notice text": "说明文本",
+ "Notice tone": "说明色调",
+ "Use plain text for operator instructions. HTML and placeholders remain literal; a static note performs no reads or actions.": "操作说明使用纯文本。HTML 和占位符按字面显示；静态说明不读取数据或执行动作。",
+ "Choose a supported notice tone and bounded plain title and text before saving.": "保存前请选择受支持的说明色调，并使用有界的纯文本标题和正文。",
+ "Notices require a static optional title, plain text and a supported semantic tone within the declared UTF-8 budgets. Unknown configurations, executable inputs and old profiles are refused.": "说明需要静态可选标题、纯文本和受支持的语义色调，并遵守声明的 UTF-8 预算。未知配置、执行输入和旧版本拒绝。",
+ "Callout primary maps to the original info tone; success, warning and danger are retained. Optional and empty titles remain distinct from the widget name. Text, HTML and {value} are literal, and static notes do not announce themselves as live alerts. Original visibility, ownership and frozen delivery remain.": "Callout 的 primary 映射原 info 色调；success、warning、danger 保留。可选或空标题与组件名保持区分。文本、HTML 和 {value} 按字面显示，静态说明不作为实时告警宣读。原显示条件、拥有者与冻结交付保持。",
+
  "Alert banner": "条件提示",
  "Alert value variable": "提示值变量",
  "Alert threshold": "提示阈值",
@@ -1626,6 +1636,16 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Notice": "说明",
+ "Show notice title": "显示说明标题",
+ "Notice title": "说明标题",
+ "Notice text": "说明文本",
+ "Notice tone": "说明色调",
+ "Use plain text for operator instructions. HTML and placeholders remain literal; a static note performs no reads or actions.": "操作说明使用纯文本。HTML 和占位符按字面显示；静态说明不读取数据或执行动作。",
+ "Choose a supported notice tone and bounded plain title and text before saving.": "保存前请选择受支持的说明色调，并使用有界的纯文本标题和正文。",
+ "Notices require a static optional title, plain text and a supported semantic tone within the declared UTF-8 budgets. Unknown configurations, executable inputs and old profiles are refused.": "说明需要静态可选标题、纯文本和受支持的语义色调，并遵守声明的 UTF-8 预算。未知配置、执行输入和旧版本拒绝。",
+ "Callout primary maps to the original info tone; success, warning and danger are retained. Optional and empty titles remain distinct from the widget name. Text, HTML and {value} are literal, and static notes do not announce themselves as live alerts. Original visibility, ownership and frozen delivery remain.": "Callout 的 primary 映射原 info 色调；success、warning、danger 保留。可选或空标题与组件名保持区分。文本、HTML 和 {value} 按字面显示，静态说明不作为实时告警宣读。原显示条件、拥有者与冻结交付保持。",
+
  "Alert banner": "条件提示",
  "Alert value variable": "提示值变量",
  "Alert threshold": "提示阈值",

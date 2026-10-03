@@ -1,5 +1,7 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Notice": "说明",
+
  "Alert banner": "条件提示",
  "Semantic notice": "语义提示",
  "Present caller-owned plain text with an accessible semantic tone.": "以可访问的语义色调呈现调用方拥有的纯文本。",

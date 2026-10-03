@@ -1034,6 +1034,12 @@ export type PageNavigation = {
   results?: Record<string, string>;
 };
 
+export type PageNotice = {
+  title?: string;
+  message: string;
+  tone: string;
+};
+
 export type PageOverlay = {
   root: string;
   kind: string;
@@ -1468,6 +1474,7 @@ export type Section = {
   recordList?: PageRecordList;
   headingLevel?: string;
   recordPicker?: PageRecordPicker;
+  notice?: PageNotice;
   alertValueVariable?: string;
   alertBanner?: PageAlertBanner;
   dateKind?: string;
@@ -1822,7 +1829,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.60",
+  "uiProfile": "platform.page.v2.61",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4337,6 +4344,70 @@ export const pageUIManifest = {
           "close"
         ]
       }
+    },
+    {
+      "componentID": "notice",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.61",
+      "title": "Notice",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "notice": {
+          "tone": "info",
+          "message": ""
+        }
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "notice": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "success",
+                  "warning",
+                  "danger"
+                ]
+              }
+            },
+            "required": [
+              "message",
+              "tone"
+            ]
+          }
+        }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      }
     }
   ],
   "supportedProfiles": [
@@ -4399,7 +4470,8 @@ export const pageUIManifest = {
     "platform.page.v2.57",
     "platform.page.v2.58",
     "platform.page.v2.59",
-    "platform.page.v2.60"
+    "platform.page.v2.60",
+    "platform.page.v2.61"
   ],
   "runtime": {
     "scope": "page",
@@ -4909,6 +4981,17 @@ export const pageUIManifest = {
       "maxMessageBytes": 4096,
       "tones": [
         "info",
+        "warning",
+        "danger"
+      ]
+    },
+    "notice": {
+      "requiredUIProfile": "platform.page.v2.61",
+      "maxTitleBytes": 1024,
+      "maxMessageBytes": 4096,
+      "tones": [
+        "info",
+        "success",
         "warning",
         "danger"
       ]

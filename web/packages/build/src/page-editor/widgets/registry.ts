@@ -1,3 +1,4 @@
+import {NoticeInspector} from "./NoticeInspector";
 import {AlertInspector} from "./AlertInspector";
 import {RecordPickerInspector} from "./RecordPickerInspector";
 import {DateInspector} from "./DateInspector";
@@ -33,6 +34,7 @@ import { ButtonInspector } from "./ButtonInspector";
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
  "record-picker":{configVersion:1,bindings:RecordPickerInspector},
+ notice:{configVersion:1,bindings:NoticeInspector},
  "alert-banner":{configVersion:1,bindings:AlertInspector},
  "date-input":{configVersion:1,bindings:DateInspector},
  "choice-input":{configVersion:1,bindings:ChoiceInspector},

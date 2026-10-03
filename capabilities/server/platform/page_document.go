@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.Widget == "notice" || s.Notice != nil {
+				return fmt.Errorf("notice requires a document")
+			}
 			if s.Widget == "alert-banner" || s.AlertValueVariable != "" || s.AlertBanner != nil {
 				return fmt.Errorf("alert banner requires a document")
 			}
@@ -219,6 +222,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkGauge(section); err != nil {
+			return err
+		}
+		if err := d.checkNotice(section); err != nil {
 			return err
 		}
 		if err := d.checkAlertBanner(section); err != nil {

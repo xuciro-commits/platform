@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:114c7e2f60d8b1f9",
+  "revision": "sha256:969f9c79f253e4f9",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2960,6 +2960,7 @@
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/MetricInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/NoticeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ProgressInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RangeInspector.tsx",
@@ -3014,6 +3015,7 @@
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/NoticeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx",
@@ -3045,6 +3047,7 @@
       "web/packages/app/src/widgets/Gauge.tsx",
       "web/packages/app/src/widgets/Kanban.tsx",
       "web/packages/app/src/widgets/Leaderboard.tsx",
+      "web/packages/app/src/widgets/Notice.tsx",
       "web/packages/app/src/widgets/Pivot.tsx",
       "web/packages/app/src/widgets/Progress.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
@@ -3278,7 +3281,8 @@
       "web/packages/build/src/process.tsx"
     ],
     "ui/notice": [
-      "web/packages/app/src/widgets/Alert.tsx"
+      "web/packages/app/src/widgets/Alert.tsx",
+      "web/packages/app/src/widgets/Notice.tsx"
     ],
     "ui/switch": [
       "web/packages/app/src/widgets/BooleanInput.tsx"
