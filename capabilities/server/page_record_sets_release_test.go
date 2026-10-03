@@ -182,6 +182,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 		sections = append(sections, build.Section{ID: spec.id, Widget: "progress", ConfigVersion: 1, ProgressValueVariable: spec.value, ProgressTotalVariable: spec.total, ProgressTotal: spec.fixed, ProgressLabel: "Frozen progress"})
 	}
+	for _, spec := range []struct{ id, field string }{{"gauge", "amount"}, {"hiddenGauge", "sensitive"}} {
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		doc.Variables[spec.id+"Value"] = platform.PageVariable{Scope: "page", Type: "number", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "aggregate", Query: "metricq", Measure: "avg:" + spec.field}}
+		warn := 60.0
+		sections = append(sections, build.Section{ID: spec.id, Widget: "gauge", ConfigVersion: 1, GaugeValueVariable: spec.id + "Value", Gauge: &platform.PageGauge{Max: 100, WarnAt: &warn, Label: "Frozen availability", Suffix: "%"}})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -207,6 +216,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[43].Gauge = &platform.PageGauge{Max: 200, Label: "Later availability"}
+	doc.Variables["gaugeValue"] = platform.PageVariable{Scope: "page", Type: "number", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "aggregate", Query: "metricq", Measure: "sum:amount"}}
 	sections[39].ProgressTotal = "800"
 	sections[39].ProgressLabel = "Later progress"
 	sections[40].ProgressTotalVariable = "privateProgressCount"
@@ -228,6 +239,20 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					gauge, privateGauge := false, false
+					for _, s := range d.Page.Sections {
+						if s.ID == "gauge" {
+							g := s.Gauge
+							gauge = g != nil && g.Max == 100 && g.Label == "Frozen availability" && g.Suffix == "%" && g.WarnAt != nil && *g.WarnAt == 60 && d.Page.Document.Variables[s.GaugeValueVariable].Source.Measure == "avg:amount"
+						}
+						if s.ID == "hiddenGauge" {
+							privateGauge = true
+						}
+					}
+					if !gauge || privateGauge != (member.ID == builder.ID) {
+						t.Fatal("frozen gauge or private measure projection changed")
+					}
+
 					progress, dual, privateProgress := false, false, 0
 					for _, s := range d.Page.Sections {
 						if s.ID == "progress" {

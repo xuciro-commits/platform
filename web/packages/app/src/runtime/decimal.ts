@@ -2,7 +2,9 @@
 export type DecimalValue={kind:"decimal";value:string};
 export type StringSetValue={kind:"string-set";values:string[]};
 export function isStringSet(value:unknown):value is StringSetValue {return !!value&&typeof value==="object"&&!Array.isArray(value)&&Object.keys(value).length===2&&(value as StringSetValue).kind==="string-set"&&Array.isArray((value as StringSetValue).values)&&(value as StringSetValue).values.length<=64&&new Set((value as StringSetValue).values).size===(value as StringSetValue).values.length&&(value as StringSetValue).values.every(v=>typeof v==="string"&&new TextEncoder().encode(v).length<=4096);}
-export type ScalarValue=string|boolean|DecimalValue|StringSetValue;
+export type NumberValue={kind:"number";value:number};
+export function isNumber(value:unknown):value is NumberValue {return !!value&&typeof value==="object"&&!Array.isArray(value)&&Object.keys(value).length===2&&(value as NumberValue).kind==="number"&&typeof (value as NumberValue).value==="number"&&Number.isFinite((value as NumberValue).value);}
+export type ScalarValue=string|boolean|DecimalValue|StringSetValue|NumberValue;
 export function decimalDraft(value:unknown,maxBytes=128):value is DecimalValue {
  return !!value&&typeof value==="object"&&!Array.isArray(value)&&Object.keys(value).length===2&&Object.hasOwn(value,"kind")&&Object.hasOwn(value,"value")&&(value as DecimalValue).kind==="decimal"&&typeof (value as DecimalValue).value==="string"&&new TextEncoder().encode((value as DecimalValue).value).length<=maxBytes;
 }

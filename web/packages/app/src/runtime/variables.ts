@@ -1,4 +1,4 @@
-import {isStringSet,isDecimal,parseDecimal,decimalDraft,compareDecimal,decimalArithmetic,type ScalarValue} from "./decimal";
+import {isNumber,isStringSet,isDecimal,parseDecimal,decimalDraft,compareDecimal,decimalArithmetic,type ScalarValue} from "./decimal";
 import type { Api, pageUIManifest } from "@platform/kernel";
 import type { QueryWindow, RecordReference } from "./Session";
 
@@ -11,7 +11,7 @@ export type ResourceValue = {kind:"record-set";object:string;records:RecordRefer
 export type VariableResult = { status: "value"; value: Scalar | ResourceValue; draft?:string } | { status: "empty"; value?: ResourceValue } | { status: "pending" } | { status: "error"; code: string; draft?:string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 const bytes = (value: string) => new TextEncoder().encode(value).length;
-const valueType = (value: unknown, contract: Contract) => isStringSet(value)?"string-set":isDecimal(value,contract.decimal.maxBytes)?"decimal":typeof value === "boolean" ? "boolean"
+const valueType = (value: unknown, contract: Contract) => isNumber(value)?"number":isStringSet(value)?"string-set":isDecimal(value,contract.decimal.maxBytes)?"decimal":typeof value === "boolean" ? "boolean"
   : typeof value === "string" && bytes(value) <= contract.maxStringBytes ? "string" : "";
 
 /** Finite presentation graph. The supplied contract is the generated Go
@@ -33,12 +33,14 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if (variable.writable && variable.mode !== "shared") fail(id,"Only shared bindings declare writable");
     if(variable.type==="record-set"&&(!["page","overlay"].includes(variable.scope)||variable.mode!=="resource"||variable.source?.kind!=="records"))fail(id,"Resource source type mismatch");
     if(variable.type==="string-set"&&(!["page","overlay"].includes(variable.scope)||!["state","constant"].includes(variable.mode)))fail(id,"Unsupported variable type or scope");
+    if(variable.type==="number"&&(!["aggregate","constant","derived"].includes(variable.mode)||variable.scope==="application"))fail(id,"Number needs a read-only scoped declaration");
+    if(variable.source?.measure&&(variable.mode!=="aggregate"||variable.source.kind!=="aggregate"))fail(id,"Measure needs an aggregate scalar");
     if (variable.mode !== "resource" && variable.mode !== "property" && variable.mode !== "aggregate" && variable.mode !== "shared" && variable.source) fail(id, "Only resource or shared variables may declare a source");
     if(variable.source?.object&&!((variable.mode==="shared"&&["object-set","record","filter"].includes(variable.type))||(variable.mode==="resource"&&variable.scope==="application"&&["record","filter"].includes(variable.type))||variable.mode==="property"))fail(id,"Only shared windows declare an object requirement");
     if(variable.source?.fields?.length&&!(variable.scope==="application"&&variable.mode==="resource"&&variable.type==="filter"))fail(id,"Only an application filter declares fields");
     if(variable.source?.field&&variable.mode!=="property")fail(id,"Only a property source declares a field");
     if(variable.mode==="aggregate") {
-      const source=variable.source;if(variable.type!=="decimal"||!source||source.kind!==contract.aggregate.source||!validID.test(source.query??"")||source.section||source.node||source.variable||variable.initial!==undefined||variable.expression)fail(id,"Aggregate needs only a count query source");
+      const source=variable.source;if(!source||!((variable.type==="decimal"&&source.kind===contract.aggregate.source&&!source.measure)||(variable.type==="number"&&source.kind==="aggregate"&&/^(sum|avg|min|max):[A-Za-z][A-Za-z0-9._:-]{0,79}$/.test(source.measure??"")))||!validID.test(source.query??"")||source.section||source.node||source.variable||variable.initial!==undefined||variable.expression)fail(id,"Aggregate needs only a count query source");
     } else if(variable.mode==="property") {
       const source=variable.source,parent=variables[source?.variable??""];if(!source||source.kind!=="property"||!validID.test(source.variable??"")||!validID.test(source.field??"")||!source.object||source.object.kind!=="object"||!source.object.app||!source.object.name||source.section||source.node||source.query||source.fields?.length||variable.expression||variable.initial!==undefined||!["string","boolean","decimal"].includes(variable.type))fail(id,"Property needs a typed record and field source");
       if(parent?.scope==="loop-item"&&(variable.scope!=="loop-item"||parent.owner!==variable.owner)||parent?.scope==="overlay"&&(variable.scope!=="overlay"||parent.owner!==variable.owner))fail(id,"Property source escapes its scope");if(visit(source?.variable??"")!=="record")fail(id,"Property source must be a record");
@@ -69,7 +71,7 @@ export function compileVariables(variables: Variables, contract: Contract) {
           if (arg.variable && variables[arg.variable]?.scope === contract.overlay.scope && (variable.scope !== contract.overlay.scope || variable.owner !== variables[arg.variable]?.owner)) return fail(id, "Overlay dependency escapes its owner scope");
           return arg.variable ? visit(arg.variable) : valueType(arg.literal, contract);
         });
-        if (types.some((type) => !type || (op.input === "resource" ? !contract.resources.some((resource) => resource.type === type) : type !== (op.input === "same" ? types[0] : op.input) || op.input === "same" && !["string", "boolean","decimal"].includes(type)))) fail(id, "Argument type mismatch");
+        if (types.some((type) => !type || (op.input === "resource" ? !contract.resources.some((resource) => resource.type === type) : type !== (op.input === "same" ? types[0] : op.input) || op.input === "same" && !["string", "boolean","decimal","number"].includes(type)))) fail(id, "Argument type mismatch");
       }
     } else fail(id, "Unsupported variable mode");
     visiting.delete(id); order.push(id);
@@ -81,7 +83,8 @@ export function compileVariables(variables: Variables, contract: Contract) {
 
 const operators: Record<Contract["operators"][number]["id"], (values: Scalar[]) => Scalar> = {
  "parse-decimal":([text])=>{const value=parseDecimal(text as string);if(!value)throw new Error("Invalid numeric value.");return value;},
-  equal: ([a, b]) => isDecimal(a)&&isDecimal(b)?compareDecimal(a,b)===0:a === b, not: ([a]) => !a,
+  "parse-number":([text])=>{const parsed=parseDecimal(text as string),value=parsed?Number(parsed.value):NaN;if(!Number.isFinite(value))throw new Error("Invalid numeric value.");return {kind:"number",value};},
+  equal: ([a, b]) => isNumber(a)&&isNumber(b)?a.value===b.value:isDecimal(a)&&isDecimal(b)?compareDecimal(a,b)===0:a === b, not: ([a]) => !a,
   and: (values) => values.every((value) => value === true), or: (values) => values.some((value) => value === true),
   concat: (values) => values.join(""),
   present: () => true,
@@ -117,7 +120,7 @@ export function evaluateVariables(variables: Variables, state: Record<string, un
     if (inputs.some((input) => input.status === "pending")) { result[id] = { status: "pending" }; continue; }
     if (expression.op === "present" && inputs[0]?.status === "empty") { result[id] = { status: "value", value: false }; continue; }
     if (inputs.some((input) => input.status === "empty")) { result[id] = { status: "empty" }; continue; }
-    let value:Scalar;try {value = operators[expression.op as keyof typeof operators](inputs.map((input) => (input as { value: Scalar }).value));}catch {result[id]={status:"error",code:expression.op==="parse-decimal"?"Invalid numeric value.":"Numeric result exceeds its budget."};continue;}
+    let value:Scalar;try {value = operators[expression.op as keyof typeof operators](inputs.map((input) => (input as { value: Scalar }).value));}catch {result[id]={status:"error",code:["parse-decimal","parse-number"].includes(expression.op)?"Invalid numeric value.":"Numeric result exceeds its budget."};continue;}
     result[id] = valueType(value, contract) === variable.type ? { status: "value", value } : { status: "error", code: "Variable result limit exceeded" };
   }
   return result;

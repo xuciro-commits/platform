@@ -1,4 +1,4 @@
-import {usePageCounts} from "./PageCounts";
+import {usePageAggregates} from "./PageAggregates";
 import { useEffect, useState } from "react";
 import { pageUIManifest, type Api } from "@platform/kernel";
 import { findDefinition, useHost } from "../index";
@@ -12,7 +12,7 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
   const active=(owner?:string)=>!owner||owner===editingOverlay||values[page.document?.overlays?.[owner]?.openVariable??""]?.status==="value"&&(values[page.document!.overlays![owner]!.openVariable] as {value:unknown}).value===true;
   const base = compileQueryPlans(plans,page.document?.variables??{},owner=>itemOwner?values:owner?overlays[owner]??{}:values,type=>source.entity(type),plan=>plan.query?findDefinition(definitions,plan.query.ref):undefined,pageUIManifest.runtime.query,page.sections??[],active,(id,result)=>snapshot.views[planKey(id)]?.base===result.signature?snapshot.views[planKey(id)]:undefined);
   const compiled = base.map(([id,result]) => [id,queryView(plans[id]!,result,result.status==="value"&&snapshot.views[planKey(id)]?.base===result.signature?snapshot.views[planKey(id)]:undefined,source.entity(plans[id]!.object.name),plans[id]?.query?findDefinition(definitions,plans[id]!.query!.ref):undefined,pageUIManifest.runtime.query)] as const);
-  const counts=usePageCounts(page.document?.variables??{},compiled,session,page.document);
+  const aggregates=usePageAggregates(page.document?.variables??{},compiled,session,page.document);
   const [round, rerun] = useState(0);
   const requestKey = JSON.stringify(compiled);
   useEffect(() => {
@@ -42,5 +42,5 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
     searchLocked:!!plans[id]?.search,sortLocked:!!(plans[id]?.query&&boundQueryDefinition(findDefinition(definitions,plans[id]!.query!.ref),plans[id]!.query)?.query?.sort?.length),maxOffset:pageUIManifest.runtime.query.maxOffset,
     onChange:(change:QueryView)=>{const original=base.find(([key])=>key===id)?.[1];if(original?.status!=="value")return;const next=queryView(plans[id]!,original,{...(snapshot.views[planKey(id)]?.base===original.signature?snapshot.views[planKey(id)]:{}),...change},source.entity(plans[id]!.object.name),plans[id]?.query?findDefinition(definitions,plans[id]!.query!.ref):undefined,pageUIManifest.runtime.query);if(next.status==="value")session.setQueryView(planKey(id),original.signature,change);}
   }:undefined]));
-  return { resources:{...resources,...counts}, signatures, windows, retry: (id: string) => { session.resetQueries([planKey(id)]); rerun((round) => round + 1); } };
+  return { resources:{...resources,...aggregates}, signatures, windows, retry: (id: string) => { session.resetQueries([planKey(id)]); rerun((round) => round + 1); } };
 }

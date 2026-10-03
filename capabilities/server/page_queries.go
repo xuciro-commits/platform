@@ -42,6 +42,15 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 		}
 	}
 	namedSources := map[platform.AssetBinding]platform.NamedQuery{}
+	for _, v := range p.Document.Variables {
+		if v.Mode == "aggregate" && v.Source != nil {
+			q := p.Document.Queries[v.Source.Query]
+			object, ok := t.entity(q.Object.Name)
+			if !ok || p.Document.CheckAggregateScalar(v, object) != nil {
+				return fmt.Errorf("page aggregate field is unavailable")
+			}
+		}
+	}
 	for id, q := range p.Document.Queries {
 		object, ok := t.entity(q.Object.Name)
 		if !ok || object.App != q.Object.App {

@@ -50,7 +50,9 @@
 
 进度条：添加“Progress / 进度”，选择“Progress value variable / 进度分子变量”，再选择“Progress total variable / 进度分母变量”或填写正数“Fixed progress total / 固定进度总数”。两个端口消费现有decimal变量，完整计数可在Page variables沿原查询配置；组件名与“Progress label / 进度标签”分别保存。显示原精确值/总数和舍入百分比，条形最高100%，超额另作提示；零/负分母、无效文本或读拒绝移除条形。ProgressBar导入自动映射cardinality与显式count聚合，countActive等命名聚合需在导入窗口确认原count及条件；来源NumericInput仍编辑原文本草稿，通过有限parse-decimal派生联动。固定total默认100，种子Open work的400保留；sum/avg等未支持标量来源明确拒绝，不能借窗口条数替代全集。交付沿原Save→冻结候选→激活，范围见[ADR-0046 §6.43](ADR/0046-application-studio-fusion.md#643-progressbar的精确标量与完整集合计数)。
 
-导入外包页面：先新建或打开绑定已有对象的页面，点击“Import Workshop module / 导入 Workshop 模块”，选择源JSON文件或粘贴原文，再选择源页面。逐项映射已有平台对象、字段及原记录动作；可选同对象的精确保留查询版本。先检查定位诊断与原生展示/作用域差异，下载原始JSON和映射报告，再勾选审查确认并应用。应用替换当前未保存草稿，支持原Undo/Redo；仍需按原Save→Review release→冻结候选→Activate release交付。当前支持二十四类组件的有限配置，完整范围见[ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-两种输入一个规范模型)。有阻塞诊断时原草稿保持；全部原配置在报告中保留。同一编辑作用域可重新打开窗口下载上次应用的报告，关闭编辑器/切换成员后清理，离开前须下载。导入不创建对象或执行外包函数/流程，92类型清单不代表92项已经可运行。
+数值仪表：添加“Gauge / 仪表”，绑定number变量，设置正数“Gauge maximum / 仪表最大值”、可选警告阈值、标签和后缀。在Page variables将变量设为完整集合聚合，选择原查询及“Aggregate measure / 聚合度量”的sum/avg/min/max:原integer/decimal字段；count仍为精确decimal，数值聚合保留宿主的number精度，不能互换。仪表显示一位小数，阈值达到或超过时警告；弧线限制0–max，范围外原值仍显示并提示，空平均值/拒绝不会变成0。源默认Gauge avgAvailability需在导入窗口显式选择原avg字段，原NumericInput可通过parse-number派生联动；函数selectedAssetRisk及Money来源明确拒绝。交付沿原Save→冻结候选→激活，范围见[ADR-0046 §6.44](ADR/0046-application-studio-fusion.md#644-gauge与原聚合数值标量)。
+
+导入外包页面：先新建或打开绑定已有对象的页面，点击“Import Workshop module / 导入 Workshop 模块”，选择源JSON文件或粘贴原文，再选择源页面。逐项映射已有平台对象、字段及原记录动作；可选同对象的精确保留查询版本。先检查定位诊断与原生展示/作用域差异，下载原始JSON和映射报告，再勾选审查确认并应用。应用替换当前未保存草稿，支持原Undo/Redo；仍需按原Save→Review release→冻结候选→Activate release交付。当前支持二十五类组件的有限配置，完整范围见[ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-两种输入一个规范模型)。有阻塞诊断时原草稿保持；全部原配置在报告中保留。同一编辑作用域可重新打开窗口下载上次应用的报告，关闭编辑器/切换成员后清理，离开前须下载。导入不创建对象或执行外包函数/流程，92类型清单不代表92项已经可运行。
 
 应用设计台默认进入工坊总览：点击能力卡片，或搜索/选择资产查看状态与关联；选中后打开编辑器、测试或发布审查，返回总览保留搜索与选择；工作流内可切换设计、测试、运行历史与发布。代码声明和租户定义共享应用 API、授权、组件及发布校验。客户不执行任意脚本。构建者拥有 `build.builder`；业务用户按对象/动作/字段权限操作，交付应用本身不增加权限。
 

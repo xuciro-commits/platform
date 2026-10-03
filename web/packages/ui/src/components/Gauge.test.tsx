@@ -1,0 +1,6 @@
+import {cleanup,render,screen} from "@testing-library/react";
+import {afterEach,expect,test} from "vitest";
+import {Gauge,gaugeModel} from "./Gauge";
+afterEach(cleanup);
+test("gauge preserves original finite numbers and threshold semantics while clipping only its arc",()=>{expect(gaugeModel(60,100,60)).toMatchObject({fraction:0.6,danger:true,outside:false});expect(gaugeModel(59.99,100,60)?.danger).toBe(false);expect(gaugeModel(-1,100)).toMatchObject({fraction:0,outside:true});expect(gaugeModel(120,100)).toMatchObject({fraction:1,outside:true});expect(gaugeModel(NaN,100)).toBeUndefined();expect(gaugeModel(1,0)).toBeUndefined();expect(gaugeModel(1,100,Infinity)).toBeUndefined();});
+test("gauge presents one decimal, original suffix and maximum and removes old arcs for invalid inputs",()=>{const {rerender}=render(<Gauge value={83.26} max={100} warnAt={90} suffix="%" label="Availability"/>);expect(screen.getByRole("img").getAttribute("aria-label")).toBe("Availability · 83.3% / 100%");rerender(<Gauge value={120} max={100} label="Availability"/>);expect(screen.getByRole("status").textContent).toContain("outside");rerender(<Gauge value={Infinity} max={100} label="Availability"/>);expect(screen.queryByRole("img")).toBeNull();expect(screen.getByRole("alert")).toBeTruthy();});

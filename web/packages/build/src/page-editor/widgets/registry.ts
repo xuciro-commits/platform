@@ -1,3 +1,4 @@
+import {GaugeInspector} from "./GaugeInspector";
 import {ProgressInspector} from "./ProgressInspector";
 import {RecordListInspector} from "./RecordListInspector";
 import {RecordCalendarInspector} from "./RecordCalendarInspector";
@@ -23,6 +24,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ gauge:{configVersion:1,bindings:GaugeInspector},
  progress:{configVersion:1,bindings:ProgressInspector},
  "record-gantt":{configVersion:1,bindings:RecordGanttInspector},
  "record-calendar":{configVersion:1,bindings:RecordCalendarInspector},

@@ -1,5 +1,9 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "gauge-scalar":"Map the original sum, average, minimum or maximum field, or bind a supported numeric input. Function-backed values need their original result contract.",
+ "gauge-presentation":"Gauge labels and suffixes must be bounded text; maximum must be positive and thresholds finite.",
+ "gauge-profile":"Gauge requires the supported numeric aggregate profile.",
+ "native-gauge-value":"The gauge uses the original complete numeric aggregate and its host number precision. Empty, invalid or denied values remain explicit; they are not replaced by zero. Its label, maximum, suffix and threshold are retained, and the arc is capped at its display range.",
  "progress-scalar":"Progress values need a supported numeric variable; original input text is converted by the declared decimal operator.",
  "progress-count":"Map progress aggregations to an original complete count. Other aggregate scalar outputs need their own supported binding.",
  "progress-total":"Choose exactly one denominator variable or a positive fixed decimal total.",

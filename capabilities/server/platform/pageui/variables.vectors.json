@@ -2015,5 +2015,75 @@
         }
       }
     }
+  },
+  {
+    "name": "host number parsing and equality preserve their number type",
+    "uiProfile": "platform.page.v2.49",
+    "valid": true,
+    "variables": {
+      "text": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "0.10"
+      },
+      "parsed": {
+        "scope": "page",
+        "type": "number",
+        "mode": "derived",
+        "expression": {
+          "op": "parse-number",
+          "args": [
+            {
+              "variable": "text"
+            }
+          ]
+        }
+      },
+      "same": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "parsed"
+            },
+            {
+              "literal": {
+                "kind": "number",
+                "value": 0.1
+              }
+            }
+          ]
+        }
+      }
+    },
+    "values": {
+      "text": "0.10",
+      "parsed": {
+        "kind": "number",
+        "value": 0.1
+      },
+      "same": true
+    }
+  },
+  {
+    "name": "number source cannot be relabelled exact decimal",
+    "uiProfile": "platform.page.v2.49",
+    "valid": false,
+    "variables": {
+      "bad": {
+        "scope": "page",
+        "type": "decimal",
+        "mode": "aggregate",
+        "source": {
+          "kind": "aggregate",
+          "query": "read",
+          "measure": "avg:availability"
+        }
+      }
+    }
   }
 ]

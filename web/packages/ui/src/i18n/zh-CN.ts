@@ -537,4 +537,11 @@ export default {
   "Exact decimal progress": "精确十进制进度",
   "Show exact authorized scalar values with a bounded progress ratio.": "以有界进度比例显示精确授权标量。",
   "The caller owns the original scalars and complete-set count. Invalid values never become zero or a denominator of one.": "调用方拥有原标量与完整集合计数，无效值不替换为零或分母一。",
+  "Gauge": "仪表",
+  "Gauge needs a finite value and positive maximum.": "仪表需要有限数值和正数最大值。",
+  "Gauge value is outside its display range.": "仪表数值超出显示范围。",
+  "of {max}": "最大值 {max}",
+  "Authorized numeric gauge": "授权数值仪表",
+  "Display the original finite numeric aggregate with a bounded arc and warning threshold.": "以有界弧线和警告阈值显示原有限数值聚合。",
+  "The caller owns the original numeric result and complete set. The gauge does not substitute zero for empty or denied values.": "调用方拥有原数值结果与完整集合，仪表不将空值或拒绝值替换为零。",
 } as Record<string, string>;

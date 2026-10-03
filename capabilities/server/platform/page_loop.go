@@ -137,6 +137,9 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		if !accessible(section.GaugeValueVariable, sectionOwners[section.ID], sectionOverlays[section.ID]) {
+			return fmt.Errorf("gauge scalar cannot escape its scope")
+		}
 		if !accessible(section.ProgressValueVariable, sectionOwners[section.ID], sectionOverlays[section.ID]) || !accessible(section.ProgressTotalVariable, sectionOwners[section.ID], sectionOverlays[section.ID]) {
 			return fmt.Errorf("progress scalar cannot escape its scope")
 		}

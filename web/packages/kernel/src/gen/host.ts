@@ -950,6 +950,13 @@ export type PageFacet = {
   kind: string;
 };
 
+export type PageGauge = {
+  max: number;
+  warnAt?: number;
+  label?: string;
+  suffix?: string;
+};
+
 export type PageInlineEdit = {
   action: AssetRef;
   fields: string[];
@@ -1095,6 +1102,7 @@ export type PageRecordView = {
 };
 
 export type PageResourceSource = {
+  measure?: string;
   field?: string;
   fields?: string[];
   object?: AssetRef;
@@ -1425,6 +1433,8 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  gauge?: PageGauge;
+  gaugeValueVariable?: string;
   progressLabel?: string;
   progressValueVariable?: string;
   progressTotalVariable?: string;
@@ -1759,7 +1769,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.48",
+  "uiProfile": "platform.page.v2.49",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3649,6 +3659,74 @@ export const pageUIManifest = {
       "layoutPreferences": {
         "frame": "card"
       }
+    },
+    {
+      "componentID": "gauge",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.49",
+      "title": "Gauge",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "half",
+        "gauge": {
+          "max": 100
+        }
+      },
+      "bindingKinds": [
+        "gauge-value"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "gauge": {
+            "type": "object",
+            "properties": {
+              "max": {
+                "type": "number"
+              },
+              "warnAt": {
+                "type": "number"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "suffix": {
+                "type": "string",
+                "maxLength": 64
+              }
+            },
+            "required": [
+              "max"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "value",
+          "bindingField": "gaugeValueVariable",
+          "type": "number",
+          "requiredUIProfile": "platform.page.v2.49"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      }
     }
   ],
   "supportedProfiles": [
@@ -3699,7 +3777,8 @@ export const pageUIManifest = {
     "platform.page.v2.45",
     "platform.page.v2.46",
     "platform.page.v2.47",
-    "platform.page.v2.48"
+    "platform.page.v2.48",
+    "platform.page.v2.49"
   ],
   "runtime": {
     "scope": "page",
@@ -3711,7 +3790,8 @@ export const pageUIManifest = {
       "object-set",
       "decimal",
       "string-set",
-      "record-set"
+      "record-set",
+      "number"
     ],
     "maxVariables": 64,
     "maxStringBytes": 4096,
@@ -3783,6 +3863,13 @@ export const pageUIManifest = {
         "id": "parse-decimal",
         "input": "string",
         "output": "decimal",
+        "minArgs": 1,
+        "maxArgs": 1
+      },
+      {
+        "id": "parse-number",
+        "input": "string",
+        "output": "number",
         "minArgs": 1,
         "maxArgs": 1
       }
@@ -3861,7 +3948,8 @@ export const pageUIManifest = {
         "button",
         "input",
         "button-group",
-        "progress"
+        "progress",
+        "gauge"
       ],
       "maxDepth": 2
     },
@@ -3885,7 +3973,8 @@ export const pageUIManifest = {
         "filter",
         "decimal",
         "string-set",
-        "record-set"
+        "record-set",
+        "number"
       ],
       "modes": [
         "state",
@@ -4139,6 +4228,9 @@ export const pageUIManifest = {
     },
     "progress": {
       "requiredUIProfile": "platform.page.v2.48"
+    },
+    "gauge": {
+      "requiredUIProfile": "platform.page.v2.49"
     }
   },
   "layout": {

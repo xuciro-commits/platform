@@ -1,4 +1,4 @@
-import {isStringSet,parseDecimal,isDecimal,type DecimalValue} from "./decimal";
+import {isStringSet,parseDecimal,isDecimal,type NumberValue,type DecimalValue} from "./decimal";
 import type { Api, pageUIManifest } from "@platform/kernel";
 import type { EntityInfo, RecordQuery } from "@platform/ui";
 import type { ResourceValue, VariableResult } from "./variables";
@@ -21,7 +21,7 @@ export const planKey = (id: string) => `plan/${id}`;
 type Contract = typeof pageUIManifest.runtime.query;
 export type QueryPlanResult = { status: "value"; object: string; query: RecordQuery; signature: string } | { status: "empty" | "pending" } | { status: "error"; code: string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
-type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|DecimalValue|import("./decimal").StringSetValue|ResourceValue};
+type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|NumberValue|DecimalValue|import("./decimal").StringSetValue|ResourceValue};
 const failed = (code: string): QueryPlanResult => ({ status: "error", code });
 
 export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract): QueryPlanResult {

@@ -1,13 +1,13 @@
 import type {Api} from "@platform/kernel";
 
-type Section = {progressValueVariable?:string;progressTotalVariable?:string;countVariable?:string;selectionSetVariable?:string;facets?:Api.PageFacet[];filterSearchVariable?:string;id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
+type Section = {gaugeValueVariable?:string;progressValueVariable?:string;progressTotalVariable?:string;countVariable?:string;selectionSetVariable?:string;facets?:Api.PageFacet[];filterSearchVariable?:string;id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
 type Draft<S extends Section> = {document:Api.PageDocument;sections:S[];selections:Api.SelectionVariable[]};
 export type LayoutClipboard<S extends Section> = {draft:Draft<S>;root:string;object:string;overlay?:string};
 export type ClipboardIssue = "unsupported" | "scope" | "invalid" | "dependencies" | "budget" | "tab-binding" | "overlay-entry";
 type Result<T> = {value:T;issue?:never} | {issue:ClipboardIssue;value?:never};
 type Limits = {maxVariables:number;query:{maxPlans:number;maxTotalLimit:number};loop:{maxContainers:number;maxItems:number;maxTotalItems:number;maxDepth:number};aggregate:{maxVariables:number;maxExpandedReads:number};selectionWriters:readonly string[];selectionWidgets:readonly string[];references:Readonly<Record<string,readonly string[]>>};
 const nodeFields=["valueVariable","activeVariable","visibleWhen","enabledWhen"] as const;
-const sectionFields=["progressValueVariable","progressTotalVariable","countVariable","recordVariable","selectionVariable","collectionVariable","filterVariable","filterSearchVariable","selectionSetVariable"] as const;
+const sectionFields=["gaugeValueVariable","progressValueVariable","progressTotalVariable","countVariable","recordVariable","selectionVariable","collectionVariable","filterVariable","filterSearchVariable","selectionSetVariable"] as const;
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 const layoutKinds=["rows","columns","tabs","flow","toolbar","loop"];
 function inMainPage(document:Api.PageDocument,id:string,wholeLoop=false):boolean {
@@ -55,7 +55,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const valueRefs=(value:Api.PageValue|undefined)=>value?.variable?[value.variable]:[];
  const queryRefs=(query:Api.PageQuery)=>[...valueRefs(query.search),...valueRefs(query.for),...(query.conditions??[]).flatMap(c=>valueRefs(c.value))];
  const addQuery=(id:string)=>{if(queries.has(id))return;const q=original.queries?.[id];if(!q){missing.value=true;return;}queries.add(id);queryRefs(q).forEach(addVariable);q.set?.inputs.forEach(addQuery);};
- const addVariable=(id:string)=>{if(variables.has(id))return;const v=original.variables?.[id];if(!v){missing.value=true;return;}variables.add(id);v.expression?.args.flatMap(valueRefs).forEach(addVariable);if(v.mode!=="shared"&&v.source?.variable)addVariable(v.source.variable);if(["plan","count"].includes(v.source?.kind??"")&&v.source?.query)addQuery(v.source.query);};
+ const addVariable=(id:string)=>{if(variables.has(id))return;const v=original.variables?.[id];if(!v){missing.value=true;return;}variables.add(id);v.expression?.args.flatMap(valueRefs).forEach(addVariable);if(v.mode!=="shared"&&v.source?.variable)addVariable(v.source.variable);if(["plan","count","aggregate"].includes(v.source?.kind??"")&&v.source?.query)addQuery(v.source.query);};
  for(const id of nodes)for(const key of nodeFields){const value=original.nodes[id]?.[key];if(value)addVariable(value);}
  for(const id of loops){const loop=original.nodes[id]!.loop!;addVariable(loop.collection);addVariable(loop.itemVariable);}
  // Owned declarations remain owned even if their consumer is dormant.
@@ -92,7 +92,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  let changed=true;
  while(changed){changed=false;
   for(const id of queries){const q=original.queries![id]!;if(!clonedQueries.has(id)&&(queryRefs(q).some(v=>clonedVariables.has(v))||q.set?.inputs.some(q=>clonedQueries.has(q)))){clonedQueries.add(id);changed=true;}}
-  for(const id of variables){const v=original.variables![id]!;if(!clonedVariables.has(id)&&(v.expression?.args.some(a=>a.variable&&clonedVariables.has(a.variable))||v.mode!=="shared"&&v.source?.variable&&clonedVariables.has(v.source.variable)||["plan","count"].includes(v.source?.kind??"")&&clonedQueries.has(v.source?.query??""))){clonedVariables.add(id);changed=true;}}
+  for(const id of variables){const v=original.variables![id]!;if(!clonedVariables.has(id)&&(v.expression?.args.some(a=>a.variable&&clonedVariables.has(a.variable))||v.mode!=="shared"&&v.source?.variable&&clonedVariables.has(v.source.variable)||["plan","count","aggregate"].includes(v.source?.kind??"")&&clonedQueries.has(v.source?.query??""))){clonedVariables.add(id);changed=true;}}
  }
  for(const id of variables){const v=original.variables![id]!;if(!["page","application"].includes(v.scope)&&!ownedScope(v))return {issue:"scope"};}
  for(const id of queries){const q=original.queries![id]!;if(q.owner&&q.owner!==clip.overlay||q.itemOwner&&!loops.has(q.itemOwner))return {issue:"scope"};}
@@ -160,6 +160,6 @@ function withinLoopBudgets(document:Api.PageDocument,limits:Limits):boolean {
  const factor=(owner?:string)=>{let result=1,depth=0;while(owner){if(++depth>limits.loop.maxDepth)return Infinity;const loop=document.nodes[owner]?.loop;if(!loop||!Number.isInteger(loop.limit)||loop.limit<1||loop.limit>limits.loop.maxItems)return Infinity;result*=loop.limit;owner=owners.get(owner);}return result;};
  const loops=Object.entries(document.nodes).filter(([,n])=>n.kind==="loop"),items=loops.reduce((sum,[id,n])=>sum+(n.loop?.limit??Infinity)*factor(owners.get(id)),0);
  if(loops.length>limits.loop.maxContainers||items>limits.loop.maxTotalItems||loops.some(([id])=>!Number.isFinite(factor(id))))return false;
- const reads=Object.values(document.queries??{}).reduce((sum,q)=>sum+q.limit*factor(q.itemOwner),0),aggregates=Object.values(document.variables??{}).filter(v=>v.mode==="aggregate"),expanded=[...new Set(aggregates.map(v=>v.source?.query??""))].reduce((sum,id)=>sum+factor(document.queries?.[id]?.itemOwner),0);
+ const reads=Object.values(document.queries??{}).reduce((sum,q)=>sum+q.limit*factor(q.itemOwner),0),aggregates=Object.values(document.variables??{}).filter(v=>v.mode==="aggregate"),expanded=[...new Set(aggregates.map(v=>JSON.stringify([v.source?.query??"",v.source?.kind==="aggregate"?v.source.measure:"count"])))].reduce((sum,key)=>sum+factor(document.queries?.[JSON.parse(key)[0]]?.itemOwner),0);
  return reads<=limits.query.maxTotalLimit&&aggregates.length<=limits.aggregate.maxVariables&&expanded<=limits.aggregate.maxExpandedReads;
 }

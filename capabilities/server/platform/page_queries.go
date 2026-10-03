@@ -195,15 +195,15 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 		return fmt.Errorf("page query plan window budget exceeded")
 	}
 	aggregates, expanded := 0, 0
-	seenCounts := map[string]bool{}
+	seenAggregates := map[string]bool{}
 	for id, v := range d.Variables {
 		if v.Mode == "aggregate" {
 			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.21") {
 				return fmt.Errorf("count variable requires v2.21")
 			}
 			aggregates++
-			if v.Source != nil && !seenCounts[v.Source.Query] {
-				seenCounts[v.Source.Query] = true
+			if v.Source != nil && !seenAggregates[v.Source.Query+"/"+v.Source.Kind+"/"+v.Source.Measure] {
+				seenAggregates[v.Source.Query+"/"+v.Source.Kind+"/"+v.Source.Measure] = true
 				factor, err := d.loopFactor(d.Queries[v.Source.Query].ItemOwner)
 				if err != nil {
 					return err

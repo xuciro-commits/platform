@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Aggregate scalar result is invalid.": "聚合标量结果无效。",
+ "No value for this gauge.": "此仪表没有数值。",
+ "Gauge value is unavailable or loading.": "仪表数值不可用或正在加载。",
+ "Gauge needs a compatible number value.": "仪表需要兼容的数值。",
+ "Number needs a read-only scoped declaration": "数值需要具有作用域的只读声明",
+ "Measure needs an aggregate scalar": "度量需要聚合标量",
  "Progress values are unavailable or loading.": "进度数值不可用或正在加载。",
  "Progress needs compatible decimal values.": "进度需要兼容的十进制数值。",
  "Gantt fields are unavailable or incompatible.": "甘特图字段不可用或不兼容。",

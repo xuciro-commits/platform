@@ -810,6 +810,13 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 					named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &query}
 				}
 			}
+			for _, v := range page.Document.Variables {
+				if v.Mode == "aggregate" && v.Source != nil && v.Source.Query == id {
+					if err := page.Document.CheckAggregateScalar(v, object); err != nil {
+						return err
+					}
+				}
+			}
 			if err := page.CheckQuerySchema(plan, object, named); err != nil {
 				return fmt.Errorf("page query %s: %w", id, err)
 			}

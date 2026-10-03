@@ -24,6 +24,7 @@ type PageVariable struct {
 // PageResourceSource names a typed widget output, loop item or application
 // presentation port. Widget sources retain their original read boundary.
 type PageResourceSource struct {
+	Measure  string    `json:"measure,omitempty"`
 	Field    string    `json:"field,omitempty"`
 	Fields   []string  `json:"fields,omitempty"`
 	Object   *AssetRef `json:"object,omitempty"` // object requirement of a shared window
@@ -42,6 +43,9 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Gauge struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+	} `json:"gauge"`
 	Progress struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 	} `json:"progress"`
@@ -204,6 +208,9 @@ type pageOperator struct {
 }
 
 func pageLiteralType(raw json.RawMessage) string {
+	if _, ok := NumberLiteral(raw); ok {
+		return "number"
+	}
 	if _, ok := DecimalLiteral(raw); ok {
 		return "decimal"
 	}
@@ -277,6 +284,12 @@ func (d *PageDocument) CheckVariables() error {
 		if v.Writable && v.Mode != contract.Application.BindingMode {
 			return fail("only shared bindings declare writable")
 		}
+		if v.Type == "number" && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Gauge.RequiredUIProfile) || !slices.Contains([]string{"aggregate", "constant", "derived"}, v.Mode) || v.Scope == "application") {
+			return fail("number needs its read-only scoped profile")
+		}
+		if v.Source != nil && v.Source.Measure != "" && (v.Mode != "aggregate" || v.Source.Kind != "aggregate") {
+			return fail("measure needs an aggregate scalar")
+		}
 		if v.Mode != "resource" && v.Mode != "property" && v.Mode != "aggregate" && v.Mode != contract.Application.BindingMode && v.Source != nil {
 			return fail("only resource or shared variables may declare a source")
 		}
@@ -291,8 +304,13 @@ func (d *PageDocument) CheckVariables() error {
 		}
 		switch v.Mode {
 		case "aggregate":
-			if v.Type != "decimal" || v.Source == nil || v.Source.Kind != contract.Aggregate.Source || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Variable != "" || v.Expression != nil || len(v.Initial) > 0 {
+			if v.Source == nil || !((v.Type == "decimal" && v.Source.Kind == contract.Aggregate.Source && v.Source.Measure == "") || (v.Type == "number" && v.Source.Kind == "aggregate")) || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Variable != "" || v.Expression != nil || len(v.Initial) > 0 {
 				return fail("aggregate needs only a count query source")
+			}
+			if v.Source.Kind == "aggregate" {
+				if _, _, ok := stringsCutMeasure(v.Source.Measure); !ok {
+					return fail("aggregate needs a supported numeric measure")
+				}
 			}
 		case "property":
 			if v.Source == nil || v.Source.Kind != "property" || !pageNodeID.MatchString(v.Source.Variable) || !pageNodeID.MatchString(v.Source.Field) || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" || len(v.Source.Fields) > 0 || len(v.Initial) > 0 || v.Expression != nil || !slices.Contains([]string{"string", "boolean", "decimal"}, v.Type) {
@@ -384,6 +402,9 @@ func (d *PageDocument) CheckVariables() error {
 				return fail("derived variable needs only an expression")
 			}
 			expr := v.Expression
+			if expr.Op == "parse-number" && !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Gauge.RequiredUIProfile) {
+				return fail("parse-number requires its profile")
+			}
 			if expr != nil && expr.Op == "parse-decimal" && !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Progress.RequiredUIProfile) {
 				return fail("parse-decimal requires its profile")
 			}

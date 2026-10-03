@@ -29,6 +29,7 @@ import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
 const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
+const GaugeRenderer=lazy(()=>import("./widgets/Gauge").then(module=>({default:module.GaugeRenderer})));
 const ProgressRenderer=lazy(()=>import("./widgets/Progress").then(module=>({default:module.ProgressRenderer})));
 const RecordGanttRenderer=lazy(()=>import("./widgets/RecordGantt").then(module=>({default:module.RecordGanttRenderer})));
 const RecordCalendarRenderer=lazy(()=>import("./widgets/RecordCalendar").then(module=>({default:module.RecordCalendarRenderer})));
@@ -48,7 +49,7 @@ type Section = NonNullable<Page["sections"]>[number];
 type Narrowed = Record<string, Record<string, unknown>>;
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
-type Bound = {progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
+type Bound = {gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
   onControl?:(id:string)=>void;controlBound?:(id:string)=>boolean;
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
@@ -400,6 +401,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
+ gauge:({section,gaugeValue})=><GaugeRenderer value={gaugeValue} fields={section.gauge} title={section.title||t("Gauge")}/>,
  progress:({section,progressValue,progressTotal})=><ProgressRenderer value={progressValue} total={progressTotal} fixedTotal={section.progressTotalVariable?undefined:section.progressTotal} title={section.progressLabel??section.title??""}/>,
  "record-gantt":({page,section,window})=>{const {source}=useHost();return <RecordGanttRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.recordGantt}/>;},
  "record-calendar":({page,section,window,selected,onSelect})=>{const {source}=useHost(),object=objectOf(page,section);return <RecordCalendarRenderer key={JSON.stringify([source.scope,object,section.recordCalendar,window?.query])} window={window} info={source.entity(object)} fields={section.recordCalendar} selected={selected} onSelect={onSelect}/>;},
@@ -577,6 +579,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         facetValues={values} onFacet={(id,value)=>setContextState(id,value,context,overlay)}
         collection={values[section.collectionVariable??""]} aggregateScope={JSON.stringify([source.scope,applicationVariable(section.collectionVariable??"")?[application.identity,application.readScope]:undefined,overlay,epoch,context?[context.owner,context.key,context.signature]:undefined])}
         numeric={initialVariables[valueVariable??""]?.type==="decimal"||!!valueVariable&&Object.values(page.document?.queries??{}).some(q=>q.conditions?.some(c=>c.asDecimal&&c.value.variable===valueVariable))} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
+        gaugeValue={values[section.gaugeValueVariable??""]}
         progressValue={values[section.progressValueVariable??""]} progressTotal={values[section.progressTotalVariable??""]}
         countValue={(()=>{const value=values[section.countVariable??""];return value?.status==="value"&&isDecimal(value.value)?value.value.value:undefined;})()} countError={(()=>{const value=values[section.countVariable??""];return value?.status==="error"?t(value.code):undefined;})()}
         onControl={id=>emit("click",id)} controlBound={id=>!!binding("click",id)} onClick={binding("click")?()=>emit("click"):undefined} />

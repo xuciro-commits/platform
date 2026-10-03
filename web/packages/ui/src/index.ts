@@ -59,3 +59,4 @@ export {RecordEvents,recordEventRows} from "./records/RecordEvents";
 export {RecordCalendar,calendarRecords,adjacentCalendarMonth,validCalendarMonth,type CalendarFields} from "./records/RecordCalendar";
 export {RecordGantt,recordGanttRows,ganttRange} from "./records/RecordGantt";
 export {Progress,progressRatio} from "./components/Progress";
+export {Gauge,gaugeModel} from "./components/Gauge";

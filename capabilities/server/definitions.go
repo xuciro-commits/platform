@@ -580,6 +580,16 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					doc.Queries = map[string]platform.PageQuery{}
 					doc.Variables = maps.Clone(doc.Variables)
 					for id, v := range doc.Variables {
+						if v.Mode == "aggregate" && v.Source != nil {
+							q := doc.Queries[v.Source.Query]
+							if q.Object.Name == "" {
+								q = page.Document.Queries[v.Source.Query]
+							}
+							info, ok := entities[q.Object.Name]
+							if !ok || doc.CheckAggregateScalar(v, info) != nil {
+								delete(doc.Variables, id)
+							}
+						}
 						if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
 							info, ok := entities[v.Source.Object.Name]
 							if !ok || page.CheckPropertySchema(v, info) != nil {
