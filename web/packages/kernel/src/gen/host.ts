@@ -934,6 +934,11 @@ export type PageEventBinding = {
   return?: boolean;
 };
 
+export type PageEventTone = {
+  value: string;
+  tone: string;
+};
+
 export type PageExpression = {
   op: string;
   args: PageValue[];
@@ -1050,6 +1055,13 @@ export type PageRecordChart = {
   mark: string;
   xField: string;
   yField: string;
+};
+
+export type PageRecordEvents = {
+  timeField: string;
+  titleField: string;
+  severityField: string;
+  tones: PageEventTone[];
 };
 
 export type PageRecordLink = {
@@ -1391,6 +1403,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  recordEvents?: PageRecordEvents;
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
@@ -1724,7 +1737,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.44",
+  "uiProfile": "platform.page.v2.45",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3238,6 +3251,115 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "record-events",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.45",
+      "title": "Record events",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "recordEvents": {
+          "timeField": "",
+          "titleField": "id",
+          "severityField": "",
+          "tones": []
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordEvents": {
+            "type": "object",
+            "properties": {
+              "timeField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "titleField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "severityField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "tones": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    "tone": {
+                      "type": "string",
+                      "enum": [
+                        "neutral",
+                        "info",
+                        "success",
+                        "warning",
+                        "danger"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "tone"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "timeField",
+              "titleField",
+              "severityField",
+              "tones"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.45"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -3284,7 +3406,8 @@ export const pageUIManifest = {
     "platform.page.v2.41",
     "platform.page.v2.42",
     "platform.page.v2.43",
-    "platform.page.v2.44"
+    "platform.page.v2.44",
+    "platform.page.v2.45"
   ],
   "runtime": {
     "scope": "page",
@@ -3679,6 +3802,18 @@ export const pageUIManifest = {
       "variants": [
         "pie",
         "donut"
+      ]
+    },
+    "recordEvents": {
+      "requiredUIProfile": "platform.page.v2.45",
+      "maxEvents": 30,
+      "maxTones": 32,
+      "tones": [
+        "neutral",
+        "info",
+        "success",
+        "warning",
+        "danger"
       ]
     }
   },

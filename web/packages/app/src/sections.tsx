@@ -29,6 +29,7 @@ import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
 const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
+const RecordEventsRenderer=lazy(()=>import("./widgets/RecordEvents").then(module=>({default:module.RecordEventsRenderer})));
 const RecordChartRenderer=lazy(()=>import("./widgets/RecordChart").then(module=>({default:module.RecordChartRenderer})));
 const TableRenderer=lazy(()=>import("./widgets/Table").then(module=>({default:module.TableRenderer})));
 const RecordTimelineRenderer=lazy(()=>import("./widgets/RecordTimeline").then(module=>({default:module.RecordTimelineRenderer})));
@@ -396,6 +397,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
+ "record-events":({page,section,window})=>{const {source}=useHost();return <RecordEventsRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.recordEvents}/>;},
  "record-chart":RecordChartAdapter,
  "record-list":TableAdapter,
  heading:({section})=><PageHeader compact level={Number(section.headingLevel?.slice(1)??2) as 1|2|3} title={section.text||t("Heading")}/>,

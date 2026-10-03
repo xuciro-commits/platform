@@ -2,6 +2,18 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Record events": "记录事件",
+ "Event query window": "事件查询窗口",
+ "Map event timeline {widget}": "映射事件时间线 {widget}",
+ "Business event time field": "业务事件时间字段",
+ "Event title field": "事件标题字段",
+ "Event severity field": "事件严重度字段",
+ "Event tone for {value}": "{value} 的事件色调",
+ "Bind event fields and an explicitly sorted query plan before saving.": "保存前请绑定事件字段及显式排序的查询计划。",
+ "Use an explicitly sorted plan and original business time. The list shows at most 30 events in UTC; record creation time is not substituted.": "使用显式排序计划和原业务时间。列表最多显示 30 条 UTC 事件，不替换为记录创建时间。",
+ "Event timelines need an original query collection and the supported ordered event-list profile.": "事件时间线需要原查询集合及受支持的排序事件列表配置。",
+ "Map the original business time, title and choice severity, and use unique original severity values with supported tones.": "映射原业务时间、标题及枚举严重度，为不重复的原严重度值选择受支持的色调。",
+ "Events show the first 30 records of the ordered original window in UTC. Business time is explicitly mapped; record creation time is not substituted. Original severity tones and ID sorting can differ from the source.": "事件按 UTC 显示原排序窗口的前 30 条记录。业务时间须显式映射，不替换为记录创建时间；原严重度色调及 ID 排序可能与来源不同。",
  "Map board {widget}": "映射看板 {widget}",
  "Map original board move actions": "映射原看板移动动作",
  "Source move {action} uses parameter {parameter}.": "来源移动动作 {action} 使用参数 {parameter}。",

@@ -442,6 +442,10 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					return err
 				}
 			}
+		case "record-events":
+			if err := s.CheckRecordEvents(info); err != nil {
+				return err
+			}
 		case "record-chart":
 			if err := s.CheckRecordChart(info); err != nil {
 				return err

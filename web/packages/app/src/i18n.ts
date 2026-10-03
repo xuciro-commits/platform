@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "This list shows original business events in the ordered query window.": "此列表显示排序查询窗口中的原业务事件。",
  "This chart shows ordered records in the current query window.": "此图表显示当前查询窗口中按序排列的记录。",
   "Inline action": "就地动作",
   "The inline action is unavailable.": "就地动作不可用。",

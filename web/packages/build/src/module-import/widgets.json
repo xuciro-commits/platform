@@ -189,9 +189,9 @@
       "sourceType": "Timeline",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": "record-timeline",
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-events",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "PivotTable",
