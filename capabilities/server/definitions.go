@@ -453,6 +453,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					if section.CheckHistogram(shown) != nil {
 						continue
 					}
+					if section.CheckSparkline(shown) != nil {
+						continue
+					}
 					if section.CheckTerms(shown) != nil {
 						continue
 					}

@@ -2,6 +2,19 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Sparkline KPI": "迷你线KPI",
+ "Sparkline scalar variable": "迷你线标量变量",
+ "Choose a scalar variable": "选择标量变量",
+ "Sparkline query window": "迷你线查询窗口",
+ "Sparkline numeric field": "迷你线数值字段",
+ "Sparkline label": "迷你线标签",
+ "Sparkline suffix": "迷你线后缀",
+ "Keep the original scalar and an optional ordered window of at most 30 records. Missing values break the line; record order does not imply time.": "保留原标量及可选的至多30条有序记录窗口；缺值断线，记录顺序不代表时间。",
+ "Bind one original sparkline scalar and an optional ordered 30-record numeric window before saving.": "保存前绑定一个原迷你线标量及可选的30条有序数值记录窗口。",
+ "Map an original scalar and optional numeric record field in a compatible ordered query window. Labels and suffixes are bounded text.": "映射原标量及兼容有序查询窗口中的可选数值记录字段；标签与后缀为有界文本。",
+ "Sparkline requires an original numeric source with an explicit count or number binding.": "迷你线需要原数值来源及显式count或number绑定。",
+ "Bind the original complete count without converting its decimal identity to a JavaScript number.": "绑定原完整count，不把decimal身份转换成JavaScript数字。",
+ "The KPI retains its original scalar scope and optionally plots at most 30 authorized ordered records. Missing values break the line, invalid numbers are refused, and stable IDs remain inspectable. Record order is not a time trend; source zero coercion is not imported.": "KPI保留原标量范围，可选绘制至多30条授权有序记录；缺值断线，无效数值拒绝，稳定ID仍可查看；记录顺序不是时间趋势，不导入来源强制置零逻辑。",
  "Treemap": "树图",
  "Treemap query window": "树图查询窗口",
  "Treemap grouping field": "树图分组字段",
@@ -1720,6 +1733,19 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Sparkline KPI": "迷你线KPI",
+ "Sparkline scalar variable": "迷你线标量变量",
+ "Choose a scalar variable": "选择标量变量",
+ "Sparkline query window": "迷你线查询窗口",
+ "Sparkline numeric field": "迷你线数值字段",
+ "Sparkline label": "迷你线标签",
+ "Sparkline suffix": "迷你线后缀",
+ "Keep the original scalar and an optional ordered window of at most 30 records. Missing values break the line; record order does not imply time.": "保留原标量及可选的至多30条有序记录窗口；缺值断线，记录顺序不代表时间。",
+ "Bind one original sparkline scalar and an optional ordered 30-record numeric window before saving.": "保存前绑定一个原迷你线标量及可选的30条有序数值记录窗口。",
+ "Map an original scalar and optional numeric record field in a compatible ordered query window. Labels and suffixes are bounded text.": "映射原标量及兼容有序查询窗口中的可选数值记录字段；标签与后缀为有界文本。",
+ "Sparkline requires an original numeric source with an explicit count or number binding.": "迷你线需要原数值来源及显式count或number绑定。",
+ "Bind the original complete count without converting its decimal identity to a JavaScript number.": "绑定原完整count，不把decimal身份转换成JavaScript数字。",
+ "The KPI retains its original scalar scope and optionally plots at most 30 authorized ordered records. Missing values break the line, invalid numbers are refused, and stable IDs remain inspectable. Record order is not a time trend; source zero coercion is not imported.": "KPI保留原标量范围，可选绘制至多30条授权有序记录；缺值断线，无效数值拒绝，稳定ID仍可查看；记录顺序不是时间趋势，不导入来源强制置零逻辑。",
  "Treemap": "树图",
  "Treemap query window": "树图查询窗口",
  "Treemap grouping field": "树图分组字段",

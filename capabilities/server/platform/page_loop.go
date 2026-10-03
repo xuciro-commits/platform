@@ -137,6 +137,11 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		for _, id := range []string{section.SparklineDecimalVariable, section.SparklineNumberVariable} {
+			if !accessible(id, "", sectionOverlays[section.ID]) || section.Widget == "sparkline-kpi" && sectionOwners[section.ID] != "" {
+				return fmt.Errorf("sparkline KPI needs its original page or overlay owner")
+			}
+		}
 		for _, id := range []string{section.GroupValueVariable, section.GroupSetVariable} {
 			if !accessible(id, "", sectionOverlays[section.ID]) || section.Widget == "treemap" && sectionOwners[section.ID] != "" {
 				return fmt.Errorf("treemap filter needs its original page or overlay owner")

@@ -131,6 +131,10 @@ type pageRuntimeContract struct {
 		RequiredUIProfile string   `json:"requiredUIProfile"`
 		Variants          []string `json:"variants"`
 	} `json:"chartPresentation"`
+	Sparkline struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+		MaxPoints         int    `json:"maxPoints"`
+	} `json:"sparkline"`
 	Treemap struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 	} `json:"treemap"`

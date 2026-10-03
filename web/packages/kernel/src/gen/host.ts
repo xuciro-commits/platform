@@ -1198,6 +1198,12 @@ export type PageSpacer = {
   size?: number;
 };
 
+export type PageSparkline = {
+  field?: string;
+  label?: string;
+  suffix?: string;
+};
+
 export type PageStatusTracker = {
   field: string;
   stages: string[];
@@ -1515,6 +1521,9 @@ export type Section = {
   recordGantt?: PageRecordGantt;
   recordCalendar?: PageRecordCalendar;
   recordEvents?: PageRecordEvents;
+  sparkline?: PageSparkline;
+  sparklineDecimalVariable?: string;
+  sparklineNumberVariable?: string;
   groupValueVariable?: string;
   groupSetVariable?: string;
   rowValueVariable?: string;
@@ -1886,7 +1895,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.71",
+  "uiProfile": "platform.page.v2.72",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4950,6 +4959,89 @@ export const pageUIManifest = {
           "scope-close"
         ]
       }
+    },
+    {
+      "componentID": "sparkline-kpi",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.72",
+      "title": "Sparkline KPI",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "sparkline": {}
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "sparkline": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "suffix": {
+                "type": "string",
+                "maxLength": 64
+              }
+            }
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.72"
+        },
+        {
+          "id": "sparklineDecimal",
+          "bindingField": "sparklineDecimalVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.72"
+        },
+        {
+          "id": "sparklineNumber",
+          "bindingField": "sparklineNumberVariable",
+          "type": "number",
+          "requiredUIProfile": "platform.page.v2.72"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -5023,7 +5115,8 @@ export const pageUIManifest = {
     "platform.page.v2.68",
     "platform.page.v2.69",
     "platform.page.v2.70",
-    "platform.page.v2.71"
+    "platform.page.v2.71",
+    "platform.page.v2.72"
   ],
   "runtime": {
     "scope": "page",
@@ -5584,6 +5677,10 @@ export const pageUIManifest = {
     },
     "treemap": {
       "requiredUIProfile": "platform.page.v2.71"
+    },
+    "sparkline": {
+      "requiredUIProfile": "platform.page.v2.72",
+      "maxPoints": 30
     }
   },
   "layout": {

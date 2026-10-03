@@ -80,6 +80,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/record-lookup": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordLookups })),
   "ui/record-page": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordDetails })),
   "ui/record-scatter": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordScatterExample })),
+  "ui/record-sparkline": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordSparklineExample })),
   "ui/record-timeline": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordTimelines })),
   "ui/record-workspace": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.MasterDetail })),
   "ui/retro-button": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RetroButtons })),

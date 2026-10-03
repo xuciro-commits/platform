@@ -450,6 +450,10 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := s.CheckHistogram(info); err != nil {
 				return err
 			}
+		case "sparkline-kpi":
+			if err := s.CheckSparkline(info); err != nil {
+				return err
+			}
 		case "term-counts", "treemap":
 			if err := s.CheckTerms(info); err != nil {
 				return err

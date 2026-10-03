@@ -1,3 +1,4 @@
+import {SparklineInspector} from "./SparklineInspector";
 import {TreemapInspector} from "./TreemapInspector";
 import {HeatmapInspector} from "./HeatmapInspector";
 import {HistogramInspector} from "./HistogramInspector";
@@ -40,6 +41,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "sparkline-kpi":{configVersion:1,bindings:SparklineInspector},
  treemap:{configVersion:1,bindings:TreemapInspector},
  heatmap:{configVersion:1,bindings:HeatmapInspector},
  histogram:{configVersion:1,bindings:HistogramInspector},

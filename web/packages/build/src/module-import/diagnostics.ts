@@ -1,5 +1,10 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "sparkline-binding":"Map an original scalar and optional numeric record field in a compatible ordered query window. Labels and suffixes are bounded text.",
+ "sparkline-scalar":"Sparkline requires an original numeric source with an explicit count or number binding.",
+ "sparkline-count":"Bind the original complete count without converting its decimal identity to a JavaScript number.",
+ "native-sparkline":"The KPI retains its original scalar scope and optionally plots at most 30 authorized ordered records. Missing values break the line, invalid numbers are refused, and stable IDs remain inspectable. Record order is not a time trend; source zero coercion is not imported.",
+
  "treemap-binding":"Map an original text or choice group, an authorized plan and an optional original string or string-set state in the same owner.",
  "native-treemap":"Treemap uses complete authorized group counts and proportional rectangle areas without minimum-size inflation. Typed groups preserve missing, empty and literal values; small groups remain accessible in the list. Selection uses the declared state type. Source object accumulation, array-only counts and guessed array types are not imported.",
 

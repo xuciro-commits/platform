@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:0a9ca416662923d4",
+  "revision": "sha256:1b0b135398525dfd",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2408,6 +2408,34 @@
       ]
     },
     {
+      "id": "ui/record-sparkline",
+      "owner": "@platform/ui",
+      "name": "Original scalar and record sparkline",
+      "summary": "Present a caller-owned scalar and original ordered record values without inventing time or replacing missing data.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordSparkline.tsx",
+      "exports": [
+        "RecordSparkline",
+        "recordSparklinePoints"
+      ],
+      "example": "RecordSparklineExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "sparkline",
+        "scalar",
+        "records",
+        "window"
+      ],
+      "constraints": [
+        "The caller owns scalar precision, authorized window and field metadata. Missing values break the line; points retain stable IDs and never read or write records."
+      ]
+    },
+    {
       "id": "ui/record-timeline",
       "owner": "@platform/ui",
       "name": "Authorized record timeline",
@@ -2950,6 +2978,7 @@
       "Optional whole-set clearing removes all selected values, including unmatched values.": "可选整组清空会移除全部已选值，包括未匹配的值。",
       "Ordered record chart": "按序逐记录图表",
       "Organize navigation and shared published objects, workflows and functions with the original application editor.": "使用原应用编辑器组织导航及共享的已发布对象、流程和函数。",
+      "Original scalar and record sparkline": "原标量与记录迷你线",
       "Page header": "页面标题区",
       "Page workspace and preview": "页面工作台与预览",
       "Partition caller-owned complete group counts into proportional rectangles with independently accessible groups.": "把调用方拥有的完整分组计数划分为比例矩形，保留独立的可访问分组。",
@@ -2960,6 +2989,7 @@
       "Pivot table": "透视表",
       "Plot original authorized records without merging equal axis labels or reading another collection.": "绘制原受权记录，不合并相同坐标标签，也不读取另一集合。",
       "Plot original numeric record coordinates and retain independently selectable stable identities.": "绘制原记录数值坐标，保留可独立选择的稳定身份。",
+      "Present a caller-owned scalar and original ordered record values without inventing time or replacing missing data.": "呈现调用方拥有的标量及原有序记录值，不虚构时间或替换缺值。",
       "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
       "Present caller-owned plain text with an accessible semantic tone.": "以可访问的语义色调呈现调用方拥有的纯文本。",
@@ -3047,6 +3077,7 @@
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒，无效草稿可修正。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
+      "The caller owns scalar precision, authorized window and field metadata. Missing values break the line; points retain stable IDs and never read or write records.": "调用方拥有标量精度、授权窗口与字段元数据；缺值断线，点保留稳定ID，不读写记录。",
       "The caller owns text, object scope and authorized reads. This control performs no queries and does not promise global ontology search.": "调用方拥有文本、对象范围及授权读取；此控件不查询数据，也不声称全本体搜索。",
       "The caller owns the authorized complete count and clears obsolete values.": "调用方负责受权完整计数并清理过期值。",
       "The caller owns the authorized window and business time; the list does not create events or read another collection.": "调用方拥有受权窗口和业务时间；列表不创建事件或读取另一集合。",
@@ -3222,6 +3253,7 @@
       "web/packages/build/src/page-editor/widgets/ScatterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SeparatorInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SpacerInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/SparklineInspector.tsx",
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SummaryInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
@@ -3314,6 +3346,7 @@
       "web/packages/app/src/widgets/RecordTimeline.tsx",
       "web/packages/app/src/widgets/Separator.tsx",
       "web/packages/app/src/widgets/Spacer.tsx",
+      "web/packages/app/src/widgets/Sparkline.tsx",
       "web/packages/app/src/widgets/Summary.tsx",
       "web/packages/app/src/widgets/Table.tsx",
       "web/packages/app/src/widgets/TermCounts.tsx",
@@ -3613,6 +3646,9 @@
     ],
     "layout/spacer": [
       "web/packages/app/src/widgets/Spacer.tsx"
+    ],
+    "ui/record-sparkline": [
+      "web/packages/app/src/widgets/Sparkline.tsx"
     ],
     "ui/summary-statistics": [
       "web/packages/app/src/widgets/Summary.tsx"

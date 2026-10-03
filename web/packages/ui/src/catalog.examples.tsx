@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -359,3 +359,5 @@ export function RecordScatterExample(){const info:EntityInfo={...demoInfo,fields
 export function CountMatrixExample(){return <CountMatrix heatmap rows="status" columns="priority" data={{columns:[{name:"status",title:"Status",kind:"group",type:"nominal"},{name:"priority",title:"Priority",kind:"group",type:"nominal"},{name:"count",title:"Count",kind:"measure",type:"quantitative"}],rows:[{status:"Open",priority:"High",count:8},{status:"Closed",priority:"Low",count:3}]}} onSelect={()=>{}}/>;}
 
 export function CountTreemapExample(){return <CountTreemap label="Assets by status" terms={[{value:"Active",count:64},{value:"Warning",count:24},{value:"Offline",count:8},{value:"Maintenance",count:3},{value:"Small group",count:1}]} onSelect={()=>{}}/>;}
+
+export function RecordSparklineExample(){const info:EntityInfo={...demoInfo,fields:[{name:"availability",title:"Availability",type:"decimal"}]};return <RecordSparkline valueText="120" label="Assets in view" suffix=" assets" records={[90,93,null,95,92].map((availability,index)=>({id:`A${index}`,revision:1,created:stamp,changed:stamp,availability}))} info={info} field="availability"/>;}

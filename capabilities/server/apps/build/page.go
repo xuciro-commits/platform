@@ -50,75 +50,78 @@ type InlineEdit struct {
 }
 
 type Section struct {
-	RecordGantt           *platform.PageRecordGantt        `json:"recordGantt,omitempty"`
-	RecordCalendar        *platform.PageRecordCalendar     `json:"recordCalendar,omitempty"`
-	RecordEvents          *platform.PageRecordEvents       `json:"recordEvents,omitempty"`
-	GroupValueVariable    string                           `json:"groupValueVariable,omitempty"`
-	GroupSetVariable      string                           `json:"groupSetVariable,omitempty"`
-	RowValueVariable      string                           `json:"rowValueVariable,omitempty"`
-	RowSetVariable        string                           `json:"rowSetVariable,omitempty"`
-	ColumnValueVariable   string                           `json:"columnValueVariable,omitempty"`
-	ColumnSetVariable     string                           `json:"columnSetVariable,omitempty"`
-	Scatter               *platform.PageRecordScatter      `json:"scatter,omitempty"`
-	RecordChart           *platform.PageRecordChart        `json:"recordChart,omitempty"`
-	RecordList            *platform.PageRecordList         `json:"recordList,omitempty"`
-	HeadingLevel          string                           `json:"headingLevel,omitempty"`
-	Histogram             *platform.PageHistogram          `json:"histogram,omitempty"`
-	InputKind             string                           `json:"inputKind,omitempty"`
-	PickerValueVariable   string                           `json:"pickerValueVariable,omitempty"`
-	RecordPicker          *platform.PageRecordPicker       `json:"recordPicker,omitempty"`
-	Spacer                *platform.PageSpacer             `json:"spacer,omitempty"`
-	Separator             *platform.PageSeparator          `json:"separator,omitempty"`
-	Notice                *platform.PageNotice             `json:"notice,omitempty"`
-	AlertValueVariable    string                           `json:"alertValueVariable,omitempty"`
-	AlertBanner           *platform.PageAlertBanner        `json:"alertBanner,omitempty"`
-	DateKind              string                           `json:"dateKind,omitempty"`
-	DateOffset            string                           `json:"dateOffset,omitempty"`
-	DateVariable          string                           `json:"dateVariable,omitempty"`
-	DateLabel             *string                          `json:"dateLabel,omitempty"`
-	ChoiceSetVariable     string                           `json:"choiceSetVariable,omitempty"`
-	ChoiceVariable        string                           `json:"choiceVariable,omitempty"`
-	ChoiceInput           *platform.PageChoiceInput        `json:"choiceInput,omitempty"`
-	BooleanVariant        string                           `json:"booleanVariant,omitempty"`
-	BooleanVariable       string                           `json:"booleanVariable,omitempty"`
-	BooleanLabel          *string                          `json:"booleanLabel,omitempty"`
-	RangeInput            *platform.PageRangeInput         `json:"rangeInput,omitempty"`
-	RangeMinVariable      string                           `json:"rangeMinVariable,omitempty"`
-	RangeMaxVariable      string                           `json:"rangeMaxVariable,omitempty"`
-	Leaderboard           *platform.PageLeaderboard        `json:"leaderboard,omitempty"`
-	SummaryField          string                           `json:"summaryField,omitempty"`
-	StatisticsVariable    string                           `json:"statisticsVariable,omitempty"`
-	Gauge                 *platform.PageGauge              `json:"gauge,omitempty"`
-	GaugeValueVariable    string                           `json:"gaugeValueVariable,omitempty"`
-	ProgressLabel         string                           `json:"progressLabel,omitempty"`
-	ProgressValueVariable string                           `json:"progressValueVariable,omitempty"`
-	ProgressTotalVariable string                           `json:"progressTotalVariable,omitempty"`
-	ProgressTotal         string                           `json:"progressTotal,omitempty"`
-	CountVariable         string                           `json:"countVariable,omitempty"`
-	MetricPresentation    *platform.PageMetricPresentation `json:"metricPresentation,omitempty"`
-	StatusTracker         *platform.PageStatusTracker      `json:"statusTracker,omitempty"`
-	RecordLinks           []platform.PageRecordLink        `json:"recordLinks,omitempty"`
-	Buttons               []platform.PageButton            `json:"buttons,omitempty"`
-	RecordView            *platform.PageRecordView         `json:"recordView,omitempty"`
-	DetailPresentation    *platform.PageDetailPresentation `json:"detailPresentation,omitempty"`
-	TableColumns          []platform.PageTableColumn       `json:"tableColumns,omitempty"`
-	ShowSearch            *bool                            `json:"showSearch,omitempty"`
-	SelectionSetVariable  string                           `json:"selectionSetVariable,omitempty"`
-	InlineEdit            *InlineEdit                      `json:"inlineEdit,omitempty"`
-	Facets                []platform.PageFacet             `json:"facets,omitempty"`
-	FilterSearchVariable  string                           `json:"filterSearchVariable,omitempty"`
-	ID                    string                           `json:"id,omitempty"`
-	ConfigVersion         int                              `json:"configVersion,omitempty"`
-	Widget                string                           `json:"widget" field:"required" help:"What it shows; the shared page widget registry defines supported kinds"`
-	Title                 string                           `json:"title,omitempty"`
-	Width                 string                           `json:"width,omitempty" choices:"full,half"`
-	Object                string                           `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
-	Selection             string                           `json:"selection,omitempty"`
-	CollectionVariable    string                           `json:"collectionVariable,omitempty"`
-	RecordVariable        string                           `json:"recordVariable,omitempty"`
-	SelectionVariable     string                           `json:"selectionVariable,omitempty"`
-	FilterVariable        string                           `json:"filterVariable,omitempty"`
-	ParentSelection       string                           `json:"parentSelection,omitempty"`
+	RecordGantt              *platform.PageRecordGantt        `json:"recordGantt,omitempty"`
+	RecordCalendar           *platform.PageRecordCalendar     `json:"recordCalendar,omitempty"`
+	RecordEvents             *platform.PageRecordEvents       `json:"recordEvents,omitempty"`
+	Sparkline                *platform.PageSparkline          `json:"sparkline,omitempty"`
+	SparklineDecimalVariable string                           `json:"sparklineDecimalVariable,omitempty"`
+	SparklineNumberVariable  string                           `json:"sparklineNumberVariable,omitempty"`
+	GroupValueVariable       string                           `json:"groupValueVariable,omitempty"`
+	GroupSetVariable         string                           `json:"groupSetVariable,omitempty"`
+	RowValueVariable         string                           `json:"rowValueVariable,omitempty"`
+	RowSetVariable           string                           `json:"rowSetVariable,omitempty"`
+	ColumnValueVariable      string                           `json:"columnValueVariable,omitempty"`
+	ColumnSetVariable        string                           `json:"columnSetVariable,omitempty"`
+	Scatter                  *platform.PageRecordScatter      `json:"scatter,omitempty"`
+	RecordChart              *platform.PageRecordChart        `json:"recordChart,omitempty"`
+	RecordList               *platform.PageRecordList         `json:"recordList,omitempty"`
+	HeadingLevel             string                           `json:"headingLevel,omitempty"`
+	Histogram                *platform.PageHistogram          `json:"histogram,omitempty"`
+	InputKind                string                           `json:"inputKind,omitempty"`
+	PickerValueVariable      string                           `json:"pickerValueVariable,omitempty"`
+	RecordPicker             *platform.PageRecordPicker       `json:"recordPicker,omitempty"`
+	Spacer                   *platform.PageSpacer             `json:"spacer,omitempty"`
+	Separator                *platform.PageSeparator          `json:"separator,omitempty"`
+	Notice                   *platform.PageNotice             `json:"notice,omitempty"`
+	AlertValueVariable       string                           `json:"alertValueVariable,omitempty"`
+	AlertBanner              *platform.PageAlertBanner        `json:"alertBanner,omitempty"`
+	DateKind                 string                           `json:"dateKind,omitempty"`
+	DateOffset               string                           `json:"dateOffset,omitempty"`
+	DateVariable             string                           `json:"dateVariable,omitempty"`
+	DateLabel                *string                          `json:"dateLabel,omitempty"`
+	ChoiceSetVariable        string                           `json:"choiceSetVariable,omitempty"`
+	ChoiceVariable           string                           `json:"choiceVariable,omitempty"`
+	ChoiceInput              *platform.PageChoiceInput        `json:"choiceInput,omitempty"`
+	BooleanVariant           string                           `json:"booleanVariant,omitempty"`
+	BooleanVariable          string                           `json:"booleanVariable,omitempty"`
+	BooleanLabel             *string                          `json:"booleanLabel,omitempty"`
+	RangeInput               *platform.PageRangeInput         `json:"rangeInput,omitempty"`
+	RangeMinVariable         string                           `json:"rangeMinVariable,omitempty"`
+	RangeMaxVariable         string                           `json:"rangeMaxVariable,omitempty"`
+	Leaderboard              *platform.PageLeaderboard        `json:"leaderboard,omitempty"`
+	SummaryField             string                           `json:"summaryField,omitempty"`
+	StatisticsVariable       string                           `json:"statisticsVariable,omitempty"`
+	Gauge                    *platform.PageGauge              `json:"gauge,omitempty"`
+	GaugeValueVariable       string                           `json:"gaugeValueVariable,omitempty"`
+	ProgressLabel            string                           `json:"progressLabel,omitempty"`
+	ProgressValueVariable    string                           `json:"progressValueVariable,omitempty"`
+	ProgressTotalVariable    string                           `json:"progressTotalVariable,omitempty"`
+	ProgressTotal            string                           `json:"progressTotal,omitempty"`
+	CountVariable            string                           `json:"countVariable,omitempty"`
+	MetricPresentation       *platform.PageMetricPresentation `json:"metricPresentation,omitempty"`
+	StatusTracker            *platform.PageStatusTracker      `json:"statusTracker,omitempty"`
+	RecordLinks              []platform.PageRecordLink        `json:"recordLinks,omitempty"`
+	Buttons                  []platform.PageButton            `json:"buttons,omitempty"`
+	RecordView               *platform.PageRecordView         `json:"recordView,omitempty"`
+	DetailPresentation       *platform.PageDetailPresentation `json:"detailPresentation,omitempty"`
+	TableColumns             []platform.PageTableColumn       `json:"tableColumns,omitempty"`
+	ShowSearch               *bool                            `json:"showSearch,omitempty"`
+	SelectionSetVariable     string                           `json:"selectionSetVariable,omitempty"`
+	InlineEdit               *InlineEdit                      `json:"inlineEdit,omitempty"`
+	Facets                   []platform.PageFacet             `json:"facets,omitempty"`
+	FilterSearchVariable     string                           `json:"filterSearchVariable,omitempty"`
+	ID                       string                           `json:"id,omitempty"`
+	ConfigVersion            int                              `json:"configVersion,omitempty"`
+	Widget                   string                           `json:"widget" field:"required" help:"What it shows; the shared page widget registry defines supported kinds"`
+	Title                    string                           `json:"title,omitempty"`
+	Width                    string                           `json:"width,omitempty" choices:"full,half"`
+	Object                   string                           `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
+	Selection                string                           `json:"selection,omitempty"`
+	CollectionVariable       string                           `json:"collectionVariable,omitempty"`
+	RecordVariable           string                           `json:"recordVariable,omitempty"`
+	SelectionVariable        string                           `json:"selectionVariable,omitempty"`
+	FilterVariable           string                           `json:"filterVariable,omitempty"`
+	ParentSelection          string                           `json:"parentSelection,omitempty"`
 	// Relation follows the typed parent selection, or the page's shared record.
 	Relation string `json:"relation,omitempty" title:"Through" help:"For another object's table, chart, metric or form: the relation to the selected parent record"`
 	// Query is a named query "<app>.<name>" the section lists (ADR-0040 21c).
@@ -202,7 +205,7 @@ func descriptor(p Page) platform.Page {
 	}
 	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
 	for _, s := range p.Sections {
-		section := platform.Section{GroupValueVariable: s.GroupValueVariable, GroupSetVariable: s.GroupSetVariable, RowValueVariable: s.RowValueVariable, RowSetVariable: s.RowSetVariable, ColumnValueVariable: s.ColumnValueVariable, ColumnSetVariable: s.ColumnSetVariable, Scatter: s.Scatter, Histogram: s.Histogram, InputKind: s.InputKind, PickerValueVariable: s.PickerValueVariable, RecordPicker: s.RecordPicker, Spacer: s.Spacer, Separator: s.Separator, Notice: s.Notice, AlertValueVariable: s.AlertValueVariable, AlertBanner: s.AlertBanner, DateKind: s.DateKind, DateOffset: s.DateOffset, DateVariable: s.DateVariable, DateLabel: s.DateLabel, ChoiceSetVariable: s.ChoiceSetVariable, ChoiceVariable: s.ChoiceVariable, ChoiceInput: s.ChoiceInput, BooleanVariant: s.BooleanVariant, BooleanVariable: s.BooleanVariable, BooleanLabel: s.BooleanLabel, RangeInput: s.RangeInput, RangeMinVariable: s.RangeMinVariable, RangeMaxVariable: s.RangeMaxVariable, Leaderboard: s.Leaderboard, SummaryField: s.SummaryField, StatisticsVariable: s.StatisticsVariable, Gauge: s.Gauge, GaugeValueVariable: s.GaugeValueVariable, ProgressLabel: s.ProgressLabel, ProgressValueVariable: s.ProgressValueVariable, ProgressTotalVariable: s.ProgressTotalVariable, ProgressTotal: s.ProgressTotal, RecordGantt: s.RecordGantt, RecordCalendar: s.RecordCalendar, RecordEvents: s.RecordEvents, RecordChart: s.RecordChart, RecordList: s.RecordList, HeadingLevel: s.HeadingLevel, CountVariable: s.CountVariable, MetricPresentation: s.MetricPresentation, StatusTracker: s.StatusTracker, RecordLinks: slices.Clone(s.RecordLinks), Buttons: slices.Clone(s.Buttons), RecordView: s.RecordView, DetailPresentation: s.DetailPresentation, TableColumns: slices.Clone(s.TableColumns), ShowSearch: s.ShowSearch, Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, SelectionSetVariable: s.SelectionSetVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
+		section := platform.Section{Sparkline: s.Sparkline, SparklineDecimalVariable: s.SparklineDecimalVariable, SparklineNumberVariable: s.SparklineNumberVariable, GroupValueVariable: s.GroupValueVariable, GroupSetVariable: s.GroupSetVariable, RowValueVariable: s.RowValueVariable, RowSetVariable: s.RowSetVariable, ColumnValueVariable: s.ColumnValueVariable, ColumnSetVariable: s.ColumnSetVariable, Scatter: s.Scatter, Histogram: s.Histogram, InputKind: s.InputKind, PickerValueVariable: s.PickerValueVariable, RecordPicker: s.RecordPicker, Spacer: s.Spacer, Separator: s.Separator, Notice: s.Notice, AlertValueVariable: s.AlertValueVariable, AlertBanner: s.AlertBanner, DateKind: s.DateKind, DateOffset: s.DateOffset, DateVariable: s.DateVariable, DateLabel: s.DateLabel, ChoiceSetVariable: s.ChoiceSetVariable, ChoiceVariable: s.ChoiceVariable, ChoiceInput: s.ChoiceInput, BooleanVariant: s.BooleanVariant, BooleanVariable: s.BooleanVariable, BooleanLabel: s.BooleanLabel, RangeInput: s.RangeInput, RangeMinVariable: s.RangeMinVariable, RangeMaxVariable: s.RangeMaxVariable, Leaderboard: s.Leaderboard, SummaryField: s.SummaryField, StatisticsVariable: s.StatisticsVariable, Gauge: s.Gauge, GaugeValueVariable: s.GaugeValueVariable, ProgressLabel: s.ProgressLabel, ProgressValueVariable: s.ProgressValueVariable, ProgressTotalVariable: s.ProgressTotalVariable, ProgressTotal: s.ProgressTotal, RecordGantt: s.RecordGantt, RecordCalendar: s.RecordCalendar, RecordEvents: s.RecordEvents, RecordChart: s.RecordChart, RecordList: s.RecordList, HeadingLevel: s.HeadingLevel, CountVariable: s.CountVariable, MetricPresentation: s.MetricPresentation, StatusTracker: s.StatusTracker, RecordLinks: slices.Clone(s.RecordLinks), Buttons: slices.Clone(s.Buttons), RecordView: s.RecordView, DetailPresentation: s.DetailPresentation, TableColumns: slices.Clone(s.TableColumns), ShowSearch: s.ShowSearch, Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, SelectionSetVariable: s.SelectionSetVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
 			Group: s.Group, Mark: s.Mark, ChartVariant: s.ChartVariant, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
 		if s.InlineEdit != nil {
 			section.InlineEdit = &platform.PageInlineEdit{Action: platform.AssetRef{App: strings.SplitN(s.InlineEdit.Action, ".", 2)[0], Kind: platform.AssetAction, Name: s.InlineEdit.Action}, Fields: slices.Clone(s.InlineEdit.Fields)}

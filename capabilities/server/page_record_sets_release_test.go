@@ -379,6 +379,18 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		root.Children = append(root.Children, spec.id)
 		doc.Nodes[doc.Root] = root
 	}
+	sparklineIndex := len(sections)
+	label := "Original series"
+	for _, spec := range []struct{ id, field, decimal, number string }{{"sparkline", "amount", "collectionCount", ""}, {"hiddenSparklineField", "sensitive", "collectionCount", ""}, {"numberSparkline", "", "", "gaugeValue"}, {"hiddenSparklineScalar", "", "", "hiddenGaugeValue"}} {
+		sections = append(sections, build.Section{ID: spec.id, Widget: "sparkline-kpi", ConfigVersion: 1, SparklineDecimalVariable: spec.decimal, SparklineNumberVariable: spec.number, Sparkline: &platform.PageSparkline{Field: spec.field, Label: &label, Suffix: " units"}})
+		if spec.field != "" {
+			sections[len(sections)-1].CollectionVariable = "pickerWindow"
+		}
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -404,6 +416,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[sparklineIndex].Sparkline = &platform.PageSparkline{Field: "sensitive", Suffix: "later"}
 	sections[treemapIndex].GroupSetVariable = ""
 	sections[treemapIndex].Group = "secret"
 	doc.Variables["treegroup"] = platform.PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: platform.Raw(map[string]any{"kind": "string-set", "values": []string{"later"}})}
@@ -533,6 +546,22 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					}
 					if !alertFound || member.ID == builder.ID && privateAlerts != 1 || member.ID != builder.ID && privateAlerts != 0 {
 						t.Fatal("frozen alert config, count binding or private dependency changed")
+					}
+					sparklineFound, numberSparkline, privateSparkline := false, false, 0
+					for _, section := range d.Page.Sections {
+						if section.ID == "sparkline" {
+							c := section.Sparkline
+							sparklineFound = c != nil && c.Field == "amount" && c.Label != nil && *c.Label == "Original series" && c.Suffix == " units" && section.SparklineDecimalVariable == "collectionCount" && section.CollectionVariable == "pickerWindow"
+						}
+						if section.ID == "numberSparkline" {
+							numberSparkline = section.SparklineNumberVariable == "gaugeValue" && section.CollectionVariable == ""
+						}
+						if section.ID == "hiddenSparklineField" || section.ID == "hiddenSparklineScalar" {
+							privateSparkline++
+						}
+					}
+					if !sparklineFound || !numberSparkline || member.ID == builder.ID && privateSparkline != 2 || member.ID != builder.ID && privateSparkline != 0 {
+						t.Fatal("frozen sparkline scalar, series, presentation or member projection changed")
 					}
 					treemapFound, privateTreemap := false, 0
 					for _, section := range d.Page.Sections {

@@ -541,9 +541,9 @@
       "sourceType": "SparklineKpi",
       "sourceCategory": "Analytics",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "sparkline-kpi",
+      "reason": "original-scalar-ordered-record-mini-line-profile"
     },
     {
       "sourceType": "ProgressBar",
