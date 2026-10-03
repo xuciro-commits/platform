@@ -140,7 +140,7 @@ func newPlant(t *testing.T) *testPlant {
 		}
 		logs := func(p *Plant) []proto.Message {
 			var out []proto.Message
-			for _, r := range p.ledger.Changes.Records(tenant) {
+			for _, r := range p.ledger.RecordsFor(tenant) {
 				out = append(out, r)
 			}
 			for _, r := range p.facts.Records(tenant) {

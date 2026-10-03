@@ -138,7 +138,7 @@ func TestAcceptedSubmitCommitFailureRetryAndReplay(t *testing.T) {
 	}
 	create := sub("k1", "create", `{"name":"Bolt","qty":2,"line":"L1"}`)
 	if _, err := live.Submit(member, create, now); err == nil ||
-		len(live.app("stock").(*stock).ledger.Changes.Records(live.ID)) != 0 ||
+		len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
 		live.records.types["stock.item"].rows["I1"] != nil {
 		t.Fatal("failed append exposed a draft")
 	}
@@ -253,7 +253,7 @@ func TestAcceptedResultCrashAfterAppendBeforeApply(t *testing.T) {
 			Schema: &pb.SchemaRef{Name: "stock.bin.create", Version: 1}, Payload: []byte(`{"code":"A"}`)}, at)
 	}()
 	if durable.Kind != "accepted-result" || source.records.types["stock.bin"].rows["B1"] != nil ||
-		len(source.app("stock").(*stock).ledger.Changes.Records(source.ID)) != 0 {
+		len(source.app("stock").(*stock).ledger.RecordsFor(source.ID)) != 0 {
 		t.Fatal("result was not durable first, or a draft escaped before application")
 	}
 	restarted := stockTenant(t)
@@ -261,7 +261,7 @@ func TestAcceptedResultCrashAfterAppendBeforeApply(t *testing.T) {
 		t.Fatalf("restart must apply committed result: %v", err)
 	}
 	if restarted.records.types["stock.bin"].rows["B1"] == nil ||
-		len(restarted.app("stock").(*stock).ledger.Changes.Records(source.ID)) != 1 {
+		len(restarted.app("stock").(*stock).ledger.RecordsFor(source.ID)) != 1 {
 		t.Fatal("durable result was not applied on restart")
 	}
 }
@@ -385,7 +385,7 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	}
 	create := submit("k1", "create", `{"name":"Bolt","qty":2,"line":"L1"}`)
 	savedCreate := stage(create, now)
-	if len(app.ledger.Changes.Records(source.ID)) != 0 || source.records.types["stock.item"].rows["I1"] != nil {
+	if len(app.ledger.RecordsFor(source.ID)) != 0 || source.records.types["stock.item"].rows["I1"] != nil {
 		t.Fatal("building a result exposed an uncommitted decision")
 	}
 	// Simulate loss of all in-memory draft state after the durable result: a
@@ -398,7 +398,7 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	c := platform.NewCaller(runtime{restored}, member, "stock", false, false)
 	got, _ := restored.records.get(c, reflect.TypeFor[Item](), "I1")
 	if got.(Item).Qty != 2 || len(restored.records.types["stock.item"].rows["I1"].history) != 1 ||
-		len(ledger.Changes.Records(restored.ID)) != 1 || len(restored.events) != 0 {
+		len(ledger.RecordsFor(restored.ID)) != 1 || len(restored.events) != 0 {
 		t.Fatalf("saved create was not applied purely: %+v", got)
 	}
 	if applied, err := restored.applyAcceptedResult(ledger, savedCreate); err != nil || applied {
@@ -424,14 +424,14 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	savedEdit := stage(submit("k2", "edit", `{"qty":7}`), now.Add(time.Second))
 	missing := stockTenant(t)
 	if _, err := missing.applyAcceptedResult(missing.app("stock").(*stock).ledger, savedEdit); err == nil ||
-		len(missing.app("stock").(*stock).ledger.Changes.Records(missing.ID)) != 0 {
+		len(missing.app("stock").(*stock).ledger.RecordsFor(missing.ID)) != 0 {
 		t.Fatal("edit without a predecessor advanced a fresh tenant")
 	}
 	if applied, err := restored.applyAcceptedResult(ledger, savedEdit); err != nil || !applied {
 		t.Fatalf("recover edit: %v, applied=%t", err, applied)
 	}
 	got, _ = restored.records.get(c, reflect.TypeFor[Item](), "I1")
-	if got.(Item).Qty != 7 || len(ledger.Changes.Records(restored.ID)) != 2 ||
+	if got.(Item).Qty != 7 || len(ledger.RecordsFor(restored.ID)) != 2 ||
 		len(restored.records.types["stock.item"].rows["I1"].history) != 2 {
 		t.Fatalf("saved edit was not applied purely: %+v", got)
 	}
@@ -488,7 +488,7 @@ func TestAcceptedResultRejectsMalformedOrIncompatibleBytes(t *testing.T) {
 			recovered := stockTenant(t)
 			ledger := recovered.app("stock").(*stock).ledger
 			if _, err := recovered.applyAcceptedResult(ledger, tampered); err == nil ||
-				len(ledger.Changes.Records(recovered.ID)) != 0 || recovered.records.types["stock.item"].rows["I1"] != nil {
+				len(ledger.RecordsFor(recovered.ID)) != 0 || recovered.records.types["stock.item"].rows["I1"] != nil {
 				t.Fatalf("invalid bytes modified recovered tenant: %v", err)
 			}
 		})

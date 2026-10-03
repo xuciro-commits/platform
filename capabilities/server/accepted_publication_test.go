@@ -417,7 +417,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 	}
 	if object, ok := platform.Get[build.Object](isolated.caller(member, isolated.app(build.ID), false), "O1"); !ok ||
 		object.State != "draft" || object.Published != "" ||
-		len(isolated.app(build.ID).(platform.ResultApp).AcceptedLedger().Changes.Records(isolated.ID)) != 1 {
+		len(isolated.app(build.ID).(platform.ResultApp).AcceptedLedger().RecordsFor(isolated.ID)) != 1 {
 		t.Fatal("incompatible publication changed the recovered record or receipt before quarantine")
 	}
 

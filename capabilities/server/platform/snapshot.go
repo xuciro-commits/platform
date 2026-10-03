@@ -24,7 +24,7 @@ type Snapshotter interface {
 func (l *Ledger) Snapshot() (json.RawMessage, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return Protos(l.Changes.Records(l.tenant))
+	return Protos(l.changes.Records(l.tenant))
 }
 
 func (l *Ledger) Restore(raw json.RawMessage) error {
@@ -32,7 +32,7 @@ func (l *Ledger) Restore(raw json.RawMessage) error {
 	defer l.mu.Unlock()
 	records, err := Unprotos[*pb.ChangeRecord](raw)
 	if err == nil {
-		l.Changes.Restore(l.tenant, records)
+		l.changes.Restore(l.tenant, records)
 	}
 	return err
 }

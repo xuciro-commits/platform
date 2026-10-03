@@ -14,6 +14,8 @@ import (
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
 	"platformserver/platform"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
 // The host API contract (ADR-0023 D7): every route is described, the document
@@ -103,5 +105,19 @@ func TestAPIContract(t *testing.T) {
 	static.Handler()
 	if got := TypeScript(static.OpenAPI(nil, nil), KernelModules("../../web/packages/kernel/src/gen")); got != string(want) {
 		t.Errorf("%s is stale: run go run ./cmd/api-types", generated)
+	}
+}
+
+// TestStatusesExhaustive guarantees that every non-unspecified kernel ErrorCode
+// maps to a valid HTTP status in statuses, preventing silent unmapped 0 statuses.
+func TestStatusesExhaustive(t *testing.T) {
+	for code, name := range pb.ErrorCode_name {
+		if code == 0 { // ERROR_CODE_UNSPECIFIED
+			continue
+		}
+		status, ok := statuses[pb.ErrorCode(code)]
+		if !ok || status < 400 || status >= 600 {
+			t.Errorf("statuses map missing or invalid HTTP status for %s (%d): got %d", name, code, status)
+		}
 	}
 }

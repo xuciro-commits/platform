@@ -26,7 +26,7 @@ func TestGeneratedDecisionStaysPrivate(t *testing.T) {
 	if err != nil || record == nil {
 		t.Fatalf("staged create: %v", err)
 	}
-	if len(app.ledger.Changes.Records(tn.ID)) != 0 || tn.records.types["stock.item"].rows["I1"] != nil ||
+	if len(app.ledger.RecordsFor(tn.ID)) != 0 || tn.records.types["stock.item"].rows["I1"] != nil ||
 		len(tn.events) != 0 || tn.acted != 0 {
 		t.Fatal("decision changed the live ledger, record or event queue before acceptance")
 	}
@@ -67,7 +67,7 @@ func TestGeneratedDecisionStaysPrivate(t *testing.T) {
 	current, _ := tn.records.get(c, reflect.TypeFor[Item](), "I1")
 	proposed, _ := draft.records.get(c, reflect.TypeFor[Item](), "I1")
 	if current.(Item).Qty != 2 || proposed.(Item).Qty != 7 ||
-		len(app.ledger.Changes.Records(tn.ID)) != 1 || len(draft.logs[app.ledger].Records(tn.ID)) != 2 {
+		len(app.ledger.RecordsFor(tn.ID)) != 1 || len(draft.logs[app.ledger].Records(tn.ID)) != 2 {
 		t.Fatalf("staged edit leaked: live=%+v draft=%+v", current, proposed)
 	}
 }

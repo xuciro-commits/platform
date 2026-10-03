@@ -20,7 +20,7 @@ func TestAcceptedRelationGraphIsPrivateUntilCommit(t *testing.T) {
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		links, _ := tn.Read(ana, "links")
 		if len(links.([]relations.Link)) != 0 ||
-			len(tn.app(relations.ID).(*relations.Relations).AcceptedLedger().Changes.Records(tn.ID)) != 0 {
+			len(tn.app(relations.ID).(*relations.Relations).AcceptedLedger().RecordsFor(tn.ID)) != 0 {
 			t.Fatal("link or ledger became visible before append")
 		}
 		if fail {

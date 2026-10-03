@@ -27,7 +27,7 @@ func NewChangeLog(schemas *SchemaRegistry) *ChangeLog {
 		byKey: map[string]map[string]*pb.ChangeRecord{}, revs: map[[3]string]uint32{}}
 }
 
-func (l *ChangeLog) Records(tenant string) []*pb.ChangeRecord { return l.logs[tenant] }
+func (l *ChangeLog) Records(tenant string) []*pb.ChangeRecord { return slices.Clone(l.logs[tenant]) }
 
 // Fork gives one decision a private change-log view. Accepted records are
 // immutable; the maps and slices that SubmitChecked extends are independent.

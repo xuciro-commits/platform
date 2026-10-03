@@ -24,7 +24,7 @@ type Ledger struct {
 	tenant       string
 	authority    string
 	declarations []*pb.AuthorityDeclaration
-	Changes      *kernel.ChangeLog
+	changes      *kernel.ChangeLog
 	authorities  *kernel.Authorities
 	// schemas is the change log's registry, kept so the package can teach it a
 	// schema that did not exist when it started (K7 S7, ADR-0034).
@@ -40,7 +40,7 @@ func NewLedger(tenant, authority string, catalog *Catalog, classes ...string) *L
 		schemas = append(schemas, &pb.SchemaRef{Name: a.Schema, Version: 1})
 	}
 	registry := kernel.NewSchemaRegistry(schemas, nil)
-	l := &Ledger{tenant: tenant, authority: authority, Changes: kernel.NewChangeLog(registry), schemas: registry,
+	l := &Ledger{tenant: tenant, authority: authority, changes: kernel.NewChangeLog(registry), schemas: registry,
 		authorities: kernel.NewAuthorities(authority), Catalog: catalog}
 	for _, class := range classes {
 		d := &pb.AuthorityDeclaration{TenantId: tenant, DataClass: class, Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: authority, Epoch: 1}
@@ -90,7 +90,7 @@ func (l *Ledger) Declarations() []*pb.AuthorityDeclaration { return l.declaratio
 func (l *Ledger) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.Changes.ApplyAccepted(record)
+	return l.changes.ApplyAccepted(record)
 }
 
 // ForkAcceptedChanges validates a complete host batch without advancing the
@@ -98,7 +98,22 @@ func (l *Ledger) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
 func (l *Ledger) ForkAcceptedChanges() *kernel.ChangeLog {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.Changes.Fork()
+	return l.changes.Fork()
+}
+
+// RecordsFor returns a defensive copy of tenant's accepted records,
+// safe to call concurrently with Receive.
+func (l *Ledger) RecordsFor(tenant string) []*pb.ChangeRecord {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.changes.Records(tenant)
+}
+
+// SetFacts supplies the change log's tenant fact-check callback (K2, K4 C11).
+func (l *Ledger) SetFacts(facts func(tenant, factID string) bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.changes.Facts = facts
 }
 
 // AcceptedFor returns a saved receipt for a key without running application
@@ -106,7 +121,7 @@ func (l *Ledger) ForkAcceptedChanges() *kernel.ChangeLog {
 func (l *Ledger) AcceptedFor(tenant, key string) *pb.ChangeRecord {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for _, record := range l.Changes.Records(tenant) {
+	for _, record := range l.changes.Records(tenant) {
 		if record.GetSubmission().GetIdempotencyKey() == key {
 			return proto.Clone(record).(*pb.ChangeRecord)
 		}
@@ -130,13 +145,13 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	rules = l.checked(c, s, rules)
 	probing := c.rt != nil && c.rt.Probing()
 	refused := false // the kernel's policy step said no
-	changes := l.Changes
+	changes := l.changes
 	// ADR-0038 19a: a host-owned decision view may use a private change log.
 	// Ordinary callers and replay retain the existing authoritative path.
 	if draft, ok := c.rt.(interface {
-		DraftChanges(*Ledger) *kernel.ChangeLog
+		DraftChanges(*Ledger, func() *kernel.ChangeLog) *kernel.ChangeLog
 	}); ok {
-		changes = draft.DraftChanges(l)
+		changes = draft.DraftChanges(l, l.changes.Fork)
 	}
 	if probing {
 		// Probes validate kernel identity, key conflicts and expected revisions

@@ -851,6 +851,7 @@ var statuses = map[pb.ErrorCode]int{
 	pb.ErrorCode_ERROR_CODE_NOT_AUTHORITY:        http.StatusMisdirectedRequest,
 	pb.ErrorCode_ERROR_CODE_CONFLICT:             http.StatusConflict,
 	pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT: http.StatusConflict,
+	pb.ErrorCode_ERROR_CODE_REDIRECT_CYCLE:       http.StatusConflict,
 	pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE:    http.StatusUnprocessableEntity,
 }
 
@@ -863,7 +864,11 @@ func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error) {
 		if err.Message != "" {
 			body["message"] = err.Message
 		}
-		WriteJSON(w, statuses[err.Code], map[string]any{"error": body})
+		status := statuses[err.Code]
+		if status == 0 {
+			status = http.StatusInternalServerError
+		}
+		WriteJSON(w, status, map[string]any{"error": body})
 	case record == nil:
 		WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	default:

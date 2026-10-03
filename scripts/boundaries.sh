@@ -11,7 +11,9 @@
 #      cmd/<id>-server; its UI, when it has one, is web/packages/<id> with
 #      src/index.tsx and src/i18n.ts;
 #   4. the host's own apps (capabilities/server/apps/*) import the app API and
-#      internal/host, never the host runtime (ADR-0025 D4).
+#      internal/host, never the host runtime (ADR-0025 D4);
+#   5. code outside platform never touches .Changes or .changes directly: all
+#      reads and decisions go through locked methods (RecordsFor, Receive, etc.).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 fail() { echo "boundary: $*" >&2; exit 1; }
@@ -43,5 +45,9 @@ for x in "${apps[@]}"; do
 done
 hits=$(cd capabilities/server && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./apps/... 2>/dev/null | grep -E ' platformserver( |$)' || true)
 [[ -z $hits ]] || fail "a platform app imports the host runtime, not the app API and internal/host:"$'\n'"$hits"
+
+leaks=$(grep -rnE '\.(Changes|changes)\.' --include="*.go" apps/ protocols/ capabilities/server/ --exclude-dir=platform || true)
+[[ -z $leaks ]] || fail "code outside platform touches change log directly without ledger lock:"$'\n'"$leaks"
+
 platformapps=$(cd capabilities/server && go list ./apps/... 2>/dev/null | wc -l | tr -d ' ')
 echo "boundaries ok: ${#apps[@]} apps, ${#protocols[@]} protocols, $platformapps platform apps as packages"

@@ -174,9 +174,9 @@ func New(tenant string, rooms map[string]RoomType) *Hotel {
 	h := &Hotel{tenant: tenant, entities: Entities(rooms),
 		ledger: platform.NewLedger(tenant, ID, Actions(), RoomTypeType, ReservationType),
 		facts:  kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: channelMessageSchema, Version: 1}}, nil))}
-	h.ledger.Changes.Facts = func(tenant, id string) bool {
+	h.ledger.SetFacts(func(tenant, id string) bool {
 		return slices.ContainsFunc(h.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
-	}
+	})
 	return h
 }
 

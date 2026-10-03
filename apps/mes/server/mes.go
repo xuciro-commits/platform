@@ -157,9 +157,9 @@ func New(tenant string, master MasterData) *Plant {
 		ledger:   platform.NewLedger(tenant, ID, Actions(), OrderType, SFCType, DowntimeType),
 		facts:    kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: schemaStates, Version: 1}}, nil)),
 		identity: kernel.NewIdentity(nil), downtime: map[string][]Downtime{}}
-	p.ledger.Changes.Facts = func(tenant, id string) bool {
+	p.ledger.SetFacts(func(tenant, id string) bool {
 		return slices.ContainsFunc(p.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
-	}
+	})
 	p.entities = Entities(p)
 	return p
 }

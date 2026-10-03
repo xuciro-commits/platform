@@ -140,7 +140,7 @@ func TestAcceptedNestedPublicationSharesParentCommitAndInstallation(t *testing.T
 	fail := true
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		if _, exists := live.owner["action:build.visit.create"]; exists ||
-			live.records.types["build.visit"] != nil || len(live.app(build.ID).(platform.ResultApp).AcceptedLedger().Changes.Records(live.ID)) != 0 {
+			live.records.types["build.visit"] != nil || len(live.app(build.ID).(platform.ResultApp).AcceptedLedger().RecordsFor(live.ID)) != 0 {
 			t.Fatal("nested publication installed before the parent's commit")
 		}
 		if fail {
@@ -181,8 +181,8 @@ func TestAcceptedNestedDecisionsShareOneCommitAndRecovery(t *testing.T) {
 	fail := true
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		// Neither the parent nor either nested decision may be public yet.
-		if len(live.app("stock").(*stock).ledger.Changes.Records(live.ID)) != 0 ||
-			len(live.app("nested").(*nestedIssuer).ledger.Changes.Records(live.ID)) != 0 ||
+		if len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
+			len(live.app("nested").(*nestedIssuer).ledger.RecordsFor(live.ID)) != 0 ||
 			live.records.types["stock.item"].rows["D1-child"] != nil ||
 			live.sequences["nested/document/0"] != 0 {
 			t.Fatal("a nested decision escaped before the one journal append")
@@ -243,8 +243,8 @@ func TestAcceptedNestedRefusalDiscardsEveryChild(t *testing.T) {
 		if _, _, err := decodeRefusedResult(entries[0].Body); err != nil {
 			t.Fatal(err)
 		}
-		if len(live.app("stock").(*stock).ledger.Changes.Records(live.ID)) != 0 ||
-			len(parent.ledger.Changes.Records(live.ID)) != 0 ||
+		if len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
+			len(parent.ledger.RecordsFor(live.ID)) != 0 ||
 			len(live.records.types["stock.item"].rows) != 0 || len(live.events) != 0 {
 			t.Fatal("a refused parent exposed a child receipt, record or event")
 		}
@@ -290,8 +290,8 @@ func TestAcceptedNestedBatchValidatesAllLedgersBeforeApplication(t *testing.T) {
 	if _, err := recovered.applyAcceptedBatch(recovered.app("nested").(*nestedIssuer).ledger, raw); err == nil {
 		t.Fatal("invalid final parent receipt was accepted")
 	}
-	if len(recovered.app("stock").(*stock).ledger.Changes.Records(recovered.ID)) != 0 ||
-		len(recovered.app("nested").(*nestedIssuer).ledger.Changes.Records(recovered.ID)) != 0 ||
+	if len(recovered.app("stock").(*stock).ledger.RecordsFor(recovered.ID)) != 0 ||
+		len(recovered.app("nested").(*nestedIssuer).ledger.RecordsFor(recovered.ID)) != 0 ||
 		len(recovered.records.types["stock.item"].rows) != 0 || recovered.sequences["nested/document/0"] != 0 {
 		t.Fatal("a late invalid receipt exposed an earlier child's state")
 	}
@@ -332,8 +332,8 @@ func TestJournalAcceptedNestedBatchCrashBeforeApplication(t *testing.T) {
 		}()
 		live.Submit(m, s, at)
 	}()
-	if len(live.app("stock").(*stock).ledger.Changes.Records(id)) != 0 ||
-		len(live.app("nested").(*nestedIssuer).ledger.Changes.Records(id)) != 0 ||
+	if len(live.app("stock").(*stock).ledger.RecordsFor(id)) != 0 ||
+		len(live.app("nested").(*nestedIssuer).ledger.RecordsFor(id)) != 0 ||
 		len(live.records.types["stock.item"].rows) != 0 || live.sequences["nested/document/0"] != 0 {
 		t.Fatal("unapplied nested result leaked a record, receipt or number")
 	}

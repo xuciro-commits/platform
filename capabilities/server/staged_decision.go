@@ -102,9 +102,9 @@ func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submi
 
 // DraftChanges is called under the ledger's lock. It keeps both the kernel
 // receipt and the host record image private until a durable result exists.
-func (d *stagedDecision) DraftChanges(l *platform.Ledger) *kernel.ChangeLog {
+func (d *stagedDecision) DraftChanges(l *platform.Ledger, fork func() *kernel.ChangeLog) *kernel.ChangeLog {
 	if d.logs[l] == nil {
-		d.logs[l] = l.Changes.Fork()
+		d.logs[l] = fork()
 		d.bindPrivateFacts(l)
 	}
 	return d.logs[l]

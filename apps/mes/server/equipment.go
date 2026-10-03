@@ -174,7 +174,7 @@ func (p *Plant) Downtime() []Downtime {
 	for _, events := range p.downtime {
 		out = append(out, events...)
 	}
-	for _, r := range p.ledger.Changes.Records(p.tenant) {
+	for _, r := range p.ledger.RecordsFor(p.tenant) {
 		if r.GetSubmission().GetSchema().GetName() != SchemaReason {
 			continue
 		}

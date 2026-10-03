@@ -103,8 +103,8 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	for s := 2; s <= 40; s++ {
 		tn.Work(at(s))
 	}
-	if w.texts["log"] != "saw why" || len(w.ledger.Changes.Records("t-1")) != 4 {
-		t.Fatalf("watcher wrote %v (%d records)", w.texts, len(w.ledger.Changes.Records("t-1")))
+	if w.texts["log"] != "saw why" || len(w.ledger.RecordsFor("t-1")) != 4 {
+		t.Fatalf("watcher wrote %v (%d records)", w.texts, len(w.ledger.RecordsFor("t-1")))
 	}
 	outcomes := func(tn *Tenant) []string {
 		out := []string{}
@@ -122,7 +122,7 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	if len(failed) != 1 || failed[0].State != "failed" || failed[0].Attempts != deliveryRetry.Attempts || failed[0].Error != "ERROR_CODE_CONFLICT" {
 		t.Fatalf("work %+v", failed)
 	}
-	if r := w.ledger.Changes.Records("t-1")[0]; r.GetSubmission().GetPrincipalId() != "app:w" {
+	if r := w.ledger.RecordsFor("t-1")[0]; r.GetSubmission().GetPrincipalId() != "app:w" {
 		t.Fatalf("the handler's decision is attributed to %s", r.GetSubmission().GetPrincipalId())
 	}
 	// An administrator retries the failed delivery: a full schedule of attempts again.

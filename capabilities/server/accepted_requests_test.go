@@ -87,8 +87,8 @@ func TestAcceptedProtocolRequestAndReplyShareCommit(t *testing.T) {
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		// All three decisions, including the reply, must still be invisible.
 		if len(tn.records.types["cart.line"].rows) != 0 || len(tn.records.types["stock.hold"].rows) != 0 ||
-			len(tn.app("cart").(*resultCart).ledger.Changes.Records(tn.ID)) != 0 ||
-			len(tn.app("stock").(*resultDepot).ledger.Changes.Records(tn.ID)) != 0 {
+			len(tn.app("cart").(*resultCart).ledger.RecordsFor(tn.ID)) != 0 ||
+			len(tn.app("stock").(*resultDepot).ledger.RecordsFor(tn.ID)) != 0 {
 			t.Fatal("protocol transaction changed live records before append")
 		}
 		if fail {
