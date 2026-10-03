@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Statistics are unavailable or loading.": "统计不可用或正在加载。",
+ "Statistics fields or result are unavailable or incompatible.": "统计字段或结果不可用或不兼容。",
+ "Statistics result is invalid.": "统计结果无效。",
+ "Statistics need a read-only scoped declaration": "统计需要具有作用域的只读声明",
  "Aggregate scalar result is invalid.": "聚合标量结果无效。",
  "No value for this gauge.": "此仪表没有数值。",
  "Gauge value is unavailable or loading.": "仪表数值不可用或正在加载。",

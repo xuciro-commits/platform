@@ -191,6 +191,14 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		warn := 60.0
 		sections = append(sections, build.Section{ID: spec.id, Widget: "gauge", ConfigVersion: 1, GaugeValueVariable: spec.id + "Value", Gauge: &platform.PageGauge{Max: 100, WarnAt: &warn, Label: "Frozen availability", Suffix: "%"}})
 	}
+	for _, spec := range []struct{ id, field string }{{"summary", "amount"}, {"hiddenSummary", "sensitive"}} {
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		doc.Variables[spec.id+"Stats"] = platform.PageVariable{Scope: "page", Type: "statistics", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "statistics", Query: "metricq", Measure: spec.field}}
+		sections = append(sections, build.Section{ID: spec.id, Widget: "summary-stats", ConfigVersion: 1, CollectionVariable: "metricWindow", StatisticsVariable: spec.id + "Stats", SummaryField: spec.field})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -216,6 +224,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[45].SummaryField = "sensitive"
+	sections[45].StatisticsVariable = "hiddenSummaryStats"
 	sections[43].Gauge = &platform.PageGauge{Max: 200, Label: "Later availability"}
 	doc.Variables["gaugeValue"] = platform.PageVariable{Scope: "page", Type: "number", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "aggregate", Query: "metricq", Measure: "sum:amount"}}
 	sections[39].ProgressTotal = "800"
@@ -239,6 +249,19 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					summary, privateSummary := false, false
+					for _, s := range d.Page.Sections {
+						if s.ID == "summary" {
+							summary = s.SummaryField == "amount" && s.StatisticsVariable == "summaryStats" && d.Page.Document.Variables[s.StatisticsVariable].Source.Measure == "amount"
+						}
+						if s.ID == "hiddenSummary" {
+							privateSummary = true
+						}
+					}
+					if !summary || privateSummary != (member.ID == builder.ID) {
+						t.Fatal("frozen summary or private field projection changed")
+					}
+
 					gauge, privateGauge := false, false
 					for _, s := range d.Page.Sections {
 						if s.ID == "gauge" {

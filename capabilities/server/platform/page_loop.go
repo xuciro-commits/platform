@@ -137,6 +137,9 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		if !accessible(section.StatisticsVariable, "", sectionOverlays[section.ID]) || section.Widget == "summary-stats" && sectionOwners[section.ID] != "" {
+			return fmt.Errorf("summary cannot escape its scope or enter a loop")
+		}
 		if !accessible(section.GaugeValueVariable, sectionOwners[section.ID], sectionOverlays[section.ID]) {
 			return fmt.Errorf("gauge scalar cannot escape its scope")
 		}

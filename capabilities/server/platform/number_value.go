@@ -23,10 +23,14 @@ func NumberLiteral(raw json.RawMessage) (NumberValue, bool) {
 	return v, true
 }
 func (d *PageDocument) CheckAggregateScalar(v PageVariable, info EntityInfo) error {
-	if v.Mode != "aggregate" || v.Source == nil || v.Source.Kind != "aggregate" {
+	if v.Mode != "aggregate" || v.Source == nil || v.Source.Kind != "aggregate" && v.Source.Kind != "statistics" {
 		return nil
 	}
 	_, field, ok := stringsCutMeasure(v.Source.Measure)
+	if v.Source.Kind == "statistics" {
+		field = v.Source.Measure
+		ok = pageNodeID.MatchString(field)
+	}
 	f, found := info.Field(field)
 	if !ok || !found || (f.Type != "integer" && f.Type != "decimal") {
 		return fmt.Errorf("aggregate scalar needs an original visible numeric field")

@@ -43,6 +43,9 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Summary struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+	} `json:"summary"`
 	Gauge struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 	} `json:"gauge"`
@@ -284,10 +287,13 @@ func (d *PageDocument) CheckVariables() error {
 		if v.Writable && v.Mode != contract.Application.BindingMode {
 			return fail("only shared bindings declare writable")
 		}
+		if v.Type == "statistics" && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Summary.RequiredUIProfile) || v.Mode != "aggregate" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
+			return fail("statistics needs its read-only scoped profile")
+		}
 		if v.Type == "number" && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Gauge.RequiredUIProfile) || !slices.Contains([]string{"aggregate", "constant", "derived"}, v.Mode) || v.Scope == "application") {
 			return fail("number needs its read-only scoped profile")
 		}
-		if v.Source != nil && v.Source.Measure != "" && (v.Mode != "aggregate" || v.Source.Kind != "aggregate") {
+		if v.Source != nil && v.Source.Measure != "" && (v.Mode != "aggregate" || v.Source.Kind != "aggregate" && v.Source.Kind != "statistics") {
 			return fail("measure needs an aggregate scalar")
 		}
 		if v.Mode != "resource" && v.Mode != "property" && v.Mode != "aggregate" && v.Mode != contract.Application.BindingMode && v.Source != nil {
@@ -304,7 +310,7 @@ func (d *PageDocument) CheckVariables() error {
 		}
 		switch v.Mode {
 		case "aggregate":
-			if v.Source == nil || !((v.Type == "decimal" && v.Source.Kind == contract.Aggregate.Source && v.Source.Measure == "") || (v.Type == "number" && v.Source.Kind == "aggregate")) || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Variable != "" || v.Expression != nil || len(v.Initial) > 0 {
+			if v.Source == nil || !((v.Type == "decimal" && v.Source.Kind == contract.Aggregate.Source && v.Source.Measure == "") || (v.Type == "number" && v.Source.Kind == "aggregate") || (v.Type == "statistics" && v.Source.Kind == "statistics" && pageNodeID.MatchString(v.Source.Measure))) || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Variable != "" || v.Expression != nil || len(v.Initial) > 0 {
 				return fail("aggregate needs only a count query source")
 			}
 			if v.Source.Kind == "aggregate" {
@@ -440,7 +446,7 @@ func (d *PageDocument) CheckVariables() error {
 					first = typ
 				}
 				resource := typ == "record" || typ == "filter" || typ == "object-set"
-				if typ == "" || (op.Input == "same" && (typ != first || resource)) || (op.Input == "resource" && !resource) || (op.Input != "same" && op.Input != "resource" && typ != op.Input) {
+				if typ == "statistics" || typ == "" || (op.Input == "same" && (typ != first || resource)) || (op.Input == "resource" && !resource) || (op.Input != "same" && op.Input != "resource" && typ != op.Input) {
 					return fail("argument type mismatch")
 				}
 			}

@@ -685,9 +685,9 @@
       "sourceType": "SummaryStats",
       "sourceCategory": "Analytics",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "summary-stats",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "TagList",

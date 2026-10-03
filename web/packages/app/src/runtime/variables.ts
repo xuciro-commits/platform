@@ -7,7 +7,7 @@ type Variables = Record<string, Api.PageVariable>;
 type Scalar = ScalarValue;
 export type VariableIssue = { variable: string; code: string };
 export type PropertyReader=(reference:RecordReference,field:string,type:string)=>VariableResult;
-export type ResourceValue = {kind:"record-set";object:string;records:RecordReference[]} | { kind: "record"; reference: RecordReference } | { kind: "filter"; object: string; fields: Record<string, unknown> } | { kind: "object-set"; window: QueryWindow };
+export type ResourceValue = import("@platform/ui").StatisticsValue | {kind:"record-set";object:string;records:RecordReference[]} | { kind: "record"; reference: RecordReference } | { kind: "filter"; object: string; fields: Record<string, unknown> } | { kind: "object-set"; window: QueryWindow };
 export type VariableResult = { status: "value"; value: Scalar | ResourceValue; draft?:string } | { status: "empty"; value?: ResourceValue } | { status: "pending" } | { status: "error"; code: string; draft?:string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 const bytes = (value: string) => new TextEncoder().encode(value).length;
@@ -33,14 +33,15 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if (variable.writable && variable.mode !== "shared") fail(id,"Only shared bindings declare writable");
     if(variable.type==="record-set"&&(!["page","overlay"].includes(variable.scope)||variable.mode!=="resource"||variable.source?.kind!=="records"))fail(id,"Resource source type mismatch");
     if(variable.type==="string-set"&&(!["page","overlay"].includes(variable.scope)||!["state","constant"].includes(variable.mode)))fail(id,"Unsupported variable type or scope");
+    if(variable.type==="statistics"&&(variable.mode!=="aggregate"||!["page","overlay"].includes(variable.scope)))fail(id,"Statistics need a read-only scoped declaration");
     if(variable.type==="number"&&(!["aggregate","constant","derived"].includes(variable.mode)||variable.scope==="application"))fail(id,"Number needs a read-only scoped declaration");
-    if(variable.source?.measure&&(variable.mode!=="aggregate"||variable.source.kind!=="aggregate"))fail(id,"Measure needs an aggregate scalar");
+    if(variable.source?.measure&&(variable.mode!=="aggregate"||variable.source.kind!=="aggregate"&&variable.source.kind!=="statistics"))fail(id,"Measure needs an aggregate scalar");
     if (variable.mode !== "resource" && variable.mode !== "property" && variable.mode !== "aggregate" && variable.mode !== "shared" && variable.source) fail(id, "Only resource or shared variables may declare a source");
     if(variable.source?.object&&!((variable.mode==="shared"&&["object-set","record","filter"].includes(variable.type))||(variable.mode==="resource"&&variable.scope==="application"&&["record","filter"].includes(variable.type))||variable.mode==="property"))fail(id,"Only shared windows declare an object requirement");
     if(variable.source?.fields?.length&&!(variable.scope==="application"&&variable.mode==="resource"&&variable.type==="filter"))fail(id,"Only an application filter declares fields");
     if(variable.source?.field&&variable.mode!=="property")fail(id,"Only a property source declares a field");
     if(variable.mode==="aggregate") {
-      const source=variable.source;if(!source||!((variable.type==="decimal"&&source.kind===contract.aggregate.source&&!source.measure)||(variable.type==="number"&&source.kind==="aggregate"&&/^(sum|avg|min|max):[A-Za-z][A-Za-z0-9._:-]{0,79}$/.test(source.measure??"")))||!validID.test(source.query??"")||source.section||source.node||source.variable||variable.initial!==undefined||variable.expression)fail(id,"Aggregate needs only a count query source");
+      const source=variable.source;if(!source||!((variable.type==="decimal"&&source.kind===contract.aggregate.source&&!source.measure)||(variable.type==="number"&&source.kind==="aggregate"&&/^(sum|avg|min|max):[A-Za-z][A-Za-z0-9._:-]{0,79}$/.test(source.measure??""))||(variable.type==="statistics"&&source.kind==="statistics"&&validID.test(source.measure??"")))||!validID.test(source.query??"")||source.section||source.node||source.variable||variable.initial!==undefined||variable.expression)fail(id,"Aggregate needs only a count query source");
     } else if(variable.mode==="property") {
       const source=variable.source,parent=variables[source?.variable??""];if(!source||source.kind!=="property"||!validID.test(source.variable??"")||!validID.test(source.field??"")||!source.object||source.object.kind!=="object"||!source.object.app||!source.object.name||source.section||source.node||source.query||source.fields?.length||variable.expression||variable.initial!==undefined||!["string","boolean","decimal"].includes(variable.type))fail(id,"Property needs a typed record and field source");
       if(parent?.scope==="loop-item"&&(variable.scope!=="loop-item"||parent.owner!==variable.owner)||parent?.scope==="overlay"&&(variable.scope!=="overlay"||parent.owner!==variable.owner))fail(id,"Property source escapes its scope");if(visit(source?.variable??"")!=="record")fail(id,"Property source must be a record");

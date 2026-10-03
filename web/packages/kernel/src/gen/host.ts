@@ -1433,6 +1433,8 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  summaryField?: string;
+  statisticsVariable?: string;
   gauge?: PageGauge;
   gaugeValueVariable?: string;
   progressLabel?: string;
@@ -1769,7 +1771,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.49",
+  "uiProfile": "platform.page.v2.50",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3727,6 +3729,70 @@ export const pageUIManifest = {
       "layoutPreferences": {
         "frame": "card"
       }
+    },
+    {
+      "componentID": "summary-stats",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.50",
+      "title": "Summary statistics",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "statistics-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "summaryField": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.50"
+        },
+        {
+          "id": "statistics",
+          "bindingField": "statisticsVariable",
+          "type": "statistics",
+          "requiredUIProfile": "platform.page.v2.50"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -3778,7 +3844,8 @@ export const pageUIManifest = {
     "platform.page.v2.46",
     "platform.page.v2.47",
     "platform.page.v2.48",
-    "platform.page.v2.49"
+    "platform.page.v2.49",
+    "platform.page.v2.50"
   ],
   "runtime": {
     "scope": "page",
@@ -3791,7 +3858,8 @@ export const pageUIManifest = {
       "decimal",
       "string-set",
       "record-set",
-      "number"
+      "number",
+      "statistics"
     ],
     "maxVariables": 64,
     "maxStringBytes": 4096,
@@ -3974,7 +4042,8 @@ export const pageUIManifest = {
         "decimal",
         "string-set",
         "record-set",
-        "number"
+        "number",
+        "statistics"
       ],
       "modes": [
         "state",
@@ -4231,6 +4300,9 @@ export const pageUIManifest = {
     },
     "gauge": {
       "requiredUIProfile": "platform.page.v2.49"
+    },
+    "summary": {
+      "requiredUIProfile": "platform.page.v2.50"
     }
   },
   "layout": {

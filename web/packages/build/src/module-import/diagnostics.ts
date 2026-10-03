@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "summary-profile":"Summary statistics need an original integer or decimal field and matching complete-query statistics profile.",
+ "native-summary-answer":"All five statistics use one original complete authorized aggregate answer. Count stays exact and numeric measures retain host precision. Missing or empty numeric measures remain empty; client arrays, zero filling and source metadata formatting are not copied.",
  "gauge-scalar":"Map the original sum, average, minimum or maximum field, or bind a supported numeric input. Function-backed values need their original result contract.",
  "gauge-presentation":"Gauge labels and suffixes must be bounded text; maximum must be positive and thresholds finite.",
  "gauge-profile":"Gauge requires the supported numeric aggregate profile.",

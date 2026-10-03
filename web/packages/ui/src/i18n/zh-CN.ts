@@ -544,4 +544,13 @@ export default {
   "Authorized numeric gauge": "授权数值仪表",
   "Display the original finite numeric aggregate with a bounded arc and warning threshold.": "以有界弧线和警告阈值显示原有限数值聚合。",
   "The caller owns the original numeric result and complete set. The gauge does not substitute zero for empty or denied values.": "调用方拥有原数值结果与完整集合，仪表不将空值或拒绝值替换为零。",
+  "Min": "最小值",
+  "Mean": "平均值",
+  "Max": "最大值",
+  "Sum": "总和",
+  "Complete authorized set": "完整授权集合",
+  "No value": "无值",
+  "Authorized summary statistics": "授权汇总统计",
+  "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
+  "The caller owns the original five-measure answer. Counts remain exact; missing numeric measures remain empty.": "调用方拥有原五度量答复。计数保持精确，缺失数值度量保持为空。",
 } as Record<string, string>;

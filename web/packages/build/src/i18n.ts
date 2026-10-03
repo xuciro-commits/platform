@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Summary statistics": "汇总统计",
+ "Summary query window": "汇总查询窗口",
+ "Summary numeric field": "汇总数值字段",
+ "Statistics variable": "统计变量",
+ "Statistics": "统计",
+ "Choose matching complete statistics": "选择匹配的完整统计",
+ "Create matching statistics in Page variables. All five measures come from one complete authorized answer; empty values stay empty.": "在页面变量中创建匹配统计。五项度量来自同一完整授权答复，空值保持为空。",
+ "Bind the summary field, query and matching statistics before saving.": "保存前请绑定汇总字段、查询及匹配统计。",
+ "Summary statistics need an original integer or decimal field and matching complete-query statistics profile.": "汇总统计需要原整数或十进制字段及匹配的完整查询统计配置。",
+ "All five statistics use one original complete authorized aggregate answer. Count stays exact and numeric measures retain host precision. Missing or empty numeric measures remain empty; client arrays, zero filling and source metadata formatting are not copied.": "五项统计使用同一原完整授权聚合答复。计数保持精确，数值度量保留宿主精度。缺失或空度量保持为空，不复制客户端数组、补零及来源元数据格式。",
  "Aggregate query source": "聚合查询来源",
  "Reads the full permitted aggregate; sorting and paging do not limit it.": "读取完整授权集合聚合，排序和分页不限制其范围。",
  "Gauge": "仪表",
