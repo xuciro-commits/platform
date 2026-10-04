@@ -1,0 +1,26 @@
+import {useMemo,useState} from "react";
+import {DataTable} from "../components/DataTable";
+import {columnsFor} from "../fields/entity";
+import {Button} from "../primitives/button";
+import {Input,Select} from "../primitives/input";
+import {Checkbox,Switch} from "../primitives/controls";
+import {t} from "../i18n";
+import {entityFrom,type EntityInfo,type EntityRecord} from "./Records";
+import {observationFields,observationTableRecords,observationWindowCurrent,type ObservationSignal,type ObservationMetadata,type ObservationWindow} from "./observation-model";
+
+export type ObservationTableProps={scope:string;window?:ObservationWindow;info:EntityInfo;signals:ObservationSignal[];metadata:ObservationMetadata;selectedId?:string;rowHeight?:number;enabled?:boolean;readCurrent?:boolean;loading?:boolean;error?:string;onSelect?:(record:EntityRecord)=>void;onExport?:(window:ObservationWindow,fields:string[])=>void};
+export function ObservationTable(props:ObservationTableProps){return <TableSurface key={props.scope} {...props}/>;}
+function TableSurface({scope,window,info,signals,metadata,selectedId,rowHeight=30,enabled=true,readCurrent=true,loading,error,onSelect,onExport}:ObservationTableProps){
+ const [hidden,setHidden]=useState<Set<string>>(()=>new Set()),[search,setSearch]=useState(""),[pin,setPin]=useState(true),[height,setHeight]=useState(rowHeight);
+ const descriptors=observationFields(info,signals,metadata);
+ // Immutable caller snapshots keep column-menu edits from rescanning all cells
+ // or rebuilding the table's row model; this memo is presentation, not a reader.
+ const records=window?.records;
+ const validRecords=useMemo(()=>!!records&&observationTableRecords(records,info,signals,metadata),[records,info,signals,metadata]);
+ const data=useMemo(()=>records?[...records]:[],[records]);
+ if(error)return <p role="alert">{t(error)}</p>;
+ if(!readCurrent||loading||!window||window.scope!==scope)return <p role="status">{t("Loading original observations…")}</p>;
+ if(!descriptors||!observationWindowCurrent(window,scope)||!validRecords||!Number.isInteger(rowHeight)||rowHeight<26||rowHeight>44)return <p role="alert">{t("The original observation table fields, records or window are unavailable or incompatible.")}</p>;
+ const visible=signals.filter(s=>!hidden.has(s.field)),fields=["id",...descriptors.fields,...visible.map(s=>s.field)],entity=entityFrom(info),columns=columnsFor(entity,fields.filter(f=>f!=="id")).map(c=>({...c,meta:{...c.meta,width:c.id===metadata.time?190:120,pin:pin&&descriptors.fields.includes(c.id!)?"left" as const:undefined}})),idColumn={id:"id",accessorKey:"id",header:t("Record ID"),meta:{width:150,pin:pin?"left" as const:undefined}},options=signals.filter(s=>`${s.group??""} ${info.fields.find(f=>f.name===s.field)!.title} ${s.field}`.toLowerCase().includes(search.toLowerCase()));
+ return <div className="grid min-w-0 gap-2"><p role="status" className="text-xs text-muted">{t("{shown} of {total} original observations · {signals} visible signals",{shown:window.records.length,total:window.total,signals:visible.length})}</p><div className="flex flex-wrap items-center gap-2"><Switch checked={pin} onChange={value=>{if(enabled)setPin(value);}} disabled={!enabled} label={t("Pin observation metadata")}/><label className="flex items-center gap-1 text-xs">{t("Observation row height")}<Select value={String(height)} disabled={!enabled} onChange={e=>setHeight(Number(e.target.value))}>{[26,30,36,44,...(rowHeight!==26&&rowHeight!==30&&rowHeight!==36&&rowHeight!==44?[rowHeight]:[])].map(n=><option key={n} value={String(n)}>{n}</option>)}</Select></label>{onExport&&<Button size="sm" disabled={!enabled||!window.records.length} onClick={()=>{if(enabled&&readCurrent)onExport(window,fields);}}>{t("Export original window")}</Button>}</div><details><summary className="cursor-pointer text-xs">{t("Observation columns")}</summary><div className="mt-2 grid min-w-0 gap-2"><Input type="search" aria-label={t("Find observation columns")} value={search} disabled={!enabled} onChange={e=>setSearch(e.target.value)}/><div className="flex flex-wrap gap-2"><Button size="sm" disabled={!enabled} onClick={()=>setHidden(new Set())}>{t("Show all signals")}</Button><Button size="sm" disabled={!enabled} onClick={()=>setHidden(new Set(signals.map(s=>s.field)))}>{t("Hide all signals")}</Button></div><div className="grid max-h-48 min-w-0 gap-1 overflow-auto sm:grid-cols-2">{options.map(s=><Checkbox key={s.field} checked={!hidden.has(s.field)} disabled={!enabled} onChange={checked=>setHidden(old=>{const next=new Set(old);if(checked)next.delete(s.field);else next.add(s.field);return next;})}>{s.group?`${s.group} · `:""}{info.fields.find(f=>f.name===s.field)!.title}{s.unit?` (${s.unit})`:""}</Checkbox>)}</div></div></details><DataTable data={data} columns={[idColumn,...columns]} getRowId={r=>r.id} selectedId={selectedId} searchable={false} resizable={true} virtualColumns height={440} rowHeight={height} onRowClick={enabled&&onSelect?record=>{if(readCurrent)onSelect(record);}:undefined} empty={t("No original observations in this window.")}/><p className="text-xs text-muted">{t("This table displays the original loaded window. Filtering, new windows and data refresh remain owned by the caller.")}</p></div>;
+}

@@ -108,3 +108,10 @@ export {CollectionCounts,signedCounts} from "./charts/CollectionCounts";
 export {DerivedMean} from "./components/DerivedMean";
 
 export {RecordActionGrid,projectActionRows} from "./records/RecordActionGrid";
+export {ObservationTable} from "./records/ObservationTable";
+export type {ObservationTableProps} from "./records/ObservationTable";
+export {ObservationStatistics} from "./records/ObservationStatistics";
+export type {ObservationStatisticsProps} from "./records/ObservationStatistics";
+export {ObservationTimeSeries,ObservationAvailability} from "./records/ObservationTimeSeries";
+export type {ObservationTimeSeriesProps,ObservationAvailabilityProps} from "./records/ObservationTimeSeries";
+export type {ObservationSignal,ObservationMetadata,ObservationWindow,ObservationStatisticsValue} from "./records/observation-model";

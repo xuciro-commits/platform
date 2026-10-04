@@ -43,6 +43,8 @@ export type DataTableProps<T> = {
   onCellEdit?: (row: T, column: string, value: unknown) => void;
   /** Drag header edges to resize. Default on; set false to lock layout. */
   resizable?: boolean;
+  /** Virtualize flat leaf columns as well as rows; pinned metadata stays mounted. */
+  virtualColumns?: boolean;
   /** Right-click a data row (browser menu is suppressed when provided). */
   onRowContextMenu?: (row: T) => void;
 };
@@ -58,7 +60,7 @@ const focusSel = (root: HTMLElement | null, sel: string, n = 3) => {
 /** Dense, virtualized, sortable, filterable table for any entity list. */
 export function DataTable<T>({
   data, columns, getRowId, height = 480, rowHeight = 28, onRowClick, selectedId, searchable = true, toolbar, empty = t("No rows"),
-  selectedIds,loading = false, loadingText, onCellEdit, resizable = true, onRowContextMenu,
+  selectedIds,loading = false, loadingText, onCellEdit, resizable = true, virtualColumns = false, onRowContextMenu,
 }: DataTableProps<T>) {
   const editorPrefix=useId();
   const [editing, setEditing] = useState<Session<T> | null>(null);
@@ -106,7 +108,16 @@ export function DataTable<T>({
   });
 
   const widths = leaf.map((c) => sizing[c.id] ?? c.columnDef.meta?.width ?? c.columnDef.meta?.field?.width);
-  const template = widths.map((w) => (w ? `${w}px` : "minmax(120px, 1fr)")).join(" ");
+  const horizontal = virtualColumns && table.getHeaderGroups().length === 1;
+  const columnVirtualizer = useVirtualizer({
+    horizontal:true, enabled:horizontal, count:leaf.length, overscan:2,
+    estimateSize:i=>widths[i]??120, getScrollElement:()=>scroller.current,
+    getItemKey:i=>leaf[i]?.id??i, initialRect:{width:640,height:0},
+  });
+  const widthKey=JSON.stringify(widths);
+  useEffect(()=>{if(horizontal)columnVirtualizer.measure();},[horizontal,widthKey]);
+  const mountedColumns=horizontal?new Set([...columnVirtualizer.getVirtualItems().map(i=>i.index),...leaf.flatMap((c,i)=>c.columnDef.meta?.pin==="left"?[i]:[])]):undefined;
+  const template = widths.map((w) => (horizontal?`${w??120}px`:w ? `${w}px` : "minmax(120px, 1fr)")).join(" ");
   // Wide entities scroll sideways instead of squeezing their columns.
   const minWidth = Math.max(320, widths.reduce<number>((n, w) => n + (w ?? 120), 0));
   let pinAcc = 0;
@@ -120,6 +131,7 @@ export function DataTable<T>({
   const go = (r: number, c: number) => {
     const rr = Math.max(0, Math.min(rows.length - 1, r)), cc = Math.max(0, Math.min(leaf.length - 1, c));
     virtualizer.scrollToIndex(rr);
+    if(horizontal&&pins[cc]==null)columnVirtualizer.scrollToIndex(cc);
     focusSel(scroller.current, `[data-nav="${rr}:${cc}"]`);
   };
 
@@ -156,15 +168,17 @@ export function DataTable<T>({
           {table.getHeaderGroups().map((group) => (
             <div role="row" key={group.id} className="grid" style={{ gridTemplateColumns: template }}>
               {group.headers.map((header, ci) => {
+                if(mountedColumns&&!mountedColumns.has(ci))return null;
                 const sorted = header.column.getIsSorted();
                 const meta = header.column.columnDef.meta;
                 const pin = pins[ci];
                 return (
                   <div role="columnheader" key={header.id}
+                    aria-colindex={ci+1}
                     aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
                     className={cn("relative flex h-7 items-center gap-1 truncate px-2 text-xs font-medium uppercase tracking-wide text-muted",
                       (meta?.align ?? meta?.field?.align) === "right" && "justify-end text-right", pin != null && "z-[2] bg-surface")}
-                    style={pin != null ? { position: "sticky", left: pin } : undefined}>
+                    style={{...(horizontal?{gridColumn:ci+1}:{}),...(pin != null ? { position: "sticky", left: pin } : {})}}>
                     {header.column.getCanSort() ? (
                       <button type="button" className="flex min-w-0 items-center gap-1 hover:text-foreground"
                         onClick={header.column.getToggleSortingHandler()}>
@@ -217,6 +231,7 @@ export function DataTable<T>({
                     browse && "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring", selected && "bg-row-selected")}
                   style={{ gridTemplateColumns: template, height: rh, transform: `translateY(${item.start}px)` }}>
                   {row.getVisibleCells().map((cell, ci) => {
+                    if(mountedColumns&&!mountedColumns.has(ci)&&editing?.columnId!==cell.column.id)return null;
                     const field = cell.column.columnDef.meta?.field;
                     const editable = grid && !!field?.editor && !field.readOnly;
                     const isEditing = editing?.rowId === row.id && editing.columnId === cell.column.id;
@@ -230,6 +245,7 @@ export function DataTable<T>({
                     };
                     return (
                       <div role="cell" key={cell.id} data-nav={coord} tabIndex={grid ? 0 : undefined}
+                        aria-colindex={ci+1}
                         title={!isEditing && (typeof raw === "string" || typeof raw === "number") ? String(raw) : undefined}
                         onClick={grid ? (e) => { e.stopPropagation(); e.currentTarget.focus(); } : undefined}
                         onDoubleClick={editable ? (e) => { e.stopPropagation(); begin(); } : undefined}
@@ -254,7 +270,7 @@ export function DataTable<T>({
                         className={cn("truncate px-2", (cell.column.columnDef.meta?.align ?? field?.align) === "right" && "text-right tabular-nums",
                           grid && "outline-none focus:z-10 focus:ring-1 focus:ring-inset focus:ring-ring", isEditing && "overflow-visible",
                           pin != null && "z-[1] bg-surface group-hover:bg-row-hover", pin != null && selected && "bg-row-selected")}
-                        style={pin != null ? { position: "sticky", left: pin } : undefined}>
+                        style={{...(horizontal?{gridColumn:ci+1}:{}),...(pin != null ? { position: "sticky", left: pin } : {})}}>
                         {isEditing && editing && field?.editor ? (
                           <div ref={selectOnOpen} onClick={(e) => e.stopPropagation()}
                             className="relative z-20 min-w-full rounded-md bg-surface p-0.5 shadow-lg ring-1 ring-border"

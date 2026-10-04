@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:e2f406cc41c3a330",
+  "revision": "sha256:7ca6eb13528c2a6b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2303,6 +2303,128 @@
       ]
     },
     {
+      "id": "ui/observation-availability",
+      "owner": "@platform/ui",
+      "name": "Original availability history",
+      "summary": "Show a complete authorized average and explicit SLO beside original business-time samples.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/ObservationTimeSeries.tsx",
+      "exports": [
+        "ObservationAvailability"
+      ],
+      "example": "ObservationAvailabilityExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "observations",
+        "availability",
+        "slo",
+        "time"
+      ],
+      "type": "ObservationAvailabilityProps",
+      "dependencies": [
+        "ui/observation-time-series"
+      ],
+      "constraints": [
+        "The original summary and record window share their query scope and total. No synthetic 24-hour points, live heartbeat, signal stream or availability promise is created."
+      ]
+    },
+    {
+      "id": "ui/observation-statistics",
+      "owner": "@platform/ui",
+      "name": "Original observation statistics",
+      "summary": "Inspect original window statistics and latest samples using controlled signal, alarm and row-window parameters.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/ObservationStatistics.tsx",
+      "exports": [
+        "ObservationStatistics"
+      ],
+      "example": "ObservationStatisticsExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "observations",
+        "statistics",
+        "signals",
+        "window"
+      ],
+      "type": "ObservationStatisticsProps",
+      "dependencies": [
+        "ui/observation-time-series",
+        "ui/input"
+      ],
+      "constraints": [
+        "The caller supplies the confirmed full-window answer, latest sample and history. Scope and parameter mismatches hide old answers; loaded table rows never become the source of claimed complete statistics."
+      ]
+    },
+    {
+      "id": "ui/observation-table",
+      "owner": "@platform/ui",
+      "name": "Original observation table",
+      "summary": "Browse wide original observation windows with virtual rows and columns, pinned metadata and signal visibility.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/ObservationTable.tsx",
+      "exports": [
+        "ObservationTable"
+      ],
+      "example": "ObservationTableExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "observations",
+        "telemetry",
+        "virtualization",
+        "signals"
+      ],
+      "type": "ObservationTableProps",
+      "dependencies": [
+        "ui/data-table"
+      ],
+      "constraints": [
+        "The caller owns authorized business observation reads, original metadata, query scope, row selection confirmation and export. This UI performs no sampling, Worker simulation or tenant reads; a virtual viewport is not throughput evidence."
+      ]
+    },
+    {
+      "id": "ui/observation-time-series",
+      "owner": "@platform/ui",
+      "name": "Original observation time series",
+      "summary": "Plot three original numeric signals with stable record identity, actual timestamps and independent units.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/ObservationTimeSeries.tsx",
+      "exports": [
+        "ObservationTimeSeries"
+      ],
+      "example": "ObservationTimeSeriesExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "observations",
+        "time-series",
+        "signals",
+        "units"
+      ],
+      "type": "ObservationTimeSeriesProps",
+      "constraints": [
+        "The caller owns a scoped window of at most 500 original business observations. Nanosecond order and literal offsets are preserved; missing values break curves and missing event time never becomes a record index or render time."
+      ]
+    },
+    {
       "id": "ui/page-header",
       "owner": "@platform/ui",
       "name": "Page header",
@@ -3685,6 +3807,7 @@
       "Browse a scoped entity source with search, sort and paging.": "通过搜索、排序和分页浏览限定范围的实体数据源。",
       "Browse original business dates by month and day and select original records.": "按月日浏览原业务日期并选择原记录。",
       "Browse records, choose a record and save a list view through the member’s host.": "通过当前成员的宿主浏览和选择记录，并保存列表视图。",
+      "Browse wide original observation windows with virtual rows and columns, pinned metadata and signal visibility.": "浏览原观测宽窗口，支持行列虚拟化、固定元数据和信号显示选择。",
       "Browse, sort and edit typed rows in a shared virtualized table.": "在共享虚拟化表格中浏览、排序和编辑类型化行。",
       "Build filters from the entity's declared fields and operators.": "从实体声明的字段和操作符构建筛选条件。",
       "Button": "按钮",
@@ -3767,6 +3890,7 @@
       "Inspect a workflow's recorded version and startup release through the member's original read permissions.": "沿成员原有读取权限，检查流程运行所记录的版本与启动发布。",
       "Inspect and edit fields, lifecycle states, transitions and access through the existing object designer.": "通过现有对象设计器查看和编辑字段、生命周期状态、跃迁与权限。",
       "Inspect or edit details while keeping the underlying task in view.": "查看或编辑详情，同时保留原任务的上下文。",
+      "Inspect original window statistics and latest samples using controlled signal, alarm and row-window parameters.": "使用受控信号、告警和行窗口参数，检查原窗口统计与最新样本。",
       "Inspect the original run trace, structured drafts and cross-application execution links.": "查看原运行轨迹、结构化草稿和跨应用执行关系。",
       "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs.": "已安装区块、版本、权限、测试和激活均来自已连接的原能力 API。",
       "Interactive Search Around": "交互式关系探索",
@@ -3803,9 +3927,13 @@
       "Ordered record chart": "按序逐记录图表",
       "Organize navigation and shared published objects, workflows and functions with the original application editor.": "使用原应用编辑器组织导航及共享的已发布对象、流程和函数。",
       "Original approval tasks": "原审批任务",
+      "Original availability history": "原可用率历史",
       "Original collection counts": "原集合计数",
       "Original derived mean": "原派生平均值",
       "Original navigation trail": "原导航路径",
+      "Original observation statistics": "原观测统计",
+      "Original observation table": "原观测表",
+      "Original observation time series": "原观测时间序列",
       "Original record exploration": "原记录探索",
       "Original record journal": "原记录日志",
       "Original record neighborhood": "原记录邻域",
@@ -3823,6 +3951,7 @@
       "Pivot table": "透视表",
       "Plot original authorized records without merging equal axis labels or reading another collection.": "绘制原受权记录，不合并相同坐标标签，也不读取另一集合。",
       "Plot original numeric record coordinates and retain independently selectable stable identities.": "绘制原记录数值坐标，保留可独立选择的稳定身份。",
+      "Plot three original numeric signals with stable record identity, actual timestamps and independent units.": "以稳定记录身份、真实时间戳和独立单位绘制三条原数值信号。",
       "Post comments and attach real file bytes through the original record's authorized service actions.": "通过原记录的受权服务动作发表评论并挂接真实文件字节。",
       "Present a caller-owned scalar and original ordered record values without inventing time or replacing missing data.": "呈现调用方拥有的标量及原有序记录值，不虚构时间或替换缺值。",
       "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
@@ -3904,6 +4033,7 @@
       "Set choice input": "集合选择输入",
       "Share declared presentation state across pages of one scoped application instance.": "在同一受控应用实例的页面间共享声明式展示状态。",
       "Shared": "共享",
+      "Show a complete authorized average and explicit SLO beside original business-time samples.": "在原业务时间样本旁显示完整受权平均值与明确的 SLO。",
       "Show a declared collection name and its caller-owned complete count.": "显示声明的集合名称及调用方提供的完整计数。",
       "Show exact authorized scalar values with a bounded progress ratio.": "以有界进度比例显示精确授权标量。",
       "Show the original first six people records as initials with their stable identities and complete authorized total.": "以姓名首字显示原前六条人员记录，同时保留稳定身份及完整已授权总数。",
@@ -3931,8 +4061,10 @@
       "The caller confirms every original record and supplies permission-filtered metadata. Values are compared by their declared scalar types; presentation performs no reads or writes and never truncates the selection.": "调用方确认每条原记录并提供权限裁剪元数据；值按声明的标量类型对比，展示不读写记录且不截断选择。",
       "The caller confirms original record access and supplies permission-filtered metadata. Titles and properties remain in their original field owners; the card performs no reads or writes.": "调用方确认原记录访问并提供权限裁剪元数据；标题及属性保持原字段归属，卡片不读写记录。",
       "The caller maps actual discoverable assets and authorizes page navigation. Source placeholder names do not create resources, URLs or implicit bindings; non-page entries remain read-only.": "调用方映射实际可发现资源并授权页面导航；源占位名称不创建资源、地址或隐式绑定，非页面条目保持只读。",
+      "The caller owns a scoped window of at most 500 original business observations. Nanosecond order and literal offsets are preserved; missing values break curves and missing event time never becomes a record index or render time.": "调用方管理最多五百条原业务观测的受控窗口。保留纳秒顺序和原偏移；缺值处断线，缺失事件时间不转换为记录下标或渲染时间。",
       "The caller owns attachment authorization and the original page string. The lazy renderer uses bundled PDF.js, its same-version worker and fixed font assets; actual page and pixel budgets apply. PDF-provided URLs, scripts, forms, XFA and annotations are not activated.": "调用方负责附件授权及原页码字符串；按需加载的渲染器使用内置PDF.js、同版本工作线程和固定字体资产，并施加实际页数及像素预算。不激活PDF提供的地址、脚本、表单、XFA或注释。",
       "The caller owns authorization, the original bounded comment window, total and persistence. Unknown totals remain explicit; the presenter never invents authors, timestamps, comments or confirmations.": "调用方负责授权、原有界评论窗口、总数及持久化；未知总数明确显示，展示组件不编造作者、时间、评论或确认结果。",
+      "The caller owns authorized business observation reads, original metadata, query scope, row selection confirmation and export. This UI performs no sampling, Worker simulation or tenant reads; a virtual viewport is not throughput evidence.": "调用方管理受权业务观测读取、原元数据、查询作用域、记录选择确认和导出。此 UI 不采样、不运行 Worker 模拟器或读取租户；虚拟视口不代表吞吐验证。",
       "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records.": "调用方拥有授权完整分箱；控件校验区间和计数，不重新分箱，也不写入记录。",
       "The caller owns authorized complete counts and filter writes. Layout never inflates small groups, reads records or writes business data.": "调用方拥有完整授权计数与筛选写入；布局不放大小分组、不读记录、不写业务数据。",
       "The caller owns authorized complete counts and filter writes. Null, empty and literal groups retain their original identities; missing groups cannot be written to text filters. No array expansion, string coercion or record reads happen here.": "调用方持有授权完整计数与筛选写入；缺值、空文本及字面分组保留原身份，缺值分组不能写入文本筛选。组件不展开数组、不强制转换字符串，也不读取记录。",
@@ -3978,6 +4110,7 @@
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
       "The caller supplies authorized root and relationship windows with complete totals. The shared canvas preserves circular badges and original half-ellipse groups; it never guesses foreign-key joins or reads records.": "调用方提供已授权起点、关系窗口及完整总数；共享画布保留圆形标记和原半椭圆分组，不猜测外键连接或读取记录。",
+      "The caller supplies the confirmed full-window answer, latest sample and history. Scope and parameter mismatches hide old answers; loaded table rows never become the source of claimed complete statistics.": "调用方提供已确认的完整窗口答复、最新样本和历史。作用域或参数不匹配时隐藏旧答复；已加载表格行不充当完整统计来源。",
       "The caller supplies validated dimensions and parent axes; layout grants no business access.": "调用方提供已验证的尺寸与父轴；布局不授予业务访问权限。",
       "The canvas owns interaction; its caller owns graph semantics, validation and persistence.": "画布负责交互；调用方负责图语义、校验和持久化。",
       "The document owner validates finite sizes against the original layout budget. Zero is preserved; the region is hidden from accessibility and is not a focus target.": "文档拥有者按原布局预算验证有限尺寸。零值保留，空白不进入无障碍内容或焦点。",
@@ -3989,6 +4122,7 @@
       "The original host owns authorization, validation and approval. An unanswered row can only resend its original decision with identical payload and revision; retiring a window ends new submissions.": "原宿主管理授权、校验和审批。未回答的行仅能以相同参数和版本重发原决策；窗口退役后停止新提交。",
       "The original host owns numeric and missing-value semantics. Empty averages remain empty and the explicit unit grants no business conversion.": "原宿主拥有数值及缺值语义；空平均值保持为空，显式单位不授予业务换算。",
       "The original inbox offers tasks; request IDs and revisions authorize approval decisions. Retiring a view never cancels a queued decision.": "原收件箱提供任务；审批决策使用请求身份与版本。视图退役不会取消已排队的决策。",
+      "The original summary and record window share their query scope and total. No synthetic 24-hour points, live heartbeat, signal stream or availability promise is created.": "原摘要与记录窗口共享查询作用域和总数。不生成合成的二十四小时点、实时心跳、信号流或可用率承诺。",
       "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.": "产物是 build.page 草稿；不会直接发布、生成租户 TSX 或绕过发布校验。",
       "The same list-detail descriptor serves a live workspace and a read-only sample preview.": "同一列表详情声明用于实际工作台和只读样例预览。",
       "The selector returns typed references. Host validation and original permissions remain authoritative.": "选择器返回类型化引用；宿主校验和原权限仍为准。",
@@ -4871,6 +5005,14 @@
         "NodePort",
         "NotificationItem",
         "NotificationListProps",
+        "ObservationAvailabilityProps",
+        "ObservationMetadata",
+        "ObservationSignal",
+        "ObservationStatisticsProps",
+        "ObservationStatisticsValue",
+        "ObservationTableProps",
+        "ObservationTimeSeriesProps",
+        "ObservationWindow",
         "Operator",
         "Option",
         "Options",

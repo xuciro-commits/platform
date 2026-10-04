@@ -256,6 +256,8 @@ node solutions/wms/assemble.mjs assemble
 
 从 Apps 首页或应用切换器打开 **Platform Catalog / 平台资产目录**，沿统一 App Shell 保留导航、标签及当前宿主/租户/身份；离线目录用 `pnpm --dir web/apps/catalog dev`，默认端口 5174，复用同一应用声明与外壳。构建视角提供真实 Widget/Block/Studio 模板入口，开发视角提供公共导入、类型与源码。离线示例只有合成数据；到 Studio 的链接需填写正在运行的工作区地址（开发工作区通常为 5176）。
 
+观测代码组件：在Catalog查“Original observation table / 原观测表”“Original observation statistics / 原观测统计”“Original availability history / 原可用率历史”“Original observation time series / 原观测时间序列”，开发视角可查看`@platform/ui`的ObservationTable、ObservationStatistics、ObservationAvailability及ObservationTimeSeries公共类型。调用方提供原EntityInfo、显式信号/单位和事件datetime字段，窗口为`{scope, records, total}`；scope包含原读取/查询身份，旧窗口不显示。表格列搜索/隐藏、元数据固定和行高只改变已读取窗口，选择/导出回调返回原记录和字段，不读取其他数据。统计调用方提供完整窗口答复与signal/threshold/windowRows/计数；最新样本和历史也需原scope。时间图支持最多500点及三种独立单位，保留缺值、原时间和记录身份；availability摘要必须与原窗口作用域、字段及total一致，SLO是明确呈现阈值。Catalog示例仅用固定合成数据，不保存文件或接入遥测。四类Workshop源组件尚不能据此直接导入；同组原生映射、宿主读取和冻结继续见[ADR-0046 §6.78](ADR/0046-application-studio-fusion.md#678-业务观测宽表窗口统计与真实时间序列)。
+
 在仓库根查询当前任务（Node 22.18+）；命令直接读生成索引，不安装依赖或启动宿主：
 
 ```sh
