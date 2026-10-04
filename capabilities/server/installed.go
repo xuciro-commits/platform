@@ -285,6 +285,25 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 		if s.Width != "" && s.Width != "full" && s.Width != "half" {
 			return fmt.Errorf("%s: width %q is neither full nor half", where, s.Width)
 		}
+		if s.Widget == "ai-assistant" {
+			owner, ok := t.app(s.Function.Ref.App).(interface {
+				FunctionReleaseAsset(string, string) (platform.ReleaseAsset, error)
+			})
+			if !ok {
+				return fmt.Errorf("AI function owner is unavailable")
+			}
+			asset, err := owner.FunctionReleaseAsset(s.Function.Ref.Name, s.Function.SourceVersion)
+			if err != nil {
+				return err
+			}
+			var f platform.AIFunction
+			if json.Unmarshal(asset.Body, &f) != nil {
+				return fmt.Errorf("AI function is invalid")
+			}
+			if err := p.CheckAIBinding(s, f); err != nil {
+				return err
+			}
+		}
 		if s.Widget == "function" {
 			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
 				return platform.WidgetWritesSelection(other.Widget) && (other.Object.Name == "" || other.Object == p.Object) && other.Selection == s.Selection
@@ -309,7 +328,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if asset.Ref != s.Function.Ref || json.Unmarshal(asset.Body, &function) != nil || function.Object != p.Object.Name {
 				return fmt.Errorf("%s: the function does not read this page's object", where)
 			}
-		} else if s.Function != nil {
+		} else if s.Function != nil && s.Widget != "ai-assistant" {
 			return fmt.Errorf("%s: only a function widget may bind a function", where)
 		}
 		if s.Widget == "compute" {

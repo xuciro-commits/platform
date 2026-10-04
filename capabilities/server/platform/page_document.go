@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.Widget == "ai-assistant" || s.AI != nil {
+				return fmt.Errorf("AI views require a document")
+			}
 			if s.Widget == "embedded-page" || s.Embedding != nil || s.Widget == "observation" || s.hasObservationConfiguration() || s.Widget == "action-table" || s.Widget == "notepad" || s.ActionTable != nil || s.NotepadVariable != "" {
 				return fmt.Errorf("record work requires a document")
 			}
@@ -254,6 +257,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document sections need unique stable IDs")
 		}
 		byID[section.ID] = true
+		if err := d.checkAI(section); err != nil {
+			return err
+		}
 		if err := d.checkExternalFrame(section); err != nil {
 			return err
 		}
@@ -759,7 +765,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 							}
 						}
 					}
-					for _, id := range append(append(s.ContextViewVariables(), s.ObservationVariables()...), s.EmbeddingVariables()...) {
+					for _, id := range append(append(s.ContextViewVariables(), s.ObservationVariables()...), append(s.EmbeddingVariables(), s.AIVariables()...)...) {
 						if id != "" {
 							if _, ok := variables[id]; !ok {
 								return false

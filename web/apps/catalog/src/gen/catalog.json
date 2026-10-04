@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:3b1ad65e55140799",
+  "revision": "sha256:dde52f42db647bd6",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1054,6 +1054,33 @@
         "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.",
         "The local example compiles synthetic source data without a host. Import applies only an undoable page draft; save, permissions and release validation stay with their original owners.",
         "Download the original JSON and mapping report before leaving the editor. Reports remain in the current editing scope until it closes or its member changes."
+      ]
+    },
+    {
+      "id": "ui/ai-result",
+      "owner": "@platform/ui",
+      "name": "Original AI result",
+      "summary": "Present authorized retained function results and controlled conversation input.",
+      "layer": 3,
+      "source": "web/packages/ui/src/components/AIResult.tsx",
+      "exports": [
+        "AIResult"
+      ],
+      "example": "AIResultExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "ai",
+        "conversation",
+        "results"
+      ],
+      "type": "AIResultProps",
+      "constraints": [
+        "The caller owns fixed functions, confirmed record context, original call IDs, permissions and lifecycle. This UI never simulates replies or executes generated code."
       ]
     },
     {
@@ -3995,6 +4022,7 @@
       "Optional whole-set clearing removes all selected values, including unmatched values.": "可选整组清空会移除全部已选值，包括未匹配的值。",
       "Ordered record chart": "按序逐记录图表",
       "Organize navigation and shared published objects, workflows and functions with the original application editor.": "使用原应用编辑器组织导航及共享的已发布对象、流程和函数。",
+      "Original AI result": "原 AI 结果",
       "Original approval tasks": "原审批任务",
       "Original availability history": "原可用率历史",
       "Original collection counts": "原集合计数",
@@ -4027,6 +4055,7 @@
       "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
       "Present an original confirmed record through shared card and field formatters with explicit identity and properties.": "通过共享卡片及字段格式器呈现原已确认记录、显式身份及属性。",
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
+      "Present authorized retained function results and controlled conversation input.": "呈现受权保留函数结果和受控会话输入。",
       "Present caller-owned plain text with an accessible semantic tone.": "以可访问的语义色调呈现调用方拥有的纯文本。",
       "Present caller-owned static choices as a select, radio group, segmented control, steps or tabs.": "以选择框、单选组、分段按钮、步骤或标签页呈现调用方持有的静态选项。",
       "Present caller-owned string selections through shared toggles without dropping unmatched values.": "通过共享多选控件呈现调用方拥有的字符串集合，不丢弃未匹配值。",
@@ -4148,6 +4177,7 @@
       "The caller owns confirmed record reads and field metadata. Optional display limits disclose the loaded range and total; omitting a limit retains all supplied changes. No per-change revision or session action log is fabricated.": "调用方负责已确认记录读取及字段元数据；可选展示限制说明已加载范围及总数，省略限制时保留所有已提供变更。不编造逐条修订或会话操作日志。",
       "The caller owns current state and optional writes. Duplicate labels retain distinct values; empty or unmatched state has no current choice. Step position makes no business workflow claim and tabs do not invent panel content.": "调用方持有当前状态及可选写入；重名标签保留不同值，空状态或不匹配状态没有当前选项。步骤位置不声明业务流程进度，标签页不生成面板内容。",
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
+      "The caller owns fixed functions, confirmed record context, original call IDs, permissions and lifecycle. This UI never simulates replies or executes generated code.": "调用方持有固定函数、确认记录上下文、原调用 ID、权限和生命周期。此 UI 不模拟回答，也不执行生成代码。",
       "The caller owns offered tasks, original request reads, action permission, submission and async state. Task and request IDs and revisions remain separate; unreadable or incompatible requests cannot expose approval actions.": "调用方负责待办任务、原请求读取、操作权限、提交及异步状态；任务与请求身份及修订保持独立，不可读或不兼容的请求不提供审批操作。",
       "The caller owns original action permissions, all payload bindings and independent revision-bound decisions. Parameter projection never replaces record identity; closing the grid ends further submissions but does not cancel queued decisions.": "调用方管理原动作权限、全部参数绑定和绑定版本的独立决策。参数投影不替换记录身份；关闭表格后停止后续提交，不取消已排队决策。",
       "The caller owns original group values and counts. No data query, Vega specification or financial waterfall engine runs in this component.": "调用方拥有原分组值及计数；此组件不执行数据查询、Vega规范或财务瀑布引擎。",
@@ -4312,6 +4342,7 @@
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/module-import/AIImportFields.tsx",
       "web/packages/build/src/module-import/EmbeddingImportFields.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/module-import/ObservationImportFields.tsx",
@@ -4321,6 +4352,7 @@
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
+      "web/packages/build/src/page-editor/widgets/AIInspector.tsx",
       "web/packages/build/src/page-editor/widgets/AggregateSource.tsx",
       "web/packages/build/src/page-editor/widgets/AlertInspector.tsx",
       "web/packages/build/src/page-editor/widgets/BooleanInspector.tsx",
@@ -4438,6 +4470,7 @@
       "web/packages/app/src/runtime/LoopRuntime.tsx",
       "web/packages/app/src/runtime/NestedLoopRuntime.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/AIWidget.tsx",
       "web/packages/app/src/widgets/Alert.tsx",
       "web/packages/app/src/widgets/BooleanInput.tsx",
       "web/packages/app/src/widgets/ChoiceInput.tsx",
@@ -4708,6 +4741,9 @@
     "ui/lifecycle": [
       "web/packages/app/src/sections.tsx",
       "web/packages/build/src/process.tsx"
+    ],
+    "ui/ai-result": [
+      "web/packages/app/src/widgets/AIWidget.tsx"
     ],
     "ui/notice": [
       "web/packages/app/src/widgets/Alert.tsx",
@@ -5039,6 +5075,8 @@
         "valueOf"
       ],
       "types": [
+        "AIResultProps",
+        "AIResultTurn",
         "AggregateColumn",
         "AggregateData",
         "AggregateOp",

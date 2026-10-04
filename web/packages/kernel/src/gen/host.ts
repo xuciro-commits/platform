@@ -962,6 +962,13 @@ export type Page = {
   selections?: SelectionVariable[];
 };
 
+export type PageAI = {
+  kind: string;
+  replyField?: string;
+  questionVariable?: string;
+  suggestions?: string[];
+};
+
 export type PageActionParameter = {
   parameter: string;
   field: string;
@@ -1715,6 +1722,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  ai?: PageAI;
   externalFrame?: PageExternalFrame;
   embedding?: PageEmbedding;
   observation?: PageObservation;
@@ -2123,7 +2131,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.85",
+  "uiProfile": "platform.page.v2.86",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -6667,6 +6675,56 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "ai-assistant",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.86",
+      "title": "AI assistant",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.73"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -6754,7 +6812,8 @@ export const pageUIManifest = {
     "platform.page.v2.82",
     "platform.page.v2.83",
     "platform.page.v2.84",
-    "platform.page.v2.85"
+    "platform.page.v2.85",
+    "platform.page.v2.86"
   ],
   "runtime": {
     "scope": "page",

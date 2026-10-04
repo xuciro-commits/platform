@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
@@ -92,18 +93,11 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 		return "", err
 	}
 	for _, test := range plan.Evaluation[0].Cases {
-		var input map[string]json.RawMessage
-		if json.Unmarshal(test.Input, &input) != nil || len(test.Input) > definition.MaxInputBytes ||
-			len(input) != len(definition.Fields) || definition.ValidateOutput(test.Expected) != nil {
+		if !functionEvaluationInput(definition, test.Input) || definition.ValidateOutput(test.Expected) != nil {
 			return "", fmt.Errorf("the plan's synthetic cases do not fit the saved function")
 		}
-		for _, name := range definition.Fields {
-			value, present := input[name]
-			if !present || !json.Valid(value) || !scalarEvaluationInput(value) {
-				return "", fmt.Errorf("the plan's synthetic cases do not fit the saved function")
-			}
-		}
 	}
+
 	definitionDigest, err := canonicalDigest(json.RawMessage(asset.Body))
 	if err != nil {
 		return "", err
@@ -128,6 +122,42 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 		return "", fmt.Errorf("function evaluation was refused: %s", refusal.Message)
 	}
 	return id, nil
+}
+
+// Synthetic evaluation uses the same prompt shape as an ordinary accepted call.
+// History contains bounded synthetic typed answers, never production call IDs.
+func functionEvaluationInput(f platform.AIFunction, raw []byte) bool {
+	if len(raw) > f.MaxInputBytes || !utf8.Valid(raw) {
+		return false
+	}
+	var input map[string]json.RawMessage
+	if json.Unmarshal(raw, &input) != nil || input == nil {
+		return false
+	}
+	if f.Conversation {
+		var record map[string]json.RawMessage
+		var question string
+		var history []map[string]json.RawMessage
+		if len(input) != 3 || json.Unmarshal(input["record"], &record) != nil || record == nil || json.Unmarshal(input["question"], &question) != nil || strings.TrimSpace(question) == "" || len(question) > 4096 || json.Unmarshal(input["history"], &history) != nil || history == nil || len(history) > 8 {
+			return false
+		}
+		for _, turn := range history {
+			var prior string
+			if len(turn) != 2 || json.Unmarshal(turn["question"], &prior) != nil || strings.TrimSpace(prior) == "" || len(prior) > 4096 || f.ValidateOutput(turn["answer"]) != nil {
+				return false
+			}
+		}
+		input = record
+	}
+	if len(input) != len(f.Fields) {
+		return false
+	}
+	for _, name := range f.Fields {
+		if value, present := input[name]; !present || !scalarEvaluationInput(value) {
+			return false
+		}
+	}
+	return true
 }
 
 func scalarEvaluationInput(raw json.RawMessage) bool {

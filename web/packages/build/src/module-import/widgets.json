@@ -301,25 +301,25 @@
       "sourceType": "AIPAnalyst",
       "sourceCategory": "AIP",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": "assistant",
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "ai-assistant",
+      "reason": "explicit-authorized-record-function"
     },
     {
       "sourceType": "AIPChatbot",
       "sourceCategory": "AIP",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": "assistant",
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "ai-assistant",
+      "reason": "explicit-authorized-record-function"
     },
     {
       "sourceType": "AIPGenerated",
       "sourceCategory": "AIP",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": "function",
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "ai-assistant",
+      "reason": "explicit-authorized-record-function"
     },
     {
       "sourceType": "Iframe",

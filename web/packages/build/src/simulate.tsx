@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 type ObjectDraft = WorkflowObject & { revision: number };
-type FunctionDraft = { id: string; revision: number; name: string; title: string; object: string };
+type FunctionDraft = { id: string; revision: number; name: string; title: string; object: string; conversation?:boolean };
 type Step = Omit<Api.SimulationStep, "payload" | "expect"> & { payload: string; expect: "accepted" | "refused" };
 type EvaluationCase = { name: string; input: string; expected: string };
 type EvaluationPolicy = { minQuality: number; maxCostUsd: number; maxLatencyMillis: number; cases: { name: string; input: Record<string, unknown>; expected: Record<string, unknown> }[] };
@@ -66,7 +66,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
   const askSteps = process?.steps.filter((step) => step.ask !== undefined) ?? [];
   const functionSteps = (fn: FunctionDraft): Step[] => [
     { type: fn.object, id: "TEST-1", action: `${fn.object}.create`, payload: "{}", expect: "accepted" },
-    { type: "build.function-call", id: "CALL-1", action: "build.function-call.start", payload: JSON.stringify({ name: fn.name, source: "TEST-1" }), expect: "accepted",
+    { type: "build.function-call", id: "CALL-1", action: "build.function-call.start", payload: JSON.stringify({ name: fn.name, source: "TEST-1",...(fn.conversation?{question:"Synthetic question",history:[]}: {}) }), expect: "accepted",
       function: { output: "{}", inputTokens: 0, outputTokens: 0, expectState: "ready" } },
   ];
   useEffect(() => { if (fn && steps.length === 0) setSteps(functionSteps(fn)); }, [fn, steps.length]);
@@ -247,6 +247,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
               <label className="grid gap-1 text-xs">{t("Maximum total USD cost")}<Input type="number" min={0.000001} step={0.01} value={maxCostUsd} onChange={(e) => { setMaxCostUsd(Number(e.target.value)); clear(); }} /></label>
               <label className="grid gap-1 text-xs">{t("Maximum latency per call (ms)")}<Input type="number" min={1} max={300000} value={maxLatencyMillis} onChange={(e) => { setMaxLatencyMillis(Number(e.target.value)); clear(); }} /></label>
             </div>
+            {fn?.conversation&&<p className="text-xs text-muted">{t("For a conversation, provide record fields, a question and synthetic question/answer history in record/question/history. No production call IDs are used.")}</p>}
             {cases.map((item, index) => <Card key={index} className="grid gap-2 p-2">
               <div className="flex items-center justify-between"><span className="text-xs font-medium">{t("Evaluation case {n}", { n: index + 1 })}</span><Button disabled={cases.length === 1} onClick={() => { setCases((old) => old.filter((_, i) => i !== index)); clear(); }}>{t("Remove")}</Button></div>
               <label className="grid gap-1 text-xs">{t("Case name")}<Input value={item.name} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, name: e.target.value } : c)); clear(); }} /></label>

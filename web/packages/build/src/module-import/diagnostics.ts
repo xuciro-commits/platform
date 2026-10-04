@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "ai-binding": "Map an original authorized record and fixed function; conversation input and result types must match.",
+ "native-original-ai": "Original functions replace fixed analyses and timer replies. Suggestions do not change collections; chat history comes from retained calls.",
  "embedding-binding": "Choose the exact published page and map all required original interface ports.",
  "embedding-collection-input": "Collection parameters need a typed original collection interface; no values were discarded.",
  "external-frame-binding": "Review the fixed HTTPS origin and isolated document interpretation.",

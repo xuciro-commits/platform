@@ -104,6 +104,7 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	AI                           *PageAI                 `json:"ai,omitempty"`
 	ExternalFrame                *PageExternalFrame      `json:"externalFrame,omitempty"`
 	Embedding                    *PageEmbedding          `json:"embedding,omitempty"`
 	Observation                  *PageObservation        `json:"observation,omitempty"`

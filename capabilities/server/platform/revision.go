@@ -277,6 +277,16 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 
 				for _, section := range page.Sections {
 					if section.Function != nil {
+						if section.Widget == "ai-assistant" {
+							asset, ok := lookup[section.Function.Ref]
+							var f AIFunction
+							if !ok || json.Unmarshal(asset.Body, &f) != nil {
+								return fmt.Errorf("AI function dependency is invalid")
+							}
+							if err := page.CheckAIBinding(section, f); err != nil {
+								return err
+							}
+						}
 						bindings = append(bindings, *section.Function)
 					}
 					if section.Operation != nil {

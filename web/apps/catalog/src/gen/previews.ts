@@ -32,6 +32,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "scenario/query-studio": () => import("@pkg/build/catalog/examples").then((module) => ({ default: module.QueryStudioExample })),
   "scenario/record-handling": () => import("@pkg/build/catalog/examples").then((module) => ({ default: module.RecordHandlingExample })),
   "scenario/workshop-import": () => import("@pkg/build/catalog/examples").then((module) => ({ default: module.WorkshopImportExample })),
+  "ui/ai-result": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.AIResultExample })),
   "ui/approval-inbox": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ApprovalInboxExample })),
   "ui/asset-directory": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.AssetDirectoryExample })),
   "ui/block-canvas": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Blocks })),

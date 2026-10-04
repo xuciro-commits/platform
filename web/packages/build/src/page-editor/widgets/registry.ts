@@ -1,4 +1,5 @@
 import {EmbeddingInspector} from "./EmbeddingInspector";
+import {AIInspector} from "./AIInspector";
 import {ExternalFrameInspector} from "./ExternalFrameInspector";
 import {ObservationInspector} from "./ObservationInspector";
 import {ActionTableInspector,NotepadInspector} from "./RecordWorkInspectors";
@@ -53,6 +54,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "ai-assistant":{configVersion:1,bindings:AIInspector},
  "external-frame":{configVersion:1,bindings:ExternalFrameInspector},
  "embedded-page":{configVersion:1,bindings:EmbeddingInspector},
  observation:{configVersion:1,bindings:ObservationInspector},

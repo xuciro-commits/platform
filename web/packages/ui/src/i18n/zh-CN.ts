@@ -1,5 +1,17 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "AI suggestions use the original authorized source. Review results before applying a business action.": "AI 建议使用原受权来源。采用业务操作前请审查结果。",
+ "Waiting for the original model result.": "正在等待原模型结果。",
+ "Original AI result": "原 AI 结果",
+ "The AI request was refused.": "AI 请求被拒绝。",
+ "AI question": "AI 问题",
+ "Requesting AI…": "正在请求 AI…",
+ "Send AI question": "发送 AI 问题",
+ "Request original analysis": "请求原分析",
+ "Reset AI view": "重置 AI 视图",
+ "Retry original AI request": "重试原 AI 请求",
+ "Present authorized retained function results and controlled conversation input.": "呈现受权保留函数结果和受控会话输入。",
+ "The caller owns fixed functions, confirmed record context, original call IDs, permissions and lifecycle. This UI never simulates replies or executes generated code.": "调用方持有固定函数、确认记录上下文、原调用 ID、权限和生命周期。此 UI 不模拟回答，也不执行生成代码。",
  "Isolated external document": "隔离的外部文档",
  "Display a fixed HTTPS document at its exact reviewed origin.": "在精确已审查来源呈现固定 HTTPS 文档。",
  "All sandbox restrictions remain enabled; no platform token, input or message bridge is provided. Scripts and form submissions are disabled. Remote bytes are not a versioned platform artifact.": "保持全部 sandbox 限制，不提供平台令牌、输入或消息桥。脚本和表单提交禁用。远程字节不属于版本化平台制品。",
