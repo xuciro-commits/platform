@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:57cde48780cc3915",
+  "revision": "sha256:0beee78d0953ea0b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4300,6 +4300,7 @@
       "web/packages/build/src/page-editor/widgets/ContextInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/DateInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/EmbeddingInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
@@ -4409,6 +4410,7 @@
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
       "web/packages/app/src/widgets/ContextViews.tsx",
       "web/packages/app/src/widgets/DateInput.tsx",
+      "web/packages/app/src/widgets/EmbeddedPage.tsx",
       "web/packages/app/src/widgets/Exploration.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/Gauge.tsx",

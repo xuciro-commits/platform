@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Embedded presentation": "嵌入呈现",
+ "Original embedded page": "原嵌入页面",
+ "Exact page content version": "精确页面内容版本",
+ "Embedded interface version": "嵌入接口版本",
+ "Embedded input {port}": "嵌入输入 {port}",
+ "Embedded result {port}": "嵌入结果 {port}",
+ "The original child page owns its UI and authorized reads. Each embedded instance has an independent session and a fixed content version.": "原子页面管理其 UI 及授权读取。每个嵌入实例拥有独立会话和固定内容版本。",
+ "module": "子模块",
+ "custom": "注册自定义组合",
+ "dashboard": "分析仪表板",
  "Map business observations {widget}": "映射业务观测 {widget}",
  "Observation source interpretation": "观测来源解释",
  "Use actual business observations": "使用真实业务观测",

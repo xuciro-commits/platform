@@ -11,8 +11,9 @@ import { checkPortValues, navigationValues, portValues, readPageEnvelope } from 
 type EventContext = { values: Record<string, VariableResult>; set: (id: string, value: ScalarValue) => void; isActive: () => boolean };
 
 export const inputSlot = (variable: string) => `input/${variable}`;
-export function usePageInputs(page: Api.Page, session: PageSessionStore, snapshot: PageSessionSnapshot) {
-  const call = useViewCall();
+export type PageCall={input?:unknown;expired?:boolean;returnValue?:(value:unknown)=>void};
+export function usePageInputs(page: Api.Page, session: PageSessionStore, snapshot: PageSessionSnapshot,provided?:PageCall) {
+  const inherited=useViewCall(),call=provided??inherited;
   const iface = page.document?.interface, envelope = useMemo(() => readPageEnvelope(call?.input), [call?.input]);
   const inputValues = envelope?.values ?? {};
   const inputError = call?.expired ? "The page navigation context expired. Open it again from its caller."
@@ -40,8 +41,8 @@ export function usePageInputs(page: Api.Page, session: PageSessionStore, snapsho
   return { inputs, error: inputError ?? (recordError ? "A page record input is unavailable." : undefined) };
 }
 
-export function usePageNavigation(page: Api.Page, live: boolean, values: Record<string, VariableResult>, set: (id: string, value: ScalarValue) => void) {
-  const { definitions, source } = useHost(), workspace = useWorkspace(), call = useViewCall();
+export function usePageNavigation(page: Api.Page, live: boolean, values: Record<string, VariableResult>, set: (id: string, value: ScalarValue) => void,provided?:PageCall) {
+  const { definitions, source } = useHost(), workspace = useWorkspace(),inherited=useViewCall(),call=provided??inherited;
   const application = useApplicationContext();
   const [error, setError] = useState<string>();
   const active = useRef(true); useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);

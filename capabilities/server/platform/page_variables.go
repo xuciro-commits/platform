@@ -44,6 +44,13 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Embedding struct {
+		MaxDepth     int `json:"maxDepth"`
+		MaxInstances int `json:"maxInstances"`
+		MaxQueries   int `json:"maxQueries"`
+		MaxRecords   int `json:"maxRecords"`
+		MaxSections  int `json:"maxSections"`
+	} `json:"embedding"`
 	Observation struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 		MaxSignals        int    `json:"maxSignals"`

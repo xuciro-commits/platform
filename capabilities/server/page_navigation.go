@@ -59,7 +59,7 @@ func filterPageNavigation(definitions []platform.Definition) []platform.Definiti
 		}
 		page.Sections = slices.DeleteFunc(page.Sections, func(s platform.Section) bool {
 			_, has := doc.Variables[s.RecordVariable]
-			return removed[s.ID] || s.RecordVariable != "" && !has || s.AssetDirectory != nil && len(s.AssetDirectory.Items) == 0
+			return s.Embedding != nil && !visible[s.Embedding.Page.Ref] || removed[s.ID] || s.RecordVariable != "" && !has || s.AssetDirectory != nil && len(s.AssetDirectory.Items) == 0
 		})
 		page.Document = doc.Visible(page.Sections)
 		for {

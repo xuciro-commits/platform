@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Embedded page instances or reads exceed their shared budget.": "嵌入页面实例或读取超出共享预算。",
+ "Embedded page": "嵌入页面",
+ "Embedded page depth or bindings are unavailable.": "嵌入页面深度或绑定不可用。",
+ "Loading original embedded page…": "正在加载原嵌入页面…",
+ "The exact embedded page is unavailable.": "精确版本的嵌入页面不可用。",
+ "Embedded page inputs are awaiting their original values.": "嵌入页面输入正等待原值。",
+ "Embedded page inputs do not match the original interface.": "嵌入页面输入与原接口不匹配。",
  "Business observations": "业务观测",
  "Original observation statistics could not be read.": "无法读取原观测统计。",
  "Original observation bindings are unavailable.": "原观测绑定不可用。",

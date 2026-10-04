@@ -1,3 +1,4 @@
+import {EmbeddingInspector} from "./EmbeddingInspector";
 import {ObservationInspector} from "./ObservationInspector";
 import {ActionTableInspector,NotepadInspector} from "./RecordWorkInspectors";
 import {CollectionAnalysisInspector} from "./CollectionAnalysisInspector";
@@ -51,6 +52,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "embedded-page":{configVersion:1,bindings:EmbeddingInspector},
  observation:{configVersion:1,bindings:ObservationInspector},
  "action-table":{configVersion:1,bindings:ActionTableInspector},
  notepad:{configVersion:1,bindings:NotepadInspector},

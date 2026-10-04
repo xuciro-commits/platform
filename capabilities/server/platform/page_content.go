@@ -15,6 +15,10 @@ func PageContentVersion(page Page) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	body, err = canonicalBody(body)
+	if err != nil {
+		return "", err
+	}
 	sum := sha256.Sum256(body)
 	return "page.sha256." + hex.EncodeToString(sum[:]), nil
 }

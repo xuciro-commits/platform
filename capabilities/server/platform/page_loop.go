@@ -161,6 +161,16 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 				return fmt.Errorf("record work needs its exact original page or overlay owner")
 			}
 		}
+		if section.Widget == "embedded-page" {
+			if sectionOwners[section.ID] != "" {
+				return fmt.Errorf("embedding does not enter a loop")
+			}
+			for _, id := range section.EmbeddingVariables() {
+				if !accessible(id, "", sectionOverlays[section.ID]) {
+					return fmt.Errorf("embedding binding escapes its original owner")
+				}
+			}
+		}
 		if section.Widget == "observation" {
 			if sectionOwners[section.ID] != "" {
 				return fmt.Errorf("observation does not enter a loop")

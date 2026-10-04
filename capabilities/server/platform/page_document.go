@@ -63,7 +63,7 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
-			if s.Widget == "observation" || s.hasObservationConfiguration() || s.Widget == "action-table" || s.Widget == "notepad" || s.ActionTable != nil || s.NotepadVariable != "" {
+			if s.Widget == "embedded-page" || s.Embedding != nil || s.Widget == "observation" || s.hasObservationConfiguration() || s.Widget == "action-table" || s.Widget == "notepad" || s.ActionTable != nil || s.NotepadVariable != "" {
 				return fmt.Errorf("record work requires a document")
 			}
 			if s.Widget == "collection-analysis" || s.Analysis != nil || s.AnalysisXVariable != "" || s.AnalysisYVariable != "" || s.AnalysisCountVariable != "" || s.AnalysisMeanVariable != "" {
@@ -254,6 +254,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document sections need unique stable IDs")
 		}
 		byID[section.ID] = true
+		if err := d.checkEmbedding(section); err != nil {
+			return err
+		}
 		if err := d.checkInputPresentation(section); err != nil {
 			return err
 		}
@@ -753,7 +756,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 							}
 						}
 					}
-					for _, id := range append(s.ContextViewVariables(), s.ObservationVariables()...) {
+					for _, id := range append(append(s.ContextViewVariables(), s.ObservationVariables()...), s.EmbeddingVariables()...) {
 						if id != "" {
 							if _, ok := variables[id]; !ok {
 								return false

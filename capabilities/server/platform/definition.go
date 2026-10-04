@@ -104,6 +104,7 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	Embedding                    *PageEmbedding          `json:"embedding,omitempty"`
 	Observation                  *PageObservation        `json:"observation,omitempty"`
 	ObservationHistoryVariable   string                  `json:"observationHistoryVariable,omitempty"`
 	ObservationContextVariable   string                  `json:"observationContextVariable,omitempty"`

@@ -61,6 +61,9 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 		return ReleaseAsset{}, err
 	}
 	requires := append([]AssetRef{page.Object}, page.NavigationTargets()...)
+	for _, e := range page.EmbeddingBindings() {
+		requires = append(requires, e.Page.Ref)
+	}
 	requires = append(requires, page.Actions...)
 	requires = append(requires, page.QueryReferences()...)
 	for _, selection := range page.Selections {
@@ -264,6 +267,9 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 							}
 						}
 					}
+				}
+				if err := CheckPageEmbeddingGraph(ref, lookup); err != nil {
+					return err
 				}
 				if err := checkFrozenQueries(page, lookup); err != nil {
 					return err
@@ -492,6 +498,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		}
 		required = append(required, page.Object)
 		required = append(required, page.NavigationTargets()...)
+		for _, e := range page.EmbeddingBindings() {
+			required = append(required, e.Page.Ref)
+		}
 		required = append(required, page.Actions...)
 		required = append(required, page.QueryReferences()...)
 		for _, selection := range page.Selections {

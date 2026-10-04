@@ -217,6 +217,36 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 	if err := p.Document.Check(p.Sections); err != nil {
 		return fmt.Errorf("page %s: %w", p.Name, err)
 	}
+	for _, embedding := range p.EmbeddingBindings() {
+		var child platform.Page
+		var source string
+		for _, d := range t.definitions {
+			if d.Ref == embedding.Page.Ref && d.Page != nil {
+				child = *d.Page
+				source = d.Version
+			}
+		}
+		digest, _ := platform.PageContentVersion(child)
+		if digest != embedding.ContentVersion {
+			owner, ok := t.app(embedding.Page.Ref.App).(interface {
+				PageContent(string, string) (platform.Page, bool)
+			})
+			if !ok {
+				return fmt.Errorf("embedded page content owner is unavailable")
+			}
+			retained, ok := owner.PageContent(embedding.Page.Ref.Name, embedding.ContentVersion)
+			if !ok {
+				return fmt.Errorf("embedded page content is unavailable")
+			}
+			child = retained
+		}
+		if source != embedding.Page.SourceVersion {
+			return fmt.Errorf("embedded page source differs")
+		}
+		if err := platform.CheckPageEmbedding(p, child, embedding); err != nil {
+			return err
+		}
+	}
 	selections := map[string]string{}
 	for _, selection := range p.Selections {
 		if !selectionName.MatchString(selection.Name) || selections[selection.Name] != "" {

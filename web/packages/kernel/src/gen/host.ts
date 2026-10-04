@@ -1045,6 +1045,15 @@ export type PageDocument = {
   interface?: PageInterface;
 };
 
+export type PageEmbedding = {
+  kind: string;
+  page: AssetBinding;
+  contentVersion: string;
+  interfaceVersion: number;
+  inputs?: Record<string, PageValue>;
+  results?: Record<string, string>;
+};
+
 export type PageEventBinding = {
   control?: string;
   source: string;
@@ -1685,6 +1694,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  embedding?: PageEmbedding;
   observation?: PageObservation;
   observationHistoryVariable?: string;
   observationContextVariable?: string;
@@ -2091,7 +2101,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.82",
+  "uiProfile": "platform.page.v2.83",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -6549,6 +6559,49 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "embedded-page",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.83",
+      "title": "Embedded page",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -6633,7 +6686,8 @@ export const pageUIManifest = {
     "platform.page.v2.79",
     "platform.page.v2.80",
     "platform.page.v2.81",
-    "platform.page.v2.82"
+    "platform.page.v2.82",
+    "platform.page.v2.83"
   ],
   "runtime": {
     "scope": "page",
@@ -7294,6 +7348,13 @@ export const pageUIManifest = {
       "maxSignals": 100,
       "maxRecords": 100,
       "maxWindowRows": 100000
+    },
+    "embedding": {
+      "maxDepth": 3,
+      "maxInstances": 16,
+      "maxQueries": 8,
+      "maxRecords": 512,
+      "maxSections": 256
     }
   },
   "layout": {

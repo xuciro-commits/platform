@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {PageEmbeddingBudget,pageEmbeddingCost} from "./embedding-budget.ts";
+test("repeated mounted children consume shared original read budgets and retirement releases their reservations",()=>{
+ const root={instances:1,queries:1,records:12,sections:3},budget=new PageEmbeddingBudget({instances:16,queries:8,records:512,sections:256},root),cost={instances:1,queries:1,records:100,sections:3},owners=Array.from({length:6},()=>({}));for(const owner of owners.slice(0,5))assert.equal(budget.reserve(owner,cost),true);assert.equal(budget.reserve(owners[5],cost),false);assert.equal(budget.reserve(owners[0],cost),true);budget.release(owners[0]);assert.equal(budget.reserve(owners[5],cost),true);
+});
+test("original loop multipliers count expanded query rows rather than unique query descriptors",()=>{
+ const page={sections:[],document:{root:"root",nodes:{root:{kind:"rows",children:["loop"]},loop:{kind:"loop",loop:{limit:4},children:[]}},queries:{plain:{limit:10},children:{itemOwner:"loop",limit:20}}}};assert.equal(pageEmbeddingCost(page).records,90);const budget=new PageEmbeddingBudget({instances:16,queries:8,records:512,sections:256},{instances:1,queries:0,records:0,sections:0});assert.equal(budget.reserve({}, {...pageEmbeddingCost(page),records:Infinity}),false);
+});
+test("dormant nested loops retain their original ownership and consume expanded budgets",()=>{
+ const page={sections:[],document:{root:"root",nodes:{root:{kind:"rows",children:["outer"]},outer:{kind:"loop",loop:{limit:4},children:[]},inner:{kind:"loop",loop:{limit:3},children:[]}},unusedWidgets:[{node:"inner",parent:"outer"}],queries:{hidden:{itemOwner:"inner",limit:20}}}};
+ assert.equal(pageEmbeddingCost(page).records,240);
+});

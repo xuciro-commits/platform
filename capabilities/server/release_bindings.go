@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -22,6 +23,10 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 	}
 	visited := map[platform.AssetRef]bool{}
 	pins := map[platform.AssetRef]string{}
+	contentPins := map[platform.AssetRef]string{}
+	// Rebuild the traversal after selecting retained page bytes. This discards
+	// bindings collected from superseded descriptors, regardless of root order.
+	restart := errors.New("restart retained page closure")
 	var visit func(platform.AssetRef) error
 	visit = func(ref platform.AssetRef) error {
 		if visited[ref] {
@@ -71,6 +76,52 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 				return err
 			}
 			for _, section := range page.Sections {
+				if e := section.Embedding; e != nil {
+					ref := e.Page.Ref
+					if prior := contentPins[ref]; prior != "" && prior != e.ContentVersion {
+						return fmt.Errorf("release binds conflicting contents of page %s", ref)
+					}
+					if prior := pins[ref]; prior != "" && prior != e.Page.SourceVersion {
+						return fmt.Errorf("release binds conflicting source versions of page %s", ref)
+					}
+					contentPins[ref], pins[ref] = e.ContentVersion, e.Page.SourceVersion
+					index, ok := indices[ref]
+					if !ok {
+						return fmt.Errorf("embedded page %s is unavailable", ref)
+					}
+					var current platform.Page
+					if json.Unmarshal(assets[index].Body, &current) != nil {
+						return fmt.Errorf("embedded page descriptor is invalid")
+					}
+					digest, err := platform.PageContentVersion(current)
+					if err != nil {
+						return err
+					}
+					if digest != e.ContentVersion || assets[index].SourceVersion != e.Page.SourceVersion {
+						if slices.Contains(fixed, ref) {
+							return fmt.Errorf("embedded page %s differs from its explicit release root", ref)
+						}
+						owner, ok := t.app(ref.App).(interface {
+							PageContent(string, string) (platform.Page, bool)
+						})
+						if !ok {
+							return fmt.Errorf("embedded page has no retained content owner")
+						}
+						retained, ok := owner.PageContent(ref.Name, e.ContentVersion)
+						if !ok {
+							return fmt.Errorf("embedded page content is not retained")
+						}
+						asset, err := platform.PageReleaseAsset(ref.App, e.Page.SourceVersion, retained)
+						if err != nil {
+							return err
+						}
+						if assets[index].SourceVersion != asset.SourceVersion {
+							return fmt.Errorf("embedded page source version is incompatible")
+						}
+						assets[index] = asset
+						return restart
+					}
+				}
 				bindings = append(bindings, section.ExplorationBindings()...)
 				if section.Function != nil {
 					bindings = append(bindings, *section.Function)
@@ -103,9 +154,24 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 		}
 		return nil
 	}
-	for _, root := range roots {
-		if err := visit(root); err != nil {
+	for pass := 0; ; pass++ {
+		clear(visited)
+		clear(pins)
+		clear(contentPins)
+		var err error
+		for _, root := range roots {
+			if err = visit(root); err != nil {
+				break
+			}
+		}
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, restart) {
 			return platform.ReleaseCandidate{}, err
+		}
+		if pass >= 4*len(assets) {
+			return platform.ReleaseCandidate{}, fmt.Errorf("page content bindings do not converge")
 		}
 	}
 	for _, ref := range slices.SortedFunc(maps.Keys(pins), func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) }) {
