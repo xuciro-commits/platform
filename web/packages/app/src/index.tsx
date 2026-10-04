@@ -282,7 +282,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   const original=useRef({type,id,scope:source.scope});original.current={type,id,scope:source.scope};
   const mounted=useRef(true);useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   const scope=source.scope,active=()=>mounted.current&&original.current.type===type&&original.current.id===id&&original.current.scope===scope;
-  const collaboration=useMemo(()=>createRecordCollaboration({client,source,can,decide,resend},{type,id},active,newId),[client,type,id,scope]);
+  const collaboration=useMemo(()=>createRecordCollaboration({client,source,can,decide,resend,me},{type,id},active,newId),[client,type,id,scope]);
   const comments = {
     add: collaboration.addComment,
     follow: async (on: boolean) => {

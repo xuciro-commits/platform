@@ -17,6 +17,10 @@ import {ObservationTable} from "./records/ObservationTable";
 import {ObservationStatistics} from "./records/ObservationStatistics";
 import {ObservationTimeSeries,ObservationAvailability} from "./records/ObservationTimeSeries";
 import type {ObservationSignal} from "./records/observation-model";
+import {SpatialMapExample,SpatialAnnotationExample,SpatialSceneExample} from "./spatial/catalog-examples";
+export function RecordMapExample(){return <SpatialMapExample/>;}
+export function ImageAnnotationExample(){return <SpatialAnnotationExample/>;}
+export function Scene3DExample(){return <SpatialSceneExample/>;}
 
 const observationSignals:ObservationSignal[]=[{field:"pressure",unit:"bar",group:"Process"},{field:"temperature",unit:"°C",group:"Process"},{field:"availability",unit:"%",group:"Availability"},...Array.from({length:97},(_,i)=>({field:`signal${i+3}`,unit:"",group:`Group ${Math.floor(i/10)+1}`}))];
 const observationInfo:EntityInfo={app:"catalog",type:"catalog.observation",title:"Observation",plural:"Observations",display:"asset",standard:[],fields:[{name:"time",title:"Event time",type:"datetime"},{name:"plant",title:"Plant",type:"text"},{name:"device",title:"Device",type:"text"},{name:"asset",title:"Asset",type:"text"},{name:"status",title:"Status",type:"choice",choices:["ready","warning"]},...observationSignals.map(s=>({name:s.field,title:s.field,type:"decimal" as const}))]};

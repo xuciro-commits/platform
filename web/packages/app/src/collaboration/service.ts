@@ -1,8 +1,10 @@
 import type {Host} from "../index";
 import type {AttachedFile,EntityRecord} from "@platform/ui";
 import {confirmedDecision} from "./decision";
+import {validImageRegions} from "@platform/ui/image-regions";
+import type {Api} from "@platform/kernel";
 export type CollaborationTarget={type:string;id:string};
-export type CollaborationHost=Pick<Host,"client"|"source"|"can"|"decide"|"resend">;
+export type CollaborationHost=Pick<Host,"client"|"source"|"can"|"decide"|"resend"|"me">;
 /** Use only this captured original record. Retiring a view cannot retarget a queued decision. */
 export function createRecordCollaboration(host:CollaborationHost,target:CollaborationTarget,active:()=>boolean,id:(prefix:string)=>string) {
  const about=`${target.type}/${target.id}`;
@@ -54,6 +56,16 @@ export function createRecordCollaboration(host:CollaborationHost,target:Collabor
   },
   async attachment(fileID:string) {
    requireActive();const view=await host.source.get("files.file",fileID);requireActive();return confirmAttachment(view.record,fileID);
+  },
+  async annotate(fileID:string,revision:number,hash:string,regions:Api.ImageRegion[]) {
+   requireActive();if(!host.can("files.file.annotate")||!validImageRegions(regions)||typeof hash!=="string"||!/^[a-f0-9]{64}$/.test(hash)||!Number.isSafeInteger(revision)||revision<1)throw new Error("Saving image regions is unavailable or incompatible.");
+   const file=await this.attachment(fileID);requireActive();if(file.hash!==hash||file.by!==host.me.principalId)throw new Error("Only the original attachment author can save its image regions.");
+   const payload={hash,regions:structuredClone(regions)},encoded=btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(payload))));
+   const unanswered=host.client.authorities.outbox.filter(entry=>entry.submission.tenantId===host.client.connection.tenant&&entry.submission.principalId===host.client.connection.principal&&entry.submission.target?.type==="files.file"&&entry.submission.target.id===fileID&&waiting(entry.state));
+   if(unanswered.length){if(unanswered.some(entry=>entry.submission.schema?.name!=="files.file.annotate"||entry.submission.expectedRevision!==revision||entry.submission.payload!==encoded||entry.submission.evidenceFactIds?.length))throw new Error("An earlier image decision is unanswered. Retry its original regions before changing the draft.");await host.resend();requireActive();return confirmedDecision(host.client.authorities.outbox,host.client.connection.tenant,unanswered[0]!.submission.idempotencyKey??"");}
+   if(file.revision!==revision)throw new Error("The original attachment changed. Reload or resolve the region conflict before saving.");
+   let refusal="Image regions were not saved. Your draft is retained.";
+   const confirmed=await host.decide("files.file.annotate",{type:"files.file",id:fileID},payload,{expectedRevision:revision,quiet:true,onRefused:reason=>refusal=reason});requireActive();if(!confirmed)throw new Error(refusal);return true;
   },
   async bytes(file:AttachedFile,maxBytes:number,signal?:AbortSignal) {
    requireActive();confirmAttachment(file,file.id);if(file.size>maxBytes)throw new Error("The file exceeds the preview byte budget.");

@@ -1,7 +1,7 @@
 import {pageUIManifest} from "@platform/kernel";
 import type {AttachedFile} from "./Records";
 
-export function attachmentIdentity(attachment:AttachedFile,scope?:string){return JSON.stringify([scope,attachment.id,attachment.name,attachment.size,attachment.contentType]);}
+export function attachmentIdentity(attachment:AttachedFile,scope?:string){return JSON.stringify([scope,attachment.id,attachment.name,attachment.size,attachment.contentType,attachment.hash]);}
 export function attachmentBytesError(attachment:AttachedFile,blob:Blob):string|undefined {
  if(!attachment||typeof attachment.id!=="string"||!attachment.id||typeof attachment.name!=="string"||!attachment.name.trim()||typeof attachment.contentType!=="string"||!Number.isSafeInteger(attachment.size)||attachment.size<0||attachment.archived)return "Attachment metadata is unavailable or incompatible.";
  if(!blob||typeof blob.arrayBuffer!=="function"||blob.size!==attachment.size)return "Attachment bytes do not match the confirmed metadata.";
@@ -9,7 +9,7 @@ export function attachmentBytesError(attachment:AttachedFile,blob:Blob):string|u
  return undefined;
 }
 export function mediaType(value:string){return value.split(";",1)[0]!.trim().toLowerCase();}
-const previewErrors=new Set(["Attachment metadata is unavailable or incompatible.","Attachment bytes do not match the confirmed metadata.","Attachment bytes exceed the preview budget.","Attachment bytes do not match the confirmed media type.","Raster bytes are invalid or do not match the confirmed media type.","Raster dimensions exceed the preview budget.","This browser cannot decode a bounded raster preview.","Decoded raster dimensions do not match its header.","This browser does not support the required PDF rendering APIs.","PDF bytes are invalid or do not match the confirmed media type.","The PDF page count exceeds the preview budget.","PDF page dimensions exceed the preview budget.","This PDF requires resources outside its attachment and cannot be previewed.","The bundled PDF font could not be loaded.","Password-protected PDFs cannot be previewed."]);
+const previewErrors=new Set(["Attachment bytes do not match the confirmed hash.","Attachment metadata is unavailable or incompatible.","Attachment bytes do not match the confirmed metadata.","Attachment bytes exceed the preview budget.","Attachment bytes do not match the confirmed media type.","Raster bytes are invalid or do not match the confirmed media type.","Raster dimensions exceed the preview budget.","This browser cannot decode a bounded raster preview.","Decoded raster dimensions do not match its header.","This browser does not support the required PDF rendering APIs.","PDF bytes are invalid or do not match the confirmed media type.","The PDF page count exceeds the preview budget.","PDF page dimensions exceed the preview budget.","This PDF requires resources outside its attachment and cannot be previewed.","The bundled PDF font could not be loaded.","Password-protected PDFs cannot be previewed."]);
 export function previewFailure(error:unknown,fallback:string){return error instanceof Error&&previewErrors.has(error.message)?error.message:fallback;}
 
 /** Header dimensions are checked before a decoder can allocate a raster. Decoding still confirms the bytes. */

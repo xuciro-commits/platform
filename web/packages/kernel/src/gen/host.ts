@@ -720,6 +720,20 @@ export type Identity = {
   roles: Record<string, string>;
 };
 
+export type ImageRegion = {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type ImageRegionsRequest = {
+  hash: string;
+  regions: ImageRegion[];
+};
+
 export type ImportRow = {
   row: number;
   id: string;
@@ -7495,3 +7509,6 @@ export const pageUIManifest = {
     "maxUnused": 128
   }
 } as const;
+
+/** Files owns normalized raster region bounds (ADR-0046). */
+export const imageRegionLimits = {"maxIDBytes":128,"maxLabelBytes":256,"maxRegions":64} as const;

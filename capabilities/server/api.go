@@ -16,6 +16,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
+	"platformserver/apps/files"
 	"platformserver/apps/flow"
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
@@ -127,6 +128,7 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	s := newSchemas()
 	// Original page call values also belong to the generated application API.
 	s.of(reflect.TypeFor[platform.PageCollectionInput]())
+	s.of(reflect.TypeFor[files.ImageRegionsRequest]())
 	paths := map[string]any{}
 	for _, r := range h.routes {
 		method, path, _ := strings.Cut(r.Pattern, " ")
@@ -455,6 +457,8 @@ func TypeScript(doc map[string]any, kernelModules map[string]string) string {
 		fmt.Fprintf(&b, "\nexport type %s = %s;\n", name, tsOf(d, 0))
 	}
 	fmt.Fprintf(&b, "\n/** Shared build-time page UI contracts (ADR-0046). */\nexport const pageUIManifest = %s as const;\n", strings.TrimSpace(platform.PageUIManifest()))
+	limits, _ := json.Marshal(map[string]int{"maxRegions": files.MaxImageRegions, "maxLabelBytes": files.MaxImageRegionLabelBytes, "maxIDBytes": files.MaxImageRegionIDBytes})
+	fmt.Fprintf(&b, "\n/** Files owns normalized raster region bounds (ADR-0046). */\nexport const imageRegionLimits = %s as const;\n", limits)
 	return b.String()
 }
 

@@ -40,7 +40,7 @@ export type RecordQuery = Omit<Api.Query,"domain"> & {domain?:unknown[]};
 export type RecordPageData = Omit<Api.RecordPage, "records"> & { records: EntityRecord[] };
 export type RecordChange = Api.RecordChange;
 /** A file attached to a record (ADR-0028). */
-export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string };
+export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string; regions?:Api.ImageRegion[] };
 
 /** A comment on a record (ADR-0028 D6). */
 export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };

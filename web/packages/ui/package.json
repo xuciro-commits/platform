@@ -12,7 +12,8 @@
     "./date": "./src/components/date.ts",
     "./static-image": "./src/components/static-image.ts",
     "./histogram": "./src/components/histogram-data.ts",
-    "./external-frame": "./src/components/external-frame.ts"
+    "./external-frame": "./src/components/external-frame.ts",
+    "./image-regions": "./src/spatial/image-regions.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",
@@ -39,6 +40,9 @@
     "react-hook-form": "^7.88.0",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
+    "three": "0.186.1",
+    "topojson-client": "3.1.0",
+    "world-atlas": "2.0.2",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -46,6 +50,8 @@
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/three": "0.186.0",
+    "@types/topojson-client": "3.1.5",
     "jsdom": "^30.1.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:dde52f42db647bd6",
+  "revision": "sha256:5cd4738536070715",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2108,6 +2108,37 @@
       ]
     },
     {
+      "id": "ui/image-annotation",
+      "owner": "@platform/ui",
+      "name": "Image annotation",
+      "summary": "Inspect original raster bytes and edit normalized, revision-bound region proposals.",
+      "layer": 3,
+      "source": "web/packages/ui/src/spatial/ImageAnnotation.tsx",
+      "exports": [
+        "ImageAnnotation",
+        "validImageRegions"
+      ],
+      "example": "ImageAnnotationExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "image",
+        "annotation",
+        "files"
+      ],
+      "type": "ImageAnnotationProps",
+      "dependencies": [
+        "ui/media-preview"
+      ],
+      "constraints": [
+        "The original attachment and author permissions belong to Files. The caller confirms saves at the captured file revision; refused drafts remain local and view retirement never cancels accepted decisions."
+      ]
+    },
+    {
       "id": "ui/indexed-choices",
       "owner": "@platform/ui",
       "name": "Steps and tabs",
@@ -3169,6 +3200,34 @@
       ]
     },
     {
+      "id": "ui/record-map",
+      "owner": "@platform/ui",
+      "name": "Record map",
+      "summary": "Explore original record coordinates with a bundled world background and stable record selection.",
+      "layer": 3,
+      "source": "web/packages/ui/src/spatial/RecordMap.tsx",
+      "exports": [
+        "RecordMap",
+        "mapPoints"
+      ],
+      "example": "RecordMapExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "map",
+        "spatial",
+        "coordinates"
+      ],
+      "type": "RecordMapProps",
+      "constraints": [
+        "The caller supplies an authorized window of at most 100 records, typed WGS84 coordinate fields and scoped selection confirmation. The map never invents coordinates or reads remote tiles."
+      ]
+    },
+    {
       "id": "ui/record-neighborhood",
       "owner": "@platform/ui",
       "name": "Original record neighborhood",
@@ -3450,6 +3509,36 @@
         "Keyboard focus"
       ],
       "snippet": "import { RetroButton } from \"@platform/ui\";\n<RetroButton variant=\"default\">RUN</RetroButton>"
+    },
+    {
+      "id": "ui/scene-3d",
+      "owner": "@platform/ui",
+      "name": "3D scene",
+      "summary": "Inspect authorized self-contained GLB geometry, model parts, layers and actual typed field mappings.",
+      "layer": 3,
+      "source": "web/packages/ui/src/spatial/Scene3D.tsx",
+      "exports": [
+        "Scene3D",
+        "validSceneConfig",
+        "sceneMappingValue"
+      ],
+      "example": "Scene3DExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "3d",
+        "glb",
+        "spatial",
+        "telemetry"
+      ],
+      "type": "Scene3DProps",
+      "constraints": [
+        "WebGL2 is required. The caller supplies a confirmed asset and attachment; sample mappings require the actual asset reference. No simulation, default asset or external model resource is used."
+      ]
     },
     {
       "id": "ui/search-around",
@@ -3858,6 +3947,7 @@
   ],
   "translations": {
     "zh-CN": {
+      "3D scene": "3D 场景",
       "A labelled boolean choice with an explicit disabled state.": "带标签的布尔选择，支持明确的禁用状态。",
       "A runtime call needs the actual host, a published owner revision and the current member’s permissions.": "运行调用需要实际宿主、已发布能力版本及当前成员的权限。",
       "A tenant object must be created, tested and published in the connected Application Studio.": "租户对象须在已连接的应用工坊创建、测试和发布。",
@@ -3967,6 +4057,7 @@
       "Exact decimal progress": "精确十进制进度",
       "Exact decimal range input": "精确十进制范围输入",
       "Expanded": "展开",
+      "Explore original record coordinates with a bundled world background and stable record selection.": "通过本地世界底图与稳定记录选择探索原记录坐标。",
       "Explore original relationship counts, walk and return along a controlled record path, and independently select output records.": "探索原关系计数，沿受控记录路径前进及返回，并独立选择输出记录。",
       "Facet choices": "分面多选",
       "File picker": "文件选择器",
@@ -3980,11 +4071,14 @@
       "Group related content with a shared heading, description and action area.": "通过统一的标题、说明和动作区域组织相关内容。",
       "Hierarchy selection": "层级选择",
       "Hover": "悬停",
+      "Image annotation": "图片标注",
       "Input controls": "输入控件",
       "Inspect a native flow's graph, waiting steps and decision trace.": "检查原生流程的关系图、等待步骤与决策轨迹。",
       "Inspect a workflow's recorded version and startup release through the member's original read permissions.": "沿成员原有读取权限，检查流程运行所记录的版本与启动发布。",
       "Inspect and edit fields, lifecycle states, transitions and access through the existing object designer.": "通过现有对象设计器查看和编辑字段、生命周期状态、跃迁与权限。",
+      "Inspect authorized self-contained GLB geometry, model parts, layers and actual typed field mappings.": "查看受权自包含GLB几何、模型部件、图层和实际类型化字段映射。",
       "Inspect or edit details while keeping the underlying task in view.": "查看或编辑详情，同时保留原任务的上下文。",
+      "Inspect original raster bytes and edit normalized, revision-bound region proposals.": "查看原栅格图片并编辑绑定版本的归一化区域草稿。",
       "Inspect original window statistics and latest samples using controlled signal, alarm and row-window parameters.": "使用受控信号、告警和行窗口参数，检查原窗口统计与最新样本。",
       "Inspect the original run trace, structured drafts and cross-application execution links.": "查看原运行轨迹、结构化草稿和跨应用执行关系。",
       "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs.": "已安装区块、版本、权限、测试和激活均来自已连接的原能力 API。",
@@ -4094,6 +4188,7 @@
       "Record list": "记录列表",
       "Record list and detail": "记录列表与详情",
       "Record lookup": "记录选择器",
+      "Record map": "记录地图",
       "Record summary": "记录摘要",
       "RecordColumnPresentation configures visible column titles, widths and typed formats without replacing field metadata or permissions. Hiding search retains the caller query.": "RecordColumnPresentation 配置可见列的标题、宽度及类型化格式，不替换字段元数据或权限。隐藏搜索保留调用方查询。",
       "RecordSelectionPort controls bounded selection in the current window; the caller confirms record permissions and owns pending, failure and cleanup. Window selection is not a complete matching set.": "RecordSelectionPort 控制当前窗口的有界选择，由调用方确认记录权限并管理在途、失败及清理。窗口选择不代表完整匹配集合。",
@@ -4207,6 +4302,7 @@
       "The caller owns the original string set and query conditions. Toggles change one declared choice and preserve unmatched selections.": "调用方拥有原字符串集合及查询条件。多选控件修改一个声明选项并保留未匹配值。",
       "The caller owns the original string state, options and query conditions. Empty or unmatched values are preserved until explicit selection.": "调用方拥有原字符串状态、选项及查询条件。空值或未匹配值保留到显式选择。",
       "The caller owns the ranked query and record authorization. This component does not sort an unranked window or write records.": "调用方拥有排名查询与记录授权。此组件不对未排序窗口排名，也不写入记录。",
+      "The caller supplies an authorized window of at most 100 records, typed WGS84 coordinate fields and scoped selection confirmation. The map never invents coordinates or reads remote tiles.": "调用方提供最多100条受权记录窗口、类型化WGS84坐标字段和作用域内选择确认。地图不编造坐标，也不读取远端瓦片。",
       "The caller supplies authorized bytes and confirmed attachment metadata. Only PNG, JPEG, GIF and WebP with bounded matching dimensions render inline; other formats keep metadata and downloads. Object URLs retire with bytes, scope or unmount.": "调用方提供授权字节及已确认附件元数据；只有尺寸符合预算及文件头的PNG、JPEG、GIF、WebP内联显示，其他格式保留元数据和下载。对象地址随字节、作用域变更或卸载退役。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
@@ -4220,6 +4316,7 @@
       "The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.": "本地示例使用合成应用资源；保存、发布与导航操作均不会连接宿主。",
       "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.": "本地示例使用合成查询与对象描述，保存和发布无法访问宿主。",
       "The offline preview shows the binding only and never executes Wasm or reads tenant data.": "离线预览仅展示绑定，不执行 Wasm 或读取租户数据。",
+      "The original attachment and author permissions belong to Files. The caller confirms saves at the captured file revision; refused drafts remain local and view retirement never cancels accepted decisions.": "原附件和作者权限归文件服务。调用方按捕获的文件版本确认保存；拒绝保留本地草稿，视图退役不取消已接受的决定。",
       "The original host owns authorization, validation and approval. An unanswered row can only resend its original decision with identical payload and revision; retiring a window ends new submissions.": "原宿主管理授权、校验和审批。未回答的行仅能以相同参数和版本重发原决策；窗口退役后停止新提交。",
       "The original host owns matching membership, time order, numeric semantics and the atomic read. The reader validates exact request echoes and discards old scopes, revisions or attempts without downloading records or retrying another mode.": "原宿主管理匹配成员、时间顺序、数值语义和原子读取。读者校验精确请求回显并丢弃旧作用域、版本或请求，不下载记录或切换模式重试。",
       "The original host owns numeric and missing-value semantics. Empty averages remain empty and the explicit unit grants no business conversion.": "原宿主拥有数值及缺值语义；空平均值保持为空，显式单位不授予业务换算。",
@@ -4246,6 +4343,7 @@
       "Use the same commands from a pointer context menu or an explicit keyboard and touch trigger.": "右键菜单、键盘与触控入口使用同一组命令。",
       "Virtual item list": "虚拟条目列表",
       "Visibility and allowed actions come from the scoped source and caller.": "可见范围与允许的动作来自限定范围的数据源和调用方。",
+      "WebGL2 is required. The caller supplies a confirmed asset and attachment; sample mappings require the actual asset reference. No simulation, default asset or external model resource is used.": "需要WebGL2。调用方提供确认资产和附件；样本映射需要实际资产引用。不使用模拟数据、默认资产或外部模型资源。",
       "Workshop module migration": "Workshop 模块迁移",
       "Wrap presentation items and navigate toolbar buttons with arrow keys.": "让呈现项自动换行，并使用方向键在工具栏按钮间移动。",
       "conflict": "冲突",
@@ -5126,6 +5224,7 @@
         "FlowTrace",
         "GraphEdge",
         "GraphNode",
+        "ImageAnnotationProps",
         "InboxTask",
         "KanbanLane",
         "KanbanMove",
@@ -5165,6 +5264,8 @@
         "RecordCommentsProps",
         "RecordEditPort",
         "RecordHistoryProps",
+        "RecordMapFields",
+        "RecordMapProps",
         "RecordNeighborhoodGroup",
         "RecordNeighborhoodProps",
         "RecordPageData",
@@ -5177,6 +5278,11 @@
         "ResourceStatusTone",
         "RetroButtonProps",
         "Route",
+        "Scene3DProps",
+        "SceneConfig",
+        "SceneInput",
+        "SceneLayer",
+        "SceneMapping",
         "SearchAroundPathEntry",
         "SearchAroundProps",
         "SearchAroundRelation",

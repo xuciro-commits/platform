@@ -20,22 +20,24 @@ import (
 )
 
 const (
-	ID           = "files"
-	FileType     = "files.file"
-	SchemaAttach = "files.file.attach"
-	SchemaDetach = "files.file.detach"
-	SettingMax   = "max-size-mb"
+	ID             = "files"
+	FileType       = "files.file"
+	SchemaAttach   = "files.file.attach"
+	SchemaDetach   = "files.file.detach"
+	SchemaAnnotate = "files.file.annotate"
+	SettingMax     = "max-size-mb"
 )
 
 // File is a file attached to a record.
 type File struct {
 	platform.Record
-	Name        string `json:"name" field:"required,search" help:"The file's name as it was uploaded"`
-	ContentType string `json:"contentType" field:"readonly" title:"Type"`
-	Size        int    `json:"size" field:"readonly" help:"Bytes"`
-	Hash        string `json:"hash" field:"readonly" help:"The SHA-256 of its bytes: where the store keeps them"`
-	Target      string `json:"target" field:"readonly" title:"Attached to" help:"<type>/<id> of the record"`
-	By          string `json:"by" field:"readonly" title:"Attached by"`
+	Name        string        `json:"name" field:"required,search" help:"The file's name as it was uploaded"`
+	ContentType string        `json:"contentType" field:"readonly" title:"Type"`
+	Size        int           `json:"size" field:"readonly" help:"Bytes"`
+	Hash        string        `json:"hash" field:"readonly" help:"The SHA-256 of its bytes: where the store keeps them"`
+	Target      string        `json:"target" field:"readonly" title:"Attached to" help:"<type>/<id> of the record"`
+	By          string        `json:"by" field:"readonly" title:"Attached by"`
+	Regions     []ImageRegion `json:"regions,omitempty" field:"readonly,aside" type:"json" title:"Image regions"`
 }
 
 var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -62,6 +64,8 @@ func New(tenant string) *Files {
 				{Name: "target", Type: "string", Required: true, Description: "<type>/<id> of the record"}}},
 		platform.Action{Schema: SchemaDetach, Target: FileType, Capability: "files", Title: "Remove file", Roles: any,
 			Description: "Remove a file you attached from its record; it stays in the record's history.", Payload: []platform.Field{}},
+		platform.Action{Schema: SchemaAnnotate, Target: FileType, Capability: "files", Title: "Save image regions", Roles: any,
+			Description: "Replace normalized regions on your readable original raster attachment at its current revision.", Payload: []platform.Field{{Name: "hash", Type: "string", Required: true, Description: "The confirmed original attachment hash"}, {Name: "regions", Type: "json", Required: true, Description: "Stable region IDs, labels and normalized rectangles"}}},
 	), FileType)}
 }
 
@@ -78,6 +82,8 @@ func (f *Files) Manifest() platform.Manifest {
 }
 
 func (f *Files) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }
+func (f *Files) AcceptedLedger() *platform.Ledger         { return f.ledger }
+func (*Files) AcceptedActionSchemas() []string            { return []string{SchemaAnnotate} }
 func (f *Files) Snapshot() (json.RawMessage, error)       { return f.ledger.Snapshot() }
 func (f *Files) Restore(raw json.RawMessage) error        { return f.ledger.Restore(raw) }
 func (f *Files) Read(platform.Caller, string) (any, *kernel.Error) {
@@ -134,6 +140,22 @@ func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 			}
 			existing.Archived = true
+			return func(r *pb.ChangeRecord) { c.Put(r, existing) }, nil
+		case SchemaAnnotate:
+			if !known || existing.Archived {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			}
+			if !c.Replaying && (!f.host.Readable(c.Member, existing.Target, now) || existing.By != c.ID) {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			}
+			p, err := imageRegionsPayload(s.GetPayload())
+			if err != nil || p.Hash != existing.Hash || !rasterAttachment(existing.ContentType) || s.GetExpectedRevision() == 0 {
+				return nil, invalid
+			}
+			if s.GetExpectedRevision() != existing.Revision {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			}
+			existing.Regions = p.Regions
 			return func(r *pb.ChangeRecord) { c.Put(r, existing) }, nil
 		}
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}

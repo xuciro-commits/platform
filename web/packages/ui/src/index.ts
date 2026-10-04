@@ -117,3 +117,10 @@ export type {ObservationStatisticsProps} from "./records/ObservationStatistics";
 export {ObservationTimeSeries,ObservationAvailability} from "./records/ObservationTimeSeries";
 export type {ObservationTimeSeriesProps,ObservationAvailabilityProps} from "./records/ObservationTimeSeries";
 export type {ObservationSignal,ObservationMetadata,ObservationWindow,ObservationStatisticsValue} from "./records/observation-model";
+
+export {RecordMap,mapPoints,type RecordMapFields,type RecordMapProps} from "./spatial/RecordMap";
+export {ImageAnnotation,type ImageAnnotationProps} from "./spatial/ImageAnnotation";
+export {validImageRegions} from "./spatial/image-regions";
+
+export {Scene3D,type Scene3DProps} from "./spatial/Scene3D";
+export {validSceneConfig,sceneMappingValue,type SceneConfig,type SceneLayer,type SceneMapping,type SceneInput} from "./spatial/scene-model";
