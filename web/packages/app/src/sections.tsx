@@ -679,7 +679,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     const collectionID=section.widget==="avatar-stack"?avatarCollectionVariable(section.avatar,avatarContext?.status,section.collectionVariable):section.collectionVariable;
     const explorationSlot=section.widget==="ai-assistant"?aiRecordSlot(page,section.recordVariable):recordResourceSlot(page,section.recordVariable),explorationRoot=explorationSlot?session.confirmedSelected(explorationSlot):undefined,rootLease=explorationSlot?session.recordBindingEpoch(explorationSlot):undefined;
     const sharedAI=section.widget==="ai-assistant"&&initialVariables[section.recordVariable??""]?.mode==="shared";
-    const sharedContext=["graph-explorer","breadcrumb","record-card"].includes(section.widget)&&initialVariables[section.recordVariable??""]?.mode==="shared";
+    const sharedContext=["graph-explorer","vertex-graph","breadcrumb","record-card"].includes(section.widget)&&initialVariables[section.recordVariable??""]?.mode==="shared";
     const sharedContextStatus=sharedContext?application.resources[section.recordVariable??""]?.status:undefined;
     const contextReference=(sharedAI||sharedContext)?application.recordReferences[section.recordVariable??""]:recordReadReference(explorationSlot?snapshot.records[explorationSlot]:undefined);
     const explorationActive=()=>{

@@ -1,0 +1,1183 @@
+{
+  "name": "workflow",
+  "object": "build.asset",
+  "document": {
+    "formatVersion": 2,
+    "uiProfile": "platform.page.v2.102",
+    "root": "import_node_8",
+    "nodes": {
+      "import_leaf_12": {
+        "kind": "widget",
+        "section": "import_widget_11",
+        "title": "Work Orders"
+      },
+      "import_leaf_17": {
+        "kind": "widget",
+        "section": "import_widget_16",
+        "title": "Runbook"
+      },
+      "import_leaf_19": {
+        "kind": "widget",
+        "section": "import_widget_18",
+        "title": "AIP"
+      },
+      "import_leaf_22": {
+        "kind": "widget",
+        "section": "import_widget_21",
+        "title": "Comments"
+      },
+      "import_node_10": {
+        "kind": "rows",
+        "title": "WF Tabs",
+        "children": [
+          "import_node_10_tabs"
+        ],
+        "gap": 8,
+        "presentation": {
+          "showHeader": false,
+          "padding": 8,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_node_10_tabs": {
+        "kind": "tabs",
+        "title": "WF Tabs",
+        "children": [
+          "import_leaf_12",
+          "import_leaf_17",
+          "import_leaf_19",
+          "import_leaf_22"
+        ],
+        "activeVariable": "import_tab_25"
+      },
+      "import_leaf_28": {
+        "kind": "widget",
+        "section": "import_widget_27"
+      },
+      "import_leaf_31": {
+        "kind": "widget",
+        "section": "import_widget_30"
+      },
+      "import_leaf_41": {
+        "kind": "widget",
+        "section": "import_widget_40"
+      },
+      "import_leaf_44": {
+        "kind": "widget",
+        "section": "import_widget_43"
+      },
+      "import_node_26": {
+        "kind": "rows",
+        "title": "Side",
+        "children": [
+          "import_leaf_28",
+          "import_leaf_31",
+          "import_leaf_41",
+          "import_leaf_44"
+        ],
+        "gap": 8,
+        "size": {
+          "width": 320
+        },
+        "presentation": {
+          "showHeader": false,
+          "padding": 10,
+          "background": "panel",
+          "border": true,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_node_9": {
+        "kind": "columns",
+        "title": "Main",
+        "children": [
+          "import_node_10",
+          "import_node_26"
+        ],
+        "gap": 8,
+        "presentation": {
+          "showHeader": false,
+          "padding": 8,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_49": {
+        "kind": "widget",
+        "section": "import_widget_48"
+      },
+      "import_leaf_53": {
+        "kind": "widget",
+        "section": "import_widget_52"
+      },
+      "import_node_47": {
+        "kind": "columns",
+        "title": "Bulk + Quiver",
+        "children": [
+          "import_leaf_49",
+          "import_leaf_53"
+        ],
+        "gap": 8,
+        "presentation": {
+          "showHeader": false,
+          "padding": 8,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_node_8": {
+        "kind": "rows",
+        "title": "Workflow",
+        "children": [
+          "import_node_9",
+          "import_node_47"
+        ],
+        "gap": 8,
+        "presentation": {
+          "showHeader": false,
+          "padding": 10,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        },
+        "size": {
+          "maxHeight": 960,
+          "scroll": "auto"
+        }
+      },
+      "import_leaf_57": {
+        "kind": "widget",
+        "section": "import_widget_56"
+      },
+      "import_leaf_60": {
+        "kind": "widget",
+        "section": "import_widget_59"
+      },
+      "import_leaf_62": {
+        "kind": "widget",
+        "section": "import_widget_61"
+      },
+      "import_leaf_64": {
+        "kind": "widget",
+        "section": "import_widget_63"
+      },
+      "import_leaf_66": {
+        "kind": "widget",
+        "section": "import_widget_65"
+      },
+      "import_node_55": {
+        "kind": "rows",
+        "title": "Drawer Content",
+        "children": [
+          "import_leaf_57",
+          "import_leaf_60",
+          "import_leaf_62",
+          "import_leaf_64",
+          "import_leaf_66"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        },
+        "size": {
+          "maxHeight": 640,
+          "scroll": "auto"
+        }
+      },
+      "import_leaf_76": {
+        "kind": "widget",
+        "section": "import_widget_75"
+      },
+      "import_leaf_78": {
+        "kind": "widget",
+        "section": "import_widget_77"
+      },
+      "import_node_74": {
+        "kind": "rows",
+        "title": "Confirm",
+        "children": [
+          "import_leaf_76",
+          "import_leaf_78"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_81": {
+        "kind": "widget",
+        "section": "import_widget_80"
+      },
+      "import_node_79": {
+        "kind": "rows",
+        "title": "Action Modal",
+        "children": [
+          "import_leaf_81"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_84": {
+        "kind": "widget",
+        "section": "import_widget_83"
+      },
+      "import_node_82": {
+        "kind": "rows",
+        "title": "Create WO",
+        "children": [
+          "import_leaf_84"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_86": {
+        "kind": "widget",
+        "section": "import_widget_85"
+      },
+      "import_leaf_93": {
+        "kind": "widget",
+        "section": "import_widget_92"
+      }
+    },
+    "variables": {
+      "import_variable_1": {
+        "title": "selectedAsset",
+        "scope": "application",
+        "type": "record",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "record",
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.asset"
+          }
+        }
+      },
+      "import_variable_2": {
+        "title": "currentPage",
+        "scope": "application",
+        "type": "string",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "currentPage"
+        }
+      },
+      "import_variable_3": {
+        "title": "showDetail",
+        "scope": "application",
+        "type": "boolean",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "showDetail"
+        }
+      },
+      "import_variable_13": {
+        "title": "workOrders",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_query_14"
+        }
+      },
+      "import_variable_20": {
+        "title": "chatInput",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_variable_23": {
+        "title": "selectedWorkOrder",
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "import_widget_11"
+        }
+      },
+      "import_variable_24": {
+        "title": "commentDraft",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_tab_25": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "import_leaf_12"
+      },
+      "import_variable_29": {
+        "title": "selectedTab",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "0"
+      },
+      "import_variable_32": {
+        "title": "filteredAssets",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_query_33"
+        }
+      },
+      "import_variable_34": {
+        "title": "statusFilter",
+        "scope": "page",
+        "type": "string-set",
+        "mode": "state",
+        "initial": {
+          "kind": "string-set",
+          "values": []
+        }
+      },
+      "import_variable_35": {
+        "title": "priorityFilter",
+        "scope": "page",
+        "type": "string-set",
+        "mode": "state",
+        "initial": {
+          "kind": "string-set",
+          "values": []
+        }
+      },
+      "import_variable_36": {
+        "title": "ownerFilter",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_variable_37": {
+        "title": "searchText",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_variable_38": {
+        "title": "pressureMin",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_variable_39": {
+        "title": "pressureMax",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_variable_42": {
+        "title": "uploadedFile",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_work_set_51": {
+        "title": "Bulk edit",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_work_query_50"
+        }
+      },
+      "import_open_54": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_count_58": {
+        "title": "filteredAssets",
+        "scope": "page",
+        "type": "decimal",
+        "mode": "aggregate",
+        "source": {
+          "kind": "count",
+          "query": "import_query_33"
+        }
+      },
+      "import_open_73": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_open_69": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_open_71": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_variable_87": {
+        "title": "allAssets",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_query_88"
+        }
+      },
+      "import_scatter_set_90": {
+        "title": "Chart 4 (unused)",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_scatter_query_89"
+        }
+      }
+    },
+    "queries": {
+      "import_query_14": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.work"
+        },
+        "conditions": [],
+        "limit": 100
+      },
+      "import_query_33": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "conditions": [
+          {
+            "field": "state",
+            "op": "in",
+            "value": {
+              "variable": "import_variable_34"
+            },
+            "optional": true
+          },
+          {
+            "field": "priority",
+            "op": "in",
+            "value": {
+              "variable": "import_variable_35"
+            },
+            "optional": true
+          },
+          {
+            "field": "owner",
+            "op": "like",
+            "value": {
+              "variable": "import_variable_36"
+            },
+            "optional": true
+          },
+          {
+            "field": "pressure",
+            "op": ">=",
+            "value": {
+              "variable": "import_variable_38"
+            },
+            "optional": true,
+            "asDecimal": true
+          },
+          {
+            "field": "pressure",
+            "op": "<=",
+            "value": {
+              "variable": "import_variable_39"
+            },
+            "optional": true,
+            "asDecimal": true
+          }
+        ],
+        "search": {
+          "variable": "import_variable_37"
+        },
+        "limit": 1
+      },
+      "import_work_query_50": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "conditions": [
+          {
+            "field": "state",
+            "op": "in",
+            "value": {
+              "variable": "import_variable_34"
+            },
+            "optional": true
+          },
+          {
+            "field": "priority",
+            "op": "in",
+            "value": {
+              "variable": "import_variable_35"
+            },
+            "optional": true
+          },
+          {
+            "field": "owner",
+            "op": "like",
+            "value": {
+              "variable": "import_variable_36"
+            },
+            "optional": true
+          },
+          {
+            "field": "pressure",
+            "op": ">=",
+            "value": {
+              "variable": "import_variable_38"
+            },
+            "optional": true,
+            "asDecimal": true
+          },
+          {
+            "field": "pressure",
+            "op": "<=",
+            "value": {
+              "variable": "import_variable_39"
+            },
+            "optional": true,
+            "asDecimal": true
+          }
+        ],
+        "search": {
+          "variable": "import_variable_37"
+        },
+        "limit": 50,
+        "offset": 0,
+        "sort": [
+          "id"
+        ]
+      },
+      "import_query_88": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "conditions": [],
+        "limit": 100
+      },
+      "import_scatter_query_89": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "conditions": [],
+        "limit": 100,
+        "sort": [
+          "id"
+        ],
+        "offset": 0
+      }
+    },
+    "overlays": {
+      "import_overlay_4": {
+        "root": "import_node_55",
+        "kind": "drawer",
+        "title": "Asset Detail Drawer",
+        "openVariable": "import_open_54",
+        "presentation": {
+          "side": "right",
+          "size": "medium",
+          "backdrop": true,
+          "closeOnBackdrop": true,
+          "closeOnEsc": true
+        }
+      },
+      "import_overlay_5": {
+        "root": "import_node_74",
+        "kind": "drawer",
+        "title": "Confirm Offline",
+        "openVariable": "import_open_73",
+        "presentation": {
+          "side": "right",
+          "size": "small",
+          "backdrop": true,
+          "closeOnBackdrop": true,
+          "closeOnEsc": true
+        }
+      },
+      "import_overlay_6": {
+        "root": "import_node_79",
+        "kind": "modal",
+        "title": "Edit Asset Status",
+        "openVariable": "import_open_69",
+        "presentation": {
+          "side": "right",
+          "size": "medium",
+          "backdrop": true,
+          "closeOnBackdrop": false,
+          "closeOnEsc": true
+        }
+      },
+      "import_overlay_7": {
+        "root": "import_node_82",
+        "kind": "modal",
+        "title": "Create Work Order",
+        "openVariable": "import_open_71",
+        "presentation": {
+          "side": "right",
+          "size": "medium",
+          "backdrop": true,
+          "closeOnBackdrop": true,
+          "closeOnEsc": true
+        }
+      }
+    },
+    "events": [
+      {
+        "source": "import_widget_65",
+        "control": "import_control_67",
+        "event": "click",
+        "target": "import_open_54",
+        "value": true
+      },
+      {
+        "source": "import_widget_65",
+        "control": "import_control_68",
+        "event": "click",
+        "target": "import_open_69",
+        "value": true
+      },
+      {
+        "source": "import_widget_65",
+        "control": "import_control_70",
+        "event": "click",
+        "target": "import_open_71",
+        "value": true
+      },
+      {
+        "source": "import_widget_65",
+        "control": "import_control_72",
+        "event": "click",
+        "target": "import_open_73",
+        "value": true
+      }
+    ],
+    "unusedWidgets": [
+      {
+        "node": "import_leaf_86",
+        "parent": "import_node_8"
+      },
+      {
+        "node": "import_leaf_93",
+        "parent": "import_node_8"
+      }
+    ]
+  },
+  "sections": [
+    {
+      "id": "import_widget_11",
+      "widget": "table",
+      "configVersion": 1,
+      "title": "Work Orders",
+      "collectionVariable": "import_variable_13",
+      "object": "build.work",
+      "tableColumns": [
+        {
+          "field": "id",
+          "title": "ID",
+          "width": 110
+        },
+        {
+          "field": "title",
+          "title": "Title",
+          "width": 220
+        },
+        {
+          "field": "status",
+          "title": "Status",
+          "width": 110,
+          "formatter": "badge"
+        },
+        {
+          "field": "asset",
+          "title": "Asset",
+          "width": 110
+        },
+        {
+          "field": "due",
+          "title": "Due",
+          "width": 120,
+          "formatter": "date"
+        }
+      ],
+      "fields": [
+        "title",
+        "status",
+        "asset",
+        "due"
+      ],
+      "tablePresentation": {
+        "density": "normal",
+        "showToolbar": true
+      },
+      "selection": "import_selection_15"
+    },
+    {
+      "id": "import_widget_16",
+      "widget": "text",
+      "configVersion": 1,
+      "title": "Runbook",
+      "text": "## Standard Operating Procedure\n\n1. **Observe** telemetry trends in the selected asset.\n2. _Investigate_ anomalies via linked Sensors.\n3. Decide on a mitigation using the Action panel.\n4. Act — submit a Work Order.\n\n> Reference: [Field Manual §4.2](#)\n\n`asset.id` is the primary key."
+    },
+    {
+      "id": "import_widget_18",
+      "widget": "ai-assistant",
+      "configVersion": 1,
+      "title": "AIP Assistant",
+      "recordVariable": "import_variable_1",
+      "function": {
+        "name": "asset-assistant",
+        "version": 1
+      },
+      "ai": {
+        "kind": "chatbot",
+        "questionVariable": "import_variable_20",
+        "replyField": "reply",
+        "suggestions": [
+          "Summarise active alerts",
+          "Which asset has highest revenue risk?",
+          "Explain the status filter"
+        ]
+      }
+    },
+    {
+      "id": "import_widget_21",
+      "widget": "record-comments",
+      "configVersion": 1,
+      "title": "Discussion",
+      "recordVariable": "import_variable_23",
+      "object": "build.work",
+      "commentDraftVariable": "import_variable_24"
+    },
+    {
+      "id": "import_widget_27",
+      "widget": "choice-input",
+      "configVersion": 1,
+      "title": "Workflow",
+      "choiceVariable": "import_variable_29",
+      "choiceInput": {
+        "variant": "steps",
+        "options": [
+          "0",
+          "1",
+          "2",
+          "3"
+        ],
+        "optionLabels": [
+          "Observe",
+          "Investigate",
+          "Decide",
+          "Act"
+        ],
+        "label": "Workflow"
+      }
+    },
+    {
+      "id": "import_widget_30",
+      "widget": "inline-action",
+      "configVersion": 1,
+      "title": "Edit Asset",
+      "recordVariable": "import_variable_1",
+      "actions": [
+        "build.asset.update"
+      ]
+    },
+    {
+      "id": "import_widget_40",
+      "widget": "record-uploader",
+      "configVersion": 1,
+      "title": "Upload Reading",
+      "recordVariable": "import_variable_23",
+      "object": "build.work",
+      "fileVariable": "import_variable_42"
+    },
+    {
+      "id": "import_widget_43",
+      "widget": "vertex-graph",
+      "configVersion": 1,
+      "title": "Neighborhood",
+      "recordVariable": "import_variable_1",
+      "vertexGraph": {
+        "groups": [
+          {
+            "id": "import_vertex_group_45",
+            "binding": {
+              "ref": {
+                "app": "build",
+                "kind": "link-type",
+                "name": "asset-sensor"
+              },
+              "sourceVersion": "1.link-1"
+            },
+            "direction": "forward",
+            "limit": 4,
+            "badge": "S",
+            "tone": "success"
+          },
+          {
+            "id": "import_vertex_group_46",
+            "binding": {
+              "ref": {
+                "app": "build",
+                "kind": "link-type",
+                "name": "asset-alert"
+              },
+              "sourceVersion": "1.link-1"
+            },
+            "direction": "forward",
+            "limit": 3,
+            "badge": "A",
+            "tone": "danger"
+          }
+        ]
+      }
+    },
+    {
+      "id": "import_widget_48",
+      "widget": "action-table",
+      "configVersion": 1,
+      "title": "Bulk edit",
+      "collectionVariable": "import_work_set_51",
+      "actions": [
+        "build.asset.update"
+      ],
+      "actionTable": {
+        "parameters": [
+          {
+            "parameter": "status",
+            "field": "state"
+          },
+          {
+            "parameter": "priority",
+            "field": "priority"
+          },
+          {
+            "parameter": "owner",
+            "field": "owner"
+          }
+        ]
+      }
+    },
+    {
+      "id": "import_widget_52",
+      "widget": "embedded-page",
+      "configVersion": 1,
+      "title": "Quiver · Fleet KPIs",
+      "embedding": {
+        "kind": "dashboard",
+        "page": {
+          "ref": {
+            "app": "build",
+            "kind": "page",
+            "name": "fleet-kpis"
+          },
+          "sourceVersion": "1.page-1"
+        },
+        "contentVersion": "page.sha256.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "interfaceVersion": 0,
+        "inputs": {},
+        "results": {},
+        "readOnly": true
+      }
+    },
+    {
+      "id": "import_widget_56",
+      "widget": "collection-title",
+      "configVersion": 1,
+      "title": "filteredAssets",
+      "collectionVariable": "import_variable_32",
+      "countVariable": "import_count_58"
+    },
+    {
+      "id": "import_widget_59",
+      "widget": "detail",
+      "configVersion": 1,
+      "title": "Properties",
+      "recordVariable": "import_variable_1",
+      "fields": [
+        "name",
+        "state",
+        "priority",
+        "owner",
+        "pressure",
+        "temperature",
+        "availability",
+        "model",
+        "installedAt",
+        "lastInspection",
+        "nextMaintenance"
+      ],
+      "detailPresentation": {
+        "columns": 2,
+        "hideNull": true
+      }
+    },
+    {
+      "id": "import_widget_61",
+      "widget": "record-links",
+      "configVersion": 1,
+      "title": "Related",
+      "recordVariable": "import_variable_1",
+      "recordLinks": [
+        {
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.sensor"
+          },
+          "field": "asset",
+          "title": "Sensors"
+        },
+        {
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.alert"
+          },
+          "field": "asset",
+          "title": "Alerts"
+        },
+        {
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.work"
+          },
+          "field": "asset",
+          "title": "Work Orders"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_63",
+      "widget": "ai-assistant",
+      "configVersion": 1,
+      "title": "AIP Insights",
+      "recordVariable": "import_variable_1",
+      "function": {
+        "name": "advice",
+        "version": 1
+      },
+      "ai": {
+        "kind": "generated"
+      }
+    },
+    {
+      "id": "import_widget_65",
+      "widget": "button-group",
+      "configVersion": 1,
+      "title": "Asset Actions",
+      "buttons": [
+        {
+          "id": "import_control_67",
+          "title": "Open Detail",
+          "variant": "primary",
+          "icon": "arrow"
+        },
+        {
+          "id": "import_control_68",
+          "title": "Edit Status",
+          "variant": "default",
+          "icon": "edit"
+        },
+        {
+          "id": "import_control_70",
+          "title": "Create Work Order",
+          "variant": "default",
+          "icon": "plus"
+        },
+        {
+          "id": "import_control_72",
+          "title": "Take offline…",
+          "variant": "danger",
+          "icon": "trash"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_75",
+      "widget": "notice",
+      "configVersion": 1,
+      "title": "Offline warning",
+      "notice": {
+        "message": "Offline assets stop producing revenue. The Update asset status action requires High priority when the new status is Offline.",
+        "tone": "danger",
+        "title": "Take this asset offline?"
+      }
+    },
+    {
+      "id": "import_widget_77",
+      "widget": "inline-action",
+      "configVersion": 1,
+      "title": "Edit Asset",
+      "recordVariable": "import_variable_1",
+      "actions": [
+        "build.asset.update"
+      ],
+      "actionDefaults": [
+        {
+          "parameter": "status",
+          "field": "state"
+        },
+        {
+          "parameter": "priority",
+          "field": "priority"
+        },
+        {
+          "parameter": "owner",
+          "field": "owner"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_80",
+      "widget": "inline-action",
+      "configVersion": 1,
+      "title": "Edit Asset",
+      "recordVariable": "import_variable_1",
+      "actions": [
+        "build.asset.update"
+      ],
+      "actionDefaults": [
+        {
+          "parameter": "status",
+          "field": "state"
+        },
+        {
+          "parameter": "priority",
+          "field": "priority"
+        },
+        {
+          "parameter": "owner",
+          "field": "owner"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_83",
+      "widget": "inline-action",
+      "configVersion": 1,
+      "title": "Create Work Order",
+      "recordVariable": "import_variable_1",
+      "actions": [
+        "build.asset.schedule"
+      ]
+    },
+    {
+      "id": "import_widget_85",
+      "widget": "record-scatter",
+      "configVersion": 1,
+      "title": "Chart 4 (unused)",
+      "scatter": {
+        "xField": "pressure",
+        "yField": "temperature",
+        "colorField": "state",
+        "labelField": "name"
+      },
+      "collectionVariable": "import_scatter_set_90",
+      "selection": "import_selection_91"
+    },
+    {
+      "id": "import_widget_92",
+      "widget": "table",
+      "configVersion": 1,
+      "title": "Object Table 3 (unused)",
+      "collectionVariable": "import_variable_87",
+      "tableColumns": [
+        {
+          "field": "name"
+        }
+      ],
+      "fields": [
+        "name"
+      ]
+    }
+  ],
+  "selections": [
+    {
+      "name": "import_selection_15",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.work"
+      }
+    },
+    {
+      "name": "import_selection_91",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.asset"
+      }
+    }
+  ],
+  "title": "Workflow",
+  "description": "Monitor assets, triage alerts, and dispatch work orders across the global fleet."
+}

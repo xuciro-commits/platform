@@ -21,10 +21,11 @@ export function collaborationRecordChoices(module:SourceModule|undefined,pageID:
  if(!module)return [];
  const owners=new Map<string,string|undefined>(),walk=(root:string,owner?:string,seen=new Set<string>())=>{if(seen.has(root))return;seen.add(root);for(const child of module.sections[root]?.children??[]){if(child.kind==="widget")owners.set(child.id,owner);else walk(child.id,owner,seen);}};
  const page=module.pages.find(p=>p.id===pageID);if(!page)return [];walk(page.rootSectionId);module.overlays.forEach(o=>walk(o.rootSectionId,o.id));module.unusedWidgetIds.forEach(id=>owners.set(id,undefined));if(!owners.has(widgetID))return [];
- return module.variables.flatMap(v=>{if(v.type!=="object"||v.definitionKind!=="widgetOutput"||v.widgetOutputKey!=="activeObject"||v.isInterface)return [];
+ const shared=module.widgets[widgetID]?.type==="VertexGraph"?aiImportInterfaceRecords(module):[];
+ return [...shared,...module.variables.flatMap(v=>{if(v.type!=="object"||v.definitionKind!=="widgetOutput"||v.widgetOutputKey!=="activeObject"||v.isInterface)return [];
   const producers=Object.values(module.widgets).filter(w=>owners.has(w.id)&&!module.unusedWidgetIds.includes(w.id)&&owners.get(w.id)===owners.get(widgetID)&&["ObjectTable","ObjectList","KanbanBoard","Calendar","ObjectSelector","Leaderboard","ScatterPlot","ResourceList","MapTemplate","Map"].includes(w.type)&&w.config.activeVarId===v.id&&(w.type!=="ObjectTable"||v.widgetId===w.id));if(producers.length!==1)return [];
   const set=module.variables.find(value=>value.id===producers[0]!.config.objectSetVarId),external=text(object(set?.objectSet)?.objectType||set?.sourceObjectType);return external?[{id:v.id,title:v.name,object:external}]:[];
- });
+ })];
 }
 /** Discover the explicit source metadata that the import mapping dialog must expose. */
 export function workshopRequirements(module:SourceModule|undefined,origin:SourceModule|undefined=module){
@@ -68,9 +69,11 @@ export function workshopRequirements(module:SourceModule|undefined,origin:Source
 /** Each explicit graph mapping control edits one part of the same reviewed binding. */
 export function patchGraphImportBinding(current:NonNullable<ImportBindings["graphs"]>[string]|undefined,patch:Partial<NonNullable<ImportBindings["graphs"]>[string]>):NonNullable<ImportBindings["graphs"]>[string] {return {relations:current?.relations??[],labelFields:current?.labelFields??{},...current,...patch};}
 
+function aiImportInterfaceRecords(module:SourceModule){
+ const ports=Array.isArray(module.moduleInterface)?module.moduleInterface as {variableId?:string}[]:[];
+ return ports.flatMap(port=>{const variable=module.variables.find(v=>v.id===port.variableId),objectType=sourceInterfaceObject(module,port.variableId??'');return variable?.type==='object'&&objectType?[{id:variable.id,title:variable.name,object:objectType}]:[];});
+}
 export function aiImportRecordChoices(module:SourceModule,page:string,widget:string){
  const choices=collaborationRecordChoices(module,page,widget),ids=new Set(choices.map(c=>c.id));
- const ports=Array.isArray(module.moduleInterface)?module.moduleInterface as {variableId?:string}[]:[];
- for(const port of ports){const variable=module.variables.find(v=>v.id===port.variableId),producer=module.widgets[String(variable?.widgetId??"")],set=module.variables.find(v=>v.id===producer?.config.objectSetVarId),objectType=text(object(set?.objectSet)?.objectType||set?.sourceObjectType);if(variable?.type==="object"&&variable.definitionKind==="widgetOutput"&&variable.widgetOutputKey==="activeObject"&&objectType&&!ids.has(variable.id)){choices.push({id:variable.id,title:variable.name,object:objectType});ids.add(variable.id);}}
- return choices;
+ return [...choices,...aiImportInterfaceRecords(module).filter(c=>!ids.has(c.id))];
 }

@@ -80,6 +80,7 @@ type pageRuntimeContract struct {
 		MaxRecords        int    `json:"maxRecords"`
 	} `json:"collectionAnalysis"`
 	Exploration struct {
+		SharedVertexUIProfile  string `json:"sharedVertexUIProfile"`
 		RequiredUIProfile      string `json:"requiredUIProfile"`
 		MaxResourceWindow      int    `json:"maxResourceWindow"`
 		MaxDirectoryItems      int    `json:"maxDirectoryItems"`

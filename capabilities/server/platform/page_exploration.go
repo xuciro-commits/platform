@@ -144,7 +144,7 @@ func (d *PageDocument) checkExploration(s Section) error {
 		return nil
 	}
 	v := d.Variables[s.RecordVariable]
-	if !(v.Type == "record" && v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && slices.Contains([]string{"page", "overlay"}, v.Scope) || s.Widget == "graph-explorer" && d.sharedContextRecord(s.RecordVariable)) {
+	if !(v.Type == "record" && v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && slices.Contains([]string{"page", "overlay"}, v.Scope) || (s.Widget == "graph-explorer" || s.Widget == "vertex-graph" && PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Exploration.SharedVertexUIProfile)) && d.sharedContextRecord(s.RecordVariable)) {
 		return fmt.Errorf("graph needs its original scoped confirmed record producer")
 	}
 	if s.Widget == "vertex-graph" {

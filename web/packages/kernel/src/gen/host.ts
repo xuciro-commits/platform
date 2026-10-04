@@ -2245,7 +2245,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.101",
+  "uiProfile": "platform.page.v2.102",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -7388,7 +7388,8 @@ export const pageUIManifest = {
     "platform.page.v2.98",
     "platform.page.v2.99",
     "platform.page.v2.100",
-    "platform.page.v2.101"
+    "platform.page.v2.101",
+    "platform.page.v2.102"
   ],
   "runtime": {
     "scope": "page",
@@ -8048,7 +8049,8 @@ export const pageUIManifest = {
       "maxRelations": 12,
       "maxPath": 8,
       "maxWindow": 20,
-      "maxNeighborhoodRecords": 7
+      "maxNeighborhoodRecords": 7,
+      "sharedVertexUIProfile": "platform.page.v2.102"
     },
     "collectionAnalysis": {
       "requiredUIProfile": "platform.page.v2.80",

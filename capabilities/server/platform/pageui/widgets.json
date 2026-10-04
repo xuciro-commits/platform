@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.101",
+  "uiProfile": "platform.page.v2.102",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5142,7 +5142,8 @@
     "platform.page.v2.98",
     "platform.page.v2.99",
     "platform.page.v2.100",
-    "platform.page.v2.101"
+    "platform.page.v2.101",
+    "platform.page.v2.102"
   ],
   "runtime": {
     "scope": "page",
@@ -5802,7 +5803,8 @@
       "maxRelations": 12,
       "maxPath": 8,
       "maxWindow": 20,
-      "maxNeighborhoodRecords": 7
+      "maxNeighborhoodRecords": 7,
+      "sharedVertexUIProfile": "platform.page.v2.102"
     },
     "collectionAnalysis": {
       "requiredUIProfile": "platform.page.v2.80",
