@@ -1,9 +1,22 @@
 import "./i18n";
-import { useState } from "react";
+import { useEffect,useMemo,useRef,useState } from "react";
 import { Panel, t } from "@platform/ui";
 import { ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
 import type {Api} from "@platform/kernel";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";
+import {ObservationStatistics,type EntityInfo} from "@platform/ui";
+import {createObservationStatisticsReader,type ObservationStatisticsRead} from "./exploration/observation-reader";
+
+export function ObservationStatisticsReaderExample(){
+ const active=useRef(true),[params,setParams]=useState({signal:"value",threshold:1.5,windowRows:1000}),[state,setState]=useState<{scope:string;result?:ObservationStatisticsRead;error?:string}>();
+ useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
+ const info=useMemo<EntityInfo>(()=>({app:"catalog",type:"catalog.observation",title:"Observation",plural:"Observations",display:"id",standard:[],fields:[{name:"at",title:"Event time",type:"datetime"},{name:"value",title:"Signal",type:"decimal"}]}),[]);
+ // This example exercises the original adapter with a fixed local answer; it grants no tenant read permissions.
+ const reader=useMemo(()=>createObservationStatisticsReader({scope:"catalog-local-window",revision:1,entity:()=>info,aggregate:async(_object,query)=>{const w=query.window!;return {columns:[],rows:[],window:{timeField:w.timeField,field:w.field,requestedRows:w.rows,threshold:w.threshold,generation:"1",total:3,timed:3,missingTime:0,count:3,valid:3,missing:0,above:[1,2,3].filter(n=>n>Number(w.threshold)).length,min:1,mean:2,max:3,first:{id:"OBS-3",revision:1,time:"2026-10-03T00:00:03Z"},last:{id:"OBS-1",revision:1,time:"2026-10-03T00:00:01Z"}}};}},()=>active.current),[info]);
+ const request=useMemo(()=>({object:info.type,query:{},window:{timeField:"at",field:params.signal,rows:params.windowRows,threshold:String(params.threshold)}}),[info,params]),scope=reader.scope(request);
+ useEffect(()=>{let current=true;void reader.read(request).then(result=>{if(current)setState({scope,result});},()=>{if(current)setState({scope,error:t("The original observation statistics answer is invalid.")});});return()=>{current=false;};},[reader,request,scope]);
+ return <div className="grid min-w-0 grid-cols-1 gap-2"><p className="break-words text-xs text-muted">{t("The window reader example uses a fixed local answer and performs no tenant query.")}</p><ObservationStatistics scope={scope} info={info} signals={[{field:"value",unit:""}]} timeField="at" {...params} windowOptions={[1000,10000,100000]} value={state?.scope===scope?state.result?.statistics:undefined} error={state?.scope===scope?state.error:undefined} onChange={setParams}/></div>;
+}
 
 export function GeneratedFormExample() {
   const [values, setValues] = useState<object>();

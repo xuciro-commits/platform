@@ -13,6 +13,11 @@ export function timestampParts(value:string){
  return {local:`${m[1]}T${m[2]}:${m[3]}:${m[4]}`,fraction:m[5]??"",offset:m[6]!};
 }
 export function validTimestamp(value:string){return !!timestampParts(value);}
+/** Exact ordering of original RFC3339 instants, including sub-millisecond precision. */
+export function timestampNanoseconds(value:string):bigint|undefined {
+ const parts=timestampParts(value),ms=Date.parse(value);if(!parts||!Number.isSafeInteger(ms))return;
+ return BigInt(ms)*1_000_000n+BigInt(parts.fraction.padEnd(9,"0").slice(3)||"0");
+}
 /** Explicit import interpretation of a complete naive datetime. */
 export function withTimestampOffset(value:string,offset:string){
  if(!validTimestampOffset(offset))return undefined;

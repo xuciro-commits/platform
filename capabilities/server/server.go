@@ -724,7 +724,7 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	handle(Route{Pattern: "POST /v1/aggregates/{type}/query", Summary: "Aggregate complete authorized record sets before any window (ADR-0046)", Body: AggregateQuery{}, Answer: Aggregate{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	handle(Route{Pattern: "POST /v1/aggregates/{type}/query", Summary: "Aggregate authorized membership or explicitly declared recent business-time windows (ADR-0046)", Body: AggregateQuery{}, Answer: Aggregate{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, platform.QuerySetMaxBytes))
 		decoder.DisallowUnknownFields()
 		var q *AggregateQuery

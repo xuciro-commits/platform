@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Original window statistics reader": "原窗口统计读者",
+ "Read recent business-time window statistics through the original authorized aggregate owner.": "通过原受权聚合归属方，读取最近业务时间窗口统计。",
+ "The original host owns matching membership, time order, numeric semantics and the atomic read. The reader validates exact request echoes and discards old scopes, revisions or attempts without downloading records or retrying another mode.": "原宿主管理匹配成员、时间顺序、数值语义和原子读取。读者校验精确请求回显并丢弃旧作用域、版本或请求，不下载记录或切换模式重试。",
+ "The window reader example uses a fixed local answer and performs no tenant query.": "窗口读者示例使用固定本地答复，不执行租户查询。",
  "Record tiles": "记录卡片",
  "Session notepad": "会话笔记",
  "Original row decisions": "原行决策",

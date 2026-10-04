@@ -44,3 +44,7 @@ test("a bounded direct aggregate posts its row budget and never retries as an un
 test("a histogram request always posts its complete predicates and bin contract",async()=>{
  const query={histogram:{field:"pressure",bins:12},domain:[["status","=","active"]],search:"asset"};const fetcher=vi.fn(async(url:string,options:RequestInit)=>{expect(url).toBe("https://test.invalid/v1/aggregates/sample.note/query");expect(options.method).toBe("POST");expect(JSON.parse(String(options.body))).toEqual(query);return new Response(JSON.stringify({columns:[],rows:[],histogram:{}}));});vi.stubGlobal("fetch",fetcher);await client().aggregate("sample.note",query);expect(fetcher).toHaveBeenCalledTimes(1);
 });
+test("event-time window statistics post their explicit contract and never retry as a complete GET or record page",async()=>{
+ const query={window:{timeField:"at",field:"value",rows:100000,threshold:"11.5"},domain:[["status","=","ready"]],search:"original"};
+ const fetcher=vi.fn(async(url:string,options:RequestInit)=>{expect(url).toBe("https://test.invalid/v1/aggregates/sample.note/query");expect(options.method).toBe("POST");expect(JSON.parse(String(options.body))).toEqual(query);return new Response("Denied window",{status:403});});vi.stubGlobal("fetch",fetcher);await expect(client().aggregate("sample.note",query)).rejects.toThrow("403");expect(fetcher).toHaveBeenCalledTimes(1);
+});

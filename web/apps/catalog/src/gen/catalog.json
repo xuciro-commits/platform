@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:7ca6eb13528c2a6b",
+  "revision": "sha256:2a18164a46e6e870",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -369,6 +369,43 @@
         "empty"
       ],
       "snippet": "import { Search } from \"@platform/app\";\n<Search initial=\"order\" />"
+    },
+    {
+      "id": "app/observation-statistics-reader",
+      "owner": "@platform/app",
+      "name": "Original window statistics reader",
+      "summary": "Read recent business-time window statistics through the original authorized aggregate owner.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "observations",
+        "statistics",
+        "window",
+        "read"
+      ],
+      "source": "web/packages/app/src/exploration/observation-reader.ts",
+      "exports": [
+        "createObservationStatisticsReader"
+      ],
+      "example": "ObservationStatisticsReaderExample",
+      "constraints": [
+        "The original host owns matching membership, time order, numeric semantics and the atomic read. The reader validates exact request echoes and discards old scopes, revisions or attempts without downloading records or retrying another mode."
+      ],
+      "type": "ObservationStatisticsRequest",
+      "dependencies": [
+        "ui/observation-statistics",
+        "ui/datetime-input"
+      ],
+      "states": [
+        "Pending",
+        "Refused",
+        "Retired"
+      ]
     },
     {
       "id": "app/page-workspace",
@@ -1536,6 +1573,7 @@
         "validTimestamp",
         "validTimestampOffset",
         "timestampParts",
+        "timestampNanoseconds",
         "withTimestampOffset"
       ],
       "example": "DateTimeInputExample",
@@ -3941,6 +3979,7 @@
       "Original row action grid": "原行操作表格",
       "Original row decisions": "原行决策",
       "Original scalar and record sparkline": "原标量与记录迷你线",
+      "Original window statistics reader": "原窗口统计读者",
       "Page header": "页面标题区",
       "Page workspace and preview": "页面工作台与预览",
       "Partition caller-owned complete group counts into proportional rectangles with independently accessible groups.": "把调用方拥有的完整分组计数划分为比例矩形，保留独立的可访问分组。",
@@ -3983,6 +4022,7 @@
       "Read a record's declared fields, related work and recorded changes.": "阅读记录的已声明字段、相关工作与变更历史。",
       "Read formatted content or edit its source with a shared preview.": "阅读格式化内容，或通过共享预览编辑源码。",
       "Read only": "只读",
+      "Read recent business-time window statistics through the original authorized aggregate owner.": "通过原受权聚合归属方，读取最近业务时间窗口统计。",
       "Read-only graph": "只读关系图",
       "Ready": "就绪",
       "Record attachment uploader": "记录附件上传器",
@@ -4120,6 +4160,7 @@
       "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.": "本地示例使用合成查询与对象描述，保存和发布无法访问宿主。",
       "The offline preview shows the binding only and never executes Wasm or reads tenant data.": "离线预览仅展示绑定，不执行 Wasm 或读取租户数据。",
       "The original host owns authorization, validation and approval. An unanswered row can only resend its original decision with identical payload and revision; retiring a window ends new submissions.": "原宿主管理授权、校验和审批。未回答的行仅能以相同参数和版本重发原决策；窗口退役后停止新提交。",
+      "The original host owns matching membership, time order, numeric semantics and the atomic read. The reader validates exact request echoes and discards old scopes, revisions or attempts without downloading records or retrying another mode.": "原宿主管理匹配成员、时间顺序、数值语义和原子读取。读者校验精确请求回显并丢弃旧作用域、版本或请求，不下载记录或切换模式重试。",
       "The original host owns numeric and missing-value semantics. Empty averages remain empty and the explicit unit grants no business conversion.": "原宿主拥有数值及缺值语义；空平均值保持为空，显式单位不授予业务换算。",
       "The original inbox offers tasks; request IDs and revisions authorize approval decisions. Retiring a view never cancels a queued decision.": "原收件箱提供任务；审批决策使用请求身份与版本。视图退役不会取消已排队的决策。",
       "The original summary and record window share their query scope and total. No synthetic 24-hour points, live heartbeat, signal stream or availability promise is created.": "原摘要与记录窗口共享查询作用域和总数。不生成合成的二十四小时点、实时心跳、信号流或可用率承诺。",
@@ -4527,6 +4568,14 @@
       "web/packages/app/src/agents.tsx",
       "web/packages/mes/src/index.tsx"
     ],
+    "ui/observation-statistics": [
+      "web/packages/app/src/catalog.examples.tsx"
+    ],
+    "ui/datetime-input": [
+      "web/packages/app/src/exploration/observation-reader.ts",
+      "web/packages/app/src/widgets/DateInput.tsx",
+      "web/packages/build/src/editor.tsx"
+    ],
     "ui/flow": [
       "web/packages/app/src/flows.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -4646,10 +4695,6 @@
     ],
     "ui/static-image": [
       "web/packages/app/src/widgets/ContextViews.tsx"
-    ],
-    "ui/datetime-input": [
-      "web/packages/app/src/widgets/DateInput.tsx",
-      "web/packages/build/src/editor.tsx"
     ],
     "ui/date-input": [
       "web/packages/app/src/widgets/DateInput.tsx"
@@ -5110,6 +5155,8 @@
         "Host",
         "Me",
         "Memory",
+        "ObservationStatisticsRead",
+        "ObservationStatisticsRequest",
         "PageDecimalValue",
         "PageVariableValue",
         "Passage",

@@ -12,6 +12,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "app/flow-instance": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.FlowInstanceExample })),
   "app/generated-form": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.GeneratedFormExample })),
   "app/knowledge-search": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.SearchExample })),
+  "app/observation-statistics-reader": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.ObservationStatisticsReaderExample })),
   "app/page-workspace": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.PageWorkspaceExample })),
   "app/record-actions": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.ActionsExample })),
   "app/record-collaboration": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.RecordDetailExample })),

@@ -24,6 +24,7 @@ import (
 //     money field. Money is summed per currency: its currency becomes a group
 //     ("amount.currency"), and amounts stay in minor units.
 type AggregateQuery struct {
+	Window    *AggregateWindowQuery   `json:"window,omitempty"`
 	Histogram *HistogramQuery         `json:"histogram,omitempty"`
 	MaxRows   int                     `json:"maxRows,omitempty"`
 	Traversal *platform.LinkTraversal `json:"traversal,omitempty"`
@@ -42,9 +43,10 @@ const AggregateSetMaxRows = 4096
 // Aggregate is the answer: the columns it has, then one row per group, keyed
 // by column name, in the order of the groups' values.
 type Aggregate struct {
-	Histogram *HistogramResult `json:"histogram,omitempty"`
-	Columns   []Column         `json:"columns"`
-	Rows      []map[string]any `json:"rows"`
+	Window    *AggregateWindowResult `json:"window,omitempty"`
+	Histogram *HistogramResult       `json:"histogram,omitempty"`
+	Columns   []Column               `json:"columns"`
+	Rows      []map[string]any       `json:"rows"`
 }
 
 // Column describes a group or a measure, so a chart or pivot knows its type:
@@ -174,6 +176,9 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	if q.MaxRows < 0 || q.MaxRows > AggregateSetMaxRows {
 		return Aggregate{}, invalid
+	}
+	if q.Window != nil {
+		return s.aggregateWindow(et, q, visible)
 	}
 	if q.Histogram != nil {
 		return s.histogram(et, q, visible)

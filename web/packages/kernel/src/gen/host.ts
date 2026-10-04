@@ -93,12 +93,14 @@ export type AgentRunRecord = {
 };
 
 export type Aggregate = {
+  window?: AggregateWindowResult;
   histogram?: HistogramResult;
   columns: Column[];
   rows: Record<string, unknown>[];
 };
 
 export type AggregateQuery = {
+  window?: AggregateWindowQuery;
   histogram?: HistogramQuery;
   maxRows?: number;
   traversal?: LinkTraversal;
@@ -108,6 +110,39 @@ export type AggregateQuery = {
   archived?: boolean;
   groups?: string[];
   measures?: string[];
+};
+
+export type AggregateWindowEdge = {
+  id: string;
+  revision: number;
+  time: string;
+};
+
+export type AggregateWindowQuery = {
+  timeField: string;
+  field: string;
+  rows: number;
+  threshold: string;
+};
+
+export type AggregateWindowResult = {
+  timeField: string;
+  field: string;
+  requestedRows: number;
+  threshold: string;
+  generation: string;
+  total: number;
+  timed: number;
+  missingTime: number;
+  count: number;
+  valid: number;
+  missing: number;
+  above: number;
+  min?: number;
+  mean?: number;
+  max?: number;
+  first?: AggregateWindowEdge;
+  last?: AggregateWindowEdge;
 };
 
 export type AppEntry = {

@@ -361,3 +361,5 @@ export {pageLayoutDiagnostics} from "./layout";
 export {tableEditableFields} from "./widgets/table-edit";
 
 export {createRecordActionSubmitter} from "./record-actions";
+export {createObservationStatisticsReader} from "./exploration/observation-reader";
+export type {ObservationStatisticsRequest,ObservationStatisticsRead} from "./exploration/observation-reader";

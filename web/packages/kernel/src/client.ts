@@ -198,7 +198,7 @@ export class EdgeClient {
 
   /** Groups and measures of an entity type's records within the caller's scope (ADR-0019): `groups` like "stage" or "checkIn:month", `measures` like "count" or "sum:amount". */
   async aggregate<T = unknown>(type: string, q: Omit<AggregateQuery,"domain"> & {domain?:unknown[]} = {}): Promise<T> {
-    if(q.histogram||q.set||q.traversal||q.maxRows){const path=`/v1/aggregates/${encodeURIComponent(type)}/query`;const response=await fetch(this.connection.server+path,{method:"POST",headers:this.headers(true),body:JSON.stringify(q)});if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);return response.json() as Promise<T>;}
+    if(q.window||q.histogram||q.set||q.traversal||q.maxRows){const path=`/v1/aggregates/${encodeURIComponent(type)}/query`;const response=await fetch(this.connection.server+path,{method:"POST",headers:this.headers(true),body:JSON.stringify(q)});if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);return response.json() as Promise<T>;}
     const p = new URLSearchParams();
     if (q.domain?.length) p.set("domain", JSON.stringify(q.domain));
     if (q.search) p.set("search", q.search);

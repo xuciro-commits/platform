@@ -258,6 +258,8 @@ node solutions/wms/assemble.mjs assemble
 
 观测代码组件：在Catalog查“Original observation table / 原观测表”“Original observation statistics / 原观测统计”“Original availability history / 原可用率历史”“Original observation time series / 原观测时间序列”，开发视角可查看`@platform/ui`的ObservationTable、ObservationStatistics、ObservationAvailability及ObservationTimeSeries公共类型。调用方提供原EntityInfo、显式信号/单位和事件datetime字段，窗口为`{scope, records, total}`；scope包含原读取/查询身份，旧窗口不显示。表格列搜索/隐藏、元数据固定和行高只改变已读取窗口，选择/导出回调返回原记录和字段，不读取其他数据。统计调用方提供完整窗口答复与signal/threshold/windowRows/计数；最新样本和历史也需原scope。时间图支持最多500点及三种独立单位，保留缺值、原时间和记录身份；availability摘要必须与原窗口作用域、字段及total一致，SLO是明确呈现阈值。Catalog示例仅用固定合成数据，不保存文件或接入遥测。四类Workshop源组件尚不能据此直接导入；同组原生映射、宿主读取和冻结继续见[ADR-0046 §6.78](ADR/0046-application-studio-fusion.md#678-业务观测宽表窗口统计与真实时间序列)。
 
+原窗口统计API：POST /v1/aggregates/<type>/query的window为{timeField,field,rows,threshold}，例如{"timeField":"observed","field":"pressure","rows":10000,"threshold":"11.5"}。timeField须为可读业务datetime，field为integer/decimal，rows为1–100000，threshold为有限十进制字符串；原domain/search/set/traversal/archived仍限定受权成员。window不能与groups/measures/histogram/maxRows混用；普通记录分页、排序不限制此窗口，窗口始终按真实事件时刻降序/ID升序取最近N条。返回window的完整匹配数量、缺时间/缺数值、mean/min/max/above及首尾，空数值省略，不生成0；generation是运行实例标记。调用代码用@platform/app.createObservationStatisticsReader(source, isActive)，先以scope(request)提供预期作用域，再调用read(request)；旧scope、修订、参数请求或已关闭租约返回undefined，当前拒绝/非法答复抛错，不下载记录或切换读取模式。返回的statistics可直接供ObservationStatistics使用，原首尾仅是元数据；最新记录/资产仍需原单记录确认。Catalog“Original window statistics reader / 原窗口统计读者”提供本地合成示例，四类Workshop组件的原生导入/冻结仍待接通；范围见[ADR-0046 §6.78.1](ADR/0046-application-studio-fusion.md#6781-原宿主的最近记录窗口统计)。
+
 在仓库根查询当前任务（Node 22.18+）；命令直接读生成索引，不安装依赖或启动宿主：
 
 ```sh

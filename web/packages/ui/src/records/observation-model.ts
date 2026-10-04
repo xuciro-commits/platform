@@ -1,4 +1,4 @@
-import {timestampParts} from "../components/date";
+import {timestampNanoseconds} from "../components/date";
 import type {EntityInfo,EntityRecord} from "./Records";
 
 export type ObservationSignal={field:string;unit:string;group?:string};
@@ -11,7 +11,7 @@ export function observationFields(info:EntityInfo,signals:readonly ObservationSi
  return {fields,signals};
 }
 export function observationIdentities(records:readonly EntityRecord[],maxRecords:number) {
- return records.length<=maxRecords&&records.every(r=>typeof r.id==="string"&&r.id.length>0&&r.id.length<=1024&&Number.isSafeInteger(r.revision)&&r.revision>0)&&new Set(records.map(r=>r.id)).size===records.length;
+ return records.length<=maxRecords&&records.every(r=>typeof r.id==="string"&&r.id.length>0&&r.id.length<=1024&&Number.isSafeInteger(r.revision)&&r.revision>=0)&&new Set(records.map(r=>r.id)).size===records.length;
 }
 export function observationTableRecords(records:readonly EntityRecord[],info:EntityInfo,signals:readonly ObservationSignal[],metadata:ObservationMetadata){
  if(!observationFields(info,signals,metadata)||!observationIdentities(records,100000))return false;
@@ -21,9 +21,7 @@ export function observationTableRecords(records:readonly EntityRecord[],info:Ent
 /** UTC geometry retains nanosecond order, original offsets and literal timestamps. */
 export function observationInstant(value:unknown):bigint|undefined {
  if(typeof value!=="string")return;
- const parts=timestampParts(value),ms=Date.parse(value);
- if(!parts||!Number.isSafeInteger(ms))return;
- return BigInt(ms)*1_000_000n+BigInt(parts.fraction.padEnd(9,"0").slice(3)||"0");
+ return timestampNanoseconds(value);
 }
 export function observationTimeSeries(records:readonly EntityRecord[],info:EntityInfo,time:string,signals:readonly ObservationSignal[],reference?:number) {
  if(!observationFields(info,signals,{time})||signals.length>3||!observationIdentities(records,500)||reference!==undefined&&!Number.isFinite(reference))return;

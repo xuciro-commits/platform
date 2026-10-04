@@ -874,6 +874,14 @@ F1e58a先交付这四类共用的共享UI与受控端口：ObservationTable扩�
 
 F1e58a停止条件为四种原观测展示共用端口与Catalog可见示例、宽表两轴虚拟化及固定/隐藏列、实际时间/缺值/单位/稳定身份、受控参数拒绝和旧答复清理、普通/窄屏观察。适用组合/格式、Web类型/单元/构建及一条共享UI浏览器路线；Go契约和宿主未改变，不重复跑全量服务或部署。整组真正导入与冻结的停止条件仍归WorkQueue，不能据此将四类记为已迁移。
 
+#### 6.78.1 原宿主的最近记录窗口统计
+
+F1e58b1补同组必要依赖：现有Records把单页限制为500，Aggregate只度量完整谓词成员；不能让客户端重复分页后自行统计，也不能把普通聚合的limit偷偷解释为最近窗口。沿原POST `/v1/aggregates/{type}/query`增加互斥的`window`声明：`{timeField,field,rows,threshold}`，显式业务datetime、原integer/decimal信号、1–100000条及有限十进制阈值字符串。权限、域、搜索、QuerySet、归档与保留关系谓词仍由原宿主编译；先得到受权完整成员，再排除nil事件时间（有效time.Time零值仍是原year-1时刻），按真实时刻降序/ID升序取最近N条。不同UTC偏移与纳秒沿time.Time比较，记录顺序不伪造时间。
+
+结果`window`回显请求、完整total/timed/missingTime、窗口count/valid/missing/above、min/mean/max及首尾ID/revision/time，并携带运行租户内的record-store generation字符串；统计和首尾在同一原存储锁内读取，不发回隐藏业务字段或窗口记录，也不提供新的持久游标。空/缺值没有数值0，above严格大于阈值；计数精确，阈值/原存储数值以有理数比较，平均值仍为有限JSON number，不宣称decimal存储无限精度。非法类型、Money、非有限/非安全integer、过大窗口、错误字段/阈值及与普通分组/度量/Histogram混用明确拒绝；旧GET和完整聚合含义保持。
+
+前端原Kernel client只走此POST，不失败降级到完整集合或普通记录页。@platform/app提供原读取适配与答复校验：保持全部原成员谓词，显式替换记录页排序/分页为本窗口声明，按原字段类型、scope/revision、请求代次及组件租约确认答复；参数改变、晚答复、退役或成员改变不显示旧窗口。该读者复用原source.aggregate，不持有第二份业务缓存、队列或定时器。公开代码路径与定向HTTP/Go/边缘验证属于本段；四类原生描述、资产引用选择、检查器、Module导入和候选冻结仍由F1e58b2完成，不提前增加77/92库存。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -1325,5 +1333,7 @@ Module页面导入（F1e–F1e2）已接通§10.1的八类组件有限profile、
 原记录操作与笔记（F1e57，v2.81）已联合接通§6.77的ActionTable、MapTemplate、NotepadEmbed，当前有限profile库存为77/92。action-table映射完整原payload参数及可读初值字段，参数别名与ID/revision分离；独立50条ID窗口使用原动作、真实目标、打开时revision和K5，逐行确认快照、整行参数校验、失败保留及显式取消重开已接通。未回答决策只能以相同参数/版本重发原键；窗口关闭阻止剩余行提交，已排队原决策保留。审批接受与业务完成仍区分。MapTemplate沿原record-list的tiles形态显示独立八条原记录及完整total，可选原记录生产者/授权确认；不是地理地图。Notepad沿同page/Overlay的string state使用共享Textarea，导入显式选择原示例或空文字；关闭或重新加载恢复发布初值，不新增持久笔记服务。检查器、复制的独立笔记状态/参数保留、原文/报告、版本预算/权限裁剪、宿主嵌套保留动作描述的完整参数校验、候选冻结/草稿隔离、CheckReplay与内存快照已接通。适用Go/组合/格式与Web类型/单元/构建通过；一条三组件联合浏览器路线验证GUI映射、共同保存/冻结后笔记草稿隔离、50/52行与8/52卡片、真实多行接受/拒绝、版本冲突及显式重开、丢失答复原键重发、卡片原详情、笔记局部重开/页面重载，以及首行答复延迟时关闭Overlay后不再提交第二行。普通/窄屏已观察；长ID沿共享表格省略显示，未计为手机布局或负责人视觉认可。本批未跑全量Playwright或部署；持久/多人笔记、地理图、更多动作参数/窗口、Loop/应用共享、完整默认Module与真实PostgreSQL恢复仍待后续。
 
 业务观测共享UI（F1e58a）已接通§6.78的ObservationTable、ObservationStatistics、ObservationAvailability、ObservationTimeSeries及四个Catalog示例。原DataTable可选两轴虚拟化保留固定元数据、列宽及原行身份；宽表支持100个显式数值信号、列搜索/隐藏、元数据固定开关、行高及原窗口选择/导出回调。统计只消费调用方的完整窗口答复，校验scope/signal/threshold/windowRows及计数/数值范围；空、非十进制或非有限阈值草稿不提交，零按JSON数值语义一致处理，不从表格窗口造统计。时间图按真实datetime与ID排序，UTC偏移/纳秒文本、重复时刻独立身份、缺值断线和缺时间计数保持；最多500点/三信号，各自单位/刻度，完整平均值与SLO独立声明并校验原窗口total。私有字段缺失、无效数据、读取拒绝和旧scope/参数答复不显示先前统计或点；新视图清理列及焦点草稿。组合/格式与Web类型/单元/构建通过；一条四视图Catalog浏览器路线验证100信号/106列的有界挂载、横向末列和纵向末行原值/选择、导出原窗口回调、列搜索/隐藏/新视图、窗口/信号/阈值、旧答复/拒绝清理、完整平均值/SLO与三条实际时间曲线。普通/窄屏已观察，窄屏可解除元数据固定检查末列；示例均为合成值，不是租户读权限、吞吐或数据接入证明。尚未开放这四类Module原生迁移，库存仍为77/92；同组宿主查询/窗口统计、授权选择、检查器、导入和候选冻结由F1e58b继续。未运行全量Playwright、部署或PostgreSQL恢复。
+
+原窗口统计读取（F1e58b1）已接通§6.78.1的AggregateQuery.window、同锁最近N条统计/首尾及@platform/app的createObservationStatisticsReader。真实业务datetime降序、ID并列、完整受权域/搜索/集合/归档与原关系谓词保持；支持1–100000条，nil时间单列，合法year-1时间和只读种子revision=0保留。缺值不造0，strict-above使用原JSON数值与阈值的有理数比较，均值输出有限number；非安全integer、混用模式和非法阈值拒绝。结果回显窗口身份/预算、total/timed/missingTime及count/valid/missing/above和首尾ID/revision/time；generation只指运行存储实例，不能当作持久游标。原Kernel client只POST，生成类型由api-types更新；App读者提供同步scope(request)与异步read(request)，供消费者先隐藏旧快照，再按原字段、请求回显、数值/首尾一致性、成员/数据修订、请求代次和租约确认。没有第二份业务缓存、分页下载或失败模式降级。Go覆盖100002条原记录中的1k/10k/100k窗口、纳秒/偏移/并列、空/缺值、数值及窗口拒绝；真实Build对象HTTP覆盖own记录范围、私有字段/时间/谓词拒绝及普通完整聚合兼容。适用Go/组合/格式、Web类型/单元/构建通过；一条定向浏览器路线验证530条实际业务记录的500条普通页、530条完整窗口和最近25条精确统计，并检查公开读者的受控参数和无效草稿。Catalog读者示例使用固定本地答复，普通/窄屏已观察，不提供租户读取证据；实际HTTP读取由前述路线及Go覆盖。四类Module迁移库存仍为77/92，原生描述/选择/检查器/导入与共同冻结继续由F1e58b2完成；全量Playwright、部署与PostgreSQL恢复本段未运行。
 
 F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和七十七类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

@@ -17,7 +17,7 @@ export {Separator} from "./primitives/separator";
 export {Notice} from "./components/Notice";
 export {DateTimeInput} from "./components/DateTimeInput";
 export {DateInput} from "./components/DateInput";
-export {validCivilDate,validTimestamp,validTimestampOffset,timestampParts,withTimestampOffset} from "./components/date";
+export {validCivilDate,validTimestamp,validTimestampOffset,timestampParts,timestampNanoseconds,withTimestampOffset} from "./components/date";
 export {MultipleChoiceInput} from "./components/MultipleChoiceInput";
 export {ChoiceInput} from "./components/ChoiceInput";
 export {StepSelector,TabSelector} from "./components/IndexedChoices";
