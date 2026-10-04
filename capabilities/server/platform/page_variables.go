@@ -45,6 +45,9 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	RecordMap struct {
+		SharedUIProfile string `json:"sharedUIProfile"`
+	} `json:"recordMap"`
 	ComputeResource struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 		MaxResources      int    `json:"maxResources"`

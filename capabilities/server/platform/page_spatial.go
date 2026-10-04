@@ -118,7 +118,10 @@ func (d *PageDocument) checkSpatial(s Section) error {
 		if v.Source != nil {
 			q = d.Queries[v.Source.Query]
 		}
-		if s.Map == nil || v.Type != "object-set" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(q.Sort) == 0 || q.Limit < 1 || q.Limit > 100 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.RecordVariable != "" || s.SelectionVariable != "" || s.ParentSelection != "" || s.Relation != "" {
+		if err := d.checkSharedRecordOutput(s); err != nil {
+			return err
+		}
+		if s.Map == nil || v.Type != "object-set" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(q.Sort) == 0 || q.Limit < 1 || q.Limit > 100 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.RecordVariable != "" || s.SelectionVariable != "" && !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordMap.SharedUIProfile) || s.ParentSelection != "" || s.Relation != "" {
 			return fmt.Errorf("map needs a bounded ordered original window")
 		}
 		return nil

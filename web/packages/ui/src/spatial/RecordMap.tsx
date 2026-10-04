@@ -16,6 +16,8 @@ export function RecordMap(props:RecordMapProps){return <MapSession key={props.sc
 function MapSession({records,info,fields,selected,enabled=true,clusterEnabled=true,onSelect}:RecordMapProps){
  const model=mapPoints(records,info,fields),camera=useSvgViewport(W,H),[background,setBackground]=useState<string>(),[failure,setFailure]=useState(false),[hidden,setHidden]=useState<(string|undefined)[]>([]),[cluster,setCluster]=useState(clusterEnabled),[showLand,setShowLand]=useState(true),[hover,setHover]=useState<string>();
  useEffect(()=>{let active=true;void worldLand().then(path=>{if(active)setBackground(path);}).catch(()=>{if(active)setFailure(true);});return()=>{active=false;};},[]);
+ const selectedPoint=model?.points.find(p=>p.record.id===selected);
+ useEffect(()=>{if(selectedPoint)camera.reveal(selectedPoint);},[selected,selectedPoint?.x,selectedPoint?.y]);
  if(!model)return <p role="alert">{t("Map fields or record coordinates are unavailable or incompatible.")}</p>;
  const v=camera.view,categories=model.categories,color=(c?:string)=>`var(${["--tone-info","--tone-success","--tone-warning","--tone-danger","--chart-5","--chart-6"][categories.indexOf(c)%6]})`,label=(c?:string)=>c===undefined?t("No value"):c===""?t("Empty text"):c,visible=model.points.filter(p=>!hidden.includes(p.category)),groups=new Map<string,typeof visible>();
  const cell=34/v.k;for(const p of visible){const key=cluster&&v.k<18&&p.record.id!==selected?`${Math.floor(p.x/cell)}:${Math.floor(p.y/cell)}`:p.record.id;if(!groups.has(key))groups.set(key,[]);groups.get(key)!.push(p);}
