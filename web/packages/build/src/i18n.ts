@@ -2,6 +2,21 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+"Complete unused widget {widget}": "补全未使用组件 {widget}",
+"Unused configuration interpretation": "未使用配置的解释",
+"Complete the original unused configuration": "补全原未使用配置",
+"Unused source collection": "未使用组件的来源集合",
+"Choose a source collection": "选择来源集合",
+"Unused table columns": "未使用表格的列",
+"Unused scatter X field": "未使用散点的 X 字段",
+"Unused scatter Y field": "未使用散点的 Y 字段",
+"Unused scatter color field": "未使用散点的颜色字段",
+"Unused scatter record title": "未使用散点的记录标题",
+"Choose a source field": "选择来源字段",
+"The original JSON stays unchanged. This explicit completion is stored in the mapping report; the widget stays unused until placed.": "原 JSON 保持不变。显式补全保存在映射报告中；组件放回布局前仍保持未使用。",
+"Explicitly complete only an original unused empty table or scatter configuration with a valid source collection and fields.": "只能为原未使用空表格或散点配置明确补全有效来源集合与字段。",
+"The reviewed completion preserves the original source and keeps the widget in unused inventory.": "已确认的补全保留原来源，并将组件保留在未使用库存中。",
+
 "Panel": "面板",
 
   "Region presentation": "区域呈现",

@@ -141,7 +141,8 @@
       "status": "profile",
       "target": [
         "chart",
-        "record-chart"
+        "record-chart",
+        "record-scatter"
       ],
       "reason": "bounded-config-profile"
     },

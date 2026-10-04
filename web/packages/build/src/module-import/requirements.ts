@@ -8,6 +8,13 @@ export function workshopRegionSections(module:SourceModule|undefined,pageID:stri
  const visited=new Set<string>(),walk=(id:string)=>{if(visited.has(id))return;visited.add(id);for(const c of module.sections[id]?.children??[])if(c.kind==='section')walk(c.id);};
  const page=module.pages.find(p=>p.id===pageID);if(!page)return [];walk(page.rootSectionId);module.overlays.forEach(o=>walk(o.rootSectionId));return [...visited].flatMap(id=>module.sections[id]?[module.sections[id]!]:[]);
 }
+/** Mapping controls only. Compilation always receives the complete original source. */
+export function workshopBindingView(module:SourceModule,pageID:string):SourceModule{
+ const regions=workshopRegionSections(module,pageID),widgets=new Set([...module.unusedWidgetIds,...regions.flatMap(s=>s.children.filter(c=>c.kind==='widget').map(c=>c.id))]),variables=new Set<string>(),known=new Map(module.variables.map(v=>[v.id,v]));
+ const scan=(value:unknown):void=>{if(typeof value==='string'&&known.has(value)){if(variables.has(value))return;variables.add(value);scan(known.get(value));}else if(Array.isArray(value))value.forEach(scan);else if(value&&typeof value==='object')Object.values(value).forEach(scan);};
+ regions.forEach(scan);[...widgets].forEach(id=>scan(module.widgets[id]));scan(module.moduleInterface);scan(module.overlays);
+ return {...module,sections:Object.fromEntries(regions.map(s=>[s.id,s])),widgets:Object.fromEntries([...widgets].flatMap(id=>module.widgets[id]?[[id,module.widgets[id]!]]:[])),variables:module.variables.filter(v=>variables.has(v.id))};
+}
 /** Offer only active-record producers actually present in this widget's owner. */
 export function collaborationRecordChoices(module:SourceModule|undefined,pageID:string,widgetID:string):{id:string;title:string;object:string}[] {
  if(!module)return [];

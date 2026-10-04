@@ -229,6 +229,8 @@ export const diagnosticMessages:Record<string,string>={
  "region-scroll-binding":"Choose an explicit bounded maximum height for the source scrolling region.",
  "native-region-presentation":"Original container panels, padding, titles and local collapse are preserved.",
  "native-region-scroll":"The reviewed maximum height bounds the original scrolling region.",
+ "unused-configuration-binding":"Explicitly complete only an original unused empty table or scatter configuration with a valid source collection and fields.",
+ "native-unused-configuration":"The reviewed completion preserves the original source and keeps the widget in unused inventory.",
  "presentation-profile":"This presentation setting is outside the supported profile.",
  "widget-profile":"This widget is tracked but has no supported import profile.",
  "unknown-widget":"This widget type is not in the source migration inventory.",
