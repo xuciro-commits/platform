@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -34,6 +35,7 @@ type Action struct {
 	Title       string      `json:"title" field:"required" title:"What people call it" example:"Hand it back"`
 	Description string      `json:"description,omitempty" help:"What it does, for people and agents"`
 	From        []string    `json:"from" title:"Taken from" help:"The states it takes a record from"`
+	ToInput     string      `json:"toInput,omitempty" title:"State from input"`
 	To          string      `json:"to,omitempty" title:"Leaves it in" help:"The state it leaves the record in; empty: where it was"`
 	Inputs      []Input     `json:"inputs,omitempty" title:"What people give"`
 	Sets        []Set       `json:"sets,omitempty" title:"What it sets"`
@@ -74,11 +76,13 @@ type ApproverLevel struct {
 
 // Input is one value a person gives when taking an action.
 type Input struct {
-	Name     string `json:"name" field:"required" example:"to"`
-	Title    string `json:"title" field:"required" title:"Label" example:"Handed to"`
-	Type     string `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,boolean,choice"`
-	Choices  string `json:"choices,omitempty" help:"For a choice: the values, comma-separated"`
-	Required bool   `json:"required,omitempty"`
+	Ref       string `json:"ref,omitempty" title:"Reference object"`
+	MinLength *int   `json:"minLength,omitempty" title:"Minimum length"`
+	Name      string `json:"name" field:"required" example:"to"`
+	Title     string `json:"title" field:"required" title:"Label" example:"Handed to"`
+	Type      string `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,boolean,choice,reference"`
+	Choices   string `json:"choices,omitempty" help:"For a choice: the values, comma-separated"`
+	Required  bool   `json:"required,omitempty"`
 }
 
 // Set is a field of the record an action sets, from an input, a fixed value,
@@ -91,17 +95,18 @@ type Set struct {
 // Condition is what must hold for the action to be taken, and what a person
 // reads when it does not (Foundry's submission criteria, as data).
 type Condition struct {
-	Field      string `json:"field" field:"required" help:"A declared record path through references, or input.<name>"`
-	Operator   string `json:"operator" field:"required" choices:"=,!=,<,<=,>,>=,empty,not empty"`
-	Value      string `json:"value,omitempty" help:"What it is compared with; $me is the person taking the action"`
-	ValueField string `json:"valueField,omitempty" help:"Compare with another declared record path or input; excludes value"`
-	Message    string `json:"message" field:"required" help:"What a person reads when it does not hold"`
+	When       *Condition `json:"when,omitempty" title:"Only when"`
+	Field      string     `json:"field" field:"required" help:"A declared record path through references, or input.<name>"`
+	Operator   string     `json:"operator" field:"required" choices:"=,!=,<,<=,>,>=,empty,not empty"`
+	Value      string     `json:"value,omitempty" help:"What it is compared with; $me is the person taking the action"`
+	ValueField string     `json:"valueField,omitempty" help:"Compare with another declared record path or input; excludes value"`
+	Message    string     `json:"message" field:"required" help:"What a person reads when it does not hold"`
 }
 
 // Operators are the comparisons a condition may make.
 var Operators = []string{"=", "!=", "<", "<=", ">", ">=", "empty", "not empty"}
 
-var inputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "boolean": "boolean", "choice": "string"}
+var inputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "boolean": "boolean", "choice": "string", "reference": "string"}
 
 // checkProcess refuses states and actions people could not take: names that are
 // not names, an action from or to a state the object has not, an input or a
@@ -140,6 +145,8 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 			return fmt.Errorf("%s has no title", where)
 		case len(a.From) == 0:
 			return fmt.Errorf("%s says no state it is taken from", where)
+		case a.ToInput != "" && (a.To != "" || a.Approval != nil):
+			return fmt.Errorf("%s cannot combine input-selected state with a fixed state or approval", where)
 		case a.To != "" && !states[a.To]:
 			return fmt.Errorf("%s leaves records in %q, which is not a state of the object", where, a.To)
 		}
@@ -186,7 +193,35 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 			case in.Type == "choice" && len(choices(in.Choices)) == 0:
 				return fmt.Errorf("%s: the choice input %q has no values", where, in.Name)
 			}
+			if in.Type == "reference" {
+				app, _, ok := strings.Cut(in.Ref, ".")
+				if !ok || in.Choices != "" || (platform.AssetRef{App: app, Kind: platform.AssetObject, Name: in.Ref}).Check() != nil {
+					return fmt.Errorf("%s needs a declared reference object for %s", where, in.Name)
+				}
+				if lookup != nil {
+					info, known := lookup(in.Ref)
+					if !known || info.App != app || info.Type != in.Ref {
+						return fmt.Errorf("%s reference object %s is unavailable", where, in.Ref)
+					}
+				}
+			} else if in.Ref != "" {
+				return fmt.Errorf("%s non-reference input cannot name a reference object", where)
+			}
+			if in.MinLength != nil && (!slices.Contains([]string{"text", "longtext"}, in.Type) || *in.MinLength < 0 || *in.MinLength > 4096) {
+				return fmt.Errorf("%s input minimum length is not supported", where)
+			}
 			inputs[in.Name] = in
+		}
+		if a.ToInput != "" {
+			in := inputs[a.ToInput]
+			if in.Type != "choice" || !in.Required || len(choices(in.Choices)) == 0 {
+				return fmt.Errorf("%s needs a required state choice input", where)
+			}
+			for _, state := range choices(in.Choices) {
+				if !states[state] {
+					return fmt.Errorf("%s input chooses an undeclared state", where)
+				}
+			}
 		}
 		for _, set := range a.Sets {
 			f, ok := fields[set.Field]
@@ -211,7 +246,7 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 				if in.Name == "" {
 					return fmt.Errorf("%s sets %q from %q, which is not one of its inputs, $me, $now or =<value>", where, f.Name, set.From)
 				}
-				if !inputFits(in.Type, f.Type) {
+				if !inputFits(in.Type, f.Type) || in.Type == "reference" && in.Ref != f.Ref {
 					return fmt.Errorf("%s sets %q (%s) from %q (%s), which does not fit", where, f.Name, f.Type, in.Name, in.Type)
 				}
 				if f.Type == "choice" {
@@ -224,35 +259,50 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 			}
 		}
 		for _, cond := range a.Conditions {
-			left, err := conditionField(o, a, cond.Field, lookup)
-			if err != nil {
-				return fmt.Errorf("%s: %w", where, err)
+			if cond.When != nil {
+				if cond.When.When != nil {
+					return fmt.Errorf("nested condition guards are unsupported")
+				}
+				if err := checkActionCondition(o, a, *cond.When, lookup, false); err != nil {
+					return err
+				}
 			}
-			switch {
-			case !slices.Contains(Operators, cond.Operator):
-				return fmt.Errorf("%s: unsupported condition operator %q", where, cond.Operator)
-			case cond.Value != "" && cond.ValueField != "":
-				return fmt.Errorf("%s: use a value or a comparison field, not both", where)
-			case cond.Operator != "empty" && cond.Operator != "not empty" && cond.Value == "" && cond.ValueField == "":
-				return fmt.Errorf("%s: %s %s compares with nothing", where, cond.Field, cond.Operator)
-			case strings.TrimSpace(cond.Message) == "":
-				return fmt.Errorf("%s: the condition on %s says nothing to a person it stops", where, cond.Field)
-			}
-			if cond.ValueField != "" {
-				if cond.Operator == "empty" || cond.Operator == "not empty" {
-					return fmt.Errorf("%s: an emptiness check needs no comparison field", where)
-				}
-				right, err := conditionField(o, a, cond.ValueField, lookup)
-				if err != nil {
-					return fmt.Errorf("%s: %w", where, err)
-				}
-				if err := checkConditionFields(left, right, cond.Operator); err != nil {
-					return fmt.Errorf("%s: %w", where, err)
-				}
-			} else if err := checkCondition(left.Type, left.Choices, cond); err != nil {
-				return fmt.Errorf("%s: the condition on %s: %w", where, cond.Field, err)
+			if err := checkActionCondition(o, a, cond, lookup, true); err != nil {
+				return err
 			}
 		}
+	}
+	return nil
+}
+
+func checkActionCondition(o Object, a Action, cond Condition, lookup func(string) (platform.EntityInfo, bool), requireMessage bool) error {
+	left, err := conditionField(o, a, cond.Field, lookup)
+	if err != nil {
+		return fmt.Errorf("action condition: %w", err)
+	}
+	switch {
+	case !slices.Contains(Operators, cond.Operator):
+		return fmt.Errorf("unsupported condition operator %q", cond.Operator)
+	case cond.Value != "" && cond.ValueField != "":
+		return fmt.Errorf("use a value or a comparison field, not both")
+	case cond.Operator != "empty" && cond.Operator != "not empty" && cond.Value == "" && cond.ValueField == "":
+		return fmt.Errorf("%s %s compares with nothing", cond.Field, cond.Operator)
+	case requireMessage && strings.TrimSpace(cond.Message) == "":
+		return fmt.Errorf("the condition on %s says nothing to a person it stops", cond.Field)
+	}
+	if cond.ValueField != "" {
+		if cond.Operator == "empty" || cond.Operator == "not empty" {
+			return fmt.Errorf("an emptiness check needs no comparison field")
+		}
+		right, err := conditionField(o, a, cond.ValueField, lookup)
+		if err != nil {
+			return fmt.Errorf("action condition: %w", err)
+		}
+		if err := checkConditionFields(left, right, cond.Operator); err != nil {
+			return fmt.Errorf("action condition: %w", err)
+		}
+	} else if err := checkCondition(left.Type, left.Choices, cond); err != nil {
+		return fmt.Errorf("the condition on %s: %w", cond.Field, err)
 	}
 	return nil
 }
@@ -263,7 +313,7 @@ func conditionField(o Object, a Action, name string, lookup func(string) (platfo
 	if input, ok := strings.CutPrefix(name, "input."); ok {
 		for _, in := range a.Inputs {
 			if in.Name == input {
-				return platform.FieldInfo{Name: name, Type: in.Type, Choices: choices(in.Choices)}, nil
+				return platform.FieldInfo{Name: name, Type: in.Type, Ref: in.Ref, Choices: choices(in.Choices)}, nil
 			}
 		}
 		return platform.FieldInfo{}, fmt.Errorf("condition input %q is not declared", input)
@@ -396,9 +446,16 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 		if a.To == "" {
 			reach = slices.Clone(a.From)
 		}
+		if a.ToInput != "" {
+			for _, in := range a.Inputs {
+				if in.Name == a.ToInput {
+					reach = choices(in.Choices)
+				}
+			}
+		}
 		payload := []platform.Field{}
 		for _, in := range a.Inputs {
-			payload = append(payload, platform.Field{Name: in.Name, Type: inputTypes[in.Type], Required: in.Required, Description: in.Title, Choices: choices(in.Choices)})
+			payload = append(payload, platform.Field{Name: in.Name, Type: inputTypes[in.Type], Ref: in.Ref, Required: in.Required, Description: in.Title, Choices: choices(in.Choices)})
 		}
 		action := a
 		takers := slices.Clone(roles)
@@ -450,6 +507,18 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		if v, ok := inputs[in.Name]; in.Required && (!ok || v == nil || v == "") {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} needs {input}", a.Title, in.Title)
 		}
+		if in.MinLength != nil {
+			if text, ok := inputs[in.Name].(string); ok && text != "" {
+				units := 0
+				for _, r := range text {
+					units += utf16.RuneLen(r)
+				}
+				if units < *in.MinLength {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{input} is shorter than its required minimum", in.Title)
+				}
+			}
+		}
+
 	}
 	v := reflect.ValueOf(record).Elem()
 	value := func(name string) (any, *kernel.Error) {
@@ -474,28 +543,28 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		}
 		return f.Interface(), nil
 	}
-	for _, cond := range a.Conditions {
+	evaluate := func(cond Condition) (bool, *kernel.Error) {
 		field, err := conditionField(o, a, cond.Field, lookup)
 		if err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition field is unavailable")
+			return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition field is unavailable")
 		}
 		got, refusal := value(cond.Field)
 		if refusal != nil {
-			return refusal
+			return false, refusal
 		}
 		kind, want := field.Type, cond.Value
 		if cond.ValueField != "" {
 			right, err := conditionField(o, a, cond.ValueField, lookup)
 			if err != nil || checkConditionFields(field, right, cond.Operator) != nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition comparison field is unavailable or incompatible")
+				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition comparison field is unavailable or incompatible")
 			}
 			other, refusal := value(cond.ValueField)
 			if refusal != nil {
-				return refusal
+				return false, refusal
 			}
 			want = textOf(other)
 			if want == "" {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", cond.Message)
+				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", cond.Message)
 			}
 			if right.Type == "decimal" {
 				kind = "decimal"
@@ -503,10 +572,40 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		} else if want == "$me" {
 			want = c.ID
 		}
-		if !holds(got, kind, cond.Operator, want) {
+		return holds(got, kind, cond.Operator, want), nil
+	}
+	for _, cond := range a.Conditions {
+		if cond.When != nil {
+			held, err := evaluate(*cond.When)
+			if err != nil {
+				return err
+			}
+			if !held {
+				continue
+			}
+		}
+		held, err := evaluate(cond)
+		if err != nil {
+			return err
+		}
+		if !held {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", cond.Message)
 		}
 	}
+	if a.ToInput != "" {
+		state, ok := inputs[a.ToInput].(string)
+		allowed := false
+		for _, in := range a.Inputs {
+			if in.Name == a.ToInput && slices.Contains(choices(in.Choices), state) {
+				allowed = true
+			}
+		}
+		if !ok || !allowed {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The selected state is unavailable")
+		}
+		v.FieldByName("State").SetString(state)
+	}
+
 	types := map[string]string{}
 	for _, f := range o.Fields {
 		types[f.Name] = f.Type

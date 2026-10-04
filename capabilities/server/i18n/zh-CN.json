@@ -1,4 +1,10 @@
 {
+  "State from input": "状态取自输入",
+  "Reference object": "引用对象",
+  "Minimum length": "最小长度",
+  "Only when": "仅在满足条件时",
+  "{input} is shorter than its required minimum": "{input}短于要求的最小长度",
+  "The selected state is unavailable": "所选状态不可用",
   "Property type": "共享属性类型",
   "Property types": "共享属性类型",
   "Property": "共享属性来源",

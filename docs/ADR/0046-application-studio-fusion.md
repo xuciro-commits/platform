@@ -975,6 +975,14 @@ AI在该profile可消费原Application的类型化shared record要求，沿PageS
 
 本组保留原Operations的ObjectSetTitle、Links、StatusTracker以及AssetDrawer中重复的标题/关联配置（五个实例、三类消费者）。原Application record选择仍由原单记录读取确认，Links的三个分组逐项映射原具名反向reference，原关联窗口/权限/真实total和导航保持既有归属。浮层内Links及共用RecordView导航先退役当前浮层，再沿原useOpenRecord打开记录窗口，避免新窗口被原遮罩和焦点陷阱挡住；只在当前member/read scope、浮层epoch及启用状态仍有效时接收导航，关闭保留主页面筛选和应用共享选择；StatusTracker逐项映射原生命周期状态，只读呈现，不发起源模拟状态变化。整组沿真实宿主的集合→选择→关联/状态→抽屉→关闭/重开→冻结操作路线验证；完整默认Module和其他断点继续保留。
 
+#### 6.87 默认动作的原宿主规则与参数装配
+
+F1e63e按原两处updateAssetStatus和一处createWorkOrder共同推进。核对§8.7与ADR-0040的原关联创建后，采用资产上的原动作加Creates，在同一决定内创建工单并自动填写Via；不把工单创建改成浏览器另发一次无关联create，也不执行来源本体规则JS。来源动作参数/默认值由后续显式映射原声明，动作条件、角色、字段权限、审批和expectedRevision仍由原宿主决定。
+
+2026-10-04接受必要的Build受控动作声明扩展（F1e63e1）：Action.toInput可指向一个required choice输入，全部选项必须是本对象原状态，互斥静态to及审批，沿原Lifecycle多目标Do选择，不新建状态执行器。Input.reference/ref沿原platform.Field.Ref产生真实引用参数，并在发布及原宿主校验；引用字段赋值必须保持同一个目标类型。Input.minLength是可选0–4096的UTF-16代码单元最小长度，仅用于text/longtext，与来源字符串长度一致；省略不改变旧规则，空可选参数不强制填写。Condition.when为最多一层的原类型化比较守卫，守卫为false时跳过该条件，读取失败仍拒绝，不按false降级；无when保持原AND。其余表达式、任意谓词树、来源代码及通用语言仍拒绝。
+
+Build拥有声明/确定性编译，原平台Lifecycle/Schema/Caller/相关创建与重放拥有执行。规则随原对象Published保存；不改语言中立内核或增加外部依赖。先以三种原动作的发布/调用规则验证共同必要层，再接参数默认值、显式来源映射和三个表单的整体冻结旅程；Go层通过不算三个表单或整个默认Module完成。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -1446,6 +1454,8 @@ F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart�
 默认四个浮层与共享AI上下文（F1e63c）已沿§6.85接通v2.91的PageOverlayPresentation、Go生成声明、UI Kit独立关闭策略、原生检查器和显式导入。来源单元保留原四个Overlay配置，校验尺寸/方向/关闭类型、旧profile及未支持关闭回调；旧浮层默认保持。共享record只在AI的明确profile消费入口扩展，聊天问题仍受原页面/浮层owner检查，其他记录消费者未统一放宽。应用原reference在同记录刷新期间保留绑定，PageSession重新确认授权，当前未就绪不显示旧数据或发起新调用；切换记录、错误、成员/实例/浮层退役仍清理原上下文。适用Go/组合/格式与Web类型/单元/构建通过。真实宿主联合路线验证GUI映射、四个原浮层呈现规则共同保存、原页面发布、包含固定函数评测的应用候选冻结/激活、浮层原详情与AI上下文、不可外部点击关闭的Modal、Escape关闭、A→B切换后原结果清除及B的原动作实际改变后端记录；后续页面草稿不改候选。AI答案仅由HTTP协议夹具提供。普通截图已查看，不计负责人视觉验收；无遮罩/禁用Escape组合仅有单元证据，共享AI成员切换/迟到答复专属浏览器、完整Operations/Module配置、全量浏览器与部署/真实PostgreSQL仍待后续。
 
 默认集合/关联/状态消费者（F1e63d）已沿§6.86修正导入器的页面→浮层读取和ObjectSetTitle计数归属，保留两个原标题、两个原Links及原StatusTracker的五个完整配置。page变量由主页面声明后可供浮层读取，原scope/owner/query保持唯一；其他浮层局部变量仍拒绝跨owner读取。两个标题复用同一个page全集count，原过滤条件/页面草稿不因浮层关闭被清理。原共享record仍经Application和PageSession确认，三个反向reference分组和四个原生命周期状态逐项显式映射。联合验收暴露的浮层导航遮挡已在原页面消费者入口修复：Links/RecordView关闭当前浮层后沿原useOpenRecord开窗，保留member/read scope、启用及Overlay epoch检查。Go平台测试、Web类型/单元/构建与escapes通过。真实宿主联合路线验证GUI原应用/字段/关联/状态映射、共同页面发布与应用候选冻结/激活、102条原全集计数而非100条窗口行数、筛选后原计数为1、A→B共享选择与实际生命周期状态、25条Sensors关联的真实total、私有Alerts裁剪、原WorkOrder关联、关闭重开保留页面筛选/共享选择、后续草稿不改候选和抽屉导航后原记录窗口可见、可进入编辑表单并取消。额外运行整个E2E目录的严格tsc仍在未改动的application-filters/application-queries等旧测试报可选值及未使用声明错误；本批新增测试/夹具未报类型错误，不计该额外检查通过。普通截图已查看，不计负责人视觉验收。组夹具从完整捕获Module取五个原消费者配置，并明确另设选择/搜索/触发测试控制；不计完整Operations/Module整体导入通过。动作/创建配置、成员切换专属浏览器、全量回归与部署/真实PostgreSQL仍待后续。
+
+默认动作的共同宿主规则层（F1e63e1）已沿§6.87接通Build的ToInput、reference/ref、UTF-16 minLength和单层Condition.when。发布核对输入状态选项、必填/互斥与审批边界、原引用类型和赋值目标、长度类型/预算及守卫字段/操作符；省略新属性保持旧行为。原Lifecycle选择参数状态，条件仍由原Caller和确定性编译执行，读取失败不退化为false。关联创建继续在原接受结果中携带父记录变更与工单，不另发create。生成SDK已核对，无公开TypeScript结构变化；声明文字和新增拒绝消息有简体中文。适用全量Go/vet、组合/格式和web-check通过。真实Tenant定向测试验证原发布/成员动作、条件性Offline/High规则与原状态更新、不可读关联守卫拒绝、错误引用目标的发布拒绝、无效引用/过短标题/Offline创建拒绝、真实资产/Operator/工单引用和单次接受结果，以及CheckReplay和内存日志恢复。参数化状态的审批、嵌套守卫、页面参数默认值/映射和三个原表单共同浏览器/候选冻结仍未覆盖；不计完整F1e63e、默认Operations/Module或PostgreSQL持久恢复完成。
 
 受控页面内容与嵌入导入（F1e59a–F1e59c）已沿§6.79接通Definition.contentVersion、原Build Page最多64个不同已发布内容的非递归history、原publish/候选激活、GET /v1/pages/{app}/{name}/{contentVersion}及EdgeClient.pageContent。完整原描述摘要与既有SourceVersion分开，未发布草稿/仅保存候选不开放给成员；缺失、不兼容或无权版本拒绝，不退回最新。版本读取复用完整原发现投影及当前对象/字段/动作/查询/导航权限，原Requires按选定内容重新取得；同一历史身份可有不同成员裁剪内容。v2.83的原Section.embedding、共同候选闭包、固定内容和接口校验、递归/实例/查询/记录/Section预算、成员页面入口裁剪、三种module/custom/dashboard呈现、独立原PageSession、原类型化接口、专属检查器及复制输出状态重写已接通。输入变化使子会话重建，无关父状态更新保留子草稿；结果经过原接口校验后写父页面标量。检查器可选择已发布页面、指定内容摘要和接口、逐项绑定同owner变量及返回端口，历史选择目前为手工填写摘要。
 

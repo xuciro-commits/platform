@@ -40,8 +40,14 @@ func (b *Build) checkCreates(o Object) error {
 				if set.Field == cr.Via {
 					return fmt.Errorf("%s and sets %q, which the action fills with this record", where, set.Field)
 				}
-				if _, ok := info.Field(set.Field); !ok {
+				field, ok := info.Field(set.Field)
+				if !ok {
 					return fmt.Errorf("%s and sets %q, which it has no field for", where, set.Field)
+				}
+				for _, input := range a.Inputs {
+					if input.Name == set.From && input.Type == "reference" && (field.Type != "reference" || field.Ref != input.Ref) {
+						return fmt.Errorf("%s reference input %s does not match field %s", where, input.Name, field.Name)
+					}
 				}
 			}
 		}
