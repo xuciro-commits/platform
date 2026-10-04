@@ -448,6 +448,7 @@ export type ContextView = {
 };
 
 export type Definition = {
+  contentVersion?: string;
   propertyType?: PropertyType;
   propertyVersions?: Record<string, PropertyType>;
   linkType?: LinkType;

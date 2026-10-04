@@ -1,7 +1,7 @@
 // A browser edge of a server-authoritative domain: a persisted K5 outbox and an
 // HTTP transport to the tenant's authority.
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
-import type { Action, Query, AggregateQuery, AssetBinding } from "./gen/host";
+import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, Definition } from "./gen/host";
 import { Authorities, type Entry } from "./outbox";
 
 /** One action a server offers to this caller (ADR-0008): render from it, never re-check roles. Generated from the host (ADR-0023). */
@@ -21,6 +21,13 @@ export function apiErrorMessage(body: unknown): string | undefined {
 
 export class EdgeClient {
   readonly authorities: Authorities;
+  /** The original owner content identity is retained while fields and actions
+   * are projected for this member. Never fall back to another page version. */
+  async pageContent(ref:AssetRef,contentVersion:string):Promise<Definition>{
+    if(ref.kind!=="page"||!ref.app||!ref.name||!/^[A-Za-z0-9._:-]+$/.test(ref.app)||ref.app.length>256||ref.name.length>256||ref.name.includes("/")||!/^page\.sha256\.[0-9a-f]{64}$/.test(contentVersion))throw Error("Invalid page content identity");
+    const path=`/v1/pages/${encodeURIComponent(ref.app)}/${encodeURIComponent(ref.name)}/${encodeURIComponent(contentVersion)}`,response=await fetch(this.connection.server+path,{headers:this.headers()});if(!response.ok)throw Error(`${path}: HTTP ${response.status}`);
+    const result=await response.json() as Definition;if(!result?.page||result.ref?.app!==ref.app||result.ref.kind!==ref.kind||result.ref.name!==ref.name||result.contentVersion!==contentVersion)throw Error("Page content identity differs from its original binding");return result;
+  }
   private readonly storageKey: string;
 
   constructor(readonly connection: Connection, edge = "browser") {

@@ -285,6 +285,10 @@ func uniqueRefs(refs []platform.AssetRef) []platform.AssetRef {
 // fields and actions are filtered through the existing read/catalog paths at
 // request time, so role and field changes are never cached in the registry.
 func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
+	return t.definitionsFrom(m, t.definitions)
+}
+
+func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []platform.Definition) []platform.Definition {
 	entities := map[string]platform.EntityInfo{}
 	for _, info := range t.Entities(m) {
 		entities[info.Type] = info
@@ -294,7 +298,7 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 		actions[action.Schema] = action
 	}
 	out := []platform.Definition{}
-	for _, registered := range t.definitions {
+	for _, registered := range registeredDefinitions {
 		def := registered
 		switch def.Ref.Kind {
 		case platform.AssetObject:
@@ -399,6 +403,11 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 				continue
 			}
 			page := *def.Page
+			digest, err := platform.PageContentVersion(page)
+			if err != nil {
+				continue
+			}
+			def.ContentVersion = digest
 			info, ok := entities[page.Object.Name]
 			if !ok {
 				continue
@@ -474,7 +483,7 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						e, ok := entities[ref.Name]
 						return e, ok && e.App == ref.App
 					}, func(b platform.AssetBinding) (platform.LinkType, bool) {
-						for _, d := range t.definitions {
+						for _, d := range registeredDefinitions {
 							if d.Ref == b.Ref {
 								if selected := d.LinkVersion(b.SourceVersion); selected != nil && selected.LinkType != nil {
 									return *selected.LinkType, true
@@ -698,9 +707,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						}
 						var named *platform.Definition
 						if q.Query != nil {
-							for i := range t.definitions {
-								if t.definitions[i].Ref == q.Query.Ref {
-									named = t.definitions[i].QuerySourceVersion(q.Query.SourceVersion)
+							for i := range registeredDefinitions {
+								if registeredDefinitions[i].Ref == q.Query.Ref {
+									named = registeredDefinitions[i].QuerySourceVersion(q.Query.SourceVersion)
 									break
 								}
 							}
@@ -767,7 +776,7 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 	for _, def := range out {
 		visibleResources[def.Ref] = true
 	}
-	for _, registered := range t.definitions {
+	for _, registered := range registeredDefinitions {
 		if registered.Ref.Kind != platform.AssetApp || registered.Application == nil || m.Roles[registered.Ref.App] == "" {
 			continue
 		}

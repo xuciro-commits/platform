@@ -701,6 +701,7 @@ func published[T any](definition T) string {
 		definition = any(value).(T)
 	case Page:
 		value.Published = ""
+		value.Versions = nil
 		definition = any(value).(T)
 	case Application:
 		value.Published = ""

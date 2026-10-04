@@ -242,7 +242,8 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 			err = b.host.ValidateInstallPage(descriptor(record))
 		}
 		if err == nil {
-			pages[i].Published = published(record)
+			err = retainPagePublication(&record)
+			pages[i] = record
 		}
 	case platform.AssetApp:
 		i := slices.IndexFunc(apps, func(a Application) bool { return a.ID == id && !a.Archived })

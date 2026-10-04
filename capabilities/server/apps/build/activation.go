@@ -170,7 +170,12 @@ func (b *Build) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 				}
 				frozen.Sections = append(frozen.Sections, section)
 			}
-			pages[i].State, pages[i].Published = "published", published(frozen)
+			frozen.Versions = slices.Clone(pages[i].Versions)
+			frozen.Published = pages[i].Published
+			if err := retainPagePublication(&frozen); err != nil {
+				return nil, nil, err
+			}
+			pages[i].State, pages[i].Published, pages[i].Versions = "published", frozen.Published, frozen.Versions
 			if err := add(SchemaRelease, pages[i]); err != nil {
 				return nil, nil, err
 			}

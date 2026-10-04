@@ -40,7 +40,8 @@ type Page struct {
 	State      string                       `json:"state" field:"readonly" choices:"draft,published"`
 	// Published is the page as it was last published: what people open, and
 	// what a restore puts back — not the draft beside it.
-	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Published string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions  []string `json:"versions,omitempty" field:"readonly" type:"lines" title:"Published page contents"`
 }
 
 // Section is one widget on a composed page, as someone lays it out.
@@ -189,6 +190,10 @@ func (b *Build) pageEntity() platform.Entity {
 					if !ok {
 						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 					}
+					next := *page
+					if err := retainPagePublication(&next); err != nil {
+						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+					}
 					if c.Staging() {
 						if err := b.checkPage(*page); err != nil {
 							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
@@ -199,7 +204,7 @@ func (b *Build) pageEntity() platform.Entity {
 					} else if err := b.release(c, *page); err != nil {
 						return err
 					}
-					page.Published = published(*page)
+					*page = next
 					return nil
 				}}}}}
 }

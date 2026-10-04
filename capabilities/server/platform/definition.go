@@ -336,6 +336,7 @@ var Icons = []string{"boxes", "clipboard", "people", "calendar", "wrench", "map"
 // Entity and Action reuse the same descriptions as the existing record/action
 // APIs; this registry is an index over those owners, not another executor.
 type Definition struct {
+	ContentVersion   string                  `json:"contentVersion,omitempty"`
 	PropertyType     *PropertyType           `json:"propertyType,omitempty"`
 	PropertyVersions map[string]PropertyType `json:"propertyVersions,omitempty"`
 	LinkType         *LinkType               `json:"linkType,omitempty"`
