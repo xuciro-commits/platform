@@ -79,6 +79,7 @@ type pageRuntimeContract struct {
 		MaxNeighborhoodRecords int    `json:"maxNeighborhoodRecords"`
 	} `json:"exploration"`
 	ContextViews struct {
+		SharedUIProfile    string `json:"sharedUIProfile"`
 		RequiredUIProfile  string `json:"requiredUIProfile"`
 		MaxAvatarWindow    int    `json:"maxAvatarWindow"`
 		MaxDetailFields    int    `json:"maxDetailFields"`

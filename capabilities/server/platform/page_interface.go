@@ -173,6 +173,15 @@ func (p Page) NavigationTargets() []AssetRef {
 
 func (p Page) CheckRecordPorts() error {
 	for _, s := range p.Sections {
+		if s.Widget == "record-card" {
+			object := s.Object
+			if object.Name == "" {
+				object = p.Object
+			}
+			if original := p.RecordResourceObject(s.RecordVariable); original != object {
+				return fmt.Errorf("record card object differs from its original record resource")
+			}
+		}
 		if err := p.CheckExplorationBinding(s); err != nil {
 			return err
 		}

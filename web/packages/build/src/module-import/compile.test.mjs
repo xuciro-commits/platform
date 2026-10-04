@@ -419,3 +419,9 @@ test('inline defaults retain explicit original parameter fields and refuse misma
  for(const defaults of [[{parameter:'reason',field:'missing'}],[{parameter:'other',field:'note'}],[{parameter:'reason',field:'note',expression:'object.note'}],[null],[{parameter:'reason',field:'note'},{parameter:'reason',field:'note'}]])assert.equal(compileWorkshopModule(JSON.stringify(m),'page',{...mapped,actionDefaults:{action:defaults}},destination).draft,undefined);
  assert.equal(compileWorkshopModule(JSON.stringify(m),'page',mapped,{...destination,profile:'platform.page.v2.91'}).draft,undefined);
 });
+
+test("shared application graph root retains every original local output and typed consumer",()=>{
+ const {m,mapped,typed,ref}=explorationFixture();m.sections.root.children=m.sections.root.children.filter(c=>c.id!=="vertex");delete m.widgets.vertex;
+ m.moduleInterface=[{variableId:"selected",externalId:"selectedAsset",direction:"inputOutput"}];const app=ref("desk","app"),object=ref("sample.note");mapped.application={binding:{ref:app,sourceVersion:"1"},ports:{selectedAsset:{variable:"selected",writable:true}}};typed.definitions.push({ref:app,version:"1",application:{name:"desk",title:"Desk",pages:[],uiProfile:profile,variables:{selected:{scope:"application",type:"record",mode:"resource",source:{kind:"record",object}}}}});
+ const r=compileWorkshopModule(JSON.stringify(m),"page",mapped,typed);assert.ok(r.draft,JSON.stringify(r.diagnostics));const graph=r.draft.sections.find(s=>s.widget==="graph-explorer"),d=r.draft.document;assert.equal(d.variables[graph.recordVariable].scope,"application");assert.equal(graph.graphExplorer.outputs.length,3);for(const o of graph.graphExplorer.outputs){assert.equal(d.variables[o.variable].scope,"page");assert.equal(d.variables[o.variable].source.section,graph.id);}assert.equal(compileWorkshopModule(JSON.stringify(m),"page",mapped,{...typed,profile:"platform.page.v2.97"}).draft,undefined);
+});

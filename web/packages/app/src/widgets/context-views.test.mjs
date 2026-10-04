@@ -45,3 +45,13 @@ test("record scope and actual producer are required rather than state, copied re
  const separate={...page,document:{...page.document,overlays:{panel:{root:"trail"}}}};
  assert.equal(originalContextSlot(separate,section,"selected"),undefined);
 });
+
+test("shared breadcrumb resolves the original application slot only in its admitted profile",async()=>{
+ const shared={...page,document:{...page.document,uiProfile:"platform.page.v2.98",variables:{selected:{scope:"application",type:"record",mode:"shared",source:{kind:"application",variable:"selected",object:page.object}}}}};
+ assert.equal(originalContextSlot(shared,section,"selected"),"input/selected");
+ assert.equal(originalContextSlot({...shared,document:{...shared.document,uiProfile:"platform.page.v2.97"}},section,"selected"),undefined);
+ assert.equal(originalContextSlot(shared,{...section,widget:"avatar-stack"},"selected"),undefined);
+ const session=new PageSessionStore({scope:"member",get:async()=>({record:{id:"A",revision:1,note:"Confirmed shared title"}})},{objects:new Map([["input/selected","sample.note"],["graph/output","sample.child"]]),children:new Map([["input/selected",new Set(["graph/output"])]]),queryParents:new Map()});
+ await session.selectReference("input/selected",{object:"sample.note",id:"A"});assert.equal(confirmedContext(shared,section,"selected",session,session.snapshot()).record.note,"Confirmed shared title");
+ session.select("graph/output",{id:"child",revision:1});session.select("input/selected",undefined);assert.equal(session.selected("graph/output"),undefined);assert.equal(confirmedContext(shared,section,"selected",session,session.snapshot()).status,"empty");
+});

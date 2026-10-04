@@ -8,7 +8,8 @@ export const recordOutputSlot=(page:Api.Page,section:Api.Section,port:string)=>`
 export function recordOutputObject(page:Api.Page,section:Api.Section,port:string,variable?:string):Api.AssetRef|undefined {if(section.widget==="graph-explorer")return section.graphExplorer?.outputs?.find(o=>o.id===port&&(!variable||o.variable===variable))?.object;const c=section.observation;if(section.widget!=="observation"||c?.kind!=="table")return;const id=port==="row"?c.rowOutput:port==="asset"?c.assetOutput:undefined;if(!id||variable&&variable!==id)return;if(port==="asset")return c.assetObject;const v=page.document?.variables?.[section.collectionVariable??""];return v?.source?.kind==="plan"?page.document?.queries?.[v.source.query??""]?.object:undefined;}
 
 export function recordResourceSlot(page:Api.Page,variable:string|undefined):string|undefined {
- const source=page.document?.variables?.[variable??""]?.source,producer=page.sections?.find(s=>s.id===source?.section);
+ const declaration=page.document?.variables?.[variable??""];if(Number((page.document?.uiProfile??"").split(".").at(-1))>=98&&declaration?.type==="record"&&declaration.mode==="shared"&&declaration.source?.kind==="application"&&declaration.source.object)return `input/${variable}`;
+ const source=declaration?.source,producer=page.sections?.find(s=>s.id===source?.section);
  if(!source||source.kind!=="record"||!producer)return;
  if(source.port)return recordOutputObject(page,producer,source.port,variable)?recordOutputSlot(page,producer,source.port):undefined;
  return ["graph-explorer","observation"].includes(producer.widget)?undefined:selectionSlot(page,producer);

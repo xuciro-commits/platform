@@ -7,6 +7,7 @@ export const currentContextRead=(hostScope:string|undefined,readScope:string|und
 /** Resolve the actual original selection producer, never a resource copy or guessed ID. */
 export function originalContextSlot(page:Api.Page,section:Api.Section,variable:string|undefined):string|undefined {
  const v=page.document?.variables?.[variable??""];
+ if(variable&&section.widget==="breadcrumb"&&Number(page.document?.uiProfile?.split(".").at(-1))>=98&&v?.type==="record"&&v.scope==="application"&&v.mode==="shared"&&v.source?.kind==="application"&&v.source.object?.kind==="object")return recordResourceSlot(page,variable);
  if(!variable||v?.type!=="record"||v.mode!=="resource"||v.source?.kind!=="record")return;
  const producer=page.sections?.find(s=>s.id===v.source?.section);
  if(!producer||!["table","record-list","resource-list","graph-explorer","record-timeline","kanban","record-calendar","record-picker","record-leaderboard","record-scatter","record-map"].includes(producer.widget)||sectionOverlay(page,section.id??"")!==sectionOverlay(page,producer.id??""))return;

@@ -144,7 +144,7 @@ func (d *PageDocument) checkExploration(s Section) error {
 		return nil
 	}
 	v := d.Variables[s.RecordVariable]
-	if v.Type != "record" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "record" || !slices.Contains([]string{"page", "overlay"}, v.Scope) {
+	if !(v.Type == "record" && v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && slices.Contains([]string{"page", "overlay"}, v.Scope) || s.Widget == "graph-explorer" && d.sharedContextRecord(s.RecordVariable)) {
 		return fmt.Errorf("graph needs its original scoped confirmed record producer")
 	}
 	if s.Widget == "vertex-graph" {
@@ -183,10 +183,23 @@ func (d *PageDocument) checkExploration(s Section) error {
 		relations[r.Binding.Ref] = true
 	}
 	ports = map[string]bool{}
+	outputScope, outputOwner := v.Scope, v.Owner
+	if d.sharedContextRecord(s.RecordVariable) {
+		outputScope = "page"
+		outputOwner = ""
+		for id, n := range d.Nodes {
+			if n.Section == s.ID {
+				outputOwner = d.overlayOwners()[id]
+			}
+		}
+		if outputOwner != "" {
+			outputScope = "overlay"
+		}
+	}
 	outputObjects := map[AssetRef]bool{}
 	for _, o := range g.Outputs {
 		output := d.Variables[o.Variable]
-		if !pageNodeID.MatchString(o.ID) || ports[o.ID] || variables[o.Variable] || outputObjects[o.Object] || !objects[o.Object] || output.Type != "record" || output.Mode != "resource" || output.Writable || output.Source == nil || output.Source.Kind != "record" || output.Source.Section != s.ID || output.Source.Port != o.ID || output.Scope != v.Scope || output.Owner != v.Owner {
+		if !pageNodeID.MatchString(o.ID) || ports[o.ID] || variables[o.Variable] || outputObjects[o.Object] || !objects[o.Object] || output.Type != "record" || output.Mode != "resource" || output.Writable || output.Source == nil || output.Source.Kind != "record" || output.Source.Section != s.ID || output.Source.Port != o.ID || output.Scope != outputScope || output.Owner != outputOwner {
 			return fmt.Errorf("graph output needs one original typed producer port in the root owner")
 		}
 		ports[o.ID] = true

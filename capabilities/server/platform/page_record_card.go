@@ -20,7 +20,7 @@ func (d *PageDocument) checkRecordCard(s Section) error {
 	c := s.RecordCard
 	v := d.Variables[s.RecordVariable]
 	limits := pageWidgets.Runtime.RecordCard
-	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || c == nil || c.LabelField == "" || !slices.Contains(limits.Tones, c.Tone) || v.Type != "record" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "record" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(s.Fields) > limits.MaxFields || len(s.Actions) > 0 || s.Selection != "" || s.SelectionVariable != "" || s.CollectionVariable != "" {
+	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || c == nil || c.LabelField == "" || !slices.Contains(limits.Tones, c.Tone) || v.Type != "record" || !(v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && slices.Contains([]string{"page", "overlay"}, v.Scope) || d.sharedContextRecord(s.RecordVariable)) || len(s.Fields) > limits.MaxFields || len(s.Actions) > 0 || s.Selection != "" || s.SelectionVariable != "" || s.CollectionVariable != "" {
 		return fmt.Errorf("record card needs its original record resource, title, tone and bounded properties")
 	}
 	return nil

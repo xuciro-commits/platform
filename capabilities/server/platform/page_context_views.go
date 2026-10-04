@@ -57,7 +57,7 @@ func (d *PageDocument) checkContextViews(s Section) error {
 	}
 	record := func(id string) bool {
 		v := d.Variables[id]
-		return v.Type == "record" && v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && slices.Contains([]string{"page", "overlay"}, v.Scope)
+		return v.Type == "record" && v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && slices.Contains([]string{"page", "overlay"}, v.Scope) || s.Widget == "breadcrumb" && d.sharedContextRecord(id)
 	}
 	switch s.Widget {
 	case "breadcrumb":
