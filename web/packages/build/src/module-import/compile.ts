@@ -74,6 +74,7 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
  const collectionProducers=new Map<string,string>();
  const recordProducers=new Map<string,string>(),timeOffsets=new Map<string,string>(),userSources=new Map<string,string>(),explorationMappings=new Map<string,Record<string,string>>();
  const sharedSources=new Map<string,{native:string;type:string;writable:boolean;object?:Api.AssetRef}>();
+ const recordChartPlans=new Map<string,string>();
  const mediaFileSources=new Map<string,{record:string;owner?:string;fileID?:string;constant:boolean}>(),legacyCommentLists=new Set<string>();
  let counter=0;const id=(space:string,sourceID:string)=>{const key=`${space}/${sourceID}`;if(!allocated.has(key))allocated.set(key,`import_${space}_${++counter}`);return allocated.get(key)!;};
  const variablePath=(sourceID:string)=>`/variables/${m.variables.findIndex(v=>v.id===sourceID)}`;
@@ -646,7 +647,16 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
     section.recordChart={mark:text(config.chartKind),xField:x,yField:y};
     if(config.agg!==undefined&&config.agg!=="none"||!["bar","line"].includes(text(config.chartKind))||resource?.type!=="object-set"||resource.source?.kind!=="plan"||!plan||Number(target.profile.split(".").at(-1))<Number(pageUIManifest.runtime.recordChart.requiredUIProfile.split(".").at(-1)))issue(`${path}/config`,"record-chart-profile");
     if(x!=="id"&&!e?.fields.some(f=>f.name===x&&["text","longtext","choice","reference","integer","decimal","boolean","date","datetime"].includes(f.type))||!e?.fields.some(f=>f.name===y&&["integer","decimal"].includes(f.type)))issue(`${path}/config`,"record-chart-binding");
-    if(plan)plan.sort=["id"];
+    if(plan){
+     const family=`${context.owner??"page"}/${q??sourceID}`,query=id("record_chart_query",family),set=id("record_chart_set",family);
+     let sort=plan.sort?.length?[...plan.sort]:["id"];
+     if(plan.query){const b=plan.query,d=target.definitions?.find(d=>d.ref.app===b.ref.app&&d.ref.kind==='query'&&d.ref.name===b.ref.name),q=d?.queryVersions?.[b.sourceVersion]??(d?.version===b.sourceVersion?d.query:undefined);if(!q)issue(`${path}/config`,'record-chart-binding');if(q?.sort?.length){if(plan.sort?.length&&JSON.stringify(plan.sort)!==JSON.stringify(q.sort))issue(`${path}/config`,'record-chart-binding');sort=[...q.sort];}}
+     // Charts own a window; table pagination and sorting must not mutate their points.
+     document.queries![query]??={...plan,title:w.name,owner:context.owner,sort};
+     if(q)recordChartPlans.set(query,q);
+     document.variables![set]={title:w.name,scope:context.kind,owner:context.owner,type:"object-set",mode:"resource",source:{kind:"plan",query}};
+     section.collectionVariable=set;
+    }
     issue(`${path}/config`,"native-record-chart-window",false);
    }
    if(typeof config.xProperty!=="string"||typeof config.yProperty!=="string")issue(`${path}/config`,"field-binding");
@@ -819,6 +829,17 @@ if(w.type==="ObjectCard"){
  for(const [sourceID,mapped] of Object.entries(ids.variables)){const v=vars.get(sourceID);if(v?.definitionKind==="widgetOutput"&&!expectedWidgets.has(recordProducers.get(sourceID)??text(v.widgetId)))issue(`${variablePath(sourceID)}/widgetId`,"selection-producer");const value=document.variables![mapped];if((value?.source?.kind==="record"||value?.source?.kind==="records")&&!sections.some(s=>s.id===value.source!.section&&(s.widget==="table"||value.source!.kind==="record"&&["record-list","kanban","record-calendar","record-picker","record-leaderboard","record-scatter","record-map","resource-list","graph-explorer","observation"].includes(s.widget))))issue(`${variablePath(sourceID)}/widgetId`,"selection-producer");}
  if(Object.keys(m.widgets).some(w=>!usedWidgets.has(w))||m.variables.some(v=>!ids.variables[v.id]))issue("/","unreferenced-content-retained",false);
  for(const [sourceID,sectionID] of Object.entries(ids.widgets)){const section=sections.find(s=>s.id===sectionID);if(section?.inputKind!=="search")continue;const input=document.nodes[id("leaf",sourceID)]?.valueVariable;if(!searchInputObjects(document,input).length)issue(`/widgets/${pointer(sourceID)}/config/variableId`,"exploration-search-binding");}
+ // A chart-only source needs one plan, not an unused second read window. Keep
+ // original variable identities as aliases; never coalesce a table/aggregate owner.
+ for(const [chart,base] of recordChartPlans){
+  const original=document.queries![base],owned=document.queries![chart];if(!original||original.owner!==owned?.owner)continue;
+  const aliases=Object.entries(document.variables!).filter(([,v])=>v.mode==='resource'&&v.source?.kind==='plan'&&v.source.query===base);
+  const other=Object.fromEntries(Object.entries(document.variables!).filter(([id])=>!aliases.some(([key])=>key===id)));
+  const references=JSON.stringify([sections,document.nodes,document.events,document.queries,other]);
+  if(aliases.some(([id])=>references.includes(JSON.stringify(id)))||Object.values(other).some(v=>v.source?.query===base))continue;
+  for(const [,v]of aliases)v.source!.query=chart;
+  delete document.queries![base];
+ }
  if(Object.keys(document.queries!).length>8||Object.values(document.queries!).reduce((s,q)=>s+q.limit,0)>512||Object.keys(document.variables!).length>64||sections.length>128||Object.keys(document.nodes).length>256)issue("/","target-budget");
  if(!diagnostics.some(d=>d.blocking))report.draft=draft;
  return report;

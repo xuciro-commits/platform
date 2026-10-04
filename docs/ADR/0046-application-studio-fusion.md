@@ -524,6 +524,8 @@ F1e16沿既有“原窗口输入、纯呈现Widget”的归属增加record-chart
 
 外包原实现只在agg=avg时分组，其余配置取前40条；bar画柱，非bar实际都画连接线。首迁移保持显式none/未声明agg的bar/line，x/y逐项映射原字段，以原ID排序建立确定窗口并要求确认来源顺序差异。scatter/area及来源sum/count不能靠名称猜测语义，保留定位拒绝；avg沿§6.35。该选择是已授权融合范围内的呈现契约增量，能力归属和权限/版本保证保持；当前实现证据仍以§14为准。
 
+F1e63h2修正源逐记录XY的导入归属：不再原地改共享集合计划的sort，改为同原集合/拥有根的记录图族独立计划，保持原条件、search、具名查询版本及原limit/offset；具名查询的固定排序优先保留，无声明时用ID排序。同图族保留原同步分页，表格和全集聚合不共用该图族的分页/排序；新的拥有根保持原Overlay生命周期，不借独立窗口放宽读取预算。
+
 ### 6.37 完整集合分布与ChartPie迁移
 
 F1e17沿既有chart/configVersion=1及原arc完整集合聚合增加v2.44的chartVariant=pie/donut。该声明仅用于chart且mark=arc；未声明时保留原饼图呈现，其他Widget/mark、旧profile和未知variant拒绝，无文档页面不能携带它。Build原Chart检查器选择饼图/环形图，切换到其他mark清理variant；保存、原候选/恢复及正反Build转换保留声明。
@@ -1493,6 +1495,9 @@ F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart�
 默认Overview与跨页共享选择（F1e63g）已沿§6.91接通v2.94 record-list主页面grid/list的原application record写出，Go拒绝只读/错对象、旧profile、并存local选择及Overlay/Loop/tiles写出；原注册描述生成宿主类型，检查器沿端口显示共享选择，设计器早期诊断保持Go边界。来源MetricCard.trend按实际原渲染等价映射card并标明，不推断历史趋势。映射控件的有限投影不再丢失别页生产者的原类型：PropertyList依赖发现、Links与原动作默认值从完整来源解析原对象，未使用补全也可选择完整来源的集合元数据；仍不将别页组件纳入当前布局或执行。完整原Overview六个可见组件（其中三KPI、集合标题、ObjectList五个主要数据配置）、四浮层及两库存共17个Section已GUI导入/Go发布，与完整Operations同一应用候选共同冻结激活。真实102条资产验证全集$103.0K汇总、In Filter 102与100行画廊；具名开放告警查询以三开放/一关闭验证计数3，候选后把查询重新发布为关闭条件，冻结Overview仍保留原版本/计数3。Operations选择B后经实际工作区侧栏进入Overview，画廊保持B；画廊选择A后切回原Operations标签，详情/原状态表单采用A及Owner A，再回Overview保持A。原表格Owner修改、四原浮层/AI上下文、Offline/High与Maintenance、真实业务Operator和工单路线在同一扩展联合测试保持通过。全量Go测试、相关vet、web-check、组合/格式与该联合浏览器通过；普通Overview截图已查看，不计负责人视觉验收。额外E2E目录严格tsc仍在未修改的旧测试报错，修改的两页测试未报错。其他五页、Flows/Logic、完整Module和Plugin Architecture、集中成员/迟到答复专项及部署/PostgreSQL仍未完成。
 
 默认Analytics集合分面组（F1e63h1）已用完整原捕获验证30个所选Analytics/浮层/库存实例，首组ExplorationFilter、ProminentTerms、Heatmap、Treemap与Histogram的原配置在明确四个状态值映射后没有编译阻塞；复用已实现端口和原集合计划，没有新增宿主契约或另一套聚合。完整页面仍拒绝散点/排行榜共享写出、多选比较生产者、Waterfall状态解释、两观测/时间线来源及窗口预算；这些拒绝与全部85来源组件继续保留。五组件组夹具逐项保留原配置，另设同计划表格作为查询窗口对照，不能计为完整Analytics导入。单元验证原string-set状态/优先级端口、scalar Owner、14桶、单一100行窗口及原in/in/like/压力条件，错误值/类型/同轴端口/执行配置拒绝；原Go平台/Build、web-check、组合/格式及一条五组件共同发布/冻结浏览器通过。真实102记录证明全集102与100行窗口区分、30条Warning及90条Active+Warning、多选清空、热力图Warning×High双轴共15条、树图和其它消费者同答复联动、原14桶不受后续2桶草稿影响，以及私有分组在成员入口裁剪。原Owner条件为contains，点击Team组40条仍会匹配Team East使总数102，点击Team East则62；这保留源条件语义，不改成未经声明的精确相等。普通热力图/树图截图已查看，不计负责人视觉验收。该批新增证据与原配置夹具，没有宣称补全其余14个根组件、整页预算、完整Module或Plugin Architecture。
+
+默认Analytics图表/透视组（F1e63h2）已保留wChart1/wChart2/wChart3/wChart4/wPivot五个原配置，复用原全集分组平均、pie/donut count、双轴透视与逐记录图。沿§6.36修复导入器原地改写共享计划sort及共用表格分页：同源/同拥有根的记录图族有独立具名计划，保持原条件/search/limit/offset和原查询版本/固定排序；只被记录图使用的原变量保持身份并指向图族，移除冗余未消费计划，避免以两个同范围窗口浪费512预算。同图族继续同步分页，不强制拆成逐Widget查询；表格/聚合或其它变量/计划仍引用的原计划保持原归属。单元验证原五配置、query版本/排序、权限相关字段与错误聚合拒绝、图族/表格隔离及原变量身份；相关Go、web-check、组合/格式及新组/既有逐记录图两条共同浏览器通过。真实102资产中第102条窗口外高值使Offline平均175，验证按全集统计而非前100条；两分布及透视总数102，表格翻页/倒序不改变图族100行/40点，图族下一窗口2条不影响表格；共同搜索第102条使图族/透视各1条、平均1000。私有度量图在成员入口裁剪，候选后折线→柱图草稿不改原冻结配置。既有75条/41窗口、重复标签、同图族同步分页、字段/条件裁剪、403清空及浮层关闭重开路线保持；该路线按新具名图族选择查询计划，不再以旧下拉顺序定位。查询复用计数路线用既有stableReadRevision抑制开发changes流回放，不能计为普通数据刷新专项；普通均值/透视截图已查看，不计负责人视觉验收。完整Analytics生产者/比较、观测/时间线及整页预算仍拒绝，图表组不计整页/Module或Plugin Architecture完成。
+
 
 
 
