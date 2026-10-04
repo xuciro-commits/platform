@@ -21,7 +21,7 @@ export class ApplicationSession {
   constructor(variables: Record<string, Api.PageVariable>, reads?:ApplicationReads) {
     this.variables = variables;this.queries=reads?.queries??{};
     const filters=Object.entries(variables).filter(([,v])=>v.mode==="resource"&&v.type==="filter"&&v.source?.object);
-    if(reads){this.reads=new PageSessionStore(reads.source,{objects:new Map(Object.entries(variables).filter(([,v])=>v.mode==="resource"&&v.type==="record"&&v.source?.object).map(([id,v])=>[id,v.source!.object!.name])),filterObjects:new Map(filters.map(([id,v])=>[id,v.source!.object!.name])),filterFields:new Map(filters.map(([id,v])=>[id,new Set(v.source!.fields??[])])),filterSelections:new Map(),filterQueries:new Map(),children:new Map(),queryParents:new Map()});this.reads.subscribe(()=>{if(this.alive){this.state={...this.state};this.listeners.forEach((listener)=>listener());}});}
+    if(reads){this.reads=new PageSessionStore(reads.source,{objects:new Map(Object.entries(variables).filter(([,v])=>v.mode==="resource"&&["record","record-set"].includes(v.type)&&v.source?.object).map(([id,v])=>[id,v.source!.object!.name])),filterObjects:new Map(filters.map(([id,v])=>[id,v.source!.object!.name])),filterFields:new Map(filters.map(([id,v])=>[id,new Set(v.source!.fields??[])])),filterSelections:new Map(),filterQueries:new Map(),children:new Map(),queryParents:new Map()});this.reads.subscribe(()=>{if(this.alive){this.state={...this.state};this.listeners.forEach((listener)=>listener());}});}
   }
   snapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -45,6 +45,15 @@ export class ApplicationSession {
     this.select(id,undefined,owner);
     const intent=Symbol();this.recordIntents.set(id,intent);this.recordOwners.set(id,owner);
     return reference=>{if(this.recordIntents.get(id)===intent)this.select(id,reference,owner,true);};
+  }
+  selectSet(id:string,references:RecordReference[]|undefined,owner:symbol,onlyOwner=false) {
+    const variable=this.variables[id];if(!this.alive||this.retired||variable?.mode!=="resource"||variable.type!=="record-set"||variable.source?.kind!=="record-set"||!this.reads||onlyOwner&&this.recordOwners.get(id)!==owner||!this.reads.canSelectSetReferences(id,references))return;
+    this.recordIntents.delete(id);if(references?.length)this.recordOwners.set(id,owner);else this.recordOwners.delete(id);void this.reads.selectSetReferences(id,references);
+  }
+  beginSetSelection(id:string,owner:symbol):((references:RecordReference[]|undefined)=>void)|undefined {
+    const variable=this.variables[id];if(!this.alive||this.retired||variable?.mode!=="resource"||variable.type!=="record-set"||variable.source?.kind!=="record-set"||!this.reads)return;
+    this.selectSet(id,undefined,owner);const intent=Symbol();this.recordIntents.set(id,intent);this.recordOwners.set(id,owner);
+    return references=>{if(this.recordIntents.get(id)===intent)this.selectSet(id,references,owner,true);};
   }
   filter(id:string,field:string,value:unknown) {
     const variable=this.variables[id];if(!this.alive||this.retired||variable?.mode!=="resource"||variable.type!=="filter"||variable.source?.kind!=="filter")return;this.reads?.filterResource(id,field,value);

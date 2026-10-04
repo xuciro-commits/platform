@@ -245,15 +245,22 @@ export class PageSessionStore {
   }
   selectionSetReferences(key:string){const state=this.state.recordSets[key];return state&&"value" in state?state.value??[]:[];}
   selectedSet(key:string){return this.selectionSetCache.get(key)??[];}
-  selectSet(key:string,ids:string[],query:string){
+  selectSet(key:string,ids:string[],query:string):Promise<RecordReference[]|undefined>|undefined{
    const object=this.plan.objects.get(key),members=this.queryData.get(query)?.records.map(r=>r.id),allowed=members?new Set(members):this.externalMembers.get(query);
    if(this.disposed||!object||!this.plan.querySelections?.get(query)?.has(key)||this.queryObjects.has(query)&&this.queryObjects.get(query)!==object||ids.length>(this.plan.maxSelectionSetRecords??64)||new Set(ids).size!==ids.length||ids.some(id=>typeof id!=="string"||!id||id.length>1024||!allowed?.has(id)))return;
-   this.clear([key]);this.selectionQueries.set(key,query);const references=ids.map(id=>({object,id}));void this.readSet(key,references);
+   this.clear([key]);this.selectionQueries.set(key,query);const references=ids.map(id=>({object,id}));return this.readSet(key,references);
   }
-  private async readSet(key:string,references:RecordReference[]){
+  canSelectSetReferences(key:string,references:RecordReference[]=[]) {
+   const object=this.plan.objects.get(key);return !this.disposed&&!!object&&references.length<=(this.plan.maxSelectionSetRecords??64)&&new Set(references.map(r=>r.id)).size===references.length&&references.every(r=>r.object===object&&typeof r.id==="string"&&!!r.id&&r.id.length<=1024);
+  }
+  selectSetReferences(key:string,references:RecordReference[]=[]):Promise<RecordReference[]|undefined>|undefined {
+   if(!this.canSelectSetReferences(key,references))return;
+   this.clear([key]);return this.readSet(key,references.map(({object,id})=>({object,id})));
+  }
+  private async readSet(key:string,references:RecordReference[]):Promise<RecordReference[]|undefined>{
    const epoch=(this.selectionSetEpoch.get(key)??0)+1;this.selectionSetEpoch.set(key,epoch);this.selectionSetCache.delete(key);
-   this.publish({recordSets:{...this.state.recordSets,[key]:references.length?{status:"pending",value:references}:{status:"empty",value:[]}}});if(!references.length)return;
-   try {const records=await Promise.all(references.map(async ref=>{const view=await this.readReference(ref.object,ref.id);if(view.record.archived)throw Error("Archived selection");return view.record;}));if(this.disposed||this.selectionSetEpoch.get(key)!==epoch)return;this.selectionSetCache.set(key,records);this.publish({recordSets:{...this.state.recordSets,[key]:{status:"value",value:references}}});}
+   this.publish({recordSets:{...this.state.recordSets,[key]:references.length?{status:"pending",value:references}:{status:"empty",value:[]}}});if(!references.length)return [];
+   try {const records=await Promise.all(references.map(async ref=>{const view=await this.readReference(ref.object,ref.id);if(view.record.archived)throw Error("Archived selection");return view.record;}));if(this.disposed||this.selectionSetEpoch.get(key)!==epoch)return;this.selectionSetCache.set(key,records);this.publish({recordSets:{...this.state.recordSets,[key]:{status:"value",value:references}}});return references;}
    catch(error){if(this.disposed||this.selectionSetEpoch.get(key)!==epoch)return;this.selectionSetCache.delete(key);this.publish({recordSets:{...this.state.recordSets,[key]:{status:"error",error:String(error)}}});}
   }
   selectReference(key: string, reference?: RecordReference) {

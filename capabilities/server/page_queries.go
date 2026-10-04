@@ -31,7 +31,7 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 				return fmt.Errorf("property source schema is unavailable")
 			}
 		}
-		if (v.Mode == "shared" || v.Scope == "application" && (v.Type == "record" || v.Type == "filter") && v.Mode == "resource") && v.Source != nil && v.Source.Object != nil {
+		if (v.Mode == "shared" || v.Scope == "application" && (v.Type == "record" || v.Type == "filter" || v.Type == "record-set") && v.Mode == "resource") && v.Source != nil && v.Source.Object != nil {
 			info, ok := t.entity(v.Source.Object.Name)
 			if v.Type == "filter" && v.Mode == "resource" && platform.CheckFilterSchema(*v.Source, info) != nil {
 				return fmt.Errorf("application filter fields are unavailable")

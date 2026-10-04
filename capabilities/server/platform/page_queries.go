@@ -272,7 +272,7 @@ func (p Page) QueryReferences() []AssetRef {
 		}
 	}
 	for _, v := range p.DocumentVariables() {
-		if (v.Mode == "shared" || v.Mode == "property" || v.Scope == "application" && v.Mode == "resource" && (v.Type == "record" || v.Type == "filter")) && v.Source != nil && v.Source.Object != nil {
+		if (v.Mode == "shared" || v.Mode == "property" || v.Scope == "application" && v.Mode == "resource" && (v.Type == "record" || v.Type == "filter" || v.Type == "record-set")) && v.Source != nil && v.Source.Object != nil {
 			refs = append(refs, *v.Source.Object)
 		}
 	}
@@ -434,6 +434,15 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 // CheckCollectionPorts keeps table object identity on the same frozen edge.
 func (p Page) CheckCollectionPorts() error {
 	for _, s := range p.Sections {
+		if s.SelectionSetVariable != "" && p.Document != nil && p.Document.Variables[s.SelectionSetVariable].Mode == "shared" {
+			object := s.Object
+			if object.Name == "" {
+				object = p.Object
+			}
+			if p.RecordSetVariableObject(s.SelectionSetVariable) != object {
+				return fmt.Errorf("shared record-set object does not match its table")
+			}
+		}
 		if s.FilterVariable != "" {
 			if p.Document == nil {
 				return fmt.Errorf("shared filter needs a document")

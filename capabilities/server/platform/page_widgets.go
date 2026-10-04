@@ -183,7 +183,11 @@ func (d *PageDocument) checkWidgetPorts(s Section) error {
 		}
 		if field == "selectionSetVariable" {
 			v := d.Variables[id]
-			if v.Mode != "resource" || v.Source == nil || v.Source.Kind != "records" || v.Source.Section != s.ID {
+			if v.Mode == "shared" {
+				if err := d.checkSharedRecordSetOutput(s); err != nil {
+					return err
+				}
+			} else if v.Mode != "resource" || v.Source == nil || v.Source.Kind != "records" || v.Source.Section != s.ID {
 				return fmt.Errorf("table selection set needs its own record-set resource")
 			}
 		}

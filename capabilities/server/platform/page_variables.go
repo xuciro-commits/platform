@@ -280,7 +280,8 @@ type pageRuntimeContract struct {
 		} `json:"formatters"`
 	} `json:"tablePresentation"`
 	RecordSelection struct {
-		MaxRecords int `json:"maxRecords"`
+		MaxRecords      int    `json:"maxRecords"`
+		SharedUIProfile string `json:"sharedUIProfile"`
 	} `json:"recordSelection"`
 	TableEditing struct {
 		MaxRows    int      `json:"maxRows"`
@@ -424,7 +425,7 @@ func (d *PageDocument) CheckVariables() error {
 		if !pageNodeID.MatchString(id) || (v.Scope != contract.Scope && v.Scope != contract.Loop.Scope && v.Scope != contract.Overlay.Scope && v.Scope != contract.Application.Scope) || ((v.Scope == contract.Scope || v.Scope == contract.Application.Scope) && v.Owner != "") || ((v.Scope == contract.Loop.Scope || v.Scope == contract.Overlay.Scope) && !pageNodeID.MatchString(v.Owner)) || !slices.Contains(contract.ValueTypes, v.Type) || len(v.Title) > 1024 {
 			return fail("unsupported identity, scope or type")
 		}
-		if v.Type == "record-set" && (!PageUIProfileSupports(d.UIProfile, "platform.page.v2.32") || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "records" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
+		if v.Type == "record-set" && !((PageUIProfileSupports(d.UIProfile, "platform.page.v2.32") && v.Mode == "resource" && v.Source != nil && v.Source.Kind == "records" && slices.Contains([]string{"page", "overlay"}, v.Scope)) || (PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordSelection.SharedUIProfile) && v.Scope == "application" && (v.Mode == "shared" || v.Mode == "resource"))) {
 			return fail("record-set needs a v2.32 local table resource")
 		}
 		if v.Scope == contract.Overlay.Scope && (!slices.Contains(contract.Overlay.ValueTypes, v.Type) || !slices.Contains(contract.Overlay.Modes, v.Mode)) {
@@ -452,7 +453,7 @@ func (d *PageDocument) CheckVariables() error {
 		if v.Mode != "resource" && v.Mode != "property" && v.Mode != "aggregate" && v.Mode != contract.Application.BindingMode && v.Source != nil {
 			return fail("only resource or shared variables may declare a source")
 		}
-		if v.Source != nil && v.Source.Object != nil && !((v.Mode == "shared" && (v.Type == "object-set" || v.Type == "record" || v.Type == "filter")) || (v.Mode == "resource" && v.Scope == "application" && (v.Type == "record" || v.Type == "filter")) || v.Mode == "property") {
+		if v.Source != nil && v.Source.Object != nil && !((v.Mode == "shared" && (v.Type == "object-set" || v.Type == "record" || v.Type == "filter" || v.Type == "record-set")) || (v.Mode == "resource" && v.Scope == "application" && (v.Type == "record" || v.Type == "filter" || v.Type == "record-set")) || v.Mode == "property") {
 			return fail("only shared windows declare an object requirement")
 		}
 		if v.Source != nil && len(v.Source.Fields) > 0 && !(v.Scope == "application" && v.Mode == "resource" && v.Type == "filter") {
@@ -487,7 +488,7 @@ func (d *PageDocument) CheckVariables() error {
 				return fail("property source must be a record")
 			}
 		case "shared":
-			if (v.Type == "record" || v.Type == "filter") && (v.Source == nil || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject) {
+			if (v.Type == "record" || v.Type == "filter" || v.Type == "record-set") && (v.Source == nil || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject) {
 				return fail("shared record needs an object requirement")
 			}
 			if v.Type == "object-set" && (v.Writable || v.Source == nil || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject) {
@@ -507,7 +508,7 @@ func (d *PageDocument) CheckVariables() error {
 			if v.Source == nil || v.Source.Variable != "" || v.Expression != nil || len(v.Initial) != 0 {
 				return fail("resource variable needs only a typed source")
 			}
-			if (v.Source.Kind == "record" || v.Source.Kind == "filter") && v.Scope == "application" {
+			if (v.Source.Kind == "record" || v.Source.Kind == "filter" || v.Source.Kind == "record-set") && v.Scope == "application" {
 				if v.Type != v.Source.Kind || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" {
 					return fail("application record needs only an object source")
 				}

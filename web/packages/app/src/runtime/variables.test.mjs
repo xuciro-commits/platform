@@ -49,3 +49,10 @@ test("unfinished numeric drafts retain text and stop dependent evaluation while 
 });
 
 test("property evaluation follows source state and never reads a value from an obsolete reference",()=>{const v=vectors.find(v=>v.name==="typed record property graph");let reads=0;const lookup=()=>{reads++;return {status:"value",value:true}};for(const status of ["empty","pending","error"]){const result=evaluateVariables(v.variables,{},contract,{record:{status,code:"Denied"}},undefined,undefined,lookup);assert.equal(result.active.status,status);}assert.equal(reads,0);});
+
+test("application record sets have only typed resource and shared declarations; scalar expressions remain outside the host profile",()=>{
+ const object={app:"sample",kind:"object",name:"sample.note"},records={scope:"application",type:"record-set",mode:"resource",source:{kind:"record-set",object}},shared={scope:"application",type:"record-set",mode:"shared",writable:true,source:{kind:"application",variable:"records",object}};
+ assert.equal(compileVariables({records},contract).issues.length,0);assert.equal(compileVariables({shared},contract).issues.length,0);
+ for(const declaration of [{...records,initial:[]},{...records,source:{kind:"records",section:"table"}},{...shared,source:{kind:"application",variable:"records"}},{...records,mode:"state",initial:[]}])assert.ok(compileVariables({records:declaration},contract).issues.length);
+ assert.ok(compileVariables({records,has:{scope:"application",type:"boolean",mode:"derived",expression:{op:"present",args:[{variable:"records"}]}}},contract).issues.some(i=>i.variable==='has'));
+});

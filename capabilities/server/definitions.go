@@ -706,7 +706,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 								delete(doc.Variables, id)
 							}
 						}
-						if v.Mode == "shared" && (v.Type == "record" || v.Type == "filter") && v.Source != nil && v.Source.Object != nil {
+						if v.Mode == "shared" && (v.Type == "record" || v.Type == "filter" || v.Type == "record-set") && v.Source != nil && v.Source.Object != nil {
 							if _, ok := entities[v.Source.Object.Name]; !ok {
 								delete(doc.Variables, id)
 							}
@@ -865,7 +865,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 					missing = !ok
 				}
 				if v.Mode == "resource" && v.Source != nil {
-					if (v.Source.Kind == "record" || v.Source.Kind == "filter") && v.Source.Object != nil {
+					if (v.Source.Kind == "record" || v.Source.Kind == "filter" || v.Source.Kind == "record-set") && v.Source.Object != nil {
 						_, ok := entities[v.Source.Object.Name]
 						missing = !ok
 						if ok && v.Type == "filter" {

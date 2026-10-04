@@ -31,3 +31,13 @@ export function defaultAnalyticsSelectionGroup(profile){
  f.module.widgets.search={id:'search',name:'Original search control',type:'TextInput',config:{variableId:'searchText',label:'Original search'}};
  f.bindings={objects:{Asset:f.target.object},fields:{Asset:f.bindings.fields.Asset},actions:{},queries:{},application:{binding:f.bindings.application.binding,ports:{selectedAsset:f.bindings.application.ports.selectedAsset}},scatters:{wScatter:{labelField:'name'}},leaderboards:{wLeader:{labelField:'name'}}};return f;
 }
+
+/** Original Operations table and Analytics selection/comparison configs, with
+ * explicit navigation controls. This proves the cross-page group, not the full page. */
+export function defaultAnalyticsComparisonGroup(profile){
+ const f=defaultAnalyticsFixture(profile),original=f.module,ids=['wObjectTable1','wScatter','wLeader','wCompare','wPropList1'],variables=new Set(['filteredAssets','statusFilter','priorityFilter','ownerFilter','searchText','pressureMin','pressureMax','selectedAsset','selectedAssets','currentPage','showDetail']);
+ f.module={id:'original-analytics-comparison-group',name:'Original cross-page selection and comparison',pages:[{id:'pOperations',name:'Operations selection group',rootSectionId:'operations'},{id:'pAnalytics',name:'Analytics comparison group',rootSectionId:'analytics'}],sections:{operations:{id:'operations',name:'Operations group',layout:'rows',children:['search','wObjectTable1','wPropList1'].map(id=>({kind:'widget',id}))},analytics:{id:'analytics',name:'Analytics group',layout:'rows',children:['wScatter','wLeader','wCompare'].map(id=>({kind:'widget',id}))}},widgets:Object.fromEntries(ids.map(id=>[id,structuredClone(original.widgets[id])])),variables:original.variables.filter(v=>variables.has(v.id)).map(v=>structuredClone(v)),moduleInterface:structuredClone(original.moduleInterface),overlays:[],unusedWidgetIds:[]};
+ f.module.widgets.search={id:'search',name:'Original search control',type:'TextInput',config:{variableId:'searchText',label:'Original search'}};
+ f.bindings={objects:{Asset:f.target.object},fields:{Asset:f.bindings.fields.Asset},actions:{},queries:{},edits:f.bindings.edits,application:{...f.bindings.application,recordSets:{selectedAssets:{variable:'records',writable:true}}},scatters:{wScatter:{labelField:'name'}},leaderboards:{wLeader:{labelField:'name'}},comparisons:{wCompare:{labelField:'name',fields:['owner','pressure','temperature']}}};
+ f.target.definitions[0].application.variables.records={scope:'application',type:'record-set',mode:'resource',source:{kind:'record-set',object:{app:'build',kind:'object',name:f.target.object}}};return f;
+}

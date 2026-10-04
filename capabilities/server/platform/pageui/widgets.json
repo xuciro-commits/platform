@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.95",
+  "uiProfile": "platform.page.v2.96",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5127,7 +5127,8 @@
     "platform.page.v2.92",
     "platform.page.v2.93",
     "platform.page.v2.94",
-    "platform.page.v2.95"
+    "platform.page.v2.95",
+    "platform.page.v2.96"
   ],
   "runtime": {
     "scope": "page",
@@ -5390,7 +5391,8 @@
         "object-set",
         "record",
         "filter",
-        "decimal"
+        "decimal",
+        "record-set"
       ],
       "modes": [
         "state",
@@ -5459,7 +5461,8 @@
       ]
     },
     "recordSelection": {
-      "maxRecords": 64
+      "maxRecords": 64,
+      "sharedUIProfile": "platform.page.v2.96"
     },
     "tablePresentation": {
       "requiredUIProfile": "platform.page.v2.34",

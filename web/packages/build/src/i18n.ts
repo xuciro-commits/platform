@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+"Map application selection set {variable}": "映射应用多选集合 {variable}",
+"Keep the original local selection set": "保留原页面局部多选集合",
+"This original table publishes confirmed selections to the application.": "此原表格向应用发布已确认的多选引用。",
+"This page reads the original table selections from the application.": "此页面从应用读取原表格的多选引用。",
 "The source trend variant renders as the original card; no historical trend is inferred.": "来源 trend 样式按原普通卡片呈现；不推断历史趋势。",
 
 "Complete unused widget {widget}": "补全未使用组件 {widget}",

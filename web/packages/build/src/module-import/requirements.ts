@@ -1,4 +1,4 @@
-import {sourceInterfaceObject} from "./application";
+import {sourceInterfaceObject,sourceRecordSetObject} from "./application";
 import type {SourceModule,ImportBindings} from "./compile";
 
 const text=(v:unknown)=>typeof v==="string"?v:"";
@@ -33,6 +33,7 @@ export function workshopRequirements(module:SourceModule|undefined,origin:Source
  const property=(type:string,p:string)=>{if(!type||!p||p==="*")return;objects.add(type);(fields[type]??=new Set()).add(p);};
  for(const v of module?.variables??[]){const set=object(v.objectSet),type=text(set?.objectType||v.sourceObjectType);if(type)objects.add(type);for(const step of Array.isArray(set?.steps)?set.steps:[])for(const clause of Array.isArray(object(step)?.clauses)?object(step)!.clauses as unknown[]:[])property(type,text(object(clause)?.property));}
  for(const w of Object.values(module?.widgets??{})){
+  if(w.type==="ObjectComparison"&&origin){const type=sourceRecordSetObject(origin,text(w.config.objectsVarId));if(type)objects.add(type);}
   if(w.type==="FilterList")for(const f of Array.isArray(w.config.facets)?w.config.facets:[])property(external(text(w.config.objectSetVarId)),text(object(f)?.property));
   if(w.type==="ObjectTable")for(const c of Array.isArray(w.config.columns)?w.config.columns:[])property(external(text(w.config.objectSetVarId)),text(object(c)?.key));
   if(w.type==="Map"&&w.config.colorBy!==undefined)property(external(text(w.config.objectSetVarId)),text(w.config.colorBy));

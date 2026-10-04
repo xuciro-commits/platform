@@ -254,3 +254,11 @@ test("retained reference keeps only binding identity through refresh and retires
  store.updateSource({...source,scope:"other"});assert.equal(recordReadReference(store.snapshot().records.parent),undefined);
  assert.equal(recordReadReference({status:"empty",value:{object:"sample.parent",id:"A"}}),undefined);
 });
+
+test("shared record-set consumers reconfirm references without trusting copied fields and retire late membership confirmation",async()=>{
+ const reads=[],source={scope:"member",entity:()=>({fields:[]}),list:async()=>({records:[record("A"),record("B")],total:2}),get:(_,id)=>new Promise((resolve,reject)=>reads.push({id,resolve,reject}))},store=new PageSessionStore(source,{objects:new Map([["set","sample.note"],["consumer","sample.note"]]),children:new Map(),queryParents:new Map(),maxSelectionSetRecords:2,querySelections:new Map([["read",new Set(["set"])]])});
+ assert.equal(store.selectSetReferences("consumer",[{object:"sample.other",id:"A"}]),undefined);assert.equal(store.selectSetReferences("consumer",[{object:"sample.note",id:"A"},{object:"sample.note",id:"A"}]),undefined);assert.equal(store.selectSetReferences("consumer",["A","B","C"].map(id=>({object:"sample.note",id}))),undefined);
+ const pending=store.selectSetReferences("consumer",[{object:"sample.note",id:"A",note:"copied secret"}]);assert.deepEqual(store.snapshot().recordSets.consumer.value,[{object:"sample.note",id:"A"}]);await tick();reads[0].resolve({record:{...record("A"),note:"current authorized value"}});await pending;assert.equal(store.selectedSet("consumer")[0].note,"current authorized value");
+ const denied=store.selectSetReferences("consumer",[{object:"sample.note",id:"B"}]);assert.deepEqual(store.selectedSet("consumer"),[]);await tick();reads[1].reject(Error("Denied"));assert.equal(await denied,undefined);assert.equal(store.snapshot().recordSets.consumer.status,"error");assert.deepEqual(store.selectedSet("consumer"),[]);
+ await store.querySource("read").list("sample.note",{limit:2});const late=store.selectSet("set",["B"],"read");await tick();store.resetQueries(["read"]);reads[2].resolve({record:record("B")});assert.equal(await late,undefined);assert.deepEqual(store.selectedSet("set"),[]);
+});

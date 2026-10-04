@@ -76,3 +76,13 @@ test("confirmed producer intentions cannot overwrite a newer producer and hide o
  const retired=session.beginSelection("selected",scatter);session.close();retired({object:object.name,id:"retired"});await tick();assert.deepEqual(session.reads.snapshot().records,{});
  assert.equal(session.beginSelection("selected",scatter),undefined);assert.equal(hub.get("other",variables,{source,queries:{}}).beginSelection("missing",rank),undefined);
 });
+
+test("shared application sets own stable references independently of single records, confirmation intents and instances",async()=>{
+ const object={app:"sample",kind:"object",name:"sample.note"},variables={records:{scope:"application",type:"record-set",mode:"resource",source:{kind:"record-set",object}},record:{scope:"application",type:"record",mode:"resource",source:{kind:"record",object}}},pending=[];
+ const source={scope:"member",entity:()=>({fields:[]}),list:async()=>({records:[],total:0}),get:(_,id)=>new Promise((resolve,reject)=>pending.push({id,resolve,reject}))},hub=new ApplicationSessionHub(),session=hub.get("one",variables,{source,queries:{}}),a=Symbol(),b=Symbol();session.attach(a,()=>{});session.attach(b,()=>{});
+ session.selectSet("records",[{object:object.name,id:"A"}],a);await tick();pending[0].resolve({record:{id:"A",revision:1,note:"not a shared value"}});await tick();assert.deepEqual(session.reads.snapshot().recordSets.records.value,[{object:object.name,id:"A"}]);
+ session.select("record",{object:object.name,id:"B"},b);await tick();pending[1].resolve({record:{id:"B",revision:1}});await tick();assert.equal(session.reads.snapshot().records.record.value.id,"B");assert.equal(session.reads.snapshot().recordSets.records.value[0].id,"A");
+ const late=session.beginSetSelection("records",a);assert.deepEqual(session.reads.selectedSet("records"),[]);session.selectSet("records",[{object:object.name,id:"C"}],b);await tick();pending[2].resolve({record:{id:"C",revision:1}});await tick();late([{object:object.name,id:"late"}]);session.selectSet("records",undefined,a,true);assert.equal(session.reads.snapshot().recordSets.records.value[0].id,"C");assert.equal(pending.length,3);
+ session.selectSet("records",[{object:"sample.other",id:"C"}],b);session.selectSet("records",[{object:object.name,id:"C"},{object:object.name,id:"C"}],b);assert.equal(session.reads.snapshot().recordSets.records.value[0].id,"C");
+ const intent=session.beginSetSelection("records",a);session.close();intent([{object:object.name,id:"old"}]);await tick();assert.deepEqual(session.reads.snapshot().recordSets,{});assert.deepEqual(hub.get("one",variables,{source,queries:{}}).reads.snapshot().recordSets,{});
+});

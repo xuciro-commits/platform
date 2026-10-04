@@ -19,7 +19,9 @@ func (d *PageDocument) checkRecordComparison(s Section) error {
 	c := s.RecordComparison
 	v := d.Variables[s.RecordSetVariable]
 	limits := pageWidgets.Runtime.RecordComparison
-	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || c == nil || c.LabelField == "" || len(c.LabelField) > 256 || v.Type != "record-set" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "records" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(s.Fields) < limits.MinFields || len(s.Fields) > limits.MaxFields || len(s.Actions) > 0 || s.Selection != "" || s.SelectionVariable != "" || s.SelectionSetVariable != "" || s.RecordVariable != "" || s.CollectionVariable != "" || s.ParentSelection != "" || s.Relation != "" || s.Query.Name != "" || s.InlineEdit != nil {
+	local := v.Mode == "resource" && v.Source != nil && v.Source.Kind == "records" && slices.Contains([]string{"page", "overlay"}, v.Scope)
+	shared := PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordSelection.SharedUIProfile) && v.Mode == "shared" && v.Scope == "application" && v.Source != nil && v.Source.Kind == "application" && v.Source.Object != nil
+	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || c == nil || c.LabelField == "" || len(c.LabelField) > 256 || v.Type != "record-set" || !(local || shared) || len(s.Fields) < limits.MinFields || len(s.Fields) > limits.MaxFields || len(s.Actions) > 0 || s.Selection != "" || s.SelectionVariable != "" || s.SelectionSetVariable != "" || s.RecordVariable != "" || s.CollectionVariable != "" || s.ParentSelection != "" || s.Relation != "" || s.Query.Name != "" || s.InlineEdit != nil {
 		return fmt.Errorf("record comparison needs its original record-set resource, title and bounded properties")
 	}
 	seen := map[string]bool{}
@@ -63,6 +65,9 @@ func (p Page) RecordSetVariableObject(variable string) AssetRef {
 		return AssetRef{}
 	}
 	v := p.Document.Variables[variable]
+	if v.Type == "record-set" && v.Mode == "shared" && v.Scope == "application" && v.Source != nil && v.Source.Kind == "application" && v.Source.Object != nil {
+		return *v.Source.Object
+	}
 	if v.Type != "record-set" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "records" {
 		return AssetRef{}
 	}

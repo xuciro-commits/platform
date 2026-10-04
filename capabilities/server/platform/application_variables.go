@@ -30,6 +30,9 @@ func (a Application) CheckVariables() error {
 		if v.Type == "filter" && !PageUIProfileSupports(a.UIProfile, "platform.page.v2.15") {
 			return fmt.Errorf("application filter %s requires v2.15", id)
 		}
+		if v.Type == "record-set" && !PageUIProfileSupports(a.UIProfile, pageWidgets.Runtime.RecordSelection.SharedUIProfile) {
+			return fmt.Errorf("application record-set %s requires its shared profile", id)
+		}
 		if v.Type == "record" && !PageUIProfileSupports(a.UIProfile, "platform.page.v2.14") {
 			return fmt.Errorf("application record %s requires v2.14", id)
 		}
@@ -62,10 +65,10 @@ func (a Application) CheckPageVariables(p Page) error {
 		if v.Type == "object-set" {
 			matches = source.Mode == "resource" && source.Source != nil && source.Source.Kind == "plan" && v.Source.Object != nil && a.Queries[source.Source.Query].Object == *v.Source.Object
 		}
-		if v.Type == "record" || v.Type == "filter" {
+		if v.Type == "record" || v.Type == "filter" || v.Type == "record-set" {
 			matches = source.Mode == "resource" && source.Source != nil && source.Source.Kind == v.Type && source.Source.Object != nil && v.Source.Object != nil && *source.Source.Object == *v.Source.Object
 		}
-		if !ok || !matches || source.Type != v.Type || v.Writable && source.Mode != "state" && v.Type != "record" && v.Type != "filter" {
+		if !ok || !matches || source.Type != v.Type || v.Writable && source.Mode != "state" && v.Type != "record" && v.Type != "filter" && v.Type != "record-set" {
 			return fmt.Errorf("application %s does not satisfy page %s shared binding %s", a.Name, p.Name, id)
 		}
 		for _, section := range p.Sections {

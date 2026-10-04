@@ -31,13 +31,13 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if (variable.scope === contract.overlay.scope && (!(contract.overlay.valueTypes as readonly string[]).includes(variable.type) || !(contract.overlay.modes as readonly string[]).includes(variable.mode))) fail(id, "Overlay variable needs a supported local value or resource");
     if (variable.scope === contract.application.scope && !(contract.application.valueTypes as readonly string[]).includes(variable.type)) fail(id,"Application variable needs a supported scalar or resource");
     if (variable.writable && variable.mode !== "shared") fail(id,"Only shared bindings declare writable");
-    if(variable.type==="record-set"&&(!["page","overlay"].includes(variable.scope)||variable.mode!=="resource"||variable.source?.kind!=="records"))fail(id,"Resource source type mismatch");
+    if(variable.type==="record-set"&&!(["page","overlay"].includes(variable.scope)&&variable.mode==="resource"&&variable.source?.kind==="records"||variable.scope==="application"&&(variable.mode==="shared"&&variable.source?.kind==="application"||variable.mode==="resource"&&variable.source?.kind==="record-set")))fail(id,"Resource source type mismatch");
     if(variable.type==="string-set"&&(!["page","overlay"].includes(variable.scope)||!["state","constant"].includes(variable.mode)))fail(id,"Unsupported variable type or scope");
     if(variable.type==="statistics"&&(variable.mode!=="aggregate"||!["page","overlay"].includes(variable.scope)))fail(id,"Statistics need a read-only scoped declaration");
     if(variable.type==="number"&&(!["aggregate","constant","derived"].includes(variable.mode)||variable.scope==="application"))fail(id,"Number needs a read-only scoped declaration");
     if(variable.source?.measure&&(variable.mode!=="aggregate"||variable.source.kind!=="aggregate"&&variable.source.kind!=="statistics"))fail(id,"Measure needs an aggregate scalar");
     if (variable.mode !== "resource" && variable.mode !== "property" && variable.mode !== "aggregate" && variable.mode !== "shared" && variable.source) fail(id, "Only resource or shared variables may declare a source");
-    if(variable.source?.object&&!((variable.mode==="shared"&&["object-set","record","filter"].includes(variable.type))||(variable.mode==="resource"&&variable.scope==="application"&&["record","filter"].includes(variable.type))||variable.mode==="property"))fail(id,"Only shared windows declare an object requirement");
+    if(variable.source?.object&&!((variable.mode==="shared"&&["object-set","record","filter","record-set"].includes(variable.type))||(variable.mode==="resource"&&variable.scope==="application"&&["record","filter","record-set"].includes(variable.type))||variable.mode==="property"))fail(id,"Only shared windows declare an object requirement");
     if(variable.source?.fields?.length&&!(variable.scope==="application"&&variable.mode==="resource"&&variable.type==="filter"))fail(id,"Only an application filter declares fields");
     if(variable.source?.field&&variable.mode!=="property")fail(id,"Only a property source declares a field");
     if(variable.mode==="aggregate") {
@@ -46,12 +46,12 @@ export function compileVariables(variables: Variables, contract: Contract) {
       const source=variable.source,parent=variables[source?.variable??""];if(!source||source.kind!=="property"||!validID.test(source.variable??"")||!validID.test(source.field??"")||!source.object||source.object.kind!=="object"||!source.object.app||!source.object.name||source.section||source.node||source.query||source.fields?.length||variable.expression||variable.initial!==undefined||!["string","boolean","decimal"].includes(variable.type))fail(id,"Property needs a typed record and field source");
       if(parent?.scope==="loop-item"&&(variable.scope!=="loop-item"||parent.owner!==variable.owner)||parent?.scope==="overlay"&&(variable.scope!=="overlay"||parent.owner!==variable.owner))fail(id,"Property source escapes its scope");if(visit(source?.variable??"")!=="record")fail(id,"Property source must be a record");
     } else if (variable.mode === "shared") {
-      if(["record","filter"].includes(variable.type)&&(!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name))fail(id,"Shared record needs an object requirement");
+      if(["record","filter","record-set"].includes(variable.type)&&(!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name))fail(id,"Shared record needs an object requirement");
       if(variable.type==="object-set"&&(variable.writable||!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name))fail(id,"Shared window needs a read-only object requirement");
       if (variable.scope !== "application" || !variable.source || variable.source.kind !== "application" || !validID.test(variable.source.variable ?? "") || variable.source.section || variable.source.node || variable.source.query || variable.initial !== undefined || variable.expression) fail(id,"Shared binding needs only an application variable source");
     } else if (variable.mode === "resource" && variable.source?.kind === "plan") {
       if (!["page","overlay","application","loop-item"].includes(variable.scope) || variable.type !== "object-set" || !validID.test(variable.source.query ?? "") || variable.source.section || variable.source.node || variable.source.variable || variable.initial !== undefined || variable.expression) fail(id,"Plan source needs a scoped query window");
-    } else if(variable.mode === "resource"&&variable.scope==="application"&&["record","filter"].includes(variable.source?.kind??"")) {
+    } else if(variable.mode === "resource"&&variable.scope==="application"&&["record","filter","record-set"].includes(variable.source?.kind??"")) {
       if(variable.type!==variable.source?.kind||!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name||variable.source.section||variable.source.node||variable.source.query||variable.source.variable||variable.initial!==undefined||variable.expression)fail(id,"Application record needs only an object source");
       if(variable.type==="filter"&&(!variable.source?.fields?.length||variable.source.fields.length>contract.application.maxFilterFields||new Set(variable.source.fields).size!==variable.source.fields.length||variable.source.fields.some((field)=>!validID.test(field))))fail(id,"Application filter needs bounded fields");
     } else if (variable.mode === "resource") {
@@ -72,7 +72,7 @@ export function compileVariables(variables: Variables, contract: Contract) {
           if (arg.variable && variables[arg.variable]?.scope === contract.overlay.scope && (variable.scope !== contract.overlay.scope || variable.owner !== variables[arg.variable]?.owner)) return fail(id, "Overlay dependency escapes its owner scope");
           return arg.variable ? visit(arg.variable) : valueType(arg.literal, contract);
         });
-        if (types.some((type) => !type || (op.input === "resource" ? !contract.resources.some((resource) => resource.type === type) : type !== (op.input === "same" ? types[0] : op.input) || op.input === "same" && !["string", "boolean","decimal","number"].includes(type)))) fail(id, "Argument type mismatch");
+        if (types.some((type) => !type || (op.input === "resource" ? type === "record-set" || !contract.resources.some((resource) => resource.type === type) : type !== (op.input === "same" ? types[0] : op.input) || op.input === "same" && !["string", "boolean","decimal","number"].includes(type)))) fail(id, "Argument type mismatch");
       }
     } else fail(id, "Unsupported variable mode");
     visiting.delete(id); order.push(id);
