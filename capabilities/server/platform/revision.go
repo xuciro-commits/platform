@@ -61,6 +61,9 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 		return ReleaseAsset{}, err
 	}
 	requires := append([]AssetRef{page.Object}, page.NavigationTargets()...)
+	for _, c := range page.ComputeResources() {
+		requires = append(requires, c.Operation.Ref)
+	}
 	for _, e := range page.EmbeddingBindings() {
 		requires = append(requires, e.Page.Ref)
 	}
@@ -275,6 +278,9 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 					return err
 				}
 
+				for _, c := range page.ComputeResources() {
+					bindings = append(bindings, c.Operation)
+				}
 				for _, section := range page.Sections {
 					if section.Function != nil {
 						if section.Widget == "ai-assistant" {
@@ -505,6 +511,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		}
 		if err := page.CheckRecordPorts(); err != nil {
 			return err
+		}
+		for _, c := range page.ComputeResources() {
+			required = append(required, c.Operation.Ref)
 		}
 		required = append(required, page.Object)
 		required = append(required, page.NavigationTargets()...)
@@ -912,6 +921,16 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	}
 	namedSources := map[AssetBinding]NamedQuery{}
 	if page.Document != nil {
+		for id, c := range page.ComputeResources() {
+			asset, ok := lookup[c.Operation.Ref]
+			var op Operation
+			ref := page.RecordResourceObject(c.RecordVariable)
+			objectAsset, exists := lookup[ref]
+			object, err := queryObjectDescriptor(objectAsset.Body)
+			if !ok || !exists || err != nil || json.Unmarshal(asset.Body, &op) != nil || page.CheckComputeResource(c, object, op, page.Document.Variables[id].Type) != nil {
+				return fmt.Errorf("frozen compute resource contract is unavailable")
+			}
+		}
 		if err := page.Document.CheckQuerySets(); err != nil {
 			return err
 		}

@@ -24,6 +24,14 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 	if p.Document == nil {
 		return nil
 	}
+	for id, c := range p.ComputeResources() {
+		ref := p.RecordResourceObject(c.RecordVariable)
+		object, ok := t.entity(ref.Name)
+		op, _, err := t.pageOperation(&c.Operation)
+		if !ok || err != nil || p.CheckComputeResource(c, object, op, p.Document.Variables[id].Type) != nil {
+			return fmt.Errorf("compute resource contract is unavailable")
+		}
+	}
 	for _, v := range p.Document.Variables {
 		if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
 			object, ok := t.entity(v.Source.Object.Name)

@@ -1,3 +1,4 @@
+import {usePageComputations} from "./runtime/PageComputations";
 import {aiRecordSlot} from "./widgets/ai-context";
 import {CollectionBuilderRenderer} from "./widgets/CollectionBuilder";
 import {RecordMapRenderer} from "./widgets/RecordMap";
@@ -612,6 +613,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
   const incoming = usePageInputs(page, session, snapshot,pageCall);
   const application = useApplicationVariables(initialVariables);
+  const computations=usePageComputations(page,session,snapshot,application,live);
   const [recordProducers]=useState(()=>new Map<string,symbol>());
   const recordProducer=(section:string)=>{if(!recordProducers.has(section))recordProducers.set(section,Symbol(section));return recordProducers.get(section)!;};
   const applicationRecords=JSON.stringify(Object.entries(initialVariables).filter(([,v])=>v.mode==="shared"&&v.type==="record").map(([id])=>[id,application.resources[id],application.recordReferences[id]]));
@@ -625,7 +627,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
 
   useEffect(()=>{for(const [id,signature] of Object.entries(application.signatures)){const result=application.resources[id],window=result&&(result.status==="value"||result.status==="empty")&&typeof result.value==="object"&&result.value?.kind==="object-set"?result.value.window:undefined;session.reconcileExternalWindow(`application/${id}`,result?.status==="error"?"":signature,window?.records.map((r)=>r.id));}},[session,JSON.stringify(application.signatures),JSON.stringify(application.resources)]);
   const aliases=Object.fromEntries(Object.entries(initialVariables).flatMap(([id,v])=>{const sharedFilter=v.source?.kind==="filter"?page.sections?.find((s)=>s.id===v.source?.section)?.filterVariable:undefined;const source=sharedFilter??applicationVariable(id);return source&&source!==id?[[id,application.resources[source]??{status:"empty" as const}]]:[]}));
-  const inputResources = useMemo(() => ({ ...resources, ...incoming.inputs, ...application.resources,...aliases }), [resources, JSON.stringify(incoming.inputs), JSON.stringify(application.resources),JSON.stringify(aliases)]);
+  const inputResources = useMemo(() => ({ ...resources, ...incoming.inputs, ...application.resources,...aliases,...computations }), [resources, JSON.stringify(incoming.inputs), JSON.stringify(application.resources),JSON.stringify(aliases),JSON.stringify(computations)]);
   const inputValues = useMemo(() => evaluateVariables(initialVariables, snapshot.scalars, pageVariableContract, inputResources,undefined,undefined,session.property), [initialVariables,snapshot.scalars,inputResources]);
   const overlayForRoot = (root: string) => Object.entries(page.document?.overlays ?? {}).find(([, overlay]) => overlay.root === root)?.[0];
   const overlayInputs=Object.fromEntries(Object.keys(page.document?.overlays??{}).map((id)=>[id,evaluateVariables(initialVariables,snapshot.scalars,pageVariableContract,inputResources,undefined,id,session.property)]));

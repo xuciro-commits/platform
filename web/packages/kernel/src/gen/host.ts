@@ -1065,6 +1065,13 @@ export type PageCollectionInput = {
   bindings?: AssetBinding[];
 };
 
+export type PageComputeResource = {
+  operation: AssetBinding;
+  recordVariable: string;
+  inputs: Record<string, Binding>;
+  outputField?: string;
+};
+
 export type PageDetailPresentation = {
   columns: number;
   hideNull?: boolean;
@@ -1424,6 +1431,7 @@ export type PageResourceList = {
 };
 
 export type PageResourceSource = {
+  compute?: PageComputeResource;
   port?: string;
   measure?: string;
   field?: string;
@@ -2237,7 +2245,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.99",
+  "uiProfile": "platform.page.v2.100",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -7369,7 +7377,8 @@ export const pageUIManifest = {
     "platform.page.v2.96",
     "platform.page.v2.97",
     "platform.page.v2.98",
-    "platform.page.v2.99"
+    "platform.page.v2.99",
+    "platform.page.v2.100"
   ],
   "runtime": {
     "scope": "page",
@@ -8057,6 +8066,10 @@ export const pageUIManifest = {
     },
     "kanban": {
       "dynamicUIProfile": "platform.page.v2.99"
+    },
+    "computeResource": {
+      "requiredUIProfile": "platform.page.v2.100",
+      "maxResources": 4
     }
   },
   "layout": {

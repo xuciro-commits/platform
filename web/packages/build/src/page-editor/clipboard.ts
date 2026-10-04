@@ -56,7 +56,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const valueRefs=(value:Api.PageValue|undefined)=>value?.variable?[value.variable]:[];
  const queryRefs=(query:Api.PageQuery)=>[...query.input?[query.input]:[],...valueRefs(query.search),...valueRefs(query.for),...(query.conditions??[]).flatMap(c=>valueRefs(c.value))];
  const addQuery=(id:string)=>{if(queries.has(id))return;const q=original.queries?.[id];if(!q){missing.value=true;return;}queries.add(id);queryRefs(q).forEach(addVariable);q.set?.inputs.forEach(addQuery);};
- const addVariable=(id:string)=>{if(variables.has(id))return;const v=original.variables?.[id];if(!v){missing.value=true;return;}variables.add(id);v.expression?.args.flatMap(valueRefs).forEach(addVariable);if(v.mode!=="shared"&&v.source?.variable)addVariable(v.source.variable);if(["plan","count","aggregate","statistics"].includes(v.source?.kind??"")&&v.source?.query)addQuery(v.source.query);};
+ const addVariable=(id:string)=>{if(variables.has(id))return;const v=original.variables?.[id];if(!v){missing.value=true;return;}variables.add(id);v.expression?.args.flatMap(valueRefs).forEach(addVariable);if(v.source?.compute)addVariable(v.source.compute.recordVariable);if(v.mode!=="shared"&&v.source?.variable)addVariable(v.source.variable);if(["plan","count","aggregate","statistics"].includes(v.source?.kind??"")&&v.source?.query)addQuery(v.source.query);};
  for(const id of nodes)for(const key of nodeFields){const value=original.nodes[id]?.[key];if(value)addVariable(value);}
  for(const id of loops){const loop=original.nodes[id]!.loop!;addVariable(loop.collection);addVariable(loop.itemVariable);}
  // Owned declarations remain owned even if their consumer is dormant.
@@ -152,6 +152,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
   if(v.source){
    if(v.source.section)v.source.section=sectionMap.get(v.source.section)??v.source.section;
    if(v.source.node)v.source.node=nodeMap.get(v.source.node)??v.source.node;
+   if(v.source.compute)v.source.compute.recordVariable=variableMap.get(v.source.compute.recordVariable)??v.source.compute.recordVariable;
    if(v.mode!=="shared"&&v.source.variable)v.source.variable=variableMap.get(v.source.variable)??v.source.variable;
    if(v.source.query)v.source.query=queryMap.get(v.source.query)??v.source.query;
   }

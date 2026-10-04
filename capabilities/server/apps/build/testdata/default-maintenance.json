@@ -1,0 +1,1169 @@
+{
+  "name": "maintenance",
+  "object": "build.asset",
+  "document": {
+    "formatVersion": 2,
+    "uiProfile": "platform.page.v2.100",
+    "root": "import_node_10",
+    "nodes": {
+      "import_leaf_12": {
+        "kind": "widget",
+        "section": "import_widget_11"
+      },
+      "import_leaf_20": {
+        "kind": "widget",
+        "section": "import_widget_19"
+      },
+      "import_leaf_22": {
+        "kind": "widget",
+        "section": "import_widget_21"
+      },
+      "import_node_18": {
+        "kind": "columns",
+        "title": "Board header",
+        "children": [
+          "import_leaf_20",
+          "import_leaf_22"
+        ],
+        "gap": 8,
+        "presentation": {
+          "showHeader": false,
+          "padding": 8,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_28": {
+        "kind": "widget",
+        "section": "import_widget_27"
+      },
+      "import_leaf_40": {
+        "kind": "widget",
+        "section": "import_widget_39"
+      },
+      "import_leaf_42": {
+        "kind": "widget",
+        "section": "import_widget_41"
+      },
+      "import_leaf_45": {
+        "kind": "widget",
+        "section": "import_widget_44"
+      },
+      "import_node_38": {
+        "kind": "rows",
+        "title": "Context",
+        "children": [
+          "import_leaf_40",
+          "import_leaf_42",
+          "import_leaf_45"
+        ],
+        "gap": 8,
+        "size": {
+          "width": 320
+        },
+        "presentation": {
+          "showHeader": false,
+          "padding": 8,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_node_26": {
+        "kind": "columns",
+        "title": "Board",
+        "children": [
+          "import_leaf_28",
+          "import_node_38"
+        ],
+        "gap": 8,
+        "presentation": {
+          "showHeader": false,
+          "padding": 8,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_53": {
+        "kind": "widget",
+        "section": "import_widget_52"
+      },
+      "import_leaf_54": {
+        "kind": "widget",
+        "section": "import_widget_9"
+      },
+      "import_leaf_59": {
+        "kind": "widget",
+        "section": "import_widget_58"
+      },
+      "import_node_51": {
+        "kind": "columns",
+        "title": "Work",
+        "children": [
+          "import_leaf_53",
+          "import_leaf_54",
+          "import_leaf_59"
+        ],
+        "gap": 8,
+        "presentation": {
+          "showHeader": false,
+          "padding": 8,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_node_10": {
+        "kind": "rows",
+        "title": "Maintenance Board",
+        "children": [
+          "import_leaf_12",
+          "import_node_18",
+          "import_node_26",
+          "import_node_51"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 10,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        },
+        "size": {
+          "maxHeight": 960,
+          "scroll": "auto"
+        }
+      },
+      "import_leaf_63": {
+        "kind": "widget",
+        "section": "import_widget_62"
+      },
+      "import_leaf_66": {
+        "kind": "widget",
+        "section": "import_widget_65"
+      },
+      "import_leaf_68": {
+        "kind": "widget",
+        "section": "import_widget_67"
+      },
+      "import_leaf_70": {
+        "kind": "widget",
+        "section": "import_widget_69"
+      },
+      "import_leaf_72": {
+        "kind": "widget",
+        "section": "import_widget_71"
+      },
+      "import_node_61": {
+        "kind": "rows",
+        "title": "Drawer Content",
+        "children": [
+          "import_leaf_63",
+          "import_leaf_66",
+          "import_leaf_68",
+          "import_leaf_70",
+          "import_leaf_72"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        },
+        "size": {
+          "maxHeight": 640,
+          "scroll": "auto"
+        }
+      },
+      "import_leaf_82": {
+        "kind": "widget",
+        "section": "import_widget_81"
+      },
+      "import_leaf_84": {
+        "kind": "widget",
+        "section": "import_widget_83"
+      },
+      "import_node_80": {
+        "kind": "rows",
+        "title": "Confirm",
+        "children": [
+          "import_leaf_82",
+          "import_leaf_84"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_87": {
+        "kind": "widget",
+        "section": "import_widget_86"
+      },
+      "import_node_85": {
+        "kind": "rows",
+        "title": "Action Modal",
+        "children": [
+          "import_leaf_87"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_90": {
+        "kind": "widget",
+        "section": "import_widget_89"
+      },
+      "import_node_88": {
+        "kind": "rows",
+        "title": "Create WO",
+        "children": [
+          "import_leaf_90"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_92": {
+        "kind": "widget",
+        "section": "import_widget_91"
+      },
+      "import_leaf_97": {
+        "kind": "widget",
+        "section": "import_widget_96"
+      }
+    },
+    "variables": {
+      "import_variable_1": {
+        "title": "selectedAsset",
+        "scope": "application",
+        "type": "record",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "record",
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.asset"
+          }
+        }
+      },
+      "import_variable_2": {
+        "title": "currentPage",
+        "scope": "application",
+        "type": "string",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "currentPage"
+        }
+      },
+      "import_variable_3": {
+        "title": "showDetail",
+        "scope": "application",
+        "type": "boolean",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "showDetail"
+        }
+      },
+      "import_producer_record_8": {
+        "title": "selectedWorkOrder · Work order calendar",
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "import_widget_9"
+        }
+      },
+      "import_variable_13": {
+        "title": "allAssets",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_query_14"
+        }
+      },
+      "import_metric_set_16": {
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_metric_query_15"
+        }
+      },
+      "import_variable_17": {
+        "title": "offlineCount",
+        "scope": "page",
+        "type": "decimal",
+        "mode": "aggregate",
+        "source": {
+          "kind": "count",
+          "query": "import_metric_query_15"
+        }
+      },
+      "import_variable_23": {
+        "title": "openWorkOrders",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_query_24"
+        }
+      },
+      "import_variable_25": {
+        "title": "openWorkOrderCount",
+        "scope": "page",
+        "type": "decimal",
+        "mode": "aggregate",
+        "source": {
+          "kind": "count",
+          "query": "import_query_24"
+        }
+      },
+      "import_variable_29": {
+        "title": "filteredAssets",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_query_30"
+        }
+      },
+      "import_variable_31": {
+        "title": "statusFilter",
+        "scope": "page",
+        "type": "string-set",
+        "mode": "state",
+        "initial": {
+          "kind": "string-set",
+          "values": []
+        }
+      },
+      "import_variable_32": {
+        "title": "priorityFilter",
+        "scope": "page",
+        "type": "string-set",
+        "mode": "state",
+        "initial": {
+          "kind": "string-set",
+          "values": []
+        }
+      },
+      "import_variable_33": {
+        "title": "ownerFilter",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_variable_34": {
+        "title": "searchText",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_variable_35": {
+        "title": "pressureMin",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_variable_36": {
+        "title": "pressureMax",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_compute_number_43": {
+        "title": "selectedAssetRisk",
+        "scope": "page",
+        "type": "number",
+        "mode": "resource",
+        "source": {
+          "kind": "compute",
+          "compute": {
+            "operation": {
+              "ref": {
+                "app": "build",
+                "kind": "compute",
+                "name": "failure-risk"
+              },
+              "sourceVersion": "1.compute-1"
+            },
+            "recordVariable": "import_variable_1",
+            "inputs": {
+              "pressure": {
+                "source": "subject",
+                "path": [
+                  "pressure"
+                ]
+              },
+              "temperature": {
+                "source": "subject",
+                "path": [
+                  "temperature"
+                ]
+              },
+              "availability": {
+                "source": "subject",
+                "path": [
+                  "availability"
+                ]
+              }
+            },
+            "outputField": "risk"
+          }
+        }
+      },
+      "import_graph_output_48": {
+        "title": "Search Around · build.asset",
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "import_widget_44",
+          "port": "import_graph_port_47"
+        }
+      },
+      "import_variable_50": {
+        "title": "Search Around · build.work",
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "import_widget_44",
+          "port": "import_graph_port_49"
+        }
+      },
+      "import_variable_55": {
+        "title": "workOrders",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_query_56"
+        }
+      },
+      "import_open_60": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_count_64": {
+        "title": "filteredAssets",
+        "scope": "page",
+        "type": "decimal",
+        "mode": "aggregate",
+        "source": {
+          "kind": "count",
+          "query": "import_query_30"
+        }
+      },
+      "import_open_79": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_open_75": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_open_77": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_scatter_set_94": {
+        "title": "Chart 4 (unused)",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_scatter_query_93"
+        }
+      }
+    },
+    "queries": {
+      "import_query_14": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "conditions": [],
+        "limit": 100
+      },
+      "import_metric_query_15": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "conditions": [
+          {
+            "field": "state",
+            "op": "=",
+            "value": {
+              "literal": "offline"
+            }
+          }
+        ],
+        "limit": 1,
+        "offset": 0
+      },
+      "import_query_24": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.work"
+        },
+        "conditions": [
+          {
+            "field": "status",
+            "op": "!=",
+            "value": {
+              "literal": "Done"
+            }
+          }
+        ],
+        "limit": 100
+      },
+      "import_query_30": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "conditions": [
+          {
+            "field": "state",
+            "op": "in",
+            "value": {
+              "variable": "import_variable_31"
+            },
+            "optional": true
+          },
+          {
+            "field": "priority",
+            "op": "in",
+            "value": {
+              "variable": "import_variable_32"
+            },
+            "optional": true
+          },
+          {
+            "field": "owner",
+            "op": "like",
+            "value": {
+              "variable": "import_variable_33"
+            },
+            "optional": true
+          },
+          {
+            "field": "pressure",
+            "op": ">=",
+            "value": {
+              "variable": "import_variable_35"
+            },
+            "optional": true,
+            "asDecimal": true
+          },
+          {
+            "field": "pressure",
+            "op": "<=",
+            "value": {
+              "variable": "import_variable_36"
+            },
+            "optional": true,
+            "asDecimal": true
+          }
+        ],
+        "search": {
+          "variable": "import_variable_34"
+        },
+        "limit": 100
+      },
+      "import_query_56": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.work"
+        },
+        "conditions": [],
+        "limit": 100,
+        "sort": [
+          "id"
+        ]
+      },
+      "import_scatter_query_93": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "conditions": [],
+        "limit": 100,
+        "sort": [
+          "id"
+        ],
+        "offset": 0
+      }
+    },
+    "overlays": {
+      "import_overlay_4": {
+        "root": "import_node_61",
+        "kind": "drawer",
+        "title": "Asset Detail Drawer",
+        "openVariable": "import_open_60",
+        "presentation": {
+          "side": "right",
+          "size": "medium",
+          "backdrop": true,
+          "closeOnBackdrop": true,
+          "closeOnEsc": true
+        }
+      },
+      "import_overlay_5": {
+        "root": "import_node_80",
+        "kind": "drawer",
+        "title": "Confirm Offline",
+        "openVariable": "import_open_79",
+        "presentation": {
+          "side": "right",
+          "size": "small",
+          "backdrop": true,
+          "closeOnBackdrop": true,
+          "closeOnEsc": true
+        }
+      },
+      "import_overlay_6": {
+        "root": "import_node_85",
+        "kind": "modal",
+        "title": "Edit Asset Status",
+        "openVariable": "import_open_75",
+        "presentation": {
+          "side": "right",
+          "size": "medium",
+          "backdrop": true,
+          "closeOnBackdrop": false,
+          "closeOnEsc": true
+        }
+      },
+      "import_overlay_7": {
+        "root": "import_node_88",
+        "kind": "modal",
+        "title": "Create Work Order",
+        "openVariable": "import_open_77",
+        "presentation": {
+          "side": "right",
+          "size": "medium",
+          "backdrop": true,
+          "closeOnBackdrop": true,
+          "closeOnEsc": true
+        }
+      }
+    },
+    "events": [
+      {
+        "source": "import_widget_19",
+        "event": "click",
+        "control": "home",
+        "target": "",
+        "navigate": {
+          "page": {
+            "app": "build",
+            "kind": "page",
+            "name": "overview"
+          },
+          "interfaceVersion": 0
+        }
+      },
+      {
+        "source": "import_widget_71",
+        "control": "import_control_73",
+        "event": "click",
+        "target": "import_open_60",
+        "value": true
+      },
+      {
+        "source": "import_widget_71",
+        "control": "import_control_74",
+        "event": "click",
+        "target": "import_open_75",
+        "value": true
+      },
+      {
+        "source": "import_widget_71",
+        "control": "import_control_76",
+        "event": "click",
+        "target": "import_open_77",
+        "value": true
+      },
+      {
+        "source": "import_widget_71",
+        "control": "import_control_78",
+        "event": "click",
+        "target": "import_open_79",
+        "value": true
+      }
+    ],
+    "unusedWidgets": [
+      {
+        "node": "import_leaf_92",
+        "parent": "import_node_10"
+      },
+      {
+        "node": "import_leaf_97",
+        "parent": "import_node_10"
+      }
+    ]
+  },
+  "sections": [
+    {
+      "id": "import_widget_11",
+      "widget": "alert-banner",
+      "configVersion": 1,
+      "title": "Offline banner",
+      "alertValueVariable": "import_variable_17",
+      "alertBanner": {
+        "threshold": "0",
+        "tone": "danger",
+        "message": "{value} assets are Offline — drag them to Maintenance on the board once a crew is assigned."
+      }
+    },
+    {
+      "id": "import_widget_19",
+      "widget": "breadcrumb",
+      "configVersion": 1,
+      "title": "Breadcrumbs",
+      "breadcrumb": {
+        "homeLabel": "Operations Command Center",
+        "pageLabel": "Maintenance Board",
+        "labelField": "name"
+      },
+      "recordVariable": "import_variable_1"
+    },
+    {
+      "id": "import_widget_21",
+      "widget": "progress",
+      "configVersion": 1,
+      "title": "Open work",
+      "progressValueVariable": "import_variable_25",
+      "progressTotal": "400",
+      "progressLabel": "Open work orders"
+    },
+    {
+      "id": "import_widget_27",
+      "widget": "kanban",
+      "configVersion": 1,
+      "title": "Asset status board",
+      "collectionVariable": "import_variable_29",
+      "cardLabel": "name",
+      "fields": [
+        "state",
+        "priority"
+      ],
+      "actions": [
+        "build.asset.update"
+      ],
+      "selectionVariable": "import_variable_1"
+    },
+    {
+      "id": "import_widget_39",
+      "widget": "record-card",
+      "configVersion": 1,
+      "title": "Selected asset",
+      "recordVariable": "import_variable_1",
+      "recordCard": {
+        "labelField": "name",
+        "tone": "neutral"
+      },
+      "fields": [
+        "state",
+        "owner"
+      ]
+    },
+    {
+      "id": "import_widget_41",
+      "widget": "gauge",
+      "configVersion": 1,
+      "title": "Failure risk",
+      "gaugeValueVariable": "import_compute_number_43",
+      "gauge": {
+        "max": 100,
+        "warnAt": 60,
+        "label": "Failure risk (selected)",
+        "suffix": "%"
+      }
+    },
+    {
+      "id": "import_widget_44",
+      "widget": "graph-explorer",
+      "configVersion": 1,
+      "title": "Search Around",
+      "recordVariable": "import_variable_1",
+      "graphExplorer": {
+        "objects": [
+          {
+            "object": {
+              "app": "build",
+              "kind": "object",
+              "name": "build.asset"
+            },
+            "labelField": "name"
+          },
+          {
+            "object": {
+              "app": "build",
+              "kind": "object",
+              "name": "build.work"
+            },
+            "labelField": "title"
+          }
+        ],
+        "relations": [
+          {
+            "id": "import_graph_relation_46",
+            "binding": {
+              "ref": {
+                "app": "build",
+                "kind": "link-type",
+                "name": "asset-work"
+              },
+              "sourceVersion": "1.link-1"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "id": "import_graph_port_47",
+            "object": {
+              "app": "build",
+              "kind": "object",
+              "name": "build.asset"
+            },
+            "variable": "import_graph_output_48"
+          },
+          {
+            "id": "import_graph_port_49",
+            "object": {
+              "app": "build",
+              "kind": "object",
+              "name": "build.work"
+            },
+            "variable": "import_variable_50"
+          }
+        ]
+      }
+    },
+    {
+      "id": "import_widget_52",
+      "widget": "approval-inbox",
+      "configVersion": 1,
+      "title": "Work order approvals"
+    },
+    {
+      "id": "import_widget_9",
+      "widget": "record-calendar",
+      "configVersion": 1,
+      "title": "Work order calendar",
+      "collectionVariable": "import_variable_55",
+      "object": "build.work",
+      "recordCalendar": {
+        "dateField": "due",
+        "labelField": "title",
+        "initialMonth": "2026-10"
+      },
+      "selection": "import_selection_57"
+    },
+    {
+      "id": "import_widget_58",
+      "widget": "notification-feed",
+      "configVersion": 1,
+      "title": "Action feed"
+    },
+    {
+      "id": "import_widget_62",
+      "widget": "collection-title",
+      "configVersion": 1,
+      "title": "filteredAssets",
+      "collectionVariable": "import_variable_29",
+      "countVariable": "import_count_64"
+    },
+    {
+      "id": "import_widget_65",
+      "widget": "detail",
+      "configVersion": 1,
+      "title": "Properties",
+      "recordVariable": "import_variable_1",
+      "fields": [
+        "name",
+        "state",
+        "priority",
+        "owner",
+        "pressure",
+        "temperature",
+        "availability",
+        "model",
+        "installedAt",
+        "lastInspection",
+        "nextMaintenance"
+      ],
+      "detailPresentation": {
+        "columns": 2,
+        "hideNull": true
+      }
+    },
+    {
+      "id": "import_widget_67",
+      "widget": "record-links",
+      "configVersion": 1,
+      "title": "Related",
+      "recordVariable": "import_variable_1",
+      "recordLinks": [
+        {
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.sensor"
+          },
+          "field": "asset",
+          "title": "Sensors"
+        },
+        {
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.alert"
+          },
+          "field": "asset",
+          "title": "Alerts"
+        },
+        {
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.work"
+          },
+          "field": "asset",
+          "title": "Work Orders"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_69",
+      "widget": "ai-assistant",
+      "configVersion": 1,
+      "title": "AIP Insights",
+      "recordVariable": "import_variable_1",
+      "function": {
+        "name": "advice",
+        "version": 1
+      },
+      "ai": {
+        "kind": "generated"
+      }
+    },
+    {
+      "id": "import_widget_71",
+      "widget": "button-group",
+      "configVersion": 1,
+      "title": "Asset Actions",
+      "buttons": [
+        {
+          "id": "import_control_73",
+          "title": "Open Detail",
+          "variant": "primary",
+          "icon": "arrow"
+        },
+        {
+          "id": "import_control_74",
+          "title": "Edit Status",
+          "variant": "default",
+          "icon": "edit"
+        },
+        {
+          "id": "import_control_76",
+          "title": "Create Work Order",
+          "variant": "default",
+          "icon": "plus"
+        },
+        {
+          "id": "import_control_78",
+          "title": "Take offline…",
+          "variant": "danger",
+          "icon": "trash"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_81",
+      "widget": "notice",
+      "configVersion": 1,
+      "title": "Offline warning",
+      "notice": {
+        "message": "Offline assets stop producing revenue. The Update asset status action requires High priority when the new status is Offline.",
+        "tone": "danger",
+        "title": "Take this asset offline?"
+      }
+    },
+    {
+      "id": "import_widget_83",
+      "widget": "inline-action",
+      "configVersion": 1,
+      "title": "Edit Asset",
+      "recordVariable": "import_variable_1",
+      "actions": [
+        "build.asset.update"
+      ],
+      "actionDefaults": [
+        {
+          "parameter": "status",
+          "field": "state"
+        },
+        {
+          "parameter": "priority",
+          "field": "priority"
+        },
+        {
+          "parameter": "owner",
+          "field": "owner"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_86",
+      "widget": "inline-action",
+      "configVersion": 1,
+      "title": "Edit Asset",
+      "recordVariable": "import_variable_1",
+      "actions": [
+        "build.asset.update"
+      ],
+      "actionDefaults": [
+        {
+          "parameter": "status",
+          "field": "state"
+        },
+        {
+          "parameter": "priority",
+          "field": "priority"
+        },
+        {
+          "parameter": "owner",
+          "field": "owner"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_89",
+      "widget": "inline-action",
+      "configVersion": 1,
+      "title": "Create Work Order",
+      "recordVariable": "import_variable_1",
+      "actions": [
+        "build.asset.schedule"
+      ]
+    },
+    {
+      "id": "import_widget_91",
+      "widget": "record-scatter",
+      "configVersion": 1,
+      "title": "Chart 4 (unused)",
+      "scatter": {
+        "xField": "pressure",
+        "yField": "temperature",
+        "colorField": "state",
+        "labelField": "name"
+      },
+      "collectionVariable": "import_scatter_set_94",
+      "selection": "import_selection_95"
+    },
+    {
+      "id": "import_widget_96",
+      "widget": "table",
+      "configVersion": 1,
+      "title": "Object Table 3 (unused)",
+      "collectionVariable": "import_variable_13",
+      "tableColumns": [
+        {
+          "field": "name"
+        }
+      ],
+      "fields": [
+        "name"
+      ]
+    }
+  ],
+  "selections": [
+    {
+      "name": "import_selection_57",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.work"
+      }
+    },
+    {
+      "name": "import_selection_95",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.asset"
+      }
+    }
+  ],
+  "title": "Maintenance Board",
+  "description": "Monitor assets, triage alerts, and dispatch work orders across the global fleet."
+}

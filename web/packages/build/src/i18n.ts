@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+"Map calculation result {variable}": "映射计算结果 {variable}",
+"Published calculation": "已发布的计算",
+"Numeric output field": "数值输出字段",
+"Calculation input {input}": "计算输入 {input}",
+"Entire numeric result": "完整数值结果",
 "Map application selection set {variable}": "映射应用多选集合 {variable}",
 "Keep the original local selection set": "保留原页面局部多选集合",
 "This original table publishes confirmed selections to the application.": "此原表格向应用发布已确认的多选引用。",

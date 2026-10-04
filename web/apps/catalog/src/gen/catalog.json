@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:1e80499eb7b76b5c",
+  "revision": "sha256:78df866d0249551a",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4448,6 +4448,7 @@
       "web/packages/build/src/module-import/AIImportFields.tsx",
       "web/packages/build/src/module-import/ApplicationImportFields.tsx",
       "web/packages/build/src/module-import/BuilderImportFields.tsx",
+      "web/packages/build/src/module-import/ComputationImportFields.tsx",
       "web/packages/build/src/module-import/EmbeddingImportFields.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/module-import/ObservationImportFields.tsx",

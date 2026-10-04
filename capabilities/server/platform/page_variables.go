@@ -24,16 +24,17 @@ type PageVariable struct {
 // PageResourceSource names a typed widget output, loop item or application
 // presentation port. Widget sources retain their original read boundary.
 type PageResourceSource struct {
-	Port     string    `json:"port,omitempty"`
-	Measure  string    `json:"measure,omitempty"`
-	Field    string    `json:"field,omitempty"`
-	Fields   []string  `json:"fields,omitempty"`
-	Object   *AssetRef `json:"object,omitempty"` // object requirement of a shared window
-	Query    string    `json:"query,omitempty"`
-	Variable string    `json:"variable,omitempty"`
-	Kind     string    `json:"kind"`
-	Section  string    `json:"section,omitempty"`
-	Node     string    `json:"node,omitempty"`
+	Compute  *PageComputeResource `json:"compute,omitempty"`
+	Port     string               `json:"port,omitempty"`
+	Measure  string               `json:"measure,omitempty"`
+	Field    string               `json:"field,omitempty"`
+	Fields   []string             `json:"fields,omitempty"`
+	Object   *AssetRef            `json:"object,omitempty"` // object requirement of a shared window
+	Query    string               `json:"query,omitempty"`
+	Variable string               `json:"variable,omitempty"`
+	Kind     string               `json:"kind"`
+	Section  string               `json:"section,omitempty"`
+	Node     string               `json:"node,omitempty"`
 }
 type PageExpression struct {
 	Op   string      `json:"op"`
@@ -44,6 +45,10 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	ComputeResource struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+		MaxResources      int    `json:"maxResources"`
+	} `json:"computeResource"`
 	Kanban struct {
 		DynamicUIProfile string `json:"dynamicUIProfile"`
 	} `json:"kanban"`
@@ -415,6 +420,9 @@ func (d *PageDocument) CheckVariables() error {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
+	if len((Page{Document: d}).ComputeResources()) > pageWidgets.Runtime.ComputeResource.MaxResources {
+		return fmt.Errorf("page compute resources exceed their bound")
+	}
 	visiting, visited := map[string]bool{}, map[string]bool{}
 	var visit func(string) (string, error)
 	visit = func(id string) (string, error) {
@@ -448,7 +456,10 @@ func (d *PageDocument) CheckVariables() error {
 		if v.Type == "statistics" && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Summary.RequiredUIProfile) || v.Mode != "aggregate" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
 			return fail("statistics needs its read-only scoped profile")
 		}
-		if v.Type == "number" && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Gauge.RequiredUIProfile) || !slices.Contains([]string{"aggregate", "constant", "derived"}, v.Mode) || v.Scope == "application") {
+		if v.Source != nil && v.Source.Compute != nil && (v.Mode != "resource" || v.Source.Kind != "compute") {
+			return fail("compute needs its original source kind")
+		}
+		if v.Type == "number" && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Gauge.RequiredUIProfile) || !(slices.Contains([]string{"aggregate", "constant", "derived"}, v.Mode) || v.Mode == "resource" && v.Source != nil && v.Source.Kind == "compute" && PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.ComputeResource.RequiredUIProfile)) || v.Scope == "application") {
 			return fail("number needs its read-only scoped profile")
 		}
 		if v.Source != nil && v.Source.Port != "" && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Exploration.RequiredUIProfile) || !pageNodeID.MatchString(v.Source.Port) || v.Type != "record" || v.Mode != "resource" || v.Source.Kind != "record" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
@@ -512,6 +523,15 @@ func (d *PageDocument) CheckVariables() error {
 				return fail("input needs a typed page value without a source")
 			}
 		case "resource":
+			if v.Source != nil && v.Source.Kind == "compute" {
+				if err := d.checkComputeResource(v); err != nil {
+					return fail(err.Error())
+				}
+				if _, err := visit(v.Source.Compute.RecordVariable); err != nil {
+					return "", err
+				}
+				break
+			}
 			if v.Source == nil || v.Source.Variable != "" || v.Expression != nil || len(v.Initial) != 0 {
 				return fail("resource variable needs only a typed source")
 			}

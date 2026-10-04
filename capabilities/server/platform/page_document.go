@@ -443,7 +443,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 	}
 	for id, variable := range d.Variables {
-		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || (variable.Source.Kind == "plan" || variable.Mode == "aggregate") || variable.Source.Kind == "property") {
+		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || (variable.Source.Kind == "plan" || variable.Mode == "aggregate") || variable.Source.Kind == "property" || variable.Source.Kind == "compute") {
 			continue
 		}
 		found := false
@@ -627,6 +627,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			}
 		}
 		if variable.Source != nil {
+			if variable.Source.Compute != nil {
+				dependencies = append(dependencies, variable.Source.Compute.RecordVariable)
+			}
 			if variable.Mode == "property" {
 				dependencies = append(dependencies, variable.Source.Variable)
 			}
@@ -724,6 +727,13 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 			}
 		}
 		for id, variable := range variables {
+			if variable.Source != nil && variable.Source.Compute != nil {
+				if _, ok := variables[variable.Source.Compute.RecordVariable]; !ok {
+					delete(variables, id)
+					changed = true
+					continue
+				}
+			}
 			if variable.Mode == "property" && variable.Source != nil {
 				if _, ok := variables[variable.Source.Variable]; !ok {
 					delete(variables, id)

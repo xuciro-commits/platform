@@ -690,6 +690,15 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 					doc.Queries = map[string]platform.PageQuery{}
 					doc.Variables = maps.Clone(doc.Variables)
 					for id, v := range doc.Variables {
+						if c := v.Source; c != nil && c.Compute != nil {
+							ref := page.RecordResourceObject(c.Compute.RecordVariable)
+							object, ok := entities[ref.Name]
+							op, _, err := t.pageOperation(&c.Compute.Operation)
+							if !ok || err != nil || !slices.Contains(op.Roles, m.Roles[c.Compute.Operation.Ref.App]) || page.CheckComputeResource(*c.Compute, object, op, v.Type) != nil {
+								delete(doc.Variables, id)
+								continue
+							}
+						}
 						if v.Mode == "aggregate" && v.Source != nil {
 							q := doc.Queries[v.Source.Query]
 							if q.Object.Name == "" {

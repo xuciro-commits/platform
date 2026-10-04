@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.99",
+  "uiProfile": "platform.page.v2.100",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5131,7 +5131,8 @@
     "platform.page.v2.96",
     "platform.page.v2.97",
     "platform.page.v2.98",
-    "platform.page.v2.99"
+    "platform.page.v2.99",
+    "platform.page.v2.100"
   ],
   "runtime": {
     "scope": "page",
@@ -5819,6 +5820,10 @@
     },
     "kanban": {
       "dynamicUIProfile": "platform.page.v2.99"
+    },
+    "computeResource": {
+      "requiredUIProfile": "platform.page.v2.100",
+      "maxResources": 4
     }
   },
   "layout": {
