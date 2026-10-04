@@ -2,6 +2,15 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Collection query": "集合查询",
+ "Collection interface input": "集合接口输入",
+ "Original collection ordering": "原集合排序",
+ "Query collection input is unavailable.": "查询集合输入不可用。",
+ "Query collection input is incompatible.": "查询集合输入不兼容。",
+ "A collection input must be a separate set source.": "集合输入必须作为独立集合来源。",
+ "Collection query version is unavailable.": "集合查询版本不可用。",
+ "Collection relation version is unavailable.": "集合关系版本不可用。",
+ "Collection query exceeds its budget or ordering contract.": "集合查询超出预算或排序契约。",
  "External document": "外部文档",
  "The external document origin or URL is unavailable.": "外部文档的来源或地址不可用。",
  "Isolated external document. Scripts, forms and platform data access are disabled.": "隔离的外部文档。脚本、表单和平台数据访问均已禁用。",

@@ -1027,6 +1027,16 @@ export type PageCollectionAnalysis = {
   steps?: PageAnalysisStep[];
 };
 
+export type PageCollectionInput = {
+  kind: string;
+  object: AssetRef;
+  predicate: RecordSetPredicate;
+  sort: string[];
+  sortLocked?: boolean;
+  traversal?: LinkTraversal;
+  bindings?: AssetBinding[];
+};
+
 export type PageDetailPresentation = {
   columns: number;
   hideNull?: boolean;
@@ -1242,6 +1252,7 @@ export type PagePort = {
 };
 
 export type PageQuery = {
+  input?: string;
   direction?: string;
   itemOwner?: string;
   set?: PageQuerySet;
@@ -2109,7 +2120,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.84",
+  "uiProfile": "platform.page.v2.85",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -6739,7 +6750,8 @@ export const pageUIManifest = {
     "platform.page.v2.81",
     "platform.page.v2.82",
     "platform.page.v2.83",
-    "platform.page.v2.84"
+    "platform.page.v2.84",
+    "platform.page.v2.85"
   ],
   "runtime": {
     "scope": "page",
@@ -6957,7 +6969,8 @@ export const pageUIManifest = {
         "string",
         "boolean",
         "record",
-        "decimal"
+        "decimal",
+        "object-set"
       ]
     },
     "overlay": {

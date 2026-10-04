@@ -16,10 +16,10 @@ export function InterfacePanel({ document, object, onChange }: { document: Api.P
         <label className="grid gap-1 text-xs">{t("Port name")}<Input defaultValue={id} onBlur={(e) => { const name = e.target.value.trim(); if (!name || name === id || iface[direction]?.[name]) return; const ports = { ...iface[direction] }; delete ports[id]; update({ ...iface, [direction]: { ...ports, [name]: port } }); }} /></label>
         {direction === "inputs" ? <label className="grid gap-1 text-xs">{t("Input type")}<Select value={port.type} onChange={(e) => {
           const type = e.target.value;
-          update({ ...iface, inputs: { ...iface.inputs, [id]: { ...port, type, object: type === "record" ? object : undefined } } }, { ...variables, [port.variable]: { ...variables[port.variable]!, type, initial: undefined } });
-        }}><option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option><option value="record">{t("Record")}</option><option value="decimal">{t("Exact number")}</option></Select></label>
+          update({ ...iface, inputs: { ...iface.inputs, [id]: { ...port, type, object: type === "record" || type==="object-set" ? object : undefined } } }, { ...variables, [port.variable]: { ...variables[port.variable]!, type, initial: undefined } });
+        }}><option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option><option value="record">{t("Record")}</option><option value="decimal">{t("Exact number")}</option><option value="object-set">{t("Collection query")}</option></Select></label>
           : <label className="grid gap-1 text-xs">{t("Output variable")}<Select value={port.variable} onChange={(e) => { const variable = variables[e.target.value]; if (variable) patch(direction, id, { variable: e.target.value, type: variable.type, object: variable.type === "record" ? object : undefined }); }}><option value="">{t("Choose a variable")}</option>{Object.entries(variables).filter(([, v]) => v.scope === "page" && ["string", "boolean", "record","decimal"].includes(v.type)).map(([key, v]) => <option key={key} value={key}>{v.title || key}</option>)}</Select></label>}
-        {port.type === "record" && <SemanticObjectSelect label={t("Port record object")} value={port.object?.name} onChange={(ref) => patch(direction, id, { object: ref })} />}
+        {(port.type === "record"||port.type==="object-set") && <SemanticObjectSelect label={t("Port record object")} value={port.object?.name} onChange={(ref) => patch(direction, id, { object: ref })} />}
         <Checkbox checked={port.required === true} onChange={(required) => patch(direction, id, { required })}>{t(direction === "inputs" ? "Required input" : "Required output")}</Checkbox>
         <Button onClick={() => { const ports = { ...iface[direction] }; delete ports[id]; const next = { ...variables }; if (direction === "inputs") delete next[port.variable]; update({ ...iface, [direction]: ports }, next); }}>{t("Remove port")}</Button>
       </div>)}
@@ -27,7 +27,7 @@ export function InterfacePanel({ document, object, onChange }: { document: Api.P
         const variable = direction === "inputs" ? layoutID("input") : Object.entries(variables).find(([, v]) => v.scope === "page" && ["string", "boolean", "record","decimal"].includes(v.type))?.[0] ?? "";
         let n = 1; while (iface[direction]?.[`${direction === "inputs" ? "input" : "output"}${n}`]) n++;
         const id = `${direction === "inputs" ? "input" : "output"}${n}`, type = direction === "inputs" ? "string" : variables[variable]?.type ?? "string";
-        update({ ...iface, [direction]: { ...iface[direction], [id]: { variable, type, object: type === "record" ? object : undefined, required: direction === "inputs" } } }, direction === "inputs" ? { ...variables, [variable]: { title: id, scope: "page", type, mode: "input" } } : variables);
+        update({ ...iface, [direction]: { ...iface[direction], [id]: { variable, type, object: type === "record" || type==="object-set" ? object : undefined, required: direction === "inputs" } } }, direction === "inputs" ? { ...variables, [variable]: { title: id, scope: "page", type, mode: "input" } } : variables);
       }}>{t(direction === "inputs" ? "Add input" : "Add output")}</Button>
     </div>)}
     <p className="text-xs text-muted">{t("Inputs carry values or record references. The receiver reads records using the current member's permissions.")}</p>

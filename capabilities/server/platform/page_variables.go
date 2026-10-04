@@ -497,7 +497,10 @@ func (d *PageDocument) CheckVariables() error {
 				return fail("shared binding needs only an application variable source")
 			}
 		case "input":
-			if v.Scope != "page" || v.Source != nil || v.Expression != nil || !slices.Contains(contract.Interface.ValueTypes, v.Type) || v.Type == "record" && len(v.Initial) != 0 || len(v.Initial) != 0 && pageLiteralType(v.Initial) != v.Type {
+			if v.Type == "object-set" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.85") {
+				return fail("collection input needs v2.85")
+			}
+			if v.Scope != "page" || v.Source != nil || v.Expression != nil || !slices.Contains(contract.Interface.ValueTypes, v.Type) || (v.Type == "record" || v.Type == "object-set") && len(v.Initial) != 0 || len(v.Initial) != 0 && pageLiteralType(v.Initial) != v.Type {
 				return fail("input needs a typed page value without a source")
 			}
 		case "resource":

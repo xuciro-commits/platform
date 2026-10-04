@@ -14,6 +14,13 @@ function fixture(){
  return {module,bindings,target};
 }
 const compile=f=>compileWorkshopModule(JSON.stringify(f.module),"page",f.bindings,f.target);
+test("default custom collection parameters preserve the original source plan and typed object requirement",()=>{
+ const f=fixture(),object={app:"sample",kind:"object",name:"sample.note"};f.module.variables.push({id:"filteredAssets",name:"Filtered assets",type:"objectSet",definitionKind:"objectSetDefinition",objectSet:{objectType:"Asset",steps:[]}});f.bindings.objects.Asset=object.name;
+ f.target.definitions[0].page.document.interface={version:1,inputs:{set:{variable:"objects",type:"object-set",object,required:true}}};
+ f.module.widgets.custom.config.params=[{name:"inputObjectSet",varId:"filteredAssets"}];f.bindings.embeddings.custom.ports={inputObjectSet:"set"};f.module.widgets.module.config.bindings=[{parentVar:"filteredAssets",childInterface:"sourceSet"}];f.bindings.embeddings.module.ports={sourceSet:"set"};
+ const r=compile(f);assert.ok(r.draft,JSON.stringify(r.diagnostics));const section=r.draft.sections.find(s=>s.embedding?.kind==="custom"),variable=r.draft.document.variables[section.embedding.inputs.set.variable];assert.equal(variable.type,"object-set");assert.equal(variable.mode,"resource");assert.equal(variable.source.kind,"plan");assert.deepEqual(r.draft.document.queries[variable.source.query].object,object);
+ f.target.profile="platform.page.v2.84";assert.equal(compile(f).draft,undefined);
+});
 test("four embedding sources map jointly with exact content, original parameters and isolated origins",()=>{
  const f=fixture(),r=compile(f);assert.ok(r.draft,JSON.stringify(r.diagnostics));assert.equal(r.source,JSON.stringify(f.module));assert.equal(r.draft.sections.length,4);
  const embeds=r.draft.sections.filter(s=>s.embedding);assert.equal(embeds.length,3);assert.equal(embeds[0].embedding.contentVersion,f.target.definitions[0].contentVersion);assert.equal(embeds[1].embedding.inputs.label.variable,embeds[0].embedding.inputs.label.variable);assert.equal(embeds[1].embedding.readOnly,true);assert.equal(embeds[2].embedding.readOnly,true);assert.deepEqual(r.draft.sections.find(s=>s.externalFrame).externalFrame,{url:"https://docs.example.com/report",origin:"https://docs.example.com",height:240});

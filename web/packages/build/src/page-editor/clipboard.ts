@@ -53,7 +53,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const events=(original.events??[]).filter(e=>sectionIDs.has(e.source));
  const variables=new Set<string>(),queries=new Set<string>(),missing={value:false};
  const valueRefs=(value:Api.PageValue|undefined)=>value?.variable?[value.variable]:[];
- const queryRefs=(query:Api.PageQuery)=>[...valueRefs(query.search),...valueRefs(query.for),...(query.conditions??[]).flatMap(c=>valueRefs(c.value))];
+ const queryRefs=(query:Api.PageQuery)=>[...query.input?[query.input]:[],...valueRefs(query.search),...valueRefs(query.for),...(query.conditions??[]).flatMap(c=>valueRefs(c.value))];
  const addQuery=(id:string)=>{if(queries.has(id))return;const q=original.queries?.[id];if(!q){missing.value=true;return;}queries.add(id);queryRefs(q).forEach(addVariable);q.set?.inputs.forEach(addQuery);};
  const addVariable=(id:string)=>{if(variables.has(id))return;const v=original.variables?.[id];if(!v){missing.value=true;return;}variables.add(id);v.expression?.args.flatMap(valueRefs).forEach(addVariable);if(v.mode!=="shared"&&v.source?.variable)addVariable(v.source.variable);if(["plan","count","aggregate","statistics"].includes(v.source?.kind??"")&&v.source?.query)addQuery(v.source.query);};
  for(const id of nodes)for(const key of nodeFields){const value=original.nodes[id]?.[key];if(value)addVariable(value);}
@@ -153,7 +153,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
   }
   document.variables={...document.variables,[mapped]:v};
  }
- for(const [id,mapped] of queryMap){const q=structuredClone(original.queries![id]!);if(q.owner===clip.overlay&&overlayID)q.owner=overlayID;if(q.itemOwner)q.itemOwner=nodeMap.get(q.itemOwner)!;if(q.search)q.search=remapValue(q.search);if(q.for)q.for=remapValue(q.for);if(q.conditions)q.conditions=q.conditions.map(c=>({...c,value:remapValue(c.value)}));if(q.set)q.set.inputs=q.set.inputs.map(id=>queryMap.get(id)??id);document.queries={...document.queries,[mapped]:q};}
+ for(const [id,mapped] of queryMap){const q=structuredClone(original.queries![id]!);if(q.owner===clip.overlay&&overlayID)q.owner=overlayID;if(q.itemOwner)q.itemOwner=nodeMap.get(q.itemOwner)!;q.input=q.input?variableMap.get(q.input)??q.input:undefined;if(q.search)q.search=remapValue(q.search);if(q.for)q.for=remapValue(q.for);if(q.conditions)q.conditions=q.conditions.map(c=>({...c,value:remapValue(c.value)}));if(q.set)q.set.inputs=q.set.inputs.map(id=>queryMap.get(id)??id);document.queries={...document.queries,[mapped]:q};}
  document.events=[...(document.events??[]),...events.map(source=>{const e=structuredClone(source);e.source=sectionMap.get(e.source)!;if(e.value!==undefined)e.value=tabValue(e.target,e.value);e.target=variableMap.get(e.target)??e.target;if(e.navigate){if(e.navigate.inputs)e.navigate.inputs=Object.fromEntries(Object.entries(e.navigate.inputs).map(([key,value])=>[key,remapValue(value)]));if(e.navigate.results)e.navigate.results=Object.fromEntries(Object.entries(e.navigate.results).map(([key,value])=>[key,variableMap.get(value)??value]));}return e;})];
  if(overlay&&entries[0])document.events.push({source:entries[0].id!,event:"click",target:variableMap.get(overlay.openVariable)!,value:true});
  const next={...current,document,sections:[...current.sections,...rewritten,...entries],selections:[...current.selections,...addedSelections]};

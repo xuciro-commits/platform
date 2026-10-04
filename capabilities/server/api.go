@@ -125,6 +125,8 @@ type SignIn struct {
 // describes the entity types and action payloads that member sees.
 func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	s := newSchemas()
+	// Original page call values also belong to the generated application API.
+	s.of(reflect.TypeFor[platform.PageCollectionInput]())
 	paths := map[string]any{}
 	for _, r := range h.routes {
 		method, path, _ := strings.Cut(r.Pattern, " ")

@@ -81,9 +81,10 @@ export function useApplicationVariables(variables: Record<string, Api.PageVariab
     const variable = variables[id];
     if (variable?.mode === "shared" && variable.writable && variable.source?.variable) context?.session.set(variable.source.variable, value);
   };
+  const collectionInputs=Object.fromEntries(Object.entries(variables).filter(([,v])=>v.mode==="shared"&&v.type==="object-set").map(([id,v])=>[id,error?{status:"error" as const,code:error}:queries.collectionInputs[v.source?.variable??""]??{status:"empty" as const}]));
   const windows=Object.fromEntries(Object.entries(variables).filter(([,v])=>v.mode==="shared"&&v.type==="object-set").map(([id,v])=>[id,queries.windows[v.source?.variable??""]]));
   const signatures=Object.fromEntries(Object.entries(variables).filter(([,v])=>v.mode==="shared"&&v.type==="object-set").map(([id,v])=>[id,queries.signatures[v.source?.variable??""]??""]));
   const select=(id:string,reference:RecordReference|undefined,owner:symbol,onlyOwner=false)=>{const v=variables[id];if(v?.type==="record"&&v.mode==="shared"&&v.writable&&v.source?.variable&&!error)context?.session.select(v.source.variable,reference,owner,onlyOwner);};
   const filter=(id:string,field:string,value:unknown)=>{const v=variables[id];if(v?.type==="filter"&&v.mode==="shared"&&v.writable&&v.source?.variable&&!error)context?.session.filter(v.source.variable,field,value);};
-  return { resources, windows, signatures, select, filter, retry:(id:string)=>queries.retry(variables[id]?.source?.variable??""), set, error, identity: context?.identity, readScope:context?.session.readScope };
+  return { collectionInputs, resources, windows, signatures, select, filter, retry:(id:string)=>queries.retry(variables[id]?.source?.variable??""), set, error, identity: context?.identity, readScope:context?.session.readScope };
 }

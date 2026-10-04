@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./host-contract": "./src/gen/host.ts"
   },
   "scripts": {
     "generate": "buf generate --template buf.gen.yaml",

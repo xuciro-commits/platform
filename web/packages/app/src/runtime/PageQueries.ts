@@ -1,3 +1,4 @@
+import {collectionInput} from "./collection-input";
 import {usePageAggregates} from "./PageAggregates";
 import { useEffect, useState } from "react";
 import { pageUIManifest, type Api } from "@platform/kernel";
@@ -47,10 +48,19 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
     resources[id] = state?.status === "error" && session.querySignature(planKey(queryID)) === plan.signature ? { status: "error", code: "Resource read failed" } : state?.status === "pending" || !matches ? { status: "pending" }
       : window!.records.length ? { status: "value", value: { kind: "object-set", window: window! } } : { status: "empty", value: { kind: "object-set", window: window! } };
   }
+  const collectionInputs:Record<string,VariableResult>={};
+  const bindings=(id:string,seen=new Set<string>()):Api.AssetBinding[]=>{if(seen.has(id))return [];seen.add(id);const q=plans[id];if(!q)return [];const inherited=q.input?values[q.input]:undefined;return [...q.query?[q.query]:[],...q.set?.inputs.flatMap(source=>bindings(source,seen))??[],...inherited?.status==="value"&&inherited.value&&typeof inherited.value==="object"&&inherited.value.kind==="object-set-input"?inherited.value.bindings??[]:[]];};
+  for(const variable of Object.keys(page.document?.variables??{})){
+   const id=variablePlan(page,variable),plan=id?plans[id]:undefined,result=compiled.find(([key])=>key===id)?.[1];if(!plan||!result)continue;
+   if(result.status!=="value"){collectionInputs[variable]=result;continue;}
+   if(snapshot.queries[planKey(id!)]?.status==="error"&&session.querySignature(planKey(id!))===result.signature){collectionInputs[variable]={status:"error",code:"Resource read failed"};continue;}
+   const original=bindings(id!),distinct=Array.from(new Map(original.map(b=>[JSON.stringify(b),b])).values()),sortLocked=!!result.sortLocked||!!(plan.query&&boundQueryDefinition(findDefinition(definitions,plan.query.ref),plan.query)?.query?.sort?.length);
+   collectionInputs[variable]={status:"value",value:collectionInput(plan.object,result.query,distinct,sortLocked)};
+  }
   const windows = Object.fromEntries(compiled.map(([id,result]) => [id,result.status==="value" ? {
     query:result.query,page:session.queryPage(planKey(id),result.signature),error:snapshot.queries[planKey(id)]?.status==="error"&&session.querySignature(planKey(id))===result.signature?"Resource read failed":undefined,
-    inputSearch:picker(id)?snapshot.views[planKey(id)]?.search??"":undefined,searchLocked:ranked(id)||!picker(id)&&!!plans[id]?.search,sortLocked:observation(id)||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)||!!(plans[id]?.query&&boundQueryDefinition(findDefinition(definitions,plans[id]!.query!.ref),plans[id]!.query)?.query?.sort?.length),maxOffset:fixedObservation(id)||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)?0:pageUIManifest.runtime.query.maxOffset,
+    inputSearch:picker(id)?snapshot.views[planKey(id)]?.search??"":undefined,searchLocked:ranked(id)||!picker(id)&&!!plans[id]?.search,sortLocked:!!result.sortLocked||observation(id)||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)||!!(plans[id]?.query&&boundQueryDefinition(findDefinition(definitions,plans[id]!.query!.ref),plans[id]!.query)?.query?.sort?.length),maxOffset:fixedObservation(id)||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)?0:pageUIManifest.runtime.query.maxOffset,
     onChange:(change:QueryView)=>{if(fixedObservation(id)||observation(id)&&change.sort!==undefined||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)&&(change.sort!==undefined||change.offset!==undefined&&change.offset!==0))return;const original=base.find(([key])=>key===id)?.[1];if(original?.status!=="value")return;const next=queryView(plans[id]!,original,{...(snapshot.views[planKey(id)]?.base===original.signature?snapshot.views[planKey(id)]:{}),...change},source.entity(plans[id]!.object.name),plans[id]?.query?findDefinition(definitions,plans[id]!.query!.ref):undefined,pageUIManifest.runtime.query,pickerTitle(id));if(next.status==="value")session.setQueryView(planKey(id),original.signature,change);}
   }:undefined]));
-  return { resources:{...resources,...aggregates}, signatures, windows, retry: (id: string) => { session.resetQueries([planKey(id)]); rerun((round) => round + 1); } };
+  return { collectionInputs, resources:{...resources,...aggregates}, signatures, windows, retry: (id: string) => { session.resetQueries([planKey(id)]); rerun((round) => round + 1); } };
 }

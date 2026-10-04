@@ -10,6 +10,7 @@ import (
 // PageQuery is a presentation-owned read plan over the original record API.
 // A named query keeps its source version and fixed owner conditions.
 type PageQuery struct {
+	Input      string               `json:"input,omitempty"`
 	Direction  string               `json:"direction,omitempty"`
 	ItemOwner  string               `json:"itemOwner,omitempty"`
 	Set        *PageQuerySet        `json:"set,omitempty"`
@@ -54,6 +55,9 @@ func (q PageQuery) Values() []PageValue {
 }
 func (q PageQuery) Variables() []string {
 	ids := []string{}
+	if q.Input != "" {
+		ids = append(ids, q.Input)
+	}
 	for _, v := range q.Values() {
 		if v.Variable != "" {
 			ids = append(ids, v.Variable)
@@ -115,6 +119,20 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 		}
 		if !pageNodeID.MatchString(id) || len(q.Title) > 1024 || q.Object.Check() != nil || q.Object.Kind != AssetObject || q.Limit < 1 || q.Limit > c.MaxLimit || q.Offset < 0 || q.Offset > c.MaxOffset || len(q.Conditions) > c.MaxConditions || len(q.Sort) > c.MaxSort {
 			return fmt.Errorf("page query %s has an invalid identity, object or budget", id)
+		}
+		if q.Input != "" {
+			v, ok := d.Variables[q.Input]
+			var object AssetRef
+			if d.Interface != nil {
+				for _, port := range d.Interface.Inputs {
+					if port.Variable == q.Input && port.Object != nil {
+						object = *port.Object
+					}
+				}
+			}
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.85") || inputScope == "application" || !ok || v.Mode != "input" || v.Type != "object-set" || object != q.Object || q.Query != nil || q.For != nil || q.Direction != "" || q.ItemOwner != "" || q.Set != nil {
+				return fmt.Errorf("query %s needs its exact original collection input", id)
+			}
 		}
 		factor := 1
 		if q.ItemOwner != "" {

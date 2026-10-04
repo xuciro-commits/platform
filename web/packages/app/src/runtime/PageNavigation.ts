@@ -31,7 +31,8 @@ export function usePageInputs(page: Api.Page, session: PageSessionStore, snapsho
   const inputs: Record<string, VariableResult> = {};
   let recordError = false;
   for (const [id, port] of Object.entries(iface?.inputs ?? {})) {
-    if (port.type === "record") {
+    if(port.type==="object-set" && Object.hasOwn(inputValues,id)){inputs[port.variable]={status:"value",value:inputValues[id] as import("./collection-input").CollectionInput};}
+    else if (port.type === "record") {
       const state = snapshot.records[inputSlot(port.variable)];
       recordError ||= state?.status === "error";
       inputs[port.variable] = state?.status === "value" ? { status: "value", value: { kind: "record", reference: state.value } }

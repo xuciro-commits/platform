@@ -218,10 +218,10 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
      if(!port||Object.hasOwn(inputs,portID!)){issue(at,"embedding-binding");continue;}
      if(input.variable){
       const source=vars.get(input.variable);
-      if(source?.type==="objectSet"){issue(at,"embedding-collection-input");continue;}
+      if(source?.type==="objectSet"&&port.type!=="object-set"){issue(at,"embedding-collection-input");continue;}
       const record=port.type==="record"?originalRecord(input.variable,context,at):undefined;
       const mapped=port.type==="record"?record!.variable:port.type==="decimal"?decimalScalar(input.variable,context,at):variable(input.variable,context,at),value=document.variables![mapped];
-      if(value?.type!==port.type||port.type==="record"&&(!port.object||record?.entity?.type!==port.object.name||record?.entity?.app!==port.object.app))issue(at,"embedding-binding");
+      if(value?.type!==port.type||port.type==="object-set"&&(Number(target.profile.split(".").at(-1))<85||!port.object||(entity(queryObjects.get(input.variable)||"",at)?.type!==port.object.name||entity(queryObjects.get(input.variable)||"",at)?.app!==port.object.app))||port.type==="record"&&(!port.object||record?.entity?.type!==port.object.name||record?.entity?.app!==port.object.app))issue(at,"embedding-binding");
       inputs[portID!]={variable:mapped};
      }else{if(port.type!=="string"||new TextEncoder().encode(input.literal??"").length>4096)issue(at,"embedding-binding");inputs[portID!]={literal:input.literal};}
     }

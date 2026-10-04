@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.84",
+  "uiProfile": "platform.page.v2.85",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4629,7 +4629,8 @@
     "platform.page.v2.81",
     "platform.page.v2.82",
     "platform.page.v2.83",
-    "platform.page.v2.84"
+    "platform.page.v2.84",
+    "platform.page.v2.85"
   ],
   "runtime": {
     "scope": "page",
@@ -4847,7 +4848,8 @@
         "string",
         "boolean",
         "record",
-        "decimal"
+        "decimal",
+        "object-set"
       ]
     },
     "overlay": {

@@ -42,7 +42,12 @@ func TestThreeEmbeddedModesFreezeOldChildContentsAndRecover(t *testing.T) {
 		return d
 	}
 	childSections := []build.Section{{ID: "text", Widget: "text", ConfigVersion: 1, Text: "ORIGINAL CHILD"}}
-	submit(build.PageType, "child", "create", map[string]any{"name": "child", "title": "Child", "object": "build.note", "sections": childSections, "document": doc("text")})
+	object := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.note"}
+	childDoc := doc("text")
+	childDoc.Variables = map[string]platform.PageVariable{"objects": {Scope: "page", Type: "object-set", Mode: "input"}}
+	childDoc.Interface = &platform.PageInterface{Version: 1, Inputs: map[string]platform.PagePort{"set": {Variable: "objects", Type: "object-set", Object: &object, Required: true}}}
+	childDoc.Queries = map[string]platform.PageQuery{"read": {Object: object, Input: "objects", Limit: 10}}
+	submit(build.PageType, "child", "create", map[string]any{"name": "child", "title": "Child", "object": "build.note", "sections": childSections, "document": childDoc})
 	submit(build.PageType, "child", "publish", map[string]any{})
 	var original platform.Definition
 	for _, d := range tn.Definitions(builder) {
@@ -58,10 +63,13 @@ func TestThreeEmbeddedModesFreezeOldChildContentsAndRecover(t *testing.T) {
 	submit(build.PageType, "child", "publish", map[string]any{})
 	sections := []build.Section{}
 	for _, kind := range []string{"module", "custom", "dashboard"} {
-		sections = append(sections, build.Section{ID: kind, Widget: "embedded-page", ConfigVersion: 1, Embedding: &platform.PageEmbedding{Kind: kind, ReadOnly: kind != "module", Page: platform.AssetBinding{Ref: original.Ref, SourceVersion: original.Version}, ContentVersion: original.ContentVersion}})
+		sections = append(sections, build.Section{ID: kind, Widget: "embedded-page", ConfigVersion: 1, Embedding: &platform.PageEmbedding{Kind: kind, ReadOnly: kind != "module", Page: platform.AssetBinding{Ref: original.Ref, SourceVersion: original.Version}, ContentVersion: original.ContentVersion, InterfaceVersion: 1, Inputs: map[string]platform.PageValue{"set": {Variable: "source"}}}})
 	}
 	sections = append(sections, build.Section{ID: "external", Widget: "external-frame", ConfigVersion: 1, ExternalFrame: &platform.PageExternalFrame{URL: "https://docs.example.com/report", Origin: "https://docs.example.com"}})
-	submit(build.PageType, "parent", "create", map[string]any{"name": "parent", "title": "Parent", "object": "build.note", "sections": sections, "document": doc("module", "custom", "dashboard", "external")})
+	parentDoc := doc("module", "custom", "dashboard", "external")
+	parentDoc.Queries = map[string]platform.PageQuery{"read": {Object: object, Limit: 10}}
+	parentDoc.Variables = map[string]platform.PageVariable{"source": {Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "read"}}}
+	submit(build.PageType, "parent", "create", map[string]any{"name": "parent", "title": "Parent", "object": "build.note", "sections": sections, "document": parentDoc})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "parent")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatal(preview, err)
@@ -97,9 +105,15 @@ func TestThreeEmbeddedModesFreezeOldChildContentsAndRecover(t *testing.T) {
 				if s.Embedding.ReadOnly != (s.ID != "module") {
 					t.Fatal("read-only presentation changed")
 				}
+				if s.Embedding.Inputs["set"].Variable != "source" || s.Embedding.InterfaceVersion != 1 {
+					t.Fatal("collection binding changed")
+				}
 				child, err := current.PageContentDefinition(reader, s.Embedding.Page.Ref, s.Embedding.ContentVersion)
 				if err != nil || child.Page.Sections[0].Text != "ORIGINAL CHILD" {
 					t.Fatal(child, err)
+				}
+				if child.Page.Document.Queries["read"].Input != "objects" || child.Page.Document.Interface.Inputs["set"].Type != "object-set" {
+					t.Fatal("collection input contract changed")
 				}
 			}
 		}

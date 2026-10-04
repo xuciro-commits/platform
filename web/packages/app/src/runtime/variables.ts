@@ -7,7 +7,7 @@ type Variables = Record<string, Api.PageVariable>;
 type Scalar = ScalarValue;
 export type VariableIssue = { variable: string; code: string };
 export type PropertyReader=(reference:RecordReference,field:string,type:string)=>VariableResult;
-export type ResourceValue = import("@platform/ui").StatisticsValue | {kind:"record-set";object:string;records:RecordReference[]} | { kind: "record"; reference: RecordReference } | { kind: "filter"; object: string; fields: Record<string, unknown> } | { kind: "object-set"; window: QueryWindow };
+export type ResourceValue = import("./collection-input").CollectionInput | import("@platform/ui").StatisticsValue | {kind:"record-set";object:string;records:RecordReference[]} | { kind: "record"; reference: RecordReference } | { kind: "filter"; object: string; fields: Record<string, unknown> } | { kind: "object-set"; window: QueryWindow };
 export type VariableResult = { status: "value"; value: Scalar | ResourceValue; draft?:string } | { status: "empty"; value?: ResourceValue } | { status: "pending" } | { status: "error"; code: string; draft?:string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 const bytes = (value: string) => new TextEncoder().encode(value).length;

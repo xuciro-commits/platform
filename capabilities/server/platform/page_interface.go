@@ -41,12 +41,20 @@ func (d *PageDocument) checkInterface() error {
 	for _, ports := range []map[string]PagePort{i.Inputs, i.Outputs} {
 		for id, p := range ports {
 			v, ok := d.Variables[p.Variable]
-			if !pageNodeID.MatchString(id) || !ok || v.Scope != "page" || v.Type != p.Type || !slices.Contains(c.ValueTypes, p.Type) || p.Type == "record" && (p.Object == nil || p.Object.Check() != nil || p.Object.Kind != AssetObject) || p.Type != "record" && p.Object != nil {
+			if !pageNodeID.MatchString(id) || !ok || v.Scope != "page" || v.Type != p.Type || !slices.Contains(c.ValueTypes, p.Type) || (p.Type == "record" || p.Type == "object-set") && (p.Object == nil || p.Object.Check() != nil || p.Object.Kind != AssetObject) || p.Type != "record" && p.Type != "object-set" && p.Object != nil {
 				return fmt.Errorf("page port %s needs a typed page variable and record object", id)
 			}
 		}
 	}
+	for _, p := range i.Outputs {
+		if p.Type == "object-set" {
+			return fmt.Errorf("collection interfaces are input-only")
+		}
+	}
 	for id, p := range i.Inputs {
+		if p.Type == "object-set" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.85") {
+			return fmt.Errorf("collection input needs v2.85")
+		}
 		if d.Variables[p.Variable].Mode != "input" || inputs[p.Variable] {
 			return fmt.Errorf("page input %s needs a unique input variable", id)
 		}
@@ -128,7 +136,7 @@ func CheckPageNavigation(source Page, target Page, nav PageNavigation) error {
 		if value.Variable != "" {
 			typ = source.Document.Variables[value.Variable].Type
 		}
-		if !ok || typ != port.Type || port.Type == "record" && (port.Object == nil || source.RecordVariableObject(value.Variable) != port.Object.Name) {
+		if !ok || typ != port.Type || port.Type == "object-set" && (port.Object == nil || source.CollectionInputObject(value.Variable) != *port.Object || !PageUIProfileSupports(source.Document.UIProfile, "platform.page.v2.85")) || port.Type == "record" && (port.Object == nil || source.RecordVariableObject(value.Variable) != port.Object.Name) {
 			return fmt.Errorf("page navigation input %s type or object differs", id)
 		}
 	}
