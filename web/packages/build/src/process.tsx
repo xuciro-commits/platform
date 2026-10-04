@@ -1,3 +1,4 @@
+import {actionDestinations,actionResultEdges,stateInputValid,ruleInputValid,assignmentInputFits} from "./process-rules";
 import { recordPaths } from "./record-paths";
 import { AssetControls } from "./asset-controls";
 // The object's process editor (ADR-0037): its states and the actions people
@@ -18,13 +19,13 @@ import { useDraftSession } from "./session/DraftSession";
 
 type Field = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
 type State = { name: string; title: string; tone?: string; description?: string };
-type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean };
+type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean;ref?:string;minLength?:number };
 type Set_ = { field: string; from: string };
-type Condition = { field: string; operator: string; value?: string; valueField?: string; message: string };
+type Condition = { field: string; operator: string; value?: string; valueField?: string; message: string;when?:Condition };
 type ApproverLevel = { title: string; role: string; all?: boolean };
 type Approval = { pending: string; rejected?: string; levels: ApproverLevel[] };
 type Create_ = { object: string; via: string; sets?: Set_[] };
-type Action = { name: string; title: string; description?: string; from: string[]; to?: string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[] };
+type Action = { name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[] };
 /** What one role of the builder app may do with the object (ADR-0037 18b). */
 type Access = { role: string; read: "all" | "own" | "none"; create?: boolean; edit?: boolean; archive?: boolean };
 type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[] };
@@ -34,12 +35,9 @@ type Chosen = { kind: "field" | "state" | "action" | "access"; at: number } | un
 
 const objectStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" } });
 const tones = ["info", "success", "warning", "danger", "neutral"];
-const inputTypes = ["text", "longtext", "integer", "decimal", "date", "boolean", "choice"];
+const inputTypes = ["text", "longtext", "integer", "decimal", "date", "boolean", "choice", "reference"];
 const fieldTypes = ["text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference"];
 const operators = ["=", "!=", "<", "<=", ">", ">=", "empty", "not empty"];
-const inputFits = (input: string, field: string) => ["text", "longtext", "reference"].includes(field)
-  ? ["text", "longtext", "choice"].includes(input)
-  : field === "decimal" ? ["decimal", "integer"].includes(input) : input === field;
 const valueFits = (kind: string, raw: string) => {
   switch (kind) {
     case "integer": return /^-?\d+$/.test(raw);
@@ -57,7 +55,7 @@ function conditionSubjects(process: Process, action: Action, parent: string, ent
   const root = { ...current, type: parent, fields } as EntityInfo;
   return [...recordPaths(parent, (type) => type === parent ? root : entities.find((entity) => entity.type === type))
     .map(({ path, label, field }) => ({ value: path.join("."), label, type: field.type, ref: field.ref })),
-    ...(action.inputs ?? []).map((input) => ({ value: `input.${input.name}`, label: t("Input: {name}", { name: input.title }), type: input.type, ref: undefined }))];
+    ...(action.inputs ?? []).map((input) => ({ value: `input.${input.name}`, label: t("Input: {name}", { name: input.title }), type: input.type, ref: input.ref }))];
 }
 const comparisonFits = (left: { type: string; ref?: string }, right: { type: string; ref?: string }) =>
   (left.type === right.type || [left.type, right.type].every((kind) => ["integer", "decimal"].includes(kind))) && (left.type !== "reference" || left.ref === right.ref);
@@ -65,11 +63,13 @@ const comparisonFits = (left: { type: string; ref?: string }, right: { type: str
 /** Early authoring hints; the host's publication check is authoritative. */
 function actionIssues(action: Action, process: Process, parent: string, targets: EntityInfo[], entities: EntityInfo[]): string[] {
   const issues: string[] = [];
+  if(!stateInputValid(action,process.states))issues.push(t("Choose a required state input with original state choices; fixed targets and approval cannot be combined."));
+  if((action.inputs??[]).some(i=>!ruleInputValid(i,entities)))issues.push(t("Reference inputs need an original object; text minimum length must be an integer from 0 to 4096."));
   if (action.from.length === 0) issues.push(t("Choose at least one starting state."));
   for (const set of action.sets ?? []) {
     const field = process.fields.find((f) => f.name === set.field);
     const input = action.inputs?.find((i) => i.name === set.from);
-    if (field && input && !inputFits(input.type, field.type)) issues.push(t("{field} needs {type}; {input} is {inputType}.", {
+    if (field && input && !assignmentInputFits(input,field)) issues.push(t("{field} needs {type}; {input} is {inputType}.", {
       field: field.title, type: t(field.type), input: input.title, inputType: t(input.type),
     }));
     if (field?.type === "choice" && input?.type === "choice") {
@@ -79,9 +79,10 @@ function actionIssues(action: Action, process: Process, parent: string, targets:
     }
   }
   const subjects = conditionSubjects(process, action, parent, entities);
-  for (const condition of action.conditions ?? []) {
+  for (const condition of (action.conditions??[]).flatMap(c=>[c,...c.when?[c.when]:[]])) {
     const field = subjects.find((field) => field.value === condition.field), kind = field?.type;
-    if (!condition.message.trim()) issues.push(t("Write the message people see when a rule fails."));
+    if((action.conditions??[]).some(c=>c.when?.when))issues.push(t("Condition guards support one level."));
+    if ((action.conditions??[]).includes(condition)&&!condition.message.trim()) issues.push(t("Write the message people see when a rule fails."));
     if (!field) { issues.push(t("Unavailable record path")); continue; }
     if (condition.operator === "empty" || condition.operator === "not empty") continue;
     if (kind === "money") { issues.push(t("Money rules need a currency-aware comparison.")); continue; }
@@ -106,7 +107,7 @@ function actionIssues(action: Action, process: Process, parent: string, targets:
       const input = action.inputs?.find((input) => input.name === set.from);
       if (!field || !set.from || !input && !["$me", "$now"].includes(set.from) && !set.from.startsWith("="))
         issues.push(t("Choose a related field and a declared input or fixed value."));
-      else if (input && !inputFits(input.type, field.type)) issues.push(t("{field} needs {type}; {input} is {inputType}.", {
+      else if (input && !assignmentInputFits(input,field,true)) issues.push(t("{field} needs {type}; {input} is {inputType}.", {
         field: field.title, type: t(field.type), input: input.title, inputType: t(input.type),
       }));
     }
@@ -270,9 +271,10 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
       inputs: [{ id: "from", label: t("Taken from"), type: "action-start" }],
       outputs: [{ id: "to", label: t("Leaves it in"), type: "action-result", limit: 1 }] },
   ];
+  const normal=catalog[1]!;const graphCatalog:NodeCatalog=[...catalog,{...normal,id:"action-input",addable:false,outputs:normal.outputs.map(p=>({...p,limit:undefined}))}];
   const links = process.actions.flatMap((a) => [
     ...a.from.map((s) => ({ from: `state:${s}`, to: `action:${a.name}` })),
-    ...(a.to ? [{ from: `action:${a.name}`, to: `state:${a.to}` }] : []),
+    ...actionResultEdges(a).map(to=>({from:`action:${a.name}`,to:`state:${to}`})),
   ]);
   const places = layout([
     ...process.states.map((s) => ({ id: `state:${s.name}`, label: s.title })),
@@ -280,17 +282,17 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
   ], links, "right", { width: canvasNodeWidth, height: Math.max(...catalog.map(canvasNodeHeight)), gapX: 40, gapY: 30 });
   const nodes: CanvasNode[] = [
     ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, detail: s.name, position: places.get(`state:${s.name}`) ?? { x: 0, y: 0 } })),
-    ...process.actions.map((a) => ({ id: `action:${a.name}`, kind: "action", label: a.title || a.name, detail: a.name, position: places.get(`action:${a.name}`) ?? { x: 0, y: 0 } })),
+    ...process.actions.map((a) => ({ id: `action:${a.name}`, kind:a.toInput?"action-input":"action", label: a.title || a.name, detail: a.name, position: places.get(`action:${a.name}`) ?? { x: 0, y: 0 } })),
   ];
   const edges: CanvasEdge[] = process.actions.flatMap((a) => [
     ...a.from.map((s) => ({ id: `from:${a.name}:${s}`, source: `state:${s}`, sourcePort: "take", target: `action:${a.name}`, targetPort: "from" })),
-    ...(a.to ? [{ id: `to:${a.name}:${a.to}`, source: `action:${a.name}`, sourcePort: "to", target: `state:${a.to}`, targetPort: "result" }] : []),
+    ...actionResultEdges(a).map(to=>({id:`to:${a.name}:${to}`,source:`action:${a.name}`,sourcePort:"to",target:`state:${to}`,targetPort:"result",dashed:!!a.toInput,label:a.toInput})),
   ]);
   const selected = chosen?.kind === "state" ? `state:${process.states[chosen.at]?.name}` : chosen?.kind === "action" ? `action:${process.actions[chosen.at]?.name}` : undefined;
   return <div className="mb-4 grid gap-2">
     <div><h3 className="text-sm font-semibold">{t("Process map")}</h3>
       <p className="text-xs text-muted">{t("Connect a state to an action to allow it; connect an action to a state for its result. Select a node to edit it. Delete a selected line to remove it.")}</p></div>
-    <NodeCanvas label={t("Process map")} catalog={catalog} nodes={nodes} edges={edges} selected={selected}
+    <NodeCanvas label={t("Process map")} catalog={graphCatalog} nodes={nodes} edges={edges} selected={selected}
       onAdd={(kind) => { if (kind === "state") onAddState(); else if (process.states.length) onAddAction(); }}
       onSelect={(id) => {
         const [kind, name] = id.split(":");
@@ -303,10 +305,12 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
           onChange({ ...process, actions: process.actions.map((a) => a.name === name ? { ...a, from: [...a.from, state] } : a) });
         } else if (c.source?.startsWith("action:") && c.target?.startsWith("state:")) {
           const name = c.source.slice(7), state = c.target.slice(6);
+          if(process.actions.find(a=>a.name===name)?.toInput){notify.info(t("Edit the state input choices to change these derived connections."));return;}
           onChange({ ...process, actions: process.actions.map((a) => a.name === name ? { ...a, to: state } : a) });
         }
       }}
       onDelete={(removedNodes, removedEdges) => {
+        if(removedEdges.some(e=>process.actions.some(a=>a.toInput&&e.source===`action:${a.name}`)))notify.info(t("Edit the state input choices to change these derived connections."));
         const states = process.states.filter((state) => !removedNodes.some((n) => n.id === `state:${state.name}`));
         const actions = process.actions.filter((action) => !removedNodes.some((n) => n.id === `action:${action.name}`)).map((action) => ({
           ...action, from: action.from.filter((state) => states.some((s) => s.name === state) && !removedEdges.some((e) => e.source === `state:${state}` && e.target === `action:${action.name}`)),
@@ -315,6 +319,7 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
         onChoose(undefined); onChange({ ...process, states, actions });
       }}
       onDisconnect={(removed) => {
+        if(removed.some(e=>process.actions.some(a=>a.toInput&&e.source===`action:${a.name}`)))notify.info(t("Edit the state input choices to change these derived connections."));
         onChange({ ...process, actions: process.actions.map((a) => ({ ...a,
           from: a.from.filter((s) => !removed.some((e) => e.source === `state:${s}` && e.target === `action:${a.name}`)),
           to: removed.some((e) => e.source === `action:${a.name}` && e.target === `state:${a.to}`) ? undefined : a.to,
@@ -404,7 +409,7 @@ function Preview({ object, process, action }: { object: ObjectRecord; process: P
   const lifecycle = {
     field: "state", initial: process.states[0]!.name,
     states: process.states.map((s) => ({ name: s.name, title: s.title, tone: s.tone as never, description: s.description })),
-    transitions: process.actions.map((a) => ({ name: a.name, schema: `build.${object.name}.${a.name}`, title: a.title, from: a.from, to: a.to ? [a.to] : a.from })),
+    transitions: process.actions.map((a) => ({ name: a.name, schema: `build.${object.name}.${a.name}`, title: a.title, from: a.from, to: actionDestinations(a) })),
   };
   return (
     <div className="grid gap-4">
@@ -418,7 +423,7 @@ function Preview({ object, process, action }: { object: ObjectRecord; process: P
         {action.description && <p className="text-sm text-muted">{action.description}</p>}
         <p className="text-xs text-muted">{t("From {from} to {to}", {
           from: action.from.map((s) => process.states.find((x) => x.name === s)?.title ?? s).join(", ") || "—",
-          to: action.to ? process.states.find((x) => x.name === action.to)?.title ?? action.to : t("where it was"),
+          to: action.toInput? actionDestinations(action).map(s=>process.states.find(x=>x.name===s)?.title??s).join(", "):action.to ? process.states.find((x) => x.name === action.to)?.title ?? action.to : t("where it was"),
         })}</p>
         {action.approval && <p className="text-xs text-muted">{t("Waits in {state} for {levels}", {
           state: process.states.find((s) => s.name === action.approval?.pending)?.title ?? action.approval.pending,
@@ -473,15 +478,17 @@ function ActionProperties({ action, states, fields, parent, targets, entities, r
         <p className="text-muted">{t("None chosen: every role that may read the object. The builder always may.")}</p>
       </fieldset>}
       <Label text={t("Leaves it in")}>
-        <Select value={action.to ?? ""} onChange={(e) => onChange({ to: e.target.value || undefined })}>
+        <Select value={action.to ?? ""} onChange={(e) => onChange({ to: e.target.value || undefined,toInput:undefined })}>
           <option value="">{t("Where it was")}</option>
           {states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}
         </Select>
       </Label>
+      <Label text={t("State from input")}><Select value={action.toInput??""} disabled={!!action.approval&&!action.toInput} onChange={e=>onChange({toInput:e.target.value||undefined,to:undefined})}><option value="">{t("Use a fixed state or keep the current state")}</option>{inputs.filter(i=>i.type==="choice"&&i.required).map(i=><option key={i.name} value={i.name}>{i.title}</option>)}</Select></Label>
+      {action.toInput&&<p className="text-xs text-muted">{t("Edit the state input choices to change these derived connections.")}</p>}
       <RelatedCreates creates={action.creates ?? []} inputs={inputs} sources={sources} parent={parent} targets={targets} onChange={(creates) => onChange({ creates })} />
       <Disclosure summary={<span className="text-xs font-semibold">{t("Approval settings")}</span>} className="border-t border-border pt-2">
       <fieldset className="grid gap-2 text-xs"><legend className="sr-only">{t("Approval")}</legend>
-        <Checkbox checked={!!action.approval} onChange={(enabled) => onChange({ approval: enabled ? {
+        <Checkbox checked={!!action.approval} disabled={!!action.toInput&&!action.approval} onChange={(enabled) => onChange({ approval: enabled ? {
           pending: states.find((s) => s.name !== action.from[0] && s.name !== action.to)?.name ?? "",
           levels: [{ title: t("Approver"), role: approverRoles[0] ?? "builder" }],
         } : undefined })}>{t("Wait for approval")}</Checkbox>
@@ -511,8 +518,10 @@ function ActionProperties({ action, states, fields, parent, targets, entities, r
         row={(input, set) => <>
           <Input aria-label={t("Label")} value={input.title} onChange={(e) => set({ title: e.target.value })} />
           <Input aria-label={t("Name")} className="font-mono" value={input.name} onChange={(e) => set({ name: e.target.value })} />
-          <Select aria-label={t("Type")} value={input.type} onChange={(e) => set({ type: e.target.value })}>{inputTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select>
+          <Select aria-label={t("Type")} value={input.type} onChange={(e) => set({ type: e.target.value,ref:undefined,choices:undefined,minLength:undefined })}>{inputTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select>
           {input.type === "choice" && <Input aria-label={t("Choices")} placeholder="a, b, c" value={input.choices ?? ""} onChange={(e) => set({ choices: e.target.value })} />}
+          {input.type==="reference"&&<Label text={t("Reference object")}><Select value={input.ref??""} onChange={e=>set({ref:e.target.value||undefined})}><option value="">{t("Choose an object")}</option>{entities.map(e=><option key={e.type} value={e.type}>{e.title} · {e.type}</option>)}</Select></Label>}
+          {["text","longtext"].includes(input.type)&&<Label text={t("Minimum length")}><Input type="number" min={0} max={4096} value={input.minLength??""} onChange={e=>set({minLength:e.target.value===""?undefined:e.target.valueAsNumber})}/></Label>}
           <Checkbox className="text-xs" checked={!!input.required} onChange={(required) => set({ required })}>{t("Required")}</Checkbox>
         </>} />
       <Assignments fields={fields} sources={sources} sets={sets} onChange={(sets) => onChange({ sets })} />
@@ -532,6 +541,8 @@ function ActionProperties({ action, states, fields, parent, targets, entities, r
               {subjects.filter((s) => comparisonFits(subjects.find((s) => s.value === c.field) ?? { type: "" }, s)).map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </Select> : <Input aria-label={t("Value")} placeholder={t("a value, or $me")} value={c.value ?? ""} onChange={(e) => patch({ value: e.target.value })} />}
           </>}
+          <Checkbox checked={!!c.when} onChange={on=>patch({when:on?{field:subjects[0]?.value??"",operator:"=",value:"",message:""}:undefined})}>{t("Only when")}</Checkbox>
+          {c.when&&<div role="group" aria-label={t("Condition guard")} className="grid gap-1 rounded border border-border p-2"><Select aria-label={t("Guard field")} value={c.when.field} onChange={e=>patch({when:{...c.when!,field:e.target.value,valueField:undefined}})}>{subjects.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}</Select><Select aria-label={t("Guard operator")} value={c.when.operator} onChange={e=>patch({when:{...c.when!,operator:e.target.value,...e.target.value.includes("empty")?{value:undefined,valueField:undefined}:{}}})}>{operators.map(op=><option key={op} value={op}>{op}</option>)}</Select>{!["empty","not empty"].includes(c.when.operator)&&<><Select aria-label={t("Guard comparison")} value={c.when.valueField?"field":"literal"} onChange={e=>patch({when:{...c.when!,value:undefined,valueField:e.target.value==="field"?c.when!.field:undefined}})}><option value="literal">{t("A fixed value")}</option><option value="field">{t("Another field")}</option></Select>{c.when.valueField?<Select aria-label={t("Guard comparison field")} value={c.when.valueField} onChange={e=>patch({when:{...c.when!,valueField:e.target.value}})}>{subjects.filter(s=>comparisonFits(subjects.find(s=>s.value===c.when!.field)??{type:""},s)).map(s=><option key={s.value} value={s.value}>{s.label}</option>)}</Select>:<Input aria-label={t("Guard value")} value={c.when.value??""} onChange={e=>patch({when:{...c.when!,value:e.target.value}})}/>}</>}</div>}
           <Input aria-label={t("Message when it does not hold")} placeholder={t("What a person reads when it does not hold")} value={c.message} onChange={(e) => patch({ message: e.target.value })} />
         </>} />
       </Disclosure>
@@ -562,7 +573,7 @@ function RelatedCreates({ creates, inputs, sources, parent, targets, onChange }:
     const target = targets.find((item) => item.type === object);
     const reference = via ?? target?.fields.find((field) => field.type === "reference" && field.ref === parent)?.name ?? "";
     return { object, via: reference, sets: target?.fields.filter((field) => field.required && !field.readOnly && field.name !== reference)
-      .map((field) => ({ field: field.name, from: inputs.find((input) => input.name === field.name && inputFits(input.type, field.type))?.name ?? "" })) ?? [] };
+      .map((field) => ({ field: field.name, from: inputs.find((input) => input.name === field.name && assignmentInputFits(input,field,true))?.name ?? "" })) ?? [] };
   };
   return <div className="grid gap-2 text-xs">
     <p className="text-muted">{t("Related records commit with this action. The target object's create permissions still apply.")}</p>

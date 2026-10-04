@@ -2,6 +2,20 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "State from input": "状态取自输入",
+ "Use a fixed state or keep the current state": "使用固定状态或保持当前状态",
+ "Edit the state input choices to change these derived connections.": "这些连线由状态输入选项派生；请修改输入选项来改变目标。",
+ "Reference inputs need an original object; text minimum length must be an integer from 0 to 4096.": "引用输入需要原对象；文本最小长度须为0–4096的整数。",
+ "Choose a required state input with original state choices; fixed targets and approval cannot be combined.": "请选择必填状态输入，选项须为原状态；不能同时设置固定目标或审批。",
+ "Condition guards support one level.": "条件守卫仅支持一层。",
+ "Minimum length": "最小长度",
+ "Only when": "仅在满足条件时",
+ "Condition guard": "条件守卫",
+ "Guard field": "守卫字段",
+ "Guard operator": "守卫操作符",
+ "Guard comparison": "守卫比较方式",
+ "Guard comparison field": "守卫比较字段",
+ "Guard value": "守卫值",
  "Default original field for {parameter}": "{parameter}的原字段默认值",
  "Leave the parameter empty": "保持参数为空",
  "Defaults seed one opened original record. Refresh keeps the draft and its revision; cancel adopts the current record.": "默认值取自本轮打开的原记录。刷新保留草稿及其版本；取消后采用当前记录。",
