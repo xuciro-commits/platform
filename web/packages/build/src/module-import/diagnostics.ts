@@ -1,5 +1,6 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "native-page-variable-reader":"This overlay reads the original page-owned variable. Closing clears overlay-local state and keeps the page filter and complete count.",
  "overlay-presentation-profile":"Preserve supported side, size, bounded custom width and explicit backdrop/Escape rules. Closing actions and executable presentation remain unsupported.",
  "native-overlay-presentation":"Original overlay size and dismissal rules are retained. Close remains available and local inputs retire on closing.",
  "metric-annotation-binding":"Review the fixed direction and text as a labeled static note. Source values do not prove a real period trend; executable or unbounded annotations are refused.",

@@ -969,6 +969,12 @@ AI在该profile可消费原Application的类型化shared record要求，沿PageS
 
 四个原浮层配置、详情/原动作与共享AI作为一组保存、冻结和操作验证；完整Operations仍按原配置诊断推进。模拟模型回答只能用于协议夹具，不能计作模型质量或真实业务预测。
 
+#### 6.86 默认页面与抽屉的集合、关联和状态消费者
+
+延续§6.30/§6.31/§6.33和§6.83的原生资源及共享绑定，不新增执行路径或profile。导入器允许浮层读取已经在主页面声明的变量，保留唯一page owner和原查询/条件；不得把页面变量重新声明成浮层局部值，也不得借此读取其他浮层的局部状态。只有实际页面已声明的来源可沿该路径复用，未声明来源仍遵循原owner规则并保留诊断。ObjectSetTitle的count与原object-set拥有同一个scope/owner/query，多个标题可以复用相同全集计数，Overlay关闭不清掉原主页面筛选。
+
+本组保留原Operations的ObjectSetTitle、Links、StatusTracker以及AssetDrawer中重复的标题/关联配置（五个实例、三类消费者）。原Application record选择仍由原单记录读取确认，Links的三个分组逐项映射原具名反向reference，原关联窗口/权限/真实total和导航保持既有归属。浮层内Links及共用RecordView导航先退役当前浮层，再沿原useOpenRecord打开记录窗口，避免新窗口被原遮罩和焦点陷阱挡住；只在当前member/read scope、浮层epoch及启用状态仍有效时接收导航，关闭保留主页面筛选和应用共享选择；StatusTracker逐项映射原生命周期状态，只读呈现，不发起源模拟状态变化。整组沿真实宿主的集合→选择→关联/状态→抽屉→关闭/重开→冻结操作路线验证；完整默认Module和其他断点继续保留。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -1438,6 +1444,8 @@ F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart�
 默认Operations四个KPI与资产表格配置（F1e63b）已沿§6.84接通v2.90的TablePresentation、静态MetricAnnotation、生成类型、检查器与显式来源解释。原密度/工具栏/标题不再只作报告提示，密度保留当前局部选择，工具栏关闭保留原窗口分页和已开始编辑的退出路径。单个{count}取原授权窗口完整total，取消旧读取、未就绪或拒绝时不保留旧计数，空标题和恢复区块标题有明确路径。静态up/down/flat和原文字注释不改原聚合请求，非空注释标明静态含义，无trendValue时保留配置而不凭空显示箭头。Go与编辑器校验旧profile、坏方向/密度、字节预算、表格原计划要求和重复/执行占位。适用Go/组合/格式及Web类型/单元/构建通过；来源单元使用原四个KPI和原ObjectTable实例配置，未改配置取巧。真实宿主联合路线验证GUI显式注释/原度量/字段/编辑映射、检查器、共同冻结/激活、真实2/1/1状态计数和62.5%平均值、筛选后标题4→1与平均值100%→原数据改变后80%、密度保留、实际静态注释、后续草稿不改候选及403后旧计数清除。普通截图已查看，不计负责人视觉验收。完整原Operations仍有浮层/共享消费者等配置断点，本组不计为整体导入完成；真期间趋势、完整表格上下文菜单/导出、全量浏览器/部署/真实PostgreSQL仍待后续。
 
 默认四个浮层与共享AI上下文（F1e63c）已沿§6.85接通v2.91的PageOverlayPresentation、Go生成声明、UI Kit独立关闭策略、原生检查器和显式导入。来源单元保留原四个Overlay配置，校验尺寸/方向/关闭类型、旧profile及未支持关闭回调；旧浮层默认保持。共享record只在AI的明确profile消费入口扩展，聊天问题仍受原页面/浮层owner检查，其他记录消费者未统一放宽。应用原reference在同记录刷新期间保留绑定，PageSession重新确认授权，当前未就绪不显示旧数据或发起新调用；切换记录、错误、成员/实例/浮层退役仍清理原上下文。适用Go/组合/格式与Web类型/单元/构建通过。真实宿主联合路线验证GUI映射、四个原浮层呈现规则共同保存、原页面发布、包含固定函数评测的应用候选冻结/激活、浮层原详情与AI上下文、不可外部点击关闭的Modal、Escape关闭、A→B切换后原结果清除及B的原动作实际改变后端记录；后续页面草稿不改候选。AI答案仅由HTTP协议夹具提供。普通截图已查看，不计负责人视觉验收；无遮罩/禁用Escape组合仅有单元证据，共享AI成员切换/迟到答复专属浏览器、完整Operations/Module配置、全量浏览器与部署/真实PostgreSQL仍待后续。
+
+默认集合/关联/状态消费者（F1e63d）已沿§6.86修正导入器的页面→浮层读取和ObjectSetTitle计数归属，保留两个原标题、两个原Links及原StatusTracker的五个完整配置。page变量由主页面声明后可供浮层读取，原scope/owner/query保持唯一；其他浮层局部变量仍拒绝跨owner读取。两个标题复用同一个page全集count，原过滤条件/页面草稿不因浮层关闭被清理。原共享record仍经Application和PageSession确认，三个反向reference分组和四个原生命周期状态逐项显式映射。联合验收暴露的浮层导航遮挡已在原页面消费者入口修复：Links/RecordView关闭当前浮层后沿原useOpenRecord开窗，保留member/read scope、启用及Overlay epoch检查。Go平台测试、Web类型/单元/构建与escapes通过。真实宿主联合路线验证GUI原应用/字段/关联/状态映射、共同页面发布与应用候选冻结/激活、102条原全集计数而非100条窗口行数、筛选后原计数为1、A→B共享选择与实际生命周期状态、25条Sensors关联的真实total、私有Alerts裁剪、原WorkOrder关联、关闭重开保留页面筛选/共享选择、后续草稿不改候选和抽屉导航后原记录窗口可见、可进入编辑表单并取消。额外运行整个E2E目录的严格tsc仍在未改动的application-filters/application-queries等旧测试报可选值及未使用声明错误；本批新增测试/夹具未报类型错误，不计该额外检查通过。普通截图已查看，不计负责人视觉验收。组夹具从完整捕获Module取五个原消费者配置，并明确另设选择/搜索/触发测试控制；不计完整Operations/Module整体导入通过。动作/创建配置、成员切换专属浏览器、全量回归与部署/真实PostgreSQL仍待后续。
 
 受控页面内容与嵌入导入（F1e59a–F1e59c）已沿§6.79接通Definition.contentVersion、原Build Page最多64个不同已发布内容的非递归history、原publish/候选激活、GET /v1/pages/{app}/{name}/{contentVersion}及EdgeClient.pageContent。完整原描述摘要与既有SourceVersion分开，未发布草稿/仅保存候选不开放给成员；缺失、不兼容或无权版本拒绝，不退回最新。版本读取复用完整原发现投影及当前对象/字段/动作/查询/导航权限，原Requires按选定内容重新取得；同一历史身份可有不同成员裁剪内容。v2.83的原Section.embedding、共同候选闭包、固定内容和接口校验、递归/实例/查询/记录/Section预算、成员页面入口裁剪、三种module/custom/dashboard呈现、独立原PageSession、原类型化接口、专属检查器及复制输出状态重写已接通。输入变化使子会话重建，无关父状态更新保留子草稿；结果经过原接口校验后写父页面标量。检查器可选择已发布页面、指定内容摘要和接口、逐项绑定同owner变量及返回端口，历史选择目前为手工填写摘要。
 

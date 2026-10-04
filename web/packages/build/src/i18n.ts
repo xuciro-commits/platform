@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "This overlay reads the original page-owned variable. Closing clears overlay-local state and keeps the page filter and complete count.": "此浮层读取原页面拥有的变量。关闭会清理浮层局部状态，保留页面筛选和完整计数。",
  "Right": "右侧",
  "Left": "左侧",
  "Overlay side": "浮层侧边",

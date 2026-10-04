@@ -88,7 +88,7 @@ type Narrowed = Record<string, Record<string, unknown>>;
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
 type Bound = {builder?:ReturnType<typeof usePageQueries>["builders"][string];sceneWindow?:QueryWindow;embeddingInputs?:Record<string,VariableResult>;embeddingReturn?:(values:Record<string,unknown>)=>void;observationHistory?:QueryWindow;observationContext?:QueryWindow;observationAsset?:EntityRecord;observationSelected?:string;onObservationRow?:(record:EntityRecord)=>Promise<void>;notepadValue?:VariableResult;onNotepad?:(value:string)=>void;explorationRoot?:EntityRecord;explorationStatus?:"empty"|"pending"|"value"|"error";explorationIdentity?:string;explorationActive?:()=>boolean;onGraphOutput?:(object:string,record:EntityRecord)=>Promise<boolean>;graphSelected?:{object:string;id:string};contextReadCurrent?:boolean;avatarContextStatus?:"empty"|"pending"|"value"|"error";onClearContext?:()=>void;collaborationRecord?:EntityRecord;collaborationReference?:import("./runtime/Session").RecordReference;collaborationStatus?:"empty"|"pending"|"value"|"error";collaborationSlot?:string;commentDraft?:VariableResult;fileValue?:VariableResult;pdfPageValue?:VariableResult;onCommentDraft?:(value:string)=>void;onFileID?:(value:string)=>void;onPdfPage?:(value:string)=>void;comparisonRecords?:EntityRecord[];comparisonStatus?:"empty"|"pending"|"value"|"error";confirmedRecord?:EntityRecord;recordStatus?:"empty"|"pending"|"value"|"error";sparklineValue?:VariableResult;groupValue?:VariableResult;onGroupFilter?:(value?:string)=>void;onHeatmap?:(row?:string,column?:string)=>void;pickerConfirmation?:"empty"|"pending"|"value"|"error";pickerValue?:VariableResult;onPickerID?:(record?:EntityRecord)=>void;alertValue?:VariableResult;dateValue?:VariableResult;onDate?:(value:string)=>void;choiceSetValue?:VariableResult;onChoiceSet?:(value:string[])=>void;choiceValue?:VariableResult;onChoice?:(value:string)=>void;booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
-  onControl?:(id:string)=>void;controlBound?:(id:string)=>boolean;
+  onRecordOpen?:(type:string,record:EntityRecord)=>void;onControl?:(id:string)=>void;controlBound?:(id:string)=>boolean;
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
   session?: PageSessionStore;
@@ -182,16 +182,16 @@ function StatusTrackerWidget({page,section,selected,readSource}:Bound){
  return <RecordStatus key={JSON.stringify([source.scope,type,selected.id])} source={source} type={type} id={selected.id} config={section.statusTracker}/>;
 }
 
-function RecordLinksWidget({page,section,selected,readSource,live}:Bound){
+function RecordLinksWidget({page,section,selected,readSource,live,onRecordOpen}:Bound){
  const host=useHost(),open=useOpenRecord(),source=readSource??host.source,type=objectOf(page,section);
  if(!selected)return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
- return <RecordLinks key={JSON.stringify([source.scope,type,selected.id])} source={source} type={type} id={selected.id} groups={section.recordLinks??[]} onOpen={live?(type,record)=>open({type,id:record.id}):undefined}/>;
+ return <RecordLinks key={JSON.stringify([source.scope,type,selected.id])} source={source} type={type} id={selected.id} groups={section.recordLinks??[]} onOpen={live?onRecordOpen??((type,record)=>open({type,id:record.id})):undefined}/>;
 }
 
-function RecordViewWidget({page,section,selected,readSource,live}:Bound){
+function RecordViewWidget({page,section,selected,readSource,live,onRecordOpen}:Bound){
  const host=useHost(),open=useOpenRecord(),source=readSource??host.source,type=objectOf(page,section);
  if(!selected)return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
- return <RecordPage key={JSON.stringify([source.scope,type,selected.id])} source={source} type={type} id={selected.id} fields={section.fields??[]} recordTabs={section.recordView?.tabs??pageVariableContract.recordView.tabs} onOpen={live?(type,record)=>open({type,id:record.id}):undefined} actions={record=>live?<RecordActions type={type} record={record} allowed={(section.actions??[]).map(a=>a.name)} steps/>:<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}/>;
+ return <RecordPage key={JSON.stringify([source.scope,type,selected.id])} source={source} type={type} id={selected.id} fields={section.fields??[]} recordTabs={section.recordView?.tabs??pageVariableContract.recordView.tabs} onOpen={live?onRecordOpen??((type,record)=>open({type,id:record.id})):undefined} actions={record=>live?<RecordActions type={type} record={record} allowed={(section.actions??[]).map(a=>a.name)} steps/>:<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}/>;
 }
 
 /** The actions the builder chose, on what is selected (Workshop's button group). */
@@ -562,6 +562,7 @@ export function ComposedPage(props: ComposedPageProps) {
 
 function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, onVariableValues, editingRoot,pageCall }: ComposedPageProps) {
   const { source } = useHost();
+  const openRecord=useOpenRecord();
   const viewVisible = useViewVisible();
   const pageFocus = useRef<HTMLDivElement>(null), callers = useRef<Record<string, HTMLElement | null>>({});
   const initialVariables = useMemo(() => {
@@ -685,6 +686,12 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         keepActive={!!binding("select")} master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {if((section.widget==="record-scatter"||section.widget==="record-map")||section.recordList?.layout==="tiles"){if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;const query=selectionQuery(section);if(!record){session.select(selectionSlot(page,section),undefined);return;}if(query)void session.confirmSelection(selectionSlot(page,section),record,query);return;}onSelect(selectionSlot(page,section),record,selectionQuery(section));if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));if(record)emit("select");}} live={live} narrowed={section.widget==="filter"&&section.filterVariable?{[objectOf(page,section)]:sharedFilter??{}}:filtersForOwner(snapshot.filters,filterOwner(page,section))} sharedFilter={sharedFilter} onNarrow={(object,field,value)=>section.filterVariable&&section.widget==="filter"?application.filter(section.filterVariable,field,value):session.filter(object,field,value,filterOwner(page,section))}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
         window={collectionID?applicationVariable(collectionID)?application.windows[applicationVariable(collectionID)!]:queries.windows[initialVariables[collectionID]?.source?.query??""]:undefined}
+        onRecordOpen={(type,record)=>{
+          if(!live||enabled===false||!currentContextRead(source.scope,session.snapshotScope())||overlay&&session.overlayEpoch(overlay)!==epoch)return;
+          // Retire the modal owner before opening the workspace's original record window.
+          if(overlay){const frame=page.document?.overlays?.[overlay];if(!frame)return;writeState(frame.openVariable,false);}
+          openRecord({type,id:record.id});
+        }}
         selectionSet={section.selectionSetVariable?{selectedIDs:session.selectionSetReferences(selectionSetSlot(page,section)).map(r=>r.id),records:session.selectedSet(selectionSetSlot(page,section)),status:snapshot.recordSets[selectionSetSlot(page,section)]?.status??"empty",maxRecords:pageVariableContract.recordSelection.maxRecords,onChange:ids=>session.selectSet(selectionSetSlot(page,section),ids,selectionQuery(section)??section.id??"")}:undefined}
         notepadValue={values[section.notepadVariable??""]} onNotepad={section.notepadVariable?value=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;writeState(section.notepadVariable!,value,overlay);}:undefined}
         facetValues={values} onFacet={(id,value)=>setContextState(id,value,context,overlay)}
