@@ -1,3 +1,4 @@
+import {sourceInterfaceObject} from "./application";
 import type {SourceModule,ImportBindings} from "./compile";
 
 const text=(v:unknown)=>typeof v==="string"?v:"";
@@ -26,7 +27,7 @@ export function collaborationRecordChoices(module:SourceModule|undefined,pageID:
  });
 }
 /** Discover the explicit source metadata that the import mapping dialog must expose. */
-export function workshopRequirements(module:SourceModule|undefined){
+export function workshopRequirements(module:SourceModule|undefined,origin:SourceModule|undefined=module){
  const objects=new Set<string>(),fields:Record<string,Set<string>>=Object.create(null),actions=new Set<string>();
  const external=(id:string,seen=new Set<string>()):string=>{if(seen.has(id))return "";seen.add(id);const producer=Object.values(module?.widgets??{}).find(w=>w.type==="ObjectSetBuilder"&&w.config.outputVarId===id);if(producer)return external(text(producer.config.objectSetVarId),seen);const v=module?.variables.find(v=>v.id===id);return text(object(v?.objectSet)?.objectType||v?.sourceObjectType);};
  const property=(type:string,p:string)=>{if(!type||!p||p==="*")return;objects.add(type);(fields[type]??=new Set()).add(p);};
@@ -56,8 +57,8 @@ export function workshopRequirements(module:SourceModule|undefined){
   if(w.type==="ProminentTerms")property(external(text(w.config.objectSetVarId)),w.config.property==null?"status":text(w.config.property));
   if(w.type==="SummaryStats")property(external(text(w.config.objectSetVarId)),text(w.config.property));
   if(w.type==="Calendar")property(external(text(w.config.objectSetVarId)),text(w.config.dateProperty));
-  if(w.type==="StatusTracker"){const variable=module?.variables.find(v=>v.id===w.config.objectVarId),producer=module?.widgets[text(variable?.widgetId)];property(external(text(producer?.config.objectSetVarId)),text(w.config.activeProp));}
-  if(w.type==="PropertyList"){const variable=module?.variables.find(v=>v.id===w.config.objectVarId),producer=module?.widgets[text(variable?.widgetId)],type=external(text(producer?.config.objectSetVarId));for(const p of Array.isArray(w.config.properties)?w.config.properties:[])property(type,text(p));}
+  if(w.type==="StatusTracker"){property(origin?sourceInterfaceObject(origin,text(w.config.objectVarId))??"":"",text(w.config.activeProp));}
+  if(w.type==="PropertyList"){const type=origin?sourceInterfaceObject(origin,text(w.config.objectVarId))??"":"";for(const p of Array.isArray(w.config.properties)?w.config.properties:[])property(type,text(p));}
   if(w.type==="InlineAction"&&text(w.config.actionId))actions.add(text(w.config.actionId));
  }
  return {objects:[...objects],fields,actions:[...actions]};

@@ -2236,7 +2236,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.93",
+  "uiProfile": "platform.page.v2.94",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3692,7 +3692,8 @@ export const pageUIManifest = {
         "object",
         "fields",
         "selection",
-        "collection-variable"
+        "collection-variable",
+        "selection-variable"
       ],
       "selectionMode": "write",
       "propsSchema": {
@@ -3738,7 +3739,15 @@ export const pageUIManifest = {
           "requiredUIProfile": "platform.page.v2.10"
         }
       ],
-      "outputPorts": [],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.94",
+          "writable": true
+        }
+      ],
       "layoutPreferences": {
         "frame": "card"
       },
@@ -7335,7 +7344,8 @@ export const pageUIManifest = {
     "platform.page.v2.90",
     "platform.page.v2.91",
     "platform.page.v2.92",
-    "platform.page.v2.93"
+    "platform.page.v2.93",
+    "platform.page.v2.94"
   ],
   "runtime": {
     "scope": "page",

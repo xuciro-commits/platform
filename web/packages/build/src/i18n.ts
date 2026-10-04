@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+"The source trend variant renders as the original card; no historical trend is inferred.": "来源 trend 样式按原普通卡片呈现；不推断历史趋势。",
+
 "Complete unused widget {widget}": "补全未使用组件 {widget}",
 "Unused configuration interpretation": "未使用配置的解释",
 "Complete the original unused configuration": "补全原未使用配置",

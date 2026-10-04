@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {collaborationRecordChoices,workshopRequirements} from "./requirements.ts";
+import {registerHooks} from 'node:module';
+registerHooks({resolve(s,c,next){try{return next(s,c)}catch(e){if(s.startsWith('./')||s.startsWith('../'))return next(s+'.ts',c);throw e;}}});
+const {collaborationRecordChoices,workshopRequirements}=await import('./requirements.ts');
 
 test("TagList exposes its property mapping from the actual source object set even without table columns",()=>{
  const module={variables:[{id:"assets",type:"objectSet",objectSet:{objectType:"Asset",steps:[]}},{id:"staff",type:"objectSet",sourceObjectType:"Person"}],widgets:{tags:{type:"TagList",config:{objectSetVarId:"assets",property:"model"}},privateTags:{type:"TagList",config:{objectSetVarId:"assets",property:"secret"}},staffTags:{type:"TagList",config:{objectSetVarId:"staff",property:"role"}},steps:{type:"Stepper",config:{steps:["Observe"],currentVarId:"index"}},tabs:{type:"Tabs",config:{tabs:["First"],variableId:"index"}}}};

@@ -1004,6 +1004,12 @@ F1e63e2在v2.92增加Section.actionDefaults，复用PageActionParameter的parame
 
 导入映射控件只展示所选页面、全部原浮层和未使用库存的配置及其变量依赖，编译始终读取完整原文，不能拿控件投影视图作为编译输入。三个带固定状态条件的纯KPI聚合计划只声明1行的辅助窗口，全集count/avg/sum仍由原聚合API执行；原表格、集合分面及独立散点保持100行语义，完整Operations的声明窗口总额为303，沿原512预算检查，不缩小全集统计或放宽预算。
 
+#### 6.91 默认Overview与跨页共享选择
+
+v2.94在原record-list注册selectionVariable写出端口，仅主页面的grid/list使用原可写application record绑定；原Selection/local端口与该端口互斥，原对象身份、成员授权确认、实例/定义作用域与发布冻结继续由原Go/应用会话检查。Overlay/Loop与tiles不新增共享写出。画廊沿原TableAdapter与应用选择通道选择原ID，导航仍走原记录入口；关闭最后一个应用页面按原会话规则清理，不能把共享选择持久化或塞进路由。
+
+所选页面的映射控件仍有限投影，record输入的原生产者类型从完整来源元数据解析，不能因为生产者在别页便猜测page.object，也不将该生产者加入当前布局或执行。PropertyList、Links与原动作默认值共用sourceInterfaceObject读取原类型，权限与是否能消费仍由编译器/Go校验。源MetricCard的variant:trend在实际来源WidgetRenderer中与普通卡片走相同渲染，明确映射card并保留等价呈现诊断，不声称历史趋势。Revenue at Risk显式绑定原数值金额字段的sum；activeAlerts虽名字如此，原捕获仅声明Alert对象集合，开放条件必须由构建者显式绑定真实具名查询，不能据名字推断或复制模拟告警。三KPI、集合标题及原ObjectList以完整来源/四浮层/库存共同导入，并与Operations沿同一应用候选冻结验证页面切换、原选择、全集聚合和原动作上下文。其他页面/Flows和完整插件架构仍保留后续。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -1483,6 +1489,9 @@ F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart�
 原动作规则设计器与图呈现（F1e63e3）已沿§6.87接通状态参数、reference/ref、UTF-16最小长度和单层when守卫的原元数据编辑；固定目标/参数目标及审批边界、引用赋值和长度预算有早期提示，原Go仍是发布权威。条件守卫沿原记录路径/输入比较，可切换字面值/字段比较及empty/not empty，不提供嵌套规则执行。图和记录预览投影原全部参数目标，派生边标记输入名；编辑从声明端进入，不能以删边偷偷改选项。Go Build/平台测试和web-check通过。联合浏览器路线从有效旧声明出发，用GUI保存状态参数/Offline守卫、配置Operator原引用及4字符最小长度、直接安装后核对实际Published；观察四个原目标边，再沿已有三原表单显式映射、共同冻结/激活、冲突保留/取消、状态条件、引用选择/过短标题及真实工单创建验证端到端。直接安装期间界面定义scope仍会退役导入包；测试在外部夹具装配完成后刷新取得最新定义快照再导入，未绕过scope检查。图/表单普通截图已查看，图中部分右侧内容在当前框内可裁切，未计负责人视觉验收。更广图编辑手势、守卫组合专属浏览器、参数化审批、完整Operations/Module、全量回归及部署/PostgreSQL仍待后续。
 
 原默认Operations装配（F1e63f1–F1e63f2）已沿§6.89–6.90接通v2.93原区域面板/标题/内边距/本地折叠及显式有界滚动、两个原未使用配置的有界补全和现有record-scatter/Table路径。Go及应用API约束呈现/权限/类型/预算，检查器与预览/运行共享同一声明；折叠保留子树，原页面/浮层生命周期与显示条件撤下时按原规则清理。完整原捕获（7页/85组件/68变量/4浮层）保持字节原文；只按已接受的所选页面边界导入，控件投影不参与编译。Operations主页、四个原浮层及两未使用实例共24个Section，以显式原应用三端口、KPI全集聚合/静态注记、字段/行编辑/生命周期、两关联、原AI函数和三原动作默认值共同装配；未使用表格/散点修正随可下载映射报告保存并保持原库存父属。三个纯聚合条件计划的辅助窗口为1行，表格、集合分面及独立散点保持100行，声明窗口总额303沿原512预算，未改变全集聚合语义。相关Go平台/Build、web-check、组合/格式及四条联合浏览器路线通过。完整GUI文件导入与下载报告核对原文/85组件/7页、24实例/4浮层/两未使用修正及零阻塞；Go保存/发布、原函数真实协议评测、同一应用候选冻结激活后，后续默认值/注记草稿不改候选。真实102条资产验证100行表格窗口/102总数、101条Active全集计数、过滤B后的全集平均100%、集合标题/状态/关联同步；原表格Owner提交后原表单采用新值，详情抽屉AI、抽屉按钮切换原Edit模态（沿原单一活动浮层规则）、Offline/High拒绝与转换、Maintenance转换、真实Operator选择并创建原关联工单，以及换A时AI上下文退役通过。原未使用实例未挂载；独立声明的查询仍按原页面服务，不能据此承诺库存零读取。普通主页/抽屉/工单截图已查看，不计负责人视觉验收。其他六页/Flows、完整Module与Plugin Architecture、更广成员/迟到答复专项和部署/PostgreSQL仍未完成。
+
+默认Overview与跨页共享选择（F1e63g）已沿§6.91接通v2.94 record-list主页面grid/list的原application record写出，Go拒绝只读/错对象、旧profile、并存local选择及Overlay/Loop/tiles写出；原注册描述生成宿主类型，检查器沿端口显示共享选择，设计器早期诊断保持Go边界。来源MetricCard.trend按实际原渲染等价映射card并标明，不推断历史趋势。映射控件的有限投影不再丢失别页生产者的原类型：PropertyList依赖发现、Links与原动作默认值从完整来源解析原对象，未使用补全也可选择完整来源的集合元数据；仍不将别页组件纳入当前布局或执行。完整原Overview六个可见组件（其中三KPI、集合标题、ObjectList五个主要数据配置）、四浮层及两库存共17个Section已GUI导入/Go发布，与完整Operations同一应用候选共同冻结激活。真实102条资产验证全集$103.0K汇总、In Filter 102与100行画廊；具名开放告警查询以三开放/一关闭验证计数3，候选后把查询重新发布为关闭条件，冻结Overview仍保留原版本/计数3。Operations选择B后经实际工作区侧栏进入Overview，画廊保持B；画廊选择A后切回原Operations标签，详情/原状态表单采用A及Owner A，再回Overview保持A。原表格Owner修改、四原浮层/AI上下文、Offline/High与Maintenance、真实业务Operator和工单路线在同一扩展联合测试保持通过。全量Go测试、相关vet、web-check、组合/格式与该联合浏览器通过；普通Overview截图已查看，不计负责人视觉验收。额外E2E目录严格tsc仍在未修改的旧测试报错，修改的两页测试未报错。其他五页、Flows/Logic、完整Module和Plugin Architecture、集中成员/迟到答复专项及部署/PostgreSQL仍未完成。
+
 
 受控页面内容与嵌入导入（F1e59a–F1e59c）已沿§6.79接通Definition.contentVersion、原Build Page最多64个不同已发布内容的非递归history、原publish/候选激活、GET /v1/pages/{app}/{name}/{contentVersion}及EdgeClient.pageContent。完整原描述摘要与既有SourceVersion分开，未发布草稿/仅保存候选不开放给成员；缺失、不兼容或无权版本拒绝，不退回最新。版本读取复用完整原发现投影及当前对象/字段/动作/查询/导航权限，原Requires按选定内容重新取得；同一历史身份可有不同成员裁剪内容。v2.83的原Section.embedding、共同候选闭包、固定内容和接口校验、递归/实例/查询/记录/Section预算、成员页面入口裁剪、三种module/custom/dashboard呈现、独立原PageSession、原类型化接口、专属检查器及复制输出状态重写已接通。输入变化使子会话重建，无关父状态更新保留子草稿；结果经过原接口校验后写父页面标量。检查器可选择已发布页面、指定内容摘要和接口、逐项绑定同owner变量及返回端口，历史选择目前为手工填写摘要。
 
