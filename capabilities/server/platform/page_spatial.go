@@ -135,10 +135,13 @@ func (d *PageDocument) checkSpatial(s Section) error {
 	if err := s.Scene.Check(); err != nil {
 		return err
 	}
-	record := d.Variables[s.RecordVariable]
+	scope, owner, validOwner := d.recordInputOwner(s)
+	if !validOwner {
+		return fmt.Errorf("scene shared record cannot enter a loop")
+	}
 	owned := func(id string, typ string, mode string) bool {
 		v := d.Variables[id]
-		return v.Type == typ && v.Mode == mode && v.Scope == record.Scope && v.Owner == record.Owner
+		return v.Type == typ && v.Mode == mode && v.Scope == scope && v.Owner == owner
 	}
 	if s.ScenePartVariable != "" && (!owned(s.ScenePartVariable, "string", "state") || s.ScenePartVariable == s.FileVariable) {
 		return fmt.Errorf("scene part output needs independent same-owner string state")

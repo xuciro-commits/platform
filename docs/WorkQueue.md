@@ -10,7 +10,7 @@
 
 | 顺序 / 优先级 / 状态 | 批次与归属 | 可见结果 / 停止条件 | 适用检查 |
 |---|---|---|---|
-| 1 / P1 / **当前：Telemetry 整页融合** | #141：ADR-0046；应用 API、Build、Web 工作区 | 状态：Operations、Overview、Analytics、Maintenance、Map、Workflow 已完成整页代码装配和轻检查。目标：完整融合 Telemetry 原页面及真实遥测绑定。停止条件：整页可导入、保存并保留全部版本依赖；七页共同冻结后验证同应用业务与跨页行为。更广的 F1–F6 与 92 类型插件迁移仍归本工作号 | 编码期间仅 Go 全量与 `scripts/verify.sh web-check`；七页共同冻结后跑一条跨页集成链路，不新增微步 Playwright/录屏，不复跑无关旧 Flaky |
+| 1 / P1 / **当前：七页共同冻结与跨页集成** | #141：ADR-0046；应用 API、Build、Web 工作区 | 状态：Operations、Overview、Analytics、Maintenance、Map、Workflow、Telemetry 已完成整页代码装配和轻检查。目标：七页以同一应用和真实受权资源共同冻结，跑一条跨页业务链路。停止条件：原七页、四浮层、库存与版本依赖共同保存/冻结，确认共享选择、动作、计算、附件及遥测联动。更广的 F1–F6 与 92 类型插件迁移仍归本工作号 | 集成准备仅 Go 全量与 `scripts/verify.sh web-check`；七页冻结后跑一条跨页链路，不新增微步 Playwright/录屏，不复跑无关旧 Flaky |
 | 2 / P1 / 待执行 | #135、#123：稳定交付与运行定位；部署、平台设置、共享运行视图 | 用已有 PostgreSQL/FileStore/编译 worker 建立固定走查环境，验证这套应用重启后可继续；从失败业务任务定位到原流程/计算/审批及可用恢复动作。不新建运维系统或全入口故障矩阵 | 适用 Go/Web 检查与 deploy；持久环境实际重启 |
 | 3 / P1 / 待执行 | #136、#131：带数据的最小演进；K7 接入、宿主、Build 发布 | 依赖前项固定持久环境。已有记录的应用通过显式升级计划新增一个可选标量字段；保留旧值与在途工作，新动作可使用新字段，拒绝不支持的迁移。不扩展通用迁移语言或全量退役 | contract（契约改变时）、capabilities、composition、format、web、对应持久恢复 |
 | 4 / P1 / 待执行 | #134：首个可配置数据接入；集成 owner、K8 宿主、工坊 | 构建者配置一个外部 JSON 数据源及字段映射，先预览/校验再沿原输入路径接入；重试不重复写入，失败可定位。只支持一个有界接入 profile，不铺连接器市场 | capabilities、composition、format、web；输入/游标重放 |

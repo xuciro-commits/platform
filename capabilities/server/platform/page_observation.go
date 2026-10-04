@@ -155,6 +155,18 @@ func (d *PageDocument) checkObservation(s Section, sections []Section) error {
 				continue
 			}
 			p := d.Variables[id]
+			if port == "asset" && d.sharedTelemetryRecord(id) {
+				if !p.Writable || c.AssetObject == nil || *p.Source.Object != *c.AssetObject {
+					return fmt.Errorf("observation asset output needs its writable original application object")
+				}
+				overlays, loops := d.overlayOwners(), d.loopOwners()
+				for node, n := range d.Nodes {
+					if n.Section == s.ID && (overlays[node] != "" || loops[node] != "") {
+						return fmt.Errorf("shared observation asset output needs a main-page producer")
+					}
+				}
+				continue
+			}
 			if !same(id, "record", "resource") || p.Writable || p.Source == nil || p.Source.Kind != "record" || p.Source.Section != s.ID || p.Source.Port != port {
 				return fmt.Errorf("observation output needs one same-owner original record port")
 			}
@@ -177,7 +189,10 @@ func (d *PageDocument) checkObservation(s Section, sections []Section) error {
 			return fmt.Errorf("statistics initial state differs from its original declared choices")
 		}
 		if s.RecordVariable != "" {
-			if !(same(s.RecordVariable, "record", "resource") || d.Variables[s.RecordVariable].Scope == "page" && d.Variables[s.RecordVariable].Type == "record" && d.Variables[s.RecordVariable].Mode == "resource") || c.AssetObject == nil || s.ObservationContextVariable == "" || !plan(s.ObservationContextVariable, true) {
+			if _, _, ok := d.recordInputOwner(s); !ok {
+				return fmt.Errorf("shared statistics cannot enter a loop")
+			}
+			if !(d.sharedTelemetryRecord(s.RecordVariable) || same(s.RecordVariable, "record", "resource") || d.Variables[s.RecordVariable].Scope == "page" && d.Variables[s.RecordVariable].Type == "record" && d.Variables[s.RecordVariable].Mode == "resource") || c.AssetObject == nil || s.ObservationContextVariable == "" || !plan(s.ObservationContextVariable, true) {
 				return fmt.Errorf("statistics context needs the original asset and retained history")
 			}
 			q := d.Queries[d.Variables[s.ObservationContextVariable].Source.Query]
@@ -199,12 +214,25 @@ func (d *PageDocument) checkObservation(s Section, sections []Section) error {
 	}
 	return nil
 }
+func (p Page) CheckObservationBinding(s Section) error {
+	if s.Widget != "observation" || s.Observation == nil || s.Observation.Kind != "statistics" || s.RecordVariable == "" {
+		return nil
+	}
+	if s.Observation.AssetObject == nil || p.RecordResourceObject(s.RecordVariable) != *s.Observation.AssetObject {
+		return fmt.Errorf("statistics context differs from its original full asset identity")
+	}
+	return nil
+}
+
 func (p Page) CheckObservation(s Section, object func(AssetRef) (EntityInfo, bool)) error {
 	if s.Widget != "observation" {
 		return nil
 	}
 	if s.Observation == nil || p.Document == nil {
 		return fmt.Errorf("observation definition is unavailable")
+	}
+	if err := p.CheckObservationBinding(s); err != nil {
+		return err
 	}
 	c := s.Observation
 	v := p.Document.Variables[s.CollectionVariable]

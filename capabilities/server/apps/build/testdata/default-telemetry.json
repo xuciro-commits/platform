@@ -1,0 +1,2204 @@
+{
+  "name": "telemetry",
+  "object": "build.asset",
+  "document": {
+    "formatVersion": 2,
+    "uiProfile": "platform.page.v2.103",
+    "root": "import_node_8",
+    "nodes": {
+      "import_leaf_11": {
+        "kind": "widget",
+        "section": "import_widget_10",
+        "size": {
+          "height": 490
+        }
+      },
+      "import_leaf_18": {
+        "kind": "widget",
+        "section": "import_widget_17",
+        "size": {
+          "height": 220
+        }
+      },
+      "import_leaf_27": {
+        "kind": "widget",
+        "section": "import_widget_26",
+        "size": {
+          "height": 255
+        }
+      },
+      "import_node_16": {
+        "kind": "rows",
+        "title": "Signal analysis",
+        "children": [
+          "import_leaf_18",
+          "import_leaf_27"
+        ],
+        "gap": 8,
+        "size": {
+          "width": 365
+        },
+        "presentation": {
+          "showHeader": false,
+          "padding": 8,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_node_9": {
+        "kind": "columns",
+        "title": "Live operations",
+        "children": [
+          "import_leaf_11",
+          "import_node_16"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 8,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_37": {
+        "kind": "widget",
+        "section": "import_widget_36",
+        "size": {
+          "height": 510
+        }
+      },
+      "import_node_8": {
+        "kind": "rows",
+        "title": "Industrial stream",
+        "children": [
+          "import_node_9",
+          "import_leaf_37"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 12,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        },
+        "size": {
+          "maxHeight": 960,
+          "scroll": "auto"
+        }
+      },
+      "import_leaf_42": {
+        "kind": "widget",
+        "section": "import_widget_41"
+      },
+      "import_leaf_45": {
+        "kind": "widget",
+        "section": "import_widget_44"
+      },
+      "import_leaf_47": {
+        "kind": "widget",
+        "section": "import_widget_46"
+      },
+      "import_leaf_49": {
+        "kind": "widget",
+        "section": "import_widget_48"
+      },
+      "import_leaf_51": {
+        "kind": "widget",
+        "section": "import_widget_50"
+      },
+      "import_node_40": {
+        "kind": "rows",
+        "title": "Drawer Content",
+        "children": [
+          "import_leaf_42",
+          "import_leaf_45",
+          "import_leaf_47",
+          "import_leaf_49",
+          "import_leaf_51"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        },
+        "size": {
+          "maxHeight": 640,
+          "scroll": "auto"
+        }
+      },
+      "import_leaf_61": {
+        "kind": "widget",
+        "section": "import_widget_60"
+      },
+      "import_leaf_63": {
+        "kind": "widget",
+        "section": "import_widget_62"
+      },
+      "import_node_59": {
+        "kind": "rows",
+        "title": "Confirm",
+        "children": [
+          "import_leaf_61",
+          "import_leaf_63"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_66": {
+        "kind": "widget",
+        "section": "import_widget_65"
+      },
+      "import_node_64": {
+        "kind": "rows",
+        "title": "Action Modal",
+        "children": [
+          "import_leaf_66"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_69": {
+        "kind": "widget",
+        "section": "import_widget_68"
+      },
+      "import_node_67": {
+        "kind": "rows",
+        "title": "Create WO",
+        "children": [
+          "import_leaf_69"
+        ],
+        "gap": 10,
+        "presentation": {
+          "showHeader": false,
+          "padding": 14,
+          "background": "default",
+          "border": false,
+          "collapsible": false,
+          "defaultCollapsed": false
+        }
+      },
+      "import_leaf_71": {
+        "kind": "widget",
+        "section": "import_widget_70"
+      },
+      "import_leaf_78": {
+        "kind": "widget",
+        "section": "import_widget_77"
+      }
+    },
+    "variables": {
+      "import_variable_1": {
+        "title": "selectedAsset",
+        "scope": "application",
+        "type": "record",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "record",
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.asset"
+          }
+        }
+      },
+      "import_variable_2": {
+        "title": "currentPage",
+        "scope": "application",
+        "type": "string",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "currentPage"
+        }
+      },
+      "import_variable_3": {
+        "title": "showDetail",
+        "scope": "application",
+        "type": "boolean",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "showDetail"
+        }
+      },
+      "import_spatial_file_12": {
+        "title": "Robot cell · live digital twin file ID",
+        "scope": "page",
+        "type": "string",
+        "mode": "constant",
+        "initial": "robot-cell-model"
+      },
+      "import_scene_sample_set_14": {
+        "title": "Robot cell · live digital twin sample window",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_scene_sample_query_13"
+        }
+      },
+      "import_variable_15": {
+        "title": "selectedScenePart",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_observation_set_20": {
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_observation_query_19"
+        }
+      },
+      "import_observation_set_22": {
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_observation_query_21"
+        }
+      },
+      "import_observation_signal_23": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "vibration"
+      },
+      "import_observation_threshold_24": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "11.5"
+      },
+      "import_observation_rows_25": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "10000"
+      },
+      "import_variable_28": {
+        "title": "filteredAssets",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_query_29"
+        }
+      },
+      "import_variable_30": {
+        "title": "statusFilter",
+        "scope": "page",
+        "type": "string-set",
+        "mode": "state",
+        "initial": {
+          "kind": "string-set",
+          "values": []
+        }
+      },
+      "import_variable_31": {
+        "title": "priorityFilter",
+        "scope": "page",
+        "type": "string-set",
+        "mode": "state",
+        "initial": {
+          "kind": "string-set",
+          "values": []
+        }
+      },
+      "import_variable_32": {
+        "title": "ownerFilter",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_variable_33": {
+        "title": "searchText",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_variable_34": {
+        "title": "pressureMin",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_variable_35": {
+        "title": "pressureMax",
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": ""
+      },
+      "import_observation_row_38": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "import_widget_36",
+          "port": "row"
+        }
+      },
+      "import_open_39": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_count_43": {
+        "title": "filteredAssets",
+        "scope": "page",
+        "type": "decimal",
+        "mode": "aggregate",
+        "source": {
+          "kind": "count",
+          "query": "import_query_29"
+        }
+      },
+      "import_open_58": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_open_54": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_open_56": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "import_variable_72": {
+        "title": "allAssets",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_query_73"
+        }
+      },
+      "import_scatter_set_75": {
+        "title": "Chart 4 (unused)",
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "kind": "plan",
+          "query": "import_scatter_query_74"
+        }
+      }
+    },
+    "queries": {
+      "import_scene_sample_query_13": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.reading"
+        },
+        "query": {
+          "ref": {
+            "app": "build",
+            "kind": "query",
+            "name": "asset-readings"
+          },
+          "sourceVersion": "1.query-1"
+        },
+        "for": {
+          "variable": "import_variable_1"
+        },
+        "sort": [
+          "-at",
+          "id"
+        ],
+        "limit": 1,
+        "offset": 0
+      },
+      "import_observation_query_19": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.reading"
+        },
+        "query": {
+          "ref": {
+            "app": "build",
+            "kind": "query",
+            "name": "plant-readings"
+          },
+          "sourceVersion": "1.query-1"
+        },
+        "limit": 100,
+        "offset": 0,
+        "sort": [
+          "-at",
+          "id"
+        ]
+      },
+      "import_observation_query_21": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.reading"
+        },
+        "query": {
+          "ref": {
+            "app": "build",
+            "kind": "query",
+            "name": "asset-readings"
+          },
+          "sourceVersion": "1.query-1"
+        },
+        "limit": 100,
+        "offset": 0,
+        "sort": [
+          "-at",
+          "id"
+        ],
+        "for": {
+          "variable": "import_variable_1"
+        }
+      },
+      "import_query_29": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "conditions": [
+          {
+            "field": "state",
+            "op": "in",
+            "value": {
+              "variable": "import_variable_30"
+            },
+            "optional": true
+          },
+          {
+            "field": "priority",
+            "op": "in",
+            "value": {
+              "variable": "import_variable_31"
+            },
+            "optional": true
+          },
+          {
+            "field": "owner",
+            "op": "like",
+            "value": {
+              "variable": "import_variable_32"
+            },
+            "optional": true
+          },
+          {
+            "field": "pressure",
+            "op": ">=",
+            "value": {
+              "variable": "import_variable_34"
+            },
+            "optional": true,
+            "asDecimal": true
+          },
+          {
+            "field": "pressure",
+            "op": "<=",
+            "value": {
+              "variable": "import_variable_35"
+            },
+            "optional": true,
+            "asDecimal": true
+          }
+        ],
+        "search": {
+          "variable": "import_variable_33"
+        },
+        "limit": 1
+      },
+      "import_query_73": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "conditions": [],
+        "limit": 100
+      },
+      "import_scatter_query_74": {
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "conditions": [],
+        "limit": 100,
+        "sort": [
+          "id"
+        ],
+        "offset": 0
+      }
+    },
+    "overlays": {
+      "import_overlay_4": {
+        "root": "import_node_40",
+        "kind": "drawer",
+        "title": "Asset Detail Drawer",
+        "openVariable": "import_open_39",
+        "presentation": {
+          "side": "right",
+          "size": "medium",
+          "backdrop": true,
+          "closeOnBackdrop": true,
+          "closeOnEsc": true
+        }
+      },
+      "import_overlay_5": {
+        "root": "import_node_59",
+        "kind": "drawer",
+        "title": "Confirm Offline",
+        "openVariable": "import_open_58",
+        "presentation": {
+          "side": "right",
+          "size": "small",
+          "backdrop": true,
+          "closeOnBackdrop": true,
+          "closeOnEsc": true
+        }
+      },
+      "import_overlay_6": {
+        "root": "import_node_64",
+        "kind": "modal",
+        "title": "Edit Asset Status",
+        "openVariable": "import_open_54",
+        "presentation": {
+          "side": "right",
+          "size": "medium",
+          "backdrop": true,
+          "closeOnBackdrop": false,
+          "closeOnEsc": true
+        }
+      },
+      "import_overlay_7": {
+        "root": "import_node_67",
+        "kind": "modal",
+        "title": "Create Work Order",
+        "openVariable": "import_open_56",
+        "presentation": {
+          "side": "right",
+          "size": "medium",
+          "backdrop": true,
+          "closeOnBackdrop": true,
+          "closeOnEsc": true
+        }
+      }
+    },
+    "events": [
+      {
+        "source": "import_widget_50",
+        "control": "import_control_52",
+        "event": "click",
+        "target": "import_open_39",
+        "value": true
+      },
+      {
+        "source": "import_widget_50",
+        "control": "import_control_53",
+        "event": "click",
+        "target": "import_open_54",
+        "value": true
+      },
+      {
+        "source": "import_widget_50",
+        "control": "import_control_55",
+        "event": "click",
+        "target": "import_open_56",
+        "value": true
+      },
+      {
+        "source": "import_widget_50",
+        "control": "import_control_57",
+        "event": "click",
+        "target": "import_open_58",
+        "value": true
+      }
+    ],
+    "unusedWidgets": [
+      {
+        "node": "import_leaf_71",
+        "parent": "import_node_8"
+      },
+      {
+        "node": "import_leaf_78",
+        "parent": "import_node_8"
+      }
+    ]
+  },
+  "sections": [
+    {
+      "id": "import_widget_10",
+      "widget": "scene-3d",
+      "configVersion": 1,
+      "title": "Robot cell · live digital twin",
+      "recordVariable": "import_variable_1",
+      "fileVariable": "import_spatial_file_12",
+      "sceneSampleCollectionVariable": "import_scene_sample_set_14",
+      "scene": {
+        "background": "dark",
+        "quality": "balanced",
+        "showGrid": true,
+        "layers": [
+          {
+            "id": "base",
+            "name": "01 / Foundation",
+            "nodes": [
+              "Foundation",
+              "BasePedestal",
+              "YawMotor",
+              "Turret"
+            ],
+            "visible": true,
+            "opacity": 1,
+            "wireframe": false
+          },
+          {
+            "id": "arm",
+            "name": "02 / Kinematics",
+            "nodes": [
+              "ShoulderHousing",
+              "UpperArm",
+              "ElbowHousing",
+              "Forearm",
+              "WristHousing",
+              "GripperBody",
+              "LeftJaw",
+              "RightJaw"
+            ],
+            "visible": true,
+            "opacity": 1,
+            "wireframe": false
+          },
+          {
+            "id": "sensors",
+            "name": "03 / Sensors",
+            "nodes": [
+              "VibrationProbe",
+              "TemperatureProbe",
+              "PressureProbe",
+              "ConveyorSensor",
+              "SafetyBeacon"
+            ],
+            "visible": true,
+            "opacity": 1,
+            "wireframe": false
+          },
+          {
+            "id": "conveyor",
+            "name": "04 / Conveyor",
+            "nodes": [
+              "ConveyorBed",
+              "ConveyorBelt",
+              "ConveyorMotor"
+            ],
+            "visible": true,
+            "opacity": 1,
+            "wireframe": false
+          }
+        ],
+        "mappings": [
+          {
+            "id": "m-yaw",
+            "node": "BaseYaw",
+            "source": "sample",
+            "mode": "rotation",
+            "axis": "y",
+            "inputMin": 400,
+            "inputMax": 1200,
+            "outputMin": -1.4,
+            "outputMax": 1.4,
+            "smooth": 0.12,
+            "enabled": true,
+            "field": "speed"
+          },
+          {
+            "id": "m-shoulder",
+            "node": "ShoulderPitch",
+            "source": "sample",
+            "mode": "rotation",
+            "axis": "z",
+            "inputMin": 0,
+            "inputMax": 20,
+            "outputMin": -0.65,
+            "outputMax": 0.75,
+            "smooth": 0.1,
+            "enabled": true,
+            "field": "vibration"
+          },
+          {
+            "id": "m-elbow",
+            "node": "ElbowPitch",
+            "source": "sample",
+            "mode": "rotation",
+            "axis": "z",
+            "inputMin": 40,
+            "inputMax": 90,
+            "outputMin": -0.95,
+            "outputMax": 0.45,
+            "smooth": 0.12,
+            "enabled": true,
+            "field": "temperature"
+          },
+          {
+            "id": "m-wrist",
+            "node": "WristRoll",
+            "source": "sample",
+            "mode": "rotation",
+            "axis": "y",
+            "inputMin": 5,
+            "inputMax": 42,
+            "outputMin": -1.2,
+            "outputMax": 1.2,
+            "smooth": 0.2,
+            "enabled": true,
+            "field": "current"
+          },
+          {
+            "id": "m-jaw-left",
+            "node": "FingerLeft",
+            "source": "sample",
+            "mode": "position",
+            "axis": "x",
+            "inputMin": 12,
+            "inputMax": 38,
+            "outputMin": -0.14,
+            "outputMax": 0.05,
+            "smooth": 0.15,
+            "enabled": true,
+            "field": "pressure"
+          },
+          {
+            "id": "m-jaw-right",
+            "node": "FingerRight",
+            "source": "sample",
+            "mode": "position",
+            "axis": "x",
+            "inputMin": 12,
+            "inputMax": 38,
+            "outputMin": 0.14,
+            "outputMax": -0.05,
+            "smooth": 0.15,
+            "enabled": true,
+            "field": "pressure"
+          },
+          {
+            "id": "m-probe",
+            "node": "VibrationProbe",
+            "source": "sample",
+            "mode": "color",
+            "axis": "y",
+            "inputMin": 5,
+            "inputMax": 19,
+            "outputMin": 0,
+            "outputMax": 1,
+            "threshold": 11.5,
+            "colorLow": "#1abb7f",
+            "colorHigh": "#e65b43",
+            "smooth": 0.2,
+            "enabled": true,
+            "field": "vibration"
+          },
+          {
+            "id": "m-temp",
+            "node": "TemperatureProbe",
+            "source": "sample",
+            "mode": "color",
+            "axis": "y",
+            "inputMin": 40,
+            "inputMax": 90,
+            "outputMin": 0,
+            "outputMax": 1,
+            "threshold": 77,
+            "colorLow": "#238acf",
+            "colorHigh": "#e38c32",
+            "smooth": 0.2,
+            "enabled": true,
+            "field": "temperature"
+          },
+          {
+            "id": "m-status",
+            "node": "SafetyBeacon",
+            "source": "asset",
+            "mode": "color",
+            "axis": "y",
+            "inputMin": 0,
+            "inputMax": 4,
+            "outputMin": 0,
+            "outputMax": 1,
+            "threshold": 0,
+            "colorLow": "#19ad6e",
+            "colorHigh": "#d43d35",
+            "smooth": 0.1,
+            "enabled": true,
+            "field": "openAlerts"
+          }
+        ],
+        "sampleAssetField": "asset",
+        "sampleTimeField": "at"
+      },
+      "scenePartVariable": "import_variable_15"
+    },
+    {
+      "id": "import_widget_17",
+      "widget": "observation",
+      "configVersion": 1,
+      "title": "Fleet vibration · WASM",
+      "observation": {
+        "kind": "statistics",
+        "timeField": "at",
+        "signals": [
+          {
+            "field": "vibration",
+            "unit": "mm/s",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal1",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal2",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal3",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal4",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal5",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal6",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal7",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal8",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal9",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "temperature",
+            "unit": "C",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal11",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal12",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal13",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal14",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal15",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal16",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal17",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal18",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal19",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "pressure",
+            "unit": "bar",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal21",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal22",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal23",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal24",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal25",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal26",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal27",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal28",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal29",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal30",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal31",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal32",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal33",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal34",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal35",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal36",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal37",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal38",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal39",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal40",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal41",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal42",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal43",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal44",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal45",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal46",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal47",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal48",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal49",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal50",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal51",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal52",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal53",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal54",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal55",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal56",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal57",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal58",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal59",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "speed",
+            "unit": "rpm",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal61",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal62",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal63",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal64",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal65",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal66",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal67",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal68",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal69",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "current",
+            "unit": "A",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal71",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal72",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal73",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal74",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal75",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal76",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal77",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal78",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal79",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal80",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal81",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal82",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal83",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal84",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal85",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal86",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal87",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal88",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal89",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal90",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal91",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal92",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal93",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal94",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal95",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal96",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal97",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal98",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal99",
+            "unit": "",
+            "group": "Plant observations"
+          }
+        ],
+        "assetObject": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "assetField": "asset"
+      },
+      "object": "build.reading",
+      "collectionVariable": "import_observation_set_20",
+      "recordVariable": "import_variable_1",
+      "observationContextVariable": "import_observation_set_22",
+      "observationSignalVariable": "import_observation_signal_23",
+      "observationThresholdVariable": "import_observation_threshold_24",
+      "observationRowsVariable": "import_observation_rows_25"
+    },
+    {
+      "id": "import_widget_26",
+      "widget": "record-view",
+      "configVersion": 1,
+      "title": "Asset Detail",
+      "recordVariable": "import_variable_1",
+      "recordView": {
+        "tabs": [
+          "overview",
+          "properties",
+          "links",
+          "history"
+        ]
+      },
+      "fields": [
+        "name",
+        "state",
+        "priority",
+        "owner",
+        "pressure",
+        "temperature",
+        "availability",
+        "openAlerts",
+        "model",
+        "installedAt",
+        "lastInspection",
+        "nextMaintenance",
+        "exposure"
+      ],
+      "actions": [
+        "build.asset.update",
+        "build.asset.schedule"
+      ]
+    },
+    {
+      "id": "import_widget_36",
+      "widget": "observation",
+      "configVersion": 1,
+      "title": "Plant telemetry · 100,000 × 100",
+      "observation": {
+        "kind": "table",
+        "timeField": "at",
+        "signals": [
+          {
+            "field": "vibration",
+            "unit": "mm/s",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal1",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal2",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal3",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal4",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal5",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal6",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal7",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal8",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal9",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "temperature",
+            "unit": "C",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal11",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal12",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal13",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal14",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal15",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal16",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal17",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal18",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal19",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "pressure",
+            "unit": "bar",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal21",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal22",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal23",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal24",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal25",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal26",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal27",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal28",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal29",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal30",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal31",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal32",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal33",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal34",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal35",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal36",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal37",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal38",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal39",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal40",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal41",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal42",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal43",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal44",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal45",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal46",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal47",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal48",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal49",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal50",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal51",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal52",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal53",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal54",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal55",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal56",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal57",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal58",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal59",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "speed",
+            "unit": "rpm",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal61",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal62",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal63",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal64",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal65",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal66",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal67",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal68",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal69",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "current",
+            "unit": "A",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal71",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal72",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal73",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal74",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal75",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal76",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal77",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal78",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal79",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal80",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal81",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal82",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal83",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal84",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal85",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal86",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal87",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal88",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal89",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal90",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal91",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal92",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal93",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal94",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal95",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal96",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal97",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal98",
+            "unit": "",
+            "group": "Plant observations"
+          },
+          {
+            "field": "signal99",
+            "unit": "",
+            "group": "Plant observations"
+          }
+        ],
+        "assetObject": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.asset"
+        },
+        "assetField": "asset",
+        "metadata": {
+          "plant": "plant",
+          "device": "device",
+          "status": "state",
+          "asset": "asset"
+        },
+        "rowHeight": 30,
+        "rowOutput": "import_observation_row_38",
+        "assetOutput": "import_variable_1"
+      },
+      "object": "build.reading",
+      "collectionVariable": "import_observation_set_20"
+    },
+    {
+      "id": "import_widget_41",
+      "widget": "collection-title",
+      "configVersion": 1,
+      "title": "filteredAssets",
+      "collectionVariable": "import_variable_28",
+      "countVariable": "import_count_43"
+    },
+    {
+      "id": "import_widget_44",
+      "widget": "detail",
+      "configVersion": 1,
+      "title": "Properties",
+      "recordVariable": "import_variable_1",
+      "fields": [
+        "name",
+        "state",
+        "priority",
+        "owner",
+        "pressure",
+        "temperature",
+        "availability",
+        "model",
+        "installedAt",
+        "lastInspection",
+        "nextMaintenance"
+      ],
+      "detailPresentation": {
+        "columns": 2,
+        "hideNull": true
+      }
+    },
+    {
+      "id": "import_widget_46",
+      "widget": "record-links",
+      "configVersion": 1,
+      "title": "Related",
+      "recordVariable": "import_variable_1",
+      "recordLinks": [
+        {
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.sensor"
+          },
+          "field": "asset",
+          "title": "Sensors"
+        },
+        {
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.alert"
+          },
+          "field": "asset",
+          "title": "Alerts"
+        },
+        {
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.work"
+          },
+          "field": "asset",
+          "title": "Work Orders"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_48",
+      "widget": "ai-assistant",
+      "configVersion": 1,
+      "title": "AIP Insights",
+      "recordVariable": "import_variable_1",
+      "function": {
+        "name": "advice",
+        "version": 1
+      },
+      "ai": {
+        "kind": "generated"
+      }
+    },
+    {
+      "id": "import_widget_50",
+      "widget": "button-group",
+      "configVersion": 1,
+      "title": "Asset Actions",
+      "buttons": [
+        {
+          "id": "import_control_52",
+          "title": "Open Detail",
+          "variant": "primary",
+          "icon": "arrow"
+        },
+        {
+          "id": "import_control_53",
+          "title": "Edit Status",
+          "variant": "default",
+          "icon": "edit"
+        },
+        {
+          "id": "import_control_55",
+          "title": "Create Work Order",
+          "variant": "default",
+          "icon": "plus"
+        },
+        {
+          "id": "import_control_57",
+          "title": "Take offline…",
+          "variant": "danger",
+          "icon": "trash"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_60",
+      "widget": "notice",
+      "configVersion": 1,
+      "title": "Offline warning",
+      "notice": {
+        "message": "Offline assets stop producing revenue. The Update asset status action requires High priority when the new status is Offline.",
+        "tone": "danger",
+        "title": "Take this asset offline?"
+      }
+    },
+    {
+      "id": "import_widget_62",
+      "widget": "inline-action",
+      "configVersion": 1,
+      "title": "Edit Asset",
+      "recordVariable": "import_variable_1",
+      "actions": [
+        "build.asset.update"
+      ],
+      "actionDefaults": [
+        {
+          "parameter": "status",
+          "field": "state"
+        },
+        {
+          "parameter": "priority",
+          "field": "priority"
+        },
+        {
+          "parameter": "owner",
+          "field": "owner"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_65",
+      "widget": "inline-action",
+      "configVersion": 1,
+      "title": "Edit Asset",
+      "recordVariable": "import_variable_1",
+      "actions": [
+        "build.asset.update"
+      ],
+      "actionDefaults": [
+        {
+          "parameter": "status",
+          "field": "state"
+        },
+        {
+          "parameter": "priority",
+          "field": "priority"
+        },
+        {
+          "parameter": "owner",
+          "field": "owner"
+        }
+      ]
+    },
+    {
+      "id": "import_widget_68",
+      "widget": "inline-action",
+      "configVersion": 1,
+      "title": "Create Work Order",
+      "recordVariable": "import_variable_1",
+      "actions": [
+        "build.asset.schedule"
+      ]
+    },
+    {
+      "id": "import_widget_70",
+      "widget": "record-scatter",
+      "configVersion": 1,
+      "title": "Chart 4 (unused)",
+      "scatter": {
+        "xField": "pressure",
+        "yField": "temperature",
+        "colorField": "state",
+        "labelField": "name"
+      },
+      "collectionVariable": "import_scatter_set_75",
+      "selection": "import_selection_76"
+    },
+    {
+      "id": "import_widget_77",
+      "widget": "table",
+      "configVersion": 1,
+      "title": "Object Table 3 (unused)",
+      "collectionVariable": "import_variable_72",
+      "tableColumns": [
+        {
+          "field": "name"
+        }
+      ],
+      "fields": [
+        "name"
+      ]
+    }
+  ],
+  "selections": [
+    {
+      "name": "import_selection_76",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.asset"
+      }
+    }
+  ],
+  "title": "Digital Twin & Telemetry",
+  "description": "Monitor assets, triage alerts, and dispatch work orders across the global fleet."
+}

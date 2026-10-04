@@ -17,7 +17,7 @@ func (d *PageDocument) checkCollaboration(s Section) error {
 		return nil
 	}
 	v := d.Variables[s.RecordVariable]
-	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Collaboration.RequiredUIProfile) || v.Type != "record" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "record" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" || s.SelectionVariable != "" || s.SelectionSetVariable != "" || s.RecordSetVariable != "" || s.Relation != "" || s.ParentSelection != "" || s.Query.Name != "" || s.InlineEdit != nil {
+	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Collaboration.RequiredUIProfile) || v.Type != "record" || !(v.Mode == "resource" || s.Widget == "scene-3d" && d.sharedTelemetryRecord(s.RecordVariable)) || v.Source == nil || !(v.Source.Kind == "record" && slices.Contains([]string{"page", "overlay"}, v.Scope) || s.Widget == "scene-3d" && d.sharedTelemetryRecord(s.RecordVariable)) || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" || s.SelectionVariable != "" || s.SelectionSetVariable != "" || s.RecordSetVariable != "" || s.Relation != "" || s.ParentSelection != "" || s.Query.Name != "" || s.InlineEdit != nil {
 		return fmt.Errorf("collaboration needs its original scoped record resource without independent business bindings")
 	}
 	var scalar, mode string
@@ -38,8 +38,12 @@ func (d *PageDocument) checkCollaboration(s Section) error {
 		}
 		scalar, mode = s.FileVariable, "read"
 	}
+	scope, owner, validOwner := d.recordInputOwner(s)
+	if !validOwner {
+		return fmt.Errorf("collaboration shared record cannot enter a loop")
+	}
 	binding := d.Variables[scalar]
-	if scalar == "" || binding.Type != "string" || binding.Scope != v.Scope || binding.Owner != v.Owner || binding.Mode != "state" && !(mode == "read" && binding.Mode == "constant") {
+	if scalar == "" || binding.Type != "string" || binding.Scope != scope || binding.Owner != owner || binding.Mode != "state" && !(mode == "read" && binding.Mode == "constant") {
 		return fmt.Errorf("collaboration scalar needs its original record owner and supported string binding")
 	}
 	if s.Widget == "pdf-viewer" {
@@ -61,14 +65,18 @@ func (d *PageDocument) checkCollaborationOwners(sections []Section) error {
 		if record.Source == nil {
 			continue // the section's original-resource check supplies the diagnostic
 		}
+		producer := record.Source.Section
+		if d.sharedTelemetryRecord(s.RecordVariable) {
+			producer = "application/" + record.Source.Variable
+		}
 		for _, scalar := range []string{s.CommentDraftVariable, s.FileVariable, s.PdfPageVariable, s.ScenePartVariable} {
 			if scalar == "" {
 				continue
 			}
-			if producer, used := owners[scalar]; used && producer != record.Source.Section {
+			if previous, used := owners[scalar]; used && previous != producer {
 				return fmt.Errorf("shared collaboration scalar %s needs one original record producer", scalar)
 			}
-			owners[scalar] = record.Source.Section
+			owners[scalar] = producer
 		}
 	}
 	return nil

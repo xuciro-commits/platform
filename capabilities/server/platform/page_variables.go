@@ -45,6 +45,9 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Telemetry struct {
+		SharedUIProfile string `json:"sharedUIProfile"`
+	} `json:"telemetry"`
 	RecordMap struct {
 		SharedUIProfile string `json:"sharedUIProfile"`
 	} `json:"recordMap"`

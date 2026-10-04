@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+"Shared asset selection": "共享资产选择",
+"Use a local asset output": "使用局部资产输出",
 "Map calculation result {variable}": "映射计算结果 {variable}",
 "Published calculation": "已发布的计算",
 "Numeric output field": "数值输出字段",

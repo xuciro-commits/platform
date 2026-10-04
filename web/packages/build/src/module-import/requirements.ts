@@ -21,7 +21,7 @@ export function collaborationRecordChoices(module:SourceModule|undefined,pageID:
  if(!module)return [];
  const owners=new Map<string,string|undefined>(),walk=(root:string,owner?:string,seen=new Set<string>())=>{if(seen.has(root))return;seen.add(root);for(const child of module.sections[root]?.children??[]){if(child.kind==="widget")owners.set(child.id,owner);else walk(child.id,owner,seen);}};
  const page=module.pages.find(p=>p.id===pageID);if(!page)return [];walk(page.rootSectionId);module.overlays.forEach(o=>walk(o.rootSectionId,o.id));module.unusedWidgetIds.forEach(id=>owners.set(id,undefined));if(!owners.has(widgetID))return [];
- const shared=module.widgets[widgetID]?.type==="VertexGraph"?aiImportInterfaceRecords(module):[];
+ const shared=["VertexGraph","Scene3D"].includes(module.widgets[widgetID]?.type??"")?aiImportInterfaceRecords(module):[];
  return [...shared,...module.variables.flatMap(v=>{if(v.type!=="object"||v.definitionKind!=="widgetOutput"||v.widgetOutputKey!=="activeObject"||v.isInterface)return [];
   const producers=Object.values(module.widgets).filter(w=>owners.has(w.id)&&!module.unusedWidgetIds.includes(w.id)&&owners.get(w.id)===owners.get(widgetID)&&["ObjectTable","ObjectList","KanbanBoard","Calendar","ObjectSelector","Leaderboard","ScatterPlot","ResourceList","MapTemplate","Map"].includes(w.type)&&w.config.activeVarId===v.id&&(w.type!=="ObjectTable"||v.widgetId===w.id));if(producers.length!==1)return [];
   const set=module.variables.find(value=>value.id===producers[0]!.config.objectSetVarId),external=text(object(set?.objectSet)?.objectType||set?.sourceObjectType);return external?[{id:v.id,title:v.name,object:external}]:[];

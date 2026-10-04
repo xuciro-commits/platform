@@ -182,6 +182,9 @@ func (p Page) CheckRecordPorts() error {
 				return fmt.Errorf("record card object differs from its original record resource")
 			}
 		}
+		if err := p.CheckObservationBinding(s); err != nil {
+			return err
+		}
 		if err := p.CheckExplorationBinding(s); err != nil {
 			return err
 		}

@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.102",
+  "uiProfile": "platform.page.v2.103",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5143,9 +5143,13 @@
     "platform.page.v2.99",
     "platform.page.v2.100",
     "platform.page.v2.101",
-    "platform.page.v2.102"
+    "platform.page.v2.102",
+    "platform.page.v2.103"
   ],
   "runtime": {
+    "telemetry": {
+      "sharedUIProfile": "platform.page.v2.103"
+    },
     "scope": "page",
     "valueTypes": [
       "string",
