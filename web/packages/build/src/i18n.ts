@@ -2,6 +2,21 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Map business observations {widget}": "映射业务观测 {widget}",
+ "Observation source interpretation": "观测来源解释",
+ "Use actual business observations": "使用真实业务观测",
+ "Original sample query version": "原样本查询版本",
+ "Choose an original sample query": "选择原样本查询",
+ "Source signal index {index}": "来源信号索引 {index}",
+ "Source asset consumer migration": "来源资产消费者迁移",
+ "Choose the actual asset producer": "选择实际资产生产者",
+ "Keep consumers on the original record producer": "消费者继续使用原记录生产者",
+ "Use the observation table asset port for source consumers": "来源消费者使用观测表资产端口",
+ "The retained query owns actual sample membership and time. Review signal mappings and asset producer changes; simulated curves, worker throughput and flow badges do not become platform facts.": "保留查询决定真实样本成员及时间。请审查信号映射和资产生产者变化；模拟曲线、Worker 吞吐和流程标识不会变成平台事实。",
+ "Map a retained original sample query, actual event time and numeric signals. Choose the asset producer explicitly and keep its reference and history query compatible.": "映射保留的原样本查询、真实事件时间和数值信号。请明确选择资产生产者，并保持引用和历史查询兼容。",
+ "Telemetry is mapped to a 100-record original business window with explicit signal indices and separate row and asset ports. Asset consumers use the reviewed producer choice; currentTelemetryRow metadata and the unused selectedSignal setting are retained in the report. Source worker controls and the larger CSV export remain unported.": "遥测映射为 100 条原业务记录窗口，明确绑定信号索引，并分别输出观测行和资产。资产消费者使用已审查的生产者；currentTelemetryRow 元数据及未执行的 selectedSignal 设置保留在报告中。来源 Worker 控制和更大窗口的 CSV 导出仍未迁移。",
+ "Statistics use the complete original sample set and the declared 1k, 10k or 100k window. Asset history uses its retained query; synthetic appended history, AST-1000 fallback and the flow-output badge are not imported as data or execution.": "统计使用完整原样本集合和声明的 1千、1万或10万窗口。资产历史使用保留查询；追加生成的模拟历史、AST-1000 兜底及流程输出标识不会作为数据或执行导入。",
+ "Actual retained sample history replaces the source synthetic curve. The chosen history query owns membership and business time; source asset filters still own the asset average and do not become implicit sample joins.": "真实保留样本历史替换来源模拟曲线。所选历史查询决定成员和业务时间；来源资产筛选仍控制资产平均值，不会成为隐式样本连接。",
  "Bind original observation time, signals, owned windows and matching record or statistic ports before saving.": "保存前请绑定原观测时间、信号、所属查询窗口，以及匹配的记录或统计端口。",
  "Observation view": "观测视图",
  "Original asset collection": "原资产集合",

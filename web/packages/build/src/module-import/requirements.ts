@@ -23,6 +23,7 @@ export function workshopRequirements(module:SourceModule|undefined){
   if(w.type==="ObjectTable")for(const c of Array.isArray(w.config.columns)?w.config.columns:[])property(external(text(w.config.objectSetVarId)),text(object(c)?.key));
   if(w.type==="ChartXY")for(const key of ["xProperty","yProperty"])property(external(text(w.config.objectSetVarId)),text(w.config[key]));
   if(["ChartVega","ChartWaterfall"].includes(w.type))property(external(text(w.config.objectSetVarId)),"status");
+  if(w.type==="ObservabilityChart")property(external(text(w.config.objectSetVarId)),"availability");
   if(w.type==="DerivedSeries")property(external(text(w.config.objectSetVarId)),"pressure");
   if(w.type==="FreeFormAnalysis")for(const key of ["pressure","temperature","availability","revenueImpact"])property(external(text(w.config.objectSetVarId)),key);
   if(w.type==="MapTemplate")property(external(text(w.config.objectSetVarId)),"name");

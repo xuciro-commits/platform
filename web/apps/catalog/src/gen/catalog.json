@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:2dde5d6277219c10",
+  "revision": "sha256:57cde48780cc3915",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4224,6 +4224,7 @@
       "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
+      "web/packages/build/src/module-import/ObservationImportFields.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
@@ -4281,6 +4282,7 @@
       "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
+      "web/packages/build/src/module-import/ObservationImportFields.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",

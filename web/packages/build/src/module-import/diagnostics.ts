@@ -1,5 +1,9 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "observation-binding": "Map a retained original sample query, actual event time and numeric signals. Choose the asset producer explicitly and keep its reference and history query compatible.",
+ "native-observation-selection": "Telemetry is mapped to a 100-record original business window with explicit signal indices and separate row and asset ports. Asset consumers use the reviewed producer choice; currentTelemetryRow metadata and the unused selectedSignal setting are retained in the report. Source worker controls and the larger CSV export remain unported.",
+ "native-observation-statistics": "Statistics use the complete original sample set and the declared 1k, 10k or 100k window. Asset history uses its retained query; synthetic appended history, AST-1000 fallback and the flow-output badge are not imported as data or execution.",
+ "native-observation-history": "Actual retained sample history replaces the source synthetic curve. The chosen history query owns membership and business time; source asset filters still own the asset average and do not become implicit sample joins.",
  "exploration-profile":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
  "exploration-asset-binding":"This source profile requires original typed resources, explicit retained assets and reviewed object-specific graph output migration.",
  "record-work-profile":"Bind original row action parameters, a bounded ID-ordered window, or an explicitly reviewed initial session note. Incompatible parameters, incomplete declarations and unsupported sources are refused.",

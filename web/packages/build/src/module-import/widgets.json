@@ -397,9 +397,9 @@
       "sourceType": "TimeSeriesAnalysis",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "observation",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "ImageAnnotation",
@@ -413,9 +413,9 @@
       "sourceType": "ObservabilityChart",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "observation",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "ResourceList",
@@ -725,17 +725,17 @@
       "sourceType": "TelemetryTable",
       "sourceCategory": "Industrial operations",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "observation",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "TelemetryStats",
       "sourceCategory": "Industrial operations",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "observation",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "Scene3D",
