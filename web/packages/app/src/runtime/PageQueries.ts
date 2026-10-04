@@ -1,6 +1,6 @@
-import {collectionInput} from "./collection-input";
+import {collectionInput, type CollectionInput} from "./collection-input";
 import {usePageAggregates} from "./PageAggregates";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { pageUIManifest, type Api } from "@platform/kernel";
 import { findDefinition, useHost } from "../index";
 import type { PageSessionStore, PageSessionSnapshot, QueryView } from "./Session";
@@ -21,7 +21,17 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
   const view=(id:string,result:{signature:string})=>{const v=snapshot.views[planKey(id)];return !ranked(id)&&!avatars(id)&&!resourceList(id)&&!analysisAxes(id)&&!recordWork(id)&&!fixedObservation(id)&&v?.base===result.signature?picker(id)?{search:v.search}:observation(id)?{search:v.search,offset:v.offset}:v:undefined;};
   const ranked=(id:string)=>(page.sections??[]).some(s=>s.widget==="record-leaderboard"&&page.document?.variables?.[s.collectionVariable??""]?.source?.query===id);
   const active=(owner?:string)=>!owner||owner===editingOverlay||values[page.document?.overlays?.[owner]?.openVariable??""]?.status==="value"&&(values[page.document!.overlays![owner]!.openVariable] as {value:unknown}).value===true;
-  const base = compileQueryPlans(plans,page.document?.variables??{},owner=>itemOwner?values:owner?overlays[owner]??{}:values,type=>source.entity(type),plan=>plan.query?findDefinition(definitions,plan.query.ref):undefined,pageUIManifest.runtime.query,page.sections??[],active,(id,result)=>view(id,result));
+  const [builderState,setBuilderState]=useState<Record<string,{key:string;conditions:Api.PageQueryCondition[]}>>({});
+  const builderIdentity=JSON.stringify([source.scope,reader.scope,page.document,page.sections]),builderEpoch=useRef({identity:builderIdentity,generation:0});
+  if(builderEpoch.current.identity!==builderIdentity)builderEpoch.current={identity:builderIdentity,generation:builderEpoch.current.generation+1};
+  const builderBases:Record<string,CollectionInput>={};
+  const builderKey=(s:Api.Section,input:CollectionInput)=>JSON.stringify([builderEpoch.current.generation,source.scope,reader.scope,page.document,page.sections,s.id,s.collectionBuilder,s.collectionVariable,s.collectionOutputVariable,snapshot.scalars[page.document?.overlays?.[page.document?.variables?.[s.collectionOutputVariable??""]?.owner??""]?.openVariable??""]===true?session.overlayEpoch(page.document!.variables![s.collectionOutputVariable!]!.owner??""):0,input]);
+  const virtual=Object.fromEntries((page.sections??[]).filter(s=>s.widget==="collection-builder").flatMap(s=>{const v=page.document?.variables?.[s.collectionVariable??""],q=v?.source?.kind==="plan"?plans[v.source.query??""]:undefined;return q?[[`builder/${s.id}`,{owner:q.owner,object:q.object,input:s.collectionOutputVariable,limit:1} as Api.PageQuery]]:[];}));
+  const allPlans={...plans,...virtual};
+  const builderSections=(page.sections??[]).filter(s=>s.widget!=="collection-builder"||!page.document?.unusedWidgets?.some(entry=>page.document?.nodes[entry.node]?.section===s.id));
+  const allBase = compileQueryPlans(allPlans,page.document?.variables??{},owner=>itemOwner?values:owner?overlays[owner]??{}:values,type=>source.entity(type),plan=>plan.query?findDefinition(definitions,plan.query.ref):undefined,pageUIManifest.runtime.query,builderSections,active,(id,result)=>view(id,result),(s,input)=>{builderBases[s.id!]=input;const state=builderState[s.id!];return state?.key===builderKey(s,input)?state.conditions:[];});
+  const base=allBase.filter(([id])=>!!plans[id]);
+  const builders=Object.fromEntries((page.sections??[]).filter(s=>s.widget==="collection-builder").map(s=>{const result=allBase.find(([id])=>id===`builder/${s.id}`)?.[1],input=builderBases[s.id!];return [s.id!,{key:input?builderKey(s,input):"",result:result?.status==="value"&&result.collection?{status:"value" as const,value:result.collection}:result??{status:"error" as const,code:"Collection builder source is unavailable."},apply:(conditions:Api.PageQueryCondition[])=>{if(!input||!active(page.document?.variables?.[s.collectionOutputVariable??""]?.owner))return;setBuilderState(old=>({...old,[s.id!]:{key:builderKey(s,input),conditions}}));}}];}));
   const compiled = base.map(([id,result]) => [id,queryView(plans[id]!,result,result.status==="value"?view(id,result):undefined,source.entity(plans[id]!.object.name),plans[id]?.query?findDefinition(definitions,plans[id]!.query!.ref):undefined,pageUIManifest.runtime.query,pickerTitle(id))] as const);
   const aggregates=usePageAggregates(page.document?.variables??{},compiled,session,page.document);
   const [round, rerun] = useState(0);
@@ -35,7 +45,7 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
   }, [session, requestKey, source.scope, source.revision, reader.scope,reader.revision, round]);
   const ids = JSON.stringify(Object.keys(plans));
   useEffect(() => () => {if(!keepOnUnmount)session.resetQueries(JSON.parse(ids).map(planKey))}, [session, ids,keepOnUnmount]);
-  const resources: Record<string, VariableResult> = {}, signatures: Record<string, string> = {};
+  const resources: Record<string, VariableResult> = Object.fromEntries((page.sections??[]).filter(s=>s.widget==="collection-builder"&&s.collectionOutputVariable).map(s=>[s.collectionOutputVariable!,builders[s.id!]?.result as VariableResult])), signatures: Record<string, string> = {};
   for (const id of Object.keys(page.document?.variables ?? {})) {
     const queryID=variablePlan(page,id);if(queryID===undefined||!plans[queryID])continue;
     const plan = compiled.find(([id]) => id === queryID)?.[1];
@@ -62,5 +72,5 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
     inputSearch:picker(id)?snapshot.views[planKey(id)]?.search??"":undefined,searchLocked:ranked(id)||!picker(id)&&!!plans[id]?.search,sortLocked:!!result.sortLocked||observation(id)||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)||!!(plans[id]?.query&&boundQueryDefinition(findDefinition(definitions,plans[id]!.query!.ref),plans[id]!.query)?.query?.sort?.length),maxOffset:fixedObservation(id)||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)?0:pageUIManifest.runtime.query.maxOffset,
     onChange:(change:QueryView)=>{if(fixedObservation(id)||observation(id)&&change.sort!==undefined||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)&&(change.sort!==undefined||change.offset!==undefined&&change.offset!==0))return;const original=base.find(([key])=>key===id)?.[1];if(original?.status!=="value")return;const next=queryView(plans[id]!,original,{...(snapshot.views[planKey(id)]?.base===original.signature?snapshot.views[planKey(id)]:{}),...change},source.entity(plans[id]!.object.name),plans[id]?.query?findDefinition(definitions,plans[id]!.query!.ref):undefined,pageUIManifest.runtime.query,pickerTitle(id));if(next.status==="value")session.setQueryView(planKey(id),original.signature,change);}
   }:undefined]));
-  return { collectionInputs, resources:{...resources,...aggregates}, signatures, windows, retry: (id: string) => { session.resetQueries([planKey(id)]); rerun((round) => round + 1); } };
+  return { builders, collectionInputs:{...Object.fromEntries((page.sections??[]).filter(s=>s.widget==="collection-builder"&&s.collectionOutputVariable).map(s=>[s.collectionOutputVariable!,builders[s.id!]?.result as VariableResult])),...collectionInputs}, resources:{...resources,...aggregates}, signatures, windows, retry: (id: string) => { session.resetQueries([planKey(id)]); rerun((round) => round + 1); } };
 }

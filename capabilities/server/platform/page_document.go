@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.Widget == "collection-builder" || s.CollectionBuilder != nil || s.CollectionOutputVariable != "" {
+				return fmt.Errorf("collection builder requires a document")
+			}
 			if s.Map != nil || s.Scene != nil || s.SceneSampleCollectionVariable != "" || s.SceneSampleVariable != "" || s.ScenePartVariable != "" || s.Widget == "record-map" || s.Widget == "scene-3d" || s.Widget == "image-annotation" {
 				return fmt.Errorf("spatial views require a document")
 			}
@@ -362,6 +365,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		if err := d.checkHeatmap(section); err != nil {
 			return err
 		}
+		if err := d.checkCollectionBuilder(section, sections); err != nil {
+			return err
+		}
 		if err := d.checkSpatial(section); err != nil {
 			return err
 		}
@@ -425,6 +431,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		for _, section := range sections {
 			for _, resource := range pageWidgets.Runtime.Resources {
 				if section.ID == variable.Source.Section && (section.Widget == resource.Widget || PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordList.RequiredUIProfile) && slices.Contains(resource.Widgets, section.Widget)) && variable.Source.Kind == resource.Kind {
+					if section.Widget == "collection-builder" && (variable.Source.Kind != "query" || section.CollectionOutputVariable != id || variable.Source.Port != "") {
+						return fmt.Errorf("collection resource needs its declared output")
+					}
 					if resource.Kind == "record" {
 						if section.Widget == "graph-explorer" || section.Widget == "observation" {
 							matched := section.HasRecordOutput(variable.Source.Port, id)

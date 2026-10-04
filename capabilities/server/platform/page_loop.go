@@ -310,6 +310,9 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		if !accessible(section.CountVariable, "", sectionOverlays[section.ID]) || section.Widget == "collection-title" && sectionOwners[section.ID] != "" {
 			return fmt.Errorf("collection count cannot escape its scope or enter a loop")
 		}
+		if !accessible(section.CollectionOutputVariable, "", sectionOverlays[section.ID]) || section.Widget == "collection-builder" && (sectionOwners[section.ID] != "" || d.Variables[section.CollectionOutputVariable].Owner != sectionOverlays[section.ID]) {
+			return fmt.Errorf("collection builder output needs its exact owner")
+		}
 		if !accessible(section.CollectionVariable, "", sectionOverlays[section.ID]) {
 			return fmt.Errorf("page section %s window escapes its overlay scope", section.ID)
 		}

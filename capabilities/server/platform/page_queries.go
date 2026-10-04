@@ -104,6 +104,9 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 		}
 		return false
 	}
+	if err := d.checkCollectionBuilderGraph(sections); err != nil {
+		return err
+	}
 	if err := d.CheckQuerySets(); err != nil {
 		return err
 	}
@@ -130,7 +133,7 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 					}
 				}
 			}
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.85") || inputScope == "application" || !ok || v.Mode != "input" || v.Type != "object-set" || object != q.Object || q.Query != nil || q.For != nil || q.Direction != "" || q.ItemOwner != "" || q.Set != nil {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.85") || inputScope == "application" || !ok || (v.Mode != "input" || object != q.Object) && !d.collectionBuilderInput(q.Input, q.Owner, q.Object, sections) || v.Type != "object-set" || q.Query != nil || q.For != nil || q.Direction != "" || q.ItemOwner != "" || q.Set != nil {
 				return fmt.Errorf("query %s needs its exact original collection input", id)
 			}
 		}
@@ -533,6 +536,9 @@ func (d *PageDocument) variableDependsOnQuery(variable, target string, sections 
 		}
 		seenQueries[id] = true
 		q := d.Queries[id]
+		if q.Input != "" && variableDepends(q.Input) {
+			return true
+		}
 		for _, value := range q.Values() {
 			if value.Variable != "" && variableDepends(value.Variable) {
 				return true

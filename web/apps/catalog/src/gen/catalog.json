@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:00a02b3b809f99c0",
+  "revision": "sha256:e49b36abbc27b815",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4373,6 +4373,7 @@
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/app/src/widgets/Button.tsx",
+      "web/packages/app/src/widgets/CollectionBuilder.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/RecordCollaboration.tsx",
       "web/packages/build/src/application.tsx",
@@ -4391,6 +4392,7 @@
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/ButtonGroupInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/CollectionBuilderInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ObservationInspector.tsx",
@@ -4442,6 +4444,7 @@
       "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/module-import/AIImportFields.tsx",
+      "web/packages/build/src/module-import/BuilderImportFields.tsx",
       "web/packages/build/src/module-import/EmbeddingImportFields.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/module-import/ObservationImportFields.tsx",
@@ -4461,6 +4464,7 @@
       "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
       "web/packages/build/src/page-editor/widgets/CollaborationInspector.tsx",
       "web/packages/build/src/page-editor/widgets/CollectionAnalysisInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/CollectionBuilderInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ContextInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/DateInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
@@ -4577,6 +4581,7 @@
       "web/packages/app/src/widgets/BooleanInput.tsx",
       "web/packages/app/src/widgets/ChoiceInput.tsx",
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
+      "web/packages/app/src/widgets/CollectionBuilder.tsx",
       "web/packages/app/src/widgets/ContextViews.tsx",
       "web/packages/app/src/widgets/DateInput.tsx",
       "web/packages/app/src/widgets/EmbeddedPage.tsx",
@@ -4868,6 +4873,12 @@
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
       "web/packages/app/src/widgets/RecordScatter.tsx"
     ],
+    "ui/field-types": [
+      "web/packages/app/src/widgets/CollectionBuilder.tsx"
+    ],
+    "ui/filter-bar": [
+      "web/packages/app/src/widgets/CollectionBuilder.tsx"
+    ],
     "ui/breadcrumb-trail": [
       "web/packages/app/src/widgets/ContextViews.tsx"
     ],
@@ -5049,8 +5060,10 @@
     ],
     "ui/toggles": [
       "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/module-import/BuilderImportFields.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/page-editor/widgets/CollectionAnalysisInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/CollectionBuilderInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ContextInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",

@@ -641,6 +641,10 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := s.CheckRecordEvents(info); err != nil {
 				return err
 			}
+		case "collection-builder":
+			if err := s.CheckCollectionBuilderFields(info); err != nil {
+				return err
+			}
 		case "record-map":
 			if err := s.CheckMap(info); err != nil {
 				return err

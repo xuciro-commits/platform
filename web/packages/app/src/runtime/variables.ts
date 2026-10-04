@@ -105,7 +105,7 @@ export function evaluateVariables(variables: Variables, state: Record<string, un
     if (variable.mode === "input" || variable.mode === "shared" || variable.mode === "aggregate") { result[id] = resources[id] ?? (variable.initial !== undefined ? { status: "value", value: variable.initial as Scalar } : { status: "empty" }); continue; }
     if (variable.mode === "resource") {
       const value = resources[id] ?? { status: "empty" };
-      result[id] = (value.status === "value" || value.status === "empty") && value.value !== undefined && (value.value === null || typeof value.value !== "object" || value.value.kind !== variable.type)
+      result[id] = (value.status === "value" || value.status === "empty") && value.value !== undefined && (value.value === null || typeof value.value !== "object" || value.value.kind !== variable.type && !(variable.type==="object-set" && variable.source?.kind==="query" && value.value.kind==="object-set-input"))
         ? { status: "error", code: "Resource source type mismatch" } : value;
       continue;
     }

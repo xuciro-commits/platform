@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "collection-builder-binding":"Explicitly migrate an empty source array to a same-owner complete original predicate and choose visible typed fields. Cycles, competing writers and unknown settings are refused.",
+ "native-collection-predicate":"The source output becomes a complete original predicate with independent consumer windows, instead of downloaded rows.",
  "spatial-binding":"Map typed WGS84 fields or an original file ID state, asset and compatible retained sample query. Unknown, simulated or executable inputs are refused.",
  "native-spatial":"Original map windows and authorized image/GLB attachments replace source simulations. Model URLs and worker data remain in the report; layers and reviewed typed mappings retain their configuration.",
  "ai-binding": "Map an original authorized record and fixed function; conversation input and result types must match.",

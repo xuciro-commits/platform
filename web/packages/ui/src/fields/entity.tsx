@@ -3,7 +3,7 @@ import { Plus, X } from "lucide-react";
 import { z } from "zod";
 import { Button } from "../primitives/button";
 import { Select } from "../primitives/input";
-import type { FieldType } from "./types";
+import type { FieldType, Operator } from "./types";
 import { t } from "../i18n";
 
 /** An entity's fields in display order, keyed by the record's property names. */
@@ -54,14 +54,14 @@ export function applyFilters<R>(entity: Entity<R>, rows: R[], filters: Filter[])
 }
 
 /** Filters built from field types: each type offers its own operators and argument editor. */
-export function FilterBar<R>({ entity, filters, onChange }: { entity: Entity<R>; filters: Filter[]; onChange: (filters: Filter[]) => void }) {
-  const keys = Object.keys(entity.fields);
+export function FilterBar<R>({ entity, filters, onChange, maxFilters }: { entity: {fields:Record<string,Pick<FieldType<any,R>,"label"|"editor">&{operators:Pick<Operator<unknown>,"id"|"label"|"needsArg">[]}>}; filters: Filter[]; onChange: (filters: Filter[]) => void; maxFilters?:number }) {
+  const keys = Object.keys(entity.fields).filter(key=>entity.fields[key]?.operators.length);
   const update = (i: number, next: Partial<Filter>) => onChange(filters.map((f, j) => (j === i ? { ...f, ...next } : f)));
   return (
     <div className="flex flex-wrap items-center gap-2">
       {filters.map((filter, i) => {
         const field = entity.fields[filter.field]!;
-        const op = field.operators.find((o) => o.id === filter.operator);
+        const op = field?.operators.find((o) => o.id === filter.operator);
         return (
           <div key={i} className="flex items-center gap-1 rounded-md border border-border bg-surface p-1">
             <Select aria-label={t("Field")} value={filter.field} className="h-6 w-32"
@@ -69,7 +69,7 @@ export function FilterBar<R>({ entity, filters, onChange }: { entity: Entity<R>;
               {keys.map((k) => <option key={k} value={k}>{entity.fields[k]!.label}</option>)}
             </Select>
             <Select aria-label={t("Operator")} value={filter.operator} className="h-6 w-28" onChange={(e) => update(i, { operator: e.target.value })}>
-              {field.operators.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              {field?.operators.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
             </Select>
             {op?.needsArg && field.editor && <span className="min-w-28">{field.editor({ value: filter.arg, onChange: (arg) => update(i, { arg }) })}</span>}
             <button type="button" aria-label={t("Remove filter")} className="px-1 text-muted hover:text-foreground"
@@ -77,7 +77,7 @@ export function FilterBar<R>({ entity, filters, onChange }: { entity: Entity<R>;
           </div>
         );
       })}
-      <Button size="sm" variant="ghost" onClick={() => onChange([...filters, { field: keys[0]!, operator: entity.fields[keys[0]!]!.operators[0]!.id }])}>
+      <Button size="sm" variant="ghost" disabled={!keys.length||maxFilters!==undefined&&filters.length>=maxFilters} onClick={() => onChange([...filters, { field: keys[0]!, operator: entity.fields[keys[0]!]!.operators[0]!.id }])}>
         <Plus />{t("Filter")}
       </Button>
     </div>

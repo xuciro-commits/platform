@@ -1051,6 +1051,10 @@ export type PageCollectionAnalysis = {
   steps?: PageAnalysisStep[];
 };
 
+export type PageCollectionBuilder = {
+  fields: string[];
+};
+
 export type PageCollectionInput = {
   kind: string;
   object: AssetRef;
@@ -1782,6 +1786,8 @@ export type SavedView = {
 };
 
 export type Section = {
+  collectionBuilder?: PageCollectionBuilder;
+  collectionOutputVariable?: string;
   map?: PageRecordMap;
   scene?: PageSceneConfig;
   sceneSampleCollectionVariable?: string;
@@ -2196,7 +2202,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.87",
+  "uiProfile": "platform.page.v2.88",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -7051,6 +7057,82 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "collection-builder",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.88",
+      "title": "Collection builder",
+      "category": "Data",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "collectionBuilder": {
+          "fields": []
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "collectionBuilder": {
+            "type": "object",
+            "properties": {
+              "fields": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "maxItems": 32
+              }
+            }
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.88"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionOutputVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.88"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -7140,7 +7222,8 @@ export const pageUIManifest = {
     "platform.page.v2.84",
     "platform.page.v2.85",
     "platform.page.v2.86",
-    "platform.page.v2.87"
+    "platform.page.v2.87",
+    "platform.page.v2.88"
   ],
   "runtime": {
     "scope": "page",
@@ -7323,6 +7406,11 @@ export const pageUIManifest = {
         "kind": "record",
         "type": "record",
         "widget": "record-map"
+      },
+      {
+        "kind": "query",
+        "type": "object-set",
+        "widget": "collection-builder"
       }
     ],
     "loop": {

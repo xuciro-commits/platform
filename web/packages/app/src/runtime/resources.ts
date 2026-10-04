@@ -68,6 +68,7 @@ export function resourceVariables(page: Api.Page, snapshot: PageSessionSnapshot)
     const source = variable.source;
     if (variable.mode !== "resource" || !source || !["page","overlay"].includes(variable.scope) || variablePlan(page,id)!==undefined) return [];
     const section = page.sections?.find((section) => section.id === source.section);
+    if(section?.widget==="collection-builder")return [];
     if (!section) return [[id, { status: "error", code: "Resource source is unavailable" } as VariableResult]];
     if(page.document?.unusedWidgets?.some(entry=>page.document?.nodes[entry.node]?.section===section.id))return [[id,{status:"empty"} as VariableResult]];
     const object = recordOutputObject(page,section,source.port??"",id)?.name ?? (section.object?.name || page.object.name);

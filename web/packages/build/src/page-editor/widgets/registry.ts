@@ -1,3 +1,4 @@
+import {CollectionBuilderInspector} from "./CollectionBuilderInspector";
 import {MapInspector,AnnotationInspector,SceneInspector} from "./SpatialInspectors";
 import {EmbeddingInspector} from "./EmbeddingInspector";
 import {AIInspector} from "./AIInspector";
@@ -55,6 +56,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "collection-builder":{configVersion:1,bindings:CollectionBuilderInspector},
  "record-map":{configVersion:1,bindings:MapInspector},
  "image-annotation":{configVersion:1,bindings:AnnotationInspector},
  "scene-3d":{configVersion:1,bindings:SceneInspector},

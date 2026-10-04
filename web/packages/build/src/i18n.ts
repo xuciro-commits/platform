@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Collection condition fields": "集合条件字段",
+ "Complete collection output": "完整集合输出",
+ "Choose an output": "选择输出",
+ "Declare complete collection output": "声明完整集合输出",
+ "Map collection builder {widget}": "映射集合构建器 {widget}",
+ "Collection source interpretation": "集合来源解释",
+ "Replace empty source rows with a complete original predicate": "将来源空行数组转为完整原查询谓词",
  "Visible": "可见",
 "This map shows the current authorized record window.": "此地图显示当前受权记录窗口。",
 "Latitude field": "纬度字段",

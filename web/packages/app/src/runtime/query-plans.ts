@@ -1,3 +1,5 @@
+import {builderSection,refineCollection} from "./collection-builder";
+import {collectionInput} from "./collection-input";
 import {validCollectionInput,collectionFieldsVisible,collectionQuery} from "./collection-input";
 import {validCivilDate,validTimestamp} from "@platform/ui/date";
 import {isStringSet,parseDecimal,isDecimal,type NumberValue,type DecimalValue} from "./decimal";
@@ -16,7 +18,7 @@ export function boundQueryDefinition(definition: Api.Definition | undefined, bin
 export function variablePlan(page:Api.Page,variableID:string):string|undefined {
  const variable=page.document?.variables?.[variableID],source=variable?.source;
  if(source?.kind==="plan")return source.query;
- if(source?.kind==="query"){const section=page.sections?.find((s)=>s.id===source.section);const bound=page.document?.variables?.[section?.collectionVariable??""];if(bound?.source?.kind==="plan")return bound.source.query;}
+ if(source?.kind==="query"){if(page.sections?.some(s=>s.id===source.section&&s.widget==="collection-builder"))return undefined;const section=page.sections?.find((s)=>s.id===source.section);const bound=page.document?.variables?.[section?.collectionVariable??""];if(bound?.source?.kind==="plan")return bound.source.query;}
  return undefined;
 }
 export const planKey = (id: string) => `plan/${id}`;
@@ -43,7 +45,7 @@ function variableDependsOnQuery(variable:string,target:string,variables:Record<s
  const queryDepends=(id:string):boolean=>{
   if(id===target)return true;if(seenQueries.has(id))return false;seenQueries.add(id);
   const plan=plans[id];if(!plan)return false;
-  return [...(plan.conditions??[]).map(condition=>condition.value),...(plan.search?[plan.search]:[]),...(plan.for?[plan.for]:[])].some(value=>!!value.variable&&variableDepends(value.variable))||!!plan.set?.inputs.some(queryDepends);
+  return !!plan.input&&variableDepends(plan.input)||[...(plan.conditions??[]).map(condition=>condition.value),...(plan.search?[plan.search]:[]),...(plan.for?[plan.for]:[])].some(value=>!!value.variable&&variableDepends(value.variable))||!!plan.set?.inputs.some(queryDepends);
  };
  const variableDepends=(id:string):boolean=>{
   if(!id||seenVariables.has(id))return false;seenVariables.add(id);const input=variables[id];if(!input)return false;
@@ -161,7 +163,7 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
 
 /** Compile source predicates, never their downloaded windows. Each root owns
  * one immutable request signature and the original read/session lifecycle. */
-export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:Record<string,Api.PageVariable>,values:(owner?:string)=>Record<string,VariableResult>,entity:(type:string)=>EntityInfo|undefined,named:(plan:Api.PageQuery)=>Api.Definition|undefined,contract:Contract,sections:Api.Section[]=[],active:(owner?:string)=>boolean=()=>true,view?:(id:string,base:Extract<QueryPlanResult,{status:"value"}>)=>QueryView|undefined):ReadonlyArray<readonly [string,QueryPlanResult]> {
+export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:Record<string,Api.PageVariable>,values:(owner?:string)=>Record<string,VariableResult>,entity:(type:string)=>EntityInfo|undefined,named:(plan:Api.PageQuery)=>Api.Definition|undefined,contract:Contract,sections:Api.Section[]=[],active:(owner?:string)=>boolean=()=>true,view?:(id:string,base:Extract<QueryPlanResult,{status:"value"}>)=>QueryView|undefined,builder?:(section:Api.Section,input:import("./collection-input").CollectionInput)=>Api.PageQueryCondition[]):ReadonlyArray<readonly [string,QueryPlanResult]> {
  const compile=(root:string):QueryPlanResult=>{
   let nodes=0;
   const target=plans[root];
@@ -173,8 +175,23 @@ export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:R
    let own=compileQueryPlan({...plan,set:undefined},variables,values(plan.owner),entity(plan.object.name),named(plan),contract,sections,!!plan.set,{id,plans});
    if(plan.input){
     if(plan.set)return failed("A collection input must be a separate set source.");
-    const declaration=variables[plan.input],result=values(plan.owner)[plan.input];
-    if(declaration?.mode!=="input"||declaration.type!=="object-set"||declaration.scope!=="page")return failed("Query collection input is unavailable.");
+    const declaration=variables[plan.input],producer=builderSection(plan.input,variables,sections,plan.owner);
+    let result=values(plan.owner)[plan.input];
+    if(producer){
+     if(!producer.collectionBuilder?.fields.length||producer.collectionBuilder.fields.some(name=>!entity(plan.object.name)?.fields.some(f=>f.name===name&&["text","choice","integer","decimal"].includes(f.type))))return failed("Collection builder fields are unavailable.");
+     const source=variables[producer.collectionVariable??""];const sourceID=source?.source?.kind==="plan"?source.source.query:undefined;
+     if(!sourceID)return failed("Collection builder source is unavailable.");
+     path.add(id);const base=visit(sourceID,depth+1,path);path.delete(id);
+     if(base.status!=="value")return base;
+     const bindings=(queryID:string,seen=new Set<string>()):Api.AssetBinding[]=>{if(seen.has(queryID))return [];seen.add(queryID);const q=plans[queryID];if(!q)return [];const inherited=q.input?builderSection(q.input,variables,sections,q.owner):undefined;const original=inherited?variables[inherited.collectionVariable??""]?.source?.query:undefined;const inputValue=q.input?values(q.owner)[q.input]:undefined;return [...q.query?[q.query]:[],...q.set?.inputs.flatMap(v=>bindings(v,seen))??[],...original?bindings(original,seen):[],...inputValue?.status==="value"&&typeof inputValue.value==="object"&&inputValue.value.kind==="object-set-input"?inputValue.value.bindings??[]:[]];};
+     const input=collectionInput(plan.object,base.query,Array.from(new Map(bindings(sourceID).map(b=>[JSON.stringify(b),b])).values()),!!base.sortLocked||!!boundQueryDefinition(named(plans[sourceID]!),plans[sourceID]?.query)?.query?.sort?.length);
+     const conditions=builder?.(producer,input)??[];
+     const checked=compileQueryPlan({object:plan.object,owner:plan.owner,limit:1,conditions},variables,values(plan.owner),entity(plan.object.name),undefined,contract,sections);
+     if(checked.status!=="value"||conditions.some(c=>!producer.collectionBuilder?.fields.includes(c.field)))return failed("Collection builder conditions are unavailable.");
+     const refined=refineCollection(input,conditions);if(!refined)return failed("Collection builder exceeds its predicate budget.");
+     result={status:"value",value:refined};
+    }
+    if(!producer&&(declaration?.mode!=="input"||declaration.type!=="object-set"||declaration.scope!=="page"))return failed("Query collection input is unavailable.");
     if(!result||result.status!=="value")return result??{status:"empty"};
     const input=result.value;
     if(!validCollectionInput(input)||depth>0&&!!input.traversal||input.object.app!==plan.object.app||input.object.name!==plan.object.name||!collectionFieldsVisible(input,entity(plan.object.name)))return failed("Query collection input is incompatible.");

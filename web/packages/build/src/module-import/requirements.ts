@@ -15,7 +15,7 @@ export function collaborationRecordChoices(module:SourceModule|undefined,pageID:
 /** Discover the explicit source metadata that the import mapping dialog must expose. */
 export function workshopRequirements(module:SourceModule|undefined){
  const objects=new Set<string>(),fields:Record<string,Set<string>>=Object.create(null),actions=new Set<string>();
- const external=(id:string)=>{const v=module?.variables.find(v=>v.id===id);return text(object(v?.objectSet)?.objectType||v?.sourceObjectType);};
+ const external=(id:string,seen=new Set<string>()):string=>{if(seen.has(id))return "";seen.add(id);const producer=Object.values(module?.widgets??{}).find(w=>w.type==="ObjectSetBuilder"&&w.config.outputVarId===id);if(producer)return external(text(producer.config.objectSetVarId),seen);const v=module?.variables.find(v=>v.id===id);return text(object(v?.objectSet)?.objectType||v?.sourceObjectType);};
  const property=(type:string,p:string)=>{if(!type||!p||p==="*")return;objects.add(type);(fields[type]??=new Set()).add(p);};
  for(const v of module?.variables??[]){const set=object(v.objectSet),type=text(set?.objectType||v.sourceObjectType);if(type)objects.add(type);for(const step of Array.isArray(set?.steps)?set.steps:[])for(const clause of Array.isArray(object(step)?.clauses)?object(step)!.clauses as unknown[]:[])property(type,text(object(clause)?.property));}
  for(const w of Object.values(module?.widgets??{})){

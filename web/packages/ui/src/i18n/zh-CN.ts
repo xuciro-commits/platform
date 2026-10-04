@@ -1,5 +1,13 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Collection builder": "集合构建器",
+ "Collection builder source is unavailable.": "集合构建器来源不可用。",
+ "Complete valid original conditions before applying. The previous collection remains applied.": "请在应用前填完有效原条件。之前应用的集合仍然有效。",
+ "Apply collection conditions": "应用集合条件",
+ "Clear collection conditions": "清空集合条件",
+ "Consumers query the complete authorized collection; their pagination is independent.": "消费者查询完整受权集合，各自分页互不影响。",
+ "at least": "大于或等于",
+ "at most": "小于或等于",
  "Attachment bytes do not match the confirmed hash.": "附件内容与确认哈希不一致。",
  "Record map": "记录地图",
  "Explore original record coordinates with a bundled world background and stable record selection.": "通过本地世界底图与稳定记录选择探索原记录坐标。",
