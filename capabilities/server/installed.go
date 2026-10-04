@@ -591,7 +591,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if p.Document == nil {
 				return fmt.Errorf("kanban needs a V2 document")
 			}
-			if err := s.CheckKanban(info); err != nil {
+			if err := p.CheckKanban(s, info); err != nil {
 				return err
 			}
 			for _, ref := range s.Actions {

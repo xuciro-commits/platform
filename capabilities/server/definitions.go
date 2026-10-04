@@ -569,7 +569,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 					if section.CheckStatusTracker(shown) != nil {
 						continue
 					}
-					if section.CheckKanban(shown) != nil {
+					if page.CheckKanban(section, shown) != nil {
 						continue
 					}
 					parentType := page.Object.Name

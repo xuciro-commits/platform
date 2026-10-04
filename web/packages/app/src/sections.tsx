@@ -163,7 +163,7 @@ function RecordChartAdapter({page,section,window}:Bound) {
 function KanbanAdapter({page,section,onSelect,selected,window,live}:Bound) {
  const {source,catalog}=useHost(),object=objectOf(page,section),info=source.entity(object);
  const allowed=new Set((section.actions??[]).map(a=>a.name));
- const moves=(info?.lifecycle?.transitions??[]).filter(m=>m.to.length===1&&allowed.has(m.schema)&&catalog.some(a=>a.schema===m.schema&&a.target===object)).map(m=>({schema:m.schema,title:m.title,from:m.from,to:m.to[0]!}));
+ const moves=(info?.lifecycle?.transitions??[]).filter(m=>allowed.has(m.schema)&&catalog.some(a=>a.schema===m.schema&&a.target===object)&&(!m.toInput&&m.to.length===1||!!m.toInput&&Number(page.document?.uiProfile.split(".").at(-1))>=99&&catalog.some(a=>a.schema===m.schema&&a.payload.some(p=>p.name===m.toInput&&p.type==="string"&&m.to.every(state=>p.choices?.includes(state)))))).flatMap(m=>m.to.map(to=>({schema:m.schema,title:m.title,from:m.from,to,input:m.toInput})));
  return <KanbanRenderer key={JSON.stringify([object,window?.query,source.scope])} object={object} info={info} window={window} cardLabel={section.cardLabel??""} fields={section.fields} selected={selected} onSelect={onSelect} moves={moves} live={live} title={section.title||t("Kanban board")}/>;
 }
 

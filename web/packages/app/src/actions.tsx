@@ -78,7 +78,7 @@ function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,previ
 }
 
 /** One action taken through the existing modal entry point. */
-function ActionDialog({ declared, type, record, onClose, onCompleted }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: () => void }) {
+function ActionDialog({ declared, type, record, onClose, onCompleted, initial={} }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: () => void; initial?:Record<string,unknown> }) {
  const {decide,source}=useHost(),info=source.entity(type);
  const [id,setId]=useState(()=>newId(prefixOf(type))),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState("");
  const target={type,id:record?.id??id},options={expectedRevision:record?.revision??0,quiet:true,onRefused:setRefusal};
@@ -86,7 +86,7 @@ function ActionDialog({ declared, type, record, onClose, onCompleted }: { declar
  return <Dialog open wide={generated&&info?.fields.some(f=>f.type==="lines")} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
  <div className="grid gap-3">
  {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting}/></label>}
- {generated?<>{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}<GeneratedForm type={type} submitLabel={t("Create")} onCancel={onClose} onSubmit={async values=>done(!!id&&await decide(declared.schema,target,values,options))}/></>:<DeclaredActionForm declared={declared} target={target} revision={record?.revision??0} onCancel={onClose} onCompleted={()=>done(true)} onBusy={setSubmitting}/>}
+ {generated?<>{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}<GeneratedForm type={type} submitLabel={t("Create")} onCancel={onClose} onSubmit={async values=>done(!!id&&await decide(declared.schema,target,values,options))}/></>:<DeclaredActionForm declared={declared} target={target} revision={record?.revision??0} onCancel={onClose} onCompleted={()=>done(true)} onBusy={setSubmitting} initial={initial}/>}
  </div></Dialog>;
 }
 
@@ -147,13 +147,14 @@ export function RecordActions({ type, record, allowed, steps: withSteps = false 
 /** A lifecycle transition taken from a record's page: at once, or through a form when it takes input (F-27). */
 export function useTransition(type: string) {
   const { action, decide } = useHost();
-  const [taking, setTaking] = useState<{ declared: ActionDeclaration; record: EntityRecord }>();
-  const take = (schema: string, record: EntityRecord) => {
+  const [taking, setTaking] = useState<{ declared: ActionDeclaration; record: EntityRecord; initial?:Record<string,unknown> }>();
+  const take = (schema: string, record: EntityRecord, destination?:{parameter:string;value:string}) => {
     const declared = action(schema);
-    if (declared?.payload.length) setTaking({ declared, record });
+    if(destination&&!declared?.payload.some(f=>f.name===destination.parameter&&f.type==="string"&&f.choices?.includes(destination.value)))return;
+    if (declared?.payload.length) setTaking({ declared, record,initial:destination?{[destination.parameter]:destination.value}:undefined });
     else void decide(schema, { type, id: record.id }, {}, { expectedRevision: record.revision });
   };
-  const dialog = taking && <ActionDialog declared={taking.declared} type={type} record={taking.record} onClose={() => setTaking(undefined)} />;
+  const dialog = taking && <ActionDialog declared={taking.declared} type={type} record={taking.record} initial={taking.initial} onClose={() => setTaking(undefined)} />;
   return { take, dialog };
 }
 

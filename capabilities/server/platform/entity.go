@@ -139,11 +139,13 @@ type Transition struct {
 	Title       string
 	Description string
 	From, To    []string
-	Roles       []string
-	Payload     []Field
-	Capability  string    // default: the entity type
-	Approval    *Approval // the transition waits for these approvers (ADR-0017)
-	Do          func(c Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error
+	// ToInput names the required choice payload that the original action uses as its destination.
+	ToInput    string
+	Roles      []string
+	Payload    []Field
+	Capability string    // default: the entity type
+	Approval   *Approval // the transition waits for these approvers (ADR-0017)
+	Do         func(c Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error
 	// After runs once the transition is accepted and the record stored: what
 	// follows from it elsewhere (another record, a notification, an effect).
 	After func(c Caller, r *pb.ChangeRecord, record any, now time.Time)
@@ -158,11 +160,12 @@ type LifecycleInfo struct {
 }
 
 type TransitionInfo struct {
-	Name   string   `json:"name"`
-	Schema string   `json:"schema"`
-	Title  string   `json:"title"`
-	From   []string `json:"from"`
-	To     []string `json:"to"`
+	ToInput string   `json:"toInput,omitempty"`
+	Name    string   `json:"name"`
+	Schema  string   `json:"schema"`
+	Title   string   `json:"title"`
+	From    []string `json:"from"`
+	To      []string `json:"to"`
 }
 
 // Standard are the generated actions an entity type asks for, and who may call them.
@@ -385,11 +388,21 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 				slices.ContainsFunc(l.Transitions[:i], func(x Transition) bool { return x.Name == t.Name }) || t.Name == "create" || t.Name == "edit" || t.Name == "archive" {
 				return EntityInfo{}, fmt.Errorf("entity %s: transition %q needs a unique name and states of the lifecycle", e.Type, t.Name)
 			}
+			if t.ToInput != "" {
+				index := slices.IndexFunc(t.Payload, func(f Field) bool { return f.Name == t.ToInput })
+				var input Field
+				if index >= 0 {
+					input = t.Payload[index]
+				}
+				if index < 0 || input.Type != "string" || !input.Required || input.Ref != "" || len(input.Choices) != len(t.To) || slices.ContainsFunc(t.To, func(state string) bool { return !slices.Contains(input.Choices, state) }) || t.Do == nil {
+					return EntityInfo{}, fmt.Errorf("entity %s: transition %s needs its required destination choice and original action", e.Type, t.Name)
+				}
+			}
 			title := t.Title
 			if title == "" {
 				title = strings.ToUpper(t.Name[:1]) + t.Name[1:]
 			}
-			info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: t.From, To: t.To})
+			info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: t.From, To: t.To, ToInput: t.ToInput})
 		}
 	}
 	for _, x := range [][2]any{{e.Standard.Create, ".create"}, {e.Standard.Edit, ".edit"}, {e.Standard.Archive, ".archive"}} {

@@ -470,7 +470,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 			}
 		}
 		l.Transitions = append(l.Transitions, platform.Transition{Name: a.Name, Title: a.Title, Description: a.Description,
-			From: slices.Clone(a.From), To: reach, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval,
+			From: slices.Clone(a.From), To: reach, ToInput: a.ToInput, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval,
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
 				return take(o, action, c, record, raw, now, creates, lookup)
 			}, After: stored(o, action, creates)})

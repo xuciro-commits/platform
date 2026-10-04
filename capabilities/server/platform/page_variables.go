@@ -44,6 +44,9 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Kanban struct {
+		DynamicUIProfile string `json:"dynamicUIProfile"`
+	} `json:"kanban"`
 	Embedding struct {
 		MaxDepth     int `json:"maxDepth"`
 		MaxInstances int `json:"maxInstances"`

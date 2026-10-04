@@ -906,7 +906,7 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 		}
 		asset, ok := lookup[ref]
 		info, err := queryObjectDescriptor(asset.Body)
-		if !ok || err != nil || page.Document == nil || s.CheckTimeline(info) != nil || s.CheckKanban(info) != nil || s.CheckStatusTracker(info) != nil || s.CheckMetricPresentation(info) != nil || s.CheckRecordList(info) != nil || s.CheckHeatmap(info) != nil || s.CheckScatter(info) != nil || s.CheckMap(info) != nil || s.CheckRecordChart(info) != nil || s.CheckRecordEvents(info) != nil || s.CheckRecordPicker(info) != nil || s.CheckLeaderboard(info) != nil || s.CheckHistogram(info) != nil || s.CheckRecordCard(info) != nil || s.CheckRecordComparison(info) != nil || page.CheckRecordComparisonBinding(s) != nil || s.CheckSparkline(info) != nil || s.CheckTerms(info) != nil || s.CheckCollectionAnalysis(info) != nil || s.CheckSummary(info) != nil || s.CheckRecordGantt(info) != nil || s.CheckRecordCalendar(info) != nil {
+		if !ok || err != nil || page.Document == nil || s.CheckTimeline(info) != nil || page.CheckKanban(s, info) != nil || s.CheckStatusTracker(info) != nil || s.CheckMetricPresentation(info) != nil || s.CheckRecordList(info) != nil || s.CheckHeatmap(info) != nil || s.CheckScatter(info) != nil || s.CheckMap(info) != nil || s.CheckRecordChart(info) != nil || s.CheckRecordEvents(info) != nil || s.CheckRecordPicker(info) != nil || s.CheckLeaderboard(info) != nil || s.CheckHistogram(info) != nil || s.CheckRecordCard(info) != nil || s.CheckRecordComparison(info) != nil || page.CheckRecordComparisonBinding(s) != nil || s.CheckSparkline(info) != nil || s.CheckTerms(info) != nil || s.CheckCollectionAnalysis(info) != nil || s.CheckSummary(info) != nil || s.CheckRecordGantt(info) != nil || s.CheckRecordCalendar(info) != nil {
 			return fmt.Errorf("frozen %s schema is unavailable", s.Widget)
 		}
 	}
@@ -1012,10 +1012,17 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		Lifecycle *LifecycleInfo               `json:"lifecycle"`
 		States    []State                      `json:"states"`
 		Actions   []struct {
-			Name  string   `json:"name"`
-			Title string   `json:"title"`
-			From  []string `json:"from"`
-			To    string   `json:"to"`
+			Name    string   `json:"name"`
+			Title   string   `json:"title"`
+			From    []string `json:"from"`
+			To      string   `json:"to"`
+			ToInput string   `json:"toInput"`
+			Inputs  []struct {
+				Name     string `json:"name"`
+				Type     string `json:"type"`
+				Required bool   `json:"required"`
+				Choices  string `json:"choices"`
+			} `json:"inputs"`
 		} `json:"actions"`
 	}
 	if err := json.Unmarshal(body, &shape); err != nil {
@@ -1058,7 +1065,27 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 			if a.To != "" {
 				to = append(to, a.To)
 			}
-			l.Transitions = append(l.Transitions, TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: to})
+			if a.ToInput != "" {
+				to = nil
+				valid := false
+				for _, input := range a.Inputs {
+					if input.Name == a.ToInput && input.Type == "choice" && input.Required {
+						valid = true
+						for _, raw := range strings.Split(input.Choices, ",") {
+							state := strings.TrimSpace(raw)
+							if state != "" {
+								to = append(to, state)
+							}
+						}
+					}
+				}
+				if !valid || a.To != "" || len(to) == 0 || slices.ContainsFunc(to, func(state string) bool { return !slices.Contains(choices, state) }) {
+					return EntityInfo{}, fmt.Errorf("frozen object destination input differs")
+				}
+			} else if a.To == "" {
+				to = slices.Clone(a.From)
+			}
+			l.Transitions = append(l.Transitions, TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: to, ToInput: a.ToInput})
 		}
 		shape.Lifecycle = &l
 	}

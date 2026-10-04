@@ -2153,6 +2153,7 @@ export type Transcript = {
 };
 
 export type TransitionInfo = {
+  toInput?: string;
   name: string;
   schema: string;
   title: string;
@@ -2236,7 +2237,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.98",
+  "uiProfile": "platform.page.v2.99",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -7367,7 +7368,8 @@ export const pageUIManifest = {
     "platform.page.v2.95",
     "platform.page.v2.96",
     "platform.page.v2.97",
-    "platform.page.v2.98"
+    "platform.page.v2.98",
+    "platform.page.v2.99"
   ],
   "runtime": {
     "scope": "page",
@@ -8052,6 +8054,9 @@ export const pageUIManifest = {
       "maxQueries": 8,
       "maxRecords": 512,
       "maxSections": 256
+    },
+    "kanban": {
+      "dynamicUIProfile": "platform.page.v2.99"
     }
   },
   "layout": {

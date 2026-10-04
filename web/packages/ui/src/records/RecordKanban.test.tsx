@@ -15,3 +15,8 @@ test("ambiguous destinations have no drag default, preview does not offer moves 
  expect(kanbanMove(record,"state","done",[move,{...move,schema:"sample.task.other"}])).toBeUndefined();expect(kanbanMove(record,"state","done",[move])?.schema).toBe(move.schema);
  render(<RecordKanban records={[record,{...record,id:"UNKNOWN",state:"private"}]} lanes={lanes} stateField="state" labelField="title" label="Board" moves={[move]} onSelect={()=>{}}/>);expect(screen.queryByRole("combobox")).toBeNull();expect(screen.queryByRole("region",{name:"private"})).toBeNull();expect(screen.getByRole("status").textContent).toContain("1 records");
 });
+
+test("one parameterized action keeps separate destination options and emits the declared target without a state write",()=>{
+ const act=vi.fn(),dynamic={...move,input:"status"},pause={...dynamic,to:"pause"};render(<RecordKanban records={[record]} lanes={[...lanes,{name:"pause",title:"Pause"}]} stateField="state" labelField="title" label="Board" moves={[dynamic,pause]} onMove={act} onSelect={()=>{}}/>);
+ fireEvent.change(screen.getByRole("combobox",{name:"Move Task with action"}),{target:{value:`${move.schema}/pause`}});expect(act).toHaveBeenLastCalledWith(record,move.schema,"pause");expect(within(screen.getByRole("region",{name:"Open"})).getByRole("button",{name:"Task"})).toBeTruthy();expect(kanbanMove(record,"state","done",[dynamic,pause])?.input).toBe("status");
+});
