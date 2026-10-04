@@ -1,0 +1,3863 @@
+{
+  "id": "mod-ops-cmd",
+  "name": "Operations Command Center",
+  "description": "Monitor assets, triage alerts, and dispatch work orders across the global fleet.",
+  "header": {
+    "variant": "horizontal",
+    "title": "Operations Command Center",
+    "items": [
+      {
+        "kind": "logo"
+      },
+      {
+        "kind": "title"
+      },
+      {
+        "kind": "tabs",
+        "pageIds": [
+          "pOperations",
+          "pOverview",
+          "pAnalytics",
+          "pMap",
+          "pWorkflow",
+          "pMaintenance",
+          "pTelemetry"
+        ]
+      },
+      {
+        "kind": "spacer"
+      },
+      {
+        "kind": "button",
+        "label": "Refresh",
+        "eventActions": [
+          {
+            "kind": "refreshData"
+          }
+        ]
+      },
+      {
+        "kind": "button",
+        "label": "Theme",
+        "eventActions": [
+          {
+            "kind": "toggleTheme"
+          }
+        ]
+      }
+    ]
+  },
+  "pages": [
+    {
+      "id": "pOperations",
+      "name": "Operations",
+      "rootSectionId": "sOperationsRoot"
+    },
+    {
+      "id": "pOverview",
+      "name": "Asset Overview",
+      "rootSectionId": "sOverviewRoot"
+    },
+    {
+      "id": "pAnalytics",
+      "name": "Analytics",
+      "rootSectionId": "sAnalyticsRoot"
+    },
+    {
+      "id": "pMap",
+      "name": "Map Operations",
+      "rootSectionId": "sMapRoot"
+    },
+    {
+      "id": "pWorkflow",
+      "name": "Workflow",
+      "rootSectionId": "sWorkflowRoot"
+    },
+    {
+      "id": "pMaintenance",
+      "name": "Maintenance Board",
+      "rootSectionId": "sMaintRoot"
+    },
+    {
+      "id": "pTelemetry",
+      "name": "Digital Twin & Telemetry",
+      "rootSectionId": "sTelemetryRoot"
+    }
+  ],
+  "sections": {
+    "sKpiRow": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wKpi1"
+        },
+        {
+          "kind": "widget",
+          "id": "wKpi2"
+        },
+        {
+          "kind": "widget",
+          "id": "wKpi3"
+        },
+        {
+          "kind": "widget",
+          "id": "wKpi4"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sKpiRow",
+      "name": "KPI Row",
+      "layout": "columns"
+    },
+    "sMainRow": {
+      "children": [
+        {
+          "kind": "section",
+          "id": "sFiltersCol"
+        },
+        {
+          "kind": "section",
+          "id": "sTableCol"
+        },
+        {
+          "kind": "section",
+          "id": "sDetailCol"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sMainRow",
+      "name": "Main workspace",
+      "layout": "columns"
+    },
+    "sFiltersCol": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wSearch1"
+        },
+        {
+          "kind": "widget",
+          "id": "wRange"
+        },
+        {
+          "kind": "widget",
+          "id": "wFilterList"
+        }
+      ],
+      "showHeader": true,
+      "direction": "vertical",
+      "padding": 10,
+      "gap": 8,
+      "background": "panel",
+      "border": true,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sFiltersCol",
+      "name": "Filters",
+      "layout": "rows",
+      "width": "260px",
+      "title": "Filters"
+    },
+    "sMbTop": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wBreadcrumb"
+        },
+        {
+          "kind": "widget",
+          "id": "wOpenWoBar"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sMbTop",
+      "name": "Board header",
+      "layout": "columns"
+    },
+    "sMbBoard": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wKanban"
+        },
+        {
+          "kind": "section",
+          "id": "sMbSide"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sMbBoard",
+      "name": "Board",
+      "layout": "columns"
+    },
+    "sMbSide": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wSelCard"
+        },
+        {
+          "kind": "widget",
+          "id": "wRiskGauge"
+        },
+        {
+          "kind": "widget",
+          "id": "wExplorer"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sMbSide",
+      "name": "Context",
+      "layout": "rows",
+      "width": "320px"
+    },
+    "sMbBottom": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wApproval"
+        },
+        {
+          "kind": "widget",
+          "id": "wCalendar"
+        },
+        {
+          "kind": "widget",
+          "id": "wFeed"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sMbBottom",
+      "name": "Work",
+      "layout": "columns"
+    },
+    "sMaintRoot": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wOfflineBanner"
+        },
+        {
+          "kind": "section",
+          "id": "sMbTop"
+        },
+        {
+          "kind": "section",
+          "id": "sMbBoard"
+        },
+        {
+          "kind": "section",
+          "id": "sMbBottom"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 10,
+      "gap": 10,
+      "background": "default",
+      "border": false,
+      "scroll": true,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sMaintRoot",
+      "name": "Maintenance Board",
+      "layout": "rows"
+    },
+    "sAnalyticsRow5": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wHeatmap"
+        },
+        {
+          "kind": "widget",
+          "id": "wTreemap"
+        },
+        {
+          "kind": "widget",
+          "id": "wHistogram"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sAnalyticsRow5",
+      "name": "Row 5",
+      "layout": "columns"
+    },
+    "sAnalyticsRow6": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wScatter"
+        },
+        {
+          "kind": "widget",
+          "id": "wLeader"
+        },
+        {
+          "kind": "widget",
+          "id": "wCompare"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sAnalyticsRow6",
+      "name": "Row 6",
+      "layout": "columns"
+    },
+    "sTableCol": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wObjectTable1"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sTableCol",
+      "name": "Assets",
+      "layout": "rows"
+    },
+    "sDetailCol": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wObjectSetTitle1"
+        },
+        {
+          "kind": "widget",
+          "id": "wStatusTracker"
+        },
+        {
+          "kind": "widget",
+          "id": "wPropList1"
+        },
+        {
+          "kind": "widget",
+          "id": "wLinks1"
+        },
+        {
+          "kind": "widget",
+          "id": "wButtonGroup1"
+        }
+      ],
+      "showHeader": true,
+      "direction": "vertical",
+      "padding": 10,
+      "gap": 8,
+      "background": "panel",
+      "border": true,
+      "scroll": false,
+      "collapsible": true,
+      "defaultCollapsed": false,
+      "id": "sDetailCol",
+      "name": "Detail",
+      "layout": "rows",
+      "width": "360px",
+      "title": "Detail",
+      "visibleVariableId": "showDetail"
+    },
+    "sOperationsRoot": {
+      "children": [
+        {
+          "kind": "section",
+          "id": "sKpiRow"
+        },
+        {
+          "kind": "section",
+          "id": "sMainRow"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 10,
+      "gap": 10,
+      "background": "default",
+      "border": false,
+      "scroll": true,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sOperationsRoot",
+      "name": "Operations",
+      "layout": "rows"
+    },
+    "sOverviewHdr": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wHeaderText1"
+        },
+        {
+          "kind": "widget",
+          "id": "wObjectSetTitle1~1"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sOverviewHdr",
+      "name": "Header",
+      "layout": "rows"
+    },
+    "sOverviewKpi": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wMetric5"
+        },
+        {
+          "kind": "widget",
+          "id": "wMetric6"
+        },
+        {
+          "kind": "widget",
+          "id": "wMetric7"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sOverviewKpi",
+      "name": "Metrics",
+      "layout": "columns"
+    },
+    "sOverviewList": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wObjectList1"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sOverviewList",
+      "name": "List",
+      "layout": "rows"
+    },
+    "sOverviewRoot": {
+      "children": [
+        {
+          "kind": "section",
+          "id": "sOverviewHdr"
+        },
+        {
+          "kind": "section",
+          "id": "sOverviewKpi"
+        },
+        {
+          "kind": "section",
+          "id": "sOverviewList"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 12,
+      "gap": 10,
+      "background": "default",
+      "border": false,
+      "scroll": true,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sOverviewRoot",
+      "name": "Overview Root",
+      "layout": "rows"
+    },
+    "sAnalyticsRow1": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wChart1"
+        },
+        {
+          "kind": "widget",
+          "id": "wChart2"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sAnalyticsRow1",
+      "name": "Row 1",
+      "layout": "columns"
+    },
+    "sAnalyticsRow2": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wChart3"
+        },
+        {
+          "kind": "widget",
+          "id": "wChart4"
+        },
+        {
+          "kind": "widget",
+          "id": "wPivot"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sAnalyticsRow2",
+      "name": "Row 2",
+      "layout": "columns"
+    },
+    "sAnalyticsRow3": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wVega"
+        },
+        {
+          "kind": "widget",
+          "id": "wWaterfall"
+        },
+        {
+          "kind": "widget",
+          "id": "wObs"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sAnalyticsRow3",
+      "name": "Row 3",
+      "layout": "columns"
+    },
+    "sAnalyticsRow4": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wFreeForm"
+        },
+        {
+          "kind": "widget",
+          "id": "wTS"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sAnalyticsRow4",
+      "name": "Row 4",
+      "layout": "columns"
+    },
+    "sAnalyticsRoot": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wPills"
+        },
+        {
+          "kind": "widget",
+          "id": "wTerms"
+        },
+        {
+          "kind": "section",
+          "id": "sAnalyticsRow5"
+        },
+        {
+          "kind": "section",
+          "id": "sAnalyticsRow6"
+        },
+        {
+          "kind": "section",
+          "id": "sAnalyticsRow1"
+        },
+        {
+          "kind": "section",
+          "id": "sAnalyticsRow2"
+        },
+        {
+          "kind": "section",
+          "id": "sAnalyticsRow3"
+        },
+        {
+          "kind": "section",
+          "id": "sAnalyticsRow4"
+        },
+        {
+          "kind": "widget",
+          "id": "wTimeline"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 12,
+      "gap": 10,
+      "background": "default",
+      "border": false,
+      "scroll": true,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sAnalyticsRoot",
+      "name": "Analytics",
+      "layout": "rows"
+    },
+    "sMapRoot": {
+      "children": [
+        {
+          "kind": "section",
+          "id": "sKpiRow~2"
+        },
+        {
+          "kind": "widget",
+          "id": "wMap1"
+        },
+        {
+          "kind": "widget",
+          "id": "wGantt"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 10,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": true,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sMapRoot",
+      "name": "Map Operations",
+      "layout": "rows"
+    },
+    "sWfTabs": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wWorkOrderTable"
+        },
+        {
+          "kind": "widget",
+          "id": "wMarkdown"
+        },
+        {
+          "kind": "widget",
+          "id": "wAIPChat"
+        },
+        {
+          "kind": "widget",
+          "id": "wComments"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sWfTabs",
+      "name": "WF Tabs",
+      "layout": "tabs",
+      "tabs": [
+        {
+          "id": "t1",
+          "label": "Work Orders",
+          "childIndex": 0
+        },
+        {
+          "id": "t2",
+          "label": "Runbook",
+          "childIndex": 1
+        },
+        {
+          "id": "t3",
+          "label": "AIP",
+          "childIndex": 2
+        },
+        {
+          "id": "t4",
+          "label": "Comments",
+          "childIndex": 3
+        }
+      ]
+    },
+    "sWfSide": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wStepper"
+        },
+        {
+          "kind": "widget",
+          "id": "wInlineAction"
+        },
+        {
+          "kind": "widget",
+          "id": "wMediaUpload"
+        },
+        {
+          "kind": "widget",
+          "id": "wVertex"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 10,
+      "gap": 8,
+      "background": "panel",
+      "border": true,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sWfSide",
+      "name": "Side",
+      "layout": "rows",
+      "width": "320px"
+    },
+    "sWfExtra": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wActionTable"
+        },
+        {
+          "kind": "widget",
+          "id": "wQuiver"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sWfExtra",
+      "name": "Bulk + Quiver",
+      "layout": "columns"
+    },
+    "sWfMain": {
+      "children": [
+        {
+          "kind": "section",
+          "id": "sWfTabs"
+        },
+        {
+          "kind": "section",
+          "id": "sWfSide"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sWfMain",
+      "name": "Main",
+      "layout": "columns"
+    },
+    "sWorkflowRoot": {
+      "children": [
+        {
+          "kind": "section",
+          "id": "sWfMain"
+        },
+        {
+          "kind": "section",
+          "id": "sWfExtra"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 10,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": true,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sWorkflowRoot",
+      "name": "Workflow",
+      "layout": "rows"
+    },
+    "sTelemetryMain": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wDigitalTwin"
+        },
+        {
+          "kind": "section",
+          "id": "sTelemetrySide"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 10,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sTelemetryMain",
+      "name": "Live operations",
+      "layout": "columns"
+    },
+    "sTelemetrySide": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wLiveStats"
+        },
+        {
+          "kind": "widget",
+          "id": "wObjectView1"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sTelemetrySide",
+      "name": "Signal analysis",
+      "layout": "rows",
+      "width": "365px"
+    },
+    "sTelemetryRoot": {
+      "children": [
+        {
+          "kind": "section",
+          "id": "sTelemetryMain"
+        },
+        {
+          "kind": "widget",
+          "id": "wLiveTable"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 12,
+      "gap": 10,
+      "background": "default",
+      "border": false,
+      "scroll": true,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sTelemetryRoot",
+      "name": "Industrial stream",
+      "layout": "rows"
+    },
+    "sDrawerRoot": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wObjectSetTitle1~7"
+        },
+        {
+          "kind": "widget",
+          "id": "wPropList1~8"
+        },
+        {
+          "kind": "widget",
+          "id": "wLinks1~9"
+        },
+        {
+          "kind": "widget",
+          "id": "wAIPGen"
+        },
+        {
+          "kind": "widget",
+          "id": "wButtonGroup1~10"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 14,
+      "gap": 10,
+      "background": "default",
+      "border": false,
+      "scroll": true,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sDrawerRoot",
+      "name": "Drawer Content",
+      "layout": "rows"
+    },
+    "sConfirmRoot": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wConfirmCallout"
+        },
+        {
+          "kind": "widget",
+          "id": "wInlineAction~11"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 14,
+      "gap": 10,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sConfirmRoot",
+      "name": "Confirm",
+      "layout": "rows"
+    },
+    "sActionModalRoot": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wInlineAction~12"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 14,
+      "gap": 10,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sActionModalRoot",
+      "name": "Action Modal",
+      "layout": "rows"
+    },
+    "sCreateWORoot": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wCreateWO"
+        }
+      ],
+      "showHeader": false,
+      "direction": "vertical",
+      "padding": 14,
+      "gap": 10,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sCreateWORoot",
+      "name": "Create WO",
+      "layout": "rows"
+    },
+    "sKpiRow~2": {
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wKpi1~3"
+        },
+        {
+          "kind": "widget",
+          "id": "wKpi2~4"
+        },
+        {
+          "kind": "widget",
+          "id": "wKpi3~5"
+        },
+        {
+          "kind": "widget",
+          "id": "wKpi4~6"
+        }
+      ],
+      "showHeader": false,
+      "direction": "horizontal",
+      "padding": 8,
+      "gap": 8,
+      "background": "default",
+      "border": false,
+      "scroll": false,
+      "collapsible": false,
+      "defaultCollapsed": false,
+      "id": "sKpiRow~2",
+      "name": "KPI Row",
+      "layout": "columns"
+    }
+  },
+  "widgets": {
+    "wKpi1": {
+      "id": "wKpi1",
+      "type": "MetricCard",
+      "name": "Active Assets",
+      "config": {
+        "label": "Active",
+        "variableId": "activeCount",
+        "trend": "up",
+        "trendValue": "+3",
+        "variant": "card"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wKpi2": {
+      "id": "wKpi2",
+      "type": "MetricCard",
+      "name": "Warnings",
+      "config": {
+        "label": "Warnings",
+        "variableId": "warningCount",
+        "trend": "flat",
+        "variant": "card",
+        "color": "warning"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wKpi3": {
+      "id": "wKpi3",
+      "type": "MetricCard",
+      "name": "Offline",
+      "config": {
+        "label": "Offline",
+        "variableId": "offlineCount",
+        "trend": "down",
+        "trendValue": "-1",
+        "variant": "card",
+        "color": "danger"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wKpi4": {
+      "id": "wKpi4",
+      "type": "MetricCard",
+      "name": "Avg Availability",
+      "config": {
+        "label": "Avg Availability",
+        "variableId": "avgAvailability",
+        "suffix": "%",
+        "variant": "card",
+        "color": "success"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wFilterList": {
+      "id": "wFilterList",
+      "type": "FilterList",
+      "name": "Asset Filters",
+      "config": {
+        "objectSetVarId": "allAssets",
+        "outputFilterVarId": "filteredAssets",
+        "facets": [
+          {
+            "property": "status",
+            "label": "Status",
+            "type": "checkbox",
+            "varId": "statusFilter"
+          },
+          {
+            "property": "priority",
+            "label": "Priority",
+            "type": "histogram",
+            "varId": "priorityFilter"
+          },
+          {
+            "property": "owner",
+            "label": "Owner",
+            "type": "search",
+            "varId": "ownerFilter"
+          }
+        ],
+        "searchVarId": "searchText"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wObjectTable1": {
+      "id": "wObjectTable1",
+      "type": "ObjectTable",
+      "name": "Assets",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "activeVarId": "selectedAsset",
+        "selectedVarId": "selectedAssets",
+        "columns": [
+          {
+            "key": "id",
+            "label": "ID",
+            "width": 90
+          },
+          {
+            "key": "name",
+            "label": "Name",
+            "width": 170
+          },
+          {
+            "key": "status",
+            "label": "Status",
+            "width": 100,
+            "formatter": "status"
+          },
+          {
+            "key": "priority",
+            "label": "Priority",
+            "width": 90,
+            "formatter": "priority"
+          },
+          {
+            "key": "owner",
+            "label": "Owner",
+            "width": 130
+          },
+          {
+            "key": "pressure",
+            "label": "Pressure (bar)",
+            "width": 110,
+            "formatter": "numeric"
+          },
+          {
+            "key": "temperature",
+            "label": "Temp (°C)",
+            "width": 90,
+            "formatter": "numeric"
+          },
+          {
+            "key": "availability",
+            "label": "Avail (%)",
+            "width": 90,
+            "formatter": "numeric"
+          },
+          {
+            "key": "openAlerts",
+            "label": "Alerts",
+            "width": 70,
+            "formatter": "numeric"
+          },
+          {
+            "key": "lastInspection",
+            "label": "Last inspection",
+            "width": 130,
+            "formatter": "date"
+          }
+        ],
+        "density": "compact",
+        "enableSelection": true,
+        "selectionMode": "multiple",
+        "enableInlineEdit": true,
+        "showToolbar": true,
+        "showSearch": true,
+        "titleTemplate": "Assets ({count})"
+      },
+      "events": [
+        {
+          "id": "ev1",
+          "trigger": "onSelect",
+          "actions": [
+            {
+              "kind": "setVariable",
+              "variableId": "showDetail",
+              "valueExpr": "true"
+            }
+          ]
+        }
+      ],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wObjectView1": {
+      "id": "wObjectView1",
+      "type": "ObjectView",
+      "name": "Asset Detail",
+      "config": {
+        "objectVarId": "selectedAsset",
+        "formFactor": "panel",
+        "viewMode": "configured",
+        "tabs": [
+          "Overview",
+          "Properties",
+          "Links",
+          "History"
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal",
+      "height": 255
+    },
+    "wPropList1": {
+      "id": "wPropList1",
+      "type": "PropertyList",
+      "name": "Properties",
+      "config": {
+        "objectVarId": "selectedAsset",
+        "columns": 2,
+        "hideNull": true,
+        "properties": [
+          "id",
+          "name",
+          "status",
+          "priority",
+          "owner",
+          "pressure",
+          "temperature",
+          "availability",
+          "model",
+          "installedAt",
+          "lastInspection",
+          "nextMaintenance"
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wLinks1": {
+      "id": "wLinks1",
+      "type": "Links",
+      "name": "Related",
+      "config": {
+        "objectVarId": "selectedAsset",
+        "linkTypes": [
+          {
+            "label": "Sensors",
+            "target": "Sensor",
+            "linkField": "assetId"
+          },
+          {
+            "label": "Alerts",
+            "target": "Alert",
+            "linkField": "assetId"
+          },
+          {
+            "label": "Work Orders",
+            "target": "WorkOrder",
+            "linkField": "assetId"
+          }
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wButtonGroup1": {
+      "id": "wButtonGroup1",
+      "type": "ButtonGroup",
+      "name": "Asset Actions",
+      "config": {
+        "buttons": [
+          {
+            "label": "Open Detail",
+            "variant": "primary",
+            "icon": "arrow",
+            "eventActions": [
+              {
+                "kind": "openOverlay",
+                "overlayId": "oAssetDrawer"
+              }
+            ]
+          },
+          {
+            "label": "Edit Status",
+            "variant": "secondary",
+            "icon": "edit",
+            "eventActions": [
+              {
+                "kind": "openOverlay",
+                "overlayId": "oActionModal"
+              }
+            ]
+          },
+          {
+            "label": "Create Work Order",
+            "variant": "secondary",
+            "icon": "plus",
+            "eventActions": [
+              {
+                "kind": "openOverlay",
+                "overlayId": "oCreateWOModal"
+              }
+            ]
+          },
+          {
+            "label": "Take offline…",
+            "variant": "danger",
+            "icon": "trash",
+            "eventActions": [
+              {
+                "kind": "openOverlay",
+                "overlayId": "oConfirmDrawer"
+              }
+            ]
+          }
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wSearch1": {
+      "id": "wSearch1",
+      "type": "TextInput",
+      "name": "Search",
+      "config": {
+        "variableId": "searchText",
+        "placeholder": "Search assets...",
+        "label": "Search"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wHeaderText1": {
+      "id": "wHeaderText1",
+      "type": "HeaderText",
+      "name": "Overview Title",
+      "config": {
+        "text": "Operational Asset Overview",
+        "variant": "h2"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wObjectSetTitle1": {
+      "id": "wObjectSetTitle1",
+      "type": "ObjectSetTitle",
+      "name": "Set Title",
+      "config": {
+        "objectSetVarId": "filteredAssets"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wObjectList1": {
+      "id": "wObjectList1",
+      "type": "ObjectList",
+      "name": "Asset Gallery",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "layout": "grid",
+        "activeVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wMetric5": {
+      "id": "wMetric5",
+      "type": "MetricCard",
+      "name": "Revenue at Risk",
+      "config": {
+        "label": "Revenue at Risk",
+        "variableId": "revenueAtRisk",
+        "prefix": "$",
+        "formatter": "currencyShort",
+        "variant": "trend"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wMetric6": {
+      "id": "wMetric6",
+      "type": "MetricCard",
+      "name": "Open Alerts",
+      "config": {
+        "label": "Open Alerts",
+        "variableId": "notificationCount",
+        "variant": "simple",
+        "color": "warning"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wMetric7": {
+      "id": "wMetric7",
+      "type": "MetricCard",
+      "name": "Filtered Count",
+      "config": {
+        "label": "In Filter",
+        "variableId": "filteredCount",
+        "variant": "tag"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wChart1": {
+      "id": "wChart1",
+      "type": "ChartXY",
+      "name": "Availability by Status",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "chartKind": "bar",
+        "xProperty": "status",
+        "yProperty": "availability",
+        "agg": "avg"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wChart2": {
+      "id": "wChart2",
+      "type": "ChartXY",
+      "name": "Pressure over Assets",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "chartKind": "line",
+        "xProperty": "id",
+        "yProperty": "pressure"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wChart3": {
+      "id": "wChart3",
+      "type": "ChartPie",
+      "name": "Status Distribution",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "groupBy": "status"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wChart4": {
+      "id": "wChart4",
+      "type": "ChartPie",
+      "name": "Priority Breakdown",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "groupBy": "priority",
+        "variant": "donut"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wPivot": {
+      "id": "wPivot",
+      "type": "PivotTable",
+      "name": "Status × Priority",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "rows": "status",
+        "cols": "priority",
+        "measure": "count"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wTimeline": {
+      "id": "wTimeline",
+      "type": "Timeline",
+      "name": "Alert Timeline",
+      "config": {
+        "objectSetVarId": "activeAlerts"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wVega": {
+      "id": "wVega",
+      "type": "ChartVega",
+      "name": "Vega Status Bars",
+      "config": {
+        "objectSetVarId": "filteredAssets"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wWaterfall": {
+      "id": "wWaterfall",
+      "type": "ChartWaterfall",
+      "name": "Status Waterfall",
+      "config": {
+        "objectSetVarId": "filteredAssets"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wObs": {
+      "id": "wObs",
+      "type": "ObservabilityChart",
+      "name": "Availability SLO",
+      "config": {
+        "objectSetVarId": "filteredAssets"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wFreeForm": {
+      "id": "wFreeForm",
+      "type": "FreeFormAnalysis",
+      "name": "Pressure vs Temp",
+      "config": {
+        "objectSetVarId": "filteredAssets"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wTS": {
+      "id": "wTS",
+      "type": "TimeSeriesAnalysis",
+      "name": "Telemetry",
+      "config": {
+        "objectSetVarId": "filteredAssets"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wPills": {
+      "id": "wPills",
+      "type": "ExplorationFilter",
+      "name": "Status pills",
+      "config": {
+        "variableId": "statusFilter"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wTerms": {
+      "id": "wTerms",
+      "type": "ProminentTerms",
+      "name": "Prominent terms",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "property": "status"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wActionTable": {
+      "id": "wActionTable",
+      "type": "ActionTable",
+      "name": "Bulk edit",
+      "config": {
+        "actionId": "updateAssetStatus",
+        "objectSetVarId": "filteredAssets"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wVertex": {
+      "id": "wVertex",
+      "type": "VertexGraph",
+      "name": "Neighborhood",
+      "config": {
+        "objectVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wKanban": {
+      "id": "wKanban",
+      "type": "KanbanBoard",
+      "name": "Asset status board",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "groupBy": "status",
+        "actionId": "updateAssetStatus",
+        "actionParam": "status",
+        "activeVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wApproval": {
+      "id": "wApproval",
+      "type": "ApprovalInbox",
+      "name": "Work order approvals",
+      "config": {
+        "objectSetVarId": "workOrders",
+        "approveActionId": "completeWorkOrder",
+        "rejectActionId": "cancelWorkOrder"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wCalendar": {
+      "id": "wCalendar",
+      "type": "Calendar",
+      "name": "Work order calendar",
+      "config": {
+        "objectSetVarId": "workOrders",
+        "dateProperty": "due",
+        "activeVarId": "selectedWorkOrder"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wFeed": {
+      "id": "wFeed",
+      "type": "NotificationFeed",
+      "name": "Action feed",
+      "config": {},
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wExplorer": {
+      "id": "wExplorer",
+      "type": "GraphExplorer",
+      "name": "Search Around",
+      "config": {
+        "objectVarId": "selectedAsset",
+        "outputVarId": "selectedWorkOrder"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wRiskGauge": {
+      "id": "wRiskGauge",
+      "type": "Gauge",
+      "name": "Failure risk",
+      "config": {
+        "variableId": "selectedAssetRisk",
+        "label": "Failure risk (selected)",
+        "max": 100,
+        "suffix": "%",
+        "warnAt": 60
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wOpenWoBar": {
+      "id": "wOpenWoBar",
+      "type": "ProgressBar",
+      "name": "Open work",
+      "config": {
+        "valueVarId": "openWorkOrderCount",
+        "total": 400,
+        "label": "Open work orders"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wOfflineBanner": {
+      "id": "wOfflineBanner",
+      "type": "AlertBanner",
+      "name": "Offline banner",
+      "config": {
+        "variableId": "offlineCount",
+        "threshold": 0,
+        "intent": "danger",
+        "message": "{value} assets are Offline — drag them to Maintenance on the board once a crew is assigned."
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wBreadcrumb": {
+      "id": "wBreadcrumb",
+      "type": "Breadcrumbs",
+      "name": "Breadcrumbs",
+      "config": {
+        "objectVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wSelCard": {
+      "id": "wSelCard",
+      "type": "ObjectCard",
+      "name": "Selected asset",
+      "config": {
+        "objectVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wHeatmap": {
+      "id": "wHeatmap",
+      "type": "Heatmap",
+      "name": "Status × Priority heatmap",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "rows": "status",
+        "cols": "priority",
+        "rowFilterVarId": "statusFilter",
+        "colFilterVarId": "priorityFilter"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wTreemap": {
+      "id": "wTreemap",
+      "type": "Treemap",
+      "name": "Assets by owner",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "groupBy": "owner",
+        "filterVarId": "ownerFilter"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wHistogram": {
+      "id": "wHistogram",
+      "type": "Histogram",
+      "name": "Pressure distribution",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "property": "pressure",
+        "bins": 14
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wScatter": {
+      "id": "wScatter",
+      "type": "ScatterPlot",
+      "name": "Pressure vs temperature",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "x": "pressure",
+        "y": "temperature",
+        "colorBy": "status",
+        "activeVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wLeader": {
+      "id": "wLeader",
+      "type": "Leaderboard",
+      "name": "Top revenue exposure",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "property": "revenueImpact",
+        "limit": 8,
+        "activeVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wRange": {
+      "id": "wRange",
+      "type": "RangeSlider",
+      "name": "Pressure range",
+      "config": {
+        "minVarId": "pressureMin",
+        "maxVarId": "pressureMax",
+        "min": 0,
+        "max": 45,
+        "label": "Pressure",
+        "unit": "bar"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wCompare": {
+      "id": "wCompare",
+      "type": "ObjectComparison",
+      "name": "Compare selected",
+      "config": {
+        "objectsVarId": "selectedAssets"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wQuiver": {
+      "id": "wQuiver",
+      "type": "QuiverDashboard",
+      "name": "Quiver KPIs",
+      "config": {
+        "title": "Quiver · Fleet KPIs"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wMap1": {
+      "id": "wMap1",
+      "type": "Map",
+      "name": "Asset Map",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "activeVarId": "selectedAsset",
+        "colorBy": "status",
+        "clusterEnabled": true
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wGantt": {
+      "id": "wGantt",
+      "type": "Gantt",
+      "name": "Work Order Schedule",
+      "config": {
+        "objectSetVarId": "workOrders"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wStatusTracker": {
+      "id": "wStatusTracker",
+      "type": "StatusTracker",
+      "name": "Asset Status",
+      "config": {
+        "objectVarId": "selectedAsset",
+        "stages": [
+          "Active",
+          "Warning",
+          "Maintenance",
+          "Offline"
+        ],
+        "activeProp": "status"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wWorkOrderTable": {
+      "id": "wWorkOrderTable",
+      "type": "ObjectTable",
+      "name": "Work Orders",
+      "config": {
+        "objectSetVarId": "workOrders",
+        "activeVarId": "selectedWorkOrder",
+        "columns": [
+          {
+            "key": "id",
+            "label": "ID",
+            "width": 110
+          },
+          {
+            "key": "title",
+            "label": "Title",
+            "width": 220
+          },
+          {
+            "key": "status",
+            "label": "Status",
+            "width": 110,
+            "formatter": "status"
+          },
+          {
+            "key": "assetId",
+            "label": "Asset",
+            "width": 110
+          },
+          {
+            "key": "due",
+            "label": "Due",
+            "width": 120,
+            "formatter": "date"
+          }
+        ],
+        "density": "normal",
+        "enableSelection": true,
+        "selectionMode": "single"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wInlineAction": {
+      "id": "wInlineAction",
+      "type": "InlineAction",
+      "name": "Edit Asset",
+      "config": {
+        "actionId": "updateAssetStatus",
+        "objectVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wCreateWO": {
+      "id": "wCreateWO",
+      "type": "InlineAction",
+      "name": "Create Work Order",
+      "config": {
+        "actionId": "createWorkOrder",
+        "objectVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wConfirmCallout": {
+      "id": "wConfirmCallout",
+      "type": "Callout",
+      "name": "Offline warning",
+      "config": {
+        "title": "Take this asset offline?",
+        "text": "Offline assets stop producing revenue. The Update asset status action requires High priority when the new status is Offline.",
+        "intent": "danger"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wStepper": {
+      "id": "wStepper",
+      "type": "Stepper",
+      "name": "Workflow",
+      "config": {
+        "steps": [
+          "Observe",
+          "Investigate",
+          "Decide",
+          "Act"
+        ],
+        "currentVarId": "selectedTab"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wTabs1": {
+      "id": "wTabs1",
+      "type": "Tabs",
+      "name": "Section Tabs",
+      "config": {
+        "tabs": [
+          "Open",
+          "In Progress",
+          "Done"
+        ],
+        "variableId": "selectedTab"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wMarkdown": {
+      "id": "wMarkdown",
+      "type": "Markdown",
+      "name": "Runbook",
+      "config": {
+        "text": "## Standard Operating Procedure\n\n1. **Observe** telemetry trends in the selected asset.\n2. _Investigate_ anomalies via linked Sensors.\n3. Decide on a mitigation using the Action panel.\n4. Act — submit a Work Order.\n\n> Reference: [Field Manual §4.2](#)\n\n`asset.id` is the primary key."
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wPdf": {
+      "id": "wPdf",
+      "type": "PdfViewer",
+      "name": "Compliance PDF",
+      "config": {
+        "source": "Compliance_Report_Q3.pdf",
+        "pageVarId": "pdfPage",
+        "totalPages": 24
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wComments": {
+      "id": "wComments",
+      "type": "Comments",
+      "name": "Discussion",
+      "config": {
+        "listVarId": "commentList",
+        "draftVarId": "commentDraft"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wMediaUpload": {
+      "id": "wMediaUpload",
+      "type": "MediaUploader",
+      "name": "Upload Reading",
+      "config": {
+        "outputVarId": "uploadedFile"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wAIPChat": {
+      "id": "wAIPChat",
+      "type": "AIPChatbot",
+      "name": "AIP Assistant",
+      "config": {
+        "historyVarId": "chatHistory",
+        "inputVarId": "chatInput",
+        "suggestions": [
+          "Summarise active alerts",
+          "Which asset has highest revenue risk?",
+          "Explain the status filter"
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wAIPAnalyst": {
+      "id": "wAIPAnalyst",
+      "type": "AIPAnalyst",
+      "name": "AIP Analyst",
+      "config": {
+        "contextVarId": "selectedAsset",
+        "outputVarId": "filteredAssets"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wAIPGen": {
+      "id": "wAIPGen",
+      "type": "AIPGenerated",
+      "name": "AIP Insights",
+      "config": {
+        "objectVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wEmbedModule": {
+      "id": "wEmbedModule",
+      "type": "EmbeddedModule",
+      "name": "Linked Workbook",
+      "config": {
+        "moduleId": "child-asset-detail",
+        "bindings": [
+          {
+            "parentVar": "selectedAsset",
+            "childInterface": "selectedAsset"
+          },
+          {
+            "parentVar": "theme",
+            "childInterface": "theme"
+          }
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wCustom": {
+      "id": "wCustom",
+      "type": "CustomWidget",
+      "name": "Vendor Widget",
+      "config": {
+        "widgetSet": "com.vendor.ops",
+        "version": "1.4.0",
+        "params": [
+          {
+            "name": "inputObjectSet",
+            "varId": "filteredAssets"
+          },
+          {
+            "name": "selectedObject",
+            "varId": "selectedAsset"
+          },
+          {
+            "name": "title",
+            "value": "Vendor Report"
+          }
+        ],
+        "permissions": [
+          "read.objects",
+          "write.actions"
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wIframe": {
+      "id": "wIframe",
+      "type": "Iframe",
+      "name": "External Dashboard",
+      "config": {
+        "url": "https://foundry.local/embed/dashboard",
+        "height": 320
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wLiveStats": {
+      "id": "wLiveStats",
+      "type": "TelemetryStats",
+      "name": "Fleet vibration · WASM",
+      "config": {
+        "assetVarId": "selectedAsset",
+        "flowStatsVarId": "liveTelemetryStats",
+        "signalIndex": 0,
+        "threshold": 11.5,
+        "windowRows": 10000
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal",
+      "height": 220
+    },
+    "wDigitalTwin": {
+      "id": "wDigitalTwin",
+      "type": "Scene3D",
+      "name": "Robot cell · live digital twin",
+      "config": {
+        "modelUrl": "/models/industrial-robot-cell.glb",
+        "assetVarId": "selectedAsset",
+        "selectedPartVarId": "selectedScenePart",
+        "background": "dark",
+        "showGrid": true,
+        "quality": "balanced",
+        "live": true,
+        "layers": [
+          {
+            "id": "base",
+            "name": "01 / Foundation",
+            "nodes": [
+              "Foundation",
+              "BasePedestal",
+              "YawMotor",
+              "Turret"
+            ],
+            "visible": true,
+            "opacity": 1,
+            "wireframe": false
+          },
+          {
+            "id": "arm",
+            "name": "02 / Kinematics",
+            "nodes": [
+              "ShoulderHousing",
+              "UpperArm",
+              "ElbowHousing",
+              "Forearm",
+              "WristHousing",
+              "GripperBody",
+              "LeftJaw",
+              "RightJaw"
+            ],
+            "visible": true,
+            "opacity": 1,
+            "wireframe": false
+          },
+          {
+            "id": "sensors",
+            "name": "03 / Sensors",
+            "nodes": [
+              "VibrationProbe",
+              "TemperatureProbe",
+              "PressureProbe",
+              "ConveyorSensor",
+              "SafetyBeacon"
+            ],
+            "visible": true,
+            "opacity": 1,
+            "wireframe": false
+          },
+          {
+            "id": "conveyor",
+            "name": "04 / Conveyor",
+            "nodes": [
+              "ConveyorBed",
+              "ConveyorBelt",
+              "ConveyorMotor"
+            ],
+            "visible": true,
+            "opacity": 1,
+            "wireframe": false
+          }
+        ],
+        "mappings": [
+          {
+            "id": "m-yaw",
+            "node": "BaseYaw",
+            "source": "telemetry",
+            "signalIndex": 60,
+            "mode": "rotation",
+            "axis": "y",
+            "inputMin": 400,
+            "inputMax": 1200,
+            "outputMin": -1.4,
+            "outputMax": 1.4,
+            "smooth": 0.12,
+            "enabled": true
+          },
+          {
+            "id": "m-shoulder",
+            "node": "ShoulderPitch",
+            "source": "telemetry",
+            "signalIndex": 0,
+            "mode": "rotation",
+            "axis": "z",
+            "inputMin": 0,
+            "inputMax": 20,
+            "outputMin": -0.65,
+            "outputMax": 0.75,
+            "smooth": 0.1,
+            "enabled": true
+          },
+          {
+            "id": "m-elbow",
+            "node": "ElbowPitch",
+            "source": "telemetry",
+            "signalIndex": 10,
+            "mode": "rotation",
+            "axis": "z",
+            "inputMin": 40,
+            "inputMax": 90,
+            "outputMin": -0.95,
+            "outputMax": 0.45,
+            "smooth": 0.12,
+            "enabled": true
+          },
+          {
+            "id": "m-wrist",
+            "node": "WristRoll",
+            "source": "telemetry",
+            "signalIndex": 70,
+            "mode": "rotation",
+            "axis": "y",
+            "inputMin": 5,
+            "inputMax": 42,
+            "outputMin": -1.2,
+            "outputMax": 1.2,
+            "smooth": 0.2,
+            "enabled": true
+          },
+          {
+            "id": "m-jaw-left",
+            "node": "FingerLeft",
+            "source": "telemetry",
+            "signalIndex": 20,
+            "mode": "position",
+            "axis": "x",
+            "inputMin": 12,
+            "inputMax": 38,
+            "outputMin": -0.14,
+            "outputMax": 0.05,
+            "smooth": 0.15,
+            "enabled": true
+          },
+          {
+            "id": "m-jaw-right",
+            "node": "FingerRight",
+            "source": "telemetry",
+            "signalIndex": 20,
+            "mode": "position",
+            "axis": "x",
+            "inputMin": 12,
+            "inputMax": 38,
+            "outputMin": 0.14,
+            "outputMax": -0.05,
+            "smooth": 0.15,
+            "enabled": true
+          },
+          {
+            "id": "m-probe",
+            "node": "VibrationProbe",
+            "source": "telemetry",
+            "signalIndex": 0,
+            "mode": "color",
+            "axis": "y",
+            "inputMin": 5,
+            "inputMax": 19,
+            "outputMin": 0,
+            "outputMax": 1,
+            "threshold": 11.5,
+            "colorLow": "#1abb7f",
+            "colorHigh": "#e65b43",
+            "smooth": 0.2,
+            "enabled": true
+          },
+          {
+            "id": "m-temp",
+            "node": "TemperatureProbe",
+            "source": "telemetry",
+            "signalIndex": 10,
+            "mode": "color",
+            "axis": "y",
+            "inputMin": 40,
+            "inputMax": 90,
+            "outputMin": 0,
+            "outputMax": 1,
+            "threshold": 77,
+            "colorLow": "#238acf",
+            "colorHigh": "#e38c32",
+            "smooth": 0.2,
+            "enabled": true
+          },
+          {
+            "id": "m-status",
+            "node": "SafetyBeacon",
+            "source": "ontology",
+            "property": "openAlerts",
+            "mode": "color",
+            "axis": "y",
+            "inputMin": 0,
+            "inputMax": 4,
+            "outputMin": 0,
+            "outputMax": 1,
+            "threshold": 0,
+            "colorLow": "#19ad6e",
+            "colorHigh": "#d43d35",
+            "smooth": 0.1,
+            "enabled": true
+          }
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal",
+      "height": 490
+    },
+    "wLiveTable": {
+      "id": "wLiveTable",
+      "type": "TelemetryTable",
+      "name": "Plant telemetry · 100,000 × 100",
+      "config": {
+        "assetVarId": "selectedAsset",
+        "selectedSignalVarId": "selectedSignal",
+        "rowHeight": 30
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal",
+      "height": 510
+    },
+    "wUnused1": {
+      "id": "wUnused1",
+      "type": "ChartXY",
+      "name": "Chart 4 (unused)",
+      "config": {
+        "chartKind": "scatter"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wUnused2": {
+      "id": "wUnused2",
+      "type": "ObjectTable",
+      "name": "Object Table 3 (unused)",
+      "config": {},
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wObjectSetTitle1~1": {
+      "id": "wObjectSetTitle1~1",
+      "type": "ObjectSetTitle",
+      "name": "Set Title",
+      "config": {
+        "objectSetVarId": "filteredAssets"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wKpi1~3": {
+      "id": "wKpi1~3",
+      "type": "MetricCard",
+      "name": "Active Assets",
+      "config": {
+        "label": "Active",
+        "variableId": "activeCount",
+        "trend": "up",
+        "trendValue": "+3",
+        "variant": "card"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wKpi2~4": {
+      "id": "wKpi2~4",
+      "type": "MetricCard",
+      "name": "Warnings",
+      "config": {
+        "label": "Warnings",
+        "variableId": "warningCount",
+        "trend": "flat",
+        "variant": "card",
+        "color": "warning"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wKpi3~5": {
+      "id": "wKpi3~5",
+      "type": "MetricCard",
+      "name": "Offline",
+      "config": {
+        "label": "Offline",
+        "variableId": "offlineCount",
+        "trend": "down",
+        "trendValue": "-1",
+        "variant": "card",
+        "color": "danger"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wKpi4~6": {
+      "id": "wKpi4~6",
+      "type": "MetricCard",
+      "name": "Avg Availability",
+      "config": {
+        "label": "Avg Availability",
+        "variableId": "avgAvailability",
+        "suffix": "%",
+        "variant": "card",
+        "color": "success"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wObjectSetTitle1~7": {
+      "id": "wObjectSetTitle1~7",
+      "type": "ObjectSetTitle",
+      "name": "Set Title",
+      "config": {
+        "objectSetVarId": "filteredAssets"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wPropList1~8": {
+      "id": "wPropList1~8",
+      "type": "PropertyList",
+      "name": "Properties",
+      "config": {
+        "objectVarId": "selectedAsset",
+        "columns": 2,
+        "hideNull": true,
+        "properties": [
+          "id",
+          "name",
+          "status",
+          "priority",
+          "owner",
+          "pressure",
+          "temperature",
+          "availability",
+          "model",
+          "installedAt",
+          "lastInspection",
+          "nextMaintenance"
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wLinks1~9": {
+      "id": "wLinks1~9",
+      "type": "Links",
+      "name": "Related",
+      "config": {
+        "objectVarId": "selectedAsset",
+        "linkTypes": [
+          {
+            "label": "Sensors",
+            "target": "Sensor",
+            "linkField": "assetId"
+          },
+          {
+            "label": "Alerts",
+            "target": "Alert",
+            "linkField": "assetId"
+          },
+          {
+            "label": "Work Orders",
+            "target": "WorkOrder",
+            "linkField": "assetId"
+          }
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wButtonGroup1~10": {
+      "id": "wButtonGroup1~10",
+      "type": "ButtonGroup",
+      "name": "Asset Actions",
+      "config": {
+        "buttons": [
+          {
+            "label": "Open Detail",
+            "variant": "primary",
+            "icon": "arrow",
+            "eventActions": [
+              {
+                "kind": "openOverlay",
+                "overlayId": "oAssetDrawer"
+              }
+            ]
+          },
+          {
+            "label": "Edit Status",
+            "variant": "secondary",
+            "icon": "edit",
+            "eventActions": [
+              {
+                "kind": "openOverlay",
+                "overlayId": "oActionModal"
+              }
+            ]
+          },
+          {
+            "label": "Create Work Order",
+            "variant": "secondary",
+            "icon": "plus",
+            "eventActions": [
+              {
+                "kind": "openOverlay",
+                "overlayId": "oCreateWOModal"
+              }
+            ]
+          },
+          {
+            "label": "Take offline…",
+            "variant": "danger",
+            "icon": "trash",
+            "eventActions": [
+              {
+                "kind": "openOverlay",
+                "overlayId": "oConfirmDrawer"
+              }
+            ]
+          }
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wInlineAction~11": {
+      "id": "wInlineAction~11",
+      "type": "InlineAction",
+      "name": "Edit Asset",
+      "config": {
+        "actionId": "updateAssetStatus",
+        "objectVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wInlineAction~12": {
+      "id": "wInlineAction~12",
+      "type": "InlineAction",
+      "name": "Edit Asset",
+      "config": {
+        "actionId": "updateAssetStatus",
+        "objectVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    }
+  },
+  "overlays": [
+    {
+      "id": "oAssetDrawer",
+      "name": "Asset Detail Drawer",
+      "kind": "drawer",
+      "rootSectionId": "sDrawerRoot",
+      "side": "right",
+      "size": "medium",
+      "backdrop": true,
+      "closeOnBackdrop": true,
+      "closeOnEsc": true,
+      "openVariableId": "showEditDrawer"
+    },
+    {
+      "id": "oConfirmDrawer",
+      "name": "Confirm Offline",
+      "kind": "drawer",
+      "rootSectionId": "sConfirmRoot",
+      "side": "right",
+      "size": "small",
+      "backdrop": true,
+      "closeOnBackdrop": true,
+      "closeOnEsc": true,
+      "openVariableId": "showConfirmModal"
+    },
+    {
+      "id": "oActionModal",
+      "name": "Edit Status Modal",
+      "kind": "modal",
+      "rootSectionId": "sActionModalRoot",
+      "title": "Edit Asset Status",
+      "backdrop": true,
+      "closeOnBackdrop": false,
+      "closeOnEsc": true,
+      "openVariableId": "showActionModal"
+    },
+    {
+      "id": "oCreateWOModal",
+      "name": "Create Work Order Modal",
+      "kind": "modal",
+      "rootSectionId": "sCreateWORoot",
+      "title": "Create Work Order",
+      "backdrop": true,
+      "closeOnBackdrop": true,
+      "closeOnEsc": true,
+      "openVariableId": "showCreateWO"
+    }
+  ],
+  "variables": [
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "allAssets",
+      "name": "allAssets",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "sourceObjectType": "Asset",
+      "description": "All assets from Ontology"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "statusFilter",
+      "name": "statusFilter",
+      "type": "array",
+      "definitionKind": "static",
+      "staticValue": [],
+      "description": "Selected asset statuses"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "priorityFilter",
+      "name": "priorityFilter",
+      "type": "array",
+      "definitionKind": "static",
+      "staticValue": []
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "ownerFilter",
+      "name": "ownerFilter",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": ""
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "searchText",
+      "name": "searchText",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": ""
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "pressureMin",
+      "name": "pressureMin",
+      "type": "numeric",
+      "definitionKind": "static",
+      "staticValue": ""
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "pressureMax",
+      "name": "pressureMax",
+      "type": "numeric",
+      "definitionKind": "static",
+      "staticValue": ""
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "filteredAssets",
+      "name": "filteredAssets",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "description": "Objects(Asset).where(status, priority, owner, search, pressure range) — OSDK-style object set",
+      "objectSet": {
+        "objectType": "Asset",
+        "steps": [
+          {
+            "op": "where",
+            "clauses": [
+              {
+                "id": "f1",
+                "property": "status",
+                "op": "isOneOf",
+                "varId": "statusFilter"
+              },
+              {
+                "id": "f2",
+                "property": "priority",
+                "op": "isOneOf",
+                "varId": "priorityFilter"
+              },
+              {
+                "id": "f3",
+                "property": "owner",
+                "op": "contains",
+                "varId": "ownerFilter"
+              },
+              {
+                "id": "f4",
+                "property": "*",
+                "op": "fullTextSearch",
+                "varId": "searchText"
+              },
+              {
+                "id": "f5",
+                "property": "pressure",
+                "op": "isGreaterThanOrEqualTo",
+                "varId": "pressureMin"
+              },
+              {
+                "id": "f6",
+                "property": "pressure",
+                "op": "isLessThanOrEqualTo",
+                "varId": "pressureMax"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "selectedAssetWorkOrders",
+      "name": "selectedAssetWorkOrders",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "objectSet": {
+        "objectType": "Asset",
+        "steps": [
+          {
+            "op": "pivotTo",
+            "linkTypeApiName": "assetWorkOrders"
+          }
+        ]
+      },
+      "inputVarId": "selectedAsset",
+      "description": "selectedAsset.pivotTo(\"assetWorkOrders\")"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "selectedAssetSensors",
+      "name": "selectedAssetSensors",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "objectSet": {
+        "objectType": "Asset",
+        "steps": [
+          {
+            "op": "pivotTo",
+            "linkTypeApiName": "assetSensors"
+          }
+        ]
+      },
+      "inputVarId": "selectedAsset"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "filteredAssetAlerts",
+      "name": "filteredAssetAlerts",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "objectSet": {
+        "objectType": "Asset",
+        "steps": [
+          {
+            "op": "pivotTo",
+            "linkTypeApiName": "assetAlerts"
+          },
+          {
+            "op": "where",
+            "clauses": [
+              {
+                "id": "a1",
+                "property": "acknowledged",
+                "op": "is",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      "inputVarId": "filteredAssets",
+      "description": "filteredAssets.pivotTo(\"assetAlerts\").where(acknowledged is false)"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "selectedAssetRisk",
+      "name": "selectedAssetRisk",
+      "type": "numeric",
+      "definitionKind": "function",
+      "functionApiName": "predictFailureRisk",
+      "inputVarId": "selectedAsset",
+      "description": "Function-backed: predictFailureRisk(selectedAsset)"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "filteredRevenueAtRisk",
+      "name": "filteredRevenueAtRisk",
+      "type": "numeric",
+      "definitionKind": "function",
+      "functionApiName": "revenueAtRisk",
+      "inputVarId": "filteredAssets"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "openWorkOrders",
+      "name": "openWorkOrders",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "objectSet": {
+        "objectType": "WorkOrder",
+        "steps": [
+          {
+            "op": "where",
+            "clauses": [
+              {
+                "id": "w1",
+                "property": "status",
+                "op": "isNot",
+                "value": "Done"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "openWorkOrderCount",
+      "name": "openWorkOrderCount",
+      "type": "numeric",
+      "definitionKind": "variableTransformation",
+      "inputVarId": "openWorkOrders",
+      "transformations": [
+        {
+          "op": "cardinality"
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "builderAssets",
+      "name": "builderAssets",
+      "type": "array",
+      "definitionKind": "static",
+      "staticValue": []
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "filteredAssets"
+      ],
+      "id": "filteredCount",
+      "name": "filteredCount",
+      "type": "numeric",
+      "definitionKind": "variableTransformation",
+      "inputVarId": "filteredAssets",
+      "transformations": [
+        {
+          "op": "cardinality"
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "selectedAsset",
+      "name": "selectedAsset",
+      "type": "object",
+      "definitionKind": "widgetOutput",
+      "widgetId": "wObjectTable1",
+      "widgetOutputKey": "activeObject",
+      "description": "Currently inspected asset"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "selectedAssets",
+      "name": "selectedAssets",
+      "type": "array",
+      "definitionKind": "widgetOutput",
+      "widgetId": "wObjectTable1",
+      "widgetOutputKey": "selectedObjects"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "selectedAsset"
+      ],
+      "id": "selectedAssetId",
+      "name": "selectedAssetId",
+      "type": "string",
+      "definitionKind": "variableTransformation",
+      "inputVarId": "selectedAsset",
+      "transformations": [
+        {
+          "op": "objectProperty",
+          "args": {
+            "prop": "id"
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "showDetail",
+      "name": "showDetail",
+      "type": "boolean",
+      "definitionKind": "static",
+      "staticValue": true
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "showEditDrawer",
+      "name": "showEditDrawer",
+      "type": "boolean",
+      "definitionKind": "static",
+      "staticValue": false
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "showActionModal",
+      "name": "showActionModal",
+      "type": "boolean",
+      "definitionKind": "static",
+      "staticValue": false
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "showCreateWO",
+      "name": "showCreateWO",
+      "type": "boolean",
+      "definitionKind": "static",
+      "staticValue": false
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "showConfirmModal",
+      "name": "showConfirmModal",
+      "type": "boolean",
+      "definitionKind": "static",
+      "staticValue": false
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "currentPage",
+      "name": "currentPage",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": "pOperations"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "activeAssetTab",
+      "name": "activeAssetTab",
+      "type": "numeric",
+      "definitionKind": "static",
+      "staticValue": 0
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "dateRangeStart",
+      "name": "dateRangeStart",
+      "type": "date",
+      "definitionKind": "static",
+      "staticValue": "2026-09-01"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "dateRangeEnd",
+      "name": "dateRangeEnd",
+      "type": "date",
+      "definitionKind": "static",
+      "staticValue": "2026-09-30"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "autoRefresh",
+      "name": "autoRefresh",
+      "type": "boolean",
+      "definitionKind": "static",
+      "staticValue": false
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "theme",
+      "name": "theme",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": "light"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "mapZoom",
+      "name": "mapZoom",
+      "type": "numeric",
+      "definitionKind": "static",
+      "staticValue": 2
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "mapSelectedId",
+      "name": "mapSelectedId",
+      "type": "string",
+      "definitionKind": "widgetOutput",
+      "widgetId": "wMap1",
+      "widgetOutputKey": "selectedId"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "activeAlerts",
+      "name": "activeAlerts",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "sourceObjectType": "Alert"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "activeAlerts"
+      ],
+      "id": "activeAlertsCount",
+      "name": "activeAlertsCount",
+      "type": "numeric",
+      "definitionKind": "variableTransformation",
+      "inputVarId": "activeAlerts",
+      "transformations": [
+        {
+          "op": "cardinality"
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "workOrders",
+      "name": "workOrders",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "sourceObjectType": "WorkOrder"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "sensors",
+      "name": "sensors",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "sourceObjectType": "Sensor"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "operators",
+      "name": "operators",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "sourceObjectType": "Operator"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "locations",
+      "name": "locations",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "sourceObjectType": "Location"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "filteredAssets"
+      ],
+      "id": "assetsByStatus",
+      "name": "assetsByStatus",
+      "type": "struct",
+      "definitionKind": "objectSetAggregation",
+      "inputVarId": "filteredAssets",
+      "transformations": [
+        {
+          "op": "aggregate",
+          "args": {
+            "by": "status"
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "filteredAssets"
+      ],
+      "id": "assetsByPriority",
+      "name": "assetsByPriority",
+      "type": "struct",
+      "definitionKind": "objectSetAggregation",
+      "inputVarId": "filteredAssets",
+      "transformations": [
+        {
+          "op": "aggregate",
+          "args": {
+            "by": "priority"
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "filteredAssets"
+      ],
+      "id": "avgAvailability",
+      "name": "avgAvailability",
+      "type": "numeric",
+      "definitionKind": "objectSetAggregation",
+      "inputVarId": "filteredAssets",
+      "transformations": [
+        {
+          "op": "aggregate",
+          "args": {
+            "by": "avgAvailability"
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "filteredAssets"
+      ],
+      "id": "revenueAtRisk",
+      "name": "revenueAtRisk",
+      "type": "numeric",
+      "definitionKind": "objectSetAggregation",
+      "inputVarId": "filteredAssets",
+      "transformations": [
+        {
+          "op": "aggregate",
+          "args": {
+            "by": "sumRevenueImpact"
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "allAssets"
+      ],
+      "id": "offlineCount",
+      "name": "offlineCount",
+      "type": "numeric",
+      "definitionKind": "objectSetAggregation",
+      "inputVarId": "allAssets",
+      "transformations": [
+        {
+          "op": "aggregate",
+          "args": {
+            "by": "countOffline"
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "allAssets"
+      ],
+      "id": "warningCount",
+      "name": "warningCount",
+      "type": "numeric",
+      "definitionKind": "objectSetAggregation",
+      "inputVarId": "allAssets",
+      "transformations": [
+        {
+          "op": "aggregate",
+          "args": {
+            "by": "countWarning"
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "allAssets"
+      ],
+      "id": "activeCount",
+      "name": "activeCount",
+      "type": "numeric",
+      "definitionKind": "objectSetAggregation",
+      "inputVarId": "allAssets",
+      "transformations": [
+        {
+          "op": "aggregate",
+          "args": {
+            "by": "countActive"
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "selectedAssets"
+      ],
+      "id": "hasSelection",
+      "name": "hasSelection",
+      "type": "boolean",
+      "definitionKind": "variableTransformation",
+      "inputVarId": "selectedAssets",
+      "transformations": [
+        {
+          "op": "cardinality"
+        },
+        {
+          "op": "ifElse",
+          "args": {
+            "threshold": 0
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "selectedAsset"
+      ],
+      "id": "selectedAssetName",
+      "name": "selectedAssetName",
+      "type": "string",
+      "definitionKind": "variableTransformation",
+      "inputVarId": "selectedAsset",
+      "transformations": [
+        {
+          "op": "objectProperty",
+          "args": {
+            "prop": "name"
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "selectedAsset"
+      ],
+      "id": "selectedAssetStatus",
+      "name": "selectedAssetStatus",
+      "type": "string",
+      "definitionKind": "variableTransformation",
+      "inputVarId": "selectedAsset",
+      "transformations": [
+        {
+          "op": "objectProperty",
+          "args": {
+            "prop": "status"
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "selectedAsset"
+      ],
+      "id": "selectedAssetOwner",
+      "name": "selectedAssetOwner",
+      "type": "string",
+      "definitionKind": "variableTransformation",
+      "inputVarId": "selectedAsset",
+      "transformations": [
+        {
+          "op": "objectProperty",
+          "args": {
+            "prop": "owner"
+          }
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "sidebarCollapsed",
+      "name": "sidebarCollapsed",
+      "type": "boolean",
+      "definitionKind": "static",
+      "staticValue": false
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "mapLayer",
+      "name": "mapLayer",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": "status"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "chartMetric",
+      "name": "chartMetric",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": "availability"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "selectedTab",
+      "name": "selectedTab",
+      "type": "numeric",
+      "definitionKind": "static",
+      "staticValue": 0
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "chatInput",
+      "name": "chatInput",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": ""
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "chatHistory",
+      "name": "chatHistory",
+      "type": "array",
+      "definitionKind": "static",
+      "staticValue": []
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "uploadedFile",
+      "name": "uploadedFile",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": ""
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "commentDraft",
+      "name": "commentDraft",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": ""
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "commentList",
+      "name": "commentList",
+      "type": "array",
+      "definitionKind": "static",
+      "staticValue": []
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "ganttRange",
+      "name": "ganttRange",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": "30d"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "pdfPage",
+      "name": "pdfPage",
+      "type": "numeric",
+      "definitionKind": "static",
+      "staticValue": 1
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "selectedWorkOrder",
+      "name": "selectedWorkOrder",
+      "type": "object",
+      "definitionKind": "widgetOutput",
+      "widgetId": "wWorkOrderTable",
+      "widgetOutputKey": "activeObject"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [
+        "activeAlerts"
+      ],
+      "id": "notificationCount",
+      "name": "notificationCount",
+      "type": "numeric",
+      "definitionKind": "variableTransformation",
+      "inputVarId": "activeAlerts",
+      "transformations": [
+        {
+          "op": "cardinality"
+        }
+      ]
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "embeddedModuleAsset",
+      "name": "embeddedModuleAsset",
+      "type": "object",
+      "definitionKind": "static",
+      "staticValue": null,
+      "isInterface": true,
+      "externalId": "selectedAsset",
+      "interfaceDirection": "inputOutput"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "liveTelemetryStats",
+      "name": "liveTelemetryStats",
+      "type": "struct",
+      "definitionKind": "static",
+      "staticValue": null,
+      "description": "Published by the Critical vibration detection flow after WASM aggregation"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "currentTelemetryRow",
+      "name": "currentTelemetryRow",
+      "type": "struct",
+      "definitionKind": "static",
+      "staticValue": null,
+      "description": "Metadata-only selected row from the 100k × 100 telemetry table"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "selectedScenePart",
+      "name": "selectedScenePart",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": "",
+      "description": "Named GLB part selected in the Digital Twin"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "selectedSignal",
+      "name": "selectedSignal",
+      "type": "numeric",
+      "definitionKind": "static",
+      "staticValue": 0
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow-telemetry",
+      "name": "Critical vibration detection",
+      "description": "Plant stream → event-time window → WebAssembly aggregation → hysteresis threshold → Ontology alert + variable output.",
+      "enabled": true,
+      "version": 4,
+      "nodes": [
+        {
+          "id": "flow-stream",
+          "type": "telemetrySource",
+          "name": "Plant telemetry · live",
+          "x": 80,
+          "y": 180,
+          "config": {
+            "plants": [],
+            "batchSize": 512,
+            "partitionBy": "deviceId",
+            "offset": "latest"
+          },
+          "retry": {
+            "attempts": 3,
+            "backoffMs": 250
+          }
+        },
+        {
+          "id": "flow-window",
+          "type": "window",
+          "name": "30s vibration window",
+          "x": 340,
+          "y": 180,
+          "config": {
+            "windowMs": 30000,
+            "slideMs": 5000,
+            "watermarkMs": 2000,
+            "lateEvents": "sideOutput",
+            "windowKind": "sliding"
+          },
+          "retry": {
+            "attempts": 3,
+            "backoffMs": 250
+          }
+        },
+        {
+          "id": "flow-wasm",
+          "type": "aggregate",
+          "name": "WASM vibration stats",
+          "x": 600,
+          "y": 180,
+          "config": {
+            "signal": "vibration",
+            "threshold": 11.5,
+            "kernel": "wasm:f32-window-stats",
+            "groupBy": [
+              "plantId",
+              "deviceId"
+            ]
+          },
+          "retry": {
+            "attempts": 3,
+            "backoffMs": 250
+          }
+        },
+        {
+          "id": "flow-threshold",
+          "type": "threshold",
+          "name": "Hysteresis · High",
+          "x": 860,
+          "y": 80,
+          "config": {
+            "field": "mean",
+            "high": 11.5,
+            "low": 9.5,
+            "debounceMs": 3000,
+            "severity": "High"
+          },
+          "retry": {
+            "attempts": 3,
+            "backoffMs": 250
+          }
+        },
+        {
+          "id": "flow-alert",
+          "type": "alertOutput",
+          "name": "Emit operational alert",
+          "x": 1120,
+          "y": 80,
+          "config": {
+            "severity": "High",
+            "actionType": "acknowledgeAlert"
+          },
+          "retry": {
+            "attempts": 3,
+            "backoffMs": 250
+          }
+        },
+        {
+          "id": "flow-output",
+          "type": "variableOutput",
+          "name": "Publish rolling statistics",
+          "x": 860,
+          "y": 300,
+          "config": {
+            "variableId": "liveTelemetryStats",
+            "mode": "replace"
+          },
+          "retry": {
+            "attempts": 3,
+            "backoffMs": 250
+          }
+        },
+        {
+          "id": "flow-dlq",
+          "type": "deadLetter",
+          "name": "Late / malformed events",
+          "x": 600,
+          "y": 390,
+          "config": {
+            "maxRecords": 10000,
+            "retry": true,
+            "ttlMs": 86400000
+          },
+          "retry": {
+            "attempts": 3,
+            "backoffMs": 250
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "fe1",
+          "source": "flow-stream",
+          "sourcePort": "batch",
+          "target": "flow-window",
+          "targetPort": "in"
+        },
+        {
+          "id": "fe2",
+          "source": "flow-window",
+          "sourcePort": "window",
+          "target": "flow-wasm",
+          "targetPort": "in"
+        },
+        {
+          "id": "fe3",
+          "source": "flow-wasm",
+          "sourcePort": "alerts",
+          "target": "flow-threshold",
+          "targetPort": "in"
+        },
+        {
+          "id": "fe4",
+          "source": "flow-threshold",
+          "sourcePort": "triggered",
+          "target": "flow-alert",
+          "targetPort": "in"
+        },
+        {
+          "id": "fe5",
+          "source": "flow-wasm",
+          "sourcePort": "stats",
+          "target": "flow-output",
+          "targetPort": "in"
+        },
+        {
+          "id": "fe6",
+          "source": "flow-window",
+          "sourcePort": "late",
+          "target": "flow-dlq",
+          "targetPort": "in"
+        }
+      ],
+      "execution": {
+        "mode": "stream",
+        "maxConcurrency": 8,
+        "checkpointEvery": 5000,
+        "errorPolicy": "deadLetter",
+        "scheduleMs": 1000
+      }
+    }
+  ],
+  "unusedWidgetIds": [
+    "wUnused1",
+    "wUnused2"
+  ],
+  "usedObjectTypes": [
+    "Asset",
+    "Sensor",
+    "Alert",
+    "WorkOrder",
+    "Operator",
+    "Location"
+  ],
+  "usedActions": [
+    "updateAssetStatus",
+    "createWorkOrder",
+    "acknowledgeAlert"
+  ],
+  "usedFunctions": [
+    "aggregateByStatus",
+    "revenueAtRisk"
+  ],
+  "moduleInterface": [
+    {
+      "variableId": "selectedAsset",
+      "externalId": "selectedAsset",
+      "direction": "inputOutput",
+      "description": "The currently inspected asset"
+    },
+    {
+      "variableId": "currentPage",
+      "externalId": "currentPage",
+      "direction": "inputOutput"
+    },
+    {
+      "variableId": "showDetail",
+      "externalId": "showDetail",
+      "direction": "input"
+    }
+  ],
+  "savedState": "saved"
+}

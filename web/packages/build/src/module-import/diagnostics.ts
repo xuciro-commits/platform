@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "application-interface-binding":"Map every source module port to an exact visible published application variable, with its original type, record object and explicit write permission. Stale versions and ambiguous aliases are refused.",
+ "native-application-interface":"The module interface uses original application state and authorized record selection. Shared values retain application instance lifecycle; other pages and overlays read the same original owner.",
  "collection-builder-binding":"Explicitly migrate an empty source array to a same-owner complete original predicate and choose visible typed fields. Cycles, competing writers and unknown settings are refused.",
  "native-collection-predicate":"The source output becomes a complete original predicate with independent consumer windows, instead of downloaded rows.",
  "spatial-binding":"Map typed WGS84 fields or an original file ID state, asset and compatible retained sample query. Unknown, simulated or executable inputs are refused.",

@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Original application module interface": "原应用模块接口",
+ "Reviewed original application": "已审核的原应用",
+ "Choose a published application": "选择已发布应用",
+ "Map module port {port}": "映射模块端口 {port}",
+ "Allow module presentation updates": "允许模块更新呈现状态",
+ "The original application owns shared state and confirmed record selection. Page imports retain other module pages and unsupported settings in the report.": "原应用管理共享状态和已确认记录选择。页面导入在报告中保留其他模块页面及未支持配置。",
  "Collection condition fields": "集合条件字段",
  "Complete collection output": "完整集合输出",
  "Choose an output": "选择输出",

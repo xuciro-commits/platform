@@ -2202,7 +2202,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.88",
+  "uiProfile": "platform.page.v2.89",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -7223,7 +7223,8 @@ export const pageUIManifest = {
     "platform.page.v2.85",
     "platform.page.v2.86",
     "platform.page.v2.87",
-    "platform.page.v2.88"
+    "platform.page.v2.88",
+    "platform.page.v2.89"
   ],
   "runtime": {
     "scope": "page",

@@ -77,8 +77,8 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 		if group && (event.Navigate != nil || event.Return) {
 			return fmt.Errorf("button group only writes finite presentation state")
 		}
-		if event.Event == "select" && (event.Navigate != nil || event.Return || variable.Mode != "state" || !slices.Contains([]string{"page", "overlay"}, variable.Scope) || !slices.Contains([]string{"string", "boolean"}, variable.Type) || open[event.Target]) {
-			return fmt.Errorf("selection event needs local scalar state without navigation or overlay control")
+		if event.Event == "select" && (event.Navigate != nil || event.Return || !(variable.Mode == "state" && slices.Contains([]string{"page", "overlay"}, variable.Scope) || PageUIProfileSupports(d.UIProfile, "platform.page.v2.89") && variable.Mode == "shared" && variable.Scope == "application" && variable.Writable && d.rootPresentationSource(event.Source)) || !slices.Contains([]string{"string", "boolean"}, variable.Type) || open[event.Target]) {
+			return fmt.Errorf("selection event needs writable presentation scalar state without navigation or overlay control")
 		}
 		if event.Navigate != nil || event.Return {
 			if err := d.checkNavigationEvent(event); err != nil {
@@ -113,4 +113,31 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 		}
 	}
 	return nil
+}
+
+// Application presentation updates are owned by an actual non-loop page root.
+// Overlay and item templates keep their existing local select-event boundary.
+func (d *PageDocument) rootPresentationSource(section string) bool {
+	seen := map[string]bool{}
+	var visit func(string) bool
+	visit = func(id string) bool {
+		if seen[id] {
+			return false
+		}
+		seen[id] = true
+		n := d.Nodes[id]
+		if n.Kind == "loop" {
+			return false
+		}
+		if n.Kind == "widget" {
+			return n.Section == section
+		}
+		for _, child := range n.Children {
+			if visit(child) {
+				return true
+			}
+		}
+		return false
+	}
+	return visit(d.Root)
 }

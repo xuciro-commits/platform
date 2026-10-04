@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:e49b36abbc27b815",
+  "revision": "sha256:7192454386497adf",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4444,6 +4444,7 @@
       "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/module-import/AIImportFields.tsx",
+      "web/packages/build/src/module-import/ApplicationImportFields.tsx",
       "web/packages/build/src/module-import/BuilderImportFields.tsx",
       "web/packages/build/src/module-import/EmbeddingImportFields.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
@@ -4538,6 +4539,7 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/module-import/ApplicationImportFields.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",
