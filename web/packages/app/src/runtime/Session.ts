@@ -8,6 +8,10 @@ import type { EntityRecord, RecordPageData, RecordQuery, RecordSource, RecordVie
 
 export type RecordReference = { object: string; id: string };
 export type ReadState<T> = { status: "empty"; value?: T } | { status: "pending"; value?: T } | { status: "value"; value: T } | { status: "error"; error: string };
+/** A retained binding identity is not a confirmed record or an access grant. */
+export function recordReadReference(state:ReadState<RecordReference>|undefined):RecordReference|undefined {
+  return state?.status === "value" || state?.status === "pending" ? state.value : undefined;
+}
 export type QueryWindow = {
   object: string; query: RecordQuery; revision?: number;
   records: RecordReference[]; total: number; complete: boolean;

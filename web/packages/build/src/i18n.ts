@@ -2,6 +2,17 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Right": "右侧",
+ "Left": "左侧",
+ "Overlay side": "浮层侧边",
+ "Overlay size": "浮层尺寸",
+ "Overlay custom width": "浮层自定义宽度",
+ "Show overlay backdrop": "显示浮层遮罩",
+ "Close on backdrop": "点击遮罩关闭",
+ "Close on Escape": "按Escape关闭",
+ "small": "小",
+ "medium": "中",
+ "large": "大",
  "Metric units and static notes need supported directions and bounded text.": "指标单位与静态注释需要受支持的方向和有界文本。",
  "Table columns and controls need supported formats, density and bounded titles.": "表格列与控件需要受支持的格式、密度和有界标题。",
  "Table controls": "表格控件",

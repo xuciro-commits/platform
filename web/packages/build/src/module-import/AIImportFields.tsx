@@ -2,9 +2,9 @@ import {useHost} from "@platform/app";
 import {Select,t} from "@platform/ui";
 import type {SourceModule} from "./compile";
 import type {AIImportBinding} from "./ai";
-import {collaborationRecordChoices} from "./requirements";
+import {aiImportRecordChoices} from "./requirements";
 export function AIImportFields({widget,module,page,value,onChange}:{widget:SourceModule["widgets"][string];module:SourceModule;page:string;value?:AIImportBinding;onChange:(value:AIImportBinding)=>void}){
- const {definitions}=useHost(),chat=widget.type==="AIPChatbot",choices=collaborationRecordChoices(module,page,widget.id),functions=definitions.filter(d=>d.ref.app==="build"&&d.function&&(chat?d.function.conversation:!d.function.conversation)),fn=functions.find(d=>JSON.stringify({ref:d.ref,sourceVersion:d.version})===JSON.stringify(value?.function));
+ const {definitions}=useHost(),chat=widget.type==="AIPChatbot",choices=aiImportRecordChoices(module,page,widget.id),functions=definitions.filter(d=>d.ref.app==="build"&&d.function&&(chat?d.function.conversation:!d.function.conversation)),fn=functions.find(d=>JSON.stringify({ref:d.ref,sourceVersion:d.version})===JSON.stringify(value?.function));
  const update=(patch:Partial<AIImportBinding>)=>onChange({migration:"",function:{ref:{app:"",kind:"function",name:""},sourceVersion:""},...value,...patch});
  return <fieldset className="grid gap-2"><legend>{t("Map original AI {widget}",{widget:widget.name})}</legend>
  <label className="grid gap-1 text-xs">{t("AI source interpretation")}<Select value={value?.migration??""} onChange={e=>update({migration:e.target.value as AIImportBinding["migration"]})}><option value="">{t("Choose an explicit migration")}</option><option value="record-scoped-functions">{t("Use original record-scoped functions")}</option></Select></label>

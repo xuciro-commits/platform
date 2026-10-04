@@ -8,11 +8,20 @@ import (
 
 // Overlays own disjoint presentation roots. Their state is page-local; they do
 // not introduce an execution path or a second business record model.
+type PageOverlayPresentation struct {
+	Side            string `json:"side"`
+	Size            string `json:"size"`
+	CustomWidth     *int   `json:"customWidth,omitempty"`
+	Backdrop        bool   `json:"backdrop"`
+	CloseOnBackdrop bool   `json:"closeOnBackdrop"`
+	CloseOnEsc      bool   `json:"closeOnEsc"`
+}
 type PageOverlay struct {
-	Root         string `json:"root"`
-	Kind         string `json:"kind"`
-	Title        string `json:"title"`
-	OpenVariable string `json:"openVariable"`
+	Presentation *PageOverlayPresentation `json:"presentation,omitempty"`
+	Root         string                   `json:"root"`
+	Kind         string                   `json:"kind"`
+	Title        string                   `json:"title"`
+	OpenVariable string                   `json:"openVariable"`
 }
 
 // A finite presentation event can only write a typed scalar state literal.
@@ -35,6 +44,11 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 	}
 	open := map[string]bool{}
 	for id, overlay := range d.Overlays {
+		if p := overlay.Presentation; p != nil {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.91") || !slices.Contains([]string{"left", "right"}, p.Side) || !slices.Contains([]string{"small", "medium", "large", "custom"}, p.Size) || (p.Size == "custom") != (p.CustomWidth != nil) || p.CustomWidth != nil && (*p.CustomWidth < 240 || *p.CustomWidth > 1200) {
+				return fmt.Errorf("overlay presentation needs supported dimensions and its renderer profile")
+			}
+		}
 		variable := d.Variables[overlay.OpenVariable]
 		var initial bool
 		if !pageNodeID.MatchString(id) || !pageNodeID.MatchString(overlay.Root) || overlay.Title == "" || len(overlay.Title) > 1024 ||

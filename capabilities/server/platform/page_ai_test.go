@@ -45,3 +45,32 @@ func TestThreeAIViewsUseOriginalRecordFunctionAndOwnedQuestion(t *testing.T) {
 		t.Fatal("record became writable question text")
 	}
 }
+
+func TestAISharedApplicationContextKeepsLocalQuestionAndOriginalObject(t *testing.T) {
+	p := embeddedTestPage("sharedai")
+	p.Sections = []Section{{ID: "ai", Widget: "ai-assistant", ConfigVersion: 1, RecordVariable: "record", Function: &AssetBinding{Ref: AssetRef{App: p.Object.App, Kind: AssetFunction, Name: "advice"}, SourceVersion: "1.function-1"}, AI: &PageAI{Kind: "chatbot", QuestionVariable: "question", ReplyField: "summary"}}}
+	p.Document.Nodes = map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"ai"}}, "ai": {Kind: "widget", Section: "ai"}}
+	p.Document.Variables = map[string]PageVariable{"record": {Scope: "application", Type: "record", Mode: "shared", Source: &PageResourceSource{Kind: "application", Variable: "selection", Object: &p.Object}}, "question": {Scope: "page", Type: "string", Mode: "state", Initial: Raw("")}}
+	f := RecordAdviceFunction(p.Object.Name, []string{"name"}, []string{"reader"})
+	f.Conversation = true
+	if err := p.Document.Check(p.Sections); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.CheckAIBinding(p.Sections[0], f); err != nil {
+		t.Fatal(err)
+	}
+	p.Document.UIProfile = "platform.page.v2.90"
+	if p.Document.Check(p.Sections) == nil {
+		t.Fatal("old AI profile accepted shared context")
+	}
+	p.Document.UIProfile = PageUIProfile()
+	q := p.Document.Variables["question"]
+	q.Scope = "application"
+	q.Mode = "shared"
+	q.Initial = nil
+	q.Source = &PageResourceSource{Kind: "application", Variable: "question"}
+	p.Document.Variables["question"] = q
+	if p.Document.Check(p.Sections) == nil {
+		t.Fatal("application question draft accepted")
+	}
+}

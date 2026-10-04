@@ -52,3 +52,10 @@ export function workshopRequirements(module:SourceModule|undefined){
 
 /** Each explicit graph mapping control edits one part of the same reviewed binding. */
 export function patchGraphImportBinding(current:NonNullable<ImportBindings["graphs"]>[string]|undefined,patch:Partial<NonNullable<ImportBindings["graphs"]>[string]>):NonNullable<ImportBindings["graphs"]>[string] {return {relations:current?.relations??[],labelFields:current?.labelFields??{},...current,...patch};}
+
+export function aiImportRecordChoices(module:SourceModule,page:string,widget:string){
+ const choices=collaborationRecordChoices(module,page,widget),ids=new Set(choices.map(c=>c.id));
+ const ports=Array.isArray(module.moduleInterface)?module.moduleInterface as {variableId?:string}[]:[];
+ for(const port of ports){const variable=module.variables.find(v=>v.id===port.variableId),producer=module.widgets[String(variable?.widgetId??"")],set=module.variables.find(v=>v.id===producer?.config.objectSetVarId),objectType=text(object(set?.objectSet)?.objectType||set?.sourceObjectType);if(variable?.type==="object"&&variable.definitionKind==="widgetOutput"&&variable.widgetOutputKey==="activeObject"&&objectType&&!ids.has(variable.id)){choices.push({id:variable.id,title:variable.name,object:objectType});ids.add(variable.id);}}
+ return choices;
+}

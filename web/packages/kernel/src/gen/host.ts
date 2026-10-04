@@ -1272,10 +1272,20 @@ export type PageObservationSignal = {
 };
 
 export type PageOverlay = {
+  presentation?: PageOverlayPresentation;
   root: string;
   kind: string;
   title: string;
   openVariable: string;
+};
+
+export type PageOverlayPresentation = {
+  side: string;
+  size: string;
+  customWidth?: number;
+  backdrop: boolean;
+  closeOnBackdrop: boolean;
+  closeOnEsc: boolean;
 };
 
 export type PagePort = {
@@ -2215,7 +2225,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.90",
+  "uiProfile": "platform.page.v2.91",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -7311,7 +7321,8 @@ export const pageUIManifest = {
     "platform.page.v2.87",
     "platform.page.v2.88",
     "platform.page.v2.89",
-    "platform.page.v2.90"
+    "platform.page.v2.90",
+    "platform.page.v2.91"
   ],
   "runtime": {
     "scope": "page",

@@ -2,7 +2,7 @@ import {registerHooks} from "node:module";
 registerHooks({resolve(specifier,context,next){try{return next(specifier,context)}catch(error){if(specifier.startsWith("./")&&!specifier.endsWith(".ts"))return next(`${specifier}.ts`,context);throw error;}}});
 import assert from "node:assert/strict";
 import test from "node:test";
-const { PageSessionStore }=await import("./Session.ts");
+const { PageSessionStore,recordReadReference }=await import("./Session.ts");
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const record = (id) => ({ id, revision: 1, note: id });
 const plan = () => ({ objects: new Map([["parent", "sample.parent"], ["child", "sample.child"]]), children: new Map([["parent", new Set(["child"])]]), queryParents: new Map([["children", "parent"]]) });
@@ -238,4 +238,19 @@ test("same-ID rebinding advances the collaboration epoch and retires the old lea
  assert.equal(store.recordBindingEpoch("chosen"),0);await store.querySource("read").list("sample.note",{limit:1});store.select("chosen",record("A"),"read");await tick();const previous=store.captureRecordLease("chosen"),epoch=store.recordBindingEpoch("chosen");assert.ok(previous?.());store.setScalars({draft:"Original draft",file:"FILE",pdfPage:"2"});
  store.updateSource({...source,revision:2});assert.equal(store.recordBindingEpoch("chosen"),epoch);assert.ok(previous());await tick();assert.equal(store.recordBindingEpoch("chosen"),epoch);assert.ok(previous());
  store.select("chosen",record("A"),"read");assert.ok(store.recordBindingEpoch("chosen")>epoch);assert.equal(previous(),false);assert.equal(store.confirmedSelected("chosen"),undefined);assert.deepEqual(store.snapshot().scalars,{draft:"",file:"",pdfPage:"1"});await tick();assert.equal(store.confirmedSelected("chosen").id,"A");const current=store.captureRecordLease("chosen"),rebound=store.recordBindingEpoch("chosen");assert.ok(current?.());store.resetQueries(["read"]);assert.ok(store.recordBindingEpoch("chosen")>rebound);assert.equal(current(),false);
+});
+
+test("retained reference keeps only binding identity through refresh and retires on denial or a different selection",async()=>{
+ const pending=[];const source={scope:"member",revision:1,entity:()=>({fields:[]}),list:async()=>({records:[],total:0}),get:(_,id)=>new Promise((resolve,reject)=>pending.push({id,resolve,reject}))};
+ const store=new PageSessionStore(source,plan());
+ store.selectReference("parent",{object:"sample.parent",id:"A"});await tick();
+ pending[0].resolve({record:record("A")});await tick();
+ const lease=store.captureRecordLease("parent"),epoch=store.recordBindingEpoch("parent");assert.equal(lease(),true);
+ store.updateSource({...source,revision:2});await tick();
+ assert.deepEqual(recordReadReference(store.snapshot().records.parent),{object:"sample.parent",id:"A"});assert.equal(store.confirmedSelected("parent"),undefined);assert.equal(lease(),true);assert.equal(store.recordBindingEpoch("parent"),epoch);
+ pending[1].resolve({record:{...record("A"),revision:2}});await tick();assert.equal(lease(),true);
+ store.selectReference("parent",{object:"sample.parent",id:"B"});await tick();assert.equal(lease(),false);assert.equal(recordReadReference(store.snapshot().records.parent).id,"B");assert.equal(store.confirmedSelected("parent"),undefined);
+ pending[2].reject(Error("Denied"));await tick();assert.equal(recordReadReference(store.snapshot().records.parent),undefined);
+ store.updateSource({...source,scope:"other"});assert.equal(recordReadReference(store.snapshot().records.parent),undefined);
+ assert.equal(recordReadReference({status:"empty",value:{object:"sample.parent",id:"A"}}),undefined);
 });
