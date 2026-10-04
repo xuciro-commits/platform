@@ -177,6 +177,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.Widget == "record-list" || s.RecordList != nil {
 				return fmt.Errorf("record list requires a document")
 			}
+			if len(s.ActionDefaults) > 0 {
+				return fmt.Errorf("action defaults require a document")
+			}
 			if s.Widget == "heading" || s.Widget == "collection-title" || s.HeadingLevel != "" || s.CountVariable != "" {
 				return fmt.Errorf("titles require a document")
 			}
@@ -385,6 +388,18 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 		if err := d.checkRecordList(section); err != nil {
 			return err
+		}
+		if len(section.ActionDefaults) > 0 {
+			if section.Widget != "inline-action" || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.92") || len(section.ActionDefaults) > 16 {
+				return fmt.Errorf("action defaults need their inline action profile and budget")
+			}
+			seen := map[string]bool{}
+			for _, m := range section.ActionDefaults {
+				if !pageNodeID.MatchString(m.Parameter) || !pageNodeID.MatchString(m.Field) || seen[m.Parameter] || slices.Contains([]string{"id", "revision", "created", "changed", "archived", "__proto__", "constructor", "prototype"}, m.Parameter) {
+					return fmt.Errorf("action defaults need unique declared parameters and fields")
+				}
+				seen[m.Parameter] = true
+			}
 		}
 		if err := d.checkTitles(section); err != nil {
 			return err

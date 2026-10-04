@@ -412,3 +412,10 @@ test("sequential graph import controls retain explicit output migration and orig
  const r=compileWorkshopModule(JSON.stringify(m),"page",{...mapped,graphs:{graph}},typed);assert.ok(r.draft,JSON.stringify(r.diagnostics));const explorer=r.draft.sections.find(s=>s.widget==="graph-explorer"),card=r.draft.sections.find(s=>s.widget==="record-card"),table=r.draft.sections.find(s=>s.title==="Original work table"),output=explorer.graphExplorer.outputs.find(o=>o.object.name==="sample.sensor");assert.equal(explorer.graphExplorer.outputs.length,3);assert.equal(card.recordVariable,output.variable);assert.ok(Object.values(r.draft.document.variables).some(v=>v.type==="record"&&v.source?.section===table.id));
  const reset=patchGraphImportBinding(graph,{outputMigration:undefined});assert.equal(reset.outputMigration,undefined);assert.deepEqual(reset.outputObject,graph.outputObject);assert.equal(compileWorkshopModule(JSON.stringify(m),"page",{...mapped,graphs:{graph:reset}},typed).draft,undefined);
 });
+
+test('inline defaults retain explicit original parameter fields and refuse mismatches old profiles or executable bindings',()=>{
+ const m=sourceModule(),destination={...target,actions:[{schema:'sample.note.close',target:target.object,payload:[{name:'reason',type:'string',required:true}]}]},mapped={...bindings,actionDefaults:{action:[{parameter:'reason',field:'note'}]}};
+ const r=compileWorkshopModule(JSON.stringify(m),'page',mapped,destination);assert.ok(r.draft,JSON.stringify(r.diagnostics));assert.deepEqual(r.draft.sections.find(s=>s.widget==='inline-action').actionDefaults,mapped.actionDefaults.action);
+ for(const defaults of [[{parameter:'reason',field:'missing'}],[{parameter:'other',field:'note'}],[{parameter:'reason',field:'note',expression:'object.note'}],[null],[{parameter:'reason',field:'note'},{parameter:'reason',field:'note'}]])assert.equal(compileWorkshopModule(JSON.stringify(m),'page',{...mapped,actionDefaults:{action:defaults}},destination).draft,undefined);
+ assert.equal(compileWorkshopModule(JSON.stringify(m),'page',mapped,{...destination,profile:'platform.page.v2.91'}).draft,undefined);
+});

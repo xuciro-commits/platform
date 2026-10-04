@@ -1,3 +1,5 @@
+import {originalActionDefaults,validActionDefaults} from "./widgets/action-defaults";
+import type {Api} from "@platform/kernel";
 // Every declared action has an entry in the generated views (F-33): an action
 // that makes a new record of a type is offered on the type's list; every other
 // action on the type, and a lifecycle transition that takes input (F-27), on
@@ -60,18 +62,18 @@ function RecordPicker({ id, type, value, onChange }: { id: string; type: string;
 export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
 
 /** The original action submission form, shared by dialogs and inline hosts. */
-function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy}:{declared:ActionDeclaration;target:{type:string;id:string};revision:number;onCancel:()=>void;onCompleted:()=>void;preview?:boolean;onBusy?:(busy:boolean)=>void}) {
+function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy,initial={},enabled=true}:{declared:ActionDeclaration;target:{type:string;id:string};revision:number;onCancel:()=>void;onCompleted:()=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean}) {
  const {decide}=useHost(),lock=useRef(false);
- const [values,setValues]=useState<Record<string,unknown>>({}),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState("");
+ const [values,setValues]=useState<Record<string,unknown>>(initial),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState("");
  const missing=declared.payload.some(f=>f.required&&(values[f.name]===undefined||values[f.name]===""));
- const submit=async()=>{if(preview||lock.current||missing||!target.id)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal}))onCompleted();}catch{setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
+ const submit=async()=>{if(!enabled||preview||lock.current||missing||!target.id)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal}))onCompleted();}catch{setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
  return <div className="grid gap-3">
  {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
  {refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}
  {preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}
- <fieldset disabled={submitting} className="grid gap-3"><PayloadFields fields={declared.payload} values={values} onChange={setValues} preview={preview}/></fieldset>
- <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting}>{t("Cancel")}</Button><Button variant="primary" disabled={preview||missing||!target.id||submitting} onClick={submit}>{submitting?t("Executing…"):declared.title}</Button></div>
+ <fieldset disabled={submitting||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload} values={values} onChange={setValues} preview={preview}/></fieldset>
+ <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{t("Cancel")}</Button><Button variant="primary" disabled={!enabled||preview||missing||!target.id||submitting} onClick={submit}>{submitting?t("Executing…"):declared.title}</Button></div>
  </div>;
 }
 
@@ -90,22 +92,23 @@ function ActionDialog({ declared, type, record, onClose, onCompleted }: { declar
 
 /** One explicit record action. Ordinary revisions retain the opened form's
  * baseline; identity, declaration and caller scope replace it completely. */
-export function InlineActionForm({type,schema,record,live=true,scope}:{type:string;schema:string;record?:EntityRecord;live?:boolean;scope?:string}) {
+export function InlineActionForm({type,schema,record,live=true,scope,defaults=[],ready=true}:{type:string;schema:string;record?:EntityRecord;live?:boolean;scope?:string;defaults?:Api.PageActionParameter[];ready?:boolean}) {
  const {catalog,source}=useHost(),declared=catalog.find(a=>a.schema===schema&&a.target===type&&!a.new);
- if(!declared)return <Panel role="alert">{t("The inline action is unavailable.")}</Panel>;
+ if(!declared||!validActionDefaults(source.entity(type),declared,defaults))return <Panel role="alert">{t("The inline action is unavailable.")}</Panel>;
  if(live&&!record)return <p className="text-sm text-muted">{t("Select a record to act on it.")}</p>;
- return <InlineActionInstance key={JSON.stringify([source.scope,scope,type,schema,record?.id,declared,live])} type={type} record={record} declared={declared} live={live}/>;
+ return <InlineActionInstance key={JSON.stringify([source.scope,scope,type,schema,record?.id,declared,defaults,live])} type={type} record={record} declared={declared} live={live} defaults={defaults} ready={ready}/>;
 }
-function InlineActionInstance({type,record,declared,live}:{type:string;record?:EntityRecord;declared:ActionDeclaration;live:boolean}) {
+function InlineActionInstance({type,record,declared,live,defaults,ready}:{type:string;record?:EntityRecord;declared:ActionDeclaration;live:boolean;defaults:Api.PageActionParameter[];ready:boolean}) {
  const {source}=useHost(),[round,setRound]=useState(0),reset=()=>setRound(r=>r+1);
- return <InlineActionRound key={round} record={record} declared={declared} type={type} info={source.entity(type)} live={live} reset={reset}/>;
+ return <InlineActionRound key={round} record={record} declared={declared} type={type} info={source.entity(type)} live={live} reset={reset} defaults={defaults} ready={ready}/>;
 }
-function InlineActionRound({type,record,declared,info,live,reset}:{type:string;record?:EntityRecord;declared:ActionDeclaration;info?:EntityInfo;live:boolean;reset:()=>void}) {
- const [baseline]=useState(record),[submitted,setSubmitted]=useState(false);
+function InlineActionRound({type,record,declared,info,live,reset,defaults,ready}:{type:string;record?:EntityRecord;declared:ActionDeclaration;info?:EntityInfo;live:boolean;reset:()=>void;defaults:Api.PageActionParameter[];ready:boolean}) {
+ const [initial]=useState(()=>originalActionDefaults(info,declared,defaults,record)),[baseline]=useState(record),[submitted,setSubmitted]=useState(false);
  const transition=info?.lifecycle?.transitions.find(step=>step.schema===declared.schema);
+ if(initial===undefined)return <Panel role="alert">{t("The inline action defaults are unavailable.")}</Panel>;
  if(live&&(!baseline||baseline.archived||transition&&!transition.from.includes(String(baseline[info!.lifecycle!.field]))))return <p role="status">{t("This action is unavailable for the selected record.")}</p>;
- if(submitted)return <div className="grid gap-2"><p role="status">{t("Request submitted. Check the record or My requests for its result.")}</p><Button onClick={reset} disabled={record?.revision===baseline?.revision}>{t("Prepare another action")}</Button></div>;
- return <DeclaredActionForm declared={declared} target={{type,id:baseline?.id??""}} revision={baseline?.revision??0} preview={!live} onCancel={reset} onCompleted={()=>setSubmitted(true)}/>;
+ if(submitted)return <div className="grid gap-2"><p role="status">{t("Request submitted. Check the record or My requests for its result.")}</p><Button onClick={reset} disabled={!ready||record?.revision===baseline?.revision}>{t("Prepare another action")}</Button></div>;
+ return <DeclaredActionForm declared={declared} target={{type,id:baseline?.id??""}} revision={baseline?.revision??0} preview={!live} initial={initial} enabled={ready} onCancel={reset} onCompleted={()=>setSubmitted(true)}/>;
 }
 
 /** The type's actions that make a new record, except those a hand-written view already offers (`covers`). */

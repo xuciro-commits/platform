@@ -853,22 +853,11 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 			return fmt.Errorf("frozen action table object is unavailable")
 		}
 		asset, ok := lookup[s.Actions[0]]
-		var a Action
-		if !ok || json.Unmarshal(asset.Body, &a) != nil {
-			return fmt.Errorf("frozen action table action is unavailable")
-		}
-		var descriptor struct {
-			Action *Action `json:"action"`
-		}
-		if err := json.Unmarshal(asset.Body, &descriptor); err != nil {
+		a, err := releaseActionDescriptor(asset.Body)
+		if !ok || err != nil {
 			return fmt.Errorf("frozen action table declaration is unavailable")
 		}
-		if descriptor.Action != nil {
-			if descriptor.Action.Schema != a.Schema || descriptor.Action.Target != a.Target {
-				return fmt.Errorf("frozen action table declaration identity differs")
-			}
-			a = *descriptor.Action
-		}
+
 		if err := s.CheckActionTable(info, a); err != nil {
 			return fmt.Errorf("frozen action table: %w", err)
 		}
@@ -887,9 +876,12 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 			return fmt.Errorf("frozen inline action object is unavailable")
 		}
 		asset, ok := lookup[s.Actions[0]]
-		var action Action
-		if !ok || json.Unmarshal(asset.Body, &action) != nil || s.CheckInlineAction(info, action) != nil {
+		action, err := releaseActionDescriptor(asset.Body)
+		if !ok || err != nil {
 			return fmt.Errorf("frozen inline action declaration is unavailable")
+		}
+		if err := s.CheckInlineAction(info, action); err != nil {
+			return fmt.Errorf("frozen inline action: %w", err)
 		}
 	}
 	for _, s := range page.Sections {
@@ -1091,4 +1083,25 @@ func frozenObjectOwnerMatches(asset ReleaseAsset, ref AssetRef) bool {
 		owner, _, _ = strings.Cut(typ, ".")
 	}
 	return ref.Kind == AssetObject && typ == descriptor.Type && typ == ref.Name && owner == ref.App
+}
+
+// Use the original nested declaration while retaining legacy flat action bodies.
+func releaseActionDescriptor(body json.RawMessage) (Action, error) {
+	var flat Action
+	if err := json.Unmarshal(body, &flat); err != nil {
+		return Action{}, err
+	}
+	var envelope struct {
+		Action *Action `json:"action"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return Action{}, err
+	}
+	if envelope.Action != nil {
+		if envelope.Action.Schema != flat.Schema || envelope.Action.Target != flat.Target {
+			return Action{}, fmt.Errorf("frozen action declaration identity differs")
+		}
+		return *envelope.Action, nil
+	}
+	return flat, nil
 }

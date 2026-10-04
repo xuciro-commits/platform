@@ -983,6 +983,12 @@ F1e63e按原两处updateAssetStatus和一处createWorkOrder共同推进。核对
 
 Build拥有声明/确定性编译，原平台Lifecycle/Schema/Caller/相关创建与重放拥有执行。规则随原对象Published保存；不改语言中立内核或增加外部依赖。先以三种原动作的发布/调用规则验证共同必要层，再接参数默认值、显式来源映射和三个表单的整体冻结旅程；Go层通过不算三个表单或整个默认Module完成。
 
+#### 6.88 原动作参数默认值与三个表单
+
+F1e63e2在v2.92增加Section.actionDefaults，复用PageActionParameter的parameter/field显式映射（最多16项且参数唯一）。仅原inline-action同对象非创建动作可使用；默认值来自当前确认记录的可读原字段，类型沿ActionParameterCompatible核对，引用保持原ref，用户可修改，未映射参数保持原空表单。状态创建动作继续使用§6.87的原资产Creates，资产本身是原动作target，不另造payload里的asset ID。来源Module只有actionId，默认值需显式选择原字段解释，源本体的默认值表达式不运行。
+
+默认值只在本轮表单打开/显式取消重置时取一次。普通数据revision保持原草稿和expectedRevision基线，原记录重新确认期间禁用提交；换记录、原绑定身份、成员/定义/实例、动作/映射或Overlay关闭清理，不把旧记录默认值带到新记录。新字段或参数不可见时裁掉有默认映射的组件，不静默丢掉映射后提供另一表单；候选冻结映射及原动作/对象声明。设计器检查器与导入器共用原字段/参数兼容规则，主页面与三处浮层沿原共享选择装配。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -1456,6 +1462,8 @@ F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart�
 默认集合/关联/状态消费者（F1e63d）已沿§6.86修正导入器的页面→浮层读取和ObjectSetTitle计数归属，保留两个原标题、两个原Links及原StatusTracker的五个完整配置。page变量由主页面声明后可供浮层读取，原scope/owner/query保持唯一；其他浮层局部变量仍拒绝跨owner读取。两个标题复用同一个page全集count，原过滤条件/页面草稿不因浮层关闭被清理。原共享record仍经Application和PageSession确认，三个反向reference分组和四个原生命周期状态逐项显式映射。联合验收暴露的浮层导航遮挡已在原页面消费者入口修复：Links/RecordView关闭当前浮层后沿原useOpenRecord开窗，保留member/read scope、启用及Overlay epoch检查。Go平台测试、Web类型/单元/构建与escapes通过。真实宿主联合路线验证GUI原应用/字段/关联/状态映射、共同页面发布与应用候选冻结/激活、102条原全集计数而非100条窗口行数、筛选后原计数为1、A→B共享选择与实际生命周期状态、25条Sensors关联的真实total、私有Alerts裁剪、原WorkOrder关联、关闭重开保留页面筛选/共享选择、后续草稿不改候选和抽屉导航后原记录窗口可见、可进入编辑表单并取消。额外运行整个E2E目录的严格tsc仍在未改动的application-filters/application-queries等旧测试报可选值及未使用声明错误；本批新增测试/夹具未报类型错误，不计该额外检查通过。普通截图已查看，不计负责人视觉验收。组夹具从完整捕获Module取五个原消费者配置，并明确另设选择/搜索/触发测试控制；不计完整Operations/Module整体导入通过。动作/创建配置、成员切换专属浏览器、全量回归与部署/真实PostgreSQL仍待后续。
 
 默认动作的共同宿主规则层（F1e63e1）已沿§6.87接通Build的ToInput、reference/ref、UTF-16 minLength和单层Condition.when。发布核对输入状态选项、必填/互斥与审批边界、原引用类型和赋值目标、长度类型/预算及守卫字段/操作符；省略新属性保持旧行为。原Lifecycle选择参数状态，条件仍由原Caller和确定性编译执行，读取失败不退化为false。关联创建继续在原接受结果中携带父记录变更与工单，不另发create。生成SDK已核对，无公开TypeScript结构变化；声明文字和新增拒绝消息有简体中文。适用全量Go/vet、组合/格式和web-check通过。真实Tenant定向测试验证原发布/成员动作、条件性Offline/High规则与原状态更新、不可读关联守卫拒绝、错误引用目标的发布拒绝、无效引用/过短标题/Offline创建拒绝、真实资产/Operator/工单引用和单次接受结果，以及CheckReplay和内存日志恢复。参数化状态的审批、嵌套守卫、页面参数默认值/映射和三个原表单共同浏览器/候选冻结仍未覆盖；不计完整F1e63e、默认Operations/Module或PostgreSQL持久恢复完成。
+
+三个原动作表单与原参数默认值（F1e63e2）已沿§6.88接通v2.92的Section.actionDefaults、Go生成类型、应用API共享参数表单、原生检查器和显式来源映射。两处原updateAssetStatus及一处createWorkOrder配置保留，默认值按原参数/字段逐项选择，未映射参数为空；两个同名来源实例以原ID区分映射。原字段/参数类型、ref、唯一性、16项预算及profile由原Go/共享兼容规则检查，隐藏字段不改成空映射后继续提供组件。默认值只初始化本轮表单，普通revision的原共享/局部记录确认保持草稿和openedRevision，未确认时禁用取消/提交；换记录/实例/动作/映射/浮层退役清理。冻结读取与行操作共用原完整动作声明，并核对包装和内部身份，旧平面声明保持；嵌套参数/身份篡改由定向Go检查拒绝。适用Go/vet、组合/格式及web-check通过。真实宿主联合路线验证GUI三处原动作/原应用共享/默认字段映射、检查器清除/恢复、共同页面发布和应用候选冻结/激活、资产A真实默认值、外部修改后草稿保留及旧revision拒绝、取消采用新值、原Warning转换、Offline/High条件性拒绝后真实转换、Offline创建拒绝、换B和关闭重开清理、真实业务Operator选择、过短标题拒绝后创建一条带原资产/Operator/到期日的工单，以及后续默认值草稿不改候选。普通输入/提交截图已查看，不计负责人视觉验收。组夹具保留三个原组件及浮层配置，另设选择/打开控制，不计完整默认Operations/Module整体通过。新增宿主规则的动作设计器显式配置与图呈现、参数化状态审批、成员切换/迟到答复专属浏览器、完整Module、全量回归及部署/PostgreSQL仍待后续。
 
 受控页面内容与嵌入导入（F1e59a–F1e59c）已沿§6.79接通Definition.contentVersion、原Build Page最多64个不同已发布内容的非递归history、原publish/候选激活、GET /v1/pages/{app}/{name}/{contentVersion}及EdgeClient.pageContent。完整原描述摘要与既有SourceVersion分开，未发布草稿/仅保存候选不开放给成员；缺失、不兼容或无权版本拒绝，不退回最新。版本读取复用完整原发现投影及当前对象/字段/动作/查询/导航权限，原Requires按选定内容重新取得；同一历史身份可有不同成员裁剪内容。v2.83的原Section.embedding、共同候选闭包、固定内容和接口校验、递归/实例/查询/记录/Section预算、成员页面入口裁剪、三种module/custom/dashboard呈现、独立原PageSession、原类型化接口、专属检查器及复制输出状态重写已接通。输入变化使子会话重建，无关父状态更新保留子草稿；结果经过原接口校验后写父页面标量。检查器可选择已发布页面、指定内容摘要和接口、逐项绑定同owner变量及返回端口，历史选择目前为手工填写摘要。
 

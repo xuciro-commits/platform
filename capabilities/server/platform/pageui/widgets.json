@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.91",
+  "uiProfile": "platform.page.v2.92",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5096,7 +5096,8 @@
     "platform.page.v2.88",
     "platform.page.v2.89",
     "platform.page.v2.90",
-    "platform.page.v2.91"
+    "platform.page.v2.91",
+    "platform.page.v2.92"
   ],
   "runtime": {
     "scope": "page",

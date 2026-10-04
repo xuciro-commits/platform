@@ -638,6 +638,12 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 							section.InlineEdit = &edit
 						}
 					}
+					if section.Widget == "inline-action" && len(section.Actions) == 1 && len(section.ActionDefaults) > 0 {
+						a, ok := actions[section.Actions[0].Name]
+						if !ok || section.CheckInlineAction(shown, a) != nil {
+							continue
+						}
+					}
 					if section.Widget == "inline-action" && len(section.Actions) != 1 {
 						continue
 					}

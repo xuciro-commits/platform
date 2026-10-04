@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "The inline action defaults are unavailable.": "就地动作的默认参数不可用。",
 "This map shows the current authorized record window.": "此地图显示当前受权记录窗口。",
  "AI suggestions use the original authorized source. Review results before applying a business action.": "AI 建议使用原受权来源。采用业务操作前请审查结果。",
  "Waiting for the original model result.": "正在等待原模型结果。",

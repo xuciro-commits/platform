@@ -1828,6 +1828,7 @@ export type Section = {
   observationCountVariable?: string;
   observationMeanVariable?: string;
   actionTable?: PageActionTable;
+  actionDefaults?: PageActionParameter[];
   notepadVariable?: string;
   analysis?: PageCollectionAnalysis;
   analysisXVariable?: string;
@@ -2225,7 +2226,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.91",
+  "uiProfile": "platform.page.v2.92",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -7322,7 +7323,8 @@ export const pageUIManifest = {
     "platform.page.v2.88",
     "platform.page.v2.89",
     "platform.page.v2.90",
-    "platform.page.v2.91"
+    "platform.page.v2.91",
+    "platform.page.v2.92"
   ],
   "runtime": {
     "scope": "page",

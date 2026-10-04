@@ -125,6 +125,7 @@ type Section struct {
 	ObservationCountVariable     string                  `json:"observationCountVariable,omitempty"`
 	ObservationMeanVariable      string                  `json:"observationMeanVariable,omitempty"`
 	ActionTable                  *PageActionTable        `json:"actionTable,omitempty"`
+	ActionDefaults               []PageActionParameter   `json:"actionDefaults,omitempty"`
 	NotepadVariable              string                  `json:"notepadVariable,omitempty"`
 	Analysis                     *PageCollectionAnalysis `json:"analysis,omitempty"`
 	AnalysisXVariable            string                  `json:"analysisXVariable,omitempty"`

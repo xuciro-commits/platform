@@ -9,7 +9,8 @@
     "./catalog/fixtures": "./src/catalog.fixtures.tsx",
     "./decimal": "./src/runtime/decimal.ts",
     "./search": "./src/widgets/search-input.ts",
-    "./action-table": "./src/widgets/action-table.ts"
+    "./action-table": "./src/widgets/action-table.ts",
+    "./action-defaults": "./src/widgets/action-defaults.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

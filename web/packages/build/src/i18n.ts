@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Default original field for {parameter}": "{parameter}的原字段默认值",
+ "Leave the parameter empty": "保持参数为空",
+ "Defaults seed one opened original record. Refresh keeps the draft and its revision; cancel adopts the current record.": "默认值取自本轮打开的原记录。刷新保留草稿及其版本；取消后采用当前记录。",
+ "Map action defaults {widget}": "映射{widget}的动作默认值",
+ "Map optional defaults to readable original fields with the exact parameter type and reference object.": "将可选默认值映射到可读的原字段，参数类型和引用对象必须一致。",
+ "Original field defaults seed one opened form. The original action still owns validation, creates, permissions and revision checks.": "原字段默认值初始化本轮表单。校验、创建、权限和版本检查仍归原动作。",
  "This overlay reads the original page-owned variable. Closing clears overlay-local state and keeps the page filter and complete count.": "此浮层读取原页面拥有的变量。关闭会清理浮层局部状态，保留页面筛选和完整计数。",
  "Right": "右侧",
  "Left": "左侧",
