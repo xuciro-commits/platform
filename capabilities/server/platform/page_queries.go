@@ -70,7 +70,12 @@ func (d *PageDocument) CheckQueries(sections []Section) error {
 }
 func (d *PageDocument) checkQueries(sections []Section, inputScope string) error {
 	c := pageWidgets.Runtime.Query
-	if len(d.Queries) > c.MaxPlans || len(d.Queries) > 0 && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.9") {
+	activePlans := d.ActiveQueryPlans(sections)
+	declaredMax := c.MaxPlans
+	if PageUIProfileSupports(d.UIProfile, c.InventoryUIProfile) && d.Root != "" {
+		declaredMax = c.MaxDeclaredPlans
+	}
+	if len(activePlans) > c.MaxPlans || len(d.Queries) > declaredMax || len(d.Queries) > 0 && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.9") {
 		return fmt.Errorf("page query plans need v2.9 and a bounded plan count")
 	}
 	var dependsOnPlan func(string, map[string]bool) bool
@@ -110,7 +115,7 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 	if err := d.CheckQuerySets(); err != nil {
 		return err
 	}
-	total := 0
+	total, declaredTotal := 0, 0
 	for id, q := range d.Queries {
 		if q.Owner != "" {
 			if inputScope == "application" {
@@ -151,7 +156,10 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 				return fmt.Errorf("item query %s needs its parent record", id)
 			}
 		}
-		total += q.Limit * factor
+		declaredTotal += q.Limit * factor
+		if activePlans[id] {
+			total += q.Limit * factor
+		}
 		if q.Query != nil && (q.Query.Ref.Check() != nil || (q.Query.Ref.Kind != AssetQuery && q.Query.Ref.Kind != AssetLinkType) || q.Query.SourceVersion == "") {
 			return fmt.Errorf("page query %s needs an exact named query binding", id)
 		}
@@ -223,6 +231,9 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 				}
 			}
 		}
+	}
+	if PageUIProfileSupports(d.UIProfile, c.InventoryUIProfile) && d.Root != "" && declaredTotal > c.MaxDeclaredTotalLimit {
+		return fmt.Errorf("declared inventory query budget exceeded")
 	}
 	if total > c.MaxTotalLimit {
 		return fmt.Errorf("page query plan window budget exceeded")

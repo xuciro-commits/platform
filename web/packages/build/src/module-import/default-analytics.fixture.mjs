@@ -41,3 +41,17 @@ export function defaultAnalyticsComparisonGroup(profile){
  f.bindings={objects:{Asset:f.target.object},fields:{Asset:f.bindings.fields.Asset},actions:{},queries:{},edits:f.bindings.edits,application:{...f.bindings.application,recordSets:{selectedAssets:{variable:'records',writable:true}}},scatters:{wScatter:{labelField:'name'}},leaderboards:{wLeader:{labelField:'name'}},comparisons:{wCompare:{labelField:'name',fields:['owner','pressure','temperature']}}};
  f.target.definitions[0].application.variables.records={scope:'application',type:'record-set',mode:'resource',source:{kind:'record-set',object:{app:'build',kind:'object',name:f.target.object}}};return f;
 }
+/** Complete original Analytics capture with explicit native bindings; any remaining
+ * diagnostic is retained rather than changing or removing a source instance. */
+export function defaultAnalyticsCompleteFixture(profile){
+ const f=defaultAnalyticsFixture(profile),object={app:'build',kind:'object',name:f.target.object};
+ f.target.definitions[0].application.variables.records={scope:'application',type:'record-set',mode:'resource',source:{kind:'record-set',object}};
+ f.bindings.application.recordSets={selectedAssets:{variable:'records',writable:false}};
+ f.bindings.scatters={wScatter:{labelField:'name'}};f.bindings.leaderboards={wLeader:{labelField:'name'}};f.bindings.comparisons={wCompare:{labelField:'name',fields:['owner','pressure','temperature']}};
+ f.bindings.states.wWaterfall={Active:'active',Warning:'warning',Maintenance:'maintenance',Offline:'offline'};
+ const sample={app:'build',type:'build.sample',fields:[{name:'eventtime',type:'datetime'},...['availability','pressure','temperature'].map(name=>({name,type:'integer'}))]},binding={ref:{app:'build',kind:'query',name:'sample-history'},sourceVersion:'1.query-1'};
+ f.target.entities.push(sample);f.target.definitions.push({ref:binding.ref,version:binding.sourceVersion,query:{object:sample.type,sort:['-eventtime','id'],limit:100}});
+ f.bindings.observations={wObs:{migration:'actual-business-observations',sampleQuery:binding,timeField:'eventtime',signals:[{field:'availability',unit:'%'}]},wTS:{migration:'actual-business-observations',sampleQuery:binding,timeField:'eventtime',signals:[{field:'pressure',unit:'bar'},{field:'temperature',unit:'°C'},{field:'availability',unit:'%'}]}};
+ const alert=f.target.entities.find(e=>e.type==='build.alert');alert.fields.push({name:'occurred',type:'datetime'},{name:'name',type:'text'},{name:'severity',type:'choice',choices:['Low','High']});
+ f.bindings.events={wTimeline:{timeField:'occurred',titleField:'name',severityField:'severity',tones:[{value:'Low',tone:'info'},{value:'High',tone:'danger'}]}};return f;
+}

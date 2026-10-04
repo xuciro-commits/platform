@@ -1,3 +1,4 @@
+import {queryInventoryBudget} from "@platform/app/query-inventory";
 import {completedUnusedConfiguration,type UnusedImportBinding} from "./unused";
 import {validActionDefaults} from "@platform/app/action-defaults";
 import {originalImportApplication,sourceInterfaceObject,sourceRecordSetObject,type ApplicationImportBinding} from "./application";
@@ -850,7 +851,17 @@ if(w.type==="ObjectCard"){
   for(const [,v]of aliases)v.source!.query=chart;
   delete document.queries![base];
  }
- if(Object.keys(document.queries!).length>8||Object.values(document.queries!).reduce((s,q)=>s+q.limit,0)>512||Object.keys(document.variables!).length>64||sections.length>128||Object.keys(document.nodes).length>256)issue("/","target-budget");
+ // An auxiliary aggregate window is not a record-window promise. Keep every
+ // original predicate and full-set measure; external window references block reduction.
+ for(const [query,q] of Object.entries(document.queries!)){
+  const aliases=Object.entries(document.variables!).filter(([,v])=>v.mode==='resource'&&v.source?.kind==='plan'&&v.source.query===query),names=new Set(aliases.map(([id])=>id)),consumers=sections.filter(s=>names.has(s.collectionVariable??''));
+  const aggregateOnly=(s:AuthoringSection)=>['metric','chart','pivot','heatmap','treemap','histogram','term-counts','tag-counts','collection-title'].includes(s.widget)||s.widget==='collection-analysis'&&s.analysis?.kind!=='record-axes'||s.widget==='observation'&&s.observation?.kind==='availability';
+  if(!consumers.length||consumers.some(s=>!aggregateOnly(s)))continue;
+  const stripped=sections.map(s=>names.has(s.collectionVariable??'')?{...s,collectionVariable:undefined}:s),other=Object.fromEntries(Object.entries(document.variables!).filter(([id])=>!names.has(id))),references=JSON.stringify([stripped,document.nodes,document.events,document.interface,document.queries,other]);
+  if(aliases.some(([id])=>references.includes(JSON.stringify(id))))continue;
+  q.limit=1;
+ }
+ if(!queryInventoryBudget(document,sections as unknown as Api.Section[],pageUIManifest.runtime.query).valid||Object.keys(document.variables!).length>64||sections.length>128||Object.keys(document.nodes).length>256)issue("/","target-budget");
  if(!diagnostics.some(d=>d.blocking))report.draft=draft;
  return report;
 }

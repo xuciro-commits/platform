@@ -112,8 +112,12 @@ func CheckPageEmbeddingGraph(root AssetRef, lookup map[AssetRef]ReleaseAsset) er
 			return fmt.Errorf("embedded page instance budget exceeded")
 		}
 		if p.Document != nil {
-			queries += len(p.Document.Queries)
-			for _, q := range p.Document.Queries {
+			plans := p.Document.ActiveQueryPlans(p.Sections)
+			queries += len(plans)
+			for id, q := range p.Document.Queries {
+				if !plans[id] {
+					continue
+				}
 				factor := 1
 				if q.ItemOwner != "" {
 					var err error

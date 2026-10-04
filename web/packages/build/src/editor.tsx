@@ -1,3 +1,4 @@
+import {queryInventoryBudget} from "@platform/app/query-inventory";
 import {validActionDefaults} from "@platform/app/action-defaults";
 import {validExternalFrame} from "@platform/ui/external-frame";
 import {observationProblem} from "./page-editor/observation";
@@ -158,7 +159,7 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
     return sections.find(s=>s.id===node.section)?.inputKind==="search"&&searchInputObjects(document,node.valueVariable).length===0||!variable || !(variable.mode === "state" || variable.mode === "shared" && variable.writable) || !["string","decimal"].includes(variable.type) || !variableAccessible(variable, loopOwner(document, id), overlayOwner(document, id));
   });
   const variableProblems = pageVariableDiagnostics(document.variables ?? {});
-  const queryProblem = Object.values(document.queries??{}).some((q)=>q.limit<1||q.limit>pageVariableContract.query.maxLimit||(q.conditions??[]).some((c)=>!c.field));
+  const queryProblem = !queryInventoryBudget(document,sections as unknown as HostApi.Section[],pageVariableContract.query).valid || Object.values(document.queries??{}).some((q)=>q.limit<1||q.limit>pageVariableContract.query.maxLimit||(q.conditions??[]).some((c)=>!c.field));
   const layoutProblems=pageLayoutDiagnostics(document);
   const inlineProblem=sections.some(s=>s.widget==="inline-action"&&(s.actions?.length!==1||!!s.actionDefaults?.length&&!validActionDefaults(source.entity(s.object||page?.object||""),catalog.find(a=>a.schema===s.actions?.[0]),s.actionDefaults)));
   const tableEditProblem=sections.some(s=>s.inlineEdit&&(!s.inlineEdit.action||s.inlineEdit.fields.length===0||s.inlineEdit.fields.length>pageVariableContract.tableEditing.maxFields||s.inlineEdit.fields.some(f=>!s.fields?.includes(f))));

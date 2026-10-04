@@ -1,3 +1,4 @@
+import {activeQueryPlans} from "./query-inventory";
 import {collectionInput, type CollectionInput} from "./collection-input";
 import {usePageAggregates} from "./PageAggregates";
 import { useEffect, useRef, useState } from "react";
@@ -9,7 +10,7 @@ import { boundQueryDefinition, compileQueryPlans, queryView, variablePlan, planK
 
 export function usePageQueries(page: Api.Page, values: Record<string, VariableResult>, session: PageSessionStore, snapshot: PageSessionSnapshot, overlays:Record<string,Record<string,VariableResult>>={}, editingOverlay?:string,itemOwner?:string,keepOnUnmount=false) {
   const reader=session.readSource();
-  const { source, definitions } = useHost(), plans = Object.fromEntries(Object.entries(page.document?.queries??{}).filter(([,plan])=>(plan.itemOwner??undefined)===itemOwner));
+  const { source, definitions } = useHost(), activePlans=page.document?activeQueryPlans(page.document,page.sections??[],pageUIManifest.runtime.query.inventoryUIProfile):new Set<string>(), plans = Object.fromEntries(Object.entries(page.document?.queries??{}).filter(([id,plan])=>activePlans.has(id)&&(plan.itemOwner??undefined)===itemOwner));
   const pickerTitle=(id:string)=>(page.sections??[]).find(s=>s.widget==="record-picker"&&page.document?.variables?.[s.collectionVariable??""]?.source?.query===id)?.recordPicker?.labelField;
   const picker=(id:string)=>(page.sections??[]).some(s=>s.widget==="record-picker"&&page.document?.variables?.[s.collectionVariable??""]?.source?.query===id);
   const avatars=(id:string)=>(page.sections??[]).some(s=>s.widget==="avatar-stack"&&[s.collectionVariable,s.avatar?.contextCollectionVariable].some(v=>v&&page.document?.variables?.[v]?.source?.query===id));

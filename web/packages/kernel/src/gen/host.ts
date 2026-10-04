@@ -2236,7 +2236,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.96",
+  "uiProfile": "platform.page.v2.97",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -7365,7 +7365,8 @@ export const pageUIManifest = {
     "platform.page.v2.93",
     "platform.page.v2.94",
     "platform.page.v2.95",
-    "platform.page.v2.96"
+    "platform.page.v2.96",
+    "platform.page.v2.97"
   ],
   "runtime": {
     "scope": "page",
@@ -7672,7 +7673,10 @@ export const pageUIManifest = {
         "maxBytes": 65536,
         "maxConditions": 32,
         "maxSearchBytes": 4096
-      }
+      },
+      "inventoryUIProfile": "platform.page.v2.97",
+      "maxDeclaredPlans": 16,
+      "maxDeclaredTotalLimit": 1600
     },
     "decimal": {
       "maxBytes": 128

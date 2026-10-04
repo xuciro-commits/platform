@@ -10,7 +10,8 @@
     "./decimal": "./src/runtime/decimal.ts",
     "./search": "./src/widgets/search-input.ts",
     "./action-table": "./src/widgets/action-table.ts",
-    "./action-defaults": "./src/widgets/action-defaults.ts"
+    "./action-defaults": "./src/widgets/action-defaults.ts",
+    "./query-inventory": "./src/runtime/query-inventory.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

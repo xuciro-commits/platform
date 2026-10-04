@@ -338,14 +338,17 @@ type pageRuntimeContract struct {
 			MaxDepth       int      `json:"maxDepth"`
 			MaxBytes       int      `json:"maxBytes"`
 		} `json:"set"`
-		Source        string   `json:"source"`
-		MaxPlans      int      `json:"maxPlans"`
-		MaxConditions int      `json:"maxConditions"`
-		MaxSort       int      `json:"maxSort"`
-		MaxLimit      int      `json:"maxLimit"`
-		MaxTotalLimit int      `json:"maxTotalLimit"`
-		MaxOffset     int      `json:"maxOffset"`
-		Operators     []string `json:"operators"`
+		Source                string   `json:"source"`
+		InventoryUIProfile    string   `json:"inventoryUIProfile"`
+		MaxDeclaredPlans      int      `json:"maxDeclaredPlans"`
+		MaxDeclaredTotalLimit int      `json:"maxDeclaredTotalLimit"`
+		MaxPlans              int      `json:"maxPlans"`
+		MaxConditions         int      `json:"maxConditions"`
+		MaxSort               int      `json:"maxSort"`
+		MaxLimit              int      `json:"maxLimit"`
+		MaxTotalLimit         int      `json:"maxTotalLimit"`
+		MaxOffset             int      `json:"maxOffset"`
+		Operators             []string `json:"operators"`
 	} `json:"query"`
 	Interface struct {
 		MaxPorts   int      `json:"maxPorts"`
