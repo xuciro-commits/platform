@@ -19,6 +19,8 @@ const SchemaFunctionAnswer = FunctionCallType + ".answer"
 // person's ordinary business action remains the only way to adopt it.
 type FunctionRun struct {
 	platform.Record
+	Question       string              `json:"question,omitempty" field:"readonly" type:"longtext"`
+	History        []string            `json:"history,omitempty" field:"readonly"`
 	Function       string              `json:"function" field:"readonly"`
 	App            string              `json:"app,omitempty" field:"readonly"`
 	Contract       platform.AIFunction `json:"contract" type:"json" field:"readonly"`
@@ -50,14 +52,14 @@ func (b *Build) functionCallEntity() platform.Entity {
 	return platform.Entity{Type: FunctionCallType, Title: "AI function call", Plural: "AI function calls", Model: FunctionRun{}, Display: "function",
 		Description: "A retained typed suggestion or refusal; it never changes its source record.",
 		Scope:       platform.Scope{Default: platform.ScopeOwn, Owner: "member", Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Derived:     []platform.Derivation{{From: "sources", Fields: []string{"output", "reason"}}}, Withheld: "withheld"}
+		Derived:     []platform.Derivation{{From: "sources", Fields: []string{"output", "reason", "question"}}}, Withheld: "withheld"}
 }
 
 func functionCallActions(roles []string) []platform.Action {
 	return []platform.Action{{Schema: SchemaFunctionCall, Target: FunctionCallType, New: true, Capability: "functions", Title: "Call AI function",
 		Description: "Request a published function over a readable source; retain the suggestion for human review.",
 		Roles:       append(slices.Clone(roles), platform.AnyMember), Automation: true,
-		Payload: []platform.Field{{Name: "app", Type: "string", Description: "Registered function owner"}, {Name: "name", Type: "string", Required: true, Description: "Published function name"},
+		Payload: []platform.Field{{Name: "question", Type: "string", Description: "Bounded member question for a conversation function"}, {Name: "history", Type: "json", Description: "Up to eight prior completed calls in this conversation"}, {Name: "app", Type: "string", Description: "Registered function owner"}, {Name: "name", Type: "string", Required: true, Description: "Published function name"},
 			{Name: "source", Type: "string", Required: true, Description: "Source record ID"},
 			{Name: "version", Type: "integer", Description: "Published version; zero selects the installed version"},
 			{Name: "release", Type: "string", Description: "Retained release for a native automation; empty keeps a development run"},
@@ -99,7 +101,7 @@ func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time
 				if !ok {
 					return
 				}
-				c.Put(r, FunctionRun{App: cmp.Or(request.App, ID), Contract: definition, Record: platform.Record{ID: id}, Function: request.Name, Version: call.Version, Member: member,
+				c.Put(r, FunctionRun{Question: request.Question, History: slices.Clone(request.History), App: cmp.Or(request.App, ID), Contract: definition, Record: platform.Record{ID: id}, Function: request.Name, Version: call.Version, Member: member,
 					Source: call.Source, State: "pending", Definition: call.Definition, Dependencies: call.Dependencies,
 					Model: call.Model, InputHash: call.InputHash, Release: call.Release, Sources: call.Sources})
 			}, nil

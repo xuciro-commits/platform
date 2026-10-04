@@ -4,6 +4,7 @@ import type { AuthorityDeclarationJson } from "./platform/kernel/v1alpha1/author
 import type { ChangeRecordJson, SubmissionJson } from "./platform/kernel/v1alpha1/change_pb";
 
 export type AIFunction = {
+  conversation?: boolean;
   name: string;
   title: string;
   description: string;
@@ -655,6 +656,8 @@ export type FunctionRun = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  question?: string;
+  history?: string[];
   function: string;
   app?: string;
   contract: AIFunction;

@@ -1102,5 +1102,16 @@
   "owner": "对象所有者",
   "restrict-active": "保护活动引用",
   "Active reference archive protection failed": "活动引用不满足归档保护约束",
-  "A published link keeps its identity, objects, reference shape and retained constraints": "已发布关系必须保留标识、对象、引用形状及已承诺的约束"
+  "A published link keeps its identity, objects, reference shape and retained constraints": "已发布关系必须保留标识、对象、引用形状及已承诺的约束",
+  "Conversation input": "会话输入",
+  "Bounded member question for a conversation function": "会话函数的有界成员问题",
+  "Up to eight prior completed calls in this conversation": "此会话最多八次已完成调用",
+  "this function has no conversation input": "此函数不接受会话输入",
+  "conversation needs a bounded question and history": "会话需要有界问题和历史",
+  "conversation history needs the original function call owner": "会话历史需要原函数调用 owner",
+  "conversation history is unavailable": "会话历史不可用",
+  "conversation history belongs to another context": "会话历史不属于当前上下文",
+  "The conversation history is not readable": "会话历史不可读取",
+  "Question": "问题",
+  "History": "历史"
 }

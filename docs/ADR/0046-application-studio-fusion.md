@@ -915,6 +915,14 @@ F1e59a先打通共同版本依赖与受权读取/SDK，停止条件为真实重�
 
 Iframe以原external-frame注册项呈现外部文档：只接受规范绝对HTTPS URL、与其初始来源完全一致的显式origin及1–4096整数高度，不修复模糊URL或携带URL用户名/密码。UI Kit持有共享ExternalFrame和相同边缘校验，原Section持有配置、宿主持有发布校验，Build持有检查器和显式导入。浏览器使用空sandbox、no-referrer和设备/剪贴板/支付禁用策略，不提供平台令牌、变量、postMessage或原动作桥；当前平台来源拒绝，框架与子页面共同占用16实例预算，Loop内拒绝。空sandbox的脚本/表单/弹窗/顶层导航限制依据[iframe规范说明](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe)。origin约束配置的初始地址，不能保证远端重定向或链接仍在同一来源；隔离限制持续生效。外部服务器控制实际字节与嵌入响应策略，URL冻结不等于远程内容冻结，也不承诺跨浏览器第三方Cookie隔离或需要脚本的外部应用可运行。更广外部交互须另取受控能力profile，不自动放宽sandbox。
 
+#### 6.80 三种原生 AI 呈现与受控会话
+
+AIPAnalyst、AIPGenerated和AIPChatbot共用原AI函数调用与保留结果路径。来源Analyst/Generated为固定文字，Chatbot为定时器加关键字拼接；不导入其模拟结果或生成代码执行。Analyst/Generated显式绑定固定函数版本和原确认记录，展示经原输出schema校验及当前权限裁剪的结果；建议不会直接修改业务对象或过滤集合。
+
+现有AIFunction只接受原记录字段，聊天不能通过改写记录保存问题来伪装。沿同一契约增加显式conversation可选模式，普通函数的输入和系统提示保持原形；会话函数接受question和最多8个已完成调用ID。问题最多4096字节，实际记录、问题和由宿主读取的历史一起计入原MaxInputBytes；不接受客户端提供的助手回答。历史须属于当前成员、同函数/版本/定义、同原记录和同回复owner；当前源权限与历史字段权限在接受及向模型释放前复核。每一轮仍是原accepted-result、模型effect、类型化answer与FunctionRun，不新增聊天数据库或模型执行器。会话函数的输入明确为record/question/history，函数自身的输出仍为已有有界标量schema。
+
+Build负责声明/发布conversation模式，AI宿主负责组装受权上下文与原模型/配额/输出校验，应用API负责会话临时调用ID与原结果读取，UI Kit负责呈现。关闭、Reset、输入记录或成员/定义变化使旧呈现失效；已接受调用留在原审计，不冒充取消模型执行。真实模型行为与测试模型协议夹具分别记录。跨集合/跨对象上下文、知识工具和更广会话输出须沿原owner扩展，本实现阶段不得将窗口摘录称为完整企业知识。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -1372,6 +1380,8 @@ Module页面导入（F1e–F1e2）已接通§10.1的八类组件有限profile、
 F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和七十七类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
 
 四种原生观测与共同导入（F1e58b2，v2.82）已接通§6.78.2的observation统一注册身份、真实查询/窗口统计、双类型记录输出、专属检查器、四类GUI映射及原保存/冻结，当时有限profile库存81/92。Table行先经原窗口和单记录确认，资产再按其真实reference确认；分页与原会话退役连带清理，迟到选择不能清理新确认。Statistics使用原1k/10k/100k读者及独立当前资产具名历史；availability组合原资产count/avg和独立真实历史，series保留三信号/单位与业务时间。检查器可声明原记录端口、三参数状态及资产聚合，变量面板按声明端口识别图/观测对象；布局复制重写输出、参数、context与原平均值依赖。成员必需字段裁剪、安装/冻结闭包、原候选与新草稿隔离、CheckReplay及内存快照沿同一原生路径保持。导入显式选择真实来源/时间/信号索引与单位、保留查询版本和资产消费者生产者；保留原文/绑定/定位报告，拒绝错类型、丢失索引、同名竞争端口、错误引用目标/版本/容量、旧profile、未知配置和未迁struct消费者。同owner原查询复用，固定历史与分页读者分开；来源数组筛选保持原资产count/avg作用域，不转为隐式样本join。Go定向原生/冻结回归及Web类型/单元/构建通过；原生联合路线已验证132条样本/两资产、参数与Overlay清理、403及迟到答复。本次导入联合浏览器路线验证四类同次GUI映射、原文/报告下载、检查器、共同保存/冻结后新草稿隔离、106条真实样本的100条页和106条完整统计、两资产89%平均值/单资产筛选98%、独立100条真实历史、资产引用详情及分页清理；普通/窄屏已观察。整组Overlay导入、参数/查询归属与竞争别名由定向编译检查覆盖；未将其写为本次浏览器Overlay导入验收。本批未运行全量Playwright、部署或PostgreSQL恢复。更多来源配置、真实高速遥测/Worker与CSV、生产吞吐、Loop/应用共享、完整默认Module、负责人视觉认可和完整插件契约继续保留后续。
+
+受控AI会话前置能力（F1e60a）已沿§6.80接通原AIFunction.conversation、FunctionRequest.question/history及原FunctionRun的question/history保留。普通函数保留原平铺输入；会话函数在接受时从原owner读取最多8个同成员/函数版本/定义/来源/已完成调用，组装record/question/history，客户端不提供助手回答。历史字段进入原Sources派生裁剪，全部输入计入原字节预算；派发前原字段/历史可读性与源记录存在/归档复核继续作用于已接受的精确输入。原问题与答案仍沿accepted-result、模型effect、输出schema、计量及自动answer保留，不改变业务源记录。Build函数编辑器可显式保存/发布此模式，旧版本仍保留原模式；类型从Go生成。Go定向与宿主检查覆盖真实本地HTTP模型协议的两轮上下文、异成员/异记录/待完成/重复历史拒绝、源归档后不释放模型输入、CheckReplay与内存快照；这是协议夹具，未观察真实模型质量。组合/格式与Web类型/单元/构建通过，原函数编辑器路线和会话选项保存/发布/保留版本路线通过。三种AI Renderer、原会话生命周期/端口、专属检查器及来源导入仍待F1e60b，不增加85/92库存；更广集合/知识上下文、全量E2E、部署与PostgreSQL恢复未计完成。
 
 受控页面内容与嵌入导入（F1e59a–F1e59c）已沿§6.79接通Definition.contentVersion、原Build Page最多64个不同已发布内容的非递归history、原publish/候选激活、GET /v1/pages/{app}/{name}/{contentVersion}及EdgeClient.pageContent。完整原描述摘要与既有SourceVersion分开，未发布草稿/仅保存候选不开放给成员；缺失、不兼容或无权版本拒绝，不退回最新。版本读取复用完整原发现投影及当前对象/字段/动作/查询/导航权限，原Requires按选定内容重新取得；同一历史身份可有不同成员裁剪内容。v2.83的原Section.embedding、共同候选闭包、固定内容和接口校验、递归/实例/查询/记录/Section预算、成员页面入口裁剪、三种module/custom/dashboard呈现、独立原PageSession、原类型化接口、专属检查器及复制输出状态重写已接通。输入变化使子会话重建，无关父状态更新保留子草稿；结果经过原接口校验后写父页面标量。检查器可选择已发布页面、指定内容摘要和接口、逐项绑定同owner变量及返回端口，历史选择目前为手工填写摘要。
 

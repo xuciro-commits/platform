@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Accept conversation questions and retained call history": "接受会话问题和保留调用历史",
+ "Conversation input contains the authorized record, current question and up to eight completed calls. The full input still uses the original byte and token budgets.": "会话输入包含受权记录、当前问题和最多八次已完成调用。完整输入仍遵循原字节和令牌预算。",
  "Collection query": "集合查询",
  "Collection interface input": "集合接口输入",
  "Original collection ordering": "原集合排序",

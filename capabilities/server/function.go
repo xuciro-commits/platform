@@ -84,6 +84,10 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an AI function source record")
 	}
 	sourceRef := f.Object + "/" + source
+	definition, err := canonicalDigest([]any{owner, f})
+	if err != nil {
+		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function definition cannot be bound")
+	}
 	at := r.GetRecordedTime().AsTime()
 	store.mu.Lock()
 	et := store.types[f.Object]
@@ -107,14 +111,20 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 		input[name] = row.value.FieldByIndex(field.Index).Interface()
 		sources = append(sources, sourceRef+"#"+name)
 	}
-	raw, err := json.Marshal(input)
+	payload, historySources, conversationErr := t.functionConversation(store, member, request, f, owner, sourceRef, definition, version, input)
+	raw, err := json.Marshal(payload)
 	store.mu.Unlock()
+	if conversationErr != nil {
+		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, conversationErr.Error())
+	}
+	for _, ref := range historySources {
+		if !t.mayRead(member, at, false)(ref) {
+			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The conversation history is not readable")
+		}
+	}
+	sources = append(sources, historySources...)
 	if err != nil || len(raw) > f.MaxInputBytes {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The AI function input exceeds its byte budget")
-	}
-	definition, err := canonicalDigest([]any{owner, f})
-	if err != nil {
-		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function definition cannot be bound")
 	}
 	candidate, release, err := t.functionClosure(owner, f, version, request.Release)
 	if err != nil {
@@ -154,13 +164,29 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 		definition != binding.Call.Definition || hash != binding.Call.InputHash || ask.Model != binding.Call.Model ||
 		ask.Prompt.System != f.SystemPrompt() || ask.Prompt.MaxTokens != f.MaxTokens || len(ask.Prompt.User) > f.MaxInputBytes ||
 		!sourceOK || sourceID == "" || sourceType != f.Object || !replyOK || replyID != ask.Call || t.authorityOf(replyType) != app || !slices.Contains(f.Roles, member.Roles[owner]) ||
-		member.Agent && t.suspended(member.ID) || len(binding.Call.Sources) != len(f.Fields) {
+		member.Agent && t.suspended(member.ID) || len(binding.Call.Sources) < len(f.Fields) || !f.Conversation && len(binding.Call.Sources) != len(f.Fields) || f.Conversation && len(binding.Call.Sources) > len(f.Fields)+16 {
 		return false
 	}
 	may := t.mayRead(member, at, false)
+	t.records.mu.Lock()
+	sourceTypeInfo := t.records.types[sourceType]
+	var sourcePresent bool
+	if sourceTypeInfo != nil {
+		row := sourceTypeInfo.rows[sourceID]
+		sourcePresent = row != nil && !recordOf(row.value).Archived
+	}
+	t.records.mu.Unlock()
+	if !sourcePresent {
+		return false
+	}
 	for i, field := range f.Fields {
 		ref := binding.Call.Source + "#" + field
 		if binding.Call.Sources[i] != ref || !may(ref) {
+			return false
+		}
+	}
+	for _, ref := range binding.Call.Sources[len(f.Fields):] {
+		if !may(ref) {
 			return false
 		}
 	}

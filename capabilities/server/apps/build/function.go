@@ -18,6 +18,7 @@ const SchemaFunction = FunctionType + ".publish"
 // edits never replace what callers use until the publication result commits.
 type Function struct {
 	platform.Record
+	Conversation   bool             `json:"conversation,omitempty" field:"aside" title:"Conversation input"`
 	Name           string           `json:"name" field:"required,search"`
 	Title          string           `json:"title" field:"required,search"`
 	Description    string           `json:"description" field:"required" type:"longtext"`
@@ -39,7 +40,7 @@ type Function struct {
 // definition projects the stored fields into the shared runtime declaration;
 // validation and execution remain owned by platform.AIFunction.
 func (f Function) definition() platform.AIFunction {
-	return platform.AIFunction{Name: f.Name, Title: f.Title, Description: f.Description, Object: f.Object,
+	return platform.AIFunction{Conversation: f.Conversation, Name: f.Name, Title: f.Title, Description: f.Description, Object: f.Object,
 		Fields: f.Fields, Instructions: f.Instructions, Output: f.Output, Model: f.Model,
 		MaxInputBytes: f.MaxInputBytes, MaxOutputBytes: f.MaxOutputBytes, MaxTokens: f.MaxTokens, Roles: f.Roles}
 }

@@ -8,7 +8,7 @@ import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, RecordLis
 import { useEffect, useState } from "react";
 import { installedObjects, type WorkflowObject } from "./workflow-model";
 
-type FunctionDraft = { id: string; revision: number; name: string; title: string; description: string; object: string; fields: string[];
+type FunctionDraft = { conversation?:boolean; id: string; revision: number; name: string; title: string; description: string; object: string; fields: string[];
   instructions: string; output: Api.Field[]; model?: string; maxInputBytes: number; maxOutputBytes: number; maxTokens: number;
   roles: string[]; version?: number; published?: string };
 type Source = WorkflowObject & { fields: { name: string; title: string; type: string; read?: string[] }[] };
@@ -65,9 +65,9 @@ export function FunctionEditor({ id }: { id: string }) {
   };
   const save = async (): Promise<number | undefined> => {
     const target = draft.id || crypto.randomUUID();
-    const { name, title, description, object, fields, instructions, output, model, maxInputBytes, maxOutputBytes, maxTokens, roles } = draft;
+    const { conversation,name, title, description, object, fields, instructions, output, model, maxInputBytes, maxOutputBytes, maxTokens, roles } = draft;
     if (!await decide(`build.function.${draft.id ? "edit" : "create"}`, { type: "build.function", id: target },
-      { name, title, description, object, fields, instructions, output, model: model ?? "", maxInputBytes, maxOutputBytes, maxTokens, roles },
+      { conversation:conversation??false,name, title, description, object, fields, instructions, output, model: model ?? "", maxInputBytes, maxOutputBytes, maxTokens, roles },
       { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) return;
     const revision = draft.id ? draft.revision + 1 : 1;
     if (!draft.id) {
@@ -147,6 +147,8 @@ export function FunctionEditor({ id }: { id: string }) {
         </>}
         {chosen === "model" && <>
           <label className="grid gap-1 text-xs">{t("Model identifier (empty: application default)")}<Input value={draft.model ?? ""} onChange={(e) => change({ model: e.target.value })} placeholder="provider/model" /></label>
+          <Checkbox checked={draft.conversation??false} onChange={conversation=>change({conversation})}>{t("Accept conversation questions and retained call history")}</Checkbox>
+          {draft.conversation&&<p className="text-xs text-muted">{t("Conversation input contains the authorized record, current question and up to eight completed calls. The full input still uses the original byte and token budgets.")}</p>}
           <label className="grid gap-1 text-xs">{t("Model instructions")}<Textarea rows={8} value={draft.instructions} onChange={(e) => change({ instructions: e.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Maximum tokens")}<Input type="number" min={1} max={4096} value={draft.maxTokens} onChange={(e) => change({ maxTokens: Number(e.target.value) })} /></label>
         </>}
