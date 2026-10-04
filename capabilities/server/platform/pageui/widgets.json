@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.94",
+  "uiProfile": "platform.page.v2.95",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2134,7 +2134,8 @@
       "bindingKinds": [
         "object",
         "collection-variable",
-        "selection"
+        "selection",
+        "selection-variable"
       ],
       "selectionMode": "write",
       "propsSchema": {
@@ -2188,7 +2189,15 @@
           "requiredUIProfile": "platform.page.v2.51"
         }
       ],
-      "outputPorts": [],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.95",
+          "writable": true
+        }
+      ],
       "layoutPreferences": {
         "frame": "card"
       },
@@ -2905,7 +2914,8 @@
       "bindingKinds": [
         "object",
         "collection-variable",
-        "selection"
+        "selection",
+        "selection-variable"
       ],
       "selectionMode": "write",
       "propsSchema": {
@@ -2959,7 +2969,15 @@
           "requiredUIProfile": "platform.page.v2.69"
         }
       ],
-      "outputPorts": [],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.95",
+          "writable": true
+        }
+      ],
       "layoutPreferences": {
         "frame": "card"
       },
@@ -5108,7 +5126,8 @@
     "platform.page.v2.91",
     "platform.page.v2.92",
     "platform.page.v2.93",
-    "platform.page.v2.94"
+    "platform.page.v2.94",
+    "platform.page.v2.95"
   ],
   "runtime": {
     "scope": "page",

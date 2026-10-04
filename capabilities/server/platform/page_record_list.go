@@ -19,17 +19,8 @@ func (d *PageDocument) checkRecordList(s Section) error {
 	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordList.RequiredUIProfile) || s.RecordList == nil || !slices.Contains(pageWidgets.Runtime.RecordList.Layouts, s.RecordList.Layout) || s.CollectionVariable == "" || len(s.Fields) > pageWidgets.Runtime.RecordList.MaxFields || len(s.Actions) > 0 {
 		return fmt.Errorf("record list needs its profile, bounded fields, layout and original window")
 	}
-	if s.SelectionVariable != "" {
-		v := d.Variables[s.SelectionVariable]
-		if s.Selection != "" || s.RecordList.Layout == "tiles" || v.Scope != "application" || v.Mode != "shared" || v.Type != "record" || !v.Writable || v.Source == nil || v.Source.Kind != "application" || v.Source.Object == nil {
-			return fmt.Errorf("record list shared selection needs its writable original application record")
-		}
-		overlays, loops := d.overlayOwners(), d.loopOwners()
-		for id, node := range d.Nodes {
-			if node.Section == s.ID && (overlays[id] != "" || loops[id] != "") {
-				return fmt.Errorf("record list shared selection needs a main-page producer")
-			}
-		}
+	if err := d.checkSharedRecordOutput(s); err != nil {
+		return err
 	}
 	if s.RecordList.Layout == "tiles" {
 		v := d.Variables[s.CollectionVariable]

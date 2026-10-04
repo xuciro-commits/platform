@@ -2236,7 +2236,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.94",
+  "uiProfile": "platform.page.v2.95",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4371,7 +4371,8 @@ export const pageUIManifest = {
       "bindingKinds": [
         "object",
         "collection-variable",
-        "selection"
+        "selection",
+        "selection-variable"
       ],
       "selectionMode": "write",
       "propsSchema": {
@@ -4425,7 +4426,15 @@ export const pageUIManifest = {
           "requiredUIProfile": "platform.page.v2.51"
         }
       ],
-      "outputPorts": [],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.95",
+          "writable": true
+        }
+      ],
       "layoutPreferences": {
         "frame": "card"
       },
@@ -5142,7 +5151,8 @@ export const pageUIManifest = {
       "bindingKinds": [
         "object",
         "collection-variable",
-        "selection"
+        "selection",
+        "selection-variable"
       ],
       "selectionMode": "write",
       "propsSchema": {
@@ -5196,7 +5206,15 @@ export const pageUIManifest = {
           "requiredUIProfile": "platform.page.v2.69"
         }
       ],
-      "outputPorts": [],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.95",
+          "writable": true
+        }
+      ],
       "layoutPreferences": {
         "frame": "card"
       },
@@ -7345,7 +7363,8 @@ export const pageUIManifest = {
     "platform.page.v2.91",
     "platform.page.v2.92",
     "platform.page.v2.93",
-    "platform.page.v2.94"
+    "platform.page.v2.94",
+    "platform.page.v2.95"
   ],
   "runtime": {
     "scope": "page",

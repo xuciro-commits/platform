@@ -26,6 +26,9 @@ func (d *PageDocument) checkLeaderboard(s Section) error {
 		}
 		return nil
 	}
+	if err := d.checkSharedRecordOutput(s); err != nil {
+		return err
+	}
 	c, v := s.Leaderboard, d.Variables[s.CollectionVariable]
 	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Leaderboard.RequiredUIProfile) || c == nil || c.Limit < 1 || c.Limit > pageWidgets.Runtime.Leaderboard.MaxRanks || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(s.Fields) > 0 || len(s.Actions) > 0 {
 		return fmt.Errorf("leaderboard needs its bounded original ranking window")

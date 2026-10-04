@@ -21,3 +21,13 @@ export function defaultAnalyticsChartGroup(profile){
  f.module.widgets.control={id:'control',name:'Original query window',type:'ObjectTable',config:{objectSetVarId:'filteredAssets',columns:[{key:'name'}]}};
  f.bindings={objects:{Asset:f.target.object},fields:{Asset:f.bindings.fields.Asset},actions:{},queries:{}};return f;
 }
+
+/** Original ScatterPlot, Leaderboard and PropertyList share the original record
+ * interface; its Operations producer metadata stays present, but is not mounted.
+ * Comparison and complete-page acceptance remain separate requirements. */
+export function defaultAnalyticsSelectionGroup(profile){
+ const f=defaultAnalyticsFixture(profile),original=f.module,ids=['wScatter','wLeader','wPropList1','wObjectTable1'],variables=new Set(['filteredAssets','statusFilter','priorityFilter','ownerFilter','searchText','pressureMin','pressureMax','selectedAsset']);
+ f.module={id:'original-analytics-selection-group',name:'Original Analytics shared selection',pages:[{id:'pAnalytics',name:'Analytics selection group',rootSectionId:'root'}],sections:{root:{id:'root',name:'Group',layout:'rows',children:['search','wScatter','wLeader','wPropList1'].map(id=>({kind:'widget',id}))}},widgets:Object.fromEntries(ids.map(id=>[id,structuredClone(original.widgets[id])])),variables:original.variables.filter(v=>variables.has(v.id)).map(v=>structuredClone(v)),moduleInterface:original.moduleInterface.filter(p=>p.variableId==='selectedAsset'),overlays:[],unusedWidgetIds:[]};
+ f.module.widgets.search={id:'search',name:'Original search control',type:'TextInput',config:{variableId:'searchText',label:'Original search'}};
+ f.bindings={objects:{Asset:f.target.object},fields:{Asset:f.bindings.fields.Asset},actions:{},queries:{},application:{binding:f.bindings.application.binding,ports:{selectedAsset:f.bindings.application.ports.selectedAsset}},scatters:{wScatter:{labelField:'name'}},leaderboards:{wLeader:{labelField:'name'}}};return f;
+}

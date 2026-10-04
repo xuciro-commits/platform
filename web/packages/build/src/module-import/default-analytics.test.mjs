@@ -1,5 +1,5 @@
 import {registerHooks} from 'node:module';import {readFileSync} from 'node:fs';import assert from 'node:assert/strict';import test from 'node:test';
-import {analyticFacetIDs,analyticChartIDs,defaultAnalyticsFixture,defaultAnalyticsFacetGroup,defaultAnalyticsChartGroup} from './default-analytics.fixture.mjs';
+import {analyticFacetIDs,analyticChartIDs,defaultAnalyticsFixture,defaultAnalyticsFacetGroup,defaultAnalyticsChartGroup,defaultAnalyticsSelectionGroup} from './default-analytics.fixture.mjs';
 const manifest=JSON.parse(readFileSync(new URL('../../../../../capabilities/server/platform/pageui/widgets.json',import.meta.url)));
 registerHooks({resolve(s,c,next){if(s==='@platform/kernel')return {url:'data:text/javascript,'+encodeURIComponent(`export const pageUIManifest=${JSON.stringify(manifest)};`),shortCircuit:true};try{return next(s,c)}catch(e){if(s.startsWith('./')||s.startsWith('../'))return next(s+'.ts',c);throw e;}}});
 const {compileWorkshopModule}=await import('./compile.ts');
@@ -21,4 +21,13 @@ test('five original facets share one unchanged typed query with scalar Owner and
 test('a chart-only source retains its original variable identity without a redundant window, while same-source record charts keep shared pagination',()=>{
  const f=defaultAnalyticsChartGroup(manifest.uiProfile);f.module.sections.root.children=[{kind:'widget',id:'wChart2'}];f.module.widgets.second=structuredClone(f.module.widgets.wChart2);f.module.widgets.second.id='second';f.module.widgets.second.name='Same original chart window';f.module.sections.root.children.push({kind:'widget',id:'second'});
  const r=compile(f);assert.ok(r.draft,JSON.stringify(r.diagnostics));const charts=r.draft.sections.filter(s=>s.widget==='record-chart'),variables=r.draft.document.variables;assert.equal(charts[0].collectionVariable,charts[1].collectionVariable);assert.equal(Object.keys(r.draft.document.queries).length,1);assert.equal(variables[r.ids.variables.filteredAssets].source.query,variables[charts[0].collectionVariable].source.query);assert.equal(r.draft.document.queries[variables[charts[0].collectionVariable].source.query].limit,100);
+});
+
+test('original Analytics producers share one writable application record while cross-page comparison remains a whole-page blocker',()=>{
+ const f=defaultAnalyticsSelectionGroup(manifest.uiProfile),r=compile(f);assert.ok(r.draft,JSON.stringify(r.diagnostics));const sections=r.draft.sections,v=r.draft.document.variables,record=r.ids.variables.selectedAsset;
+ for(const id of ['wScatter','wLeader','wPropList1'])assert.deepEqual(f.module.widgets[id],defaultAnalyticsFixture(manifest.uiProfile).module.widgets[id]);
+ for(const kind of ['record-scatter','record-leaderboard']){const producer=sections.find(s=>s.widget===kind);assert.equal(producer.selectionVariable,record);assert.equal(producer.selection,undefined);}
+ assert.equal(sections.find(s=>s.widget==='detail').recordVariable,record);assert.equal(v[record].mode,'shared');assert.equal(v[record].writable,true);assert.deepEqual(v[record].source.object,{app:'build',kind:'object',name:f.target.object});assert.equal(r.draft.selections.length,0);
+ for(const mutate of [f=>f.target.profile='platform.page.v2.94',f=>f.bindings.application.ports.selectedAsset.writable=false,f=>f.module.moduleInterface=[],f=>f.module.widgets.wLeader.config.activeVarId='missing',f=>f.target.definitions[0].application.variables.record.source.object.name='build.other']){const copy=structuredClone(f);mutate(copy);assert.equal(compile(copy).draft,undefined,String(mutate));}
+ const full=defaultAnalyticsFixture(manifest.uiProfile);full.bindings.scatters=f.bindings.scatters;full.bindings.leaderboards=f.bindings.leaderboards;const blocked=compile(full);assert.equal(blocked.draft,undefined);assert.equal(Object.keys(full.module.widgets).length,85);assert.ok(blocked.diagnostics.some(d=>d.blocking&&d.path.includes('wCompare')));assert.ok(blocked.diagnostics.every(d=>!d.blocking||!['wScatter','wLeader'].some(id=>d.path.startsWith(`/widgets/${id}/`))));
 });

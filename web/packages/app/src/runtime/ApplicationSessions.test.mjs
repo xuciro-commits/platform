@@ -63,3 +63,16 @@ test("application filters use declared fields and values, isolate resources and 
  first.filter("filter","active","true");first.filter("filter","state","invalid");first.filter("filter","hidden",true);assert.deepEqual(first.reads.snapshot().filters.filter,{active:true});
  first.filter("filter","state","open");first.filter("filter","active",undefined);assert.deepEqual(first.reads.snapshot().filters.filter,{state:"open"});first.detach(a);assert.deepEqual(first.reads.snapshot().filters.filter,{state:"open"});first.close();first.filter("filter","active",true);assert.deepEqual(first.reads.snapshot().filters,{});assert.deepEqual(hub.get("one",variables,options).reads.snapshot().filters,{});
 });
+
+test("confirmed producer intentions cannot overwrite a newer producer and hide old fields while waiting",async()=>{
+ const object={app:"sample",kind:"object",name:"sample.note"},variables={selected:{scope:"application",type:"record",mode:"resource",source:{kind:"record",object}}};
+ const source={scope:"member:v1",entity:()=>({fields:[]}),get:async(_,id)=>({record:{id,revision:1,note:id}}),list:async()=>({records:[],total:0})};
+ const hub=new ApplicationSessionHub(),session=hub.get("one",variables,{source,queries:{}}),scatter=Symbol(),rank=Symbol();session.attach(scatter,()=>{});session.attach(rank,()=>{});
+ session.select("selected",{object:object.name,id:"old"},rank);await tick();assert.equal(session.reads.selected("selected").note,"old");
+ const late=session.beginSelection("selected",scatter);assert.equal(session.reads.selected("selected"),undefined);
+ session.select("selected",{object:object.name,id:"new"},rank);await tick();late({object:object.name,id:"late"});await tick();assert.equal(session.reads.selected("selected").id,"new");
+ const first=session.beginSelection("selected",scatter),second=session.beginSelection("selected",scatter);first({object:object.name,id:"first"});await tick();assert.equal(session.reads.selected("selected"),undefined);second({object:object.name,id:"second"});await tick();assert.equal(session.reads.selected("selected").id,"second");
+ const denied=session.beginSelection("selected",scatter);denied(undefined);assert.equal(session.reads.selected("selected"),undefined);
+ const retired=session.beginSelection("selected",scatter);session.close();retired({object:object.name,id:"retired"});await tick();assert.deepEqual(session.reads.snapshot().records,{});
+ assert.equal(session.beginSelection("selected",scatter),undefined);assert.equal(hub.get("other",variables,{source,queries:{}}).beginSelection("missing",rank),undefined);
+});

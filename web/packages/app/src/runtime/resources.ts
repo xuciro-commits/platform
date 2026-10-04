@@ -23,7 +23,10 @@ export function sectionOverlay(page:Api.Page,section:string):string|undefined {
 export function selectionSlot(page:Api.Page,section:Api.Section,parent=false):string {
  const object=parent?(section.parentSelection?page.selections?.find((s)=>s.name===section.parentSelection)?.object.name??"":page.object.name):section.object?.name||page.object.name;
  const name=parent?section.parentSelection:section.selection,owner=sectionOverlay(page,section.id??"");
- const scoped=Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=11;
+ const profile=Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1]);
+ // Application producers share the output, not each other's query-confirmation lease.
+ if(!parent&&profile>=95&&section.selectionVariable&&section.id)return `record-producer/${section.id}/${object}`;
+ const scoped=profile>=11;
  const local=scoped&&owner&&(page.sections??[]).some((s)=>["table","record-timeline","kanban","record-list","resource-list","record-calendar","record-picker","record-leaderboard","record-scatter","record-map"].includes(s.widget)&&(s.object?.name||page.object.name)===object&&(s.selection??"")===(name??"")&&sectionOverlay(page,s.id??"")===owner);
  return recordSlot(object,name,local?owner:undefined);
 }

@@ -90,6 +90,7 @@ export function useApplicationVariables(variables: Record<string, Api.PageVariab
   const windows=Object.fromEntries(Object.entries(variables).filter(([,v])=>v.mode==="shared"&&v.type==="object-set").map(([id,v])=>[id,queries.windows[v.source?.variable??""]]));
   const signatures=Object.fromEntries(Object.entries(variables).filter(([,v])=>v.mode==="shared"&&v.type==="object-set").map(([id,v])=>[id,queries.signatures[v.source?.variable??""]??""]));
   const select=(id:string,reference:RecordReference|undefined,owner:symbol,onlyOwner=false)=>{const v=variables[id];if(v?.type==="record"&&v.mode==="shared"&&v.writable&&v.source?.variable&&!error)context?.session.select(v.source.variable,reference,owner,onlyOwner);};
+  const beginSelect=(id:string,owner:symbol)=>{const v=variables[id];if(v?.type==="record"&&v.mode==="shared"&&v.writable&&v.source?.variable&&!error)return context?.session.beginSelection(v.source.variable,owner);};
   const filter=(id:string,field:string,value:unknown)=>{const v=variables[id];if(v?.type==="filter"&&v.mode==="shared"&&v.writable&&v.source?.variable&&!error)context?.session.filter(v.source.variable,field,value);};
-  return { recordReferences, collectionInputs, resources, windows, signatures, select, filter, retry:(id:string)=>queries.retry(variables[id]?.source?.variable??""), set, error, identity: context?.identity, readScope:context?.session.readScope };
+  return { recordReferences, collectionInputs, resources, windows, signatures, select, beginSelect, filter, retry:(id:string)=>queries.retry(variables[id]?.source?.variable??""), set, error, identity: context?.identity, readScope:context?.session.readScope };
 }

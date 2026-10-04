@@ -13,6 +13,7 @@ export class ApplicationSession {
   private pages = new Map<symbol, () => void>();
   private alive = true;
   private recordOwners=new Map<string,symbol>();
+  private recordIntents=new Map<string,symbol>();
   retired = false;
   readonly variables: Record<string, Api.PageVariable>;
   readonly reads?:PageSessionStore;
@@ -32,8 +33,18 @@ export class ApplicationSession {
   select(id:string,reference:RecordReference|undefined,owner:symbol,onlyOwner=false) {
     const variable=this.variables[id];
     if(!this.alive||this.retired||variable?.mode!=="resource"||variable.type!=="record"||variable.source?.kind!=="record"||!this.reads||onlyOwner&&this.recordOwners.get(id)!==owner||reference&&(reference.object!==variable.source.object?.name||!reference.id))return;
+    this.recordIntents.delete(id);
     if(reference)this.recordOwners.set(id,owner);else this.recordOwners.delete(id);
     this.reads.selectReference(id,reference);
+  }
+  /** Reserve the user's latest choice while its producer confirms window membership.
+   * Another producer, a clear or teardown invalidates this completion. */
+  beginSelection(id:string,owner:symbol):((reference:RecordReference|undefined)=>void)|undefined {
+    const variable=this.variables[id];
+    if(!this.alive||this.retired||variable?.mode!=="resource"||variable.type!=="record"||variable.source?.kind!=="record"||!this.reads)return;
+    this.select(id,undefined,owner);
+    const intent=Symbol();this.recordIntents.set(id,intent);this.recordOwners.set(id,owner);
+    return reference=>{if(this.recordIntents.get(id)===intent)this.select(id,reference,owner,true);};
   }
   filter(id:string,field:string,value:unknown) {
     const variable=this.variables[id];if(!this.alive||this.retired||variable?.mode!=="resource"||variable.type!=="filter"||variable.source?.kind!=="filter")return;this.reads?.filterResource(id,field,value);
@@ -41,7 +52,7 @@ export class ApplicationSession {
   attach(owner: symbol, close: () => void) { this.alive = true; this.retired = false; this.pages.set(owner, close); this.reads?.activate(); }
   detach(owner: symbol) { this.pages.delete(owner); if (!this.pages.size) this.clear(); }
   close() { const pages = [...this.pages.values()]; this.clear(); pages.forEach((close) => close()); }
-  clear() { this.alive = false; this.retired = true; this.reads?.dispose(); this.recordOwners.clear(); this.state = {}; this.listeners.forEach((listener) => listener()); }
+  clear() { this.alive = false; this.retired = true; this.reads?.dispose(); this.recordOwners.clear(); this.recordIntents.clear(); this.state = {}; this.listeners.forEach((listener) => listener()); }
 }
 
 export class ApplicationSessionHub {

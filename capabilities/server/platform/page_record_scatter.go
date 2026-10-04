@@ -20,12 +20,15 @@ func (d *PageDocument) checkScatter(s Section) error {
 		}
 		return nil
 	}
+	if err := d.checkSharedRecordOutput(s); err != nil {
+		return err
+	}
 	v := d.Variables[s.CollectionVariable]
 	var q PageQuery
 	if v.Source != nil {
 		q = d.Queries[v.Source.Query]
 	}
-	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordScatter.RequiredUIProfile) || s.Scatter == nil || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(q.Sort) == 0 || q.Limit < 1 || q.Limit > pageWidgets.Runtime.RecordScatter.MaxPoints || len(s.Fields) > 0 || len(s.Actions) > 0 || s.SelectionVariable != "" || s.RecordVariable != "" || s.ParentSelection != "" || s.Relation != "" {
+	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordScatter.RequiredUIProfile) || s.Scatter == nil || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(q.Sort) == 0 || q.Limit < 1 || q.Limit > pageWidgets.Runtime.RecordScatter.MaxPoints || len(s.Fields) > 0 || len(s.Actions) > 0 || s.RecordVariable != "" || s.ParentSelection != "" || s.Relation != "" {
 		return fmt.Errorf("scatter needs its profile, fields and bounded ordered original plan window")
 	}
 	return nil
