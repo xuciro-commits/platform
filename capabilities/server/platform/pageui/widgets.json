@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.89",
+  "uiProfile": "platform.page.v2.90",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -92,6 +92,25 @@
               "full",
               "half"
             ]
+          },
+          "tablePresentation": {
+            "type": "object",
+            "properties": {
+              "density": {
+                "type": "string",
+                "enum": [
+                  "compact",
+                  "normal"
+                ]
+              },
+              "showToolbar": {
+                "type": "boolean"
+              },
+              "titleTemplate": {
+                "type": "string",
+                "maxLength": 256
+              }
+            }
           }
         }
       },
@@ -366,6 +385,60 @@
           "measure": {
             "type": "string",
             "maxLength": 256
+          },
+          "metricPresentation": {
+            "type": "object",
+            "properties": {
+              "formatter": {
+                "type": "string",
+                "enum": [
+                  "number",
+                  "short"
+                ]
+              },
+              "variant": {
+                "type": "string",
+                "enum": [
+                  "card",
+                  "simple",
+                  "tag"
+                ]
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "warning",
+                  "danger",
+                  "success"
+                ]
+              },
+              "prefix": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "suffix": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "annotation": {
+                "type": "object",
+                "properties": {
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "up",
+                      "down",
+                      "flat"
+                    ]
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -5021,7 +5094,8 @@
     "platform.page.v2.86",
     "platform.page.v2.87",
     "platform.page.v2.88",
-    "platform.page.v2.89"
+    "platform.page.v2.89",
+    "platform.page.v2.90"
   ],
   "runtime": {
     "scope": "page",

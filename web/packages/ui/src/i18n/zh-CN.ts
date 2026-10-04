@@ -1,5 +1,12 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Record density": "记录密度",
+ "Compact": "紧凑",
+ "Comfortable": "舒适",
+ "Static note": "静态注释",
+ "Upward annotation": "上行注释",
+ "Downward annotation": "下行注释",
+ "Unchanged annotation": "持平注释",
  "Collection builder": "集合构建器",
  "Collection builder source is unavailable.": "集合构建器来源不可用。",
  "Complete valid original conditions before applying. The previous collection remains applied.": "请在应用前填完有效原条件。之前应用的集合仍然有效。",

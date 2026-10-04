@@ -69,6 +69,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.Map != nil || s.Scene != nil || s.SceneSampleCollectionVariable != "" || s.SceneSampleVariable != "" || s.ScenePartVariable != "" || s.Widget == "record-map" || s.Widget == "scene-3d" || s.Widget == "image-annotation" {
 				return fmt.Errorf("spatial views require a document")
 			}
+			if s.TablePresentation != nil {
+				return fmt.Errorf("table presentation requires a document")
+			}
 			if s.Widget == "ai-assistant" || s.AI != nil {
 				return fmt.Errorf("AI views require a document")
 			}

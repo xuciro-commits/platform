@@ -80,10 +80,11 @@ function Kpi({ spec, data }: { spec: ChartSpec; data: AggregateData }) {
   const format=(value:unknown,row:Record<string,unknown>)=>{if(display&&value==null)return `${display.prefix??""}\u2014${display.suffix??""}`;const numeric=typeof value==="number"&&Number.isFinite(value),short=display?.formatter==="short"&&!data.columns.find(c=>c.name===column)?.money&&numeric;return `${display?.prefix??""}${short?(Math.abs(value)>=1e6?`${(value/1e6).toFixed(1)}M`:Math.abs(value)>=1e3?`${(value/1e3).toFixed(1)}K`:fmt(value,row)):fmt(value,row)}${display?.suffix??""}`;};
   // One value per currency when the measure is money.
   return (
-    <div className="flex flex-wrap gap-4">
+    <div className="flex flex-wrap items-baseline gap-4">
       {(data.rows.length ? data.rows : [{}]).map((r, i) => (
         <span key={i} className={"font-semibold tabular-nums "+color+" "+(display?.variant==="tag"?"rounded-md border border-border px-2 py-1 text-sm":"text-2xl")}>{format(data.rows.length ? r[column] : display&&e.aggregate!=="count"?undefined:0, r)}</span>
       ))}
+      {display?.annotation?.text&&<span className="text-xs text-muted"><span>{t("Static note")}: </span><span aria-label={t({up:"Upward annotation",down:"Downward annotation",flat:"Unchanged annotation"}[display.annotation.direction]??"Unchanged annotation")}>{({up:"↑",down:"↓",flat:"→"} as Record<string,string>)[display.annotation.direction]}</span> {display.annotation.text}</span>}
     </div>
   );
 }

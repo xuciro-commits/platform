@@ -143,7 +143,7 @@ function TableAdapter({ page, section, onSelect, selected, master, narrowed, sha
   const domain = [...((query?.domain as unknown[] | undefined) ?? []), ...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
   return <TableRenderer onNavigate={section.widget==="record-list"&&live?record=>openRecord({type,id:record.id}):undefined} cards={section.widget==="record-list"?{layout:section.recordList?.layout as "grid"|"list"??"grid",labelField:section.cardLabel??"id"}:undefined} key={section.collectionVariable ? type : refField ? `${type}/${refField.name}/${master?.id}` : type}
     source={section.collectionVariable ? source : session?.querySource(section.id ?? `section:${page.sections?.indexOf(section)}`) ?? source}
-    columns={section.tableColumns} showSearch={section.showSearch} keepActive={section.widget==="record-list"||keepActive} selectionSet={selectionSet} inlineEdit={inlineEdit} object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
+    presentation={section.tablePresentation} columns={section.tableColumns} showSearch={section.showSearch} keepActive={section.widget==="record-list"||keepActive} selectionSet={selectionSet} inlineEdit={inlineEdit} object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
     selected={selected} onSelect={onSelect} status={status} plural={info?.plural?.toLowerCase()}/>;
 }
 
@@ -529,13 +529,15 @@ export function SectionView(bound: Bound & Composing) {
   const implementation = widgets.resolveDefinition(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
   const Renderer=implementation?.Renderer;
   const body = Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
+  const template=section.tablePresentation?.titleTemplate,total=bound.window?.error||!["value","empty"].includes(bound.collection?.status??"")?undefined:bound.window?.page?.total;
+  const title=template===undefined?section.title:template.replace("{count}",total===undefined||!Number.isSafeInteger(total)||total<0?"…":total.toLocaleString());
   const inHand = onChoose !== undefined && chosen === at;
   if (implementation?.contract.layoutPreferences.frame === "inline") return <div onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined} className={cn("min-w-0", inHand && "outline outline-2 outline-primary rounded")}><WidgetBoundary key={`${section.id ?? at}/${section.widget}/${section.configVersion}/${JSON.stringify(section)}`}>{body}</WidgetBoundary></div>;
   return (
     <Card onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined}
       className={cn("grid min-w-0 grid-cols-1 content-start gap-2 p-3", nested ? "w-full" : section.width === "half" ? "md:col-span-1" : "md:col-span-2",
         onChoose && "cursor-pointer", inHand && "outline outline-2 outline-primary")}>
-      {section.title && <h3 className="text-sm font-semibold">{section.title}</h3>}
+      {title && <h3 className="text-sm font-semibold">{title}</h3>}
       <WidgetBoundary key={`${section.id ?? at}/${section.widget}/${section.configVersion}/${JSON.stringify(section)}`}>{body}</WidgetBoundary>
     </Card>
   );

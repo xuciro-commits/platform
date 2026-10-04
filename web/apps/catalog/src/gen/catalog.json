@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:7192454386497adf",
+  "revision": "sha256:b9e35a6f20852d73",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4398,6 +4398,7 @@
       "web/packages/build/src/page-editor/widgets/ObservationInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SpatialInspectors.tsx",
+      "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
@@ -4552,6 +4553,7 @@
       "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/MetricInspector.tsx",
       "web/packages/build/src/page-editor/widgets/NoticeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SeparatorInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SpatialInspectors.tsx",

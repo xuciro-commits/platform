@@ -1209,7 +1209,13 @@ export type PageLoop = {
   limit: number;
 };
 
+export type PageMetricAnnotation = {
+  direction: string;
+  text: string;
+};
+
 export type PageMetricPresentation = {
+  annotation?: PageMetricAnnotation;
   prefix?: string;
   suffix?: string;
   formatter: string;
@@ -1478,6 +1484,12 @@ export type PageTableColumn = {
   title?: string;
   width?: number;
   formatter?: string;
+};
+
+export type PageTablePresentation = {
+  density: string;
+  showToolbar: boolean;
+  titleTemplate?: string;
 };
 
 export type PageUnusedWidget = {
@@ -1786,6 +1798,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  tablePresentation?: PageTablePresentation;
   collectionBuilder?: PageCollectionBuilder;
   collectionOutputVariable?: string;
   map?: PageRecordMap;
@@ -2202,7 +2215,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.89",
+  "uiProfile": "platform.page.v2.90",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2295,6 +2308,25 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "tablePresentation": {
+            "type": "object",
+            "properties": {
+              "density": {
+                "type": "string",
+                "enum": [
+                  "compact",
+                  "normal"
+                ]
+              },
+              "showToolbar": {
+                "type": "boolean"
+              },
+              "titleTemplate": {
+                "type": "string",
+                "maxLength": 256
+              }
+            }
           }
         }
       },
@@ -2569,6 +2601,60 @@ export const pageUIManifest = {
           "measure": {
             "type": "string",
             "maxLength": 256
+          },
+          "metricPresentation": {
+            "type": "object",
+            "properties": {
+              "formatter": {
+                "type": "string",
+                "enum": [
+                  "number",
+                  "short"
+                ]
+              },
+              "variant": {
+                "type": "string",
+                "enum": [
+                  "card",
+                  "simple",
+                  "tag"
+                ]
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "warning",
+                  "danger",
+                  "success"
+                ]
+              },
+              "prefix": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "suffix": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "annotation": {
+                "type": "object",
+                "properties": {
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "up",
+                      "down",
+                      "flat"
+                    ]
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -7224,7 +7310,8 @@ export const pageUIManifest = {
     "platform.page.v2.86",
     "platform.page.v2.87",
     "platform.page.v2.88",
-    "platform.page.v2.89"
+    "platform.page.v2.89",
+    "platform.page.v2.90"
   ],
   "runtime": {
     "scope": "page",

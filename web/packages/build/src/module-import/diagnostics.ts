@@ -1,5 +1,9 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "metric-annotation-binding":"Review the fixed direction and text as a labeled static note. Source values do not prove a real period trend; executable or unbounded annotations are refused.",
+ "native-static-metric-note":"The fixed source annotation is preserved and labeled. The original complete aggregate still owns the KPI value.",
+ "table-controls-profile":"Use compact/normal density, a boolean toolbar switch and a bounded literal title with at most one {count} placeholder.",
+ "native-table-controls":"Density and toolbar presentation are retained. Count titles use the current complete authorized total, not downloaded rows; pagination remains independently accessible.",
  "application-interface-binding":"Map every source module port to an exact visible published application variable, with its original type, record object and explicit write permission. Stale versions and ambiguous aliases are refused.",
  "native-application-interface":"The module interface uses original application state and authorized record selection. Shared values retain application instance lifecycle; other pages and overlays read the same original owner.",
  "collection-builder-binding":"Explicitly migrate an empty source array to a same-owner complete original predicate and choose visible typed fields. Cycles, competing writers and unknown settings are refused.",

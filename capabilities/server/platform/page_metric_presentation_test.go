@@ -52,3 +52,22 @@ func TestMetricPresentationAndFrozenMeasure(t *testing.T) {
 		t.Fatal("money lost currency semantics")
 	}
 }
+
+func TestMetricStaticAnnotationProfileAndBudget(t *testing.T) {
+	d := &PageDocument{UIProfile: PageUIProfile()}
+	s := Section{Widget: "metric", MetricPresentation: &PageMetricPresentation{Formatter: "number", Variant: "card", Tone: "neutral", Annotation: &PageMetricAnnotation{Direction: "up", Text: "+3"}}}
+	if err := d.checkMetricPresentation(s); err != nil {
+		t.Fatal(err)
+	}
+	d.UIProfile = "platform.page.v2.89"
+	if d.checkMetricPresentation(s) == nil {
+		t.Fatal("old profile accepted annotation")
+	}
+	d.UIProfile = PageUIProfile()
+	for _, value := range []PageMetricAnnotation{{Direction: "script", Text: "a"}, {Direction: "flat", Text: strings.Repeat("x", 257)}} {
+		s.MetricPresentation.Annotation = &value
+		if d.checkMetricPresentation(s) == nil {
+			t.Fatal("invalid annotation accepted")
+		}
+	}
+}

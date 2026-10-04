@@ -112,3 +112,9 @@ test("RecordPage ignores a completed read for the previous record", async () => 
   expect(screen.queryByRole("heading", { name: "OLD" })).toBeNull();
   expect(screen.getByRole("heading", { name: "NEW" })).toBeTruthy();
 });
+
+test("table toolbar changes keep window paging and density changes do not issue a new read",async()=>{
+ const source:RecordSource={scope:"member",entity:()=>entity,list:vi.fn(),get:vi.fn()},change=vi.fn(),window={query:{sort:["id"],limit:1},page:{records:[record("A")],total:2} as RecordPageData,maxOffset:100,onChange:change};
+ const {rerender}=render(<RecordList source={source} type={entity.type} window={window} tablePresentation={{density:"compact",showToolbar:true}}/>);await waitFor(()=>expect(screen.getByRole("cell",{name:"A"})).toBeTruthy());fireEvent.change(screen.getByRole("combobox",{name:"Record density"}),{target:{value:"normal"}});expect((screen.getByRole("combobox",{name:"Record density"}) as HTMLSelectElement).value).toBe("normal");expect(source.list).not.toHaveBeenCalled();
+ rerender(<RecordList source={source} type={entity.type} window={window} tablePresentation={{density:"compact",showToolbar:false}}/>);expect(screen.queryByRole("combobox",{name:"Record density"})).toBeNull();expect(screen.queryByRole("textbox",{name:"Search"})).toBeNull();expect(screen.queryByRole("combobox",{name:"Sort"})).toBeNull();fireEvent.click(screen.getByRole("button",{name:"Next page"}));expect(change).toHaveBeenCalledWith({offset:1});expect(source.list).not.toHaveBeenCalled();
+});

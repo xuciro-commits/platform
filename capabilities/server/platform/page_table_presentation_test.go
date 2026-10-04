@@ -36,3 +36,36 @@ func TestTablePresentationBoundsAndFieldFormats(t *testing.T) {
 		t.Fatal("unknown field accepted")
 	}
 }
+
+func TestTableControlsFreezeBoundedOriginalCountTitle(t *testing.T) {
+	p := collectionBuilderPage()
+	p.Sections = p.Sections[1:]
+	p.Document.Nodes = map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"table"}}, "table": {Kind: "widget", Section: "table"}}
+	p.Document.Queries = map[string]PageQuery{"result": {Object: p.Object, Limit: 2}}
+	delete(p.Document.Variables, "output")
+	delete(p.Document.Variables, "base")
+	title := "Assets ({count})"
+	p.Sections[0].TablePresentation = &PageTablePresentation{Density: "compact", ShowToolbar: true, TitleTemplate: &title}
+	if err := p.Document.Check(p.Sections); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []func(*Page){func(p *Page) { p.Document.UIProfile = "platform.page.v2.89" }, func(p *Page) { p.Sections[0].TablePresentation.Density = "large" }, func(p *Page) { s := "{count} {count}"; p.Sections[0].TablePresentation.TitleTemplate = &s }, func(p *Page) { s := "{execute()}"; p.Sections[0].TablePresentation.TitleTemplate = &s }, func(p *Page) { p.Sections[0].CollectionVariable = "" }, func(p *Page) { p.Sections[0].Widget = "detail" }} {
+		copy := p
+		section := p.Sections[0]
+		style := *section.TablePresentation
+		section.TablePresentation = &style
+		copy.Sections = []Section{section}
+		doc := *p.Document
+		copy.Document = &doc
+		change(&copy)
+		if copy.Document.Check(copy.Sections) == nil {
+			t.Fatal("invalid table controls accepted")
+		}
+	}
+	empty := ""
+	p.Sections[0].TablePresentation.TitleTemplate = &empty
+	p.Sections[0].TablePresentation.ShowToolbar = false
+	if err := p.Document.Check(p.Sections); err != nil {
+		t.Fatal(err)
+	}
+}

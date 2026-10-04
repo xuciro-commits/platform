@@ -3,6 +3,7 @@ package platform
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // Column presentation never replaces the object's field or edit contract.
@@ -13,7 +14,32 @@ type PageTableColumn struct {
 	Formatter string `json:"formatter,omitempty"`
 }
 
+type PageTablePresentation struct {
+	Density       string  `json:"density"`
+	ShowToolbar   bool    `json:"showToolbar"`
+	TitleTemplate *string `json:"titleTemplate,omitempty"`
+}
+
 func (d *PageDocument) checkTablePresentation(s Section) error {
+	if s.TablePresentation != nil {
+		c := s.TablePresentation
+		if s.Widget != "table" || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.90") || !slices.Contains([]string{"compact", "normal"}, c.Density) {
+			return fmt.Errorf("table controls need their renderer profile and density")
+		}
+		if c.TitleTemplate != nil {
+			text := *c.TitleTemplate
+			plain := strings.Replace(text, "{count}", "", 1)
+			if len(text) > 256 || strings.ContainsAny(plain, "{}") {
+				return fmt.Errorf("table title needs bounded literal text and one count placeholder")
+			}
+			if strings.Contains(text, "{count}") {
+				v := d.Variables[s.CollectionVariable]
+				if v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || v.Type != "object-set" {
+					return fmt.Errorf("table count title needs its original plan collection")
+				}
+			}
+		}
+	}
 	if len(s.TableColumns) == 0 && s.ShowSearch == nil {
 		return nil
 	}

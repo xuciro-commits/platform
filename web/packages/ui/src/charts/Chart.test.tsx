@@ -20,3 +20,10 @@ test("metric display preserves units and abbreviated signed values without chang
 });
 
 test("empty metric means stay absent while empty count stays zero",async()=>{const metric={suffix:"%",formatter:"number",variant:"card",tone:"neutral"},source={aggregate:async()=>({columns:[{name:"avg:qty",title:"Mean",kind:"measure" as const,type:"quantitative" as const}],rows:[]}),scope:"member"};const average={data:{entity:"sample.item"},mark:"kpi",encoding:{y:{field:"qty",aggregate:"avg",type:"quantitative"}},metric} as ChartSpec;const {rerender}=render(<Chart spec={average} source={source}/>);await waitFor(()=>expect(screen.getByText("\u2014%")).toBeTruthy());rerender(<Chart spec={{...spec(""),metric}} source={{aggregate:async()=>data(0),scope:"count"}}/>);await waitFor(()=>expect(screen.getByText("0%")).toBeTruthy());});
+
+test("explicit static notes retain their text without changing original KPI reads and disappear on a rejected source",async()=>{
+ const aggregate=vi.fn(async()=>data(42)),metric={formatter:"number",variant:"card",tone:"neutral",annotation:{direction:"up",text:"+3"}},base={...spec(""),metric} as ChartSpec;
+ const {rerender}=render(<Chart spec={base} source={{aggregate,scope:"one"}}/>);await waitFor(()=>expect(screen.getByText("42")).toBeTruthy());expect(screen.getByText("Static note:")).toBeTruthy();expect(screen.getByText("+3")).toBeTruthy();expect(screen.getByLabelText("Upward annotation")).toBeTruthy();expect(aggregate).toHaveBeenCalledTimes(1);
+ rerender(<Chart spec={{...base,metric:{...base.metric!,annotation:{direction:"down",text:"-1"}}}} source={{aggregate,scope:"one"}}/>);expect(screen.getByText("-1")).toBeTruthy();expect(screen.queryByText("+3")).toBeNull();expect(aggregate).toHaveBeenCalledTimes(1);
+ rerender(<Chart spec={base} source={{aggregate:async()=>{throw Error("Denied")},scope:"two"}}/>);await waitFor(()=>expect(screen.getByRole("alert").textContent).toContain("Denied"));expect(screen.queryByText("+3")).toBeNull();expect(screen.queryByText("42")).toBeNull();
+});

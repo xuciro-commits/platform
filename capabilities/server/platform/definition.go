@@ -104,6 +104,7 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	TablePresentation             *PageTablePresentation `json:"tablePresentation,omitempty"`
 	CollectionBuilder             *PageCollectionBuilder `json:"collectionBuilder,omitempty"`
 	CollectionOutputVariable      string                 `json:"collectionOutputVariable,omitempty"`
 	Map                           *PageRecordMap         `json:"map,omitempty"`
