@@ -706,7 +706,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 				continue
 			}
 		}
-		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || (variable.Source.Kind == "plan" || variable.Mode == "aggregate") || variable.Source.Kind == "property") || allowed[variable.Source.Section] {
+		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || (variable.Source.Kind == "plan" || variable.Mode == "aggregate") || variable.Source.Kind == "property" || variable.Source.Kind == "compute" && variable.Source.Compute != nil) || allowed[variable.Source.Section] {
 			variables[id] = variable
 		}
 	}

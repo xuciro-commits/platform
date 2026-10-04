@@ -67,3 +67,26 @@ func TestComputeResourceThreeConsumersRetainTypedInputAndFrozenOperation(t *test
 		t.Fatal("binary fractional output acquired exact decimal semantics")
 	}
 }
+
+func TestComputeVisibilityRetainsConsumersAndWithdrawsLostRecordInput(t *testing.T) {
+	p, _, _ := computeResourcePage()
+	visible := p.Document.Visible(p.Sections)
+	if visible.Variables["number"].Source == nil || visible.Variables["exact"].Source == nil || visible.Nodes["gauge"].Section != "gauge" || visible.Nodes["mini"].Section != "mini" || visible.Nodes["notice"].Section != "notice" {
+		t.Fatal("visible calculation and its three consumers were pruned")
+	}
+	if err := visible.Check(p.Sections); err != nil {
+		t.Fatal(err)
+	}
+	retired := p.Document.Visible(p.Sections[1:])
+	if _, ok := retired.Variables["number"]; ok {
+		t.Fatal("calculation survived a missing original record")
+	}
+	if _, ok := retired.Variables["exact"]; ok {
+		t.Fatal("exact calculation survived a missing original record")
+	}
+	for _, id := range []string{"gauge", "mini", "notice"} {
+		if _, ok := retired.Nodes[id]; ok {
+			t.Fatal("consumer survived its unavailable calculation")
+		}
+	}
+}

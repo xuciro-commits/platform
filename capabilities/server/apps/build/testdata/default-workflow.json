@@ -847,6 +847,20 @@
       "recordVariable": "import_variable_1",
       "actions": [
         "build.asset.update"
+      ],
+      "actionDefaults": [
+        {
+          "parameter": "status",
+          "field": "state"
+        },
+        {
+          "parameter": "priority",
+          "field": "priority"
+        },
+        {
+          "parameter": "owner",
+          "field": "owner"
+        }
       ]
     },
     {

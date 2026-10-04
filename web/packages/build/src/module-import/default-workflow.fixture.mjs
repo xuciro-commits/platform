@@ -5,6 +5,7 @@ export function defaultWorkflowFixture(profile){
  f.bindings.regions={sWorkflowRoot:{maxHeight:960},sDrawerRoot:{maxHeight:640}};
  f.bindings.fields.WorkOrder.assetId='asset';f.bindings.fields.WorkOrder.id='id';
  f.bindings.collaboration={wComments:{recordVarId:'selectedWorkOrder'},wMediaUpload:{recordVarId:'selectedWorkOrder'}};
+ f.bindings.actionDefaults.wInlineAction=[{parameter:'status',field:'state'},{parameter:'priority',field:'priority'},{parameter:'owner',field:'owner'}];
  f.bindings.actionTables={wActionTable:[{parameter:'status',field:'state'},{parameter:'priority',field:'priority'},{parameter:'owner',field:'owner'}]};
  const conversation={ref:{app:'build',kind:'function',name:'asset-assistant'},sourceVersion:'1.function-1'};
  f.target.definitions.push({ref:conversation.ref,version:conversation.sourceVersion,function:{object:asset.name,conversation:true,fields:['name','state','pressure','temperature','availability'],output:[{name:'reply',type:'string',required:true}]}});

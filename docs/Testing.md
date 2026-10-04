@@ -24,7 +24,7 @@
 
 新增测试先确认它能发现哪种实际回归、哪一层是规范主人。已经由服务端/契约证明的规则不在浏览器逐项重测；浏览器验证按钮、表单和页面确实接通相同能力。保留有独立价值的拒绝、权限与持久化回归；不按代码覆盖率或测试行数扩充测试。
 
-本轮 ADR-0046 默认 Module 融合按整页交付：Maintenance（包含计算资源）、Map、Workflow、Telemetry 不再拆分微批次。编码期间只运行 Go 全量与 `scripts/verify.sh web-check`；不新增组件级 Playwright、录屏或微步浏览器检查。七个页面共同冻结后，只运行一条跨页集成链路。无关旧 E2E 的间歇焦点/超时不触发连续复跑，也不阻塞已通过的本批轻检查。
+本轮 ADR-0046 默认 Module 融合按整页交付：Maintenance（包含计算资源）、Map、Workflow、Telemetry 不再拆分微批次。编码期间只运行 Go 全量与 `scripts/verify.sh web-check`；不新增组件级 Playwright、录屏或微步浏览器检查。七个页面共同冻结后，只运行一条跨页集成链路。 当前统一入口为 `pnpm -C web/e2e exec playwright test tests/page-default-operations.spec.ts --workers=1`；须按[部署说明](../deploy/local/README.md)配置真实编译/计算 worker，并传入两项私有 socket 环境变量。该路线用生产编译器和实时宿主目录准备完整七页，验证共同候选激活后的跨页行为；逐页映射对话框由已有导入路线覆盖。无关旧 E2E 的间歇焦点/超时不触发连续复跑，也不阻塞已通过的本批轻检查。
 
 ## 自动检查的归属
 

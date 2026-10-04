@@ -19,12 +19,13 @@ export function RecordCollaborationRenderer({sceneSampleObject,sceneWindow,scene
  const current=useRef({identity,text:scalar(draft),file:scalar(fileValue),page:scalar(pageValue),mounted:true});current.current={identity,text:scalar(draft),file:scalar(fileValue),page:scalar(pageValue),mounted:current.current.mounted};
  const [comments,setComments]=useState<{identity:string;records:RecordComment[];total:number}>(),[readError,setReadError]=useState<{identity:string;key?:string;message:string}>(),[attachment,setAttachment]=useState<{key:string;file:AttachedFile}>(),[blob,setBlob]=useState<{key:string;value:Blob}>();
  const [selected,setSelected]=useState<{identity:string;file:File}>(),[busy,setBusy]=useState(false),[mutationError,setMutationError]=useState<{identity:string;message:string}>(),[refresh,setRefresh]=useState(0);
+ const pickerLease=useRef<{identity:string;active:()=>boolean}|undefined>(undefined);
  const mutation=useRef<MutationLease|undefined>(undefined),confirmedAsset=useRef<{identity:string;record:EntityRecord;info:NonNullable<ReturnType<RecordSource["entity"]>>}|undefined>(undefined);
- if(ready&&record&&target){const info=source.entity(target.type);if(info)confirmedAsset.current={identity,record,info};}
+ if(ready&&record&&target){const lease=session&&slot?session.captureRecordLease(slot):undefined;if(lease)pickerLease.current={identity,active:lease};const info=source.entity(target.type);if(info)confirmedAsset.current={identity,record,info};}
  useEffect(()=>{current.current.mounted=true;return()=>{current.current.mounted=false;};},[]);
  const capture=()=>{const lease=session&&slot?session.captureRecordLease(slot):undefined;if(!lease||!target)return undefined;const captured=identity;return ()=>current.current.mounted&&current.current.identity===captured&&lease();};
  const mutationLease=()=>{const prior=mutation.current;if(prior?.identity===identity&&prior.active())return prior;const active=capture();if(!active||!target)return;const next={identity,active,service:createRecordCollaboration({...host,source},target,active,newId)};mutation.current=next;return next;};
- useEffect(()=>{setSelected(undefined);setMutationError(undefined);setBusy(false);if(mutation.current?.identity!==identity)mutation.current=undefined;},[identity]);
+ useEffect(()=>{setSelected(previous=>previous?.identity===identity?previous:undefined);setMutationError(previous=>previous?.identity===identity?previous:undefined);setBusy(false);if(mutation.current?.identity!==identity)mutation.current=undefined;},[identity]);
  useEffect(()=>{
   if(!ready||kind!=="record-comments"||!target)return;let active=true;setComments(undefined);setReadError(undefined);
   void source.list("platform.comment",{domain:[["target","=",`${target.type}/${target.id}`]],sort:["created","id"],limit:limits.maxCommentsWindow}).then(page=>{
@@ -57,7 +58,7 @@ export function RecordCollaborationRenderer({sceneSampleObject,sceneWindow,scene
   catch(failure){if(active())setMutationError({identity,message:errorText(failure)});}finally{if(active())setBusy(false);}
  };
  const upload=async()=>{
-  const file=selected?.identity===identity?selected.file:undefined;if(!file||busy)return;const lease=mutationLease();if(!lease)return;const {active,service}=lease;setBusy(true);setMutationError(undefined);
+  const file=selected?.identity===identity?selected.file:undefined;if(!ready||!file||busy)return;const lease=mutationLease();if(!lease)return;const {active,service}=lease;setBusy(true);setMutationError(undefined);
   try {const fileID=await service.upload(file);if(fileID&&active()){onFileID?.(fileID);if(selected?.file===file)setSelected(undefined);setRefresh(n=>n+1);}}
   catch(failure){if(active())setMutationError({identity,message:errorText(failure)});}finally{if(active())setBusy(false);}
  };
@@ -71,6 +72,10 @@ export function RecordCollaborationRenderer({sceneSampleObject,sceneWindow,scene
   const visible=ready&&attachment.key===fileKey&&!failure,file=attachment.file;
   return <>{!visible&&(status==="error"?<Panel role="alert">{t("The original record could not be confirmed.")}</Panel>:failure?<Panel role="alert">{t(failure)}</Panel>:<p role="status">{t("Confirming original attachment access…")}</p>)}<div hidden={!visible}><Scene3D attachment={file} blob={blob.value} scope={identity} asset={confirmedAsset.current} sample={visible?(sceneWindow?latest?.key===latestKey?latest.value:undefined:sample):undefined} config={scene} selected={scalar(part)||undefined} enabled={visible&&writable} onSelect={visible&&writable?value=>{const active=capture();if(active?.())onPart?.(value);}:undefined}/></div></>;
  }
+ if(kind==="record-uploader"&&status!=="error"&&source.scope===host.source.scope&&confirmedAsset.current?.identity===identity){
+  const file=attachment?.key===fileKey?attachment.file:undefined;
+  return <>{!ready&&<p role="status">{t("Confirming record access…")}</p>}<div hidden={!ready}><RecordUploader label={label} file={selected?.identity===identity?selected.file:undefined} currentFile={file} busy={busy} error={failure?t(failure):undefined} enabled={writable&&host.can("files.file.attach")} onFile={writable&&host.can("files.file.attach")?file=>{const lease=pickerLease.current;if(lease?.identity===current.current.identity&&lease.active()){setSelected({identity:lease.identity,file});setMutationError(undefined);}}:undefined} onUpload={upload} onClear={()=>setSelected(undefined)}/></div></>;
+ }
  if(status==="error")return <Panel role="alert">{t("The original record could not be confirmed.")}</Panel>;
  if(status==="pending")return <p role="status">{t("Confirming record access…")}</p>;
  if(!ready)return <p role="status">{t("Select a confirmed original record for collaboration.")}</p>;
@@ -82,7 +87,6 @@ export function RecordCollaborationRenderer({sceneSampleObject,sceneWindow,scene
  }
 
  const file=attachment?.key===fileKey?attachment.file:undefined;
- if(kind==="record-uploader")return <RecordUploader label={label} file={selected?.identity===identity?selected.file:undefined} currentFile={file} busy={busy} error={failure?t(failure):undefined} enabled={writable&&host.can("files.file.attach")} onFile={writable&&host.can("files.file.attach")?file=>{setSelected({identity,file});setMutationError(undefined);}:undefined} onUpload={upload} onClear={()=>setSelected(undefined)}/>;
  if(failure)return <Panel role="alert">{t(failure)}</Panel>;
  if(!fileID)return <p role="status">{t("No confirmed attachment selected.")}</p>;
  if(!file)return <p role="status">{t("Confirming original attachment access…")}</p>;
