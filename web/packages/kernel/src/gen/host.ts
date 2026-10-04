@@ -1184,6 +1184,32 @@ export type PageNotice = {
   tone: string;
 };
 
+export type PageObservation = {
+  kind: string;
+  timeField: string;
+  signals: PageObservationSignal[];
+  metadata?: PageObservationMetadata;
+  rowHeight?: number;
+  assetObject?: AssetRef;
+  assetField?: string;
+  rowOutput?: string;
+  assetOutput?: string;
+  averageField?: string;
+};
+
+export type PageObservationMetadata = {
+  plant?: string;
+  device?: string;
+  asset?: string;
+  status?: string;
+};
+
+export type PageObservationSignal = {
+  field: string;
+  unit: string;
+  group?: string;
+};
+
 export type PageOverlay = {
   root: string;
   kind: string;
@@ -1658,6 +1684,14 @@ export type SavedView = {
 };
 
 export type Section = {
+  observation?: PageObservation;
+  observationHistoryVariable?: string;
+  observationContextVariable?: string;
+  observationSignalVariable?: string;
+  observationThresholdVariable?: string;
+  observationRowsVariable?: string;
+  observationCountVariable?: string;
+  observationMeanVariable?: string;
   actionTable?: PageActionTable;
   notepadVariable?: string;
   analysis?: PageCollectionAnalysis;
@@ -2056,7 +2090,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.81",
+  "uiProfile": "platform.page.v2.82",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -6404,6 +6438,116 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "observation",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.82",
+      "title": "Business observations",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "history",
+          "bindingField": "observationHistoryVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "context",
+          "bindingField": "observationContextVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "signal",
+          "bindingField": "observationSignalVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.82",
+          "writable": true
+        },
+        {
+          "id": "threshold",
+          "bindingField": "observationThresholdVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.82",
+          "writable": true
+        },
+        {
+          "id": "rows",
+          "bindingField": "observationRowsVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.82",
+          "writable": true
+        },
+        {
+          "id": "count",
+          "bindingField": "observationCountVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "mean",
+          "bindingField": "observationMeanVariable",
+          "type": "number",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.82"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -6487,7 +6631,8 @@ export const pageUIManifest = {
     "platform.page.v2.78",
     "platform.page.v2.79",
     "platform.page.v2.80",
-    "platform.page.v2.81"
+    "platform.page.v2.81",
+    "platform.page.v2.82"
   ],
   "runtime": {
     "scope": "page",
@@ -6660,6 +6805,11 @@ export const pageUIManifest = {
         "kind": "record",
         "type": "record",
         "widget": "graph-explorer"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "observation"
       }
     ],
     "loop": {
@@ -7137,6 +7287,12 @@ export const pageUIManifest = {
       "maxActionRows": 50,
       "maxTiles": 8,
       "maxParameters": 16
+    },
+    "observation": {
+      "requiredUIProfile": "platform.page.v2.82",
+      "maxSignals": 100,
+      "maxRecords": 100,
+      "maxWindowRows": 100000
     }
   },
   "layout": {

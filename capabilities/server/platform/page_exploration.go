@@ -214,12 +214,24 @@ func (s Section) CheckResourceList(info EntityInfo) error {
 	}
 	return nil
 }
-func (p Page) GraphOutputObject(section, port, variable string) AssetRef {
+func (p Page) RecordOutputObject(section, port, variable string) AssetRef {
 	if port == "" {
 		return AssetRef{}
 	}
 	for _, s := range p.Sections {
-		if s.ID != section || s.Widget != "graph-explorer" || s.GraphExplorer == nil {
+		if s.ID != section {
+			continue
+		}
+		if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "table" {
+			if port == "row" && variable == s.Observation.RowOutput {
+				return p.ObservationObject(s)
+			}
+			if port == "asset" && variable == s.Observation.AssetOutput && s.Observation.AssetObject != nil {
+				return *s.Observation.AssetObject
+			}
+			continue
+		}
+		if s.Widget != "graph-explorer" || s.GraphExplorer == nil {
 			continue
 		}
 		for _, o := range s.GraphExplorer.Outputs {
@@ -237,6 +249,9 @@ func (p Page) CheckExplorationBinding(s Section) error {
 			object := s.Object
 			if object.Name == "" {
 				object = p.Object
+			}
+			if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "statistics" && s.Observation.AssetObject != nil {
+				object = *s.Observation.AssetObject
 			}
 			if original := p.RecordResourceObject(s.RecordVariable); original.Name == "" || original != object {
 				return fmt.Errorf("graph output consumer differs from its original full object identity")

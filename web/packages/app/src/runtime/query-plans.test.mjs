@@ -97,6 +97,15 @@ function avatarPlans(owner){
  return {plans,variables,sections,values,entity,named};
 }
 const compileAvatar=f=>Object.fromEntries(compileQueryPlans(f.plans,f.variables,()=>f.values,f.entity,f.named,contract,f.sections));
+test("observation statistics consume the declared original asset port and reject history feedback or an invented output",()=>{
+ for(const owner of [undefined,"panel"]){const f=avatarPlans(owner),producer=f.sections[0],consumer=f.sections[1];producer.widget="observation";producer.observation={kind:"table",assetOutput:"active",assetObject:producer.object};f.variables.active.source.port="asset";consumer.widget="observation";delete consumer.avatar;consumer.observation={kind:"statistics"};consumer.recordVariable="active";consumer.observationContextVariable="related";
+  if(owner){f.variables.active.scope="page";delete f.variables.active.owner;delete f.plans.assets.owner;f.variables.assetWindow.scope="page";delete f.variables.assetWindow.owner;}
+  assert.equal(compileAvatar(f).related.status,"value");assert.deepEqual(compileAvatar(f).related.query.domain,[["shift","=","night"],["asset","=","ASSET-A"]]);
+  const port=producer.observation.assetOutput;producer.observation.assetOutput="invented";assert.equal(compileAvatar(f).related.status,"error");producer.observation.assetOutput=port;
+  producer.observationContextVariable="related";assert.equal(compileAvatar(f).related.status,"error");delete producer.observationContextVariable;
+  consumer.observationContextVariable="all";assert.equal(compileAvatar(f).related.status,"error");
+ }
+});
 test("an avatar consumes the confirmed original record from an independent page or overlay plan and preserves the typed named domain",()=>{
  for(const owner of [undefined,"panel"]){const f=avatarPlans(owner),compiled=compileAvatar(f);assert.equal(compiled.assets.status,"value");assert.deepEqual(compiled.assets.query.domain,[["active","=",true]]);assert.equal(compiled.related.status,"value");assert.deepEqual(compiled.related.query.domain,[["shift","=","night"],["asset","=","ASSET-A"]]);assert.deepEqual(compiled.related.query.sort,["id"]);assert.equal(compiled.related.query.limit,6);
   for(const status of ["empty","pending","error"])assert.equal(compileAvatar({...f,values:{active:{status,code:"Denied"}}}).related.status,status);

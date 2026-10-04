@@ -1,3 +1,4 @@
+import {originalRecordObject} from "./record-binding";
 import type {Api} from "@platform/kernel";
 import {loopOwner,overlayOwner} from "../page-layout";
 import type {AuthoringSection} from "./draft";
@@ -9,10 +10,10 @@ export const requiresOriginalRecord=(section:AuthoringSection)=>isCollaborationW
 /** The shared record resource remains attached to its actual compatible producer. */
 export function collaborationRecordSource(document:Api.PageDocument,sections:AuthoringSection[],variable:string,consumer:string,pageObject:string):{object:string;producer:AuthoringSection}|undefined {
  const value=document.variables?.[variable],producer=sections.find(s=>s.id===value?.source?.section),leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===consumer)?.[0],origin=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===producer?.id)?.[0];
- if(!leaf||!origin||value?.type!=="record"||value.mode!=="resource"||value.source?.kind!=="record"||!producer||!["table","record-list","kanban","record-calendar","record-picker","record-leaderboard","record-scatter","resource-list","graph-explorer"].includes(producer.widget)||loopOwner(document,leaf)||loopOwner(document,origin))return undefined;
+ if(!leaf||!origin||value?.type!=="record"||value.mode!=="resource"||value.source?.kind!=="record"||!producer||!["table","record-list","kanban","record-calendar","record-picker","record-leaderboard","record-scatter","resource-list","graph-explorer","observation"].includes(producer.widget)||loopOwner(document,leaf)||loopOwner(document,origin))return undefined;
  const owner=overlayOwner(document,leaf);
  if(owner!==overlayOwner(document,origin)||value.scope!==(owner?"overlay":"page")||value.owner!==owner)return undefined;
- if(producer.widget==="graph-explorer"){if(producer.id===consumer)return undefined;const output=producer.graphExplorer?.outputs?.find(o=>o.id===value.source?.port&&o.variable===variable);return output?{object:output.object.name,producer}:undefined;}
+ if(producer.widget==="observation"||producer.widget==="graph-explorer"){if(producer.id===consumer)return undefined;const original=originalRecordObject(document,sections,variable,{app:pageObject.split(".")[0]!,kind:"object",name:pageObject});return original?{object:original.name,producer}:undefined;}
  const object=producer.object||pageObject,collection=document.variables?.[producer.collectionVariable??""],query=document.queries?.[collection?.source?.query??""];
  if(collection){const target=query?.object||collection.source?.object;if(!(collection.mode==="resource"&&collection.source?.kind==="plan"||collection.mode==="shared"&&collection.type==="object-set")||!target||target.name!==object)return undefined;}
  return {object,producer};

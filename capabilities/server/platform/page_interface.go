@@ -79,7 +79,7 @@ func (p Page) RecordVariableObject(variable string) string {
 	section := ""
 	if v.Source != nil {
 		if v.Source.Port != "" {
-			return p.GraphOutputObject(v.Source.Section, v.Source.Port, variable).Name
+			return p.RecordOutputObject(v.Source.Section, v.Source.Port, variable).Name
 		}
 		if v.Source.Kind == "record" {
 			section = v.Source.Section

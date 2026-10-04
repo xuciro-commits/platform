@@ -4,12 +4,14 @@ import { variablePlan } from "./query-plans";
 import type { VariableResult } from "./variables";
 
 export const recordSlot = (object: string, name?: string, overlay?:string) => `${overlay?`overlay:${overlay}/`:""}${name ? `selection:${name}` : "object"}/${object}`;
-export const graphOutputSlot=(page:Api.Page,section:Api.Section,port:string)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-output/${section.id??""}/${port}`;
+export const recordOutputSlot=(page:Api.Page,section:Api.Section,port:string)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-output/${section.id??""}/${port}`;
+export function recordOutputObject(page:Api.Page,section:Api.Section,port:string,variable?:string):Api.AssetRef|undefined {if(section.widget==="graph-explorer")return section.graphExplorer?.outputs?.find(o=>o.id===port&&(!variable||o.variable===variable))?.object;const c=section.observation;if(section.widget!=="observation"||c?.kind!=="table")return;const id=port==="row"?c.rowOutput:port==="asset"?c.assetOutput:undefined;if(!id||variable&&variable!==id)return;if(port==="asset")return c.assetObject;const v=page.document?.variables?.[section.collectionVariable??""];return v?.source?.kind==="plan"?page.document?.queries?.[v.source.query??""]?.object:undefined;}
+
 export function recordResourceSlot(page:Api.Page,variable:string|undefined):string|undefined {
  const source=page.document?.variables?.[variable??""]?.source,producer=page.sections?.find(s=>s.id===source?.section);
  if(!source||source.kind!=="record"||!producer)return;
- if(source.port)return producer.widget==="graph-explorer"&&producer.graphExplorer?.outputs?.some(o=>o.id===source.port&&o.variable===variable)?graphOutputSlot(page,producer,source.port):undefined;
- return selectionSlot(page,producer);
+ if(source.port)return recordOutputObject(page,producer,source.port,variable)?recordOutputSlot(page,producer,source.port):undefined;
+ return ["graph-explorer","observation"].includes(producer.widget)?undefined:selectionSlot(page,producer);
 }
 
 /** Presentation ownership comes from the one layout document. */
@@ -51,7 +53,7 @@ export function overlaySessionScopes(page:Api.Page) {
   const sections=(page.sections??[]).filter((s)=>[...nodes].some((id)=>document?.nodes[id]?.section===s.id));
   return [owner,{
    queries:new Set([...sections.map((s)=>s.id??""),...Object.entries(document?.queries??{}).filter(([,q])=>q.owner===owner).map(([id])=>`plan/${id}`)]),
-   selections:new Set(sections.flatMap(s=>[selectionSlot(page,s),...(s.graphExplorer?.outputs??[]).map(o=>graphOutputSlot(page,s,o.id)),...(s.selectionSetVariable?[selectionSetSlot(page,s)]:[])]).filter((key)=>key.startsWith(`overlay:${owner}/`))),
+   selections:new Set(sections.flatMap(s=>[selectionSlot(page,s),...(s.graphExplorer?.outputs??[]).map(o=>recordOutputSlot(page,s,o.id)),...(s.observation?.kind==="table"?["row","asset"].filter(port=>recordOutputObject(page,s,port)).map(port=>recordOutputSlot(page,s,port)):[]),...(s.selectionSetVariable?[selectionSetSlot(page,s)]:[])]).filter((key)=>key.startsWith(`overlay:${owner}/`))),
    filters:new Set(sections.filter((s)=>s.widget==="filter").map((s)=>filterSlot(s.object?.name||page.object.name,filterOwner(page,s))).filter((key)=>key.startsWith(`overlay:${owner}/`))),
    loops:new Set([...nodes].filter((id)=>document?.nodes[id]?.kind==="loop")),
   }];
@@ -68,7 +70,7 @@ export function resourceVariables(page: Api.Page, snapshot: PageSessionSnapshot)
     const section = page.sections?.find((section) => section.id === source.section);
     if (!section) return [[id, { status: "error", code: "Resource source is unavailable" } as VariableResult]];
     if(page.document?.unusedWidgets?.some(entry=>page.document?.nodes[entry.node]?.section===section.id))return [[id,{status:"empty"} as VariableResult]];
-    const object = section.graphExplorer?.outputs?.find(o=>o.id===source.port)?.object.name ?? (section.object?.name || page.object.name);
+    const object = recordOutputObject(page,section,source.port??"",id)?.name ?? (section.object?.name || page.object.name);
     let value: VariableResult;
     if (source.kind === "record") {
       const slot=recordResourceSlot(page,id),state=slot?snapshot.records[slot]:undefined;

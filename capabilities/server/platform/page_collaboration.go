@@ -117,13 +117,13 @@ func (p Page) RecordResourceObject(variable string) AssetRef {
 		return AssetRef{}
 	}
 	if v.Source.Port != "" {
-		return p.GraphOutputObject(v.Source.Section, v.Source.Port, variable)
+		return p.RecordOutputObject(v.Source.Section, v.Source.Port, variable)
 	}
 	for _, s := range p.Sections {
 		if s.ID != v.Source.Section {
 			continue
 		}
-		if s.Widget == "graph-explorer" {
+		if s.Widget == "graph-explorer" || s.Widget == "observation" {
 			return AssetRef{}
 		}
 		compatible := false

@@ -511,6 +511,12 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 							continue
 						}
 					}
+					if page.CheckObservation(section, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+						e, ok := entities[ref.Name]
+						return e, ok && e.App == ref.App
+					}) != nil {
+						continue
+					}
 					if section.CheckCollectionAnalysis(shown) != nil {
 						if section.Analysis != nil && section.Analysis.Kind == "record-axes" && page.Document != nil {
 							doc := *page.Document

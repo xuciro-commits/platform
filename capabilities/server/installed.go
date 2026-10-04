@@ -332,6 +332,12 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return err
 			}
 		}
+		if err := p.CheckObservation(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+			actual, ok := t.entity(ref.Name)
+			return actual, ok && actual.App == ref.App
+		}); err != nil {
+			return err
+		}
 		if err := s.CheckCollectionAnalysis(info); err != nil {
 			return err
 		}
@@ -367,12 +373,24 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			v := p.Document.Variables[s.RecordVariable]
 			if v.Source != nil && v.Source.Port != "" {
 				ref := p.RecordResourceObject(s.RecordVariable)
-				if ref.App != info.App || ref.Name != info.Type {
+				expected := info
+				if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "statistics" && s.Observation.AssetObject != nil {
+					actual, ok := t.entity(s.Observation.AssetObject.Name)
+					if !ok {
+						return fmt.Errorf("%s: observation asset is unavailable", where)
+					}
+					expected = actual
+				}
+				if ref.App != expected.App || ref.Name != expected.Type {
 					return fmt.Errorf("%s: graph output consumer does not match its actual entity owner", where)
 				}
 			}
 		}
 		if s.RecordVariable != "" {
+			expectedType := info.Type
+			if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "statistics" && s.Observation.AssetObject != nil {
+				expectedType = s.Observation.AssetObject.Name
+			}
 			producer := p.Document.LoopRecordSource(s.RecordVariable)
 			sourceType := p.RecordVariableObject(s.RecordVariable)
 			for _, candidate := range p.Sections {
@@ -383,7 +401,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					}
 				}
 			}
-			if sourceType != info.Type {
+			if sourceType != expectedType {
 				return fmt.Errorf("%s: item record type does not match the widget object", where)
 			}
 		}

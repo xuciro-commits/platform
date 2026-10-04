@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Business observations": "业务观测",
+ "Original observation statistics could not be read.": "无法读取原观测统计。",
+ "Original observation bindings are unavailable.": "原观测绑定不可用。",
+ "Original business-time observations; this page is a window of the complete authorized set.": "按原业务时间显示观测；当前页是完整受权集合中的一个窗口。",
+ "Original availability or history could not be read.": "无法读取原可用性或历史。",
+ "Original observation statistics bindings are unavailable or incompatible.": "原观测统计绑定不可用或不兼容。",
  "Original window statistics reader": "原窗口统计读者",
  "Read recent business-time window statistics through the original authorized aggregate owner.": "通过原受权聚合归属方，读取最近业务时间窗口统计。",
  "The original host owns matching membership, time order, numeric semantics and the atomic read. The reader validates exact request echoes and discards old scopes, revisions or attempts without downloading records or retrying another mode.": "原宿主管理匹配成员、时间顺序、数值语义和原子读取。读者校验精确请求回显并丢弃旧作用域、版本或请求，不下载记录或切换模式重试。",

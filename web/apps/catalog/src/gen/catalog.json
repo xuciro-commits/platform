@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:2a18164a46e6e870",
+  "revision": "sha256:2dde5d6277219c10",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4233,6 +4233,7 @@
       "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/ObservationInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
@@ -4271,6 +4272,7 @@
       "web/packages/app/src/semantic/Selector.tsx",
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
+      "web/packages/app/src/widgets/Observation.tsx",
       "web/packages/app/src/widgets/RecordWork.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
@@ -4306,6 +4308,7 @@
       "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/MetricInspector.tsx",
       "web/packages/build/src/page-editor/widgets/NoticeInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/ObservationInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ProgressInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RangeInspector.tsx",
@@ -4411,6 +4414,7 @@
       "web/packages/app/src/widgets/Kanban.tsx",
       "web/packages/app/src/widgets/Leaderboard.tsx",
       "web/packages/app/src/widgets/Notice.tsx",
+      "web/packages/app/src/widgets/Observation.tsx",
       "web/packages/app/src/widgets/Pivot.tsx",
       "web/packages/app/src/widgets/Progress.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
@@ -4569,7 +4573,8 @@
       "web/packages/mes/src/index.tsx"
     ],
     "ui/observation-statistics": [
-      "web/packages/app/src/catalog.examples.tsx"
+      "web/packages/app/src/catalog.examples.tsx",
+      "web/packages/app/src/widgets/Observation.tsx"
     ],
     "ui/datetime-input": [
       "web/packages/app/src/exploration/observation-reader.ts",
@@ -4726,6 +4731,15 @@
     ],
     "ui/record-leaderboard": [
       "web/packages/app/src/widgets/Leaderboard.tsx"
+    ],
+    "ui/observation-table": [
+      "web/packages/app/src/widgets/Observation.tsx"
+    ],
+    "ui/observation-availability": [
+      "web/packages/app/src/widgets/Observation.tsx"
+    ],
+    "ui/observation-time-series": [
+      "web/packages/app/src/widgets/Observation.tsx"
     ],
     "ui/pivot": [
       "web/packages/app/src/widgets/Pivot.tsx"

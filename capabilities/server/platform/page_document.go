@@ -63,7 +63,7 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
-			if s.Widget == "action-table" || s.Widget == "notepad" || s.ActionTable != nil || s.NotepadVariable != "" {
+			if s.Widget == "observation" || s.hasObservationConfiguration() || s.Widget == "action-table" || s.Widget == "notepad" || s.ActionTable != nil || s.NotepadVariable != "" {
 				return fmt.Errorf("record work requires a document")
 			}
 			if s.Widget == "collection-analysis" || s.Analysis != nil || s.AnalysisXVariable != "" || s.AnalysisYVariable != "" || s.AnalysisCountVariable != "" || s.AnalysisMeanVariable != "" {
@@ -281,6 +281,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		if err := d.checkTerms(section); err != nil {
 			return err
 		}
+		if err := d.checkObservation(section, sections); err != nil {
+			return err
+		}
 		if err := d.checkRecordWork(section); err != nil {
 			return err
 		}
@@ -388,7 +391,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 		if section.CollectionVariable != "" {
 			v, ok := d.Variables[section.CollectionVariable]
-			if section.FilterVariable != "" || !ok || v.Source == nil || !(v.Mode == "resource" && (v.Scope == "page" || v.Scope == "overlay") && v.Source.Kind == "plan" || v.Mode == "shared" && v.Scope == "application" && v.Source.Kind == "application" && v.Source.Object != nil) || section.Query.Name != "" || section.ParentSelection != "" || section.Relation != "" || section.RecordVariable != "" {
+			if section.FilterVariable != "" || !ok || v.Source == nil || !(v.Mode == "resource" && (v.Scope == "page" || v.Scope == "overlay") && v.Source.Kind == "plan" || v.Mode == "shared" && v.Scope == "application" && v.Source.Kind == "application" && v.Source.Object != nil) || section.Query.Name != "" || section.ParentSelection != "" || section.Relation != "" || section.RecordVariable != "" && !(section.Widget == "observation" && section.Observation != nil && section.Observation.Kind == "statistics") {
 				return fmt.Errorf("page section %s needs an exclusive plan window binding", section.ID)
 			}
 		}
@@ -405,8 +408,8 @@ func (d *PageDocument) Check(sections []Section) error {
 			for _, resource := range pageWidgets.Runtime.Resources {
 				if section.ID == variable.Source.Section && (section.Widget == resource.Widget || PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordList.RequiredUIProfile) && slices.Contains(resource.Widgets, section.Widget)) && variable.Source.Kind == resource.Kind {
 					if resource.Kind == "record" {
-						if section.Widget == "graph-explorer" {
-							matched := section.GraphExplorer != nil && slices.ContainsFunc(section.GraphExplorer.Outputs, func(o PageGraphOutput) bool { return o.ID == variable.Source.Port && o.Variable == id })
+						if section.Widget == "graph-explorer" || section.Widget == "observation" {
+							matched := section.HasRecordOutput(variable.Source.Port, id)
 							if !matched {
 								return fmt.Errorf("graph record source needs its declared original typed port")
 							}
@@ -643,7 +646,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		if variable.Source != nil && variable.Source.Port != "" {
 			found := false
 			for _, s := range sections {
-				if s.ID == variable.Source.Section && s.GraphExplorer != nil && slices.ContainsFunc(s.GraphExplorer.Outputs, func(o PageGraphOutput) bool { return o.Variable == id && o.ID == variable.Source.Port }) {
+				if s.ID == variable.Source.Section && s.HasRecordOutput(variable.Source.Port, id) {
 					found = true
 				}
 			}
@@ -750,7 +753,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 							}
 						}
 					}
-					for _, id := range s.ContextViewVariables() {
+					for _, id := range append(s.ContextViewVariables(), s.ObservationVariables()...) {
 						if id != "" {
 							if _, ok := variables[id]; !ok {
 								return false

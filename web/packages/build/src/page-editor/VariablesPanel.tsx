@@ -1,3 +1,4 @@
+import {originalRecordObject} from "./record-binding";
 import type { Api } from "@platform/kernel";
 import { parsePageDecimal,isPageDecimalDraft,SemanticObjectSelect, pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";
 import { Button, Card, Checkbox, Input, PropertyList, Select, t } from "@platform/ui";
@@ -11,15 +12,15 @@ const expression = (op: string): Api.PageExpression => {
   return { op, args: Array.from({ length: contract.minArgs }, () => ({ literal: initial(contract.input) })) };
 };
 
-export function VariablesPanel({ document, sections, values, onChange, object, application = false }: { object?:Api.AssetRef; application?: boolean; document: Api.PageDocument; sections: { id?: string; widget: string; title?: string;object?:string|Api.AssetRef }[]; values: Record<string, PageVariableValue>; onChange: (document: Api.PageDocument) => void }) {
+export function VariablesPanel({ document, sections, values, onChange, object, application = false }: { object?:Api.AssetRef; application?: boolean; document: Api.PageDocument; sections: (Pick<Api.Section,"id"|"widget"|"title"|"graphExplorer"|"observation"|"collectionVariable">&{object?:string|Api.AssetRef})[]; values: Record<string, PageVariableValue>; onChange: (document: Api.PageDocument) => void }) {
   const { definitions,source } = useHost();
   const shared = Object.fromEntries(definitions.flatMap((d) => Object.entries(d.application?.variables ?? {})));
   const sharedObjects=Object.fromEntries(definitions.flatMap((d)=>Object.entries(d.application?.variables??{}).flatMap(([id,v])=>["record","filter"].includes(v.source?.kind??"")&&v.source?.object?[[id,v.source.object]]:v.source?.kind==="plan"&&d.application?.queries?.[v.source.query??""]?[[id,d.application.queries[v.source.query??""]!.object]]:[])));
   const sectionOwner=(section?:string)=>{const node=Object.entries(document.nodes).find(([,n])=>n.section===section)?.[0];return node?overlayOwner(document,node):undefined;};
   const sourceSections=(scope:string,owner?:string)=>sections.filter((s)=>sectionOwner(s.id)===(scope==="overlay"?owner:undefined));
   const sourcePlans=(scope:string,owner?:string)=>Object.entries(document.queries??{}).filter(([,q])=>(scope==="loop-item"?q.itemOwner===owner:!q.itemOwner&&(q.owner??undefined)===(scope==="overlay"?owner:undefined)));
-  const sectionObject=(id?:string)=>{const value=sections.find((s)=>s.id===id)?.object;return typeof value==="string"?{app:value.split(".")[0]!,kind:"object" as const,name:value}:value??object;};
-  const recordObject=(id:string):Api.AssetRef|undefined=>{const v=document.variables?.[id];if(v?.source?.object)return v.source.object;const port=Object.values(document.interface?.inputs??{}).find((p)=>p.variable===id);if(port?.object)return port.object;if(v?.source?.kind==="record")return sectionObject(v.source.section);if(v?.source?.kind==="item"){const collection=document.variables?.[document.nodes[v.owner??""]?.loop?.collection??""];if(collection?.source?.object)return collection.source.object;if(collection?.source?.kind==="plan")return document.queries?.[collection.source.query??""]?.object;return sectionObject(collection?.source?.section);}return;};
+
+  const recordObject=(id:string)=>originalRecordObject(document,sections,id,object);
   const fieldType=(type:string)=>["text","longtext","choice"].includes(type)?"string":type==="boolean"?"boolean":["integer","decimal"].includes(type)?"decimal":undefined;
   const variables = document.variables ?? {}, [chosen, choose] = useState("");
   const id = variables[chosen] ? chosen : Object.keys(variables)[0] ?? "", variable = variables[id];
@@ -91,7 +92,7 @@ export function VariablesPanel({ document, sections, values, onChange, object, a
           const resource = pageVariableContract.resources.find((resource) => resource.kind === event.target.value)!;
           patch({ type: resource.type, source: { kind: resource.kind, section: sourceSections(variable.scope,variable.owner).find((section) => pageVariableContract.resources.some(r=>r.kind===resource.kind&&(r.widget===section.widget||"widgets" in r&&(r.widgets as readonly string[]).includes(section.widget))))?.id ?? "" } });
         }}><option value="record">{t("Record selection")}</option><option value="records">{t("Record selection set")}</option><option value="filter">{t("Filter values")}</option><option value="query">{t("Query window")}</option>{sourcePlans(variable.scope,variable.owner).length>0&&<option value="plan">{t("Query plan")}</option>}</Select></label>
-        {variable.source?.kind === "plan" ? <label className="grid gap-1 text-xs">{t("Query plan")}<Select value={variable.source.query??""} onChange={(event)=>patch({source:{kind:"plan",query:event.target.value}})}>{sourcePlans(variable.scope,variable.owner).map(([id,query])=><option key={id} value={id}>{query.title||id}</option>)}</Select></label> : <label className="grid gap-1 text-xs">{t("Source widget")}<Select value={variable.source?.section ?? ""} onChange={(event) => patch({ source: { kind: variable.source!.kind, section: event.target.value } })}>
+        {variable.source?.kind === "plan" ? <label className="grid gap-1 text-xs">{t("Query plan")}<Select value={variable.source.query??""} onChange={(event)=>patch({source:{kind:"plan",query:event.target.value}})}>{sourcePlans(variable.scope,variable.owner).map(([id,query])=><option key={id} value={id}>{query.title||id}</option>)}</Select></label> : <label className="grid gap-1 text-xs">{t("Source widget")}<Select disabled={!!variable.source?.port} value={variable.source?.section ?? ""} onChange={(event) => patch({ source: { kind: variable.source!.kind, section: event.target.value } })}>
           <option value="">{t("Choose a source widget")}</option>{sourceSections(variable.scope,variable.owner).filter((section) => pageVariableContract.resources.some(r=>r.kind===variable.source?.kind&&(r.widget===section.widget||"widgets" in r&&(r.widgets as readonly string[]).includes(section.widget)))).map((section) => <option key={section.id} value={section.id}>{section.title || section.widget}</option>)}
         </Select></label>}
         <p className="text-xs text-muted">{t("Uses the widget's original binding and read permissions. A query window is not the full object set.")}</p>

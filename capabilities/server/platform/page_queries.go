@@ -174,7 +174,7 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 			if value.Variable != "" {
 				v, ok := d.Variables[value.Variable]
 				plannedInput := dependsOnPlan(value.Variable, map[string]bool{})
-				if plannedInput && inputScope == "page" && d.avatarContextQueryInput(id, value.Variable, sections) && !d.variableDependsOnQuery(value.Variable, id, sections) {
+				if plannedInput && slices.Contains([]string{"page", "overlay"}, inputScope) && d.recordContextQueryInput(id, value.Variable, sections) && !d.variableDependsOnQuery(value.Variable, id, sections) {
 					plannedInput = false
 				}
 				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record" && (q.Query == nil || q.Query.Ref.Kind != AssetLinkType)) || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "") && !(v.Scope == "loop-item" && v.Owner == q.ItemOwner && q.ItemOwner != "")) || !slices.Contains([]string{"string", "boolean", "record", "decimal", "string-set"}, v.Type) || plannedInput {
@@ -243,6 +243,11 @@ func (p Page) QueryReferences() []AssetRef {
 			if q.Query != nil {
 				refs = append(refs, q.Query.Ref)
 			}
+		}
+	}
+	for _, s := range p.Sections {
+		if s.Observation != nil && s.Observation.AssetObject != nil {
+			refs = append(refs, *s.Observation.AssetObject)
 		}
 	}
 	for _, v := range p.DocumentVariables() {
@@ -443,21 +448,24 @@ func (p Page) CheckCollectionPorts() error {
 	return nil
 }
 
-// A contextual avatar consumes the confirmed record of an original producer,
+// A contextual view consumes the confirmed record of an original producer,
 // including one with its own independent query window. It may not consume a
 // record whose actual read dependencies lead back to this query.
-func (d *PageDocument) avatarContextQueryInput(query, variable string, sections []Section) bool {
+func (d *PageDocument) recordContextQueryInput(query, variable string, sections []Section) bool {
 	q := d.Queries[query]
 	v := d.Variables[variable]
-	if q.For == nil || q.For.Variable != variable || v.Type != "record" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "record" || !(v.Scope == "page" && q.Owner == "" || v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "") {
+	if q.For == nil || q.For.Variable != variable || v.Type != "record" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "record" || !(v.Scope == "page" || v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "") {
 		return false
 	}
 	consumer := false
 	for _, s := range sections {
-		if s.Widget != "avatar-stack" || s.Avatar == nil || s.Avatar.ContextVariable != variable {
-			continue
+		windowID := ""
+		if s.Widget == "avatar-stack" && s.Avatar != nil && s.Avatar.ContextVariable == variable && (v.Scope != "page" || q.Owner == "") {
+			windowID = s.Avatar.ContextCollectionVariable
+		} else if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "statistics" && s.RecordVariable == variable {
+			windowID = s.ObservationContextVariable
 		}
-		window := d.Variables[s.Avatar.ContextCollectionVariable]
+		window := d.Variables[windowID]
 		if window.Mode == "resource" && window.Source != nil && window.Source.Kind == "plan" && window.Source.Query == query {
 			consumer = true
 			break
@@ -469,6 +477,9 @@ func (d *PageDocument) avatarContextQueryInput(query, variable string, sections 
 	for _, s := range sections {
 		if s.ID != v.Source.Section {
 			continue
+		}
+		if v.Source.Port != "" && !s.HasRecordOutput(v.Source.Port, variable) {
+			return false
 		}
 		for _, r := range pageWidgets.Runtime.Resources {
 			if r.Kind == "record" && (r.Widget == s.Widget || slices.Contains(r.Widgets, s.Widget)) {
@@ -532,7 +543,7 @@ func (d *PageDocument) variableDependsOnQuery(variable, target string, sections 
 				if s.ID != v.Source.Section {
 					continue
 				}
-				for _, input := range []string{s.CollectionVariable, s.FilterVariable, s.RecordVariable} {
+				for _, input := range append([]string{s.CollectionVariable, s.FilterVariable, s.RecordVariable}, s.ObservationVariables()...) {
 					if variableDepends(input) {
 						return true
 					}

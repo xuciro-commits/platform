@@ -26,14 +26,14 @@ type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"valu
 const failed = (code: string): QueryPlanResult => ({ status: "error", code });
 type QueryGraph={id:string;plans:Record<string,Api.PageQuery>};
 
-/** Only an actual avatar's original record input may come from an independent planned producer. */
-function avatarContextQueryInput(variable:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],graph:QueryGraph):boolean {
+/** Only an actual contextual view may consume an independent confirmed record producer. */
+function recordContextQueryInput(variable:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],graph:QueryGraph):boolean {
  const plan=graph.plans[graph.id],input=variables[variable];
- if(plan?.for?.variable!==variable||input?.type!=="record"||input.mode!=="resource"||input.source?.kind!=="record"||!(input.scope==="page"&&!plan.owner||input.scope==="overlay"&&input.owner===plan.owner&&!!plan.owner))return false;
- const consumer=sections.some(section=>{if(section.widget!=="avatar-stack"||section.avatar?.contextVariable!==variable)return false;const window=variables[section.avatar.contextCollectionVariable??""];return window?.mode==="resource"&&window.source?.kind==="plan"&&window.source.query===graph.id;});
+ if(plan?.for?.variable!==variable||input?.type!=="record"||input.mode!=="resource"||input.source?.kind!=="record"||!(input.scope==="page"||input.scope==="overlay"&&input.owner===plan.owner&&!!plan.owner))return false;
+ const consumer=sections.some(section=>{const id=section.widget==="avatar-stack"&&section.avatar?.contextVariable===variable&&(input.scope!=="page"||!plan.owner)?section.avatar.contextCollectionVariable:section.widget==="observation"&&section.observation?.kind==="statistics"&&section.recordVariable===variable?section.observationContextVariable:undefined;const window=variables[id??""];return window?.mode==="resource"&&window.source?.kind==="plan"&&window.source.query===graph.id;});
  if(!consumer)return false;
  const producer=sections.find(section=>section.id===input.source!.section);
- return !!producer&&["table","record-list","record-timeline","kanban","record-calendar","record-picker","record-leaderboard","record-scatter"].includes(producer.widget);
+ if(!producer)return false;const port=input.source!.port;if(["graph-explorer","observation"].includes(producer.widget)&&!port)return false;if(port&&!((producer.widget==="graph-explorer"&&producer.graphExplorer?.outputs?.some(o=>o.id===port&&o.variable===variable))||(producer.widget==="observation"&&producer.observation?.kind==="table"&&(port==="row"&&producer.observation.rowOutput===variable||port==="asset"&&producer.observation.assetOutput===variable))))return false;return ["table","record-list","record-timeline","kanban","record-calendar","record-picker","record-leaderboard","record-scatter","resource-list"].includes(producer.widget)||producer.widget==="graph-explorer"&&!!port||producer.widget==="observation"&&!!port&&producer.observation?.kind==="table";
 }
 
 /** Follow original variables, producer inputs and set operands, rather than downloaded rows. */
@@ -50,7 +50,7 @@ function variableDependsOnQuery(variable:string,target:string,variables:Record<s
   const source=input.source;if(!source)return false;
   if(source.kind==="property"&&!!source.variable&&variableDepends(source.variable))return true;
   if((source.kind==="plan"||input.mode==="aggregate")&&!!source.query&&queryDepends(source.query))return true;
-  return ["record","records","query","filter"].includes(source.kind)&&sections.filter(section=>section.id===source.section).some(section=>[section.collectionVariable,section.filterVariable,section.recordVariable].some(id=>!!id&&variableDepends(id)));
+  return ["record","records","query","filter"].includes(source.kind)&&sections.filter(section=>section.id===source.section).some(section=>[section.collectionVariable,section.filterVariable,section.recordVariable,section.observationHistoryVariable,section.observationContextVariable].some(id=>!!id&&variableDepends(id)));
  };
  return variableDepends(variable);
 }
@@ -90,7 +90,7 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
       return {status:"value",value:value as string|boolean|number|DecimalValue|import("./decimal").StringSetValue};
     }
     const variable = variables[binding.variable];
-    const plannedInput=usesPlan(binding.variable)&&!(graph&&avatarContextQueryInput(binding.variable,variables,sections,graph)&&!variableDependsOnQuery(binding.variable,graph.id,variables,sections,graph.plans));
+    const plannedInput=usesPlan(binding.variable)&&!(graph&&recordContextQueryInput(binding.variable,variables,sections,graph)&&!variableDependsOnQuery(binding.variable,graph.id,variables,sections,graph.plans));
     if (!variable || !(variable.scope==="page"||variable.scope==="application"||variable.scope==="overlay"&&variable.owner===plan.owner&&!!plan.owner||variable.scope==="loop-item"&&variable.owner===plan.itemOwner&&!!plan.itemOwner) || plannedInput) return { status: "error", code: "Query parameter escapes its input scope." };
     return values[binding.variable] ?? { status: "empty" };
   };

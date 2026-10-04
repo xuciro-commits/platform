@@ -867,6 +867,18 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 		}
 	}
 	for _, s := range page.Sections {
+		if err := page.CheckObservation(s, func(ref AssetRef) (EntityInfo, bool) {
+			a, ok := lookup[ref]
+			if !ok {
+				return EntityInfo{}, false
+			}
+			info, err := queryObjectDescriptor(a.Body)
+			return info, err == nil && info.App == ref.App && info.Type == ref.Name
+		}); err != nil {
+			return err
+		}
+	}
+	for _, s := range page.Sections {
 		if s.Widget != "collection-analysis" && s.Widget != "record-comparison" && s.Widget != "record-card" && s.Widget != "sparkline-kpi" && s.Widget != "treemap" && s.Widget != "tag-counts" && s.Widget != "heatmap" && s.Widget != "record-scatter" && s.Widget != "histogram" && s.Widget != "term-counts" && s.Widget != "record-timeline" && s.Widget != "kanban" && s.Widget != "status-tracker" && s.Widget != "record-list" && s.Widget != "record-chart" && s.Widget != "record-events" && s.Widget != "record-picker" && s.Widget != "record-leaderboard" && s.Widget != "summary-stats" && s.Widget != "record-gantt" && s.Widget != "record-calendar" && s.MetricPresentation == nil {
 			continue
 		}
@@ -941,6 +953,9 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 				}
 			}
 			if err := page.CheckRecordPickerQuery(id, named); err != nil {
+				return err
+			}
+			if err := page.CheckObservationQuery(id, named); err != nil {
 				return err
 			}
 			if err := page.CheckRecordWorkQuery(id, named); err != nil {

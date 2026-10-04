@@ -76,6 +76,9 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 		if err := p.CheckRecordPickerQuery(id, named); err != nil {
 			return err
 		}
+		if err := p.CheckObservationQuery(id, named); err != nil {
+			return err
+		}
 		if err := p.CheckRecordWorkQuery(id, named); err != nil {
 			return err
 		}
