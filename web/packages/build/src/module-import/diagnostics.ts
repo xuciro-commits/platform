@@ -1,5 +1,10 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "embedding-binding": "Choose the exact published page and map all required original interface ports.",
+ "embedding-collection-input": "Collection parameters need a typed original collection interface; no values were discarded.",
+ "external-frame-binding": "Review the fixed HTTPS origin and isolated document interpretation.",
+ "native-original-embedding": "The original page replaces source placeholders; its content, ports and current permissions remain authoritative.",
+ "native-external-document": "The original URL renders as an isolated document with scripts and forms disabled. Remote bytes are not frozen.",
  "observation-binding": "Map a retained original sample query, actual event time and numeric signals. Choose the asset producer explicitly and keep its reference and history query compatible.",
  "native-observation-selection": "Telemetry is mapped to a 100-record original business window with explicit signal indices and separate row and asset ports. Asset consumers use the reviewed producer choice; currentTelemetryRow metadata and the unused selectedSignal setting are retained in the report. Source worker controls and the larger CSV export remain unported.",
  "native-observation-statistics": "Statistics use the complete original sample set and the declared 1k, 10k or 100k window. Asset history uses its retained query; synthetic appended history, AST-1000 fallback and the flow-output badge are not imported as data or execution.",

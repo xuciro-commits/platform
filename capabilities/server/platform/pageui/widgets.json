@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.83",
+  "uiProfile": "platform.page.v2.84",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4500,6 +4500,49 @@
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "external-frame",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.84",
+      "title": "External document",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -4585,7 +4628,8 @@
     "platform.page.v2.80",
     "platform.page.v2.81",
     "platform.page.v2.82",
-    "platform.page.v2.83"
+    "platform.page.v2.83",
+    "platform.page.v2.84"
   ],
   "runtime": {
     "scope": "page",

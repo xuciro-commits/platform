@@ -1046,6 +1046,7 @@ export type PageDocument = {
 };
 
 export type PageEmbedding = {
+  readOnly?: boolean;
   kind: string;
   page: AssetBinding;
   contentVersion: string;
@@ -1072,6 +1073,12 @@ export type PageEventTone = {
 export type PageExpression = {
   op: string;
   args: PageValue[];
+};
+
+export type PageExternalFrame = {
+  url: string;
+  origin: string;
+  height?: number;
 };
 
 export type PageFacet = {
@@ -1694,6 +1701,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  externalFrame?: PageExternalFrame;
   embedding?: PageEmbedding;
   observation?: PageObservation;
   observationHistoryVariable?: string;
@@ -2101,7 +2109,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.83",
+  "uiProfile": "platform.page.v2.84",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -6602,6 +6610,49 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "external-frame",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.84",
+      "title": "External document",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -6687,7 +6738,8 @@ export const pageUIManifest = {
     "platform.page.v2.80",
     "platform.page.v2.81",
     "platform.page.v2.82",
-    "platform.page.v2.83"
+    "platform.page.v2.83",
+    "platform.page.v2.84"
   ],
   "runtime": {
     "scope": "page",

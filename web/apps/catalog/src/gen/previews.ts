@@ -56,6 +56,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/editor-workbench": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.EditorPanels })),
   "ui/entity-card": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordSummaries })),
   "ui/entity-form": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SchemaForms })),
+  "ui/external-frame": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ExternalFrameExample })),
   "ui/facet-choices": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.FacetChoicesExample })),
   "ui/field-types": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Fields })),
   "ui/file-picker": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.FilePicking })),

@@ -7,6 +7,7 @@ import (
 )
 
 type PageEmbedding struct {
+	ReadOnly         bool                 `json:"readOnly,omitempty"`
 	Kind             string               `json:"kind"`
 	Page             AssetBinding         `json:"page"`
 	ContentVersion   string               `json:"contentVersion"`
@@ -49,6 +50,9 @@ func (d *PageDocument) checkEmbedding(s Section) error {
 		return nil
 	}
 	e := s.Embedding
+	if e != nil && e.ReadOnly && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.84") {
+		return fmt.Errorf("read-only embedding needs v2.84")
+	}
 	if e == nil || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.83") || !slices.Contains([]string{"module", "custom", "dashboard"}, e.Kind) || e.Page.Ref.Check() != nil || e.Page.Ref.Kind != AssetPage || e.Page.SourceVersion == "" || CheckPageContentVersion(e.ContentVersion) != nil || e.InterfaceVersion < 0 || len(e.Inputs) > 16 || len(e.Results) > 16 || s.Object != (AssetRef{}) || s.RecordVariable != "" || s.CollectionVariable != "" || s.Query != (AssetRef{}) || s.Operation != nil || s.Function != nil || len(s.Fields) > 0 || len(s.Actions) > 0 || len(s.Inputs) > 0 || s.Selection != "" || s.FilterVariable != "" || s.ParentSelection != "" || s.Relation != "" {
 		return fmt.Errorf("embedding needs exact original page content and finite typed bindings")
 	}
@@ -98,6 +102,11 @@ func CheckPageEmbeddingGraph(root AssetRef, lookup map[AssetRef]ReleaseAsset) er
 			return fmt.Errorf("embedded page is unavailable")
 		}
 		instances++
+		for _, s := range p.Sections {
+			if s.ExternalFrame != nil {
+				instances++
+			}
+		}
 		sections += len(p.Sections)
 		if instances > pageWidgets.Runtime.Embedding.MaxInstances || sections > pageWidgets.Runtime.Embedding.MaxSections {
 			return fmt.Errorf("embedded page instance budget exceeded")

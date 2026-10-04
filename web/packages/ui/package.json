@@ -11,7 +11,8 @@
     "./choices": "./src/components/choice.ts",
     "./date": "./src/components/date.ts",
     "./static-image": "./src/components/static-image.ts",
-    "./histogram": "./src/components/histogram-data.ts"
+    "./histogram": "./src/components/histogram-data.ts",
+    "./external-frame": "./src/components/external-frame.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

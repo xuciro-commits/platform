@@ -1,5 +1,11 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Isolated external document": "隔离的外部文档",
+ "Display a fixed HTTPS document at its exact reviewed origin.": "在精确已审查来源呈现固定 HTTPS 文档。",
+ "All sandbox restrictions remain enabled; no platform token, input or message bridge is provided. Scripts and form submissions are disabled. Remote bytes are not a versioned platform artifact.": "保持全部 sandbox 限制，不提供平台令牌、输入或消息桥。脚本和表单提交禁用。远程字节不属于版本化平台制品。",
+ "External document": "外部文档",
+ "The external document origin or URL is unavailable.": "外部文档的来源或地址不可用。",
+ "Isolated external document. Scripts, forms and platform data access are disabled.": "隔离的外部文档。脚本、表单和平台数据访问均已禁用。",
  "Above {threshold}": "超过 {threshold}",
  "Alarm above": "告警上界",
  "Catalog observation read refused.": "目录示例的观测读取被拒绝。",

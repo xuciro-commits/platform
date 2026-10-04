@@ -1,4 +1,4 @@
-import {PageEmbeddingBoundary,EmbeddedPageRenderer} from "./widgets/EmbeddedPage";
+import {PageEmbeddingBoundary,EmbeddedPageRenderer,ExternalDocumentRenderer} from "./widgets/EmbeddedPage";
 import {avatarCollectionVariable,confirmedContext,originalContextSlot,currentContextRead} from "./widgets/context-views";
 import {searchInputObjects} from "./widgets/search-input";
 import {tableEditableFields} from "./widgets/table-edit";
@@ -445,6 +445,7 @@ function ExplorerWidget({page,section,session,explorationRoot,explorationStatus,
  const {source,definitions}=useHost();return <ExplorationRenderer kind={section.widget as "graph-explorer"|"vertex-graph"} config={section.graphExplorer} vertex={section.vertexGraph} root={explorationRoot} status={explorationStatus} rootObject={section.object?.name?section.object:page.object} source={session?.readSource()??source} definitions={definitions} identity={explorationIdentity??""} isActive={explorationActive??(()=>false)} onOutput={onGraphOutput} selected={graphSelected} enabled={enabled} label={section.title||t("Record exploration")} readCurrent={contextReadCurrent}/>;
 }
 const widgets = createWidgetRegistry<Bound>({
+ "external-frame":({section,contextReadCurrent})=><ExternalDocumentRenderer section={section} readCurrent={contextReadCurrent}/>,
  "embedded-page":bound=><EmbeddedPageRenderer section={bound.section} values={bound.facetValues??{}} scope={bound.aggregateScope??""} live={bound.live} readCurrent={bound.contextReadCurrent} enabled={bound.enabled} onReturn={bound.embeddingReturn}/>,
  "action-table":({page,section,window,session,aggregateScope,enabled,live,contextReadCurrent})=><ActionTableRenderer section={section} object={objectOf(page,section)} window={window} session={session} scope={aggregateScope??""} enabled={enabled} live={live} readCurrent={contextReadCurrent}/>,
  notepad:({section,notepadValue,onNotepad,enabled,contextReadCurrent})=><NotepadRenderer value={notepadValue} onChange={onNotepad} enabled={enabled} label={section.title||t("Session notepad")} readCurrent={contextReadCurrent}/>,

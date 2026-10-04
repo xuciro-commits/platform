@@ -1,6 +1,6 @@
 import {createContext,useContext,useEffect,useRef,useMemo,useState,type ReactNode} from "react";
 import {useQuery} from "@tanstack/react-query";
-import {Panel,t} from "@platform/ui";
+import {ExternalFrame,Panel,t} from "@platform/ui";
 import {pageUIManifest,type Api} from "@platform/kernel";
 const limits=pageUIManifest.runtime.embedding;
 import {useHost} from "../index";
@@ -11,6 +11,7 @@ import {PageEmbeddingBudget,pageEmbeddingCost} from "../runtime/embedding-budget
 
 const EmbeddingDepth=createContext(0);
 const BudgetContext=createContext<PageEmbeddingBudget|undefined>(undefined);
+export function ExternalDocumentRenderer({section,readCurrent=true}:{section:Api.Section;readCurrent?:boolean}){const budget=useContext(BudgetContext);if(!budget?.valid)return <Panel role="alert">{t("Embedded page instances or reads exceed their shared budget.")}</Panel>;return section.externalFrame?<ExternalFrame key={JSON.stringify(section.externalFrame)} config={section.externalFrame} title={section.title||t("External document")} active={readCurrent}/>:null;}
 export function PageEmbeddingBoundary({page,children}:{page:Api.Page;children:ReactNode}){const parent=useContext(BudgetContext),budget=useMemo(()=>new PageEmbeddingBudget({instances:limits.maxInstances,queries:limits.maxQueries,records:limits.maxRecords,sections:limits.maxSections},pageEmbeddingCost(page)),[page]);return <BudgetContext.Provider value={parent??budget}>{children}</BudgetContext.Provider>;}
 type Props={section:Api.Section;values:Record<string,VariableResult>;scope:string;live:boolean;enabled?:boolean;readCurrent?:boolean;onReturn?:(values:Record<string,unknown>)=>void};
 /** Each original child owns its existing PageSession. Parent values only cross
@@ -28,5 +29,5 @@ function EmbeddedSurface({section,values,scope,live,enabled=true,readCurrent=tru
  if((iface?.version??0)!==e.interfaceVersion||checkPortValues(iface?.inputs??{},inputs))return <Panel role="alert">{t("Embedded page inputs do not match the original interface.")}</Panel>;
  const key=JSON.stringify([e.interfaceVersion,inputs]);if(envelope.current?.key!==key)envelope.current={key,value:{version:e.interfaceVersion,values:inputs}};
  const input=envelope.current.value,returnValue=(raw:unknown)=>{if(!lease.current||!activity.current.enabled||!activity.current.readCurrent)return;const answer=readPageEnvelope(raw);if(!answer||answer.version!==e.interfaceVersion||checkPortValues(iface?.outputs??{},answer.values))return;activity.current.onReturn?.(answer.values);};
- return <div className="min-w-0" aria-label={section.title||t("Embedded page")}><EmbeddingDepth.Provider value={depth+1}><ComposedPage page={page} definitionKey={JSON.stringify([scope,e.contentVersion,input])} pageCall={{input,returnValue}} live={live&&enabled}/></EmbeddingDepth.Provider></div>;
+ return <div className="min-w-0" aria-label={section.title||t("Embedded page")}><EmbeddingDepth.Provider value={depth+1}><ComposedPage page={page} definitionKey={JSON.stringify([scope,e.contentVersion,input])} pageCall={{input,returnValue}} live={live&&enabled&&!e.readOnly}/></EmbeddingDepth.Provider></div>;
 }

@@ -325,25 +325,25 @@
       "sourceType": "Iframe",
       "sourceCategory": "Embed",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "external-frame",
+      "reason": "explicit-isolated-origin"
     },
     {
       "sourceType": "EmbeddedModule",
       "sourceCategory": "Embed",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "embedded-page",
+      "reason": "explicit-fixed-original-page-interface"
     },
     {
       "sourceType": "CustomWidget",
       "sourceCategory": "Custom",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "embedded-page",
+      "reason": "explicit-fixed-original-page-interface"
     },
     {
       "sourceType": "DerivedSeries",
@@ -357,9 +357,9 @@
       "sourceType": "QuiverDashboard",
       "sourceCategory": "Embed",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "embedded-page",
+      "reason": "explicit-fixed-original-page-interface"
     },
     {
       "sourceType": "VertexGraph",

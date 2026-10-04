@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "External document": "外部文档",
  "Embedded page instances or reads exceed their shared budget.": "嵌入页面实例或读取超出共享预算。",
  "Embedded page": "嵌入页面",
  "Embedded page depth or bindings are unavailable.": "嵌入页面深度或绑定不可用。",
@@ -441,6 +442,7 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "External document": "外部文档",
  "Spacer": "空白",
  "Spacer configuration is unavailable or incompatible.": "空白配置不可用或不兼容。",
 

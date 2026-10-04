@@ -254,6 +254,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document sections need unique stable IDs")
 		}
 		byID[section.ID] = true
+		if err := d.checkExternalFrame(section); err != nil {
+			return err
+		}
 		if err := d.checkEmbedding(section); err != nil {
 			return err
 		}

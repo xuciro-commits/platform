@@ -19,6 +19,13 @@ func TestEmbeddingFixedContentsInterfacesAndExpandedBudget(t *testing.T) {
 	if err := parent.Document.Check(parent.Sections); err != nil {
 		t.Fatal(err)
 	}
+	e.ReadOnly = true
+	parent.Document.UIProfile = "platform.page.v2.83"
+	if parent.Document.Check(parent.Sections) == nil {
+		t.Fatal("an old renderer profile accepted read-only embedding")
+	}
+	e.ReadOnly = false
+	parent.Document.UIProfile = PageUIProfile()
 	if err := CheckPageEmbedding(parent, child, e); err != nil {
 		t.Fatal(err)
 	}

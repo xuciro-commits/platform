@@ -58,9 +58,10 @@ func TestThreeEmbeddedModesFreezeOldChildContentsAndRecover(t *testing.T) {
 	submit(build.PageType, "child", "publish", map[string]any{})
 	sections := []build.Section{}
 	for _, kind := range []string{"module", "custom", "dashboard"} {
-		sections = append(sections, build.Section{ID: kind, Widget: "embedded-page", ConfigVersion: 1, Embedding: &platform.PageEmbedding{Kind: kind, Page: platform.AssetBinding{Ref: original.Ref, SourceVersion: original.Version}, ContentVersion: original.ContentVersion}})
+		sections = append(sections, build.Section{ID: kind, Widget: "embedded-page", ConfigVersion: 1, Embedding: &platform.PageEmbedding{Kind: kind, ReadOnly: kind != "module", Page: platform.AssetBinding{Ref: original.Ref, SourceVersion: original.Version}, ContentVersion: original.ContentVersion}})
 	}
-	submit(build.PageType, "parent", "create", map[string]any{"name": "parent", "title": "Parent", "object": "build.note", "sections": sections, "document": doc("module", "custom", "dashboard")})
+	sections = append(sections, build.Section{ID: "external", Widget: "external-frame", ConfigVersion: 1, ExternalFrame: &platform.PageExternalFrame{URL: "https://docs.example.com/report", Origin: "https://docs.example.com"}})
+	submit(build.PageType, "parent", "create", map[string]any{"name": "parent", "title": "Parent", "object": "build.note", "sections": sections, "document": doc("module", "custom", "dashboard", "external")})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "parent")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatal(preview, err)
@@ -80,12 +81,21 @@ func TestThreeEmbeddedModesFreezeOldChildContentsAndRecover(t *testing.T) {
 				continue
 			}
 			found = true
-			if len(d.Page.Sections) != 3 {
+			if len(d.Page.Sections) != 4 {
 				t.Fatal("embedded modes were removed")
 			}
 			for _, s := range d.Page.Sections {
+				if s.ID == "external" {
+					if s.ExternalFrame == nil || s.ExternalFrame.Origin != "https://docs.example.com" || s.ExternalFrame.URL != "https://docs.example.com/report" {
+						t.Fatal("external configuration changed")
+					}
+					continue
+				}
 				if s.Embedding == nil || s.Embedding.ContentVersion != original.ContentVersion {
 					t.Fatal("parent adopted latest child")
+				}
+				if s.Embedding.ReadOnly != (s.ID != "module") {
+					t.Fatal("read-only presentation changed")
 				}
 				child, err := current.PageContentDefinition(reader, s.Embedding.Page.Ref, s.Embedding.ContentVersion)
 				if err != nil || child.Page.Sections[0].Text != "ORIGINAL CHILD" {

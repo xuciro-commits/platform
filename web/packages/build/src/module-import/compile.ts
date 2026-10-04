@@ -1,3 +1,5 @@
+import {validExternalFrame} from "@platform/ui/external-frame";
+import {embeddingSourceTypes,sourceEmbeddingInputs,embeddedImportTarget,type EmbeddingImportBinding,type ExternalFrameImportBinding} from "./embedding";
 import {observationMapping,observationSourceTypes,type ObservationImportBinding} from "./observations";
 import {validStaticImage} from "@platform/ui/static-image";
 import {searchInputObjects} from "@platform/app/search";
@@ -16,7 +18,7 @@ type SourceSection=Obj&{id:string;name:string;layout:string;children:{kind:strin
 type SourceVariable=Obj&{id:string;name:string;type:string;definitionKind:string};
 export type SourceModule=Obj&{id:string;name:string;description:string;pages:{id:string;name:string;rootSectionId:string}[];sections:Record<string,SourceSection>;widgets:Record<string,SourceWidget>;variables:SourceVariable[];overlays:(Obj&{id:string;name:string;kind:string;rootSectionId:string;openVariableId?:string})[];unusedWidgetIds:string[]};
 export type ImportDiagnostic={path:string;code:string;blocking:boolean};
-export type ImportBindings={observations?:Record<string,ObservationImportBinding>;actionTables?:Record<string,Api.PageActionParameter[]>;notepads?:Record<string,{initial:string}>;analysis?:Record<string,{unit:string}>;resources?:Record<string,Api.PageResourceList>;directories?:Record<string,Api.AssetBinding[]>;graphs?:Record<string,{relations:Api.AssetBinding[];labelFields:Record<string,string>;outputMigration?:"graph-ports";outputObject?:Api.AssetRef}>;vertices?:Record<string,{groups:Api.AssetBinding[]}>;breadcrumbs?:Record<string,{homePage:Api.AssetRef;interfaceVersion:number;labelField?:string}>;avatars?:Record<string,{allQuery:Api.AssetBinding;contextQuery?:Api.AssetBinding;labelField:string;detailFields?:string[]}>;work?:Record<string,{kind:"caller-approvals"|"caller-notifications"|"record-history";recordVarId?:string}>;collaboration?:Record<string,{recordVarId:string;fileID?:string}>;comparisons?:Record<string,{labelField:string;fields:string[]}>;cards?:Record<string,{labelField:string;fields:string[];tone:string}>;scatters?:Record<string,{labelField:string}>;explorations?:Record<string,Record<string,string>>;users?:Record<string,{object:string;labelField:string;query?:Api.AssetBinding}>;datetimes?:Record<string,{offset:string}>;pickers?:Record<string,{labelField:string}>;leaderboards?:Record<string,{labelField:string}>;gantts?:Record<string,Api.PageRecordGantt>;calendars?:Record<string,{labelField:string;initialMonth:string}>;events?:Record<string,Api.PageRecordEvents>;boards?:Record<string,{label:string;fields:string[];moves:string[]}>;lists?:Record<string,{label:string;fields:string[]}>;aggregates?:Record<string,{measure:string;conditions?:Api.PageQueryCondition[]}>;states?:Record<string,Record<string,string>>;links?:Record<string,Api.PageRecordLink[]>;edits?:Record<string,{action:string;fields:string[]}>;objects:Record<string,string>;fields:Record<string,Record<string,string>>;actions:Record<string,string>;queries:Record<string,Api.AssetBinding|undefined>};
+export type ImportBindings={embeddings?:Record<string,EmbeddingImportBinding>;externalFrames?:Record<string,ExternalFrameImportBinding>;observations?:Record<string,ObservationImportBinding>;actionTables?:Record<string,Api.PageActionParameter[]>;notepads?:Record<string,{initial:string}>;analysis?:Record<string,{unit:string}>;resources?:Record<string,Api.PageResourceList>;directories?:Record<string,Api.AssetBinding[]>;graphs?:Record<string,{relations:Api.AssetBinding[];labelFields:Record<string,string>;outputMigration?:"graph-ports";outputObject?:Api.AssetRef}>;vertices?:Record<string,{groups:Api.AssetBinding[]}>;breadcrumbs?:Record<string,{homePage:Api.AssetRef;interfaceVersion:number;labelField?:string}>;avatars?:Record<string,{allQuery:Api.AssetBinding;contextQuery?:Api.AssetBinding;labelField:string;detailFields?:string[]}>;work?:Record<string,{kind:"caller-approvals"|"caller-notifications"|"record-history";recordVarId?:string}>;collaboration?:Record<string,{recordVarId:string;fileID?:string}>;comparisons?:Record<string,{labelField:string;fields:string[]}>;cards?:Record<string,{labelField:string;fields:string[];tone:string}>;scatters?:Record<string,{labelField:string}>;explorations?:Record<string,Record<string,string>>;users?:Record<string,{object:string;labelField:string;query?:Api.AssetBinding}>;datetimes?:Record<string,{offset:string}>;pickers?:Record<string,{labelField:string}>;leaderboards?:Record<string,{labelField:string}>;gantts?:Record<string,Api.PageRecordGantt>;calendars?:Record<string,{labelField:string;initialMonth:string}>;events?:Record<string,Api.PageRecordEvents>;boards?:Record<string,{label:string;fields:string[];moves:string[]}>;lists?:Record<string,{label:string;fields:string[]}>;aggregates?:Record<string,{measure:string;conditions?:Api.PageQueryCondition[]}>;states?:Record<string,Record<string,string>>;links?:Record<string,Api.PageRecordLink[]>;edits?:Record<string,{action:string;fields:string[]}>;objects:Record<string,string>;fields:Record<string,Record<string,string>>;actions:Record<string,string>;queries:Record<string,Api.AssetBinding|undefined>};
 export type ImportEntity={type:string;app:string;lifecycle?:Api.LifecycleInfo;fields:{name:string;type:string;choices?:string[];ref?:string;inverse?:string}[]};
 export type ImportTarget={object:string;profile:string;entities:ImportEntity[];actions:{schema:string;target:string;new?:boolean;needsApproval?:boolean;automation?:boolean;title?:string;payload?:{name:string;type?:string;required?:boolean;description?:string;choices?:string[];ref?:string;from?:string}[]}[];definitions?:Api.Definition[]};
 export type ImportReport={formatVersion:1;source:string;sourceModule:string;selectedPage:string;inventoryRevision:string;diagnostics:ImportDiagnostic[];ids:{nodes:Record<string,string>;widgets:Record<string,string>;variables:Record<string,string>;overlays:Record<string,string>};draft?:PageDraft};
@@ -198,6 +200,43 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
   if(["StringSelector","ObjectDropdown","RadioGroup","SegmentedControl"].includes(w.type)&&userSources.has(text(config.variableId)))issue(`${path}/config/variableId`,"user-reference-binding");
   if(mapping?.status!=="profile"){issue(`${path}/type`,mapping?"widget-profile":"unknown-widget");return leaf;}
   const section:AuthoringSection={id:sectionID,widget:Array.isArray(mapping.target)?mapping.target[config.agg==="avg"?0:1]!:mapping.target!,configVersion:1,title:w.name};sections.push(section);document.nodes[leaf]={kind:"widget",section:sectionID};
+  if(w.type==="Iframe"){
+   safeKeys(config,["url","height"],`${path}/config`);
+   const b=bindings.externalFrames?.[sourceID];if(b)safeKeys(b,["migration","origin"],`${path}/nativeBinding`);
+   section.externalFrame={url:text(config.url),origin:b?.origin??"",...config.height!==undefined?{height:config.height as number}:{}};
+   if(b?.migration!=="sandboxed-document"||!validExternalFrame(section.externalFrame)||Number(target.profile.split(".").at(-1))<84)issue(`${path}/nativeBinding`,"external-frame-binding");
+   issue(`${path}/config`,"native-external-document",false);
+  }
+  if(embeddingSourceTypes.includes(w.type)){
+   const b=bindings.embeddings?.[sourceID],child=embeddedImportTarget(w.type,b,target),sourceInputs=sourceEmbeddingInputs(w);
+   if(!child?.page||!b||!sourceInputs||Number(target.profile.split(".").at(-1))<84)issue(`${path}/nativeBinding`,"embedding-binding");
+   else{
+    const iface=child.page.document?.interface,inputs:Record<string,Api.PageValue>={},results:Record<string,string>={};
+    if(Object.keys(b.ports).some(name=>!sourceInputs.some(input=>input.name===name)))issue(`${path}/nativeBinding/ports`,"embedding-binding");
+    for(const input of sourceInputs){
+     const portID=b.ports[input.name],port=iface?.inputs?.[portID??""],at=`${path}/config/${w.type==="CustomWidget"?"params":"bindings"}/${sourceInputs.indexOf(input)}`;
+     if(!port||Object.hasOwn(inputs,portID!)){issue(at,"embedding-binding");continue;}
+     if(input.variable){
+      const source=vars.get(input.variable);
+      if(source?.type==="objectSet"){issue(at,"embedding-collection-input");continue;}
+      const record=port.type==="record"?originalRecord(input.variable,context,at):undefined;
+      const mapped=port.type==="record"?record!.variable:port.type==="decimal"?decimalScalar(input.variable,context,at):variable(input.variable,context,at),value=document.variables![mapped];
+      if(value?.type!==port.type||port.type==="record"&&(!port.object||record?.entity?.type!==port.object.name||record?.entity?.app!==port.object.app))issue(at,"embedding-binding");
+      inputs[portID!]={variable:mapped};
+     }else{if(port.type!=="string"||new TextEncoder().encode(input.literal??"").length>4096)issue(at,"embedding-binding");inputs[portID!]={literal:input.literal};}
+    }
+    for(const [id,port]of Object.entries(iface?.inputs??{}))if(port.required&&!Object.hasOwn(inputs,id))issue(`${path}/nativeBinding/ports/${pointer(id)}`,"embedding-binding");
+    const outputs=new Set<string>();
+    for(const [portID,sourceID]of Object.entries(b.results??{})){
+     const port=iface?.outputs?.[portID],mapped=variable(sourceID,context,`${path}/nativeBinding/results/${pointer(portID)}`),v=document.variables![mapped];
+     if(!port||port.type==="record"||v?.type!==port.type||v?.mode!=="state"||outputs.has(mapped))issue(`${path}/nativeBinding/results`,"embedding-binding");
+     outputs.add(mapped);results[portID]=mapped;
+    }
+    section.embedding={kind:w.type==="EmbeddedModule"?"module":w.type==="CustomWidget"?"custom":"dashboard",page:b.page,contentVersion:b.contentVersion,interfaceVersion:b.interfaceVersion,inputs,results,readOnly:w.type!=="EmbeddedModule"};
+    if(w.type==="QuiverDashboard"&&config.title!==undefined)section.title=text(config.title);
+   }
+   issue(`${path}/config`,"native-original-embedding",false);
+  }
   safeKeys(w,["id","type","name","config","events","height","flex","style","emptyMessage","readOnly","hidden","mountBehavior","unmountBehavior"],path);
   presentation(w,path,{mountBehavior:"normal",unmountBehavior:"normal",hidden:false,readOnly:false});if(w.style!==undefined)issue(`${path}/style`,"presentation-profile");if(w.emptyMessage!==undefined)issue(`${path}/emptyMessage`,"presentation-profile");
   if(w.height!==undefined)document.nodes[leaf]!.size={height:Number(w.height)};if(w.flex!==undefined)document.nodes[leaf]!.size={...document.nodes[leaf]!.size,weight:Number(w.flex)};

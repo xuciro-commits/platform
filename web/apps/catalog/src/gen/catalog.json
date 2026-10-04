@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:0beee78d0953ea0b",
+  "revision": "sha256:31fc1a24c05eba3b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1749,6 +1749,34 @@
       "dependencies": [
         "ui/field-types",
         "ui/button"
+      ]
+    },
+    {
+      "id": "ui/external-frame",
+      "owner": "@platform/ui",
+      "name": "Isolated external document",
+      "summary": "Display a fixed HTTPS document at its exact reviewed origin.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/ExternalFrame.tsx",
+      "exports": [
+        "ExternalFrame",
+        "validExternalFrame"
+      ],
+      "example": "ExternalFrameExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "embed",
+        "iframe",
+        "origin"
+      ],
+      "type": "ExternalFrameProps",
+      "constraints": [
+        "All sandbox restrictions remain enabled; no platform token, input or message bridge is provided. Scripts and form submissions are disabled. Remote bytes are not a versioned platform artifact."
       ]
     },
     {
@@ -3809,6 +3837,7 @@
       "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions.": "动作条件将已声明的记录路径或输入与固定值或兼容字段比较；关联读取和审批重试均走原动作及申请人当前权限。",
       "Activate stable scoped presentation controls through caller-owned bindings.": "通过调用方拥有的绑定激活具有稳定身份的作用域呈现控件。",
       "Agent run and execution chain": "智能体运行与执行链",
+      "All sandbox restrictions remain enabled; no platform token, input or message bridge is provided. Scripts and form submissions are disabled. Remote bytes are not a versioned platform artifact.": "保持全部 sandbox 限制，不提供平台令牌、输入或消息桥。脚本和表单提交禁用。远程字节不属于版本化平台制品。",
       "An inbox preview is not an approval or permission engine.": "收件箱预览不承担审批或权限引擎职责。",
       "An optional RecordEditPort supplies authorized displayed fields and the original revision-bound submit callback. Failed edits remain staged; the caller owns permissions and execution.": "可选 RecordEditPort 提供授权展示字段及绑定原记录版本的提交回调。失败修改仍保留暂存，调用方管理权限及执行。",
       "App Shell / Workspace": "应用外壳 / 工作区",
@@ -3890,6 +3919,7 @@
       "Disabled": "禁用",
       "Disclosure": "展开区块",
       "Display a bounded record window as time points or intervals, grouped by an original resource field.": "将有界记录窗口显示为时间点或区间，按原资源字段分组。",
+      "Display a fixed HTTPS document at its exact reviewed origin.": "在精确已审查来源呈现固定 HTTPS 文档。",
       "Display declared record states and caller-allowed transitions.": "展示已声明的记录状态与调用方允许的跃迁。",
       "Display the original finite numeric aggregate with a bounded arc and warning threshold.": "以有界弧线和警告阈值显示原有限数值聚合。",
       "Display the original public image URL, caption and cover height through the browser image element.": "通过浏览器图片元素展示原公开图片地址、说明及覆盖高度。",
@@ -3934,6 +3964,7 @@
       "Interactive Search Around": "交互式关系探索",
       "Invalid": "无效",
       "Isolated": "隔离",
+      "Isolated external document": "隔离的外部文档",
       "Keep record browsing and focused detail in one responsive task frame.": "在响应式任务框架中同时保留记录浏览与聚焦详情。",
       "Keep selection and detail together using the existing record workspace or controlled table/detail sections.": "使用原记录工作台或受控表格与详情区块，保持选择与详情连贯。",
       "Keyboard focus": "键盘焦点",
@@ -4281,6 +4312,7 @@
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/module-import/EmbeddingImportFields.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/module-import/ObservationImportFields.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
@@ -4302,6 +4334,7 @@
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/EmbeddingInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
+      "web/packages/build/src/page-editor/widgets/ExternalFrameInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/HeatmapInspector.tsx",
@@ -4376,6 +4409,7 @@
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/EmbeddingInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",
@@ -4708,6 +4742,9 @@
     "ui/date-input": [
       "web/packages/app/src/widgets/DateInput.tsx"
     ],
+    "ui/external-frame": [
+      "web/packages/app/src/widgets/EmbeddedPage.tsx"
+    ],
     "ui/resource-list": [
       "web/packages/app/src/widgets/Exploration.tsx"
     ],
@@ -5038,6 +5075,8 @@
         "Entity",
         "EntityInfo",
         "EntityRecord",
+        "ExternalFrameConfig",
+        "ExternalFrameProps",
         "Field",
         "FieldInfo",
         "FieldType",

@@ -11,3 +11,6 @@ test("dormant nested loops retain their original ownership and consume expanded 
  const page={sections:[],document:{root:"root",nodes:{root:{kind:"rows",children:["outer"]},outer:{kind:"loop",loop:{limit:4},children:[]},inner:{kind:"loop",loop:{limit:3},children:[]}},unusedWidgets:[{node:"inner",parent:"outer"}],queries:{hidden:{itemOwner:"inner",limit:20}}}};
  assert.equal(pageEmbeddingCost(page).records,240);
 });
+test("external browsing contexts consume the same instance budget before a draft can mount them",()=>{
+ const cost=pageEmbeddingCost({sections:Array.from({length:16},()=>({externalFrame:{url:"https://docs.example.com/report",origin:"https://docs.example.com"}}))}),budget=new PageEmbeddingBudget({instances:16,queries:8,records:512,sections:256},cost);assert.equal(cost.instances,17);assert.equal(budget.valid,false);assert.equal(budget.reserve({}, {instances:1,queries:0,records:0,sections:0}),false);
+});

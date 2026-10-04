@@ -161,7 +161,7 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 				return fmt.Errorf("record work needs its exact original page or overlay owner")
 			}
 		}
-		if section.Widget == "embedded-page" {
+		if section.Widget == "embedded-page" || section.Widget == "external-frame" {
 			if sectionOwners[section.ID] != "" {
 				return fmt.Errorf("embedding does not enter a loop")
 			}
