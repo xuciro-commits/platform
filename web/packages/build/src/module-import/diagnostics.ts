@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "spatial-binding":"Map typed WGS84 fields or an original file ID state, asset and compatible retained sample query. Unknown, simulated or executable inputs are refused.",
+ "native-spatial":"Original map windows and authorized image/GLB attachments replace source simulations. Model URLs and worker data remain in the report; layers and reviewed typed mappings retain their configuration.",
  "ai-binding": "Map an original authorized record and fixed function; conversation input and result types must match.",
  "native-original-ai": "Original functions replace fixed analyses and timer replies. Suggestions do not change collections; chat history comes from retained calls.",
  "embedding-binding": "Choose the exact published page and map all required original interface ports.",

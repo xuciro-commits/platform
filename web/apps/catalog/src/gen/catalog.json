@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:5cd4738536070715",
+  "revision": "sha256:00a02b3b809f99c0",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4395,6 +4395,7 @@
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ObservationInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/SpatialInspectors.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
@@ -4444,6 +4445,7 @@
       "web/packages/build/src/module-import/EmbeddingImportFields.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/module-import/ObservationImportFields.tsx",
+      "web/packages/build/src/module-import/SpatialImportFields.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",
@@ -4493,6 +4495,7 @@
       "web/packages/build/src/page-editor/widgets/SeparatorInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SpacerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SparklineInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/SpatialInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SummaryInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
@@ -4545,6 +4548,7 @@
       "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/NoticeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SeparatorInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/SpatialInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx",
@@ -4936,6 +4940,12 @@
     "ui/record-chart": [
       "web/packages/app/src/widgets/RecordChart.tsx"
     ],
+    "ui/image-annotation": [
+      "web/packages/app/src/widgets/RecordCollaboration.tsx"
+    ],
+    "ui/scene-3d": [
+      "web/packages/app/src/widgets/RecordCollaboration.tsx"
+    ],
     "ui/record-comments": [
       "web/packages/app/src/widgets/RecordCollaboration.tsx"
     ],
@@ -4957,6 +4967,9 @@
     "ui/record-gantt": [
       "web/packages/app/src/widgets/RecordGantt.tsx",
       "web/packages/build/src/editor.tsx"
+    ],
+    "ui/record-map": [
+      "web/packages/app/src/widgets/RecordMap.tsx"
     ],
     "ui/record-timeline": [
       "web/packages/app/src/widgets/RecordTimeline.tsx"

@@ -173,9 +173,9 @@
       "sourceType": "Map",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-map",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "Gantt",
@@ -405,9 +405,9 @@
       "sourceType": "ImageAnnotation",
       "sourceCategory": "Visualization",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "image-annotation",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "ObservabilityChart",
@@ -741,9 +741,9 @@
       "sourceType": "Scene3D",
       "sourceCategory": "Industrial operations",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "scene-3d",
+      "reason": "bounded-config-profile"
     }
   ],
   "adapterOwner": "@pkg/build",

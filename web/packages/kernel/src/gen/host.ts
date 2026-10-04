@@ -1363,6 +1363,14 @@ export type PageRecordList = {
   layout: string;
 };
 
+export type PageRecordMap = {
+  latitudeField: string;
+  longitudeField: string;
+  labelField: string;
+  colorField?: string;
+  clusterEnabled: boolean;
+};
+
 export type PageRecordPicker = {
   labelField: string;
   label?: string;
@@ -1396,6 +1404,44 @@ export type PageResourceSource = {
   kind: string;
   section?: string;
   node?: string;
+};
+
+export type PageSceneConfig = {
+  background: string;
+  showGrid: boolean;
+  quality: string;
+  layers: PageSceneLayer[];
+  mappings: PageSceneMapping[];
+  sampleTimeField?: string;
+  sampleAssetField?: string;
+};
+
+export type PageSceneLayer = {
+  id: string;
+  name: string;
+  nodes: string[];
+  visible: boolean;
+  opacity: number;
+  wireframe: boolean;
+  color?: string;
+};
+
+export type PageSceneMapping = {
+  id: string;
+  node: string;
+  source: string;
+  field: string;
+  mode: string;
+  axis: string;
+  inputMin: number;
+  inputMax: number;
+  outputMin: number;
+  outputMax: number;
+  threshold?: number;
+  colorLow?: string;
+  colorHigh?: string;
+  smooth?: number;
+  enabled: boolean;
 };
 
 export type PageSeparator = {
@@ -1736,6 +1782,11 @@ export type SavedView = {
 };
 
 export type Section = {
+  map?: PageRecordMap;
+  scene?: PageSceneConfig;
+  sceneSampleCollectionVariable?: string;
+  sceneSampleVariable?: string;
+  scenePartVariable?: string;
   ai?: PageAI;
   externalFrame?: PageExternalFrame;
   embedding?: PageEmbedding;
@@ -2145,7 +2196,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.86",
+  "uiProfile": "platform.page.v2.87",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -6739,6 +6790,267 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "record-map",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.87",
+      "title": "Record map",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "map": {
+          "latitudeField": "",
+          "longitudeField": "",
+          "labelField": "id",
+          "clusterEnabled": true
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "map": {
+            "type": "object",
+            "properties": {
+              "latitudeField": {
+                "type": "string"
+              },
+              "longitudeField": {
+                "type": "string"
+              },
+              "labelField": {
+                "type": "string"
+              },
+              "colorField": {
+                "type": "string"
+              },
+              "clusterEnabled": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.87"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
+    },
+    {
+      "componentID": "image-annotation",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.87",
+      "title": "Image annotation",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.87"
+        },
+        {
+          "id": "file",
+          "bindingField": "fileVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.87"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "scene-3d",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.87",
+      "title": "3D scene",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "scene": {
+          "background": "dark",
+          "showGrid": true,
+          "quality": "balanced",
+          "layers": [],
+          "mappings": []
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "scene": {
+            "type": "object",
+            "properties": {
+              "background": {
+                "type": "string"
+              },
+              "quality": {
+                "type": "string"
+              },
+              "showGrid": {
+                "type": "boolean"
+              },
+              "sampleAssetField": {
+                "type": "string"
+              },
+              "layers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "mappings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "sampleTimeField": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.87"
+        },
+        {
+          "id": "file",
+          "bindingField": "fileVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.87"
+        },
+        {
+          "id": "sample",
+          "bindingField": "sceneSampleVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.87"
+        },
+        {
+          "id": "sample-window",
+          "bindingField": "sceneSampleCollectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.87"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "part",
+          "bindingField": "scenePartVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.87"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -6827,7 +7139,8 @@ export const pageUIManifest = {
     "platform.page.v2.83",
     "platform.page.v2.84",
     "platform.page.v2.85",
-    "platform.page.v2.86"
+    "platform.page.v2.86",
+    "platform.page.v2.87"
   ],
   "runtime": {
     "scope": "page",
@@ -7005,6 +7318,11 @@ export const pageUIManifest = {
         "kind": "record",
         "type": "record",
         "widget": "observation"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "record-map"
       }
     ],
     "loop": {

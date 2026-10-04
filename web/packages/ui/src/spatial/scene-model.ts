@@ -1,15 +1,17 @@
+import type {Api} from "@platform/kernel";
 import type {EntityInfo,EntityRecord} from "../records/Records";
 
 export type SceneInput={record:EntityRecord;info:EntityInfo};
-export type SceneMapping={id:string;node:string;source:"asset"|"sample";field:string;mode:"rotation"|"position"|"scale"|"color"|"visibility";axis:"x"|"y"|"z";inputMin:number;inputMax:number;outputMin:number;outputMax:number;threshold?:number;colorLow?:string;colorHigh?:string;smooth?:number;enabled:boolean};
-export type SceneLayer={id:string;name:string;nodes:string[];visible:boolean;opacity:number;wireframe:boolean;color?:string};
-export type SceneConfig={background:"light"|"dark";showGrid:boolean;quality:"performance"|"balanced"|"high";layers:SceneLayer[];mappings:SceneMapping[];sampleAssetField?:string};
+export type SceneMapping=Api.PageSceneMapping;
+export type SceneLayer=Api.PageSceneLayer;
+export type SceneConfig=Api.PageSceneConfig;
 export const sceneLimits={maxBytes:16<<20,maxJSONBytes:1<<20,maxNodes:512,maxMeshes:256,maxMaterials:128,maxVertices:250000,maxIndices:1500000,maxTexturePixels:16000000,maxLayers:32,maxMappings:64} as const;
 const hex=(color?:string)=>color===undefined||/^#[\da-fA-F]{6}$/.test(color);
 export function validSceneConfig(c:SceneConfig):boolean{
  if(!c||!["light","dark"].includes(c.background)||!["performance","balanced","high"].includes(c.quality)||typeof c.showGrid!=="boolean"||!Array.isArray(c.layers)||!Array.isArray(c.mappings)||c.layers.length>sceneLimits.maxLayers||c.mappings.length>sceneLimits.maxMappings)return false;
  const ids=new Set<string>(),drives=new Set<string>();
- const id=(v:string)=>typeof v==="string"&&!!v.trim()&&v.length<=128&&!ids.has(v)&&(ids.add(v),true),name=(v:string)=>typeof v==="string"&&!!v.trim()&&v.length<=256;
+ const bytes=(v:string)=>new TextEncoder().encode(v).length;
+ const id=(v:string)=>typeof v==="string"&&!!v.trim()&&bytes(v)<=128&&!ids.has(v)&&(ids.add(v),true),name=(v:string)=>typeof v==="string"&&!!v.trim()&&bytes(v)<=256;
  return c.layers.every(l=>!!l&&id(l.id)&&name(l.name)&&Array.isArray(l.nodes)&&l.nodes.length>0&&l.nodes.length<=sceneLimits.maxNodes&&l.nodes.every(name)&&new Set(l.nodes).size===l.nodes.length&&typeof l.visible==="boolean"&&typeof l.wireframe==="boolean"&&Number.isFinite(l.opacity)&&l.opacity>=0&&l.opacity<=1&&hex(l.color))&&c.mappings.every(m=>{
   if(!m)return false;
   const drive=JSON.stringify([m.node,m.mode,["color","visibility"].includes(m.mode)?undefined:m.axis]);

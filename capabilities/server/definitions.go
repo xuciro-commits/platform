@@ -551,6 +551,12 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 					if section.CheckRecordEvents(shown) != nil {
 						continue
 					}
+					if section.CheckMap(shown) != nil || page.CheckSceneBinding(section, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+						actual, ok := entities[ref.Name]
+						return actual, ok && actual.App == ref.App
+					}) != nil {
+						continue
+					}
 					if section.CheckScatter(shown) != nil {
 						continue
 					}

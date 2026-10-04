@@ -121,7 +121,7 @@ test("default onSelect compiles fixed local state after independent active and m
  assert.equal(globalThis.eventExecuted,undefined);assert.equal(compileWorkshopModule(JSON.stringify(m),"page",bindings,{...target,profile:"platform.page.v2.32"}).draft,undefined);
 });
 test("migration inventory tracks every pinned source type once and cannot confer runtime eligibility",()=>{
- assert.equal(workshopMigrationCatalog.entries.length,92);assert.equal(new Set(workshopMigrationCatalog.entries.map(e=>e.sourceType)).size,92);assert.equal(workshopMigrationCatalog.entries.filter(e=>e.status==="profile").length,88);assert.equal(workshopMigrationCatalog.entries.find(e=>e.sourceType==="Scene3D").status,"planned");
+ assert.equal(workshopMigrationCatalog.entries.length,92);assert.equal(new Set(workshopMigrationCatalog.entries.map(e=>e.sourceType)).size,92);assert.equal(workshopMigrationCatalog.entries.filter(e=>e.status==="profile").length,91);assert.equal(workshopMigrationCatalog.entries.find(e=>e.sourceType==="ObjectSetBuilder").status,"planned");
  // Pinned from the actual WidgetType union, independently of migration entries.
  assert.equal(createHash("sha256").update(workshopMigrationCatalog.entries.map(e=>e.sourceType).sort().join("\n")).digest("hex"),"fd2ad8319d16fbe084db00d4635ee9bd30c99d718d012f4e8c61f01df9d958e0");
  for(const entry of workshopMigrationCatalog.entries.filter(e=>e.status==="profile"))for(const target of Array.isArray(entry.target)?entry.target:[entry.target])assert.ok(nativeRegistry.widgets.some(w=>w.componentID===target),entry.sourceType);

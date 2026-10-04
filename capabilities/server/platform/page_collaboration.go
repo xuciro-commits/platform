@@ -6,7 +6,7 @@ import (
 )
 
 func collaborationWidget(widget string) bool {
-	return slices.Contains([]string{"record-comments", "record-uploader", "media-preview", "pdf-viewer"}, widget)
+	return slices.Contains([]string{"record-comments", "record-uploader", "media-preview", "pdf-viewer", "image-annotation", "scene-3d"}, widget)
 }
 
 func (d *PageDocument) checkCollaboration(s Section) error {
@@ -32,8 +32,8 @@ func (d *PageDocument) checkCollaboration(s Section) error {
 			return fmt.Errorf("uploader cannot bind comment or PDF state")
 		}
 		scalar, mode = s.FileVariable, "state"
-	case "media-preview", "pdf-viewer":
-		if s.CommentDraftVariable != "" || s.Widget == "media-preview" && s.PdfPageVariable != "" {
+	case "media-preview", "pdf-viewer", "image-annotation", "scene-3d":
+		if s.CommentDraftVariable != "" || s.Widget != "pdf-viewer" && s.PdfPageVariable != "" {
 			return fmt.Errorf("media preview bindings are incompatible")
 		}
 		scalar, mode = s.FileVariable, "read"
@@ -61,7 +61,7 @@ func (d *PageDocument) checkCollaborationOwners(sections []Section) error {
 		if record.Source == nil {
 			continue // the section's original-resource check supplies the diagnostic
 		}
-		for _, scalar := range []string{s.CommentDraftVariable, s.FileVariable, s.PdfPageVariable} {
+		for _, scalar := range []string{s.CommentDraftVariable, s.FileVariable, s.PdfPageVariable, s.ScenePartVariable} {
 			if scalar == "" {
 				continue
 			}
@@ -82,7 +82,9 @@ func (s Section) CollaborationDependencies() []AssetRef {
 		return []AssetRef{{App: "relations", Kind: AssetObject, Name: "platform.comment"}, {App: "relations", Kind: AssetAction, Name: "platform.comment.add"}}
 	case "record-uploader":
 		return []AssetRef{{App: "files", Kind: AssetObject, Name: "files.file"}, {App: "files", Kind: AssetAction, Name: "files.file.attach"}}
-	case "media-preview", "pdf-viewer":
+	case "image-annotation":
+		return []AssetRef{{App: "files", Kind: AssetObject, Name: "files.file"}, {App: "files", Kind: AssetAction, Name: "files.file.annotate"}}
+	case "media-preview", "pdf-viewer", "scene-3d":
 		return []AssetRef{{App: "files", Kind: AssetObject, Name: "files.file"}}
 	}
 	return nil

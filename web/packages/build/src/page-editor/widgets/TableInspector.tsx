@@ -14,7 +14,7 @@ export type TableDraft = {tableColumns?:Api.PageTableColumn[];showSearch?:boolea
 export type TableInspectorPorts = { section:TableDraft; document:Api.PageDocument; object:string; info?:EntityInfo; overlay?:string; itemOwner?:string; onChange:(patch:Partial<TableDraft>)=>void };
 
 /** Only table-specific ports; common object/property controls stay shared. */
-export function TableInspector({section,document,object,info,overlay,itemOwner,onChange,widget="table",showFields=true}:TableInspectorPorts&{widget?:"action-table"|"collection-analysis"|"tag-counts"|"sparkline-kpi"|"treemap"|"record-scatter"|"histogram"|"term-counts"|"table"|"record-timeline"|"kanban"|"record-list"|"record-chart"|"record-events"|"record-calendar"|"record-gantt"|"summary-stats"|"record-leaderboard"|"record-picker";showFields?:boolean}) {
+export function TableInspector({section,document,object,info,overlay,itemOwner,onChange,widget="table",showFields=true}:TableInspectorPorts&{widget?:"record-map"|"action-table"|"collection-analysis"|"tag-counts"|"sparkline-kpi"|"treemap"|"record-scatter"|"histogram"|"term-counts"|"table"|"record-timeline"|"kanban"|"record-list"|"record-chart"|"record-events"|"record-calendar"|"record-gantt"|"summary-stats"|"record-leaderboard"|"record-picker";showFields?:boolean}) {
   const {catalog}=useHost(),edit=catalog.find(a=>a.schema===(section.object||object)+".edit"),editable=tableEditableFields(info,edit,section.fields??[]);
   const contract=widgetContract(widget)!;
   const collection=contract.inputPorts.find(p=>p.bindingField==="collectionVariable")!;

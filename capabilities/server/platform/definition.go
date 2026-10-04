@@ -104,6 +104,12 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	Map                           *PageRecordMap   `json:"map,omitempty"`
+	Scene                         *PageSceneConfig `json:"scene,omitempty"`
+	SceneSampleCollectionVariable string           `json:"sceneSampleCollectionVariable,omitempty"`
+	SceneSampleVariable           string           `json:"sceneSampleVariable,omitempty"`
+	ScenePartVariable             string           `json:"scenePartVariable,omitempty"`
+
 	AI                           *PageAI                 `json:"ai,omitempty"`
 	ExternalFrame                *PageExternalFrame      `json:"externalFrame,omitempty"`
 	Embedding                    *PageEmbedding          `json:"embedding,omitempty"`

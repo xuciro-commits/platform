@@ -13,7 +13,8 @@
     "./static-image": "./src/components/static-image.ts",
     "./histogram": "./src/components/histogram-data.ts",
     "./external-frame": "./src/components/external-frame.ts",
-    "./image-regions": "./src/spatial/image-regions.ts"
+    "./image-regions": "./src/spatial/image-regions.ts",
+    "./scene-model": "./src/spatial/scene-model.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

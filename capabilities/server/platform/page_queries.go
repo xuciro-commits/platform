@@ -298,6 +298,17 @@ func (p Page) WindowVariableObject(id string) string {
 // CheckQuerySchema compares original member-visible descriptors. Compilation
 // uses unfiltered descriptors; discovery calls it with this member's fields.
 func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition) error {
+	for _, section := range p.Sections {
+		if section.SceneSampleCollectionVariable == "" || section.Scene == nil || p.Document == nil {
+			continue
+		}
+		v := p.Document.Variables[section.SceneSampleCollectionVariable]
+		if v.Source != nil && string(Raw(p.Document.Queries[v.Source.Query])) == string(Raw(q)) {
+			if named == nil || named.Query == nil || named.Query.By != section.Scene.SampleAssetField {
+				return fmt.Errorf("scene latest sample query uses another asset reference")
+			}
+		}
+	}
 	if object.Type != q.Object.Name {
 		return fmt.Errorf("query object is unavailable")
 	}
@@ -480,6 +491,8 @@ func (d *PageDocument) recordContextQueryInput(query, variable string, sections 
 		windowID := ""
 		if s.Widget == "avatar-stack" && s.Avatar != nil && s.Avatar.ContextVariable == variable && (v.Scope != "page" || q.Owner == "") {
 			windowID = s.Avatar.ContextCollectionVariable
+		} else if s.Widget == "scene-3d" && s.RecordVariable == variable {
+			windowID = s.SceneSampleCollectionVariable
 		} else if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "statistics" && s.RecordVariable == variable {
 			windowID = s.ObservationContextVariable
 		}
@@ -561,7 +574,7 @@ func (d *PageDocument) variableDependsOnQuery(variable, target string, sections 
 				if s.ID != v.Source.Section {
 					continue
 				}
-				for _, input := range append([]string{s.CollectionVariable, s.FilterVariable, s.RecordVariable}, s.ObservationVariables()...) {
+				for _, input := range append(append([]string{s.CollectionVariable, s.FilterVariable, s.RecordVariable}, s.ObservationVariables()...), s.SpatialVariables()...) {
 					if variableDepends(input) {
 						return true
 					}

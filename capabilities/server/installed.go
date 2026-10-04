@@ -641,6 +641,17 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := s.CheckRecordEvents(info); err != nil {
 				return err
 			}
+		case "record-map":
+			if err := s.CheckMap(info); err != nil {
+				return err
+			}
+		case "scene-3d":
+			if err := p.CheckSceneBinding(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+				actual, ok := t.entity(ref.Name)
+				return actual, ok && actual.App == ref.App
+			}); err != nil {
+				return err
+			}
 		case "record-scatter":
 			if err := s.CheckScatter(info); err != nil {
 				return err

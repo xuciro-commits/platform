@@ -1,3 +1,4 @@
+import {MapInspector,AnnotationInspector,SceneInspector} from "./SpatialInspectors";
 import {EmbeddingInspector} from "./EmbeddingInspector";
 import {AIInspector} from "./AIInspector";
 import {ExternalFrameInspector} from "./ExternalFrameInspector";
@@ -54,6 +55,9 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "record-map":{configVersion:1,bindings:MapInspector},
+ "image-annotation":{configVersion:1,bindings:AnnotationInspector},
+ "scene-3d":{configVersion:1,bindings:SceneInspector},
  "ai-assistant":{configVersion:1,bindings:AIInspector},
  "external-frame":{configVersion:1,bindings:ExternalFrameInspector},
  "embedded-page":{configVersion:1,bindings:EmbeddingInspector},

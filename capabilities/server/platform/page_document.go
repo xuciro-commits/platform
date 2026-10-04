@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.Map != nil || s.Scene != nil || s.SceneSampleCollectionVariable != "" || s.SceneSampleVariable != "" || s.ScenePartVariable != "" || s.Widget == "record-map" || s.Widget == "scene-3d" || s.Widget == "image-annotation" {
+				return fmt.Errorf("spatial views require a document")
+			}
 			if s.Widget == "ai-assistant" || s.AI != nil {
 				return fmt.Errorf("AI views require a document")
 			}
@@ -357,6 +360,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkHeatmap(section); err != nil {
+			return err
+		}
+		if err := d.checkSpatial(section); err != nil {
 			return err
 		}
 		if err := d.checkScatter(section); err != nil {
@@ -765,7 +771,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 							}
 						}
 					}
-					for _, id := range append(append(s.ContextViewVariables(), s.ObservationVariables()...), append(s.EmbeddingVariables(), s.AIVariables()...)...) {
+					for _, id := range append(append(s.ContextViewVariables(), s.ObservationVariables()...), append(append(s.EmbeddingVariables(), s.AIVariables()...), s.SpatialVariables()...)...) {
 						if id != "" {
 							if _, ok := variables[id]; !ok {
 								return false

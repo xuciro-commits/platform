@@ -9,7 +9,7 @@ export function originalContextSlot(page:Api.Page,section:Api.Section,variable:s
  const v=page.document?.variables?.[variable??""];
  if(!variable||v?.type!=="record"||v.mode!=="resource"||v.source?.kind!=="record")return;
  const producer=page.sections?.find(s=>s.id===v.source?.section);
- if(!producer||!["table","record-list","resource-list","graph-explorer","record-timeline","kanban","record-calendar","record-picker","record-leaderboard","record-scatter"].includes(producer.widget)||sectionOverlay(page,section.id??"")!==sectionOverlay(page,producer.id??""))return;
+ if(!producer||!["table","record-list","resource-list","graph-explorer","record-timeline","kanban","record-calendar","record-picker","record-leaderboard","record-scatter","record-map"].includes(producer.widget)||sectionOverlay(page,section.id??"")!==sectionOverlay(page,producer.id??""))return;
  return recordResourceSlot(page,variable);
 }
 export function confirmedContext(page:Api.Page,section:Api.Section,variable:string|undefined,session:PageSessionStore,snapshot:PageSessionSnapshot) {
