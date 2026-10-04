@@ -61,7 +61,7 @@ export { humanizeKernelError } from "./lib/errors";
 
 export { useViewVisible } from "./shell/ViewVisibility";
 
-export {Spacer,LayoutRegion,LayoutStack,type LayoutSize} from "./layout/LayoutRegion";
+export {Spacer,RegionPresentation,LayoutRegion,LayoutStack,type LayoutSize} from "./layout/LayoutRegion";
 
 export {CommandMenu,type ContextCommand} from "./components/CommandMenu";
 

@@ -656,7 +656,7 @@ export default {
   "Unavailable": "不可用",
 
   "Sized layout regions": "可配置尺寸的布局区域",
-  "Arrange weighted regions with bounded dimensions and local scrolling, stacking columns in narrow containers.": "以有界尺寸与局部滚动安排带权重的区域，在窄容器中堆叠列。",
+  "Arrange weighted regions with bounded dimensions and local scrolling, container panels and local collapse, stacking columns in narrow containers.": "以有界尺寸与局部滚动安排带权重的区域，在窄容器中堆叠列。",
   "The caller supplies validated dimensions and parent axes; layout grants no business access.": "调用方提供已验证的尺寸与父轴；布局不授予业务访问权限。",
   "Primary region": "主要区域",
   "Secondary region": "次要区域",

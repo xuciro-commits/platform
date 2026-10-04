@@ -1,6 +1,6 @@
 import { loopOwner, overlayOwner, variableAccessible, type LayoutKind } from "../page-layout";
 import {pageUIManifest,type Api} from "@platform/kernel";
-import { Button, Card, CommandMenu, Input, Select, cn, t } from "@platform/ui";
+import { Button, Card, Checkbox, CommandMenu, Input, Select, cn, t } from "@platform/ui";
 import { useId, useState, type DragEvent, type ReactNode } from "react";
 import { widgetContract } from "@platform/app";
 import { ChevronDown, ChevronRight, Columns2, Layers, Plus, Rows3, Settings2 } from "lucide-react";
@@ -108,6 +108,12 @@ export function LayoutProperties({ document, id, onChange, onPatch, onUngroup }:
       </Select>
     </label>
     <label className="grid gap-1 text-xs">{t("Container title")}<Input value={node.title ?? ""} onChange={(event) => onPatch(id, { title: event.target.value })} /></label>
+    {["rows","columns"].includes(node.kind)&&<fieldset className="grid gap-2"><legend className="text-xs font-semibold">{t("Region presentation")}</legend>
+      <label className="grid gap-1 text-xs">{t("Region padding (px)")}<Input type="number" min={0} max={pageUIManifest.layout.maxPadding} step={1} value={node.presentation?.padding??""} onChange={e=>onPatch(id,{presentation:{...node.presentation,padding:e.target.value===""?undefined:Number(e.target.value)}})}/></label>
+      <label className="grid gap-1 text-xs">{t("Region background")}<Select value={node.presentation?.background??"default"} onChange={e=>onPatch(id,{presentation:{...node.presentation,background:e.target.value}})}><option value="default">{t("Default")}</option><option value="panel">{t("Panel")}</option></Select></label>
+      {([['border','Region border'],['showHeader','Show region title'],['collapsible','Collapsible region'],['defaultCollapsed','Initially collapsed']]as const).map(([key,label])=><Checkbox key={key} className="text-xs" checked={!!node.presentation?.[key]} onChange={checked=>onPatch(id,{presentation:{...node.presentation,[key]:checked,...key==='showHeader'&&!checked?{collapsible:false,defaultCollapsed:false}:{},...key==='collapsible'?{...checked?{showHeader:true}:{defaultCollapsed:false}}:{}}})}>{t(label)}</Checkbox>)}
+      <Button variant="ghost" onClick={()=>onPatch(id,{presentation:undefined})}>{t("Reset region presentation")}</Button>
+    </fieldset>}
     {(node.kind === "flow" || node.kind === "toolbar") && <label className="grid gap-1 text-xs">{t("Alignment")}<Select value={node.align ?? "start"} onChange={(event) => onPatch(id, { align: event.target.value })}>
       <option value="start">{t("Start")}</option><option value="center">{t("Center")}</option><option value="end">{t("End")}</option><option value="between">{t("Space between")}</option>
     </Select></label>}

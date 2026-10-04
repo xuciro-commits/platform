@@ -18,6 +18,8 @@ export function pageLayoutDiagnostics(document:Api.PageDocument):{node:string;co
  for(const [id,n]of Object.entries(document.nodes)){
   const s=n.size,p=parents.get(id),parent=p?document.nodes[p]:undefined;
   const fail=(code:string)=>issues.push({node:id,code});
+  const r=n.presentation;
+  if(r&&(Number(document.uiProfile.split('.').at(-1))<Number(limits.presentationProfile.split('.').at(-1))||!['rows','columns'].includes(n.kind)||r.padding!==undefined&&(!Number.isInteger(r.padding)||r.padding<0||r.padding>limits.maxPadding)||r.background!==undefined&&!['default','panel'].includes(r.background)||(['border','showHeader','collapsible','defaultCollapsed']as const).some(k=>r[k]!==undefined&&typeof r[k]!=='boolean')||r.showHeader&&!n.title||r.collapsible&&(!r.showHeader||!n.title)||r.defaultCollapsed&&!r.collapsible))fail('Region presentation needs a supported container, bounded padding and a visible collapse title.');
   if((s||n.gap!==undefined)&&Number(document.uiProfile.split(".").at(-1))<Number(limits.requiredUIProfile.split(".").at(-1)))fail("Layout sizing needs a newer page profile.");
   if(n.gap!==undefined&&(!["rows","columns"].includes(n.kind)||!Number.isInteger(n.gap)||n.gap<0||n.gap>limits.maxGap))fail("Layout gap is outside its container budget.");
   if(!s)continue;

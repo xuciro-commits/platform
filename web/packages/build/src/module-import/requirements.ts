@@ -2,6 +2,12 @@ import type {SourceModule,ImportBindings} from "./compile";
 
 const text=(v:unknown)=>typeof v==="string"?v:"";
 const object=(v:unknown)=>v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:undefined;
+/** Regions presented by the selected page and retained overlays, excluding other pages. */
+export function workshopRegionSections(module:SourceModule|undefined,pageID:string){
+ if(!module)return [];
+ const visited=new Set<string>(),walk=(id:string)=>{if(visited.has(id))return;visited.add(id);for(const c of module.sections[id]?.children??[])if(c.kind==='section')walk(c.id);};
+ const page=module.pages.find(p=>p.id===pageID);if(!page)return [];walk(page.rootSectionId);module.overlays.forEach(o=>walk(o.rootSectionId));return [...visited].flatMap(id=>module.sections[id]?[module.sections[id]!]:[]);
+}
 /** Offer only active-record producers actually present in this widget's owner. */
 export function collaborationRecordChoices(module:SourceModule|undefined,pageID:string,widgetID:string):{id:string;title:string;object:string}[] {
  if(!module)return [];

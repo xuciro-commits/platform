@@ -1,6 +1,16 @@
-import type {CSSProperties,ReactNode} from "react";
+import {useId,useState,type CSSProperties,type ReactNode} from "react";
 import type {Api} from "@platform/kernel";
 import {cn} from "../lib/cn";
+import {Button} from '../primitives/button';
+
+/** Local presentation state. The page owner keys this by session and overlay lifetime. */
+export function RegionPresentation({children,presentation:p,title}:{children:ReactNode;presentation:Api.PageRegionPresentation;title?:string}){
+ const [collapsed,setCollapsed]=useState(!!p.defaultCollapsed),content=useId();
+ return <section aria-label={p.showHeader?title:undefined} className={cn('flex min-h-0 min-w-0 flex-1 flex-col',p.background==='panel'&&'bg-surface',p.border&&'rounded-md border border-border')} style={{padding:p.padding}}>
+  {p.showHeader&&<div className="mb-2 flex shrink-0 items-center gap-2"><h2 className="text-sm font-semibold">{p.collapsible?<Button variant="ghost" aria-expanded={!collapsed} aria-controls={content} onClick={()=>setCollapsed(v=>!v)}>{title}</Button>:title}</h2></div>}
+  <div id={content} hidden={collapsed} className={cn(!collapsed&&'flex min-h-0 min-w-0 flex-1 flex-col')}>{children}</div>
+ </section>;
+}
 
 export type LayoutSize=Api.PageLayoutSize;
 

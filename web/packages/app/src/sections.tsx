@@ -15,7 +15,7 @@ import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button,ButtonGroup, CollectionTitle, PageHeader, Card, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Input, SearchInput, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, RecordLinks, RecordStatus, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
+  Button,ButtonGroup, CollectionTitle, PageHeader, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Input, SearchInput, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, RecordLinks, RecordStatus, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, InlineActionForm, prefixOf } from "./actions";
@@ -758,7 +758,8 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       if (visible.value !== true) return wrapLayout ? wrapLayout(id, node, <Panel>{t("Hidden by page variable")}: {node.visibleWhen}</Panel>) : null;
     }
     const bounded=node.size?.height!==undefined||parentHeight&&(parentKind==="columns"||parentKind==="rows"&&node.size?.weight!==undefined);
-    const frame=(body:ReactNode)=><LayoutRegion key={id} size={node.size} parent={parentKind} fillHeight={parentKind==="columns"&&parentHeight} fillWidth={(parentKind==="flow"||parentKind==="toolbar")&&node.kind!=="widget"}>{wrapLayout?wrapLayout(id,node,body):body}</LayoutRegion>;
+    const frame=(body:ReactNode)=><LayoutRegion key={id} size={node.size} parent={parentKind} fillHeight={parentKind==="columns"&&parentHeight} fillWidth={(parentKind==="flow"||parentKind==="toolbar")&&node.kind!=="widget"}>{wrapLayout?wrapLayout(id,node,present(body)):present(body)}</LayoutRegion>;
+    const present=(body:ReactNode)=>node.presentation?<RegionPresentation key={`${id}/${overlay?session.overlayEpoch(overlay):"page"}`} title={node.title} presentation={node.presentation}>{body}</RegionPresentation>:body;
     if (node.kind === "widget") {
       const item = indexed.get(node.section);
       if (!item) return null; // server filtered this widget for the reader

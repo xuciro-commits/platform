@@ -51,14 +51,16 @@ type pageWidgetEvent struct {
 
 type pageUIContract struct {
 	Layout struct {
-		RequiredUIProfile string `json:"requiredUIProfile"`
-		UnusedProfile     string `json:"unusedProfile"`
-		MaxUnused         int    `json:"maxUnused"`
-		MinSize           int    `json:"minSize"`
-		MaxSize           int    `json:"maxSize"`
-		MaxWeight         int    `json:"maxWeight"`
-		MaxGap            int    `json:"maxGap"`
-		StackBelow        int    `json:"stackBelow"`
+		PresentationProfile string `json:"presentationProfile"`
+		MaxPadding          int    `json:"maxPadding"`
+		RequiredUIProfile   string `json:"requiredUIProfile"`
+		UnusedProfile       string `json:"unusedProfile"`
+		MaxUnused           int    `json:"maxUnused"`
+		MinSize             int    `json:"minSize"`
+		MaxSize             int    `json:"maxSize"`
+		MaxWeight           int    `json:"maxWeight"`
+		MaxGap              int    `json:"maxGap"`
+		StackBelow          int    `json:"stackBelow"`
 	} `json:"layout"`
 	UIProfile         string               `json:"uiProfile"`
 	SupportedProfiles []string             `json:"supportedProfiles"`

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:8ed494bc836cdf14",
+  "revision": "sha256:2d2d16e323af011b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2203,12 +2203,13 @@
       "id": "ui/layout-region",
       "owner": "@platform/ui",
       "name": "Sized layout regions",
-      "summary": "Arrange weighted regions with bounded dimensions and local scrolling, stacking columns in narrow containers.",
+      "summary": "Arrange weighted regions with bounded dimensions and local scrolling, container panels and local collapse, stacking columns in narrow containers.",
       "layer": 2,
       "source": "web/packages/ui/src/layout/LayoutRegion.tsx",
       "exports": [
         "LayoutRegion",
-        "LayoutStack"
+        "LayoutStack",
+        "RegionPresentation"
       ],
       "example": "SizedLayouts",
       "authority": "api",
@@ -3965,7 +3966,7 @@
       "Applications reuse Workspace; app navigation and views come from their AppUI declaration.": "应用复用 Workspace；应用导航与视图由各自的 AppUI 声明提供。",
       "Arrange a library, canvas and inspector with keyboard and pointer pane resizing.": "组合组件库、画布与检查器，支持键盘和指针调整面板宽度。",
       "Arrange original bounded relationship groups around their confirmed record through the shared graph canvas.": "通过共享图画布将原有界关系分组排列在已确认记录周围。",
-      "Arrange weighted regions with bounded dimensions and local scrolling, stacking columns in narrow containers.": "以有界尺寸与局部滚动安排带权重的区域，在窄容器中堆叠列。",
+      "Arrange weighted regions with bounded dimensions and local scrolling, container panels and local collapse, stacking columns in narrow containers.": "以有界尺寸与局部滚动安排带权重的区域，在窄容器中堆叠列。",
       "Ask for a bounded decision with focus trapping and a labelled title.": "用限制焦点范围、带标题的对话框完成有界决策。",
       "Author fixed record conditions and retain explicit query versions for shared page plans.": "编写固定记录条件，保留共享页面计划的明确查询版本。",
       "Authorized PDF pages": "已授权PDF页面",
@@ -4543,6 +4544,7 @@
       "web/packages/build/src/module-import/ApplicationImportFields.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
+      "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",

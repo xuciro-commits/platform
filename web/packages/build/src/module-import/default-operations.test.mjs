@@ -1,0 +1,20 @@
+import {registerHooks} from 'node:module';import {readFileSync} from 'node:fs';import assert from 'node:assert/strict';import test from 'node:test';
+import {defaultOperationsFixture} from './default-operations.fixture.mjs';
+const manifest=JSON.parse(readFileSync(new URL('../../../../../capabilities/server/platform/pageui/widgets.json',import.meta.url)));
+registerHooks({resolve(s,c,next){if(s==='@platform/kernel')return {url:'data:text/javascript,'+encodeURIComponent(`export const pageUIManifest=${JSON.stringify(manifest)};`),shortCircuit:true};try{return next(s,c)}catch(e){if(s.startsWith('./')||s.startsWith('../'))return next(s+'.ts',c);throw e;}}});
+const {compileWorkshopModule}=await import('./compile.ts'),{workshopRegionSections}=await import('./requirements.ts');
+const compile=f=>compileWorkshopModule(JSON.stringify(f.module),'pOperations',f.bindings,f.target);
+test('complete untouched Operations source retains every page widget overlay and missing unused binding after the actual container discontinuities are resolved',()=>{
+ const f=defaultOperationsFixture(manifest.uiProfile),source=JSON.stringify(f.module),initial=compile(f);assert.equal(initial.source,source);assert.equal(f.module.pages.length,7);assert.equal(Object.keys(f.module.widgets).length,85);assert.equal(f.module.overlays.length,4);assert.deepEqual(workshopRegionSections(f.module,'pOperations').filter(s=>s.scroll).map(s=>s.id),['sOperationsRoot','sDrawerRoot']);
+ assert.deepEqual(initial.diagnostics.filter(d=>d.blocking&&!d.path.startsWith('/widgets/wUnused')).map(d=>[d.path,d.code]),[['/sections/sOperationsRoot/scroll','region-scroll-binding'],['/sections/sDrawerRoot/scroll','region-scroll-binding']]);
+ f.bindings.regions={sOperationsRoot:{maxHeight:960},sDrawerRoot:{maxHeight:640}};
+ const r=compile(f);assert.equal(r.source,source);assert.equal(r.draft,undefined);const blocking=r.diagnostics.filter(d=>d.blocking);assert.ok(blocking.length);assert.ok(blocking.every(d=>d.path.startsWith('/widgets/wUnused')),JSON.stringify(blocking));assert.ok(blocking.some(d=>d.path.includes('wUnused1')));assert.ok(blocking.some(d=>d.path.includes('wUnused2')));assert.equal(Object.keys(r.ids.widgets).length,24);
+});
+test('grouped source containers preserve bounded panels headers collapse and explicit scroll ownership; executable or ambiguous settings refuse',()=>{
+ const f=defaultOperationsFixture(manifest.uiProfile),ids=['sOperationsRoot','sFiltersCol','sDetailCol','sDrawerRoot','sConfirmRoot'];
+ // Isolate five original configurations with test controls; the full source test above stays blocked.
+ f.module={id:'regions',name:'Original five regions',pages:[{id:'pOperations',name:'Regions',rootSectionId:'sOperationsRoot'}],sections:Object.fromEntries(ids.map(id=>[id,structuredClone(f.module.sections[id])])),widgets:{},variables:[],overlays:[],unusedWidgetIds:[]};
+ for(const s of Object.values(f.module.sections)){s.children=[];delete s.visibleVariableId;}f.module.sections.sOperationsRoot.children=ids.slice(1).map(id=>({kind:'section',id}));f.bindings={objects:{},fields:{},actions:{},queries:{},regions:{sOperationsRoot:{maxHeight:960},sDrawerRoot:{maxHeight:640}}};
+ const r=compile(f);assert.ok(r.draft,JSON.stringify(r.diagnostics));for(const id of ids){const n=r.draft.document.nodes[r.ids.nodes[id]],s=f.module.sections[id];assert.deepEqual(n.presentation,{showHeader:s.showHeader,padding:s.padding,background:s.background,border:s.border,collapsible:s.collapsible,defaultCollapsed:s.defaultCollapsed});if(s.scroll)assert.deepEqual(n.size,{maxHeight:f.bindings.regions[id].maxHeight,scroll:'auto'});}assert.equal(r.draft.document.nodes[r.ids.nodes.sDetailCol].size.width,360);
+ for(const change of [f=>f.target.profile='platform.page.v2.92',f=>f.module.sections.sDetailCol.padding=65,f=>f.module.sections.sDetailCol.showHeader=false,f=>f.module.sections.sDetailCol.collapsible='true',f=>f.module.sections.sDetailCol.background='execute',f=>f.bindings.regions.sDrawerRoot.maxHeight=0,f=>f.bindings.regions.sDrawerRoot.expression='window.height']){const copy=structuredClone(f);change(copy);assert.equal(compile(copy).draft,undefined,String(change));}
+});

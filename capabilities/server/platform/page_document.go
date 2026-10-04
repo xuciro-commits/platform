@@ -42,18 +42,19 @@ type PageLayoutSize struct {
 }
 
 type PageLayoutNode struct {
-	Size           *PageLayoutSize `json:"size,omitempty"`
-	Gap            *int            `json:"gap,omitempty"`
-	Kind           string          `json:"kind"` // rows, columns, tabs, flow, toolbar, or widget
-	Children       []string        `json:"children,omitempty"`
-	Section        string          `json:"section,omitempty"`
-	Title          string          `json:"title,omitempty"`
-	ValueVariable  string          `json:"valueVariable,omitempty"`
-	ActiveVariable string          `json:"activeVariable,omitempty"`
-	VisibleWhen    string          `json:"visibleWhen,omitempty"`
-	EnabledWhen    string          `json:"enabledWhen,omitempty"`
-	Align          string          `json:"align,omitempty"`
-	Loop           *PageLoop       `json:"loop,omitempty"`
+	Presentation   *PageRegionPresentation `json:"presentation,omitempty"`
+	Size           *PageLayoutSize         `json:"size,omitempty"`
+	Gap            *int                    `json:"gap,omitempty"`
+	Kind           string                  `json:"kind"` // rows, columns, tabs, flow, toolbar, or widget
+	Children       []string                `json:"children,omitempty"`
+	Section        string                  `json:"section,omitempty"`
+	Title          string                  `json:"title,omitempty"`
+	ValueVariable  string                  `json:"valueVariable,omitempty"`
+	ActiveVariable string                  `json:"activeVariable,omitempty"`
+	VisibleWhen    string                  `json:"visibleWhen,omitempty"`
+	EnabledWhen    string                  `json:"enabledWhen,omitempty"`
+	Align          string                  `json:"align,omitempty"`
+	Loop           *PageLoop               `json:"loop,omitempty"`
 }
 
 var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
@@ -500,6 +501,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document node %q is shared or cyclic", id)
 		}
 		seen[id] = true
+		if err := d.checkRegionPresentation(id, node); err != nil {
+			return err
+		}
 		bounded, err := d.checkLayoutSize(id, node, parentKind, parentHeight, unused[id])
 		if err != nil {
 			return err

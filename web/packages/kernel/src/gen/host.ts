@@ -1171,6 +1171,7 @@ export type PageInterface = {
 };
 
 export type PageLayoutNode = {
+  presentation?: PageRegionPresentation;
   size?: PageLayoutSize;
   gap?: number;
   kind: string;
@@ -1405,6 +1406,15 @@ export type PageRecordScatter = {
 
 export type PageRecordView = {
   tabs: string[];
+};
+
+export type PageRegionPresentation = {
+  padding?: number;
+  background?: string;
+  border?: boolean;
+  showHeader?: boolean;
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
 };
 
 export type PageResourceList = {
@@ -2226,7 +2236,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.92",
+  "uiProfile": "platform.page.v2.93",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -7324,7 +7334,8 @@ export const pageUIManifest = {
     "platform.page.v2.89",
     "platform.page.v2.90",
     "platform.page.v2.91",
-    "platform.page.v2.92"
+    "platform.page.v2.92",
+    "platform.page.v2.93"
   ],
   "runtime": {
     "scope": "page",
@@ -8013,7 +8024,9 @@ export const pageUIManifest = {
     "maxGap": 64,
     "stackBelow": 448,
     "unusedProfile": "platform.page.v2.28",
-    "maxUnused": 128
+    "maxUnused": 128,
+    "presentationProfile": "platform.page.v2.93",
+    "maxPadding": 64
   }
 } as const;
 

@@ -2,6 +2,22 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+"Panel": "面板",
+
+  "Region presentation": "区域呈现",
+  "Region padding (px)": "区域内边距（像素）",
+  "Region background": "区域背景",
+  "Region border": "区域边框",
+  "Show region title": "显示区域标题",
+  "Collapsible region": "可折叠区域",
+  "Initially collapsed": "初始折叠",
+  "Reset region presentation": "重置区域呈现",
+  "Maximum scroll height for {region}": "{region}的最大滚动高度",
+  "Region presentation needs a supported container, bounded padding and a visible collapse title.": "区域呈现需要受支持的容器、有界内边距和可见的折叠标题。",
+  "Choose an explicit bounded maximum height for the source scrolling region.": "为来源滚动区域明确选择有界的最大高度。",
+  "Original container panels, padding, titles and local collapse are preserved.": "保留原容器的面板、内边距、标题与本地折叠。",
+  "The reviewed maximum height bounds the original scrolling region.": "已确认的最大高度限定原滚动区域。",
+
  "State from input": "状态取自输入",
  "Use a fixed state or keep the current state": "使用固定状态或保持当前状态",
  "Edit the state input choices to change these derived connections.": "这些连线由状态输入选项派生；请修改输入选项来改变目标。",
