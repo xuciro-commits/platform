@@ -1,5 +1,11 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Application header": "应用页头",
+ "Render authorized application navigation and read or appearance controls in a shared horizontal or vertical header.": "在共享横向或纵向页头中呈现授权应用导航及读取或外观操作。",
+ "Application pages": "应用页面",
+ "Application page": "应用页面",
+ "Expand application navigation": "展开应用导航",
+ "Collapse application navigation": "折叠应用导航",
  "Record density": "记录密度",
  "Compact": "紧凑",
  "Comfortable": "舒适",

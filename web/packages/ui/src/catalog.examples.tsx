@@ -1,3 +1,5 @@
+import {ApplicationHeader} from "./layout/ApplicationHeader";
+import {useTheme} from "./theme";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
@@ -432,3 +434,5 @@ export function DerivedMeanExample(){return <DerivedMean count="42" mean={23.125
 export function ExternalFrameExample(){const [active,setActive]=useState(false);return <Panel><Checkbox checked={active} onChange={setActive}>{t("External document")}</Checkbox><p className="text-xs text-muted">https://example.com/</p><ExternalFrame title={t("External document")} config={{url:"https://example.com/",origin:"https://example.com"}} active={active}/></Panel>;}
 
 export function AIResultExample(){return <AIResult kind="analyst" turns={[]} question="" suggestions={[]} disabled={true} busy={false} onQuestion={()=>{}} onRun={()=>{}} onReset={()=>{}}/>;}
+
+export function ApplicationHeaderExample(){const appearance=useTheme();return <ApplicationHeader header={{variant:"horizontal",title:"Example application",items:[{kind:"title"},{kind:"tabs",pages:["overview","work"]},{kind:"button",label:"Theme",action:"theme"}]}} pages={[{name:"overview",title:"Overview"},{name:"work",title:"Work"}]} currentPage="overview" onPage={()=>{}} onTheme={appearance.toggle}><p>Application content</p></ApplicationHeader>;}

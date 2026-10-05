@@ -178,6 +178,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     }
     return {
       client, me, entities, definitions, source, opens, outbox, decide,
+      refresh:async()=>{await queries.invalidateQueries();setRevision(r=>r+1);},
       role: (app) => me.profile.roles[app] || undefined,
       can: (schema) => !!actions?.some((a) => a.schema === schema),
       action: (schema) => actions?.find((a) => a.schema === schema),

@@ -16,10 +16,10 @@ const messages:Record<string,string>={
  'application-import-scope-changed':'The member, application or definition changed. Further import writes stopped.',
 };
 /** Application authoring orchestration; execution and release remain with their owners. */
-export function WorkshopApplicationImport({open,onClose,application,onPrepared}:{open:boolean;onClose:()=>void;application:Api.AssetBinding;onPrepared:(names:string[])=>void}){
+export function WorkshopApplicationImport({open,onClose,application,onPrepared}:{open:boolean;onClose:()=>void;application:Api.AssetBinding;onPrepared:(names:string[],header?:Api.ApplicationHeader)=>void}){
  const host=useHost(),inventory=useRecordInventory<PageRecord>('build.page');
  const definition=host.definitions.find(d=>d.ref.app===application.ref.app&&d.ref.kind==='app'&&d.ref.name===application.ref.name&&d.version===application.sourceVersion);
- const [destinations,setDestinations]=useState<ImportPageDestination[]>([]),[busy,setBusy]=useState(false),[writes,setWrites]=useState<ImportPageWrite[]>(),[progress,setProgress]=useState<ImportSaveProgress[]>([]),[error,setError]=useState(''),[done,setDone]=useState(false);
+ const [destinations,setDestinations]=useState<ImportPageDestination[]>([]),[busy,setBusy]=useState(false),[writes,setWrites]=useState<ImportPageWrite[]>(),[progress,setProgress]=useState<ImportSaveProgress[]>([]),[error,setError]=useState(''),[done,setDone]=useState(false),[acceptedHeader,setAcceptedHeader]=useState<Api.ApplicationHeader>();
  // Page publications change the directory. The captured member, original
  // schemas/actions and application binding must survive our own publications.
  const scope=JSON.stringify([host.me,host.entities,host.catalog,definition?.version,application]),current=useRef({scope,client:host.client,mounted:true}),running=useRef(false);current.current.scope=scope;current.current.client=host.client;
@@ -31,7 +31,7 @@ export function WorkshopApplicationImport({open,onClose,application,onPrepared}:
   if(!writes&&!report?.ready)return;
   if(report?.bindings.application&&(JSON.stringify(report.bindings.application.binding)!==JSON.stringify(application))){setError(t('Map shared ports to this original application before importing.'));return;}
   const captured=current.current.scope,capturedClient=host.client,active=()=>current.current.mounted&&current.current.scope===captured&&current.current.client===capturedClient;
-  const accepted=writes??importedPageWrites(report!);setWrites(accepted);running.current=true;setBusy(true);setError('');
+  const accepted=writes??importedPageWrites(report!);const header=writes?acceptedHeader:report?.header;if(!writes)setAcceptedHeader(header);setWrites(accepted);running.current=true;setBusy(true);setError('');
   try{
    await saveImportedPages(accepted,{
     active,
@@ -40,7 +40,7 @@ export function WorkshopApplicationImport({open,onClose,application,onPrepared}:
     decide:async(schema,id,payload,expectedRevision)=>host.decide(schema,{type:'build.page',id},payload,{expectedRevision,quiet:true,onRefused:reason=>{if(active())setError(reason);}}),
     progress:value=>{if(active())setProgress(previous=>[...previous.filter(p=>p.page!==value.page),value]);},
    });
-   if(active()){setDone(true);onPrepared(accepted.map(w=>w.destination.name));}
+   if(active()){setDone(true);onPrepared(accepted.map(w=>w.destination.name),header);}
   }catch(failure){if(active())setError(previous=>previous||t(messages[failure instanceof Error?failure.message:'']??'The module import stopped. Confirmed pages are retained; check the original pending changes and saved pages.'));}
   finally{running.current=false;if(current.current.mounted){setBusy(false);if(!active())setError(t(messages['application-import-scope-changed']!));}}
  };

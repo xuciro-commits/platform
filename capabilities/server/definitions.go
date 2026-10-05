@@ -817,6 +817,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			}
 		}
 		application.Groups = groups
+		application.Header = application.VisibleHeader()
 		application.Resources = slices.DeleteFunc(slices.Clone(application.Resources), func(ref platform.AssetRef) bool {
 			if ref.Kind == platform.AssetFlow {
 				return m.Roles["build"] != "builder" || t.procs == nil || !t.procs.HasPublishedFlow(ref.Name)

@@ -177,6 +177,7 @@ export type AppSettings = {
 };
 
 export type Application = {
+  header?: ApplicationHeader;
   uiProfile?: string;
   variables?: Record<string, PageVariable>;
   queries?: Record<string, PageQuery>;
@@ -187,6 +188,22 @@ export type Application = {
   pages: string[];
   groups?: AppGroup[];
   resources?: AssetRef[];
+};
+
+export type ApplicationHeader = {
+  variant: string;
+  title: string;
+  logo?: string;
+  collapsed?: boolean;
+  items: ApplicationHeaderItem[];
+};
+
+export type ApplicationHeaderItem = {
+  kind: string;
+  pages?: string[];
+  label?: string;
+  text?: string;
+  action?: string;
 };
 
 export type ApprovalRequest = {
@@ -2246,7 +2263,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.104",
+  "uiProfile": "platform.page.v2.105",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -7446,7 +7463,8 @@ export const pageUIManifest = {
     "platform.page.v2.101",
     "platform.page.v2.102",
     "platform.page.v2.103",
-    "platform.page.v2.104"
+    "platform.page.v2.104",
+    "platform.page.v2.105"
   ],
   "runtime": {
     "telemetry": {

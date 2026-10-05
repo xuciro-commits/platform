@@ -60,6 +60,8 @@ export type Host = {
    *  pages — a code page or one composed in this tenant (ADR-0032, ADR-0034). */
   definitions: Definition[];
   source: RecordSource;
+  /** Refresh original reads without submitting business actions or replacing drafts. */
+  refresh?:()=>Promise<void>;
   /** Entity type → the view that shows one record of it, from every app's `opens`. */
   opens: Map<string, string>;
 };

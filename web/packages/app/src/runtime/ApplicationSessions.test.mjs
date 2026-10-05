@@ -4,6 +4,11 @@ import {registerHooks} from "node:module";
 registerHooks({resolve(specifier,context,next){try{return next(specifier,context)}catch(error){if(specifier.startsWith("./")&&!specifier.endsWith(".ts"))return next(`${specifier}.ts`,context);throw error;}}});
 const {ApplicationSessionHub}=await import("./ApplicationSessions.ts");
 
+test("header collapse belongs to one application identity and instance and does not become a business variable",()=>{
+ const hub=new ApplicationSessionHub(),one=hub.get("member:app:v1:one",{}),other=hub.get("member:app:v1:two",{}),nextVersion=hub.get("member:app:v2:one",{});
+ let notifications=0;one.subscribe(()=>notifications++);one.setHeaderCollapsed(true);assert.equal(hub.get("member:app:v1:one",{}).headerSnapshot(),true);assert.equal(other.headerSnapshot(),undefined);assert.equal(nextVersion.headerSnapshot(),undefined);assert.deepEqual(one.snapshot(),{});assert.equal(notifications,1);hub.clear();one.setHeaderCollapsed(false);assert.equal(one.headerSnapshot(),true);
+});
+
 test("application state follows one identity and instance, and retired handles cannot write a reopened instance", () => {
   const variables = { condition: { scope: "application", type: "boolean", mode: "state", initial: false }, label: { scope: "application", type: "string", mode: "constant", initial: "read only" } };
   const hub = new ApplicationSessionHub(), first = hub.get("member:app:v1:one", variables), second = hub.get("member:app:v1:two", variables);

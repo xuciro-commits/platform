@@ -9,6 +9,7 @@ const asset = (id: string, name: string, summary: string, layer: CatalogEntry["l
 });
 
 export const entries: CatalogEntry[] = [
+ asset("ui/application-header","Application header","Render authorized application navigation and read or appearance controls in a shared horizontal or vertical header.",2,"layout/ApplicationHeader.tsx",["ApplicationHeader"],"ApplicationHeaderExample"),
  asset("ui/record-map","Record map","Explore original record coordinates with a bundled world background and stable record selection.",3,"spatial/RecordMap.tsx",["RecordMap","mapPoints"],"RecordMapExample",{type:"RecordMapProps",tags:["map","spatial","coordinates"],constraints:["The caller supplies an authorized window of at most 100 records, typed WGS84 coordinate fields and scoped selection confirmation. The map never invents coordinates or reads remote tiles."]}),
  asset("ui/image-annotation","Image annotation","Inspect original raster bytes and edit normalized, revision-bound region proposals.",3,"spatial/ImageAnnotation.tsx",["ImageAnnotation","validImageRegions"],"ImageAnnotationExample",{type:"ImageAnnotationProps",tags:["image","annotation","files"],dependencies:["ui/media-preview"],constraints:["The original attachment and author permissions belong to Files. The caller confirms saves at the captured file revision; refused drafts remain local and view retirement never cancels accepted decisions."]}),
  asset("ui/scene-3d","3D scene","Inspect authorized self-contained GLB geometry, model parts, layers and actual typed field mappings.",3,"spatial/Scene3D.tsx",["Scene3D","validSceneConfig","sceneMappingValue"],"Scene3DExample",{type:"Scene3DProps",tags:["3d","glb","spatial","telemetry"],constraints:["WebGL2 is required. The caller supplies a confirmed asset and attachment; sample mappings require the actual asset reference. No simulation, default asset or external model resource is used."]}),
@@ -181,7 +182,7 @@ export const entries: CatalogEntry[] = [
 
 /** Public nonvisual API, classified explicitly rather than pretending to be UI. */
 export const api = [
-  "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
+  "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
   "defineEntity", "columnsFor", "recordSchema", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useUnsavedChanges", "notify",
   "routeKey", "routeToHash", "routeFromHash", "layout", "neighborhoodPositions", "canvasNodeHeight", "canvasNodeWidth", "canvasPlacement", "validateCanvasConnection",
   "flowStates", "useChartData", "groupDomain", "aggregateQuery", "aggregateValues", "columnOf",

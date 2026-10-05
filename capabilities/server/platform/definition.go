@@ -262,6 +262,7 @@ var Filterable = []string{"choice", "boolean", "reference"}
 // name, an icon from the platform's set, and the pages it holds in order. It
 // grants nothing; each page is offered to whoever may read what it shows.
 type Application struct {
+	Header      *ApplicationHeader      `json:"header,omitempty"`
 	UIProfile   string                  `json:"uiProfile,omitempty"`
 	Variables   map[string]PageVariable `json:"variables,omitempty"`
 	Queries     map[string]PageQuery    `json:"queries,omitempty"`

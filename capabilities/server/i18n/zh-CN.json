@@ -1119,5 +1119,6 @@
   "conversation history belongs to another context": "会话历史不属于当前上下文",
   "The conversation history is not readable": "会话历史不可读取",
   "Question": "问题",
-  "History": "历史"
+  "History": "历史",
+  "Application header": "应用页头"
 }

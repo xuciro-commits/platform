@@ -893,6 +893,9 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 			return fmt.Errorf("application %s: no published resource %s", a.Name, ref)
 		}
 	}
+	if err := a.CheckHeader(); err != nil {
+		return err
+	}
 	if err := a.CheckGroups(); err != nil {
 		return fmt.Errorf("application %s: %v", a.Name, err)
 	}

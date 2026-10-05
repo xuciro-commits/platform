@@ -2,6 +2,22 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+"Horizontal": "横向",
+"Vertical": "纵向",
+"Refresh": "刷新",
+"Application header": "应用页头",
+"Show application header": "显示应用页头",
+"Header title": "页头标题",
+"Header layout": "页头布局",
+"Header logo URL": "页头标志 URL",
+"Initially collapse application navigation": "初始折叠应用导航",
+"Header button label": "页头按钮名称",
+"Header button action": "页头按钮操作",
+"Header text": "页头文字",
+"Add header item": "添加页头项",
+"Refresh data": "刷新数据",
+"Toggle theme": "切换明暗主题",
+"The application header needs a supported profile and explicit page or read/appearance actions.": "应用页头需要支持的 profile 及明确的页面或读取/外观操作。",
 "Slot and layout nodes need one parent.": "插槽和布局节点只能属于一个父节点。",
 "Edit {slot} slot": "编辑{slot}插槽",
 "Slot: {name}": "插槽：{name}",

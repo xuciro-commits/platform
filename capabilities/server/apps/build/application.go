@@ -27,6 +27,7 @@ const (
 // Application is an application this organisation hands to its people.
 type Application struct {
 	platform.Record
+	Header      *platform.ApplicationHeader      `json:"header,omitempty" field:"aside" type:"json" title:"Application header"`
 	UIProfile   string                           `json:"uiProfile,omitempty" field:"aside" title:"UI profile"`
 	Queries     map[string]platform.PageQuery    `json:"queries,omitempty" field:"aside" type:"json" title:"Application queries"`
 	Variables   map[string]platform.PageVariable `json:"variables,omitempty" field:"aside" type:"json" title:"Application variables"`
@@ -99,7 +100,7 @@ func applicationDescriptor(a Application) platform.Application {
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Pages: slices.Clone(g.Pages)})
 	}
-	return platform.Application{Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}
+	return platform.Application{Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}
 }
 
 // checkApplication refuses an application people could not open: a name that is
@@ -125,6 +126,9 @@ func (b *Build) checkApplication(a Application) error {
 		return err
 	}
 	if err := applicationDescriptor(a).CheckVariables(); err != nil {
+		return err
+	}
+	if err := applicationDescriptor(a).CheckHeader(); err != nil {
 		return err
 	}
 	return applicationDescriptor(a).CheckGroups()

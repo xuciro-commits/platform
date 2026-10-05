@@ -1,3 +1,4 @@
+import {ApplicationHeaderEditor} from "./ApplicationHeaderEditor";
 import { VariablesPanel } from "./page-editor/VariablesPanel";
 import { QueriesPanel } from "./page-editor/QueriesPanel";
 import { AssetControls } from "./asset-controls";
@@ -56,8 +57,8 @@ export function ApplicationEditor({ id }: { id: string }) {
     setBusy(true); setError("");
     try {
       const target = draft.id || newId("APP");
-      const { name, title, description, icon, pages, groups, resources, variables, queries, uiProfile } = draft;
-      const ok = await decide(`build.app.${draft.id ? "edit" : "create"}`, { type: "build.app", id: target }, { name, title, description, icon, pages, groups, resources, variables, queries, uiProfile },
+      const { name, title, description, icon, pages, groups, resources, variables, queries, uiProfile,header } = draft;
+      const ok = await decide(`build.app.${draft.id ? "edit" : "create"}`, { type: "build.app", id: target }, { name, title, description, icon, pages, groups, resources, variables, queries, uiProfile,header },
         { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError });
       if (!ok) return;
       if (!draft.id) { markSaved(); setDirty(false); open({ view: "application", params: { id: target } }); close({ view: "application", params: { id } }); return; }
@@ -80,7 +81,7 @@ export function ApplicationEditor({ id }: { id: string }) {
           onClick={() => open({ view: "release-review", params: { kind: "app", id: draft.id } })}>{t("Review application release")}</Button>
       </div>} />
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
-    {importApplication&&<WorkshopApplicationImport key={JSON.stringify([draft.id,me])} open={importing} onClose={()=>setImporting(false)} application={{ref:importApplication.ref,sourceVersion:importApplication.version}} onPrepared={names=>change({pages:[...names,...draft.pages.filter(name=>!names.includes(name))]})}/>}
+    {importApplication&&<WorkshopApplicationImport key={JSON.stringify([draft.id,me])} open={importing} onClose={()=>setImporting(false)} application={{ref:importApplication.ref,sourceVersion:importApplication.version}} onPrepared={(names,header)=>change({pages:[...names,...draft.pages.filter(name=>!names.includes(name))],header,uiProfile:header?pageUIProfile:draft.uiProfile})}/>}
     <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="grid min-w-0 content-start gap-4 p-4">
         <label className="grid gap-1 text-xs">{t("What people call it")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>
@@ -89,6 +90,7 @@ export function ApplicationEditor({ id }: { id: string }) {
             {["boxes", "clipboard", "people", "calendar", "wrench", "map", "chart", "sparkles"].map((icon) => <option key={icon} value={icon}>{t(icon)}</option>)}
           </Select></label></div>
         <label className="grid gap-1 text-xs">{t("Description")}<Textarea value={draft.description ?? ""} rows={2} onChange={(e) => change({ description: e.target.value })} /></label>
+        <ApplicationHeaderEditor value={draft.header} pages={draft.pages} onChange={header=>change({header,uiProfile:header?pageUIProfile:draft.uiProfile})}/>
         <fieldset className="grid gap-2"><legend className="mb-2 text-sm font-semibold">{t("Pages and navigation")}</legend>
           {pages.map((page) => <Checkbox key={page.ref.name} checked={draft.pages.includes(page.ref.name)} onChange={(checked) => togglePage(page.ref.name, checked)}>{page.page?.title} · {page.ref.name}</Checkbox>)}
           {!pages.length && <p className="text-sm text-muted">{t("Publish a page before adding it to this application.")}</p>}

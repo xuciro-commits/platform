@@ -1,8 +1,10 @@
+import type {Api} from "@platform/kernel";
+import {importApplicationHeader} from "./header";
 import {compileWorkshopModule,parseWorkshopModule,type ImportBindings,type ImportDiagnostic,type ImportReport,type ImportTarget} from './compile';
 import type {PageDraft} from '../page-editor/draft';
 
 export type ImportPageDestination={sourcePage:string;id:string;name:string;object:string;revision?:number};
-export type ApplicationImportReport={formatVersion:2;source:string;bindings:ImportBindings;destinations:ImportPageDestination[];pages:{destination:ImportPageDestination;report:ImportReport}[];diagnostics:(ImportDiagnostic&{page?:string})[];ready:boolean};
+export type ApplicationImportReport={header?:Api.ApplicationHeader;formatVersion:2;source:string;bindings:ImportBindings;destinations:ImportPageDestination[];pages:{destination:ImportPageDestination;report:ImportReport}[];diagnostics:(ImportDiagnostic&{page?:string})[];ready:boolean};
 const pointer=(value:string)=>value.replaceAll('~','~0').replaceAll('/','~1');
 
 /** All pages use the original compiler and one reviewed binding map. No writes. */
@@ -21,6 +23,7 @@ export function compileWorkshopApplication(source:string,bindings:ImportBindings
   result.pages.push({destination,report});
   result.diagnostics.push(...report.diagnostics.filter(d=>d.code!=='other-pages-retained').map(d=>({...d,page:page.id})));
  }
+ if(parsed.module.header!==undefined){result.header=importApplicationHeader(parsed.module.header,destinations);if(!result.header||Number(target.profile.split(".").at(-1))<105)result.diagnostics.push({path:"/header",code:"application-header-profile",blocking:true});}
  result.ready=parsed.module.pages.length>0&&result.pages.length===parsed.module.pages.length&&!result.diagnostics.some(d=>d.blocking)&&result.pages.every(p=>!!p.report.draft);
  return result;
 }

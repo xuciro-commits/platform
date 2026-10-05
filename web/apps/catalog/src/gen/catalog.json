@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:cc3b7a1a1a3512c0",
+  "revision": "sha256:cda3fed5491a8383",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1082,6 +1082,25 @@
       "constraints": [
         "The caller owns fixed functions, confirmed record context, original call IDs, permissions and lifecycle. This UI never simulates replies or executes generated code."
       ]
+    },
+    {
+      "id": "ui/application-header",
+      "owner": "@platform/ui",
+      "name": "Application header",
+      "summary": "Render authorized application navigation and read or appearance controls in a shared horizontal or vertical header.",
+      "layer": 2,
+      "source": "web/packages/ui/src/layout/ApplicationHeader.tsx",
+      "exports": [
+        "ApplicationHeader"
+      ],
+      "example": "ApplicationHeaderExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": []
     },
     {
       "id": "ui/approval-inbox",
@@ -3959,6 +3978,7 @@
       "An inbox preview is not an approval or permission engine.": "收件箱预览不承担审批或权限引擎职责。",
       "An optional RecordEditPort supplies authorized displayed fields and the original revision-bound submit callback. Failed edits remain staged; the caller owns permissions and execution.": "可选 RecordEditPort 提供授权展示字段及绑定原记录版本的提交回调。失败修改仍保留暂存，调用方管理权限及执行。",
       "App Shell / Workspace": "应用外壳 / 工作区",
+      "Application header": "应用页头",
       "Application owns scalar declarations and bounded queries. Pages use typed shared bindings; windows remain read-only, ephemeral and member-scoped.": "应用拥有标量声明和有界查询；页面通过类型化端口共享，只读窗口为成员作用域内的临时值。",
       "Application release workbench": "整应用发布工作台",
       "Application resources refer to original owners; membership does not grant access. Release review freezes published dependencies using the existing candidate path.": "应用资源引用原归属方；加入应用不会授予权限。发布审查通过原候选路径冻结已发布依赖。",
@@ -4197,6 +4217,7 @@
       "Refused": "拒绝",
       "Render a visualization spec using inline values or a scoped aggregate source.": "使用内联值或限定范围的聚合数据源呈现可视化规格。",
       "Render actual PDF pages from authorized attachment bytes with caller-owned original page state.": "从授权附件字节渲染实际PDF页面，并使用调用方持有的原页码状态。",
+      "Render authorized application navigation and read or appearance controls in a shared horizontal or vertical header.": "在共享横向或纵向页头中呈现授权应用导航及读取或外观操作。",
       "Render labelled editors and validate an ad hoc schema before submission.": "呈现带标签的编辑器，并在提交前校验临时模式。",
       "Render measured rows by stable identity and retain the focused item.": "按稳定身份呈现测量后的行，并保留当前聚焦项。",
       "Render original Page sections with shared selection and filters; composition disables writes.": "按原 Page 区块共享选择和过滤状态；装配预览关闭写入。",
@@ -4379,6 +4400,7 @@
       "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/RecordCollaboration.tsx",
+      "web/packages/build/src/ApplicationHeaderEditor.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/asset-controls.tsx",
       "web/packages/build/src/code.tsx",
@@ -4445,6 +4467,7 @@
       "web/packages/app/src/widgets/Input.tsx",
       "web/packages/app/src/widgets/Observation.tsx",
       "web/packages/app/src/widgets/RecordWork.tsx",
+      "web/packages/build/src/ApplicationHeaderEditor.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
@@ -4547,6 +4570,7 @@
     "ui/checkbox": [
       "web/packages/app/src/actions.tsx",
       "web/packages/app/src/widgets/BooleanInput.tsx",
+      "web/packages/build/src/ApplicationHeaderEditor.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/function.tsx",
@@ -4839,6 +4863,9 @@
     ],
     "ui/record-workspace": [
       "web/packages/app/src/pages.tsx"
+    ],
+    "ui/application-header": [
+      "web/packages/app/src/runtime/ApplicationRuntime.tsx"
     ],
     "ui/virtual-stack": [
       "web/packages/app/src/runtime/LoopRuntime.tsx"
@@ -5226,6 +5253,7 @@
         "submissionStatuses",
         "t",
         "useChartData",
+        "useTheme",
         "useUnsavedChanges",
         "useViewCall",
         "useViewVisible",

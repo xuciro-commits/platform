@@ -1,6 +1,6 @@
 import type {ScalarValue} from "./decimal";
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Button, Panel, Select, t, useWorkspace, type Route } from "@platform/ui";
+import { ApplicationHeader,Button, Panel, Select, t, useWorkspace,useTheme, type Route } from "@platform/ui";
 import { pageUIManifest, type Api } from "@platform/kernel";
 import { useHost } from "../index";
 import { ApplicationSessionHub, type ApplicationSession } from "./ApplicationSessions";
@@ -26,7 +26,8 @@ export function ApplicationSessionsProvider({ children }: { children: ReactNode 
 /** Application identity is explicit for reused pages. The shell retains only
  * the opaque instance ID; this provider owns attachment and teardown. */
 export function ApplicationPage({ pageRef, route, preview = false, children }: { pageRef: Api.AssetRef; route: Route; preview?: boolean; children: ReactNode }) {
-  const { definitions, source } = useHost(), workspace = useWorkspace(), hub = useContext(Hub);
+  const { definitions, source,refresh } = useHost(), workspace = useWorkspace(), hub = useContext(Hub);
+  const appearance=useTheme();
   const [localPreview] = useState(() => `preview:${crypto.randomUUID()}`);
   const holders = definitions.filter((d) => d.application && d.ref.app === pageRef.app && d.application.pages.includes(pageRef.name));
   const id = route.params?.application ?? (holders.length === 1 ? idOf(holders[0]!) : "");
@@ -44,6 +45,7 @@ export function ApplicationPage({ pageRef, route, preview = false, children }: {
     return () => session.detach(owner);
   }, [session, owner, routeKey]);
   const context = useMemo(() => definition && session ? { definition, session, instance, identity, preview } : undefined, [definition, session, instance, identity, preview]);
+  const collapsed=useSyncExternalStore(session?.subscribe??emptySubscribe,session?.headerSnapshot??(()=>undefined),()=>undefined);
   const navigate = (application: string, instance: string) => { const params:Record<string,string> = { ...route.params, application, instance }; delete params.call; workspace.open({ ...route, params }); };
   return <ApplicationContext.Provider value={context}><div className="min-w-0 max-w-full">
     {holders.length > 0 && <div className="mb-3 flex min-w-0 max-w-full flex-wrap items-center gap-2">
@@ -53,7 +55,7 @@ export function ApplicationPage({ pageRef, route, preview = false, children }: {
       <span className="min-w-0 max-w-full break-all text-xs text-muted">{t("Instance")}: {instance === "main" ? "main" : instance.slice(-8)}</span>
     </div>}
     {definition && !session && <Panel role="alert">{t("The application instance is unavailable.")}</Panel>}
-    {children}
+    {definition?.application?.header?<ApplicationHeader key={identity} header={definition.application.header} collapsed={collapsed} onCollapsedChange={session?.setHeaderCollapsed} pages={definition.application.pages.flatMap(name=>{const page=definitions.find(d=>d.ref.app===pageRef.app&&d.ref.kind==="page"&&d.ref.name===name)?.page;return page?[{name,title:page.title}]:[];})} currentPage={pageRef.name} onPage={name=>workspace.open({view:"page",params:{app:pageRef.app,kind:"page",name,application:id,instance}})} onRefresh={refresh?()=>void refresh():undefined} onTheme={appearance.toggle}>{children}</ApplicationHeader>:children}
   </div></ApplicationContext.Provider>;
 }
 

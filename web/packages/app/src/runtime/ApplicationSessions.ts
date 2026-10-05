@@ -9,6 +9,9 @@ export type ApplicationReads = {source:RecordSource;queries:Record<string,Api.Pa
 export class ApplicationSession {
   readonly readScope = crypto.randomUUID();
   private state: Record<string, ScalarValue> = {};
+  private headerCollapsed:boolean|undefined;
+  headerSnapshot=()=>this.headerCollapsed;
+  setHeaderCollapsed=(collapsed:boolean)=>{if(!this.alive)return;this.headerCollapsed=collapsed;this.listeners.forEach(listener=>listener());};
   private listeners = new Set<() => void>();
   private pages = new Map<symbol, () => void>();
   private alive = true;

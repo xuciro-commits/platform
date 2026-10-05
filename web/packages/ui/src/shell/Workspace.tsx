@@ -1,5 +1,6 @@
+import {useTheme} from "../theme";
 import { Command } from "cmdk";
-import { DockviewDefaultTab, DockviewReact, themeLight, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps } from "dockview-react";
+import { DockviewDefaultTab, DockviewReact, themeLight,themeDark, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps } from "dockview-react";
 import { ChevronDown, LayoutGrid, PanelLeft, Search } from "lucide-react";
 import { DropdownMenu, Menubar } from "radix-ui";
 import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -124,6 +125,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   /** Keeps a chosen language beyond this browser, e.g. as the member's preference; the page reloads in it after. */
   onLanguage?: (id: string) => unknown;
 }) {
+  const appearance=useTheme();
   const dock = useRef<DockviewApi>(null);
   const drafts = useRef(new Map<string, Map<symbol, () => void>>());
   const transfers = useRef(new ViewTransfers());
@@ -373,7 +375,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
             </nav>
           )}
           <div className="platform-dock min-h-0 min-w-0 overflow-hidden">
-            <DockviewReact defaultRenderer="always" defaultTabComponent={tab} components={components} onReady={onReady} theme={themeLight} />
+            <DockviewReact defaultRenderer="always" defaultTabComponent={tab} components={components} onReady={onReady} theme={appearance.theme==="dark"?themeDark:themeLight} />
           </div>
         </div>
       </div>

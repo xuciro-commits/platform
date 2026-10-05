@@ -1,3 +1,5 @@
+export {ApplicationHeader} from "./layout/ApplicationHeader";
+export {useTheme} from "./theme";
 export {Histogram} from "./components/Histogram";
 export {validHistogram} from "./components/histogram-data";
 export {TermCounts,type TermCount} from "./components/TermCounts";

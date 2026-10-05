@@ -213,6 +213,7 @@ export const diagnosticMessages:Record<string,string>={
  "target-budget":"The translated page exceeds the native page budget.",
  "native-shell":"The existing workspace supplies navigation and the header.",
  "other-pages-retained":"Other pages remain in the report and are not applied.",
+ "application-header-profile":"The application header needs a supported profile and explicit page or read/appearance actions.",
  "flows-retained-not-executed":"Source flows remain in the report and are not executed.",
  "native-presentation":"The native widget supplies this presentation setting.",
  "native-overlay-lifetime":"Overlay-local values reset when the native overlay closes.",
