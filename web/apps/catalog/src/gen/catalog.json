@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ba411b9263781820",
+  "revision": "sha256:24bb67365f3273e8",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5085,7 +5085,8 @@
     "ui/editor-workbench": [
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
-      "web/packages/build/src/process.tsx"
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/workflow.tsx"
     ],
     "ui/toggles": [
       "web/packages/build/src/editor.tsx",

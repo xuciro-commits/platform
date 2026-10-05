@@ -1191,6 +1191,8 @@ F5d沿原ProcessStep的app/query增加queryVersion：Build租户查询必须显�
 
 查询步骤仍按发起成员的当前对象/字段权限读取，使用原固定domain、sort、limit和唯一for输入，结果是原records/total/sources端口；不另建查询执行器。步骤输入在运行时按该版本schema验证，构建检查拒绝缺失必填、未知参数和错误常量类型。首次profile不迁移旧无版本租户流程、不增加动态查询参数，也不冻结实例数据或自动升级对象存储。等待中的流程保留原依赖与版本，已接受输出继续由原日志重放而非重新查询。Web只从原成员定义/能力描述选择保留来源，界面不能把后来发布的查询标题/端口当作旧步骤的来源。
 
+原 Logic 编辑页复用共享 EditorWorkbench 的可调三栏及窄宽度排列，保留唯一 NodeCanvas、类型化控制/数据连接、能力库和原测试/发布/执行面板。草稿历史统一归 DraftSession；保存确认保留撤销/重做，期望 revision 独立于历史快照，旧读取不覆盖已确认的新修订，串行请求锁阻止重复提交。运行输入沿原已发布快照初始化；画布状态与检查器输出核对流程身份、版本、可见性和完整定义内容，保存了新草稿不等于运行了旧发布。不同版本仍可在执行面板查看其原快照；状态未重读确认时不开放运行和候选审查。原 Go 编译、调用者授权、固定依赖、保存/候选/运行路径保持，未引入外包 flowEngine。来源 Flows 的显式资产映射与完整导入仍待实现，当前源码/轻检查不能代替整页手感或运行验收。
+
 ### 8.5 记录时间轴 profile
 
 F5e在v2.25新增record-timeline/configVersion=1，原timeline仍为单记录日志历史。共享UI拥有资源×时间的点/区间呈现，应用API注册专属Renderer并消费授权计划窗口，Build拥有相同配置版本的Inspector。Section.timeStart为原date/datetime字段，timeEnd可选且类型须相同，timeLabel为id或原文本/choice/reference字段，timeGroup可选同类标量。首次profile必须显式绑定collectionVariable，不生成第二条读取路径；本地/应用/同根Overlay选择继续沿原record来源和详情/动作。Loop内不启用该集合组件。

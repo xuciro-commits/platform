@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+"The current workflow revision differs from this editing session. Reload before running or reviewing a release.": "当前流程修订与本编辑会话不同。请重新加载后再运行或审查发布。",
+"Workflow inspector": "流程检查器",
+"This run belongs to a different saved definition or the draft has changed. Inspect its recorded version in Executions.": "此运行属于另一份已保存定义，或草稿已修改。请在“执行记录”中查看其记录版本。",
 "Review page compatibility": "审查页面兼容性",
 "Draft UI profile": "草稿 UI profile",
 "An upgrade changes this draft's UI profile. Widget configurations, bindings and layout remain intact. Save and review a new release candidate to deliver it; existing releases retain their original bytes.": "升级会修改当前草稿的 UI profile，保留组件配置、绑定和布局。保存后审查新的发布候选再交付；已有发布保留原字节。",

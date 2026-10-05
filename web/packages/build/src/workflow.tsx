@@ -1,12 +1,14 @@
 import { AssetControls } from "./asset-controls";
+import {useDraftSession} from "./session/DraftSession";
+import {workflowInputs,workflowRunMatches} from "./workflow-session";
 // Logic Studio edits the one build.process definition. Its native Flow owner
 // compiles, executes and accepts outcomes; React Flow remains presentation.
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
-import { Button, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, Tag, canvasNodeHeight, canvasNodeWidth, canvasPlacement, layout, t, useWorkspace, useUnsavedChanges,
+import { Button, Disclosure, EditorWorkbench, Input, NodeCanvas, PageHeader, Panel, RecordList, Tag, canvasNodeHeight, canvasNodeWidth, canvasPlacement, layout, t, useWorkspace, useUnsavedChanges,
   type BlockStatus, type CanvasAddContext, type CanvasEdge, type CanvasNode, type NodeCatalog, type NodeKind, type NodePort } from "@platform/ui";
-import { Blocks, Braces, Brain, ChevronDown, ChevronUp, Database, GitBranch, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Plus, Search, Settings2, Workflow, Zap } from "lucide-react";
-import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { Blocks, Braces, Brain, ChevronDown, ChevronUp, Database, GitBranch, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Plus, Redo2, Search, Settings2, Undo2, Workflow, Zap } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {useQueries} from "@tanstack/react-query";
 import { DataField, JSONEditor, WorkflowFormProblems, schemaIssue } from "./workflow-binding";
 import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
@@ -18,14 +20,6 @@ import { WorkflowRuns, type WorkflowRun } from "./workflow-runs";
 
 const empty = (): WorkflowDraft => ({ id: "", revision: 0, name: "", title: "", object: "", when: "", manual: true, input: {}, inputSchema: { type: "object", properties: {} }, steps: [], layout: {} });
 type Edit = Partial<WorkflowDraft> | ((draft: WorkflowDraft) => WorkflowDraft);
-type EditorState = { draft: WorkflowDraft; dirty: boolean; past: WorkflowDraft[]; future: WorkflowDraft[] };
-function reducer(state: EditorState, action: { type: "load"; draft: WorkflowDraft } | { type: "edit"; edit: Edit } | { type: "undo" } | { type: "redo" }): EditorState {
-  if (action.type === "load") return { draft: action.draft, dirty: false, past: [], future: [] };
-  if (action.type === "undo") { const draft = state.past.at(-1); return draft ? { draft, dirty: true, past: state.past.slice(0, -1), future: [state.draft, ...state.future] } : state; }
-  if (action.type === "redo") { const draft = state.future[0]; return draft ? { draft, dirty: true, past: [...state.past, state.draft], future: state.future.slice(1) } : state; }
-  const draft = typeof action.edit === "function" ? action.edit(state.draft) : { ...state.draft, ...action.edit };
-  return JSON.stringify(draft) === JSON.stringify(state.draft) ? state : { draft, dirty: true, past: [...state.past.slice(-79), state.draft], future: [] };
-}
 const icons: Record<string, ReactNode> = { action: <Zap />, query: <Database />, compute: <Braces />, ai: <Brain />, branch: <GitBranch />, switch: <GitBranch />, foreach: <Workflow />, while: <Workflow />, fork: <GitBranch />, payload: <Play /> };
 const translatedPort = (port: string) => t(({ in: "In", In: "In", next: "Continue", Next: "Continue", error: "Error", Error: "Error", body: "Loop", Loop: "Loop", true: "True", false: "False" } as Record<string, string>)[port] ?? port);
 const definitionKind = (capability: Capability): NodeKind => {
@@ -118,10 +112,12 @@ export function WorkflowEditor({ id }: { id: string }) {
   const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`);
   const catalogQuery = useReadQuery<Capability[]>("/v1/capabilities");
   const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");
-  const [{ draft, dirty, past, future }, dispatch] = useReducer(reducer, undefined, () => ({ draft: empty(), dirty: false, past: [], future: [] }));
+  const session=useDraftSession<WorkflowDraft>(empty());
+  const {draft,dirty}=session;
+  const loaded=useRef(""),baseRevision=useRef(0),lock=useRef(false),acknowledged=useRef<WorkflowDraft|undefined>(undefined);
   const [chosen, setChosen] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const [leftOpen, setLeftOpen] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1600px)").matches), [rightOpen, setRightOpen] = useState(true), [dockOpen, setDockOpen] = useState(false);
+  const [leftOpen, setLeftOpen] = useState(true), [rightOpen, setRightOpen] = useState(true), [dockOpen, setDockOpen] = useState(false);
   const [dock, setDock] = useState<"run" | "history" | "test" | "release">("run");
   const [mountedDocks, setMountedDocks] = useState<Partial<Record<typeof dock, true>>>({});
   const [search, setSearch] = useState(""), [filter, setFilter] = useState("all");
@@ -130,16 +126,19 @@ export function WorkflowEditor({ id }: { id: string }) {
   const [formProblems, setFormProblems] = useState<Record<string, string>>({});
   const [validation, setValidation] = useState<{ valid: boolean; issues: { node?: string; message: string }[] }>();
   const { markSaved, confirmDiscard, discardChanges } = useUnsavedChanges(dirty, () => {
-    dispatch({ type: "load", draft: query.data?.record ?? empty() }); setError(""); setValidation(undefined); setChosen(""); setFormProblems({});
+    const saved=query.data?.record??empty();session.load(saved);baseRevision.current=saved.revision;loaded.current=`${saved.id}:${saved.revision}`; setError(""); setValidation(undefined); setChosen(""); setFormProblems({});
   });
   const reportProblem = useCallback((key: string, problem: string) => setFormProblems((previous) => {
     if ((previous[key] ?? "") === problem) return previous;
     const next = { ...previous }; if (problem) next[key] = problem; else delete next[key]; return next;
   }), []);
-  useEffect(() => { if (query.data?.record && !dirty) dispatch({ type: "load", draft: query.data.record }); }, [query.data, dirty]);
-  useEffect(() => { setRunInput(draft.input ?? {}); }, [draft.id, draft.input]);
+  useEffect(()=>{const saved=query.data?.record;if(saved&&saved.revision>=baseRevision.current&&!dirty&&!busy&&loaded.current!==`${saved.id}:${saved.revision}`){session.load(saved);baseRevision.current=saved.revision;loaded.current=`${saved.id}:${saved.revision}`;}},[query.data,dirty,busy,session.load]);
   useEffect(() => { if (dockOpen) setMountedDocks((previous) => previous[dock] ? previous : { ...previous, [dock]: true }); }, [dock, dockOpen]);
-  const change = useCallback((edit: Edit) => { dispatch({ type: "edit", edit }); setError(""); setValidation(undefined); }, []);
+  const change = useCallback((edit: Edit) => {if(lock.current)return;session.edit(edit);setError("");setValidation(undefined);},[session.edit]);
+  const installed=useMemo(()=>{try{return query.data?.record?.published?JSON.parse(query.data.record.published) as WorkflowDraft:undefined;}catch{return undefined;}},[query.data?.record?.published]);
+  const matchingRun=query.data?.record?.revision===baseRevision.current&&workflowRunMatches(draft,installed,run,dirty);
+  useEffect(()=>{setRunInput(installed?.input??{});setRunKey("");},[installed]);
+  useEffect(()=>{if(chosen&&!draft.steps.some(step=>step.name===chosen))setChosen("");},[chosen,draft.steps]);
   const retainedQueries=useMemo(()=>[...new Set(draft.steps.filter(s=>s.kind==="query"&&s.queryVersion).map(s=>`/v1/capabilities/${encodeURIComponent(s.app??"")}/query/${encodeURIComponent(s.query??"")}?version=${s.queryVersion}`))],[draft.steps]);
   const retained=useQueries({queries:retainedQueries.map(path=>({queryKey:[client.connection.token,client.connection.tenant,path],queryFn:()=>client.get<Capability>(path),retry:false}))});
   const capabilities = [...(catalogQuery.data ?? []),...retained.flatMap(q=>q.data&&!q.isError?[q.data]:[])];
@@ -158,14 +157,14 @@ export function WorkflowEditor({ id }: { id: string }) {
     const tokens = run?.tokens?.filter((token) => token.step === step.name) ?? [];
     const accepted = run?.outputs && Object.hasOwn(run.outputs, step.name);
     const visited = run?.trace?.some((trace) => trace.step === step.name);
-    const status: BlockStatus | undefined = run && !dirty && run.version === draft.version ? tokens.some((token) => token.error || token.waits === "stuck") ? "error" : tokens.length ? "waiting" : accepted || visited ? "success" : "idle" : undefined;
+    const status: BlockStatus | undefined = matchingRun ? tokens.some((token) => token.error || token.waits === "stuck") ? "error" : tokens.length ? "waiting" : accepted || visited ? "success" : "idle" : undefined;
     return { id: step.name, kind: `node:${step.name}`, label: step.title || step.name, detail: step.name === draft.steps[0]?.name ? t("Entry block") : sourceCapability(step, capabilities)?.ref.app ?? t("Platform control"),
       version: step.operation ? step.operation.version > 0 ? `v${step.operation.version}` : sourceCapability(step, capabilities)?.version : step.function ? step.function.version > 0 ? `v${step.function.version}` : sourceCapability(step, capabilities)?.version : step.queryVersion ? `v${step.queryVersion}` : undefined,
-      position: draft.layout?.[step.name] ?? positioned.get(step.name) ?? { x: 0, y: 0 }, status, diagnostics: diagnostics[step.name], current: tokens.length > 0 };
+      position: draft.layout?.[step.name] ?? positioned.get(step.name) ?? { x: 0, y: 0 }, status, diagnostics: diagnostics[step.name], current: matchingRun && tokens.length > 0 };
   });
   const node = draft.steps.find((step) => step.name === chosen);
   const saved = query.data?.record;
-  const installed = useMemo(() => { try { return draft.published ? JSON.parse(draft.published) as WorkflowDraft : undefined; } catch { return undefined; } }, [draft.published]);
+  const synchronized=!draft.id||saved?.revision===baseRevision.current;
   const runIssue = installed?.inputSchema ? schemaIssue(installed.inputSchema, runInput) : undefined;
   const brokenForm = Object.values(formProblems).filter(Boolean);
 
@@ -250,18 +249,17 @@ export function WorkflowEditor({ id }: { id: string }) {
     if (steps[0]) setChosen(steps[0].name);
   };
   const save = async () => {
-    const target = draft.id || crypto.randomUUID();
-    const { name, title, object, when, manual, input, inputSchema, steps, layout: positions } = draft;
-    if (!await decide(`build.process.${draft.id ? "edit" : "create"}`, { type: "build.process", id: target }, { name, title, object, when, manual, input, inputSchema, steps, layout: positions },
-      { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) return;
-    if (!draft.id) {
-      markSaved(); dispatch({ type: "load", draft: { ...draft, id: target, revision: 1 } });
-      open({ view: "workflow", params: { id: target } });
-      close({ view: "workflow", params: { id } });
-      return target;
+    const submitted=structuredClone(draft),target=submitted.id||crypto.randomUUID(),revision=submitted.id?baseRevision.current:0;
+    if(!await decide(`build.process.${submitted.id?"edit":"create"}`,{type:"build.process",id:target},workflowInputs(submitted),{expectedRevision:submitted.id?revision:undefined,quiet:true,onRefused:setError}))return;
+    baseRevision.current=revision+1;loaded.current=`${target}:${revision+1}`;
+    if(!submitted.id){
+      session.saved(submitted,{...submitted,id:target,revision:1});markSaved();
+      open({view:"workflow",params:{id:target}});close({view:"workflow",params:{id}});return target;
     }
-    const fresh = await query.refetch(); if (fresh.data?.record) { markSaved(); dispatch({ type: "load", draft: fresh.data.record }); }
-    return target;
+    const fresh=await query.refetch();
+    const confirmed=fresh.isSuccess&&fresh.data?.record?.revision===revision+1?fresh.data.record:undefined;
+    acknowledged.current=confirmed??{...submitted,revision:revision+1};
+    session.saved(submitted,acknowledged.current);markSaved();return target;
   };
   const check = async () => {
     const response = await client.call<{ valid: boolean; issues: { node?: string; message: string }[] }>("POST", "/v1/build/process/check", draft);
@@ -269,15 +267,19 @@ export function WorkflowEditor({ id }: { id: string }) {
     setValidation(response.body);
   };
   const publish = async () => {
-    if (dirty && !await save()) return;
-    const revision = dirty ? draft.revision + 1 : draft.revision;
-    if (await decide("build.process.publish", { type: "build.process", id: draft.id }, {}, { expectedRevision: revision, quiet: true, onRefused: setError })) {
-      const fresh = await query.refetch(); if (fresh.data?.record) dispatch({ type: "load", draft: fresh.data.record }); await catalogQuery.refetch();
+    if(!synchronized)return;
+    if(dirty&&!await save())return;
+    if(await decide("build.process.publish",{type:"build.process",id:draft.id},{},{expectedRevision:baseRevision.current,quiet:true,onRefused:setError})){
+      baseRevision.current++;loaded.current=`${draft.id}:${baseRevision.current}`;
+      const fresh=await query.refetch();
+      if(fresh.isSuccess&&fresh.data?.record?.revision===baseRevision.current){session.saved(dirty?acknowledged.current!:draft,fresh.data.record);markSaved();}
+      await catalogQuery.refetch();
     }
   };
-  const perform = async (action: () => Promise<unknown>) => { setBusy(true); setError(""); try { await action(); } catch { setError(t("The workflow request could not be completed.")); } finally { setBusy(false); } };
+  const perform=async(action:()=>Promise<unknown>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError("");try{await action();}catch{setError(t("The workflow request could not be completed."));}finally{lock.current=false;setBusy(false);}};
   const start = async () => {
     const key = runKey || crypto.randomUUID(); setRunKey(key);
+    if(!synchronized)return;
     if (await decide("build.process.run", { type: "build.process", id: draft.id }, { key, input: JSON.stringify(runInput) }, { quiet: true, onRefused: setError })) { setDock("history"); setDockOpen(true); }
   };
   const rename = (name: string) => {
@@ -293,30 +295,34 @@ export function WorkflowEditor({ id }: { id: string }) {
   if (role("build") !== "builder") return <PageHeader title={t("Logic Studio")} description={t("Only a builder can edit workflows.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Logic Studio")} description={query.isError ? t("The workflow could not be loaded.") : t("Loading…")} />;
 
-  return <WorkflowFormProblems.Provider value={reportProblem}><div className="flex min-h-0 flex-col gap-2">
+  return <WorkflowFormProblems.Provider value={reportProblem}><div className="flex min-h-0 flex-col gap-2" tabIndex={-1} onKeyDown={event=>{if(!(event.metaKey||event.ctrlKey))return;if(event.key.toLowerCase()==="s"){event.preventDefault();if(dirty&&!busy&&!brokenForm.length)void perform(save);}}}>
     <PageHeader title={draft.title || t("New workflow")} description={t("Logic Studio · Native flow, one capability library")}
       actions={<div className="flex items-center gap-1"><Tag label={dirty ? t("Unsaved") : draft.version ? `v${draft.version}` : t("Draft")} tone={dirty ? "warning" : draft.version ? "success" : "neutral"} />
         <Button variant="ghost" onClick={() => open({ view: "studio" })}>{t("Studio overview")}</Button></div>} />
     <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface px-2 py-1.5" role="toolbar" aria-label={t("Workflow actions")}>
       <Button variant="ghost" onClick={() => setLeftOpen(!leftOpen)} aria-label={t("Toggle block library")}>{leftOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}</Button>
+      <Button variant="ghost" aria-label={t("Undo")} disabled={busy||!session.canUndo} onClick={()=>{session.undo();setValidation(undefined);}}><Undo2/></Button>
+      <Button variant="ghost" aria-label={t("Redo")} disabled={busy||!session.canRedo} onClick={()=>{session.redo();setValidation(undefined);}}><Redo2/></Button>
       <Button variant="ghost" onClick={() => { setChosen(""); setRightOpen(true); }}><Settings2 className="mr-1 size-3.5" />{t("Settings")}</Button>
-      {draft.id && <Button disabled={busy} variant="ghost" onClick={() => confirmDiscard(() => void perform(async () => { const fresh = await query.refetch(); if (fresh.data?.record) { markSaved(); dispatch({ type: "load", draft: fresh.data.record }); setError(""); setValidation(undefined); } }))}>{t("Reload saved workflow")}</Button>}
+      {draft.id && <Button disabled={busy} variant="ghost" onClick={() => confirmDiscard(() => void perform(async () => { const fresh = await query.refetch(); if (fresh.isSuccess&&fresh.data?.record) { markSaved(); session.load(fresh.data.record);baseRevision.current=fresh.data.record.revision;loaded.current=`${fresh.data.record.id}:${fresh.data.record.revision}`; setError(""); setValidation(undefined); } }))}>{t("Reload saved workflow")}</Button>}
 <AssetControls type="build.process" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "workflow", params: { id } }} />
       <Button disabled={busy || brokenForm.length > 0 || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save workflow")}</Button>
       <Button disabled={busy || brokenForm.length > 0} onClick={() => void perform(check)}>{t("Validate workflow")}</Button>
-      <Button disabled={busy || !draft.id || brokenForm.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>
+      <Button disabled={busy || !synchronized || !draft.id || brokenForm.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>
       <span className="mx-1 h-5 w-px bg-border" />
-      <Button variant="primary" disabled={busy || !installed?.manual || dirty} onClick={() => { setDock("run"); setDockOpen(true); }}><Play className="mr-1 size-3" />{t("Run")}</Button>
+      <Button variant="primary" disabled={busy || !synchronized || !installed?.manual || dirty} onClick={() => { setDock("run"); setDockOpen(true); }}><Play className="mr-1 size-3" />{t("Run")}</Button>
       <Button variant="ghost" onClick={() => { setDock("history"); setDockOpen(true); }}>{t("Runs")}</Button>
-      <Button variant="ghost" disabled={!draft.id || dirty} onClick={() => { setDock("release"); setDockOpen(true); }}>{t("Release")}</Button>
+      <Button variant="ghost" disabled={!draft.id || dirty || !synchronized} onClick={() => { setDock("release"); setDockOpen(true); }}>{t("Release")}</Button>
       <Button variant="ghost" className="ml-auto" onClick={() => setRightOpen(!rightOpen)} aria-label={t("Toggle inspector")}>{rightOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}</Button>
     </div>
     <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {validation && <Panel role="status" className={`text-xs ${validation.valid ? "text-success" : "text-danger"}`}>{validation.valid ? t("The native compiler accepted this draft.") : validation.issues.map((issue) => issue.message).join(" ")}</Panel>}
+    {!synchronized&&<Panel role="alert">{t("The current workflow revision differs from this editing session. Reload before running or reviewing a release.")}</Panel>}
+    {run&&!matchingRun&&<Panel role="status" className="text-xs text-muted">{t("This run belongs to a different saved definition or the draft has changed. Inspect its recorded version in Executions.")}</Panel>}
     {catalogQuery.isError && <Panel role="alert" className="text-xs text-danger">{t("The capability library could not be loaded.")} <Button onClick={() => void catalogQuery.refetch()}>{t("Retry")}</Button></Panel>}
-    <fieldset disabled={busy} className="grid min-h-0 gap-2" style={{ gridTemplateColumns: `${leftOpen ? "240px " : ""}minmax(360px,1fr)${rightOpen ? " 320px" : ""}`, height: "clamp(520px, calc(100vh - 220px), 900px)" }}>
-      {leftOpen && <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-surface" aria-label={t("Block library")}>
+    <fieldset disabled={busy} className="min-w-0 border-0 p-0"><EditorWorkbench className="lg:h-[clamp(520px,calc(100vh-220px),900px)]" leftLabel={t("Block library")} centerLabel={t("Workflow map")} rightLabel={t("Workflow inspector")}
+      left={leftOpen && <div className="flex h-full min-h-0 flex-col overflow-hidden">
         <div className="border-b border-border p-3"><h3 className="mb-2 text-xs font-semibold">{t("Block library")}</h3><div className="relative"><Search className="pointer-events-none absolute left-2 top-2 size-3.5 text-muted" /><Input className="pl-7" aria-label={t("Search capabilities")} placeholder={t("Search capabilities")} value={search} onChange={(event) => setSearch(event.target.value)} /></div>
           <div className="mt-2 flex gap-1">{["all", "native", "code", "control"].map((kind) => <Button variant="ghost" key={kind} type="button" className={`rounded px-2 py-1 text-[10px] ${filter === kind ? "bg-row-selected text-primary" : "text-muted hover:bg-row-hover"}`} onClick={() => setFilter(kind)}>{t(({ all: "All", native: "Native", code: "Code", control: "Logic" })[kind as "all"])}</Button>)}</div>
         </div>
@@ -328,11 +334,15 @@ export function WorkflowEditor({ id }: { id: string }) {
           {draft.steps.filter((step) => step.name !== chosen).map((step) => <DataField key={step.name} title={step.title || step.name} schema={outputSchema(step, draft, capabilities)} binding={{ source: "step", step: step.name }} />)}
           {draft.object && <DataField title={t("Source record")} binding={{ source: "subject" }} />}
         </Disclosure>
-      </aside>}
-      <div className="min-h-0 min-w-0" aria-label={t("Workflow map")}><NodeCanvas label={t("Workflow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
+      </div>}
+      right={rightOpen && (node ? <WorkflowInspector step={node} steps={draft.steps} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun?run?.outputs?.[node.name]:undefined}
+        onChange={(patch) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === chosen ? { ...step, ...patch } : step) }))} onRename={rename}
+        onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} onClose={() => setRightOpen(false)} />
+        : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} onClose={() => setRightOpen(false)} />)}>
+      <div className="min-h-[32rem] min-w-0 flex-1 lg:min-h-0"><NodeCanvas label={t("Workflow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
         onSelect={(name) => { setChosen(name); setRightOpen(true); }} onOpen={(name) => { setChosen(name); setRightOpen(true); }} onAdd={add} onInsert={insert} onConnect={connect} onDisconnect={disconnect}
         onPositionsChange={(positions) => change((current) => ({ ...current, layout: { ...current.layout, ...positions } }))} onLayout={(positions) => change({ layout: positions })}
-        onDelete={deleteNodes} onDuplicate={duplicate} history={{ canUndo: past.length > 0, canRedo: future.length > 0, onUndo: () => { dispatch({ type: "undo" }); setValidation(undefined); }, onRedo: () => { dispatch({ type: "redo" }); setValidation(undefined); } }}
+        onDelete={deleteNodes} onDuplicate={duplicate} history={{ canUndo: session.canUndo, canRedo: session.canRedo, onUndo: () => { session.undo(); setValidation(undefined); }, onRedo: () => { session.redo(); setValidation(undefined); } }}
         canConnect={(connection) => {
           if (connection.sourceHandle?.startsWith("data:")) return true;
           const successors = new Map(draft.steps.map((step) => [step.name, controlEdges(draft).filter((edge) => edge.source === step.name).map((edge) => edge.target)]));
@@ -340,10 +350,7 @@ export function WorkflowEditor({ id }: { id: string }) {
           while (pending.length) { const next = pending.pop()!; if (next === connection.source) return false; if (seen.has(next)) continue; seen.add(next); pending.push(...(successors.get(next) ?? [])); }
           return true;
         }} /></div>
-      {rightOpen && (node ? <WorkflowInspector step={node} steps={draft.steps} capabilities={capabilities} flows={flowQuery.data ?? []} output={run?.outputs?.[node.name]}
-        onChange={(patch) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === chosen ? { ...step, ...patch } : step) }))} onRename={rename}
-        onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} onClose={() => setRightOpen(false)} />
-        : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} onClose={() => setRightOpen(false)} />)}
+    </EditorWorkbench>
     </fieldset>
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
       <div className="flex items-center gap-1 p-1.5"><Button variant="ghost" type="button" onClick={() => setDockOpen(!dockOpen)} className="rounded p-1 text-muted hover:bg-row-hover" aria-label={t(dockOpen ? "Collapse execution panel" : "Expand execution panel")}>{dockOpen ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}</Button>
@@ -354,12 +361,12 @@ export function WorkflowEditor({ id }: { id: string }) {
         {mountedDocks.run && <div hidden={dock !== "run"}><div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_280px]"><JSONEditor label={t("Run input (JSON)")} value={runInput} schema={installed?.inputSchema} onChange={setRunInput} rows={5} />
           <div className="grid content-start gap-2"><h4 className="text-xs font-medium">{t("Run published workflow")}</h4><p className="text-[11px] leading-5 text-muted">{t("Runs use the published version and real permissions. Actions and effects can change your platform data.")}</p>
             <Input aria-label={t("Stable run key")} placeholder={t("Stable run key (generated on first run)")} value={runKey} onChange={(event) => setRunKey(event.target.value)} />
-            <Button variant="primary" disabled={busy || dirty || !installed?.manual || !!runIssue || brokenForm.length > 0} onClick={() => void perform(start)}><Play className="mr-1 size-3" />{t("Run published version")}</Button>
+            <Button variant="primary" disabled={busy || dirty || !synchronized || !installed?.manual || !!runIssue || brokenForm.length > 0} onClick={() => void perform(start)}><Play className="mr-1 size-3" />{t("Run published version")}</Button>
             <Button variant="ghost" onClick={() => setRunKey(crypto.randomUUID())}>{t("New run key")}</Button>{!installed?.manual && <p className="text-xs text-muted">{t("Save and publish a manual workflow before running it here.")}</p>}{dirty && <p className="text-xs text-muted">{t("Save or undo draft changes before running the published version.")}</p>}
           </div></div></div>}
         {mountedDocks.history && <div hidden={dock !== "history"}><WorkflowRuns name={draft.name} versions={saved?.versions ?? draft.versions} onStepSelect={(name) => { setChosen(name); setRightOpen(true); }} onRunSelect={setRun} /></div>}
-        {mountedDocks.test && <div hidden={dock !== "test"}>{draft.id && !dirty ? <CandidateTest processId={draft.id} embedded onStepSelect={(name) => { setChosen(name); setRightOpen(true); }} /> : <p className="text-xs text-muted">{t("Save the workflow before isolated testing.")}</p>}</div>}
-        {mountedDocks.release && <div hidden={dock !== "release"}>{draft.id && !dirty ? <ReleaseReview initialKind="flow" initialID={draft.id} embedded /> : <p className="text-xs text-muted">{t("Save the workflow before release review.")}</p>}</div>}
+        {mountedDocks.test && <div hidden={dock !== "test"}>{draft.id && !dirty && synchronized ? <CandidateTest processId={draft.id} embedded onStepSelect={(name) => { setChosen(name); setRightOpen(true); }} /> : <p className="text-xs text-muted">{t("Save the workflow before isolated testing.")}</p>}</div>}
+        {mountedDocks.release && <div hidden={dock !== "release"}>{draft.id && !dirty && synchronized ? <ReleaseReview initialKind="flow" initialID={draft.id} embedded /> : <p className="text-xs text-muted">{t("Save the workflow before release review.")}</p>}</div>}
       </div>
     </div>
   </div></WorkflowFormProblems.Provider>;
