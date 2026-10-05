@@ -39,7 +39,9 @@ func main() {
 	if err == nil {
 		err = deployment.Serve(t)
 	}
-	log.Fatal(err)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // seed gives a development host its books in CNY, the demo chart of accounts,

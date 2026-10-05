@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path"
@@ -51,11 +52,33 @@ type Host struct {
 	// from the API's origin; empty serves no pages.
 	Web string
 	// SignIn tells the workspace how to sign in (GET /v1/sign-in): the OpenID
-	// issuer and the workspace's client, or, with neither, the development
-	// identities of a host whose tokens are the subjects.
+	// issuer and the workspace's client, or, with neither, the identities of
+	// the host's own seats — on a development host the token is the subject,
+	// on a lightweight one each served token is signed with the local key
+	// (ADR-0049 D3).
 	Issuer, Client string
 	Development    bool
-	routes         []Route // as Handler registered them: the API contract's source (api.go)
+	// Mint, when set, signs the identity tokens /v1/sign-in serves: the
+	// lightweight host's key (ADR-0049 D3). Without it the tokens are the
+	// development ones, the subject itself.
+	Mint   func(subject string) string
+	routes []Route // as Handler registered them: the API contract's source (api.go)
+}
+
+// SignWith makes the host take the lightweight provider's tokens and sign the
+// seats it serves with them (ADR-0049 D3): the host's authenticate function is
+// replaced, so a development token — the subject itself — is not accepted
+// beside them. Both are set through one call so a host cannot end up signing
+// with a key it does not verify.
+func (h *Host) SignWith(idp *LocalIdP, ttl time.Duration) {
+	h.authenticate = idp.Authenticate()
+	h.Mint = func(subject string) string {
+		token, err := idp.Mint(subject, ttl, h.Now())
+		if err != nil {
+			log.Printf("mint token: %v", err)
+		}
+		return token
+	}
 }
 
 // NewHost serves tenants; a tenant's members come from its console (the platform app).
@@ -853,6 +876,11 @@ func (h *Host) Handler() http.Handler {
 			for _, t := range h.currentTenants() {
 				if d := consoleOf(t); d != nil {
 					out.Identities = append(out.Identities, d.Identities()...)
+				}
+			}
+			if h.Mint != nil {
+				for i := range out.Identities { // the lightweight host signs what it serves
+					out.Identities[i].Token = h.Mint(out.Identities[i].Token)
 				}
 			}
 		}

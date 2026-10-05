@@ -43,6 +43,7 @@
 ## 4. 证据与检查
 
 - 上表测试均在本稿之前存在，并在真实 PostgreSQL 上整套跑绿（2026-10-05，`PLATFORM_TEST_DATABASE`，`ok platformserver 36.068s`）。本稿**不新增测试**，也不把既往 ADR 的 As built 当作本轮新验证。
+- ADR-0049 S1–S3 落地时在同一沙箱复核：PostgreSQL 16.2（Unix socket）上整套 `capabilities/server` 含新增的 `journal_file_test.go`（文件与 PostgreSQL 同一契约）与 `lightweight_test.go`（轻量 IdP、本地文件字节、按 profile 拒绝与单目录重启）全绿，`ok platformserver 37.753s`。
 - 平台评审要求的复现测试见 ADR-0050 §4（AI-01…AI-05 五类用例，全绿）。
 - 检查选择按 `Testing.md`：本稿只改文档与决策，不触发持久化/部署检查。
 

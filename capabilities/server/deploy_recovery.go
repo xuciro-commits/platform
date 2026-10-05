@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func (t *Tenant) attachJournal(ctx context.Context, journal *Journal) {
+func (t *Tenant) attachJournal(ctx context.Context, journal Journals) {
 	t.Store = journal
 	t.Record = func(e Entry) {
 		if err := journal.Append(ctx, t.ID, e); err != nil {
@@ -28,7 +28,7 @@ func (t *Tenant) attachJournal(ctx context.Context, journal *Journal) {
 // possibly half-applied in-memory tenant. A damaged snapshot can be bypassed
 // because the full journal is retained; a damaged journal cannot be bypassed.
 // No new generation is visible to HTTP, work or metrics until it is checked.
-func (d *Deployment) retryTenant(ctx context.Context, journal *Journal, registry *tenantRegistry, code, id string) (err error) {
+func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry *tenantRegistry, code, id string) (err error) {
 	old := registry.current(id)
 	if old == nil || !old.quarantined() {
 		return fmt.Errorf("tenant %s is not quarantined", id)
@@ -71,8 +71,8 @@ func (d *Deployment) retryTenant(ctx context.Context, journal *Journal, registry
 		}
 	}
 	var projection *Projection
-	if d.Project {
-		projection, err = Project(ctx, journal.pool, fresh)
+	if pgPool, pg := pool(journal); d.Project && pg {
+		projection, err = Project(ctx, pgPool, fresh)
 		if err != nil {
 			return fmt.Errorf("rebuild tenant %s projection: %w", id, err)
 		}
