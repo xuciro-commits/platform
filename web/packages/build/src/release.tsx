@@ -22,6 +22,18 @@ const merged = (current: JointChoice[], incoming: JointChoice[]): JointChoice[] 
 };
 
 export type ReleaseKind = "object" | "page" | "app" | "flow" | "link-type" | "property-type" | "query" | "function" | "compute";
+/** A route carries the already-known candidate inputs as "kind:id,kind:id"
+ * (ADR-0048 D6: the import's saved draft objects are the application's
+ * dependencies, so its review opens with them selected). */
+export function releaseDraftsParam(value: string | undefined, kinds: readonly string[]): JointChoice[] {
+  if (!value) return [];
+  const out: JointChoice[] = [];
+  for (const item of value.split(",")) {
+    const [kind, id] = item.split(":") as [ReleaseKind, string];
+    if (kinds.includes(kind) && id && !out.some((choice) => jointKey(choice) === `${kind}/${id}`)) out.push({ kind, id });
+  }
+  return out;
+}
 type Record = { id: string; title: string; name: string; state: string };
 type EvaluationPlan = { id: string; title: string; function?: string; evaluation?: unknown[] };
 type EvaluationReport = { id: string; candidate: string; function: string; state: string; quality: number; costUsd: number; costComplete: boolean; peakLatencyMillis: number; attempts: unknown[] };
@@ -36,8 +48,9 @@ const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
   { kind: "function", type: "build.function", label: "AI functions" },
   { kind: "compute", type: "build.code", label: "Code functions" },
 ];
+export const releaseKinds: ReleaseKind[] = kinds.map((item) => item.kind);
 
-export function ReleaseReview({ initialKind = "object", initialID = "", embedded = false }: { initialKind?: ReleaseKind; initialID?: string; embedded?: boolean } = {}) {
+export function ReleaseReview({ initialKind = "object", initialID = "", initialDrafts = [], embedded = false }: { initialKind?: ReleaseKind; initialID?: string; initialDrafts?: JointChoice[]; embedded?: boolean } = {}) {
   const { client, role } = useHost();
   const scope = useApplicationScope();
   const [kind, setKind] = useState<ReleaseKind>(initialKind);
@@ -55,7 +68,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", embedded
   const [reportID, setReportID] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [joint, setJoint] = useState<JointChoice[]>([]);
+  const [joint, setJoint] = useState<JointChoice[]>(initialDrafts);
   const [jointNote, setJointNote] = useState("");
   const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20`);
   const activeID = inventory.data?.activeId ?? "";

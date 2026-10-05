@@ -5,17 +5,25 @@ import { assetBindingKey, semanticModelView, semanticPropertyTypes, type Propert
 
 /** Typed semantic selection shared by model design and page binding. It uses
  * the member's registered descriptors, without a second ontology cache.
+ *
+ * `drafts` adds objects that are saved as drafts and not installed yet: the
+ * delivery releases them together (ADR-0048 D6), so a binding to one is a
+ * candidate input rather than a missing definition.
  */
-export function SemanticObjectSelect({ value, onChange, label, disabled, filter }: {
+export function SemanticObjectSelect({ value, onChange, label, disabled, filter, drafts }: {
   value?: string; onChange: (ref?: Api.AssetRef) => void; label: string; disabled?: boolean;
   filter?: (definition: Api.Definition) => boolean;
+  drafts?: { name: string; title?: string }[];
 }) {
   const { definitions } = useHost();
   const objects = semanticModelView(definitions).objects.filter((definition) => !filter || filter(definition));
-  return <Select aria-label={label} value={value ?? ""} disabled={disabled} onChange={(event) => onChange(objects.find((definition) => definition.ref.name === event.target.value)?.ref)}>
+  const saved = (drafts ?? []).filter((draft) => !objects.some((definition) => definition.ref.name === draft.name));
+  const chosen = objects.find((definition) => definition.ref.name === value)?.ref ?? (saved.some((draft) => draft.name === value) ? { app: "build", kind: "object" as const, name: value } : undefined);
+  return <Select aria-label={label} value={value ?? ""} disabled={disabled} onChange={(event) => onChange(objects.find((definition) => definition.ref.name === event.target.value)?.ref ?? (saved.some((draft) => draft.name === event.target.value) ? { app: "build", kind: "object", name: event.target.value } : undefined))}>
     <option value="">{t("Choose an object")}</option>
-    {value && !objects.some((definition) => definition.ref.name === value) && <option value={value}>{t("Unavailable object: {name}", { name: value })}</option>}
+    {value && !chosen && <option value={value}>{t("Unavailable object: {name}", { name: value })}</option>}
     {objects.map((definition) => <option key={definition.ref.name} value={definition.ref.name}>{definition.entity!.title} · {definition.ref.name}</option>)}
+    {saved.map((draft) => <option key={draft.name} value={draft.name}>{draft.title || draft.name} · {draft.name} · {t("Saved draft, delivered with the application release")}</option>)}
   </Select>;
 }
 

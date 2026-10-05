@@ -9,6 +9,7 @@ import { Button, Card, Checkbox, Input, PageHeader, Panel, RecordList, Select, S
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {WorkshopApplicationImport} from './module-import/WorkshopApplicationImport';
+import type {ApplicationImportDependency} from './module-import/application-import';
 
 type Draft = Api.Application & { id: string; revision: number; state: string };
 const empty: Draft = { id: "", revision: 0, state: "draft", name: "", title: "", description: "", icon: "boxes", pages: [], groups: [], resources: [] };
@@ -46,10 +47,14 @@ export function ApplicationEditor({ id }: { id: string }) {
   const [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [importing,setImporting]=useState(false);
+  // The saved object drafts the module import bound pages to: they are inputs
+  // to this application's release, not something to publish first (ADR-0048 D6).
+  const [importedDependencies,setImportedDependencies]=useState<ApplicationImportDependency[]>([]);
   const importApplication=definitions.find(d=>d.ref.app==='build'&&d.ref.kind==='app'&&d.ref.name===draft.name&&d.application);
   const reset = () => { setDraft(hydrate(query.data?.record)); setDirty(false); setError(""); };
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, reset);
   useEffect(() => { if (query.data?.record && !dirty) setDraft(hydrate(query.data.record)); }, [query.data, dirty]);
+  useEffect(() => { setImportedDependencies([]); }, [id]);
   const change = (patch: Partial<Draft>) => { setDraft((current) => ({ ...current, ...patch })); setDirty(true); setError(""); };
   const pages = definitions.filter((definition) => definition.ref.app === "build" && definition.page);
   const resources = definitions.filter((definition) => ["object", "query", "function", "compute"].includes(definition.ref.kind) && (definition.ref.app !== "build" || definition.source === "tenant"))
@@ -105,10 +110,10 @@ export function ApplicationEditor({ id }: { id: string }) {
         <Button disabled={busy || !!draft.id && !dirty || !draft.name || !draft.title} onClick={() => void save()}>{t(draft.id ? "Save application" : "Create application")}</Button>
         <Button disabled={busy||dirty||!draft.id||!importApplication} onClick={()=>setImporting(true)}>{t('Import complete Workshop module')}</Button>
         <Button variant="primary" disabled={busy || dirty || !draft.id || !draft.pages.length || processes.isLoading || processes.isError}
-          onClick={() => open({ view: "release-review", params: { kind: "app", id: draft.id } })}>{t("Review application release")}</Button>
+          onClick={() => open({ view: "release-review", params: { kind: "app", id: draft.id, ...(importedDependencies.length ? { drafts: importedDependencies.map((dependency) => `${dependency.kind}:${dependency.id}`).join(",") } : {}) } })}>{t("Review application release")}</Button>
       </div>} />
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
-    {importApplication&&<WorkshopApplicationImport key={JSON.stringify([draft.id,me])} open={importing} onClose={()=>setImporting(false)} application={{ref:importApplication.ref,sourceVersion:importApplication.version}} onPrepared={(names,header)=>change({pages:[...names,...draft.pages.filter(name=>!names.includes(name))],header,uiProfile:header?pageUIProfile:draft.uiProfile})}/>}
+    {importApplication&&<WorkshopApplicationImport key={JSON.stringify([draft.id,me])} open={importing} onClose={()=>setImporting(false)} application={{ref:importApplication.ref,sourceVersion:importApplication.version}} onPrepared={({pages,header,dependencies})=>{setImportedDependencies(dependencies);change({pages:[...pages,...draft.pages.filter(name=>!pages.includes(name))],header,uiProfile:header?pageUIProfile:draft.uiProfile});}}/>}
     <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="grid min-w-0 content-start gap-4 p-4">
         <label className="grid gap-1 text-xs">{t("What people call it")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>
@@ -128,6 +133,7 @@ export function ApplicationEditor({ id }: { id: string }) {
             <Button size="sm" aria-label={t("Move page down")} disabled={at === draft.pages.length - 1} onClick={() => movePage(at, 1)}><ArrowDown size={12} /></Button>
             <Button size="sm" aria-label={t("Remove page")} onClick={() => togglePage(name, false)}><Trash2 size={12} /></Button>
           </div>)}
+          {!!importedDependencies.length && <p className="text-xs text-muted">{t("Delivered with this application release: {drafts}", { drafts: importedDependencies.map((dependency) => dependency.title || dependency.name).join(", ") })}</p>}
         </fieldset>
         <fieldset className="grid gap-2"><legend className="mb-2 text-sm font-semibold">{t("Navigation groups")}</legend>
           {(draft.groups ?? []).map((group, at) => <div key={at} className="grid gap-2 rounded border border-border p-3">

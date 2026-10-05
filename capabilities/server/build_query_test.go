@@ -46,9 +46,17 @@ func reusableQueryVersions(t *testing.T, journal *Journal) {
 		return tn
 	}
 	tn := compose()
+	if journal != nil {
+		if _, err := journal.Entries(context.Background(), tenant, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
 	builder, _ := tn.Member("builder")
 	reader, _ := tn.Member("reader")
-	at := time.Now().UTC()
+	// A durable journal stores timestamptz at microsecond precision (journal.go
+	// sameJournalTime); decide at that precision so the replayed tenant and the
+	// live one are byte-identical.
+	at := time.Now().UTC().Truncate(time.Microsecond)
 	key := 0
 	var entries []Entry
 	fail := false

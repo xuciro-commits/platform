@@ -3,6 +3,9 @@ import { register } from "@platform/ui";
 
 register("zh-CN", {
   "Shared resources": "共享资源",
+  "{count} saved object drafts are candidate inputs and are added to the review.": "{count} 份已保存对象草稿是候选输入，将加入评审。",
+  "Delivered with this application release: {drafts}": "随本应用发布交付：{drafts}",
+
   "Discover capabilities": "发现可用能力",
   "Data and semantics": "数据与语义",
   "Pages and experience": "页面与体验",

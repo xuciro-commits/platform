@@ -49,5 +49,8 @@
 - **D5b 直接安装退场**：构建者声明 `build/releaseProfile`（`production`/`development`，默认 `development` = 开发/导入/探针）。`production` 时 owner 在 `Submit` 拒绝九类直接安装 schema（`ERROR_CODE_POLICY_DENIED`，消息点名候选路径），回放/恢复与历史 Published 一律不受影响；`GET /v1/release-profile` 让编辑面在 production 不再提供 Direct install，改为指向发布评审。编辑器与资源库按钮仅在 development 显示。
 - **D7 权限**：预览/封存/激活仍要求 Builder，未新增角色。
 - **D8**：未改 Worker/编译契约。
+- **D6 第二批（2026-10-05，本批）**：Module 导入的预发布依赖改为候选输入。导入对话框可把页面绑定到**已保存未安装**的对象草稿（`SemanticObjectSelect` 的 `drafts` 选项、`ModuleImportDialog` 的合并实体集），导入完成后把所用对象草稿作为依赖报给应用编辑器（`importDependencies` 纯函数），`Review application release` 以 `drafts=object:<id>,…` 打开交付台并**预选**这些草稿，页面与对象作为一个候选交付；开发/导入 profile 的逐页发布保持不变。
 - **证据**：Go 测试 `TestJointDraftsDeliverNewObjectPageAndApplication`（新对象＋新页面＋应用的联合交付、来源、陈旧 ID 拒绝、激活后可见）、`TestProductionProfileRefusesDirectInstallAndKeepsDelivery`（development 直装仍在、production 拒绝且草稿未变、联合候选在 production 仍交付、回放一致）；e2e `joint-draft-release.spec.ts`（两个行业，UI 走联合交付，并证明单独页面被拒）。
-- **剩余**：D6（完整 Module 导入改生成联合草稿、`WorkshopApplicationImport` 预发布依赖改候选输入）；ADR-0047 §10.2 M4 的固定持久环境证据；`deploy/local/rehearse.sh` 末尾新增 delivery profile 断言（本沙箱无 Docker，未实际执行）。
+- **D6 完成**：完整 Module 导入改生成联合草稿（第一批）与 `WorkshopApplicationImport` 预发布依赖改候选输入（第二批）均已落地，见上。
+- **M4 固定持久环境证据（2026-10-05，本批）**：本沙箱用 `pgserver`（PyPI 包，PostgreSQL 16.2，Unix socket）建立真实日志；`hospitality-server -database …` 在真实 PostgreSQL 上写入对象/记录后停止（快照落库）并重启（`restored hotel-a from the snapshot at N, then replayed 0 entries`），定义与记录原样可读、可继续写入；`capabilities/server` 全套测试带 `PLATFORM_TEST_DATABASE` 在真实 PostgreSQL 上全绿（含联合草稿、production 拒绝、回放恢复）。为此修正两处测试侧问题：追加前必须先读日志（与部署一致），测试决策时间取日志精度（微秒）。
+- **剩余**：运维界面走查（从失败业务任务定位原运行/原因与获权恢复动作）；`deploy/local/rehearse.sh` 末尾的 delivery profile 断言（本沙箱无 Docker，未实际执行；轻量 profile 见 [ADR-0049](0049-delivery-and-lightweight-profiles.md)）。
