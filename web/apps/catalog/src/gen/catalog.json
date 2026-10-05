@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:cff160a8e7a0cf95",
+  "revision": "sha256:872dabade866399e",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4590,6 +4590,7 @@
       "web/packages/app/src/widgets/AIWidget.tsx",
       "web/packages/app/src/widgets/Alert.tsx",
       "web/packages/app/src/widgets/BooleanInput.tsx",
+      "web/packages/app/src/widgets/ChartSurface.tsx",
       "web/packages/app/src/widgets/ChoiceInput.tsx",
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
       "web/packages/app/src/widgets/CollectionBuilder.tsx",
@@ -4610,8 +4611,10 @@
       "web/packages/app/src/widgets/Range.tsx",
       "web/packages/app/src/widgets/RecordCalendar.tsx",
       "web/packages/app/src/widgets/RecordCard.tsx",
+      "web/packages/app/src/widgets/RecordChart.tsx",
       "web/packages/app/src/widgets/RecordCollaboration.tsx",
       "web/packages/app/src/widgets/RecordComparison.tsx",
+      "web/packages/app/src/widgets/RecordDetails.tsx",
       "web/packages/app/src/widgets/RecordEvents.tsx",
       "web/packages/app/src/widgets/RecordGantt.tsx",
       "web/packages/app/src/widgets/RecordPicker.tsx",
@@ -4812,7 +4815,8 @@
     "ui/record-page": [
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
-      "web/packages/app/src/sections.tsx"
+      "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/RecordDetails.tsx"
     ],
     "ui/chart": [
       "web/packages/app/src/index.tsx",
@@ -4843,10 +4847,6 @@
     "ui/tasks": [
       "web/packages/app/src/sections.tsx",
       "web/apps/workspace/src/chrome.tsx"
-    ],
-    "ui/lifecycle": [
-      "web/packages/app/src/sections.tsx",
-      "web/packages/build/src/process.tsx"
     ],
     "ui/ai-result": [
       "web/packages/app/src/widgets/AIWidget.tsx"
@@ -4984,6 +4984,10 @@
     ],
     "ui/record-comparison": [
       "web/packages/app/src/widgets/RecordComparison.tsx"
+    ],
+    "ui/lifecycle": [
+      "web/packages/app/src/widgets/RecordDetails.tsx",
+      "web/packages/build/src/process.tsx"
     ],
     "ui/record-events": [
       "web/packages/app/src/widgets/RecordEvents.tsx"

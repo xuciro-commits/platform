@@ -1,3 +1,5 @@
+import {detailPlugins} from "./widgets/detail-plugins";
+import {chartPlugins} from "./widgets/chart-plugins";
 import {recordPresentationPlugins} from "./widgets/record-presentation-plugins";
 import {surfacePlugins} from "./widgets/surface-plugins";
 import {distributionPlugins} from "./widgets/distribution-plugins";
@@ -24,10 +26,10 @@ import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, RecordLinks, RecordStatus, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
+  Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
 import { Component, lazy, Suspense, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { NewActions, RecordActions, InlineActionForm, prefixOf } from "./actions";
+import { InlineActionForm, prefixOf } from "./actions";
 import { GeneratedForm, findDefinition, newId, HostContext, useHost,useOpenRecord, useInvokeCapability, type Definition } from "./index";
 import { ComputeCall } from "./capability";
 import type { Api } from "@platform/kernel";
@@ -35,7 +37,6 @@ import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry"
 import { useApplicationContext, useApplicationVariables } from "./runtime/ApplicationRuntime";
 import { usePageQueries } from "./runtime/PageQueries";
 import { planKey, variablePlan } from "./runtime/query-plans";
-import { compileChartSpec } from "./widgets/chart-spec";
 import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavigation";
 import { NestedLoopRuntime } from "./runtime/NestedLoopRuntime";
 import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
@@ -48,14 +49,11 @@ const ExplorationRenderer=lazy(()=>import("./widgets/Exploration").then(module=>
 const ActionTableRenderer=lazy(()=>import("./widgets/RecordWork").then(m=>({default:m.ActionTableRenderer})));
 const RecordTilesRenderer=lazy(()=>import("./widgets/RecordWork").then(m=>({default:m.RecordTilesRenderer})));
 const ObservationRenderer=lazy(()=>import("./widgets/Observation").then(module=>({default:module.ObservationRenderer})));
-const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
 const RecordCollaborationRenderer=lazy(()=>import("./widgets/RecordCollaboration").then(module=>({default:module.RecordCollaborationRenderer})));
 const WorkViewsRenderer=lazy(()=>import("./widgets/WorkViews").then(module=>({default:module.WorkViewsRenderer})));
-const RecordChartRenderer=lazy(()=>import("./widgets/RecordChart").then(module=>({default:module.RecordChartRenderer})));
 const TableRenderer=lazy(()=>import("./widgets/Table").then(module=>({default:module.TableRenderer})));
 const RecordTimelineRenderer=lazy(()=>import("./widgets/RecordTimeline").then(module=>({default:module.RecordTimelineRenderer})));
 const KanbanRenderer=lazy(()=>import("./widgets/Kanban").then(module=>({default:module.KanbanRenderer})));
-const PivotRenderer=lazy(()=>import("./widgets/Pivot").then(module=>({default:module.PivotRenderer})));
 
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
@@ -121,89 +119,11 @@ function RecordTimelineAdapter({page,section,onSelect,selected,window}:Bound) {
  const valid=start&&["date","datetime"].includes(start.type)&&(!section.timeEnd||end?.type===start.type)&&label(section.timeLabel)&&(!section.timeGroup||label(section.timeGroup));
  return <RecordTimelineRenderer window={window} fields={valid?{start:section.timeStart!,end:section.timeEnd,label:section.timeLabel!,group:section.timeGroup,kind:start.type as "date"|"datetime"}:undefined} selected={selected} onSelect={onSelect} title={section.title||t("Record timeline")}/>;
 }
-function RecordChartAdapter({page,section,window}:Bound) {
- const {source}=useHost(),info=source.entity(objectOf(page,section));
- if(!info)return <Panel role="alert">{t("Record chart fields or values are unavailable or incompatible.")}</Panel>;
- return <RecordChartRenderer window={window} info={info} fields={{mark:section.recordChart?.mark as "bar"|"line"??"line",xField:section.recordChart?.xField??"",yField:section.recordChart?.yField??""}}/>;
-}
 function KanbanAdapter({page,section,onSelect,selected,window,live}:Bound) {
  const {source,catalog}=useHost(),object=objectOf(page,section),info=source.entity(object);
  const allowed=new Set((section.actions??[]).map(a=>a.name));
  const moves=(info?.lifecycle?.transitions??[]).filter(m=>allowed.has(m.schema)&&catalog.some(a=>a.schema===m.schema&&a.target===object)&&(!m.toInput&&m.to.length===1||!!m.toInput&&Number(page.document?.uiProfile.split(".").at(-1))>=99&&catalog.some(a=>a.schema===m.schema&&a.payload.some(p=>p.name===m.toInput&&p.type==="string"&&m.to.every(state=>p.choices?.includes(state)))))).flatMap(m=>m.to.map(to=>({schema:m.schema,title:m.title,from:m.from,to,input:m.toInput})));
  return <KanbanRenderer key={JSON.stringify([object,window?.query,source.scope])} object={object} info={info} window={window} cardLabel={section.cardLabel??""} fields={section.fields} selected={selected} onSelect={onSelect} moves={moves} live={live} title={section.title||t("Kanban board")}/>;
-}
-
-/** The record the page has selected, with the fields the builder chose. */
-function DetailWidget({ page, section, selected, readSource }: Bound) {
-  const host = useHost(), source = readSource ?? host.source;
-  const type = objectOf(page, section);
-  if (!selected) return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
-  // The fields alone: what people do with it is the actions widget's (ADR-0035 D2).
-  return <RecordPage key={`${type}/${selected.id}`} source={source} type={type} id={selected.id} fields={section.fields} detailPresentation={section.detailPresentation} detailOnly />;
-}
-
-function StatusTrackerWidget({page,section,selected,readSource}:Bound){
- const host=useHost(),source=readSource??host.source,type=objectOf(page,section);
- if(!selected)return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
- return <RecordStatus key={JSON.stringify([source.scope,type,selected.id])} source={source} type={type} id={selected.id} config={section.statusTracker}/>;
-}
-
-function RecordLinksWidget({page,section,selected,readSource,live,onRecordOpen}:Bound){
- const host=useHost(),open=useOpenRecord(),source=readSource??host.source,type=objectOf(page,section);
- if(!selected)return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
- return <RecordLinks key={JSON.stringify([source.scope,type,selected.id])} source={source} type={type} id={selected.id} groups={section.recordLinks??[]} onOpen={live?onRecordOpen??((type,record)=>open({type,id:record.id})):undefined}/>;
-}
-
-function RecordViewWidget({page,section,selected,readSource,live,onRecordOpen}:Bound){
- const host=useHost(),open=useOpenRecord(),source=readSource??host.source,type=objectOf(page,section);
- if(!selected)return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
- return <RecordPage key={JSON.stringify([source.scope,type,selected.id])} source={source} type={type} id={selected.id} fields={section.fields??[]} recordTabs={section.recordView?.tabs??pageVariableContract.recordView.tabs} onOpen={live?onRecordOpen??((type,record)=>open({type,id:record.id})):undefined} actions={record=>live?<RecordActions type={type} record={record} allowed={(section.actions??[]).map(a=>a.name)} steps/>:<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}/>;
-}
-
-/** The actions the builder chose, on what is selected (Workshop's button group). */
-function ActionsWidget({ page, section, selected, live }: Bound) {
-  const type = objectOf(page, section);
-  const allowed = (section.actions ?? []).map((ref) => ref.name);
-  if (!live) return <p className="text-sm text-muted">{t("Actions do not run while you compose.")}</p>;
-  return (
-    <div className="flex flex-wrap gap-2">
-      <NewActions type={type} allowed={allowed} />
-      {selected
-        ? <RecordActions type={type} record={selected} allowed={allowed} steps />
-        : <span className="self-center text-sm text-muted">{t("Select a record to act on it.")}</span>}
-    </div>
-  );
-}
-
-/** An aggregate of the object: grouped and measured, drawn by the kit (ADR-0019). */
-function chartSpec(page: Page, section: Section, kpi: boolean, domain: unknown[]): ChartSpec {
-  return {...compileChartSpec({object:objectOf(page,section),title:section.title,group:section.group,measure:section.measure,mark:section.mark,chartVariant:section.chartVariant,kpi,domain}),metric:kpi?section.metricPresentation:undefined};
-}
-
-function ChartWidget({ page, section, kpi, pivot, narrowed, sharedFilter, master, window, collection, aggregateScope,onHeatmap,enabled }: Bound & { kpi: boolean; pivot?:boolean }) {
-  const { source } = useHost();
-  const aggregate = source.aggregate;
-  const render=(spec:ChartSpec,readScope?:string)=>pivot?<PivotRenderer filterAxes={{row:!!(section.rowValueVariable||section.rowSetVariable),column:!!(section.columnValueVariable||section.columnSetVariable)}} heatmap={section.widget==="heatmap"} enabled={enabled} onCellFilter={onHeatmap} onClearFilters={onHeatmap?()=>onHeatmap():undefined} object={objectOf(page,section)} query={"entity" in spec.data?{domain:spec.data.domain,search:spec.data.search,set:spec.data.set,traversal:spec.data.traversal,archived:spec.data.archived}:{}} rows={section.group??""} columns={section.columnGroup} measure={section.measure??"count"} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>:<ChartRenderer spec={spec} height={kpi?120:240} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>;
-  if(section.collectionVariable){
-    if(!window)return <Panel role={collection?.status==="error"?"alert":"status"}>{t(collection?.status==="error"?collection.code:"Query window is unavailable.")}</Panel>;
-    if(window.error)return <Panel role="alert">{t(window.error)}</Panel>;
-    const {domain,search,set,archived,traversal}=window.query;
-    const spec=chartSpec(page,section,kpi,domain??[]);spec.data={entity:objectOf(page,section),domain,search,set,archived,traversal};
-    return render(spec,aggregateScope);
-  }
-  const type = objectOf(page, section);
-  const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
-  const info = source.entity(type);
-  const refField = !isMaster ? relatedField(info?.fields, page, section) : undefined;
-  if ((section.relation || section.parentSelection) && !refField) return <p role="alert" className="text-sm text-danger">
-    {t("This section's parent reference is unavailable.")}</p>;
-  if (refField && !master) return <p className="text-sm text-muted">
-    {t("Select a record to see related {records}.", { records: info?.plural?.toLowerCase() ?? type })}
-  </p>;
-  const relationDomain = refField && master ? [[refField.name, "=", master.id]] : [];
-  const domain = [...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
-
-  return render(chartSpec(page, section, kpi, domain),aggregateScope);
 }
 
 /** The filter (16b): a value to narrow the object's records by, for each field
@@ -424,6 +344,8 @@ const widgets = createWidgetRegistry<Bound>({
  ...navigationPlugins,
  ...recordPresentationPlugins,
  ...surfacePlugins,
+ ...detailPlugins,
+ ...chartPlugins,
  "image-annotation":CollaborationWidget,
  "scene-3d":CollaborationWidget,
  "collection-builder":CollectionBuilderRenderer,
@@ -434,19 +356,11 @@ const widgets = createWidgetRegistry<Bound>({
  "approval-inbox":({section,session,enabled,live})=><WorkViewsRenderer kind="approval-inbox" label={section.title||t("Approval inbox")} readSource={session?.readSource()} enabled={enabled} live={live}/>,
  "notification-feed":({section,session,enabled,live})=><WorkViewsRenderer kind="notification-feed" label={section.title||t("Notifications")} readSource={session?.readSource()} enabled={enabled} live={live}/>,
  "record-comments":CollaborationWidget,"record-uploader":CollaborationWidget,"media-preview":CollaborationWidget,"pdf-viewer":CollaborationWidget,
- "record-chart":RecordChartAdapter,
  "record-list":(bound)=>bound.section.recordList?.layout==="tiles"?<RecordTilesRenderer window={bound.window} object={objectOf(bound.page,bound.section)} labelField={bound.section.cardLabel??"id"} selected={bound.selected?.id} onSelect={bound.enabled===false||!bound.section.selection?undefined:record=>bound.onSelect(record)} label={bound.section.title||t("Record tiles")} readCurrent={bound.contextReadCurrent}/>:<TableAdapter {...bound}/>,
- "status-tracker":StatusTrackerWidget,
- "record-links":RecordLinksWidget,
- "record-view":RecordViewWidget,
   kanban:KanbanAdapter,
   "record-timeline":RecordTimelineAdapter,
   "inline-action":({page,section,selected,live,aggregateScope,actionReady})=><InlineActionForm type={objectOf(page,section)} schema={section.actions?.[0]?.name??""} record={selected} live={live} scope={aggregateScope} defaults={section.actionDefaults} ready={actionReady}/>,
-  table: TableAdapter, detail: DetailWidget, actions: ActionsWidget,
-  heatmap:(props)=><ChartWidget {...props} kpi={false} pivot/>,
-  pivot: (bound) => <ChartWidget {...bound} kpi={false} pivot/>,
-  chart: (bound) => <ChartWidget {...bound} kpi={false} />,
-  metric: (bound) => <ChartWidget {...bound} kpi />,
+  table: TableAdapter,
   filter: FilterWidget,
   form: (bound) => <FormWidget key={`${objectOf(bound.page, bound.section)}/${bound.section.relation ?? ""}/${bound.section.parentSelection ?? ""}/${bound.section.relation ? bound.master?.id ?? "" : ""}`} {...bound} />,
   timeline: TimelineWidget, tasks: TasksWidget, function: FunctionWidget,
