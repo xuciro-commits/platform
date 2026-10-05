@@ -1,3 +1,5 @@
+import {scalarPlugins} from "./widgets/scalar-plugins";
+import {recordWindowPlugins} from "./widgets/record-window-plugins";
 import {contentPlugins} from "./widgets/content-plugins";
 import {inputPlugins} from "./widgets/input-plugins";
 import {confirmObservationRow} from "./widgets/observation-selection";
@@ -21,9 +23,9 @@ import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime
 import {
   Button,ButtonGroup, CollectionTitle, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, RecordLinks, RecordStatus, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
-import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, lazy, Suspense, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, InlineActionForm, prefixOf } from "./actions";
-import { GeneratedForm, findDefinition, newId, useHost,useOpenRecord, useInvokeCapability, type Definition } from "./index";
+import { GeneratedForm, findDefinition, newId, HostContext, useHost,useOpenRecord, useInvokeCapability, type Definition } from "./index";
 import { ComputeCall } from "./capability";
 import type { Api } from "@platform/kernel";
 import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry";
@@ -54,20 +56,10 @@ const HistogramRenderer=lazy(()=>import("./widgets/Histogram").then(module=>({de
 const TermCountsRenderer=lazy(()=>import("./widgets/TermCounts").then(module=>({default:module.TermCountsRenderer})));
 const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
 const RecordPickerRenderer=lazy(()=>import("./widgets/RecordPicker").then(module=>({default:module.RecordPickerRenderer})));
-const AlertRenderer=lazy(()=>import("./widgets/Alert").then(module=>({default:module.AlertRenderer})));
-const LeaderboardRenderer=lazy(()=>import("./widgets/Leaderboard").then(module=>({default:module.LeaderboardRenderer})));
-const SummaryRenderer=lazy(()=>import("./widgets/Summary").then(module=>({default:module.SummaryRenderer})));
 const RecordCollaborationRenderer=lazy(()=>import("./widgets/RecordCollaboration").then(module=>({default:module.RecordCollaborationRenderer})));
 const WorkViewsRenderer=lazy(()=>import("./widgets/WorkViews").then(module=>({default:module.WorkViewsRenderer})));
 const RecordComparisonRenderer=lazy(()=>import("./widgets/RecordComparison").then(module=>({default:module.RecordComparisonRenderer})));
 const RecordCardRenderer=lazy(()=>import("./widgets/RecordCard").then(module=>({default:module.RecordCardRenderer})));
-const SparklineRenderer=lazy(()=>import("./widgets/Sparkline").then(module=>({default:module.SparklineRenderer})));
-const GaugeRenderer=lazy(()=>import("./widgets/Gauge").then(module=>({default:module.GaugeRenderer})));
-const ProgressRenderer=lazy(()=>import("./widgets/Progress").then(module=>({default:module.ProgressRenderer})));
-const RecordGanttRenderer=lazy(()=>import("./widgets/RecordGantt").then(module=>({default:module.RecordGanttRenderer})));
-const RecordCalendarRenderer=lazy(()=>import("./widgets/RecordCalendar").then(module=>({default:module.RecordCalendarRenderer})));
-const RecordEventsRenderer=lazy(()=>import("./widgets/RecordEvents").then(module=>({default:module.RecordEventsRenderer})));
-const RecordScatterRenderer=lazy(()=>import("./widgets/RecordScatter").then(module=>({default:module.RecordScatterRenderer})));
 const RecordChartRenderer=lazy(()=>import("./widgets/RecordChart").then(module=>({default:module.RecordChartRenderer})));
 const TableRenderer=lazy(()=>import("./widgets/Table").then(module=>({default:module.TableRenderer})));
 const RecordTimelineRenderer=lazy(()=>import("./widgets/RecordTimeline").then(module=>({default:module.RecordTimelineRenderer})));
@@ -436,6 +428,8 @@ function ExplorerWidget({page,section,session,explorationRoot,explorationStatus,
 const widgets = createWidgetRegistry<Bound>({
  ...inputPlugins,
  ...contentPlugins,
+ ...scalarPlugins,
+ ...recordWindowPlugins,
  "record-map":({page,section,window,selected,enabled,onSelect,pickerConfirmation})=>{const {source}=useHost();return <RecordMapRenderer window={window} info={source.entity(objectOf(page,section))} config={section.map} scope={source.scope??""} confirmation={pickerConfirmation} selected={selected} enabled={enabled} onSelect={onSelect}/>;},
  "image-annotation":CollaborationWidget,
  "scene-3d":CollaborationWidget,
@@ -457,20 +451,10 @@ const widgets = createWidgetRegistry<Bound>({
  "notification-feed":({section,session,enabled,live})=><WorkViewsRenderer kind="notification-feed" label={section.title||t("Notifications")} readSource={session?.readSource()} enabled={enabled} live={live}/>,
  "record-comments":CollaborationWidget,"record-uploader":CollaborationWidget,"media-preview":CollaborationWidget,"pdf-viewer":CollaborationWidget,
  histogram:({page,section,window,aggregateScope})=>{const {source}=useHost();return <HistogramRenderer object={objectOf(page,section)} window={window} fields={section.histogram} label={section.title||t("Histogram")} info={source.entity(objectOf(page,section))} source={source.aggregate?{aggregate:source.aggregate,scope:aggregateScope??source.scope,revision:source.revision}:undefined}/>;},
- "sparkline-kpi":({page,section,window,sparklineValue})=>{const {source}=useHost();return <SparklineRenderer value={sparklineValue} window={window} info={source.entity(objectOf(page,section))} fields={section.sparkline} title={section.title||t("Sparkline KPI")}/>;},
  "tag-counts":({page,section,window,aggregateScope,groupValue,enabled,onGroupFilter})=>{const {source}=useHost(),selected=groupValue?.status==="value"?typeof groupValue.value==="string"?[groupValue.value]:isStringSet(groupValue.value)?groupValue.value.values:[]:[];return <TermCountsRenderer tags selected={selected} enabled={enabled} onSelect={onGroupFilter} object={objectOf(page,section)} window={window} field={section.group??""} label={section.title||t("Tag counts")} info={source.entity(objectOf(page,section))} source={source.aggregate?{aggregate:source.aggregate,scope:aggregateScope??source.scope,revision:source.revision}:undefined}/>;},
  "treemap":({page,section,window,aggregateScope,groupValue,enabled,onGroupFilter})=>{const {source}=useHost(),selected=groupValue?.status==="value"?typeof groupValue.value==="string"?[groupValue.value]:isStringSet(groupValue.value)?groupValue.value.values:[]:[];return <TermCountsRenderer treemap selected={selected} enabled={enabled} onSelect={onGroupFilter} object={objectOf(page,section)} window={window} field={section.group??""} label={section.title||t("Treemap")} info={source.entity(objectOf(page,section))} source={source.aggregate?{aggregate:source.aggregate,scope:aggregateScope??source.scope,revision:source.revision}:undefined}/>;},
  "term-counts":({page,section,window,aggregateScope})=>{const {source}=useHost();return <TermCountsRenderer object={objectOf(page,section)} window={window} field={section.group??""} label={section.title||t("Term counts")} info={source.entity(objectOf(page,section))} source={source.aggregate?{aggregate:source.aggregate,scope:aggregateScope??source.scope,revision:source.revision}:undefined}/>;},
  "record-picker":({page,section,window,selected,enabled,onSelect,pickerValue,onPickerID,pickerConfirmation})=><RecordPickerRenderer type={objectOf(page,section)} window={window} fields={section.recordPicker} title={section.title||t("Record picker")} selected={selected} enabled={enabled} confirmation={section.pickerValueVariable?pickerConfirmation:undefined} value={section.pickerValueVariable?pickerValue:undefined} onSelect={onPickerID??onSelect}/>,
- "alert-banner":({section,alertValue})=><AlertRenderer value={alertValue} config={section.alertBanner} title={section.title||t("Alert banner")}/>,
- "record-leaderboard":({page,section,window,selected,onSelect})=>{const {source}=useHost();return <LeaderboardRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.leaderboard} selected={selected} onSelect={onSelect}/>;},
- "summary-stats":({page,section,statisticsValue})=>{const {source}=useHost();return <SummaryRenderer value={statisticsValue} info={source.entity(objectOf(page,section))} field={section.summaryField}/>;},
- gauge:({section,gaugeValue})=><GaugeRenderer value={gaugeValue} fields={section.gauge} title={section.title||t("Gauge")}/>,
- progress:({section,progressValue,progressTotal})=><ProgressRenderer value={progressValue} total={progressTotal} fixedTotal={section.progressTotalVariable?undefined:section.progressTotal} title={section.progressLabel??section.title??""}/>,
- "record-gantt":({page,section,window})=>{const {source}=useHost();return <RecordGanttRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.recordGantt}/>;},
- "record-calendar":({page,section,window,selected,onSelect})=>{const {source}=useHost(),object=objectOf(page,section);return <RecordCalendarRenderer key={JSON.stringify([source.scope,object,section.recordCalendar,window?.query])} window={window} info={source.entity(object)} fields={section.recordCalendar} selected={selected} onSelect={onSelect}/>;},
- "record-events":({page,section,window})=>{const {source}=useHost();return <RecordEventsRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.recordEvents}/>;},
- "record-scatter":({page,section,window,selected,enabled,onSelect,pickerConfirmation})=>{const {source}=useHost();return <RecordScatterRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.scatter} confirmation={pickerConfirmation} selected={selected} enabled={enabled} onSelect={onSelect}/>;},
  "record-chart":RecordChartAdapter,
  "record-list":(bound)=>bound.section.recordList?.layout==="tiles"?<RecordTilesRenderer window={bound.window} object={objectOf(bound.page,bound.section)} labelField={bound.section.cardLabel??"id"} selected={bound.selected?.id} onSelect={bound.enabled===false||!bound.section.selection?undefined:record=>bound.onSelect(record)} label={bound.section.title||t("Record tiles")} readCurrent={bound.contextReadCurrent}/>:<TableAdapter {...bound}/>,
  "collection-title":({section,countValue,countError})=><CollectionTitle title={section.title||t("Collection title")} value={countValue} error={countError}/>,
@@ -502,10 +486,11 @@ class WidgetBoundary extends Component<{ children: ReactNode }, { failed: boolea
 }
 
 export function SectionView(bound: Bound & Composing) {
+  const source=useContext(HostContext)?.source;
   const { section, chosen, onChoose, at, nested } = bound;
   const implementation = widgets.resolveDefinition(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
   const Renderer=implementation?.Renderer;
-  const body = Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
+  const body = Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound} info={source?.entity(objectOf(bound.page,bound.section))} sourceScope={source?.scope}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
   const template=section.tablePresentation?.titleTemplate,total=bound.window?.error||!["value","empty"].includes(bound.collection?.status??"")?undefined:bound.window?.page?.total;
   const title=template===undefined?section.title:template.replace("{count}",total===undefined||!Number.isSafeInteger(total)||total<0?"…":total.toLocaleString());
   const inHand = onChoose !== undefined && chosen === at;

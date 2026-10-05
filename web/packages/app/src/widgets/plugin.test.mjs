@@ -8,13 +8,28 @@ const {defineWidgetPlugin}=await import('./plugin.ts');
 const {createWidgetDefinitions,createWidgetRegistry,widgetContracts}=await import('./registry.ts');
 const {inputPlugins}=await import('./input-plugins.ts');
 const {contentPlugins}=await import('./content-plugins.ts');
+const {scalarPlugins}=await import('./scalar-plugins.ts');
+const {recordWindowPlugins}=await import('./record-window-plugins.ts');
 
 test('runtime and authoring reject missing, undeclared or incompatible registrations and keep definitions immutable',()=>{
  const definitions=Object.fromEntries(widgetContracts.map(c=>[c.componentID,{configVersion:1,owner:'original'}]));
  const registry=createWidgetDefinitions(definitions);assert.equal(registry.resolve('input',1).owner,'original');assert.equal(registry.resolve('input',2),undefined);assert.equal(registry.resolve('unknown',1),undefined);assert.ok(Object.isFrozen(registry.entries));assert.ok(Object.isFrozen(registry.resolve('input',1)));
  const missing={...definitions};delete missing.text;assert.throws(()=>createWidgetDefinitions(missing),/Missing widget implementation/);assert.throws(()=>createWidgetDefinitions({...definitions,custom:{configVersion:1}}),/Undeclared widget implementation/);assert.throws(()=>createWidgetDefinitions({...definitions,text:{configVersion:2}}),/Unsupported widget configuration/);
  const renderer=()=>null,implementations=Object.fromEntries(widgetContracts.map(c=>[c.componentID,renderer]));assert.throws(()=>createWidgetRegistry({...implementations,text:inputPlugins.input}),/Mismatched widget plugin/);assert.throws(()=>createWidgetRegistry({...implementations,text:undefined}),/Missing widget implementation/);
- const current=createWidgetRegistry({...implementations,...inputPlugins,...contentPlugins});for(const [id,plugin]of Object.entries({...inputPlugins,...contentPlugins})){assert.equal(current.resolve(id,1),plugin.Renderer);assert.equal(current.resolve(id,2),undefined);}
+ const plugins={...inputPlugins,...contentPlugins,...scalarPlugins,...recordWindowPlugins},current=createWidgetRegistry({...implementations,...plugins});assert.equal(Object.keys(plugins).length,20);for(const [id,plugin]of Object.entries(plugins)){assert.equal(current.resolve(id,1),plugin.Renderer);assert.equal(current.resolve(id,2),undefined);}
+});
+test('scalar and record-window adapters preserve pending results, authorization confirmation and original window callbacks',()=>{
+ const pending={status:'pending'},error={status:'error',code:'refused'},selected={id:'original',revision:7},callback=()=>{},info={type:'original.asset',fields:[]},query={limit:100,offset:0},window={query,page:{records:[selected],total:1},onChange:callback};
+ const section={title:'Original title',gauge:{max:100},progressLabel:'',progressTotal:'0',progressTotalVariable:'total',summaryField:'pressure',sparkline:{field:'pressure'},alertBanner:{tone:'warning'},recordCalendar:{dateField:'at',labelField:'name'},recordGantt:{startField:'start'},recordEvents:{timeField:'at'},scatter:{xField:'x',yField:'y'},leaderboard:{valueField:'pressure'}};
+ const context={page:{object:{name:'original.asset'}},sourceScope:'member/definition',section,window,info,selected,onSelect:callback,enabled:false,pickerConfirmation:'pending',gaugeValue:pending,progressValue:error,progressTotal:pending,statisticsValue:error,sparklineValue:pending,alertValue:error};
+ for(const key of ['session','readSource','catalog'])Object.defineProperty(context,key,{get:()=>{throw Error(`forbidden context ${key}`);}});
+ for(const plugin of Object.values({...scalarPlugins,...recordWindowPlugins})){const props=plugin.Renderer(context).props;for(const forbidden of ['page','section','session','readSource','catalog','sourceScope'])assert.equal(Object.hasOwn(props,forbidden),false);}
+ assert.equal(scalarPlugins.gauge.bind(context).value,pending);const progress=scalarPlugins.progress.bind(context);assert.equal(progress.value,error);assert.equal(progress.total,pending);assert.equal(progress.fixedTotal,undefined);assert.equal(progress.title,'');assert.equal(scalarPlugins.progress.bind({...context,section:{...section,progressTotalVariable:undefined}}).fixedTotal,'0');assert.equal(scalarPlugins['summary-stats'].bind(context).info,info);assert.equal(scalarPlugins['sparkline-kpi'].bind(context).window,window);
+ const scatter=recordWindowPlugins['record-scatter'].bind(context);assert.equal(scatter.confirmation,'pending');assert.equal(scatter.enabled,false);assert.equal(scatter.selected,selected);assert.equal(scatter.onSelect,callback);
+ for(const id of ['record-gantt','record-calendar','record-events','record-leaderboard'])assert.equal(recordWindowPlugins[id].bind(context).window,window);
+ const calendar=recordWindowPlugins['record-calendar'],key=calendar.Renderer(context).key;
+ assert.equal(calendar.Renderer({...context,window:{...window,page:{records:[],total:0}}}).key,key);
+ for(const next of [{...context,sourceScope:'other-member'},{...context,page:{object:{name:'other.asset'}}},{...context,section:{...section,recordCalendar:{...section.recordCalendar,initialMonth:'2026-11'}}},{...context,window:{...window,query:{...query,offset:100}}}])assert.notEqual(calendar.Renderer(next).key,key);
 });
 test('the plugin adapter projects only declared props and never loads a renderer during registration or binding',()=>{
  let loads=0;const define=defineWidgetPlugin(),plugin=define('input',1,context=>({value:context.value}),async()=>{loads++;return ()=>null;});const context={value:'kept',privateSession:'must not escape'};
