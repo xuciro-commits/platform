@@ -1,3 +1,5 @@
+import {schemaIssue} from "./workflow-schema";
+export {schemaIssue} from "./workflow-schema";
 import { Button, Checkbox, Disclosure, Input, Select, Textarea, t } from "@platform/ui";
 import { Braces, ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from "lucide-react";
 import { createContext, useContext, useEffect, useId, useState } from "react";
@@ -22,37 +24,6 @@ export function JSONEditor({ value, onChange, label, rows = 4, schema }: { value
 }
 
 /** Editing hints only; the owner revalidates the full JSON profile on publish and execution. */
-export function schemaIssue(schema: ValueSchema, value: unknown): string | undefined {
-  if (value === null && schema.nullable) return undefined;
-  if (schema.type === "variant") {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return t("Expected a tagged object.");
-    const tag = (value as Record<string, unknown>)[schema.discriminator ?? ""];
-    if (typeof tag !== "string" || !schema.variants?.[tag]) return t("Choose a declared variant tag.");
-    return schemaIssue(schema.variants[tag], value);
-  }
-  if (schema.type === "object") {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return t("Expected an object.");
-    const record = value as Record<string, unknown>;
-    for (const name of schema.required ?? []) if (!(name in record)) return t("Required field: {name}", { name });
-    for (const [name, child] of Object.entries(record)) {
-      const property = schema.properties?.[name];
-      if (!property) return t("Unknown field: {name}", { name });
-      const issue = schemaIssue(property, child); if (issue) return `${name}: ${issue}`;
-    }
-  } else if (schema.type === "array") {
-    if (!Array.isArray(value)) return t("Expected an array.");
-    if (schema.maxItems && value.length > schema.maxItems) return t("The array exceeds its limit.");
-    if (schema.items) for (const item of value) { const issue = schemaIssue(schema.items, item); if (issue) return issue; }
-  } else if (schema.type === "string") {
-    if (typeof value !== "string") return t("Expected text.");
-    if (schema.enum?.length && !schema.enum.includes(value)) return t("Choose a declared option.");
-    if (schema.maxLength && value.length > schema.maxLength) return t("The text exceeds its limit.");
-  } else if (schema.type === "boolean" && typeof value !== "boolean") return t("Expected true or false.");
-  else if (schema.type === "number" && (typeof value !== "number" || !Number.isFinite(value))) return t("Expected a number.");
-  else if (schema.type === "integer" && (typeof value !== "number" || !Number.isSafeInteger(value))) return t("Expected a safe integer.");
-  return undefined;
-}
-
 export const schemaDefault = (schema?: ValueSchema): unknown => {
   if (schema?.type === "variant") return schemaDefault(Object.values(schema.variants ?? {})[0]);
   if (schema?.type === "object") return Object.fromEntries((schema.required ?? []).map((name) => [name, schemaDefault(schema.properties?.[name])]));

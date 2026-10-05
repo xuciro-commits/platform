@@ -1,3 +1,4 @@
+import {FlowImportDialog} from "./module-import/FlowImportDialog";
 import { AssetControls } from "./asset-controls";
 import {useDraftSession} from "./session/DraftSession";
 import {workflowInputs,workflowRunMatches} from "./workflow-session";
@@ -116,6 +117,7 @@ export function WorkflowEditor({ id }: { id: string }) {
   const {draft,dirty}=session;
   const loaded=useRef(""),baseRevision=useRef(0),lock=useRef(false),acknowledged=useRef<WorkflowDraft|undefined>(undefined);
   const [chosen, setChosen] = useState("");
+  const [importingFlow,setImportingFlow]=useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [leftOpen, setLeftOpen] = useState(true), [rightOpen, setRightOpen] = useState(true), [dockOpen, setDockOpen] = useState(false);
   const [dock, setDock] = useState<"run" | "history" | "test" | "release">("run");
@@ -295,7 +297,7 @@ export function WorkflowEditor({ id }: { id: string }) {
   if (role("build") !== "builder") return <PageHeader title={t("Logic Studio")} description={t("Only a builder can edit workflows.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Logic Studio")} description={query.isError ? t("The workflow could not be loaded.") : t("Loading…")} />;
 
-  return <WorkflowFormProblems.Provider value={reportProblem}><div className="flex min-h-0 flex-col gap-2" tabIndex={-1} onKeyDown={event=>{if(!(event.metaKey||event.ctrlKey))return;if(event.key.toLowerCase()==="s"){event.preventDefault();if(dirty&&!busy&&!brokenForm.length)void perform(save);}}}>
+  return <WorkflowFormProblems.Provider value={reportProblem}><div className="flex min-h-0 flex-col gap-2" tabIndex={-1} onKeyDown={event=>{if(!(event.metaKey||event.ctrlKey))return;if(event.key.toLowerCase()==="s"){event.preventDefault();if(dirty&&!busy&&!importingFlow&&!brokenForm.length)void perform(save);}}}>
     <PageHeader title={draft.title || t("New workflow")} description={t("Logic Studio · Native flow, one capability library")}
       actions={<div className="flex items-center gap-1"><Tag label={dirty ? t("Unsaved") : draft.version ? `v${draft.version}` : t("Draft")} tone={dirty ? "warning" : draft.version ? "success" : "neutral"} />
         <Button variant="ghost" onClick={() => open({ view: "studio" })}>{t("Studio overview")}</Button></div>} />
@@ -306,6 +308,7 @@ export function WorkflowEditor({ id }: { id: string }) {
       <Button variant="ghost" onClick={() => { setChosen(""); setRightOpen(true); }}><Settings2 className="mr-1 size-3.5" />{t("Settings")}</Button>
       {draft.id && <Button disabled={busy} variant="ghost" onClick={() => confirmDiscard(() => void perform(async () => { const fresh = await query.refetch(); if (fresh.isSuccess&&fresh.data?.record) { markSaved(); session.load(fresh.data.record);baseRevision.current=fresh.data.record.revision;loaded.current=`${fresh.data.record.id}:${fresh.data.record.revision}`; setError(""); setValidation(undefined); } }))}>{t("Reload saved workflow")}</Button>}
 <AssetControls type="build.process" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "workflow", params: { id } }} />
+      <Button disabled={busy||!!draft.id} onClick={()=>setImportingFlow(true)}>{t("Import Workshop flow")}</Button>
       <Button disabled={busy || brokenForm.length > 0 || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save workflow")}</Button>
       <Button disabled={busy || brokenForm.length > 0} onClick={() => void perform(check)}>{t("Validate workflow")}</Button>
       <Button disabled={busy || !synchronized || !draft.id || brokenForm.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>
@@ -316,6 +319,7 @@ export function WorkflowEditor({ id }: { id: string }) {
       <Button variant="ghost" className="ml-auto" onClick={() => setRightOpen(!rightOpen)} aria-label={t("Toggle inspector")}>{rightOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}</Button>
     </div>
     <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
+    {importingFlow&&<FlowImportDialog name={draft.name||"importedflow"} capabilities={capabilities} onClose={()=>setImportingFlow(false)} onApply={next=>{change(next);setChosen("");setImportingFlow(false);setFormProblems({});}}/>}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {validation && <Panel role="status" className={`text-xs ${validation.valid ? "text-success" : "text-danger"}`}>{validation.valid ? t("The native compiler accepted this draft.") : validation.issues.map((issue) => issue.message).join(" ")}</Panel>}
     {!synchronized&&<Panel role="alert">{t("The current workflow revision differs from this editing session. Reload before running or reviewing a release.")}</Panel>}
