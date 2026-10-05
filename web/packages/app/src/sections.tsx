@@ -1,3 +1,5 @@
+import {recordPresentationPlugins} from "./widgets/record-presentation-plugins";
+import {surfacePlugins} from "./widgets/surface-plugins";
 import {distributionPlugins} from "./widgets/distribution-plugins";
 import {navigationPlugins} from "./widgets/navigation-plugins";
 import {scalarPlugins} from "./widgets/scalar-plugins";
@@ -8,9 +10,8 @@ import {confirmObservationRow} from "./widgets/observation-selection";
 import {usePageComputations} from "./runtime/PageComputations";
 import {aiRecordSlot} from "./widgets/ai-context";
 import {CollectionBuilderRenderer} from "./widgets/CollectionBuilder";
-import {RecordMapRenderer} from "./widgets/RecordMap";
 import {AIWidget} from "./widgets/AIWidget";
-import {PageEmbeddingBoundary,EmbeddedPageRenderer,ExternalDocumentRenderer} from "./widgets/EmbeddedPage";
+import {PageEmbeddingBoundary} from "./widgets/EmbeddedPage";
 import {avatarCollectionVariable,confirmedContext,originalContextSlot,currentContextRead} from "./widgets/context-views";
 import {searchInputObjects} from "./widgets/search-input";
 import {tableEditableFields} from "./widgets/table-edit";
@@ -47,21 +48,14 @@ const ExplorationRenderer=lazy(()=>import("./widgets/Exploration").then(module=>
 const ActionTableRenderer=lazy(()=>import("./widgets/RecordWork").then(m=>({default:m.ActionTableRenderer})));
 const RecordTilesRenderer=lazy(()=>import("./widgets/RecordWork").then(m=>({default:m.RecordTilesRenderer})));
 const ObservationRenderer=lazy(()=>import("./widgets/Observation").then(module=>({default:module.ObservationRenderer})));
-const ResourceListRenderer=lazy(()=>import("./widgets/Exploration").then(module=>({default:module.ResourceListRenderer})));
-const AssetDirectoryRenderer=lazy(()=>import("./widgets/Exploration").then(module=>({default:module.AssetDirectoryRenderer})));
-const AvatarStackRenderer=lazy(()=>import("./widgets/ContextViews").then(module=>({default:module.AvatarStackRenderer})));
 const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
-const RecordPickerRenderer=lazy(()=>import("./widgets/RecordPicker").then(module=>({default:module.RecordPickerRenderer})));
 const RecordCollaborationRenderer=lazy(()=>import("./widgets/RecordCollaboration").then(module=>({default:module.RecordCollaborationRenderer})));
 const WorkViewsRenderer=lazy(()=>import("./widgets/WorkViews").then(module=>({default:module.WorkViewsRenderer})));
-const RecordComparisonRenderer=lazy(()=>import("./widgets/RecordComparison").then(module=>({default:module.RecordComparisonRenderer})));
-const RecordCardRenderer=lazy(()=>import("./widgets/RecordCard").then(module=>({default:module.RecordCardRenderer})));
 const RecordChartRenderer=lazy(()=>import("./widgets/RecordChart").then(module=>({default:module.RecordChartRenderer})));
 const TableRenderer=lazy(()=>import("./widgets/Table").then(module=>({default:module.TableRenderer})));
 const RecordTimelineRenderer=lazy(()=>import("./widgets/RecordTimeline").then(module=>({default:module.RecordTimelineRenderer})));
 const KanbanRenderer=lazy(()=>import("./widgets/Kanban").then(module=>({default:module.KanbanRenderer})));
 const PivotRenderer=lazy(()=>import("./widgets/Pivot").then(module=>({default:module.PivotRenderer})));
-const ButtonRenderer=lazy(()=>import("./widgets/Button").then(module=>({default:module.ButtonRenderer})));
 
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
@@ -428,33 +422,25 @@ const widgets = createWidgetRegistry<Bound>({
  ...recordWindowPlugins,
  ...distributionPlugins,
  ...navigationPlugins,
- "record-map":({page,section,window,selected,enabled,onSelect,pickerConfirmation})=>{const {source}=useHost();return <RecordMapRenderer window={window} info={source.entity(objectOf(page,section))} config={section.map} scope={source.scope??""} confirmation={pickerConfirmation} selected={selected} enabled={enabled} onSelect={onSelect}/>;},
+ ...recordPresentationPlugins,
+ ...surfacePlugins,
  "image-annotation":CollaborationWidget,
  "scene-3d":CollaborationWidget,
  "collection-builder":CollectionBuilderRenderer,
  "ai-assistant":bound=><AIWidget section={bound.section} record={bound.explorationRoot} status={bound.explorationStatus} identity={bound.explorationIdentity??""} active={bound.explorationActive??(()=>false)} live={bound.live} enabled={bound.enabled} question={bound.facetValues?.[bound.section.ai?.questionVariable??""]} onQuestion={value=>{const id=bound.section.ai?.questionVariable;if(id)bound.onFacet?.(id,value);}}/>,
- "external-frame":({section,contextReadCurrent})=><ExternalDocumentRenderer section={section} readCurrent={contextReadCurrent}/>,
- "embedded-page":bound=><EmbeddedPageRenderer section={bound.section} values={bound.embeddingInputs??bound.facetValues??{}} scope={bound.aggregateScope??""} live={bound.live} readCurrent={bound.contextReadCurrent} enabled={bound.enabled} onReturn={bound.embeddingReturn}/>,
  "action-table":({page,section,window,session,aggregateScope,enabled,live,contextReadCurrent})=><ActionTableRenderer section={section} object={objectOf(page,section)} window={window} session={session} scope={aggregateScope??""} enabled={enabled} live={live} readCurrent={contextReadCurrent}/>,
  observation:bound=><ObservationRenderer page={bound.page} section={bound.section} window={bound.window} history={bound.observationHistory} context={bound.observationContext} asset={bound.observationAsset} selectedRow={bound.observationSelected} onRow={bound.onObservationRow} values={bound.facetValues??{}} onState={bound.onFacet} session={bound.session} scope={bound.aggregateScope??""} enabled={bound.enabled} readCurrent={bound.contextReadCurrent} live={bound.live}/>,
- "resource-list":({page,section,window,collection,selected,onSelect,enabled,contextReadCurrent})=>{const {source}=useHost();return <ResourceListRenderer config={section.resourceList} window={window} collection={collection} info={source.entity(objectOf(page,section))} selected={selected} onSelect={onSelect} enabled={enabled} label={section.title||t("Resource list")} readCurrent={contextReadCurrent}/>;},
- "asset-directory":({section,onControl,controlBound,enabled})=>{const {definitions}=useHost(),pages=section.assetDirectory?.items.filter(i=>i.asset.ref.kind==="page")??[],canOpen=pages.some(i=>controlBound?.(i.id));return <AssetDirectoryRenderer config={section.assetDirectory} definitions={definitions} onOpen={canOpen?id=>{if(controlBound?.(id))onControl?.(id);}:undefined} canOpen={controlBound} enabled={enabled} label={section.title||t("Asset directory")}/>;},
  "graph-explorer":ExplorerWidget,"vertex-graph":ExplorerWidget,
- "avatar-stack":({page,section,window,collection,avatarContextStatus,contextReadCurrent})=>{const {source}=useHost();return <AvatarStackRenderer readCurrent={contextReadCurrent} config={section.avatar} contextStatus={avatarContextStatus} window={window} collection={collection} info={source.entity(objectOf(page,section))} label={section.title||t("Personnel avatars")}/>;},
  "approval-inbox":({section,session,enabled,live})=><WorkViewsRenderer kind="approval-inbox" label={section.title||t("Approval inbox")} readSource={session?.readSource()} enabled={enabled} live={live}/>,
  "notification-feed":({section,session,enabled,live})=><WorkViewsRenderer kind="notification-feed" label={section.title||t("Notifications")} readSource={session?.readSource()} enabled={enabled} live={live}/>,
  "record-comments":CollaborationWidget,"record-uploader":CollaborationWidget,"media-preview":CollaborationWidget,"pdf-viewer":CollaborationWidget,
- "record-picker":({page,section,window,selected,enabled,onSelect,pickerValue,onPickerID,pickerConfirmation})=><RecordPickerRenderer type={objectOf(page,section)} window={window} fields={section.recordPicker} title={section.title||t("Record picker")} selected={selected} enabled={enabled} confirmation={section.pickerValueVariable?pickerConfirmation:undefined} value={section.pickerValueVariable?pickerValue:undefined} onSelect={onPickerID??onSelect}/>,
  "record-chart":RecordChartAdapter,
  "record-list":(bound)=>bound.section.recordList?.layout==="tiles"?<RecordTilesRenderer window={bound.window} object={objectOf(bound.page,bound.section)} labelField={bound.section.cardLabel??"id"} selected={bound.selected?.id} onSelect={bound.enabled===false||!bound.section.selection?undefined:record=>bound.onSelect(record)} label={bound.section.title||t("Record tiles")} readCurrent={bound.contextReadCurrent}/>:<TableAdapter {...bound}/>,
  "status-tracker":StatusTrackerWidget,
  "record-links":RecordLinksWidget,
- "record-comparison":({page,section,comparisonRecords,comparisonStatus})=>{const {source}=useHost();return <RecordComparisonRenderer records={comparisonRecords??[]} status={comparisonStatus} info={source.entity(objectOf(page,section))} fields={section.fields??[]} config={section.recordComparison}/>;},
- "record-card":({page,section,confirmedRecord,recordStatus})=>{const {source}=useHost();return <RecordCardRenderer record={confirmedRecord} status={recordStatus} info={source.entity(objectOf(page,section))} fields={section.fields??[]} config={section.recordCard}/>;},
  "record-view":RecordViewWidget,
   kanban:KanbanAdapter,
   "record-timeline":RecordTimelineAdapter,
-  button: ({ section, onClick, enabled }) => <ButtonRenderer title={section.title} onClick={onClick} enabled={enabled}/>,
   "inline-action":({page,section,selected,live,aggregateScope,actionReady})=><InlineActionForm type={objectOf(page,section)} schema={section.actions?.[0]?.name??""} record={selected} live={live} scope={aggregateScope} defaults={section.actionDefaults} ready={actionReady}/>,
   table: TableAdapter, detail: DetailWidget, actions: ActionsWidget,
   heatmap:(props)=><ChartWidget {...props} kpi={false} pivot/>,
@@ -474,12 +460,12 @@ class WidgetBoundary extends Component<{ children: ReactNode }, { failed: boolea
 }
 
 export function SectionView(bound: Bound & Composing) {
-  const source=useContext(HostContext)?.source;
+  const host=useContext(HostContext),source=host?.source;
   const { section, chosen, onChoose, at, nested } = bound;
   const aggregateSource=source?.aggregate?{aggregate:source.aggregate,scope:bound.aggregateScope??source.scope,revision:source.revision}:undefined;
   const implementation = widgets.resolveDefinition(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
   const Renderer=implementation?.Renderer;
-  const body = Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound} info={source?.entity(objectOf(bound.page,bound.section))} sourceScope={source?.scope} aggregateSource={aggregateSource}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
+  const body = Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound} info={source?.entity(objectOf(bound.page,bound.section))} sourceScope={source?.scope} aggregateSource={aggregateSource} recordSource={source} definitions={host?.definitions}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
   const template=section.tablePresentation?.titleTemplate,total=bound.window?.error||!["value","empty"].includes(bound.collection?.status??"")?undefined:bound.window?.page?.total;
   const title=template===undefined?section.title:template.replace("{count}",total===undefined||!Number.isSafeInteger(total)||total<0?"…":total.toLocaleString());
   const inHand = onChoose !== undefined && chosen === at;

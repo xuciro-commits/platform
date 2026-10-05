@@ -1,10 +1,9 @@
-import {Panel,RecordLookup,t,type EntityRecord} from "@platform/ui";
+import {Panel,RecordLookup,t,type RecordSource,type EntityRecord} from "@platform/ui";
 import type {VariableResult} from "../runtime/variables";
 import type {Api} from "@platform/kernel";
-import {useHost} from "../index";
 import type {QueryWindow} from "./QueryWindowFrame";
-export function RecordPickerRenderer({window,type,fields,title,selected,enabled,value,onSelect,confirmation}:{confirmation?:"empty"|"pending"|"value"|"error";value?:VariableResult;window?:QueryWindow;type:string;fields?:Api.PageRecordPicker;title:string;selected?:EntityRecord;enabled?:boolean;onSelect:(record?:EntityRecord)=>void}){
- const {source}=useHost();if(!fields||!window)return <Panel role="status">{t("Record picker window is unavailable.")}</Panel>;
+export function RecordPickerRenderer({source,window,type,fields,title,selected,enabled,value,onSelect,confirmation}:{source?:RecordSource;confirmation?:"empty"|"pending"|"value"|"error";value?:VariableResult;window?:QueryWindow;type:string;fields?:Api.PageRecordPicker;title:string;selected?:EntityRecord;enabled?:boolean;onSelect:(record?:EntityRecord)=>void}){
+ if(!source||!fields||!window)return <Panel role="status">{t("Record picker window is unavailable.")}</Panel>;
  if(window.error)return <Panel role="alert">{t(window.error)}</Panel>;
  if(window.query.limit!==20||!!window.query.offset||JSON.stringify(window.query.sort)!==JSON.stringify(["id"]))return <Panel role="alert">{t("Record picker window bounds or ordering changed.")}</Panel>;
  const caption=fields.label??"",id=value?.status==="value"&&typeof value.value==="string"?value.value:selected?.id,current=id===selected?.id?selected:undefined;if(value&&value.status!=="value"||value?.status==="value"&&typeof value.value!=="string")return <Panel role="alert">{t("Picker ID state is unavailable or incompatible.")}</Panel>;
