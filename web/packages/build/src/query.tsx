@@ -1,7 +1,8 @@
+import { useApplicationWorkspace } from "./application-scope";
 import { useEffect, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
-import { Button, Card, Checkbox, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useWorkspace, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
 import { AssetControls } from "./asset-controls";
 import { useDirectInstall } from "./release-profile";
 
@@ -12,12 +13,12 @@ const hydrate = (record:Draft):Draft => ({...empty(),...record,domain:record.dom
 const supported = ["text","choice","reference","boolean","integer","decimal","date","datetime"];
 
 export function Queries() {
- const {source,role}=useHost(),{open}=useWorkspace();
+ const {source,role}=useHost(),{open}=useApplicationWorkspace();
  if(role("build")!=="builder")return <PageHeader title={t("Queries")} description={t("Only a builder can edit queries.")}/>;
  return <div className="grid gap-3"><PageHeader title={t("Queries")} description={t("Publish reusable record reads and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"query",params:{id:"new"}})}>{t("New query")}</Button>}/><RecordList source={source} type="build.query" fields={["title","name","object","version"]} onOpen={(record)=>open({view:"query",params:{id:record.id}})}/></div>;
 }
 export function QueryEditor({id}:{id:string}) {
- const {decide,role,definitions}=useHost(),{open,close}=useWorkspace();
+ const {decide,role,definitions}=useHost(),{open,close}=useApplicationWorkspace();
  const query=useReadQuery<{record?:Draft}>(`/v1/records/build.query/${encodeURIComponent(id)}`);
  const [draft,setDraft]=useState<Draft>(empty),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{setDraft(query.data?.record?hydrate(query.data.record):empty());setDirty(false);setError("");});

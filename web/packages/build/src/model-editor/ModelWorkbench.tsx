@@ -1,7 +1,9 @@
+import { useApplicationWorkspace } from "../application-scope";
+import { AssetControls } from "../asset-controls";
 import { NewActions, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
   type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, Input, NodeCanvas, PageHeader, Panel, PropertyList, RecordList, Select, Tag,
-  canvasNodeHeight, canvasNodeWidth, layout, t, useWorkspace, type CanvasEdge, type CanvasNode, type ColumnDef, type NodeCatalog } from "@platform/ui";
+  canvasNodeHeight, canvasNodeWidth, layout, t, type CanvasEdge, type CanvasNode, type ColumnDef, type NodeCatalog } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { Boxes, Database, GitBranch, Link2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -24,7 +26,7 @@ export function ModelWorkbench({ initialObject, initialTab }: { initialObject?: 
 
 function ModelInventory({ initialObject, initialTab }: { initialObject?: string; initialTab?: string }) {
   const host = useHost();
-  const { open } = useWorkspace();
+  const { open } = useApplicationWorkspace();
   const inventory = useRecordInventory<ObjectDraft>("build.object");
   const linkInventory=useRecordInventory<{id:string;name:string}>("build.linktype");
   const propertyInventory=useRecordInventory<{id:string;name:string}>("build.propertytype");
@@ -78,7 +80,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const editShared=(name:string)=>{const draft=propertyInventory.data?.records.find(p=>p.name===name);if(draft)open({view:"property-type",params:{id:draft.id}});};
   return <div className="flex flex-col gap-2 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
     <PageHeader title={t("Objects")} description={t("Explore the business model, inspect relationships, and bind real resources to pages.")}
-      actions={<div className="flex flex-wrap gap-2"><NewActions type="build.object"/><Button onClick={()=>open({view:"link-type",params:{id:"new",parent:current}})}>{t("New relationship")}</Button><Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button></div>} />
+      actions={<div className="flex flex-wrap gap-2"><AssetControls type="build.object" /><NewActions type="build.object"/><Button onClick={()=>open({view:"link-type",params:{id:"new",parent:current}})}>{t("New relationship")}</Button><Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button></div>} />
     <Card role="toolbar" aria-label={t("Model navigation")} className="flex flex-wrap items-center gap-2 px-3 py-2">
       <Button variant={view === "catalog" ? "primary" : "ghost"} onClick={() => setView("catalog")}><Boxes />{t("Model catalog")}</Button>
       <Button variant={view === "graph" ? "primary" : "ghost"} onClick={() => setView("graph")}><GitBranch />{t("Relationship graph")}</Button>
@@ -163,7 +165,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
 
 function PageFromModel({ seed, onClose }: { seed: PageSeed; onClose: () => void }) {
   const { definitions, decide, can } = useHost();
-  const { open } = useWorkspace();
+  const { open } = useApplicationWorkspace();
   const [name, setName] = useState(""), [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const entity = definitions.find((definition) => definition.ref.kind === "object" && definition.ref.name === seed.object.name)?.entity;

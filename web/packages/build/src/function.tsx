@@ -1,9 +1,10 @@
+import { useApplicationWorkspace } from "./application-scope";
 import { AssetControls } from "./asset-controls";
 // This editor writes build.function's native declaration. The three stages
 // visualize that declaration; execution belongs to the host model effect path.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Textarea, t, useWorkspace, useUnsavedChanges,
+import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Textarea, t, useUnsavedChanges,
   type CanvasNode, type NodeCatalog } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { useDirectInstall } from "./release-profile";
@@ -22,7 +23,7 @@ const toggle = (values: string[], name: string, enabled: boolean) => enabled ? [
 
 export function Functions() {
   const { source, role } = useHost();
-  const { open } = useWorkspace();
+  const { open } = useApplicationWorkspace();
   if (role("build") !== "builder") return <PageHeader title={t("AI functions")} description={t("Only a builder can edit AI functions.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("AI functions")} description={t("Turn readable record fields into typed suggestions for human review.")}
@@ -33,7 +34,7 @@ export function Functions() {
 
 export function FunctionEditor({ id }: { id: string }) {
   const { decide, role } = useHost();
-  const { open, close } = useWorkspace();
+  const { open, close } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: FunctionDraft }>(`/v1/records/build.function/${encodeURIComponent(id)}`);
   const inventory = useRecordInventory<Source>("build.object");
   const objects = installedObjects(inventory.data?.records ?? []);

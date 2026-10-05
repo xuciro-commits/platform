@@ -1,3 +1,4 @@
+import { useApplicationWorkspace } from "./application-scope";
 import {FlowImportDialog} from "./module-import/FlowImportDialog";
 import { AssetControls } from "./asset-controls";
 import {useDraftSession} from "./session/DraftSession";
@@ -6,7 +7,7 @@ import {workflowInputs,workflowRunMatches} from "./workflow-session";
 // compiles, executes and accepts outcomes; React Flow remains presentation.
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
-import { Button, Disclosure, EditorWorkbench, Input, NodeCanvas, PageHeader, Panel, RecordList, Tag, canvasNodeHeight, canvasNodeWidth, canvasPlacement, layout, t, useWorkspace, useUnsavedChanges,
+import { Button, Disclosure, EditorWorkbench, Input, NodeCanvas, PageHeader, Panel, RecordList, Tag, canvasNodeHeight, canvasNodeWidth, canvasPlacement, layout, t, useUnsavedChanges,
   type BlockStatus, type CanvasAddContext, type CanvasEdge, type CanvasNode, type NodeCatalog, type NodeKind, type NodePort } from "@platform/ui";
 import { Blocks, Braces, Brain, ChevronDown, ChevronUp, Database, GitBranch, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Plus, Redo2, Search, Settings2, Undo2, Workflow, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -103,14 +104,14 @@ function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capabi
 }
 
 export function Workflows() {
-  const { source, role } = useHost(), { open } = useWorkspace();
+  const { source, role } = useHost(), { open } = useApplicationWorkspace();
   return <div className="grid gap-3"><PageHeader title={t("Logic Studio")} description={t("Assemble native capabilities, typed code, human tasks and AI in one workflow.")}
     actions={role("build") === "builder" && <Button onClick={() => open({ view: "workflow", params: { id: "new" } })}>{t("New workflow")}</Button>} />
     <RecordList source={source} type="build.process" fields={["title", "name", "object", "version"]} onOpen={(record) => open({ view: "workflow", params: { id: record.id } })} /></div>;
 }
 
 export function WorkflowEditor({ id }: { id: string }) {
-  const { decide, role, client, entities } = useHost(), { open, close } = useWorkspace();
+  const { decide, role, client, entities } = useHost(), { open, close } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`);
   const catalogQuery = useReadQuery<Capability[]>("/v1/capabilities");
   const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");

@@ -1,6 +1,7 @@
+import { useApplicationWorkspace } from "./application-scope";
 import { AssetControls } from "./asset-controls";
 import { PayloadFields, useHost, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, Disclosure, FlowView, Input, PageHeader, Select, Textarea, t, useWorkspace, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, FlowView, Input, PageHeader, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api, type ActionDeclaration } from "@platform/kernel";
 import { installedObjects, type WorkflowDraft, type WorkflowObject } from "./workflow-model";
 import { useEffect, useState } from "react";
@@ -18,7 +19,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
   processId?: string; functionId?: string; objectId?: string; embedded?: boolean; onStepSelect?: (step: string) => void;
 }) {
   const { client, role, decide, action } = useHost();
-  const { open } = useWorkspace();
+  const { open } = useApplicationWorkspace();
   const objects = useRecordInventory<ObjectDraft>("build.object");
   const plans = useRecordInventory<TestPlan>("build.testplan");
   const processes = useRecordInventory<WorkflowDraft>("build.process");

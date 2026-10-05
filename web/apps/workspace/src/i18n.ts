@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Studio applications": "工坊应用",
+  "All applications": "全部应用",
+  "Back to application": "返回应用",
   "Business workspace": "业务工作台",
   "Application Studio": "应用工坊",
   "Tenant console": "租户控制台",

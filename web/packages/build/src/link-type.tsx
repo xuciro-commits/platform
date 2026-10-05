@@ -1,6 +1,7 @@
+import { useApplicationWorkspace } from "./application-scope";
 import { useEffect, useState } from "react";
 import { useHost, useReadQuery, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
-import { Button, Input, Select, PageHeader, Panel, RecordList, Textarea, t, useWorkspace, useUnsavedChanges } from "@platform/ui";
+import { Button, Input, Select, PageHeader, Panel, RecordList, Textarea, t, useUnsavedChanges } from "@platform/ui";
 import { AssetControls } from "./asset-controls";
 import { useDirectInstall } from "./release-profile";
 
@@ -9,12 +10,12 @@ const empty=():Draft=>({id:"",revision:0,name:"",title:"",description:"",parent:
 const hydrate=(record:Draft):Draft=>({...empty(),...record});
 
 export function LinkTypes() {
- const {source,role}=useHost(),{open}=useWorkspace();
+ const {source,role}=useHost(),{open}=useApplicationWorkspace();
  if(role("build")!=="builder")return <PageHeader title={t("Relationships")} description={t("Only a builder can edit relationships.")}/>;
  return <div className="grid gap-3"><PageHeader title={t("Relationships")} description={t("Define a reference-backed relationship and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"link-type",params:{id:"new"}})}>{t("New relationship")}</Button>}/><RecordList source={source} type="build.linktype" fields={["title","name","parent","child","version"]} onOpen={(record)=>open({view:"link-type",params:{id:record.id}})}/></div>;
 }
 export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;child?:string;via?:string}) {
- const {decide,role,definitions}=useHost(),{open,close}=useWorkspace();
+ const {decide,role,definitions}=useHost(),{open,close}=useApplicationWorkspace();
  const query=useReadQuery<{record?:Draft}>(`/v1/records/build.linktype/${encodeURIComponent(id)}`);
  const [draft,setDraft]=useState<Draft>(()=>({...empty(),parent:parent??"",child:child??"",via:via??""})),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{setDraft(query.data?.record?hydrate(query.data.record):empty());setDirty(false);setError("");});

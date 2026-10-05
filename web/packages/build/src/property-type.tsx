@@ -1,7 +1,8 @@
+import { useApplicationWorkspace } from "./application-scope";
 import {useEffect,useRef,useState} from "react";
 import type {Api} from "@platform/kernel";
 import {useHost,useReadQuery,semanticPropertyTypes} from "@platform/app";
-import {Button,Input,PageHeader,Panel,RecordList,Select,Textarea,t,useWorkspace,useUnsavedChanges} from "@platform/ui";
+import {Button,Input,PageHeader,Panel,RecordList,Select,Textarea,t,useUnsavedChanges} from "@platform/ui";
 import {AssetControls} from "./asset-controls";
 import { useDirectInstall } from "./release-profile";
 
@@ -11,13 +12,13 @@ const hydrate = (record:Draft):Draft => ({...empty(),...record});
 const types = ["text","longtext","integer","decimal","date","datetime","boolean"];
 
 export function PropertyTypes() {
- const {source,role}=useHost(),{open}=useWorkspace();
+ const {source,role}=useHost(),{open}=useApplicationWorkspace();
  if(role("build")!=="builder")return <PageHeader title={t("Shared properties")} description={t("Only a builder can edit shared properties.")}/>;
  return <div className="grid gap-3"><PageHeader title={t("Shared properties")} description={t("Publish shared scalar meaning and bind object fields to an exact version.")} actions={<Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button>}/><RecordList source={source} type="build.propertytype" fields={["title","name","type","version"]} onOpen={record=>open({view:"property-type",params:{id:record.id}})}/></div>;
 }
 
 export function PropertyTypeEditor({id}:{id:string}) {
- const {decide,role,definitions}=useHost(),{open,close}=useWorkspace();
+ const {decide,role,definitions}=useHost(),{open,close}=useApplicationWorkspace();
  const query=useReadQuery<{record?:Draft}>(`/v1/records/build.propertytype/${encodeURIComponent(id)}`);
  const [draft,setDraft]=useState<Draft>(empty),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const loaded=useRef(""),baseRevision=useRef(0),lock=useRef(false);

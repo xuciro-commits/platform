@@ -118,6 +118,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   // The installed assets, so an app's navigation can offer the pages it has —
   // a code page, or one someone composed in this tenant (ADR-0032, ADR-0034).
   const definitions = read<Definition[]>("/v1/definitions").data ?? [];
+  const studioApplications = useQuery({ queryKey: [token, tenant, "/v1/records/build.app", "inventory", 1000],
+    queryFn: () => client.inventory<{ id: string; name: string; title: string; archived?: boolean }>("build.app"),
+    enabled: ready && me?.profile.roles.build === "builder" });
   const release = read<Api.ReleaseActive>("/v1/releases/active", 5000, { retry: false });
   const releaseUnavailable = release.isError || release.fetchStatus === "paused";
   const [releaseOpen, setReleaseOpen] = useState(false);
@@ -218,6 +221,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   registry.current = definitions;
   const app = all.find((a) => a.id === current);
   const surface = app?.surface ?? "work";
+  const studioApplicationID = activeRoute?.view === "application" ? activeRoute.params?.id : activeRoute?.params?.application;
+  const studioApplication = studioApplications.data?.records.find(record => !record.archived && record.id === studioApplicationID);
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
   const select = useCallback((id?: string) => {
     if (scope.current !== selectionScope) return;
@@ -306,12 +311,16 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   return (
     <HostContext.Provider value={host}>
-      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={app?.title ?? t("Business workspace")} storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
+      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={surface === "studio" && studioApplication ? studioApplication.title || studioApplication.name : app?.title ?? t("Business workspace")} storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
         views={views} home={{ view: "inbox" }}
         entryPoints={{ apps: entryPoints, current: surface, onSelect: chooseSurface }}
         onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
         launcher={surface === "work" ? { apps: business.map((a) => ({ id: a.id, title: a.title, icon: a.icon })), current: app?.id,
-          onSelect: (id) => { select(id); const home = business.find((a) => a.id === id)?.home; if (home) location.hash = routeToHash(home); } } : undefined}
+          onSelect: (id) => { select(id); const home = business.find((a) => a.id === id)?.home; if (home) location.hash = routeToHash(home); } }
+          : surface === "studio" ? { label: t("Studio applications"), current: studioApplication?.id ?? "studio:all",
+            apps: [{ id: "studio:all", title: t("All applications"), icon: <LayoutGrid /> }, ...(studioApplications.data?.records ?? []).filter(record => !record.archived)
+              .map(record => ({ id: record.id, title: record.title || record.name, icon: <Hammer /> }))],
+            onSelect: id => { location.hash = routeToHash(id === "studio:all" ? { view: "applications", params: { surface: "studio" } } : { view: "application", params: { id, surface: "studio" } }); } } : undefined}
         onActiveRoute={setActiveRoute}
         nav={[
           ...(surface === "work" ? [{ label: t("My work"), items: [

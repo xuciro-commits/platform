@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:5e2171dcf45c6e48",
+  "revision": "sha256:8b8ea689730e0793",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -857,7 +857,7 @@
       "id": "scenario/application-studio",
       "owner": "@pkg/build",
       "name": "Application release workbench",
-      "summary": "Organize navigation and shared published objects, workflows and functions with the original application editor.",
+      "summary": "Create and organize saved pages and shared resources, then review their joint application candidate with the original editors.",
       "layer": 5,
       "authority": "example",
       "maturity": "recommended",
@@ -4135,6 +4135,7 @@
       "Controlled page composition": "受控页面装配",
       "Counted tag groups": "带计数的标签分组",
       "Counted term labels": "计数词条标签",
+      "Create and organize saved pages and shared resources, then review their joint application candidate with the original editors.": "创建并组织已保存页面及共享资源，再通过原编辑器审查整个应用的联合候选。",
       "Data table": "数据表格",
       "Decision confirmation": "决策确认",
       "Declared action controls": "声明式动作控件",
@@ -4226,7 +4227,6 @@
       "Open this full-window preview separately; its shell owns routes and saved layout.": "单独打开全窗口预览；外壳负责路由与保存的布局。",
       "Optional whole-set clearing removes all selected values, including unmatched values.": "可选整组清空会移除全部已选值，包括未匹配的值。",
       "Ordered record chart": "按序逐记录图表",
-      "Organize navigation and shared published objects, workflows and functions with the original application editor.": "使用原应用编辑器组织导航及共享的已发布对象、流程和函数。",
       "Original AI result": "原 AI 结果",
       "Original approval tasks": "原审批任务",
       "Original availability history": "原可用率历史",
@@ -5182,6 +5182,13 @@
       "web/packages/app/src/widgets/WorkViews.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
+    "app/record-actions": [
+      "web/packages/build/src/application.tsx",
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/simulate.tsx"
+    ],
     "app/composed-page": [
       "web/packages/build/src/catalog.examples.tsx",
       "web/packages/build/src/editor.tsx",
@@ -5192,12 +5199,6 @@
       "web/packages/build/src/editor.tsx",
       "web/apps/workspace/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
-    ],
-    "app/record-actions": [
-      "web/packages/build/src/editor.tsx",
-      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
-      "web/packages/build/src/process.tsx",
-      "web/packages/build/src/simulate.tsx"
     ],
     "app/semantic-selection": [
       "web/packages/build/src/editor.tsx",

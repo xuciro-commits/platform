@@ -2,6 +2,23 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Field choices come from a saved object draft. Business data is available after joint activation.": "字段选项来自已保存对象草稿；联合激活后才能读取业务数据。",
+  "Choose existing resources": "选择已有资源",
+  "Show application resources": "查看应用资源",
+  "No resources selected. Create them in this application or choose existing resources.": "尚未选择资源。可在本应用内创建，也可选择已有资源。",
+  "Create and organize saved pages and shared resources, then review their joint application candidate with the original editors.": "创建并组织已保存页面及共享资源，再通过原编辑器审查整个应用的联合候选。",
+  "Build saved drafts here. Activated applications appear in the business application menu for authorized users.": "在这里构建已保存草稿；应用激活后，会进入获权用户的业务应用菜单。",
+  "Choose saved pages and resources, then deliver the application as one candidate.": "选择已保存的页面和资源，再将整个应用作为一个候选交付。",
+  "Application work": "应用工作区",
+  "Open business application": "打开业务应用",
+  "An installed version is available in the business application menu. Saved edits remain drafts until activation.": "已安装版本已进入业务应用菜单；保存的修改仍是草稿，激活后才生效。",
+  "This application is available in the Studio application menu. Add a page, review its dependent drafts, then activate the candidate to make it available for business use.": "本应用已进入工坊应用菜单。添加页面、审查依赖草稿，再激活候选，即可进入业务使用。",
+  "Save the application before creating resources within it.": "先保存应用，再在应用内创建资源。",
+  "Create a page draft here, or select an existing page. Publishing it separately is not required.": "在这里创建页面草稿，或选择已有页面；无需先单独发布页面。",
+  "Membership selects resources; release review explicitly selects saved drafts and resolves their dependencies. Saving does not activate them.": "应用成员关系选择资源；发布审查显式选择已保存草稿并解析依赖。保存不会激活它们。",
+  "Some resource inventories are unavailable or still loading. The selection may be incomplete; retry before delivery.": "部分资源清单不可用或仍在加载，选择范围可能不完整；请在交付前重试。",
+  "The resource was saved but could not be added to this application. Reload the application and select it from the saved resources.": "资源已保存，但未能加入本应用。请重新加载应用，再从已保存资源中选择它。",
+  "Installed": "已安装",
   "Shared resources": "共享资源",
   "{count} saved object drafts are candidate inputs and are added to the review.": "{count} 份已保存对象草稿是候选输入，将加入评审。",
   "Delivered with this application release: {drafts}": "随本应用发布交付：{drafts}",

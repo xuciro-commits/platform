@@ -78,11 +78,11 @@ function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,previ
 }
 
 /** One action taken through the existing modal entry point. */
-function ActionDialog({ declared, type, record, onClose, onCompleted, initial={} }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: () => void; initial?:Record<string,unknown> }) {
+function ActionDialog({ declared, type, record, onClose, onCompleted, initial={} }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown> }) {
  const {decide,source}=useHost(),info=source.entity(type);
  const [id,setId]=useState(()=>newId(prefixOf(type))),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState("");
  const target={type,id:record?.id??id},options={expectedRevision:record?.revision??0,quiet:true,onRefused:setRefusal};
- const done=(ok:boolean)=>{if(ok){onClose();onCompleted?.();}},generated=declared.schema===`${type}.create`;
+ const done=(ok:boolean)=>{if(ok){onClose();onCompleted?.(target);}},generated=declared.schema===`${type}.create`;
  return <Dialog open wide={generated&&info?.fields.some(f=>f.type==="lines")} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
  <div className="grid gap-3">
  {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting}/></label>}
@@ -112,13 +112,13 @@ function InlineActionRound({type,record,declared,info,live,reset,defaults,ready}
 }
 
 /** The type's actions that make a new record, except those a hand-written view already offers (`covers`). */
-export function NewActions({ type, covers = [], allowed }: { type: string; covers?: string[]; allowed?: string[] }) {
+export function NewActions({ type, covers = [], allowed, disabled = false, onCreated }: { type: string; covers?: string[]; allowed?: string[]; disabled?: boolean; onCreated?: (target: { type: string; id: string }) => void }) {
   const { catalog } = useHost();
   const [taking, setTaking] = useState<ActionDeclaration>();
   const offered = catalog.filter((a) => a.target === type && a.new && !covers.includes(a.schema) && (!allowed || allowed.includes(a.schema)));
   return <>
-    {offered.map((a) => <Button key={a.schema} variant="primary" onClick={() => setTaking(a)}>+ {a.title}</Button>)}
-    {taking && <ActionDialog declared={taking} type={type} onClose={() => setTaking(undefined)} />}
+    {offered.map((a) => <Button key={a.schema} variant="primary" disabled={disabled} onClick={() => setTaking(a)}>+ {a.title}</Button>)}
+    {taking && <ActionDialog declared={taking} type={type} onClose={() => setTaking(undefined)} onCompleted={onCreated} />}
   </>;
 }
 

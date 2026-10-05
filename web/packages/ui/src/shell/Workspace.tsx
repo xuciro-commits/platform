@@ -30,7 +30,7 @@ export type Session = {
 };
 
 /** The apps a member may open (ADR-0018): the launcher in the menu bar and the palette switch between them. */
-export type Launcher = { apps: { id: string; title: string; icon?: ReactNode }[]; current?: string; onSelect: (id: string) => void };
+export type Launcher = { apps: { id: string; title: string; icon?: ReactNode }[]; current?: string; label?: string; onSelect: (id: string) => void };
 
 type OpenOptions = { window?: "tab" | "float" | "popout" };
 type Unsaved = {
@@ -322,7 +322,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
           <button type="button" aria-label={t("Toggle navigation")} aria-expanded={navigationVisible} onClick={toggleNavigation}
             className="rounded-sm p-1 text-muted hover:bg-row-hover hover:text-foreground"><PanelLeft className="size-4" /></button>
           {entryPoints && <AppMenu launcher={entryPoints} product={entryPoints.apps.find((entry) => entry.id === entryPoints.current)?.title ?? product} label={t("Workspaces")} />}
-          {launcher ? <AppMenu launcher={launcher} product={product} /> : !entryPoints && <span className="pr-2 text-sm font-semibold tracking-tight">{product}</span>}
+          {launcher ? <AppMenu launcher={launcher} product={product} label={launcher.label} /> : !entryPoints && <span className="pr-2 text-sm font-semibold tracking-tight">{product}</span>}
           <Menubar.Root className="hidden items-center sm:flex">
             {[...menus, ...builtInMenus].map((menu) => (
               <Menubar.Menu key={menu.label}>

@@ -1,3 +1,4 @@
+import { useApplicationWorkspace } from "./application-scope";
 import {actionDestinations,actionResultEdges,stateInputValid,ruleInputValid,assignmentInputFits} from "./process-rules";
 import { recordPaths } from "./record-paths";
 import { AssetControls } from "./asset-controls";
@@ -9,7 +10,7 @@ import { AssetControls } from "./asset-controls";
 import { PayloadFields, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost, useReadQuery } from "@platform/app";
 import type {Api} from "@platform/kernel";
 import {
-  Button, Card, Checkbox, Disclosure, EditorWorkbench, Input, NodeCanvas, PageHeader, Panel, Select, StatusBar, StatusTag, Textarea, Toggles, canvasNodeHeight, canvasNodeWidth, cn, defineStatuses, layout, notify, t, useWorkspace, useUnsavedChanges,
+  Button, Card, Checkbox, Disclosure, EditorWorkbench, Input, NodeCanvas, PageHeader, Panel, Select, StatusBar, StatusTag, Textarea, Toggles, canvasNodeHeight, canvasNodeWidth, cn, defineStatuses, layout, notify, t, useUnsavedChanges,
   type CanvasEdge, type CanvasNode, type NodeCatalog, type EntityInfo,
 } from "@platform/ui";
 import { ArrowDown, ArrowUp, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
@@ -130,7 +131,7 @@ export function Objects() {
 
 export function ProcessEditor({ id, initialField, initialAction, initialAccess }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean }) {
   const { decide, entities, definitions } = useHost();
-  const { open } = useWorkspace();
+  const { open } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: ObjectRecord }>(`/v1/records/build.object/${encodeURIComponent(id)}`);
   const object = query.data?.record;
   const session = useDraftSession<Process>({ states: [], actions: [], access: [], fields: [] });
@@ -158,6 +159,7 @@ export function ProcessEditor({ id, initialField, initialAction, initialAccess }
     else if (initialAction) { const at = object.actions?.findIndex((action) => action.name === initialAction) ?? -1; if (at >= 0) setChosen({ kind: "action", at }); }
     else if (initialAccess && object.access?.length) setChosen({ kind: "access", at: 0 });
   }, [object, id, initialField, initialAction, initialAccess]);
+  const directInstall = useDirectInstall();
   if (!object) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const parent = `build.${object.name}`;
   const targets = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent)
@@ -187,7 +189,6 @@ export function ProcessEditor({ id, initialField, initialAction, initialAccess }
     }
     return ok;
   };
-  const directInstall = useDirectInstall();
   const publish = async () => {
     setRefused(undefined);
     if (issues.length) { setRefused(issues.join(" ")); return; }

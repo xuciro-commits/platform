@@ -1,7 +1,8 @@
+import { useApplicationWorkspace } from "./application-scope";
 import { AssetControls } from "./asset-controls";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useWorkspace, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
 import { useCallback, useEffect, useState } from "react";
 import { JSONEditor, SchemaEditor, WorkflowFormProblems, schemaDefault } from "./workflow-binding";
 import type { ValueSchema } from "./workflow-model";
@@ -20,7 +21,7 @@ const empty = (): CodeDraft => ({ id: "", revision: 0, name: "", title: "", desc
 
 export function CodeFunctions() {
   const { source, role } = useHost();
-  const { open } = useWorkspace();
+  const { open } = useApplicationWorkspace();
   if (role("build") !== "builder") return <PageHeader title={t("Code functions")} description={t("Only a builder can edit code functions.")} />;
   return <div className="grid gap-3"><PageHeader title={t("Code functions")} description={t("Package a typed Go or TinyGo algorithm for pages and workflows.")}
     actions={<Button onClick={() => open({ view: "code", params: { id: "new" } })}>{t("New code function")}</Button>} />
@@ -29,7 +30,7 @@ export function CodeFunctions() {
 }
 
 export function CodeEditor({ id }: { id: string }) {
-  const { decide, client, role } = useHost(), { open, close } = useWorkspace(), invoke = useInvokeCapability();
+  const { decide, client, role } = useHost(), { open, close } = useApplicationWorkspace(), invoke = useInvokeCapability();
   const [draft, setDraft] = useState<CodeDraft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [tab, setTab] = useState<"source" | "contract" | "sdk" | "test">("source"), [sdk, setSDK] = useState("");
   const [input, setInput] = useState<unknown>({}), [executedInput, setExecutedInput] = useState<unknown>(), [call, setCall] = useState(""), [problems, setProblems] = useState<Record<string, string>>({});

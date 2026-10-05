@@ -1,7 +1,7 @@
 // Builder release workbench: saved candidates come from committed bytes.
 // Evaluation and activation retain the host's existing gates.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Card, PageHeader, Select, StatusTag, t } from "@platform/ui";
+import { Button, Card, PageHeader, Select, StatusTag, t, useWorkspace } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope } from "./application-scope";
 import { useState } from "react";
@@ -53,6 +53,7 @@ export const releaseKinds: ReleaseKind[] = kinds.map((item) => item.kind);
 export function ReleaseReview({ initialKind = "object", initialID = "", initialDrafts = [], embedded = false }: { initialKind?: ReleaseKind; initialID?: string; initialDrafts?: JointChoice[]; embedded?: boolean } = {}) {
   const { client, role } = useHost();
   const scope = useApplicationScope();
+  const { open } = useWorkspace();
   const [kind, setKind] = useState<ReleaseKind>(initialKind);
   const [id, setId] = useState(initialID);
   const [review, setReview] = useState<Api.ReleasePreview>();
@@ -198,7 +199,8 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     </div>
   );
   return <div className="grid gap-3">
-    {!embedded && <PageHeader title={t("Release review")} description={t("Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators.")} />}
+    {!embedded && <PageHeader title={t("Release review")} description={t("Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators.")}
+      actions={scope && <Button onClick={() => open({ view: "application", params: { id: scope } })}>{t("Back to application")}</Button>} />}
     <Card className="grid gap-3 p-3" aria-label={t("Saved releases")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{t("Saved releases")}</h2>

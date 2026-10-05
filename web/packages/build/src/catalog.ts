@@ -36,7 +36,7 @@ export const entries: CatalogEntry[] = [
     constraints: ["This is the existing ProcessEditor with synthetic local data. Save and publish are refused in Catalog.", "A tenant object must be created, tested and published in the connected Application Studio.", "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions."],
   },
   {
-    id: "scenario/application-studio", owner: "@pkg/build", name: "Application release workbench", summary: "Organize navigation and shared published objects, workflows and functions with the original application editor.",
+    id: "scenario/application-studio", owner: "@pkg/build", name: "Application release workbench", summary: "Create and organize saved pages and shared resources, then review their joint application candidate with the original editors.",
     layer: 5, authority: "example", maturity: "recommended", scope: "platform", uses: ["reference"], tags: ["application", "resources", "release", "navigation", "studio"],
     source: "web/packages/build/src/application.tsx", example: "ApplicationStudioExample", dependencies: ["ui/panels", "app/record-actions"],
     constraints: ["The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.", "Application resources refer to original owners; membership does not grant access. Release review freezes published dependencies using the existing candidate path."],

@@ -1,3 +1,4 @@
+import { useApplicationWorkspace } from "./application-scope";
 import {WidgetGlyph,LayoutGlyph} from "./page-editor/WidgetGlyph";
 import {canvasModel,canvasDrop,canvasMove,canvasResize,canvasResetSize,canvasGroup,canvasEqualize,canvasUngroup,canvasRemove} from "./page-editor/canvas-layout";
 import {addWidgetSlot} from "./page-editor/widget-slots";
@@ -20,7 +21,7 @@ import { AssetControls } from "./asset-controls";
 // the same registered widgets; save and activation use the original Go path.
 import { ApplicationPage, ComposedPage, NewActions, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
 import {
-  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, Button, Card, CanvasEditor, CanvasRegion, ContentTabs, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useWorkspace, useUnsavedChanges,
+  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, Button, Card, CanvasEditor, CanvasRegion, ContentTabs, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useUnsavedChanges,
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
 import { Copy, Clipboard, Columns2, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
@@ -54,6 +55,7 @@ type PageRecord = {
   document?: HostApi.PageDocument;
   sections?: AuthoringSection[];
 };
+type DraftObjectMetadata = { name: string; title: string; plural?: string; fields: (Omit<HostApi.FieldInfo, "choices"> & { choices?: string })[] };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
 const pageStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" } });
@@ -98,7 +100,7 @@ collectionBuilder:s.collectionBuilder,collectionOutputVariable:s.collectionOutpu
 /** The pages of this organisation: open one to compose it. */
 export function PagesList() {
   const { source } = useHost();
-  const { open } = useWorkspace();
+  const { open } = useApplicationWorkspace();
   return (
     <div className="grid gap-3">
       <PageHeader title={t("Pages")} description={t("Compose pages over your objects, then review a candidate to release them together.")}
@@ -111,8 +113,19 @@ export function PagesList() {
 
 export function PageEditor({ id }: { id: string }) {
   const { decide, source, catalog, definitions } = useHost();
-  const { open } = useWorkspace();
+  const { open } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(id)}`);
+  const directInstall = useDirectInstall();
+  const draftObjects = useRecordInventory<DraftObjectMetadata>("build.object");
+  // Field pickers may describe a saved object before installation. These
+  // authoring hints never replace runtime definitions, reads or permissions.
+  const authoringEntity = (type: string): EntityInfo | undefined => {
+    const installed = source.entity(type);
+    if (installed) return installed;
+    const object = draftObjects.data?.records.find(record => `build.${record.name}` === type);
+    return object ? { type, app: "build", title: object.title, plural: object.plural || object.title, display: "id", standard: [],
+      fields: [{ name: "id", title: "ID", type: "text", readOnly: true }, ...(object.fields ?? []).map(field => ({ ...field, choices: field.choices?.split(",").map(value => value.trim()) }))] } : undefined;
+  };
   const page = query.data?.record;
   const session = useDraftSession<PageDraft,LayoutClipboard<Draft>>(emptyDraft(),JSON.stringify([id,source.scope]));
   const [clipboardNotice,setClipboardNotice]=useState<{scope:string;error?:boolean;text:string}>();
@@ -226,7 +239,7 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
   const [queryPreviewOwner,setQueryPreviewOwner]=useState<string|undefined>(undefined);
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
   if (!page) return <p className="text-sm text-muted">{t("Loading…")}</p>;
-  const info = source.entity(page.object);
+  const info = authoringEntity(page.object);
 const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s) }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
   const add = (widget: string, destination?: { container: string; after?: string }, drop?:CanvasDrop) => {
     const contract = widgetContract(widget); if (!contract) return;
@@ -298,7 +311,6 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     } catch { setRefused(t("The page could not be saved. Your draft is still here.")); return false; }
     finally { lock.current = false; setSaving(false); }
   };
-  const directInstall = useDirectInstall();
   const nothing = sections.length === 0;
   const publish = async () => {
     if (invalid || nothing || lock.current || dirty && !await save()) return;
@@ -359,6 +371,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     }}>
       <PageHeader title={title || page.title} description={t("Compose what people see, save your draft, then review its release candidate.")}
         actions={<><StatusTag status={page.state} registry={pageStates} />{page.state === "published" && <Button onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: page.name } })}>{t("Open published page")}</Button>}</>} />
+      {!source.entity(page.object) && info && <p className="text-xs text-warning" role="status">{t("Field choices come from a saved object draft. Business data is available after joint activation.")}</p>}
       <Card role="toolbar" aria-label={t("Page design actions")} className="flex flex-wrap items-center gap-1 px-2 py-1.5">
         <Button variant="ghost" aria-label={t("Toggle widget library")} onClick={() => setLeftOpen(!leftOpen)}>{leftOpen ? <PanelLeftClose /> : <PanelLeftOpen />}</Button>
         <Button variant="ghost" aria-label={t("Undo")} title={t("Undo")} disabled={!session.canUndo || busy} onClick={() => history("undo")}><Undo2 /></Button>
@@ -450,7 +463,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
             events={(() => { const Inspector=canvasSelection&&widgetInspector(canvasSelection.widget,canvasSelection.configVersion??0)?.events;return canvasSelection?<InspectorFrame id={canvasSelection.id??String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion??0} part="events">{Inspector&&<Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons,document)=>edit({document,sections:sections.map(s=>s.id===canvasSelection.id?{...s,buttons}:s)})} document={document} section={canvasSelection.id!} owner={nodeID?loopOwner(document,nodeID):undefined} overlay={nodeID?overlayOwner(document,nodeID):undefined} onChange={document=>edit({document})}/>}</InspectorFrame>:null; })()}
             display={<> {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value&&nodeID) canvasCommitDrop({kind:'move',id:nodeID,label:canvasSelection?.title??nodeID},{kind:'into',parent:event.target.value}); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
             {nodeID&&<LayoutSizing document={document} id={nodeID} onPatch={patchNode}/>}
-            {nodeID && <NodeBindings document={document} id={nodeID} button={!!canvasSelection&&!!widgetContract(canvasSelection.widget)?.inputPorts.some(port=>port.bindingField==="enabledWhen")&&canvasSelection.widget!=="input"} input={canvasSelection?.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />} </>} onResourcesChange={(patch,variables)=>edit(old=>({...old,document:{...old.document,variables},sections:old.sections.map(s=>s.id===canvasSelection?.id?{...s,...patch}:s)}),"graph-resources")} sections={sections} section={canvasSelection} info={source.entity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
+            {nodeID && <NodeBindings document={document} id={nodeID} button={!!canvasSelection&&!!widgetContract(canvasSelection.widget)?.inputPorts.some(port=>port.bindingField==="enabledWhen")&&canvasSelection.widget!=="input"} input={canvasSelection?.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />} </>} onResourcesChange={(patch,variables)=>edit(old=>({...old,document:{...old.document,variables},sections:old.sections.map(s=>s.id===canvasSelection?.id?{...s,...patch}:s)}),"graph-resources")} sections={sections} section={canvasSelection} info={authoringEntity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
             document={document} object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
             {!canvasSelection&&nodeID&&<LayoutSizing document={document} id={nodeID} onPatch={patchNode}/>}
             {!canvasSelection && nodeID && <NodeBindings document={document} id={nodeID} button={false} input={false} onChange={(patch) => patchNode(nodeID, patch)} />}</div>)}>
