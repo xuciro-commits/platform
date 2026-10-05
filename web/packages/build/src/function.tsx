@@ -6,6 +6,7 @@ import { type Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Textarea, t, useWorkspace, useUnsavedChanges,
   type CanvasNode, type NodeCatalog } from "@platform/ui";
 import { useEffect, useState } from "react";
+import { useDirectInstall } from "./release-profile";
 import { installedObjects, type WorkflowObject } from "./workflow-model";
 
 type FunctionDraft = { conversation?:boolean; id: string; revision: number; name: string; title: string; description: string; object: string; fields: string[];
@@ -81,6 +82,7 @@ export function FunctionEditor({ id }: { id: string }) {
     }
     return revision;
   };
+  const directInstall = useDirectInstall();
   const publish = async () => {
     if (issues.length) { setError(issues.join(" ")); return; }
     const revision = dirty ? await save() : draft.revision;
@@ -112,10 +114,11 @@ export function FunctionEditor({ id }: { id: string }) {
         <Button disabled={busy || !draft.id} onClick={() => confirmDiscard(() => void perform(reload))}>{t("Reload saved function")}</Button>
         <Button disabled={busy || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
         <Button disabled={busy || !draft.id || dirty} onClick={() => open({ view: "candidate-test", params: { functionId: draft.id } })}>{t("Test function")}</Button>
-        <Button disabled={busy || !draft.id || issues.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>
+        {directInstall && <Button disabled={busy || !draft.id || issues.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>}
         <Button variant="primary" disabled={busy || !draft.id || issues.length > 0} onClick={() => void perform(review)}>{t("Review release")}</Button>
       </div>} />
     <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
+    {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed function version {version}. Accepted calls keep their saved inputs and definition.", { version: draft.version })}</Panel> : null}
     {dirty && <Panel role="status" className="text-xs">{t("Unsaved changes. Direct install and release review save first.")}</Panel>}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}

@@ -2149,6 +2149,7 @@ register("zh-CN", {
   "Any reference to this page's object": "任一指向本页对象的引用",
   "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators.": "对比已保存的草稿，再保存候选的精确字节。保存不会让操作员使用它。",
   "Save immutable candidate": "保存不可变候选",
+  "This tenant delivers through a saved release candidate: review the draft and activate it.": "该租户通过已保存的发布候选交付：请评审草稿并激活。",
   "Deliver drafts together": "联合交付草稿",
   "An object, the page over it and the application holding the page can be delivered as one candidate; nothing has to be published first.": "对象、其上的页面和承载该页面的应用可作为同一个候选交付，无需先逐项发布。",
   "Add selected draft": "加入所选草稿",

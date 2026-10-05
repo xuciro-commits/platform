@@ -14,6 +14,7 @@ import {
 } from "@platform/ui";
 import { ArrowDown, ArrowUp, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useDirectInstall } from "./release-profile";
 import { ModelWorkbench } from "./model-editor/ModelWorkbench";
 import { useDraftSession } from "./session/DraftSession";
 
@@ -186,6 +187,7 @@ export function ProcessEditor({ id, initialField, initialAction, initialAccess }
     }
     return ok;
   };
+  const directInstall = useDirectInstall();
   const publish = async () => {
     setRefused(undefined);
     if (issues.length) { setRefused(issues.join(" ")); return; }
@@ -216,10 +218,11 @@ export function ProcessEditor({ id, initialField, initialAction, initialAccess }
           <Button variant="ghost" aria-label={t("Undo")} title={t("Undo")} disabled={!session.canUndo || busy} onClick={() => { session.undo(); setChosen(undefined); }}><Undo2 /></Button>
           <Button variant="ghost" aria-label={t("Redo")} title={t("Redo")} disabled={!session.canRedo || busy} onClick={() => { session.redo(); setChosen(undefined); }}><Redo2 /></Button>
           <Button onClick={() => void perform(save)} disabled={!dirty || busy}>{t("Save")}</Button>
-          <Button disabled={busy || issues.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>
+          {directInstall && <Button disabled={busy || issues.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>}
           <Button variant="primary" disabled={busy || issues.length > 0} onClick={() => void perform(review)}>{t("Review release")}</Button>
         </div>} />
       <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
+      {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
       {refused && <Panel role="alert" className="text-sm text-[var(--tone-danger)]">{t("The host refused it:")} {refused}</Panel>}
       {issues.length > 0 && <Panel role="alert" className="text-xs text-[var(--tone-danger)]"><strong>{t("Check these rules before installing or reviewing a release:")}</strong>
         <ul className="ml-4 list-disc">{issues.map((message, i) => <li key={i}>{message}</li>)}</ul></Panel>}

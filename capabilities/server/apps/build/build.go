@@ -145,6 +145,14 @@ func (b *Build) objectEntity() platform.Entity {
 				}}}}}
 }
 
+// releaseProfile is declared, not hidden: an operator sets it through the
+// platform's settings surface (ADR-0048 D5b).
+func (b *Build) settings() []platform.Setting {
+	return []platform.Setting{{Name: SettingReleaseProfile, Title: "Release profile", Type: "choice",
+		Choices: []string{ProfileProduction, ProfileDevelopment}, Default: ProfileDevelopment,
+		Description: "production: definitions are delivered only through a saved release candidate; development: direct install stays available for authoring, import and probes."}}
+}
+
 func (b *Build) Manifest() platform.Manifest {
 	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity()}
 	for _, typ := range sortedTypes(b.installed) {
@@ -161,7 +169,7 @@ func (b *Build) Manifest() platform.Manifest {
 		}
 	}
 	slices.Sort(roles)
-	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Operations: b.operationDeclarations(),
+	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Settings: b.settings(), Reads: []string{ReadReleaseProfile}, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Operations: b.operationDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -191,6 +199,41 @@ func sortedTypes(installed map[string]platform.Entity) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// SettingReleaseProfile declares how definitions reach operators (ADR-0048
+// D5b): a tenant that declares "production" delivers only through a saved joint
+// candidate, and the direct install its authoring surfaces used to offer is
+// refused by the owner. Any other value — including the default below — is the
+// development/import/probe profile, where the same compile, install and
+// recovery implementation stays available, exactly as before.
+const SettingReleaseProfile = "releaseProfile"
+
+// ReadReleaseProfile serves the profile to this app's authoring surfaces.
+const ReadReleaseProfile = "release-profile"
+
+const (
+	// ProfileProduction delivers through saved release candidates only.
+	ProfileProduction = "production"
+	// ProfileDevelopment is authoring, import and probe: direct install stays.
+	ProfileDevelopment = "development"
+)
+
+// directInstallSchemas are the builder's direct install entries: each installs a
+// definition for operators at once, without a saved candidate.
+var directInstallSchemas = []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess,
+	SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish}
+
+// checkReleaseProfile refuses a direct install that a production tenant has
+// retired, naming the schema and the route that replaces it. Replay and
+// recovery never take this path, so a historical Published image, its versions
+// and a restore keep working in every profile.
+func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Error {
+	if c.Setting(SettingReleaseProfile) != ProfileProduction || !slices.Contains(directInstallSchemas, schema) {
+		return nil
+	}
+	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: fmt.Sprintf(
+		"%s installs a definition for operators at once, and this tenant delivers through a saved release candidate: review the draft and activate the candidate (POST /v1/releases/candidates). Direct install is limited to the development and import profiles.", schema)}
 }
 
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
@@ -428,9 +471,28 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 }
 func (b *Build) Snapshot() (json.RawMessage, error) { return b.ledger.Snapshot() }
 func (b *Build) Restore(raw json.RawMessage) error  { return b.ledger.Restore(raw) }
-func (b *Build) Read(platform.Caller, string) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+
+// Read release-profile answers how this tenant delivers definitions, for the
+// authoring surfaces that must not offer an entry the owner would refuse
+// (ADR-0048 D5b). Every role of this app may read it: it is a declaration of
+// the tenant's profile, not a record.
+func (b *Build) Read(c platform.Caller, name string) (any, *kernel.Error) {
+	if name != ReadReleaseProfile {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	profile := c.Setting(SettingReleaseProfile)
+	if profile != ProfileProduction {
+		profile = ProfileDevelopment
+	}
+	return ReleaseProfile{Profile: profile, DirectInstall: profile != ProfileProduction}, nil
 }
+
+// ReleaseProfile is how a tenant delivers definitions to operators.
+type ReleaseProfile struct {
+	Profile       string `json:"profile"`
+	DirectInstall bool   `json:"directInstall"`
+}
+
 func (b *Build) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
@@ -485,6 +547,11 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 // Submit takes the builder's own actions and those generated for every object
 // it has installed: a defined object's records are decided like any other's.
 func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if !c.Replaying {
+		if err := b.checkReleaseProfile(c, s.GetSchema().GetName()); err != nil {
+			return nil, err
+		}
+	}
 	if s.GetSchema().GetName() == SchemaCodeCompile {
 		return b.submitCodeCompile(c, s, now)
 	}

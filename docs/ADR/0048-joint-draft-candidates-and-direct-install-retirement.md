@@ -1,6 +1,6 @@
 # ADR-0048：联合草稿候选与生产直接安装退场（提案）
 
-**状态：** 提案，待负责人决定（2026-10-05，#141）。[ADR-0047](0047-platform-composition-and-workspaces.md) §10.2 规定 M3 的“必要编译、profile 与权限变更先设计”，§11 把相关授权/接口决策列为依赖批次启动前的专项决定。本文只列出待决选项与推荐；负责人接受后才把 M3 纳入 [WorkQueue](../WorkQueue.md) 并开始实现。
+**状态：** 已采纳，2026-10-05（#141）。负责人指示按 §2 的推荐值“一口气干完”，M3 已按 D1–D8 实施中，实际落地与剩余见 §6。[ADR-0047](0047-platform-composition-and-workspaces.md) §10.2 规定 M3 的“必要编译、profile 与权限变更先设计”，本文即该设计；独立发布/审计/项目 ACL 仍按 ADR-0047 §11 专项。
 **范围：** ADR-0047 §7.1 的联合草稿候选与生产直接安装退场。不改变 M1/M2 已接受的入口与边界；独立发布/审计/项目 ACL 与 §13 持续 Flow 不在本文。
 **设计日期：** 2026-10-05。代码事实基线：`e41aa91c`（M2）与其上的 `main`。
 
@@ -39,3 +39,15 @@
 ## 5. 关系
 
 本稿只扩展**候选集合及其封存/激活输入**，不改变 ADR-0026/0038/0039/0044 的执行、接受结果、恢复、发布与编译主人；ADR-0047 的入口、组织与其他批次的边界不变。
+
+## 6. 实际落地（2026-10-05）
+
+- **D1/D2 联合草稿图**：`Build.DraftReleaseAssetsMulti` 用一份共享 inventory 代换多份对象/页面/应用/流程草稿（`jointEntities` 让未安装的对象在页面与流程里可命名），简单类型仍走各自 owner 的单草稿路径；缺依赖在预览阶段**列名阻塞**（`ReleasePreview.Diagnostic`），引用校验接受“已安装、已保存草稿、或他应用已声明”的对象，其余如实拒绝。
+- **D1/D3 候选输入与服务端重算**：`POST /v1/releases/preview`、`POST /v1/releases/candidates` 接受 1–32 份显式勾选（单一 kind/id 与 drafts 互斥）；`POST /v1/releases/drafts/referenced` 由服务端给出所选记录草稿尚未安装的依赖草稿，供交付台勾选。保存时在同一租户锁下按同一集合重算候选 ID，陈旧/外来 ID 被拒绝；预览回显 `drafts` 作为联合候选的草稿来源，差异仍为 added/changed/removed。
+- **D2 先证明可安装**：多草稿预览先重建“当前已安装”映像（含全部 prior 与改名/删除闭包），再走**与激活同一套私有安装**的干跑（`releaseInstallationsLocked`，不提交任何状态）；不可安装即 Diagnostic，绝不封存。
+- **D4 封存与激活**：沿用原封存与原激活主人及激活指针，不新增应用私有指针；失败保留旧定义、草稿与在途版本。
+- **D5b 直接安装退场**：构建者声明 `build/releaseProfile`（`production`/`development`，默认 `development` = 开发/导入/探针）。`production` 时 owner 在 `Submit` 拒绝九类直接安装 schema（`ERROR_CODE_POLICY_DENIED`，消息点名候选路径），回放/恢复与历史 Published 一律不受影响；`GET /v1/release-profile` 让编辑面在 production 不再提供 Direct install，改为指向发布评审。编辑器与资源库按钮仅在 development 显示。
+- **D7 权限**：预览/封存/激活仍要求 Builder，未新增角色。
+- **D8**：未改 Worker/编译契约。
+- **证据**：Go 测试 `TestJointDraftsDeliverNewObjectPageAndApplication`（新对象＋新页面＋应用的联合交付、来源、陈旧 ID 拒绝、激活后可见）、`TestProductionProfileRefusesDirectInstallAndKeepsDelivery`（development 直装仍在、production 拒绝且草稿未变、联合候选在 production 仍交付、回放一致）；e2e `joint-draft-release.spec.ts`（两个行业，UI 走联合交付，并证明单独页面被拒）。
+- **剩余**：D6（完整 Module 导入改生成联合草稿、`WorkshopApplicationImport` 预发布依赖改候选输入）；ADR-0047 §10.2 M4 的固定持久环境证据；`deploy/local/rehearse.sh` 末尾新增 delivery profile 断言（本沙箱无 Docker，未实际执行）。
