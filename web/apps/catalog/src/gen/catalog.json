@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:d43a35a4123e82db",
+  "revision": "sha256:ba411b9263781820",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4389,6 +4389,7 @@
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/module-import/ObservationImportFields.tsx",
       "web/packages/build/src/module-import/WorkshopApplicationImport.tsx",
+      "web/packages/build/src/page-editor/CompatibilityReview.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
@@ -4642,6 +4643,7 @@
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/module-import/WorkshopApplicationImport.tsx",
+      "web/packages/build/src/page-editor/CompatibilityReview.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",
@@ -4675,6 +4677,7 @@
       "web/packages/app/src/pages.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
+      "web/packages/build/src/page-editor/CompatibilityReview.tsx",
       "web/packages/csm/src/index.tsx",
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",

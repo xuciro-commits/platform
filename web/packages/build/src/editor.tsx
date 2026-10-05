@@ -15,7 +15,7 @@ import { AssetControls } from "./asset-controls";
 // Application Studio page design (ADR-0046). Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
 // the same registered widgets; save and activation use the original Go path.
-import { ApplicationPage, ComposedPage, NewActions, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, supportsPageUIProfile, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
+import { ApplicationPage, ComposedPage, NewActions, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
 import {
   validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, Button, Card, CommandMenu, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useWorkspace, useUnsavedChanges,
   type EntityInfo,
@@ -30,6 +30,8 @@ import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";
 import { InterfacePanel } from "./page-editor/InterfacePanel";
 import { widgetInspector } from "./page-editor/widgets/registry";
 import {InspectorFrame} from "./page-editor/widgets/InspectorFrame";
+import {CompatibilityReview} from "./page-editor/CompatibilityReview";
+import {applyProfileUpgrade,pageCompatibility} from "./page-editor/compatibility";
 import { OverlayProperties } from "./page-editor/OverlayPanel";
 import { LayoutProperties, LayoutSizing, LayoutTree } from "./page-editor/LayoutTree";
 import { useDraftSession } from "./session/DraftSession";
@@ -110,11 +112,12 @@ export function PageEditor({ id }: { id: string }) {
   const session = useDraftSession<PageDraft,LayoutClipboard<Draft>>(emptyDraft(),JSON.stringify([id,source.scope]));
   const [clipboardNotice,setClipboardNotice]=useState<{scope:string;error?:boolean;text:string}>();
   const clipboardScope=JSON.stringify([id,source.scope]);
-  useEffect(()=>{setClipboardNotice(undefined);setImportPackage(undefined);setImporting(false);},[clipboardScope]);
+  useEffect(()=>{setClipboardNotice(undefined);setImportPackage(undefined);setImporting(false);setCompatibilityOpen(false);},[clipboardScope]);
   const { sections, document, selections, title, description } = session.draft;
   const { dirty } = session;
   const [selection, select] = useState<StudioSelection>({ kind: "page" });
   const [importing,setImporting]=useState(false);
+  const [compatibilityOpen,setCompatibilityOpen]=useState(false);
   const [importPackage,setImportPackage]=useState<{scope:string;pack:ImportPackage}>();
   const [leftOpen, setLeftOpen] = useState(true), [rightOpen, setRightOpen] = useState(true);
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop"), [zoom, setZoom] = useState(100);
@@ -142,7 +145,10 @@ export function PageEditor({ id }: { id: string }) {
   const choose = (index: number) => { select(index < 0 || !sections[index]?.id ? { kind: "page" } : { kind: "widget", id: sections[index]!.id! }); setRightOpen(true); };
   const edit: typeof session.edit = (update, key) => { if (!lock.current) session.edit((old) => {
     const next = typeof update === "function" ? update(old) : { ...old, ...update };
-    return { ...next, ...synchronizeLoopBindings(next.document, next.sections) };
+    // Profile changes are explicit reviewed commands; ordinary editing retains
+    // the original profile even when a layout helper returns the latest one.
+    const document=key==="module-import"?next.document:{...next.document,uiProfile:old.document.uiProfile};
+    return { ...next, ...synchronizeLoopBindings(document, next.sections) };
   }, key); };
   const history = (direction: "undo" | "redo") => { if (lock.current) return; session[direction](); setFormProblems({}); setRefused(undefined); };
   const selectionProblem = selections.some((v, i) => !/^[a-z][a-z0-9_-]{0,63}$/.test(v.name) || selections.some((other, at) => at !== i && other.name === v.name))
@@ -150,7 +156,8 @@ export function PageEditor({ id }: { id: string }) {
       s.selection && !selections.some((v) => v.name === s.selection && v.object.name === (s.object || page?.object)) ||
       s.parentSelection && !selections.some((v) => v.name === s.parentSelection))
       ? t("A widget references a missing selection or the wrong object type.") : "";
-  const incompatible = document.formatVersion !== 2 || !supportsPageUIProfile(document.uiProfile) || sections.some((s) => !widgetContract(s.widget) || s.configVersion !== widgetContract(s.widget)?.configVersion);
+  const compatibility=pageCompatibility(session.draft);
+  const incompatible=!compatibility.supported||compatibility.issues.length>0;
 const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => !document.nodes[overlay.root]?.children?.length && !document.unusedWidgets?.some(entry=>entry.parent===overlay.root) || !overlay.title.trim()) || sections.some(section=>{const contract=widgetContract(section.widget);return contract&&"events" in contract&&contract.events.some(event=>event.required&&!document.events?.some(binding=>binding.source===section.id&&binding.event===event.id));}); const groupProblem=sections.some(s=>s.widget==="button-group"&&(!(s.buttons?.length)||s.buttons.length>pageVariableContract.buttonGroup.maxButtons||s.buttons.some((b,i)=>!b.title||new TextEncoder().encode(b.title).length>pageVariableContract.buttonGroup.maxTitleBytes||s.buttons?.some((other,j)=>i!==j&&b.id===other.id)||!document.events?.some(e=>e.source===s.id&&e.control===b.id&&e.event==="click"))));
   const loopProblem = Object.values(document.nodes).some((node) => node.kind === "loop" && (!node.loop || !document.variables?.[node.loop.collection]));
   const searchInputProblem=sections.some(s=>s.inputKind!==undefined&&(s.widget!=="input"||s.inputKind!=="search"||searchInputObjects(document,Object.values(document.nodes).find(n=>n.section===s.id)?.valueVariable).length===0));
@@ -216,7 +223,7 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
   if (!page) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const info = source.entity(page.object);
-const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s),document:"actionDefaults" in patch||(sections[index]?.widget==="ai-assistant"&&"recordVariable" in patch)||patch.mark||"selectionVariable" in patch||"selectionSetVariable" in patch||"recordSetVariable" in patch||"map" in patch||"collectionBuilder" in patch||"collectionOutputVariable" in patch||"scene" in patch||"sceneSampleCollectionVariable" in patch||"sceneSampleVariable" in patch||"scenePartVariable" in patch||"ai" in patch||"externalFrame" in patch||"embedding" in patch||"observation" in patch||"observationHistoryVariable" in patch||"observationContextVariable" in patch||"observationSignalVariable" in patch||"observationThresholdVariable" in patch||"observationRowsVariable" in patch||"observationCountVariable" in patch||"observationMeanVariable" in patch||"actionTable" in patch||"notepadVariable" in patch||"analysis" in patch||"analysisXVariable" in patch||"analysisYVariable" in patch||"analysisCountVariable" in patch||"analysisMeanVariable" in patch||"resourceList" in patch||"assetDirectory" in patch||"graphExplorer" in patch||"vertexGraph" in patch||"breadcrumb" in patch||"avatar" in patch||"image" in patch||"historyLimit" in patch||"commentDraftVariable" in patch||"fileVariable" in patch||"pdfPageVariable" in patch||"recordCard" in patch||"sparkline" in patch||"sparklineDecimalVariable" in patch||"sparklineNumberVariable" in patch||"groupValueVariable" in patch||"groupSetVariable" in patch||"rowValueVariable" in patch||"rowSetVariable" in patch||"columnValueVariable" in patch||"columnSetVariable" in patch||"scatter" in patch||"histogram" in patch||"inputKind" in patch||"spacer" in patch||"separator" in patch||"notice" in patch||"alertBanner" in patch||"alertValueVariable" in patch||"pickerValueVariable" in patch||"recordPicker" in patch||"dateKind" in patch||"dateOffset" in patch||"dateVariable" in patch||"dateLabel" in patch||"choiceInput" in patch||"choiceSetVariable" in patch||"choiceVariable" in patch||"booleanVariant" in patch||"booleanVariable" in patch||"booleanLabel" in patch||"rangeInput" in patch||"rangeMinVariable" in patch||"rangeMaxVariable" in patch||"leaderboard" in patch||"summaryField" in patch||"statisticsVariable" in patch||"gauge" in patch||"gaugeValueVariable" in patch||"progressLabel" in patch||"progressValueVariable" in patch||"progressTotalVariable" in patch||"progressTotal" in patch||"recordGantt" in patch||"recordCalendar" in patch||"recordEvents" in patch||"chartVariant" in patch||"recordChart" in patch||"recordList" in patch||"headingLevel" in patch||"countVariable" in patch||"metricPresentation" in patch||"statusTracker" in patch||"recordLinks" in patch||"buttons" in patch||"recordView" in patch||"detailPresentation" in patch||"tablePresentation" in patch||"tableColumns" in patch||"showSearch" in patch?{...old.document,uiProfile:pageUIProfile}:old.document }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
+const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s) }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
   const move = (index: number, by: -1 | 1) => { const section = sections[index]; if (section?.id) edit((old) => ({ ...old, document: moveWidget(old.document, section.id!, by) })); };
   const add = (widget: string, destination?: { container: string; after?: string }) => {
     const contract = widgetContract(widget); if (!contract) return;
@@ -227,7 +234,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     if (contract.fieldPreset === "filter") section.fields = info?.fields.filter((f) => filterable.includes(f.type)).slice(0, 2).map((f) => f.name) ?? [];
     if (contract.fieldPreset === "create") section.fields = info?.fields.filter((f) => f.required && !f.readOnly).map((f) => f.name) ?? [];
     edit((old) => {
-      const document = appendWidget({ ...old.document, uiProfile: pageUIProfile }, section.id!, destination?.container ?? container ?? old.document.root, destination ? destination.after : chosen >= 0 ? sections[chosen]?.id : undefined);
+      const document = appendWidget(old.document, section.id!, destination?.container ?? container ?? old.document.root, destination ? destination.after : chosen >= 0 ? sections[chosen]?.id : undefined);
       if (widget === "input") {
         const [nodeID, node] = Object.entries(document.nodes).find(([, node]) => node.section === section.id)!;
         const loop = loopOwner(document, nodeID), overlay = overlayOwner(document, nodeID), variable = layoutID("value");
@@ -306,7 +313,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   const review = async () => { if (nothing || invalid || lock.current || dirty && !await save()) return; open({ view: "release-review", params: { kind: "page", id } }); };
   const canvasSelection = sections[chosen];
   const nodeID = container ?? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection?.id && node.kind === "widget")?.[0];
-  const patchNode = (id: string, patch: Partial<HostApi.PageLayoutNode>) => edit((old) => ({ ...old, document: { ...old.document, uiProfile: pageUIProfile, nodes: { ...old.document.nodes, [id]: { ...old.document.nodes[id]!, ...patch } } } }), `node:${id}:${Object.keys(patch).join(",")}`);
+  const patchNode = (id: string, patch: Partial<HostApi.PageLayoutNode>) => edit((old) => ({ ...old, document: { ...old.document, nodes: { ...old.document.nodes, [id]: { ...old.document.nodes[id]!, ...patch } } } }), `node:${id}:${Object.keys(patch).join(",")}`);
   return <WorkflowFormProblems.Provider value={report}>
     <div className="flex flex-col gap-2 lg:h-[calc(100dvh-8rem)] lg:min-h-0" tabIndex={-1} onKeyDown={(event) => {
       const command = event.metaKey || event.ctrlKey;
@@ -328,6 +335,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         <Button variant="ghost" disabled={!container&&chosen < 0 || busy} onClick={()=>container?duplicateContainer(container):duplicate()}><Copy />{t(container?"Duplicate layout":"Duplicate widget")}</Button>
         <Button variant="ghost" disabled={!container||busy} onClick={()=>container&&copyContainer(container)}>{t("Copy layout")}</Button>
         <Button variant="ghost" disabled={!container||!session.clipboard||busy} onClick={()=>container&&pasteContainer(container)}>{t("Paste layout")}</Button>
+        <Button variant="ghost" disabled={busy} onClick={()=>setCompatibilityOpen(true)}>{t("Review page compatibility")}</Button>
         <Button variant="ghost" disabled={busy} onClick={()=>setImporting(true)}>{t("Import Workshop module")}</Button>
         <span className="mx-1 h-4 w-px bg-border" />
         <AssetControls type="build.page" record={page} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "compose", params: { id } }} />
@@ -338,7 +346,8 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         <Button variant="ghost" aria-label={t("Toggle inspector")} onClick={() => setRightOpen(!rightOpen)}>{rightOpen ? <PanelRightClose /> : <PanelRightOpen />}</Button>
       </Card>
       {refused && <Panel role="alert" className="text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
-      {importing&&<ModuleImportDialog key={clipboardScope} open retained={importPackage?.scope===clipboardScope?importPackage.pack:undefined} object={page.object} profile={pageUIProfile} onClose={()=>setImporting(false)} onApply={(draft,pack)=>{setImportPackage({scope:clipboardScope,pack});edit(draft);select({kind:"page"});setFormProblems({});setRefused(undefined);}}/>}
+      {importing&&<ModuleImportDialog key={clipboardScope} open retained={importPackage?.scope===clipboardScope?importPackage.pack:undefined} object={page.object} profile={pageUIProfile} onClose={()=>setImporting(false)} onApply={(draft,pack)=>{setImportPackage({scope:clipboardScope,pack});edit(draft,"module-import");select({kind:"page"});setFormProblems({});setRefused(undefined);}}/>}
+      {compatibilityOpen&&<CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={()=>setCompatibilityOpen(false)} onLocate={id=>{select({kind:"widget",id});setRightOpen(true);setCompatibilityOpen(false);}} onApply={review=>{if(lock.current)return;const next=applyProfileUpgrade(session.draft,review);if(!next)return;session.edit(next,"profile-upgrade");setCompatibilityOpen(false);setFormProblems({});setRefused(undefined);}}/>}
       {clipboardNotice?.scope===clipboardScope&&<Panel role={clipboardNotice.error?"alert":"status"}>{clipboardNotice.text}</Panel>}
       {layoutProblems.length>0&&<Panel role="alert">{layoutProblems.map((issue,i)=><p key={i}>{issue.node}: {t(issue.code)}</p>)}</Panel>}
       {variableProblems.length > 0 && <Panel role="alert" className="text-xs text-danger">{variableProblems.map((issue, index) => <p key={index}>{issue.variable}: {t(issue.code)}</p>)}</Panel>}
@@ -399,7 +408,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
             onRestore={(index,target)=>{const section=sections[index];if(section?.id)edit({document:restoreWidget(document,section.id,target)});}}
             onRemove={(index) => { const section = sections[index]; if (!section?.id) return; edit((old) => ({ ...old, document: removeWidget(old.document, section.id!), sections: old.sections.filter((s) => s.id !== section.id) })); select({ kind: "page" }); }} /></>}
           right={rightOpen && (selection.kind === "queries" ? <QueriesPanel sections={sections} onPreviewOwner={setQueryPreviewOwner} document={document} object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} values={variableValues} onChange={(document)=>edit({document})}/> : selection.kind === "interface" ? <InterfacePanel document={document} object={{ app: page.object.split(".")[0]!, kind: "object", name: page.object }} onChange={(document) => edit({ document })} /> : selection.kind === "variables" ? <VariablesPanel object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> : <div className="grid content-start gap-2">{container && Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container).map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
-            onChange={(patch) => edit({ document: { ...document, ...(patch.presentation?{uiProfile:pageUIProfile}:{}), overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
+            onChange={(patch) => edit({ document: { ...document, overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
             onRemove={() => { const result = removeOverlay(document, id); edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}{container ? <LayoutProperties document={document} id={container}
             onPatch={patchNode} onChange={(kind) => edit((old) => ({ ...old, document: setLayoutKind(old.document, container, kind) }))}
             onUngroup={() => { edit({ document: ungroup(document, container) }); select({ kind: "page" }); }} /> :
@@ -407,7 +416,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
             selections={selections} objects={definitions.filter((d) => d.ref.kind === "object" && d.entity).map((d) => d.ref).sort((a, b) => Number(b.name === page.object) - Number(a.name === page.object))}
             onSelections={(next, rename) => edit((old) => ({ ...old, selections: next, sections: rename ? old.sections.map((s) => ({ ...s, selection: s.selection === rename.from ? rename.to : s.selection, parentSelection: s.parentSelection === rename.from ? rename.to : s.parentSelection })) : old.sections }))}
             onChange={(patch) => edit(patch, `settings:${Object.keys(patch).join(",")}`)} /> :
-          <Properties onResourcesChange={(patch,variables)=>edit(old=>({...old,document:{...old.document,uiProfile:pageUIProfile,variables},sections:old.sections.map(s=>s.id===canvasSelection?.id?{...s,...patch}:s)}),"graph-resources")} sections={sections} section={canvasSelection} info={source.entity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
+          <Properties onResourcesChange={(patch,variables)=>edit(old=>({...old,document:{...old.document,variables},sections:old.sections.map(s=>s.id===canvasSelection?.id?{...s,...patch}:s)}),"graph-resources")} sections={sections} section={canvasSelection} info={source.entity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
             document={document} object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
             {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value) edit({ document: relocateWidget(document, sections[chosen]!.id!, event.target.value) }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
 {(() => { const Inspector=canvasSelection&&widgetInspector(canvasSelection.widget,canvasSelection.configVersion??0)?.events;return canvasSelection?<InspectorFrame id={canvasSelection.id??String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion??0} part="events">{Inspector&&<Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons,document)=>edit({document,sections:sections.map(s=>s.id===canvasSelection.id?{...s,buttons}:s)})} document={document} section={canvasSelection.id!} owner={nodeID?loopOwner(document,nodeID):undefined} overlay={nodeID?overlayOwner(document,nodeID):undefined} onChange={document=>edit({document})}/>}</InspectorFrame>:null; })()}
