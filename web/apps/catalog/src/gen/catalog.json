@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:872dabade866399e",
+  "revision": "sha256:cea4389e3e827a7a",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4625,6 +4625,7 @@
       "web/packages/app/src/widgets/Sparkline.tsx",
       "web/packages/app/src/widgets/Summary.tsx",
       "web/packages/app/src/widgets/Table.tsx",
+      "web/packages/app/src/widgets/TableSurface.tsx",
       "web/packages/app/src/widgets/TermCounts.tsx",
       "web/packages/app/src/widgets/WorkViews.tsx",
       "web/packages/build/src/application.tsx",

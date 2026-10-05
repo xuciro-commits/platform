@@ -6,12 +6,12 @@ import {useHost} from "../index";
 import {createAIReader,type AIRequest} from "../ai/service";
 import type {VariableResult} from "../runtime/variables";
 
-type Props={section:Api.Section;record?:EntityRecord;status?:string;identity:string;active:()=>boolean;live:boolean;enabled?:boolean;question?:VariableResult;onQuestion?:(value:string)=>void};
-export function AIWidget(props:Props){const host=useHost();return <AISession key={JSON.stringify([host.source.scope,props.identity,props.section.function,props.section.ai])} {...props}/>;}
-function AISession({section,record,status,active,live,enabled=true,question,onQuestion}:Props){
+type Props={config?:Api.PageAI;functionBinding?:Api.AssetBinding;record?:EntityRecord;status?:string;identity:string;active:()=>boolean;live:boolean;enabled?:boolean;question?:VariableResult;onQuestion?:(value:string)=>void};
+export function AIWidget(props:Props){const host=useHost();return <AISession key={JSON.stringify([host.source.scope,props.identity,props.functionBinding,props.config])} {...props}/>;}
+function AISession({config,functionBinding,record,status,active,live,enabled=true,question,onQuestion}:Props){
  const host=useHost(),lease=useRef(true),current=useRef({active,live,enabled,status});current.current={active,live,enabled,status};useEffect(()=>{lease.current=true;return()=>{lease.current=false;};},[]);
  const valid=()=>lease.current&&current.current.active(),reader=createAIReader(host,valid),[requests,setRequests]=useState<AIRequest[]>([]),[attempt,setAttempt]=useState<AIRequest>(),[busy,setBusy]=useState(false),[error,setError]=useState<string>();
- const config=section.ai,fn=section.function,version=Number(fn?.sourceVersion.match(/\.function-(\d+)$/)?.[1]??0),text=question?.status==="value"&&typeof question.value==="string"?question.value:"";
+ const fn=functionBinding,version=Number(fn?.sourceVersion.match(/\.function-(\d+)$/)?.[1]??0),text=question?.status==="value"&&typeof question.value==="string"?question.value:"";
  const answers=useQueries({queries:requests.map(request=>({queryKey:["original-ai-call",host.source.scope,request.id],queryFn:()=>reader.read(request),enabled:valid(),refetchInterval:(query:{state:{error:unknown;data?:Api.FunctionRun}})=>!valid()||query.state.error?false:query.state.data?.state==="pending"?1000:false}))});
  if(!config||!fn||!version)return <Panel role="alert">{t("Choose a fixed original AI function.")}</Panel>;
  if(status!=="value"||!record)return <p role={status==="error"?"alert":"status"}>{t(status==="error"?"The AI source record is unavailable.":"Select an original record for AI context.")}</p>;

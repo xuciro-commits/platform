@@ -1,3 +1,5 @@
+import {listingPlugins} from "./widgets/listing-plugins";
+import {executionPlugins} from "./widgets/execution-plugins";
 import {detailPlugins} from "./widgets/detail-plugins";
 import {chartPlugins} from "./widgets/chart-plugins";
 import {recordPresentationPlugins} from "./widgets/record-presentation-plugins";
@@ -11,12 +13,9 @@ import {inputPlugins} from "./widgets/input-plugins";
 import {confirmObservationRow} from "./widgets/observation-selection";
 import {usePageComputations} from "./runtime/PageComputations";
 import {aiRecordSlot} from "./widgets/ai-context";
-import {CollectionBuilderRenderer} from "./widgets/CollectionBuilder";
-import {AIWidget} from "./widgets/AIWidget";
 import {PageEmbeddingBoundary} from "./widgets/EmbeddedPage";
 import {avatarCollectionVariable,confirmedContext,originalContextSlot,currentContextRead} from "./widgets/context-views";
 import {searchInputObjects} from "./widgets/search-input";
-import {tableEditableFields} from "./widgets/table-edit";
 import {Facets} from "./widgets/Facets";
 import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime/decimal";
 // A composed page (ADR-0035): sections laid out in order, each holding one
@@ -29,9 +28,8 @@ import {
   Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
 import { Component, lazy, Suspense, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { InlineActionForm, prefixOf } from "./actions";
-import { GeneratedForm, findDefinition, newId, HostContext, useHost,useOpenRecord, useInvokeCapability, type Definition } from "./index";
-import { ComputeCall } from "./capability";
+import { prefixOf } from "./actions";
+import { GeneratedForm, newId, HostContext, useHost,useOpenRecord, useInvokeCapability, type Definition } from "./index";
 import type { Api } from "@platform/kernel";
 import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry";
 import { useApplicationContext, useApplicationVariables } from "./runtime/ApplicationRuntime";
@@ -47,20 +45,14 @@ import { pageVariableContract, usePageVariables, usePageSession } from "./runtim
 
 const ExplorationRenderer=lazy(()=>import("./widgets/Exploration").then(module=>({default:module.ExplorationRenderer})));
 const ActionTableRenderer=lazy(()=>import("./widgets/RecordWork").then(m=>({default:m.ActionTableRenderer})));
-const RecordTilesRenderer=lazy(()=>import("./widgets/RecordWork").then(m=>({default:m.RecordTilesRenderer})));
 const ObservationRenderer=lazy(()=>import("./widgets/Observation").then(module=>({default:module.ObservationRenderer})));
 const RecordCollaborationRenderer=lazy(()=>import("./widgets/RecordCollaboration").then(module=>({default:module.RecordCollaborationRenderer})));
-const WorkViewsRenderer=lazy(()=>import("./widgets/WorkViews").then(module=>({default:module.WorkViewsRenderer})));
-const TableRenderer=lazy(()=>import("./widgets/Table").then(module=>({default:module.TableRenderer})));
-const RecordTimelineRenderer=lazy(()=>import("./widgets/RecordTimeline").then(module=>({default:module.RecordTimelineRenderer})));
-const KanbanRenderer=lazy(()=>import("./widgets/Kanban").then(module=>({default:module.KanbanRenderer})));
 
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
 
 /** The page's second variable (16b): the conditions each filter set, by the
  *  object they narrow. A table, chart or metric over that object reads them. */
-type Narrowed = Record<string, Record<string, unknown>>;
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
 type Bound = import("./widgets/bindings").WidgetBindingContext;
@@ -75,56 +67,11 @@ const parentTypeOf = (page: Page, section: Section) => section.parentSelection
 // Named and unnamed selections use one typed slot model.
 const selectionKey = recordSlot;
 
-/** The filters' conditions over an object, as the host's domain (ADR-0019). */
-const domainOf = (narrowed: Narrowed, object: string): unknown[] =>
-  Object.entries(narrowed[object] ?? {}).filter(([, v]) => v !== undefined && v !== "").map(([field, v]) => [field, "=", v]);
-
 /** The reference that ties a section's object to the page's selected record:
  *  the declared relation when the section names one (ADR-0040 21b), else the
  *  first reference to the page's object. */
 const relatedField = (fields: { name: string; title: string; type: string; ref?: string; inverse?: string; readOnly?: boolean }[] | undefined, page: Page, section: Section) =>
   fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
-
-/** The records of an object, as a list; selecting one fills the rest of the page. */
-function TableAdapter({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window,collection,live,aggregateScope,selectionSet,keepActive }: Bound) {
-  const openRecord=useOpenRecord();
-  const { source, definitions,catalog,decide } = useHost();
-  const type = objectOf(page, section);
-  const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
-  const info = source.entity(type);
-  // A named query (ADR-0040 21c): its declared conditions, run for the selected
-  // record through its reference; the list is still the member's own read.
-  const query = section.query?.name ? findDefinition(definitions, section.query)?.query : undefined;
-  const refField = !isMaster
-    ? (query?.by ? info?.fields.find((f) => f.name === query.by) : relatedField(info?.fields, page, section))
-    : undefined;
-
-  const editAction=section.inlineEdit?catalog.find(a=>a.schema===section.inlineEdit!.action.name):undefined,editFields=tableEditableFields(info,editAction,section.inlineEdit?.fields??[]);
-  const inlineEdit=editAction&&editFields.length?{schema:editAction.schema,fields:editFields,scope:JSON.stringify([aggregateScope,editAction]),preview:!live,maxRows:pageVariableContract.tableEditing.maxRows,submit:async(record:EntityRecord,patch:Record<string,unknown>)=>{let error:string|undefined;const accepted=await decide(editAction.schema,{type,id:record.id},patch,{expectedRevision:record.revision,quiet:true,onRefused:reason=>error=reason});return {accepted,error};}}:undefined;
-  if(section.collectionVariable&&collection?.status==="error")return <Panel role="alert">{t(collection.code)}</Panel>;
-  const status = section.collectionVariable ? !window ? "missing-window" : undefined
-    : (section.relation || section.parentSelection) && !refField ? "invalid-reference" : refField && !master ? "missing-parent" : undefined;
-  const relationDomain = refField && master ? [[refField.name, "=", master.id]] : [];
-  const domain = [...((query?.domain as unknown[] | undefined) ?? []), ...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
-  return <TableRenderer onNavigate={section.widget==="record-list"&&live?record=>openRecord({type,id:record.id}):undefined} cards={section.widget==="record-list"?{layout:section.recordList?.layout as "grid"|"list"??"grid",labelField:section.cardLabel??"id"}:undefined} key={section.collectionVariable ? type : refField ? `${type}/${refField.name}/${master?.id}` : type}
-    source={section.collectionVariable ? source : session?.querySource(section.id ?? `section:${page.sections?.indexOf(section)}`) ?? source}
-    presentation={section.tablePresentation} columns={section.tableColumns} showSearch={section.showSearch} keepActive={section.widget==="record-list"||keepActive} selectionSet={selectionSet} inlineEdit={inlineEdit} object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
-    selected={selected} onSelect={onSelect} status={status} plural={info?.plural?.toLowerCase()}/>;
-}
-
-function RecordTimelineAdapter({page,section,onSelect,selected,window}:Bound) {
- const {source}=useHost(),info=source.entity(objectOf(page,section));
- const start=info?.fields.find(f=>f.name===section.timeStart),end=section.timeEnd?info?.fields.find(f=>f.name===section.timeEnd):undefined;
- const label=(name?:string)=>name==="id"||!!info?.fields.some(f=>f.name===name&&["text","longtext","choice","reference"].includes(f.type));
- const valid=start&&["date","datetime"].includes(start.type)&&(!section.timeEnd||end?.type===start.type)&&label(section.timeLabel)&&(!section.timeGroup||label(section.timeGroup));
- return <RecordTimelineRenderer window={window} fields={valid?{start:section.timeStart!,end:section.timeEnd,label:section.timeLabel!,group:section.timeGroup,kind:start.type as "date"|"datetime"}:undefined} selected={selected} onSelect={onSelect} title={section.title||t("Record timeline")}/>;
-}
-function KanbanAdapter({page,section,onSelect,selected,window,live}:Bound) {
- const {source,catalog}=useHost(),object=objectOf(page,section),info=source.entity(object);
- const allowed=new Set((section.actions??[]).map(a=>a.name));
- const moves=(info?.lifecycle?.transitions??[]).filter(m=>allowed.has(m.schema)&&catalog.some(a=>a.schema===m.schema&&a.target===object)&&(!m.toInput&&m.to.length===1||!!m.toInput&&Number(page.document?.uiProfile.split(".").at(-1))>=99&&catalog.some(a=>a.schema===m.schema&&a.payload.some(p=>p.name===m.toInput&&p.type==="string"&&m.to.every(state=>p.choices?.includes(state)))))).flatMap(m=>m.to.map(to=>({schema:m.schema,title:m.title,from:m.from,to,input:m.toInput})));
- return <KanbanRenderer key={JSON.stringify([object,window?.query,source.scope])} object={object} info={info} window={window} cardLabel={section.cardLabel??""} fields={section.fields} selected={selected} onSelect={onSelect} moves={moves} live={live} title={section.title||t("Kanban board")}/>;
-}
 
 /** The filter (16b): a value to narrow the object's records by, for each field
  *  the builder chose. What it sets is the page's second variable. */
@@ -346,25 +293,17 @@ const widgets = createWidgetRegistry<Bound>({
  ...surfacePlugins,
  ...detailPlugins,
  ...chartPlugins,
+ ...listingPlugins,
+ ...executionPlugins,
  "image-annotation":CollaborationWidget,
  "scene-3d":CollaborationWidget,
- "collection-builder":CollectionBuilderRenderer,
- "ai-assistant":bound=><AIWidget section={bound.section} record={bound.explorationRoot} status={bound.explorationStatus} identity={bound.explorationIdentity??""} active={bound.explorationActive??(()=>false)} live={bound.live} enabled={bound.enabled} question={bound.facetValues?.[bound.section.ai?.questionVariable??""]} onQuestion={value=>{const id=bound.section.ai?.questionVariable;if(id)bound.onFacet?.(id,value);}}/>,
  "action-table":({page,section,window,session,aggregateScope,enabled,live,contextReadCurrent})=><ActionTableRenderer section={section} object={objectOf(page,section)} window={window} session={session} scope={aggregateScope??""} enabled={enabled} live={live} readCurrent={contextReadCurrent}/>,
  observation:bound=><ObservationRenderer page={bound.page} section={bound.section} window={bound.window} history={bound.observationHistory} context={bound.observationContext} asset={bound.observationAsset} selectedRow={bound.observationSelected} onRow={bound.onObservationRow} values={bound.facetValues??{}} onState={bound.onFacet} session={bound.session} scope={bound.aggregateScope??""} enabled={bound.enabled} readCurrent={bound.contextReadCurrent} live={bound.live}/>,
  "graph-explorer":ExplorerWidget,"vertex-graph":ExplorerWidget,
- "approval-inbox":({section,session,enabled,live})=><WorkViewsRenderer kind="approval-inbox" label={section.title||t("Approval inbox")} readSource={session?.readSource()} enabled={enabled} live={live}/>,
- "notification-feed":({section,session,enabled,live})=><WorkViewsRenderer kind="notification-feed" label={section.title||t("Notifications")} readSource={session?.readSource()} enabled={enabled} live={live}/>,
  "record-comments":CollaborationWidget,"record-uploader":CollaborationWidget,"media-preview":CollaborationWidget,"pdf-viewer":CollaborationWidget,
- "record-list":(bound)=>bound.section.recordList?.layout==="tiles"?<RecordTilesRenderer window={bound.window} object={objectOf(bound.page,bound.section)} labelField={bound.section.cardLabel??"id"} selected={bound.selected?.id} onSelect={bound.enabled===false||!bound.section.selection?undefined:record=>bound.onSelect(record)} label={bound.section.title||t("Record tiles")} readCurrent={bound.contextReadCurrent}/>:<TableAdapter {...bound}/>,
-  kanban:KanbanAdapter,
-  "record-timeline":RecordTimelineAdapter,
-  "inline-action":({page,section,selected,live,aggregateScope,actionReady})=><InlineActionForm type={objectOf(page,section)} schema={section.actions?.[0]?.name??""} record={selected} live={live} scope={aggregateScope} defaults={section.actionDefaults} ready={actionReady}/>,
-  table: TableAdapter,
   filter: FilterWidget,
   form: (bound) => <FormWidget key={`${objectOf(bound.page, bound.section)}/${bound.section.relation ?? ""}/${bound.section.parentSelection ?? ""}/${bound.section.relation ? bound.master?.id ?? "" : ""}`} {...bound} />,
   timeline: TimelineWidget, tasks: TasksWidget, function: FunctionWidget,
-  compute: (bound) => <ComputeCall binding={bound.section.operation} bindings={bound.section.inputs} record={bound.selected} recordType={bound.page.object.name} live={bound.live} />,
 });
 
 class WidgetBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -379,7 +318,7 @@ export function SectionView(bound: Bound & Composing) {
   const aggregateSource=source?.aggregate?{aggregate:source.aggregate,scope:bound.aggregateScope??source.scope,revision:source.revision}:undefined;
   const implementation = widgets.resolveDefinition(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
   const Renderer=implementation?.Renderer;
-  const body = Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound} info={source?.entity(objectOf(bound.page,bound.section))} sourceScope={source?.scope} aggregateSource={aggregateSource} recordSource={source} definitions={host?.definitions}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
+  const body = Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound} info={source?.entity(objectOf(bound.page,bound.section))} sourceScope={source?.scope} aggregateSource={aggregateSource} recordSource={source} definitions={host?.definitions} catalog={host?.catalog} decide={host?.decide}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
   const template=section.tablePresentation?.titleTemplate,total=bound.window?.error||!["value","empty"].includes(bound.collection?.status??"")?undefined:bound.window?.page?.total;
   const title=template===undefined?section.title:template.replace("{count}",total===undefined||!Number.isSafeInteger(total)||total<0?"…":total.toLocaleString());
   const inHand = onChoose !== undefined && chosen === at;
