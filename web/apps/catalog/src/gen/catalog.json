@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:cda3fed5491a8383",
+  "revision": "sha256:d19b0a38ad37399c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4877,7 +4877,8 @@
       "web/packages/app/src/sections.tsx"
     ],
     "ui/content-tabs": [
-      "web/packages/app/src/sections.tsx"
+      "web/packages/app/src/sections.tsx",
+      "web/packages/build/src/editor.tsx"
     ],
     "ui/sheet": [
       "web/packages/app/src/sections.tsx",

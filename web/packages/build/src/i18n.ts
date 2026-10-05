@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+"Display": "显示",
+"Events": "事件",
+"Setup": "设置",
+"Widget inspector panels": "组件检查器面板",
 "Horizontal": "横向",
 "Vertical": "纵向",
 "Refresh": "刷新",

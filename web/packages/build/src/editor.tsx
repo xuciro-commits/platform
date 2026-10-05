@@ -18,11 +18,11 @@ import { AssetControls } from "./asset-controls";
 // the same registered widgets; save and activation use the original Go path.
 import { ApplicationPage, ComposedPage, NewActions, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
 import {
-  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, Button, Card, CommandMenu, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useWorkspace, useUnsavedChanges,
+  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, Button, Card, CommandMenu, ContentTabs, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useWorkspace, useUnsavedChanges,
   type EntityInfo,
 } from "@platform/ui";
 import { Copy, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {pageUIManifest,type Api as HostApi} from "@platform/kernel";
 import { BindingEditor, WorkflowFormProblems } from "./workflow-binding";
 import { widgetSubtreeSections,variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, stashWidget, restoreWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
@@ -420,12 +420,14 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
             selections={selections} objects={definitions.filter((d) => d.ref.kind === "object" && d.entity).map((d) => d.ref).sort((a, b) => Number(b.name === page.object) - Number(a.name === page.object))}
             onSelections={(next, rename) => edit((old) => ({ ...old, selections: next, sections: rename ? old.sections.map((s) => ({ ...s, selection: s.selection === rename.from ? rename.to : s.selection, parentSelection: s.parentSelection === rename.from ? rename.to : s.parentSelection })) : old.sections }))}
             onChange={(patch) => edit(patch, `settings:${Object.keys(patch).join(",")}`)} /> :
-          <Properties onResourcesChange={(patch,variables)=>edit(old=>({...old,document:{...old.document,variables},sections:old.sections.map(s=>s.id===canvasSelection?.id?{...s,...patch}:s)}),"graph-resources")} sections={sections} section={canvasSelection} info={source.entity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
-            document={document} object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
-            {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value) edit({ document: relocateWidget(document, sections[chosen]!.id!, event.target.value) }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
-{(() => { const Inspector=canvasSelection&&widgetInspector(canvasSelection.widget,canvasSelection.configVersion??0)?.events;return canvasSelection?<InspectorFrame id={canvasSelection.id??String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion??0} part="events">{Inspector&&<Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons,document)=>edit({document,sections:sections.map(s=>s.id===canvasSelection.id?{...s,buttons}:s)})} document={document} section={canvasSelection.id!} owner={nodeID?loopOwner(document,nodeID):undefined} overlay={nodeID?overlayOwner(document,nodeID):undefined} onChange={document=>edit({document})}/>}</InspectorFrame>:null; })()}
+          <WidgetProperties key={`${canvasSelection?.id}/${canvasSelection?.widget}/${canvasSelection?.configVersion}`}
+            events={(() => { const Inspector=canvasSelection&&widgetInspector(canvasSelection.widget,canvasSelection.configVersion??0)?.events;return canvasSelection?<InspectorFrame id={canvasSelection.id??String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion??0} part="events">{Inspector&&<Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons,document)=>edit({document,sections:sections.map(s=>s.id===canvasSelection.id?{...s,buttons}:s)})} document={document} section={canvasSelection.id!} owner={nodeID?loopOwner(document,nodeID):undefined} overlay={nodeID?overlayOwner(document,nodeID):undefined} onChange={document=>edit({document})}/>}</InspectorFrame>:null; })()}
+            display={<> {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value) edit({ document: relocateWidget(document, sections[chosen]!.id!, event.target.value) }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
             {nodeID&&<LayoutSizing document={document} id={nodeID} onPatch={patchNode}/>}
-            {nodeID && <NodeBindings document={document} id={nodeID} button={!!canvasSelection&&!!widgetContract(canvasSelection.widget)?.inputPorts.some(port=>port.bindingField==="enabledWhen")&&canvasSelection.widget!=="input"} input={canvasSelection?.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />}</div>)}>
+            {nodeID && <NodeBindings document={document} id={nodeID} button={!!canvasSelection&&!!widgetContract(canvasSelection.widget)?.inputPorts.some(port=>port.bindingField==="enabledWhen")&&canvasSelection.widget!=="input"} input={canvasSelection?.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />} </>} onResourcesChange={(patch,variables)=>edit(old=>({...old,document:{...old.document,variables},sections:old.sections.map(s=>s.id===canvasSelection?.id?{...s,...patch}:s)}),"graph-resources")} sections={sections} section={canvasSelection} info={source.entity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
+            document={document} object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
+            {!canvasSelection&&nodeID&&<LayoutSizing document={document} id={nodeID} onPatch={patchNode}/>}
+            {!canvasSelection && nodeID && <NodeBindings document={document} id={nodeID} button={false} input={false} onChange={(patch) => patchNode(nodeID, patch)} />}</div>)}>
           <div className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-1.5">
             <span className="mr-auto truncate text-xs font-medium">{title || page.title}</span>
             {([["desktop", "Desktop preview", Monitor], ["tablet", "Tablet preview", Tablet], ["mobile", "Mobile preview", Smartphone]] as const).map(([device, label, Icon]) => <Button key={device} size="sm" variant="ghost" aria-label={t(label)} aria-pressed={viewport === device} onClick={() => setViewport(device)}><Icon /></Button>)}
@@ -463,13 +465,53 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
 }
 
 /** The panel that configures the widget in hand: only what that widget binds. */
-function Properties({ section, sections, document, info, catalog, object, selections, relatedObjects = [], onChange,onResourcesChange }: {
+type PropertiesProps = {
   section?: Draft; sections:Draft[]; document: HostApi.PageDocument; info?: EntityInfo; object: string; relatedObjects?: string[];
   selections: HostApi.SelectionVariable[];
   catalog: { schema: string; title: string; target: string }[];
   onChange: (patch: Partial<Draft>) => void;
   onResourcesChange:(patch:Partial<Draft>,variables:Record<string,HostApi.PageVariable>)=>void;
-}) {
+};
+
+/** Inspector navigation is local UI; every panel edits the same DraftSession. */
+function WidgetProperties(props: PropertiesProps & { events: ReactNode; display: ReactNode }) {
+  const [tab, setTab] = useState("setup");
+  const { section, sections, document, info, object, onChange, onResourcesChange } = props;
+  if (!section) return null;
+  const leaf = Object.entries(document.nodes).find(([, node]) => node.section === section.id)?.[0];
+  const overlay = leaf ? overlayOwner(document, leaf) : undefined;
+  const Inspector = widgetInspector(section.widget, section.configVersion ?? 0)?.bindings;
+  const contract = widgetContract(section.widget);
+  return <ContentTabs label={t("Widget inspector panels")} value={tab} onChange={setTab} items={[
+    { id: "setup", title: t("Setup"), content: <Card className="grid gap-3 p-3">
+      <label className="grid gap-1 text-xs">{t("Title")}
+        <Input value={section.title ?? ""} onChange={(event) => onChange({ title: event.target.value })} />
+      </label>
+      {section.widget === "input" && <label className="grid gap-1 text-xs">{t("Input presentation")}
+        <Select value={section.inputKind ?? ""} onChange={(event) => onChange({ inputKind: event.target.value || undefined })}>
+          <option value="">{t("Text input")}</option><option value="search">{t("Scoped record search")}</option>
+        </Select>
+      </label>}
+      <p className="text-xs text-muted">{t("Use layout groups to arrange this widget in rows or columns.")}</p>
+      {section.widget === "text" && <div className="grid gap-1 text-xs">
+        <span className="font-medium text-muted">{t("Words")}</span>
+        <MarkdownEditor value={section.text ?? ""} onChange={(text) => onChange({ text })} rows={6} placeholder={t("Write markdown here…")} />
+      </div>}
+    </Card> },
+    { id: "data", title: t("Data"), content: <Properties {...props} /> },
+    ...(Inspector ? [{ id: "props", title: t("Properties"), content: <Card className="grid gap-3 p-3">
+      <InspectorFrame id={section.id ?? "selected"} widget={section.widget} version={section.configVersion ?? 0} part="bindings">
+        <Inspector section={section} document={document} object={object} info={info} overlay={overlay}
+          itemOwner={leaf ? loopOwner(document, leaf) : undefined} sections={sections}
+          onResourcesChange={onResourcesChange} onChange={onChange} />
+      </InspectorFrame>
+    </Card> }] : []),
+    ...(contract && "events" in contract && contract.events.length ? [{ id: "events", title: t("Events"), content: props.events }] : []),
+    { id: "display", title: t("Display"), content: <div className="grid gap-2">{props.display}</div> },
+  ]} />;
+}
+
+function Properties({ section, sections, document, info, catalog, object, selections, relatedObjects = [], onChange }: PropertiesProps) {
   const { definitions, source } = useHost();
   const functionRecords = useRecordInventory<{ name: string; title: string; object: string; versions?: string[] }>("build.function");
   const codeRecords = useRecordInventory<{ versions?: string[] }>("build.code");
@@ -508,7 +550,6 @@ function Properties({ section, sections, document, info, catalog, object, select
         </label>
       )}
       {allows("filter-variable")&&!(leaf&&loopOwner(document,leaf))&&(!overlay||section.widget!=="filter")&&!section.collectionVariable&&<label className="grid gap-1 text-xs">{t("Shared filter binding")}<Select value={section.filterVariable??""} onChange={(e)=>onChange({filterVariable:e.target.value||undefined})}><option value="">{t("Keep filters in this page")}</option>{Object.entries(document.variables??{}).filter(([,v])=>v.mode==="shared"&&v.type==="filter"&&v.source?.object?.name===(section.object||object)&&(section.widget!=="filter"||v.writable)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
-      {(() => {const Inspector=widgetInspector(section.widget,section.configVersion??0)?.bindings;return <InspectorFrame id={section.id??"selected"} widget={section.widget} version={section.configVersion??0} part="bindings">{Inspector&&<Inspector section={section} document={document} object={object} info={info} overlay={overlay} itemOwner={leaf?loopOwner(document,leaf):undefined} sections={sections} onResourcesChange={onResourcesChange} onChange={onChange}/>}</InspectorFrame>;})()}
       {section.widget==="metric" && <label className="grid gap-1 text-xs">{t("Aggregate query set")}<Select value={section.collectionVariable??""} onChange={(event)=>{const variable=document.variables?.[event.target.value],query=variable?.source?.query?document.queries?.[variable.source.query]:undefined,shared=variable?.source?.object;onChange({collectionVariable:event.target.value||undefined,filterVariable:undefined,query:undefined,parentSelection:undefined,relation:undefined,...((query?.object||shared)?{object:(query?.object||shared)!.name===object?undefined:(query?.object||shared)!.name}:{} )});}}><option value="">{t("Use the widget's own aggregate")}</option>{Object.entries(document.variables??{}).filter(([,v])=>accessible(v)&&v.type==="object-set"&&(v.source?.kind==="plan"||v.mode==="shared"&&!!v.source?.object)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
       {allows("record-set-variable")&&<label className="grid gap-1 text-xs">{t("Input record set binding")}<Select value={section.recordSetVariable??""} onChange={e=>{const binding=recordComparisonSource(document,sections,e.target.value,section.id??"",object),changed=binding&&binding.object!==(section.object||object);onChange({recordSetVariable:e.target.value||undefined,...(binding?{object:binding.object===object?undefined:binding.object}:{}),...(changed?{fields:[],recordComparison:{labelField:"id"}}:{})});}}><option value="">{t("Choose an original multi-selection")}</option>{Object.entries(document.variables??{}).filter(([id])=>!!recordComparisonSource(document,sections,id,section.id??"",object)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
       {allows("record-variable") && <label className="grid gap-1 text-xs">{t("Input record binding")}<Select value={document.variables?.[section.recordVariable ?? ""]?.source?.kind === "record" || document.variables?.[section.recordVariable ?? ""]?.mode === "input" || document.variables?.[section.recordVariable ?? ""]?.mode === "shared" ? section.recordVariable : ""} onChange={(e) => {const original=requiresOriginalRecord(section)?collaborationRecordSource(document,sections,e.target.value,section.id??"",object):undefined;onChange({recordVariable:e.target.value||undefined,selection:undefined,...(section.widget==="breadcrumb"&&!e.target.value?{object:undefined,breadcrumb:section.breadcrumb?{...section.breadcrumb,labelField:undefined}:undefined}:{}),...(original?{object:original.object===object?undefined:original.object,fields:[],actions:[]}:{})});}}><option value="">{t(requiresOriginalRecord(section)?"Choose an original record resource":"Use page selection")}</option>{!requiresOriginalRecord(section)&&Object.entries(document.interface?.inputs ?? {}).filter(([, p]) => p.type === "record").map(([id, p]) => <option key={id} value={p.variable}>{id}</option>)}{Object.entries(document.variables??{}).filter(([id,v])=>requiresOriginalRecord(section)?!!collaborationRecordSource(document,sections,id,section.id??"",object):v.type==="record"&&(v.source?.kind==="record"||v.mode==="shared")&&accessible(v)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
@@ -552,11 +593,6 @@ function Properties({ section, sections, document, info, catalog, object, select
           </Select>
         </label>
       )}
-      <label className="grid gap-1 text-xs">{t("Title")}
-        <Input value={section.title ?? ""} onChange={(e) => onChange({ title: e.target.value })} />
-      </label>
-      {section.widget==="input"&&<label className="grid gap-1 text-xs">{t("Input presentation")}<Select value={section.inputKind??""} onChange={e=>onChange({inputKind:e.target.value||undefined})}><option value="">{t("Text input")}</option><option value="search">{t("Scoped record search")}</option></Select></label>}
-      <p className="text-xs text-muted">{t("Use layout groups to arrange this widget in rows or columns.")}</p>
       {section.widget === "function" && <>
         <label className="grid gap-1 text-xs">{t("Published function version")}
           <Select value={section.function ? `${section.function.name}:${section.function.version}` : ""} onChange={(e) => {
@@ -629,12 +665,6 @@ function Properties({ section, sections, document, info, catalog, object, select
             {measures.map((m) => <option key={m} value={m}>{m}</option>)}
           </Select>
         </label>
-      )}
-      {section.widget === "text" && (
-        <div className="grid gap-1 text-xs">
-          <span className="font-medium text-muted">{t("Words")}</span>
-          <MarkdownEditor value={section.text ?? ""} onChange={(text) => onChange({ text })} rows={6} placeholder={t("Write markdown here…")} />
-        </div>
       )}
     </Card>
   );
