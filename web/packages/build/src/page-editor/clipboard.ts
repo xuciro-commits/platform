@@ -22,20 +22,24 @@ function inMainPage(document:Api.PageDocument,id:string,wholeLoop=false):boolean
 }
 
 /** Capture original draft bytes, never runtime records or an alternate page format. */
-export function copyLayout<S extends Section>(draft:Draft<S>,root:string,object:string):Result<LayoutClipboard<S>> {
+export function copyLayoutIssue<S extends Section>(draft:Draft<S>,root:string):ClipboardIssue|undefined {
  const document=draft.document,seen=new Set<string>();
  const walk=(id:string):boolean=>{
   const node=document.nodes[id];if(!node||seen.has(id)||![...layoutKinds,"widget"].includes(node.kind))return false;
   seen.add(id);return [...(node.children??[]),...(document.unusedWidgets??[]).filter(e=>e.parent===id).map(e=>e.node)].every(walk);
  };
- if(!document.nodes[root]||!layoutKinds.includes(document.nodes[root]!.kind)&&!(document.nodes[root]!.kind==="widget"&&document.nodes[root]!.children?.length))return {issue:"unsupported"};
- if(document.nodes[root]!.slot)return {issue:"scope"};
- if(!walk(root))return {issue:"unsupported"};
+ if(!document.nodes[root]||!layoutKinds.includes(document.nodes[root]!.kind)&&document.nodes[root]!.kind!=="widget")return "unsupported";
+ if(document.nodes[root]!.slot)return "scope";
+ if(!walk(root))return "unsupported";
  // A complete Loop brings its owner. Fragments cannot lift item state to page.
  const overlay=Object.entries(document.overlays??{}).find(([,o])=>o.root===root)?.[0];
- if(!overlay&&!inMainPage(document,root,true))return {issue:"scope"};
+ if(!overlay&&!inMainPage(document,root,true))return "scope";
  const ownedSections=new Set<string>();
- for(const id of seen){const node=document.nodes[id]!,section=node.section;if(node.kind==="loop"&&!node.loop)return {issue:"invalid"};if(node.kind==="widget"){if(!section||ownedSections.has(section)||draft.sections.filter(s=>s.id===section).length!==1)return {issue:"invalid"};ownedSections.add(section);}}
+ for(const id of seen){const node=document.nodes[id]!,section=node.section;if(node.kind==="loop"&&!node.loop)return "invalid";if(node.kind==="widget"){if(!section||ownedSections.has(section)||draft.sections.filter(s=>s.id===section).length!==1)return "invalid";ownedSections.add(section);}}
+}
+export function copyLayout<S extends Section>(draft:Draft<S>,root:string,object:string):Result<LayoutClipboard<S>> {
+ const issue=copyLayoutIssue(draft,root);if(issue)return {issue};
+ const overlay=Object.entries(draft.document.overlays??{}).find(([,o])=>o.root===root)?.[0];
  return {value:{draft:structuredClone(draft),root,object,overlay}};
 }
 

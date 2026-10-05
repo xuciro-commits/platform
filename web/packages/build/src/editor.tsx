@@ -1,3 +1,5 @@
+import {WidgetGlyph,LayoutGlyph} from "./page-editor/WidgetGlyph";
+import {canvasModel,canvasDrop,canvasMove,canvasResize,canvasResetSize,canvasGroup,canvasEqualize,canvasUngroup,canvasRemove} from "./page-editor/canvas-layout";
 import {addWidgetSlot} from "./page-editor/widget-slots";
 import {queryInventoryBudget} from "@platform/app/query-inventory";
 import {validActionDefaults} from "@platform/app/action-defaults";
@@ -18,14 +20,14 @@ import { AssetControls } from "./asset-controls";
 // the same registered widgets; save and activation use the original Go path.
 import { ApplicationPage, ComposedPage, NewActions, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
 import {
-  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, Button, Card, CommandMenu, ContentTabs, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useWorkspace, useUnsavedChanges,
-  type EntityInfo,
+  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, Button, Card, CanvasEditor, CanvasRegion, ContentTabs, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useWorkspace, useUnsavedChanges,
+  type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
-import { Copy, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
+import { Copy, Clipboard, Columns2, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {pageUIManifest,type Api as HostApi} from "@platform/kernel";
 import { BindingEditor, WorkflowFormProblems } from "./workflow-binding";
-import { widgetSubtreeSections,variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, stashWidget, restoreWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
+import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, layoutID, stashWidget, restoreWidget, setLayoutKind } from "./page-layout";
 import { QueriesPanel } from "./page-editor/QueriesPanel";
 import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";
 import { InterfacePanel } from "./page-editor/InterfacePanel";
@@ -34,9 +36,10 @@ import {InspectorFrame} from "./page-editor/widgets/InspectorFrame";
 import {CompatibilityReview} from "./page-editor/CompatibilityReview";
 import {applyProfileUpgrade,pageCompatibility} from "./page-editor/compatibility";
 import { OverlayProperties } from "./page-editor/OverlayPanel";
-import { LayoutProperties, LayoutSizing, LayoutTree } from "./page-editor/LayoutTree";
+import {LayoutTree} from "./page-editor/LayoutTree";
+import {LayoutProperties,LayoutSizing} from "./page-editor/LayoutProperties";
 import { useDraftSession } from "./session/DraftSession";
-import {copyLayout,pasteLayout,type LayoutClipboard,type ClipboardIssue} from "./page-editor/clipboard";
+import {copyLayout,copyLayoutIssue,pasteLayout,type LayoutClipboard,type ClipboardIssue} from "./page-editor/clipboard";
 import type {AuthoringSection,PageDraft} from "./page-editor/draft";
 import {ModuleImportDialog,type ImportPackage} from "./module-import/ModuleImportDialog";
 
@@ -122,7 +125,6 @@ export function PageEditor({ id }: { id: string }) {
   const [importPackage,setImportPackage]=useState<{scope:string;pack:ImportPackage}>();
   const [leftOpen, setLeftOpen] = useState(true), [rightOpen, setRightOpen] = useState(true);
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop"), [zoom, setZoom] = useState(100);
-  const [dropTarget, setDropTarget] = useState<string>();
   const [refused, setRefused] = useState<string>();
   const [saving, setSaving] = useState(false), [publishing, setPublishing] = useState(false);
   const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0);
@@ -225,8 +227,7 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
   if (!page) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const info = source.entity(page.object);
 const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s) }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
-  const move = (index: number, by: -1 | 1) => { const section = sections[index]; if (section?.id) edit((old) => ({ ...old, document: moveWidget(old.document, section.id!, by) })); };
-  const add = (widget: string, destination?: { container: string; after?: string }) => {
+  const add = (widget: string, destination?: { container: string; after?: string }, drop?:CanvasDrop) => {
     const contract = widgetContract(widget); if (!contract) return;
     const defaults = JSON.parse(JSON.stringify(contract.defaults)) as Partial<Draft>;
     if(widget==="record-calendar")defaults.recordCalendar={dateField:"",labelField:"id",initialMonth:new Date().toISOString().slice(0,7)};
@@ -235,7 +236,9 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     if (contract.fieldPreset === "filter") section.fields = info?.fields.filter((f) => filterable.includes(f.type)).slice(0, 2).map((f) => f.name) ?? [];
     if (contract.fieldPreset === "create") section.fields = info?.fields.filter((f) => f.required && !f.readOnly).map((f) => f.name) ?? [];
     edit((old) => {
-      const document = appendWidget(old.document, section.id!, destination?.container ?? container ?? old.document.root, destination ? destination.after : chosen >= 0 ? sections[chosen]?.id : undefined);
+      const dropParent=drop?(drop.kind==='insert'||drop.kind==='into'?drop.parent:Object.entries(old.document.nodes).find(([,n])=>n.children?.includes(drop.target))?.[0]):undefined;
+      let document = appendWidget(old.document, section.id!, dropParent??destination?.container ?? container ?? old.document.root, drop?undefined:destination ? destination.after : chosen >= 0 ? sections[chosen]?.id : undefined);
+      if(drop){const leaf=Object.keys(document.nodes).find(id=>document.nodes[id]?.section===section.id);const result=leaf&&canvasDrop(document,leaf,drop,[...old.sections,section]);if(!result)return old;document=result;}
       if (widget === "input") {
         const [nodeID, node] = Object.entries(document.nodes).find(([, node]) => node.section === section.id)!;
         const loop = loopOwner(document, nodeID), overlay = overlayOwner(document, nodeID), variable = layoutID("value");
@@ -247,22 +250,11 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     select({ kind: "widget", id: section.id! }); setRightOpen(true);
   };
   const duplicate = (index=chosen) => {
-    const source = sections[index]; if (!source?.id) return;
-    const owner=Object.keys(document.nodes).find(id=>document.nodes[id]?.section===source.id);
-    if(owner&&document.nodes[owner]?.children?.length){const result=copyLayout(session.draft,owner,page.object);if(result.issue){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError(result.issue)});return;}const parent=Object.entries(document.nodes).find(([,n])=>n.children?.includes(owner))?.[0]??document.root;pasteContainer(parent,result.value);return;}
-    const copy = { ...structuredClone(source), id: layoutID("section") };
-    edit((old) => {
-      const document = appendWidget(old.document, copy.id, old.document.root, source.id);
-      const original = Object.values(document.nodes).find((node) => node.section === source.id);
-      const leaf = Object.keys(document.nodes).find((id) => document.nodes[id]?.section === copy.id);
-      if (original && leaf) document.nodes[leaf] = { ...structuredClone(original), section: copy.id };
-      const unused=old.document.unusedWidgets?.find(entry=>old.document.nodes[entry.node]?.section===source.id);
-      if(unused&&leaf){document.nodes[document.root]!.children=document.nodes[document.root]!.children?.filter(id=>id!==leaf);document.unusedWidgets=[...(document.unusedWidgets??[]),{node:leaf,parent:unused.parent}];}
-      if(original?.valueVariable&&leaf){const value=document.variables?.[original.valueVariable];if(value?.mode==="state"&&value.scope!=="application"){const variable=layoutID("value");document.variables={...document.variables,[variable]:structuredClone(value)};document.nodes[leaf]!.valueVariable=variable;}}
-      document.events = [...(old.document.events ?? []), ...(old.document.events ?? []).filter((event) => event.source === source.id).map((event) => ({ ...event, source: copy.id }))];
-      return { ...old, sections: [...old.sections, copy], document };
-    });
-    select({ kind: "widget", id: copy.id });
+    const section=sections[index],leaf=Object.keys(document.nodes).find(id=>document.nodes[id]?.section===section?.id);
+    if(!leaf)return;
+    const copied=copyLayout(session.draft,leaf,page.object);if(copied.issue){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError(copied.issue)});return;}
+    const parent=Object.entries(document.nodes).find(([,n])=>n.children?.includes(leaf))?.[0]??document.unusedWidgets?.find(e=>e.node===leaf)?.parent??document.root;
+    pasteContainer(parent,copied.value,leaf);
   };
   const clipboardError=(issue:ClipboardIssue)=>issue==="unsupported"?t("Copy a main-page Rows, Columns, Tabs, Flow, Toolbar or complete Loop layout."):issue==="scope"?t("Copy a complete main-page layout or an entire overlay root. Scoped fragments need their owner."):issue==="dependencies"?t("An external binding changed since this layout was copied. Copy it again before pasting."):issue==="budget"?t("This copy would exceed the page's layout or resource limits."):issue==="tab-binding"?t("Copied tabs need a private state selector in their layout scope. Shared selectors name the original panels."):issue==="overlay-entry"?t("An overlay copy needs a visible entry button."):t("This layout has missing or invalid references. Correct it before copying.");
   const copyContainer=(root:string)=>{
@@ -271,22 +263,23 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     if(result.issue){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError(result.issue)});return;}
     session.copy(result.value);setClipboardNotice({scope:clipboardScope,text:t("Layout copied. Choose a page layout and paste. External shared bindings stay shared.")});
   };
-  const pasteContainer=(target:string,clip=session.clipboard)=>{
+  const pasteContainer=(target:string,clip=session.clipboard,after?:string)=>{
     if(lock.current||!clip)return;
     const overlay=clip.overlay?clip.draft.document.overlays?.[clip.overlay]:undefined,copyTitle=overlay?t("Copy of {title}",{title:overlay.title}):"",button=widgetContract("button");
     const options=overlay&&button?{title:copyTitle,entry:{...button.defaults,widget:"button",configVersion:button.configVersion,title:t("Open {title}",{title:copyTitle})} as Draft}:undefined;
     const result=pasteLayout(session.draft,clip,target,page.object,{...pageVariableContract,selectionWriters:widgetContracts.filter(w=>w.selectionMode==="write").map(w=>w.componentID),selectionWidgets:widgetContracts.filter(w=>w.selectionMode!=="none").map(w=>w.componentID),references:Object.fromEntries(definitions.filter(d=>d.entity).map(d=>[d.entity!.type,d.entity!.fields.filter(f=>f.type==="reference"&&f.ref).map(f=>f.ref!)]))},options);
     if(result.issue){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError(result.issue)});return;}
-    edit({...session.draft,...result.value.draft});select({kind:"container",id:result.value.root});setRightOpen(true);
+    let draft=result.value.draft;
+    if(after){const parent=Object.entries(draft.document.nodes).find(([,n])=>n.children?.includes(after))?.[0],unused=document.unusedWidgets?.find(e=>e.node===after);if(parent){const index=(draft.document.nodes[parent]!.children??[]).indexOf(after)+1;const next=canvasDrop(draft.document,result.value.root,{kind:'insert',parent,index},draft.sections);if(!next){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError("invalid")});return;}draft={...draft,document:next};}else if(unused){const section=draft.document.nodes[result.value.root]?.section;if(section)draft={...draft,document:stashWidget(draft.document,section)};}}
+    edit({...session.draft,...draft});const copied=draft.document.nodes[result.value.root];select(copied?.kind==='widget'?{kind:'widget',id:copied.section!}:{kind:'container',id:result.value.root});setRightOpen(true);
     setClipboardNotice({scope:clipboardScope,text:result.value.shared.length?t("Layout pasted. External bindings kept: {bindings}",{bindings:result.value.shared.map(id=>document.variables?.[id]?.title||id).join(", ")}):t("Layout pasted with independent inputs and record selections.")});
   };
   const duplicateContainer=(root:string)=>{
     const result=copyLayout(session.draft,root,page.object);
     if(result.issue){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError(result.issue)});return;}
     const parent=Object.entries(document.nodes).find(([,node])=>node.children?.includes(root))?.[0]??document.root;
-    pasteContainer(parent,result.value);
+    pasteContainer(parent,result.value,root);
   };
-  const layoutCommands=(root:string)=>[{id:"copy",label:t("Copy layout"),run:()=>copyContainer(root)},{id:"paste",label:t("Paste layout"),disabled:!session.clipboard,run:()=>pasteContainer(root)},{id:"duplicate",label:t("Duplicate layout"),run:()=>duplicateContainer(root)}];
   const save = async () => {
     if (invalid || lock.current) return false;
     lock.current = true; setRefused(undefined); setSaving(true);
@@ -317,17 +310,50 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   const canvasSelection = sections[chosen];
   const nodeID = container ?? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection?.id && node.kind === "widget")?.[0];
   const patchNode = (id: string, patch: Partial<HostApi.PageLayoutNode>) => edit((old) => ({ ...old, document: { ...old.document, nodes: { ...old.document.nodes, [id]: { ...old.document.nodes[id]!, ...patch } } } }), `node:${id}:${Object.keys(patch).join(",")}`);
+  const canvasSelect=(id:string)=>{const node=document.nodes[id];if(!node)return;if(node.kind==='widget'){const index=sections.findIndex(s=>s.id===node.section);if(index>=0)choose(index);}else{select({kind:'container',id});setRightOpen(true);}};
+  const canvasEdit=(next:HostApi.PageDocument|undefined)=>{if(next)edit({document:next});};
+  const canvasCommitDrop=(payload:CanvasPayload,target:CanvasDrop)=>{if(lock.current)return;if(payload.kind==='new')add(payload.type,undefined,target);else{const next=canvasDrop(document,payload.id,target,sections);if(next){canvasEdit(next);canvasSelect(payload.id);}else notify.error(t("This move would change a protected scope or exceed the layout limits."));}};
+  const canvasCommitSizes=(sizes:Record<string,HostApi.PageLayoutSize>)=>{if(lock.current)return;const next=structuredClone(document);for(const [id,size]of Object.entries(sizes))if(next.nodes[id])next.nodes[id]!.size=Object.keys(size).length?size:undefined;if(!pageLayoutDiagnostics(next,sections).length)canvasEdit(next);};
+  const canvasCommands=(id:string):CanvasCommand[]=>{
+    const node=document.nodes[id];if(!node)return [];const parent=Object.entries(document.nodes).find(([,n])=>n.children?.includes(id))?.[0],root=id===document.root||Object.values(document.overlays??{}).some(o=>o.root===id),unused=document.unusedWidgets?.find(e=>e.node===id),at=sections.findIndex(s=>s.id===node.section);
+    const children=parent?document.nodes[parent]!.children??[]:[],index=children.indexOf(id),horizontal=parent&&['columns','toolbar'].includes(document.nodes[parent]!.kind),copyIssue=copyLayoutIssue(session.draft,id),ungrouped=canvasUngroup(document,id,sections);
+    const commands:CanvasCommand[]=[
+      {id:'configure',label:t('Configure selection'),icon:<Settings2/>,primary:true,run:()=>canvasSelect(id)},
+      {id:'parent',label:t('Select parent layout'),icon:<ChevronUp/>,disabled:!parent,run:()=>parent&&canvasSelect(parent)},
+      {id:'previous',label:t(horizontal?'Move left':'Move up'),disabled:index<=0||!!node.slot,shortcut:horizontal?'Alt+←':'Alt+↑',run:()=>canvasEdit(canvasMove(document,id,-1,sections))},
+      {id:'next',label:t(horizontal?'Move right':'Move down'),disabled:index<0||index>=children.length-1||!!node.slot,shortcut:horizontal?'Alt+→':'Alt+↓',run:()=>canvasEdit(canvasMove(document,id,1,sections))},
+      {id:'copy',label:t('Copy selection'),icon:<Copy/>,primary:true,disabled:!!copyIssue,shortcut:'⌘C',separatorBefore:true,run:()=>copyContainer(id)},
+      {id:'paste',label:t('Paste into layout'),icon:<Clipboard/>,disabled:!session.clipboard,shortcut:'⌘V',run:()=>pasteContainer(node.kind==='widget'?parent??document.root:id)},
+      {id:'duplicate',label:t('Duplicate selection'),icon:<Copy/>,primary:true,disabled:root||!!copyIssue,shortcut:'⌘D',run:()=>node.kind==='widget'?duplicate(at):duplicateContainer(id)},
+      ...(['rows','columns']as const).map(kind=>({id:'group-'+kind,label:t(kind==='columns'?'Group in columns':'Group in rows'),icon:kind==='columns'?<Columns2/>:<Rows3/>,primary:kind==='columns',disabled:root||!!node.slot,run:()=>{const result=canvasGroup(document,id,kind,sections);if(result){canvasEdit(result.document);select({kind:'container',id:result.id});}}})),
+      {id:'ungroup',label:t('Ungroup layout'),icon:<Ungroup/>,disabled:!ungrouped,run:()=>{if(ungrouped){canvasEdit(ungrouped);if(parent)canvasSelect(parent);}}},
+      {id:'equalize',label:t('Equalize layout shares'),icon:<Equal/>,disabled:!canvasEqualize(document,id,sections),separatorBefore:true,run:()=>canvasEdit(canvasEqualize(document,id,sections))},
+      {id:'reset-size',label:t('Reset region sizing'),icon:<RotateCcw/>,run:()=>patchNode(id,{size:undefined,gap:undefined})},
+    ];
+    if(node.kind==='widget'){
+      if(unused)commands.push({id:'restore',label:t('Put back in original layout'),icon:<Archive/>,run:()=>edit({document:restoreWidget(document,node.section!,unused.parent)})});
+      else commands.push({id:'stash',label:t('Move to unused widgets'),icon:<Archive/>,primary:true,run:()=>edit({document:stashWidget(document,node.section!)})});
+      const contract=sections[at]&&widgetContract(sections[at]!.widget);
+      if(contract&&'slots'in contract)for(const slot of contract.slots)commands.push({id:'slot-'+slot.id,label:t('Edit {slot} slot',{slot:t(slot.title)}),icon:<Group/>,run:()=>{const result=addWidgetSlot(document,node.section!,sections[at]!.widget,slot.id);if(result.id){canvasEdit(result.document);select({kind:'container',id:result.id});}else setCompatibilityOpen(true);}});
+    }
+    commands.push({id:'delete',label:t(node.kind==='widget'?'Delete widget':'Delete layout'),icon:<Trash2/>,primary:true,danger:true,separatorBefore:true,disabled:root||!!node.slot,run:()=>{const result=canvasRemove(document,id);if(result){edit(old=>({...old,document:result.document,sections:old.sections.filter(s=>!result.sections.has(s.id??''))}));select({kind:'page'});}}});
+    return commands;
+  };
+  const selectionCommands=nodeID?canvasCommands(nodeID):[];
+  const selectionCommand=(name:string)=>selectionCommands.find(command=>command.id===name);
+  const runSelectionCommand=(name:string)=>{const command=selectionCommand(name);if(command&&!command.disabled&&!busy&&!incompatible)command.run();};
   return <WorkflowFormProblems.Provider value={report}>
     <div className="flex flex-col gap-2 lg:h-[calc(100dvh-8rem)] lg:min-h-0" tabIndex={-1} onKeyDown={(event) => {
       const command = event.metaKey || event.ctrlKey;
       const typing = (event.target as HTMLElement).closest("input,textarea,select,[contenteditable=true]");
       if (command && event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy) void save(); }
+      if(!typing&&!busy&&!incompatible&&event.altKey&&nodeID&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();canvasEdit(canvasMove(document,nodeID,event.key==='ArrowUp'||event.key==='ArrowLeft'?-1:1,sections));return;}
       if (!command || typing || busy) return;
       if (event.key.toLowerCase() === "z") { event.preventDefault(); history(event.shiftKey ? "redo" : "undo"); }
       if (event.key.toLowerCase() === "y") { event.preventDefault(); history("redo"); }
-      if (event.key.toLowerCase() === "d") { event.preventDefault(); if(container)duplicateContainer(container);else duplicate(); }
-      if (event.key.toLowerCase() === "c"&&container&&!window.getSelection()?.toString()) { event.preventDefault(); copyContainer(container); }
-      if (event.key.toLowerCase() === "v"&&container&&session.clipboard) { event.preventDefault(); pasteContainer(container); }
+      if (event.key.toLowerCase() === "d") { event.preventDefault(); runSelectionCommand("duplicate"); }
+      if (event.key.toLowerCase() === "c"&&nodeID&&!window.getSelection()?.toString()) { event.preventDefault(); runSelectionCommand("copy"); }
+      if (event.key.toLowerCase() === "v"&&nodeID&&session.clipboard) { event.preventDefault(); runSelectionCommand("paste"); }
     }}>
       <PageHeader title={title || page.title} description={t("Compose what people see, save your draft, then review its release candidate.")}
         actions={<><StatusTag status={page.state} registry={pageStates} />{page.state === "published" && <Button onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: page.name } })}>{t("Open published page")}</Button>}</>} />
@@ -335,9 +361,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         <Button variant="ghost" aria-label={t("Toggle widget library")} onClick={() => setLeftOpen(!leftOpen)}>{leftOpen ? <PanelLeftClose /> : <PanelLeftOpen />}</Button>
         <Button variant="ghost" aria-label={t("Undo")} title={t("Undo")} disabled={!session.canUndo || busy} onClick={() => history("undo")}><Undo2 /></Button>
         <Button variant="ghost" aria-label={t("Redo")} title={t("Redo")} disabled={!session.canRedo || busy} onClick={() => history("redo")}><Redo2 /></Button>
-        <Button variant="ghost" disabled={!container&&chosen < 0 || busy} onClick={()=>container?duplicateContainer(container):duplicate()}><Copy />{t(container?"Duplicate layout":"Duplicate widget")}</Button>
-        <Button variant="ghost" disabled={!container||busy} onClick={()=>container&&copyContainer(container)}>{t("Copy layout")}</Button>
-        <Button variant="ghost" disabled={!container||!session.clipboard||busy} onClick={()=>container&&pasteContainer(container)}>{t("Paste layout")}</Button>
+        {([['duplicate','Duplicate selection',Copy],['copy','Copy selection',Copy],['paste','Paste into layout',Clipboard]]as const).map(([id,label,Icon])=><Button key={id} variant="ghost" title={t(label)} aria-label={t(label)} disabled={busy||incompatible||!selectionCommand(id)||selectionCommand(id)?.disabled} onClick={()=>runSelectionCommand(id)}><Icon/></Button>)}
         <Button variant="ghost" disabled={busy} onClick={()=>setCompatibilityOpen(true)}>{t("Review page compatibility")}</Button>
         <Button variant="ghost" disabled={busy} onClick={()=>setImporting(true)}>{t("Import Workshop module")}</Button>
         <span className="mx-1 h-4 w-px bg-border" />
@@ -399,30 +423,29 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       {selectionProblem && <Panel role="alert" className="text-xs text-danger">{selectionProblem}</Panel>}
       {incompatible && <Panel role="alert" className="text-xs text-danger">{t("This draft needs a newer workspace version. Its saved content has been preserved.")}</Panel>}
       <fieldset disabled={busy || incompatible} className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
+        <CanvasEditor model={canvasModel(document,sections,{...Object.fromEntries(Object.entries(widgetTitles).map(([id,title])=>[id,title()])),rows:t("Rows"),columns:t("Columns"),tabs:t("Tabs"),flow:t("Flow layout"),toolbar:t("Toolbar"),loop:t("Loop")})} selected={nodeID} revision={session.draft} zoom={zoom/100} disabled={busy||incompatible}
+          commands={selectionCommands} icon={canvasSelection?<WidgetGlyph widget={canvasSelection.widget}/>:<LayoutGlyph kind={document.nodes[nodeID??'']?.kind??'rows'}/>}
+          onSelect={canvasSelect} onDrop={canvasCommitDrop} onMove={(id,delta)=>canvasEdit(canvasMove(document,id,delta,sections))}
+          resize={(id,axis,pixels,rects)=>canvasResize(document,id,axis,pixels,rects)} onResize={canvasCommitSizes}
+          onResetSize={(id,axis)=>{const sizes=canvasResetSize(document,id,axis);if(sizes)canvasCommitSizes(sizes);}}>
         <EditorWorkbench leftLabel={t("Widgets and layout")} centerLabel={t("The page")} rightLabel={t("The widget in hand")}
-          left={leftOpen && <><Button className="m-3" aria-pressed={selection.kind === "queries"} onClick={() => { select({kind:"queries"});setRightOpen(true); }}>{t("Query plans")}</Button><Button className="m-3" aria-pressed={selection.kind === "interface"} onClick={() => { select({ kind: "interface" }); setRightOpen(true); }}>{t("Page interface")}</Button><Button className="m-3" aria-pressed={selection.kind === "variables"} onClick={() => { select({ kind: "variables" }); setRightOpen(true); }}>{t("Page variables")}</Button><LayoutTree document={document} sections={sections} chosen={chosen} container={container} widgetTitles={widgetTitles} widgets={widgets}
-            onChoose={choose} onContainer={(id) => { select({ kind: "container", id }); setRightOpen(true); }} title={title || page.title} onAdd={add} onMove={move}
-            onInsert={(widget, container, after) => add(widget, { container, after })}
-            onRelocate={(section, target, after) => edit((old) => ({ ...old, document: relocateWidget(old.document, section, target, after) }))}
-            onGroup={(kind) => { const section = sections[chosen]; if (!section?.id) return; const result = groupWidget(document, section.id, kind); edit({ document: result.document }); if (result.id) select({ kind: "container", id: result.id }); }}
-            onAddOverlay={() => { const result = addOverlay(document, t("Overlay {n}", { n: Object.keys(document.overlays ?? {}).length + 1 })); edit({ document: result.document }); select({ kind: "container", id: result.root }); setRightOpen(true); }}
-            onDuplicate={duplicate} onStash={index=>{const section=sections[index];if(section?.id)edit({document:stashWidget(document,section.id)});}}
-            onCopyLayout={copyContainer} onPasteLayout={pasteContainer} onDuplicateLayout={duplicateContainer} canPasteLayout={!!session.clipboard}
-            onRestore={(index,target)=>{const section=sections[index];if(section?.id)edit({document:restoreWidget(document,section.id,target)});}}
-            onSlot={(index,slot)=>{const section=sections[index];if(!section?.id)return;const result=addWidgetSlot(document,section.id,section.widget,slot);if(!result.id){setCompatibilityOpen(true);return;}edit({document:result.document});select({kind:"container",id:result.id});setRightOpen(true);}}
-            onRemove={(index) => { const section = sections[index]; if (!section?.id) return; edit((old) => ({ ...old, document: removeWidget(old.document, section.id!), sections: old.sections.filter((s) => !widgetSubtreeSections(old.document,section.id!).has(s.id??"")) })); select({ kind: "page" }); }} /></>}
+          left={leftOpen && <><Button className="m-3" aria-pressed={selection.kind === "queries"} onClick={() => { select({kind:"queries"});setRightOpen(true); }}>{t("Query plans")}</Button><Button className="m-3" aria-pressed={selection.kind === "interface"} onClick={() => { select({ kind: "interface" }); setRightOpen(true); }}>{t("Page interface")}</Button><Button className="m-3" aria-pressed={selection.kind === "variables"} onClick={() => { select({ kind: "variables" }); setRightOpen(true); }}>{t("Page variables")}</Button><LayoutTree document={document} sections={sections} chosen={chosen} container={container} title={title||page.title}
+            widgetTitles={widgetTitles} widgets={widgets} onChoose={choose} onContainer={id=>canvasSelect(id)} onAdd={add}
+            onGroup={kind=>{if(!nodeID)return;const result=canvasGroup(document,nodeID,kind,sections);if(result){canvasEdit(result.document);select({kind:'container',id:result.id});}}}
+            onAddOverlay={()=>{const result=addOverlay(document,t("Overlay {n}",{n:Object.keys(document.overlays??{}).length+1}));canvasEdit(result.document);select({kind:'container',id:result.root});setRightOpen(true);}}
+            commandsForNode={canvasCommands} /></>}
           right={rightOpen && (selection.kind === "queries" ? <QueriesPanel sections={sections} onPreviewOwner={setQueryPreviewOwner} document={document} object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} values={variableValues} onChange={(document)=>edit({document})}/> : selection.kind === "interface" ? <InterfacePanel document={document} object={{ app: page.object.split(".")[0]!, kind: "object", name: page.object }} onChange={(document) => edit({ document })} /> : selection.kind === "variables" ? <VariablesPanel object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> : <div className="grid content-start gap-2">{container && Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container).map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
             onChange={(patch) => edit({ document: { ...document, overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
             onRemove={() => { const result = removeOverlay(document, id); edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}{container ? <LayoutProperties sections={sections} document={document} id={container}
             onPatch={patchNode} onChange={(kind) => edit((old) => ({ ...old, document: setLayoutKind(old.document, container, kind) }))}
-            onUngroup={() => { edit({ document: ungroup(document, container) }); select({ kind: "page" }); }} /> :
+            onUngroup={() => canvasCommands(container).find(command=>command.id==='ungroup')?.run()} ungroupDisabled={!canvasUngroup(document,container,sections)} /> :
           chosen < 0 ? <Settings value={{ title, description }} object={info?.title ?? page.object}
             selections={selections} objects={definitions.filter((d) => d.ref.kind === "object" && d.entity).map((d) => d.ref).sort((a, b) => Number(b.name === page.object) - Number(a.name === page.object))}
             onSelections={(next, rename) => edit((old) => ({ ...old, selections: next, sections: rename ? old.sections.map((s) => ({ ...s, selection: s.selection === rename.from ? rename.to : s.selection, parentSelection: s.parentSelection === rename.from ? rename.to : s.parentSelection })) : old.sections }))}
             onChange={(patch) => edit(patch, `settings:${Object.keys(patch).join(",")}`)} /> :
           <WidgetProperties key={`${canvasSelection?.id}/${canvasSelection?.widget}/${canvasSelection?.configVersion}`}
             events={(() => { const Inspector=canvasSelection&&widgetInspector(canvasSelection.widget,canvasSelection.configVersion??0)?.events;return canvasSelection?<InspectorFrame id={canvasSelection.id??String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion??0} part="events">{Inspector&&<Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons,document)=>edit({document,sections:sections.map(s=>s.id===canvasSelection.id?{...s,buttons}:s)})} document={document} section={canvasSelection.id!} owner={nodeID?loopOwner(document,nodeID):undefined} overlay={nodeID?overlayOwner(document,nodeID):undefined} onChange={document=>edit({document})}/>}</InspectorFrame>:null; })()}
-            display={<> {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value) edit({ document: relocateWidget(document, sections[chosen]!.id!, event.target.value) }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
+            display={<> {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value&&nodeID) canvasCommitDrop({kind:'move',id:nodeID,label:canvasSelection?.title??nodeID},{kind:'into',parent:event.target.value}); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
             {nodeID&&<LayoutSizing document={document} id={nodeID} onPatch={patchNode}/>}
             {nodeID && <NodeBindings document={document} id={nodeID} button={!!canvasSelection&&!!widgetContract(canvasSelection.widget)?.inputPorts.some(port=>port.bindingField==="enabledWhen")&&canvasSelection.widget!=="input"} input={canvasSelection?.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />} </>} onResourcesChange={(patch,variables)=>edit(old=>({...old,document:{...old.document,variables},sections:old.sections.map(s=>s.id===canvasSelection?.id?{...s,...patch}:s)}),"graph-resources")} sections={sections} section={canvasSelection} info={source.entity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
             document={document} object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
@@ -433,7 +456,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
             {([["desktop", "Desktop preview", Monitor], ["tablet", "Tablet preview", Tablet], ["mobile", "Mobile preview", Smartphone]] as const).map(([device, label, Icon]) => <Button key={device} size="sm" variant="ghost" aria-label={t(label)} aria-pressed={viewport === device} onClick={() => setViewport(device)}><Icon /></Button>)}
             <Select aria-label={t("Canvas zoom")} value={zoom} onChange={(event) => setZoom(Number(event.target.value))} className="w-20">{[50, 75, 100, 125].map((value) => <option key={value} value={value}>{value}%</option>)}</Select>
           </div>
-          <div className="min-h-[24rem] flex-1 overflow-auto bg-canvas p-4">
+          <div data-canvas-scroll className="min-h-[24rem] flex-1 overflow-auto bg-canvas p-4">
             <div className="mx-auto" style={{ width: viewport === "desktop" ? "100%" : viewport === "tablet" ? 768 : 390, zoom: zoom / 100 }}>
               <ApplicationPage pageRef={{app:"build",kind:"page",name:page.name}} route={{view:"compose",params:{id}}} preview><ComposedPage editingRoot={(() => {
                 if(selection.kind==="queries")return queryPreviewOwner?document.overlays?.[queryPreviewOwner]?.root:undefined;
@@ -444,21 +467,12 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
                 })?.root;
               })()} onVariableValues={setVariableValues} page={asPage({ ...page, title, description, selections }, sections, document)} live={false} chosen={chosen} onChoose={choose}
                 notice={nothing && <Panel role="status" className="text-xs text-muted">{t("Add at least one widget before installing or reviewing a release.")}</Panel>}
-                wrapLayout={(id, node, body) => <div key={id} data-layout-node={id} className={`relative flex min-h-0 min-w-0 flex-1 flex-col rounded ${dropTarget === id || container === id ? "outline outline-2 outline-primary" : ""}`}
-                  onDragOver={(event) => { if (!event.dataTransfer.types.some((type) => type === "application/platform-page-widget" || type === "application/platform-page-section")) return; event.preventDefault(); event.stopPropagation(); setDropTarget(id); }}
-                  onDragLeave={() => setDropTarget(undefined)} onDrop={(event) => {
-                    const widget = event.dataTransfer.getData("application/platform-page-widget"), section = event.dataTransfer.getData("application/platform-page-section");
-                    if (!widget && !section) return; event.preventDefault(); event.stopPropagation(); setDropTarget(undefined);
-                    const destination = { container: node.kind === "widget" ? document.root : id, after: node.kind === "widget" ? node.section : undefined };
-                    if (widget) add(widget, destination); else edit((old) => ({ ...old, document: relocateWidget(old.document, section, destination.container, destination.after) }));
-                  }}>
-                  {container === id && <div className="absolute -top-3 left-2 z-10"><CommandMenu label={t("Layout commands")} commands={layoutCommands(id)}><Button size="sm" variant="primary" onClick={() => select({ kind: "container", id })}>{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : node.kind === "loop" ? "Loop" : "Rows")}</Button></CommandMenu></div>}
-                  {body}
-                </div>} /></ApplicationPage>
+                wrapLayout={(id, _node, body) => <CanvasRegion key={id} id={id}>{body}</CanvasRegion>} /></ApplicationPage>
             </div>
           </div>
           <div className="flex items-center gap-2 border-t border-border px-3 py-1.5 text-[11px] text-muted" role="status">{t("Your records, as they are. Actions do not run while you compose.")}</div>
         </EditorWorkbench>
+        </CanvasEditor>
       </fieldset>
     </div>
   </WorkflowFormProblems.Provider>;
@@ -482,7 +496,7 @@ function WidgetProperties(props: PropertiesProps & { events: ReactNode; display:
   const overlay = leaf ? overlayOwner(document, leaf) : undefined;
   const Inspector = widgetInspector(section.widget, section.configVersion ?? 0)?.bindings;
   const contract = widgetContract(section.widget);
-  return <ContentTabs label={t("Widget inspector panels")} value={tab} onChange={setTab} items={[
+  return <><div className="flex items-center gap-2 px-3 py-1 text-xs font-semibold text-muted"><WidgetGlyph widget={section.widget}/>{widgetTitles[section.widget]?.()??section.widget}</div><ContentTabs label={t("Widget inspector panels")} value={tab} onChange={setTab} items={[
     { id: "setup", title: t("Setup"), content: <Card className="grid gap-3 p-3">
       <label className="grid gap-1 text-xs">{t("Title")}
         <Input value={section.title ?? ""} onChange={(event) => onChange({ title: event.target.value })} />
@@ -508,7 +522,7 @@ function WidgetProperties(props: PropertiesProps & { events: ReactNode; display:
     </Card> }] : []),
     ...(contract && "events" in contract && contract.events.length ? [{ id: "events", title: t("Events"), content: props.events }] : []),
     { id: "display", title: t("Display"), content: <div className="grid gap-2">{props.display}</div> },
-  ]} />;
+  ]} /></>;
 }
 
 function Properties({ section, sections, document, info, catalog, object, selections, relatedObjects = [], onChange }: PropertiesProps) {

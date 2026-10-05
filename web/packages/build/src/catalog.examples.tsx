@@ -1,3 +1,4 @@
+import {PageEditor} from "./editor";
 import "./i18n";
 import { CatalogFixture, sampleObject, samplePage } from "@platform/app/catalog/fixtures";
 import { PageWorkspaceExample } from "@platform/app/catalog/examples";
@@ -62,3 +63,14 @@ export function WorkshopImportExample(){
  const report=compileWorkshopModule(JSON.stringify(sampleModule),"page",{objects:{Asset:sampleObject.type},fields:{Asset:{name:"title"}},actions:{finishAsset:"catalog.sample.review"},queries:{}},{object:sampleObject.type,profile:pageUIProfile,entities:[sampleObject],actions:[{schema:"catalog.sample.review",target:sampleObject.type}]});
  return <Panel><p>{t("All {count} source widget types have an owner and migration status.",{count:92})}</p><p>{t("Mapped {count} widgets into the original V2 page format.",{count:report.draft?.sections.length??0})}</p><pre className="overflow-auto text-xs">{JSON.stringify({diagnostics:report.diagnostics,sections:report.draft?.sections},null,2)}</pre></Panel>;
 }
+
+const canvasReads={
+ "/v1/records/build.page/PAGE-CANVAS":{record:{id:"PAGE-CANVAS",revision:1,name:"canvas",title:"Canvas design",object:sampleObject.type,state:"draft",sections:[
+  {id:"heading",widget:"heading",configVersion:1,title:"Heading",text:"Workspace",headingLevel:"h2"},
+  {id:"left",widget:"text",configVersion:1,title:"Left content",text:"Edit, move and resize this region."},
+  {id:"right",widget:"text",configVersion:1,title:"Right content",text:"Use the attached toolbar or layout tree."}],
+  document:{formatVersion:2,uiProfile:pageUIProfile,root:"root",nodes:{root:{kind:"rows",children:["heading","columns"]},heading:{kind:"widget",section:"heading"},columns:{kind:"columns",children:["left","right"]},left:{kind:"widget",section:"left"},right:{kind:"widget",section:"right"}}}}},
+ "/v1/records/build.function?limit=500&offset=0":{records:[],total:0},
+ "/v1/records/build.code?limit=500&offset=0":{records:[],total:0},
+};
+export const PageStudioExample=()=> <CatalogFixture reads={canvasReads} roles={builderRole}><PageEditor id="PAGE-CANVAS"/></CatalogFixture>;

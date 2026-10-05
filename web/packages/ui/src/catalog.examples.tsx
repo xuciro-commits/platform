@@ -1,7 +1,11 @@
+import {CanvasEditor,CanvasRegion,useCanvasGesture,type CanvasModel} from "./layout/CanvasEditor";
 import {ApplicationHeader} from "./layout/ApplicationHeader";
 import {useTheme} from "./theme";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
+import {AlignLeft,AlignCenter,AlignRight} from "lucide-react";
+import {InspectorField,InspectorSection} from "./components/InspectorControls";
+import {SegmentedChoice} from "./components/SegmentedChoice";
 import { z } from "zod";
 import {
   AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
@@ -363,6 +367,13 @@ export function RangeInputExample(){const [values,setValues]=useState<[string,st
 export function SwitchExample(){const [on,setOn]=useState(false);return <Switch label="Active assets" checked={on} onChange={setOn}/>;}
 
 export function ChoiceInputExample(){const [value,setValue]=useState("");return <ChoiceInput value={value} options={["Open","In progress","Done"]} variant="segments" label="Status" title="Task status" onChange={setValue}/>;}
+export function InspectorControlsExample(){
+ const [width,setWidth]=useState('256'),[height,setHeight]=useState('160'),[align,setAlign]=useState('start');
+ return <div className="max-w-72 rounded-md border border-border bg-surface"><InspectorSection title={t('Layout')}>
+  <SegmentedChoice compact label={t('Alignment')} value={align} options={[{value:'start',label:t('Start'),icon:<AlignLeft/>},{value:'center',label:t('Center'),icon:<AlignCenter/>},{value:'end',label:t('End'),icon:<AlignRight/>}]} onChange={setAlign}/>
+  <div className="grid grid-cols-2 gap-2"><InspectorField label={t('Width (px)')} prefix="W" unit="px" type="number" value={width} onChange={e=>setWidth(e.target.value)}/><InspectorField label={t('Height (px)')} prefix="H" unit="px" type="number" value={height} onChange={e=>setHeight(e.target.value)}/></div>
+ </InspectorSection></div>;
+}
 export function IndexedChoicesExample(){const [value,setValue]=useState("1"),options=[{value:"0",label:"Configure"},{value:"1",label:"Review"},{value:"2",label:"Review"}];return <div className="grid min-w-0 gap-4"><StepSelector options={options} value={value} label="Build steps" onChange={setValue}/><TabSelector options={options} value={value} label="Review tabs" onChange={setValue}/></div>;}
 
 export function MultipleChoiceInputExample(){const [value,setValue]=useState(["Open"]);return <MultipleChoiceInput clearable value={value} options={["Open","In progress","Done"]} label="Status" title="Task status" onChange={setValue}/>;}
@@ -436,3 +447,15 @@ export function ExternalFrameExample(){const [active,setActive]=useState(false);
 export function AIResultExample(){return <AIResult kind="analyst" turns={[]} question="" suggestions={[]} disabled={true} busy={false} onQuestion={()=>{}} onRun={()=>{}} onReset={()=>{}}/>;}
 
 export function ApplicationHeaderExample(){const appearance=useTheme();return <ApplicationHeader header={{variant:"horizontal",title:"Example application",items:[{kind:"title"},{kind:"tabs",pages:["overview","work"]},{kind:"button",label:"Theme",action:"theme"}]}} pages={[{name:"overview",title:"Overview"},{name:"work",title:"Work"}]} currentPage="overview" onPage={()=>{}} onTheme={appearance.toggle}><p>Application content</p></ApplicationHeader>;}
+
+function CanvasExampleRegion({id}:{id:string}){const gesture=useCanvasGesture();return <CanvasRegion id={id}><Panel title={id}><Button style={{touchAction:"none"}} onPointerDown={event=>gesture?.start({kind:"move",id,label:id},event)}>{t("Drag selected region")}</Button></Panel></CanvasRegion>;}
+export function CanvasEditorExample(){
+ const [order,setOrder]=useState(["First","Second","Third"]),[selected,setSelected]=useState<string>(),[sizes,setSizes]=useState<Record<string,{width?:number;height?:number}>>({});
+ const model:CanvasModel={root:{kind:"container",label:t("Canvas"),children:order,horizontal:false},...Object.fromEntries(order.map(id=>[id,{kind:"widget",label:id,parent:"root",children:[],horizontal:false}]))};
+ return <div className="h-96"><CanvasEditor model={model} selected={selected} onSelect={setSelected} revision={order} onDrop={(payload,target)=>{
+  if(payload.kind!=="move")return;const next=[...order],at=next.indexOf(payload.id);if(target.kind==="swap"){const other=next.indexOf(target.target);[next[at],next[other]]=[next[other]!,next[at]!];}else if(target.kind==="insert"){next.splice(at,1);next.splice(at<target.index?target.index-1:target.index,0,payload.id);}setOrder(next);
+ }} onMove={(id,delta)=>{const next=[...order],at=next.indexOf(id),to=at+delta;if(to<0||to>=next.length)return;[next[at],next[to]]=[next[to]!,next[at]!];setOrder(next);}}
+ resize={(id,axis,pixels)=>({[id]:{...sizes[id],[axis]:Math.min(800,Math.max(32,Math.round(pixels)))}})} onResize={next=>setSizes(old=>({...old,...next}))} onResetSize={(id,axis)=>setSizes(old=>({...old,[id]:{...old[id],[axis]:undefined}}))}>
+  <div data-canvas-scroll className="overflow-auto p-6"><LayoutRegion><CanvasRegion id="root"><LayoutStack direction="rows">{order.map(id=><LayoutRegion key={id} size={sizes[id]}><CanvasExampleRegion id={id}/></LayoutRegion>)}</LayoutStack></CanvasRegion></LayoutRegion></div>
+ </CanvasEditor></div>;
+}

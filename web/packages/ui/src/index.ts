@@ -22,6 +22,8 @@ export {DateInput} from "./components/DateInput";
 export {validCivilDate,validTimestamp,validTimestampOffset,timestampParts,timestampNanoseconds,withTimestampOffset} from "./components/date";
 export {MultipleChoiceInput} from "./components/MultipleChoiceInput";
 export {ChoiceInput} from "./components/ChoiceInput";
+export {SegmentedChoice} from "./components/SegmentedChoice";
+export {InspectorField,InspectorSection} from "./components/InspectorControls";
 export {StepSelector,TabSelector} from "./components/IndexedChoices";
 export {ButtonGroup} from "./components/ButtonGroup";
 export { FlowLayout } from "./layout/FlowLayout";
@@ -126,3 +128,7 @@ export {validImageRegions} from "./spatial/image-regions";
 
 export {Scene3D,type Scene3DProps} from "./spatial/Scene3D";
 export {validSceneConfig,sceneMappingValue,type SceneConfig,type SceneLayer,type SceneMapping,type SceneInput} from "./spatial/scene-model";
+
+export {CanvasEditor,CanvasRegion,useCanvasGesture,type CanvasModel,type CanvasPayload,type CanvasDrop,type CanvasRect} from "./layout/CanvasEditor";
+
+export type {CanvasCommand} from "./layout/CanvasSelectionToolbar";

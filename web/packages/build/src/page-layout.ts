@@ -33,33 +33,6 @@ export function appendWidget(document: Document, section: string, container = do
   return repairTabs(next);
 }
 
-/** Wrap the chosen widget and its next sibling; a lone widget can also start a group. */
-export function groupWidget(document: Document, section: string, kind: Kind): { document: Document; id?: string } {
-  const leaf = leafOf(document, section);
-  const parent = leaf && Object.entries(document.nodes).find(([,node])=>node.children?.includes(leaf))?.[0];
-  if (!leaf || !parent) return { document };
-  const next = structuredClone(document);
-  const siblings = next.nodes[parent]!.children!;
-  const at = siblings.indexOf(leaf);
-  const children = siblings.splice(at, Math.min(2, siblings.length - at));
-  const id = layoutID("group");
-  next.nodes[id] = { kind: "rows", children };
-  siblings.splice(at, 0, id);
-  return { document: setLayoutKind(next, id, kind), id };
-}
-
-export function moveWidget(document: Document, section: string, delta: -1 | 1): Document {
-  const leaf = leafOf(document, section);
-  const parent = leaf && parentOf(document, leaf);
-  if (!leaf || !parent) return document;
-  const next = structuredClone(document);
-  const siblings = next.nodes[parent]!.children!;
-  const at = siblings.indexOf(leaf), target = at + delta;
-  if (target < 0 || target >= siblings.length) return document;
-  [siblings[at], siblings[target]] = [siblings[target]!, siblings[at]!];
-  return repairTabs(next);
-}
-
 export function removeWidget(document: Document, section: string): Document {
   const leaf = leafOf(document, section);
   const parent = leaf && parentOf(document, leaf);
@@ -84,22 +57,6 @@ function pruneEmpty(next: Document, parent: string) {
     delete next.nodes[current];
     current = above;
   }
-}
-
-/** Reparent a leaf without changing its widget identity or business bindings. */
-export function relocateWidget(document: Document, section: string, container: string, afterSection?: string): Document {
-  const leaf = leafOf(document, section), after = afterSection ? leafOf(document, afterSection) : undefined;
-  if(leaf&&document.unusedWidgets?.some(entry=>entry.node===leaf))return restoreWidget(document,section,container,afterSection);
-  if (!leaf || leaf === after) return document;
-  const from = parentOf(document, leaf), to = after ? parentOf(document, after) : container;
-  if (!from || !to || document.nodes[to]?.kind === "widget" || !document.nodes[to]) return document;
-  const next = structuredClone(document);
-  next.nodes[from]!.children = next.nodes[from]!.children!.filter((id) => id !== leaf);
-  const children = next.nodes[to]!.children ?? [];
-  const at = after ? children.indexOf(after) + 1 : children.length;
-  children.splice(at, 0, leaf); next.nodes[to]!.children = children;
-  pruneEmpty(next, from);
-  return repairTabs(next);
 }
 
 export function ungroup(document: Document, group: string): Document {
@@ -138,7 +95,7 @@ export function setLayoutKind(document: Document, id: string, kind: Kind): Docum
   return repairTabs(next);
 }
 
-function repairTabs(document: Document): Document {
+export function repairTabs(document: Document): Document {
   for (const node of Object.values(document.nodes)) {
     if (node.kind !== "tabs" || !node.children?.length) continue;
     const variable = document.variables?.[node.activeVariable ?? ""];

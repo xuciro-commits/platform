@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:d19b0a38ad37399c",
+  "revision": "sha256:f70f39537ec2e11f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -946,6 +946,33 @@
       ]
     },
     {
+      "id": "scenario/page-studio",
+      "owner": "@pkg/build",
+      "name": "Page design workbench",
+      "summary": "Edit the original page draft with layout gestures, scoped commands, inspectors and undo history.",
+      "layer": 5,
+      "authority": "example",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "reference"
+      ],
+      "source": "web/packages/build/src/editor.tsx",
+      "example": "PageStudioExample",
+      "dependencies": [
+        "ui/canvas-editor",
+        "app/composed-page"
+      ],
+      "tags": [
+        "studio",
+        "editor",
+        "layout"
+      ],
+      "constraints": [
+        "The local example uses the production PageEditor with synthetic records. Host writes, save and publication are refused in Catalog."
+      ]
+    },
+    {
       "id": "scenario/query-studio",
       "owner": "@pkg/build",
       "name": "Reusable query workbench",
@@ -1285,6 +1312,35 @@
       ],
       "constraints": [
         "Each control has a stable identity; the caller owns its binding, permissions and execution."
+      ]
+    },
+    {
+      "id": "ui/canvas-editor",
+      "owner": "@platform/ui",
+      "name": "Layout canvas editor",
+      "summary": "Move, order and resize controlled layout regions with pointer previews and atomic caller-owned edits.",
+      "layer": 3,
+      "source": "web/packages/ui/src/layout/CanvasEditor.tsx",
+      "exports": [
+        "CanvasEditor",
+        "CanvasRegion",
+        "useCanvasGesture"
+      ],
+      "example": "CanvasEditorExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "editor",
+        "layout",
+        "drag",
+        "resize"
+      ],
+      "constraints": [
+        "The caller owns the layout document, accepted edits and scope validation. Pointer previews never publish or mutate business data."
       ]
     },
     {
@@ -2216,6 +2272,35 @@
         "Enabled",
         "Disabled",
         "Invalid"
+      ]
+    },
+    {
+      "id": "ui/inspector-controls",
+      "owner": "@platform/ui",
+      "name": "Compact property inspector",
+      "summary": "Group dimensions, icon choices and advanced properties in compact accessible sections.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/InspectorControls.tsx",
+      "exports": [
+        "InspectorField",
+        "InspectorSection",
+        "SegmentedChoice"
+      ],
+      "example": "InspectorControlsExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "inspector",
+        "properties",
+        "layout",
+        "segments"
+      ],
+      "constraints": [
+        "The caller owns property semantics and validation. Short visual prefixes and icons retain full accessible names."
       ]
     },
     {
@@ -4030,6 +4115,7 @@
       "Closed": "关闭",
       "Collapsed": "收起",
       "Collection title": "集合标题",
+      "Compact property inspector": "紧凑属性检查器",
       "Compare aggregate groups with totals and explicit drill-down.": "比较聚合分组，展示合计并提供明确的下钻。",
       "Compare two to four complete original records with typed differences, stable identities and original field formatting.": "对比两到四条完整原记录，保留类型差异、稳定身份及原字段格式。",
       "Complete typed count matrix": "完整类型化计数矩阵",
@@ -4068,6 +4154,7 @@
       "Edit declared entity fields using their shared validators and editors.": "使用共享校验器和编辑器编辑已声明的实体字段。",
       "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
       "Edit original business date text with a native picker and explicit invalid draft repair.": "通过原生日期选择器及显式无效草稿修正编辑原业务日期文本。",
+      "Edit the original page draft with layout gestures, scoped commands, inspectors and undo history.": "通过布局手势、作用域命令、检查器和撤销历史编辑原页面草稿。",
       "Edit two original text drafts on an exact decimal tick grid and clear them atomically.": "在精确十进制刻度上编辑两个原文本草稿并原子清空。",
       "Editing": "编辑中",
       "Editor workbench": "编辑工作台",
@@ -4089,6 +4176,7 @@
       "Generated record form": "记录生成表单",
       "Give a task its title, description and visible actions.": "提供任务标题、说明与可见动作。",
       "Give an installed agent a goal; review its proposed actions before confirming them.": "为已安装智能体设置目标，在确认前审核它提出的动作。",
+      "Group dimensions, icon choices and advanced properties in compact accessible sections.": "用紧凑且可访问的分区组织尺寸、图标选项和高级属性。",
       "Group related content with a shared heading, description and action area.": "通过统一的标题、说明和动作区域组织相关内容。",
       "Hierarchy selection": "层级选择",
       "Hover": "悬停",
@@ -4110,6 +4198,7 @@
       "Keep record browsing and focused detail in one responsive task frame.": "在响应式任务框架中同时保留记录浏览与聚焦详情。",
       "Keep selection and detail together using the existing record workspace or controlled table/detail sections.": "使用原记录工作台或受控表格与详情区块，保持选择与详情连贯。",
       "Keyboard focus": "键盘焦点",
+      "Layout canvas editor": "布局画布编辑器",
       "Lifecycle status bar": "生命周期状态栏",
       "List selection is shared by details and actions. The object contract and current member’s read scope remain authoritative.": "详情和动作共享列表选择；对象契约和当前成员的读取范围仍为准。",
       "Loading": "加载中",
@@ -4122,6 +4211,7 @@
       "Member-scoped assistant": "成员范围内的助手",
       "Metal button": "金属与流体按钮",
       "Modal dialog": "模态对话框",
+      "Move, order and resize controlled layout regions with pointer previews and atomic caller-owned edits.": "通过指针预览和调用方拥有的原子编辑，移动、排序与调整受控布局区域。",
       "Multiple choices": "多项选择",
       "Named record selections keep same-object lists independent; parent bindings scope related sections.": "具名记录选择让同一对象的多个列表互不干扰；父来源绑定限定关联区块的范围。",
       "Notifications": "通知",
@@ -4154,6 +4244,7 @@
       "Original row decisions": "原行决策",
       "Original scalar and record sparkline": "原标量与记录迷你线",
       "Original window statistics reader": "原窗口统计读者",
+      "Page design workbench": "页面设计工作台",
       "Page header": "页面标题区",
       "Page workspace and preview": "页面工作台与预览",
       "Partition caller-owned complete group counts into proportional rectangles with independently accessible groups.": "把调用方拥有的完整分组计数划分为比例矩形，保留独立的可访问分组。",
@@ -4301,6 +4392,7 @@
       "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒，无效草稿可修正。",
       "The caller owns page navigation, confirmed record identity and clearing the original producer. Duplicate labels remain distinct; an optional current-page action clears context without invoking ancestor navigation. Read-only trails do not invoke callbacks.": "调用方负责页面导航、已确认记录身份及清除原选择来源；重复标签保持独立，可选当前页操作清除上下文而不调用上层导航。只读路径不调用回调。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
+      "The caller owns property semantics and validation. Short visual prefixes and icons retain full accessible names.": "调用方负责属性语义与校验；简短前缀和图标保留完整的可访问名称。",
       "The caller owns scalar precision, authorized window and field metadata. Missing values break the line; points retain stable IDs and never read or write records.": "调用方拥有标量精度、授权窗口与字段元数据；缺值断线，点保留稳定ID，不读写记录。",
       "The caller owns text, object scope and authorized reads. This control performs no queries and does not promise global ontology search.": "调用方拥有文本、对象范围及授权读取；此控件不查询数据，也不声称全本体搜索。",
       "The caller owns the actual File, bytes upload, attach decision and confirmed metadata. Refusal preserves the selected file; this control reports no simulated progress or local filename as a confirmed attachment.": "调用方持有实际文件并负责字节上传、挂载决策及已确认元数据；拒绝时保留所选文件，组件不报告模拟进度或将本地文件名当作已确认附件。",
@@ -4313,6 +4405,7 @@
       "The caller owns the condition and message. This component performs no queries, template execution or notification delivery.": "调用方拥有条件及消息，本组件不执行查询、模板代码或通知发送。",
       "The caller owns the fixed URL configuration. Only HTTP(S) absolute or single-root-relative public paths render; loading and failure remain explicit. Published URL configuration does not freeze remote bytes or authorize attachments.": "调用方负责固定图片地址配置；仅呈现HTTP(S)绝对地址或单斜杠根相对公开路径，并明确显示加载及失败状态。发布地址配置不冻结远程字节或授权附件。",
       "The caller owns the label and visibility. The separator is horizontal and noninteractive, without data reads or text evaluation.": "调用方拥有标签及显示条件。分隔为横向、不可交互，不读取数据或执行文本。",
+      "The caller owns the layout document, accepted edits and scope validation. Pointer previews never publish or mutate business data.": "调用方拥有布局文档、接受的编辑与作用域校验。指针预览不发布或修改业务数据。",
       "The caller owns the ordered authorized window and confirmation. Missing coordinates are excluded; invalid values refuse the plot, and overlapping points remain separate records.": "调用方拥有有序授权窗口与选择确认；缺值坐标排除，无效值拒绝绘制，重叠点仍是独立记录。",
       "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes.": "调用方拥有排序窗口、字段权限和点数预算；此图表不读取或写入数据。",
       "The caller owns the original date text and query conditions. Invalid drafts remain visible; no local timezone or timestamp conversion is applied.": "调用方拥有原日期文本及查询条件。无效草稿保持可见，不应用本地时区或时间点转换。",
@@ -4337,6 +4430,7 @@
       "The local example demonstrates a payload and result flow in the original WorkflowEditor; it does not execute a process.": "本地示例在原 WorkflowEditor 展示输入到结果的流程，不执行流程。",
       "The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.": "本地示例使用合成应用资源；保存、发布与导航操作均不会连接宿主。",
       "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.": "本地示例使用合成查询与对象描述，保存和发布无法访问宿主。",
+      "The local example uses the production PageEditor with synthetic records. Host writes, save and publication are refused in Catalog.": "本地示例使用正式页面编辑器和合成记录。资产库拒绝宿主写入、保存和发布。",
       "The offline preview shows the binding only and never executes Wasm or reads tenant data.": "离线预览仅展示绑定，不执行 Wasm 或读取租户数据。",
       "The original attachment and author permissions belong to Files. The caller confirms saves at the captured file revision; refused drafts remain local and view retirement never cancels accepted decisions.": "原附件和作者权限归文件服务。调用方按捕获的文件版本确认保存；拒绝保留本地草稿，视图退役不取消已接受的决定。",
       "The original host owns authorization, validation and approval. An unanswered row can only resend its original decision with identical payload and revision; retiring a window ends new submissions.": "原宿主管理授权、校验和审批。未回答的行仅能以相同参数和版本重发原决策；窗口退役后停止新提交。",
@@ -4414,6 +4508,7 @@
       "web/packages/build/src/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/page-editor/CompatibilityReview.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
+      "web/packages/build/src/page-editor/LayoutProperties.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
@@ -4486,6 +4581,7 @@
       "web/packages/build/src/module-import/UnusedImportFields.tsx",
       "web/packages/build/src/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
+      "web/packages/build/src/page-editor/LayoutProperties.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
@@ -4578,7 +4674,7 @@
       "web/packages/build/src/module-import/ApplicationImportFields.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
-      "web/packages/build/src/page-editor/LayoutTree.tsx",
+      "web/packages/build/src/page-editor/LayoutProperties.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
@@ -4734,6 +4830,7 @@
     "ui/disclosure": [
       "web/packages/app/src/agents.tsx",
       "web/packages/build/src/code.tsx",
+      "web/packages/build/src/page-editor/LayoutProperties.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/simulate.tsx",
       "web/packages/build/src/workflow-binding.tsx",
@@ -5110,7 +5207,7 @@
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx"
     ],
-    "ui/command-menu": [
+    "ui/canvas-editor": [
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx"
     ],
@@ -5159,6 +5256,12 @@
       "web/packages/pms/src/index.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/inspector-controls": [
+      "web/packages/build/src/page-editor/LayoutProperties.tsx"
+    ],
+    "ui/command-menu": [
+      "web/packages/build/src/page-editor/LayoutTree.tsx"
     ],
     "app/records": [
       "web/packages/crm/src/index.tsx",
@@ -5284,10 +5387,15 @@
         "ButtonProps",
         "CalendarFields",
         "CanvasAddContext",
+        "CanvasCommand",
+        "CanvasDrop",
         "CanvasEdge",
         "CanvasHistory",
+        "CanvasModel",
         "CanvasNode",
+        "CanvasPayload",
         "CanvasPosition",
+        "CanvasRect",
         "Channels",
         "ChartData",
         "ChartSource",

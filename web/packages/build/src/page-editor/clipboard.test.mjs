@@ -12,6 +12,12 @@ const {observationProblem}=await import("./observation.ts");
 const {explorationViewProblem}=await import("./exploration-views.ts");
 const {collaborationRecordSource,historyViewProblem}=await import("./collaboration.ts");
 const limits={...contract.runtime,selectionWriters:contract.widgets.filter(w=>w.selectionMode==="write").map(w=>w.componentID),selectionWidgets:contract.widgets.filter(w=>w.selectionMode!=="none").map(w=>w.componentID),references:{"sample.child":["sample.note"]}};
+test("single input duplication owns an independent state while preserving original private input bytes",()=>{
+ const current=fixture(),before=JSON.stringify(current),clip=copyLayout(current,"input","sample.note");assert.ok(clip.value);
+ const result=pasteLayout(current,clip.value,"root","sample.note",limits);assert.ok(result.value);
+ const leaf=result.value.draft.document.nodes[result.value.root],variable=leaf.valueVariable;
+ assert.notEqual(variable,"term");assert.deepEqual(result.value.draft.document.variables[variable],current.document.variables.term);assert.equal(result.value.draft.sections.length,current.sections.length+1);assert.equal(JSON.stringify(current),before);
+});
 const object={app:"sample",kind:"object",name:"sample.note"};
 test("embedded page copies retain exact child identity and isolate returned local state",()=>{
  const current=fixture(),section=current.sections.find(s=>s.id==="detail");section.widget="embedded-page";delete section.recordVariable;section.embedding={kind:"module",page:{ref:{app:"sample",kind:"page",name:"child"},sourceVersion:"1"},contentVersion:"page.sha256."+"a".repeat(64),interfaceVersion:1,inputs:{name:{variable:"shared"}},results:{answer:"returned"}};current.document.variables.returned={scope:"page",type:"string",mode:"state",initial:"No result"};

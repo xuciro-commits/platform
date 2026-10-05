@@ -7,6 +7,7 @@
     "./catalog": "./src/catalog.ts",
     "./catalog/examples": "./src/catalog.examples.tsx",
     "./styles.css": "./src/styles.css",
+    "./canvas-snapping": "./src/layout/canvas-snapping.ts",
     "./range": "./src/components/range.ts",
     "./choices": "./src/components/choice.ts",
     "./date": "./src/components/date.ts",

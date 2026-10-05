@@ -24,11 +24,11 @@ export function Spacer({size}:{size:number}){
 export function LayoutRegion({children,size,parent,label,fillHeight,fillWidth}: {children:ReactNode;size?:LayoutSize;parent?:string;label?:string;fillHeight?:boolean;fillWidth?:boolean}) {
  const s=size??{};
  const style:CSSProperties={
-  width:s.width===undefined?(fillWidth?"100%":undefined):`min(${s.width}px, 100%)`,
+  width:`var(--platform-preview-width, ${s.width===undefined?(fillWidth?"100%":"auto"):`min(${s.width}px, 100%)`})`,
   minWidth:s.minWidth===undefined?0:`min(${s.minWidth}px, 100%)`,maxWidth:s.maxWidth===undefined?"100%":`min(${s.maxWidth}px, 100%)`,
-  height:s.height??(fillHeight?"100%":undefined),minHeight:s.minHeight??0,maxHeight:s.maxHeight,
-  overflow:s.scroll==="auto"?"auto":undefined,
-  flex:parent==="rows"&&s.weight!==undefined?`${s.weight} 1 0%`:parent==="columns"&&s.width===undefined?`${s.weight??1} 1 0%`:"0 0 auto",
+  height:`var(--platform-preview-height, ${s.height===undefined?(fillHeight?"100%":"auto"):`${s.height}px`})`,minHeight:s.minHeight??0,maxHeight:s.maxHeight,
+  overflow:`var(--platform-preview-overflow, ${s.scroll==="auto"?"auto":"visible"})`,
+  flex:`var(--platform-preview-flex, ${parent==="rows"&&s.weight!==undefined?`${s.weight} 1 0%`:parent==="columns"&&s.width===undefined?`${s.weight??1} 1 0%`:"0 0 auto"})`,
  };
  return <div className="platform-layout-region flex min-w-0 flex-col" style={style} role={label?"region":undefined} aria-label={label}>{children}</div>;
 }
