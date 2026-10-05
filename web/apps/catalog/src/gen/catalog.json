@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ac3ab95847957372",
+  "revision": "sha256:6c866fec677aa768",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4827,9 +4827,6 @@
     "ui/record-history": [
       "web/packages/app/src/sections.tsx"
     ],
-    "ui/collection-title": [
-      "web/packages/app/src/sections.tsx"
-    ],
     "ui/layout-region": [
       "web/packages/app/src/sections.tsx"
     ],
@@ -4842,9 +4839,6 @@
     "ui/sheet": [
       "web/packages/app/src/sections.tsx",
       "web/apps/pms-desk/src/App.tsx"
-    ],
-    "ui/button-group": [
-      "web/packages/app/src/sections.tsx"
     ],
     "ui/tasks": [
       "web/packages/app/src/sections.tsx",
@@ -4934,6 +4928,12 @@
     ],
     "ui/record-leaderboard": [
       "web/packages/app/src/widgets/Leaderboard.tsx"
+    ],
+    "ui/collection-title": [
+      "web/packages/app/src/widgets/Navigation.tsx"
+    ],
+    "ui/button-group": [
+      "web/packages/app/src/widgets/Navigation.tsx"
     ],
     "ui/observation-table": [
       "web/packages/app/src/widgets/Observation.tsx"
