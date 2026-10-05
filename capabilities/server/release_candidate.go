@@ -196,6 +196,10 @@ type ReleasePreview struct {
 	Removed     []platform.AssetRef `json:"removed"`
 	Changed     []platform.AssetRef `json:"changed"`
 	Diagnostic  string              `json:"diagnostic,omitempty"`
+	// Drafts is the exact saved-draft selection this review was built from, in
+	// the order it was selected (ADR-0048 D3): the provenance of a joint
+	// candidate. One draft keeping its installed dependency is not repeated.
+	Drafts []build.JointDraftRef `json:"drafts,omitempty"`
 	// CandidateActions are owner-compiled draft inputs for builder test forms,
 	// not the installed member catalog or permission to execute.
 	CandidateActions []platform.Action `json:"candidateActions"`
@@ -215,6 +219,41 @@ type ReleaseSaveRequest struct {
 	Drafts      []build.JointDraftRef `json:"drafts,omitempty"`
 	CandidateID string                `json:"candidateId"`
 	Key         string                `json:"key"`
+}
+
+// ReleaseDraftsRequest names one saved draft to list dependencies for.
+type ReleaseDraftsRequest struct {
+	Kind platform.AssetKind `json:"kind"`
+	ID   string             `json:"id"`
+}
+
+// ReleaseDraftClosure is the saved record drafts that must be delivered with
+// the chosen draft, in dependency order breadth-first from it.
+type ReleaseDraftClosure struct {
+	Drafts []build.JointDraftRef `json:"drafts"`
+}
+
+// ReferencedDrafts answers which saved record drafts a chosen draft needs, so
+// a builder can select them together (ADR-0048 D1).
+func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id string) (ReleaseDraftClosure, error) {
+	if err := t.admits(m); err != nil {
+		return ReleaseDraftClosure{}, err
+	}
+	if m.Roles[build.ID] != build.Builder {
+		return ReleaseDraftClosure{}, fmt.Errorf("builder role required")
+	}
+	owner, ok := t.app(build.ID).(*build.Build)
+	if !ok {
+		return ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
+	}
+	drafts, err := owner.ReferencedDrafts(kind, id)
+	if err != nil {
+		return ReleaseDraftClosure{}, err
+	}
+	if drafts == nil {
+		drafts = []build.JointDraftRef{}
+	}
+	return ReleaseDraftClosure{Drafts: drafts}, nil
 }
 
 type ReleaseSaved struct {
@@ -287,6 +326,11 @@ func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef) (ReleasePrev
 	}
 	assets, diagnostic := owner.DraftReleaseAssetsMulti(drafts)
 	reply := ReleasePreview{CandidateActions: []platform.Action{}, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
+	for _, draft := range drafts {
+		if draft.ID != "" && !slices.Contains(reply.Drafts, draft) {
+			reply.Drafts = append(reply.Drafts, draft)
+		}
+	}
 	if diagnostic != nil {
 		reply.Diagnostic = diagnostic.Error()
 		return reply, platform.ReleaseCandidate{}, nil

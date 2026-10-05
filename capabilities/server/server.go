@@ -463,6 +463,35 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
+	handle(Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved record drafts a chosen draft depends on and that are not installed yet (ADR-0048 D1)", Body: ReleaseDraftsRequest{}, Answer: ReleaseDraftClosure{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		body, readErr := io.ReadAll(io.LimitReader(r.Body, 4097))
+		if readErr != nil || len(body) > 4096 {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		var request ReleaseDraftsRequest
+		decoder := json.NewDecoder(strings.NewReader(string(body)))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil || request.ID == "" {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "a draft kind and id are required"})
+			return
+		}
+		var trailing any
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		answer, err := t.ReferencedDrafts(m, request.Kind, request.ID)
+		if err != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
 	// One request carries either a single draft or a joint selection.
 	draftsOf := func(request ReleaseSaveRequest) []build.JointDraftRef {
 		if len(request.Drafts) > 0 {

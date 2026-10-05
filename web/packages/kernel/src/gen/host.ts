@@ -1768,6 +1768,15 @@ export type ReleaseActive = {
   id: string;
 };
 
+export type ReleaseDraftClosure = {
+  drafts: JointDraftRef[];
+};
+
+export type ReleaseDraftsRequest = {
+  kind: string;
+  id: string;
+};
+
 export type ReleaseEvaluationRequest = {
   candidateId: string;
   planId: string;
@@ -1792,6 +1801,7 @@ export type ReleasePreview = {
   removed: AssetRef[];
   changed: AssetRef[];
   diagnostic?: string;
+  drafts?: JointDraftRef[];
   candidateActions: Action[];
 };
 

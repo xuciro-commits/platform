@@ -64,6 +64,18 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 		t.Fatalf("a page over an unpublished object was deliverable on its own: %+v", alone)
 	}
 
+	// The builder does not have to know the graph: the closure names the drafts
+	// the application draft needs, deepest last, and never repeats an installed
+	// dependency.
+	closure, err := tn.ReferencedDrafts(member, platform.AssetApp, "APP")
+	if err != nil || len(closure.Drafts) != 2 {
+		t.Fatalf("application closure: %+v %v", closure, err)
+	}
+	if closure.Drafts[0] != (build.JointDraftRef{Kind: platform.AssetPage, ID: "PAGE"}) ||
+		closure.Drafts[1] != (build.JointDraftRef{Kind: platform.AssetObject, ID: "O"}) {
+		t.Fatalf("application closure order: %+v", closure.Drafts)
+	}
+
 	selection := []build.JointDraftRef{
 		{Kind: platform.AssetObject, ID: "O"},
 		{Kind: platform.AssetPage, ID: "PAGE"},
@@ -72,6 +84,9 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	preview, err := tn.PreviewReleaseDrafts(member, selection)
 	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
 		t.Fatalf("joint preview: %+v %v", preview, err)
+	}
+	if len(preview.Drafts) != 3 || preview.Drafts[0] != (build.JointDraftRef{Kind: platform.AssetObject, ID: "O"}) {
+		t.Fatalf("joint review concealed its draft provenance: %+v", preview.Drafts)
 	}
 	kinds := map[platform.AssetKind]int{}
 	for _, ref := range preview.Included {

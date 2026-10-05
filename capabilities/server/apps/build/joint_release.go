@@ -312,3 +312,114 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	}
 	return assets.Before, assets.After, prior, next, hadPrior, nil
 }
+
+// ReferencedDrafts lists the saved record drafts a chosen draft depends on and
+// that are not installed yet, so a builder can select them for one joint
+// candidate instead of publishing dependencies first (ADR-0048 D1).
+//
+// Records only — objects, pages, applications and workflows. A draft whose
+// non-record dependency (an AI function, query or code function) is still a
+// draft is reported by that owner's own check, and the builder selects it by
+// hand. A dependency that is already published needs no entry: the candidate
+// closes over its installed version.
+func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDraftRef, error) {
+	if id == "" {
+		return nil, fmt.Errorf("a saved draft is required")
+	}
+	if !recordKind(kind) {
+		return nil, fmt.Errorf("%s drafts have no record dependencies to select", kind)
+	}
+	objects, pages, apps, err := b.releaseInventory()
+	if err != nil {
+		return nil, err
+	}
+	processes, err := b.processInventory()
+	if err != nil {
+		return nil, err
+	}
+	find := func(want platform.AssetKind, name string) (JointDraftRef, bool) {
+		switch want {
+		case platform.AssetObject:
+			for _, o := range objects {
+				if o.Published == "" && (o.Name == name || TypeOf(o.Name) == name) {
+					return JointDraftRef{Kind: want, ID: o.ID}, true
+				}
+			}
+		case platform.AssetPage:
+			for _, p := range pages {
+				if p.Published == "" && (p.Name == name || TypeOf(p.Name) == name) {
+					return JointDraftRef{Kind: want, ID: p.ID}, true
+				}
+			}
+		case platform.AssetFlow:
+			for _, p := range processes {
+				if p.Published == "" && (p.Name == name || TypeOf(p.Name) == name) {
+					return JointDraftRef{Kind: want, ID: p.ID}, true
+				}
+			}
+		}
+		return JointDraftRef{}, false
+	}
+	var result []JointDraftRef
+	seen := map[JointDraftRef]bool{{Kind: kind, ID: id}: true}
+	queue := []JointDraftRef{{Kind: kind, ID: id}}
+	for len(queue) > 0 && len(result) < 64 {
+		next := queue[0]
+		queue = queue[1:]
+		dependencies := map[platform.AssetKind][]string{}
+		switch next.Kind {
+		case platform.AssetObject:
+			i := slices.IndexFunc(objects, func(o Object) bool { return o.ID == next.ID })
+			if i < 0 {
+				return nil, fmt.Errorf("no saved object draft %s", next.ID)
+			}
+			for _, field := range objects[i].Fields {
+				if field.Type == "reference" && field.Ref != "" {
+					dependencies[platform.AssetObject] = append(dependencies[platform.AssetObject], field.Ref)
+				}
+			}
+		case platform.AssetPage:
+			i := slices.IndexFunc(pages, func(p Page) bool { return p.ID == next.ID })
+			if i < 0 {
+				return nil, fmt.Errorf("no saved page draft %s", next.ID)
+			}
+			if pages[i].Object != "" {
+				dependencies[platform.AssetObject] = append(dependencies[platform.AssetObject], pages[i].Object)
+			}
+		case platform.AssetApp:
+			i := slices.IndexFunc(apps, func(a Application) bool { return a.ID == next.ID })
+			if i < 0 {
+				return nil, fmt.Errorf("no saved application draft %s", next.ID)
+			}
+			for _, name := range apps[i].Pages {
+				dependencies[platform.AssetPage] = append(dependencies[platform.AssetPage], name)
+			}
+			for _, resource := range apps[i].Resources {
+				dependencies[resource.Kind] = append(dependencies[resource.Kind], resource.Name)
+			}
+		case platform.AssetFlow:
+			i := slices.IndexFunc(processes, func(p Process) bool { return p.ID == next.ID })
+			if i < 0 {
+				return nil, fmt.Errorf("no saved workflow draft %s", next.ID)
+			}
+			if processes[i].Object != "" {
+				dependencies[platform.AssetObject] = append(dependencies[platform.AssetObject], processes[i].Object)
+			}
+		}
+		for want, names := range dependencies {
+			if !recordKind(want) {
+				continue // the owner that owns that draft reports its own gap
+			}
+			for _, name := range names {
+				ref, ok := find(want, name)
+				if !ok || seen[ref] {
+					continue
+				}
+				seen[ref] = true
+				result = append(result, ref)
+				queue = append(queue, ref)
+			}
+		}
+	}
+	return result, nil
+}
