@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Shared resources": "共享资源",
+  "Discover capabilities": "发现可用能力",
+  "Data and semantics": "数据与语义",
+  "Pages and experience": "页面与体验",
+  "Logic and AI": "逻辑与 AI",
+  "Maintain reusable assets and background automation with their original editors.": "沿原编辑器维护可复用资源和后台自动化。",
  "Work": "操作",
  "Analysis": "分析",
  "Content": "内容",

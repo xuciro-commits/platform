@@ -1,5 +1,6 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Workspaces": "工作入口",
  "Width (px)": "宽度（像素）",
  "Height (px)": "高度（像素）",
  "Alignment": "对齐",

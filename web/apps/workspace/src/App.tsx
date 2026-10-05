@@ -3,11 +3,11 @@
 // and the member holds a role in (`/v1/me`), the actions of their catalog — and
 // each app's UI package contributes its views and navigation through defineApp.
 import "./i18n";
-import { ApplicationSessionsProvider, confirmedDecision, HostContext, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
+import { ApplicationSessionsProvider, confirmedDecision, HostContext, type AppUI, type Definition, type Host, type Me, type SavedView, type WorkspaceSurface } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
 import { Button, Card, Dialog, Workspace, humanizeKernelError, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { Bell, Bookmark, Gauge, Inbox, LayoutGrid, Send, Sparkles, Upload } from "lucide-react";
+import { Bell, Bookmark, BookOpen, Gauge, Hammer, Inbox, LayoutGrid, Send, SlidersHorizontal, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chromeViews } from "./chrome";
 import { pageApplication, tenantApps } from "./tenantApps";
@@ -21,7 +21,7 @@ type ProtocolInfo = Api.ProtocolInfo;
 // member holds a role in an app it serves. Public reference applications need
 // no backend role; their runtime reads/actions still use the original host.
 // Settings serves the platform's apps.
-const packages: { serves: string[]; role?: string; public?: boolean; load: () => Promise<{ default: AppUI }> }[] = [
+const packages: { serves: string[]; role?: string; public?: boolean; load: () => Promise<{ default: AppUI; contributions?: AppUI[] }> }[] = [
   { serves: [], public: true, load: () => import("@platform/catalog-app/app") },
   { serves: ["build"], role: "builder", load: () => import("@pkg/build") },
   { serves: ["crm"], load: () => import("@pkg/crm") },
@@ -85,22 +85,31 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   const meQuery = useQuery({ queryKey: [token, tenant, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false });
   const me = meQuery.data;
+  const identityScope = me ? JSON.stringify([me.tenantId, me.principalId]) : undefined;
+  const packageScope = me ? JSON.stringify([me.tenantId, me.principalId, me.apps.map((app) => app.id), me.profile.roles]) : undefined;
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!me) return;
     if (me.preferred && me.preferred !== language()) return setLanguage(me.preferred); // the member's own language, on any browser (ADR-0023)
+    let live = true;
+    setReady(false);
     Object.assign(client.connection, { principal: me.principalId, tenant: me.tenantId });
     setCurrency(me.currency); // the default of amounts people enter (ADR-0024)
-    client.refreshDeclarations().then(() => setReady(true), () => notify.error(t("Host unreachable")));
-  }, [client, me]);
+    client.refreshDeclarations().then(() => { if (live) setReady(true); }, () => { if (live) notify.error(t("Host unreachable")); });
+    return () => { live = false; };
+  }, [client, identityScope, me?.preferred]);
 
   const [apps, setApps] = useState<(AppUI & { serves?: string[] })[]>();
   useEffect(() => {
     if (!me) return;
+    let live = true;
+    setApps(undefined);
     const held = new Set(me.apps.map((a) => a.id));
     void Promise.all(packages.filter((p) => p.public || p.serves.some((id) => held.has(id) && (!p.role || me.profile.roles[id] === p.role)))
-      .map((p) => p.load().then((m) => ({ ...m.default, serves: p.serves })))).then(setApps);
-  }, [me]);
+      .map((p) => p.load().then((m) => [m.default, ...(m.contributions ?? [])].map((app) => ({ ...app, serves: app.serves ?? p.serves })))))
+      .then((loaded) => { if (live) setApps(loaded.flat()); });
+    return () => { live = false; };
+  }, [packageScope]);
 
   const read = <T,>(path: string, refetchInterval: number | false = false, options: { retry?: false } = {}) =>
     useQuery({ queryKey: [token, tenant, path], queryFn: () => client.get<T>(path), refetchInterval, enabled: ready, ...options });
@@ -187,27 +196,52 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     };
   }, [actions, apps, client, decide, definitions, entities, me, outbox, protocols, queries, revision]);
 
-  const [current, setCurrent] = useState(remembered("workspace:app"));
+  const selectionScope = me ? `workspace:selection:${me.tenantId}:${me.principalId}` : undefined;
+  const scope = useRef(selectionScope);
+  scope.current = selectionScope;
+  const [current, setCurrent] = useState<string>();
+  useEffect(() => { setCurrent(selectionScope ? remembered(selectionScope) : undefined); }, [selectionScope]);
   // The apps this member may open: the code packages above, and the
   // applications this tenant handed to its people (ADR-0036).
   const [activeRoute, setActiveRoute] = useState<Route>();
-  const all = useMemo(() => [...(apps ?? []), ...tenantApps(definitions, { application: activeRoute?.params?.application, instance: activeRoute?.params?.instance })], [apps, definitions, activeRoute?.params?.application, activeRoute?.params?.instance]);
+  const all = useMemo(() => [...(apps ?? []), ...tenantApps(definitions, { application: activeRoute?.params?.application, instance: activeRoute?.params?.instance })]
+    .filter((app) => !app.for || !!host && app.for(host)), [apps, definitions, host, activeRoute?.params?.application, activeRoute?.params?.instance]);
+  const business = all.filter((app) => (app.surface ?? "work") === "work");
+  const entries = useRef(all);
+  entries.current = all;
   // The launcher is drawn inside a panel that outlives this render, so it reads
   // the apps through a reference: one handed over while the workspace is open
   // belongs there too (ADR-0036).
   const open = useRef<AppUI[]>([]);
-  open.current = all;
+  open.current = business;
   const registry = useRef<Definition[]>([]); // read by tab titles, as the launcher reads `open`
   registry.current = definitions;
   const app = all.find((a) => a.id === current);
+  const surface = app?.surface ?? "work";
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
-  const select = useCallback((id: string) => { setCurrent(id); remember("workspace:app", id); }, []);
+  const select = useCallback((id?: string) => {
+    if (scope.current !== selectionScope) return;
+    setCurrent(id);
+    if (selectionScope) {
+      remember(selectionScope, id ?? "");
+      const selected = entries.current.find((entry) => entry.id === id);
+      if (selected) remember(`${selectionScope}:${selected.surface ?? "work"}`, selected.id);
+    }
+  }, [selectionScope]);
   useEffect(() => {
     if (!activeRoute) return;
+    if (["home", "inbox", "requests", "notifications", "outbox"].includes(activeRoute.view)) {
+      if (app && surface !== "work") select(undefined);
+      return;
+    }
+    const requested = activeRoute.params?.surface ?? (["catalog", "catalog-example"].includes(activeRoute.view)
+      && activeRoute.params?.mode === "builder" ? "studio" : undefined);
+    const context = requested && all.find((entry) => entry.surface === requested);
+    if (context) { if (context.id !== current) select(context.id); return; }
     const id = owner.get(activeRoute.view) ?? pageApplication(activeRoute, definitions, current)
-      ?? (["records", "definitions"].includes(activeRoute.view) && apps?.some((a) => a.id === "platform") ? "platform" : undefined);
+      ?? (["records", "definitions"].includes(activeRoute.view) ? all.find((entry) => entry.surface === "developer")?.id : undefined);
     if (id && id !== current && all.some((a) => a.id === id)) select(id);
-  }, [activeRoute, all, apps, current, definitions, owner, select]);
+  }, [activeRoute, all, app, current, definitions, owner, select, surface]);
   const views = useMemo(() => {
     const views = [...chromeViews(() => open.current, (id) => {
       select(id);
@@ -234,6 +268,22 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }
   if (!host || !apps || !ready) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
 
+  const entryPoints = [
+    { id: "work", title: t("Business workspace"), icon: <LayoutGrid /> },
+    ...(all.some((entry) => entry.surface === "studio") ? [{ id: "studio", title: t("Application Studio"), icon: <Hammer /> }] : []),
+    ...(all.some((entry) => entry.surface === "tenant") ? [{ id: "tenant", title: t("Tenant console"), icon: <SlidersHorizontal /> }] : []),
+    ...(host.role("build") === "builder" || host.role("platform") === "admin" || surface === "developer"
+      ? [{ id: "developer", title: t("Developer reference"), icon: <BookOpen /> }] : []),
+  ];
+  const chooseSurface = (id: string) => {
+    const candidates = all.filter((entry) => (entry.surface ?? "work") === id);
+    const last = selectionScope ? remembered(`${selectionScope}:${id}`) : undefined;
+    const target = candidates.find((entry) => entry.id === last) ?? candidates[0];
+    if (!target && id !== "work") return;
+    select(target?.id);
+    location.hash = id === "work" ? "#/inbox" : routeToHash({ ...target!.home, params: { ...target!.home.params, surface: id as WorkspaceSurface } });
+  };
+
   const sessionOptions = [
     ...(me!.tenants.length > 1 ? me!.tenants.map((tenant) => ({ id: `tenant:${tenant}`, label: `${t("Tenant")} ${tenant}` })) : []),
     ...(signedIn ? [{ id: "sign-out", label: t("Sign out {email}", { email: signedIn.session.email }) }]
@@ -241,36 +291,44 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   ];
   const onSwitch = (id: string) => {
     if (id === "sign-out" && signedIn) void signOut(signedIn.config);
-    if (id.startsWith("tenant:")) { setTenant(id.slice(7)); remember("workspace:tenant", id.slice(7)); setReady(false); }
-    if (id.startsWith("as:")) { setToken(id.slice(3)); remember("workspace:identity", id.slice(3)); setReady(false); setApps(undefined); }
+    if (id.startsWith("tenant:") || id.startsWith("as:")) {
+      history.replaceState(null, "", "#/inbox");
+      setActiveRoute(undefined);
+      setCurrent(undefined);
+      setReady(false);
+      setApps(undefined);
+    }
+    if (id.startsWith("tenant:")) { setTenant(id.slice(7)); remember("workspace:tenant", id.slice(7)); }
+    if (id.startsWith("as:")) { setToken(id.slice(3)); remember("workspace:identity", id.slice(3)); }
   };
   const badge = (n: number) => n ? <span className="text-xs text-[var(--tone-info)]">{n}</span> : null;
   const waiting = outbox.filter((e) => e.state !== "SUBMISSION_STATE_CONFIRMED" && e.state !== "SUBMISSION_STATE_REJECTED").length;
 
   return (
     <HostContext.Provider value={host}>
-      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={app?.title ?? t("Workspace")} storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
-        views={views} home={{ view: "home" }}
+      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={app?.title ?? t("Business workspace")} storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
+        views={views} home={{ view: "inbox" }}
+        entryPoints={{ apps: entryPoints, current: surface, onSelect: chooseSurface }}
         onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
-        launcher={{ apps: all.map((a) => ({ id: a.id, title: a.title, icon: a.icon })), current: app?.id,
-          onSelect: (id) => { select(id); const home = all.find((a) => a.id === id)?.home; if (home) location.hash = routeToHash(home); } }}
+        launcher={surface === "work" ? { apps: business.map((a) => ({ id: a.id, title: a.title, icon: a.icon })), current: app?.id,
+          onSelect: (id) => { select(id); const home = business.find((a) => a.id === id)?.home; if (home) location.hash = routeToHash(home); } } : undefined}
         onActiveRoute={setActiveRoute}
         nav={[
-          { label: t("You"), items: [
-            { label: t("Application launcher"), icon: <LayoutGrid />, route: { view: "home" } },
+          ...(surface === "work" ? [{ label: t("My work"), items: [
+            { label: t("Business applications"), icon: <LayoutGrid />, route: { view: "home" } },
             { label: t("Inbox"), icon: <Inbox />, route: { view: "inbox" } },
             { label: t("My requests"), icon: <Send />, route: { view: "requests" } },
             { label: t("Notifications"), icon: <Bell />, route: { view: "notifications" }, badge: badge(unread) },
             ...(host.can("agent.run.start") ? [{ label: t("Assistant"), icon: <Sparkles />, route: { view: "assistant" } }] : []),
             ...(waiting ? [{ label: t("Outbox"), icon: <Upload />, route: { view: "outbox" }, badge: badge(waiting) }] : []),
-          ] },
-          ...(saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
+          ] }] : []),
+          ...(surface === "work" && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
           ...(app?.dashboards?.some((d) => !d.for || d.for(host)) ? [{ label: t("Dashboards"), items: app.dashboards.filter((d) => !d.for || d.for(host))
             .map((d) => ({ label: d.title, icon: <Gauge />, route: { view: "dashboard", params: { app: app.id, id: d.id } } })) }] : []),
           ...(app?.nav(host) ?? []),
         ]}
         commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() },
-          { id: "active-release", label: t("Active release"), run: () => setReleaseOpen(true) },
+          { id: "active-release", label: t("Last activated release"), run: () => setReleaseOpen(true) },
           { id: "search", label: t("Search"), run: () => { location.hash = "#/search"; } },
           ...(host.role("build") === "builder" ? [
             { id: "records", label: t("Browse all records"), run: () => { location.hash = "#/records"; } },
@@ -280,11 +338,11 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           .map((h) => ({ id: `${h.type}/${h.id}`, label: h.title || h.id, detail: `${h.type} · ${h.id}`,
             open: () => { const view = host?.opens.get(h.type); location.hash = routeToHash(view ? { view, params: { id: h.id } } : { view: "record", params: { type: h.type, id: h.id } }); } }))}
         status={<div className="flex items-center gap-2 text-xs text-muted">
-          <span className="max-lg:hidden">{app ? `${app.title}: ${host.role(app.id.split(":")[0]!) ?? "—"}` : t("{n} apps", { n: apps.length })}</span>
-          <Button size="sm" variant="ghost" aria-label={t("Active release")} onClick={() => setReleaseOpen(true)}
+          <span className="max-lg:hidden">{me!.tenantId}</span>
+          <Button size="sm" variant="ghost" aria-label={t("Last activated release")} onClick={() => setReleaseOpen(true)}
             title={!releaseUnavailable ? release.data?.id : undefined}>
             {releaseUnavailable ? t("Release unavailable") : release.isPending ? t("Checking release…") :
-              release.data?.id ? <>{t("Active release")}: <code>{release.data.id.split(":").at(-1)?.slice(0, 10)}</code></> : t("No activated release")}
+              release.data?.id ? <>{t("Last activated release")}: <code>{release.data.id.split(":").at(-1)?.slice(0, 10)}</code></> : t("No activated release")}
           </Button>
         </div>}
         session={{ tenant: me!.tenantId, principal: me!.principalId, detail: signedIn?.session.email, options: sessionOptions,
@@ -296,7 +354,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
 /** Public activation identity; candidate descriptors remain builder-only. */
 function ReleaseInformation({ query, open, onOpenChange }: { query: UseQueryResult<Api.ReleaseActive>; open: boolean; onOpenChange: (open: boolean) => void }) {
-  return <Dialog open={open} onOpenChange={onOpenChange} title={t("Active release")}>
+  return <Dialog open={open} onOpenChange={onOpenChange} title={t("Last activated release")}>
     <div className="grid gap-3 text-sm">
       {query.isError || query.fetchStatus === "paused" ? <p role="alert">{t("The active release could not be read. Retry to check the current identifier.")}</p> :
         query.isPending ? <p role="status">{t("Checking release…")}</p> : query.data?.id ?

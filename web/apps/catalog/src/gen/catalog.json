@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:f70f39537ec2e11f",
+  "revision": "sha256:e68d0dc03866a426",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4537,6 +4537,7 @@
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/index.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
@@ -4785,6 +4786,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/index.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
@@ -4886,6 +4888,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/index.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/processes.tsx",
@@ -5574,7 +5577,8 @@
         "WidgetID",
         "WidgetImplementation",
         "WidgetRegistry",
-        "WorkViewsHost"
+        "WorkViewsHost",
+        "WorkspaceSurface"
       ]
     },
     "@pkg/build": {

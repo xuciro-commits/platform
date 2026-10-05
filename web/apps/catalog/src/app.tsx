@@ -18,7 +18,7 @@ export function catalogNavigation(mode: "builder" | "developer" = "builder"): Na
       items: [
         { label: t("All assets"), icon: <Boxes />, route: { view: "catalog", params: { mode } } },
         { label: t("Sandbox"), icon: <Terminal />, route: { view: "sandbox" } },
-        { label: t("Governance"), icon: <Network />, route: { view: "governance" } },
+        { label: t("Quality and compatibility"), icon: <Network />, route: { view: "governance" } },
       ],
     },
   ];
@@ -26,12 +26,19 @@ export function catalogNavigation(mode: "builder" | "developer" = "builder"): Na
 
 export default defineApp({
   id: "catalog",
+  surface: "developer",
   get title() {
     return t("Platform Catalog");
   },
   icon: <BookOpen />,
-  home: { view: "catalog", params: { mode: "builder" } },
-  nav: () => catalogNavigation(),
+  home: { view: "catalog", params: { mode: "developer" } },
+  nav: (host) => [
+    ...catalogNavigation("developer"),
+    ...(host.role("build") === "builder" || host.role("platform") === "admin" ? [{ label: t("Data diagnostics"), items: [
+      { label: t("Records"), route: { view: "records", params: { surface: "developer" } } },
+      { label: t("Definitions"), route: { view: "definitions", params: { surface: "developer" } } },
+    ] }] : []),
+  ],
   views: [
     {
       id: "catalog-example",

@@ -27,6 +27,12 @@ export async function open(page: Page, token: string, route: string) {
   await page.goto(`/#${route}`);
 }
 
+/** Task surfaces share the shell and leave existing editor tabs mounted. */
+export async function switchWorkspace(page: Page, title: string) {
+  await page.getByRole("button", { name: "Workspaces", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: title, exact: true }).click();
+}
+
 /** A fresh ID, so tests never meet each other's records on the shared host. */
 export const fresh = (prefix: string) => `${prefix}-${Date.now().toString(36).toUpperCase()}${n++}`;
 

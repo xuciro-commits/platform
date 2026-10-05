@@ -159,7 +159,16 @@ func TestFlowCancellationRevokesOriginalOperationGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tenant.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) { return entry.Body, nil }
+	tenant.AcceptResult = func(entry Entry, key, hash string) ([]byte, error) {
+		identity, err := acceptedIdentity(entry.Body)
+		if err != nil {
+			return nil, err
+		}
+		if identity.Tenant != tenant.ID || identity.App != entry.App || identity.Key != key || identity.Hash != hash {
+			t.Fatal("operation result failed journal identity admission")
+		}
+		return entry.Body, nil
+	}
 	member, _ := tenant.Member("builder")
 	submit := func(app, key, schema, typ, id string, payload any) {
 		t.Helper()

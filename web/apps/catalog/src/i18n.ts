@@ -1,6 +1,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Quality and compatibility": "质量与兼容",
+  "Data diagnostics": "数据诊断",
+  "Records": "记录",
+  "Definitions": "定义",
   "Only builders can open Application Studio.": "只有构建者可以打开应用设计台。",
   "Platform Catalog": "平台资产库",
   "Components": "组件库",

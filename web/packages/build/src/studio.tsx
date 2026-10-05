@@ -123,7 +123,7 @@ function StudioInventory() {
   const loading = [objects, pages, workflows, queries, functions, computes, applications].some((query) => query.isLoading);
   const failed = [objects, pages, workflows, queries, functions, computes, applications].some((query) => query.isError);
   return <div className="grid gap-4">
-    <PageHeader title={t("Application Studio")} description={t("Build with the capabilities already available in this workspace.")}
+    <PageHeader title={t("Shared resources")} description={t("Maintain reusable assets and background automation with their original editors.")}
       actions={<Button onClick={() => open({ view: "studio-templates" })}>{t("Studio templates")}</Button>} />
     <Panel role="region" aria-label={t("Studio capabilities")} className="grid gap-3 border-0 bg-transparent p-0 sm:grid-cols-2 xl:grid-cols-3">
       {[

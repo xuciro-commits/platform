@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { decide, fresh, open } from "./host";
+import { decide, fresh, open, switchWorkspace } from "./host";
 
 test("editors keep drafts across navigation and require a choice before discarding", async ({ page, request }, testInfo) => {
   const name = fresh("guard").replace(/[^a-z0-9]/gi, "").toLowerCase();
@@ -27,7 +27,7 @@ test("editors keep drafts across navigation and require a choice before discardi
   await page.getByRole("button", { name: "Page settings", exact: true }).click();
   await expect(title).toHaveValue("Saved page");
   await title.fill("Local page draft");
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Application launcher", exact: true }).click();
+  await switchWorkspace(page, "Business workspace");
   await expect(confirmation).toHaveCount(0); // navigation leaves the editor mounted
   await page.getByRole("tab", { name: "Compose a page", exact: true }).click();
   await expect(title).toHaveValue("Local page draft");

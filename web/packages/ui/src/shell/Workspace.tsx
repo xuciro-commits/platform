@@ -116,10 +116,10 @@ function dockFloating(api: DockviewApi) {
  * tabs are routes (one per entity), a command palette (⌘K) and notifications.
  * The layout survives restarts (per `storageKey`); the active tab is in the URL.
  */
-export function Workspace({ product, storageKey, views, nav, home, menus = [], commands = [], session, status, launcher, onActiveRoute, onLanguage, search }: {
+export function Workspace({ product, storageKey, views, nav, home, menus = [], commands = [], session, status, launcher, entryPoints, onActiveRoute, onLanguage, search }: {
   product: string; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
   menus?: Menu[]; commands?: ShellCommand[]; session?: Session; status?: ReactNode;
-  launcher?: Launcher; onActiveRoute?: (route: Route) => void;
+  launcher?: Launcher; entryPoints?: Launcher; onActiveRoute?: (route: Route) => void;
   /** Records matching what is typed in the palette (⌘K), opened on choice: the palette searches data, not only commands. */
   search?: (text: string) => Promise<{ id: string; label: string; detail?: string; open: () => void }[]>;
   /** Keeps a chosen language beyond this browser, e.g. as the member's preference; the page reloads in it after. */
@@ -321,7 +321,8 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
         <header className="flex min-w-0 items-center gap-2 overflow-hidden border-b border-border bg-surface px-2">
           <button type="button" aria-label={t("Toggle navigation")} aria-expanded={navigationVisible} onClick={toggleNavigation}
             className="rounded-sm p-1 text-muted hover:bg-row-hover hover:text-foreground"><PanelLeft className="size-4" /></button>
-          {launcher ? <AppMenu launcher={launcher} product={product} /> : <span className="pr-2 text-sm font-semibold tracking-tight">{product}</span>}
+          {entryPoints && <AppMenu launcher={entryPoints} product={entryPoints.apps.find((entry) => entry.id === entryPoints.current)?.title ?? product} label={t("Workspaces")} />}
+          {launcher ? <AppMenu launcher={launcher} product={product} /> : !entryPoints && <span className="pr-2 text-sm font-semibold tracking-tight">{product}</span>}
           <Menubar.Root className="hidden items-center sm:flex">
             {[...menus, ...builtInMenus].map((menu) => (
               <Menubar.Menu key={menu.label}>
@@ -393,6 +394,12 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
               ))}
             </Command.Group>
           )}
+          {entryPoints && (
+            <Command.Group heading={t("Workspaces")} className={paletteGroup}>
+              {entryPoints.apps.map((entry) => <Command.Item key={entry.id} value={`workspace ${entry.title}`} className={paletteItem}
+                onSelect={() => { entryPoints.onSelect(entry.id); setPaletteOpen(false); }}>{entry.icon}{entry.title}</Command.Item>)}
+            </Command.Group>
+          )}
           {launcher && (
             <Command.Group heading={t("Apps")} className={paletteGroup}>
               {launcher.apps.map((a) => (
@@ -450,15 +457,15 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   );
 }
 
-function AppMenu({ launcher, product }: { launcher: Launcher; product: string }) {
+function AppMenu({ launcher, product, label = t("Apps") }: { launcher: Launcher; product: string; label?: string }) {
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label={t("Apps")} className="flex h-7 items-center gap-2 rounded-md px-2 text-sm font-semibold tracking-tight hover:bg-row-hover">
-        <LayoutGrid className="size-4 text-muted" />{product}<ChevronDown className="size-3.5 text-muted" />
+      <DropdownMenu.Trigger aria-label={label} className="flex h-7 min-w-0 max-w-56 items-center gap-2 rounded-md px-2 text-sm font-semibold tracking-tight hover:bg-row-hover max-sm:max-w-28">
+        <LayoutGrid className="size-4 shrink-0 text-muted" /><span className="truncate">{product}</span><ChevronDown className="size-3.5 shrink-0 text-muted" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" sideOffset={4} className={menuPanel}>
-          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Apps")}</DropdownMenu.Label>
+          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{label}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={launcher.current ?? ""} onValueChange={launcher.onSelect}>
             {launcher.apps.map((a) => (
               <DropdownMenu.RadioItem key={a.id} value={a.id} className={cn(menuItem, "gap-2 [&_svg]:size-3.5")}>
@@ -475,11 +482,11 @@ function AppMenu({ launcher, product }: { launcher: Launcher; product: string })
 function SessionMenu({ session, onLanguageSelect }: { session: Session; onLanguageSelect: (id: string) => void }) {
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger className="flex h-7 items-center gap-2 rounded-md border border-border px-2 text-sm hover:bg-row-hover">
+      <DropdownMenu.Trigger aria-label={`${session.principal} · ${session.tenant}`} className="flex h-7 shrink-0 items-center gap-2 rounded-md border border-border px-2 text-sm hover:bg-row-hover">
         <span className="grid size-5 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
           {session.principal.slice(0, 1).toUpperCase()}
         </span>
-        <span className="text-left leading-tight">
+        <span className="text-left leading-tight max-sm:hidden">
           <span className="block text-sm">{session.principal}</span>
           <span className="block text-xs text-muted">{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
         </span>

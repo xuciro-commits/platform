@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Business workspace": "业务工作台",
+  "Application Studio": "应用工坊",
+  "Tenant console": "租户控制台",
+  "Developer reference": "开发参考",
+  "My work": "我的工作",
+  "Business applications": "业务应用",
+  "Last activated release": "租户最后激活的发布",
   "Application launcher": "应用启动器",
   "Browse all records": "浏览全部记录",
   "Browse definitions": "浏览定义",
