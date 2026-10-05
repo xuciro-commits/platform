@@ -16,6 +16,11 @@ test("application declarations bind two released pages and isolate and close exp
   await decide(request, "manager", "build", "build.app.create", { type: "build.app", id: appID }, { name: `${name}app`, title: "Shared desk", pages: [`${name}first`, `${name}second`], uiProfile: pageUIProfile, variables: declarations("initial") });
   await decide(request, "manager", "build", "build.app.publish", { type: "build.app", id: appID }, {});
   await open(page, "manager", `/application?id=${appID}`);
+  // A page opens in the editor that maintains it, with the application kept in context (ADR-0047 §6.2).
+  await page.getByRole("button", { name: "Open Shared first", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Back to application", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Back to application", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save application", exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Choose application variable", exact: true }).selectOption("draft");
   await page.getByLabel("Initial value", { exact: true }).fill("start");
   await page.getByRole("button", { name: "Save application", exact: true }).click();

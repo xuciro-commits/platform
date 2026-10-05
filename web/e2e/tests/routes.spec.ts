@@ -90,7 +90,8 @@ test("route 29: define an object, publish it, use it", async ({ page }) => {
   const name = `visit${Date.now().toString(36).slice(-5)}`;
   await open(page, "manager", "/home");
   await switchWorkspace(page, "Application Studio"); // the app, from the launcher
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Objects", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Shared resources", exact: true }).click();
+  await page.getByRole("button", { name: "Objects and relationships", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Objects" })).toBeVisible();
   await page.getByRole("button", { name: "Create object" }).click();
   const dialog = page.getByRole("dialog");
@@ -113,7 +114,7 @@ test("route 29: define an object, publish it, use it", async ({ page }) => {
 
   // Publication does not dump an automatic CRUD page into Studio's menu.
   const nav = page.getByRole("navigation", { name: "Main", exact: true });
-  await expect(nav.getByRole("button", { name: "Objects", exact: true })).toHaveCount(1);
+  await expect(nav.getByRole("button", { name: "Shared resources", exact: true })).toHaveCount(1);
   await expect(nav.getByRole("button", { name: "Process and access", exact: true })).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "Visits", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Open records", exact: true }).click();
@@ -131,7 +132,8 @@ test("route 30: compose a page of widgets and use it", async ({ page, request })
   await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Composed offsite " + opp });
   await open(page, "manager", "/home");
   await switchWorkspace(page, "Application Studio");
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Pages", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Shared resources", exact: true }).click();
+  await page.getByRole("button", { name: "Pages", exact: true }).click();
   await page.getByRole("button", { name: "Create page" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Name" }).first().fill(name);
@@ -185,7 +187,8 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   // A page to hand over, composed as in route 30.
   await open(page, "manager", "/home");
   await switchWorkspace(page, "Application Studio");
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Pages", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Shared resources", exact: true }).click();
+  await page.getByRole("button", { name: "Pages", exact: true }).click();
   await page.getByRole("button", { name: "Create page" }).click();
   let dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Name" }).first().fill(pageName);

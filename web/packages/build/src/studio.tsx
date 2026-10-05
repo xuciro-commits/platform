@@ -34,7 +34,12 @@ function StudioInventory() {
   const functions = useRecordInventory<Asset>("build.function");
   const computes = useRecordInventory<Asset>("build.code");
   const applications = useRecordInventory<Asset>("build.app");
+  const linkTypes = useRecordInventory<{ id: string; name: string; title?: string }>("build.linktype");
+  const propertyTypes = useRecordInventory<{ id: string; name: string; title?: string }>("build.propertytype");
   const [search, setSearch] = useState("");
+  // The library is the single resource entry: owned assets, the ones no application
+  // references yet, and pageless automation each have a view here (ADR-0047 §6.2).
+  const [scope, setScope] = useState<"all" | "unused" | "automation">("all");
   const [selected, setSelected] = useState<string>();
   const [narrow, setNarrow] = useState(() => typeof matchMedia !== "undefined" && matchMedia("(max-width: 639px)").matches);
   const inspectorRef = useRef<HTMLDivElement>(null);
@@ -103,25 +108,36 @@ function StudioInventory() {
     }
     return { assets, edges };
   }, [applications.data, queries.data, functions.data, computes.data, objects.data, pages.data, workflows.data, definitions]);
+  const referenced = useMemo(() => {
+    const keys = new Set<string>();
+    for (const edge of all.edges) if (edge.id.startsWith("resource:") || edge.id.startsWith("contains:")) { keys.add(edge.source); keys.add(edge.target); }
+    return keys;
+  }, [all]);
+  const scoped = useMemo(() => {
+    const maintained = ["object", "page", "workflow", "query", "function", "compute"];
+    if (scope === "automation") return all.assets.filter((asset) => ["workflow", "function", "compute"].includes(asset.kind));
+    if (scope === "unused") return all.assets.filter((asset) => maintained.includes(asset.kind) && !referenced.has(asset.key));
+    return all.assets;
+  }, [all, scope, referenced]);
   const visible = useMemo(() => {
     const q = search.trim().toLocaleLowerCase();
-    const matches = q ? all.assets.filter((asset) => `${asset.label} ${asset.detail}`.toLocaleLowerCase().includes(q)) : all.assets;
+    const matches = q ? scoped.filter((asset) => `${asset.label} ${asset.detail}`.toLocaleLowerCase().includes(q)) : scoped;
     const keys = new Set(matches.slice(0, 80).map((asset) => asset.key));
     if (q) for (const edge of all.edges) if (keys.has(edge.source) || keys.has(edge.target)) { keys.add(edge.source); keys.add(edge.target); }
-    const assets = all.assets.filter((asset) => keys.has(asset.key));
-    const edges = all.edges.filter((edge) => keys.has(edge.source) && keys.has(edge.target));
+    const assets = scoped.filter((asset) => keys.has(asset.key));
+    const edges = all.edges.filter((edge) => assets.some((asset) => asset.key === edge.source) && assets.some((asset) => asset.key === edge.target));
     const places = layout(assets.map((asset) => ({ id: asset.key, label: asset.label })), edges.map((edge) => ({ from: edge.source, to: edge.target })), "right",
       { width: canvasNodeWidth, height: Math.max(...catalog.map(canvasNodeHeight)), gapX: 58, gapY: 32 });
     const nodes: CanvasNode[] = assets.map((asset) => ({ id: asset.key, kind: asset.kind, label: asset.label, detail: asset.detail,
       position: places.get(asset.key) ?? { x: 0, y: 0 } }));
     return { assets, edges, nodes, matches: matches.length };
-  }, [all, search]);
+  }, [all, scoped, search]);
   const current = all.assets.find((asset) => asset.key === selected);
   const connections = all.edges.filter((edge) => edge.source === selected || edge.target === selected)
     .map((edge) => all.assets.find((asset) => asset.key === (edge.source === selected ? edge.target : edge.source)))
     .filter((asset): asset is StudioAsset => Boolean(asset));
-  const loading = [objects, pages, workflows, queries, functions, computes, applications].some((query) => query.isLoading);
-  const failed = [objects, pages, workflows, queries, functions, computes, applications].some((query) => query.isError);
+  const loading = [objects, pages, workflows, queries, functions, computes, applications, linkTypes, propertyTypes].some((query) => query.isLoading);
+  const failed = [objects, pages, workflows, queries, functions, computes, applications, linkTypes, propertyTypes].some((query) => query.isError);
   return <div className="grid gap-4">
     <PageHeader title={t("Shared resources")} description={t("Maintain reusable assets and background automation with their original editors.")}
       actions={<Button onClick={() => open({ view: "studio-templates" })}>{t("Studio templates")}</Button>} />
@@ -131,6 +147,8 @@ function StudioInventory() {
         { title: "Pages", detail: "Compose an interface over your business objects.", route: { view: "pages" }, query: pages },
         { title: "Workflows", detail: "Connect actions, people and published functions.", route: { view: "workflow" }, query: workflows },
         { title: "Queries", detail: "Publish reusable record reads and bind pages to an exact version.", route: {view:"query"}, query:queries },
+        { title: "Relationships", detail: "Define a reference-backed relationship and bind pages to an exact version.", route: { view: "link-type" }, query: linkTypes },
+        { title: "Shared properties", detail: "Publish shared scalar meaning and bind object fields to an exact version.", route: { view: "property-type" }, query: propertyTypes },
         { title: "AI functions", detail: "Configure typed advice and review its results.", route: { view: "function" }, query: functions },
         { title: "Code functions", detail: "Compile typed Go or TinyGo algorithms for pages and workflows.", route: { view: "code" }, query: computes },
         { title: "Applications", detail: "Organize pages and published resources, then review the whole application release.", route: { view: "applications" }, query: applications },
@@ -151,7 +169,11 @@ function StudioInventory() {
           <label className="min-w-0 flex-1 text-xs">{t("Find an asset")}
             <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Search objects, pages and workflows")} />
           </label>
-          <p className="text-xs text-muted" role="status">{t("Showing {shown} of {total} assets", { shown: visible.assets.length, total: all.assets.length })}</p>
+          <div role="group" aria-label={t("Resource scope")} className="flex flex-wrap items-center gap-1">
+            {([["all", "Owned assets"], ["unused", "Not used by an application"], ["automation", "Background automation"]] as const).map(([key, label]) =>
+              <Button key={key} size="sm" variant={scope === key ? "primary" : "ghost"} aria-pressed={scope === key} onClick={() => setScope(key)}>{t(label)}</Button>)}
+          </div>
+          <p className="text-xs text-muted" role="status">{t("Showing {shown} of {total} assets", { shown: visible.assets.length, total: scoped.length })}</p>
         </div>
         {loading ? <p role="status" className="p-6 text-sm text-muted">{t("Loading…")}</p>
           : visible.nodes.length ? <NodeCanvas label={t("Application map")} catalog={catalog} nodes={visible.nodes} edges={visible.edges}
@@ -175,7 +197,7 @@ function StudioInventory() {
           </div>}
           {current.kind === "source" && <p className="text-xs text-muted">{t("This source is installed outside Application Studio.")}</p>}
           {connections.length > 0 && <div className="mt-2 grid gap-1 border-t border-border pt-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Connected assets")}</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Usage and impact")}</h3>
             {connections.map((asset) => <Button key={asset.key} variant="row" onClick={() => selectAsset(asset.key)}>{asset.label}</Button>)}
           </div>}
         </> : <p className="text-sm text-muted">{t("Select a node to inspect its status and open its editor.")}</p>}

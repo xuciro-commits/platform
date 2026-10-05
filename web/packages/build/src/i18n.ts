@@ -2789,4 +2789,10 @@ register("zh-CN", {
   "Columns follow the original lifecycle.": "列沿用原生命周期。",
   "Choose at most four visible summary fields.": "最多选择四个可见摘要字段。",
   "Moves use original action inputs, approvals and record revisions. No action runs while composing.": "移动使用原动作输入、审批与记录修订。编辑时不执行动作。",
+  "Back to application": "返回应用",
+  "Resource scope": "资源范围",
+  "Owned assets": "获权资产",
+  "Not used by an application": "未被应用引用的资源",
+  "Background automation": "后台自动化",
+  "Usage and impact": "使用处与影响",
 });
