@@ -23,12 +23,13 @@ type ReleasePage struct {
 }
 
 type SavedReleaseReview struct {
-	Preview              ReleasePreview `json:"preview"`
-	Active               bool           `json:"active"`
-	RunningMatches       bool           `json:"runningMatches"`
-	RunningDiagnostic    string         `json:"runningDiagnostic,omitempty"`
-	CanActivate          bool           `json:"canActivate"`
-	ActivationDiagnostic string         `json:"activationDiagnostic,omitempty"`
+	Preview              ReleasePreview      `json:"preview"`
+	Active               bool                `json:"active"`
+	RunningMatches       bool                `json:"runningMatches"`
+	RunningDiagnostic    string              `json:"runningDiagnostic,omitempty"`
+	CanActivate          bool                `json:"canActivate"`
+	ActivationDiagnostic string              `json:"activationDiagnostic,omitempty"`
+	UpgradePlan          *ReleaseUpgradePlan `json:"upgradePlan,omitempty"`
 }
 
 func (t *Tenant) SavedReleases(m platform.Member, offset, limit int) (ReleasePage, error) {
@@ -125,6 +126,11 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	reply.CanActivate = err == nil
 	if err != nil {
 		reply.ActivationDiagnostic = err.Error()
+		if plan, planErr := t.releaseUpgradePlanLocked(saved); planErr == nil && plan != nil {
+			if _, checkErr := t.prepareReleaseActivationLocked(id, raw, true); checkErr == nil {
+				reply.UpgradePlan = plan
+			}
+		}
 	}
 	return reply, nil
 }

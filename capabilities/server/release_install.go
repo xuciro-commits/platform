@@ -15,12 +15,12 @@ type releaseInstallation struct {
 	Before string `json:"before"`
 }
 
-func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte) ([]releaseInstallation, error) {
+func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte, upgrade ...bool) ([]releaseInstallation, error) {
 	saved, err := platform.ReadCandidate(id, raw)
 	if err != nil {
 		return nil, err
 	}
-	installations, err := t.releaseInstallationsLocked(saved)
+	installations, err := t.releaseInstallationsLocked(saved, upgrade...)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +34,7 @@ func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte) ([]releas
 // current owner assets and installs it into a tenant draft. It changes nothing
 // committed, so the same call proves a joint draft candidate installs before
 // it is saved (ADR-0048 D2/D4).
-func (t *Tenant) releaseInstallationsLocked(saved platform.ReleaseCandidate) ([]releaseInstallation, error) {
+func (t *Tenant) releaseInstallationsLocked(saved platform.ReleaseCandidate, upgrade ...bool) ([]releaseInstallation, error) {
 	id := saved.ID
 	owner, ok := t.app(build.ID).(*build.Build)
 	if !ok {
@@ -100,7 +100,7 @@ func (t *Tenant) releaseInstallationsLocked(saved platform.ReleaseCandidate) ([]
 		}
 		installations = append(installations, releaseInstallation{publication, before})
 	}
-	if _, err := t.stageReleaseInstallationLocked(installations, true); err != nil {
+	if _, err := t.stageReleaseInstallationLocked(installations, true, upgrade...); err != nil {
 		return nil, err
 	}
 	return installations, nil
@@ -108,7 +108,7 @@ func (t *Tenant) releaseInstallationsLocked(saved platform.ReleaseCandidate) ([]
 
 // The same private installation machinery prepares a live activation and
 // applies committed descriptor images. Replay does not run today's policies.
-func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallation, validate bool) (*Tenant, error) {
+func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallation, validate bool, upgrade ...bool) (*Tenant, error) {
 	owner := t.app(build.ID).(*build.Build)
 	draft := (hostView{t: t, app: owner}).installationDraft()
 	ledger := platform.NewLedger(t.ID, build.ID, platform.NewCatalog())
@@ -151,7 +151,9 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 					return nil, err
 				}
 				if old := draft.records.types[info.Type]; old != nil && len(old.rows) > 0 && !sameStoredFields(old.info, info) {
-					return nil, fmt.Errorf("object %s has records; changing their storage shape needs an upgrade plan", info.Type)
+					if len(upgrade) == 0 || !upgrade[0] || optionalStoredAddition(old.info, info) == nil {
+						return nil, fmt.Errorf("object %s has records; changing their storage shape needs an upgrade plan", info.Type)
+					}
 				}
 				for _, def := range t.definitions {
 					if def.Ref.App == build.ID && def.Action != nil && def.Action.Target == info.Type &&

@@ -61,7 +61,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 			return fmt.Errorf("%s is declared by %s", info.Type, before.info.App)
 		}
 		for id, r := range before.rows {
-			raw, err := json.Marshal(r.value.Interface())
+			raw, err := r.image()
 			if err != nil {
 				return err
 			}
@@ -70,7 +70,8 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 				return err
 			}
 			emptyLists(v)
-			et.rows[id] = &row{value: v, history: r.history}
+			et.rows[id] = &row{value: v, history: copyHistory(r.history)}
+			et.rows[id].retainOriginal(raw)
 		}
 		delete(s.byGo, before.info.Go)
 	}

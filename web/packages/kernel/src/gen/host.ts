@@ -1910,6 +1910,7 @@ export type Related = {
 export type ReleaseActivateRequest = {
   candidateId: string;
   key: string;
+  upgradeId?: string;
 };
 
 export type ReleaseActive = {
@@ -1933,6 +1934,14 @@ export type ReleaseEvaluationRequest = {
 
 export type ReleaseEvaluationStarted = {
   id: string;
+};
+
+export type ReleaseFieldAddition = {
+  type: string;
+  field: string;
+  kind: string;
+  records: number;
+  sourceShape: string;
 };
 
 export type ReleasePage = {
@@ -1977,6 +1986,13 @@ export type ReleaseSummary = {
   assets: number;
 };
 
+export type ReleaseUpgradePlan = {
+  id: string;
+  candidateId: string;
+  activeId: string;
+  additions: ReleaseFieldAddition[];
+};
+
 export type RetainedArtifact = {
   version: string;
   digest?: string;
@@ -2000,6 +2016,7 @@ export type SavedReleaseReview = {
   runningDiagnostic?: string;
   canActivate: boolean;
   activationDiagnostic?: string;
+  upgradePlan?: ReleaseUpgradePlan;
 };
 
 export type SavedView = {

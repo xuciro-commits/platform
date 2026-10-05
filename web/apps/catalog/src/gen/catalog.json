@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:8b8ea689730e0793",
+  "revision": "sha256:e9eaeea1f3bb48fc",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4693,6 +4693,7 @@
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx",
+      "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
       "web/packages/build/src/template-ui.tsx",
       "web/packages/build/src/workflow-binding.tsx",

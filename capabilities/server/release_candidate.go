@@ -264,6 +264,7 @@ type ReleaseSaved struct {
 type ReleaseActivateRequest struct {
 	CandidateID string `json:"candidateId"`
 	Key         string `json:"key"`
+	UpgradeID   string `json:"upgradeId,omitempty"`
 }
 
 // ReleaseActive is the tenant's active release, empty before any activation.

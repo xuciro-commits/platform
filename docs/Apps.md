@@ -18,6 +18,8 @@
 
 发布 profile（ADR-0048）：构建者用设置 `build/releaseProfile` 声明 `development`（默认，开发/导入/探针）或 `production`。production 租户不再提供直接安装——编辑器与资源库不显示按钮，owner 在提交处拒绝其 API 旁路并点名候选路径；正式交付走“审查发布 → 检查依赖 → 保存不可变候选 → 激活”。历史已发布定义、回放与恢复不受影响。
 
+已有数据的字段升级（ADR-0039）：在对象草稿新增一个非必填标量字段，保存并审查/封存候选。发布审查显示“Storage upgrade plan / 存储升级计划”、字段类型及已有记录数；勾选“Confirm this optional field upgrade plan / 确认本次可选字段升级计划”后激活。计划过期须刷新并重新确认，未提供计划的接口请求仍拒绝。旧值和历史保持，新动作可写新字段；旧流程保留启动版本并沿原动作继续。该 profile 不支持必填、引用、选择、金额或一般转换，范围归 ADR-0039。
+
 完整 Workshop 模块导入：在已保存、已发布的应用编辑器点击“Import complete Workshop module / 导入完整 Workshop 模块”，选择原 JSON，为所有来源页选择新页面或现有页面。通过“Edit shared platform bindings / 编辑共同平台绑定”配置原对象/字段/动作和应用端口；来源页选择只切换专属配置，共同映射保留。也可加载与原文一致的已下载映射报告，所有绑定重新检查。查询、模型函数、Go/Wasm 和嵌入分析页先由其原编辑器真实发布，再在此显式选择固定版本。审查各页诊断、四浮层/库存及呈现差异后保存并发布页面；完成后关闭窗口，Save application，再进入原应用候选审查。失败可查看已保存/发布进度并继续，未确认提交先沿原 Pending changes 重新发送；离开编辑器前下载原文和报告。边界归 [ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-格式与导入)。
 
 表格多选：在“Page variables / 页面变量”创建resource，选择“Record selection set / 记录选择集合”和来源Table；在Table检查器的“Record selection set output / 记录选择集合输出”绑定同一变量。运行时逐项勾选或“Select this window / 选择当前窗口”，行点击设活动记录，Ctrl/Cmd切换、Shift选择同窗口范围；最多64条，通过原记录读取确认后显示选中摘要。全选只表示当前窗口，分页/查询变化清空，不表示完整匹配集合。其他表格、活动记录和浮层独立，关闭浮层/刷新/成员或定义变化清理，失败不保留旧摘要。外包selectionMode=multiple与selectedVarId/selectedObjects沿此生成record-set，活动记录获得独立具名选择槽；原详情和动作仍消费活动记录。该集合不进入页面接口、路由、业务数据或自动批量动作，边界见[ADR-0046 §6.24](ADR/0046-application-studio-fusion.md#624-表格的有界记录多选输出)。

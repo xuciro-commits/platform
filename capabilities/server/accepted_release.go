@@ -29,16 +29,22 @@ type acceptedRelease struct {
 	// Active marks an activation: the tenant's single release pointer moves to
 	// this saved candidate (ADR-0039 D2). A save leaves the pointer alone.
 	Active        bool                  `json:"active,omitempty"`
+	UpgradeID     string                `json:"upgradeId,omitempty"`
 	Installations []releaseInstallation `json:"installations,omitempty"`
 	RequestHash   string                `json:"requestHash"`
 	Digest        string                `json:"digest"`
 }
 
-func releaseRequestHash(tenant, member, key, id string, active bool) (string, error) {
+func releaseRequestHash(tenant, member, key, id string, active bool, upgrade ...string) (string, error) {
+	upgradeID := ""
+	if len(upgrade) > 0 {
+		upgradeID = upgrade[0]
+	}
 	return canonicalDigest(struct {
 		Tenant, Member, Key, CandidateID string
 		Active                           bool
-	}{tenant, member, key, id, active})
+		UpgradeID                        string `json:"UpgradeID,omitempty"`
+	}{tenant, member, key, id, active, upgradeID})
 }
 
 func encodeAcceptedRelease(saved acceptedRelease) ([]byte, error) {
@@ -73,13 +79,16 @@ func decodeAcceptedRelease(raw []byte) (acceptedRelease, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return saved, fmt.Errorf("release result has trailing data")
 	}
-	hash, err := releaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, saved.Active)
-	if err != nil || (saved.Version != 1 && saved.Version != 2) || saved.Kind != "release-result" || saved.App != build.ID ||
+	hash, err := releaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, saved.Active, saved.UpgradeID)
+	if err != nil || (saved.Version != 1 && saved.Version != 2 && saved.Version != 3) || saved.Kind != "release-result" || saved.App != build.ID ||
 		saved.Tenant == "" || saved.Member == "" || saved.Key == "" || saved.At.IsZero() ||
 		saved.RequestHash != hash {
 		return saved, fmt.Errorf("invalid release result identity")
 	}
-	if len(saved.Installations) > 0 && (saved.Version != 2 || !saved.Active) {
+	if (saved.Version == 3) != (saved.UpgradeID != "") || saved.Version == 3 && !saved.Active {
+		return saved, fmt.Errorf("storage upgrade needs an active format-3 result")
+	}
+	if len(saved.Installations) > 0 && (saved.Version < 2 || !saved.Active) {
 		return saved, fmt.Errorf("definition installation needs an active format-2 release result")
 	}
 	digest, err := releaseDigest(saved)
@@ -139,6 +148,12 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 		t.releaseApplied = map[string]string{}
 	}
 	t.releaseApplied[saved.Key] = saved.Digest
+	if saved.Version == 3 {
+		if t.acceptedAnswers == nil {
+			t.acceptedAnswers = map[string]json.RawMessage{}
+		}
+		t.acceptedAnswers["release:"+saved.Key] = slices.Clone(raw)
+	}
 	return saved, nil
 }
 
@@ -203,6 +218,10 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 // in one committed result (ADR-0039 D2). Unsupported upgrades and changed code
 // dependencies are refused before either state is exposed.
 func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now time.Time) (string, error) {
+	return t.ActivateReleaseWithUpgrade(m, candidateID, key, "", now)
+}
+
+func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key, upgradeID string, now time.Time) (string, error) {
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
@@ -217,14 +236,35 @@ func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now
 	if t.quarantined() {
 		return "", fmt.Errorf("tenant is quarantined")
 	}
+	if prior := t.acceptedAnswers["release:activate:"+key]; prior != nil {
+		saved, err := decodeAcceptedRelease(prior)
+		hash, hashErr := releaseRequestHash(t.ID, m.ID, "activate:"+key, candidateID, true, upgradeID)
+		if err != nil || hashErr != nil || hash != saved.RequestHash {
+			return "", fmt.Errorf("activation key belongs to another request")
+		}
+		return saved.CandidateID, nil
+	}
 	raw := t.releaseCandidates[candidateID]
 	if raw == nil {
 		return "", fmt.Errorf("release candidate %s is not saved", candidateID)
 	}
 	var installations []releaseInstallation
+	if upgradeID != "" {
+		candidate, err := platform.ReadCandidate(candidateID, raw)
+		if err != nil {
+			return "", err
+		}
+		plan, err := t.releaseUpgradePlanLocked(candidate)
+		if err != nil {
+			return "", err
+		}
+		if plan == nil || plan.ID != upgradeID {
+			return "", fmt.Errorf("storage upgrade plan changed; refresh and review it again")
+		}
+	}
 	if t.runningMatchesLocked(candidateID, raw) != nil {
 		var err error
-		installations, err = t.prepareReleaseActivationLocked(candidateID, raw)
+		installations, err = t.prepareReleaseActivationLocked(candidateID, raw, upgradeID != "")
 		if err != nil {
 			return "", err
 		}
@@ -240,8 +280,11 @@ func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now
 	if len(installations) > 0 {
 		saved.Version = 2
 	}
+	if upgradeID != "" {
+		saved.Version, saved.UpgradeID = 3, upgradeID
+	}
 	var err error
-	saved.RequestHash, err = releaseRequestHash(t.ID, m.ID, saved.Key, candidateID, true)
+	saved.RequestHash, err = releaseRequestHash(t.ID, m.ID, saved.Key, candidateID, true, upgradeID)
 	if err != nil {
 		return "", err
 	}

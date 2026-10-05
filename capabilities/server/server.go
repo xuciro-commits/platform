@@ -655,7 +655,7 @@ func (h *Host) Handler() http.Handler {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		id, err := t.ActivateRelease(m, request.CandidateID, request.Key, h.Now())
+		id, err := t.ActivateReleaseWithUpgrade(m, request.CandidateID, request.Key, request.UpgradeID, h.Now())
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return

@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Storage upgrade plan": "存储升级计划",
+  "Add optional fields without changing existing values or record history. Required fields, type changes and removals are refused.": "新增可选字段，保留已有值与记录历史；拒绝新增必填字段、类型变更和字段删除。",
+  "{count} existing records": "{count} 条已有记录",
+  "Confirm this optional field upgrade plan": "确认本次可选字段升级计划",
   "Field choices come from a saved object draft. Business data is available after joint activation.": "字段选项来自已保存对象草稿；联合激活后才能读取业务数据。",
   "Choose existing resources": "选择已有资源",
   "Show application resources": "查看应用资源",

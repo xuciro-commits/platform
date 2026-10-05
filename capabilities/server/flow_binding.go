@@ -1,9 +1,12 @@
 package platformserver
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"slices"
 
+	"platformserver/apps/build"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
@@ -26,6 +29,18 @@ func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding
 		binding.Assets = append(binding.Assets, dependency.Ref)
 	}
 	if prior.Dependencies != "" && prior.Dependencies != closure.ID {
+		if raw := h.t.releaseCandidates[prior.Release]; raw != nil {
+			if saved, err := platform.ReadCandidate(prior.Release, raw); err == nil {
+				if original, err := platform.Candidate([]platform.AssetRef{root}, saved.Assets); err == nil && original.ID == prior.Dependencies && compatibleFlowStorageExpansion(original, closure) {
+					bound := prior
+					bound.Assets = nil
+					for _, asset := range original.Assets {
+						bound.Assets = append(bound.Assets, asset.Ref)
+					}
+					return bound, nil
+				}
+			}
+		}
 		return binding, fmt.Errorf("flow %s version %d dependency release changed", root, version)
 	}
 	if prior.Dependencies == "" {
@@ -48,6 +63,34 @@ func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding
 		return binding, fmt.Errorf("flow %s version %d differs from its activated release", root, version)
 	}
 	return binding, nil
+}
+
+// Keep the original dependency identity. Only additive storage differs; every
+// executable asset must remain byte-identical to the instance's saved closure.
+func compatibleFlowStorageExpansion(before, after platform.ReleaseCandidate) bool {
+	if len(before.Assets) != len(after.Assets) {
+		return false
+	}
+	for _, old := range before.Assets {
+		at := slices.IndexFunc(after.Assets, func(next platform.ReleaseAsset) bool { return next.Ref == old.Ref })
+		if at < 0 {
+			return false
+		}
+		next := after.Assets[at]
+		a, _ := json.Marshal(old)
+		b, _ := json.Marshal(next)
+		if bytes.Equal(a, b) {
+			continue
+		}
+		if old.Ref.App != build.ID || old.Ref.Kind != platform.AssetObject || old.SourceVersion != next.SourceVersion || old.ContractVersion != next.ContractVersion || !slices.Equal(old.Requires, next.Requires) {
+			return false
+		}
+		var oldObject, nextObject build.Object
+		if json.Unmarshal(old.Body, &oldObject) != nil || json.Unmarshal(next.Body, &nextObject) != nil || !build.CompatibleObjectExpansion(oldObject, nextObject) {
+			return false
+		}
+	}
+	return true
 }
 
 func (h hostView) flowClosure(app, name string, version int) (platform.ReleaseCandidate, platform.AssetRef, error) {

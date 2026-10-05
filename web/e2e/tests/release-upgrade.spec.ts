@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { decide, fresh, open } from "./host";
 
-test("a workflow upgrade preserves existing data and waiting runs and refuses a storage migration", async ({ page, request }, testInfo) => {
+test("workflow and optional-field upgrades preserve data and waiting runs", async ({ page, request }, testInfo) => {
   const name = fresh("upgrade").replace(/[^a-z0-9]/gi, "").toLowerCase();
   const type = `build.${name}`, flowName = `${name}flow`;
   const objectID = fresh("OBJ"), flowID = fresh("FLOW"), oldRecord = fresh("OLD"), newRecord = fresh("NEW");
@@ -90,15 +90,8 @@ test("a workflow upgrade preserves existing data and waiting runs and refuses a 
   if (process.env.PLATFORM_SCREENSHOTS) await operator.screenshot({ path: testInfo.outputPath("active-release-menu.png") });
   await releaseDialog.getByRole("button", { name: "Close", exact: true }).click();
   if (process.env.PLATFORM_SCREENSHOTS && viewport) await operator.setViewportSize(viewport);
-  await operator.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Inbox", exact: true }).click();
-  const task = operator.getByRole("listitem").filter({ hasText: oldRecord });
-  await expect(task).toBeVisible();
-  await task.getByRole("button", { name: /^approve$/i }).click();
-  await expect.poll(async () => (await record(type, oldRecord, user))?.state).toBe("done");
-  expect(await record(type, oldRecord, user)).toMatchObject({ note: "Existing operator data", state: "done" });
-  expect(await record(type, newRecord, user)).toMatchObject({ note: "New operator data", state: "rejected" });
-
-  // Adding a stored field still requires migration, even after waiting work finishes.
+  // Adding an optional scalar requires a reviewed plan; an API call without
+  // the plan is refused, and accepted expansion retains business data.
   await decide(request, "manager", "build", "build.object.edit", { type: "build.object", id: objectID }, {
     fields: [{ name: "note", title: "Note", type: "text" }, { name: "priority", title: "Priority", type: "integer" }],
   });
@@ -114,6 +107,24 @@ test("a workflow upgrade preserves existing data and waiting runs and refuses a 
   expect(await active()).toBe(second);
   const entities = await (await request.get("/v1/entities", { headers: user })).json();
   expect(entities.find((entity: { type: string }) => entity.type === type).fields.map((field: { name: string }) => field.name)).not.toContain("priority");
-  expect(await record(type, oldRecord, user)).toMatchObject({ note: "Existing operator data", state: "done" });
+  expect(await record(type, oldRecord, user)).toMatchObject({ note: "Existing operator data", state: "open" });
   if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("unsupported-record-upgrade.png") });
+  await expect(page.getByRole("group", { name: "Storage upgrade plan", exact: true })).toBeVisible();
+  await page.getByRole("checkbox", { name: "Confirm this optional field upgrade plan", exact: true }).check();
+  await page.getByRole("button", { name: "Activate release", exact: true }).click();
+  await expect(page.getByText("Release active for operators.")).toBeVisible();
+  await expect.poll(active).toBe(unsupported);
+  expect(await record(type, oldRecord, user)).toMatchObject({ note: "Existing operator data", state: "open" });
+  await decide(request, "desk", "build", `${type}.edit`, { type, id: oldRecord }, { priority: 7 });
+  expect(await record(type, oldRecord, user)).toMatchObject({ note: "Existing operator data", priority: 7 });
+  expect(await record("flow.instance", oldRunID, user)).toMatchObject({ state: "waiting", version: 1, release: first });
+  await operator.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Inbox", exact: true }).click();
+  const task = operator.getByRole("listitem").filter({ hasText: oldRecord });
+  await expect(task).toBeVisible();
+  await task.getByRole("button", { name: /^approve$/i }).click();
+  try { await expect.poll(async () => (await record(type, oldRecord, user))?.state).toBe("done"); } catch (error) { const diagnostic = await request.get("/v1/work", { headers: builder }); throw new Error(`${error}\nWork diagnostic: ${await diagnostic.text()}`); }
+  expect(await record(type, oldRecord, user)).toMatchObject({ note: "Existing operator data", state: "done" });
+  expect(await record(type, newRecord, user)).toMatchObject({ note: "New operator data", state: "rejected" });
+
+
 });

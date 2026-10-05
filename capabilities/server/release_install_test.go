@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -266,5 +267,55 @@ func checkSavedReleaseInstallation(t *testing.T, journal *Journal, id string, v2
 	after, _ := json.Marshal(live.definitions)
 	if string(before) != string(after) || live.ActiveRelease() != app {
 		t.Fatal("rejected migration altered the running release")
+	}
+	upgradeReview, err := live.ReviewSavedRelease(builder, changed)
+	if err != nil || upgradeReview.UpgradePlan == nil || len(upgradeReview.UpgradePlan.Additions) != 1 {
+		t.Fatalf("missing optional-field plan: %+v %v", upgradeReview, err)
+	}
+	if _, err := live.ActivateReleaseWithUpgrade(builder, changed, "stale-plan", "wrong", at); err == nil {
+		t.Fatal("an unreviewed plan was accepted")
+	}
+	do(operator, "build.visit", "V2", "build.visit.create", `{"note":"Created while the plan was open"}`)
+	if _, err := live.ActivateReleaseWithUpgrade(builder, changed, "drifted-plan", upgradeReview.UpgradePlan.ID, at); err == nil {
+		t.Fatal("a stale record-count plan was accepted")
+	}
+	upgradeReview, err = live.ReviewSavedRelease(builder, changed)
+	if err != nil || upgradeReview.UpgradePlan == nil || upgradeReview.UpgradePlan.Additions[0].Records != 2 {
+		t.Fatal("the refreshed plan lost concurrent records")
+	}
+	priorRecord, _ := acceptedRowOf("build.visit", "V1", live.records.types["build.visit"].rows["V1"])
+	priorHash, _ := canonicalDigest(priorRecord)
+	if _, err := live.ActivateReleaseWithUpgrade(builder, changed, "optional-field", upgradeReview.UpgradePlan.ID, at); err != nil {
+		t.Fatal(err)
+	}
+	retained, _ := acceptedRowOf("build.visit", "V1", live.records.types["build.visit"].rows["V1"])
+	retainedHash, _ := canonicalDigest(retained)
+	if retainedHash != priorHash {
+		t.Fatal("storage expansion changed values or history")
+	}
+	do(operator, "build.visit", "V1", "build.visit.edit", `{"priority":7}`)
+	if value, _ := live.records.types["build.visit"].rows["V1"].image(); !bytes.Contains(value, []byte(`"priority":7`)) {
+		t.Fatal("the new write action cannot set the optional field")
+	}
+	if _, err := live.ActivateReleaseWithUpgrade(builder, changed, "optional-field", upgradeReview.UpgradePlan.ID, at.Add(time.Second)); err != nil {
+		t.Fatalf("retry lost its original plan receipt: %v", err)
+	}
+	if _, err := live.ActivateReleaseWithUpgrade(builder, changed, "optional-field", "another-plan", at); err == nil {
+		t.Fatal("the same key accepted another plan")
+	}
+	CheckReplay(t, live, entries, compose)
+	upgradedSnapshot, _, err := live.Snapshot(func() int64 { return int64(len(entries)) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgraded := compose()
+	if err := upgraded.Restore(upgradedSnapshot); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := upgraded.ActivateReleaseWithUpgrade(builder, changed, "optional-field", upgradeReview.UpgradePlan.ID, at.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if field, ok := upgraded.records.types["build.visit"].info.Field("priority"); !ok || field.Required {
+		t.Fatal("the restored optional field is missing")
 	}
 }

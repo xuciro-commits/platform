@@ -1,7 +1,7 @@
 // Builder release workbench: saved candidates come from committed bytes.
 // Evaluation and activation retain the host's existing gates.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Card, PageHeader, Select, StatusTag, t, useWorkspace } from "@platform/ui";
+import { Button, Card, Checkbox, PageHeader, Select, StatusTag, t, useWorkspace } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope } from "./application-scope";
 import { useState } from "react";
@@ -65,6 +65,8 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [runningDiagnostic, setRunningDiagnostic] = useState("");
   const [canActivate, setCanActivate] = useState(false);
   const [activationDiagnostic, setActivationDiagnostic] = useState("");
+  const [upgradePlan, setUpgradePlan] = useState<Api.ReleaseUpgradePlan>();
+  const [confirmedUpgrade, setConfirmedUpgrade] = useState("");
   const [planID, setPlanID] = useState("");
   const [reportID, setReportID] = useState("");
   const [error, setError] = useState("");
@@ -101,6 +103,8 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         setReview(result.body.preview); setSavedID(candidateID); setSavedReview(true);
         setRunningMatches(result.body.runningMatches); setRunningDiagnostic(result.body.runningDiagnostic ?? "");
         setCanActivate(result.body.canActivate); setActivationDiagnostic(result.body.activationDiagnostic ?? "");
+        setUpgradePlan(result.body.upgradePlan);
+        setConfirmedUpgrade(current => current === result.body.upgradePlan?.id ? current : "");
         await reports.refetch();
       }
     } catch { setError(t("Saved releases could not be loaded.")); }
@@ -181,7 +185,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     setError("");
     try {
       const result = await client.call<Api.ReleaseActive>("POST", "/v1/releases/active",
-        { candidateId: savedID, key: crypto.randomUUID() } satisfies Api.ReleaseActivateRequest);
+        { candidateId: savedID, key: crypto.randomUUID(), ...(confirmedUpgrade && confirmedUpgrade === upgradePlan?.id ? { upgradeId: confirmedUpgrade } : {}) } satisfies Api.ReleaseActivateRequest);
       if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Release could not be activated."));
       else { await inventory.refetch(); await loadSaved(result.body.id); }
     } catch {
@@ -266,6 +270,12 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       {savedReview && <p className="text-sm" role="status">{runningDiagnostic ? t("Current definitions could not be compared with this candidate.") : runningMatches ? t("Running definitions match this saved release.") : t("Running definitions differ from this saved release.")}</p>}
       {savedReview && !runningMatches && canActivate && <p className="text-sm">{t("Activation installs the candidate's included objects, pages, applications, workflows, AI functions and code functions together.")}</p>}
       {savedReview && activationDiagnostic && <p role="alert" className="text-sm text-warning">{activationDiagnostic}</p>}
+      {savedReview && upgradePlan && <Card role="group" className="grid gap-2 p-3" aria-label={t("Storage upgrade plan")}>
+        <h3 className="text-sm font-semibold">{t("Storage upgrade plan")}</h3>
+        <p className="text-xs text-muted">{t("Add optional fields without changing existing values or record history. Required fields, type changes and removals are refused.")}</p>
+        <ul className="grid gap-1 text-xs">{upgradePlan.additions.map(addition => <li key={addition.type}>{addition.type} · {addition.field} · {t(addition.kind)} · {t("{count} existing records", { count: addition.records })}</li>)}</ul>
+        <Checkbox checked={confirmedUpgrade === upgradePlan.id} onChange={checked => setConfirmedUpgrade(checked ? upgradePlan.id : "")}>{t("Confirm this optional field upgrade plan")}</Checkbox>
+      </Card>}
       {savedReview && runningDiagnostic && <p className="break-words text-xs text-warning">{runningDiagnostic}</p>}
       {review.diagnostic && <p role="alert" className="text-sm text-danger">{review.diagnostic}</p>}
       {!review.diagnostic && !(savedReview && runningDiagnostic) && <div className="grid gap-3 sm:grid-cols-3">
@@ -306,7 +316,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
           {report && <p className="text-sm" role="status">{t("Report state")}: {t(report.state)} · {t("Quality")}: {Math.round(report.quality * 100)}% · {t("Reported USD cost")}: {report.costComplete ? report.costUsd : t("Unknown")} · {t("Peak latency (ms)")}: {report.peakLatencyMillis} · {t("Calls")}: {report.attempts.length}</p>}
           {!eligiblePlans.length && <p className="text-xs text-warning">{t("Save a function test plan with evaluation cases before running the release evaluation.")}</p>}
         </div>}
-        {savedID && <Button variant="default" disabled={busy || activeID === savedID || !evaluated || savedReview && !canActivate} onClick={activate}>{t("Activate release")}</Button>}
+        {savedID && <Button variant="default" disabled={busy || activeID === savedID || !evaluated || savedReview && !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
         {activeID === savedID && savedID && <p className="break-all text-sm" role="status">{savedReview && !runningMatches ? t("Active release differs from running definitions.") : t("Release active for operators.")} <code>{activeID}</code></p>}
       </div>}
     </Card>}
