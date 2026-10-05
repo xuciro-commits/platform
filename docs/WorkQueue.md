@@ -6,7 +6,7 @@
 
 统一能力装配与 Platform Catalog 已形成工程入口，范围归 [ADR-0044 §12](ADR/0044-capability-fabric.md#12-实际构建边界) 与 [ADR-0045 §11](ADR/0045-platform-catalog.md#11-当前实现边界)。沿工坊→页面/流程→测试/发布→操作任务验证最大共享体验断点。WMS 是独立的受控定义装配验证应用，不新增行业专用源码应用。
 
-收货探针已验证对象、关联、动作、Go/Wasm 和审批，用法归 [Apps](Apps.md#wms-受控装配探针)。应用设计台融合设计归 [ADR-0046](ADR/0046-application-studio-fusion.md)，外包编辑体验为目标，平台语义与 Go 执行保持统一。负责人已接受 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md) 的功能架构与入口/组织取代原则，M0–M4、M6 已按 §10.2 收敛：M1 入口与 M2 应用与资源构建上下文（应用内打开页面/对象/逻辑并返回应用，共享资源库按获权、未被引用与后台自动化分视图，重复资产类型导航已删除）；M3 联合草稿候选与直接安装退场按 [ADR-0048](ADR/0048-joint-draft-candidates-and-direct-install-retirement.md) 落地（显式勾选集合与依赖查询、缺依赖列名阻塞、草稿来源/差异、原封存与原激活、production profile 拒绝直接安装旁路、完整 Module 导入与其预发布对象都改联合草稿）；M4 在固定持久环境上取得诊断与续接证据（真实 PostgreSQL 写入、快照重启续接、整套 Go 测试全绿；无 Docker 时的交付断言由 [deploy/local/rehearse-lite.sh](../deploy/local/rehearse-lite.sh) 的 walk/verify/backup 承担，Docker 专属部分仍归 [deploy/local/rehearse.sh](../deploy/local/rehearse.sh)），负责人明确免掉界面走查；M6 只留规范路径，地址译码支持政策已声明（原 view ID 与旧书签继续解析，退役 view 显式反馈）。M5（按任务补装配与高级能力）只在负责人确认的专项里做，§13 已决定采用方案 A（尚未实现，不代表持续 Flow 可用）。平台 Review 的 AI 专项按 [ADR-0050](ADR/0050-model-accounting-and-run-scope.md) 落地并附复现测试，平台侧的"逐入口陈述保证、不宣称全平台恰好一次"与留给负责人的边界按 [ADR-0051](ADR/0051-entry-level-persistence-guarantees.md) 定案。基础设施的交付/轻量两种 profile 按 [ADR-0049](ADR/0049-delivery-and-lightweight-profiles.md) 实施 S1–S3（`Journals` 接口与单文件日志、本地文件字节、内置轻量 IdP；同一套契约测试在文件与真实 PostgreSQL 上通过，无 Docker 的单目录重启走查归 [deploy/local/rehearse-lightweight.sh](../deploy/local/rehearse-lightweight.sh) 的 walk/verify/backup），S4（SQLite）按 D2 作为后继后端暂缓、待依赖方案。原 F1–F6 缺口及以下交付事项保留。每次只推进一个活动批次，完成后移除该行；先修当前任务的共性阻塞，不追加 WMS 行业深度。
+收货探针已验证对象、关联、动作、Go/Wasm 和审批，用法归 [Apps](Apps.md#wms-受控装配探针)。应用设计台融合设计归 [ADR-0046](ADR/0046-application-studio-fusion.md)，外包编辑体验为目标，平台语义与 Go 执行保持统一。负责人已接受 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md) 的功能架构与入口/组织取代原则，M0–M4、M6 已按 §10.2 收敛：M1 入口与 M2 应用与资源构建上下文（应用内打开页面/对象/逻辑并返回应用，共享资源库按获权、未被引用与后台自动化分视图，重复资产类型导航已删除）；M3 联合草稿候选与直接安装退场按 [ADR-0048](ADR/0048-joint-draft-candidates-and-direct-install-retirement.md) 落地（显式勾选集合与依赖查询、缺依赖列名阻塞、草稿来源/差异、原封存与原激活、production profile 拒绝直接安装旁路、完整 Module 导入与其预发布对象都改联合草稿）；M4 在固定持久环境上取得诊断与续接证据（真实 PostgreSQL 写入、快照重启续接、整套 Go 测试全绿；无 Docker 时的交付断言由 [deploy/local/rehearse-lite.sh](../deploy/local/rehearse-lite.sh) 的 walk/verify/backup 承担，Docker 专属部分仍归 [deploy/local/rehearse.sh](../deploy/local/rehearse.sh)），负责人明确免掉界面走查；M6 只留规范路径，地址译码支持政策已声明（原 view ID 与旧书签继续解析，退役 view 显式反馈）。M5（按任务补装配与高级能力）只在负责人确认的专项里做，§13 已决定采用方案 A（尚未实现，不代表持续 Flow 可用）。平台 Review 的 AI 专项按 [ADR-0050](ADR/0050-model-accounting-and-run-scope.md) 落地并附复现测试，平台侧的"逐入口陈述保证、不宣称全平台恰好一次"与留给负责人的边界按 [ADR-0051](ADR/0051-entry-level-persistence-guarantees.md) 定案。基础设施的交付/轻量两种 profile 按 [ADR-0049](ADR/0049-delivery-and-lightweight-profiles.md) 完成 S1–S3（`Journals` 接口与单文件日志、本地文件字节、内置轻量 IdP；同一套契约测试在文件与真实 PostgreSQL 上通过，无 Docker 的单目录重启走查归 [deploy/local/rehearse-lightweight.sh](../deploy/local/rehearse-lightweight.sh) 的 walk/verify/backup）；S4（SQLite）按 D2 明确为后继后端（接口已就绪，等依赖方案）。ADR-0047 M1–M4/M6、ADR-0048 M3、ADR-0050 与 ADR-0051 均已按各自的边界完成。原 F1–F6 缺口及以下交付事项保留。每次只推进一个活动批次，完成后移除该行；先修当前任务的共性阻塞，不追加 WMS 行业深度。
 
 | 顺序 / 优先级 / 状态 | 批次与归属 | 可见结果 / 停止条件 | 适用检查 |
 |---|---|---|---|
@@ -20,14 +20,14 @@
 
 | 工作号 | 剩余范围 / 启动条件 |
 |---|---|
-| #138、#132 | 多级具名选择、物料参数绑定及原动作的跨对象条件已有，用法归 Apps。单次预计量校验不等于累计核算；累计收货量/父单完结与受控聚合写入仍缺，当前不能保证累计超收限制或库存台账。审批候选的隔离 Work fixture、独立关系基数/删除语义、更广原子编辑及候选物理隔离按实际任务取必要部分 |
-| #136、#131 | 整应用资源与发布已有，用法归 Apps；最小存储演进见近期批次。其他操作读取/新动作发布标识、重命名/AI 绑定变化、退役、环境晋级、通用升级兼容及客户扩展保留 |
+| #138、#132 | 多级具名选择、物料参数绑定及原动作的跨对象条件已有，用法归 Apps。单次预计量校验不等于累计核算；累计收货量/父单完结与受控聚合写入仍缺，当前不能保证累计超收限制或库存台账。审批候选的隔离 Work fixture、独立关系基数/删除语义及更广原子编辑按实际任务取必要部分 |
+| #136、#131 | 整应用资源与发布已有，用法归 Apps；最小存储演进见近期批次。其他操作读取/新动作发布标识、重命名/AI 绑定变化、退役、通用升级兼容及客户扩展保留（跨环境晋级按 ADR-0047 §11 不支持） |
 | #130、#128 | 权限一致的表单与独立业务审批角色用法归 Apps。新派生/预览面的权限闭包，触及时决定所有者隐私读取语义 |
 | #135、F-44 | 未接入的 Chat/Agent、私有状态、旧入口/历史与正式升级结果恢复；对应能力触及时收口 |
 | #133、F-29 | W2 的真实模型任务质量、更广调试及不可逆协议/效果审批；不重开已收尾首批函数增量 |
 | #134、F-28 | 首个接入见近期批次；更广映射、身份对账、血缘及外部应答事件化 |
 | #137 | 后续修订/引用/提交/恢复证明随对应能力推进 |
-| #124 | MCP 鉴权与资源发现 |
+| #124 | MCP 标准鉴权发现与 Resources：`/.well-known/oauth-protected-resource`（RFC 9728）与未鉴权 401 `WWW-Authenticate`，业务记录/具名读取的 `record://`、`read://` 资源化；现有 `POST /mcp` 的成员目录 tools 与 Bearer 鉴权已具备 |
 | #129 | MES 签署归属、MES/PMS Fact/Submit 与报表的已知逃逸，触及时消除 |
 | #121、#115 | 下一次集中体验核对隐私/审批/导入导出与 ERP 采购链，不重开开发 |
 | #125、#127 | 行业深度暂缓，只取平台探针必要变更 |
