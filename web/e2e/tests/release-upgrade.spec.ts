@@ -40,10 +40,10 @@ test("a workflow upgrade preserves existing data and waiting runs and refuses a 
   expect(waiting).toMatchObject({ version: 1, release: first, dependencies: first });
   const operator = await page.context().newPage();
   await open(operator, "desk", `/flow?id=${encodeURIComponent(oldRunID)}`);
-  const releaseButton = operator.getByRole("button", { name: "Active release", exact: true });
+  const releaseButton = operator.getByRole("button", { name: "Last activated release", exact: true });
   await expect(releaseButton).toHaveAttribute("title", first);
   await releaseButton.click();
-  const releaseDialog = operator.getByRole("dialog", { name: "Active release", exact: true });
+  const releaseDialog = operator.getByRole("dialog", { name: "Last activated release", exact: true });
   await expect(releaseDialog.locator("code")).toHaveText(first);
   await releaseDialog.getByRole("button", { name: "Close", exact: true }).click();
   expect((await request.get("/v1/releases/candidates?limit=1", { headers: user })).status()).toBe(403);
@@ -85,7 +85,7 @@ test("a workflow upgrade preserves existing data and waiting runs and refuses a 
   const viewport = operator.viewportSize();
   if (process.env.PLATFORM_SCREENSHOTS) await operator.setViewportSize({ width: 390, height: 844 });
   await operator.getByRole("button", { name: "Search and commands", exact: true }).click();
-  await operator.getByRole("dialog", { name: "Command palette", exact: true }).getByRole("option", { name: "Active release", exact: true }).click();
+  await operator.getByRole("dialog", { name: "Command palette", exact: true }).getByRole("option", { name: "Last activated release", exact: true }).click();
   await expect(releaseDialog.locator("code")).toHaveText(second);
   if (process.env.PLATFORM_SCREENSHOTS) await operator.screenshot({ path: testInfo.outputPath("active-release-menu.png") });
   await releaseDialog.getByRole("button", { name: "Close", exact: true }).click();

@@ -139,6 +139,11 @@ func acceptedIdentity(raw []byte) (resultIdentity, error) {
 		return identity, err
 	}
 	identity.Scope = "submission"
+	if envelope.Kind == "operation-claim" {
+		result, err := decodeOperationClaim(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
+		return identity, err
+	}
 	if envelope.Kind == "refusal" {
 		result, sub, err := decodeRefusedResult(raw)
 		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, sub.GetIdempotencyKey(), result.RequestHash

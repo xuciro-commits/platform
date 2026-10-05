@@ -2,6 +2,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "AI assistance": "AI 助手",
+  "Tenant console": "租户控制台",
+  "Delivery and operations": "交付与运行",
+  "Connections and models": "连接与模型",
+  "Access and governance": "身份与治理",
+  "Release review": "发布审查",
+  "Test a candidate": "测试候选",
+  "Operate delivered applications and manage access in {tenant}.": "在 {tenant} 中运行已交付应用并管理访问。",
   "Platform": "平台",
   "Developer tools": "开发工具",
   "Definitions": "定义",

@@ -34,7 +34,9 @@ func operationClaimDigest(r acceptedOperationClaim) (string, error) {
 	r.Digest = ""
 	return canonicalDigest(r)
 }
-func (t *Tenant) applyOperationClaim(raw []byte) (acceptedOperationClaim, error) {
+
+// Decode before journal admission without applying the K9 transition.
+func decodeOperationClaim(raw []byte) (acceptedOperationClaim, error) {
 	var saved acceptedOperationClaim
 	if _, err := platform.DecodeValue(raw, maxAcceptedResultBytes); err != nil {
 		return saved, err
@@ -44,8 +46,22 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedOperationClaim, error)
 	}
 	digest, err := operationClaimDigest(saved)
 	hash, _ := canonicalDigest([]any{saved.Before, saved.PriorWork})
-	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant != t.ID || saved.App != PlatformApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != operationEndpoint || saved.Before.ID == "" || settled(saved.Before.State) || saved.At.IsZero() {
+	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant == "" || saved.App != PlatformApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != operationEndpoint || saved.Before.ID == "" || settled(saved.Before.State) || saved.At.IsZero() {
 		return saved, fmt.Errorf("invalid operation ownership result")
+	}
+	if saved.After.Generation == 0 || saved.Key != fmt.Sprintf("operation-claim:%s:%d", saved.Before.ID, saved.After.Generation) {
+		return saved, fmt.Errorf("operation claim identity differs")
+	}
+	return saved, nil
+}
+
+func (t *Tenant) applyOperationClaim(raw []byte) (acceptedOperationClaim, error) {
+	saved, err := decodeOperationClaim(raw)
+	if err != nil {
+		return saved, err
+	}
+	if saved.Tenant != t.ID {
+		return saved, fmt.Errorf("invalid operation ownership tenant")
 	}
 	t.opsMu.Lock()
 	i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == saved.Before.ID })

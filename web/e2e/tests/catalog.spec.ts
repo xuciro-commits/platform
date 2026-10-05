@@ -1,15 +1,17 @@
 import { expect, test } from "@playwright/test";
-import { open } from "./host";
+import { open, switchWorkspace } from "./host";
 
 test("Catalog leads a builder to a controlled Studio draft", async ({ page, request }, testInfo) => {
   await open(page, "manager", "/home");
   // An ordinary example parameter must not replace the application shell.
   await page.goto("/?preview=ui/button#/home");
-  await page.getByRole("button", { name: "Platform Catalog", exact: true }).click();
-  const appMenu = page.getByRole("button", { name: "Apps", exact: true }).first();
+  await switchWorkspace(page, "Developer reference");
+  const appMenu = page.getByRole("button", { name: "Workspaces", exact: true }).first();
   await appMenu.click();
-  await expect(page.getByRole("menuitemradio", { name: /Platform Catalog/ })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("menuitemradio", { name: /Developer reference/ })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
+  await switchWorkspace(page, "Application Studio");
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Discover capabilities", exact: true }).click();
   const nav = page.getByRole("navigation", { name: "Main", exact: true });
   await expect(nav.getByRole("button", { name: "Inspector", exact: true })).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "Primitives", exact: true })).toHaveCount(0);

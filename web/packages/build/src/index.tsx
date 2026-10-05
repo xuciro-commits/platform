@@ -21,9 +21,10 @@ import { AppWindow, Boxes, GitBranch, Hammer, LayoutList } from "lucide-react";
 
 export default defineApp({
   id: "build",
+  surface: "studio",
   title: t("Application Studio"),
   icon: <Hammer />,
-  home: { view: "studio" },
+  home: { view: "applications" },
   views: [
     { id: "studio", title: () => t("Application Studio"), render: () => <StudioOverview /> },
     { id: "studio-templates", title: () => t("Studio templates"), render: (p) => <StudioTemplates key={p.template ?? "templates"} initial={p.template} /> },
@@ -49,19 +50,26 @@ export default defineApp({
       {
         label: t("Application Studio"),
         items: [
-          { label: t("Overview"), icon: <Boxes />, route: { view: "studio" } },
           { label: t("Applications"), icon: <AppWindow />, route: { view: "applications" } },
-          { label: t("Objects"), icon: <Hammer />, route: { view: "process" } },
-          ...(builder?[{label:t("Relationships"),icon:<GitBranch/>,route:{view:"link-type"}}]:[]),
-          ...(builder?[{label:t("Shared properties"),icon:<Boxes/>,route:{view:"property-type"}}]:[]),
-          { label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } },
+          { label: t("Shared resources"), icon: <Boxes />, route: { view: "studio" } },
+          { label: t("Discover capabilities"), icon: <Boxes />, route: { view: "catalog", params: { mode: "builder", surface: "studio" } } },
           ...(builder ? [{ label: t("Studio templates"), icon: <LayoutList />, route: { view: "studio-templates" } }] : []),
         ],
       },
+      {
+        label: t("Data and semantics"),
+        items: [
+          { label: t("Objects"), icon: <Hammer />, route: { view: "process" } },
+          { label: t("Business model"), icon: <Boxes />, route: { view: "model" } },
+          ...(builder?[{label:t("Relationships"),icon:<GitBranch/>,route:{view:"link-type"}}]:[]),
+          ...(builder?[{label:t("Shared properties"),icon:<Boxes/>,route:{view:"property-type"}}]:[]),
+          ...(builder ? [{ label: t("Queries"), icon: <Boxes />, route: { view: "query" } }] : []),
+        ],
+      },
+      { label: t("Pages and experience"), items: [{ label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } }] },
       ...(builder ? [
-        { label: t("Logic"), items: [
+        { label: t("Logic and AI"), items: [
             { label: t("Workflows"), icon: <GitBranch />, route: { view: "workflow" } },
-            { label: t("Queries"), icon: <Boxes />, route: { view: "query" } },
             { label: t("AI functions"), icon: <Boxes />, route: { view: "function" } },
             { label: t("Code functions"), icon: <Boxes />, route: { view: "code" } },
         ] },

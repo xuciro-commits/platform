@@ -136,10 +136,18 @@ export function useOpenRecord(): (ref: string | { type: string; id: string }, op
 /** A dashboard an app ships (ADR-0019 D4): charts in the platform's visualization spec, for the members `for` admits. */
 export type Dashboard = { id: string; title: string; description?: string; for?: (host: Host) => boolean; charts: ChartSpec[] };
 
+/** A task surface is presentation context; it never grants owner permissions. */
+export type WorkspaceSurface = "work" | "studio" | "tenant" | "developer";
+
 /** An app's contribution to the workspace, in typed code (AGENTS.md rule 5). */
 export type AppUI = {
-  /** The host app it is the UI of. */
+  /** Stable UI contribution identity; existing native app ids are retained. */
   id: string;
+  surface?: WorkspaceSurface;
+  /** Explicit owner bindings, independent of the contribution's display name. */
+  serves?: string[];
+  /** Navigation projection only; every read/action still checks its owner. */
+  for?: (host: Host) => boolean;
   title: string;
   icon: ReactNode;
   /** View ids are unique across the workspace. */

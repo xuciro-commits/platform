@@ -161,7 +161,7 @@
 | 原集合构建与装配（ADR-0046，F1e62） | UI Kit、应用 API、Build | 类型化条件、同owner完整谓词输出、独立表格/计数、检查器/显式导入及共同冻结已接通；无效草稿保留已应用集合，原权限/版本/反馈预算保留，完整Module与更广集合形态待后续。 | [ADR-0046 §6.82](ADR/0046-application-studio-fusion.md#682-集合构建器与完整谓词装配) |
 | 共享空间呈现与附件标注（ADR-0046，F1e61） | UI Kit、Files、应用 API | 地图/图片标注/GLB 三类共享 UI、Catalog与原文件作者/revision标注决定、原生绑定/检查器、共同候选和有限来源导入已接通；3D最新样本沿固定原查询与当前权限确认，更多空间语义/完整来源配置待实施。 | [ADR-0046 §6.81](ADR/0046-application-studio-fusion.md#681-记录地图附件标注与原生-3d-场景) |
 | Platform Catalog (ADR-0045) | UI/app/build owner、Web 目录 | 六层复用发现、真实示例、开发/构建视角与有界查询；Studio 模板沿原草稿创建，租户能力沿原作用域读取。 | web/apps/catalog、scripts/catalog.mjs；[ADR-0045 §11](ADR/0045-platform-catalog.md#11-当前实现边界) |
-| 工作区与 UI 应用 API (ADR-0018) | Web | 统一登录/应用导航、记录与收件箱返回、编辑标签上下文；CRM/MES 建议复用记录与动作。 | @platform/app, web/apps/workspace；[ADR-0018](ADR/0018-one-workspace.md) |
+| 工作区与 UI 应用 API (ADR-0018/0047) | Web | 统一登录与原生/租户业务入口；工坊、租户控制台、开发参考按任务分区，入口切换保留原编辑标签。角色与执行检查保持原 owner。 | @platform/app, web/apps/workspace；[ADR-0047 §14](ADR/0047-platform-composition-and-workspaces.md#14-当前实现边界) |
 | 边缘客户端与登录 | Web | HTTP 边缘客户端、发件箱、PKCE/OIDC 与可读拒绝。 | @platform/kernel |
 | 设置中心 | Web | 系统治理与运行设置界面。 | @pkg/platform |
 | 应用 UI 包 | Web | 业务视图组合共享 UI/API，跨记录共性能力归平台。 | @pkg/<id>, crm |
@@ -464,7 +464,7 @@
 
 ### 10.3 目标架构与不变式
 
-平台功能架构、用户入口与前端收敛的推荐方案见 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md)：区分功能域、依赖层、用户职责与工作入口，围绕完整应用任务重组现有前端；目前仍为待负责人决定的提议。其 §13 保留原持续 Flow 子方案，受控包安装及授权演进按实际任务另行推进。该提议不改变本文件的当前实现摘要或既有已接受约束，取代条款接受后再更新。
+平台功能架构、用户入口与前端收敛见已接受的 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md)（2026-10-05）：区分功能域、依赖层、用户职责与工作入口，围绕应用及共享资源任务重组前端；先沿现有授权收敛入口。其 §11 明确入口/组织取代原则，授权、安装及交付执行的专项变化按实际依赖推进；§13 持续 Flow 仍待专项决定。目标结构不自动改变当前实现摘要或扩大权限、版本与恢复保证。
 
 本节定义即将落地实现的目标软件架构，而非当前已可直接调用的 API 现状。在确定最终序列化格式或增设代码包之前，必须首先确立其核心命名与边界。
 

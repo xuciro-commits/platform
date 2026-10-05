@@ -1,6 +1,6 @@
 // Browser smoke: canonical build/use paths. Visual layout is reviewed manually.
 import { expect, test, type Page } from "@playwright/test";
-import { decide, fresh, open } from "./host";
+import { decide, fresh, open, switchWorkspace } from "./host";
 
 const value = (page: Page, text: string) => page.getByRole("definition").filter({ hasText: new RegExp(`^${text}$`, "i") });
 
@@ -89,8 +89,8 @@ test("route 20: field security", async ({ page, request }) => {
 test("route 29: define an object, publish it, use it", async ({ page }) => {
   const name = `visit${Date.now().toString(36).slice(-5)}`;
   await open(page, "manager", "/home");
-  await page.getByRole("button", { name: "Application Studio" }).first().click(); // the app, from the launcher
-  await page.getByRole("region", { name: "Application Studio", exact: true }).getByRole("button", { name: "Objects and relationships", exact: true }).click();
+  await switchWorkspace(page, "Application Studio"); // the app, from the launcher
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Objects", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Objects" })).toBeVisible();
   await page.getByRole("button", { name: "Create object" }).click();
   const dialog = page.getByRole("dialog");
@@ -130,7 +130,7 @@ test("route 30: compose a page of widgets and use it", async ({ page, request })
   await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Composed " + account, kind: "company" });
   await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Composed offsite " + opp });
   await open(page, "manager", "/home");
-  await page.getByRole("button", { name: "Application Studio" }).first().click();
+  await switchWorkspace(page, "Application Studio");
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Pages", exact: true }).click();
   await page.getByRole("button", { name: "Create page" }).click();
   const dialog = page.getByRole("dialog");
@@ -184,7 +184,7 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Handed offsite " + opp });
   // A page to hand over, composed as in route 30.
   await open(page, "manager", "/home");
-  await page.getByRole("button", { name: "Application Studio" }).first().click();
+  await switchWorkspace(page, "Application Studio");
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Pages", exact: true }).click();
   await page.getByRole("button", { name: "Create page" }).click();
   let dialog = page.getByRole("dialog");
@@ -220,7 +220,8 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
 
   // It is in the launcher, and its page opens from its own navigation.
-  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Application launcher", exact: true }).click();
+  await switchWorkspace(page, "Business workspace");
+  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Business applications", exact: true }).click();
   await expect(page.getByRole("heading", { name: /Welcome/ })).toBeVisible(); // the launcher itself
   await expect(page.getByRole("button", { name: "Front desk" }).first()).toBeVisible();
   await page.getByRole("button", { name: "Front desk" }).first().click();
@@ -232,8 +233,7 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   await expect(nav.getByRole("button", { name: "Objects", exact: true })).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "Definitions", exact: true })).toHaveCount(0);
   // Old unambiguous page links also resolve membership, even from Studio.
-  await page.getByRole("button", { name: "Apps", exact: true }).click();
-  await page.getByRole("menuitemradio", { name: "Application Studio", exact: true }).click();
+  await switchWorkspace(page, "Application Studio");
   await page.goto(`/#/page?app=build&kind=page&name=${pageName}`);
   await expect(nav.getByRole("button", { name: "Handed offsites", exact: true })).toHaveCount(1);
 });
