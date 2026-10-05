@@ -7,23 +7,22 @@ import {newId,useHost} from "../index";
 import {createRecordCollaboration} from "../collaboration/service";
 import type {RecordReference} from "../runtime/Session";
 import type {VariableResult} from "../runtime/variables";
-import type {PageSessionStore} from "../runtime/Session";
 
-type Props={sceneSampleObject?:string;sceneWindow?:QueryWindow;scene?:Api.PageSceneConfig;sample?:SceneInput;part?:VariableResult;onPart?:(value:string)=>void;kind:string;label:string;record?:EntityRecord;reference?:RecordReference;status?:"empty"|"pending"|"value"|"error";session?:PageSessionStore;slot?:string;bindingEpoch?:number;readSource?:RecordSource;draft?:VariableResult;fileValue?:VariableResult;pageValue?:VariableResult;onDraft?:(value:string)=>void;onFileID?:(value:string)=>void;onPage?:(value:string)=>void;enabled?:boolean;live:boolean};
+type Props={sceneSampleObject?:string;sceneWindow?:QueryWindow;scene?:Api.PageSceneConfig;sample?:SceneInput;part?:VariableResult;onPart?:(value:string)=>void;kind:string;label:string;record?:EntityRecord;reference?:RecordReference;status?:"empty"|"pending"|"value"|"error";captureRecordLease?:(slot:string)=>(()=>boolean)|undefined;slot?:string;bindingEpoch?:number;readSource?:RecordSource;draft?:VariableResult;fileValue?:VariableResult;pageValue?:VariableResult;onDraft?:(value:string)=>void;onFileID?:(value:string)=>void;onPage?:(value:string)=>void;enabled?:boolean;live:boolean};
 type MutationLease={identity:string;active:()=>boolean;service:ReturnType<typeof createRecordCollaboration>};
 const scalar=(value?:VariableResult)=>value?.status==="value"&&typeof value.value==="string"?value.value:undefined;
 const errorText=(failure:unknown)=>failure instanceof Error?failure.message:String(failure);
 /** Collaboration and spatial views share the captured original record and the owning services. */
-export function RecordCollaborationRenderer({sceneSampleObject,sceneWindow,scene,sample,part,onPart,kind,label,record,reference,status,session,slot,bindingEpoch,readSource,draft,fileValue,pageValue,onDraft,onFileID,onPage,enabled,live}:Props) {
+export function RecordCollaborationRenderer({sceneSampleObject,sceneWindow,scene,sample,part,onPart,kind,label,record,reference,status,captureRecordLease,slot,bindingEpoch,readSource,draft,fileValue,pageValue,onDraft,onFileID,onPage,enabled,live}:Props) {
  const host=useHost(),source=readSource??host.source,limits=pageUIManifest.runtime.collaboration,target=reference?{type:reference.object,id:reference.id}:undefined,identity=JSON.stringify([host.source.scope,slot,bindingEpoch,target?.type,target?.id]),ready=status==="value"&&source.scope===host.source.scope&&!!record&&record.id===target?.id;
  const current=useRef({identity,text:scalar(draft),file:scalar(fileValue),page:scalar(pageValue),mounted:true});current.current={identity,text:scalar(draft),file:scalar(fileValue),page:scalar(pageValue),mounted:current.current.mounted};
  const [comments,setComments]=useState<{identity:string;records:RecordComment[];total:number}>(),[readError,setReadError]=useState<{identity:string;key?:string;message:string}>(),[attachment,setAttachment]=useState<{key:string;file:AttachedFile}>(),[blob,setBlob]=useState<{key:string;value:Blob}>();
  const [selected,setSelected]=useState<{identity:string;file:File}>(),[busy,setBusy]=useState(false),[mutationError,setMutationError]=useState<{identity:string;message:string}>(),[refresh,setRefresh]=useState(0);
  const pickerLease=useRef<{identity:string;active:()=>boolean}|undefined>(undefined);
  const mutation=useRef<MutationLease|undefined>(undefined),confirmedAsset=useRef<{identity:string;record:EntityRecord;info:NonNullable<ReturnType<RecordSource["entity"]>>}|undefined>(undefined);
- if(ready&&record&&target){const lease=session&&slot?session.captureRecordLease(slot):undefined;if(lease)pickerLease.current={identity,active:lease};const info=source.entity(target.type);if(info)confirmedAsset.current={identity,record,info};}
+ if(ready&&record&&target){const lease=captureRecordLease&&slot?captureRecordLease(slot):undefined;if(lease)pickerLease.current={identity,active:lease};const info=source.entity(target.type);if(info)confirmedAsset.current={identity,record,info};}
  useEffect(()=>{current.current.mounted=true;return()=>{current.current.mounted=false;};},[]);
- const capture=()=>{const lease=session&&slot?session.captureRecordLease(slot):undefined;if(!lease||!target)return undefined;const captured=identity;return ()=>current.current.mounted&&current.current.identity===captured&&lease();};
+ const capture=()=>{const lease=captureRecordLease&&slot?captureRecordLease(slot):undefined;if(!lease||!target)return undefined;const captured=identity;return ()=>current.current.mounted&&current.current.identity===captured&&lease();};
  const mutationLease=()=>{const prior=mutation.current;if(prior?.identity===identity&&prior.active())return prior;const active=capture();if(!active||!target)return;const next={identity,active,service:createRecordCollaboration({...host,source},target,active,newId)};mutation.current=next;return next;};
  useEffect(()=>{setSelected(previous=>previous?.identity===identity?previous:undefined);setMutationError(previous=>previous?.identity===identity?previous:undefined);setBusy(false);if(mutation.current?.identity!==identity)mutation.current=undefined;},[identity]);
  useEffect(()=>{

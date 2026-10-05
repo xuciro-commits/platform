@@ -1,22 +1,10 @@
-import {listingPlugins} from "./widgets/listing-plugins";
-import {executionPlugins} from "./widgets/execution-plugins";
-import {detailPlugins} from "./widgets/detail-plugins";
-import {chartPlugins} from "./widgets/chart-plugins";
-import {recordPresentationPlugins} from "./widgets/record-presentation-plugins";
-import {surfacePlugins} from "./widgets/surface-plugins";
-import {distributionPlugins} from "./widgets/distribution-plugins";
-import {navigationPlugins} from "./widgets/navigation-plugins";
-import {scalarPlugins} from "./widgets/scalar-plugins";
-import {recordWindowPlugins} from "./widgets/record-window-plugins";
-import {contentPlugins} from "./widgets/content-plugins";
-import {inputPlugins} from "./widgets/input-plugins";
+import {pageWidgetRegistry as widgets} from "./widgets/plugins";
 import {confirmObservationRow} from "./widgets/observation-selection";
 import {usePageComputations} from "./runtime/PageComputations";
 import {aiRecordSlot} from "./widgets/ai-context";
 import {PageEmbeddingBoundary} from "./widgets/EmbeddedPage";
 import {avatarCollectionVariable,confirmedContext,originalContextSlot,currentContextRead} from "./widgets/context-views";
 import {searchInputObjects} from "./widgets/search-input";
-import {Facets} from "./widgets/Facets";
 import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime/decimal";
 // A composed page (ADR-0035): sections laid out in order, each holding one
 // widget bound to what this tenant has. A table says which record is selected;
@@ -25,13 +13,12 @@ import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type EntityRecord, type RecordSource, type RecordView,
+  Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, cn, t, useViewVisible, type EntityRecord,
 } from "@platform/ui";
-import { Component, lazy, Suspense, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { prefixOf } from "./actions";
-import { GeneratedForm, newId, HostContext, useHost,useOpenRecord, useInvokeCapability, type Definition } from "./index";
+import { Component, Suspense, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { HostContext, useHost,useOpenRecord, type Definition } from "./index";
 import type { Api } from "@platform/kernel";
-import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry";
+import { supportsPageUIProfile } from "./widgets/registry";
 import { useApplicationContext, useApplicationVariables } from "./runtime/ApplicationRuntime";
 import { usePageQueries } from "./runtime/PageQueries";
 import { planKey, variablePlan } from "./runtime/query-plans";
@@ -43,16 +30,8 @@ import { recordSlot, filterOwner, filtersForOwner, filterSessionBindings, select
 import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
-const ExplorationRenderer=lazy(()=>import("./widgets/Exploration").then(module=>({default:module.ExplorationRenderer})));
-const ActionTableRenderer=lazy(()=>import("./widgets/RecordWork").then(m=>({default:m.ActionTableRenderer})));
-const ObservationRenderer=lazy(()=>import("./widgets/Observation").then(module=>({default:module.ObservationRenderer})));
-const RecordCollaborationRenderer=lazy(()=>import("./widgets/RecordCollaboration").then(module=>({default:module.RecordCollaborationRenderer})));
-
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
-
-/** The page's second variable (16b): the conditions each filter set, by the
- *  object they narrow. A table, chart or metric over that object reads them. */
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
 type Bound = import("./widgets/bindings").WidgetBindingContext;
@@ -73,238 +52,7 @@ const selectionKey = recordSlot;
 const relatedField = (fields: { name: string; title: string; type: string; ref?: string; inverse?: string; readOnly?: boolean }[] | undefined, page: Page, section: Section) =>
   fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
-/** The filter (16b): a value to narrow the object's records by, for each field
- *  the builder chose. What it sets is the page's second variable. */
-function FilterWidget({ page, section, narrowed, onNarrow,facetValues,onFacet,window,aggregateScope }: Bound) {
-  const { source } = useHost();
-  const prefix = useId();
-  const type = objectOf(page, section);
-  const info = source.entity(type);
-  const set = narrowed[type] ?? {};
-  if(section.facets?.length||section.filterSearchVariable)return <Facets section={section} source={source} object={type} window={window} values={facetValues??{}} onChange={onFacet??(()=>{})} scope={aggregateScope??""}/>;
-  return (
-    <div role="search" aria-label={section.title || t("Filter")} className="flex flex-wrap items-end gap-3">
-      {(section.fields ?? []).map((name) => {
-        const f = info?.fields.find((x) => x.name === name);
-        if (!f) return null; // not a field this member reads
-        const id = `${prefix}-${type}-${name}`;
-        const value = set[name];
-        return (
-          <label key={name} htmlFor={id} className="grid gap-1 text-xs text-muted">{f.title}
-            {f.type === "reference" && f.ref
-              ? <RecordLookup id={id} source={source} type={f.ref} value={value as string | undefined} onChange={(v) => onNarrow(type, name, v)} />
-              : <Select id={id} aria-label={f.title} className="w-40" value={value === undefined ? "" : String(value)}
-                  onChange={(e) => onNarrow(type, name, e.target.value === "" ? undefined : f.type === "boolean" ? e.target.value === "true" : e.target.value)}>
-                  <option value="">{t("Any")}</option>
-                  {f.type === "boolean"
-                    ? <><option value="true">{t("Yes")}</option><option value="false">{t("No")}</option></>
-                    : (f.choices ?? []).map((c, i) => <option key={c} value={c}>{f.choiceTitles?.[i] ?? c}</option>)}
-                </Select>}
-          </label>
-        );
-      })}
-      {Object.values(set).some((v) => v !== undefined && v !== "") &&
-        <Button size="sm" variant="ghost" onClick={() => Object.keys(set).forEach((name) => onNarrow(type, name, undefined))}>{t("Clear")}</Button>}
-    </div>
-  );
-}
 
-/** The form (16b): a new record of the object, made through its own create
- *  action with the fields the builder chose; the host checks it like any other. */
-function FormWidget({ page, section, live, master }: Bound) {
-  const { decide, source } = useHost();
-  const invoke = useInvokeCapability();
-  const type = objectOf(page, section), parentType = parentTypeOf(page, section);
-  const refField = section.relation ? relatedField(source.entity(type)?.fields, page, section) : undefined;
-  const [round, setRound] = useState(0), [error, setError] = useState("");
-  const bindings = section.inputs ?? {};
-  const bindingKey = JSON.stringify([parentType, master?.id, bindings]);
-  const [bound, setBound] = useState<{ key: string; values?: Record<string, unknown>; error?: string }>({ key: "" });
-  useEffect(() => {
-    let current = true;
-    setBound({ key: bindingKey });
-    Promise.all(Object.entries(bindings).map(async ([name, binding]) => {
-      if (binding.source === "literal") return [name, binding.value] as const;
-      if (binding.source !== "subject" || !master || !binding.path?.length) throw new Error(t("The bound record input is unavailable."));
-      let typ = parentType, record = (await source.get(typ, master.id)).record;
-      for (const [index, part] of binding.path.entries()) {
-        const field = source.entity(typ)?.fields.find((field) => field.name === part);
-        const value = record[part];
-        if (!field || value === undefined) throw new Error(t("The bound record input is unavailable."));
-        if (index === binding.path.length - 1) return [name, value] as const;
-        if (field.type !== "reference" || !field.ref || typeof value !== "string" || !value) throw new Error(t("The bound record input is unavailable."));
-        typ = field.ref; record = (await source.get(typ, value)).record;
-      }
-      throw new Error(t("The bound record input is unavailable."));
-    })).then((values) => { if (current) setBound({ key: bindingKey, values: Object.fromEntries(values) }); }, () => {
-      if (current) setBound({ key: bindingKey, error: t("The bound record input is unavailable.") });
-    });
-    return () => { current = false; };
-  }, [bindingKey, source, source.revision]);
-  if (section.relation && (!refField || refField.readOnly)) return <p role="alert" className="text-sm text-danger">
-    {t("This form's parent reference is unavailable.")}</p>;
-  if (refField && !master) return <p className="text-sm text-muted">{t("Select a parent record before creating a related record.")}</p>;
-  const fields = (section.fields ?? source.entity(type)?.fields.map((field) => field.name) ?? [])
-    .filter((name) => name !== refField?.name && !bindings[name]);
-  const parentInfo = source.entity(parentType);
-  const ready = bound.key === bindingKey && bound.values !== undefined;
-  const supplied = ready ? Object.entries(bound.values!).map(([name, value]) => [source.entity(type)?.fields.find((field) => field.name === name)?.title ?? name, String(value)] as [string, string]) : [];
-  return <div className="grid gap-2">
-    {!live && <p className="text-xs text-muted">{t("The form does not submit while you compose.")}</p>}
-    {refField && master && <PropertyList items={[[refField.title, String(master[parentInfo?.display ?? "id"] ?? master.id)]]} />}
-    {supplied.length > 0 && <PropertyList items={supplied} />}
-    {!ready && Object.keys(bindings).length > 0 && <p role={bound.error ? "alert" : "status"} className="text-xs text-muted">{bound.error ?? t("Loading bound inputs…")}</p>}
-    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-    <fieldset disabled={!live || !ready}>
-      <GeneratedForm key={round} type={type} fields={fields} submitLabel={t("Create")} onCancel={() => { setError(""); setRound((r) => r + 1); }}
-        onSubmit={async (values) => {
-          if (!live) return;
-          setError("");
-          const payload = refField && master ? { ...values, [refField.name]: master.id } : values;
-          const id = newId(prefixOf(type));
-          try {
-            if (Object.keys(bindings).length > 0) {
-              await invoke({ ref: { app: type.split(".")[0]!, kind: "action", name: `${type}.create` }, target: id, key: crypto.randomUUID(),
-                inputs: payload, bindings, record: Object.values(bindings).some((binding) => binding.source === "subject") && master ? `${parentType}/${master.id}` : undefined, expectedRevision: 0 });
-              setRound((r) => r + 1);
-            } else if (await decide(`${type}.create`, { type, id }, payload, { expectedRevision: 0 })) setRound((r) => r + 1);
-          } catch (failure) { setError(failure instanceof Error ? failure.message : t("The related record could not be created.")); }
-        }} />
-    </fieldset>
-  </div>;
-}
-
-/** The selected record as its page reads it: history, tasks waiting on it. */
-function useRecordView(type: string, id?: string, readSource?: RecordSource) {
-  const host = useHost(), source = readSource ?? host.source;
-  const key=JSON.stringify([host.source.scope,source.scope,source.revision,type,id]),[result,setResult]=useState<{key:string;view?:RecordView;error?:string}>();
-  useEffect(() => {
-    let current = true;
-    setResult(undefined);
-    if(id&&source.scope===host.source.scope)void source.get(type,id).then(value=>{if(value.record.id!==id)throw Error("Record identity mismatch");if(current)setResult({key,view:value});}).catch(error=>{if(current)setResult({key,error:error instanceof Error?error.message:String(error)});});
-    return () => { current = false; };
-  }, [key]);
-  return result?.key===key?result:undefined;
-}
-
-/** The timeline (16b): the selected record's history from the journal. */
-function TimelineWidget({ page, section, selected, readSource,session,confirmedRecord,recordStatus }: Bound) {
-  const { source } = useHost();
-  const type = objectOf(page, section);
-  const info = source.entity(type);
-  const original=section.historyLimit?confirmedRecord:selected,result=useRecordView(type,original?.id,readSource??session?.readSource());
-  if(section.historyLimit&&recordStatus==="error")return <Panel role="alert">{t("The original record history could not be read.")}</Panel>;
-  if(section.historyLimit&&recordStatus==="pending")return <p role="status">{t("Confirming record access…")}</p>;
-  if (!original) return <p role="status" className="text-sm text-muted">{t("Select a record to see what happened to it.")}</p>;
-  if(result?.error)return <Panel role="alert">{t("The original record history could not be read.")}</Panel>;
-  if (!result?.view || !info) return <p role="status" className="text-sm text-muted">{t("Loading…")}</p>;
-  return <RecordHistory info={info} history={result.view.history} heading={false} limit={section.historyLimit||undefined} total={result.view.history.length} recordID={original.id} recordRevision={result.view.record.revision}/>;
-}
-
-/** The tasks (16b): what waits on the selected record for this member — approvals
- *  and flow steps from the work app — answered where they are. */
-function TasksWidget({ page, section, selected, live, readSource }: Bound) {
-  const { can, decide } = useHost();
-  const type = objectOf(page, section);
-  const result = useRecordView(type, selected?.id, readSource),view=result?.view;
-  if (!selected) return <p className="text-sm text-muted">{t("Select a record to see what waits on it.")}</p>;
-  if(result?.error)return <Panel role="alert">{t("The original record work could not be read.")}</Panel>;
-  if (!view) return <p className="text-sm text-muted">{t("Loading…")}</p>;
-  if (view.tasks.length === 0) return <p className="text-sm text-muted">{t("Nothing waits on it.")}</p>;
-  const answer = live && can("work.task.complete")
-    ? { answer: async (task: RecordView["tasks"][number], a?: string) => { await decide("work.task.complete", { type: "work.task", id: task.id }, a ? { answer: a } : {}); } }
-    : undefined;
-  return <Tasks list={view.tasks} tasks={answer} />;
-}
-
-/** The builder's published function is called by its ordinary action. The
- * saved call record remains the only answer and permission surface. */
-function FunctionWidget({ page, section, selected, live }: Bound) {
-  const { source, can, decide } = useHost();
-  const [callID, setCallID] = useState("");
-  const [reload, setReload] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [measured, setMeasured] = useState<EntityRecord>();
-  const name = section.function?.ref.name ?? "";
-  const version = Number(section.function?.sourceVersion.match(/\.function-(\d+)$/)?.[1] ?? 0);
-  useEffect(() => { setCallID(""); setError(""); }, [selected?.id, name, version]);
-  useEffect(() => {
-    if (!live || !callID) { setMeasured(undefined); return; }
-    let current = true;
-    source.get("build.function-call", callID).then((view) => { if (current) setMeasured(view.record); }, () => { if (current) setMeasured(undefined); });
-    return () => { current = false; };
-  }, [source, live, callID, reload]);
-  if (!name || !version) return <p role="alert" className="text-sm text-danger">{t("Choose a published function for this page.")}</p>;
-  return <div className="grid gap-3">
-    <p className="text-xs text-muted">{name} · {t("Version")} {version}</p>
-    {!selected ? <p className="text-sm text-muted">{t("Select a record to request advice.")}</p> : <>
-      <div className="flex flex-wrap gap-2">
-        <Button disabled={!live || busy || !can("build.function-call.start")} onClick={async () => {
-          setBusy(true); setError("");
-          const id = newId("CALL");
-          try {
-            if (await decide("build.function-call.start", { type: "build.function-call", id },
-              { name, version, source: selected.id }, { quiet: true, onRefused: setError })) { setCallID(id); setReload((n) => n + 1); }
-          } finally { setBusy(false); }
-        }}>{busy ? t("Requesting advice…") : t("Request advice")}</Button>
-        <Button disabled={!live} onClick={() => setReload((n) => n + 1)}>{t("Refresh advice")}</Button>
-      </div>
-      {!live && <p className="text-xs text-muted">{t("Advice calls do not run while you compose.")}</p>}
-      {error && <p role="alert" className="text-xs text-danger">{error}</p>}
-      {live && <RecordList key={reload} source={source} type="build.function-call" fields={["function", "version", "state", "source"]}
-        domain={[["source", "=", `${page.object.name}/${selected.id}`], ["function", "=", name], ["version", "=", version]]}
-        onOpen={(record) => setCallID(record.id)} />}
-      {live && callID && measured?.metered === true && <Card className="grid gap-2 p-3">
-        <h3 className="text-sm font-semibold">{t("Measured model call")}</h3>
-        <PropertyList items={[
-          [t("Input tokens"), measured.tokensReported ? String(measured.inputTokens ?? 0) : t("Not reported")],
-          [t("Output tokens"), measured.tokensReported ? String(measured.outputTokens ?? 0) : t("Not reported")],
-          [t("Model latency"), `${measured.latencyMillis ?? 0} ms`],
-          [t("Reported USD cost"), measured.costReported ? `$${Number(measured.costUsd ?? 0).toFixed(6)}` : t("Not reported")],
-          [t("Requested model"), String(measured.model ?? t("Not reported"))],
-          [t("Served model"), measured.servedModel ? String(measured.servedModel) : t("Not reported")],
-        ]} />
-      </Card>}
-      {live && callID && measured?.state !== "pending" && measured?.metered === false &&
-        <p className="text-xs text-muted">{t("No model call was measured for this result.")}</p>}
-      {live && callID && <RecordPage source={source} type="build.function-call" id={callID} fields={["state", "output", "code", "reason"]} reload={reload} />}
-    </>}
-  </div>;
-}
-
-/** One section: its title, and the widget it holds. While a page is being
- *  composed, clicking it takes it in hand. */
-function CollaborationWidget({page,section,facetValues,onFacet,sceneWindow,collaborationRecord,collaborationReference,collaborationStatus,collaborationSlot,session,commentDraft,fileValue,pdfPageValue,onCommentDraft,onFileID,onPdfPage,enabled,live}:Bound) {
- const host=useHost(),source=session?.readSource()??host.source,sampleSlot=recordResourceSlot(page,section.sceneSampleVariable),sampleRecord=sampleSlot?session?.confirmedSelected(sampleSlot):undefined,sampleReference=sampleSlot?session?.snapshot().records[sampleSlot]:undefined,sampleInfo=sampleReference?.status==="value"?source.entity(sampleReference.value.object):undefined;
- return <RecordCollaborationRenderer sceneWindow={sceneWindow} sceneSampleObject={page.document?.queries?.[page.document?.variables?.[section.sceneSampleCollectionVariable??""]?.source?.query??""]?.object.name} scene={section.scene} sample={sampleRecord&&sampleInfo?{record:sampleRecord,info:sampleInfo}:undefined} part={facetValues?.[section.scenePartVariable??""]} onPart={value=>{if(section.scenePartVariable)onFacet?.(section.scenePartVariable,value);}} kind={section.widget} label={section.title||t("Record collaboration")} record={collaborationRecord} reference={collaborationReference} status={collaborationStatus} slot={collaborationSlot} bindingEpoch={collaborationSlot?session?.recordBindingEpoch(collaborationSlot):undefined} session={session} readSource={session?.readSource()} draft={commentDraft} fileValue={fileValue} pageValue={pdfPageValue} onDraft={onCommentDraft} onFileID={onFileID} onPage={onPdfPage} enabled={enabled} live={live}/>;
-}
-function ExplorerWidget({page,section,session,explorationRoot,explorationStatus,explorationIdentity,explorationActive,onGraphOutput,graphSelected,enabled,contextReadCurrent}:Bound){
- const {source,definitions}=useHost();return <ExplorationRenderer kind={section.widget as "graph-explorer"|"vertex-graph"} config={section.graphExplorer} vertex={section.vertexGraph} root={explorationRoot} status={explorationStatus} rootObject={section.object?.name?section.object:page.object} source={session?.readSource()??source} definitions={definitions} identity={explorationIdentity??""} isActive={explorationActive??(()=>false)} onOutput={onGraphOutput} selected={graphSelected} enabled={enabled} label={section.title||t("Record exploration")} readCurrent={contextReadCurrent}/>;
-}
-const widgets = createWidgetRegistry<Bound>({
- ...inputPlugins,
- ...contentPlugins,
- ...scalarPlugins,
- ...recordWindowPlugins,
- ...distributionPlugins,
- ...navigationPlugins,
- ...recordPresentationPlugins,
- ...surfacePlugins,
- ...detailPlugins,
- ...chartPlugins,
- ...listingPlugins,
- ...executionPlugins,
- "image-annotation":CollaborationWidget,
- "scene-3d":CollaborationWidget,
- "action-table":({page,section,window,session,aggregateScope,enabled,live,contextReadCurrent})=><ActionTableRenderer section={section} object={objectOf(page,section)} window={window} session={session} scope={aggregateScope??""} enabled={enabled} live={live} readCurrent={contextReadCurrent}/>,
- observation:bound=><ObservationRenderer page={bound.page} section={bound.section} window={bound.window} history={bound.observationHistory} context={bound.observationContext} asset={bound.observationAsset} selectedRow={bound.observationSelected} onRow={bound.onObservationRow} values={bound.facetValues??{}} onState={bound.onFacet} session={bound.session} scope={bound.aggregateScope??""} enabled={bound.enabled} readCurrent={bound.contextReadCurrent} live={bound.live}/>,
- "graph-explorer":ExplorerWidget,"vertex-graph":ExplorerWidget,
- "record-comments":CollaborationWidget,"record-uploader":CollaborationWidget,"media-preview":CollaborationWidget,"pdf-viewer":CollaborationWidget,
-  filter: FilterWidget,
-  form: (bound) => <FormWidget key={`${objectOf(bound.page, bound.section)}/${bound.section.relation ?? ""}/${bound.section.parentSelection ?? ""}/${bound.section.relation ? bound.master?.id ?? "" : ""}`} {...bound} />,
-  timeline: TimelineWidget, tasks: TasksWidget, function: FunctionWidget,
-});
 
 class WidgetBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };

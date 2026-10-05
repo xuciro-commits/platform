@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:cea4389e3e827a7a",
+  "revision": "sha256:0b662becb7123ab5",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4375,6 +4375,8 @@
       "web/packages/app/src/sections.tsx",
       "web/packages/app/src/widgets/Button.tsx",
       "web/packages/app/src/widgets/CollectionBuilder.tsx",
+      "web/packages/app/src/widgets/FilterSurface.tsx",
+      "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/RecordCollaboration.tsx",
       "web/packages/build/src/application.tsx",
@@ -4434,10 +4436,10 @@
       "web/packages/app/src/capability.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
-      "web/packages/app/src/sections.tsx",
       "web/packages/app/src/semantic/Selector.tsx",
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
+      "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/Input.tsx",
       "web/packages/app/src/widgets/Observation.tsx",
       "web/packages/app/src/widgets/RecordWork.tsx",
@@ -4599,6 +4601,8 @@
       "web/packages/app/src/widgets/EmbeddedPage.tsx",
       "web/packages/app/src/widgets/Exploration.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
+      "web/packages/app/src/widgets/FilterSurface.tsx",
+      "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/Gauge.tsx",
       "web/packages/app/src/widgets/Histogram.tsx",
       "web/packages/app/src/widgets/Kanban.tsx",
@@ -4609,6 +4613,7 @@
       "web/packages/app/src/widgets/Progress.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/Range.tsx",
+      "web/packages/app/src/widgets/RecordActivity.tsx",
       "web/packages/app/src/widgets/RecordCalendar.tsx",
       "web/packages/app/src/widgets/RecordCard.tsx",
       "web/packages/app/src/widgets/RecordChart.tsx",
@@ -4681,7 +4686,7 @@
     ],
     "ui/record-lookup": [
       "web/packages/app/src/actions.tsx",
-      "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/RecordPicker.tsx"
     ],
     "ui/form": [
@@ -4789,7 +4794,8 @@
     ],
     "ui/entity-card": [
       "web/packages/app/src/index.tsx",
-      "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/CreateForm.tsx",
+      "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
@@ -4799,7 +4805,7 @@
     ],
     "ui/record-list": [
       "web/packages/app/src/index.tsx",
-      "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/Table.tsx",
       "web/packages/app/src/widgets/bindings.ts",
       "web/packages/build/src/application.tsx",
@@ -4816,7 +4822,7 @@
     "ui/record-page": [
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
-      "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/RecordDetails.tsx"
     ],
     "ui/chart": [
@@ -4828,9 +4834,6 @@
     ],
     "ui/virtual-stack": [
       "web/packages/app/src/runtime/LoopRuntime.tsx"
-    ],
-    "ui/record-history": [
-      "web/packages/app/src/sections.tsx"
     ],
     "ui/layout-region": [
       "web/packages/app/src/sections.tsx"
@@ -4844,10 +4847,6 @@
     "ui/sheet": [
       "web/packages/app/src/sections.tsx",
       "web/apps/pms-desk/src/App.tsx"
-    ],
-    "ui/tasks": [
-      "web/packages/app/src/sections.tsx",
-      "web/apps/workspace/src/chrome.tsx"
     ],
     "ui/ai-result": [
       "web/packages/app/src/widgets/AIWidget.tsx"
@@ -4955,6 +4954,13 @@
     "ui/range-input": [
       "web/packages/app/src/widgets/Range.tsx",
       "web/packages/build/src/editor.tsx"
+    ],
+    "ui/record-history": [
+      "web/packages/app/src/widgets/RecordActivity.tsx"
+    ],
+    "ui/tasks": [
+      "web/packages/app/src/widgets/RecordActivity.tsx",
+      "web/apps/workspace/src/chrome.tsx"
     ],
     "ui/record-calendar": [
       "web/packages/app/src/widgets/RecordCalendar.tsx"
