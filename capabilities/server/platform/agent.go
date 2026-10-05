@@ -55,6 +55,9 @@ type CaseRun struct {
 // Budget bounds one run: model turns, tokens in and out, and actions taken.
 type Budget struct {
 	Steps, Tokens, Actions int
+	// Cost caps what a run may spend on models, in USD, across its calls; 0:
+	// no cap. It is measured from what the providers report (ADR-0050 D6).
+	Cost float64
 }
 
 // AgentRun is a run as an agent's functions see it.

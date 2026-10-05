@@ -17,8 +17,10 @@ import (
 // The context graph (ADR-0021 D5): one read that grounds a person or an agent
 // in a record — its fields and history, the records it references and that
 // reference it, its links across apps, the flows and the tasks about it.
-// Within the reader's scope; nil reads as the host (a flow's agent, reading
-// what its app may).
+// Within the reader's scope: a person reads with their own grants, an app's
+// automation reads its own app (ADR-0050 D2). There is no host fallback — a
+// read without a reader answers nothing, so a flow's agent can never quietly
+// read as the host did before the review (AI-01).
 
 type ContextView struct {
 	Type       string         `json:"type"`
@@ -45,7 +47,9 @@ type TaskSummary struct {
 	Answer string `json:"answer,omitempty"`
 }
 
-// host reads everything: every app's roles, tenant scope.
+// host reads everything: every app's roles, tenant scope. It is the host's own
+// view for indexing and maintenance, not a reader: reads taken for a person or
+// an agent are taken as that person or as the agent's own app (ADR-0050 D2).
 func (t *Tenant) host() platform.Member {
 	m := platform.Member{ID: "app:" + AgentApp, Tenant: t.ID, Roles: map[string]string{}}
 	for _, a := range t.apps {
@@ -54,14 +58,19 @@ func (t *Tenant) host() platform.Member {
 	return m
 }
 
+// appReader is the member an app's automation reads as: exactly that app's
+// records, and none of any other app's. It is a strict subset of host(): the
+// same roles for the app's own types, no role in any other app. An agent a
+// flow runs reads as its app (ADR-0050 D2, review AI-01).
+func (t *Tenant) appReader(app string) *platform.Member {
+	return &platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{app: platform.AnyMember}}
+}
+
 func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time) (ContextView, *kernel.Error) {
-	if reader != nil && reader.Tenant != t.ID {
+	if reader == nil || reader.Tenant != t.ID {
 		return ContextView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	m := t.host()
-	if reader != nil {
-		m = *reader
-	}
+	m := *reader
 	view, err := t.RecordOf(m, typ, id, now)
 	if err != nil {
 		return ContextView{}, err
@@ -130,15 +139,13 @@ type Hit struct {
 }
 
 // Search finds records of every type the reader may read by text: the global
-// search of the workspace and an agent's search tool.
+// search of the workspace and an agent's search tool. Without a reader it
+// finds nothing (ADR-0050 D2).
 func (t *Tenant) Search(reader *platform.Member, q string, now time.Time) []Hit {
-	if reader != nil && reader.Tenant != t.ID {
+	if reader == nil || reader.Tenant != t.ID {
 		return nil
 	}
-	m := t.host()
-	if reader != nil {
-		m = *reader
-	}
+	m := *reader
 	out := []Hit{}
 	if strings.TrimSpace(q) == "" {
 		return out

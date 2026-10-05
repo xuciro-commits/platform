@@ -31,8 +31,26 @@ const (
 	transcriptsInMemory   = 500
 )
 
+var purgeAll = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+
+// transcriptDays is how many days transcripts are kept, and whether any are
+// kept at all: 0 or less keeps none, so the setting is a switch, not only a
+// period (ADR-0050 D5, review AI-04).
+func (t *Tenant) transcriptDays() int {
+	days, err := strconv.Atoi(t.setting(t.automation(AgentApp, false), SettingTranscriptDays))
+	if err != nil {
+		return 0
+	}
+	return days
+}
+
 // transcribe keeps a call's transcript in the Store, or in memory without one.
+// When the tenant keeps none, nothing is written — a transcript holds personal
+// data, and a setting of 0 must not quietly keep it forever.
 func (t *Tenant) transcribe(x Transcript) {
+	if t.transcriptDays() <= 0 {
+		return
+	}
 	x.Tenant = t.ID
 	if t.Store != nil {
 		t.Store.SaveTranscript(x)
@@ -62,24 +80,36 @@ func (t *Tenant) Transcripts(run string, limit int) []Transcript {
 	return out
 }
 
-// PurgeTranscripts forgets transcripts older than the setting keeps them.
+// PurgeTranscripts forgets transcripts older than the setting keeps them, and
+// every one of them when it keeps none: lowering the period, or setting it to
+// zero, deletes what is over it on the next round (review AI-04).
 func (t *Tenant) PurgeTranscripts(now time.Time) {
 	if t.agents == nil {
 		return
 	}
-	days, err := strconv.Atoi(t.setting(t.automation(AgentApp, false), SettingTranscriptDays))
-	if err != nil || days <= 0 {
-		return
-	}
-	before := now.AddDate(0, 0, -days)
+	days := t.transcriptDays()
 	if t.Store != nil {
-		t.Store.PurgeTranscripts(t.ID, before)
+		// A store's purge is "everything before this moment"; keeping none
+		// means forgetting every one, so the moment is past every record.
+		if days <= 0 {
+			t.Store.PurgeTranscripts(t.ID, purgeAll)
+			return
+		}
+		t.Store.PurgeTranscripts(t.ID, now.AddDate(0, 0, -days))
 		return
 	}
 	t.derivedMu.Lock()
 	defer t.derivedMu.Unlock()
+	if days <= 0 {
+		t.transcripts = nil
+		return
+	}
+	before := now.AddDate(0, 0, -days)
 	t.transcripts = slices.DeleteFunc(t.transcripts, func(x Transcript) bool { return x.At.Before(before) })
 }
+
+// purgeAll is a moment after any transcript: forgetting every one is a purge
+// with this cutoff.
 
 // TranscriptsFor are the model calls of run (every run's, for no run) as m may
 // read them: an administrator of the agent or AI app reads a call only where
@@ -94,6 +124,12 @@ func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now ti
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: "only an administrator of the agent or AI app reads transcripts"}
 	}
 	found := t.Transcripts(run, limit)
+	if run == "" {
+		// A person's own chat calls are not a run's trace: there are no records
+		// to check them against, and the administrator gate above stands
+		// (review AI-04).
+		return found, nil
+	}
 	out := []Transcript{}
 	for _, x := range found {
 		if !t.withheld(m, x.Run, now) {

@@ -79,6 +79,10 @@ func consoleOf(t *Tenant) *Console {
 // of several on this host (ADR-0018 D7); without it, the first that knows them.
 const TenantHeader = "Platform-Tenant"
 
+// chatMaxBytes bounds a chat request body: a conversation with its tool
+// declarations, well within what a person or a page sends (review AI-03).
+const chatMaxBytes = 1 << 20
+
 func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	subject, ok := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 	if !ok {
@@ -241,7 +245,9 @@ func (h *Host) Handler() http.Handler {
 	})
 	handle(Route{Pattern: "POST /v1/ai/chat", Summary: "Call a model the caller may use; the call is metered (ADR-0015)", Body: ChatRequest{}, Answer: ChatAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var req ChatRequest
-		if json.NewDecoder(r.Body).Decode(&req) != nil {
+		// A chat body carries a conversation and its tool declarations; the
+		// platform bounds it like every other request body (review AI-03).
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, chatMaxBytes)).Decode(&req) != nil {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}

@@ -68,6 +68,22 @@ func (t *Tenant) turns(now time.Time) []func() {
 	return out
 }
 
+// stillRunning reports whether this run is still the running turn that was
+// snapshotted before its model call: a cancel, or a stop from any other cause,
+// ends the run and the late answer must not become a step (ADR-0050 D3). It
+// also clears the turn's busy mark, so a run stopped in flight is no longer
+// held out of the scheduler.
+func (t *Tenant) stillRunning(id string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	run, known := platform.Get[AgentRunRecord](t.automation(AgentApp, false), id)
+	if !known || run.State != "running" {
+		delete(t.agents.busy, id)
+		return false
+	}
+	return true
+}
+
 // take takes one run's turn: its model's answer becomes the run's next step.
 func (t *Tenant) take(x turn, now time.Time) {
 	{
@@ -86,6 +102,15 @@ func (t *Tenant) take(x turn, now time.Time) {
 		answer, failure := t.call(x.pv, x.model, t.agents.member(x.run.Agent), x.req, now)
 		if t.quarantined() {
 			return // do not apply a late model answer to a tenant under recovery
+		}
+		// The call above is the one place a run waits on the outside, and the
+		// tenant's lock is not held while it does: the run may have been
+		// cancelled, stopped or suspended in the meantime. A late answer must
+		// not run its tool then (ADR-0050 D3, review AI-02). What it cost is
+		// still journaled and metered, so spend stays accounted for.
+		if !t.stillRunning(x.run.ID) {
+			t.meter(t.agents.member(x.run.Agent), answer.Usage)
+			return
 		}
 		body := stepBody{Run: x.run.ID, Content: answer.Content, Usage: answer.Usage}
 		if failure != nil {
@@ -138,6 +163,11 @@ func (a *Agents) due(now time.Time) []turn {
 			x.stop = "the person no longer has access to this agent's app"
 		case name == "":
 			x.stop = "no model is set for agents"
+		case d.spentOut(run):
+			// A run at its budget is not given another model call: the reply
+			// that crossed the budget already happened, and one more would
+			// only spend more (ADR-0050 D6, review AI-05).
+			x.stop = d.budgetReason(run)
 		case t.suspended("agent:" + run.Agent): // the off switch (ADR-0029 D4)
 			sw, _ := t.Held(SwitchType + "/agent:" + run.Agent)
 			x.stop = "suspended by " + sw.(Switch).By
@@ -147,7 +177,7 @@ func (a *Agents) due(now time.Time) []turn {
 				x.stop = "the model " + name + " is not enabled"
 				break
 			}
-			if why := t.allowed(a.member(run.Agent), model, now); why != "" { // the door every call passes (ADR-0029 D1)
+			if why := t.reserve(a.member(run.Agent), model, now); why != "" { // the door every call passes (ADR-0029 D1)
 				x.stop = why
 				break
 			}
@@ -161,6 +191,23 @@ func (a *Agents) due(now time.Time) []turn {
 		out = append(out, x)
 	}
 	return out
+}
+
+// spentOut reports whether a run may not make another model call: what its
+// budget allows is spent. Steps and tokens are counted as they happen; cost,
+// only when the provider reports it (ADR-0050 D6, review AI-05).
+func (d *agentDef) spentOut(run AgentRunRecord) bool {
+	return run.StepsUsed >= d.Budget.Steps || d.Budget.Tokens > 0 && run.TokensUsed >= d.Budget.Tokens ||
+		d.Budget.Cost > 0 && run.Cost >= d.Budget.Cost
+}
+
+// budgetReason says what a run ran out of, for the person who takes it over.
+func (d *agentDef) budgetReason(run AgentRunRecord) string {
+	reason := fmt.Sprintf("%d steps, %d tokens", run.StepsUsed, run.TokensUsed)
+	if d.Budget.Cost > 0 {
+		reason += fmt.Sprintf(", %.4f USD", run.Cost)
+	}
+	return "over its budget (" + reason + ")"
 }
 
 // prompt is the conversation so far: instructions, the goal with its record's
@@ -217,8 +264,9 @@ func clip(s string, n int) string {
 	return s[:n] + "…"
 }
 
-// reader is who an agent reads as: the person it runs for, or nil for an
-// app's automation. A removed person must not silently become automation.
+// reader is the person a run works for, or nil for an app's automation. It
+// answers about authority: a removed person must not silently become
+// automation, and an app's automation drafts nothing.
 func (a *Agents) reader(run AgentRunRecord) *platform.Member {
 	if run.OnBehalf != "" {
 		if m, ok := a.t.member(run.OnBehalf); ok {
@@ -227,6 +275,24 @@ func (a *Agents) reader(run AgentRunRecord) *platform.Member {
 		return &platform.Member{ID: run.OnBehalf} // no tenant or grants: derived reads refuse it
 	}
 	return nil
+}
+
+// readsAs is who a run's reads happen as: the person it runs for, or its own
+// app when no person started it (a flow's agent). An app's automation reads
+// its own app's records only — never the host's view of every app, which the
+// reads used to fall back to (ADR-0050 D2, review AI-01).
+func (a *Agents) readsAs(run AgentRunRecord) *platform.Member {
+	if m := a.reader(run); m != nil {
+		return m
+	}
+	app := ""
+	if d := a.defs[run.Agent]; d != nil {
+		app = d.app
+	}
+	if app == "" {
+		return &platform.Member{ID: "app:" + AgentApp, Tenant: a.t.ID} // no grants: nothing is readable
+	}
+	return a.t.appReader(app)
 }
 
 // agentStep journals a step, then applies it.
@@ -243,9 +309,20 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 		now = now.Truncate(time.Microsecond)
 	}
 	delete(t.agents.busy, b.Run)
-	run, _ := platform.Get[AgentRunRecord](t.automation(AgentApp, false), b.Run)
+	run, known := platform.Get[AgentRunRecord](t.automation(AgentApp, false), b.Run)
 	if b.Evaluation != nil {
+		// A report is applied only while its evaluation still waits for one;
+		// an evaluation already reported must not be written twice.
+		ev, waited := platform.Get[Evaluation](t.automation(AgentApp, false), b.Evaluation.ID)
+		if !waited || ev.State != "queued" {
+			return
+		}
 		run.Agent = b.Evaluation.Agent
+	} else if !known || run.State != "running" {
+		// The fence at the end of the outside call, and here in the step's own
+		// decision: a model answer that arrives after the run was cancelled or
+		// stopped never runs its tool (ADR-0050 D3, review AI-02).
+		return
 	}
 	if b.Stop == "" && run.OnBehalf != "" {
 		reader, definition := t.agents.reader(run), t.agents.defs[run.Agent]
@@ -322,7 +399,9 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 	step := RunStep{At: now, Tool: b.Tool, Arguments: string(b.Arguments), Tokens: b.Usage.Input + b.Usage.Output}
 	run.StepsUsed++
 	run.TokensUsed += step.Tokens
-	run.Cost += b.Usage.Cost
+	if b.Usage.CostReported { // a cost nobody reported is not 0, it is unknown (ADR-0050 D7)
+		run.Cost += b.Usage.Cost
+	}
 	run.Model = cmp.Or(b.Usage.Model, run.Model)
 	var args map[string]any
 	json.Unmarshal(b.Arguments, &args)
@@ -348,9 +427,11 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 	case d == nil:
 		step.Outcome = "the agent is no longer declared"
 		stop(step.Outcome)
-	case run.StepsUsed > d.Budget.Steps || run.TokensUsed > d.Budget.Tokens:
+	case run.StepsUsed > d.Budget.Steps || run.TokensUsed > d.Budget.Tokens || d.Budget.Cost > 0 && run.Cost > d.Budget.Cost:
+		// The reply that crossed the budget: what it cost is kept, and no
+		// further call is made for this run (ADR-0050 D6, review AI-05).
 		step.Outcome = "over budget"
-		stop(fmt.Sprintf("over its budget (%d steps, %d tokens)", run.StepsUsed, run.TokensUsed))
+		stop(d.budgetReason(run))
 	case b.Tool == "": // a text answer ends the run with it
 		step.Outcome = "finished"
 		run.Result, run.State = b.Content, "done"
@@ -412,7 +493,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 				Ref: RunType + "/" + run.ID, To: to, Key: key, Answers: answers})
 		}
 	case "context":
-		view, err := t.Context(a.reader(*run), str("type"), str("id"), now)
+		view, err := t.Context(a.readsAs(*run), str("type"), str("id"), now)
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
@@ -420,7 +501,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		out, _ := json.Marshal(view)
 		return string(out), nil
 	case "search":
-		found := t.Search(a.reader(*run), str("query"), now)
+		found := t.Search(a.readsAs(*run), str("query"), now)
 		for _, hit := range found {
 			step.Sources = append(step.Sources, hit.Type+"/"+hit.ID)
 		}

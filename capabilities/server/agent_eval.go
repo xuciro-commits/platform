@@ -29,18 +29,21 @@ const (
 // Evaluation is one candidate's report on an agent's past runs.
 type Evaluation struct {
 	platform.Record
-	Agent   string     `json:"agent" field:"readonly,search"`
-	Model   string     `json:"model" field:"readonly,search" title:"Candidate model"`
-	State   string     `json:"state" field:"readonly" choices:"queued,done"`
-	Agrees  int        `json:"agrees" field:"readonly" title:"Agrees with accepted"`
-	Differs int        `json:"differs" field:"readonly" title:"Differs from accepted"`
-	Repeats int        `json:"repeats" field:"readonly" title:"Repeats a correction"`
-	Avoids  int        `json:"avoids" field:"readonly" title:"Avoids a correction"`
-	Asks    int        `json:"asks" field:"readonly"`
-	Fails   int        `json:"fails" field:"readonly"`
-	Score   float64    `json:"score" field:"readonly"` // agrees and avoids, of the cases
-	Tokens  int        `json:"tokens" field:"readonly"`
-	Cases   []EvalCase `json:"cases" field:"readonly"`
+	Agent   string  `json:"agent" field:"readonly,search"`
+	Model   string  `json:"model" field:"readonly,search" title:"Candidate model"`
+	State   string  `json:"state" field:"readonly" choices:"queued,done"`
+	Agrees  int     `json:"agrees" field:"readonly" title:"Agrees with accepted"`
+	Differs int     `json:"differs" field:"readonly" title:"Differs from accepted"`
+	Repeats int     `json:"repeats" field:"readonly" title:"Repeats a correction"`
+	Avoids  int     `json:"avoids" field:"readonly" title:"Avoids a correction"`
+	Asks    int     `json:"asks" field:"readonly"`
+	Fails   int     `json:"fails" field:"readonly"`
+	Score   float64 `json:"score" field:"readonly"` // agrees and avoids, of the cases
+	Tokens  int     `json:"tokens" field:"readonly"`
+	// Cost is the USD the providers reported for the whole evaluation; calls
+	// whose cost was not reported are not counted here (ADR-0050 D7).
+	Cost  float64    `json:"cost,omitempty" field:"readonly" title:"Model cost, USD"`
+	Cases []EvalCase `json:"cases" field:"readonly"`
 	// Suite runs the agent's declared cases instead of its past runs (ADR-0029 D6).
 	Suite bool `json:"suite,omitempty" field:"readonly" title:"Declared cases"`
 }
@@ -50,16 +53,17 @@ const suiteRuns = 3 // each declared case, as models vary
 // EvalCase is one past run and what the candidate made of it, or one of the
 // agent's declared cases run three times (ADR-0029 D6).
 type EvalCase struct {
-	Case      string `json:"case,omitempty"`   // the declared case's name
-	Passes    int    `json:"passes,omitempty"` // of Runs
-	Runs      int    `json:"runs,omitempty"`
-	Run       string `json:"run"`
-	Signal    string `json:"signal"` // what people made of the run
-	Verdict   string `json:"verdict"`
-	Reference string `json:"reference"` // the decision people accepted, or the one they corrected
-	Candidate string `json:"candidate"`
-	Steps     int    `json:"steps"`
-	Tokens    int    `json:"tokens"`
+	Case      string  `json:"case,omitempty"`   // the declared case's name
+	Passes    int     `json:"passes,omitempty"` // of Runs
+	Runs      int     `json:"runs,omitempty"`
+	Run       string  `json:"run"`
+	Signal    string  `json:"signal"` // what people made of the run
+	Verdict   string  `json:"verdict"`
+	Reference string  `json:"reference"` // the decision people accepted, or the one they corrected
+	Candidate string  `json:"candidate"`
+	Steps     int     `json:"steps"`
+	Tokens    int     `json:"tokens"`
+	Cost      float64 `json:"cost,omitempty"`
 }
 
 // decision is a run's outcome as the evaluation compares it: the actions it
@@ -108,6 +112,33 @@ func normal(s string) string {
 	return s
 }
 
+// evalBudget is what a whole evaluation of planned runs may spend: the
+// definition's budget once per run, so a suite cannot run past what its runs
+// were each allowed (ADR-0050 D9, review AI-05).
+func evalBudget(b platform.Budget, planned int) platform.Budget {
+	b.Steps, b.Tokens, b.Cost = b.Steps*planned, b.Tokens*planned, b.Cost*float64(planned)
+	return b
+}
+
+// budgetLeft is what remains of ceiling after spent. A zero cost ceiling means
+// no cost cap, as it does for a run.
+func budgetLeft(ceiling, spent platform.Budget) platform.Budget {
+	left := platform.Budget{Steps: ceiling.Steps - spent.Steps, Tokens: ceiling.Tokens - spent.Tokens}
+	if ceiling.Cost > 0 {
+		left.Cost = ceiling.Cost - spent.Cost
+	}
+	return left
+}
+
+// minBudget is the tighter of two budgets: a run may spend what both allow.
+func minBudget(a, b platform.Budget) platform.Budget {
+	out := platform.Budget{Steps: min(a.Steps, b.Steps), Tokens: min(a.Tokens, b.Tokens)}
+	if a.Cost > 0 && b.Cost > 0 {
+		out.Cost = min(a.Cost, b.Cost)
+	}
+	return out
+}
+
 // Evaluate works through queued evaluations, one at a time, outside the
 // tenant's lock but for each tool it probes; the host calls it apart from Think.
 func (t *Tenant) Evaluate(now time.Time) {
@@ -154,7 +185,7 @@ func (a *Agents) evaluate(ev Evaluation, now time.Time) Evaluation {
 		}
 		x := a.rerun(d, run, model, pv, who, now)
 		ev.Cases = append(ev.Cases, x)
-		ev.Tokens += x.Tokens
+		ev.Tokens, ev.Cost = ev.Tokens+x.Tokens, ev.Cost+x.Cost
 		switch x.Verdict {
 		case "agrees":
 			ev.Agrees++
@@ -203,8 +234,8 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Pr
 		}
 		x.Reference = "not: " + strings.Join(bad, "; ")
 	}
-	dry, failed := a.dryRun(d, run, model, pv, who, now)
-	x.Steps, x.Tokens = dry.StepsUsed, dry.TokensUsed
+	dry, failed := a.dryRun(d, run, model, pv, who, now, d.Budget)
+	x.Steps, x.Tokens, x.Cost = dry.StepsUsed, dry.TokensUsed, dry.Cost
 	if failed != "" {
 		x.Verdict, x.Candidate = "fails", failed
 	} else if dry.State == "asked" {
@@ -238,14 +269,26 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Pr
 // the runs that pass (ADR-0029 D6): a case passes when every run does, varies
 // when some do, and fails when none does. The score is the runs that pass.
 func (a *Agents) suite(ev Evaluation, d *agentDef, model ai.Model, pv ai.Provider, who platform.Member, now time.Time) Evaluation {
+	// The whole evaluation has a ceiling too: each case runs suiteRuns times,
+	// so it may spend the definition's budget that many times over, checked
+	// before each run is started rather than after it spent
+	// (ADR-0050 D9, review AI-05).
+	ceiling, spent := evalBudget(d.Budget, len(d.Cases)*suiteRuns), platform.Budget{}
 	total, passed := 0, 0
 	for _, c := range d.Cases {
 		x := EvalCase{Case: c.Name, Runs: suiteRuns}
 		var why []string
 		for i := range suiteRuns {
+			room := budgetLeft(ceiling, spent)
+			if room.Steps <= 0 || room.Tokens <= 0 || ceiling.Cost > 0 && room.Cost <= 0 {
+				why = append(why, fmt.Sprintf("run %d: over the evaluation's budget", i+1))
+				continue
+			}
 			run := AgentRunRecord{Record: platform.Record{ID: fmt.Sprintf("%s:%s:%d", ev.ID, c.Name, i+1)}, Agent: ev.Agent, Goal: c.Goal, Ref: c.Ref, OnBehalf: who.ID}
-			dry, failed := a.dryRun(d, run, model, pv, who, now)
+			dry, failed := a.dryRun(d, run, model, pv, who, now, minBudget(d.Budget, room))
 			x.Steps, x.Tokens = x.Steps+dry.StepsUsed, x.Tokens+dry.TokensUsed
+			x.Cost += dry.Cost
+			spent.Steps, spent.Tokens, spent.Cost = spent.Steps+dry.StepsUsed, spent.Tokens+dry.TokensUsed, spent.Cost+dry.Cost
 			got, _, result := decision(d, dry.Steps, dry.Result, func(int) string { return "" })
 			miss := failed
 			switch {
@@ -270,7 +313,7 @@ func (a *Agents) suite(ev Evaluation, d *agentDef, model ai.Model, pv ai.Provide
 		}
 		x.Reference = strings.Join(why, "; ")
 		total, passed = total+suiteRuns, passed+x.Passes
-		ev.Tokens += x.Tokens
+		ev.Tokens, ev.Cost = ev.Tokens+x.Tokens, ev.Cost+x.Cost
 		ev.Cases = append(ev.Cases, x)
 		switch x.Verdict {
 		case "passes":
@@ -290,21 +333,24 @@ func (a *Agents) suite(ev Evaluation, d *agentDef, model ai.Model, pv ai.Provide
 // dryRun runs a goal with the candidate, dry: reads the run made answer as
 // then, other reads read now, actions are probed and never taken. failed says
 // why the model could not go on; an asked run's question is its Result.
-func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Provider, who platform.Member, now time.Time) (AgentRunRecord, string) {
+func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Provider, who platform.Member, now time.Time, room platform.Budget) (AgentRunRecord, string) {
 	t := a.t
 	dry := AgentRunRecord{Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []RunStep{}}
-	for dry.StepsUsed < d.Budget.Steps && dry.TokensUsed < d.Budget.Tokens {
+	for dry.StepsUsed < room.Steps && dry.TokensUsed < room.Tokens {
 		t.mu.Lock()
 		req := a.prompt(t.automation(AgentApp, false), d, dry, model.Name(), now)
 		t.mu.Unlock()
 		req.run = run.ID + ":evaluation"
-		if why := t.allowed(who, model, now); why != "" {
+		if why := t.reserve(who, model, now); why != "" {
 			return dry, why
 		}
 		answer, failure := t.call(pv, model, who, req, now)
 		t.meter(who, answer.Usage)
 		dry.StepsUsed++
 		dry.TokensUsed += answer.Usage.Input + answer.Usage.Output
+		if answer.Usage.CostReported {
+			dry.Cost += answer.Usage.Cost
+		}
 		if failure != nil {
 			return dry, "the model failed: " + failure.Detail
 		}

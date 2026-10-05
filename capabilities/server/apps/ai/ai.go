@@ -35,6 +35,7 @@ const (
 	SettingDailyTokens = "daily-tokens"     // tokens per person per day; 0: none
 	SettingPerMinute   = "calls-per-minute" // calls per person or agent per minute; 0: none
 	SettingAppModel    = "app-model"        // the model apps ask when they name none (ADR-0029 D3)
+	SettingMaxTokens   = "max-tokens"       // the most tokens one answer may ask for; 0: the provider's default
 	Admin              = "admin"
 	User               = "user" // may call models open to users
 )
@@ -99,10 +100,14 @@ type Usage struct {
 	Input          int       `json:"input"`
 	Output         int       `json:"output"`
 	TokensReported bool      `json:"tokensReported,omitempty"`
-	Cost           float64   `json:"cost,omitempty"` // USD, when the provider reports it
-	CostReported   bool      `json:"costReported,omitempty"`
-	Millis         int64     `json:"millis"`
-	Outcome        string    `json:"outcome"` // ok, or why it failed
+	// TokensEstimated marks usage the provider did not report: the numbers are
+	// the platform's conservative estimate, so an unknown call is never booked
+	// as a free one (ADR-0050 D7, review AI-05).
+	TokensEstimated bool    `json:"tokensEstimated,omitempty"`
+	Cost            float64 `json:"cost,omitempty"` // USD, when the provider reports it
+	CostReported    bool    `json:"costReported,omitempty"`
+	Millis          int64   `json:"millis"`
+	Outcome         string  `json:"outcome"` // ok, or why it failed
 }
 
 const usageKept = 5000
@@ -117,7 +122,11 @@ type AI struct {
 	// caller's calls of the last minute, derived from usage as it is metered.
 	daily  map[string]int
 	recent map[string][]time.Time
-	ledger *platform.Ledger
+	// inflight are the calls that passed the door and whose usage is not
+	// metered yet: a call in flight counts against its caller's minute, so
+	// calls that start together cannot each pass the same limit (ADR-0050 D4).
+	inflight map[string][]time.Time
+	ledger   *platform.Ledger
 }
 
 // New is a tenant's AI app.
@@ -126,7 +135,7 @@ func New(tenant string) *AI {
 	f := func(name, typ, description string, required bool) platform.Field {
 		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
-	return &AI{limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
+	return &AI{limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, inflight: map[string][]time.Time{}, ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
 		platform.Action{Schema: SchemaProviderAdd, Target: ProviderType, Capability: "providers", Title: "Add AI provider", Roles: admin,
 			Description: "Add a source of models: a vendor (Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter), a third-party OpenAI-compatible API, or a local model server (LM Studio, Ollama, llama.cpp).",
 			Payload: []platform.Field{f("kind", "string", "vendor, compatible or local", true), f("vendor", "string", "For a vendor: its ID", false),
@@ -177,6 +186,7 @@ func (a *AI) Restore(raw json.RawMessage) error {
 		a.daily = map[string]int{}
 	}
 	a.recent = map[string][]time.Time{}
+	a.inflight = map[string][]time.Time{} // calls in flight do not survive a restore
 	return nil
 }
 
@@ -189,7 +199,9 @@ func (a *AI) Manifest() platform.Manifest {
 			{Name: SettingAppModel, Title: "Model apps ask", Type: "text", Default: "",
 				Description: "The enabled model (<provider>/<model>) an app's request asks when it names none, such as a ticket's summary; empty: such requests are refused."},
 			{Name: SettingPerMinute, Title: "Calls per minute", Type: "integer", Default: "60",
-				Description: "How many model calls each person or agent may make a minute, unless an AI limit says otherwise; 0: no limit."}}}
+				Description: "How many model calls each person or agent may make a minute, unless an AI limit says otherwise; 0: no limit."},
+			{Name: SettingMaxTokens, Title: "Most tokens one answer", Type: "integer", Default: "8192",
+				Description: "The most tokens one model answer may ask for; a call asking for more is capped to this. 0: whatever the provider's own default allows."}}}
 }
 
 func (a *AI) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
@@ -336,6 +348,11 @@ func (a *AI) Meter(u Usage) {
 	a.daily[day+"|"+u.Member] += u.Input + u.Output
 	a.daily[day+"|model:"+u.Model] += u.Input + u.Output
 	a.recent[u.Member] = append(slices.DeleteFunc(a.recent[u.Member], func(t time.Time) bool { return u.At.Sub(t) >= time.Minute }), u.At)
+	// The call this usage belongs to is no longer in flight: its booking is
+	// released by the meter reading that replaces it, in the same lock.
+	if calls := a.inflight[u.Member]; len(calls) > 0 {
+		a.inflight[u.Member] = calls[1:]
+	}
 }
 
 // Usage is the usage kept, oldest first.
@@ -352,9 +369,15 @@ type Defaults struct{ People, Agents, PerMinute int }
 // Allow says why m may not call model now, or "" when it may: the model's
 // daily cap for the tenant, then m's tokens today and calls this minute,
 // against m's own limit or the defaults. Apps (app:<id>) take only their own.
+// Calls already in flight count against the minute: they passed the door but
+// their usage is not metered yet. Allow alone takes nothing — Reserve does.
 func (a *AI) Allow(m platform.Member, model Model, d Defaults, now time.Time) string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	return a.allowLocked(m, model, d, now)
+}
+
+func (a *AI) allowLocked(m platform.Member, model Model, d Defaults, now time.Time) string {
 	day := now.UTC().Format(time.DateOnly)
 	if model.DailyTokens > 0 && a.daily[day+"|model:"+model.Name()] >= model.DailyTokens {
 		return fmt.Sprintf("The tenant used the %d tokens a day of %s", model.DailyTokens, model.Name())
@@ -373,10 +396,46 @@ func (a *AI) Allow(m platform.Member, model Model, d Defaults, now time.Time) st
 	if daily > 0 && a.daily[day+"|"+m.ID] >= daily {
 		return fmt.Sprintf("%s used its %d tokens for today", m.ID, daily)
 	}
-	if perMinute > 0 && len(slices.DeleteFunc(slices.Clone(a.recent[m.ID]), func(t time.Time) bool { return now.Sub(t) >= time.Minute })) >= perMinute {
+	if perMinute > 0 && a.callsLocked(m.ID, now) >= perMinute {
 		return fmt.Sprintf("%s made its %d calls this minute", m.ID, perMinute)
 	}
 	return ""
+}
+
+// callsLocked is the caller's calls this minute: the ones already metered and
+// the ones in flight.
+func (a *AI) callsLocked(member string, now time.Time) int {
+	recent := slices.DeleteFunc(slices.Clone(a.recent[member]), func(t time.Time) bool { return now.Sub(t) >= time.Minute })
+	inflight := slices.DeleteFunc(slices.Clone(a.inflight[member]), func(t time.Time) bool { return now.Sub(t) >= time.Minute })
+	return len(recent) + len(inflight)
+}
+
+// Reserve is the door one model call passes, taken atomically with the call's
+// registration: it refuses with why, or lets the call start and counts it as in
+// flight until its usage is metered. It is what every model call takes instead
+// of a bare Allow — calls that start together would each pass the same limit
+// otherwise (ADR-0050 D4, review AI-03).
+func (a *AI) Reserve(m platform.Member, model Model, d Defaults, now time.Time) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.pruneInflightLocked(now)
+	if why := a.allowLocked(m, model, d, now); why != "" {
+		return why
+	}
+	a.inflight[m.ID] = append(a.inflight[m.ID], now)
+	return ""
+}
+
+// pruneInflightLocked forgets calls in flight beyond a minute: a call the
+// process died before metering must not hold its caller's limits forever.
+func (a *AI) pruneInflightLocked(now time.Time) {
+	for member, calls := range a.inflight {
+		if left := slices.DeleteFunc(calls, func(t time.Time) bool { return now.Sub(t) >= time.Minute }); len(left) == 0 {
+			delete(a.inflight, member)
+		} else {
+			a.inflight[member] = left
+		}
+	}
 }
 
 // Total is usage summed per day, member and model.
@@ -389,6 +448,13 @@ type Total struct {
 	Input  int     `json:"input"`
 	Output int     `json:"output"`
 	Cost   float64 `json:"cost"`
+	// Reported and Estimated split Input+Output into what the provider said
+	// and what the platform had to estimate; CostUnknown counts the calls
+	// whose cost no provider reported, so a cost of 0 is never read as free
+	// when it was simply not said (ADR-0050 D7, review AI-05).
+	Reported    int `json:"reported"`
+	Estimated   int `json:"estimated"`
+	CostUnknown int `json:"costUnknown"`
 }
 
 // Read "ai-providers" (administrators), "ai-models" (what the caller may call;
@@ -436,6 +502,15 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		}
 		t := &totals[j]
 		t.Calls, t.Input, t.Output, t.Cost = t.Calls+1, t.Input+u.Input, t.Output+u.Output, t.Cost+u.Cost
+		switch {
+		case u.TokensReported:
+			t.Reported += u.Input + u.Output
+		case u.TokensEstimated:
+			t.Estimated += u.Input + u.Output
+		}
+		if !u.CostReported {
+			t.CostUnknown++
+		}
 		if u.Outcome != "ok" {
 			t.Failed++
 		}

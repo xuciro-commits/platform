@@ -272,8 +272,15 @@ func TestAnthropicProvider(t *testing.T) {
 	}
 	answer, kerr, failure := tn.Chat(ana, ChatRequest{Model: "claude/claude-opus-5", Messages: []Message{
 		{Role: "system", Content: "be brief"}, {Role: "user", Content: "hi"}, {Role: "assistant", Content: "hello"}, {Role: "user", Content: "again"}}}, now)
-	if kerr != nil || failure != nil || answer.Content != "be brief|again|3|16000" || answer.Usage.Input != 12 || answer.Usage.Output != 7 {
+	if kerr != nil || failure != nil || answer.Content != "be brief|again|3|8192" || answer.Usage.Input != 12 || answer.Usage.Output != 7 {
 		t.Fatalf("answer %+v %v %v", answer, kerr, failure)
+	}
+	// The platform's ceiling, not the adapter's own default, is what an answer
+	// asking for more is capped to (review AI-03); a smaller ask is kept.
+	capped, _, _ := tn.Chat(ana, ChatRequest{Model: "claude/claude-opus-5", MaxTokens: 100000, Messages: []Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "x"}}}, now)
+	small, _, _ := tn.Chat(ana, ChatRequest{Model: "claude/claude-opus-5", MaxTokens: 512, Messages: []Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "x"}}}, now)
+	if !strings.HasSuffix(capped.Content, "|8192") || !strings.HasSuffix(small.Content, "|512") {
+		t.Fatalf("max tokens ceiling: %q, %q", capped.Content, small.Content)
 	}
 	if _, _, failure := tn.Chat(ana, ChatRequest{Model: "claude/claude-busy", Messages: []Message{{Role: "user", Content: "x"}}}, now); failure == nil ||
 		failure.Status != 429 || failure.Detail != "rate limited" {

@@ -318,9 +318,12 @@ func testAgents(t *testing.T, accepted bool) {
 	start("ana", "R4", "refund T4", "")
 	think(3)
 	expect("guard", run("R4").Steps[0].Outcome[:24]+" "+ticket("T4").Status, "refused by its guard: ER open")
+	// The budget is checked before the next call, so the loop stops at its
+	// fourth step rather than spend a fifth to learn it is over (ADR-0050 D6,
+	// review AI-05); a reply that crosses the budget is still counted.
 	start("ana", "R5", "loop", "")
 	think(6)
-	expect("budget", run("R5").State+" "+run("R5").Stopped, "stopped over its budget (5 steps, 600 tokens)")
+	expect("budget", run("R5").State+" "+run("R5").Stopped, "stopped over its budget (4 steps, 480 tokens)")
 	inbox, _ = tn.Read(member("ana"), "inbox")
 	expect("takeover", fmt.Sprint(slices.ContainsFunc(inbox.([]work.WorkTask), func(w work.WorkTask) bool { return w.Title == "Take over from the agent: loop" })), "true")
 

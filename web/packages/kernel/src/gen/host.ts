@@ -284,6 +284,7 @@ export type Budget = {
   Steps: number;
   Tokens: number;
   Actions: number;
+  Cost: number;
 };
 
 export type Calendar = {
@@ -2175,6 +2176,9 @@ export type Total = {
   input: number;
   output: number;
   cost: number;
+  reported: number;
+  estimated: number;
+  costUnknown: number;
 };
 
 export type TraceLine = {
@@ -2232,6 +2236,7 @@ export type Usage = {
   input: number;
   output: number;
   tokensReported?: boolean;
+  tokensEstimated?: boolean;
   cost?: number;
   costReported?: boolean;
   millis: number;

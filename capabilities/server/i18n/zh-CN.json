@@ -1124,5 +1124,9 @@
   "The conversation history is not readable": "会话历史不可读取",
   "Question": "问题",
   "History": "历史",
-  "Application header": "应用页头"
+  "Application header": "应用页头",
+  "Most tokens one answer": "单次回答最多 token",
+  "The most tokens one model answer may ask for; a call asking for more is capped to this. 0: whatever the provider's own default allows.": "一次模型回答最多可请求的 token 数；请求更多会被限制到该值。0：以服务商自身默认上限为准。",
+  "Every model call's full request and answer are kept this many days outside the journal, for agent administrators; they may hold personal data. 0: none are kept, and what was kept is forgotten.": "每次模型调用的完整请求与回答在日志之外保留这么多天，供 Agent 管理员查看；其中可能包含个人数据。0：不保留，并遗忘已保留的内容。",
+  "Model cost, USD": "模型成本（美元）"
 }

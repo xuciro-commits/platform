@@ -104,18 +104,37 @@ type models interface {
 	Meter(u ai.Usage)
 	Spent(member string, now time.Time) int
 	Allow(m platform.Member, model ai.Model, d ai.Defaults, now time.Time) string
+	Reserve(m platform.Member, model ai.Model, d ai.Defaults, now time.Time) string
 	Usage() []ai.Usage
 }
 
-// allowed says why m may not call model now (ADR-0029 D1), or "": the door
-// every model call passes — members', agents', evaluations' and embeddings'.
-func (t *Tenant) allowed(m platform.Member, model ai.Model, now time.Time) string {
+// limits are the defaults a member without its own takes (ADR-0029 D1).
+func (t *Tenant) limits() ai.Defaults {
 	number := func(app, name string) int {
 		n, _ := strconv.Atoi(t.setting(t.automation(app, false), name))
 		return n
 	}
-	return t.ai.Allow(m, model, ai.Defaults{People: number(ai.ID, ai.SettingDailyTokens), Agents: number(AgentApp, SettingAgentDaily),
-		PerMinute: number(ai.ID, ai.SettingPerMinute)}, now)
+	return ai.Defaults{People: number(ai.ID, ai.SettingDailyTokens), Agents: number(AgentApp, SettingAgentDaily),
+		PerMinute: number(ai.ID, ai.SettingPerMinute)}
+}
+
+// reserve takes the door every model call passes — members', agents',
+// evaluations' and embeddings': it refuses with why, or lets the call start
+// and counts it in flight until its usage is metered, both under one lock.
+// Calls that start together would each pass the same limit without it
+// (ADR-0050 D4, review AI-03).
+func (t *Tenant) reserve(m platform.Member, model ai.Model, now time.Time) string {
+	if t.ai == nil {
+		return ""
+	}
+	return t.ai.Reserve(m, model, t.limits(), now)
+}
+
+// mostTokens is the most tokens one answer may ask for (platform setting); 0:
+// the provider's own default. An answer a caller asks to be longer is capped.
+func (t *Tenant) mostTokens() int {
+	n, _ := strconv.Atoi(t.setting(t.automation(ai.ID, false), ai.SettingMaxTokens))
+	return n
 }
 
 // Chat calls a model for m. A refusal of access is a kernel error; a provider
@@ -138,7 +157,7 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time, delta .
 	if !t.breakers.allow("ai:"+pv.ID, now) {
 		return ChatAnswer{}, nil, &AIError{Status: http.StatusServiceUnavailable, Detail: "the provider " + pv.ID + " failed repeatedly; its calls wait until it answers again"}
 	}
-	if why := t.allowed(m, model, now); why != "" {
+	if why := t.reserve(m, model, now); why != "" {
 		return ChatAnswer{}, nil, &AIError{Status: http.StatusTooManyRequests, Detail: why, Quota: true}
 	}
 	if len(delta) > 0 && len(req.Tools) == 0 {
@@ -151,6 +170,13 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time, delta .
 
 // call calls a model once, outside the tenant's lock; the caller meters it.
 func (t *Tenant) call(pv ai.Provider, model ai.Model, m platform.Member, req ChatRequest, now time.Time) (ChatAnswer, *AIError) {
+	// The platform's ceiling on one answer, at the one place every call passes:
+	// a caller may ask for less, never for more; asking for nothing takes the
+	// ceiling, so no adapter's own default outgrows the tenant's setting
+	// (review AI-03).
+	if ceiling := t.mostTokens(); ceiling > 0 {
+		req.MaxTokens = min(cmp.Or(req.MaxTokens, ceiling), ceiling)
+	}
 	started := time.Now()
 	complete := t.complete
 	if pv.Wire == "anthropic" {
@@ -159,6 +185,18 @@ func (t *Tenant) call(pv ai.Provider, model ai.Model, m platform.Member, req Cha
 	span := outside(trace.SpanContext{}, "chat "+model.Model, attribute.String("gen_ai.operation.name", "chat"),
 		attribute.String("gen_ai.provider.name", pv.ID), attribute.String("gen_ai.request.model", model.Model), attribute.String("platform.tenant", t.ID))
 	answer, u, failure := complete(pv, model.Model, req)
+	if !u.TokensReported {
+		// A provider that says nothing about usage must not be booked as
+		// spending nothing: the platform books a conservative estimate of the
+		// request and the answer, marked as one, so daily caps and run budgets
+		// still bite (ADR-0050 D7, review AI-05).
+		request, _ := json.Marshal(req)
+		said := answer.Content
+		for _, c := range answer.ToolCalls {
+			said += string(c.Arguments)
+		}
+		u.Input, u.Output, u.TokensEstimated = estimateTokens(string(request)), estimateTokens(said), true
+	}
 	if req.delta != nil && failure == nil && pv.Wire == "anthropic" { // no stream on this wire yet: the answer at once
 		req.delta(answer.Content)
 	}
@@ -181,6 +219,16 @@ func (t *Tenant) call(pv ai.Provider, model ai.Model, m platform.Member, req Cha
 	reply, _ := json.Marshal(answer)
 	t.transcribe(Transcript{At: now, Member: m.ID, Model: model.Name(), Run: req.run, Request: request, Answer: reply, Outcome: u.Outcome})
 	return answer, failure
+}
+
+// estimateTokens is a conservative estimate of the tokens in text: about a
+// third of its bytes, and 0 only for text that is not there. It is used when,
+// and only when, a provider reports no usage (ADR-0050 D7, review AI-05).
+func estimateTokens(text string) int {
+	if text == "" {
+		return 0
+	}
+	return (len(text) + 2) / 3
 }
 
 // meter journals a call's usage, then applies it.
@@ -617,7 +665,7 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 		out.Result, out.Detail = "retry", "the provider "+pv.ID+" failed repeatedly"
 		return out, nil
 	}
-	if why := t.allowed(m, enabled, now); why != "" {
+	if why := t.reserve(m, enabled, now); why != "" {
 		out.Result, out.Detail = "retry", why
 		return out, nil
 	}
