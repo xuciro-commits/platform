@@ -51,11 +51,15 @@ function normalizedSections(sections:unknown):unknown{
  return sections.map(section=>{if(!section.embedding)return section;const embedding={...section.embedding};for(const key of ['inputs','results'])if(embedding[key]&&typeof embedding[key]==='object'&&!Object.keys(embedding[key]).length)delete embedding[key];return {...section,embedding};});
 }
 const matches=(record:ImportedPageRecord,payload:ImportPageWrite['payload'])=>Object.entries(payload).every(([key,value])=>key==='document'?canonical(normalizedDocument(record[key]))===canonical(normalizedDocument(value)):key==='sections'?canonical(normalizedSections(record[key]??[]))===canonical(normalizedSections(value)):canonical(record[key]??(key==='description'?'':Array.isArray(value)&&!value.length?[]:undefined))===canonical(value));
-export type ImportSaveProgress={page:string;state:'saved'|'published'};
+export type ImportSaveProgress={page:string;state:'saved'|'published'|'draft'};
 export type ImportSaveIO={
  active:()=>boolean;
  read:(id:string)=>Promise<ImportedPageRecord|undefined>;
  pending:(id:string)=>boolean;
+ /** Whether this tenant still publishes a page on its own (ADR-0048 D5b/D6):
+  * the development and import profiles do; a delivery tenant saves the drafts
+  * and the application's joint candidate carries them. */
+ directInstall:boolean;
  decide:(schema:string,id:string,payload:unknown,revision?:number)=>Promise<boolean>;
  progress:(value:ImportSaveProgress)=>void;
 };
@@ -74,6 +78,12 @@ export async function saveImportedPages(writes:ImportPageWrite[],io:ImportSaveIO
    if(!record||!matches(record,payload))throw Error('application-import-conflict');
   }
   io.progress({page:d.sourcePage,state:'saved'});
+ }
+ // A delivery tenant delivers these pages with the application's release: the
+ // drafts above are the candidate's inputs, and nothing is installed yet.
+ if(!io.directInstall){
+  for(const {destination:d} of writes)io.progress({page:d.sourcePage,state:'draft'});
+  return;
  }
  for(const {destination:d,payload} of writes){
   assertActive();const record=await io.read(d.id);assertActive();

@@ -32,7 +32,16 @@ test('one complete source and shared binding map compile all seven original page
 });
 const payload=name=>({name,object:'build.asset',title:name,description:'',sections:[],selections:[],document:{formatVersion:2,uiProfile:manifest.uiProfile,root:'root',nodes:{root:{kind:'rows',children:[]}}}});
 const writes=['one','two'].map((name,i)=>({destination:{sourcePage:name,id:`PAGE-${i}`,name,object:'build.asset'},payload:payload(name)}));
-function io(){const records=new Map(),calls=[],progress=[];let pending=false,reject='';return {records,calls,progress,setPending:v=>pending=v,setReject:v=>reject=v,active:()=>true,read:async id=>records.get(id),pending:()=>pending,decide:async(schema,id,value,revision)=>{calls.push({schema,id,revision});if(schema===reject)return false;if(schema==='build.page.create')records.set(id,{...structuredClone(value),id,revision:1});else if(schema==='build.page.publish'){const r=records.get(id);assert.equal(revision,r.revision);r.published=JSON.stringify(r);r.revision++;}else throw Error('unexpected edit');return true;},progress:value=>progress.push(value)};}
+function io(directInstall=true){const records=new Map(),calls=[],progress=[];let pending=false,reject='';return {records,calls,progress,directInstall,setPending:v=>pending=v,setReject:v=>reject=v,active:()=>true,read:async id=>records.get(id),pending:()=>pending,decide:async(schema,id,value,revision)=>{calls.push({schema,id,revision});if(schema===reject)return false;if(schema==='build.page.create')records.set(id,{...structuredClone(value),id,revision:1});else if(schema==='build.page.publish'){const r=records.get(id);assert.equal(revision,r.revision);r.published=JSON.stringify(r);r.revision++;}else throw Error('unexpected edit');return true;},progress:value=>progress.push(value)};}
+test('a delivery tenant saves the imported pages as drafts and publishes nothing (ADR-0048 D6)',async()=>{
+ const state=io(false),seen=[];
+ await saveImportedPages(writes,{...state,progress:value=>seen.push(value)});
+ assert.deepEqual(state.calls.map(c=>c.schema),['build.page.create','build.page.create']);
+ assert.deepEqual(seen,[{page:'one',state:'saved'},{page:'two',state:'saved'},{page:'one',state:'draft'},{page:'two',state:'draft'}]);
+ for(const record of state.records.values())assert.equal(record.published,undefined);
+ state.calls.length=0;await saveImportedPages(writes,{...state,progress:value=>seen.push(value)});
+ assert.equal(state.calls.length,0);assert.equal(state.records.size,2);
+});
 test('save all drafts before publishing, retain partial results, and resume only confirmed matching bytes',async()=>{
  const state=io();state.setReject('build.page.publish');await assert.rejects(saveImportedPages(writes,state),/application-import-publish-refused/);assert.deepEqual(state.calls.map(c=>c.schema),['build.page.create','build.page.create','build.page.publish']);assert.equal(state.records.size,2);
  state.setReject('');state.calls.length=0;await saveImportedPages(writes,state);assert.deepEqual(state.calls.map(c=>c.schema),['build.page.publish','build.page.publish']);state.calls.length=0;await saveImportedPages(writes,state);assert.equal(state.calls.length,0);
