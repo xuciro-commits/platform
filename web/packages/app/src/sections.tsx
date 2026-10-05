@@ -1,3 +1,5 @@
+import {contentPlugins} from "./widgets/content-plugins";
+import {inputPlugins} from "./widgets/input-plugins";
 import {confirmObservationRow} from "./widgets/observation-selection";
 import {usePageComputations} from "./runtime/PageComputations";
 import {aiRecordSlot} from "./widgets/ai-context";
@@ -17,7 +19,7 @@ import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button,ButtonGroup, CollectionTitle, PageHeader, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Input, SearchInput, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, RecordLinks, RecordStatus, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
+  Button,ButtonGroup, CollectionTitle, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, RecordLinks, RecordStatus, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, InlineActionForm, prefixOf } from "./actions";
@@ -52,14 +54,7 @@ const HistogramRenderer=lazy(()=>import("./widgets/Histogram").then(module=>({de
 const TermCountsRenderer=lazy(()=>import("./widgets/TermCounts").then(module=>({default:module.TermCountsRenderer})));
 const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
 const RecordPickerRenderer=lazy(()=>import("./widgets/RecordPicker").then(module=>({default:module.RecordPickerRenderer})));
-const SpacerRenderer=lazy(()=>import("./widgets/Spacer").then(module=>({default:module.SpacerRenderer})));
-const SeparatorRenderer=lazy(()=>import("./widgets/Separator").then(module=>({default:module.SeparatorRenderer})));
-const NoticeRenderer=lazy(()=>import("./widgets/Notice").then(module=>({default:module.NoticeRenderer})));
 const AlertRenderer=lazy(()=>import("./widgets/Alert").then(module=>({default:module.AlertRenderer})));
-const DateInputRenderer=lazy(()=>import("./widgets/DateInput").then(module=>({default:module.DateInputRenderer})));
-const ChoiceInputRenderer=lazy(()=>import("./widgets/ChoiceInput").then(module=>({default:module.ChoiceInputRenderer})));
-const BooleanInputRenderer=lazy(()=>import("./widgets/BooleanInput").then(module=>({default:module.BooleanInputRenderer})));
-const RangeRenderer=lazy(()=>import("./widgets/Range").then(module=>({default:module.RangeRenderer})));
 const LeaderboardRenderer=lazy(()=>import("./widgets/Leaderboard").then(module=>({default:module.LeaderboardRenderer})));
 const SummaryRenderer=lazy(()=>import("./widgets/Summary").then(module=>({default:module.SummaryRenderer})));
 const RecordCollaborationRenderer=lazy(()=>import("./widgets/RecordCollaboration").then(module=>({default:module.RecordCollaborationRenderer})));
@@ -80,7 +75,6 @@ const KanbanRenderer=lazy(()=>import("./widgets/Kanban").then(module=>({default:
 const PivotRenderer=lazy(()=>import("./widgets/Pivot").then(module=>({default:module.PivotRenderer})));
 const ButtonRenderer=lazy(()=>import("./widgets/Button").then(module=>({default:module.ButtonRenderer})));
 
-import type {QueryWindow} from "./widgets/QueryWindowFrame";
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
 
@@ -89,19 +83,7 @@ type Section = NonNullable<Page["sections"]>[number];
 type Narrowed = Record<string, Record<string, unknown>>;
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
-type Bound = {builder?:ReturnType<typeof usePageQueries>["builders"][string];sceneWindow?:QueryWindow;embeddingInputs?:Record<string,VariableResult>;embeddingReturn?:(values:Record<string,unknown>)=>void;observationHistory?:QueryWindow;observationContext?:QueryWindow;observationAsset?:EntityRecord;observationSelected?:string;onObservationRow?:(record:EntityRecord)=>Promise<void>;notepadValue?:VariableResult;onNotepad?:(value:string)=>void;explorationRoot?:EntityRecord;explorationStatus?:"empty"|"pending"|"value"|"error";explorationIdentity?:string;explorationActive?:()=>boolean;onGraphOutput?:(object:string,record:EntityRecord)=>Promise<boolean>;graphSelected?:{object:string;id:string};contextReadCurrent?:boolean;avatarContextStatus?:"empty"|"pending"|"value"|"error";onClearContext?:()=>void;collaborationRecord?:EntityRecord;collaborationReference?:import("./runtime/Session").RecordReference;collaborationStatus?:"empty"|"pending"|"value"|"error";collaborationSlot?:string;commentDraft?:VariableResult;fileValue?:VariableResult;pdfPageValue?:VariableResult;onCommentDraft?:(value:string)=>void;onFileID?:(value:string)=>void;onPdfPage?:(value:string)=>void;comparisonRecords?:EntityRecord[];comparisonStatus?:"empty"|"pending"|"value"|"error";confirmedRecord?:EntityRecord;recordStatus?:"empty"|"pending"|"value"|"error";sparklineValue?:VariableResult;groupValue?:VariableResult;onGroupFilter?:(value?:string)=>void;onHeatmap?:(row?:string,column?:string)=>void;pickerConfirmation?:"empty"|"pending"|"value"|"error";pickerValue?:VariableResult;onPickerID?:(record?:EntityRecord)=>void;alertValue?:VariableResult;dateValue?:VariableResult;onDate?:(value:string)=>void;choiceSetValue?:VariableResult;onChoiceSet?:(value:string[])=>void;choiceValue?:VariableResult;onChoice?:(value:string)=>void;booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
-  actionReady?:boolean;onRecordOpen?:(type:string,record:EntityRecord)=>void;onControl?:(id:string)=>void;controlBound?:(id:string)=>boolean;
-  page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
-  master?: EntityRecord;
-  session?: PageSessionStore;
-  window?: NonNullable<Parameters<typeof RecordList>[0]["window"]>;
- collection?:VariableResult; aggregateScope?:string;
-  selectionSet?:import("@platform/ui").RecordSelectionPort;
-  keepActive?:boolean;
-  facetValues?:Record<string,VariableResult>;onFacet?:(id:string,value:ScalarValue)=>void;
-  inputScopes?:string[];onClick?: () => void; numeric?:boolean; valueError?:string; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
-  sharedFilter?:Record<string,unknown>; narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
-};
+type Bound = import("./widgets/bindings").WidgetBindingContext;
 
 /** Composing: the section in hand, and choosing another by clicking it. */
 type Composing = { chosen?: number; onChoose?: (at: number) => void; at?: number; nested?: boolean;
@@ -452,6 +434,8 @@ function ExplorerWidget({page,section,session,explorationRoot,explorationStatus,
  const {source,definitions}=useHost();return <ExplorationRenderer kind={section.widget as "graph-explorer"|"vertex-graph"} config={section.graphExplorer} vertex={section.vertexGraph} root={explorationRoot} status={explorationStatus} rootObject={section.object?.name?section.object:page.object} source={session?.readSource()??source} definitions={definitions} identity={explorationIdentity??""} isActive={explorationActive??(()=>false)} onOutput={onGraphOutput} selected={graphSelected} enabled={enabled} label={section.title||t("Record exploration")} readCurrent={contextReadCurrent}/>;
 }
 const widgets = createWidgetRegistry<Bound>({
+ ...inputPlugins,
+ ...contentPlugins,
  "record-map":({page,section,window,selected,enabled,onSelect,pickerConfirmation})=>{const {source}=useHost();return <RecordMapRenderer window={window} info={source.entity(objectOf(page,section))} config={section.map} scope={source.scope??""} confirmation={pickerConfirmation} selected={selected} enabled={enabled} onSelect={onSelect}/>;},
  "image-annotation":CollaborationWidget,
  "scene-3d":CollaborationWidget,
@@ -478,14 +462,7 @@ const widgets = createWidgetRegistry<Bound>({
  "treemap":({page,section,window,aggregateScope,groupValue,enabled,onGroupFilter})=>{const {source}=useHost(),selected=groupValue?.status==="value"?typeof groupValue.value==="string"?[groupValue.value]:isStringSet(groupValue.value)?groupValue.value.values:[]:[];return <TermCountsRenderer treemap selected={selected} enabled={enabled} onSelect={onGroupFilter} object={objectOf(page,section)} window={window} field={section.group??""} label={section.title||t("Treemap")} info={source.entity(objectOf(page,section))} source={source.aggregate?{aggregate:source.aggregate,scope:aggregateScope??source.scope,revision:source.revision}:undefined}/>;},
  "term-counts":({page,section,window,aggregateScope})=>{const {source}=useHost();return <TermCountsRenderer object={objectOf(page,section)} window={window} field={section.group??""} label={section.title||t("Term counts")} info={source.entity(objectOf(page,section))} source={source.aggregate?{aggregate:source.aggregate,scope:aggregateScope??source.scope,revision:source.revision}:undefined}/>;},
  "record-picker":({page,section,window,selected,enabled,onSelect,pickerValue,onPickerID,pickerConfirmation})=><RecordPickerRenderer type={objectOf(page,section)} window={window} fields={section.recordPicker} title={section.title||t("Record picker")} selected={selected} enabled={enabled} confirmation={section.pickerValueVariable?pickerConfirmation:undefined} value={section.pickerValueVariable?pickerValue:undefined} onSelect={onPickerID??onSelect}/>,
- spacer:({section})=><SpacerRenderer config={section.spacer}/>,
- separator:({section})=><SeparatorRenderer config={section.separator} name={section.title||t("Separator")}/>,
- notice:({section})=><NoticeRenderer config={section.notice} label={section.title||t("Notice")}/>,
  "alert-banner":({section,alertValue})=><AlertRenderer value={alertValue} config={section.alertBanner} title={section.title||t("Alert banner")}/>,
- "date-input":({section,dateValue,onDate,enabled})=><DateInputRenderer value={dateValue} kind={section.dateKind} offset={section.dateOffset} label={section.dateLabel} title={section.title||t("Date input")} enabled={enabled} onChange={onDate}/>,
- "choice-input":({section,choiceValue,choiceSetValue,onChoice,onChoiceSet,enabled})=><ChoiceInputRenderer setValue={choiceSetValue} onSet={onChoiceSet} value={choiceValue} fields={section.choiceInput} title={section.title||t("Choice input")} enabled={enabled} onChange={onChoice}/>,
- "boolean-input":({section,booleanInput,onBoolean,enabled})=><BooleanInputRenderer value={booleanInput} label={section.booleanLabel} variant={section.booleanVariant} title={section.title||t("Boolean switch")} enabled={enabled} onChange={onBoolean}/>,
- "range-input":({section,rangeLower,rangeUpper,onRange})=><RangeRenderer lower={rangeLower} upper={rangeUpper} fields={section.rangeInput} title={section.title||t("Range input")} onChange={onRange}/>,
  "record-leaderboard":({page,section,window,selected,onSelect})=>{const {source}=useHost();return <LeaderboardRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.leaderboard} selected={selected} onSelect={onSelect}/>;},
  "summary-stats":({page,section,statisticsValue})=>{const {source}=useHost();return <SummaryRenderer value={statisticsValue} info={source.entity(objectOf(page,section))} field={section.summaryField}/>;},
  gauge:({section,gaugeValue})=><GaugeRenderer value={gaugeValue} fields={section.gauge} title={section.title||t("Gauge")}/>,
@@ -496,7 +473,6 @@ const widgets = createWidgetRegistry<Bound>({
  "record-scatter":({page,section,window,selected,enabled,onSelect,pickerConfirmation})=>{const {source}=useHost();return <RecordScatterRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.scatter} confirmation={pickerConfirmation} selected={selected} enabled={enabled} onSelect={onSelect}/>;},
  "record-chart":RecordChartAdapter,
  "record-list":(bound)=>bound.section.recordList?.layout==="tiles"?<RecordTilesRenderer window={bound.window} object={objectOf(bound.page,bound.section)} labelField={bound.section.cardLabel??"id"} selected={bound.selected?.id} onSelect={bound.enabled===false||!bound.section.selection?undefined:record=>bound.onSelect(record)} label={bound.section.title||t("Record tiles")} readCurrent={bound.contextReadCurrent}/>:<TableAdapter {...bound}/>,
- heading:({section})=><PageHeader compact level={Number(section.headingLevel?.slice(1)??2) as 1|2|3} title={section.text||t("Heading")}/>,
  "collection-title":({section,countValue,countError})=><CollectionTitle title={section.title||t("Collection title")} value={countValue} error={countError}/>,
  "button-group":({section,onControl,controlBound,enabled})=><ButtonGroup buttons={section.buttons??[]} label={section.title||t("Button group")} onActivate={id=>onControl?.(id)} isBound={controlBound??(()=>false)} enabled={enabled}/>,
  "status-tracker":StatusTrackerWidget,
@@ -506,7 +482,6 @@ const widgets = createWidgetRegistry<Bound>({
  "record-view":RecordViewWidget,
   kanban:KanbanAdapter,
   "record-timeline":RecordTimelineAdapter,
-  input: ({ section, value, onValue, enabled,numeric,valueError,inputScopes }) => <div className="grid gap-1">{section.inputKind==="search"?<SearchInput value={value??""} onChange={onValue??(()=>{})} disabled={!onValue||enabled===false} aria-label={section.title||t("Search records")} scope={inputScopes??[]}/>:<Input inputMode={numeric?"decimal":undefined} maxLength={numeric?pageVariableContract.decimal.maxBytes:undefined} aria-invalid={!!valueError} aria-label={section.title || t("Text input")} value={value ?? ""} disabled={!onValue || enabled === false} onChange={(event) => onValue?.(event.target.value)} />}{valueError&&<p role="alert" className="text-xs text-danger">{t(valueError)}</p>}</div>,
   button: ({ section, onClick, enabled }) => <ButtonRenderer title={section.title} onClick={onClick} enabled={enabled}/>,
   "inline-action":({page,section,selected,live,aggregateScope,actionReady})=><InlineActionForm type={objectOf(page,section)} schema={section.actions?.[0]?.name??""} record={selected} live={live} scope={aggregateScope} defaults={section.actionDefaults} ready={actionReady}/>,
   table: TableAdapter, detail: DetailWidget, actions: ActionsWidget,
@@ -514,7 +489,6 @@ const widgets = createWidgetRegistry<Bound>({
   pivot: (bound) => <ChartWidget {...bound} kpi={false} pivot/>,
   chart: (bound) => <ChartWidget {...bound} kpi={false} />,
   metric: (bound) => <ChartWidget {...bound} kpi />,
-  text: ({ section }) => <Markdown content={section.text} className="text-sm" />,
   filter: FilterWidget,
   form: (bound) => <FormWidget key={`${objectOf(bound.page, bound.section)}/${bound.section.relation ?? ""}/${bound.section.parentSelection ?? ""}/${bound.section.relation ? bound.master?.id ?? "" : ""}`} {...bound} />,
   timeline: TimelineWidget, tasks: TasksWidget, function: FunctionWidget,

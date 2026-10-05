@@ -347,7 +347,7 @@ export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type
 export { NewActions, PayloadFields, InlineActionForm, RecordActions, useRecordArchive } from "./actions";
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages";
 export { ComposedPage, SectionView, isComposed } from "./sections";
-export { createWidgetRegistry, widgetContracts, widgetContract, pageUIProfile, supportsPageUIProfile, type WidgetRegistry, type WidgetImplementation, type WidgetContract, type WidgetID } from "./widgets/registry";
+export { createWidgetDefinitions, createWidgetRegistry, widgetContracts, widgetContract, pageUIProfile, supportsPageUIProfile, type WidgetRegistry, type WidgetImplementation, type WidgetContract, type WidgetID } from "./widgets/registry";
 export { pageVariableContract, pageVariableValues, pageVariableDiagnostics } from "./runtime/PageRuntime";
 export type { VariableResult as PageVariableValue } from "./runtime/variables";
 

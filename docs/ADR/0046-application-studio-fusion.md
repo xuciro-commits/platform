@@ -1161,6 +1161,10 @@ Button click声明void payload、required及maxBindings=1，宿主事件检查�
 
 应用API拥有BindingAdapter和注册身份，TableRenderer/ButtonRenderer仅接收明确的授权source/window/selection或click/enabled端口，通过React懒加载并复用共享RecordList/Button。Build拥有按同一configVersion注册的TableInspector/ButtonInspector；通用对象/属性/关系和类型化导航编辑继续复用原owner。未迁组件暂保留原Renderer/检查器，本profile不是92组件迁移完成，也没有通用slots、动态市场或租户JS权限。
 
+输入（input、boolean-input、choice-input、date-input、range-input）与内容（text、heading、spacer、separator、notice）两个五件家族已使用类型化插件定义：固定组件身份与配置版本，BindingAdapter 从应用 API 的绑定上下文选出明确 props，Renderer 按需加载，不接收完整页面、会话或数据源。加载与错误隔离继续归原 SectionView；变量写入、权限、Scope 退役及原冻结由既有 owner 决定。原语义、空标签、零尺寸、错误草稿与回调保持，不新增事件/变量存储。
+
+运行与 Build 检查器共用 createWidgetDefinitions 的完整注册、版本和生命周期校验，当前 75 个原生组件全部需要显式声明；使用通用编辑面的七种组件显式登记无专属检查器，避免把注册遗漏当作正常无配置。插件身份与注册键不符会拒绝，未知版本不选择最新实现。其余 65 个原生适配器尚需成组迁移；通用 slots、配置迁移及完整 Plugin Architecture 仍未完成。
+
 ### 8.2 Pivot分析组件 profile
 
 F5b在v2.23注册pivot，configVersion=1，复用Section.group作为行轴、新增columnGroup作为可选列轴、沿原measure声明度量。两轴不能相同；类型/日期分桶及度量由原Aggregate owner验证。集合端口继续使用原collectionVariable，互斥组件自身查询/关系/共享筛选；页面、同根Overlay或应用共享计划提供完整谓词，分页/排序/limit不进入聚合请求。没有集合端口时沿原对象条件、父关系及共享筛选读取。

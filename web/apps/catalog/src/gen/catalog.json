@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:2281ac68ee1812cf",
+  "revision": "sha256:19d0856f17eebd71",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4438,6 +4438,7 @@
       "web/packages/app/src/semantic/Selector.tsx",
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
+      "web/packages/app/src/widgets/Input.tsx",
       "web/packages/app/src/widgets/Observation.tsx",
       "web/packages/app/src/widgets/RecordWork.tsx",
       "web/packages/build/src/application.tsx",
@@ -4728,7 +4729,7 @@
       "web/packages/app/src/agents.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
-      "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/Content.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
@@ -4796,6 +4797,7 @@
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/app/src/widgets/Table.tsx",
+      "web/packages/app/src/widgets/bindings.ts",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
@@ -4825,9 +4827,6 @@
     "ui/record-history": [
       "web/packages/app/src/sections.tsx"
     ],
-    "ui/search-input": [
-      "web/packages/app/src/sections.tsx"
-    ],
     "ui/collection-title": [
       "web/packages/app/src/sections.tsx"
     ],
@@ -4843,11 +4842,6 @@
     "ui/sheet": [
       "web/packages/app/src/sections.tsx",
       "web/apps/pms-desk/src/App.tsx"
-    ],
-    "ui/markdown": [
-      "web/packages/app/src/sections.tsx",
-      "web/packages/build/src/editor.tsx",
-      "web/packages/platform/src/knowledge.tsx"
     ],
     "ui/button-group": [
       "web/packages/app/src/sections.tsx"
@@ -4890,6 +4884,11 @@
     "ui/filter-bar": [
       "web/packages/app/src/widgets/CollectionBuilder.tsx"
     ],
+    "ui/markdown": [
+      "web/packages/app/src/widgets/Content.tsx",
+      "web/packages/build/src/editor.tsx",
+      "web/packages/platform/src/knowledge.tsx"
+    ],
     "ui/breadcrumb-trail": [
       "web/packages/app/src/widgets/ContextViews.tsx"
     ],
@@ -4926,6 +4925,9 @@
     ],
     "ui/histogram": [
       "web/packages/app/src/widgets/Histogram.tsx"
+    ],
+    "ui/search-input": [
+      "web/packages/app/src/widgets/Input.tsx"
     ],
     "ui/record-kanban": [
       "web/packages/app/src/widgets/Kanban.tsx"
@@ -5346,6 +5348,7 @@
         "HostContext",
         "assetBindingKey",
         "assetKey",
+        "createWidgetDefinitions",
         "createWidgetRegistry",
         "defineApp",
         "findDefinition",
