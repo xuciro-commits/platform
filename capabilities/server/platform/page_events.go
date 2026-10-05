@@ -143,8 +143,8 @@ func (d *PageDocument) rootPresentationSource(section string) bool {
 		if n.Kind == "loop" {
 			return false
 		}
-		if n.Kind == "widget" {
-			return n.Section == section
+		if n.Kind == "widget" && n.Section == section {
+			return true
 		}
 		for _, child := range n.Children {
 			if visit(child) {

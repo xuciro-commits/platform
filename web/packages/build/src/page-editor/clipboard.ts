@@ -28,7 +28,8 @@ export function copyLayout<S extends Section>(draft:Draft<S>,root:string,object:
   const node=document.nodes[id];if(!node||seen.has(id)||![...layoutKinds,"widget"].includes(node.kind))return false;
   seen.add(id);return [...(node.children??[]),...(document.unusedWidgets??[]).filter(e=>e.parent===id).map(e=>e.node)].every(walk);
  };
- if(!document.nodes[root]||!layoutKinds.includes(document.nodes[root]!.kind))return {issue:"unsupported"};
+ if(!document.nodes[root]||!layoutKinds.includes(document.nodes[root]!.kind)&&!(document.nodes[root]!.kind==="widget"&&document.nodes[root]!.children?.length))return {issue:"unsupported"};
+ if(document.nodes[root]!.slot)return {issue:"scope"};
  if(!walk(root))return {issue:"unsupported"};
  // A complete Loop brings its owner. Fragments cannot lift item state to page.
  const overlay=Object.entries(document.overlays??{}).find(([,o])=>o.root===root)?.[0];

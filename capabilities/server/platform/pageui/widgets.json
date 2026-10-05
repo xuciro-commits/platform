@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.103",
+  "uiProfile": "platform.page.v2.104",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -164,6 +164,32 @@
           "maxBindings": 1,
           "requiredUIProfile": "platform.page.v2.33"
         }
+      ],
+      "slots": [
+        {
+          "id": "toolbar",
+          "title": "Toolbar",
+          "placement": "before",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        },
+        {
+          "id": "footer",
+          "title": "Footer",
+          "placement": "after",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        }
       ]
     },
     {
@@ -210,7 +236,21 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "slots": [
+        {
+          "id": "actions",
+          "title": "Actions",
+          "placement": "after",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        }
+      ]
     },
     {
       "componentID": "actions",
@@ -3331,7 +3371,21 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "slots": [
+        {
+          "id": "actions",
+          "title": "Actions",
+          "placement": "after",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        }
+      ]
     },
     {
       "componentID": "record-comparison",
@@ -5144,7 +5198,8 @@
     "platform.page.v2.100",
     "platform.page.v2.101",
     "platform.page.v2.102",
-    "platform.page.v2.103"
+    "platform.page.v2.103",
+    "platform.page.v2.104"
   ],
   "runtime": {
     "telemetry": {

@@ -1178,6 +1178,7 @@ export type PageInterface = {
 };
 
 export type PageLayoutNode = {
+  slot?: string;
   presentation?: PageRegionPresentation;
   size?: PageLayoutSize;
   gap?: number;
@@ -2245,7 +2246,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.103",
+  "uiProfile": "platform.page.v2.104",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2410,6 +2411,32 @@ export const pageUIManifest = {
           "maxBindings": 1,
           "requiredUIProfile": "platform.page.v2.33"
         }
+      ],
+      "slots": [
+        {
+          "id": "toolbar",
+          "title": "Toolbar",
+          "placement": "before",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        },
+        {
+          "id": "footer",
+          "title": "Footer",
+          "placement": "after",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        }
       ]
     },
     {
@@ -2456,7 +2483,21 @@ export const pageUIManifest = {
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "slots": [
+        {
+          "id": "actions",
+          "title": "Actions",
+          "placement": "after",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        }
+      ]
     },
     {
       "componentID": "actions",
@@ -5577,7 +5618,21 @@ export const pageUIManifest = {
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "slots": [
+        {
+          "id": "actions",
+          "title": "Actions",
+          "placement": "after",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        }
+      ]
     },
     {
       "componentID": "record-comparison",
@@ -7390,7 +7445,8 @@ export const pageUIManifest = {
     "platform.page.v2.100",
     "platform.page.v2.101",
     "platform.page.v2.102",
-    "platform.page.v2.103"
+    "platform.page.v2.103",
+    "platform.page.v2.104"
   ],
   "runtime": {
     "telemetry": {

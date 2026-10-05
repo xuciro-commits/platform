@@ -42,6 +42,7 @@ type PageLayoutSize struct {
 }
 
 type PageLayoutNode struct {
+	Slot           string                  `json:"slot,omitempty"`
 	Presentation   *PageRegionPresentation `json:"presentation,omitempty"`
 	Size           *PageLayoutSize         `json:"size,omitempty"`
 	Gap            *int                    `json:"gap,omitempty"`
@@ -501,6 +502,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document node %q is shared or cyclic", id)
 		}
 		seen[id] = true
+		if err := d.checkSlotParent(id, node); err != nil {
+			return err
+		}
 		if err := d.checkRegionPresentation(id, node); err != nil {
 			return err
 		}
@@ -541,12 +545,20 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 		switch node.Kind {
 		case "widget":
-			if len(node.Children) != 0 || !byID[node.Section] || used[node.Section] {
+			if !byID[node.Section] || used[node.Section] || node.Slot != "" {
 				return fmt.Errorf("page document widget %q needs one unique section", id)
 			}
 			used[node.Section] = true
+			if err := d.checkWidgetSlots(id, node, sections); err != nil {
+				return err
+			}
+			for _, child := range node.Children {
+				if err := walk(child, depth+1, node.Kind, bounded); err != nil {
+					return err
+				}
+			}
 		case "rows", "columns", "tabs", "flow", "toolbar", "loop":
-			if node.Section != "" || len(d.ownedChildren(id)) == 0 || len(d.ownedChildren(id)) > 128 {
+			if node.Section != "" || len(d.ownedChildren(id)) == 0 && node.Slot == "" || len(d.ownedChildren(id)) > 128 {
 				return fmt.Errorf("page document container %q needs children and no section", id)
 			}
 			if node.Kind == "tabs" {
@@ -865,6 +877,13 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 			if !allowed[node.Section] {
 				return false
 			}
+			children := make([]string, 0, len(node.Children))
+			for _, child := range node.Children {
+				if copyVisible(child) {
+					children = append(children, child)
+				}
+			}
+			node.Children = children
 			out.Nodes[id] = node
 			return true
 		}
@@ -881,7 +900,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 				dormant = true
 			}
 		}
-		if len(children) == 0 && !dormant && id != d.Root {
+		if len(children) == 0 && !dormant && id != d.Root && node.Slot == "" {
 			return false
 		}
 		node.Children = children

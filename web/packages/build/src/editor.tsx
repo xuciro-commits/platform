@@ -1,3 +1,4 @@
+import {addWidgetSlot} from "./page-editor/widget-slots";
 import {queryInventoryBudget} from "@platform/app/query-inventory";
 import {validActionDefaults} from "@platform/app/action-defaults";
 import {validExternalFrame} from "@platform/ui/external-frame";
@@ -24,7 +25,7 @@ import { Copy, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRig
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {pageUIManifest,type Api as HostApi} from "@platform/kernel";
 import { BindingEditor, WorkflowFormProblems } from "./workflow-binding";
-import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, stashWidget, restoreWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
+import { widgetSubtreeSections,variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, stashWidget, restoreWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
 import { QueriesPanel } from "./page-editor/QueriesPanel";
 import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";
 import { InterfacePanel } from "./page-editor/InterfacePanel";
@@ -168,7 +169,7 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
   });
   const variableProblems = pageVariableDiagnostics(document.variables ?? {});
   const queryProblem = !queryInventoryBudget(document,sections as unknown as HostApi.Section[],pageVariableContract.query).valid || Object.values(document.queries??{}).some((q)=>q.limit<1||q.limit>pageVariableContract.query.maxLimit||(q.conditions??[]).some((c)=>!c.field));
-  const layoutProblems=pageLayoutDiagnostics(document);
+  const layoutProblems=pageLayoutDiagnostics(document,sections);
   const inlineProblem=sections.some(s=>s.widget==="inline-action"&&(s.actions?.length!==1||!!s.actionDefaults?.length&&!validActionDefaults(source.entity(s.object||page?.object||""),catalog.find(a=>a.schema===s.actions?.[0]),s.actionDefaults)));
   const tableEditProblem=sections.some(s=>s.inlineEdit&&(!s.inlineEdit.action||s.inlineEdit.fields.length===0||s.inlineEdit.fields.length>pageVariableContract.tableEditing.maxFields||s.inlineEdit.fields.some(f=>!s.fields?.includes(f))));
   const presentationLimits=pageVariableContract.tablePresentation;
@@ -247,6 +248,8 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   };
   const duplicate = (index=chosen) => {
     const source = sections[index]; if (!source?.id) return;
+    const owner=Object.keys(document.nodes).find(id=>document.nodes[id]?.section===source.id);
+    if(owner&&document.nodes[owner]?.children?.length){const result=copyLayout(session.draft,owner,page.object);if(result.issue){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError(result.issue)});return;}const parent=Object.entries(document.nodes).find(([,n])=>n.children?.includes(owner))?.[0]??document.root;pasteContainer(parent,result.value);return;}
     const copy = { ...structuredClone(source), id: layoutID("section") };
     edit((old) => {
       const document = appendWidget(old.document, copy.id, old.document.root, source.id);
@@ -406,10 +409,11 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
             onDuplicate={duplicate} onStash={index=>{const section=sections[index];if(section?.id)edit({document:stashWidget(document,section.id)});}}
             onCopyLayout={copyContainer} onPasteLayout={pasteContainer} onDuplicateLayout={duplicateContainer} canPasteLayout={!!session.clipboard}
             onRestore={(index,target)=>{const section=sections[index];if(section?.id)edit({document:restoreWidget(document,section.id,target)});}}
-            onRemove={(index) => { const section = sections[index]; if (!section?.id) return; edit((old) => ({ ...old, document: removeWidget(old.document, section.id!), sections: old.sections.filter((s) => s.id !== section.id) })); select({ kind: "page" }); }} /></>}
+            onSlot={(index,slot)=>{const section=sections[index];if(!section?.id)return;const result=addWidgetSlot(document,section.id,section.widget,slot);if(!result.id){setCompatibilityOpen(true);return;}edit({document:result.document});select({kind:"container",id:result.id});setRightOpen(true);}}
+            onRemove={(index) => { const section = sections[index]; if (!section?.id) return; edit((old) => ({ ...old, document: removeWidget(old.document, section.id!), sections: old.sections.filter((s) => !widgetSubtreeSections(old.document,section.id!).has(s.id??"")) })); select({ kind: "page" }); }} /></>}
           right={rightOpen && (selection.kind === "queries" ? <QueriesPanel sections={sections} onPreviewOwner={setQueryPreviewOwner} document={document} object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} values={variableValues} onChange={(document)=>edit({document})}/> : selection.kind === "interface" ? <InterfacePanel document={document} object={{ app: page.object.split(".")[0]!, kind: "object", name: page.object }} onChange={(document) => edit({ document })} /> : selection.kind === "variables" ? <VariablesPanel object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> : <div className="grid content-start gap-2">{container && Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container).map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
             onChange={(patch) => edit({ document: { ...document, overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
-            onRemove={() => { const result = removeOverlay(document, id); edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}{container ? <LayoutProperties document={document} id={container}
+            onRemove={() => { const result = removeOverlay(document, id); edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}{container ? <LayoutProperties sections={sections} document={document} id={container}
             onPatch={patchNode} onChange={(kind) => edit((old) => ({ ...old, document: setLayoutKind(old.document, container, kind) }))}
             onUngroup={() => { edit({ document: ungroup(document, container) }); select({ kind: "page" }); }} /> :
           chosen < 0 ? <Settings value={{ title, description }} object={info?.title ?? page.object}

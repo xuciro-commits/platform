@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+"Slot and layout nodes need one parent.": "插槽和布局节点只能属于一个父节点。",
+"Edit {slot} slot": "编辑{slot}插槽",
+"Slot: {name}": "插槽：{name}",
+"Footer": "页脚",
+"A widget slot needs its registered widget parent.": "组件插槽需要其已注册的父组件。",
+"Widget slots need unique declared layouts and a supported page profile.": "组件插槽需要唯一的已声明布局和支持的页面 profile。",
 "The native flow validation could not be completed.": "无法完成原生流程校验。",
 "Validating flow…": "正在校验流程…",
 "Nodes": "节点",

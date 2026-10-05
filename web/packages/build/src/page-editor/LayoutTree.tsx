@@ -7,13 +7,14 @@ import { ChevronDown, ChevronRight, Columns2, Layers, Plus, Rows3, Settings2 } f
 
 type Label = { id?: string; widget: string; title?: string };
 
-export function LayoutTree({ document, sections, chosen, container, title, widgetTitles, widgets, onChoose, onContainer, onAdd, onMove, onRemove, onGroup, onRelocate, onInsert, onAddOverlay, onStash, onRestore, onDuplicate, onCopyLayout, onPasteLayout, onDuplicateLayout, canPasteLayout }: {
+export function LayoutTree({ document, sections, chosen, container, title, widgetTitles, widgets, onChoose, onContainer, onAdd, onMove, onRemove, onGroup, onRelocate, onInsert, onAddOverlay, onStash, onRestore, onDuplicate, onCopyLayout, onPasteLayout, onDuplicateLayout, canPasteLayout,onSlot }: {
   document: Api.PageDocument; sections: Label[]; chosen: number; container?: string; title: string;
   widgetTitles: Record<string, () => string>; widgets: readonly string[];
   onChoose: (i: number) => void; onContainer: (id: string) => void; onAdd: (widget: string) => void;
   onMove: (i: number, by: -1 | 1) => void;
   onRelocate: (section: string, container: string, afterSection?: string) => void;
   onInsert: (widget: string, container: string, afterSection?: string) => void; onRemove: (i: number) => void; onStash:(index:number)=>void;onRestore:(index:number,target:string)=>void;onDuplicate:(index:number)=>void; onGroup: (kind: LayoutKind) => void; onAddOverlay: () => void;
+  onSlot:(index:number,slot:string)=>void;
   onCopyLayout:(id:string)=>void;onPasteLayout:(id:string)=>void;onDuplicateLayout:(id:string)=>void;canPasteLayout:boolean;
 }) {
   const focusScope=useId();
@@ -42,18 +43,20 @@ export function LayoutTree({ document, sections, chosen, container, title, widge
       const { section, i } = item;
       const unused=document.unusedWidgets?.find(entry=>entry.node===id);
       const commands=[{id:"select",label:t("Select widget"),run:()=>onChoose(i)},{id:"copy",label:t("Duplicate widget"),run:()=>onDuplicate(i)},...(unused?[{id:"restore-original",label:t("Put back in original layout"),run:()=>onRestore(i,unused.parent)},...Object.entries(document.nodes).filter(([target,n])=>n.kind!=="widget"&&target!==unused.parent).map(([target,n],at)=>({id:`restore:${target}`,label:t("Place in {layout}",{layout:n.title||Object.values(document.overlays??{}).find(o=>o.root===target)?.title||(target===document.root?t("Main page"):t("Layout {n}",{n:at+1}))}),run:()=>onRestore(i,target)}))]:[{id:"stash",label:t("Move to unused widgets"),run:()=>onStash(i)},{id:"up",label:t("Move up"),run:()=>onMove(i,-1)},{id:"down",label:t("Move down"),run:()=>onMove(i,1)}]),{id:"delete",label:t("Delete widget"),run:()=>onRemove(i)}];
+      const contract=widgetContract(section.widget);if(contract&&"slots" in contract)commands.push(...contract.slots.map(slot=>({id:`slot:${slot.id}`,label:t("Edit {slot} slot",{slot:t(slot.title)}),run:()=>onSlot(i,slot.id)})));
       return <li key={id} className="min-w-0" onDragOver={(event) => over(event, id)} onDragLeave={() => setHover(undefined)} onDrop={(event) => drop(event, document.root, section.id)}><CommandMenu focusKey={`${focusScope}:${section.id}`} label={t("Commands for {widget}",{widget:section.title||widgetTitles[section.widget]?.()||section.widget})} commands={commands}>
         <div className={cn("flex items-center gap-0.5 rounded border px-1 py-0.5", i === chosen || hover === id ? "border-primary bg-row-selected" : "border-transparent")}>
           <Button variant="ghost" size="sm" className="min-w-0 w-0 flex-1 justify-start" title={section.title||widgetTitles[section.widget]?.()||section.widget} aria-pressed={i === chosen} onClick={() => onChoose(i)} draggable onDragStart={(event) => { event.dataTransfer.setData("application/platform-page-section", section.id!); event.dataTransfer.effectAllowed = "move"; }}>
             <Layers className="size-3 shrink-0" /><span className="min-w-0 truncate">{section.title || widgetTitles[section.widget]?.() || section.widget}</span>
           </Button>
         </div>
-      </CommandMenu></li>;
+      </CommandMenu>{node.children?.length?<ul className="ml-3 grid gap-1 border-l border-border pl-2">{node.children.map(child=>renderNode(child,next))}</ul>:null}</li>;
     }
     const kindTitle=t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : node.kind === "loop" ? "Loop" : "Rows");
-    const layoutTitle=node.title||Object.values(document.overlays??{}).find(o=>o.root===id)?.title;
+    const parent=Object.values(document.nodes).find(n=>n.children?.includes(id)),owner=sections.find(s=>s.id===parent?.section),contract=owner?widgetContract(owner.widget):undefined,slot=contract&&"slots" in contract?contract.slots.find(s=>s.id===node.slot):undefined;
+    const layoutTitle=node.slot?t("Slot: {name}",{name:t(slot?.title??node.slot)}):node.title||Object.values(document.overlays??{}).find(o=>o.root===id)?.title;
     return <li key={id} className="min-w-0">
-      <CommandMenu focusKey={`${focusScope}:${id}`} label={t("Commands for {layout}",{layout:layoutTitle||kindTitle})} commands={[{id:"select",label:t("Select layout"),run:()=>onContainer(id)},{id:"copy",label:t("Copy layout"),run:()=>onCopyLayout(id)},{id:"paste",label:t("Paste layout"),disabled:!canPasteLayout,run:()=>onPasteLayout(id)},{id:"duplicate",label:t("Duplicate layout"),run:()=>onDuplicateLayout(id)}]}><div className={cn("flex items-center rounded", hover === id && "outline outline-primary bg-row-selected")}
+      <CommandMenu focusKey={`${focusScope}:${id}`} label={t("Commands for {layout}",{layout:layoutTitle||kindTitle})} commands={[{id:"select",label:t("Select layout"),run:()=>onContainer(id)},{id:"copy",label:t("Copy layout"),disabled:!!node.slot,run:()=>onCopyLayout(id)},{id:"paste",label:t("Paste layout"),disabled:!canPasteLayout,run:()=>onPasteLayout(id)},{id:"duplicate",label:t("Duplicate layout"),disabled:!!node.slot,run:()=>onDuplicateLayout(id)}]}><div className={cn("flex items-center rounded", hover === id && "outline outline-primary bg-row-selected")}
         onDragOver={(event) => over(event, id)} onDragLeave={() => setHover(undefined)} onDrop={(event) => drop(event, id)}>
         <Button size="sm" variant="ghost" aria-label={t("Expand or collapse layout group")} aria-expanded={expanded[id] !== false} onClick={() => setExpanded((old) => ({ ...old, [id]: old[id] === false }))}>{expanded[id] === false ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}</Button>
         <Button size="sm" variant="ghost" aria-pressed={container === id && chosen === -2} className={cn("min-w-0 w-0 flex-1 justify-start", container === id && chosen === -2 && "bg-row-selected text-primary")} onClick={() => onContainer(id)}>
@@ -95,16 +98,17 @@ export function LayoutTree({ document, sections, chosen, container, title, widge
   </div>;
 }
 
-export function LayoutProperties({ document, id, onChange, onPatch, onUngroup }: {
-  document: Api.PageDocument; id: string; onChange: (kind: LayoutKind) => void; onPatch: (id: string, patch: Partial<Api.PageLayoutNode>) => void; onUngroup: () => void;
+export function LayoutProperties({ document, id, sections=[],onChange, onPatch, onUngroup }: {
+  document: Api.PageDocument; id: string; sections?:Label[];onChange: (kind: LayoutKind) => void; onPatch: (id: string, patch: Partial<Api.PageLayoutNode>) => void; onUngroup: () => void;
 }) {
   const node = document.nodes[id];
   if (!node) return null;
+  const parent=Object.values(document.nodes).find(n=>n.children?.includes(id)),owner=sections.find(s=>s.id===parent?.section),contract=owner?widgetContract(owner.widget):undefined,slot=contract&&"slots" in contract?contract.slots.find(s=>s.id===node.slot):undefined;
   return <Card className="grid content-start gap-3 p-3">
     <div className="text-xs font-semibold text-muted">{t("Layout container")}</div>
     <label className="grid gap-1 text-xs">{t("Layout")}
       <Select value={node.kind} onChange={(event) => onChange(event.target.value as LayoutKind)}>
-        <option value="rows">{t("Rows")}</option><option value="columns">{t("Columns")}</option><option value="tabs">{t("Tabs")}</option><option value="flow">{t("Flow layout")}</option><option value="toolbar">{t("Toolbar")}</option><option value="loop">{t("Loop")}</option>
+        {(["rows","columns","tabs","flow","toolbar","loop"] as const).filter(kind=>!slot||(slot.allowedLayouts as readonly string[]).includes(kind)).map(kind=><option key={kind} value={kind}>{t(({rows:"Rows",columns:"Columns",tabs:"Tabs",flow:"Flow layout",toolbar:"Toolbar",loop:"Loop"})[kind])}</option>)}
       </Select>
     </label>
     <label className="grid gap-1 text-xs">{t("Container title")}<Input value={node.title ?? ""} onChange={(event) => onPatch(id, { title: event.target.value })} /></label>
@@ -130,7 +134,7 @@ export function LayoutProperties({ document, id, onChange, onPatch, onUngroup }:
       <p className="text-xs text-muted">{t("Tabs keep visited content mounted until this page session ends.")}</p>
     </>}
     <p className="text-xs text-muted">{t("Add widgets to this container, or nest another group inside it.")}</p>
-    <Button disabled={id === document.root || Object.values(document.overlays ?? {}).some((overlay) => overlay.root === id)} onClick={onUngroup}>{t("Ungroup")}</Button>
+    <Button disabled={!!node.slot || id === document.root || Object.values(document.overlays ?? {}).some((overlay) => overlay.root === id)} onClick={onUngroup}>{t("Ungroup")}</Button>
   </Card>;
 }
 

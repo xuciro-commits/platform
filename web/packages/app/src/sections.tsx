@@ -37,7 +37,7 @@ type Section = NonNullable<Page["sections"]>[number];
 type Bound = import("./widgets/bindings").WidgetBindingContext;
 
 /** Composing: the section in hand, and choosing another by clicking it. */
-type Composing = { chosen?: number; onChoose?: (at: number) => void; at?: number; nested?: boolean;
+type Composing = { slotViews?:Readonly<Record<string,ReactNode>>; chosen?: number; onChoose?: (at: number) => void; at?: number; nested?: boolean;
   wrapLayout?: (id: string, node: Api.PageLayoutNode, body: ReactNode) => ReactNode };
 
 const objectOf = (page: Page, section: Section) => section.object?.name || page.object.name;
@@ -67,6 +67,7 @@ export function SectionView(bound: Bound & Composing) {
   const implementation = widgets.resolveDefinition(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
   const Renderer=implementation?.Renderer;
   const body = Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound} info={source?.entity(objectOf(bound.page,bound.section))} sourceScope={source?.scope} aggregateSource={aggregateSource} recordSource={source} definitions={host?.definitions} catalog={host?.catalog} decide={host?.decide}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
+  const slots=(placement:"before"|"after")=>implementation&&"slots" in implementation.contract?implementation.contract.slots.filter(slot=>slot.placement===placement).map(slot=>bound.slotViews?.[slot.id]?<div key={slot.id} data-widget-slot={slot.id} onClick={event=>event.stopPropagation()}>{bound.slotViews[slot.id]}</div>:null):null;
   const template=section.tablePresentation?.titleTemplate,total=bound.window?.error||!["value","empty"].includes(bound.collection?.status??"")?undefined:bound.window?.page?.total;
   const title=template===undefined?section.title:template.replace("{count}",total===undefined||!Number.isSafeInteger(total)||total<0?"…":total.toLocaleString());
   const inHand = onChoose !== undefined && chosen === at;
@@ -76,7 +77,9 @@ export function SectionView(bound: Bound & Composing) {
       className={cn("grid min-w-0 grid-cols-1 content-start gap-2 p-3", nested ? "w-full" : section.width === "half" ? "md:col-span-1" : "md:col-span-2",
         onChoose && "cursor-pointer", inHand && "outline outline-2 outline-primary")}>
       {title && <h3 className="text-sm font-semibold">{title}</h3>}
+      {slots("before")}
       <WidgetBoundary key={`${section.id ?? at}/${section.widget}/${section.configVersion}/${JSON.stringify(section)}`}>{body}</WidgetBoundary>
+      {slots("after")}
     </Card>
   );
 }
@@ -202,7 +205,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   };
   const setContextState = (id: string, value: ScalarValue, context?: LoopContext, overlay?: string) => initialVariables[id]?.scope === "loop-item" && context ? context.set(id, value) : writeState(id, value, overlay);
   const booleanValue = (id: string) => { const result = variables.values[id]; return result?.status === "value" && result.value === true; };
-  const renderSection = (section: Section, i: number, nested: boolean, enabled = true, context?: LoopContext, overlay?: string, valueVariable?: string) => {
+  const renderSection = (section: Section, i: number, nested: boolean, enabled = true, context?: LoopContext, overlay?: string, valueVariable?: string,slotViews?:Readonly<Record<string,ReactNode>>) => {
     const values = context?.values ?? (overlay ? overlayValues[overlay] : variables.values) ?? {}, value = values[valueVariable ?? ""];
     const shared=section.filterVariable?application.resources[section.filterVariable]:undefined;
     if(section.filterVariable&&(!shared||shared.status==="error"||shared.status==="pending"||!("value" in shared)||typeof shared.value!=="object"||shared.value.kind!=="filter"))return <Panel role="alert">{t("Shared filter is unavailable.")}</Panel>;
@@ -239,7 +242,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     const actionRecord=actionSlot&&actionRef?.object===applicationAction?.object&&actionRef?.id===applicationAction?.id?session.selected(actionSlot):undefined;
     const actionReady=(!actionVariable||actionVariable.mode!=="shared"||application.resources[section.recordVariable??""]?.status==="value")&&(!actionSlot||snapshot.records[actionSlot]?.status==="value")&&enabled!==false;
     return (
-      <SectionView builder={queries.builders[section.id??""]} key={section.id || i} page={page} section={section} session={session} readSource={context?.source} actionReady={actionReady} selected={mapShared?(mapReady?mapRecord:undefined):section.widget==="inline-action"&&actionSlot? actionRecord:section.selectionVariable?session.selected(inputSlot(section.selectionVariable)):section.recordVariable ? context ? context.record : initialVariables[section.recordVariable]?.mode==="resource"&&initialVariables[section.recordVariable]?.source?.kind==="record" ? (()=>{const slot=recordResourceSlot(page,section.recordVariable);return slot?session.selected(slot):undefined})() : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionSlot(page,section))}
+      <SectionView slotViews={slotViews} builder={queries.builders[section.id??""]} key={section.id || i} page={page} section={section} session={session} readSource={context?.source} actionReady={actionReady} selected={mapShared?(mapReady?mapRecord:undefined):section.widget==="inline-action"&&actionSlot? actionRecord:section.selectionVariable?session.selected(inputSlot(section.selectionVariable)):section.recordVariable ? context ? context.record : initialVariables[section.recordVariable]?.mode==="resource"&&initialVariables[section.recordVariable]?.source?.kind==="record" ? (()=>{const slot=recordResourceSlot(page,section.recordVariable);return slot?session.selected(slot):undefined})() : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionSlot(page,section))}
         keepActive={!!binding("select")} master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {if((section.widget==="record-scatter"||section.widget==="record-map")||section.recordList?.layout==="tiles"){if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;const query=selectionQuery(section);if(!record){session.select(selectionSlot(page,section),undefined);if(section.selectionVariable)application.select(section.selectionVariable,undefined,recordProducer(section.id??""),true);return;}if(query){const complete=section.selectionVariable?application.beginSelect(section.selectionVariable,recordProducer(section.id??"")):undefined;void session.confirmSelection(selectionSlot(page,section),record,query).then(confirmed=>{if(!currentContextRead(source.scope,session.snapshotScope())||overlay&&session.overlayEpoch(overlay)!==epoch||confirmed&&session.confirmedSelected(selectionSlot(page,section))!==confirmed){complete?.(undefined);return;}complete?.(confirmed?{object:objectOf(page,section),id:confirmed.id}:undefined);});}return;}onSelect(selectionSlot(page,section),record,selectionQuery(section));if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));if(record)emit("select");}} live={live} narrowed={section.widget==="filter"&&section.filterVariable?{[objectOf(page,section)]:sharedFilter??{}}:filtersForOwner(snapshot.filters,filterOwner(page,section))} sharedFilter={sharedFilter} onNarrow={(object,field,value)=>section.filterVariable&&section.widget==="filter"?application.filter(section.filterVariable,field,value):session.filter(object,field,value,filterOwner(page,section))}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
         window={collectionID?applicationVariable(collectionID)?application.windows[applicationVariable(collectionID)!]:queries.windows[initialVariables[collectionID]?.source?.query??""]:undefined}
@@ -317,7 +320,9 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       const item = indexed.get(node.section);
       if (!item) return null; // server filtered this widget for the reader
       if (context && !([...pageVariableContract.loop.recordWidgets, ...pageVariableContract.loop.presentationWidgets] as readonly string[]).includes(item.section.widget)) return <Panel role="alert">{t("This widget is not supported in a loop.")}</Panel>;
-      const body = renderSection(item.section, item.i, true, !node.enabledWhen || (() => { const result = values[node.enabledWhen]; return result?.status === "value" && result.value === true; })(), context, overlay, node.valueVariable);
+      const next=new Set(ancestors);next.add(id);
+      const slotViews=Object.fromEntries((node.children??[]).map(child=>[page.document!.nodes[child]?.slot??"",renderNode(child,next,context,overlay,"widget",bounded)]));
+      const body = renderSection(item.section, item.i, true, !node.enabledWhen || (() => { const result = values[node.enabledWhen]; return result?.status === "value" && result.value === true; })(), context, overlay, node.valueVariable,slotViews);
       return frame(body);
     }
     if (!["rows", "columns", "tabs", "flow", "toolbar", "loop"].includes(node.kind)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;

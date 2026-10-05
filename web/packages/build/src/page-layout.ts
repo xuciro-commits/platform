@@ -5,6 +5,11 @@ export type LayoutKind = "rows" | "columns" | "tabs" | "flow" | "toolbar" | "loo
 type Kind = LayoutKind;
 import { pageUIProfile, pageVariableContract } from "@platform/app";
 
+export function widgetSubtreeSections(document:Document,section:string):Set<string>{
+ const found=new Set<string>(),seen=new Set<string>();const visit=(id:string)=>{if(seen.has(id))return;seen.add(id);const node=document.nodes[id];if(node?.section)found.add(node.section);for(const child of [...node?.children??[],...(document.unusedWidgets??[]).filter(e=>e.parent===id).map(e=>e.node)])visit(child);};
+ const leaf=leafOf(document,section);if(leaf)visit(leaf);return found;
+}
+
 export const layoutID = (prefix: string) => `${prefix}${crypto.randomUUID()}`;
 
 function parentOf(document: Document, child: string): string | undefined {
@@ -60,10 +65,11 @@ export function removeWidget(document: Document, section: string): Document {
   const parent = leaf && parentOf(document, leaf);
   if (!leaf || !parent) return document;
   const next = structuredClone(document);
-  next.unusedWidgets=next.unusedWidgets?.filter(entry=>entry.node!==leaf);
+  const removed=widgetSubtreeSections(document,section),nodes=new Set<string>();const visit=(id:string)=>{if(nodes.has(id))return;nodes.add(id);for(const child of [...next.nodes[id]?.children??[],...(next.unusedWidgets??[]).filter(e=>e.parent===id).map(e=>e.node)])visit(child);};visit(leaf);
+  next.unusedWidgets=next.unusedWidgets?.filter(entry=>!nodes.has(entry.node)&&!nodes.has(entry.parent));
   next.nodes[parent]!.children = (next.nodes[parent]!.children??[]).filter((id) => id !== leaf);
-  delete next.nodes[leaf];
-  next.events = next.events?.filter((event) => event.source !== section);
+  for(const id of nodes)delete next.nodes[id];
+  next.events = next.events?.filter((event) => !removed.has(event.source));
   pruneEmpty(next, parent);
   return repairTabs(next);
 }
@@ -71,7 +77,7 @@ export function removeWidget(document: Document, section: string): Document {
 function pruneEmpty(next: Document, parent: string) {
   // Empty non-root containers are removed so a saved document remains valid.
   let current = parent;
-  while (current !== next.root && next.nodes[current]?.children?.length === 0 && !next.unusedWidgets?.some(entry=>entry.parent===current)) {
+  while (current !== next.root && !next.nodes[current]?.slot && next.nodes[current]?.children?.length === 0 && !next.unusedWidgets?.some(entry=>entry.parent===current)) {
     const above = parentOf(next, current);
     if (!above) break;
     next.nodes[above]!.children = next.nodes[above]!.children!.filter((id) => id !== current);
@@ -98,7 +104,7 @@ export function relocateWidget(document: Document, section: string, container: s
 
 export function ungroup(document: Document, group: string): Document {
   const parent = parentOf(document, group);
-  if (!parent || document.nodes[group]?.kind === "widget") return document;
+  if (!parent || document.nodes[group]?.kind === "widget"||document.nodes[group]?.slot) return document;
   const next = structuredClone(document);
   const siblings = next.nodes[parent]!.children!;
   const at = siblings.indexOf(group);

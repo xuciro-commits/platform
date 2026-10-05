@@ -24,6 +24,7 @@ type pageWidgetContract struct {
 	InputPorts        []pageWidgetPort  `json:"inputPorts"`
 	OutputPorts       []pageWidgetPort  `json:"outputPorts"`
 	Events            []pageWidgetEvent `json:"events"`
+	Slots             []pageWidgetSlot  `json:"slots"`
 	LayoutPreferences struct {
 		Frame string `json:"frame"`
 	} `json:"layoutPreferences"`
@@ -32,6 +33,27 @@ type pageWidgetContract struct {
 		ClearOn    []string `json:"clearOn"`
 		Hidden     string   `json:"hidden"`
 	} `json:"lifecyclePolicy"`
+}
+
+type pageWidgetSlot struct {
+	ID                string   `json:"id"`
+	Title             string   `json:"title"`
+	Placement         string   `json:"placement"`
+	RequiredUIProfile string   `json:"requiredUIProfile"`
+	AllowedLayouts    []string `json:"allowedLayouts"`
+}
+
+func widgetSlot(widget, id string) *pageWidgetSlot {
+	for _, contract := range pageWidgets.Widgets {
+		if contract.ComponentID == widget {
+			for _, slot := range contract.Slots {
+				if slot.ID == id {
+					return &slot
+				}
+			}
+		}
+	}
+	return nil
 }
 
 type pageWidgetPort struct {
@@ -79,6 +101,18 @@ var pageWidgets = func() pageUIContract {
 			panic("invalid page widget contract identity")
 		}
 		seen[widget.ComponentID] = true
+		slots := map[string]bool{}
+		for _, slot := range widget.Slots {
+			if slot.ID == "" || slots[slot.ID] || slot.Title == "" || !slices.Contains([]string{"before", "after"}, slot.Placement) || !slices.Contains(manifest.SupportedProfiles, slot.RequiredUIProfile) || len(slot.AllowedLayouts) == 0 || len(widget.Slots) > 4 {
+				panic("invalid page widget slot")
+			}
+			for _, kind := range slot.AllowedLayouts {
+				if !slices.Contains([]string{"rows", "columns", "flow", "toolbar"}, kind) {
+					panic("unsupported widget slot layout")
+				}
+			}
+			slots[slot.ID] = true
+		}
 		fields := map[string]bool{}
 		for _, port := range append(slices.Clone(widget.InputPorts), widget.OutputPorts...) {
 			if port.ID == "" || fields[port.BindingField] || !slices.Contains([]string{"collectionOutputVariable", "sceneSampleCollectionVariable", "sceneSampleVariable", "scenePartVariable", "observationHistoryVariable", "observationContextVariable", "observationSignalVariable", "observationThresholdVariable", "observationRowsVariable", "observationCountVariable", "observationMeanVariable", "notepadVariable", "analysisXVariable", "analysisYVariable", "analysisCountVariable", "analysisMeanVariable", "avatar.contextVariable", "avatar.contextCollectionVariable", "commentDraftVariable", "fileVariable", "pdfPageVariable", "recordSetVariable", "recordVariable", "collectionVariable", "selectionVariable", "filterVariable", "selectionSetVariable", "countVariable", "progressValueVariable", "progressTotalVariable", "gaugeValueVariable", "statisticsVariable", "rangeMinVariable", "rangeMaxVariable", "booleanVariable", "choiceVariable", "choiceSetVariable", "dateVariable", "alertValueVariable", "sparklineDecimalVariable", "sparklineNumberVariable", "groupValueVariable", "groupSetVariable", "rowValueVariable", "rowSetVariable", "columnValueVariable", "columnSetVariable", "pickerValueVariable", "enabledWhen"}, port.BindingField) || !slices.Contains([]string{"record", "record-set", "object-set", "filter", "boolean", "decimal", "number", "statistics", "string", "string-set"}, port.Type) || !slices.Contains(manifest.SupportedProfiles, port.RequiredUIProfile) {

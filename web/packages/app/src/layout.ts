@@ -1,10 +1,10 @@
 import {pageUIManifest,type Api} from "@platform/kernel";
 
 /** Application API diagnostics; the host remains the save/publish authority. */
-export function pageLayoutDiagnostics(document:Api.PageDocument):{node:string;code:string}[] {
+export function pageLayoutDiagnostics(document:Api.PageDocument,sections:Pick<Api.Section,"id"|"widget"|"configVersion">[]=[]):{node:string;code:string}[] {
  const limits=pageUIManifest.layout,issues:{node:string;code:string}[]=[];
  const parents=new Map<string,string>();
- for(const [id,n]of Object.entries(document.nodes))for(const child of n.children??[])parents.set(child,id);
+ for(const [id,n]of Object.entries(document.nodes))for(const child of n.children??[]){if(parents.has(child))issues.push({node:child,code:"Slot and layout nodes need one parent."});parents.set(child,id);}
  const entries=document.unusedWidgets??[];
  if(entries.length>limits.maxUnused||entries.length&&Number(document.uiProfile.split(".").at(-1))<Number(limits.unusedProfile.split(".").at(-1)))issues.push({node:document.root,code:"Unused widgets need a newer profile and a bounded inventory."});
  const registered=new Set<string>();for(const entry of entries){if(registered.has(entry.node)||parents.has(entry.node)||document.nodes[entry.node]?.kind!=="widget"||!document.nodes[entry.parent]||document.nodes[entry.parent]?.kind==="widget")issues.push({node:entry.node,code:"Unused widget needs one original leaf and a layout parent."});registered.add(entry.node);}
@@ -16,6 +16,12 @@ export function pageLayoutDiagnostics(document:Api.PageDocument):{node:string;co
   return !!n&&(n.size?.height!==undefined||!!parent&&!!p&&(parent.kind==="columns"||parent.kind==="rows"&&n.size?.weight!==undefined)&&bounded(p,seen));
  };
  for(const [id,n]of Object.entries(document.nodes)){
+  const ownerID=parents.get(id),owner=ownerID?document.nodes[ownerID]:undefined;
+  if(n.slot&&owner?.kind!=="widget")issues.push({node:id,code:"A widget slot needs its registered widget parent."});
+  if(n.kind==="widget"&&(n.children?.length??0)>0){
+   const section=sections.find(s=>s.id===n.section),contract=pageUIManifest.widgets.find(w=>w.componentID===section?.widget),slots=contract&&"slots" in contract?contract.slots:[],used=new Set<string>();
+   for(const child of n.children??[]){const root=document.nodes[child],slot=slots.find(s=>s.id===root?.slot);if(!slot||used.has(slot.id)||Number(document.uiProfile.split('.').at(-1))<Number(slot.requiredUIProfile.split('.').at(-1))||!(slot.allowedLayouts as readonly string[]).includes(root?.kind??""))issues.push({node:child,code:"Widget slots need unique declared layouts and a supported page profile."});if(slot)used.add(slot.id);}
+  }
   const s=n.size,p=parents.get(id),parent=p?document.nodes[p]:undefined;
   const fail=(code:string)=>issues.push({node:id,code});
   const r=n.presentation;
