@@ -312,6 +312,8 @@ Go 类型内嵌 `platform.Record`，由 `platform.Entity` 声明：
 
 普通模型请求用 `Caller.Request` + `platform.Prompt` + 本应用 Reply。类型化函数在 `Manifest.Functions` 声明 `platform.AIFunction`，用 `Caller.RequestFunction` 从受限结果动作调用；Reply 是宿主自动动作，人员不能伪造。接受时固定输入、函数/依赖与模型，派发前重查权限和预算；建议记录保存 Sources 并声明派生读取边界。完整代码例子见 [CRM](../apps/crm/server/crm.go) 与 [MES](../apps/mes/server/mes.go)，接口约束见 ADR-0043。
 
+**不可信输入（提示注入，ADR-0050 的 AI-06 约定）：** 业务文档、Goal、检索片段、工具返回与 Agent 记忆都可能含误导文字，一律按**数据**对待，不升级为系统指令；实际把关仍是工具白名单、原业务权限与 `Guard`、草稿/确认、有限记忆与急停。记忆由 `remember` 写入（默认 active，可按人、范围与期限），来源与操作者可追溯、可按范围审查或撤回；"读到恶意文字即越权"和"记忆必然污染"都不能由静态事实推断，需用恶意文档、历史纠偏与跨 run 记忆构造针对性案例验证。模型调用的完整请求/回答留存见 `transcript-days`（0 = 不保留并遗忘），调用记录可按人读回。
+
 ## 4. 声明流程
 
 代码使用 `platform.Flow`，租户使用 `build.process`，都由原 Flow/Work 执行。步骤明确 `kind`，数据使用 `Binding{source,path,step,value}`，条件使用结构化 Predicate；`next/error/cases/body` 决定控制路径。ForEach/While 是有界 scope，break/continue 只影响所在循环；fork `all` 等待全部，`any` 等待首个成功路径。保存和发布由同一 owner compiler 校验；布局不决定运行顺序。
