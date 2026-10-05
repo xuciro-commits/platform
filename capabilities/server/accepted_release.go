@@ -157,8 +157,8 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
-	if m.Roles[build.ID] != build.Builder {
-		return "", fmt.Errorf("builder role required")
+	if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
+		return "", fmt.Errorf("builder or publisher role required")
 	}
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
 		return "", fmt.Errorf("candidate ID and idempotency key are required")
@@ -206,8 +206,8 @@ func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
-	if m.Roles[build.ID] != build.Builder {
-		return "", fmt.Errorf("builder role required")
+	if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
+		return "", fmt.Errorf("builder or publisher role required")
 	}
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
 		return "", fmt.Errorf("candidate ID and idempotency key are required")

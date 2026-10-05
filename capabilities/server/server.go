@@ -61,8 +61,11 @@ type Host struct {
 	// Mint, when set, signs the identity tokens /v1/sign-in serves: the
 	// lightweight host's key (ADR-0049 D3). Without it the tokens are the
 	// development ones, the subject itself.
-	Mint   func(subject string) string
-	routes []Route // as Handler registered them: the API contract's source (api.go)
+	Mint func(subject string) string
+	// HostAdmins are the subjects that may open the host console (ADR-0047
+	// §6.5): an independent scope, not a tenant's administrators.
+	HostAdmins map[string]bool
+	routes     []Route // as Handler registered them: the API contract's source (api.go)
 }
 
 // SignWith makes the host take the lightweight provider's tokens and sign the
@@ -159,6 +162,11 @@ func (h *Host) Handler() http.Handler {
 					"error": map[string]string{"code": "TENANT_QUARANTINED"}})
 				return
 			}
+			if t.hostSuspended() && (r.Method != http.MethodGet || r.URL.Path != "/v1/health") {
+				WriteJSON(w, http.StatusServiceUnavailable, map[string]any{
+					"error": map[string]string{"code": "TENANT_SUSPENDED"}})
+				return
+			}
 			f(w, r, m, t)
 		})
 	}
@@ -195,6 +203,26 @@ func (h *Host) Handler() http.Handler {
 			}
 		}
 		w.WriteHeader(http.StatusInternalServerError)
+	})
+	handle(Route{Pattern: "POST /v1/composites", Summary: "Edit several of an application's assets as one unit: every edit is probed, and either all apply or none (ADR-0047 §11)", Body: struct {
+		Key   string          `json:"key"`
+		Edits []CompositeEdit `json:"edits"`
+	}{}, Answer: CompositeAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 4<<20))
+		var request struct {
+			Key   string          `json:"key"`
+			Edits []CompositeEdit `json:"edits"`
+		}
+		if json.Unmarshal(body, &request) != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "a key and its edits are required"})
+			return
+		}
+		answer, err := t.Composite(m, request.Key, request.Edits, h.Now())
+		if err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
 	})
 	handle(Route{Pattern: "POST /v1/submissions", Summary: "Submit a decision: an action on a target, received in the kernel's order (K6) and journaled once accepted", Body: pb.Submission{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(r.Body)
@@ -890,6 +918,9 @@ func (h *Host) Handler() http.Handler {
 	metadata(Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees (ADR-0023)"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, h.OpenAPI(t, &m))
 	})
+	// The host console (ADR-0047 §6.5): its own scope, its own administrators.
+	h.hostConsoleRoutes(mux)
+	h.environmentRoutes(mux)
 	// The process is alive and holds its tenants (ADR-0027 D6); a tenant's own
 	// health is the administrators' read /v1/health.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

@@ -333,6 +333,24 @@ func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef) (ReleasePrev
 	}
 	if diagnostic != nil {
 		reply.Diagnostic = diagnostic.Error()
+		// A review still names what is installed now: a draft that cannot be
+		// assembled refuses the candidate, and the running closure is what the
+		// reader needs to compare against (ADR-0048 D3).
+		if len(assets.Priors) > 0 {
+			if available, err := t.releaseAssetsLocked(nil, false); err == nil {
+				var installedRoots []platform.AssetRef
+				for _, prior := range assets.Priors {
+					for _, owner := range dependentRoots(prior, available) {
+						if !slices.Contains(installedRoots, owner) {
+							installedRoots = append(installedRoots, owner)
+						}
+					}
+				}
+				if current, err := t.candidateWithBindings(installedRoots, available, assets.Priors); err == nil {
+					reply.CurrentID = current.ID
+				}
+			}
+		}
 		return reply, platform.ReleaseCandidate{}, nil
 	}
 	var current platform.ReleaseCandidate

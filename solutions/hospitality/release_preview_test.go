@@ -73,7 +73,7 @@ func TestHotelBuilderPreviewIsReadOnlyAndRestricted(t *testing.T) {
 	w.expect(w.submit("manager", build.ID, build.ObjectType+".edit", build.ObjectType, "O-PREVIEW", "preview-rename",
 		map[string]any{"name": "renamed"}), "ok")
 	renamed, err := w.tenant.PreviewRelease(w.members["manager"], platform.AssetObject, "O-PREVIEW")
-	if err != nil || !strings.Contains(renamed.Diagnostic, "release requires missing asset build/page/visit") || renamed.CandidateID != "" {
+	if err != nil || !strings.Contains(renamed.Diagnostic, "release requires missing asset build/object/build.visit") || renamed.CandidateID != "" {
 		t.Fatalf("incompatible rename was not rejected before affecting an installed application: %+v, %v", renamed, err)
 	}
 }

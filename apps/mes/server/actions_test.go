@@ -26,15 +26,17 @@ func TestCatalogPerCaller(t *testing.T) {
 	p := newPlant(t)
 	assistant := member("agent-l1", Assistant, "L1")
 	read, lang := platformserver.SchemaNotificationRead, platformserver.SchemaLanguage
+	// Every member may call the platform's declared operations (ADR-0047 §13).
+	call := platformserver.SchemaOperationCall
 	for _, c := range []struct {
 		who  platform.Caller
 		want []string
 	}{
-		{sup, []string{lang, read, SchemaAdvice, SchemaRelease, SchemaReason, SchemaConfirm, SchemaAnswer, SchemaResend}},
-		{op1, []string{lang, read, SchemaStart, SchemaComplete, SchemaNC, SchemaReason}},
-		{qa1, []string{lang, read, SchemaNC, SchemaSign}},
-		{assistant, []string{lang, read, SchemaReason, SchemaResend}},
-		{gw, []string{lang, read}}, // every member chooses its language and marks its own notifications
+		{sup, []string{lang, read, call, SchemaAdvice, SchemaRelease, SchemaReason, SchemaConfirm, SchemaAnswer, SchemaResend}},
+		{op1, []string{lang, read, call, SchemaStart, SchemaComplete, SchemaNC, SchemaReason}},
+		{qa1, []string{lang, read, call, SchemaNC, SchemaSign}},
+		{assistant, []string{lang, read, call, SchemaReason, SchemaResend}},
+		{gw, []string{lang, read, call}}, // every member chooses its language and marks its own notifications
 	} {
 		if got := schemas(p.tenant.Catalog(c.who.Member)); !slices.Equal(got, c.want) {
 			t.Errorf("%s: catalog %v, want %v", c.who.ID, got, c.want)

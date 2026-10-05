@@ -24,8 +24,11 @@ const (
 	ID                = "build"
 	definitionVersion = "1"
 	ObjectType        = "build.object"
-	// Builder defines and publishes objects; User works with what is published.
+	// Builder defines and publishes objects; Publisher saves and activates
+	// release candidates without editing definitions; User works with what is
+	// published (ADR-0047 §11).
 	Builder       = "builder"
+	Publisher     = "publisher"
 	User          = "user"
 	SchemaPublish = ObjectType + ".publish"
 )
@@ -159,8 +162,9 @@ func (b *Build) Manifest() platform.Manifest {
 		entities = append(entities, b.installed[typ])
 	}
 	// Every role an object names is a role of this app, which the Console
-	// grants — one that only reads grants no action (ADR-0037 D4).
-	roles := []string{User}
+	// grants — one that only reads grants no action (ADR-0037 D4). Builder and
+	// Publisher are the two roles releases need (ADR-0047 §11).
+	roles := []string{User, Builder, Publisher}
 	for _, typ := range sortedTypes(b.installed) {
 		for role := range b.installed[typ].Scope.Levels {
 			if !slices.Contains(roles, role) {

@@ -132,16 +132,20 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef) (JointDraftAsset
 			continue
 		}
 		prior, next, hadPrior, err := b.applyRecordDraft(&inv, draft.Kind, draft.ID)
-		if err != nil {
-			return result, err
-		}
+		// A refused draft still names the asset it would have replaced: the
+		// review can say what is installed now beside why the draft failed.
 		if hadPrior {
 			result.Priors = append(result.Priors, prior)
 			if prior != next {
 				removed[prior] = true
 			}
 		}
-		result.Nexts = append(result.Nexts, next)
+		if next != (platform.AssetRef{}) {
+			result.Nexts = append(result.Nexts, next)
+		}
+		if err != nil {
+			return result, err
+		}
 	}
 	recordAssets, err := releaseAssets(inv.objects, inv.pages, inv.apps, inv.processes, b.Manifest().Version)
 	if err != nil {

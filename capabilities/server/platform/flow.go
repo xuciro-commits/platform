@@ -30,6 +30,25 @@ type Flow struct {
 	// From moves running instances of the previous version to this one: their
 	// step there → the step here (a decision, taken by an administrator).
 	From map[string]string
+	// Continuous declares a flow an arriving batch advances, instead of one
+	// decision starting one instance (ADR-0047 §13, plan A).
+	Continuous *Continuous
+}
+
+// Continuous is a flow's declared batch contract (ADR-0047 §13.3): the real
+// source it consumes, the batch and state budgets, and whether dead letters are
+// kept. The batch identity, predecessor and watermark travel with each batch;
+// the instance's frame keeps what was consumed.
+type Continuous struct {
+	// Source names the connector or protocol the batches arrive from.
+	Source string
+	// Batch is the most signals one batch may carry; 0 keeps the flow's own
+	// budget. A batch over it is refused, never trimmed.
+	Batch int
+	// State is the most bytes one node's state may hold; 0: no extra bound.
+	State int
+	// DeadLetter keeps signals that could not be folded, with the reason.
+	DeadLetter bool
 }
 
 // Start is what starts an instance: events (actions of the app, or protocol

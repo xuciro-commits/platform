@@ -57,9 +57,12 @@ type FlowInstance struct {
 	Answer       string                     `json:"answer,omitempty" field:"readonly"`
 	Parent       string                     `json:"parent,omitempty" field:"readonly"` // the instance that called it
 	Tokens       []Token                    `json:"tokens" field:"readonly" title:"Where it stands"`
-	Undo         []UndoEntry                `json:"undo" field:"readonly" title:"To undo"`
-	Trace        []TraceLine                `json:"trace" field:"readonly"`
-	Seq          int                        `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
+	// Batch is the continuous instance's frame (ADR-0047 §13): the cursor it
+	// consumed through, its watermark, node state and dead letters.
+	Batch *BatchFrame `json:"batch,omitempty" field:"readonly" type:"json"`
+	Undo  []UndoEntry `json:"undo" field:"readonly" title:"To undo"`
+	Trace []TraceLine `json:"trace" field:"readonly"`
+	Seq   int         `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
 }
 
 // Token is where a path of the instance stands (BPMN's token): a step it is at
@@ -247,6 +250,11 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 	}
 	if byState && !slices.ContainsFunc(m.Entities, func(e platform.Entity) bool { return e.Type == fl.Start.Type }) && (m.ID != "build" || f.host == nil || !f.host.Declares(fl.Start.Type)) {
 		return nil, fmt.Errorf("flow %s starts on the state of %s, not an entity type of %s", id, fl.Start.Type, m.ID)
+	}
+	if fl.Continuous != nil {
+		if fl.Continuous.Source == "" || fl.Continuous.Batch < 0 || !fl.Continuous.DeadLetter {
+			return nil, fmt.Errorf("flow %s: a continuous flow names its source, a batch budget of zero or more, and keeps dead letters", id)
+		}
 	}
 	versions := f.defs[id]
 	if len(versions) > 0 && versions[len(versions)-1].Version >= fl.Version {

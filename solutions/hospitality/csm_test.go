@@ -29,8 +29,10 @@ import (
 // person. A ticket the agent cannot take goes to the desk, and to its leads
 // when it is late. A reply promising money is refused by the agent's guard.
 func TestCSMTriage(t *testing.T) {
-	// The model searches the customer's account, reads its context, triages,
-	// replies naming what it found, and finishes; "fail" tickets get errors.
+	// The model searches its own app, reads the ticket's context, tries the guest
+	// account (refused: a flow's agent reads its own app, ADR-0050 D1/D2), looks
+	// the matter up in the house rules, triages and replies with what it may
+	// read; "fail" tickets get errors.
 	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Messages []map[string]any }
 		json.NewDecoder(r.Body).Decode(&req)
@@ -56,15 +58,17 @@ func TestCSMTriage(t *testing.T) {
 		case 0:
 			name, args = "search", map[string]any{"query": account}
 		case 1:
-			name, args = "context", map[string]any{"type": "crm.account", "id": account}
+			name, args = "context", map[string]any{"type": "csm.ticket", "id": ticket}
 		case 2:
-			name, args = "knowledge", map[string]any{"query": "wifi"}
+			// Another app's record: a run no person started may not read it (ADR-0050 D1/D2).
+			name, args = "context", map[string]any{"type": "crm.account", "id": account}
 		case 3:
-			name, args = "csm_ticket_triage", map[string]any{"target": ticket, "category": "booking", "priority": "high"}
+			name, args = "knowledge", map[string]any{"query": "wifi"}
 		case 4:
-			found := regexp.MustCompile(`"title":"([^"]+)"`).FindAllStringSubmatch(results[1], -1) // the account's opportunities
-			rule := regexp.MustCompile(`"title":"([^"]+)"`).FindStringSubmatch(results[2])         // the passage found
-			reply := "About your " + found[len(found)-1][1] + ": the front desk resets the wifi password (" + rule[1] + "). A colleague is on it."
+			name, args = "csm_ticket_triage", map[string]any{"target": ticket, "category": "booking", "priority": "high"}
+		case 5:
+			rule := regexp.MustCompile(`"title":"([^"]+)"`).FindStringSubmatch(results[3]) // the passage found
+			reply := "About the wifi: the front desk resets the wifi password (" + rule[1] + "). A colleague is on it."
 			if strings.Contains(goal, "refund") {
 				reply = "We will refund you."
 			}
@@ -139,13 +143,15 @@ func TestCSMTriage(t *testing.T) {
 	w.expect(do(lead, knowledge.ID, knowledge.DocumentType+".create", knowledge.DocumentType, "RULES",
 		map[string]any{"title": "House rules", "text": "# Wifi\n\nThe wifi password is on the key card; the front desk resets it."}), "ok")
 
-	// Grounded in the CRM and the house rules, cited: the account's opportunity is named in the reply; the
-	// high priority makes it due in four hours; the mail waits for a person.
+	// Grounded in its own app and the house rules, cited: the reply relies on the
+	// rule it read; the guest account is refused, so nothing from another app
+	// grounds it (ADR-0050 D1/D2); the high priority makes it due in four hours;
+	// the mail waits for a person.
 	open("T-1", "Wifi keeps dropping")
 	tick(8 * time.Second)
 	x := ticket("T-1")
 	w.expect(fmt.Sprint(x.Status, " ", x.Category, " ", x.Priority, " ", x.Due.Sub(x.Created.At), " ", x.Replied, " | ", x.Reply),
-		"answered booking high 4h0m0s agent:csm.triage | About your Board offsite: the front desk resets the wifi password (House rules). A colleague is on it.")
+		"answered booking high 4h0m0s agent:csm.triage | About the wifi: the front desk resets the wifi password (House rules). A colleague is on it.")
 	w.expect(x.Summary, "Wifi drops in the rooms") // the app asked the tenant's model for apps, and its reply action took the answer (ADR-0029 D3)
 	// An administrator of the agent app reads a run's trace only where they may
 	// also read what the run read (#130): the lead holds those roles; an
@@ -155,7 +161,13 @@ func TestCSMTriage(t *testing.T) {
 	agents.Roles = maps.Clone(lead.Roles)
 	agents.Roles[platformserver.AgentApp] = platformserver.AgentAdmin
 	cited, _ := w.tenant.Records(agents, platformserver.RunType, platform.Query{Domain: json.RawMessage(`[["goal","like","T-1"]]`)}, now)
-	w.expect(fmt.Sprint(cited.Records[0].(platformserver.AgentRunRecord).Citations), "[{knowledge.document/RULES House rules 0 2}]")
+	citedRun := cited.Records[0].(platformserver.AgentRunRecord)
+	w.expect(fmt.Sprint(citedRun.Citations), "[{knowledge.document/RULES House rules 0 3}]")
+	// The guest account it tried to read: another app's record, refused, and
+	// nothing from it reaches the trace (ADR-0050 D1/D2).
+	if len(citedRun.Steps) < 3 || !strings.HasPrefix(citedRun.Steps[2].Outcome, "refused:") || strings.Contains(citedRun.Steps[2].Outcome, "Board") {
+		t.Fatalf("a flow's agent read another app's record: %+v", citedRun.Steps)
+	}
 	bare := platform.Member{ID: "x", Tenant: "hotel-a", Roles: map[string]string{platformserver.AgentApp: platformserver.AgentAdmin}}
 	withheld, _ := w.tenant.Records(bare, platformserver.RunType, platform.Query{Domain: json.RawMessage(`[["goal","like","T-1"]]`)}, now)
 	narrow := withheld.Records[0].(platformserver.AgentRunRecord)

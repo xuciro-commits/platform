@@ -42,6 +42,9 @@ type Deployment struct {
 	Mint     string
 	NewKey   bool
 	TokenTTL time.Duration
+	// Packages is a directory of package descriptors (ADR-0047 §10.3): the
+	// index the console lists and prechecks. Empty: no packages offered.
+	Packages string
 	// Rebuild composes a fresh, unstarted tenant with the same durable app and
 	// connector declarations. Required for an in-process recovery retry.
 	Rebuild func(id string) (*Tenant, error)
@@ -68,6 +71,7 @@ func Flags(addr string) *Deployment {
 	flag.BoolVar(&d.NewKey, "idp-new-key", false, "make a signing key when none exists, refuse to replace one, and stop")
 	flag.StringVar(&d.Mint, "mint-token", "", "print an access token for this subject and stop (<user:email> or <client:id>, as the seats name them)")
 	flag.DurationVar(&d.TokenTTL, "token-ttl", 12*time.Hour, "how long a minted token is accepted")
+	flag.StringVar(&d.Packages, "packages", "", "directory of package descriptors the console offers (empty: no packages)")
 	return d
 }
 

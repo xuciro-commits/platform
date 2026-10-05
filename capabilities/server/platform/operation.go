@@ -278,6 +278,10 @@ type OperationLimits struct {
 	MemoryPages    uint32 `json:"memoryPages"`
 	MaxInputBytes  int    `json:"maxInputBytes"`
 	MaxOutputBytes int    `json:"maxOutputBytes"`
+	// StagedOutputBytes, when set, allows a result above MaxOutputBytes to be
+	// sealed into the per-call result channel the host owns (ADR-0047 §13.3).
+	// 0 keeps the inline-only profile; the worker still never writes anywhere.
+	StagedOutputBytes int `json:"stagedOutputBytes,omitempty"`
 }
 type Operation struct {
 	Name        string           `json:"name"`
@@ -312,6 +316,10 @@ func (o Operation) Check() error {
 	}
 	if o.Limits.TimeoutMillis < 1 || o.Limits.TimeoutMillis > 30000 || o.Limits.MemoryPages < 1 || o.Limits.MemoryPages > 4096 || o.Limits.MaxInputBytes < 1 || o.Limits.MaxInputBytes > 1<<20 || o.Limits.MaxOutputBytes < 1 || o.Limits.MaxOutputBytes > 48<<10 {
 		return fmt.Errorf("operation needs bounded time, memory and JSON bytes")
+	}
+	if o.Limits.StagedOutputBytes < 0 || o.Limits.StagedOutputBytes > 16<<20 ||
+		o.Limits.StagedOutputBytes > 0 && o.Limits.StagedOutputBytes <= o.Limits.MaxOutputBytes {
+		return fmt.Errorf("operation staged output must exceed the inline budget and stay within 16 MiB")
 	}
 	seen := map[string]bool{}
 	for _, r := range o.Roles {

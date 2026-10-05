@@ -58,6 +58,9 @@ type Console struct {
 	tenant   string
 	members  map[string]*platform.Member
 	subjects map[string]string // subject → member ID
+	projects map[string]*BuildProject
+	packages map[string]*InstalledPackage
+	index    *PackageIndex
 	ledger   *platform.Ledger
 	t        *Tenant // the tenant running it, once composed (NewTenant)
 }
@@ -65,26 +68,35 @@ type Console struct {
 func ConsoleActions() *platform.Catalog {
 	admin := []string{Admin}
 	app := platform.Field{Name: "app", Type: "string", Required: true, Description: "App ID"}
-	return platform.NewCatalog(append([]platform.Action{
-		platform.Action{Schema: SchemaAdd, Target: MemberType, Capability: "members", Title: "Add member",
+	actions := []platform.Action{
+		{Schema: SchemaAdd, Target: MemberType, Capability: "members", Title: "Add member",
 			Description: "Add a member who signs in as a subject: user:<email> for a person, client:<id> for a service or AI agent.",
 			Payload: []platform.Field{{Name: "subject", Type: "string", Required: true, Description: "user:<email> or client:<id>"},
 				{Name: "agent", Type: "boolean", Description: "An AI agent: its irreversible effects wait for a person's approval"}}, Roles: admin},
-		platform.Action{Schema: SchemaGrant, Target: MemberType, Capability: "members", Title: "Grant role",
+		{Schema: SchemaGrant, Target: MemberType, Capability: "members", Title: "Grant role",
 			Description: "Give a member a role in an app, replacing the role held there.",
 			Payload:     []platform.Field{app, {Name: "role", Type: "string", Required: true, Description: "A role the app defines"}}, Roles: admin},
-		platform.Action{Schema: SchemaRevoke, Target: MemberType, Capability: "members", Title: "Revoke role",
+		{Schema: SchemaRevoke, Target: MemberType, Capability: "members", Title: "Revoke role",
 			Description: "Remove a member's role in an app.", Payload: []platform.Field{app}, Roles: admin},
-		platform.Action{Schema: SchemaLanguage, Target: MemberType, Capability: "language", Title: "Choose language",
+		{Schema: SchemaLanguage, Target: MemberType, Capability: "language", Title: "Choose language",
 			Description: "Choose the language a member reads the platform in: your own, or anyone's as an administrator.",
 			Payload:     []platform.Field{{Name: "language", Type: "string", Description: "A language the tenant speaks, such as zh-CN; empty: the tenant's default"}}, Roles: []string{platform.AnyMember}},
-	}, append(append(operationsActions(), effectActions()...), operationActions()...)...)...)
+	}
+	actions = append(actions, operationsActions()...)
+	actions = append(actions, effectActions()...)
+	actions = append(actions, operationActions()...)
+	actions = append(actions, ProjectActions()...)
+	actions = append(actions, PackageActions()...)
+	return platform.NewCatalog(actions...)
 }
 
 // NewConsole seeds a tenant's directory of members; changes recorded later replay on top.
 func NewConsole(tenant string, seats ...Seat) *Console {
 	d := &Console{tenant: tenant, members: map[string]*platform.Member{}, subjects: map[string]string{},
-		ledger: platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType)}
+		projects: map[string]*BuildProject{},
+		packages: map[string]*InstalledPackage{},
+		index:    &PackageIndex{},
+		ledger:   platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ProjectType, PackageType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -124,14 +136,16 @@ func (d *Console) Identities() []Identity {
 
 // Snapshot and Restore: the members, how they sign in, and the decisions (ADR-0019 D6).
 type consoleState struct {
-	Members  map[string]*platform.Member `json:"members"`
-	Subjects map[string]string           `json:"subjects"`
+	Members  map[string]*platform.Member  `json:"members"`
+	Subjects map[string]string            `json:"subjects"`
+	Projects map[string]*BuildProject     `json:"projects,omitempty"`
+	Packages map[string]*InstalledPackage `json:"packages,omitempty"`
 }
 
 func (d *Console) Snapshot() (json.RawMessage, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.ledger.SnapshotWith(consoleState{d.members, d.subjects})
+	return d.ledger.SnapshotWith(consoleState{Members: d.members, Subjects: d.subjects, Projects: d.projects, Packages: d.packages})
 }
 
 func (d *Console) Restore(raw json.RawMessage) error {
@@ -142,6 +156,12 @@ func (d *Console) Restore(raw json.RawMessage) error {
 		return err
 	}
 	d.members, d.subjects = s.Members, s.Subjects
+	if s.Projects != nil {
+		d.projects = s.Projects
+	}
+	if s.Packages != nil {
+		d.packages = s.Packages
+	}
 	return nil
 }
 
@@ -194,8 +214,8 @@ func clone(m *platform.Member) platform.Member {
 }
 
 func (d *Console) Manifest() platform.Manifest {
-	return platform.Manifest{ID: PlatformApp, Title: "Settings", Version: "1", Actions: d.ledger.Catalog,
-		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads"},
+	return platform.Manifest{ID: PlatformApp, Title: "Settings", Version: "1", Actions: d.ledger.Catalog, Roles: []string{Admin, Auditor},
+		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "projects", "packages", "contributions"},
 		Everyone: []string{"notifications"}, Inputs: map[string]bool{"heartbeat": false},
 		Settings: []platform.Setting{{Name: SettingLanguage, Title: "Default language", Type: "text", Default: "",
 			Description: "The language members read until they choose their own, such as zh-CN; empty: what each browser asks for, else English."},
@@ -209,7 +229,8 @@ func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.De
 // remain outside this path until their respective owners can be staged too.
 func (d *Console) AcceptedLedger() *platform.Ledger { return d.ledger }
 func (*Console) AcceptedActionSchemas() []string {
-	return []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaLanguage, SchemaOperationCall}
+	return []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaLanguage, SchemaOperationCall, SchemaProjectSave, SchemaProjectArchive,
+		SchemaPackageInstall, SchemaPackageUpgrade, SchemaPackageDrain, SchemaPackageRetire}
 }
 
 func (d *Console) ForkAcceptedState() (platform.App, error) {
@@ -220,14 +241,24 @@ func (d *Console) ForkAcceptedState() (platform.App, error) {
 		copy := clone(member)
 		members[id] = &copy
 	}
-	return &Console{tenant: d.tenant, members: members, subjects: maps.Clone(d.subjects),
-		ledger: d.ledger, t: d.t}, nil
+	projects := make(map[string]*BuildProject, len(d.projects))
+	for id, project := range d.projects {
+		copy := *project
+		projects[id] = &copy
+	}
+	packages := make(map[string]*InstalledPackage, len(d.packages))
+	for id, p := range d.packages {
+		copy := *p
+		packages[id] = &copy
+	}
+	return &Console{tenant: d.tenant, members: members, subjects: maps.Clone(d.subjects), projects: projects,
+		packages: packages, index: d.index, ledger: d.ledger, t: d.t}, nil
 }
 
 func (d *Console) AcceptedState() (json.RawMessage, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return json.Marshal(consoleState{d.members, d.subjects})
+	return json.Marshal(consoleState{Members: d.members, Subjects: d.subjects, Projects: d.projects, Packages: d.packages})
 }
 
 func (d *Console) ValidateAcceptedState(raw json.RawMessage) error {
@@ -278,6 +309,28 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 			d.mu.Lock()
 			apply, err := d.decideMember(c, s)
 			d.mu.Unlock()
+			if apply == nil {
+				return nil, err
+			}
+			return func(r *pb.ChangeRecord) {
+				d.mu.Lock()
+				defer d.mu.Unlock()
+				apply(r)
+			}, err
+		}
+		if declared.Target == PackageType {
+			apply, err := d.decidePackage(c, s)
+			if apply == nil {
+				return nil, err
+			}
+			return func(r *pb.ChangeRecord) {
+				d.mu.Lock()
+				defer d.mu.Unlock()
+				apply(r)
+			}, err
+		}
+		if declared.Target == ProjectType {
+			apply, err := d.decideProject(c, s)
 			if apply == nil {
 				return nil, err
 			}
@@ -363,7 +416,10 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	if t != nil && name == "notifications" {
 		return t.notificationsFor(c.ID), nil
 	}
-	if c.Role() != Admin || t == nil {
+	if name == "contributions" {
+		return d.Contributions(), nil
+	}
+	if t == nil || c.Role() != Admin && (c.Role() != Auditor || !auditorMayRead(name)) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	switch name {
@@ -385,6 +441,10 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		return t.Health(time.Now()), nil
 	case "personal-reads":
 		return t.PersonalReads(), nil
+	case "projects":
+		return d.ProjectViews(), nil
+	case "packages":
+		return d.PackageViews(), nil
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()

@@ -56,17 +56,31 @@ type ApprovalRequest struct {
 	Release string `json:"release,omitempty" field:"readonly"`
 }
 
-// ApprovalStep is one level: who may approve, and who did.
+// ApprovalStep is one level: who may approve, and who did. Count is how many
+// distinct approvals close the level (ADR-0047 §11): 0 keeps the level's own
+// rule of one, or all when All is set.
 type ApprovalStep struct {
 	Title     string    `json:"title"`
 	Approvers []string  `json:"approvers"`
 	All       bool      `json:"all,omitempty"`
+	Count     int       `json:"count,omitempty"`
 	Approved  []string  `json:"approved"`
 	Due       time.Time `json:"due,omitzero"`
 	// Delegates may decide for an approver away on the request's day
 	// (delegate → approver); DecidedBy says who did (approver → delegate) (ADR-0028 D11).
 	Delegates map[string]string `json:"delegates,omitempty"`
 	DecidedBy map[string]string `json:"decidedBy,omitempty"`
+}
+
+// required is the number of distinct approvals this level closes at.
+func (s ApprovalStep) required() int {
+	if s.All {
+		return len(s.Approvers)
+	}
+	if s.Count > 0 {
+		return s.Count
+	}
+	return 1
 }
 
 // Delegation hands a member's approvals and tasks to another for some days.
@@ -137,7 +151,8 @@ func New(tenant string) *Work {
 			Roles: []string{platform.AnyMember}},
 		platform.Action{Schema: SchemaUndelegate, Target: DelegationType, Capability: "delegation", Title: "End delegation",
 			Description: "End one of your delegations.", Payload: []platform.Field{}, Roles: []string{platform.AnyMember}})
-	w.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType, DelegationType)
+	actions = append(actions, w.policyActions()...)
+	w.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType, DelegationType, PolicyType)
 	return w
 }
 
@@ -185,6 +200,7 @@ func (w *Work) entities() []platform.Entity {
 							w.closed(c, record.(*WorkTask).ID)
 						}},
 				}}},
+		policyEntity(),
 		{Type: ViewType, Title: "Saved view", Model: SavedView{}},
 		{Type: DelegationType, Title: "Delegation", Model: Delegation{}, Description: "A member's approvals and tasks handed to another for some days; the delegate decides for them, and the request says so.",
 			Scope: platform.Scope{Participants: func(record any) []string { d := record.(Delegation); return []string{d.From, d.To} }}},
@@ -232,6 +248,8 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 			return w.delegate(c, s)
 		case SchemaViewSave, SchemaViewRemove:
 			return w.view(c, s)
+		case SchemaPolicySave, SchemaPolicyRemove:
+			return w.policy(c, s)
 		}
 		if w.host == nil || s.GetSchema().GetName() != SchemaRequest {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
@@ -269,6 +287,9 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED} // nobody could approve it
 		}
 		step := ApprovalStep{Title: level.Title, Approvers: approvers, All: level.All, Approved: []string{}, Delegates: w.delegates(c, approvers, now)}
+		// A tenant policy may ask several distinct members for this action
+		// (ADR-0047 §11); the count is fixed now, with the approvers.
+		step.Count = CountFor(step, level.All, w.PolicyCount(c, app, declared.Schema), len(approvers))
 		if level.Due > 0 {
 			step.Due = now.Add(level.Due)
 		}
@@ -377,8 +398,8 @@ func (w *Work) approve(c platform.Caller, record any, payload json.RawMessage, n
 		}
 		step.DecidedBy[who] = c.ID
 	}
-	if step.All && len(step.Approved) < len(step.Approvers) {
-		return nil // stays pending at this level
+	if len(step.Approved) < step.required() {
+		return nil // stays pending at this level until the required approvals
 	}
 	if a.Level+1 < len(a.Levels) {
 		a.Level++

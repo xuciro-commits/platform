@@ -2,6 +2,7 @@
 // change the Go types, then run `go run ./cmd/api-types` in capabilities/server.
 import type { AuthorityDeclarationJson } from "./platform/kernel/v1alpha1/authority_pb";
 import type { ChangeRecordJson, SubmissionJson } from "./platform/kernel/v1alpha1/change_pb";
+import type { EntityRefJson } from "./platform/kernel/v1alpha1/identity_pb";
 
 export type AIFunction = {
   conversation?: boolean;
@@ -230,6 +231,7 @@ export type ApprovalStep = {
   title: string;
   approvers: string[];
   all?: boolean;
+  count?: number;
   approved: string[];
   due?: string;
   delegates?: Record<string, string>;
@@ -419,6 +421,18 @@ export type Column = {
   money?: boolean;
 };
 
+export type CompositeAnswer = {
+  key: string;
+  applied: number;
+  digest?: string;
+};
+
+export type CompositeEdit = {
+  schema: string;
+  target: EntityRef;
+  payload?: unknown;
+};
+
 export type ComputeFixture = {
   app?: string;
   name: string;
@@ -464,6 +478,17 @@ export type ContextView = {
   links: string[];
   flows: FlowSummary[];
   tasks: TaskSummary[];
+};
+
+export type Contribution = {
+  key: string;
+  view: string;
+  surface?: string;
+  title?: string;
+  kind?: string;
+  app?: string;
+  source: string;
+  state: string;
 };
 
 export type Definition = {
@@ -576,6 +601,9 @@ export type EntityInfo = {
   standard: string[];
   lifecycle?: LifecycleInfo;
 };
+
+/** The kernel contract's EntityRef (contract/proto). */
+export type EntityRef = EntityRefJson;
 
 export type ErrorBody = {
   code: string;
@@ -731,6 +759,38 @@ export type Hit = {
   title: string;
 };
 
+export type HostArtifactView = {
+  candidate: string;
+  active?: boolean;
+  digest?: string;
+  size: number;
+  assets: number;
+  verified: boolean;
+  note?: string;
+};
+
+export type HostOverview = {
+  now: string;
+  tenants: HostTenantView[];
+  admins: number;
+};
+
+export type HostTenantView = {
+  id: string;
+  quarantined?: boolean;
+  fault?: string;
+  lifecycle?: string;
+  apps: string[];
+  members: number;
+  audit: number;
+  activeRelease?: string;
+  candidates: number;
+  support: number;
+  failedWork: number;
+  connectors: number;
+  started?: string;
+};
+
 export type Identity = {
   token: string;
   tenant: string;
@@ -779,6 +839,20 @@ export type InboxTask = {
   answerTitles?: string[];
 };
 
+export type InstalledPackage = {
+  id: string;
+  version: string;
+  namespace: string;
+  title?: string;
+  state: string;
+  contributions?: PackageContribution[];
+  digest?: string;
+  artifact?: string;
+  installedAt?: string;
+  changedAt?: string;
+  retained?: RetainedArtifact[];
+};
+
 export type JointDraftRef = {
   kind: string;
   id: string;
@@ -789,6 +863,11 @@ export type LifecycleInfo = {
   initial: string;
   states: State[];
   transitions: TransitionInfo[];
+};
+
+export type LifecycleRequest = {
+  action: string;
+  reason?: string;
 };
 
 export type Limit = {
@@ -895,6 +974,29 @@ export type Message = {
   toolCallId?: string;
 };
 
+export type MigrationManifest = {
+  at: string;
+  from: string;
+  to: string;
+  key: string;
+  member: string;
+  types: MigrationType[];
+};
+
+export type MigrationResult = {
+  from: string;
+  to: string;
+  key: string;
+  types: MigrationType[];
+};
+
+export type MigrationType = {
+  type: string;
+  rows: number;
+  written: number;
+  refused?: ImportRow[];
+};
+
 export type Model = {
   provider: string;
   model: string;
@@ -960,6 +1062,7 @@ export type OperationLimits = {
   memoryPages: number;
   maxInputBytes: number;
   maxOutputBytes: number;
+  stagedOutputBytes?: number;
 };
 
 export type OperationRef = {
@@ -983,6 +1086,32 @@ export type OrgSeed = {
   units: Unit[];
   edges: Edge[];
   memberships: Membership[];
+};
+
+export type PackageContribution = {
+  view: string;
+  surface?: string;
+  title?: string;
+  kind?: string;
+  app?: string;
+};
+
+export type PackageDescriptor = {
+  id: string;
+  version: string;
+  title?: string;
+  namespace: string;
+  requires?: string[];
+  compatibility?: string;
+  contributions?: PackageContribution[];
+  artifactDigest?: string;
+  description?: string;
+};
+
+export type PackageView = {
+  descriptor: PackageDescriptor;
+  installed?: InstalledPackage;
+  precheck: Precheck;
 };
 
 export type Page = {
@@ -1586,6 +1715,14 @@ export type PersonalRead = {
   fields: string[];
 };
 
+export type Precheck = {
+  id: string;
+  version: string;
+  ok: boolean;
+  problems?: string[];
+  missing?: string[];
+};
+
 export type Predicate = {
   op: "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "contains" | "exists" | "all" | "any" | "not";
   left?: Binding;
@@ -1655,6 +1792,16 @@ export type ProcessStep = {
   untilSeconds?: number;
   flow?: string;
   flowVersion?: number;
+};
+
+export type PromotionResult = {
+  from: string;
+  to: string;
+  candidate: string;
+  digest: string;
+  active: boolean;
+  key: string;
+  assets: number;
 };
 
 export type PropertyType = {
@@ -1828,6 +1975,12 @@ export type ReleaseSummary = {
   id: string;
   title: string;
   assets: number;
+};
+
+export type RetainedArtifact = {
+  version: string;
+  digest?: string;
+  at: string;
 };
 
 export type RunStep = {
@@ -2100,6 +2253,31 @@ export type Submission = SubmissionJson;
 export type SubmissionAnswer = {
   record?: ChangeRecord;
   error?: ErrorBody;
+};
+
+export type SupportAnswer = {
+  read: string;
+  answer?: unknown;
+  error?: string;
+};
+
+export type SupportGrant = {
+  id: string;
+  tenant: string;
+  member: string;
+  reason: string;
+  opened: string;
+  expires: string;
+  uses: number;
+};
+
+export type SupportRead = {
+  tenant: string;
+  grant: string;
+  at: string;
+  health: TenantHealth;
+  audit: AuditEntry[];
+  answers?: SupportAnswer[];
 };
 
 export type Task = {
