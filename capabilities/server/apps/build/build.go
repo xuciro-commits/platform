@@ -76,7 +76,15 @@ type Build struct {
 	ledger *platform.Ledger
 	// installed are the objects published in this tenant, by entity type: their
 	// declarations, so generated actions of a defined object reach the record store.
-	installed     map[string]platform.Entity
+	installed map[string]platform.Entity
+	// jointEntities are the object drafts of the candidate being built, so the
+	// same validation answers entity lookups as the candidate would install
+	// them (ADR-0048). Empty outside a joint build.
+	jointEntities map[string]platform.EntityInfo
+	// jointMode is set while a candidate holds more than one draft: the host's
+	// installed-state install checks then move to the candidate's own install
+	// dry run, because no single draft's image is installed yet (ADR-0048 D2).
+	jointMode     bool
 	linkTypes     map[string]LinkType
 	propertyTypes map[string]PropertyType
 	queries       map[string]Query
@@ -514,7 +522,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			if err == nil && p.Fields != nil {
 				err = b.checkPropertyFields(*p.Fields)
 				if err == nil {
-					err = checkFields(*p.Fields, b.host)
+					err = checkFields(*p.Fields, b.fieldKnown)
 				}
 			}
 			if err != nil {
@@ -525,7 +533,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); (name == PageType+".create" || name == PageType+".edit") && !c.Replaying {
 		var p Page
 		if json.Unmarshal(s.GetPayload(), &p) == nil && p.Object != "" {
-			if _, known := b.host.Entity(p.Object); !known {
+			if !b.fieldKnown(p.Object) {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: fmt.Sprintf("this tenant has no object %q", p.Object)}
 			}
 		}
@@ -550,7 +558,7 @@ func (b *Build) conditionLookup(typ string) (platform.EntityInfo, bool) {
 	if b.host == nil {
 		return platform.EntityInfo{}, false
 	}
-	return b.host.Entity(typ)
+	return b.lookupEntity(typ)
 }
 
 func (b *Build) check(o Object, id string) error {
@@ -560,7 +568,7 @@ func (b *Build) check(o Object, id string) error {
 	if err := b.checkPropertyFields(o.Fields); err != nil {
 		return err
 	}
-	if err := checkFields(o.Fields, b.host); err != nil {
+	if err := checkFields(o.Fields, b.fieldKnown); err != nil {
 		return err
 	}
 	if err := checkProcess(o, b.conditionLookup); err != nil {
@@ -587,9 +595,34 @@ func (b *Build) checkName(name, id string) error {
 	return nil
 }
 
+// fieldKnown answers whether a reference names an object this tenant can
+// compose against: an installed one, one selected as a draft in the candidate
+// being built, or another saved draft object (ADR-0048 D1). Delivery still
+// proves the object installs.
+func (b *Build) fieldKnown(ref string) bool {
+	if _, known := b.lookupEntity(ref); known {
+		return true
+	}
+	if b.host == nil {
+		return false
+	}
+	if b.host.Declares(ref) {
+		return true
+	}
+	name, derived := strings.CutPrefix(ref, ID+".")
+	if !derived {
+		return false
+	}
+	objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(objects, func(o Object) bool { return !o.Archived && o.Name == name })
+}
+
 // checkFields refuses a field the platform has no type for, a choice without
 // values, or a reference to an object this tenant has not.
-func checkFields(fields []Field, h host.Host) error {
+func checkFields(fields []Field, known func(string) bool) error {
 	seen := map[string]bool{}
 	for _, f := range fields {
 		switch {
@@ -607,7 +640,7 @@ func checkFields(fields []Field, h host.Host) error {
 			return fmt.Errorf("the choice field %q has no values", f.Name)
 		case f.Type == "reference" && f.Ref == "":
 			return fmt.Errorf("the reference field %q says nothing it refers to", f.Name)
-		case f.Type == "reference" && h != nil && !h.Declares(f.Ref):
+		case f.Type == "reference" && known != nil && !known(f.Ref):
 			return fmt.Errorf("the field %q refers to %q, which this tenant has no object for", f.Name, f.Ref)
 		case f.Inverse != "" && f.Type != "reference":
 			return fmt.Errorf("the field %q names how it is seen from elsewhere but refers to nothing", f.Name)

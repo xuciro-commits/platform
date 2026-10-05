@@ -197,7 +197,7 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 		var states []platform.State
 		if entity.Type == p.Object && entity.Lifecycle != nil {
 			states = entity.Lifecycle.States
-		} else if info, ok := b.host.Entity(p.Object); ok && info.Lifecycle != nil {
+		} else if info, ok := b.lookupEntity(p.Object); ok && info.Lifecycle != nil {
 			for _, state := range info.Lifecycle.States {
 				states = append(states, platform.State{Name: state.Name})
 			}
@@ -278,7 +278,7 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 			}
 			scope := entity.Scope
 			if entity.Type != p.Object {
-				if info, ok := b.host.Entity(p.Object); ok {
+				if info, ok := b.lookupEntity(p.Object); ok {
 					scope = info.Scope
 				}
 			}
@@ -521,7 +521,7 @@ func (b *Build) flowOf(p Process) platform.Flow {
 	if !p.Manual {
 		fl.Start.Type = p.Object
 		stateField := "state"
-		if info, ok := b.host.Entity(p.Object); ok && info.Lifecycle != nil {
+		if info, ok := b.lookupEntity(p.Object); ok && info.Lifecycle != nil {
 			stateField = info.Lifecycle.Field
 		}
 		fl.Start.When = func(_ platform.Caller, record any) bool {
@@ -547,7 +547,7 @@ func (b *Build) flowOf(p Process) platform.Flow {
 			raw, err := b.host.Caller(c, member, ID).ReadRecord(p.Object, r.Key, r.Now)
 			if err == nil {
 				var fields map[string]json.RawMessage
-				info, known := b.host.Entity(p.Object)
+				info, known := b.lookupEntity(p.Object)
 				if known && json.Unmarshal(raw, &fields) == nil {
 					for name := range fields {
 						// Record identity/stamps are covered by the record source.

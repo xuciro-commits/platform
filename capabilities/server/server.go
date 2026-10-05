@@ -463,6 +463,13 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
+	// One request carries either a single draft or a joint selection.
+	draftsOf := func(request ReleaseSaveRequest) []build.JointDraftRef {
+		if len(request.Drafts) > 0 {
+			return request.Drafts
+		}
+		return []build.JointDraftRef{{Kind: request.Kind, ID: request.ID}}
+	}
 	handle(Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of one saved draft with its installed development definition (ADR-0039 20a)", Body: ReleasePreviewRequest{}, Answer: ReleasePreview{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if m.Roles[build.ID] != build.Builder {
 			w.WriteHeader(http.StatusForbidden)
@@ -476,8 +483,11 @@ func (h *Host) Handler() http.Handler {
 		var request ReleasePreviewRequest
 		decoder := json.NewDecoder(strings.NewReader(string(body)))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || request.ID == "" {
-			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "a draft kind and id are required"})
+		if err := decoder.Decode(&request); err != nil ||
+			(request.ID == "" && len(request.Drafts) == 0) ||
+			(request.ID != "" && len(request.Drafts) > 0) ||
+			len(request.Drafts) > 32 {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "one draft kind and id, or up to 32 joint drafts, are required"})
 			return
 		}
 		var trailing any
@@ -486,6 +496,9 @@ func (h *Host) Handler() http.Handler {
 			return
 		}
 		answer, err := t.PreviewRelease(m, request.Kind, request.ID)
+		if len(request.Drafts) > 0 {
+			answer, err = t.PreviewReleaseDrafts(m, request.Drafts)
+		}
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
 			return
@@ -500,7 +513,9 @@ func (h *Host) Handler() http.Handler {
 		var request ReleaseSaveRequest
 		decoder := json.NewDecoder(io.LimitReader(r.Body, 4097))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || request.ID == "" ||
+		if err := decoder.Decode(&request); err != nil ||
+			(request.ID == "" && len(request.Drafts) == 0) ||
+			(request.ID != "" && len(request.Drafts) > 0) || len(request.Drafts) > 32 ||
 			request.CandidateID == "" || request.Key == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -510,7 +525,7 @@ func (h *Host) Handler() http.Handler {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		id, err := t.SaveReleaseCandidate(m, request.Kind, request.ID, request.CandidateID, request.Key, h.Now())
+		id, err := t.SaveReleaseCandidates(m, draftsOf(request), request.CandidateID, request.Key, h.Now())
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return

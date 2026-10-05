@@ -778,6 +778,11 @@ export type InboxTask = {
   answerTitles?: string[];
 };
 
+export type JointDraftRef = {
+  kind: string;
+  id: string;
+};
+
 export type LifecycleInfo = {
   field: string;
   initial: string;
@@ -1791,13 +1796,15 @@ export type ReleasePreview = {
 };
 
 export type ReleasePreviewRequest = {
-  kind: string;
-  id: string;
+  kind?: string;
+  id?: string;
+  drafts?: JointDraftRef[];
 };
 
 export type ReleaseSaveRequest = {
-  kind: string;
-  id: string;
+  kind?: string;
+  id?: string;
+  drafts?: JointDraftRef[];
   candidateId: string;
   key: string;
 };

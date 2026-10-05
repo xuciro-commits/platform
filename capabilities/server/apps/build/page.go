@@ -294,7 +294,7 @@ func (b *Build) checkPage(p Page) error {
 	if b.host == nil {
 		return nil
 	}
-	info, known := b.host.Entity(p.Object)
+	info, known := b.lookupEntity(p.Object)
 	if !known {
 		return fmt.Errorf("this tenant has no object %q", p.Object)
 	}

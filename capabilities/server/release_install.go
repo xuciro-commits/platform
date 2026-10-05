@@ -20,6 +20,22 @@ func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte) ([]releas
 	if err != nil {
 		return nil, err
 	}
+	installations, err := t.releaseInstallationsLocked(saved)
+	if err != nil {
+		return nil, err
+	}
+	if err := t.pendingWorkFitsLocked(id, raw); err != nil {
+		return nil, err
+	}
+	return installations, nil
+}
+
+// releaseInstallationsLocked resolves one candidate's exact bytes against the
+// current owner assets and installs it into a tenant draft. It changes nothing
+// committed, so the same call proves a joint draft candidate installs before
+// it is saved (ADR-0048 D2/D4).
+func (t *Tenant) releaseInstallationsLocked(saved platform.ReleaseCandidate) ([]releaseInstallation, error) {
+	id := saved.ID
 	owner, ok := t.app(build.ID).(*build.Build)
 	if !ok {
 		return nil, fmt.Errorf("tenant has no builder")
@@ -85,9 +101,6 @@ func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte) ([]releas
 		installations = append(installations, releaseInstallation{publication, before})
 	}
 	if _, err := t.stageReleaseInstallationLocked(installations, true); err != nil {
-		return nil, err
-	}
-	if err := t.pendingWorkFitsLocked(id, raw); err != nil {
 		return nil, err
 	}
 	return installations, nil
