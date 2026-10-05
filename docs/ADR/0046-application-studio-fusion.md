@@ -1281,6 +1281,8 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 ## 11. 外包能力吸收范围
 
+持续 Flow 所需的原生批次、状态和受控数据输入适配见 [ADR-0047](0047-continuous-flow-adaptation.md)，目前为提议；不因此缩减本 ADR 的完整范围或将当前手动 profile 当成默认持续 Flow。
+
 吸收清单以实际行为验收，下面是迁移归属，不宣称外包已完整实现每个名称所代表的产品能力。所有92个类型都保留可追踪去向，首次迁移时建立owner维护的机器可读映射，并检查数量、重复和缺失。
 
 当前机器清单为`web/packages/build/src/module-import/widgets.json`，固定实际源`types.ts`的SHA-256、92个唯一类型、原分类、共享能力owner、目标及profile/planned状态。转换适配归Build，绑定统一归应用API；共享控件/内容展示可归UI，资源读取、分析、动作及嵌入能力边界归应用API，不由UI拥有业务执行。八个profile由同目录纯转换器消费，其他状态不授予Renderer资格。Catalog的`scenario/workshop-import`提供原生草稿转换示例及边界，原Widget Registry仍是运行注册的唯一归属。
