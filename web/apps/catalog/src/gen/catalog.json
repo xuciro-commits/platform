@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:c6db3747c5d7543e",
+  "revision": "sha256:2281ac68ee1812cf",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4386,6 +4386,7 @@
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/module-import/ObservationImportFields.tsx",
+      "web/packages/build/src/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
@@ -4454,6 +4455,7 @@
       "web/packages/build/src/module-import/ObservationImportFields.tsx",
       "web/packages/build/src/module-import/SpatialImportFields.tsx",
       "web/packages/build/src/module-import/UnusedImportFields.tsx",
+      "web/packages/build/src/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",
@@ -4629,6 +4631,7 @@
       "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
+      "web/packages/build/src/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",
@@ -5051,6 +5054,7 @@
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
+      "web/packages/build/src/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",

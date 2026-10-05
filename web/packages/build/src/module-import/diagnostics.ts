@@ -1,5 +1,6 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "application-page-destination":"Choose one distinct page name, record and readable object for every source page.",
  "action-defaults-binding":"Map optional defaults to readable original fields with the exact parameter type and reference object.",
  "native-action-defaults":"Original field defaults seed one opened form. The original action still owns validation, creates, permissions and revision checks.",
  "native-page-variable-reader":"This overlay reads the original page-owned variable. Closing clears overlay-local state and keeps the page filter and complete count.",

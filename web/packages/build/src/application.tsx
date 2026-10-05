@@ -7,6 +7,7 @@ import type { Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Input, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, defineStatuses, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import {WorkshopApplicationImport} from './module-import/WorkshopApplicationImport';
 
 type Draft = Api.Application & { id: string; revision: number; state: string };
 const empty: Draft = { id: "", revision: 0, state: "draft", name: "", title: "", description: "", icon: "boxes", pages: [], groups: [], resources: [] };
@@ -28,13 +29,15 @@ export function Applications() {
 /** Application membership writes the original build.app; release and execution
  * stay with the existing owners. Pages alone determine operator navigation. */
 export function ApplicationEditor({ id }: { id: string }) {
-  const { definitions, decide, role } = useHost();
+  const { definitions, decide, role,me } = useHost();
   const { open, close } = useWorkspace();
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.app/${encodeURIComponent(id)}`, undefined, id !== "new");
   const processes = useRecordInventory<{ id: string; name: string; title: string; state: string; version?: number; published?: string; archived?: boolean }>("build.process");
   const [draft, setDraft] = useState<Draft>(empty);
   const [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [importing,setImporting]=useState(false);
+  const importApplication=definitions.find(d=>d.ref.app==='build'&&d.ref.kind==='app'&&d.ref.name===draft.name&&d.application);
   const reset = () => { setDraft(hydrate(query.data?.record)); setDirty(false); setError(""); };
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, reset);
   useEffect(() => { if (query.data?.record && !dirty) setDraft(hydrate(query.data.record)); }, [query.data, dirty]);
@@ -72,10 +75,12 @@ export function ApplicationEditor({ id }: { id: string }) {
       actions={<div className="flex flex-wrap gap-2"><Button onClick={() => open({ view: "applications" })}>{t("Applications")}</Button>
         <AssetControls type="build.app" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "application", params: { id } }} />
         <Button disabled={busy || !!draft.id && !dirty || !draft.name || !draft.title} onClick={() => void save()}>{t(draft.id ? "Save application" : "Create application")}</Button>
+        <Button disabled={busy||dirty||!draft.id||!importApplication} onClick={()=>setImporting(true)}>{t('Import complete Workshop module')}</Button>
         <Button variant="primary" disabled={busy || dirty || !draft.id || !draft.pages.length || processes.isLoading || processes.isError}
           onClick={() => open({ view: "release-review", params: { kind: "app", id: draft.id } })}>{t("Review application release")}</Button>
       </div>} />
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
+    {importApplication&&<WorkshopApplicationImport key={JSON.stringify([draft.id,me])} open={importing} onClose={()=>setImporting(false)} application={{ref:importApplication.ref,sourceVersion:importApplication.version}} onPrepared={names=>change({pages:[...names,...draft.pages.filter(name=>!names.includes(name))]})}/>}
     <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="grid min-w-0 content-start gap-4 p-4">
         <label className="grid gap-1 text-xs">{t("What people call it")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>
