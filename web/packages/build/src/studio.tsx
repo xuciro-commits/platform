@@ -133,6 +133,16 @@ function StudioInventory() {
     return { assets, edges, nodes, matches: matches.length };
   }, [all, scoped, search]);
   const current = all.assets.find((asset) => asset.key === selected);
+  // "Usage and impact" for the selected asset: the applications that reference it
+  // (ADR-0047 §6.2). Membership, not a copy of the asset's own definition.
+  const resourceKind = (kind: string) => kind === "workflow" ? "flow" : kind === "application" ? "app" : kind;
+  const referencedBy = useMemo(() => {
+    if (!current || current.kind === "source") return [];
+    return (applications.data?.records ?? []).filter((app) => current.kind === "page"
+      ? (app.pages ?? []).includes(current.record?.name ?? "")
+      : (app.resources ?? []).some((ref) => ref.kind === resourceKind(current.kind) &&
+          ref.name.replace(/^build\./, "") === (current.record?.name ?? "")));
+  }, [applications.data, current]);
   const connections = all.edges.filter((edge) => edge.source === selected || edge.target === selected)
     .map((edge) => all.assets.find((asset) => asset.key === (edge.source === selected ? edge.target : edge.source)))
     .filter((asset): asset is StudioAsset => Boolean(asset));
@@ -196,6 +206,12 @@ function StudioInventory() {
             <Button size="sm" onClick={() => open({ view: "release-review", params: { kind: current.kind === "workflow" ? "flow" : current.kind === "application" ? "app" : current.kind, id: current.record!.id } })}>{t("Review selected release")}</Button>
           </div>}
           {current.kind === "source" && <p className="text-xs text-muted">{t("This source is installed outside Application Studio.")}</p>}
+          {(referencedBy.length > 0 || ["object", "page", "workflow", "query", "function", "compute"].includes(current.kind)) && <div className="mt-2 grid gap-1 border-t border-border pt-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Used by applications")}</h3>
+            {referencedBy.length === 0
+              ? <p className="text-xs text-muted">{t("No application references this asset yet.")}</p>
+              : referencedBy.map((app) => <Button key={app.id} variant="row" onClick={() => open({ view: "application", params: { id: app.id } })}>{app.title || app.name}</Button>)}
+          </div>}
           {connections.length > 0 && <div className="mt-2 grid gap-1 border-t border-border pt-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Usage and impact")}</h3>
             {connections.map((asset) => <Button key={asset.key} variant="row" onClick={() => selectAsset(asset.key)}>{asset.label}</Button>)}

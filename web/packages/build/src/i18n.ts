@@ -2795,4 +2795,6 @@ register("zh-CN", {
   "Not used by an application": "未被应用引用的资源",
   "Background automation": "后台自动化",
   "Usage and impact": "使用处与影响",
+  "Used by applications": "被应用引用",
+  "No application references this asset yet.": "尚无应用引用该资源。",
 });
