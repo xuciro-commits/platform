@@ -123,7 +123,7 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	if request.FunctionID != "" {
 		kind, id = platform.AssetFunction, request.FunctionID
 	}
-	review, candidate, err := t.previewReleaseLocked(kind, id)
+	review, candidate, err := t.previewReleaseLocked([]build.JointDraftRef{{Kind: kind, ID: id}})
 	functionName := ""
 	if request.FunctionID != "" {
 		selected, _ := platform.Get[build.Function](t.automation(build.ID, false), request.FunctionID)

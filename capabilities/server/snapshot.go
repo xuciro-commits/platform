@@ -49,7 +49,15 @@ type tenantState struct {
 	Settings          map[string]string          `json:"settings"`
 	Endpoints         []*Endpoint                `json:"endpoints"`
 	Outbound          []effectState              `json:"outbound"`
-	Sequences         map[string]int             `json:"sequences,omitempty"`
+	// The host console's lifecycle and support sessions (ADR-0047 §6.5) travel
+	// with the tenant: a restart keeps a suspension and its authorized sessions.
+	HostLifecycle string                           `json:"hostLifecycle,omitempty"`
+	Support       []SupportGrant                   `json:"support,omitempty"`
+	Sealed        map[string]SealedArtifact        `json:"sealed,omitempty"`
+	Migrations    []MigrationManifest              `json:"migrations,omitempty"`
+	Composites    map[string]string                `json:"composites,omitempty"`
+	Staged        map[string]platform.StagedResult `json:"staged,omitempty"`
+	Sequences     map[string]int                   `json:"sequences,omitempty"`
 }
 
 type recordState struct {
@@ -180,6 +188,10 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	for _, x := range t.outbound {
 		s.Outbound = append(s.Outbound, effectState{Effect: x.Effect, Since: x.since})
 	}
+	s.HostLifecycle, s.Support = t.hostLifecycle, slices.Clone(t.support)
+	s.Sealed, s.Migrations = maps.Clone(t.sealed), slices.Clone(t.migrations)
+	s.Composites = maps.Clone(t.compositeApplied)
+	s.Staged = maps.Clone(t.staged)
 	return s, rows, position(), nil
 }
 
@@ -298,6 +310,17 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	t.auditMu.Lock()
 	t.audit = s.Audit
 	t.auditMu.Unlock()
+	t.hostLifecycle, t.support = s.HostLifecycle, slices.Clone(s.Support)
+	if s.Sealed != nil {
+		t.sealed = s.Sealed
+	}
+	t.migrations = slices.Clone(s.Migrations)
+	if s.Composites != nil {
+		t.compositeApplied = s.Composites
+	}
+	if s.Staged != nil {
+		t.staged = s.Staged
+	}
 	for key, result := range s.Refusals {
 		raw, err := json.Marshal(result)
 		if err != nil {

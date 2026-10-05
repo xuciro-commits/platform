@@ -25,6 +25,7 @@ import {
 } from "@platform/ui";
 import { Copy, Clipboard, Columns2, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useDirectInstall } from "./release-profile";
 import {pageUIManifest,type Api as HostApi} from "@platform/kernel";
 import { BindingEditor, WorkflowFormProblems } from "./workflow-binding";
 import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, layoutID, stashWidget, restoreWidget, setLayoutKind } from "./page-layout";
@@ -297,6 +298,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     } catch { setRefused(t("The page could not be saved. Your draft is still here.")); return false; }
     finally { lock.current = false; setSaving(false); }
   };
+  const directInstall = useDirectInstall();
   const nothing = sections.length === 0;
   const publish = async () => {
     if (invalid || nothing || lock.current || dirty && !await save()) return;
@@ -368,11 +370,12 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         <AssetControls type="build.page" record={page} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "compose", params: { id } }} />
         <span className="ml-auto text-xs text-muted" role="status">{dirty ? t("Unsaved") : t("Saved")}</span>
         <Button onClick={() => void save()} disabled={!dirty || busy || invalid}>{saving ? t("Saving…") : t("Save")}</Button>
-        <Button onClick={() => void publish()} disabled={nothing || busy || invalid} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{publishing ? t("Installing…") : t("Direct install")}</Button>
+        {directInstall && <Button onClick={() => void publish()} disabled={nothing || busy || invalid} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{publishing ? t("Installing…") : t("Direct install")}</Button>}
         <Button variant="primary" onClick={() => void review()} disabled={nothing || busy || invalid}>{t("Review release")}</Button>
         <Button variant="ghost" aria-label={t("Toggle inspector")} onClick={() => setRightOpen(!rightOpen)}>{rightOpen ? <PanelRightClose /> : <PanelRightOpen />}</Button>
       </Card>
       {refused && <Panel role="alert" className="text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
+      {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
       {importing&&<ModuleImportDialog key={clipboardScope} open retained={importPackage?.scope===clipboardScope?importPackage.pack:undefined} object={page.object} profile={pageUIProfile} onClose={()=>setImporting(false)} onApply={(draft,pack)=>{setImportPackage({scope:clipboardScope,pack});edit(draft,"module-import");select({kind:"page"});setFormProblems({});setRefused(undefined);}}/>}
       {compatibilityOpen&&<CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={()=>setCompatibilityOpen(false)} onLocate={id=>{select({kind:"widget",id});setRightOpen(true);setCompatibilityOpen(false);}} onApply={review=>{if(lock.current)return;const next=applyProfileUpgrade(session.draft,review);if(!next)return;session.edit(next,"profile-upgrade");setCompatibilityOpen(false);setFormProblems({});setRefused(undefined);}}/>}
       {clipboardNotice?.scope===clipboardScope&&<Panel role={clipboardNotice.error?"alert":"status"}>{clipboardNotice.text}</Panel>}

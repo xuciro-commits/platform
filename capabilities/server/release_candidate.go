@@ -167,19 +167,22 @@ func dependentRoots(ref platform.AssetRef, available []platform.ReleaseAsset) []
 	return roots
 }
 
-func (t *Tenant) previewCandidateLocked(ref platform.AssetRef, builderAssets []platform.ReleaseAsset, additionalRoots []platform.AssetRef) (platform.ReleaseCandidate, error) {
+func (t *Tenant) previewCandidateLocked(selected []platform.AssetRef, builderAssets []platform.ReleaseAsset, additionalRoots []platform.AssetRef) (platform.ReleaseCandidate, error) {
 	available, err := t.releaseAssetsLocked(builderAssets, true)
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
 	}
-	roots := dependentRoots(ref, available)
+	var roots []platform.AssetRef
+	for _, ref := range selected {
+		roots = append(roots, dependentRoots(ref, available)...)
+	}
 	for _, other := range additionalRoots {
 		if slices.ContainsFunc(available, func(a platform.ReleaseAsset) bool { return a.Ref == other }) &&
 			!slices.Contains(roots, other) {
 			roots = append(roots, other)
 		}
 	}
-	return t.candidateWithBindings(roots, available, []platform.AssetRef{ref})
+	return t.candidateWithBindings(roots, available, selected)
 }
 
 // ReleasePreview is a builder-only comparison between the installed
@@ -193,21 +196,64 @@ type ReleasePreview struct {
 	Removed     []platform.AssetRef `json:"removed"`
 	Changed     []platform.AssetRef `json:"changed"`
 	Diagnostic  string              `json:"diagnostic,omitempty"`
+	// Drafts is the exact saved-draft selection this review was built from, in
+	// the order it was selected (ADR-0048 D3): the provenance of a joint
+	// candidate. One draft keeping its installed dependency is not repeated.
+	Drafts []build.JointDraftRef `json:"drafts,omitempty"`
 	// CandidateActions are owner-compiled draft inputs for builder test forms,
 	// not the installed member catalog or permission to execute.
 	CandidateActions []platform.Action `json:"candidateActions"`
 }
 
 type ReleasePreviewRequest struct {
+	Kind platform.AssetKind `json:"kind,omitempty"`
+	ID   string             `json:"id,omitempty"`
+	// Drafts selects several saved drafts as one joint candidate (ADR-0048 D1).
+	// A request carries either one kind/id or a non-empty drafts list.
+	Drafts []build.JointDraftRef `json:"drafts,omitempty"`
+}
+
+type ReleaseSaveRequest struct {
+	Kind        platform.AssetKind    `json:"kind,omitempty"`
+	ID          string                `json:"id,omitempty"`
+	Drafts      []build.JointDraftRef `json:"drafts,omitempty"`
+	CandidateID string                `json:"candidateId"`
+	Key         string                `json:"key"`
+}
+
+// ReleaseDraftsRequest names one saved draft to list dependencies for.
+type ReleaseDraftsRequest struct {
 	Kind platform.AssetKind `json:"kind"`
 	ID   string             `json:"id"`
 }
 
-type ReleaseSaveRequest struct {
-	Kind        platform.AssetKind `json:"kind"`
-	ID          string             `json:"id"`
-	CandidateID string             `json:"candidateId"`
-	Key         string             `json:"key"`
+// ReleaseDraftClosure is the saved record drafts that must be delivered with
+// the chosen draft, in dependency order breadth-first from it.
+type ReleaseDraftClosure struct {
+	Drafts []build.JointDraftRef `json:"drafts"`
+}
+
+// ReferencedDrafts answers which saved record drafts a chosen draft needs, so
+// a builder can select them together (ADR-0048 D1).
+func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id string) (ReleaseDraftClosure, error) {
+	if err := t.admits(m); err != nil {
+		return ReleaseDraftClosure{}, err
+	}
+	if m.Roles[build.ID] != build.Builder {
+		return ReleaseDraftClosure{}, fmt.Errorf("builder role required")
+	}
+	owner, ok := t.app(build.ID).(*build.Build)
+	if !ok {
+		return ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
+	}
+	drafts, err := owner.ReferencedDrafts(kind, id)
+	if err != nil {
+		return ReleaseDraftClosure{}, err
+	}
+	if drafts == nil {
+		drafts = []build.JointDraftRef{}
+	}
+	return ReleaseDraftClosure{Drafts: drafts}, nil
 }
 
 type ReleaseSaved struct {
@@ -229,6 +275,13 @@ type ReleaseActive struct {
 // records and before computing any digest or error path. It never changes the
 // installed definitions, persistent records, or active operator work.
 func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id string) (ReleasePreview, error) {
+	return t.PreviewReleaseDrafts(m, []build.JointDraftRef{{Kind: kind, ID: id}})
+}
+
+// PreviewReleaseDrafts compares one or several saved drafts with the installed
+// development definitions, and proves the resulting joint candidate installs
+// before it can be saved (ADR-0048 D1/D2).
+func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef) (ReleasePreview, error) {
 	if err := t.admits(m); err != nil {
 		return ReleasePreview{}, err
 	}
@@ -237,7 +290,7 @@ func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id s
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	reply, candidate, err := t.previewReleaseLocked(kind, id)
+	reply, candidate, err := t.previewReleaseLocked(drafts)
 	reply.CandidateActions = []platform.Action{}
 	if err != nil {
 		return reply, err
@@ -266,23 +319,55 @@ func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id s
 // The candidate returned here is exactly what the builder saw in the
 // comparison. A later save must recompute it under the tenant lock and reject
 // a stale candidate ID rather than trusting bytes supplied by the browser.
-func (t *Tenant) previewReleaseLocked(kind platform.AssetKind, id string) (ReleasePreview, platform.ReleaseCandidate, error) {
+func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef) (ReleasePreview, platform.ReleaseCandidate, error) {
 	owner, ok := t.app(build.ID).(*build.Build)
 	if !ok {
 		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
 	}
-	before, after, oldRoot, newRoot, hadPrior, diagnostic := owner.DraftReleaseAssets(kind, id)
+	assets, diagnostic := owner.DraftReleaseAssetsMulti(drafts)
 	reply := ReleasePreview{CandidateActions: []platform.Action{}, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
+	for _, draft := range drafts {
+		if draft.ID != "" && !slices.Contains(reply.Drafts, draft) {
+			reply.Drafts = append(reply.Drafts, draft)
+		}
+	}
+	if diagnostic != nil {
+		reply.Diagnostic = diagnostic.Error()
+		// A review still names what is installed now: a draft that cannot be
+		// assembled refuses the candidate, and the running closure is what the
+		// reader needs to compare against (ADR-0048 D3).
+		if len(assets.Priors) > 0 {
+			if available, err := t.releaseAssetsLocked(nil, false); err == nil {
+				var installedRoots []platform.AssetRef
+				for _, prior := range assets.Priors {
+					for _, owner := range dependentRoots(prior, available) {
+						if !slices.Contains(installedRoots, owner) {
+							installedRoots = append(installedRoots, owner)
+						}
+					}
+				}
+				if current, err := t.candidateWithBindings(installedRoots, available, assets.Priors); err == nil {
+					reply.CurrentID = current.ID
+				}
+			}
+		}
+		return reply, platform.ReleaseCandidate{}, nil
+	}
 	var current platform.ReleaseCandidate
 	var oldOwners []platform.AssetRef
-	if hadPrior {
-		var err error
-		available, err := t.releaseAssetsLocked(before, true)
+	if len(assets.Priors) > 0 {
+		available, err := t.releaseAssetsLocked(assets.Before, true)
 		if err != nil {
 			return ReleasePreview{}, platform.ReleaseCandidate{}, err
 		}
-		oldOwners = dependentRoots(oldRoot, available)
-		current, err = t.candidateWithBindings(oldOwners, available, []platform.AssetRef{oldRoot})
+		for _, prior := range assets.Priors {
+			for _, owner := range dependentRoots(prior, available) {
+				if !slices.Contains(oldOwners, owner) {
+					oldOwners = append(oldOwners, owner)
+				}
+			}
+		}
+		current, err = t.candidateWithBindings(oldOwners, available, assets.Priors)
 		if err != nil {
 			return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("installed definition: %w", err)
 		}
@@ -290,22 +375,29 @@ func (t *Tenant) previewReleaseLocked(kind platform.AssetKind, id string) (Relea
 		// Renames must still check surviving pages/apps that pointed at the
 		// old identity. Removed generated assets are not roots of the new
 		// release, but a surviving dependent must be closed or diagnosed.
-		oldOwners = slices.DeleteFunc(oldOwners, func(ref platform.AssetRef) bool { return ref == oldRoot && ref != newRoot })
+		oldOwners = slices.DeleteFunc(oldOwners, func(ref platform.AssetRef) bool {
+			return slices.Contains(assets.Priors, ref) && !slices.Contains(assets.Nexts, ref)
+		})
 	}
-	if diagnostic != nil {
-		reply.Diagnostic = diagnostic.Error()
-		return reply, platform.ReleaseCandidate{}, nil
-	}
-	candidate, err := t.previewCandidateLocked(newRoot, after, oldOwners)
+	candidate, err := t.previewCandidateLocked(assets.Nexts, assets.After, oldOwners)
 	if err != nil {
 		reply.Diagnostic = err.Error()
 		return reply, platform.ReleaseCandidate{}, nil
+	}
+	// The same private installation path that activates a saved candidate runs
+	// here against a tenant draft: a joint selection that installs nothing is
+	// diagnosed now, before it can be saved (ADR-0048 D2/D4).
+	if len(drafts) > 1 {
+		if _, err := t.releaseInstallationsLocked(candidate); err != nil {
+			reply.Diagnostic = err.Error()
+			return reply, platform.ReleaseCandidate{}, nil
+		}
 	}
 	reply.CandidateID = candidate.ID
 	for _, asset := range candidate.Assets {
 		reply.Included = append(reply.Included, asset.Ref)
 	}
-	if !hadPrior {
+	if len(assets.Priors) == 0 {
 		for _, asset := range candidate.Assets {
 			reply.Added = append(reply.Added, asset.Ref)
 		}

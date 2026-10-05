@@ -35,6 +35,21 @@ export function importedPageWrites(report:ApplicationImportReport):ImportPageWri
  // Snapshot the accepted bytes. Later mapping edits cannot alter an in-flight write.
  return JSON.parse(JSON.stringify(report.pages.map(({destination,report:r})=>({destination,payload:{name:destination.name,object:destination.object,...r.draft!}}))));
 }
+/** A saved object draft the imported pages bind to: the application's joint
+ * candidate installs it with them (ADR-0048 D6). */
+export type ImportDraftObject={id:string;name:string;title?:string};
+export type ApplicationImportDependency={kind:'object';id:string;name:string;title?:string};
+/** The pre-release dependencies of the imported pages, in destination order and
+ * without repeats. Objects already installed are not dependencies. */
+export function importDependencies(destinations:ImportPageDestination[],drafts:ImportDraftObject[]):ApplicationImportDependency[]{
+ const byName=new Map(drafts.map(draft=>[draft.name,draft])),seen=new Set<string>(),out:ApplicationImportDependency[]=[];
+ for(const destination of destinations){
+  const draft=byName.get(destination.object);
+  if(draft&&!seen.has(draft.id)){seen.add(draft.id);out.push({kind:'object',id:draft.id,name:draft.name,...(draft.title===undefined?{}:{title:draft.title})});}
+ }
+ return out;
+}
+export type ApplicationImportPrepared={pages:string[];dependencies:ApplicationImportDependency[];header?:Api.ApplicationHeader};
 const canonical=(value:unknown):string=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);
 /** Go omits these typed zero values when re-encoding a page. Do not normalize
  * arbitrary values: variable initials, labels and explicit sizes retain meaning. */
@@ -51,11 +66,15 @@ function normalizedSections(sections:unknown):unknown{
  return sections.map(section=>{if(!section.embedding)return section;const embedding={...section.embedding};for(const key of ['inputs','results'])if(embedding[key]&&typeof embedding[key]==='object'&&!Object.keys(embedding[key]).length)delete embedding[key];return {...section,embedding};});
 }
 const matches=(record:ImportedPageRecord,payload:ImportPageWrite['payload'])=>Object.entries(payload).every(([key,value])=>key==='document'?canonical(normalizedDocument(record[key]))===canonical(normalizedDocument(value)):key==='sections'?canonical(normalizedSections(record[key]??[]))===canonical(normalizedSections(value)):canonical(record[key]??(key==='description'?'':Array.isArray(value)&&!value.length?[]:undefined))===canonical(value));
-export type ImportSaveProgress={page:string;state:'saved'|'published'};
+export type ImportSaveProgress={page:string;state:'saved'|'published'|'draft'};
 export type ImportSaveIO={
  active:()=>boolean;
  read:(id:string)=>Promise<ImportedPageRecord|undefined>;
  pending:(id:string)=>boolean;
+ /** Whether this tenant still publishes a page on its own (ADR-0048 D5b/D6):
+  * the development and import profiles do; a delivery tenant saves the drafts
+  * and the application's joint candidate carries them. */
+ directInstall:boolean;
  decide:(schema:string,id:string,payload:unknown,revision?:number)=>Promise<boolean>;
  progress:(value:ImportSaveProgress)=>void;
 };
@@ -74,6 +93,12 @@ export async function saveImportedPages(writes:ImportPageWrite[],io:ImportSaveIO
    if(!record||!matches(record,payload))throw Error('application-import-conflict');
   }
   io.progress({page:d.sourcePage,state:'saved'});
+ }
+ // A delivery tenant delivers these pages with the application's release: the
+ // drafts above are the candidate's inputs, and nothing is installed yet.
+ if(!io.directInstall){
+  for(const {destination:d} of writes)io.progress({page:d.sourcePage,state:'draft'});
+  return;
  }
  for(const {destination:d,payload} of writes){
   assertActive();const record=await io.read(d.id);assertActive();

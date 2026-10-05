@@ -68,7 +68,7 @@ func (b *Build) checkLinkType(f *LinkType) error {
 	if _, ok := b.installed[f.Child]; !ok {
 		return fmt.Errorf("Link child needs this builder's published object")
 	}
-	info, ok := b.host.Entity(f.Child)
+	info, ok := b.lookupEntity(f.Child)
 	if !ok {
 		return fmt.Errorf("Link child is unavailable")
 	}

@@ -39,5 +39,7 @@ func main() {
 	if err == nil {
 		err = deployment.Serve(t)
 	}
-	log.Fatal(err)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

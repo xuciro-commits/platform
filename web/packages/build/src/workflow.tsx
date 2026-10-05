@@ -10,6 +10,7 @@ import { Button, Disclosure, EditorWorkbench, Input, NodeCanvas, PageHeader, Pan
   type BlockStatus, type CanvasAddContext, type CanvasEdge, type CanvasNode, type NodeCatalog, type NodeKind, type NodePort } from "@platform/ui";
 import { Blocks, Braces, Brain, ChevronDown, ChevronUp, Database, GitBranch, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Plus, Redo2, Search, Settings2, Undo2, Workflow, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useDirectInstall } from "./release-profile";
 import {useQueries} from "@tanstack/react-query";
 import { DataField, JSONEditor, WorkflowFormProblems, schemaIssue } from "./workflow-binding";
 import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
@@ -268,6 +269,7 @@ export function WorkflowEditor({ id }: { id: string }) {
     if (!response.ok) { setError(apiErrorMessage(response.body) ?? t("Workflow validation failed.")); return; }
     setValidation(response.body);
   };
+  const directInstall = useDirectInstall();
   const publish = async () => {
     if(!synchronized)return;
     if(dirty&&!await save())return;
@@ -311,7 +313,7 @@ export function WorkflowEditor({ id }: { id: string }) {
       <Button disabled={busy||!!draft.id} onClick={()=>setImportingFlow(true)}>{t("Import Workshop flow")}</Button>
       <Button disabled={busy || brokenForm.length > 0 || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save workflow")}</Button>
       <Button disabled={busy || brokenForm.length > 0} onClick={() => void perform(check)}>{t("Validate workflow")}</Button>
-      <Button disabled={busy || !synchronized || !draft.id || brokenForm.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>
+      {directInstall && <Button disabled={busy || !synchronized || !draft.id || brokenForm.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>}
       <span className="mx-1 h-5 w-px bg-border" />
       <Button variant="primary" disabled={busy || !synchronized || !installed?.manual || dirty} onClick={() => { setDock("run"); setDockOpen(true); }}><Play className="mr-1 size-3" />{t("Run")}</Button>
       <Button variant="ghost" onClick={() => { setDock("history"); setDockOpen(true); }}>{t("Runs")}</Button>
@@ -319,6 +321,7 @@ export function WorkflowEditor({ id }: { id: string }) {
       <Button variant="ghost" className="ml-auto" onClick={() => setRightOpen(!rightOpen)} aria-label={t("Toggle inspector")}>{rightOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}</Button>
     </div>
     <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
+    {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
     {importingFlow&&<FlowImportDialog name={draft.name||"importedflow"} capabilities={capabilities} onClose={()=>setImportingFlow(false)} onApply={next=>{change(next);setChosen("");setImportingFlow(false);setFormProblems({});}}/>}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {validation && <Panel role="status" className={`text-xs ${validation.valid ? "text-success" : "text-danger"}`}>{validation.valid ? t("The native compiler accepted this draft.") : validation.issues.map((issue) => issue.message).join(" ")}</Panel>}

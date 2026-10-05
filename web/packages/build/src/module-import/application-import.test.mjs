@@ -10,7 +10,7 @@ import {defaultWorkflowFixture} from './default-workflow.fixture.mjs';
 import {defaultTelemetryFixture} from './default-telemetry.fixture.mjs';
 const manifest=JSON.parse(readFileSync(new URL('../../../../../capabilities/server/platform/pageui/widgets.json',import.meta.url)));
 registerHooks({resolve(s,c,next){if(s==='@platform/kernel')return {url:'data:text/javascript,'+encodeURIComponent(`export const pageUIManifest=${JSON.stringify(manifest)}`),shortCircuit:true};try{return next(s,c)}catch(e){if(s.startsWith('./')||s.startsWith('../'))return next(s+'.ts',c);throw e;}}});
-const {compileWorkshopApplication,importedPageWrites,saveImportedPages}=await import('./application-import.ts');
+const {compileWorkshopApplication,importDependencies,importedPageWrites,saveImportedPages}=await import('./application-import.ts');
 const merge=(a,b)=>{if(!a||!b||Array.isArray(a)||Array.isArray(b)||typeof a!=='object'||typeof b!=='object')return structuredClone(b);const result=structuredClone(a);for(const [key,value] of Object.entries(b))result[key]=merge(result[key],value);return result;};
 function complete(){
  const fixtures=[defaultOverviewFixture,defaultAnalyticsCompleteFixture,defaultMaintenanceFixture,defaultMapFixture,defaultWorkflowFixture,defaultTelemetryFixture].map(make=>make(manifest.uiProfile));
@@ -32,7 +32,25 @@ test('one complete source and shared binding map compile all seven original page
 });
 const payload=name=>({name,object:'build.asset',title:name,description:'',sections:[],selections:[],document:{formatVersion:2,uiProfile:manifest.uiProfile,root:'root',nodes:{root:{kind:'rows',children:[]}}}});
 const writes=['one','two'].map((name,i)=>({destination:{sourcePage:name,id:`PAGE-${i}`,name,object:'build.asset'},payload:payload(name)}));
-function io(){const records=new Map(),calls=[],progress=[];let pending=false,reject='';return {records,calls,progress,setPending:v=>pending=v,setReject:v=>reject=v,active:()=>true,read:async id=>records.get(id),pending:()=>pending,decide:async(schema,id,value,revision)=>{calls.push({schema,id,revision});if(schema===reject)return false;if(schema==='build.page.create')records.set(id,{...structuredClone(value),id,revision:1});else if(schema==='build.page.publish'){const r=records.get(id);assert.equal(revision,r.revision);r.published=JSON.stringify(r);r.revision++;}else throw Error('unexpected edit');return true;},progress:value=>progress.push(value)};}
+function io(directInstall=true){const records=new Map(),calls=[],progress=[];let pending=false,reject='';return {records,calls,progress,directInstall,setPending:v=>pending=v,setReject:v=>reject=v,active:()=>true,read:async id=>records.get(id),pending:()=>pending,decide:async(schema,id,value,revision)=>{calls.push({schema,id,revision});if(schema===reject)return false;if(schema==='build.page.create')records.set(id,{...structuredClone(value),id,revision:1});else if(schema==='build.page.publish'){const r=records.get(id);assert.equal(revision,r.revision);r.published=JSON.stringify(r);r.revision++;}else throw Error('unexpected edit');return true;},progress:value=>progress.push(value)};}
+test('the imported pages report their saved object drafts as candidate inputs (ADR-0048 D6)',()=>{
+ const destinations=[{sourcePage:'one',id:'PAGE-1',name:'import1',object:'stock.item'},{sourcePage:'two',id:'PAGE-2',name:'import2',object:'sales.order'},{sourcePage:'three',id:'PAGE-3',name:'import3',object:'stock.item'}];
+ const drafts=[{id:'OBJ-1',name:'stock.item',title:'Items'},{id:'OBJ-2',name:'unused.object',title:'Unused'}];
+ assert.deepEqual(importDependencies(destinations,drafts),[ {kind:'object',id:'OBJ-1',name:'stock.item',title:'Items'} ]);
+ assert.deepEqual(importDependencies(destinations,[]),[]);
+ assert.deepEqual(importDependencies([{sourcePage:'one',id:'PAGE-1',name:'import1',object:'unused.object'}],drafts),[ {kind:'object',id:'OBJ-2',name:'unused.object',title:'Unused'} ]);
+ assert.deepEqual(importDependencies([{sourcePage:'one',id:'PAGE-1',name:'import1',object:'sales.order'}],drafts),[]);
+ assert.deepEqual(importDependencies(destinations,[{id:'OBJ-1',name:'stock.item'}]),[ {kind:'object',id:'OBJ-1',name:'stock.item'} ]);
+});
+test('a delivery tenant saves the imported pages as drafts and publishes nothing (ADR-0048 D6)',async()=>{
+ const state=io(false),seen=[];
+ await saveImportedPages(writes,{...state,progress:value=>seen.push(value)});
+ assert.deepEqual(state.calls.map(c=>c.schema),['build.page.create','build.page.create']);
+ assert.deepEqual(seen,[{page:'one',state:'saved'},{page:'two',state:'saved'},{page:'one',state:'draft'},{page:'two',state:'draft'}]);
+ for(const record of state.records.values())assert.equal(record.published,undefined);
+ state.calls.length=0;await saveImportedPages(writes,{...state,progress:value=>seen.push(value)});
+ assert.equal(state.calls.length,0);assert.equal(state.records.size,2);
+});
 test('save all drafts before publishing, retain partial results, and resume only confirmed matching bytes',async()=>{
  const state=io();state.setReject('build.page.publish');await assert.rejects(saveImportedPages(writes,state),/application-import-publish-refused/);assert.deepEqual(state.calls.map(c=>c.schema),['build.page.create','build.page.create','build.page.publish']);assert.equal(state.records.size,2);
  state.setReject('');state.calls.length=0;await saveImportedPages(writes,state);assert.deepEqual(state.calls.map(c=>c.schema),['build.page.publish','build.page.publish']);state.calls.length=0;await saveImportedPages(writes,state);assert.equal(state.calls.length,0);

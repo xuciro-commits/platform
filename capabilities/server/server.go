@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path"
@@ -51,11 +52,36 @@ type Host struct {
 	// from the API's origin; empty serves no pages.
 	Web string
 	// SignIn tells the workspace how to sign in (GET /v1/sign-in): the OpenID
-	// issuer and the workspace's client, or, with neither, the development
-	// identities of a host whose tokens are the subjects.
+	// issuer and the workspace's client, or, with neither, the identities of
+	// the host's own seats — on a development host the token is the subject,
+	// on a lightweight one each served token is signed with the local key
+	// (ADR-0049 D3).
 	Issuer, Client string
 	Development    bool
-	routes         []Route // as Handler registered them: the API contract's source (api.go)
+	// Mint, when set, signs the identity tokens /v1/sign-in serves: the
+	// lightweight host's key (ADR-0049 D3). Without it the tokens are the
+	// development ones, the subject itself.
+	Mint func(subject string) string
+	// HostAdmins are the subjects that may open the host console (ADR-0047
+	// §6.5): an independent scope, not a tenant's administrators.
+	HostAdmins map[string]bool
+	routes     []Route // as Handler registered them: the API contract's source (api.go)
+}
+
+// SignWith makes the host take the lightweight provider's tokens and sign the
+// seats it serves with them (ADR-0049 D3): the host's authenticate function is
+// replaced, so a development token — the subject itself — is not accepted
+// beside them. Both are set through one call so a host cannot end up signing
+// with a key it does not verify.
+func (h *Host) SignWith(idp *LocalIdP, ttl time.Duration) {
+	h.authenticate = idp.Authenticate()
+	h.Mint = func(subject string) string {
+		token, err := idp.Mint(subject, ttl, h.Now())
+		if err != nil {
+			log.Printf("mint token: %v", err)
+		}
+		return token
+	}
 }
 
 // NewHost serves tenants; a tenant's members come from its console (the platform app).
@@ -78,6 +104,10 @@ func consoleOf(t *Tenant) *Console {
 // TenantHeader names the tenant a request is for, when the caller is a member
 // of several on this host (ADR-0018 D7); without it, the first that knows them.
 const TenantHeader = "Platform-Tenant"
+
+// chatMaxBytes bounds a chat request body: a conversation with its tool
+// declarations, well within what a person or a page sends (review AI-03).
+const chatMaxBytes = 1 << 20
 
 func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	subject, ok := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
@@ -132,6 +162,11 @@ func (h *Host) Handler() http.Handler {
 					"error": map[string]string{"code": "TENANT_QUARANTINED"}})
 				return
 			}
+			if t.hostSuspended() && (r.Method != http.MethodGet || r.URL.Path != "/v1/health") {
+				WriteJSON(w, http.StatusServiceUnavailable, map[string]any{
+					"error": map[string]string{"code": "TENANT_SUSPENDED"}})
+				return
+			}
 			f(w, r, m, t)
 		})
 	}
@@ -168,6 +203,26 @@ func (h *Host) Handler() http.Handler {
 			}
 		}
 		w.WriteHeader(http.StatusInternalServerError)
+	})
+	handle(Route{Pattern: "POST /v1/composites", Summary: "Edit several of an application's assets as one unit: every edit is probed, and either all apply or none (ADR-0047 §11)", Body: struct {
+		Key   string          `json:"key"`
+		Edits []CompositeEdit `json:"edits"`
+	}{}, Answer: CompositeAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 4<<20))
+		var request struct {
+			Key   string          `json:"key"`
+			Edits []CompositeEdit `json:"edits"`
+		}
+		if json.Unmarshal(body, &request) != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "a key and its edits are required"})
+			return
+		}
+		answer, err := t.Composite(m, request.Key, request.Edits, h.Now())
+		if err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
 	})
 	handle(Route{Pattern: "POST /v1/submissions", Summary: "Submit a decision: an action on a target, received in the kernel's order (K6) and journaled once accepted", Body: pb.Submission{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(r.Body)
@@ -241,7 +296,9 @@ func (h *Host) Handler() http.Handler {
 	})
 	handle(Route{Pattern: "POST /v1/ai/chat", Summary: "Call a model the caller may use; the call is metered (ADR-0015)", Body: ChatRequest{}, Answer: ChatAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var req ChatRequest
-		if json.NewDecoder(r.Body).Decode(&req) != nil {
+		// A chat body carries a conversation and its tool declarations; the
+		// platform bounds it like every other request body (review AI-03).
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, chatMaxBytes)).Decode(&req) != nil {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}
@@ -463,6 +520,42 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
+	handle(Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved record drafts a chosen draft depends on and that are not installed yet (ADR-0048 D1)", Body: ReleaseDraftsRequest{}, Answer: ReleaseDraftClosure{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		body, readErr := io.ReadAll(io.LimitReader(r.Body, 4097))
+		if readErr != nil || len(body) > 4096 {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		var request ReleaseDraftsRequest
+		decoder := json.NewDecoder(strings.NewReader(string(body)))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil || request.ID == "" {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "a draft kind and id are required"})
+			return
+		}
+		var trailing any
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		answer, err := t.ReferencedDrafts(m, request.Kind, request.ID)
+		if err != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
+	// One request carries either a single draft or a joint selection.
+	draftsOf := func(request ReleaseSaveRequest) []build.JointDraftRef {
+		if len(request.Drafts) > 0 {
+			return request.Drafts
+		}
+		return []build.JointDraftRef{{Kind: request.Kind, ID: request.ID}}
+	}
 	handle(Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of one saved draft with its installed development definition (ADR-0039 20a)", Body: ReleasePreviewRequest{}, Answer: ReleasePreview{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if m.Roles[build.ID] != build.Builder {
 			w.WriteHeader(http.StatusForbidden)
@@ -476,8 +569,11 @@ func (h *Host) Handler() http.Handler {
 		var request ReleasePreviewRequest
 		decoder := json.NewDecoder(strings.NewReader(string(body)))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || request.ID == "" {
-			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "a draft kind and id are required"})
+		if err := decoder.Decode(&request); err != nil ||
+			(request.ID == "" && len(request.Drafts) == 0) ||
+			(request.ID != "" && len(request.Drafts) > 0) ||
+			len(request.Drafts) > 32 {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "one draft kind and id, or up to 32 joint drafts, are required"})
 			return
 		}
 		var trailing any
@@ -486,6 +582,9 @@ func (h *Host) Handler() http.Handler {
 			return
 		}
 		answer, err := t.PreviewRelease(m, request.Kind, request.ID)
+		if len(request.Drafts) > 0 {
+			answer, err = t.PreviewReleaseDrafts(m, request.Drafts)
+		}
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
 			return
@@ -500,7 +599,9 @@ func (h *Host) Handler() http.Handler {
 		var request ReleaseSaveRequest
 		decoder := json.NewDecoder(io.LimitReader(r.Body, 4097))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || request.ID == "" ||
+		if err := decoder.Decode(&request); err != nil ||
+			(request.ID == "" && len(request.Drafts) == 0) ||
+			(request.ID != "" && len(request.Drafts) > 0) || len(request.Drafts) > 32 ||
 			request.CandidateID == "" || request.Key == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -510,7 +611,7 @@ func (h *Host) Handler() http.Handler {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		id, err := t.SaveReleaseCandidate(m, request.Kind, request.ID, request.CandidateID, request.Key, h.Now())
+		id, err := t.SaveReleaseCandidates(m, draftsOf(request), request.CandidateID, request.Key, h.Now())
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
@@ -805,6 +906,11 @@ func (h *Host) Handler() http.Handler {
 					out.Identities = append(out.Identities, d.Identities()...)
 				}
 			}
+			if h.Mint != nil {
+				for i := range out.Identities { // the lightweight host signs what it serves
+					out.Identities[i].Token = h.Mint(out.Identities[i].Token)
+				}
+			}
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
@@ -812,6 +918,9 @@ func (h *Host) Handler() http.Handler {
 	metadata(Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees (ADR-0023)"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, h.OpenAPI(t, &m))
 	})
+	// The host console (ADR-0047 §6.5): its own scope, its own administrators.
+	h.hostConsoleRoutes(mux)
+	h.environmentRoutes(mux)
 	// The process is alive and holds its tenants (ADR-0027 D6); a tenant's own
 	// health is the administrators' read /v1/health.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

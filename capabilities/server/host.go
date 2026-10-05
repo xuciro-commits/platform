@@ -69,8 +69,21 @@ type Tenant struct {
 	releaseCandidates map[string]json.RawMessage
 	releaseApplied    map[string]string // committed release key -> applied result digest
 	activeRelease     string
-	definitions       []platform.Definition   // installed code assets; member views are derived on read
-	owner             map[string]platform.App // "action:", "read:" and "input:" names → app
+	// hostLifecycle is the host console's lifecycle for this tenant (ADR-0047
+	// §6.5): "" or "open" runs, "suspended" and "decommissioned" block
+	// ordinary requests; support are its authorized support sessions.
+	hostLifecycle string
+	support       []SupportGrant
+	// sealed are the candidate artifacts written to the file store (item 5),
+	// and migrations what the host console moved in or out of this tenant.
+	sealed     map[string]SealedArtifact
+	migrations []MigrationManifest
+	// compositeApplied are the composite commands this tenant committed, by key.
+	compositeApplied map[string]string
+	// staged are the per-call result channel's sealed entries, by call.
+	staged      map[string]platform.StagedResult
+	definitions []platform.Definition   // installed code assets; member views are derived on read
+	owner       map[string]platform.App // "action:", "read:" and "input:" names → app
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
 	auditMu    sync.Mutex
@@ -309,6 +322,9 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 	if t.quarantined() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
+	// A project's asset edit delegation is computed from this submission's
+	// target under the tenant lock, before any app decides it.
+	m = t.delegatedElevation(m, s)
 	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
@@ -847,6 +863,14 @@ func (t *Tenant) Replay(entries []Entry) error {
 					!sameJournalTime(saved.At, e.At) {
 					return fmt.Errorf("entry %d: immutable release result: %v", i+1, err)
 				}
+				continue
+			}
+			if envelope.Kind == "composite-result" {
+				saved, err := t.applyAcceptedComposite(e.Body)
+				if err != nil || saved.App != e.App || saved.Member != m.ID || !sameJournalTime(saved.At, e.At) {
+					return fmt.Errorf("entry %d: composite result: %v", i+1, err)
+				}
+				t.changed()
 				continue
 			}
 			if envelope.Kind == "input-result" {

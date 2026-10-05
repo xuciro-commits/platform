@@ -44,13 +44,28 @@ type Effect struct {
 
 // Outcome is what an attempt learned; it is the journal entry of the attempt.
 type Outcome struct {
-	Effect     string          `json:"effect"`
-	Result     string          `json:"result"` // delivered, rejected, retry
-	Detail     string          `json:"detail,omitempty"`
-	Digest     string          `json:"digest,omitempty"`
-	Answer     json.RawMessage `json:"answer,omitempty"`     // the receiver's body, for app effects (up to 64 KiB of JSON)
-	Generation uint32          `json:"generation,omitempty"` // rejects stale internal compute completions
-	Millis     int64           `json:"millis,omitempty"`
+	Effect string          `json:"effect"`
+	Result string          `json:"result"` // delivered, rejected, retry
+	Detail string          `json:"detail,omitempty"`
+	Digest string          `json:"digest,omitempty"`
+	Answer json.RawMessage `json:"answer,omitempty"` // the receiver's body, for app effects (up to 64 KiB of JSON)
+	// Staged references the sealed per-call result channel when an operation's
+	// result exceeds its inline budget (ADR-0047 §13.3): Answer then carries
+	// the handle, and the bytes live in the host's sealed artifact.
+	Staged     *StagedResult `json:"staged,omitempty"`
+	Generation uint32        `json:"generation,omitempty"` // rejects stale internal compute completions
+	Millis     int64         `json:"millis,omitempty"`
+}
+
+// StagedResult is one call's entry in the per-call result channel: where the
+// sealed bytes are, what schema they claim and the digest that proves them.
+type StagedResult struct {
+	Tenant string `json:"tenant"`
+	Call   string `json:"call"`
+	Schema string `json:"schema"`
+	Key    string `json:"key"`
+	Digest string `json:"digest"`
+	Size   int    `json:"size"`
 }
 
 // Emit sends data as an effect of kind (declared in the app's manifest) to every

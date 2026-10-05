@@ -45,6 +45,37 @@ OPENROUTER_API_KEY=sk-or-...
 
 主机按名字取密钥（ADR-0014 D5）：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `manufacturing-server` / `hospitality-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
 
+## 轻量 profile（无 Docker 的单机运行，ADR-0049）
+
+同一套语义可以在小设备上用一个二进制加一个数据目录跑起来：没有 Docker、没有 PostgreSQL、没有对象存储、没有外部身份服务。profile 是**声明**的，缺依赖就失败退出，不会悄悄回退到另一个 profile 的存储或身份。
+
+```bash
+go build -o /tmp/hospitality-server ./solutions/hospitality/cmd/hospitality-server
+
+# 1. 第一次启动前生成签名密钥（数据目录里只做一次，之后绝不替换）
+/tmp/hospitality-server -profile lightweight -data /var/lib/platform -idp-new-key
+
+# 2. 给一个席位签发 token（token 从 stdout 输出，日志走 stderr；<user:email> 或 <client:id>）
+TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mint-token user:ops@example.com)
+
+# 3. 启动；工作台（可选）用 -web 指向 web/apps/workspace 的构建
+/tmp/hospitality-server -profile lightweight -data /var/lib/platform -addr 127.0.0.1:8496
+```
+
+- `-data` 就是**全部**持久状态：`journal/journal.jsonl`（条目）、`journal/snapshots/`（本代码最新的两份快照）、`journal/derived/`（向量与转写）、`files/<tenant>/<hash>`（文件字节，内容寻址）、`idp.key`（签名密钥，0600）。备份和迁移就是复制这一个目录。
+- 身份：轻量宿主只接受自己用 `idp.key` 签发的 token；交付宿主的开发 token（把 subject 原文当凭据）在这里是 401。席位仍是 `-directory` 或内置的演示席位。
+- 与轻量 profile 互斥的开关会被拒绝：`-database`、`-files`、`-oidc-issuer`、`-oidc-keys`、`-project`；交付 profile 则拒绝 `-data`、`-idp-key`。
+- 重启语义与 PostgreSQL 日志一致：启动时读本代码的最新快照、重放其余条目、损坏日志则隔离该租户；`/v1/sign-in`、`/v1/me`、权限拒绝与审计不因 profile 而变。
+
+无 Docker 的走查（ADR-0049 §3.5）：
+
+```bash
+rm -rf /tmp/platform-lightweight-rehearse
+PLATFORM_REHEARSE_BIN=/tmp/hospitality-server bash deploy/local/rehearse-lightweight.sh walk    # 建密钥、自签登录、写决策、停止、再启动、读回
+HOST=http://127.0.0.1:18499 TOKEN=$TOKEN bash deploy/local/rehearse-lightweight.sh verify        # 对运行中的宿主核对同一状态与同一决策
+PLATFORM_REHEARSE_BIN=/tmp/hospitality-server bash deploy/local/rehearse-lightweight.sh backup   # 复制唯一的数据目录并在副本上再起一个宿主
+```
+
 ## 地址
 
 - 文件（ADR-0028）：存在 RustFS（S3 兼容），S3 接口 `http://127.0.0.1:9000`，管理界面 `http://127.0.0.1:9001`，账号 `platform`，密码 `platform-files-local-only`。日志里只记文件的哈希，备份时 RustFS 的卷要和 PostgreSQL 一起备份。

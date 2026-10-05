@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useHost, useReadQuery, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
 import { Button, Input, Select, PageHeader, Panel, RecordList, Textarea, t, useWorkspace, useUnsavedChanges } from "@platform/ui";
 import { AssetControls } from "./asset-controls";
+import { useDirectInstall } from "./release-profile";
 
 type Draft = {id:string;revision:number;name:string;title:string;description:string;parent:string;child:string;via:string;forward:string;reverse:string;cardinality:string;deletePolicy:string;published?:string;version?:number};
 const empty=():Draft=>({id:"",revision:0,name:"",title:"",description:"",parent:"",child:"",via:"",forward:"children",reverse:"parent",cardinality:"one-to-many",deletePolicy:"owner"});
@@ -29,14 +30,16 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
   if(!draft.id){markSaved();setDirty(false);open({view:"link-type",params:{id:target}});close({view:"link-type",params:{id}});}else await reload();
   return revision;
  };
+ const directInstall = useDirectInstall();
  const publish=async()=>{const revision=dirty?await save():draft.revision;if(revision===undefined)return;if(await decide("build.linktype.publish",{type:"build.linktype",id:draft.id},{},{expectedRevision:revision,quiet:true,onRefused:setError}))await reload();};
  const review=async()=>{if(dirty&&await save()===undefined)return;open({view:"release-review",params:{kind:"link-type",id:draft.id}});};
  const installed=definitions.find((d)=>d.ref.kind==="link-type"&&d.ref.app==="build"&&d.ref.name===draft.name);
  const versions=Object.keys(installed?.linkVersions??{});
  if(role("build")!=="builder")return <PageHeader title={t("Relationships")} description={t("Only a builder can edit relationships.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Relationships")} description={query.isError?t("The relationship could not be loaded."):t("Loading…")}/>;
- return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New relationship")} description={t("Define a reference-backed relationship and bind pages to an exact version.")} actions={<div className="flex min-w-0 flex-wrap gap-2"><Button onClick={()=>open({view:"link-type"})}>{t("Relationships")}</Button><AssetControls type="build.linktype" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"link-type",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved relationship")}</Button><Button disabled={busy||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save relationship")}</Button><Button disabled={busy||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button><Button variant="primary" disabled={busy||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
+ return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New relationship")} description={t("Define a reference-backed relationship and bind pages to an exact version.")} actions={<div className="flex min-w-0 flex-wrap gap-2"><Button onClick={()=>open({view:"link-type"})}>{t("Relationships")}</Button><AssetControls type="build.linktype" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"link-type",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved relationship")}</Button><Button disabled={busy||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save relationship")}</Button>{directInstall&&<Button disabled={busy||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button>}<Button variant="primary" disabled={busy||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
  <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
+ {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
  {error&&<Panel role="alert" className="text-danger">{error}</Panel>}
  {dirty&&<Panel role="status">{t("Unsaved changes. Direct install and release review save first.")}</Panel>}
  <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">

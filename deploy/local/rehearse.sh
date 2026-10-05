@@ -772,3 +772,18 @@ function_joint_finish "$MANUFACTURING" plant-sz "$SUP" "$OP1" plant
 function_joint_finish "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
 deployed_browser after
 echo "ok   builder AI functions: both operators called the page's retained function again after backup restore and complete journal recovery"
+
+# The delivery profile (ADR-0048 D5b). Every scenario above ran in the default
+# development/import profile, which keeps the direct install. A tenant that
+# declares production refuses it at the owner — a hidden button is not a
+# retirement — names the candidate route, and still previews a saved candidate,
+# including a joint selection of several drafts.
+AUTHORITY=platform SERVER=$HOSPITALITY TENANT=hotel-a \
+  workflow_submit "$MGR" rp-set platform.setting.set platform.setting build/releaseProfile '{"value":"production"}'
+result=$(AUTHORITY=build SERVER=$HOSPITALITY TENANT=hotel-a \
+  submit "$MGR" rp-direct build.object.publish build.object WF-O '{}')
+jq -e '.error.code == "ERROR_CODE_POLICY_DENIED"' <<<"$result" >/dev/null || fail "production accepted a direct install"
+jq -e '.error.message | test("release candidate")' <<<"$result" >/dev/null || fail "the refusal did not name the candidate route"
+candidate=$(AUTHORITY=build workflow_post "$MGR" releases/preview '{"kind":"page","id":"FN-P"}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "production preview"
+joint=$(AUTHORITY=build workflow_post "$MGR" releases/preview '{"drafts":[{"kind":"object","id":"WF-O"},{"kind":"page","id":"FN-P"}]}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "production joint preview"
+echo "ok   delivery profile: production refuses the direct install with the candidate route named; single and joint candidates still preview"

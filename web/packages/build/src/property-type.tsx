@@ -3,6 +3,7 @@ import type {Api} from "@platform/kernel";
 import {useHost,useReadQuery,semanticPropertyTypes} from "@platform/app";
 import {Button,Input,PageHeader,Panel,RecordList,Select,Textarea,t,useWorkspace,useUnsavedChanges} from "@platform/ui";
 import {AssetControls} from "./asset-controls";
+import { useDirectInstall } from "./release-profile";
 
 type Draft = Api.PropertyType & {id:string;revision:number;published?:string;version?:number};
 const empty = ():Draft => ({id:"",revision:0,name:"",title:"",description:"",type:"text"});
@@ -35,13 +36,15 @@ export function PropertyTypeEditor({id}:{id:string}) {
   else {const result=await query.refetch();if(result.isSuccess&&result.data?.record?.revision===expected+1)load(result.data.record);}
   return {id:target,revision:expected+1};
  };
+ const directInstall = useDirectInstall();
  const publish=async()=>{const saved=dirty?await save():{id:draft.id,revision:baseRevision.current};if(!saved)return;if(await decide("build.propertytype.publish",{type:"build.propertytype",id:saved.id},{},{expectedRevision:saved.revision,quiet:true,onRefused:setError}))await reload();};
  const review=async()=>{const saved=dirty?await save():{id:draft.id,revision:baseRevision.current};if(saved)open({view:"release-review",params:{kind:"property-type",id:saved.id}});};
  const versions=semanticPropertyTypes(definitions).filter(p=>p.binding.ref.app==="build"&&p.binding.ref.name===draft.name);
  if(role("build")!=="builder")return <PageHeader title={t("Shared properties")} description={t("Only a builder can edit shared properties.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Shared properties")} description={query.isError?t("The shared property could not be loaded."):t("Loading…")}/>;
- return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New shared property")} description={t("Publish shared scalar meaning and bind object fields to an exact version.")} actions={<div className="flex min-w-0 flex-wrap gap-2"><Button onClick={()=>open({view:"property-type"})}>{t("Shared properties")}</Button><AssetControls type="build.propertytype" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"property-type",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved shared property")}</Button><Button disabled={busy||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save shared property")}</Button><Button disabled={busy||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button><Button variant="primary" disabled={busy||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
+ return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New shared property")} description={t("Publish shared scalar meaning and bind object fields to an exact version.")} actions={<div className="flex min-w-0 flex-wrap gap-2"><Button onClick={()=>open({view:"property-type"})}>{t("Shared properties")}</Button><AssetControls type="build.propertytype" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"property-type",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved shared property")}</Button><Button disabled={busy||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save shared property")}</Button>{directInstall&&<Button disabled={busy||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button>}<Button variant="primary" disabled={busy||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
  <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
+ {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
  {error&&<Panel role="alert" className="text-danger">{error}</Panel>}
  {dirty&&<Panel role="status">{t("Unsaved changes. Direct install and release review save first.")}</Panel>}
  <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">

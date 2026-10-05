@@ -28,7 +28,7 @@ func (b *Build) checkCreates(o Object) error {
 			if b.host == nil {
 				continue
 			}
-			info, known := b.host.Entity(cr.Object)
+			info, known := b.lookupEntity(cr.Object)
 			if !known {
 				return fmt.Errorf("%s, which this tenant has not published", where)
 			}

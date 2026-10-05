@@ -194,7 +194,7 @@ func (a *Agents) Manifest() platform.Manifest {
 			{Name: SettingPublished, Title: "Published over A2A", Type: "text", Default: "",
 				Description: "Agents other systems may call over A2A 1.0, comma-separated <app>.<name>; their cards are at /a2a/<tenant>/<agent>/.well-known/agent-card.json."},
 			{Name: SettingTranscriptDays, Title: "Days transcripts are kept", Type: "integer", Default: "30",
-				Description: "Every model call's full request and answer are kept this many days outside the journal, for agent administrators; they may hold personal data."},
+				Description: "Every model call's full request and answer are kept this many days outside the journal, for agent administrators; they may hold personal data. 0: none are kept, and what was kept is forgotten."},
 		}}
 }
 
@@ -497,7 +497,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 	run := AgentRunRecord{Record: platform.Record{ID: id}, Agent: agent, Title: title, Goal: goal, Ref: ref, OnBehalf: onBehalf, Flow: flow, Step: step, Token: token,
 		State: "running", Steps: []RunStep{}}
 	if typ, rid, ok := strings.Cut(ref, "/"); ok {
-		if view, err := a.t.Context(a.reader(run), typ, rid, now); err == nil {
+		if view, err := a.t.Context(a.readsAs(run), typ, rid, now); err == nil {
 			raw, _ := json.Marshal(view)
 			run.Seen = clip(string(raw), 6000)
 		}

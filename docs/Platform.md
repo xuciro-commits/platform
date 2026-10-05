@@ -148,7 +148,7 @@
 | 知识库 (ADR-0022) | 平台应用 `knowledge` | 权限内文本/向量检索、增量索引与引用来源；规模证据归 ADR-0033。 | knowledge.go, index.postings；[ADR-0022](ADR/0022-knowledge-memory-a2a.md) |
 | 协议 (ADR-0011) | 协议 | 版本化跨应用动作/读取/应答；住宿暂留与生产确认。 | platform.Protocol, Caller.Probe；[ADR-0011](ADR/0011-apps-interoperate-through-protocols.md) |
 | UI 库 | Web | 共享表格/表单/详情/工作区/画布；记录工作区集中任务、审批、流程，窄屏属性单列。 | @platform/ui |
-| 应用设计台融合（ADR-0046，持续实施） | 应用 API、Build、共享 UI | 原 V2 页面/应用契约、类型化会话、统一本体工作台、受控关系与共享属性；75 个原生插件、92 类来源有限 profile、七页完整 Module 装配、页头/slots 与原保存/候选路径。当前版本联合运行、持续 Flow、必要持久恢复及体验/资源验收未完成；详细边界只归 ADR。 | platform/pageui、PageDocument、EditorWorkbench、app/semantic；[ADR-0046 §14](ADR/0046-application-studio-fusion.md#14-代价审阅点与当前实现边界) |
+| 应用设计台融合（ADR-0046，持续实施） | 应用 API、Build、共享 UI | 原 V2 页面/应用契约、类型化会话、统一本体工作台、受控关系与共享属性；75 个原生插件、92 类来源有限 profile、七页完整 Module 装配、页头/slots 与原保存/候选路径。当前版本联合运行已具备，持续 Flow 的方案 A 已按 ADR-0047 §13.5 实现（批次 frame 与每次调用通道），必要持久恢复与体验/资源验收按各自 ADR 的边界；详细边界只归 ADR。 | platform/pageui、PageDocument、EditorWorkbench、app/semantic；[ADR-0046 §14](ADR/0046-application-studio-fusion.md#14-代价审阅点与当前实现边界) |
 | 业务观测（ADR-0046，F1e58） | 共享 UI | 原宽表的两轴虚拟化/固定与隐藏列、受控窗口统计、真实时间/独立单位三曲线和完整平均值/SLO可在代码及Catalog组合；原宿主最近1–100000条业务时间窗口统计及受控App读者已接通；四种原生观测/资产双确认、设计检查器、复制与冻结已接通；四类Workshop Module显式真实来源/查询/信号及资产消费者迁移已接通；更广来源配置及当前版本整页运行验收仍待验证。 | @platform/ui ObservationTable/ObservationStatistics/ObservationTimeSeries/ObservationAvailability；[ADR-0046 §6.78](ADR/0046-application-studio-fusion.md#678-业务观测宽表窗口统计与真实时间序列) |
 | 固定页面内容与受控嵌入（ADR-0046，F1e59） | 原页面/宿主/前端边缘、UI Kit、Build | 原页面内容摘要与64份发布内容、当前成员精确版本读取、固定子页面候选闭包、原类型化接口、独立会话、共同预算、隔离外部文档及四类来源有限导入已接通；原类型化集合输入与默认CustomWidget集合参数已接通；集合返回与更广来源模块仍待实施，当前版本默认嵌入待联合运行验收。 | [ADR-0046 §6.79](ADR/0046-application-studio-fusion.md#679-受控嵌入与组合页面) |
 | 记录 AI 呈现与会话（ADR-0046，F1e60） | 原 AI/函数宿主、应用 API、UI Kit、Build | 固定受权函数、原确认记录/类型化结果、三种原生呈现与有限来源导入已接通；问题/原调用历史、同owner状态与退役、候选函数评估门禁沿原路径。跨集合/知识上下文和真实模型质量仍待验证。 | [ADR-0046 §6.80](ADR/0046-application-studio-fusion.md#680-三种原生-ai-呈现与受控会话) |
@@ -464,7 +464,7 @@
 
 ### 10.3 目标架构与不变式
 
-平台功能架构、用户入口与前端收敛见已接受的 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md)（2026-10-05）：区分功能域、依赖层、用户职责与工作入口，围绕应用及共享资源任务重组前端；先沿现有授权收敛入口。其 §11 明确入口/组织取代原则，授权、安装及交付执行的专项变化按实际依赖推进；§13 持续 Flow 仍待专项决定。目标结构不自动改变当前实现摘要或扩大权限、版本与恢复保证。
+平台功能架构、用户入口与前端收敛见已接受的 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md)（2026-10-05）：区分功能域、依赖层、用户职责与工作入口，围绕应用及共享资源任务重组前端；先沿现有授权收敛入口。其 §11 明确入口/组织取代原则；原「越界事项」的处置（独立发布/只读审计、多审批规则、项目编辑委派、受控包安装、候选物理隔离/跨环境晋级/真实数据迁移）已按负责人指示本批实现（见 §14 末条），不再是不支持项；§13 持续 Flow 的方案 A 已实现。目标结构不自动改变当前实现摘要或扩大权限、版本与恢复保证。
 
 本节定义即将落地实现的目标软件架构，而非当前已可直接调用的 API 现状。在确定最终序列化格式或增设代码包之前，必须首先确立其核心命名与边界。
 

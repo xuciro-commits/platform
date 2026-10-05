@@ -631,7 +631,7 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	if !t.breakers.allow("ai:"+pv.ID, now) {
 		return nil, fmt.Errorf("the provider %s failed repeatedly; embedding waits", pv.ID)
 	}
-	if why := t.allowed(platform.Member{ID: "app:" + knowledge.ID, Tenant: t.ID}, model, now); why != "" {
+	if why := t.reserve(platform.Member{ID: "app:" + knowledge.ID, Tenant: t.ID}, model, now); why != "" {
 		return nil, fmt.Errorf("%s", why)
 	}
 	body, _ := json.Marshal(map[string]any{"model": model.Model, "input": input})
@@ -644,7 +644,10 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 			Index     int       `json:"index"`
 		} `json:"data"`
 		Usage struct {
-			Prompt int `json:"prompt_tokens"`
+			// Reported distinguishes a provider that says zero from one that
+			// says nothing: the accounting must not read "unknown" as "free"
+			// (ADR-0050 D6, review AI-05).
+			Prompt *int `json:"prompt_tokens"`
 		} `json:"usage"`
 	}
 	u := ai.Usage{At: now, Member: "app:" + knowledge.ID, Model: name, Millis: time.Since(started).Milliseconds(), Outcome: "ok"}
@@ -654,7 +657,14 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	case status/100 != 2 || json.Unmarshal(answer, &out) != nil || len(out.Data) != len(input):
 		u.Outcome = fmt.Sprintf("HTTP %d: no embeddings", status)
 	}
-	u.Input = out.Usage.Prompt
+	if out.Usage.Prompt != nil {
+		u.Input, u.TokensReported = *out.Usage.Prompt, true
+	} else {
+		for _, text := range input {
+			u.Input += estimateTokens(text)
+		}
+		u.TokensEstimated = u.Input > 0
+	}
 	t.meter(platform.Member{ID: u.Member, Tenant: t.ID}, u)
 	if u.Outcome != "ok" {
 		return nil, fmt.Errorf("%s", u.Outcome)

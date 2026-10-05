@@ -12,12 +12,13 @@ import { QueryEditor, Queries } from "./query";
 import { FunctionEditor, Functions } from "./function";
 import { ApplicationEditor, Applications } from "./application";
 import { CodeEditor, CodeFunctions } from "./code";
-import { ReleaseReview, type ReleaseKind } from "./release";
+import { ReleaseReview, releaseDraftsParam, releaseKinds, type ReleaseKind } from "./release";
 import { CandidateTest } from "./simulate";
 import { StudioOverview } from "./studio";
 import { StudioTemplates } from "./template-ui";
 import { t, type NavSection } from "@platform/ui";
-import { AppWindow, Boxes, GitBranch, Hammer, LayoutList } from "lucide-react";
+import { ApplicationScope } from "./application-scope";
+import { AppWindow, Boxes, Hammer, LayoutList } from "lucide-react";
 
 export default defineApp({
   id: "build",
@@ -31,17 +32,17 @@ export default defineApp({
     { id: "applications", title: () => t("Applications"), render: () => <Applications /> },
     { id: "application", title: () => t("Application design"), render: (p) => <ApplicationEditor key={p.id ?? "new"} id={p.id ?? "new"} /> },
     { id: "pages", title: () => t("Pages"), render: () => <PagesList /> },
-    { id: "compose", title: () => t("Compose a page"), render: (p) => <PageEditor id={p.id ?? ""} /> },
-    { id: "process", title: (p) => p.id ? t("Object design") : t("Objects"), render: (p) => p.id ? <ProcessEditor id={p.id} initialField={p.field} initialAction={p.action} initialAccess={p.access === "true"} /> : <Objects /> },
-    { id: "model", title: () => t("Business model"), render: (p) => <ModelWorkbench key={p.object ?? "catalog"} initialObject={p.object} initialTab={p.tab} /> },
-    { id: "workflow", title: () => t("Workflows"), render: (p) => p.id ? <WorkflowEditor key={p.id} id={p.id} /> : <Workflows /> },
-    {id:"link-type",title:()=>t("Relationships"),render:p=>p.id?<LinkTypeEditor key={p.id} id={p.id} parent={p.parent} child={p.child} via={p.via}/>:<LinkTypes/>},
-    {id:"property-type",title:()=>t("Shared properties"),render:p=>p.id?<PropertyTypeEditor key={p.id} id={p.id}/>:<PropertyTypes/>},
-    { id: "query", title: () => t("Queries"), render: (p) => p.id ? <QueryEditor key={p.id} id={p.id} /> : <Queries /> },
-    { id: "function", title: () => t("AI functions"), render: (p) => p.id ? <FunctionEditor key={p.id} id={p.id} /> : <Functions /> },
-    { id: "code", title: () => t("Code functions"), render: (p) => p.id ? <CodeEditor key={p.id} id={p.id} /> : <CodeFunctions /> },
-    { id: "release-review", title: () => t("Release review"), render: (p) => <ReleaseReview key={`${p.kind}:${p.id}`} initialKind={["object", "page", "app", "flow", "link-type", "property-type", "query", "function", "compute"].includes(p.kind ?? "") ? p.kind as ReleaseKind : "object"} initialID={p.id} /> },
-    { id: "candidate-test", title: () => t("Test a candidate"), render: (p) => <CandidateTest key={p.functionId ?? p.processId ?? p.objectId ?? "object"} processId={p.processId} functionId={p.functionId} objectId={p.objectId} /> },
+    { id: "compose", title: () => t("Compose a page"), render: (p) => <ApplicationScope key={p.id ?? "new"} application={p.application}><PageEditor id={p.id ?? ""} /></ApplicationScope> },
+    { id: "process", title: (p) => p.id ? t("Object design") : t("Objects"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><ProcessEditor id={p.id} initialField={p.field} initialAction={p.action} initialAccess={p.access === "true"} /></ApplicationScope> : <Objects /> },
+    { id: "model", title: () => t("Business model"), render: (p) => <ApplicationScope application={p.application}><ModelWorkbench key={p.object ?? "catalog"} initialObject={p.object} initialTab={p.tab} /></ApplicationScope> },
+    { id: "workflow", title: () => t("Workflows"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><WorkflowEditor id={p.id} /></ApplicationScope> : <Workflows /> },
+    {id:"link-type",title:()=>t("Relationships"),render:p=>p.id?<ApplicationScope key={p.id} application={p.application}><LinkTypeEditor id={p.id} parent={p.parent} child={p.child} via={p.via}/></ApplicationScope>:<LinkTypes/>},
+    {id:"property-type",title:()=>t("Shared properties"),render:p=>p.id?<ApplicationScope key={p.id} application={p.application}><PropertyTypeEditor id={p.id}/></ApplicationScope>:<PropertyTypes/>},
+    { id: "query", title: () => t("Queries"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><QueryEditor id={p.id} /></ApplicationScope> : <Queries /> },
+    { id: "function", title: () => t("AI functions"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><FunctionEditor id={p.id} /></ApplicationScope> : <Functions /> },
+    { id: "code", title: () => t("Code functions"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><CodeEditor id={p.id} /></ApplicationScope> : <CodeFunctions /> },
+    { id: "release-review", title: () => t("Release review"), render: (p) => <ApplicationScope application={p.application}><ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={releaseDraftsParam(p.drafts, releaseKinds)} /></ApplicationScope> },
+    { id: "candidate-test", title: () => t("Test a candidate"), render: (p) => <ApplicationScope application={p.application}><CandidateTest key={p.functionId ?? p.processId ?? p.objectId ?? "object"} processId={p.processId} functionId={p.functionId} objectId={p.objectId} /></ApplicationScope> },
   ],
   opens: { "build.app": "application", "build.page": "compose", "build.object": "process", "build.process": "workflow", "build.linktype":"link-type", "build.propertytype":"property-type", "build.query": "query", "build.function": "function", "build.code": "code" }, // open a semantic asset in its editor
   nav: (host): NavSection[] => {
@@ -56,23 +57,7 @@ export default defineApp({
           ...(builder ? [{ label: t("Studio templates"), icon: <LayoutList />, route: { view: "studio-templates" } }] : []),
         ],
       },
-      {
-        label: t("Data and semantics"),
-        items: [
-          { label: t("Objects"), icon: <Hammer />, route: { view: "process" } },
-          { label: t("Business model"), icon: <Boxes />, route: { view: "model" } },
-          ...(builder?[{label:t("Relationships"),icon:<GitBranch/>,route:{view:"link-type"}}]:[]),
-          ...(builder?[{label:t("Shared properties"),icon:<Boxes/>,route:{view:"property-type"}}]:[]),
-          ...(builder ? [{ label: t("Queries"), icon: <Boxes />, route: { view: "query" } }] : []),
-        ],
-      },
-      { label: t("Pages and experience"), items: [{ label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } }] },
       ...(builder ? [
-        { label: t("Logic and AI"), items: [
-            { label: t("Workflows"), icon: <GitBranch />, route: { view: "workflow" } },
-            { label: t("AI functions"), icon: <Boxes />, route: { view: "function" } },
-            { label: t("Code functions"), icon: <Boxes />, route: { view: "code" } },
-        ] },
         { label: t("Delivery"), items: [
             { label: t("Test a candidate"), icon: <Boxes />, route: { view: "candidate-test" } },
             { label: t("Release review"), icon: <Boxes />, route: { view: "release-review" } },

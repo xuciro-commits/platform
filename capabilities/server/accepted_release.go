@@ -147,11 +147,18 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 // preview cannot be persisted by submitting its ID alone. A retry of an
 // already-saved ID remains possible even after the editor changes the draft.
 func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind, draftID, candidateID, key string, now time.Time) (string, error) {
+	return t.SaveReleaseCandidates(m, []build.JointDraftRef{{Kind: kind, ID: draftID}}, candidateID, key, now)
+}
+
+// SaveReleaseCandidates persists one or several saved drafts as one immutable
+// candidate. The bytes are recomputed under the tenant lock, so a joint
+// selection cannot be frozen from a stale browser image (ADR-0048 D4).
+func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDraftRef, candidateID, key string, now time.Time) (string, error) {
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
-	if m.Roles[build.ID] != build.Builder {
-		return "", fmt.Errorf("builder role required")
+	if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
+		return "", fmt.Errorf("builder or publisher role required")
 	}
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
 		return "", fmt.Errorf("candidate ID and idempotency key are required")
@@ -168,7 +175,7 @@ func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind
 		}
 		candidateBytes = slices.Clone(prior)
 	} else {
-		preview, candidate, err := t.previewReleaseLocked(kind, draftID)
+		preview, candidate, err := t.previewReleaseLocked(drafts)
 		if err != nil {
 			return "", err
 		}
@@ -199,8 +206,8 @@ func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
-	if m.Roles[build.ID] != build.Builder {
-		return "", fmt.Errorf("builder role required")
+	if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
+		return "", fmt.Errorf("builder or publisher role required")
 	}
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
 		return "", fmt.Errorf("candidate ID and idempotency key are required")

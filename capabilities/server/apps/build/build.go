@@ -24,8 +24,11 @@ const (
 	ID                = "build"
 	definitionVersion = "1"
 	ObjectType        = "build.object"
-	// Builder defines and publishes objects; User works with what is published.
+	// Builder defines and publishes objects; Publisher saves and activates
+	// release candidates without editing definitions; User works with what is
+	// published (ADR-0047 §11).
 	Builder       = "builder"
+	Publisher     = "publisher"
 	User          = "user"
 	SchemaPublish = ObjectType + ".publish"
 )
@@ -76,7 +79,15 @@ type Build struct {
 	ledger *platform.Ledger
 	// installed are the objects published in this tenant, by entity type: their
 	// declarations, so generated actions of a defined object reach the record store.
-	installed     map[string]platform.Entity
+	installed map[string]platform.Entity
+	// jointEntities are the object drafts of the candidate being built, so the
+	// same validation answers entity lookups as the candidate would install
+	// them (ADR-0048). Empty outside a joint build.
+	jointEntities map[string]platform.EntityInfo
+	// jointMode is set while a candidate holds more than one draft: the host's
+	// installed-state install checks then move to the candidate's own install
+	// dry run, because no single draft's image is installed yet (ADR-0048 D2).
+	jointMode     bool
 	linkTypes     map[string]LinkType
 	propertyTypes map[string]PropertyType
 	queries       map[string]Query
@@ -137,14 +148,23 @@ func (b *Build) objectEntity() platform.Entity {
 				}}}}}
 }
 
+// releaseProfile is declared, not hidden: an operator sets it through the
+// platform's settings surface (ADR-0048 D5b).
+func (b *Build) settings() []platform.Setting {
+	return []platform.Setting{{Name: SettingReleaseProfile, Title: "Release profile", Type: "choice",
+		Choices: []string{ProfileProduction, ProfileDevelopment}, Default: ProfileDevelopment,
+		Description: "production: definitions are delivered only through a saved release candidate; development: direct install stays available for authoring, import and probes."}}
+}
+
 func (b *Build) Manifest() platform.Manifest {
 	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
 	// Every role an object names is a role of this app, which the Console
-	// grants — one that only reads grants no action (ADR-0037 D4).
-	roles := []string{User}
+	// grants — one that only reads grants no action (ADR-0037 D4). Builder and
+	// Publisher are the two roles releases need (ADR-0047 §11).
+	roles := []string{User, Builder, Publisher}
 	for _, typ := range sortedTypes(b.installed) {
 		for role := range b.installed[typ].Scope.Levels {
 			if !slices.Contains(roles, role) {
@@ -153,7 +173,7 @@ func (b *Build) Manifest() platform.Manifest {
 		}
 	}
 	slices.Sort(roles)
-	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Operations: b.operationDeclarations(),
+	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Settings: b.settings(), Reads: []string{ReadReleaseProfile}, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Operations: b.operationDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -183,6 +203,41 @@ func sortedTypes(installed map[string]platform.Entity) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// SettingReleaseProfile declares how definitions reach operators (ADR-0048
+// D5b): a tenant that declares "production" delivers only through a saved joint
+// candidate, and the direct install its authoring surfaces used to offer is
+// refused by the owner. Any other value — including the default below — is the
+// development/import/probe profile, where the same compile, install and
+// recovery implementation stays available, exactly as before.
+const SettingReleaseProfile = "releaseProfile"
+
+// ReadReleaseProfile serves the profile to this app's authoring surfaces.
+const ReadReleaseProfile = "release-profile"
+
+const (
+	// ProfileProduction delivers through saved release candidates only.
+	ProfileProduction = "production"
+	// ProfileDevelopment is authoring, import and probe: direct install stays.
+	ProfileDevelopment = "development"
+)
+
+// directInstallSchemas are the builder's direct install entries: each installs a
+// definition for operators at once, without a saved candidate.
+var directInstallSchemas = []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess,
+	SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish}
+
+// checkReleaseProfile refuses a direct install that a production tenant has
+// retired, naming the schema and the route that replaces it. Replay and
+// recovery never take this path, so a historical Published image, its versions
+// and a restore keep working in every profile.
+func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Error {
+	if c.Setting(SettingReleaseProfile) != ProfileProduction || !slices.Contains(directInstallSchemas, schema) {
+		return nil
+	}
+	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: fmt.Sprintf(
+		"%s installs a definition for operators at once, and this tenant delivers through a saved release candidate: review the draft and activate the candidate (POST /v1/releases/candidates). Direct install is limited to the development and import profiles.", schema)}
 }
 
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
@@ -420,9 +475,28 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 }
 func (b *Build) Snapshot() (json.RawMessage, error) { return b.ledger.Snapshot() }
 func (b *Build) Restore(raw json.RawMessage) error  { return b.ledger.Restore(raw) }
-func (b *Build) Read(platform.Caller, string) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+
+// Read release-profile answers how this tenant delivers definitions, for the
+// authoring surfaces that must not offer an entry the owner would refuse
+// (ADR-0048 D5b). Every role of this app may read it: it is a declaration of
+// the tenant's profile, not a record.
+func (b *Build) Read(c platform.Caller, name string) (any, *kernel.Error) {
+	if name != ReadReleaseProfile {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	profile := c.Setting(SettingReleaseProfile)
+	if profile != ProfileProduction {
+		profile = ProfileDevelopment
+	}
+	return ReleaseProfile{Profile: profile, DirectInstall: profile != ProfileProduction}, nil
 }
+
+// ReleaseProfile is how a tenant delivers definitions to operators.
+type ReleaseProfile struct {
+	Profile       string `json:"profile"`
+	DirectInstall bool   `json:"directInstall"`
+}
+
 func (b *Build) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
@@ -477,6 +551,11 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 // Submit takes the builder's own actions and those generated for every object
 // it has installed: a defined object's records are decided like any other's.
 func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if !c.Replaying {
+		if err := b.checkReleaseProfile(c, s.GetSchema().GetName()); err != nil {
+			return nil, err
+		}
+	}
 	if s.GetSchema().GetName() == SchemaCodeCompile {
 		return b.submitCodeCompile(c, s, now)
 	}
@@ -514,7 +593,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			if err == nil && p.Fields != nil {
 				err = b.checkPropertyFields(*p.Fields)
 				if err == nil {
-					err = checkFields(*p.Fields, b.host)
+					err = checkFields(*p.Fields, b.fieldKnown)
 				}
 			}
 			if err != nil {
@@ -525,7 +604,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); (name == PageType+".create" || name == PageType+".edit") && !c.Replaying {
 		var p Page
 		if json.Unmarshal(s.GetPayload(), &p) == nil && p.Object != "" {
-			if _, known := b.host.Entity(p.Object); !known {
+			if !b.fieldKnown(p.Object) {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: fmt.Sprintf("this tenant has no object %q", p.Object)}
 			}
 		}
@@ -550,7 +629,7 @@ func (b *Build) conditionLookup(typ string) (platform.EntityInfo, bool) {
 	if b.host == nil {
 		return platform.EntityInfo{}, false
 	}
-	return b.host.Entity(typ)
+	return b.lookupEntity(typ)
 }
 
 func (b *Build) check(o Object, id string) error {
@@ -560,7 +639,7 @@ func (b *Build) check(o Object, id string) error {
 	if err := b.checkPropertyFields(o.Fields); err != nil {
 		return err
 	}
-	if err := checkFields(o.Fields, b.host); err != nil {
+	if err := checkFields(o.Fields, b.fieldKnown); err != nil {
 		return err
 	}
 	if err := checkProcess(o, b.conditionLookup); err != nil {
@@ -587,9 +666,34 @@ func (b *Build) checkName(name, id string) error {
 	return nil
 }
 
+// fieldKnown answers whether a reference names an object this tenant can
+// compose against: an installed one, one selected as a draft in the candidate
+// being built, or another saved draft object (ADR-0048 D1). Delivery still
+// proves the object installs.
+func (b *Build) fieldKnown(ref string) bool {
+	if _, known := b.lookupEntity(ref); known {
+		return true
+	}
+	if b.host == nil {
+		return false
+	}
+	if b.host.Declares(ref) {
+		return true
+	}
+	name, derived := strings.CutPrefix(ref, ID+".")
+	if !derived {
+		return false
+	}
+	objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(objects, func(o Object) bool { return !o.Archived && o.Name == name })
+}
+
 // checkFields refuses a field the platform has no type for, a choice without
 // values, or a reference to an object this tenant has not.
-func checkFields(fields []Field, h host.Host) error {
+func checkFields(fields []Field, known func(string) bool) error {
 	seen := map[string]bool{}
 	for _, f := range fields {
 		switch {
@@ -607,7 +711,7 @@ func checkFields(fields []Field, h host.Host) error {
 			return fmt.Errorf("the choice field %q has no values", f.Name)
 		case f.Type == "reference" && f.Ref == "":
 			return fmt.Errorf("the reference field %q says nothing it refers to", f.Name)
-		case f.Type == "reference" && h != nil && !h.Declares(f.Ref):
+		case f.Type == "reference" && known != nil && !known(f.Ref):
 			return fmt.Errorf("the field %q refers to %q, which this tenant has no object for", f.Name, f.Ref)
 		case f.Inverse != "" && f.Type != "reference":
 			return fmt.Errorf("the field %q names how it is seen from elsewhere but refers to nothing", f.Name)
