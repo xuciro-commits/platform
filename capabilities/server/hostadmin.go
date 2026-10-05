@@ -329,7 +329,6 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 			for i := range result.Types {
 				_ = i
 			}
-			result.Key = result.Key
 			_ = subject
 			WriteJSON(w, http.StatusOK, result)
 		})

@@ -217,8 +217,14 @@ func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, mode
 	if run.OnBehalf != "" {
 		goal += "\nOn behalf of: " + run.OnBehalf
 	}
-	if run.Seen != "" {
-		goal += "\nAbout " + run.Ref + ":\n" + run.Seen
+	// Historical Seen bytes remain immutable recovery evidence. A new model
+	// call grounds itself through today's reader, including after ADR-0050
+	// narrowed an old flow agent's scope or a member's grants changed.
+	if typ, id, ok := strings.Cut(run.Ref, "/"); ok {
+		if view, err := a.t.Context(a.readsAs(run), typ, id, now); err == nil {
+			raw, _ := json.Marshal(view)
+			goal += "\nAbout " + run.Ref + ":\n" + clip(string(raw), 6000)
+		}
 	}
 	system := preamble + "\n\n" + d.Instructions
 	if meaning := a.t.meaning(d.app); meaning != "" {

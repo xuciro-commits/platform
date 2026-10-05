@@ -452,6 +452,9 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 			return false, fmt.Errorf("record batch needs installed entity %s", image.Type)
 		}
 		prior := et.rows[image.ID]
+		if restored := legacyAgentContextPredecessor(prior, image); restored != nil {
+			prior = restored
+		}
 		before := ""
 		baseHistory, revision := 0, uint32(0)
 		if prior != nil {
