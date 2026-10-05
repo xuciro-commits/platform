@@ -103,7 +103,6 @@ type models interface {
 	Provider(id string) (ai.Provider, bool)
 	Meter(u ai.Usage)
 	Spent(member string, now time.Time) int
-	Allow(m platform.Member, model ai.Model, d ai.Defaults, now time.Time) string
 	Reserve(m platform.Member, model ai.Model, d ai.Defaults, now time.Time) string
 	Usage() []ai.Usage
 }

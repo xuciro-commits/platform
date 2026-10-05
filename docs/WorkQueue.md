@@ -6,14 +6,14 @@
 
 统一能力装配与 Platform Catalog 已形成工程入口，范围归 [ADR-0044 §12](ADR/0044-capability-fabric.md#12-实际构建边界) 与 [ADR-0045 §11](ADR/0045-platform-catalog.md#11-当前实现边界)。沿工坊→页面/流程→测试/发布→操作任务验证最大共享体验断点。WMS 是独立的受控定义装配验证应用，不新增行业专用源码应用。
 
-收货探针已验证对象、关联、动作、Go/Wasm 和审批，用法归 [Apps](Apps.md#wms-受控装配探针)。应用设计台融合设计归 [ADR-0046](ADR/0046-application-studio-fusion.md)，外包编辑体验为目标，平台语义与 Go 执行保持统一。负责人已接受 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md) 的功能架构与入口/组织取代原则；M1 入口与 M2 应用与资源构建上下文已按 §10.2 收敛（应用内打开页面/对象/逻辑并返回应用，共享资源库按获权、未被引用与后台自动化分视图，重复资产类型导航已删除）；M3 联合草稿候选与直接安装退场已按 [ADR-0048](ADR/0048-joint-draft-candidates-and-direct-install-retirement.md) 落地（显式勾选集合与依赖查询、缺依赖列名阻塞、草稿来源/差异、原封存与原激活、production profile 拒绝直接安装旁路；完整 Module 导入改联合草稿仍在该 ADR D6），当前继续稳定交付与运行定位（#135、#123）以取得 M4 的固定持久环境证据（2026-10-05：真实 PostgreSQL 上写入、重启续接、整套 Go 测试全绿，见 ADR-0048 §6；剩余运维界面走查与无 Docker 时的 delivery 断言），完整依赖顺序归该 ADR §10.2。基础设施的交付/轻量两种 profile 按 [ADR-0049](ADR/0049-delivery-and-lightweight-profiles.md)（提案）先设计；负责人答复 D1–D7 后再实施 S1–S4。原 F1–F6 缺口及以下交付事项保留。每次只推进一个活动批次，完成后移除该行；先修当前任务的共性阻塞，不追加 WMS 行业深度。
+收货探针已验证对象、关联、动作、Go/Wasm 和审批，用法归 [Apps](Apps.md#wms-受控装配探针)。应用设计台融合设计归 [ADR-0046](ADR/0046-application-studio-fusion.md)，外包编辑体验为目标，平台语义与 Go 执行保持统一。负责人已接受 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md) 的功能架构与入口/组织取代原则，M0–M4、M6 已按 §10.2 收敛：M1 入口与 M2 应用与资源构建上下文（应用内打开页面/对象/逻辑并返回应用，共享资源库按获权、未被引用与后台自动化分视图，重复资产类型导航已删除）；M3 联合草稿候选与直接安装退场按 [ADR-0048](ADR/0048-joint-draft-candidates-and-direct-install-retirement.md) 落地（显式勾选集合与依赖查询、缺依赖列名阻塞、草稿来源/差异、原封存与原激活、production profile 拒绝直接安装旁路、完整 Module 导入与其预发布对象都改联合草稿）；M4 在固定持久环境上取得诊断与续接证据（真实 PostgreSQL 写入、快照重启续接、整套 Go 测试全绿；无 Docker 时的交付断言由 [deploy/local/rehearse-lite.sh](../deploy/local/rehearse-lite.sh) 的 walk/verify/backup 承担，Docker 专属部分仍归 [deploy/local/rehearse.sh](../deploy/local/rehearse.sh)），负责人明确免掉界面走查；M6 只留规范路径，地址译码支持政策已声明（原 view ID 与旧书签继续解析，退役 view 显式反馈）。M5（按任务补装配与高级能力）只在负责人确认的专项里做，§13 已决定采用方案 A（尚未实现，不代表持续 Flow 可用）。平台 Review 的 AI 专项按 [ADR-0050](ADR/0050-model-accounting-and-run-scope.md) 落地。基础设施的交付/轻量两种 profile 按 [ADR-0049](ADR/0049-delivery-and-lightweight-profiles.md)（提案）先设计；负责人答复 D1–D7 后再实施 S1–S4。原 F1–F6 缺口及以下交付事项保留。每次只推进一个活动批次，完成后移除该行；先修当前任务的共性阻塞，不追加 WMS 行业深度。
 
 | 顺序 / 优先级 / 状态 | 批次与归属 | 可见结果 / 停止条件 | 适用检查 |
 |---|---|---|---|
-| 1 / P1 / **当前：#135、#123** | #135、#123：稳定交付与运行定位；部署、平台设置、共享运行视图 | 用已有 PostgreSQL/FileStore/编译 worker 建立固定走查环境，验证这套应用重启后可继续；从失败业务任务定位到原流程/计算/审批及可用恢复动作。不新建运维系统或全入口故障矩阵 | 适用 Go/Web 检查与 deploy；持久环境实际重启 |
-| 2 / P1 / 待执行 | #136、#131：带数据的最小演进；K7 接入、宿主、Build 发布 | 依赖前项固定持久环境。已有记录的应用通过显式升级计划新增一个可选标量字段；保留旧值与在途工作，新动作可使用新字段，拒绝不支持的迁移。不扩展通用迁移语言或全量退役 | contract（契约改变时）、capabilities、composition、format、web、对应持久恢复 |
-| 3 / P1 / 待执行 | #134：首个可配置数据接入；集成 owner、K8 宿主、工坊 | 构建者配置一个外部 JSON 数据源及字段映射，先预览/校验再沿原输入路径接入；重试不重复写入，失败可定位。只支持一个有界接入 profile，不铺连接器市场 | capabilities、composition、format、web；输入/游标重放 |
-| 4 / P2 / 待执行 | #138、#132：通用表单条件联动；语义/页面/共享表单规范主人 | 用非收货的通用申请表，按类型切换一组字段的显示/必填；权限归原表单和动作，切换及拒绝保留输入。只支持一个有界条件，不新增租户脚本或行业审批逻辑 | capabilities、format、web；发布及必填校验 |
+| 1 / P1 / 待执行 | #136、#131：带数据的最小演进；K7 接入、宿主、Build 发布 | 已有记录的应用通过显式升级计划新增一个可选标量字段；保留旧值与在途工作，新动作可使用新字段，拒绝不支持的迁移。不扩展通用迁移语言或全量退役 | contract（契约改变时）、capabilities、composition、format、web、对应持久恢复 |
+| 2 / P1 / 待执行 | #134：首个可配置数据接入；集成 owner、K8 宿主、工坊 | 构建者配置一个外部 JSON 数据源及字段映射，先预览/校验再沿原输入路径接入；重试不重复写入，失败可定位。只支持一个有界接入 profile，不铺连接器市场 | capabilities、composition、format、web；输入/游标重放 |
+| 3 / P2 / 待执行 | #138、#132：通用表单条件联动；语义/页面/共享表单规范主人 | 用非收货的通用申请表，按类型切换一组字段的显示/必填；权限归原表单和动作，切换及拒绝保留输入。只支持一个有界条件，不新增租户脚本或行业审批逻辑 | capabilities、format、web；发布及必填校验 |
+| — / P2 / 待答复 | [ADR-0049](ADR/0049-delivery-and-lightweight-profiles.md)：交付/轻量两种 profile | 负责人答复 D1–D7 后按 S1（存储接口 + 单文件后端）→ S2（本地文件字节）→ S3（内置轻量 IdP）→ S4（SQLite，含依赖方案）落地；每片带一次重启走查 | Go 全量与持久环境重启走查 |
 
 负责人已认可此前集中走查与 Go/Wasm 实例，不重新要求整体验收。沿可操作任务及必要检查推进；不回到模型评测、计算崩溃分支或底层证明的无限加固，不另开第二队列。
 

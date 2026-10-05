@@ -366,17 +366,11 @@ func (a *AI) Usage() []Usage {
 // tokens a day for people and for agents, and calls a minute; 0: none.
 type Defaults struct{ People, Agents, PerMinute int }
 
-// Allow says why m may not call model now, or "" when it may: the model's
-// daily cap for the tenant, then m's tokens today and calls this minute,
-// against m's own limit or the defaults. Apps (app:<id>) take only their own.
-// Calls already in flight count against the minute: they passed the door but
-// their usage is not metered yet. Allow alone takes nothing — Reserve does.
-func (a *AI) Allow(m platform.Member, model Model, d Defaults, now time.Time) string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.allowLocked(m, model, d, now)
-}
-
+// allowLocked says why m may not call model now, or "" when it may: the
+// model's daily cap for the tenant, then m's tokens today and calls this
+// minute, against m's own limit or the defaults. Apps (app:<id>) take only
+// their own. Calls already in flight count against the minute: they passed the
+// door but their usage is not metered yet. Only Reserve takes the door.
 func (a *AI) allowLocked(m platform.Member, model Model, d Defaults, now time.Time) string {
 	day := now.UTC().Format(time.DateOnly)
 	if model.DailyTokens > 0 && a.daily[day+"|model:"+model.Name()] >= model.DailyTokens {
