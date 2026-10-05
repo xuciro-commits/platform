@@ -1,58 +1,72 @@
-import {CollectionBuilderInspector} from "./CollectionBuilderInspector";
-import {MapInspector,AnnotationInspector,SceneInspector} from "./SpatialInspectors";
-import {EmbeddingInspector} from "./EmbeddingInspector";
-import {AIInspector} from "./AIInspector";
-import {ExternalFrameInspector} from "./ExternalFrameInspector";
-import {ObservationInspector} from "./ObservationInspector";
-import {ActionTableInspector,NotepadInspector} from "./RecordWorkInspectors";
-import {CollectionAnalysisInspector} from "./CollectionAnalysisInspector";
-import {ResourceListInspector,AssetDirectoryInspector,GraphExplorerInspector,VertexGraphInspector} from "./ExplorationInspectors";
-import {BreadcrumbInspector,BreadcrumbHomeInspector,AvatarInspector,ImageInspector} from "./ContextInspectors";
-import {HistoryInspector,WorkViewsInspector} from "./WorkViewsInspector";
-import {CollaborationInspector} from "./CollaborationInspector";
-import {TagCountsInspector} from "./TagCountsInspector";
-import {RecordComparisonInspector} from "./RecordComparisonInspector";
-import {RecordCardInspector} from "./RecordCardInspector";
-import {SparklineInspector} from "./SparklineInspector";
-import {TreemapInspector} from "./TreemapInspector";
-import {HeatmapInspector} from "./HeatmapInspector";
-import {HistogramInspector} from "./HistogramInspector";
-import {TermsInspector} from "./TermsInspector";
-import {SpacerInspector} from "./SpacerInspector";
-import {SeparatorInspector} from "./SeparatorInspector";
-import {NoticeInspector} from "./NoticeInspector";
-import {AlertInspector} from "./AlertInspector";
-import {RecordPickerInspector} from "./RecordPickerInspector";
-import {DateInspector} from "./DateInspector";
-import {ChoiceInspector} from "./ChoiceInspector";
-import {BooleanInspector} from "./BooleanInspector";
-import {RangeInspector} from "./RangeInspector";
-import {LeaderboardInspector} from "./LeaderboardInspector";
-import {SummaryInspector} from "./SummaryInspector";
-import {GaugeInspector} from "./GaugeInspector";
-import {ProgressInspector} from "./ProgressInspector";
-import {RecordListInspector} from "./RecordListInspector";
-import {RecordCalendarInspector} from "./RecordCalendarInspector";
-import {RecordGanttInspector} from "./RecordGanttInspector";
-import {RecordEventsInspector} from "./RecordEventsInspector";
-import {ScatterInspector} from "./ScatterInspector";
-import {RecordChartInspector} from "./RecordChartInspector";
-import {HeadingInspector,CollectionTitleInspector} from "./TitleInspectors";
-import {MetricInspector} from "./MetricInspector";
-import {StatusTrackerInspector} from "./StatusTrackerInspector";
-import {RecordLinksInspector} from "./RecordLinksInspector";
-import {FilterInspector} from "./FilterInspector";
-import {ButtonGroupInspector} from "./ButtonGroupInspector";
-import {RecordViewInspector} from "./RecordViewInspector";
-import {DetailInspector} from "./DetailInspector";
-import {InlineActionInspector} from "./InlineActionInspector";
 import { createWidgetDefinitions } from "@platform/app";
-import { ChartInspector } from "./ChartInspector";
-import { PivotInspector } from "./PivotInspector";
-import {KanbanInspector} from "./KanbanInspector";
-import {RecordTimelineInspector} from "./RecordTimelineInspector";
-import { TableInspector,TableSelectionInspector } from "./TableInspector";
-import { ButtonInspector } from "./ButtonInspector";
+import {lazyInspector} from "./lazy-inspector";
+
+const CollectionBuilderInspector=lazyInspector(()=>import("./CollectionBuilderInspector").then(module=>module.CollectionBuilderInspector));
+const MapInspector=lazyInspector(()=>import("./SpatialInspectors").then(module=>module.MapInspector));
+const AnnotationInspector=lazyInspector(()=>import("./SpatialInspectors").then(module=>module.AnnotationInspector));
+const SceneInspector=lazyInspector(()=>import("./SpatialInspectors").then(module=>module.SceneInspector));
+const EmbeddingInspector=lazyInspector(()=>import("./EmbeddingInspector").then(module=>module.EmbeddingInspector));
+const AIInspector=lazyInspector(()=>import("./AIInspector").then(module=>module.AIInspector));
+const ExternalFrameInspector=lazyInspector(()=>import("./ExternalFrameInspector").then(module=>module.ExternalFrameInspector));
+const ObservationInspector=lazyInspector(()=>import("./ObservationInspector").then(module=>module.ObservationInspector));
+const ActionTableInspector=lazyInspector(()=>import("./RecordWorkInspectors").then(module=>module.ActionTableInspector));
+const NotepadInspector=lazyInspector(()=>import("./RecordWorkInspectors").then(module=>module.NotepadInspector));
+const CollectionAnalysisInspector=lazyInspector(()=>import("./CollectionAnalysisInspector").then(module=>module.CollectionAnalysisInspector));
+const ResourceListInspector=lazyInspector(()=>import("./ExplorationInspectors").then(module=>module.ResourceListInspector));
+const AssetDirectoryInspector=lazyInspector(()=>import("./ExplorationInspectors").then(module=>module.AssetDirectoryInspector));
+const GraphExplorerInspector=lazyInspector(()=>import("./ExplorationInspectors").then(module=>module.GraphExplorerInspector));
+const VertexGraphInspector=lazyInspector(()=>import("./ExplorationInspectors").then(module=>module.VertexGraphInspector));
+const BreadcrumbInspector=lazyInspector(()=>import("./ContextInspectors").then(module=>module.BreadcrumbInspector));
+const BreadcrumbHomeInspector=lazyInspector(()=>import("./ContextInspectors").then(module=>module.BreadcrumbHomeInspector));
+const AvatarInspector=lazyInspector(()=>import("./ContextInspectors").then(module=>module.AvatarInspector));
+const ImageInspector=lazyInspector(()=>import("./ContextInspectors").then(module=>module.ImageInspector));
+const HistoryInspector=lazyInspector(()=>import("./WorkViewsInspector").then(module=>module.HistoryInspector));
+const WorkViewsInspector=lazyInspector(()=>import("./WorkViewsInspector").then(module=>module.WorkViewsInspector));
+const CollaborationInspector=lazyInspector(()=>import("./CollaborationInspector").then(module=>module.CollaborationInspector));
+const TagCountsInspector=lazyInspector(()=>import("./TagCountsInspector").then(module=>module.TagCountsInspector));
+const RecordComparisonInspector=lazyInspector(()=>import("./RecordComparisonInspector").then(module=>module.RecordComparisonInspector));
+const RecordCardInspector=lazyInspector(()=>import("./RecordCardInspector").then(module=>module.RecordCardInspector));
+const SparklineInspector=lazyInspector(()=>import("./SparklineInspector").then(module=>module.SparklineInspector));
+const TreemapInspector=lazyInspector(()=>import("./TreemapInspector").then(module=>module.TreemapInspector));
+const HeatmapInspector=lazyInspector(()=>import("./HeatmapInspector").then(module=>module.HeatmapInspector));
+const HistogramInspector=lazyInspector(()=>import("./HistogramInspector").then(module=>module.HistogramInspector));
+const TermsInspector=lazyInspector(()=>import("./TermsInspector").then(module=>module.TermsInspector));
+const SpacerInspector=lazyInspector(()=>import("./SpacerInspector").then(module=>module.SpacerInspector));
+const SeparatorInspector=lazyInspector(()=>import("./SeparatorInspector").then(module=>module.SeparatorInspector));
+const NoticeInspector=lazyInspector(()=>import("./NoticeInspector").then(module=>module.NoticeInspector));
+const AlertInspector=lazyInspector(()=>import("./AlertInspector").then(module=>module.AlertInspector));
+const RecordPickerInspector=lazyInspector(()=>import("./RecordPickerInspector").then(module=>module.RecordPickerInspector));
+const DateInspector=lazyInspector(()=>import("./DateInspector").then(module=>module.DateInspector));
+const ChoiceInspector=lazyInspector(()=>import("./ChoiceInspector").then(module=>module.ChoiceInspector));
+const BooleanInspector=lazyInspector(()=>import("./BooleanInspector").then(module=>module.BooleanInspector));
+const RangeInspector=lazyInspector(()=>import("./RangeInspector").then(module=>module.RangeInspector));
+const LeaderboardInspector=lazyInspector(()=>import("./LeaderboardInspector").then(module=>module.LeaderboardInspector));
+const SummaryInspector=lazyInspector(()=>import("./SummaryInspector").then(module=>module.SummaryInspector));
+const GaugeInspector=lazyInspector(()=>import("./GaugeInspector").then(module=>module.GaugeInspector));
+const ProgressInspector=lazyInspector(()=>import("./ProgressInspector").then(module=>module.ProgressInspector));
+const RecordListInspector=lazyInspector(()=>import("./RecordListInspector").then(module=>module.RecordListInspector));
+const RecordCalendarInspector=lazyInspector(()=>import("./RecordCalendarInspector").then(module=>module.RecordCalendarInspector));
+const RecordGanttInspector=lazyInspector(()=>import("./RecordGanttInspector").then(module=>module.RecordGanttInspector));
+const RecordEventsInspector=lazyInspector(()=>import("./RecordEventsInspector").then(module=>module.RecordEventsInspector));
+const ScatterInspector=lazyInspector(()=>import("./ScatterInspector").then(module=>module.ScatterInspector));
+const RecordChartInspector=lazyInspector(()=>import("./RecordChartInspector").then(module=>module.RecordChartInspector));
+const HeadingInspector=lazyInspector(()=>import("./TitleInspectors").then(module=>module.HeadingInspector));
+const CollectionTitleInspector=lazyInspector(()=>import("./TitleInspectors").then(module=>module.CollectionTitleInspector));
+const MetricInspector=lazyInspector(()=>import("./MetricInspector").then(module=>module.MetricInspector));
+const StatusTrackerInspector=lazyInspector(()=>import("./StatusTrackerInspector").then(module=>module.StatusTrackerInspector));
+const RecordLinksInspector=lazyInspector(()=>import("./RecordLinksInspector").then(module=>module.RecordLinksInspector));
+const FilterInspector=lazyInspector(()=>import("./FilterInspector").then(module=>module.FilterInspector));
+const ButtonGroupInspector=lazyInspector(()=>import("./ButtonGroupInspector").then(module=>module.ButtonGroupInspector));
+const RecordViewInspector=lazyInspector(()=>import("./RecordViewInspector").then(module=>module.RecordViewInspector));
+const DetailInspector=lazyInspector(()=>import("./DetailInspector").then(module=>module.DetailInspector));
+const InlineActionInspector=lazyInspector(()=>import("./InlineActionInspector").then(module=>module.InlineActionInspector));
+const ChartInspector=lazyInspector(()=>import("./ChartInspector").then(module=>module.ChartInspector));
+const PivotInspector=lazyInspector(()=>import("./PivotInspector").then(module=>module.PivotInspector));
+const KanbanInspector=lazyInspector(()=>import("./KanbanInspector").then(module=>module.KanbanInspector));
+const RecordTimelineInspector=lazyInspector(()=>import("./RecordTimelineInspector").then(module=>module.RecordTimelineInspector));
+const TableInspector=lazyInspector(()=>import("./TableInspector").then(module=>module.TableInspector));
+const TableSelectionInspector=lazyInspector(()=>import("./TableInspector").then(module=>module.TableSelectionInspector));
+const ButtonInspector=lazyInspector(()=>import("./ButtonInspector").then(module=>module.ButtonInspector));
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = createWidgetDefinitions({
@@ -138,4 +152,10 @@ export function widgetInspector(id:string,version:number) {
     bindings:"bindings" in implementation?implementation.bindings:undefined,
     events:"events" in implementation?implementation.events:undefined,
   }:undefined;
+}
+
+/** Unknown versions are distinct from the seven deliberately common editors. */
+export function widgetInspectorStatus(id:string,version:number){
+ const inspector=widgetInspector(id,version);
+ return !inspector?"unsupported":inspector.bindings||inspector.events?"specialized":"common";
 }

@@ -13,7 +13,7 @@ import {embeddingSourceTypes} from "./embedding";
 import {ObservationImportFields} from "./ObservationImportFields";
 import {observationSourceTypes} from "./observations";
 import {sourceNotepadInitial} from "./notepad";
-import {ResourceListFields,explorationAssets,directoryLabels} from "../page-editor/widgets/ExplorationInspectors";
+import {ResourceListFields,explorationAssets,directoryLabels} from "../page-editor/widgets/ExplorationFields";
 import {retainedExplorationLink} from "../page-editor/exploration-views";
 import {collaborationRecordChoices,workshopRequirements,workshopRegionSections,workshopBindingView,patchGraphImportBinding} from "./requirements";
 import {explorationChoices} from "./exploration";
@@ -24,8 +24,7 @@ import type {Api} from "@platform/kernel";
 import type {PageDraft} from "../page-editor/draft";
 import {compileWorkshopModule,parseWorkshopModule,type ImportBindings,type ImportReport} from "./compile";
 import {workshopMigrationCatalog} from "./catalog";
-import {RecordGanttFields} from "../page-editor/widgets/RecordGanttInspector";
-import {RecordEventsFields} from "../page-editor/widgets/RecordEventsInspector";
+import {RecordGanttFields,RecordEventsFields} from "../page-editor/widgets/RecordTimeFields";
 import {diagnosticMessages,unsupportedProfileMessage} from "./diagnostics";
 import {compileWorkshopApplication,type ApplicationImportReport,type ImportPageDestination} from './application-import';
 

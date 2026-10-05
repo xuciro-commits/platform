@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:0b662becb7123ab5",
+  "revision": "sha256:d43a35a4123e82db",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4479,6 +4479,7 @@
       "web/packages/build/src/page-editor/widgets/DateInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/EmbeddingInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/ExplorationFields.tsx",
       "web/packages/build/src/page-editor/widgets/ExplorationInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/ExternalFrameInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
@@ -4498,11 +4499,10 @@
       "web/packages/build/src/page-editor/widgets/RecordCardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordComparisonInspector.tsx",
-      "web/packages/build/src/page-editor/widgets/RecordEventsInspector.tsx",
-      "web/packages/build/src/page-editor/widgets/RecordGanttInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordListInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordPickerInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordTimeFields.tsx",
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordWorkInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/ScatterInspector.tsx",
@@ -4648,6 +4648,7 @@
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
+      "web/packages/build/src/page-editor/widgets/InspectorFrame.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",

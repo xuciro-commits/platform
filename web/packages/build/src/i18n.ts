@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+"Loading widget inspector…": "正在加载组件检查器…",
+"This widget uses the shared properties and bindings below.": "此组件使用下方的共同属性和绑定。",
+"Unsupported widget configuration: {widget}, version {version}. Your page draft is preserved.": "不支持的组件配置：{widget}，版本 {version}。页面草稿已保留。",
+"The widget inspector could not be loaded. Your page draft is still here.": "无法加载组件检查器。页面草稿仍然保留。",
+"The widget inspector could not be displayed. Your page draft is still here.": "无法显示组件检查器。页面草稿仍然保留。",
 "Hide shared platform bindings": "收起共同平台绑定",
 "Edit shared platform bindings": "编辑共同平台绑定",
 "Choose one distinct page name, record and readable object for every source page.": "为每个来源页选择唯一的页面名称、记录和可读取对象。",

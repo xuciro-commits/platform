@@ -1159,13 +1159,13 @@ F5a沿原Section及PageLayoutNode的字段声明端口，不增加平行port-val
 
 Button click声明void payload、required及maxBindings=1，宿主事件检查与专属编辑器消费同一声明；事件目标仍由原有限状态/导航owner校验。layoutPreferences.frame区分card和inline，WidgetHost按声明装配容器。Table/Button lifecyclePolicy为page-session拥有状态、scope-change/binding-change/close清理、隐藏时retain；注册器拒绝不支持的策略，实际清理沿原PageSession及应用实例/Overlay所有权执行。配置版本仍为1，旧profile保持原绑定格式；本批没有配置迁移或第三方脚本装载。
 
-应用API拥有BindingAdapter和注册身份，TableRenderer/ButtonRenderer仅接收明确的授权source/window/selection或click/enabled端口，通过React懒加载并复用共享RecordList/Button。Build拥有按同一configVersion注册的TableInspector/ButtonInspector；通用对象/属性/关系和类型化导航编辑继续复用原owner。未迁组件暂保留原Renderer/检查器，本profile不是92组件迁移完成，也没有通用slots、动态市场或租户JS权限。
+应用 API 拥有 BindingAdapter 和注册身份；Renderer 接收明确端口并懒加载共享 UI。Build 拥有同一 configVersion 的检查器实现，通用对象、属性、关系和类型化导航编辑继续复用原 owner。当前统一装配范围如下，不开放动态市场或租户 JS。
 
 当前 75 个原生组件均采用固定身份/配置版本的类型化插件定义，由应用 API 的 `widgets/plugins.ts` 唯一装配。输入、内容、数值、记录窗口、分布、导航、记录呈现、空间/目录、详情/动作、图表、列表、执行、构建/历史、分析服务和记录协作按共同能力归模块；页面装配文件保留查询、变量、实例与生命周期管理，不再维护组件实现或另一份分派。BindingAdapter 拥有绑定上下文，Renderer 按需加载，只接收明确 props/服务；不新增事件或变量存储。原字段投影、标准编辑/逐行 revision、状态动作、预览禁用和固定版本继续沿原 owner。
 
 元数据与聚合服务来自原 Host 投影；全集谓词、具名窗口/父引用及读取预算保持。日历/看板和创建表单保留原重建键，普通数据更新不制造新的呈现身份。历史/任务读取继续核对原作用域与记录 ID；旧函数视图保留原调用记录/计量。嵌入只传配置和接口端口，版本、共享预算与清理归原嵌入 owner。遥测传显式对象、变量和原读取服务；图保留原根身份及 active 租约；行操作保留原动作/schema/revision。协作组件通过捕获函数取得原记录租约，不接收 PageSessionStore；上传草稿、真实附件、标注和 GLB 的退役规则沿原实现。
 
-运行与 Build 检查器共用 createWidgetDefinitions 的完整注册、版本及生命周期校验；通用编辑面的七种组件显式登记无专属检查器。插件身份与注册键不符会拒绝，未知版本不选择最新实现。75 件与规范清单逐项相等、传参边界、查询/回调及关键重建键由轻检查覆盖；七页联合路线仍有环境续验欠项，不能计为本次浏览器通过。通用 slots、显式配置迁移、检查器装配进一步收敛及完整 Plugin Architecture 仍未完成，75 个原生插件不等于 92 类来源的全部配置兼容。
+运行与 Build 检查器共用 createWidgetDefinitions 的完整注册、版本及生命周期校验；全部专属绑定/事件检查器按需加载，七种通用编辑面的组件显式登记并呈现说明。未知版本明确拒绝且不选择最新实现；加载、显示失败有独立提示和按选中实例/组件/版本划定的错误边界，页面草稿、历史与原保存路径保持。插件身份与注册键不符会拒绝，75 件与规范清单逐项相等、传参边界、查询/回调及关键重建键由轻检查覆盖。七页联合路线待环境恢复后续验。通用 slots、实际版本差异的显式配置迁移及完整 Plugin Architecture 仍未完成；当前配置均为版本 1，不制造空升级版本，75 个原生插件不等于 92 类来源的全部配置兼容。
 
 ### 8.2 Pivot分析组件 profile
 
