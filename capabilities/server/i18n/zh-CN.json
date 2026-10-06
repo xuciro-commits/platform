@@ -1160,5 +1160,7 @@
   "The app whose action it is": "该动作所属的应用",
   "What the rule is for, for the people who read audits": "这条规则的用途，供阅读审计的人参考",
   "Why the rule is there": "规则存在的原因",
-  "Batch": "批次"
+  "Batch": "批次",
+  "Startup release": "启动发布",
+  "Startup agent definition": "启动智能体定义"
 }

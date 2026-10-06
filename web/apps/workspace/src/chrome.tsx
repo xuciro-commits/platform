@@ -3,7 +3,7 @@
 // (ADR-0013), the outbox (K5), every record the member may read (ADR-0016),
 // and the assistant, agent runs and global search (ADR-0021).
 import "./i18n";
-import { ApplicationPage, Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { ApplicationRuns, OperationRunView, ApplicationPage, Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
@@ -233,8 +233,10 @@ export const chromeViews = (apps: () => AppUI[], select: (id: string) => void, d
   { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} params={p} /> },
   { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview params={p} /></StudioReference> },
   { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
-  { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} /> },
-  { id: "flow", title: (p) => p.id ?? t("Flow"), render: (p) => <FlowInstanceView id={p.id ?? ""} /> },
+  { id: "application-runs", title: () => t("Application runs"), render: (p) => <ApplicationRuns key={`${p.app}:${p.name}`} owner={p.app??"build"} name={p.name??""}/> },
+  { id: "operation-run", title: () => t("Calculation run"), render: (p) => <OperationRunView id={p.id??""} application={p.application}/> },
+  { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} application={p.application} /> },
+  { id: "flow", title: (p) => p.id ?? t("Flow"), render: (p) => <FlowInstanceView id={p.id ?? ""} application={p.application} /> },
   { id: "assistant", title: (p) => p.about ? `${t("Assistant")}: ${p.about}` : t("Assistant"), render: (p) => <Assistant about={p.about} /> },
   { id: "search", title: () => t("Search"), render: () => <Search /> },
 ];

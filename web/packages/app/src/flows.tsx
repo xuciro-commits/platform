@@ -2,7 +2,7 @@ import { Button, FlowView, t, useWorkspace, type FlowDefinition, type FlowInstan
 import { ChainGraph, useHost, useOpenRecord, useReadQuery } from "./index";
 
 /** One runtime record view for every member; original reads/actions authorize access. */
-export function FlowInstanceView({ id }: { id: string }) {
+export function FlowInstanceView({ id, application }: { id: string; application?: string }) {
   const { open } = useWorkspace(), openRecord = useOpenRecord(), { decide, can } = useHost();
   const view = useReadQuery<{ record: FlowInstanceData }>(`/v1/records/flow.instance/${encodeURIComponent(id)}`, 3000);
   const flows = useReadQuery<FlowDefinition[]>("/v1/flows").data ?? [];
@@ -14,7 +14,7 @@ export function FlowInstanceView({ id }: { id: string }) {
   const live = !["done", "compensated", "canceled"].includes(instance.state);
   const next = flows.some((flow) => flow.id === instance.flow && flow.version > instance.version);
   return <div className="grid max-w-4xl gap-3">
-    <div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={() => open({ view: "inbox" }, { window: "float" })}>{t("Back to inbox")}</Button>
+    <div className="flex flex-wrap gap-2">{application&&<Button variant="ghost" onClick={()=>open({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":")}})}>{t("Back to application runs")}</Button>}<Button variant="ghost" onClick={() => open({ view: "inbox" }, { window: "float" })}>{t("Back to inbox")}</Button>
       {instance.subject && <Button variant="ghost" onClick={() => openRecord(instance.subject!)}>{t("Open related record")}</Button>}
     </div>
     {live && <div className="flex gap-2">

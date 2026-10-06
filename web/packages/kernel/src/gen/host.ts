@@ -67,6 +67,8 @@ export type AgentRunRecord = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  release?: string;
+  definitionVersion?: string;
   agent: string;
   title: string;
   goal: string;
@@ -205,6 +207,31 @@ export type ApplicationHeaderItem = {
   label?: string;
   text?: string;
   action?: string;
+};
+
+export type ApplicationRun = {
+  id: string;
+  kind: string;
+  title: string;
+  resource?: AssetRef;
+  resourceName: string;
+  state: string;
+  version?: string;
+  release?: string;
+  dependencies?: string;
+  module?: string;
+  node?: string;
+  error?: string;
+  association: string;
+  shared: string[];
+  created: string;
+};
+
+export type ApplicationRunPage = {
+  application: AssetRef;
+  title: string;
+  runs: ApplicationRun[];
+  total: number;
 };
 
 export type ApprovalRequest = {
@@ -1083,6 +1110,13 @@ export type OperationRef = {
 };
 
 export type OperationResult = {
+  ownerVersion?: string;
+  ref?: AssetRef;
+  definition?: string;
+  version?: number;
+  module?: string;
+  dependencies?: string;
+  release?: string;
   id: string;
   state: string;
   output?: unknown;

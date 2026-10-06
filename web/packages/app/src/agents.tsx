@@ -3,7 +3,7 @@
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
 import "./i18n";
-import { Button, Card, Disclosure, Form, Graph, Input, PageHeader, Panel, Select, StatusTag, Tag, Textarea, defineStatuses, t, language, type GraphEdge, type GraphNode } from "@platform/ui";
+import { Button, Card, Disclosure, useWorkspace, Form, Graph, Input, PageHeader, Panel, Select, StatusTag, Tag, Textarea, defineStatuses, t, language, type GraphEdge, type GraphNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
 import { PayloadFields } from "./actions";
@@ -27,11 +27,10 @@ const signalTones = { confirmed: "success", accepted: "success", approved: "succ
   rejected: "danger", discarded: "danger", undone: "danger" } as const;
 
 /** One run: read from the member's own runs, or as an administrator of the agent app. */
-function useRun(id: string): AgentRun | undefined {
-  const { role } = useHost();
-  const mine = useRead<AgentRun[]>("/v1/runs")?.find((r) => r.id === id);
-  const any = useReadQuery<{ record: AgentRun }>(`/v1/records/agent.run/${encodeURIComponent(id)}`);
-  return mine ?? (role("agent") ? any.data?.record : undefined);
+function useRun(id: string) {
+  const mine=useReadQuery<AgentRun[]>("/v1/runs");
+  const record=useReadQuery<{record:AgentRun}>(`/v1/records/agent.run/${encodeURIComponent(id)}`);
+  return {run:mine.data?.find(run=>run.id===id)??record.data?.record,error:record.isError};
 }
 
 /** The draft an agent made for the member: its fields, changeable, then confirm or reject. */
@@ -57,16 +56,21 @@ function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
 }
 
 /** A run's page: goal, state, the draft waiting for the member, each step and why, and what people made of it. */
-export function RunView({ id, compact }: { id: string; compact?: boolean }) {
+export function RunView({ id, compact, application }: { id: string; compact?: boolean; application?: string }) {
   const { me, can, decide, role } = useHost();
   const openRecord = useOpenRecord();
-  const run = useRun(id);
+  const {run,error}=useRun(id);
+  const {open:openWorkspace}=useWorkspace();
   const [open, setOpen] = useState<number>();
+  if(error&&!run)return <p role="alert">{t("This agent run is unavailable to you.")}</p>;
   if (!run) return <p className="text-sm text-muted">{t("Loading run")} {id}…</p>;
   const mine = run.onBehalf === me.principalId;
   const live = run.state === "running" || run.state === "waiting";
   return (
     <div className="grid max-w-4xl gap-3">
+      {application&&<Button variant="ghost" onClick={()=>openWorkspace({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":")}})}>{t("Back to application runs")}</Button>}
+      {run.definitionVersion&&<p className="break-all font-mono text-xs">{t("Startup definition")}: {run.definitionVersion}</p>}
+      <p className="break-all font-mono text-xs">{t("Startup release")}: {run.release||t("No startup activation recorded")}</p>
       {!compact && <PageHeader title={run.title} description={`${run.agent}${run.onBehalf ? ` for ${run.onBehalf}` : ""}${run.flow ? `, in the flow ${run.flow}` : ""}`}
         actions={live && (mine || role("agent") === "admin") && can("agent.run.cancel")
           ? <Button size="sm" variant="danger" onClick={() => void decide("agent.run.cancel", { type: "agent.run", id: run.id }, {})}>{t("Stop")}</Button> : undefined} />}

@@ -348,6 +348,7 @@ type OperationRequest struct {
 	Release  *string         `json:"release,omitempty"`
 }
 type OperationCall struct {
+	OwnerVersion string   `json:"ownerVersion,omitempty"`
 	ID           string   `json:"id"`
 	Definition   string   `json:"definition"`
 	InputHash    string   `json:"inputHash"`
@@ -358,12 +359,19 @@ type OperationCall struct {
 	Release      string   `json:"release,omitempty"`
 }
 type OperationResult struct {
-	ID         string          `json:"id"`
-	State      string          `json:"state"`
-	Output     json.RawMessage `json:"output,omitempty"`
-	Error      string          `json:"error,omitempty"`
-	Generation uint32          `json:"generation"`
-	Millis     int64           `json:"millis,omitempty"`
+	OwnerVersion string          `json:"ownerVersion,omitempty"`
+	Ref          *AssetRef       `json:"ref,omitempty"`
+	Definition   string          `json:"definition,omitempty"`
+	Version      int             `json:"version,omitempty"`
+	Module       string          `json:"module,omitempty"`
+	Dependencies string          `json:"dependencies,omitempty"`
+	Release      string          `json:"release,omitempty"`
+	ID           string          `json:"id"`
+	State        string          `json:"state"`
+	Output       json.RawMessage `json:"output,omitempty"`
+	Error        string          `json:"error,omitempty"`
+	Generation   uint32          `json:"generation"`
+	Millis       int64           `json:"millis,omitempty"`
 }
 
 func (c Caller) RequestOperation(r *pb.ChangeRecord, q OperationRequest) (OperationCall, *kernel.Error) {

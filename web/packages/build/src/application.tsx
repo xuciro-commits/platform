@@ -140,6 +140,7 @@ export function ApplicationEditor({ id }: { id: string }) {
   return <div className="grid min-w-0 gap-3">
     <PageHeader title={draft.title || t("New application")} description={t("Choose saved pages and resources, then deliver the application as one candidate.")}
       actions={<div className="flex flex-wrap gap-2"><Button onClick={() => open({ view: "applications" })}>{t("Applications")}</Button>
+        {delivered&&<Button onClick={()=>open({view:"application-runs",params:{app:"build",name:draft.name,application:`build:${draft.name}`}})}>{t("Application runs")}</Button>}
         <AssetControls type="build.app" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "application", params: { id } }} />
         <Button disabled={busy || !!draft.id && !dirty || !draft.name || !draft.title} onClick={() => void save()}>{t(draft.id ? "Save application" : "Create application")}</Button>
         <Button disabled={busy||dirty||!draft.id||!importApplication} onClick={()=>setImporting(true)}>{t('Import complete Workshop module')}</Button>

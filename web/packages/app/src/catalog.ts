@@ -29,6 +29,14 @@ export const entries: CatalogEntry[] = [
     dependencies: ["ui/record-page", "app/record-actions"], uses: ["code", "widget"], widgets: ["detail", "timeline", "tasks"],
     states: ["loading", "error", "pending", "conflict"], snippet: 'import { RecordDetail } from "@platform/app";\n<RecordDetail type="your.object" id={selectedID} />',
   }),
+  asset("application-runs", "Application runtime diagnostics", "Inspect authorized current and historical resource-linked runs without claiming exclusive application origin.", ["ApplicationRuns"], "ApplicationRunsExample", {
+    source: "web/packages/app/src/application-runs.tsx", uses: ["code", "reference"], dependencies: ["ui/data-table", "app/flow-instance", "app/agent-run", "app/operation-run"], states: ["loading", "error", "shared", "failed"],
+    snippet: 'import { ApplicationRuns } from "@platform/app";\n<ApplicationRuns owner="build" name="yourapp" />',
+  }),
+  asset("operation-run", "Authorized calculation run", "Read the original computation binding and result; retry through the original authorized effect action.", ["OperationRunView"], "OperationRunExample", {
+    source: "web/packages/app/src/application-runs.tsx", uses: ["code", "reference"], dependencies: ["app/agent-run"], states: ["pending", "completed", "failed", "denied"],
+    snippet: 'import { OperationRunView } from "@platform/app";\n<OperationRunView id={callID} />',
+  }),
   asset("flow-instance", "Authorized workflow run", "Inspect a workflow's recorded version and startup release through the member's original read permissions.", ["FlowInstanceView"], "FlowInstanceExample", {
     source: "web/packages/app/src/flows.tsx", uses: ["code", "reference"], tags: ["flow", "run", "version", "release"],
     dependencies: ["ui/flow", "app/agent-run"], states: ["loading", "error", "running", "waiting", "done"],

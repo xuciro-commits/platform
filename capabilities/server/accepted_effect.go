@@ -403,7 +403,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *ai.Usage
 	}
 	t.enqueue(saved.At)
 	if len(saved.Changes) == 0 && len(saved.Rows) == 0 && len(saved.States) == 0 && saved.Notices == nil {
-		t.operationsChanged()
+		t.operationsChanged(saved.App)
 	} else {
 		t.changedOwner(saved.App)
 	}

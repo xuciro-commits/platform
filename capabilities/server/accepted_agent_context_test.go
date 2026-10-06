@@ -65,3 +65,30 @@ func TestRecoveredContextDoesNotGrantANewModelRead(t *testing.T) {
 		}
 	}
 }
+
+func TestLegacyAgentBindingRecoversOnlyExactCommittedStartupMetadata(t *testing.T) {
+	run := AgentRunRecord{State: "running"}
+	run.ID = "run"
+	history := []RecordChange{{Change: "start", Schema: SchemaRunStart, Fields: []FieldChange{{Field: "state", After: json.RawMessage(`"running"`)}}}}
+	prior := &row{value: reflect.ValueOf(run), history: history}
+	saved := run
+	saved.Release = "release:original"
+	saved.DefinitionVersion = "agent.sha256.original"
+	expectedHistory := copyHistory(history)
+	expectedHistory[0].Fields = append([]FieldChange{{Field: "release", After: json.RawMessage(`"release:original"`)}, {Field: "definitionVersion", After: json.RawMessage(`"agent.sha256.original"`)}}, expectedHistory[0].Fields...)
+	expected := &row{value: reflect.ValueOf(saved), history: expectedHistory}
+	body, _ := acceptedRowOf(RunType, run.ID, expected)
+	digest, _ := canonicalDigest(body)
+	image := acceptedBatchRow{App: AgentApp, Before: digest, acceptedRow: body}
+	image.History = append(copyHistory(expectedHistory), RecordChange{Change: "step", Schema: SchemaRunStep})
+	if recovered := legacyAgentContextPredecessor(prior, image); recovered == nil || recovered.value.Interface().(AgentRunRecord).DefinitionVersion != saved.DefinitionVersion {
+		t.Fatal("exact startup metadata was not restored")
+	}
+	image.Before = "different"
+	if legacyAgentContextPredecessor(prior, image) != nil {
+		t.Fatal("nonmatching predecessor accepted")
+	}
+	if prior.value.Interface().(AgentRunRecord).Release != "" {
+		t.Fatal("failed probe mutated live data")
+	}
+}

@@ -4,7 +4,7 @@
 // and the navigation — beside the apps that came as code, with the same shell.
 import type { AppUI } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import type { NavSection, Route } from "@platform/ui";
+import { t, type NavSection, type Route } from "@platform/ui";
 import { BarChart3, Boxes, CalendarDays, ClipboardList, Map as MapPin, Sparkles, Users, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -38,7 +38,7 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
       .filter((g) => g.pages.length > 0);
     const grouped = new Set(groups.flatMap((g) => g.pages));
     const sections = [{ label: application.title, pages: held.filter((name) => !grouped.has(name)) }, ...groups].filter((g) => g.pages.length > 0);
-    const nav = (): NavSection[] => sections.map((g) => ({ label: g.label, items: g.pages.map(item) }));
+    const nav = (): NavSection[] => [...sections.map((g) => ({ label: g.label, items: g.pages.map(item) })),{label:t("Run and diagnose"),items:[{label:t("Application runs"),icon:<BarChart3/>,route:{view:"application-runs",params:{app:definition.ref.app,name:application.name,application:id}}}]}];
     return [{
       id,
       title: application.title,
@@ -55,6 +55,7 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
  * deep link can still resolve its owner without a second route or asset copy.
  */
 export function pageApplication(route: Route, definitions: Definition[], current?: string): string | undefined {
+  if (route.view === "application-runs" && route.params?.application) return route.params.application;
   if (route.view !== "page" || route.params?.kind !== "page") return undefined;
   const { app, name, application } = route.params;
   const holders = definitions.filter((d) => d.ref.kind === "app" && d.ref.app === app && d.application?.pages.includes(name ?? ""))

@@ -172,7 +172,7 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 	}
 	t.enqueue(saved.At)
 	if len(saved.Changes) == 0 && saved.Notices == nil {
-		t.operationsChanged()
+		t.operationsChanged(saved.App)
 	} else {
 		t.changedOwner(saved.App)
 	}

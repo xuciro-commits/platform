@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:8246e676120ffd8c",
+  "revision": "sha256:86a188674cd5be37",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -65,6 +65,46 @@
         "withheld"
       ],
       "snippet": "import { RunView } from \"@platform/app\";\n<RunView id={runID} />"
+    },
+    {
+      "id": "app/application-runs",
+      "owner": "@platform/app",
+      "name": "Application runtime diagnostics",
+      "summary": "Inspect authorized current and historical resource-linked runs without claiming exclusive application origin.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code",
+        "reference"
+      ],
+      "tags": [
+        "record",
+        "binding",
+        "host"
+      ],
+      "source": "web/packages/app/src/application-runs.tsx",
+      "exports": [
+        "ApplicationRuns"
+      ],
+      "example": "ApplicationRunsExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "dependencies": [
+        "ui/data-table",
+        "app/flow-instance",
+        "app/agent-run",
+        "app/operation-run"
+      ],
+      "states": [
+        "loading",
+        "error",
+        "shared",
+        "failed"
+      ],
+      "snippet": "import { ApplicationRuns } from \"@platform/app\";\n<ApplicationRuns owner=\"build\" name=\"yourapp\" />"
     },
     {
       "id": "app/application-sessions",
@@ -406,6 +446,43 @@
         "Refused",
         "Retired"
       ]
+    },
+    {
+      "id": "app/operation-run",
+      "owner": "@platform/app",
+      "name": "Authorized calculation run",
+      "summary": "Read the original computation binding and result; retry through the original authorized effect action.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code",
+        "reference"
+      ],
+      "tags": [
+        "record",
+        "binding",
+        "host"
+      ],
+      "source": "web/packages/app/src/application-runs.tsx",
+      "exports": [
+        "OperationRunView"
+      ],
+      "example": "OperationRunExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "dependencies": [
+        "app/agent-run"
+      ],
+      "states": [
+        "pending",
+        "completed",
+        "failed",
+        "denied"
+      ],
+      "snippet": "import { OperationRunView } from \"@platform/app\";\n<OperationRunView id={callID} />"
     },
     {
       "id": "app/page-workspace",
@@ -4069,6 +4146,7 @@
       "Application owns scalar declarations and bounded queries. Pages use typed shared bindings; windows remain read-only, ephemeral and member-scoped.": "应用拥有标量声明和有界查询；页面通过类型化端口共享，只读窗口为成员作用域内的临时值。",
       "Application release workbench": "整应用发布工作台",
       "Application resources refer to original owners; membership does not grant access. Release review freezes published dependencies using the existing candidate path.": "应用资源引用原归属方；加入应用不会授予权限。发布审查通过原候选路径冻结已发布依赖。",
+      "Application runtime diagnostics": "应用运行诊断",
       "Application sessions": "应用会话",
       "Applications reuse Workspace; app navigation and views come from their AppUI declaration.": "应用复用 Workspace；应用导航与视图由各自的 AppUI 声明提供。",
       "Arrange a library, canvas and inspector with keyboard and pointer pane resizing.": "组合组件库、画布与检查器，支持键盘和指针调整面板宽度。",
@@ -4077,6 +4155,7 @@
       "Ask for a bounded decision with focus trapping and a labelled title.": "用限制焦点范围、带标题的对话框完成有界决策。",
       "Author fixed record conditions and retain explicit query versions for shared page plans.": "编写固定记录条件，保留共享页面计划的明确查询版本。",
       "Authorized PDF pages": "已授权PDF页面",
+      "Authorized calculation run": "获权计算运行",
       "Authorized cross-application search": "受权跨应用搜索",
       "Authorized event list": "受权事件列表",
       "Authorized lifecycle board": "授权生命周期看板",
@@ -4188,6 +4267,7 @@
       "Inspect a native flow's graph, waiting steps and decision trace.": "检查原生流程的关系图、等待步骤与决策轨迹。",
       "Inspect a workflow's recorded version and startup release through the member's original read permissions.": "沿成员原有读取权限，检查流程运行所记录的版本与启动发布。",
       "Inspect and edit fields, lifecycle states, transitions and access through the existing object designer.": "通过现有对象设计器查看和编辑字段、生命周期状态、跃迁与权限。",
+      "Inspect authorized current and historical resource-linked runs without claiming exclusive application origin.": "查看获权的当前及历史资源关联运行，不将共享资源视为应用独占。",
       "Inspect authorized self-contained GLB geometry, model parts, layers and actual typed field mappings.": "查看受权自包含GLB几何、模型部件、图层和实际类型化字段映射。",
       "Inspect or edit details while keeping the underlying task in view.": "查看或编辑详情，同时保留原任务的上下文。",
       "Inspect original raster bytes and edit normalized, revision-bound region proposals.": "查看原栅格图片并编辑绑定版本的归一化区域草稿。",
@@ -4291,6 +4371,7 @@
       "Read formatted content or edit its source with a shared preview.": "阅读格式化内容，或通过共享预览编辑源码。",
       "Read only": "只读",
       "Read recent business-time window statistics through the original authorized aggregate owner.": "通过原受权聚合归属方，读取最近业务时间窗口统计。",
+      "Read the original computation binding and result; retry through the original authorized effect action.": "读取计算原始绑定和结果，通过原获权效果动作重试。",
       "Read-only graph": "只读关系图",
       "Ready": "就绪",
       "Record attachment uploader": "记录附件上传器",
@@ -4464,15 +4545,19 @@
       "WebGL2 is required. The caller supplies a confirmed asset and attachment; sample mappings require the actual asset reference. No simulation, default asset or external model resource is used.": "需要WebGL2。调用方提供确认资产和附件；样本映射需要实际资产引用。不使用模拟数据、默认资产或外部模型资源。",
       "Workshop module migration": "Workshop 模块迁移",
       "Wrap presentation items and navigate toolbar buttons with arrow keys.": "让呈现项自动换行，并使用方向键在工具栏按钮间移动。",
+      "completed": "已完成",
       "conflict": "冲突",
+      "denied": "拒绝",
       "dirty": "未保存",
       "done": "完成",
       "empty": "为空",
       "error": "错误",
+      "failed": "失败",
       "loading": "加载中",
       "pending": "待完成",
       "refused": "已拒绝",
       "running": "运行中",
+      "shared": "共享",
       "stopped": "停止",
       "unavailable": "不可用",
       "validation": "校验",
@@ -4484,6 +4569,7 @@
     "ui/button": [
       "web/packages/app/src/actions.tsx",
       "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/application-runs.tsx",
       "web/packages/app/src/capability.tsx",
       "web/packages/app/src/flows.tsx",
       "web/packages/app/src/index.tsx",
@@ -4707,6 +4793,7 @@
     "ui/panels": [
       "web/packages/app/src/actions.tsx",
       "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/application-runs.tsx",
       "web/packages/app/src/capability.tsx",
       "web/packages/app/src/catalog.examples.tsx",
       "web/packages/app/src/catalog.fixtures.tsx",
@@ -4846,6 +4933,7 @@
     ],
     "ui/status": [
       "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/application-runs.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
@@ -4870,6 +4958,7 @@
     ],
     "ui/page-header": [
       "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/application-runs.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
       "web/packages/app/src/widgets/Content.tsx",
@@ -4905,6 +4994,21 @@
     "ui/graph": [
       "web/packages/app/src/agents.tsx",
       "web/packages/mes/src/index.tsx"
+    ],
+    "ui/data-table": [
+      "web/packages/app/src/application-runs.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/workflow-runs.tsx",
+      "web/packages/erp/src/index.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/packages/platform/src/processes.tsx",
+      "web/packages/pms/src/index.tsx",
+      "web/apps/pms-desk/src/App.tsx",
+      "web/apps/workspace/src/chrome.tsx"
     ],
     "ui/observation-statistics": [
       "web/packages/app/src/catalog.examples.tsx",
@@ -5250,20 +5354,6 @@
       "web/packages/build/src/workflow-runs.tsx",
       "web/packages/build/src/workflow.tsx"
     ],
-    "ui/data-table": [
-      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
-      "web/packages/build/src/workflow-runs.tsx",
-      "web/packages/erp/src/index.tsx",
-      "web/packages/mes/src/index.tsx",
-      "web/packages/platform/src/ai.tsx",
-      "web/packages/platform/src/apps.tsx",
-      "web/packages/platform/src/operations.tsx",
-      "web/packages/platform/src/people.tsx",
-      "web/packages/platform/src/processes.tsx",
-      "web/packages/pms/src/index.tsx",
-      "web/apps/pms-desk/src/App.tsx",
-      "web/apps/workspace/src/chrome.tsx"
-    ],
     "ui/inspector-controls": [
       "web/packages/build/src/page-editor/LayoutProperties.tsx"
     ],
@@ -5307,6 +5397,12 @@
     ],
     "app/decision-confirmation": [
       "web/apps/workspace/src/App.tsx"
+    ],
+    "app/application-runs": [
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/operation-run": [
+      "web/apps/workspace/src/chrome.tsx"
     ],
     "app/flow-instance": [
       "web/apps/workspace/src/chrome.tsx"
