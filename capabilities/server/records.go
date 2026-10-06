@@ -28,6 +28,7 @@ import (
 
 type recordStore struct {
 	mu           sync.Mutex
+	liveVersions map[string]uint64
 	uniqueLinks  map[string]platform.LinkType
 	archiveLinks map[string]platform.LinkType
 	types        map[string]*entityType
@@ -192,7 +193,7 @@ func newRecordStore() *recordStore {
 func (s *recordStore) forkRecords() *recordStore {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	draft := &recordStore{uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
+	draft := &recordStore{liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
 		byGo: make(map[reflect.Type]*entityType, len(s.byGo)), writes: map[string]bool{},
 		dirty: make(map[string]bool, len(s.dirty)), changed: make(map[string][]string, len(s.changed)),
 		order: slices.Clone(s.order)}
@@ -254,6 +255,8 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 	}
 	slices.Sort(refs)
 	for _, ref := range refs {
+		typ, _, _ := strings.Cut(ref, "/")
+		s.liveTouched(typ)
 		if s.touched != nil {
 			typ, id, _ := strings.Cut(ref, "/")
 			s.touched(typ, id)
@@ -436,6 +439,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	}
 	et.rows[rec.ID] = &row{value: v, history: append(history, change)}
 	s.generation++
+	s.liveTouched(et.info.Type)
 	if s.writes != nil {
 		s.writes[et.info.Type+"/"+rec.ID] = true
 	}
@@ -1315,4 +1319,12 @@ func (t *Tenant) PersonalReads() []PersonalRead {
 	out := slices.Clone(t.personal)
 	slices.Reverse(out)
 	return out
+}
+
+// liveTouched is ephemeral query invalidation metadata, protected by mu.
+func (s *recordStore) liveTouched(typ string) {
+	if s.liveVersions == nil {
+		s.liveVersions = map[string]uint64{}
+	}
+	s.liveVersions[typ]++
 }

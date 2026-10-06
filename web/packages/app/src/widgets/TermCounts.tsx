@@ -12,7 +12,7 @@ export function TermCountsRenderer({object,window,field,info,source,label,...pre
  return <CompleteTerms {...presentation} spec={spec} source={source} field={field} label={label}/>;
 }
 function CompleteTerms({spec,source,field,label,treemap,tags,bars,steps,selected,enabled,onSelect}:{spec:ChartSpec;source?:ChartSource;field:string;label:string}&Presentation){
- const reader=useMemo(()=>source&&({...source,aggregate:(object:string,query:Parameters<ChartSource["aggregate"]>[1])=>source.aggregate(object,{...query,maxRows:pageUIManifest.runtime.terms.maxGroups})}),[source]);
+ const reader=useMemo(()=>source&&({...source,watchAggregate:source.watchAggregate?((object:string,query:Parameters<ChartSource["aggregate"]>[1],changed:()=>void)=>source.watchAggregate!(object,{...query,maxRows:pageUIManifest.runtime.terms.maxGroups},changed)):undefined,aggregate:(object:string,query:Parameters<ChartSource["aggregate"]>[1])=>source.aggregate(object,{...query,maxRows:pageUIManifest.runtime.terms.maxGroups})}),[source]);
  const {data,error}=useChartData(spec,reader);if(error)return <Panel role="alert">{t("Term counts could not be loaded.")}</Panel>;
  if(!data)return <p role="status">{t("Loading term counts…")}</p>;
  const terms=termCounts(data,field,!!bars||!!steps);if(!terms)return <Panel role="alert">{t("Term counts are invalid or exceed their budget.")}</Panel>;

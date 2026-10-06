@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, expect, test, vi } from "vitest";
 import { RecordList, RecordPage, RecordLinks, RecordStatus, type EntityRecord, type RecordPageData, type RecordSource, type RecordView } from "./Records";
 
+import { ViewVisibilityContext } from "../shell/ViewVisibility";
 afterEach(cleanup);
 Element.prototype.getBoundingClientRect = () => ({ width: 800, height: 280, top: 0, left: 0, right: 800, bottom: 280, x: 0, y: 0, toJSON: () => ({}) });
 for (const [key, value] of [["offsetWidth", 800], ["offsetHeight", 280]] as const) Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => value });
@@ -142,4 +143,16 @@ test("table toolbar changes keep window paging and density changes do not issue 
  const source:RecordSource={scope:"member",entity:()=>entity,list:vi.fn(),get:vi.fn()},change=vi.fn(),window={query:{sort:["id"],limit:1},page:{records:[record("A")],total:2} as RecordPageData,maxOffset:100,onChange:change};
  const {rerender}=render(<RecordList source={source} type={entity.type} window={window} tablePresentation={{density:"compact",showToolbar:true}}/>);await waitFor(()=>expect(screen.getByRole("cell",{name:"A"})).toBeTruthy());fireEvent.change(screen.getByRole("combobox",{name:"Record density"}),{target:{value:"normal"}});expect((screen.getByRole("combobox",{name:"Record density"}) as HTMLSelectElement).value).toBe("normal");expect(source.list).not.toHaveBeenCalled();
  rerender(<RecordList source={source} type={entity.type} window={window} tablePresentation={{density:"compact",showToolbar:false}}/>);expect(screen.queryByRole("combobox",{name:"Record density"})).toBeNull();expect(screen.queryByRole("textbox",{name:"Search"})).toBeNull();expect(screen.queryByRole("combobox",{name:"Sort"})).toBeNull();fireEvent.click(screen.getByRole("button",{name:"Next page"}));expect(change).toHaveBeenCalledWith({offset:1});expect(source.list).not.toHaveBeenCalled();
+});
+
+test("hidden record windows release their live lease, preserve search and register again when shown", async () => {
+ const release=vi.fn(),watch=vi.fn(()=>release),list=vi.fn(async()=>({records:[record("VISIBLE")],total:1}));
+ const source:RecordSource={scope:"member",entity:()=>entity,list,get:vi.fn(),watchList:watch};
+ const view=(visible:boolean)=><ViewVisibilityContext.Provider value={visible}><RecordList source={source} type={entity.type}/></ViewVisibilityContext.Provider>;
+ const {rerender}=render(view(true));await waitFor(()=>expect(screen.getByText("VISIBLE")).toBeTruthy());
+ const search=screen.getByPlaceholderText(/Search/);fireEvent.change(search,{target:{value:"retained search"}});
+ await waitFor(()=>expect(watch).toHaveBeenCalledTimes(2));
+ rerender(view(false));expect(release).toHaveBeenCalledTimes(2);const count=list.mock.calls.length;
+ rerender(view(false));await new Promise(resolve=>setTimeout(resolve,180));expect(list).toHaveBeenCalledTimes(count);
+ rerender(view(true));expect((screen.getByPlaceholderText(/Search/) as HTMLInputElement).value).toBe("retained search");await waitFor(()=>expect(watch).toHaveBeenCalledTimes(3));
 });

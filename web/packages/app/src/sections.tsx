@@ -63,7 +63,7 @@ class WidgetBoundary extends Component<{ children: ReactNode }, { failed: boolea
 export function SectionView(bound: Bound & Composing) {
   const host=useContext(HostContext),source=host?.source;
   const { section, chosen, onChoose, at, nested } = bound;
-  const aggregateSource=source?.aggregate?{aggregate:source.aggregate,scope:bound.aggregateScope??source.scope,revision:source.revision}:undefined;
+  const aggregateSource=source?.aggregate?{aggregate:source.aggregate,scope:bound.aggregateScope??source.scope,revision:source.revision,watchAggregate:source.watchAggregate}:undefined;
   const implementation = widgets.resolveDefinition(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
   const Renderer=implementation?.Renderer;
   const body = Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound} info={source?.entity(objectOf(bound.page,bound.section))} sourceScope={source?.scope} aggregateSource={aggregateSource} recordSource={source} definitions={host?.definitions} catalog={host?.catalog} decide={host?.decide}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;

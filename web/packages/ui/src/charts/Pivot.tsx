@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatter } from "./echarts";
 import type { AggregateData, AggregateQuery } from "./spec";
 import type { ChartSource } from "./Chart";
+import { useViewVisible } from "../shell/ViewVisibility";
 import { t } from "../i18n";
 
 const text = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : String(v));
@@ -31,15 +32,19 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill,hea
 }) {
   const [state, setState] = useState<{key?:string;data?:AggregateData;error?:string}>({});
   const key = JSON.stringify([type, query, rows, columns, measure, source.scope]);
+  const visible = useViewVisible();
   const from = useRef(source);
   from.current = source;
   useEffect(() => {
+    if (!visible) return;
     let live = true;
     setState(previous => previous.key === key ? {key,data:previous.data} : {key});
-    from.current.aggregate(type, { ...query, maxRows:query.maxRows??4096, groups: columns ? [rows, columns] : [rows], measures: [measure] })
+    const aggregateQuery = { ...query, maxRows: query.maxRows ?? 4096, groups: columns ? [rows, columns] : [rows], measures: [measure] };
+    const load = () => from.current.aggregate(type, aggregateQuery)
       .then((data) => live && setState({key,data}), (e) => live && setState({key,error:String(e)}));
-    return () => { live = false; };
-  }, [key, source.revision]); // eslint-disable-line react-hooks/exhaustive-deps
+    const stop = from.current.watchAggregate?.(type, aggregateQuery, load); void load();
+    return () => { live = false; stop?.(); };
+  }, [key, source.revision, visible]); // eslint-disable-line react-hooks/exhaustive-deps
   const {data,error}=state.key===key?state:{};
   if (error) return <p role="alert" className="text-sm text-[var(--tone-danger)]">{error}</p>;
   if (!data) return <p className="text-sm text-muted">{t("Loading…")}</p>;

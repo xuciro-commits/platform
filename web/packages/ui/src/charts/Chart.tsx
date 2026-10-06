@@ -3,12 +3,13 @@
 // the renderer is ECharts 6, loaded only here.
 import type { ECharts } from "echarts/core";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useViewVisible } from "../shell/ViewVisibility";
 import { toOption, formatter, type Theme } from "./echarts";
 import { aggregateQuery, aggregateValues, columnOf, markOf, type AggregateColumn, type AggregateData, type AggregateQuery, type ChartSpec } from "./spec";
 import { t } from "../i18n";
 
 /** Where aggregates come from: the host's `GET /v1/aggregates/<type>`, wired by the workspace. */
-export type ChartSource = { aggregate: (type: string, query: AggregateQuery) => Promise<AggregateData>; revision?: number; scope?:string };
+export type ChartSource = { aggregate: (type: string, query: AggregateQuery) => Promise<AggregateData>; revision?: number; scope?:string; watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void };
 
 // The kit's tokens as colours a canvas understands (they are oklch in CSS).
 function resolve(variable: string): string {
@@ -33,9 +34,11 @@ function theme(): Theme {
 export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: AggregateData; error?: string } {
   const [state, setState] = useState<{ key?:string; data?: AggregateData; error?: string }>({});
   const key = JSON.stringify(spec.data) + JSON.stringify(spec.encoding) + JSON.stringify(source?.scope);
+  const visible = useViewVisible();
   const from = useRef(source); // read when the spec changes, not whenever a caller builds a new source object
   from.current = source;
   useEffect(() => {
+    if (!visible) return;
     const source = from.current;
     const query = aggregateQuery(spec);
     if (!query) {
@@ -49,9 +52,11 @@ export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: Ag
     if (!source || !("entity" in spec.data)) return setState({ key,error: t("No source for records") });
     let live = true;
     setState(previous => previous.key === key ? { key, data: previous.data } : { key });
-    source.aggregate(spec.data.entity, query).then((data) => live && setState({ key, data }), (e) => live && setState({ key, error: String(e) }));
-    return () => { live = false; };
-  }, [key, source?.revision]); // eslint-disable-line react-hooks/exhaustive-deps
+    const type = spec.data.entity;
+    const load = () => source.aggregate(type, query).then((data) => live && setState({ key, data }), (e) => live && setState({ key, error: String(e) }));
+    const stop = source.watchAggregate?.(type, query, load); void load();
+    return () => { live = false; stop?.(); };
+  }, [key, source?.revision, visible]); // eslint-disable-line react-hooks/exhaustive-deps
   return state.key===key?state:{};
 }
 

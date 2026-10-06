@@ -12,7 +12,7 @@ export {searchInputObjects} from "./widgets/search-input";
 import "./i18n";
 import { apiErrorMessage, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
 import {
-  Button, Chart, Dialog, FilePicker, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
+  Button, Chart, Dialog, FilePicker, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
@@ -76,8 +76,13 @@ export function useHost(): Host {
 
 /** A read of the host (`/v1/...`) for the signed-in member, refreshed while shown. */
 export function useReadQuery<T>(path: string, refetchInterval?: number, enabled = true): UseQueryResult<T> {
-  const { client } = useHost();
-  return useQuery({ queryKey: [client.connection.token, client.connection.tenant, path], queryFn: () => client.get<T>(path), refetchInterval, enabled });
+  const { client, source } = useHost();
+  const visible = useViewVisible();
+  const diagnostic = path === "/v1/health" || path === "/v1/connectors";
+  const query = useQuery({ queryKey: [client.connection.token, client.connection.tenant, path, source.scope], queryFn: () => client.get<T>(path, diagnostic), refetchInterval: diagnostic && visible ? refetchInterval : false, enabled: enabled && visible });
+  const refetch = useRef(query.refetch); refetch.current = query.refetch;
+  useEffect(() => enabled && visible ? client.subscribeRead(path, () => { void refetch.current(); }) : undefined, [client, path, enabled, visible]);
+  return { ...query, data: query.isError ? undefined : query.data } as UseQueryResult<T>;
 }
 
 export function useRead<T>(path: string, refetchInterval?: number): T | undefined {
@@ -87,9 +92,13 @@ export function useRead<T>(path: string, refetchInterval?: number): T | undefine
 /** A bounded complete inventory, rather than a single record-list page. The
  * caller receives an error if the advertised inventory cannot be read whole. */
 export function useRecordInventory<T>(type: string, limit = 1000, enabled = true): UseQueryResult<{ records: T[] }> {
-  const { client } = useHost();
+  const { client, source } = useHost();
   const path = `/v1/records/${encodeURIComponent(type)}`;
-  return useQuery({ queryKey: [client.connection.token, client.connection.tenant, path, "inventory", limit], queryFn: () => client.inventory<T>(type, limit), enabled });
+  const visible = useViewVisible();
+  const query = useQuery({ queryKey: [client.connection.token, client.connection.tenant, path, "inventory", limit, source.scope], queryFn: () => client.inventory<T>(type, limit), enabled: enabled && visible });
+  const refetch = useRef(query.refetch); refetch.current = query.refetch;
+  useEffect(() => enabled && visible ? client.subscribeInventory(type, limit, () => { void refetch.current(); }) : undefined, [client, type, limit, enabled, visible]);
+  return { ...query, data: query.isError ? undefined : query.data } as UseQueryResult<{ records: T[] }>;
 }
 
 /** The member's installed semantic assets, through the host's one registry. */
@@ -272,7 +281,7 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
     <>
       <PageHeader title={dashboard.title} description={dashboard.description} />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start gap-3">
-        {dashboard.charts.map((spec, i) => <Chart key={i} spec={spec} source={aggregate ? { aggregate, scope:source.scope, revision: source.revision } : undefined}
+        {dashboard.charts.map((spec, i) => <Chart key={i} spec={spec} source={aggregate ? { aggregate, scope:source.scope, revision: source.revision, watchAggregate: source.watchAggregate } : undefined}
           height={typeof spec.mark === "string" && spec.mark === "kpi" ? 60 : 240} />)}
       </div>
     </>

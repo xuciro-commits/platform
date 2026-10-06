@@ -180,8 +180,14 @@ func (h *Host) Handler() http.Handler {
 			f(w, r, m, t)
 		})
 	}
-	handle(Route{Pattern: "GET /v1/changes", Summary: "Server-sent events: changed for data changes, operations for queue-only progress (F-32)", Answer: ""},
-		func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) { followChanges(w, r, t) })
+	handle(Route{Pattern: "GET /v1/changes", Summary: "Server-sent events: changed for data changes, operations for queue-only progress (F-32)", Answer: LiveQueryFrame{}},
+		func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
+			if r.URL.Query().Has("watch") {
+				followLiveQueries(w, r, t, mux)
+				return
+			}
+			followChanges(w, r, t)
+		})
 	handle(Route{Pattern: "POST /v1/recovery/retry", Summary: "Retry recovery of this quarantined tenant from the durable journal after an operator repairs its cause (ADR-0038)",
 		Answer: TenantHealth{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if m.Roles[PlatformApp] != Admin {

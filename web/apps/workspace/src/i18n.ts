@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Live updates unavailable": "实时更新暂不可用",
   "Studio applications": "工坊应用",
   "All applications": "全部应用",
   "Back to application": "返回应用",

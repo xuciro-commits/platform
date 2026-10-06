@@ -904,6 +904,17 @@ export type LinkType = {
   deletePolicy: string;
 };
 
+export type LiveQueryFrame = {
+  sequence: number;
+  results: LiveQueryResult[];
+};
+
+export type LiveQueryResult = {
+  path: string;
+  status: number;
+  body: unknown;
+};
+
 export type LoopFrame = {
   items?: unknown[];
   outer?: string[];

@@ -232,7 +232,7 @@ func (t *Tenant) finishCommittedInput(a platform.AcceptedInputApp, m platform.Me
 	if applied && result.Refusal == nil {
 		t.remember(AuditEntry{At: result.At, Member: m.ID, App: result.App, Action: "input:" + name})
 		t.enqueue(result.At)
-		t.changed()
+		t.changedOwner(result.App)
 	}
 	return t.answerAcceptedInput(a, committed)
 }

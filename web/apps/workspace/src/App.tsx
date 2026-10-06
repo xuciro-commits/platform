@@ -43,7 +43,7 @@ const preferred = (ids: Identity[]) => [...ids].sort((a, b) => Object.keys(b.rol
 function Recovery({ client, token, tenant }: { client: EdgeClient; token: string; tenant: string }) {
   const queries = useQueryClient();
   const health = useQuery({ queryKey: [token, tenant, "recovery-health"],
-    queryFn: () => client.get<Api.TenantHealth>("/v1/health"), refetchInterval: 5000, retry: false });
+    queryFn: () => client.get<Api.TenantHealth>("/v1/health", true), refetchInterval: 5000, retry: false });
   const [retrying, setRetrying] = useState(false);
   const [failure, setFailure] = useState("");
   const retry = async () => {
@@ -54,6 +54,7 @@ function Recovery({ client, token, tenant }: { client: EdgeClient; token: string
       if (!result.ok) {
         setFailure(result.body.error ?? t("Recovery is not available for this tenant."));
       } else {
+        client.refreshLiveReads();
         await queries.invalidateQueries({ queryKey: [token, tenant, "me"] });
       }
       await health.refetch();
@@ -84,7 +85,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const client = useMemo(() => new EdgeClient({ server: "", token, tenant, principal: "" }), [token, tenant]);
-  useEffect(() => signedIn && !signingOut ? keepFresh(signedIn.config, signedIn.session, (s) => { client.connection.token = s.accessToken; }) : undefined, [client, signedIn, signingOut]);
+  useEffect(() => signedIn && !signingOut ? keepFresh(signedIn.config, signedIn.session, (s) => { client.connection.token = s.accessToken; client.refreshLiveReads(); }) : undefined, [client, signedIn, signingOut]);
   const leaveSession = async () => {
     if (!signedIn || signingOut) return;
     setSigningOut(true);
@@ -102,7 +103,10 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   };
 
   const meQuery = useQuery({ queryKey: [token, tenant, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false });
-  const me = meQuery.data;
+  const connectionUnavailable = meQuery.isError && /live connection unavailable|HTTP (400|413)/.test(String(meQuery.error));
+  const me = meQuery.isError && !connectionUnavailable ? undefined : meQuery.data;
+  const meRefetch = useRef(meQuery.refetch); meRefetch.current = meQuery.refetch;
+  useEffect(() => client.subscribeRead("/v1/me", () => { void meRefetch.current(); }), [client]);
   const identityScope = me ? JSON.stringify([me.tenantId, me.principalId]) : undefined;
   const packageScope = me ? JSON.stringify([me.tenantId, me.principalId, me.apps.map((app) => app.id), me.profile.roles]) : undefined;
   const [ready, setReady] = useState(false);
@@ -129,8 +133,13 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     return () => { live = false; };
   }, [packageScope]);
 
-  const read = <T,>(path: string, refetchInterval: number | false = false, options: { retry?: false } = {}) =>
-    useQuery({ queryKey: [token, tenant, path], queryFn: () => client.get<T>(path), refetchInterval, enabled: ready, ...options });
+  const read = <T,>(path: string, refetchInterval: number | false = false, options: { retry?: false } = {}) => {
+    const query = useQuery({ queryKey: [token, tenant, path], queryFn: () => client.get<T>(path), refetchInterval, enabled: ready, ...options });
+    const refetch = useRef(query.refetch); refetch.current = query.refetch;
+    useEffect(() => ready ? client.subscribeRead(path, () => { void refetch.current(); }) : undefined, [client, path, ready]);
+    const keepMetadata = ["/v1/actions", "/v1/entities", "/v1/definitions", "/v1/protocols", "/v1/views"].includes(path) && /live connection unavailable|HTTP (400|413)/.test(String(query.error));
+    return { ...query, data: query.isError && !keepMetadata ? undefined : query.data } as UseQueryResult<T>;
+  };
   const actions = read<ActionDeclaration[]>("/v1/actions").data;
   const entities = read<EntityInfo[]>("/v1/entities").data ?? [];
   // The installed assets, so an app's navigation can offer the pages it has —
@@ -150,33 +159,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const queries = useQueryClient();
   // Moves with every change the host reports and every decision taken here: views that read through the source read again.
   const [revision, setRevision] = useState(0);
-  // The host says when anything changed (F-32): whatever is on screen is read
-  // again, whoever changed it — another member, an agent, a flow, a system outside.
-  useEffect(() => {
-    if (!ready) return;
-    const stop = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let first = true; // the stream opens with where the tenant stands
-    let dataChanged = false;
-    void client.follow((kind) => {
-      if (first) { first = false; return; }
-      dataChanged ||= kind === "changed";
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (dataChanged) {
-          void queries.invalidateQueries();
-          setRevision((r) => r + 1);
-        } else {
-          void queries.invalidateQueries({ predicate: (query) => {
-            const path = query.queryKey[2];
-            return typeof path === "string" && /^\/v1\/(health|work|deliveries|effects|endpoints|connectors|protocols|agent-overview|ai-usage|transcripts)(?:[/?]|$)/.test(path);
-          } });
-        }
-        dataChanged = false;
-      }, 200);
-    }, stop.signal);
-    return () => { stop.abort(); clearTimeout(timer); };
-  }, [client, queries, ready]);
+  useEffect(() => ready ? client.enableLiveReads() : undefined, [client, ready]);
+  const studioRefetch = useRef(studioApplications.refetch); studioRefetch.current = studioApplications.refetch;
+  useEffect(() => ready && me?.profile.roles.build === "builder" ? client.subscribeInventory("build.app", 1000, () => { void studioRefetch.current(); }) : undefined, [client, ready, me?.profile.roles.build]);
 
   const decide = useCallback<Host["decide"]>(async (schema, target, payload, options = {}) => {
     // A type this client has no authority for is one the tenant declared while
@@ -195,6 +180,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       if (!ok || !options.quiet) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? entry.submission.schema?.name ?? schema, target: entry.submission.target?.id??target.id, outcome: outcomeText }));
     }
     setOutbox([...client.authorities.outbox]);
+    client.refreshLiveReads();
     await queries.invalidateQueries();
     setRevision((r) => r + 1);
     return confirmedDecision(client.authorities.outbox,client.connection.tenant,key);
@@ -208,6 +194,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       list: (type, q) => client.records<RecordPageData>(type, q),
       get: (type, id) => client.record<RecordView>(type, id),
       aggregate: (type, q) => client.aggregate<AggregateData>(type, q),
+      watchList: (type, q, changed) => client.subscribeRead(client.recordsPath(type, q), changed),
+      watchRecord: (type, id, changed) => client.subscribeRead(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, changed),
+      watchAggregate: (type, q, changed) => client.subscribeRead(client.aggregatePath(type, q), changed),
       revision,
     };
   }, [actions, client, definitions, entities, me, revision]);
@@ -225,12 +214,14 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     }
     return {
       client, me, entities, definitions, source, opens, outbox, decide,
-      refresh:async()=>{await queries.invalidateQueries();setRevision(r=>r+1);},
+      refresh:async()=>{client.refreshLiveReads();
+    await queries.invalidateQueries();setRevision(r=>r+1);},
       role: (app) => me.profile.roles[app] || undefined,
       can: (schema) => !!actions?.some((a) => a.schema === schema),
       action: (schema) => actions?.find((a) => a.schema === schema),
       catalog: actions ?? [],
-      resend: async () => { await client.send(); setOutbox([...client.authorities.outbox]); await queries.invalidateQueries(); setRevision(r=>r+1); },
+      resend: async () => { await client.send(); setOutbox([...client.authorities.outbox]); client.refreshLiveReads();
+    await queries.invalidateQueries(); setRevision(r=>r+1); },
     };
   }, [actions, apps, client, decide, definitions, entities, me, outbox, protocols, queries, source]);
 
@@ -297,7 +288,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     return views;
   }, [apps, select]);
 
-  if (meQuery.error) {
+  if (meQuery.error && !(connectionUnavailable && me)) {
     if (/HTTP 503/.test(String(meQuery.error))) {
       return <Recovery client={client} token={token} tenant={tenant} />;
     }
@@ -391,6 +382,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           .map((h) => ({ id: `${h.type}/${h.id}`, label: h.title || h.id, detail: `${h.type} · ${h.id}`,
             open: () => { const view = host?.opens.get(h.type); location.hash = routeToHash(view ? { view, params: { id: h.id } } : { view: "record", params: { type: h.type, id: h.id } }); } }))}
         status={<div className="flex items-center gap-2 text-xs text-muted">
+          {connectionUnavailable && <span role="status" title={String(meQuery.error)}>{t("Live updates unavailable")}</span>}
           <span className="max-lg:hidden">{me!.tenantId}</span>
           <Button size="sm" variant="ghost" aria-label={t("Last activated release")} onClick={() => setReleaseOpen(true)}
             title={!releaseUnavailable ? release.data?.id : undefined}>

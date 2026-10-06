@@ -13,7 +13,9 @@ func (t *Tenant) quarantine(err error) {
 	if err == nil {
 		return
 	}
-	t.fault.CompareAndSwap(nil, &tenantFault{Reason: fmt.Sprintf("%v", err)})
+	if t.fault.CompareAndSwap(nil, &tenantFault{Reason: fmt.Sprintf("%v", err)}) {
+		t.changed()
+	}
 }
 
 func (t *Tenant) quarantined() bool { return t.fault.Load() != nil }

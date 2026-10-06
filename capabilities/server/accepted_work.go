@@ -174,7 +174,7 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 	if len(saved.Changes) == 0 && saved.Notices == nil {
 		t.operationsChanged()
 	} else {
-		t.changed()
+		t.changedOwner(saved.App)
 	}
 	return saved.Outcome
 }

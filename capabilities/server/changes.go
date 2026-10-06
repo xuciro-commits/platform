@@ -11,29 +11,41 @@ import (
 // reads; queue-only progress invalidates operation monitors. Neither event
 // carries records, identities or private task details.
 type changes struct {
-	mu   sync.Mutex
-	seq  int64
-	data int64
-	wake chan struct{}
+	mu     sync.Mutex
+	seq    int64
+	data   int64
+	wake   chan struct{}
+	global int64
+	owners map[string]int64
 }
 
 func (t *Tenant) changed() {
-	t.markChanged(true)
+	t.markChanged(true, "")
 }
 
 // Queue progress without record, private state or notification changes wakes
 // operation monitors without invalidating every business read in the tenant.
 func (t *Tenant) operationsChanged() {
-	t.markChanged(false)
+	t.markChanged(false, "")
 }
 
-func (t *Tenant) markChanged(data bool) {
+func (t *Tenant) changedOwner(owner string) { t.markChanged(true, owner) }
+
+func (t *Tenant) markChanged(data bool, owner string) {
 	c := &t.change
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.seq++
 	if data {
 		c.data++
+		if owner == "" {
+			c.global++
+		} else {
+			if c.owners == nil {
+				c.owners = map[string]int64{}
+			}
+			c.owners[owner]++
+		}
 	}
 	if c.wake != nil {
 		close(c.wake)

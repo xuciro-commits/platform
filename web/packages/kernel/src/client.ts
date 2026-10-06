@@ -3,6 +3,7 @@
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
 import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, Definition } from "./gen/host";
 import { Authorities, type Entry } from "./outbox";
+import { LiveReads } from "./live";
 
 /** One action a server offers to this caller (ADR-0008): render from it, never re-check roles. Generated from the host (ADR-0023). */
 export type ActionDeclaration = Action;
@@ -21,6 +22,45 @@ export function apiErrorMessage(body: unknown): string | undefined {
 
 export class EdgeClient {
   readonly authorities: Authorities;
+  private live = new LiveReads((paths, signal) => fetch(this.connection.server + "/v1/changes?" + new URLSearchParams({ watch: JSON.stringify(paths) }), { headers: this.headers(), signal }));
+  enableLiveReads() { return this.live.enable(); }
+  subscribeRead(path: string, changed: () => void) { return this.live.subscribe(path, changed); }
+  refreshLiveReads() { this.live.refresh(); }
+  subscribeInventory(type: string, limit: number, changed: () => void) {
+    const path = (offset: number) => `/v1/records/${encodeURIComponent(type)}?limit=500&offset=${offset}`;
+    const stops = new Map<number, () => void>();
+    const update = () => {
+      let total: number | undefined;
+      try { total = this.live.read<{ total: number }>(path(0))?.value.total; } catch { /* the query reports the original refusal */ }
+      const pages = total !== undefined && Number.isInteger(total) && total >= 0 && total <= limit ? Math.max(1, Math.ceil(total / 500)) : 1;
+      for (const [offset, stop] of stops) if (offset >= pages * 500) { stop(); stops.delete(offset); }
+      for (let page = 0; page < pages; page++) if (!stops.has(page * 500)) stops.set(page * 500, this.subscribeRead(path(page * 500), update));
+      changed();
+    };
+    stops.set(0, this.subscribeRead(path(0), update));
+    return () => { stops.forEach(stop => stop()); stops.clear(); };
+  }
+  recordsPath(type: string, q: Omit<Query,"domain"> & {domain?:unknown[]} = {}) {
+    if (q.set || q.traversal) return `/v1/records/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
+    return `/v1/records/${encodeURIComponent(type)}?${this.readParams(q)}`;
+  }
+  aggregatePath(type: string, q: Omit<AggregateQuery,"domain"> & {domain?:unknown[]} = {}) {
+    if (q.window || q.histogram || q.set || q.traversal || q.maxRows) return `/v1/aggregates/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
+    const p = this.readParams(q);
+    if (q.groups?.length) p.set("group", q.groups.join(","));
+    if (q.measures?.length) p.set("measure", q.measures.join(","));
+    return `/v1/aggregates/${encodeURIComponent(type)}?${p}`;
+  }
+  private readParams(q: {domain?:unknown;search?:string;sort?:string[];offset?:number;limit?:number;archived?:boolean}) {
+    const p = new URLSearchParams();
+    if (Array.isArray(q.domain) && q.domain.length) p.set("domain", JSON.stringify(q.domain));
+    if (q.search) p.set("search", q.search);
+    if (q.sort?.length) p.set("sort", q.sort.join(","));
+    if (q.offset) p.set("offset", String(q.offset));
+    if (q.limit) p.set("limit", String(q.limit));
+    if (q.archived) p.set("archived", "true");
+    return p;
+  }
   /** The original owner content identity is retained while fields and actions
    * are projected for this member. Never fall back to another page version. */
   async pageContent(ref:AssetRef,contentVersion:string):Promise<Definition>{
@@ -50,10 +90,14 @@ export class EdgeClient {
       ...(lang ? { "Accept-Language": lang } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
   }
 
-  async get<T>(path: string): Promise<T> {
-    const response = await fetch(this.connection.server + path, { headers: this.headers() });
+  async get<T>(key: string, fresh = false): Promise<T> {
+    const cached = fresh ? undefined : this.live.read<T>(key); if (cached) return cached.value;
+    const [path, body] = key.split("\n");
+    const response = await fetch(this.connection.server + path, { headers: this.headers(body !== undefined), ...(body !== undefined ? { method: "POST", body } : {}) });
+    const current = fresh ? undefined : this.live.read<T>(key); if (current) return current.value;
     if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
-    return response.json() as Promise<T>;
+    const value = await response.json() as T;
+    return fresh ? value : this.live.read<T>(key)?.value ?? value;
   }
 
   /** Read all pages of a bounded record inventory. Never silently return the
@@ -180,20 +224,7 @@ export class EdgeClient {
 
   /** Records of an entity type (ADR-0016): a domain, a search, sort fields and a page. */
   async records<T = unknown>(type: string, q: Omit<Query,"domain"> & {domain?:unknown[]} = {}): Promise<T> {
-    if(q.set||q.traversal){
-      const path=`/v1/records/${encodeURIComponent(type)}/query`;
-      const response=await fetch(this.connection.server+path,{method:"POST",headers:this.headers(true),body:JSON.stringify(q)});
-      if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);
-      return response.json() as Promise<T>;
-    }
-    const p = new URLSearchParams();
-    if (q.domain?.length) p.set("domain", JSON.stringify(q.domain));
-    if (q.search) p.set("search", q.search);
-    if (q.sort?.length) p.set("sort", q.sort.join(","));
-    if (q.offset) p.set("offset", String(q.offset));
-    if (q.limit) p.set("limit", String(q.limit));
-    if (q.archived) p.set("archived", "true");
-    return this.get<T>(`/v1/records/${encodeURIComponent(type)}?${p}`);
+    return this.get<T>(this.recordsPath(type, q));
   }
 
   /** Follow an exact relationship version; the server applies its typed reference and member scope. */
@@ -206,14 +237,7 @@ export class EdgeClient {
 
   /** Groups and measures of an entity type's records within the caller's scope (ADR-0019): `groups` like "stage" or "checkIn:month", `measures` like "count" or "sum:amount". */
   async aggregate<T = unknown>(type: string, q: Omit<AggregateQuery,"domain"> & {domain?:unknown[]} = {}): Promise<T> {
-    if(q.window||q.histogram||q.set||q.traversal||q.maxRows){const path=`/v1/aggregates/${encodeURIComponent(type)}/query`;const response=await fetch(this.connection.server+path,{method:"POST",headers:this.headers(true),body:JSON.stringify(q)});if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);return response.json() as Promise<T>;}
-    const p = new URLSearchParams();
-    if (q.domain?.length) p.set("domain", JSON.stringify(q.domain));
-    if (q.search) p.set("search", q.search);
-    if (q.archived) p.set("archived", "true");
-    if (q.groups?.length) p.set("group", q.groups.join(","));
-    if (q.measures?.length) p.set("measure", q.measures.join(","));
-    return this.get<T>(`/v1/aggregates/${encodeURIComponent(type)}?${p}`);
+    return this.get<T>(this.aggregatePath(type, q));
   }
 
   /** One record with its history and related records. */

@@ -540,7 +540,7 @@ func (t *Tenant) finishCommittedResult(a platform.ResultApp, m platform.Member, 
 		if applied {
 			t.remember(submitted(m.ID, a, sub, saved.At))
 			t.publishAcceptedBatch(saved)
-			t.changed()
+			t.changedOwner(saved.App)
 		}
 		t.enqueue(saved.At)
 		return receipt, nil
@@ -568,7 +568,7 @@ func (t *Tenant) finishCommittedResult(a platform.ResultApp, m platform.Member, 
 	if applied {
 		t.remember(submitted(m.ID, a, receipt.GetSubmission(), saved.At))
 		t.publishAccepted(platform.Event{App: a.Manifest().ID, Record: receipt, Changed: saved.Event.Changed}, saved.Event, saved.Version)
-		t.changed()
+		t.changedOwner(saved.App)
 	}
 	t.enqueue(saved.At)
 	return receipt, nil
@@ -790,7 +790,7 @@ func (t *Tenant) Deliveries() []Delivery {
 }
 
 func (t *Tenant) record(a platform.App, kind string, m platform.Member, body []byte, now time.Time) {
-	t.changed()
+	t.changedOwner(a.Manifest().ID)
 	if t.Record == nil {
 		return
 	}

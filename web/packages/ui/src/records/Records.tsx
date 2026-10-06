@@ -5,6 +5,7 @@
 import { ChevronLeft, ChevronRight, History as HistoryIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
+import { useViewVisible } from "../shell/ViewVisibility";
 import {RecordCards} from "./RecordCards";
 import {RecordComments} from "./RecordComments";
 import {RecordUploader} from "./RecordUploader";
@@ -73,6 +74,9 @@ export type RecordSource = {
   aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;
   /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */
   revision?: number;
+  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;
+  watchRecord?: (type: string, id: string, changed: () => void) => () => void;
+  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;
 };
 
 // The tenant's currency (ADR-0024): the default of amounts people enter; the workspace sets it from /v1/me.
@@ -280,19 +284,23 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   // Scoped sources may be wrapped anew during ordinary parent renders. Their
   // scope, metadata, query and revision determine when a read is necessary.
   const sourceIdentity = source.scope ?? source;
+  const visible = useViewVisible();
   useEffect(() => {
-    if (window || !info || view !== "list") return;
+    if (!visible || window || !info || view !== "list") return;
     let current = true;
     const source = from.current;
     setError(undefined);
     const field = sort.replace(/^-/, "");
     const known = ["id", "created", "changed"].includes(field) || info.fields.some((f) => f.name === field);
-    const handle = setTimeout(() => {
-      source.list(type, { domain, search, sort: known ? [sort] : ["id"], offset, limit: pageSize, archived })
+    const query = { domain, search, sort: known ? [sort] : ["id"], offset, limit: pageSize, archived };
+    const load = () => {
+      source.list(type, query)
         .then((p) => { if (current) { setLoadedPage({ key: pageKey, page: p }); setError(undefined); } }, (e) => { if (current) { setLoadedPage(undefined); setError(String(e)); } });
-    }, 150);
-    return () => { current = false; clearTimeout(handle); };
-  }, [sourceIdentity, source.revision, pageKey, view, windowKey]);
+    };
+    const stop = source.watchList?.(type, query, load);
+    const handle = setTimeout(load, 150);
+    return () => { current = false; stop?.(); clearTimeout(handle); };
+  }, [sourceIdentity, source.revision, pageKey, view, windowKey, visible]);
   if (!info || !entity) return <p className="text-sm text-muted">{t("Unknown entity type")} {type}.</p>;
   const columnsOf = presentRecordColumns([{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
     ...columnsFor(entity,[...new Set(fields??listed(entity))].filter(name=>listed(entity).includes(name))).map((c) => ({ ...c, enableSorting: false }))],entity,info,columnPresentation);
@@ -364,10 +372,10 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
         <EditableRecordGrid key={JSON.stringify([source.scope,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.scope,inlineEdit?.preview,domain,search,sort,offset,archived,error])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} rowHeight={density==="normal"?36:28} showToolbar={showToolbar} port={inlineEdit} selectionSet={selectionSet} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
       )}
       {view === "pivot" && aggregate && rows && (
-        <Pivot source={{ aggregate, scope: source.scope, revision: source.revision }} type={type} query={query} rows={rows} columns={columns || undefined} measure={measure}
+        <Pivot source={{ aggregate, scope: source.scope, revision: source.revision, watchAggregate: source.watchAggregate }} type={type} query={query} rows={rows} columns={columns || undefined} measure={measure}
           onDrill={(d) => { setDrilled([...(drilled ?? []), ...d]); setOffset(0); setView("list"); }} />
       )}
-      {view === "chart" && aggregate && rows && <Chart spec={spec} source={{ aggregate, scope: source.scope, revision: source.revision }} height={360} />}
+      {view === "chart" && aggregate && rows && <Chart spec={spec} source={{ aggregate, scope: source.scope, revision: source.revision, watchAggregate: source.watchAggregate }} height={360} />}
     </div>
   );
 }
@@ -441,10 +449,16 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
     const scope = source.scope;
     setError(undefined);
     source.get(type, id).then((value) => { if (request.current === epoch && source.scope === scope) setLoaded({ type, id, scope, view: value }); }, (e) => {
-      if (request.current === epoch && source.scope === scope) setError(e instanceof Error ? e.message : String(e));
+      if (request.current === epoch && source.scope === scope) { setLoaded(undefined); setError(e instanceof Error ? e.message : String(e)); }
     });
   }, [source, source.scope, type, id]);
-  useEffect(() => { load(); return () => { request.current++; }; }, [load, reload, source.revision]);
+  const visible = useViewVisible();
+  useEffect(() => {
+    if (!visible) return;
+    load();
+    const stop = source.watchRecord?.(type, id, load);
+    return () => { request.current++; stop?.(); };
+  }, [load, reload, source.revision, visible, source.watchRecord, type, id]);
   const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
   if (error) {
     return (
