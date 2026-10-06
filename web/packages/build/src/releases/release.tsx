@@ -77,6 +77,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [joint, setJoint] = useState<JointChoice[]>(initialDrafts);
   const [jointNote, setJointNote] = useState("");
   const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20`, undefined, mayRelease);
+  const hostAdmin = useReadQuery<{ subject: string; tenants: string[] }>("/v1/host/me", undefined, mayRelease).isSuccess; // the host console answers only host administrators
   const activeID = inventory.data?.activeId ?? "";
   const selected = kinds.find((item) => item.kind === kind)!;
   const query = useRecordInventory<Record>(selected.type, 1000, builder);
@@ -272,6 +273,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       </div>
       {review.currentId && <p className="break-all text-xs">{t("Installed candidate")}: <code>{review.currentId}</code></p>}
       {review.candidateId && <p className="break-all text-xs">{savedReview ? t("Saved candidate") : t("Draft candidate")}: <code>{review.candidateId}</code></p>}
+      {savedReview && hostAdmin && <div className="flex flex-wrap items-center gap-2"><Button size="sm" onClick={() => open({ view: "host-promotions", params: { from: client.connection.tenant, candidate: savedID } })}>{t("Promote to another environment…")}</Button><span className="text-xs text-muted">{t("Development → test → production: the sealed bytes of this candidate move into another tenant through the host console.")}</span></div>}
       {savedReview && <Disclosure className="rounded border border-border p-3" summary={<span className="text-sm font-semibold">{t("Sealed definitions")} · {assets.length}</span>}>
         <p className="my-2 text-xs text-muted">{t("These definitions come from this immutable candidate, including its original versions and dependencies.")}</p>
         {assets.map(asset => <Disclosure key={`${asset.ref.app}/${asset.ref.kind}/${asset.ref.name}`} className="my-2" summary={<span className="font-mono text-xs">{asset.ref.app}/{asset.ref.kind}/{asset.ref.name}</span>}><pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(asset, null, 2)}</pre></Disclosure>)}

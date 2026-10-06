@@ -3145,4 +3145,6 @@ register("zh-CN", {
   "Record ID": "记录 ID",
   "Offer printing as a label": "提供标签打印",
   "The barcode is Code 128 over a text field; printing prints only this detail.": "条码为文本字段的 Code 128；打印时只打印这个详情区块。",
+  "Promote to another environment…": "晋级到另一个环境…",
+  "Development → test → production: the sealed bytes of this candidate move into another tenant through the host console.": "开发 → 测试 → 生产：该候选的封存字节通过宿主控制台移入另一个租户。",
 });

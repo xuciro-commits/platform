@@ -165,7 +165,7 @@ export const hostConsole = defineApp({
   views: [
     { id: "host-overview", title: () => t("Host Console"), render: () => <HostOverview /> },
     { id: "host-tenant", title: (p) => p.tenant ?? t("Tenant"), render: (p) => <HostTenant key={p.tenant} tenant={p.tenant ?? ""} /> },
-    { id: "host-promotions", title: () => t("Promote a release"), render: (p) => <HostPromotions tenant={p.tenant} /> },
+    { id: "host-promotions", title: () => t("Promote a release"), render: (p) => <HostPromotions tenant={p.tenant} from={p.from} candidate={p.candidate} /> },
     { id: "host-migrations", title: () => t("Migrate records"), render: (p) => <HostMigrations tenant={p.tenant} /> },
   ],
   nav: () => [{ label: t("Host Console"), items: [

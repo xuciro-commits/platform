@@ -166,17 +166,17 @@ function SupportDialog({ tenant, open, onOpenChange }: { tenant: string; open: b
 }
 
 /** Tenants as environments: a sealed candidate moves from one into another. */
-export function HostPromotions({ tenant }: { tenant?: string }) {
+export function HostPromotions({ tenant, from: initialFrom, candidate: initialCandidate }: { tenant?: string; from?: string; candidate?: string }) {
   const overview = useReadQuery<Api.HostOverview>("/v1/host/overview");
   const call = useConsole();
   const tenants = overview.data?.tenants ?? [];
   const [to, setTo] = useState(tenant ?? "");
-  const [from, setFrom] = useState("");
-  const target = to || tenants[0]?.id || "";
-  const source = from || tenants.find((candidate) => candidate.id !== target)?.id || "";
+  const [from, setFrom] = useState(initialFrom ?? "");
+  const source = from || tenants.find((candidate) => candidate.id !== to)?.id || "";
+  const target = to || tenants.find((candidate) => candidate.id !== source)?.id || tenants[0]?.id || "";
   const artifacts = useReadQuery<Artifact[]>(`/v1/host/tenants/${encodeURIComponent(source)}/artifacts`, undefined, !!source);
   const grants = useReadQuery<Grant[]>(`/v1/host/tenants/${encodeURIComponent(target)}/support`, undefined, !!target);
-  const [candidate, setCandidate] = useState("");
+  const [candidate, setCandidate] = useState(initialCandidate ?? "");
   const [grant, setGrant] = useState("");
   const [activate, setActivate] = useState(false);
   const [busy, setBusy] = useState(false);
