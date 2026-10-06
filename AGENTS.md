@@ -6,7 +6,7 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 
 面向 FDE 与客户构建者的 AI 业务应用平台，产品形态对标 Palantir Foundry/AIP：语言中立的内核契约（`contract/`）、Go 宿主（`capabilities/server/`）、Web 工作区（`web/`）、验证应用（`apps/`、`solutions/`）。
 
-读什么：[Intent](docs/Intent.md)（宗旨）→ [WorkQueue](docs/WorkQueue.md)（当前要做的事）→ 与任务相关的 [Platform](docs/Platform.md) 章节、[ADR](docs/ADR/) 与 [Apps](docs/Apps.md)。产品结构（Shell、应用门户、功能块）以 [ADR-0052](docs/ADR/0052-foundry-aligned-platform-experience.md) 为唯一现行版本。不要求通读全部 ADR。
+读什么：[Intent](docs/Intent.md)（宗旨）→ [WorkQueue](docs/WorkQueue.md)（当前要做的事）→ 与任务相关的 [Platform](docs/Platform.md) 章节、[ADR](docs/ADR/) 与 [Apps](docs/Apps.md)。产品结构（Shell、应用门户、功能块）以 [ADR-0052（Shell/门户/投影）与 ADR-0053（构建者编辑器）](docs/ADR/0052-foundry-aligned-platform-experience.md) 为唯一现行版本。不要求通读全部 ADR。
 
 ## 工作方式
 
