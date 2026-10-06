@@ -1184,5 +1184,5 @@ func (t *Tenant) Member(id string) (platform.Member, bool) {
 	if m == nil {
 		return platform.Member{}, false
 	}
-	return clone(m), true
+	return d.currentMember(m), true
 }

@@ -7,11 +7,86 @@ import (
 	"net/http/httptest"
 	"net/url"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/enterprise"
+	"platformserver/platform"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestEnterpriseHTTPAndLiveReads(t *testing.T) {
+	seat := Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin, enterprise.ID: enterprise.Admin}}}
+	tn, err := NewTenant("enterprise-http", NewConsole("enterprise-http", seat), enterprise.New("enterprise-http", platform.OrgSeed{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(NewHost(Tokens(map[string]string{"token": "user:admin@example.test"}), tn).Handler())
+	defer server.Close()
+	client := &http.Client{Timeout: 3 * time.Second}
+	paths := []string{"/v1/enterprise", "/v1/enterprise-metamodel", "/v1/enterprise-published"}
+	get := func(path string) *http.Response {
+		t.Helper()
+		request, _ := http.NewRequest("GET", server.URL+path, nil)
+		request.Header.Set("Authorization", "Bearer token")
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != 200 {
+			response.Body.Close()
+			t.Fatalf("%s: HTTP %d", path, response.StatusCode)
+		}
+		return response
+	}
+	for _, path := range paths {
+		get(path).Body.Close()
+	}
+	watch, _ := json.Marshal(paths)
+	response := get("/v1/changes?" + url.Values{"watch": {string(watch)}}.Encode())
+	defer response.Body.Close()
+	reader := bufio.NewReader(response.Body)
+	frame := func() LiveQueryFrame {
+		t.Helper()
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.HasPrefix(line, "data: ") {
+				var out LiveQueryFrame
+				if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &out); err != nil {
+					t.Fatal(err)
+				}
+				for _, result := range out.Results {
+					if result.Status != 200 {
+						t.Fatalf("live %s: HTTP %d", result.Path, result.Status)
+					}
+				}
+				return out
+			}
+		}
+	}
+	if initial := frame(); len(initial.Results) != len(paths) {
+		t.Fatalf("missing initial enterprise snapshots: %+v", initial)
+	}
+	admin, _ := tn.Member("admin")
+	if _, err := tn.Submit(admin, &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: enterprise.ID, IdempotencyKey: "add-unit",
+		Target: &pb.EntityRef{Type: enterprise.ElementType, Id: "company"}, Schema: &pb.SchemaRef{Name: enterprise.SchemaElementAdd, Version: 1},
+		Payload: []byte(`{"stereotype":"ActualOrganization","name":"Company"}`)}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	updated := frame()
+	found := false
+	for _, result := range updated.Results {
+		if result.Path == "/v1/enterprise" && strings.Contains(string(result.Body), `"id":"company"`) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("model change did not reach the original enterprise subscription")
+	}
+}
 
 func TestLiveQueriesFilterDependenciesAndInvalidateDeniedReads(t *testing.T) {
 	tenant := &Tenant{records: newRecordStore()}

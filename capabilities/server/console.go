@@ -127,7 +127,7 @@ func (d *Console) Identities() []Identity {
 	out := []Identity{}
 	for subject, id := range d.subjects {
 		if m := d.members[id]; m != nil {
-			out = append(out, Identity{Token: subject, Tenant: d.tenant, Member: id, Roles: maps.Clone(m.Roles)})
+			out = append(out, Identity{Token: subject, Tenant: d.tenant, Member: id, Roles: d.currentMember(m).Roles})
 		}
 	}
 	slices.SortFunc(out, func(a, b Identity) int { return strings.Compare(a.Token, b.Token) })
@@ -173,7 +173,7 @@ func (d *Console) Member(subject string) (platform.Member, bool) {
 	if m == nil {
 		return platform.Member{}, false
 	}
-	return clone(m), true
+	return d.currentMember(m), true
 }
 
 // holding are the members with role in app, sorted.
@@ -182,7 +182,7 @@ func (d *Console) holding(app, role string) []string {
 	defer d.mu.Unlock()
 	var out []string
 	for id, m := range d.members {
-		if m.Roles[app] == role {
+		if d.currentMember(m).Roles[app] == role {
 			out = append(out, id)
 		}
 	}
@@ -391,7 +391,12 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		if p.App == "" {
 			return nil, invalid
 		}
-		return func(*pb.ChangeRecord) { delete(m.Roles, p.App) }, nil
+		return func(*pb.ChangeRecord) {
+			delete(m.Roles, p.App)
+			if p.App == "enterprise" && d.enterpriseRoles() && !c.Replaying {
+				delete(m.Roles, "org")
+			}
+		}, nil
 	}
 	// SchemaGrant: only a role the app defines, in an app the tenant runs.
 	if d.t == nil {
@@ -400,7 +405,12 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 	if app := d.t.app(p.App); app == nil || !slices.Contains(app.Manifest().AllRoles(), p.Role) {
 		return nil, invalid
 	}
-	return func(*pb.ChangeRecord) { m.Roles[p.App] = p.Role }, nil
+	return func(*pb.ChangeRecord) {
+		m.Roles[p.App] = p.Role
+		if p.App == "enterprise" && d.enterpriseRoles() && !c.Replaying {
+			delete(m.Roles, "org")
+		}
+	}, nil
 }
 
 // MemberView is a member with the subjects that sign in as it.
@@ -450,7 +460,7 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	defer d.mu.Unlock()
 	out := []MemberView{}
 	for _, m := range d.members {
-		v := MemberView{Member: clone(m), Subjects: []string{}}
+		v := MemberView{Member: d.currentMember(m), Subjects: []string{}}
 		for subject, id := range d.subjects {
 			if id == m.ID {
 				v.Subjects = append(v.Subjects, subject)
@@ -501,5 +511,5 @@ func (t *Tenant) member(id string) (platform.Member, bool) {
 	if m == nil {
 		return platform.Member{}, false
 	}
-	return clone(m), true
+	return d.currentMember(m), true
 }
