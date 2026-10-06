@@ -1259,13 +1259,10 @@
   "Share it with the tenants this one federates with (group, subsidiaries, partners)": "与本租户联合的租户共享（集团、子公司、合作伙伴）",
   "The other tenant's enterprise-published answer": "另一个租户 enterprise-published 读取的结果",
   "Stereotype": "构造型",
-  "Apply an enterprise example": "应用企业建模示例",
-  "Add an editable example to this enterprise model, preserving existing data.": "将可编辑的示例加入此企业模型，保留已有数据。",
-  "The versioned enterprise example": "带版本的企业建模示例",
-  "An optional existing organisation to attach it to": "可选：挂接到的已有组织",
-  "enterprise examples are unavailable": "企业建模示例暂不可用",
-  "the example application needs a bounded identifier": "应用示例需要一个有界标识。",
-  "the enterprise needs a name": "请填写企业名称。",
-  "the example's parent must be a live local organisation": "示例的上级必须是当前有效的本地组织。",
-  "the example application identifier is already in use": "此示例应用标识已使用。"
+  "Add from a pattern": "从模式添加",
+  "Graft a ready-made piece of enterprise — a company, plant, hotel, warehouse, department, line — under an organisation, or at the top. Rename and reshape it afterwards like anything else.": "将现成的企业片段——公司、工厂、酒店、仓库、部门、产线——嫁接到组织之下或作为顶层节点，之后可以改名和调整结构。",
+  "Pattern id: group, company, plant, hotel, warehouse, office, department, shared-services, line, team": "模式标识：group、company、plant、hotel、warehouse、office、department、shared-services、line、team",
+  "The new root's name": "新增根节点名称",
+  "The organisation it sits under; empty: the top": "嫁接到的组织；留空：顶层",
+  "Integer knobs by name, e.g. {\"workshops\": 3}": "按名称设置整数参数，例如 {\"workshops\": 3}"
 }

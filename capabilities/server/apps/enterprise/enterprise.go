@@ -35,14 +35,14 @@ const (
 	SchemaKindAdd         = "enterprise.kind.add"
 	SchemaViewSave        = "enterprise.view.save"
 	SchemaSeed            = "enterprise.model.seed"
-	SchemaApplyExample    = "enterprise.model.apply-example"
 
-	ReadOrganization  = "organization"
-	ReadModel         = "enterprise"
-	ReadMetamodel     = "enterprise-metamodel"
-	ReadExamples      = "enterprise-examples"
-	ReadPublished     = "enterprise-published" // the slice this tenant shares with the tenants it federates with
-	SchemaSliceImport = "enterprise.slice.import"
+	ReadOrganization   = "organization"
+	ReadModel          = "enterprise"
+	ReadMetamodel      = "enterprise-metamodel"
+	ReadPublished      = "enterprise-published" // the slice this tenant shares with the tenants it federates with
+	ReadPatterns       = "enterprise-patterns"  // the pattern catalogue with previews
+	SchemaPatternApply = "enterprise.pattern.apply"
+	SchemaSliceImport  = "enterprise.slice.import"
 
 	// Admin stewards the model (the org app's role, kept so seats carry over).
 	Admin = "admin"
@@ -96,9 +96,10 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 		platform.Action{Schema: SchemaSliceImport, Target: ModelType, Capability: "federation", Title: "Import a published slice", Roles: admin,
 			Description: "Mirror what another tenant publishes — its organisations, capabilities, sites — read-only, owned there; relate your own elements to them. A connector delivers the slice.",
 			Payload:     []platform.Field{f("slice", "json", "The other tenant's enterprise-published answer", true)}},
-		platform.Action{Schema: SchemaApplyExample, Target: ModelType, Capability: "seed", Title: "Apply an enterprise example", Roles: admin,
-			Description: "Add an editable example to this enterprise model, preserving existing data.",
-			Payload:     []platform.Field{f("example", "string", "The versioned enterprise example", true), f("name", "string", "The enterprise's name", true), f("parent", "string", "An optional existing organisation to attach it to", false)}},
+		platform.Action{Schema: SchemaPatternApply, Target: ModelType, Capability: "seed", Title: "Add from a pattern", Roles: admin,
+			Description: "Graft a ready-made piece of enterprise — a company, plant, hotel, warehouse, department, line — under an organisation, or at the top. Rename and reshape it afterwards like anything else.",
+			Payload: []platform.Field{f("pattern", "string", "Pattern id: group, company, plant, hotel, warehouse, office, department, shared-services, line, team", true), f("name", "string", "The new root's name", true),
+				f("under", "string", "The organisation it sits under; empty: the top", false), f("params", "json", "Integer knobs by name, e.g. {\"workshops\": 3}", false)}},
 		platform.Action{Schema: SchemaSeed, Target: ModelType, Capability: "seed", Title: "Seed from a template", Roles: admin,
 			Description: "Give an empty model its first shape for the enterprise's scale: S (≤100 people), M (≤1,000: a plant), L (≤10,000: divisions), XL (≤100,000: a group).",
 			Payload: []platform.Field{f("scale", "string", "S, M, L or XL; empty: from headcount", false), f("name", "string", "The enterprise's name", true), f("headcount", "number", "People, roughly", false),
@@ -123,7 +124,7 @@ func (e *Enterprise) Restore(raw json.RawMessage) error {
 
 func (e *Enterprise) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: "Enterprise", Version: "1", Actions: e.ledger.Catalog,
-		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished, ReadExamples}, Everyone: []string{ReadModel, ReadMetamodel, ReadExamples}}
+		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished, ReadPatterns}, Everyone: []string{ReadModel, ReadMetamodel, ReadPatterns}}
 }
 
 func (e *Enterprise) Declarations() []*pb.AuthorityDeclaration { return e.ledger.Declarations() }
@@ -157,8 +158,9 @@ type payload struct {
 	Layout                                                                                           map[string][2]float64
 	Calendar                                                                                         string
 	Published                                                                                        *bool
-	Example, Parent                                                                                  string
 	Slice                                                                                            *Slice
+	Pattern, Under                                                                                   string
+	Params                                                                                           Params
 }
 
 func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -214,12 +216,6 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			return func(*pb.ChangeRecord) {
 				m.Kinds = append(m.Kinds, Kind{ID: id, Name: p.Name, Kind: p.Kind, Matrix: p.Matrix})
 			}, nil
-		case SchemaApplyExample:
-			added, err := m.appendExample(p.Example, id, p.Name, p.Parent, today)
-			if err != nil {
-				return nil, invalid(err.Error())
-			}
-			return func(*pb.ChangeRecord) { *m = added }, nil
 		case SchemaSeed:
 			if len(m.Elements) > 0 {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "the model already has {n} elements; a template seeds only an empty model", len(m.Elements))
@@ -235,6 +231,12 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				seeded.Calendars = m.Calendars
 				*m = seeded
 			}, nil
+		case SchemaPatternApply:
+			probe := copyModel(*m)
+			if _, err := probe.Apply(p.Pattern, p.Under, p.Name, p.Params, today); err != nil {
+				return nil, invalid(err.Error())
+			}
+			return func(*pb.ChangeRecord) { m.Apply(p.Pattern, p.Under, p.Name, p.Params, today) }, nil
 		case SchemaSliceImport:
 			if p.Slice == nil || p.Slice.Tenant == "" || p.Slice.Tenant == e.tenant {
 				return nil, invalid("a slice names the tenant it comes from")
@@ -496,6 +498,13 @@ func (e *Enterprise) Calendar(party string, day Date) platform.Calendar {
 
 // Metamodel is what the client draws palettes from: the current release's
 // stereotypes in the Enterprise Core Profile, with the whole registry behind.
+// PatternInfo is a pattern with what it adds by default.
+type PatternInfo struct {
+	Pattern
+	LevelName string  `json:"levelName"`
+	Preview   Preview `json:"preview"`
+}
+
 type Metamodel struct {
 	Version      string                      `json:"version"`
 	URI          string                      `json:"uri"`
@@ -529,16 +538,17 @@ func (e *Enterprise) Read(_ platform.Caller, name string) (any, *kernel.Error) {
 	switch name {
 	case ReadOrganization:
 		return e.model.OrgSeed(), nil
-	case ReadExamples:
-		examples, err := ModelExamples()
-		if err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "enterprise examples are unavailable")
-		}
-		return examples, nil
 	case ReadModel:
 		return copyModel(e.model), nil
 	case ReadPublished:
 		return e.model.Published(e.tenant), nil
+	case ReadPatterns:
+		out := []PatternInfo{}
+		for _, p := range Patterns() {
+			pv, _ := PatternPreview(p.ID, "", nil)
+			out = append(out, PatternInfo{Pattern: p, Preview: pv, LevelName: LevelNames[p.Level]})
+		}
+		return out, nil
 	case ReadMetamodel:
 		mm := uaf.Current()
 		return Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations, Grid: Grid()}, nil

@@ -1266,4 +1266,13 @@ export default {
   "Standard look": "标准风格",
   "Industrial look": "工业风格",
   "Print": "打印",
+  "Arrange": "排布",
+  "Tree, top down": "树状·自上而下",
+  "Tree, left to right": "树状·自左向右",
+  "Radial": "放射",
+  "Drag from one element to another to relate them.": "从一个元素拖到另一个元素即可建立关系。",
+  "Nothing shown yet.": "尚未显示任何内容。",
+  "Entity relationship canvas": "实体关系画布",
+  "Explore and arrange entity relationships with zoom, pan, layouts and caller-owned linking.": "通过缩放、平移、排布与调用方管理的连线探索实体关系。",
+  "The caller supplies semantic icons, hierarchy edges, permissions and persistence.": "调用方提供语义图标、层级关系、权限与持久化。",
 } as Record<string, string>;

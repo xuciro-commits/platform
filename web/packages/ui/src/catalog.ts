@@ -173,6 +173,9 @@ export const entries: CatalogEntry[] = [
   asset("ui/block-canvas", "Typed block canvas", "Compose nodes through typed ports with one shared graph interaction model.", 3,
     "graph/BlockCanvas.tsx", ["BlockCanvas", "NodeCanvas"], "Blocks", { type: "BlockCanvasProps", tags: ["flow", "node", "canvas"],
       states: ["Read only", "Editing", "Selected"], constraints: ["The canvas owns interaction; its caller owns graph semantics, validation and persistence."] }),
+  asset("ui/diagram-canvas", "Entity relationship canvas", "Explore and arrange entity relationships with zoom, pan, layouts and caller-owned linking.", 3,
+    "graph/DiagramCanvas.tsx", ["DiagramCanvas"], "Diagrams", { type: "DiagramCanvasProps", tags: ["graph", "diagram", "canvas"],
+      states: ["Read only", "Editing", "Selected"], constraints: ["The caller supplies semantic icons, hierarchy edges, permissions and persistence."] }),
   asset("ui/flow", "Flow observation", "Inspect a native flow's graph, waiting steps and decision trace.", 3,
     "flows/FlowView.tsx", ["FlowView", "FlowGraph", "FlowReleaseBinding"], "FlowObservation", { type: "FlowInstanceData", tags: ["flow", "trace", "release", "version"], dependencies: ["ui/graph", "ui/status"] }),
   asset("ui/record-workspace", "Record list and detail", "Keep record browsing and focused detail in one responsive task frame.", 3,
@@ -188,7 +191,7 @@ export const entries: CatalogEntry[] = [
 export const api = [
   "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
   "defineEntity", "columnsFor", "recordSchema", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useUnsavedChanges", "notify",
-  "routeKey", "routeToHash", "routeFromHash", "layout", "neighborhoodPositions", "canvasNodeHeight", "canvasNodeWidth", "canvasPlacement", "validateCanvasConnection",
+  "routeKey", "routeToHash", "routeFromHash", "layout", "diagramLayout", "diagramLayouts", "neighborhoodPositions", "canvasNodeHeight", "canvasNodeWidth", "canvasPlacement", "validateCanvasConnection",
   "flowStates", "useChartData", "groupDomain", "aggregateQuery", "aggregateValues", "columnOf",
   "groupable", "measurable", "entityFrom", "setCurrency", "humanizeKernelError",
 ];

@@ -53,6 +53,8 @@ export type { ColumnDef } from "@tanstack/react-table";
 export { Graph, layout, type GraphNode, type GraphEdge } from "./graph/Graph";
 export { NodeCanvas, canvasNodeHeight, canvasNodeWidth, canvasPlacement, validateCanvasConnection, type NodeCatalog, type NodeKind, type NodePort, type CanvasNode, type CanvasEdge, type CanvasPosition, type CanvasAddContext, type CanvasHistory, type BlockStatus, type BlockDiagnostic } from "./graph/NodeCanvas";
 export { BlockCanvas, type BlockCanvasProps } from "./graph/BlockCanvas";
+export { DiagramCanvas, type DiagramCanvasProps, type DiagramNode, type DiagramEdge } from "./graph/DiagramCanvas";
+export { diagramLayout, diagramLayouts, type DiagramLayout } from "./graph/diagramLayouts";
 export { FlowView, FlowGraph, FlowReleaseBinding, flowStates, type FlowDefinition, type FlowInstanceData, type FlowStep, type FlowToken, type FlowTrace } from "./flows/FlowView";
 export { Chart, useChartData, type ChartSource } from "./charts/Chart";
 export { Pivot, groupDomain } from "./charts/Pivot";
