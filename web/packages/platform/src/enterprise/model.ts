@@ -64,3 +64,11 @@ export function autoLayout(m: Model, shown: string[], kind: string, day: string,
   for (const id of shown) if (!out[id]) { out[id] = [x + 20, y]; y += 70; if (y > 600) { y = 40; x += 180; } }
   return out;
 }
+
+// A reusable piece of enterprise on the four-level backbone (ADR-0068 §5):
+// 1 Enterprise, 2 Site, 3 Function, 4 Team. Grafted under any organisation.
+export type PatternInfo = {
+  id: string; title: string; description: string; level: number; industry?: string; levelName: string;
+  params: { name: string; type: string; description: string }[];
+  preview: { elements: number; relationships: number; organisations: number; posts: number; locations: number; resources: number; outline: string[] };
+};

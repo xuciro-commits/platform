@@ -6,9 +6,9 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, Input, Panel, Select, Tag, Tree, Workbench, t, type ColumnDef, type WorkbenchTab } from "@platform/ui";
-import { Link2, Network, Plus, Save, Table2, Workflow } from "lucide-react";
+import { Link2, Network, Plus, Puzzle, Save, Table2, Workflow } from "lucide-react";
 import { Canvas, type Positions } from "./canvas";
-import { autoLayout, childrenOf, live, rootsOf, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PLACEMENT, RELATIONSHIP, VIEW, type Element, type GridCell, type Metamodel, type Model, type Relationship } from "./model";
+import { autoLayout, childrenOf, live, rootsOf, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PLACEMENT, RELATIONSHIP, VIEW, type Element, type GridCell, type Metamodel, type Model, type PatternInfo, type Relationship } from "./model";
 
 type Decide = (schema: string, target: { type: string; id: string }, payload: unknown) => Promise<boolean>;
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
@@ -30,6 +30,8 @@ export function Enterprise() {
 // --- The wizard: three to five questions, then a template (ADR-0067 D6).
 function SeedWizard({ decide, admin }: { decide: Decide; admin: boolean }) {
   const [v, setV] = useState({ name: "", headcount: "500", sites: "", legalEntities: "", industry: "manufacturing" });
+  const patterns = useRead<PatternInfo[]>("/v1/enterprise-patterns").data ?? [];
+  const [pattern, setPattern] = useState<PatternInfo>();
   const scale = +v.headcount <= 100 ? "S" : +v.headcount <= 1000 ? "M" : +v.headcount <= 10000 ? "L" : "XL";
   const shapes: Record<string, string> = { S: t("One company with a few teams and one site."), M: t("A plant: departments, workshops, lines, stations and machines."), L: t("Business units each with a plant, shared services, cost centres and projects."), XL: t("A group: subsidiaries with ownership shares, regions, a board and committees.") };
   return <div className="mx-auto grid max-w-xl gap-4">
@@ -49,6 +51,11 @@ function SeedWizard({ decide, admin }: { decide: Decide; admin: boolean }) {
         {!admin && <p className="text-xs text-muted">{t("An enterprise administrator seeds the model.")}</p>}
       </div>
     </Panel>
+    <Panel title={t("Or start from one piece")} description={t("A single company, plant, hotel or warehouse to try the modeler with; add more pieces later from the Patterns tab.")}>
+      <div className="grid gap-1">{patterns.filter((p) => p.level <= 2).map((p) => <Button key={p.id} variant="row" disabled={!admin} onClick={() => setPattern(p)} className="justify-between border border-border">
+        <span>{p.title}</span><span className="text-[10px] text-muted">{p.levelName} · {t("{n} elements", { n: p.preview.elements })}</span></Button>)}</div>
+    </Panel>
+    {pattern && <PatternDialog pattern={pattern} organisations={[]} decide={decide} onClose={() => setPattern(undefined)} />}
   </div>;
 }
 
@@ -63,6 +70,8 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   const [dialog, setDialog] = useState<{ kind: "element"; stereotype: string; at?: [number, number] } | { kind: "link"; source: string; target: string } | { kind: "view" }>();
   const [filter, setFilter] = useState("");
   const [left, setLeft] = useState("palette");
+  const patterns = useRead<PatternInfo[]>("/v1/enterprise-patterns").data ?? [];
+  const [pattern, setPattern] = useState<PatternInfo>();
 
   const view = m.views.find((v) => v.id === viewId) ?? m.views[0];
   const cell: GridCell | undefined = meta.grid.find((g) => g.id === (draft?.grid ?? view?.grid)) ?? meta.grid[0];
@@ -102,6 +111,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     if (await decide("enterprise.view.save", { type: VIEW, id }, { name, grid, elements: working.elements, layout: working.layout, asOf: day })) { setDraft(undefined); setViewId(id); }
   };
 
+  const sel = selected ? byId(selected) : undefined;
   const tabs: WorkbenchTab[] = [
     { id: "palette", title: t("Palette"), content: <div className="grid gap-1 p-2">
       <p className="px-1 text-xs text-muted">{cell ? `${cell.id} · ${cell.title}` : ""}</p>
@@ -110,6 +120,19 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
         <span>{p.title}</span><span className="font-mono text-[10px] text-muted">{p.stereotype}</span>
       </Button>)}
       <p className="px-1 pt-2 text-[11px] text-muted">{t("Drag onto the canvas or click to add. UAF {version}.", { version: meta.version })}</p>
+    </div> },
+    { id: "patterns", title: t("Patterns"), content: <div className="grid gap-1 p-2">
+      <p className="px-1 text-xs text-muted">{sel?.stereotype === ORGANIZATION ? t("Added under {name}.", { name: sel.name }) : t("Added at the top; select an organisation to add under it.")}</p>
+      {[1, 2, 3, 4].map((level) => {
+        const list = patterns.filter((p) => p.level === level);
+        return list.length === 0 ? null : <div key={level} className="grid gap-1">
+          <p className="px-1 pt-1 text-[11px] font-semibold text-muted">{level} · {t(list[0]!.levelName)}</p>
+          {list.map((p) => <Button key={p.id} variant="row" disabled={!admin} onClick={() => setPattern(p)} className="justify-between border border-border" title={p.description}>
+            <span className="flex items-center gap-1"><Puzzle className="size-3" />{p.title}</span><span className="text-[10px] text-muted">{p.industry ? `${t(p.industry)} · ` : ""}{t("{n} elements", { n: p.preview.elements })}</span>
+          </Button>)}
+        </div>;
+      })}
+      <p className="px-1 pt-2 text-[11px] text-muted">{t("A pattern grafts a ready-made piece — rename, move or close anything afterwards.")}</p>
     </div> },
     { id: "elements", title: t("Elements"), badge: m.elements.length, content: <div className="grid gap-1 p-2">
       <Input placeholder={t("Find…")} value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -128,7 +151,6 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     </div> },
   ];
 
-  const sel = selected ? byId(selected) : undefined;
   const tableColumns: ColumnDef<Element, unknown>[] = [
     { id: "name", header: t("Name"), accessorFn: (e) => e.name },
     { id: "type", header: t("Type"), accessorFn: (e) => title(e.stereotype) },
@@ -169,6 +191,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     {dialog?.kind === "link" && <LinkDialog source={byId(dialog.source)!} target={byId(dialog.target)!} cell={cell} meta={meta} kinds={m.kinds} defaultKind={placementKind} title={title}
       onClose={() => { setDialog(undefined); setLinking(false); }}
       onSubmit={async (v) => { if (await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("rel", dialog.source) }, { ...v, source: dialog.source, target: dialog.target })) { setDialog(undefined); setLinking(false); } }} />}
+    {pattern && <PatternDialog pattern={pattern} organisations={m.elements.filter((e) => e.stereotype === ORGANIZATION && live(e, day))} under={sel?.stereotype === ORGANIZATION ? sel.id : undefined} decide={decide} onClose={() => setPattern(undefined)} />}
     {dialog?.kind === "view" && <ViewDialog grid={meta.grid.filter((g) => !g.scales?.length || !m.scale || g.scales.includes(m.scale))} onClose={() => setDialog(undefined)}
       onSubmit={async (name, grid) => { setDraft({ elements: [], layout: {}, name, grid, dirty: true }); setDialog(undefined); await saveView(name, grid); }} />}
   </>;
@@ -215,6 +238,24 @@ function LinkDialog({ source, target, cell, meta, kinds, defaultKind, title, onC
       {v.stereotype === MEMBERSHIP && field(t("Role"), <Input value={v.role} onChange={(e) => setV({ ...v, role: e.target.value })} />)}
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit">{t("Relate")}</Button></div>
     </Form>}
+  </Dialog>;
+}
+
+// A pattern applied: a name, its integer knobs, where it goes, and what it adds.
+function PatternDialog({ pattern: p, organisations, under, decide, onClose }: { pattern: PatternInfo; organisations: Element[]; under?: string; decide: Decide; onClose: () => void }) {
+  const [v, setV] = useState<{ name: string; under: string; params: Record<string, string> }>({ name: "", under: under ?? "", params: {} });
+  const params = Object.fromEntries(Object.entries(v.params).filter(([, x]) => x !== "").map(([k, x]) => [k, +x]));
+  return <Dialog open onOpenChange={(o) => !o && onClose()} title={t("Add a {thing}", { thing: p.title })}>
+    <Form className="grid gap-3" onSubmit={async () => { if (await decide("enterprise.pattern.apply", { type: MODEL, id: "model" }, { pattern: p.id, name: v.name, under: v.under || undefined, params: Object.keys(params).length ? params : undefined })) onClose(); }}>
+      <p className="text-xs text-muted">{p.description}</p>
+      {field(t("Name"), <Input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />)}
+      {p.params.length > 0 && <div className="grid grid-cols-2 gap-3">{p.params.map((k) => field(k.description, <Input key={k.name} type="number" min="0" value={v.params[k.name] ?? ""} onChange={(e) => setV({ ...v, params: { ...v.params, [k.name]: e.target.value } })} />))}</div>}
+      {organisations.length > 0 && field(t("Under"), <Select value={v.under} onChange={(e) => setV({ ...v, under: e.target.value })}><option value="">{t("— top level")}</option>{organisations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</Select>)}
+      <Disclosure summary={<span className="text-xs text-muted">{t("Adds by default")}: {t("{n} elements", { n: p.preview.elements })} · {p.preview.organisations} {t("organisations")} · {p.preview.posts} {t("posts")} · {p.preview.locations} {t("locations")} · {p.preview.resources} {t("resources")}</span>}>
+        <pre className="mt-1 max-h-48 overflow-auto text-[11px] text-muted">{p.preview.outline.join("\n")}</pre>
+      </Disclosure>
+      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" disabled={!v.name}>{t("Add")}</Button></div>
+    </Form>
   </Dialog>;
 }
 

@@ -39,3 +39,14 @@
 - 2D/3D 运营视图读取 `ActualLocation` 层级与 `ActualResource` 位置。
 - `core.site.unit` 目前存储企业组织元素 ID（文本）；企业模型是 Directory 私有状态，不是 host record store 中的对象。统一对象引用尚未接通，不能用 `ref:"enterprise.element"` 声明虚假的对象依赖，否则组合启动失败；`Caller.Enterprise()` 的模型读取仍可用。
 - 结构清理阶段：`Caller.Units` 删除、`Scope.Structure` 改名、`core` 的 site/location 投影到模型。
+
+## 5. 模式库：四层骨架上的可复用片段（补充决定）
+
+规模模板（S/M/L/XL）只在空租户第一次有用；"示例"若做成另一套整模型预览，就成了第二条路径。改为：
+
+- **四层骨架**：1 Enterprise（集团/公司）、2 Site（工厂/酒店/配送中心/办公点）、3 Function（部门/共享服务/产线）、4 Team（班组/岗位组）。层级只是模式的"根落在哪一层"，模型本身仍是 UAF 元素与关系，不新增类型。
+- **模式（Pattern）**＝一个带整数旋钮的子树构造器：group、company、plant、hotel、warehouse、office、department、shared-services、line、team（`apps/enterprise/seeds.go: Patterns()`）。每个模式有 `Preview`（元素/关系/组织/岗位/位置/资源计数 + 两层大纲），不改模型即可看。
+- **嫁接**：`enterprise.pattern.apply {pattern, name, under?, params?}` 把模式根放到任一组织之下（management 置放；根为法人时另加 legal），ID 与现有模型避撞。读 `enterprise-patterns` 给出目录与默认预览。
+- **规模模板＝模式的组合**：`Template(SeedParams)` 现在用同一批模式搭建（行业决定场地模式：hospitality→hotel、logistics/trade→warehouse、services/other→office、其余→plant）。向导与模式共用一套代码，没有第二份种子数据。
+- Web：建模器左栏新增 Patterns 页签（按层分组，选中组织时默认嫁接其下），空模型页提供"从一个单元开始"。
+- 本地助手的"示例/Examples"工作应改建在此之上：示例＝某个模式的预览/一次 apply，不再单独维护整模型文件。
