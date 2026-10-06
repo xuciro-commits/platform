@@ -1,6 +1,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Developer": "开发者",
+ "Reusable UI, App API and patterns, with live examples and a sandbox.": "可复用的 UI、应用 API 与模式，附实时示例与沙箱。",
   "Quality and compatibility": "质量与兼容",
   "Data diagnostics": "数据诊断",
   "Records": "记录",

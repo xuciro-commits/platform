@@ -28,7 +28,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await expect(page.getByRole("button", { name: "Platform Catalog", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: /^PMS\b/ }).first().click();
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Reservations", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Apps", exact: true }).click();
+  await page.getByRole("button", { name: "Switch application", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "Knowledge", exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Documents", exact: true })).toBeVisible();
 
@@ -47,7 +47,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await expect(nav.getByRole("button", { name: "Workflow runs", exact: true })).toBeVisible();
   await expect(nav.getByRole("button", { name: "Documents", exact: true })).toHaveCount(0);
   await nav.getByRole("button", { name: "Release review", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Workspaces", exact: true })).toContainText("Tenant console");
+  await expect(page.getByRole("button", { name: "Switch application", exact: true })).toContainText("Tenant console");
   await nav.getByRole("button", { name: "Workflow runs", exact: true }).click();
   if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("tenant-operations.png"), fullPage: true });
 

@@ -27,7 +27,7 @@ test("editors keep drafts across navigation and require a choice before discardi
   await page.getByRole("button", { name: "Page settings", exact: true }).click();
   await expect(title).toHaveValue("Saved page");
   await title.fill("Local page draft");
-  await switchWorkspace(page, "Business workspace");
+  await switchWorkspace(page, "Home");
   await expect(confirmation).toHaveCount(0); // navigation leaves the editor mounted
   await page.getByRole("tab", { name: "Compose a page", exact: true }).click();
   await expect(title).toHaveValue("Local page draft");

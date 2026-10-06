@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Review sealed candidates and activate a release.": "审查已封存候选并激活发布。",
+ "Design objects, pages, workflows, functions and applications; test and seal candidates.": "设计对象、页面、流程、函数与应用；测试并封存候选。",
   "Release delivery": "应用交付",
   "A builder or publisher role is required to review releases.": "审查发布需要构建者或发布者角色。",
   "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.": "审查已封存候选的定义并激活发布。定义编辑由构建者负责。",

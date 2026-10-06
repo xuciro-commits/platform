@@ -5,10 +5,10 @@ test("Catalog leads a builder to a controlled Studio draft", async ({ page, requ
   await open(page, "manager", "/home");
   // An ordinary example parameter must not replace the application shell.
   await page.goto("/?preview=ui/button#/home");
-  await switchWorkspace(page, "Developer reference");
-  const appMenu = page.getByRole("button", { name: "Workspaces", exact: true }).first();
+  await switchWorkspace(page, "Platform Catalog");
+  const appMenu = page.getByRole("button", { name: "Switch application", exact: true });
   await appMenu.click();
-  await expect(page.getByRole("menuitemradio", { name: /Developer reference/ })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("menuitemradio", { name: /Platform Catalog/ })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
   await switchWorkspace(page, "Application Studio");
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Discover capabilities", exact: true }).click();

@@ -27,6 +27,8 @@ export function catalogNavigation(mode: "builder" | "developer" = "builder"): Na
 export default defineApp({
   id: "catalog",
   surface: "developer",
+  category: "developer",
+  description: t("Reusable UI, App API and patterns, with live examples and a sandbox."),
   get title() {
     return t("Platform Catalog");
   },

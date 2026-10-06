@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Documents and the glossary of your organisation.": "组织的文档与术语表。",
+ "Try models and functions, and see usage.": "试用模型与函数，查看用量。",
+ "Members, organisation, packages, connections, models, runs and audit.": "成员、组织、能力包、连接、模型、运行与审计。",
   "Package": "软件包",
   "Namespace": "命名空间",
   "Sealed artifact": "封存制品",

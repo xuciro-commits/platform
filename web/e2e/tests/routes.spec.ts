@@ -223,9 +223,8 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
 
   // It is in the launcher, and its page opens from its own navigation.
-  await switchWorkspace(page, "Business workspace");
-  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Business applications", exact: true }).click();
-  await expect(page.getByRole("heading", { name: /Welcome/ })).toBeVisible(); // the launcher itself
+  await switchWorkspace(page, "Home");
+  await expect(page.getByRole("heading", { name: /^Good (morning|afternoon|evening)/ })).toBeVisible(); // Home lists the business applications
   await expect(page.getByRole("button", { name: "Front desk" }).first()).toBeVisible();
   await page.getByRole("button", { name: "Front desk" }).first().click();
   await expect(page.getByRole("heading", { name: "Handed offsites" })).toBeVisible();

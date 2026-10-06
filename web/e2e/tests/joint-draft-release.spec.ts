@@ -70,7 +70,7 @@ for (const fixture of [
       await page.getByRole("button", { name: "Back to application", exact: true }).click();
       await page.getByRole("button", { name: "Open business application", exact: true }).click();
       await expect(page.getByRole("heading", { name: fixture.title, exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Apps", exact: true }).click();
+      await page.getByRole("button", { name: "Switch application", exact: true }).click();
       await expect(page.getByRole("menuitemradio", { name: new RegExp(`${fixture.title} application$`) })).toBeVisible();
       await page.keyboard.press("Escape");
 

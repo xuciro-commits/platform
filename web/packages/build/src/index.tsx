@@ -23,7 +23,7 @@ import { AppWindow, Boxes, Hammer, LayoutList, PackageCheck } from "lucide-react
 const releaseView: View = { id: "release-review", title: () => t("Release review"), render: (p) => <ApplicationScope application={p.application}><ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={releaseDraftsParam(p.drafts, releaseKinds)} /></ApplicationScope> };
 
 export const contributions = [defineApp({
-  id: "build-delivery", serves: ["build"], surface: "tenant", title: t("Release delivery"), icon: <PackageCheck />,
+  id: "build-delivery", serves: ["build"], surface: "tenant", category: "operate", title: t("Release delivery"), description: t("Review sealed candidates and activate a release."), icon: <PackageCheck />,
   home: { view: "release-review" }, views: [releaseView],
   nav: () => [{ label: t("Delivery"), items: [{ label: t("Release review"), icon: <PackageCheck />, route: { view: "release-review", params: { surface: "tenant" } } }] }],
 })];
@@ -31,6 +31,8 @@ export const contributions = [defineApp({
 export default defineApp({
   id: "build",
   surface: "studio",
+  category: "build",
+  description: t("Design objects, pages, workflows, functions and applications; test and seal candidates."),
   title: t("Application Studio"),
   icon: <Hammer />,
   home: { view: "applications" },

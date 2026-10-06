@@ -148,11 +148,27 @@ export type Dashboard = { id: string; title: string; description?: string; for?:
 /** A task surface is presentation context; it never grants owner permissions. */
 export type WorkspaceSurface = "work" | "studio" | "tenant" | "developer";
 
+/**
+ * Where an application sits in the Applications portal (ADR-0052 §3.2). A
+ * category is display grouping only; it never grants owner permissions.
+ * `business` is every application a tenant hands to its people; the others
+ * are the platform's own tools.
+ */
+export type PlatformAppCategory = "business" | "ontology" | "build" | "operate" | "govern" | "developer";
+
+/** The portal category an app lands in when it declares none: by its surface, for the packages that still declare one. */
+export const categoryOf = (app: Pick<AppUI, "category" | "surface">): PlatformAppCategory =>
+  app.category ?? ({ studio: "build", tenant: "govern", developer: "developer" } as Record<string, PlatformAppCategory>)[app.surface ?? "work"] ?? "business";
+
 /** An app's contribution to the workspace, in typed code (AGENTS.md rule 5). */
 export type AppUI = {
   /** Stable UI contribution identity; existing native app ids are retained. */
   id: string;
   surface?: WorkspaceSurface;
+  /** Portal category (ADR-0052); defaults from `surface`, then `business`. */
+  category?: PlatformAppCategory;
+  /** One line under the title in the portal and on Home. */
+  description?: string;
   /** Explicit owner bindings, independent of the contribution's display name. */
   serves?: string[];
   /** Navigation projection only; every read/action still checks its owner. */

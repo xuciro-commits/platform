@@ -3,14 +3,15 @@
 // and the member holds a role in (`/v1/me`), the actions of their catalog — and
 // each app's UI package contributes its views and navigation through defineApp.
 import "./i18n";
-import { ApplicationSessionsProvider, confirmedDecision, HostContext, type AppUI, type Definition, type Host, type Me, type SavedView, type WorkspaceSurface } from "@platform/app";
+import { ApplicationSessionsProvider, categoryOf, confirmedDecision, HostContext, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
 import { Button, Card, Dialog, Workspace, humanizeKernelError, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { Bell, Bookmark, BookOpen, Gauge, Hammer, Inbox, LayoutGrid, Send, SlidersHorizontal, Sparkles, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bookmark, Gauge, Hammer, LayoutGrid, SlidersHorizontal, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chromeViews } from "./chrome";
 import { pageApplication, tenantApps } from "./tenantApps";
+import { availableProjections, categories, portalEntry, projectionOfSurface, projections, type Projection } from "./shell/registry";
 
 /** A development identity of a host on development tokens (GET /v1/sign-in); generated from the host (ADR-0023). */
 export type Identity = Api.Identity;
@@ -261,10 +262,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [selectionScope]);
   useEffect(() => {
     if (!activeRoute) return;
-    if (["home", "inbox", "requests", "notifications", "outbox"].includes(activeRoute.view)) {
-      if (app && surface !== "work") select(undefined);
-      return;
-    }
+    if (["home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved"].includes(activeRoute.view)) return; // the shell's own places keep the current application
     const requested = activeRoute.params?.surface ?? (["catalog", "catalog-example"].includes(activeRoute.view)
       && activeRoute.params?.mode === "builder" ? "studio" : undefined);
     const context = requested && all.find((entry) => entry.surface === requested);
@@ -274,12 +272,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     if (id && id !== current && all.some((a) => a.id === id)) select(id);
   }, [activeRoute, all, app, current, definitions, owner, select, surface]);
   const views = useMemo(() => {
-    const views = [...chromeViews(() => open.current, (id) => {
-      select(id);
-      const home = open.current.find((a) => a.id === id)?.home; // with its params: an app's home may be one of its pages
-      location.hash = home ? routeToHash(home) : "#/home";
-    }, () => registry.current),
-      ...(apps ?? []).flatMap((a) => a.views)];
+    const views = [...chromeViews(() => open.current, () => registry.current), ...(apps ?? []).flatMap((a) => a.views)];
     const seen = new Set<string>();
     for (const v of views) {
       if (seen.has(v.id)) console.error(`view ${v.id} is declared twice; view ids are unique across the workspace`);
@@ -308,21 +301,27 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }
   if (!host || !apps || !ready) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
 
-  const entryPoints = [
-    { id: "work", title: t("Business workspace"), icon: <LayoutGrid /> },
-    ...(all.some((entry) => entry.surface === "studio") ? [{ id: "studio", title: t("Application Studio"), icon: <Hammer /> }] : []),
-    ...(all.some((entry) => entry.surface === "tenant") ? [{ id: "tenant", title: t("Tenant console"), icon: <SlidersHorizontal /> }] : []),
-    ...(host.role("build") === "builder" || host.role("platform") === "admin" || surface === "developer"
-      ? [{ id: "developer", title: t("Developer reference"), icon: <BookOpen /> }] : []),
-  ];
-  const chooseSurface = (id: string) => {
-    const candidates = all.filter((entry) => (entry.surface ?? "work") === id);
-    const last = selectionScope ? remembered(`${selectionScope}:${id}`) : undefined;
-    const target = candidates.find((entry) => entry.id === last) ?? candidates[0];
-    if (!target && id !== "work") return;
-    select(target?.id);
-    location.hash = id === "work" ? "#/inbox" : routeToHash({ ...target!.home, params: { ...target!.home.params, surface: id as WorkspaceSurface } });
+  // The portal (ADR-0052 §3.2): every application this member may open, by
+  // category; and the projections they may switch between. Both only group
+  // what the host already allowed.
+  const portal = all.map(portalEntry);
+  const held = availableProjections(all);
+  const projectionKey = selectionScope ? `${selectionScope}:projection` : undefined;
+  const requestedProjection = projectionOfSurface(activeRoute?.params?.surface) ?? (activeRoute?.params?.workspace as Projection | undefined);
+  const projection: Projection = (requestedProjection && held.includes(requestedProjection) ? requestedProjection : undefined)
+    ?? (projectionKey && held.includes(remembered(projectionKey) as Projection) ? remembered(projectionKey) as Projection : undefined)
+    ?? (app && held.find((id) => projections.find((p) => p.id === id)!.categories.includes(categoryOf(app)))) ?? "operations";
+  const openApplication = (id: string) => {
+    const target = all.find((a) => a.id === id);
+    if (!target) return;
+    select(id);
+    location.hash = routeToHash(target.home);
   };
+  const chooseProjection = (id: string) => {
+    if (projectionKey) remember(projectionKey, id);
+    location.hash = routeToHash({ view: "portal", params: { workspace: id } });
+  };
+  const projectionIcon: Record<Projection, ReactNode> = { operations: <LayoutGrid />, build: <Hammer />, admin: <SlidersHorizontal /> };
 
   const sessionOptions = [
     ...(me!.tenants.length > 1 ? me!.tenants.map((tenant) => ({ id: `tenant:${tenant}`, label: `${t("Tenant")} ${tenant}` })) : []),
@@ -332,7 +331,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const onSwitch = (id: string) => {
     if (id === "sign-out" && signedIn) void leaveSession();
     if (id.startsWith("tenant:") || id.startsWith("as:")) {
-      history.replaceState(null, "", "#/inbox");
+      history.replaceState(null, "", "#/home");
       setActiveRoute(undefined);
       setCurrent(undefined);
       setReady(false);
@@ -346,32 +345,30 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   return (
     <HostContext.Provider value={host}>
-      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={surface === "studio" && studioApplication ? studioApplication.title || studioApplication.name : app?.title ?? t("Business workspace")} storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
-        views={views} home={{ view: "inbox" }}
-        entryPoints={{ apps: entryPoints, current: surface, onSelect: chooseSurface }}
+      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={surface === "studio" && studioApplication ? studioApplication.title || studioApplication.name : app?.title ?? t("Platform")} productIcon={app?.icon}
+        storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
+        views={views} home={{ view: "home" }}
+        rail={{ home: { view: "home" }, applications: { view: "portal" }, notifications: { route: { view: "notifications" }, unread },
+          ...(host.can("agent.run.start") ? { assist: { view: "assistant" } } : {}) }}
+        applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
+        workspaces={{ options: held.map((id) => ({ id, title: projections.find((p) => p.id === id)!.title(), icon: projectionIcon[id] })), current: projection, onSelect: chooseProjection }}
         onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
-        launcher={surface === "work" ? { apps: business.map((a) => ({ id: a.id, title: a.title, icon: a.icon })), current: app?.id,
-          onSelect: (id) => { select(id); const home = business.find((a) => a.id === id)?.home; if (home) location.hash = routeToHash(home); } }
-          : surface === "studio" ? { label: t("Studio applications"), current: studioApplication?.id ?? "studio:all",
-            apps: [{ id: "studio:all", title: t("All applications"), icon: <LayoutGrid /> }, ...(studioApplications.data?.records ?? []).filter(record => !record.archived)
-              .map(record => ({ id: record.id, title: record.title || record.name, icon: <Hammer /> }))],
-            onSelect: id => { location.hash = routeToHash(id === "studio:all" ? { view: "applications", params: { surface: "studio" } } : { view: "application", params: { id, surface: "studio" } }); } } : undefined}
         onActiveRoute={setActiveRoute}
         nav={[
-          ...(surface === "work" ? [{ label: t("My work"), items: [
-            { label: t("Business applications"), icon: <LayoutGrid />, route: { view: "home" } },
-            { label: t("Inbox"), icon: <Inbox />, route: { view: "inbox" } },
-            { label: t("My requests"), icon: <Send />, route: { view: "requests" } },
-            { label: t("Notifications"), icon: <Bell />, route: { view: "notifications" }, badge: badge(unread) },
-            ...(host.can("agent.run.start") ? [{ label: t("Assistant"), icon: <Sparkles />, route: { view: "assistant" } }] : []),
-            ...(waiting ? [{ label: t("Outbox"), icon: <Upload />, route: { view: "outbox" }, badge: badge(waiting) }] : []),
+          ...(surface === "studio" && (studioApplications.data?.records.length ?? 0) > 0 ? [{ label: t("Studio applications"), items: [
+            { label: t("All applications"), icon: <LayoutGrid />, route: { view: "applications", params: { surface: "studio" } } },
+            ...(studioApplications.data?.records ?? []).filter((record) => !record.archived)
+              .map((record) => ({ label: record.title || record.name, icon: <Hammer />, route: { view: "application", params: { id: record.id, surface: "studio" } } })),
           ] }] : []),
-          ...(surface === "work" && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
+          ...(app?.nav(host) ?? []),
           ...(app?.dashboards?.some((d) => !d.for || d.for(host)) ? [{ label: t("Dashboards"), items: app.dashboards.filter((d) => !d.for || d.for(host))
             .map((d) => ({ label: d.title, icon: <Gauge />, route: { view: "dashboard", params: { app: app.id, id: d.id } } })) }] : []),
-          ...(app?.nav(host) ?? []),
+          ...((app?.surface ?? "work") === "work" && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
+          ...(waiting ? [{ label: t("Pending"), items: [{ label: t("Outbox"), icon: <Upload />, route: { view: "outbox" }, badge: badge(waiting) }] }] : []),
         ]}
         commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() },
+          { id: "inbox", label: t("Inbox"), group: t("My work"), run: () => { location.hash = "#/inbox"; } },
+          { id: "requests", label: t("My requests"), group: t("My work"), run: () => { location.hash = "#/requests"; } },
           { id: "active-release", label: t("Last activated release"), run: () => setReleaseOpen(true) },
           { id: "search", label: t("Search"), run: () => { location.hash = "#/search"; } },
           ...(host.role("build") === "builder" ? [

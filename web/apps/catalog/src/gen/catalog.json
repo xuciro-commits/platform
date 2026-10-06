@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:8246e676120ffd8c",
+  "revision": "sha256:93b65bcf81bfe94a",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4550,7 +4550,9 @@
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/App.tsx",
-      "web/apps/workspace/src/chrome.tsx"
+      "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/shell/Applications.tsx",
+      "web/apps/workspace/src/shell/Home.tsx"
     ],
     "ui/input": [
       "web/packages/app/src/actions.tsx",
@@ -4664,7 +4666,8 @@
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
-      "web/apps/workspace/src/chrome.tsx"
+      "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/shell/Applications.tsx"
     ],
     "ui/checkbox": [
       "web/packages/app/src/actions.tsx",
@@ -4797,7 +4800,8 @@
       "web/apps/catalog/src/Governance.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/workspace/src/App.tsx",
-      "web/apps/workspace/src/chrome.tsx"
+      "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/shell/Home.tsx"
     ],
     "ui/dialog": [
       "web/packages/app/src/actions.tsx",
@@ -4900,7 +4904,8 @@
       "web/apps/catalog/src/Governance.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
-      "web/apps/workspace/src/chrome.tsx"
+      "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/shell/Applications.tsx"
     ],
     "ui/graph": [
       "web/packages/app/src/agents.tsx",
@@ -5379,6 +5384,7 @@
         "AggregateData",
         "AggregateOp",
         "AggregateQuery",
+        "Applications",
         "ApprovalInboxProps",
         "ApprovalInboxRow",
         "AssetDirectoryItem",
@@ -5433,7 +5439,6 @@
         "InboxTask",
         "KanbanLane",
         "KanbanMove",
-        "Launcher",
         "LayoutSize",
         "Lifecycle",
         "ListState",
@@ -5461,6 +5466,9 @@
         "Option",
         "Options",
         "PdfViewerProps",
+        "PlatformApplication",
+        "Rail",
+        "RecentEntry",
         "RecordAvatarStackProps",
         "RecordChange",
         "RecordChartFields",
@@ -5503,7 +5511,8 @@
         "TimeUnit",
         "TimelineFields",
         "Tone",
-        "View"
+        "View",
+        "Workspaces"
       ]
     },
     "@platform/app": {
@@ -5512,6 +5521,7 @@
         "HostContext",
         "assetBindingKey",
         "assetKey",
+        "categoryOf",
         "createWidgetDefinitions",
         "createWidgetRegistry",
         "defineApp",
@@ -5567,6 +5577,7 @@
         "PageDecimalValue",
         "PageVariableValue",
         "Passage",
+        "PlatformAppCategory",
         "PropertyRef",
         "RecordExplorationReader",
         "ReferenceRelationRef",

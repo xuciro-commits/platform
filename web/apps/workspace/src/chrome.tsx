@@ -10,6 +10,9 @@ import {
   useWorkspace, type ColumnDef, type InboxTask, type View,
  t } from "@platform/ui";
 import { useState, type ReactNode } from "react";
+import { ApplicationsPortal } from "./shell/Applications";
+import { Home } from "./shell/Home";
+import { projectionOfSurface, type Projection } from "./shell/registry";
 
 type Notification = Api.Notification;
 type Request = Api.ApprovalRequest;
@@ -21,26 +24,6 @@ function StudioReference({ application, children }: { application?: string; chil
 
 const requestStates = defineStatuses({ pending: { label: t("Pending"), tone: "warning" }, approved: { label: t("Approved"), tone: "success" },
   rejected: { label: t("Rejected"), tone: "danger" }, refused: { label: t("Refused when run"), tone: "danger" }, withdrawn: { label: t("Withdrawn"), tone: "neutral" } });
-
-// The launcher as a page: every app the member may open, like a home screen.
-function Home({ apps: appsOf, onSelect }: { apps: () => AppUI[]; onSelect: (id: string) => void }) {
-  const apps = appsOf(); // read when the launcher draws: an application published while it is open belongs here
-  const { me } = useHost();
-  return (
-    <>
-      <PageHeader title={t("Welcome, {name}", { name: me.principalId })} description={t("The apps of {tenant} you hold a role in. One sign-in opens all of them.", { tenant: me.tenantId })} />
-      <div className="grid max-w-4xl grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
-        {apps.map((a) => (
-          <Button key={a.id} type="button" onClick={() => onSelect(a.id)}
-            className="grid h-auto justify-items-center gap-2 whitespace-normal p-4 text-sm [&_svg]:size-7 [&_svg]:text-primary">
-            {a.icon}<span className="font-medium">{a.title}</span>
-            <span className="text-xs text-muted">{me.apps.find((e) => e.id === a.id)?.role ?? ""}</span>
-          </Button>
-        ))}
-      </div>
-    </>
-  );
-}
 
 function MyInbox() {
   const tasks = useRead<InboxTask[]>("/v1/inbox") ?? [];
@@ -218,11 +201,12 @@ function Saved({ id }: { id: string }) {
   return view ? <Records type={view.entity} saved={view} /> : <p className="text-sm text-muted">{t("No saved view")} {id}.</p>;
 }
 
-export const chromeViews = (apps: () => AppUI[], select: (id: string) => void, definitions: () => Definition[] = () => []): View[] => [
+export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[] = () => []): View[] => [
   { id: "saved", title: () => t("Saved view"), render: (p) => <Saved id={p.id ?? ""} /> },
   { id: "dashboard", title: (p) => apps().find((a) => a.id === p.app)?.dashboards?.find((d) => d.id === p.id)?.title ?? t("Dashboard"),
     render: (p) => { const d = apps().find((a) => a.id === p.app)?.dashboards?.find((x) => x.id === p.id); return d ? <DashboardView dashboard={d} /> : <p className="text-sm text-muted">{t("No dashboard.")}</p>; } },
-  { id: "home", title: () => t("Application launcher"), render: () => <Home apps={apps} onSelect={select} /> },
+  { id: "home", title: () => t("Home"), render: () => <Home /> },
+  { id: "portal", title: () => t("Applications"), render: (p) => <ApplicationsPortal projection={(p.workspace as Projection | undefined) ?? projectionOfSurface(p.surface)} /> },
   { id: "inbox", title: () => t("Inbox"), render: () => <MyInbox /> },
   { id: "requests", title: () => t("My requests"), render: () => <MyRequests /> },
   { id: "notifications", title: () => t("Notifications"), render: () => <Notifications /> },
