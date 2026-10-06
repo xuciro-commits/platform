@@ -98,6 +98,7 @@ type Build struct {
 	queries       map[string]Query
 	functions     map[string]Function
 	codes         map[string]Code
+	tables        map[string]Table // published decision tables, by name (ADR-0062)
 }
 
 // Attach is called by the host when a tenant is composed.
@@ -105,7 +106,7 @@ func (b *Build) Attach(h host.Host) { b.host = h }
 
 // New is a tenant's builder app.
 func New(tenant string) *Build {
-	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, codes: map[string]Code{}}
+	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, codes: map[string]Code{}, tables: map[string]Table{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
@@ -164,7 +165,7 @@ func (b *Build) settings() []platform.Setting {
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity(), b.sourceEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity(), b.sourceEntity(), b.tableEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -619,7 +620,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity(), b.sourceEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity(), b.sourceEntity(), b.tableEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -1016,6 +1017,9 @@ func (b *Build) Reinstall() error {
 		}
 	}
 	if err := b.installProcesses(); err != nil {
+		return err
+	}
+	if err := b.installTables(); err != nil {
 		return err
 	}
 	for _, a := range applications { // after the pages they hold

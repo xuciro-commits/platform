@@ -205,6 +205,9 @@ func (b *Build) OperationDefinition(name string, version int) (platform.Operatio
 	if current, ok := b.codes[name]; ok && (version == 0 || version == current.Version) {
 		return current.definition(), current.Version, true
 	}
+	if tb, ok := b.tables[name]; ok && (version == 0 || version == tb.Version) {
+		return tb.definition(), tb.Version, true
+	}
 	list, err := b.codeInventory()
 	if err != nil {
 		return platform.Operation{}, 0, false
@@ -230,6 +233,14 @@ func (b *Build) operationDeclarations() []platform.Operation {
 	for _, name := range names {
 		out = append(out, b.codes[name].definition())
 	}
+	tables := make([]string, 0, len(b.tables))
+	for name := range b.tables {
+		tables = append(tables, name)
+	}
+	slices.Sort(tables)
+	for _, name := range tables {
+		out = append(out, b.tables[name].definition())
+	}
 	return out
 }
 func codeImage(image []byte) (Code, error) {
@@ -252,6 +263,9 @@ func codeReleaseAsset(code Code, manifest string) (platform.ReleaseAsset, error)
 func (b *Build) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
 	out := []platform.ReleaseAsset{}
 	for _, op := range b.operationDeclarations() {
+		if op.Binding.Kind == "native" {
+			continue // a decision table is installed directly, not carried by a release (ADR-0062)
+		}
 		asset, err := codeReleaseAsset(b.codes[op.Name], b.Manifest().Version)
 		if err != nil {
 			return nil, err
