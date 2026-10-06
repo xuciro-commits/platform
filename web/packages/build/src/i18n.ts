@@ -2477,6 +2477,8 @@ register("zh-CN", {
   "Reference object": "引用对象",
   "Seen from there as": "在对方记录中显示为",
   "Searchable": "可搜索",
+  "Computed by formula": "按公式计算",
+  "Computed from the object's other number fields at every change; nobody sets it by hand.": "每次变更时由该对象的其他数字字段计算得出；无需手工填写。",
   "money": "金额",
   "datetime": "日期时间",
   "reference": "引用",

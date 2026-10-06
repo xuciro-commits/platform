@@ -73,6 +73,9 @@ type Field struct {
 	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
 	Required bool   `json:"required,omitempty"`
 	Search   bool   `json:"search,omitempty" title:"Searchable"`
+	// Formula computes an integer or decimal field from the record's other
+	// number fields at every decision; such a field is read-only (ADR-0064).
+	Formula string `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
 	// Read and Write, when set, are the roles that read and set it (ADR-0028 D3).
 	Read  []string `json:"read,omitempty" title:"Read by" help:"Roles that read it; empty: every role that reads the object"`
 	Write []string `json:"write,omitempty" title:"Set by" help:"Roles that set it; empty: every role that edits the object"`
@@ -653,6 +656,9 @@ func (b *Build) check(o Object, id string) error {
 	if err := checkFields(o.Fields, b.fieldKnown); err != nil {
 		return err
 	}
+	if err := checkFormulas(o.Fields); err != nil {
+		return err
+	}
 	if err := checkProcess(o, b.conditionLookup); err != nil {
 		return err
 	}
@@ -1071,6 +1077,9 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		if f.Search {
 			marks = append(marks, "search")
 		}
+		if f.Formula != "" {
+			marks = append(marks, "readonly")
+		}
 		if len(marks) > 0 {
 			tag += fmt.Sprintf(` field:"%s"`, strings.Join(marks, ","))
 		}
@@ -1105,7 +1114,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Compute: computeOf(o)}
 }
 
 // page is the list and detail page a defined object comes with: the same

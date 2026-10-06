@@ -53,6 +53,9 @@ type Money struct {
 // Entity declares an entity type of the app.
 type Entity struct {
 	PropertyBindings map[string]AssetBinding
+	// Compute, when set, fills the record's computed fields right before every
+	// decision on it is checked; it receives a pointer to the record.
+	Compute func(record any)
 
 	Type   string // a data class the app is authority for, e.g. "crm.opportunity"
 	Title  string // "Opportunity"

@@ -237,6 +237,8 @@ function FieldProperties({ field, onChange, onRemove }: { field: Field; onChange
     {field.type === "choice" && <Label text={t("Choices")}><Input value={field.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
     {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect label={t("Reference object")} value={field.ref} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined })} /></Label>}
     {field.type === "reference" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
+    {(field.type === "integer" || field.type === "decimal") && <Label text={t("Computed by formula")}><Input className="font-mono" placeholder="price * qty" value={field.formula ?? ""} onChange={(e) => onChange({ formula: e.target.value || undefined })} /></Label>}
+    {field.formula && <p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
     <Checkbox checked={!!field.search} onChange={(search) => onChange({ search })}>{t("Searchable")}</Checkbox>
     <Button variant="danger" onClick={onRemove}>{t("Remove field")}</Button>
