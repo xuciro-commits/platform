@@ -110,6 +110,20 @@ test("RecordList cannot replace a newer query result with an earlier response", 
   expect(screen.getByRole("cell", { name: "NEW" })).toBeTruthy();
 });
 
+test("scoped list wrappers do not refetch and background revisions retain rows while stale responses or changed scopes cannot leak", async () => {
+ const requests:ReturnType<typeof pending<RecordPageData>>[]=[],list=vi.fn(()=>{const request=pending<RecordPageData>();requests.push(request);return request.promise;});
+ const source=(revision=0,scope="member"):RecordSource=>({scope,revision,entity:()=>({...entity}),list,get:vi.fn()});
+ const {rerender}=render(<RecordList source={source()} type={entity.type}/>);
+ await waitFor(()=>expect(requests).toHaveLength(1));await act(async()=>requests[0]!.resolve({records:[record("OLD")],total:1}));
+ rerender(<RecordList source={source()} type={entity.type}/>);
+ await act(async()=>{await new Promise(resolve=>setTimeout(resolve,250));});expect(list).toHaveBeenCalledTimes(1);
+ rerender(<RecordList source={source(1)} type={entity.type}/>);expect(screen.getByRole("cell",{name:"OLD"})).toBeTruthy();await waitFor(()=>expect(requests).toHaveLength(2));
+ rerender(<RecordList source={source(2)} type={entity.type}/>);await waitFor(()=>expect(requests).toHaveLength(3));await act(async()=>requests[1]!.resolve({records:[record("STALE")],total:1}));expect(screen.queryByRole("cell",{name:"STALE"})).toBeNull();expect(screen.getByRole("cell",{name:"OLD"})).toBeTruthy();
+ await act(async()=>requests[2]!.resolve({records:[record("NEW")],total:1}));expect(screen.getByRole("cell",{name:"NEW"})).toBeTruthy();
+ rerender(<RecordList source={source(2,"other-member")} type={entity.type}/>);expect(screen.queryByRole("cell",{name:"NEW"})).toBeNull();
+ await waitFor(()=>expect(requests).toHaveLength(4));await act(async()=>requests[3]!.resolve({records:[],total:0}));
+});
+
 test("RecordPage ignores a completed read for the previous record", async () => {
   const requests = new Map<string, ReturnType<typeof pending<RecordView>>>();
   const source: RecordSource = { entity: () => entity, list: async () => ({ records: [], total: 0 }), get: (_, id) => {

@@ -19,7 +19,9 @@ if (previewWorkspace) {
   const oidc: OidcConfig | undefined = how.issuer && how.client ? { issuer: how.issuer, clientId: how.client, redirectUri: `${location.origin}/` } : undefined;
   const session = oidc ? (await currentSession(oidc)) ?? (await signIn(oidc)) : undefined;
 
-  const queries = new QueryClient({ defaultOptions: { queries: { refetchInterval: 3000, retry: 1 } } });
+  // Tenant changes already invalidate reads through /v1/changes. Only views
+  // of live operational state opt into their own polling interval.
+  const queries = new QueryClient({ defaultOptions: { queries: { refetchInterval: false, retry: 1 } } });
 
   root.render(
     <StrictMode>

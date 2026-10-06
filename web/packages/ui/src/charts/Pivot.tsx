@@ -30,16 +30,16 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill,hea
   rows: string; columns?: string; measure: string; onDrill?: (domain: unknown[]) => void;
 }) {
   const [state, setState] = useState<{key?:string;data?:AggregateData;error?:string}>({});
-  const key = JSON.stringify([type, query, rows, columns, measure, source.scope, source.revision ?? 0]);
+  const key = JSON.stringify([type, query, rows, columns, measure, source.scope]);
   const from = useRef(source);
   from.current = source;
   useEffect(() => {
     let live = true;
-    setState({key});
+    setState(previous => previous.key === key ? {key,data:previous.data} : {key});
     from.current.aggregate(type, { ...query, maxRows:query.maxRows??4096, groups: columns ? [rows, columns] : [rows], measures: [measure] })
       .then((data) => live && setState({key,data}), (e) => live && setState({key,error:String(e)}));
     return () => { live = false; };
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, source.revision]); // eslint-disable-line react-hooks/exhaustive-deps
   const {data,error}=state.key===key?state:{};
   if (error) return <p role="alert" className="text-sm text-[var(--tone-danger)]">{error}</p>;
   if (!data) return <p className="text-sm text-muted">{t("Loading…")}</p>;

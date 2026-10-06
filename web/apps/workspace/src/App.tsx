@@ -186,9 +186,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     return confirmedDecision(client.authorities.outbox,client.connection.tenant,key);
   }, [actions, client, queries]);
 
-  const host = useMemo<Host | undefined>(() => {
+  const source = useMemo<RecordSource | undefined>(() => {
     if (!me) return undefined;
-    const source: RecordSource = {
+    return {
       scope: JSON.stringify([me, entities, actions, definitions]),
       entity: (type) => entities.find((e) => e.type === type),
       list: (type, q) => client.records<RecordPageData>(type, q),
@@ -196,6 +196,10 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       aggregate: (type, q) => client.aggregate<AggregateData>(type, q),
       revision,
     };
+  }, [actions, client, definitions, entities, me, revision]);
+
+  const host = useMemo<Host | undefined>(() => {
+    if (!me || !source) return undefined;
     // A record opens in its app's view; a protocol's record (lodging.booking)
     // in the view of the app the tenant binds as its provider (D5).
     const opens = new Map<string, string>([["agent.run", "run"], ["flow.instance", "flow"]]);
@@ -214,7 +218,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       catalog: actions ?? [],
       resend: async () => { await client.send(); setOutbox([...client.authorities.outbox]); await queries.invalidateQueries(); setRevision(r=>r+1); },
     };
-  }, [actions, apps, client, decide, definitions, entities, me, outbox, protocols, queries, revision]);
+  }, [actions, apps, client, decide, definitions, entities, me, outbox, protocols, queries, source]);
 
   const selectionScope = me ? `workspace:selection:${me.tenantId}:${me.principalId}` : undefined;
   const scope = useRef(selectionScope);

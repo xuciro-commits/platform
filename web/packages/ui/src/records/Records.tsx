@@ -252,8 +252,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const [localSort, setSort] = useState(initial.sort ?? "-changed");
   const [localOffset, setOffset] = useState(0);
   const [archived, setArchived] = useState(initial.archived ?? false);
-  const [loadedPage, setLoadedPage] = useState<{ scope?: string; page: RecordPageData }>();
-  const page = window ? window.page : loadedPage?.scope === source.scope ? loadedPage?.page : undefined;
+  const [loadedPage, setLoadedPage] = useState<{ key: string; page: RecordPageData }>();
   const search = window ? window.inputSearch ?? window.query.search ?? "" : localSearch, sort = window ? window.query.sort?.[0] ?? "id" : localSort, offset = window ? window.query.offset ?? 0 : localOffset;
   if (window) pageSize = window.query.limit ?? pageSize;
   const windowKey = JSON.stringify(window?.query);
@@ -273,19 +272,27 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   useEffect(() => { setOffset(0); }, [fixedKey, type]);
   const domain = useMemo(() => [...JSON.parse(fixedKey), ...(drilled ?? [])], [fixedKey, drilled]);
   const entity = useMemo(() => (info ? entityFrom(info,{},source) : undefined), [info,source]);
+  const infoKey = JSON.stringify(info);
+  const pageKey = JSON.stringify([source.scope, type, infoKey, domain, search, sort, offset, archived, pageSize]);
+  const page = window ? window.page : loadedPage?.key === pageKey ? loadedPage.page : undefined;
+  const from = useRef(source);
+  from.current = source;
+  // Scoped sources may be wrapped anew during ordinary parent renders. Their
+  // scope, metadata, query and revision determine when a read is necessary.
+  const sourceIdentity = source.scope ?? source;
   useEffect(() => {
     if (window || !info || view !== "list") return;
     let current = true;
-    const scope = source.scope;
-    setLoadedPage(undefined); setError(undefined);
+    const source = from.current;
+    setError(undefined);
     const field = sort.replace(/^-/, "");
     const known = ["id", "created", "changed"].includes(field) || info.fields.some((f) => f.name === field);
     const handle = setTimeout(() => {
       source.list(type, { domain, search, sort: known ? [sort] : ["id"], offset, limit: pageSize, archived })
-        .then((p) => { if (current && source.scope === scope) { setLoadedPage({ scope, page: p }); setError(undefined); } }, (e) => { if (current && source.scope === scope) setError(String(e)); });
+        .then((p) => { if (current) { setLoadedPage({ key: pageKey, page: p }); setError(undefined); } }, (e) => { if (current) { setLoadedPage(undefined); setError(String(e)); } });
     }, 150);
     return () => { current = false; clearTimeout(handle); };
-  }, [source, source.scope, source.revision, type, info, search, sort, offset, archived, pageSize, domain, view, windowKey]);
+  }, [sourceIdentity, source.revision, pageKey, view, windowKey]);
   if (!info || !entity) return <p className="text-sm text-muted">{t("Unknown entity type")} {type}.</p>;
   const columnsOf = presentRecordColumns([{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
     ...columnsFor(entity,[...new Set(fields??listed(entity))].filter(name=>listed(entity).includes(name))).map((c) => ({ ...c, enableSorting: false }))],entity,info,columnPresentation);
@@ -357,10 +364,10 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
         <EditableRecordGrid key={JSON.stringify([source.scope,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.scope,inlineEdit?.preview,domain,search,sort,offset,archived,error])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} rowHeight={density==="normal"?36:28} showToolbar={showToolbar} port={inlineEdit} selectionSet={selectionSet} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
       )}
       {view === "pivot" && aggregate && rows && (
-        <Pivot source={{ aggregate, revision: source.revision }} type={type} query={query} rows={rows} columns={columns || undefined} measure={measure}
+        <Pivot source={{ aggregate, scope: source.scope, revision: source.revision }} type={type} query={query} rows={rows} columns={columns || undefined} measure={measure}
           onDrill={(d) => { setDrilled([...(drilled ?? []), ...d]); setOffset(0); setView("list"); }} />
       )}
-      {view === "chart" && aggregate && rows && <Chart spec={spec} source={{ aggregate, revision: source.revision }} height={360} />}
+      {view === "chart" && aggregate && rows && <Chart spec={spec} source={{ aggregate, scope: source.scope, revision: source.revision }} height={360} />}
     </div>
   );
 }

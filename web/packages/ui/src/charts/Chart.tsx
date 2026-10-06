@@ -32,7 +32,7 @@ function theme(): Theme {
 /** Loads a spec's rows: the host aggregates records; inline values are aggregated here the same way. */
 export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: AggregateData; error?: string } {
   const [state, setState] = useState<{ key?:string; data?: AggregateData; error?: string }>({});
-  const key = JSON.stringify(spec.data) + JSON.stringify(spec.encoding) + JSON.stringify([source?.scope,source?.revision ?? 0]);
+  const key = JSON.stringify(spec.data) + JSON.stringify(spec.encoding) + JSON.stringify(source?.scope);
   const from = useRef(source); // read when the spec changes, not whenever a caller builds a new source object
   from.current = source;
   useEffect(() => {
@@ -48,10 +48,10 @@ export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: Ag
     }
     if (!source || !("entity" in spec.data)) return setState({ key,error: t("No source for records") });
     let live = true;
-    setState({key});
+    setState(previous => previous.key === key ? { key, data: previous.data } : { key });
     source.aggregate(spec.data.entity, query).then((data) => live && setState({ key, data }), (e) => live && setState({ key, error: String(e) }));
     return () => { live = false; };
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, source?.revision]); // eslint-disable-line react-hooks/exhaustive-deps
   return state.key===key?state:{};
 }
 
@@ -92,7 +92,11 @@ function Kpi({ spec, data }: { spec: ChartSpec; data: AggregateData }) {
 function Canvas({ spec, data, height }: { spec: ChartSpec; data: AggregateData; height: number }) {
   const element = useRef<HTMLDivElement>(null);
   const chart = useRef<ECharts>(null);
-  const option = useMemo(() => toOption(spec, data.rows, data.columns, theme()), [spec, data]);
+  // Parent renders and identical refresh answers must not reset the renderer
+  // and replay its animation. Rebuild options only when their content changes.
+  const palette = theme();
+  const optionKey = JSON.stringify([spec, data, palette]);
+  const option = useMemo(() => toOption(spec, data.rows, data.columns, palette), [optionKey]);
   const latest = useRef(option);
   latest.current = option;
   useEffect(() => {

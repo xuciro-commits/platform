@@ -2,10 +2,29 @@ import {act,cleanup,render,screen,waitFor} from "@testing-library/react";
 import {afterEach,expect,test,vi} from "vitest";
 import {Chart} from "./Chart";
 import type {AggregateData,AggregateQuery,ChartSpec} from "./spec";
-afterEach(cleanup);
+const renderer = vi.hoisted(()=>({setOption:vi.fn(),resize:vi.fn(),dispose:vi.fn()}));
+vi.mock("./renderer",()=>({init:()=>renderer}));
+afterEach(()=>{cleanup();vi.clearAllMocks();vi.unstubAllGlobals();});
 const deferred=()=>{let resolve!:(data:AggregateData)=>void,reject!:(error:Error)=>void;const promise=new Promise<AggregateData>((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject};};
 const spec=(search:string):ChartSpec=>({data:{entity:"sample.note",search,set:{op:"union",inputs:[{},{}]}},mark:"kpi",encoding:{y:{aggregate:"count",type:"quantitative"}}});
 const data=(count:number):AggregateData=>({columns:[{name:"count",title:"Count",kind:"measure",type:"quantitative"}],rows:[{count}]});
+test("unchanged chart wrappers and refresh answers do not reset the renderer while changed values redraw it",async()=>{
+ vi.stubGlobal("ResizeObserver",class {observe(){}disconnect(){}});
+ let value=620;const aggregate=vi.fn(async()=>({columns:[{name:"row",title:"Row",kind:"group" as const,type:"nominal" as const},...data(value).columns],rows:[{row:"R",count:value}]}));
+ const base:ChartSpec={data:{entity:"sample.note"},mark:"bar",encoding:{x:{field:"row",type:"nominal"},y:{aggregate:"count",type:"quantitative"}}};
+ const {rerender}=render(<Chart spec={base} source={{aggregate,scope:"member",revision:0}}/>);await waitFor(()=>expect(renderer.setOption).toHaveBeenCalledTimes(1));
+ rerender(<Chart spec={{...base}} source={{aggregate,scope:"member",revision:0}}/>);expect(renderer.setOption).toHaveBeenCalledTimes(1);
+ rerender(<Chart spec={{...base}} source={{aggregate,scope:"member",revision:1}}/>);await waitFor(()=>expect(aggregate).toHaveBeenCalledTimes(2));await act(async()=>{});expect(renderer.setOption).toHaveBeenCalledTimes(1);
+ value=621;rerender(<Chart spec={base} source={{aggregate,scope:"member",revision:2}}/>);await waitFor(()=>expect(renderer.setOption).toHaveBeenCalledTimes(2));
+});
+test("background chart refresh retains its value and display node but a refused refresh removes stale values",async()=>{
+ const requests:ReturnType<typeof deferred>[]=[],aggregate=()=>{const request=deferred();requests.push(request);return request.promise;};
+ const {rerender}=render(<Chart spec={spec("A")} source={{aggregate,scope:"member",revision:0}}/>);
+ await waitFor(()=>expect(requests).toHaveLength(1));await act(async()=>requests[0]!.resolve(data(620)));const metric=screen.getByText("620");
+ rerender(<Chart spec={spec("A")} source={{aggregate,scope:"member",revision:0}}/>);expect(requests).toHaveLength(1);
+ rerender(<Chart spec={spec("A")} source={{aggregate,scope:"member",revision:1}}/>);expect(screen.getByText("620")).toBe(metric);await waitFor(()=>expect(requests).toHaveLength(2));
+ await act(async()=>requests[1]!.reject(new Error("Denied")));expect(screen.queryByText("620")).toBeNull();expect(screen.getByRole("alert").textContent).toContain("Denied");
+});
 test("chart scope and parameter changes immediately hide previous data and drop delayed or refused aggregates",async()=>{
  const requests:ReturnType<typeof deferred>[]=[];const aggregate=()=>{const pending=deferred();requests.push(pending);return pending.promise};
  const {rerender}=render(<Chart spec={spec("A")} source={{aggregate,scope:"member:one"}}/>);
