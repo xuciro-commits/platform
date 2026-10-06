@@ -1,578 +1,112 @@
-import { useEffect, useState } from "react";
-import { Button, Card, Input, PageHeader, Panel, Tag, Textarea, t } from "@platform/ui";
-import {
-  Copy,
-  Check,
-  Play,
-  RotateCcw,
-  Sparkles,
-  Code2,
-  Monitor,
-  Tablet,
-  Smartphone,
-  FileCode,
-  Maximize2,
-  Minimize2,
-  Plus,
-  Trash2,
-} from "lucide-react";
-import INDUSTRIAL_INSTRUMENT_SAMPLE from "./presets/industrial-hmi.html?raw";
+// The code sandbox (ADR-0054 D4): an IDE for HTML/CSS/JS prototypes. Left:
+// snippets (presets and the member's own, kept in this browser). Main: the
+// editor. Right: the live preview at a chosen device width. Dock: the console
+// of the preview frame. Running, copying, saving and "copy as React component"
+// are title-bar commands, not pages.
+import { Button, PanelSection, StructureRow, Textarea, Workbench, language, notify, t } from "@platform/ui";
+import { Copy, FileCode, Maximize2, Minimize2, Monitor, Play, Plus, RotateCcw, Save, Smartphone, Tablet, Trash2, Braces, Eraser } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import INDUSTRIAL_INSTRUMENT from "./presets/industrial-hmi.html?raw";
+import HMI_CONSOLE from "./presets/hmi-console.html?raw";
+import METAL_BUTTON from "./presets/metal-button.html?raw";
+import RETRO_BUTTON from "./presets/retro-button.html?raw";
 
-const b = "button";
-const INDUSTRIAL_HMI_SAMPLE = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <title>工业控制台</title>
-  <style>
-    body { margin: 0; background: #0b0f19; color: #e2e8f0; font-family: ui-monospace, monospace; padding: 20px; }
-    .card { background: #131c2e; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-    .title { font-size: 14px; font-weight: 600; color: #38bdf8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
-    .metric { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 12px; }
-    .metric-name { font-size: 11px; color: #94a3b8; }
-    .metric-val { font-size: 24px; font-weight: 700; color: #22c55e; margin-top: 4px; }
-    .btn { background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%); border: 1px solid #475569; color: #f8fafc; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
-    .btn:hover { border-color: #38bdf8; color: #38bdf8; }
-    .btn-danger { background: #dc2626; border-color: #ef4444; color: white; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="title">真空退火炉实时工况 (Annealing Furnace #3)</div>
-    <div class="grid">
-      <div class="metric"><div class="metric-name">炉温主控温度</div><div class="metric-val">842.6 ℃</div></div>
-      <div class="metric"><div class="metric-name">腔体气压</div><div class="metric-val">1.2e-4 Pa</div></div>
-      <div class="metric"><div class="metric-name">循环水流量</div><div class="metric-val">42.8 L/min</div></div>
-      <div class="metric"><div class="metric-name">主轴电机负载</div><div class="metric-val">68.4 %</div></div>
-    </div>
-  </div>
-  <div style="display: flex; gap: 10px;">
-    <${b} class="btn" onclick="alert('执行加热程序')">启动升温</${b}>
-    <${b} class="btn" onclick="alert('氮气吹扫中')">氮气保护吹扫</${b}>
-    <${b} class="btn btn-danger" onclick="alert('触发急停联锁')">急停控制</${b}>
-  </div>
-</body>
-</html>`;
-
-const METAL_BUTTON_SAMPLE = `<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body { background: #0f172a; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .metal-btn {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 24px;
-      font-size: 14px;
-      font-weight: 600;
-      color: #0f172a;
-      border: 1px solid rgba(255,255,255,0.4);
-      border-radius: 8px;
-      cursor: pointer;
-      background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 50%, #94a3b8 100%);
-      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(0,0,0,0.2);
-      transition: all 0.15s ease;
-    }
-    .metal-btn:hover {
-      box-shadow: 0 6px 12px -2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.9);
-      transform: translateY(-1px);
-    }
-  </style>
-</head>
-<body>
-  <${b} class="metal-btn">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-    确认关键工艺放行
-  </${b}>
-</body>
-</html>`;
-
-const RETRO_BUTTON_SAMPLE = `<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body { background: #18181b; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .retro-btn {
-      font-family: monospace;
-      font-size: 14px;
-      font-weight: 700;
-      padding: 10px 20px;
-      color: #18181b;
-      background: #fbbf24;
-      border: 2px solid #000;
-      box-shadow: 4px 4px 0px #000;
-      cursor: pointer;
-      text-transform: uppercase;
-      transition: all 0.1s ease;
-    }
-    .retro-btn:active {
-      transform: translate(2px, 2px);
-      box-shadow: 2px 2px 0px #000;
-    }
-  </style>
-</head>
-<body>
-  <${b} class="retro-btn">INITIALIZE SYSTEM // 01</${b}>
-</body>
-</html>`;
-
-type InspirationItem = {
-  id: string;
-  title: string;
-  tag: string;
-  tone?: "neutral" | "info" | "success" | "warning" | "danger";
-  desc: string;
-  code: string;
-  isCustom?: boolean;
-};
-
-const DEFAULT_INSPIRATIONS: InspirationItem[] = [
-  {
-    id: "industrial-prototype",
-    title: "工业仪表 UI · 单页原型",
-    tag: "Braun / Dieter Rams",
-    tone: "success",
-    desc: "博朗/拉姆斯风格精工工业仪表 UI，包含实体旋钮、冲压质感按键、液晶段码屏与工况示波波形。",
-    code: INDUSTRIAL_INSTRUMENT_SAMPLE,
-  },
-  {
-    id: "industrial-furnace",
-    title: "真空退火炉高精度看板 (HMI Console)",
-    tag: "Industrial HMI",
-    tone: "info",
-    desc: "深色工业装备看板原型，包含实时炉温、高真空读数、循环水监控与急停控制。",
-    code: INDUSTRIAL_HMI_SAMPLE,
-  },
-  {
-    id: "metal-button",
-    title: "拉丝金属精密按钮 (Metal Button)",
-    tag: "CSS Spec",
-    tone: "neutral",
-    desc: "具备真实微米级金属反光拉丝质感，专用于高端制造与关键放行确认。",
-    code: METAL_BUTTON_SAMPLE,
-  },
-  {
-    id: "retro-button",
-    title: "复古立体按钮 (Retro Button)",
-    tag: "Retro 80s",
-    tone: "warning",
-    desc: "80年代赛博复古厚边框高饱和度按钮，按压具备物理位移反馈。",
-    code: RETRO_BUTTON_SAMPLE,
-  },
+type Snippet = { id: string; title: string; code: string; own?: boolean };
+const presets: () => Snippet[] = () => [
+  { id: "industrial-instrument", title: t("Industrial instrument panel"), code: INDUSTRIAL_INSTRUMENT },
+  { id: "hmi-console", title: t("Furnace HMI console"), code: HMI_CONSOLE },
+  { id: "metal-button", title: t("Brushed metal button"), code: METAL_BUTTON },
+  { id: "retro-button", title: t("Retro raised button"), code: RETRO_BUTTON },
 ];
+const OWN_KEY = "sandbox.snippets";
+const readOwn = (): Snippet[] => { try { return JSON.parse(localStorage.getItem(OWN_KEY) ?? "[]"); } catch { return []; } };
+const writeOwn = (list: Snippet[]) => { try { localStorage.setItem(OWN_KEY, JSON.stringify(list)); } catch { /* storage unavailable */ } };
+const widths = [["100%", Monitor, "Desktop"], ["768px", Tablet, "Tablet"], ["375px", Smartphone, "Phone"]] as const;
 
-const STORAGE_KEY = "catalog.custom_inspirations";
+/** Forwards the frame's console and errors to the dock; injected before the member's markup. */
+const bridge = `<script>(function(){var send=function(level,args){try{parent.postMessage({sandbox:true,level:level,text:Array.prototype.map.call(args,function(a){try{return typeof a==="string"?a:JSON.stringify(a)}catch(e){return String(a)}}).join(" ")},"*")}catch(e){}};
+["log","info","warn","error"].forEach(function(l){var o=console[l];console[l]=function(){send(l,arguments);o&&o.apply(console,arguments)}});
+window.addEventListener("error",function(e){send("error",[e.message+" ("+e.lineno+":"+e.colno+")"])});window.addEventListener("unhandledrejection",function(e){send("error",[String(e.reason)])})})()</script>`;
+type Line = { at: string; level: string; text: string };
 
-export function SandboxView({ tab = "playground" }: { tab?: string }) {
-  const [currentTab, setCurrentTab] = useState(tab);
-  const [code, setCode] = useState(INDUSTRIAL_INSTRUMENT_SAMPLE);
-  const [copied, setCopied] = useState(false);
-  const [previewWidth, setPreviewWidth] = useState<"100%" | "768px" | "375px">("100%");
-  const [isFullscreen, setIsFullscreen] = useState(false);
+/** Wraps an HTML prototype as a React component skeleton for `@platform/ui` work. */
+function asComponent(code: string): string {
+  const body = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(code)?.[1]?.trim() ?? code.trim();
+  const style = [...code.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => (m[1] ?? "").trim()).join("\n");
+  return `// Generated from the sandbox: replace the markup with @platform/ui primitives before publishing.
+export function Snippet() {
+  return <>
+    ${style ? `<style>{\`${style.replace(/`/g, "\\`")}\`}</style>\n    ` : ""}<div dangerouslySetInnerHTML={{ __html: \`${body.replace(/`/g, "\\`").replace(/\$\{/g, "\\${")}\` }} />
+  </>;
+}
+`;
+}
 
-  // Custom inspirations state with localStorage persistence
-  const [customInspirations, setCustomInspirations] = useState<InspirationItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  // Add Inspiration Modal/Form state
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newTag, setNewTag] = useState("HTML/CSS");
-  const [newDesc, setNewDesc] = useState("");
-  const [newCode, setNewCode] = useState("");
-
+export function SandboxView() {
+  const library = useMemo(presets, [language()]);
+  const [own, setOwn] = useState<Snippet[]>(readOwn);
+  const [current, setCurrent] = useState<string>(library[0]!.id);
+  const [code, setCode] = useState(library[0]!.code);
+  const [running, setRunning] = useState(code);
+  const [width, setWidth] = useState<(typeof widths)[number][0]>("100%");
+  const [big, setBig] = useState(false);
+  const [lines, setLines] = useState<Line[]>([]);
+  const all = [...own, ...library];
+  const dirty = code !== (all.find((s) => s.id === current)?.code ?? "");
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (isFullscreen) setIsFullscreen(false);
-        if (isAddOpen) setIsAddOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isFullscreen, isAddOpen]);
+    const onMessage = (event: MessageEvent) => { const m = event.data; if (m && m.sandbox) setLines((old) => [...old.slice(-199), { at: new Date().toLocaleTimeString(), level: m.level, text: m.text }]); };
+    addEventListener("message", onMessage);
+    return () => removeEventListener("message", onMessage);
+  }, []);
+  const run = useCallback(() => { setLines([]); setRunning(code); }, [code]);
+  const choose = (snippet: Snippet) => { setCurrent(snippet.id); setCode(snippet.code); setRunning(snippet.code); setLines([]); };
+  const save = useCallback(() => {
+    const existing = own.find((s) => s.id === current);
+    const next = existing ? own.map((s) => s.id === current ? { ...s, code } : s)
+      : [{ id: `own-${Date.now()}`, title: `${t("Snippet")} ${own.length + 1}`, code, own: true }, ...own];
+    setOwn(next); writeOwn(next);
+    if (!existing) setCurrent(next[0]!.id);
+    notify.success(t("Snippet saved in this browser."));
+  }, [own, current, code]);
+  const rename = (snippet: Snippet) => { const title = prompt(t("Snippet name"), snippet.title)?.trim(); if (!title) return; const next = own.map((s) => s.id === snippet.id ? { ...s, title } : s); setOwn(next); writeOwn(next); };
+  const remove = (snippet: Snippet) => { const next = own.filter((s) => s.id !== snippet.id); setOwn(next); writeOwn(next); if (current === snippet.id) choose(library[0]!); };
+  const copy = async (text: string, done: string) => { try { await navigator.clipboard.writeText(text); notify.success(done); } catch { notify.error(t("Clipboard unavailable. Select and copy the code below.")); } };
+  const preview = <div className="flex h-full min-h-0 items-start justify-center overflow-auto bg-surface p-3">
+    <iframe title={t("Sandbox preview")} srcDoc={bridge + running} sandbox="allow-scripts" style={{ width, minHeight: "100%" }} className="h-full min-h-[24rem] rounded border border-border bg-white shadow-sm transition-[width] duration-200" />
+  </div>;
+  const toolbar = <div className="flex items-center gap-1 border-b border-border px-2 py-1 text-xs">
+    {widths.map(([w, Icon, label]) => <Button key={w} size="sm" variant={width === w ? "primary" : "ghost"} aria-label={t(label)} title={t(label)} onClick={() => setWidth(w)}><Icon />{w}</Button>)}
+    <span className="ml-auto" /><Button size="sm" variant="ghost" aria-label={big ? t("Back to the editor") : t("Expand preview")} title={big ? t("Back to the editor") : t("Expand preview")} onClick={() => setBig((v) => !v)}>{big ? <Minimize2 /> : <Maximize2 />}</Button>
+  </div>;
+  const snippetRow = (snippet: Snippet) => <StructureRow key={snippet.id} icon={<FileCode />} label={snippet.title} selected={snippet.id === current} onClick={() => choose(snippet)}
+    actions={snippet.own ? <><Button size="sm" variant="ghost" aria-label={t("Rename")} title={t("Rename")} onClick={(e) => { e.stopPropagation(); rename(snippet); }}><Braces /></Button>
+      <Button size="sm" variant="ghost" aria-label={t("Delete")} title={t("Delete")} onClick={(e) => { e.stopPropagation(); remove(snippet); }}><Trash2 /></Button></> : undefined} />;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const loadPreset = (presetCode: string) => {
-    setCode(presetCode);
-    setCurrentTab("playground");
-  };
-
-  const handleAddInspiration = () => {
-    if (!newTitle.trim() || !newCode.trim()) return;
-    const newItem: InspirationItem = {
-      id: `custom-${Date.now()}`,
-      title: newTitle.trim(),
-      tag: newTag.trim() || "HTML/CSS",
-      tone: "neutral",
-      desc: newDesc.trim() || t("Paste custom HTML/CSS markup to save as inspiration"),
-      code: newCode.trim(),
-      isCustom: true,
-    };
-    const next = [newItem, ...customInspirations];
-    setCustomInspirations(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      /* storage unavailable */
-    }
-    setNewTitle("");
-    setNewDesc("");
-    setNewCode("");
-    setIsAddOpen(false);
-  };
-
-  const handleDeleteInspiration = (id: string) => {
-    const next = customInspirations.filter((item) => item.id !== id);
-    setCustomInspirations(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      /* storage unavailable */
-    }
-  };
-
-  const allInspirations = [...customInspirations, ...DEFAULT_INSPIRATIONS];
-
-  if (isFullscreen) return (
-          <div className="flex h-full min-h-[32rem] flex-col bg-background p-4">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm text-foreground">{t("Live preview")}</span>
-                <span className="rounded bg-surface px-1.5 py-0.5 text-xs text-muted">{t("Expand preview")}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 rounded bg-surface p-0.5 border border-border">
-                  <Button
-                    size="sm"
-                    variant={previewWidth === "100%" ? "primary" : "ghost"}
-                    onClick={() => setPreviewWidth("100%")}
-                    aria-label="Desktop view"
-                  >
-                    <Monitor className="size-3.5" />
-                    100%
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={previewWidth === "768px" ? "primary" : "ghost"}
-                    onClick={() => setPreviewWidth("768px")}
-                    aria-label="Tablet view"
-                  >
-                    <Tablet className="size-3.5" />
-                    768px
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={previewWidth === "375px" ? "primary" : "ghost"}
-                    onClick={() => setPreviewWidth("375px")}
-                    aria-label="Mobile view"
-                  >
-                    <Smartphone className="size-3.5" />
-                    375px
-                  </Button>
-                </div>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => setIsFullscreen(false)}
-                  aria-label={t("Exit fullscreen")}
-                >
-                  <Minimize2 className="size-3.5" />
-                  {t("Exit fullscreen")}
-                </Button>
-              </div>
-            </div>
-            <div className="flex flex-1 items-center justify-center overflow-auto p-4 bg-surface/30">
-              <iframe
-                title="sandbox-preview-fullscreen"
-                srcDoc={code}
-                sandbox="allow-scripts"
-                style={{ width: previewWidth, height: "100%", minHeight: "560px" }}
-                className="rounded border border-border bg-white shadow-2xl transition-all duration-200"
-              />
-            </div>
-          </div>
-  );
-
-  return (
-    <div className="space-y-4">
-      <PageHeader
-        title={t("Sandbox")}
-        description={t("In-a-box code playground")}
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant={currentTab === "playground" ? "primary" : "default"}
-              size="sm"
-              onClick={() => setCurrentTab("playground")}
-            >
-              <Code2 className="size-3.5" />
-              {t("Live playground")}
-            </Button>
-            <Button
-              variant={currentTab === "inspirations" ? "primary" : "default"}
-              size="sm"
-              onClick={() => setCurrentTab("inspirations")}
-            >
-              <Sparkles className="size-3.5" />
-              {t("Inspirations")}
-            </Button>
-            <Button
-              variant={currentTab === "convert" ? "primary" : "default"}
-              size="sm"
-              onClick={() => setCurrentTab("convert")}
-            >
-              <FileCode className="size-3.5" />
-              {t("Convert component")}
-            </Button>
-            {currentTab === "inspirations" && (
-              <Button size="sm" variant="primary" onClick={() => setIsAddOpen(true)}>
-                <Plus className="size-3.5" />
-                {t("Add inspiration")}
-              </Button>
-            )}
-          </div>
-        }
-      />
-
-      {currentTab === "playground" && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {/* Left: Code Box */}
-          <Panel
-            title={t("Code editor")}
-            description={t("Paste HTML, CSS or markup to preview in real-time.")}
-            actions={
-              <div className="flex items-center gap-1.5">
-                <Button size="sm" onClick={handleCopy}>
-                  {copied ? <Check className="size-3.5 text-green-500" /> : <Copy className="size-3.5" />}
-                  {copied ? t("Copied") : t("Copy developer example")}
-                </Button>
-                <Button size="sm" onClick={() => setCode(INDUSTRIAL_INSTRUMENT_SAMPLE)}>
-                  <RotateCcw className="size-3.5" />
-                  {t("Reset")}
-                </Button>
-              </div>
-            }
-          >
-            <div className="relative">
-              <Textarea
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                rows={22}
-                spellCheck={false}
-                className="w-full rounded-md border border-border bg-slate-950 p-3 font-mono text-xs text-slate-100 outline-none focus:border-primary"
-              />
-            </div>
-          </Panel>
-
-          {/* Right: Live Preview Box */}
-          <Panel
-            title={t("Live preview")}
-            description={t("Synthetic fixtures. This preview does not call a tenant host.")}
-            actions={
-              <div className="flex items-center gap-1">
-                <Button
-                  size="sm"
-                  variant={previewWidth === "100%" ? "primary" : "ghost"}
-                  onClick={() => setPreviewWidth("100%")}
-                  aria-label="Desktop view"
-                >
-                  <Monitor className="size-3.5" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant={previewWidth === "768px" ? "primary" : "ghost"}
-                  onClick={() => setPreviewWidth("768px")}
-                  aria-label="Tablet view"
-                >
-                  <Tablet className="size-3.5" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant={previewWidth === "375px" ? "primary" : "ghost"}
-                  onClick={() => setPreviewWidth("375px")}
-                  aria-label="Mobile view"
-                >
-                  <Smartphone className="size-3.5" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setIsFullscreen(true)}
-                  aria-label={t("Expand preview")}
-                >
-                  <Maximize2 className="size-3.5" />
-                  {t("Expand preview")}
-                </Button>
-              </div>
-            }
-          >
-            <div className="flex justify-center rounded-md border border-border bg-slate-900 p-2">
-              <iframe
-                title="sandbox-preview"
-                srcDoc={code}
-                sandbox="allow-scripts"
-                style={{ width: previewWidth, height: "480px" }}
-                className="rounded border border-slate-700 bg-white shadow-md transition-all duration-200"
-              />
-            </div>
-          </Panel>
-        </div>
-      )}
-
-      {currentTab === "inspirations" && (
-        <div className="space-y-4">
-          {/* Add Inspiration Form */}
-          {isAddOpen && (
-            <Card className="p-4 space-y-3 border-primary/50 shadow-md">
-              <div className="flex items-center justify-between border-b border-border pb-2">
-                <div className="flex items-center gap-2">
-                  <Plus className="size-4 text-primary" />
-                  <span className="font-semibold text-sm">{t("Add inspiration")}</span>
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => setIsAddOpen(false)}>
-                  {t("Cancel")}
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <span className="text-xs text-muted block mb-1">{t("Inspiration title")}</span>
-                  <Input
-                    placeholder="例如：精密高低温试验箱看板"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <span className="text-xs text-muted block mb-1">{t("Category / Tag")}</span>
-                  <Input
-                    placeholder="例如：HTML/CSS 或 拟物工控"
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <span className="text-xs text-muted block mb-1">{t("Description")}</span>
-                <Input
-                  placeholder="简要说明设计特性与交互重点"
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
-                />
-              </div>
-              <div>
-                <span className="text-xs text-muted block mb-1">{t("HTML / CSS markup")}</span>
-                <Textarea
-                  rows={6}
-                  placeholder="在此粘贴完整 HTML / CSS 代码..."
-                  value={newCode}
-                  onChange={(e) => setNewCode(e.target.value)}
-                  className="font-mono text-xs"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button size="sm" variant="ghost" onClick={() => setIsAddOpen(false)}>
-                  {t("Cancel")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  disabled={!newTitle.trim() || !newCode.trim()}
-                  onClick={handleAddInspiration}
-                >
-                  <Check className="size-3.5" />
-                  {t("Save inspiration")}
-                </Button>
-              </div>
-            </Card>
-          )}
-
-          {/* Inspirations Grid */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {/* Add Card */}
-            <Card
-              className="flex min-h-[220px] cursor-pointer flex-col items-center justify-center border-dashed border-2 border-border p-6 text-center hover:border-primary hover:bg-row-hover transition-colors"
-              onClick={() => setIsAddOpen(true)}
-            >
-              <div className="rounded-full bg-surface p-3 shadow-sm border border-border">
-                <Plus className="size-5 text-muted" />
-              </div>
-              <h4 className="mt-3 text-sm font-medium">{t("Add inspiration")}</h4>
-              <p className="mt-1 text-xs text-muted">{t("Paste custom HTML/CSS markup to save as inspiration")}</p>
-            </Card>
-
-            {/* Inspiration Cards */}
-            {allInspirations.map((item) => (
-              <Card key={item.id} className="flex flex-col justify-between p-4">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <Tag label={item.tag} tone={item.tone ?? "neutral"} />
-                    {item.isCustom ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-500 hover:text-red-600"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteInspiration(item.id);
-                        }}
-                        aria-label={t("Delete")}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    ) : (
-                      <span className="font-mono text-xs text-muted">HTML/CSS</span>
-                    )}
-                  </div>
-                  <h3 className="mt-2 text-sm font-semibold">{item.title}</h3>
-                  <p className="mt-1 text-xs text-muted line-clamp-3">{item.desc}</p>
-                </div>
-                <div className="mt-4 pt-2 border-t border-border flex justify-end">
-                  <Button size="sm" variant="primary" onClick={() => loadPreset(item.code)}>
-                    <Play className="size-3.5" />
-                    {t("Load template")}
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {currentTab === "convert" && (
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium">{t("Convert to Platform Component")}</h3>
-            <Tag label="Beta" tone="neutral" />
-          </div>
-          <p className="text-xs text-muted">{t("Generate component definition from HTML prototype.")}</p>
-          <Card className="p-3 text-xs space-y-2 font-mono">
-            <div className="text-muted">// 平台组件输出规范 (Target: @platform/ui)</div>
-            <div className="text-green-600 dark:text-green-400">export interface CustomWidgetProps extends React.ButtonHTMLAttributes&lt;HTMLButtonElement&gt; &#123;</div>
-            <div className="pl-4">variant?: "default" | "metal" | "retro" | "liquid";</div>
-            <div className="pl-4">size?: "sm" | "md" | "lg";</div>
-            <div className="text-green-600 dark:text-green-400">&#125;</div>
-          </Card>
-          <Button size="sm" variant="primary">
-            <Sparkles className="size-3.5" />
-            {t("Convert component")}
-          </Button>
-        </Card>
-      )}
-    </div>
-  );
+  return <Workbench storageKey="sandbox" mainLabel={t("Editor")} crumbs={[{ label: t("Sandbox") }, { label: all.find((s) => s.id === current)?.title ?? "" }]}
+    saving={dirty ? "dirty" : "idle"}
+    onKeyDown={(event) => { if (!(event.metaKey || event.ctrlKey)) return; if (event.key === "Enter") { event.preventDefault(); run(); } if (event.key.toLowerCase() === "s") { event.preventDefault(); save(); } }}
+    actions={<>
+      <Button size="sm" variant="primary" onClick={run} title="⌘↩"><Play />{t("Run")}</Button>
+      <Button size="sm" variant="ghost" onClick={save} title="⌘S"><Save />{t("Save snippet")}</Button>
+      <Button size="sm" variant="ghost" onClick={() => void copy(code, t("Code copied."))}><Copy />{t("Copy")}</Button>
+      <Button size="sm" variant="ghost" onClick={() => void copy(asComponent(code), t("Component skeleton copied."))} title={t("Copies a React component skeleton wrapping this markup.")}><Braces />{t("Copy as component")}</Button>
+      <Button size="sm" variant="ghost" disabled={!dirty} onClick={() => { const s = all.find((x) => x.id === current); if (s) choose(s); }}><RotateCcw />{t("Reset")}</Button>
+    </>}
+    left={{ label: t("Snippets"), content: <div className="grid content-start gap-1 p-2">
+      <PanelSection title={t("My snippets")} actions={<Button size="sm" variant="ghost" aria-label={t("New snippet")} title={t("New snippet")} onClick={() => { setCurrent(""); setCode("<!doctype html>\n<html>\n<body>\n\n</body>\n</html>\n"); setRunning(""); }}><Plus /></Button>}>
+        {own.length ? own.map(snippetRow) : <p className="px-2 py-1 text-xs text-muted">{t("Save the editor's code to keep it here. Snippets stay in this browser.")}</p>}
+      </PanelSection>
+      <PanelSection title={t("Presets")}>{library.map(snippetRow)}</PanelSection>
+    </div> }}
+    right={big ? undefined : { label: t("Preview"), min: 280, max: 900, content: <div className="flex h-full min-h-0 flex-col">{toolbar}{preview}</div> }}
+    dock={{ label: t("Sandbox dock"), tabs: [{ id: "console", title: t("Console"), badge: lines.filter((l) => l.level === "error").length || undefined, content: <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-center justify-between border-b border-border px-2 py-0.5 text-xs text-muted"><span>{t("Messages from the preview frame")}</span><Button size="sm" variant="ghost" onClick={() => setLines([])}><Eraser />{t("Clear")}</Button></div>
+      <ol className="min-h-0 flex-1 overflow-auto font-mono text-xs">{lines.map((l, i) => <li key={i} className={`flex gap-2 border-b border-border/50 px-2 py-0.5 ${l.level === "error" ? "text-danger" : l.level === "warn" ? "text-warning" : ""}`}><span className="text-muted">{l.at}</span><span className="w-10 uppercase text-muted">{l.level}</span><span className="whitespace-pre-wrap break-all">{l.text}</span></li>)}
+        {!lines.length && <li className="px-2 py-1 text-muted">{t("Nothing logged yet. console.log in the snippet shows up here.")}</li>}</ol>
+    </div> }] }}>
+    {big ? <div className="flex min-h-0 flex-1 flex-col">{toolbar}{preview}</div>
+      : <Textarea aria-label={t("Code")} value={code} spellCheck={false} onChange={(e) => setCode(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Tab") { e.preventDefault(); const el = e.currentTarget, start = el.selectionStart, end = el.selectionEnd; const next = `${code.slice(0, start)}  ${code.slice(end)}`; setCode(next); requestAnimationFrame(() => el.setSelectionRange(start + 2, start + 2)); } }}
+        className="min-h-0 flex-1 resize-none rounded-none border-0 font-mono text-xs leading-5 focus-visible:ring-0" />}
+  </Workbench>;
 }

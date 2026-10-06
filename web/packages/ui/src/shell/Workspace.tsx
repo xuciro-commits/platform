@@ -2,7 +2,7 @@ import {useTheme} from "../theme";
 import { Command } from "cmdk";
 import { DockviewDefaultTab, DockviewReact, themeLight,themeDark, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps } from "dockview-react";
 import { Bell, ChevronDown, Clock, Grid2x2, Home as HomeIcon, LayoutGrid, PanelLeft, Search, Sparkles, Star } from "lucide-react";
-import { DropdownMenu, Menubar } from "radix-ui";
+import { ContextMenu, DropdownMenu, Menubar } from "radix-ui";
 import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
@@ -40,12 +40,13 @@ export type Rail = { home: Route; applications: Route; notifications?: { route: 
 /** A route the member opened, remembered by the shell for the Recent list and Home. */
 export type RecentEntry = { route: Route; title: string; app?: string; at: number };
 
-type OpenOptions = { window?: "tab" | "float" | "popout" };
+/** Where a route opens: the current group, a group beside it (split right, like an IDE's "open to the side"), or a separate window. */
+type OpenOptions = { window?: "tab" | "beside" | "popout" };
 type Unsaved = {
   register: (panel: string, owner: symbol, discard?: () => void) => void;
   ask: (panels: string[], run: () => void) => void;
 };
-type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; notify: typeof toast; unsaved?: Unsaved;
+type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; closeAll: () => void; notify: typeof toast; unsaved?: Unsaved;
   transfer?: (from: string, route: Route, input: unknown, result: (value: unknown) => void) => void;
   /** Opens the search and command palette (⌘K). */
   palette: () => void;
@@ -113,30 +114,21 @@ class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void 
   }
 }
 
-/** Narrow workspaces use full-width tabs, while retaining each record's context. */
-function dockFloating(api: DockviewApi) {
-  const root = api.groups.find((group) => group.api.location.type === "grid");
-  if (!root) return;
-  const active = api.activePanel;
-  for (const group of [...api.groups].filter((group) => group.api.location.type === "floating")) {
-    for (const panel of [...group.panels]) {
-      panel.api.setRenderer("always");
-      panel.api.moveTo({ group: root });
-    }
-  }
-  active?.api.setActive();
-}
-
 /**
  * The platform shell (ADR-0052): a constant rail (Home, search, notifications,
  * applications, recent, favorites, assistant, workspaces, account), a header
  * with the current application and its menus, a context pane with that
  * application's navigation, and a docking workspace whose tabs are routes
  * (one per entity) with a command palette (⌘K).
- * The layout and the recent/favorites memory survive restarts (per `storageKey`); the active tab is in the URL.
+ * Tabs are grouped by application (ADR-0054 D1): each `layoutScope` has its own
+ * remembered layout, swapped in when the scope changes; the recent/favorites memory is per `storageKey`; the active tab is in the URL.
  */
-export function Workspace({ product, productIcon, storageKey, views, nav, home, menus = [], commands = [], session, status, applications, workspaces, rail, onActiveRoute, onLanguage, search }: {
+export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, views, nav, home, menus = [], commands = [], session, status, applications, workspaces, rail, onActiveRoute, onLanguage, search }: {
   product: string; productIcon?: ReactNode; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
+  /** The application whose tabs are shown; its layout is remembered apart from the others'. */
+  layoutScope?: string;
+  /** The scope a route belongs to (undefined for the shell's own views, which open in any scope). */
+  scopeOf?: (route: Route) => string | undefined;
   menus?: Menu[]; commands?: ShellCommand[]; session?: Session; status?: ReactNode;
   applications?: Applications; workspaces?: Workspaces; rail?: Rail; onActiveRoute?: (route: Route) => void;
   /** Records matching what is typed in the palette (⌘K), opened on choice: the palette searches data, not only commands. */
@@ -166,7 +158,21 @@ export function Workspace({ product, productIcon, storageKey, views, nav, home, 
       else run();
     },
   }), []);
-  const closePanel = useCallback((id: string) => unsaved.ask([id], () => dock.current?.getPanel(id)?.api.close()), [unsaved]);
+  const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
+  const closePanels = useCallback((ids: string[]) => unsaved.ask(ids, () => { for (const id of ids) dock.current?.getPanel(id)?.api.close(); }), [unsaved]);
+  const closePanel = useCallback((id: string) => closePanels([id]), [closePanels]);
+  const scope = useRef(layoutScope);
+  const layoutKey = (id: string | undefined) => `${storageKey}:${id ?? "shell"}`;
+  const saveLayout = useCallback((id: string | undefined) => { try { if (dock.current) localStorage.setItem(layoutKey(id), JSON.stringify(dock.current.toJSON())); } catch { /* storage unavailable */ } }, [storageKey]);
+  const loadLayout = useCallback((id: string | undefined) => {
+    const api = dock.current; if (!api) return;
+    try { const saved = localStorage.getItem(layoutKey(id)); if (saved) api.fromJSON(JSON.parse(saved)); else api.clear(); } catch { api.clear(); }
+    for (const p of [...api.panels]) { // discard removed views; refresh titles in the reader's language
+      const route = (p.params as { route?: Route } | undefined)?.route;
+      const view = byId.get(route?.view ?? "");
+      if (!view) p.api.close(); else p.setTitle(view.title(route?.params ?? {}));
+    }
+  }, [storageKey]);
   const popout = useCallback((id: string) => unsaved.ask([id], () => {
     const panel = dock.current?.getPanel(id);
     if (panel) void dock.current?.addPopoutGroup(panel, { onDidOpen: ({ window: child }) => {
@@ -222,8 +228,6 @@ export function Workspace({ product, productIcon, storageKey, views, nav, home, 
   }, []);
   const navigationVisible = compact ? mobileNavOpen : navOpen;
   const toggleNavigation = () => compact ? setMobileNavOpen((open) => !open) : setNavOpen((open) => !open);
-  const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
-  useEffect(() => { if (compact && dock.current) dockFloating(dock.current); }, [compact]);
 
   const followed = useRef(onActiveRoute);
   followed.current = onActiveRoute;
@@ -235,26 +239,47 @@ export function Workspace({ product, productIcon, storageKey, views, nav, home, 
     if (!api || !view) return;
     const key = routeKey(route);
     const title = view.title(route.params ?? {});
-    const floating = options.window === "float" && !compact ? api.groups.find((g) => g.api.location.type === "floating") : undefined;
     let panel = api.getPanel(key);
-    if (panel && floating && panel.group !== floating) {
-      panel.api.setRenderer("always");
-      panel.api.moveTo({ group: floating });
-    }
-    if (!panel && options.window === "float" && !compact) {
-      // One floating window above the page: what opens next joins it as a tab, so people click back and forth.
-      const width = Math.min(820, api.width - 48), height = Math.max(280, api.height - 64);
-      panel = floating
-        ? api.addPanel({ id: key, component: "view", renderer: "always", title, params: { route }, position: { referenceGroup: floating } })
-        : api.addPanel({ id: key, component: "view", renderer: "onlyWhenVisible", title, params: { route }, floating: { width, height, x: api.width - width - 24, y: 32 } });
+    if (!panel && options.window === "beside" && !compact && api.activePanel) {
+      // Beside the current tab: the other grid group if there is one, else a new group to the right.
+      const current = api.activePanel.group;
+      const other = api.groups.find((g) => g !== current && g.api.location.type === "grid") ?? api.addGroup({ referencePanel: api.activePanel, direction: "right" });
+      panel = api.addPanel({ id: key, component: "view", title, params: { route }, position: { referenceGroup: other } });
     }
     panel ??= api.addPanel({ id: key, component: "view", title, params: { route } });
     if (options.window === "popout") popout(panel.id);
     panel.api.setActive();
   }, [byId, compact, popout]);
+  const beside = useCallback((id: string) => {
+    const api = dock.current, panel = api?.getPanel(id);
+    if (!api || !panel) return;
+    const other = api.groups.find((g) => g !== panel.group && g.api.location.type === "grid") ?? api.addGroup({ referencePanel: panel, direction: "right" });
+    panel.api.moveTo({ group: other });
+    panel.api.setActive();
+  }, []);
+  const closeAll = useCallback(() => closePanels((dock.current?.panels ?? []).map((p) => p.id)), [closePanels]);
+  const closeOthers = useCallback((id: string) => closePanels((dock.current?.panels ?? []).filter((p) => p.id !== id).map((p) => p.id)), [closePanels]);
+  const closeRight = useCallback((id: string) => {
+    const group = dock.current?.getPanel(id)?.group; if (!group) return;
+    const index = group.panels.findIndex((p) => p.id === id);
+    closePanels(group.panels.slice(index + 1).map((p) => p.id));
+  }, [closePanels]);
+  // Switching application swaps the tab set (ADR-0054 D1): the old one is remembered, the new one restored; tabs just opened for the new application come along.
+  useEffect(() => {
+    const api = dock.current;
+    if (!api || layoutScope === scope.current) return;
+    const carried = api.panels.map((p) => (p.params as { route?: Route } | undefined)?.route).filter((r): r is Route => !!r && scopeOf?.(r) === layoutScope);
+    for (const route of carried) api.getPanel(routeKey(route))?.api.close();
+    saveLayout(scope.current);
+    scope.current = layoutScope;
+    loadLayout(layoutScope);
+    for (const route of carried) open(route);
+    const linked = routeFromHash(location.hash);
+    if (api.panels.length === 0) open(linked && byId.has(linked.view) ? linked : home);
+  }, [layoutScope, scopeOf, saveLayout, loadLayout, open, byId, home]);
 
   const workspace = useMemo<WorkspaceApi>(() => ({
-    open, notify: toast, close: (route) => closePanel(routeKey(route)), unsaved,
+    open, notify: toast, close: (route) => closePanel(routeKey(route)), closeAll, unsaved,
     transfer: (from, route, input, result) => {
       if (!dock.current?.getPanel(from)) return;
       const id = transfers.current.start(from, input, result), called = { ...route, params: { ...route.params, call: id } };
@@ -262,10 +287,26 @@ export function Workspace({ product, productIcon, storageKey, views, nav, home, 
     },
     palette: () => setPaletteOpen(true),
     recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail, workspaces,
-  }), [open, closePanel, unsaved, memory, toggleFavorite, applications, rail, workspaces]);
+  }), [open, closePanel, closeAll, unsaved, memory, toggleFavorite, applications, rail, workspaces]);
 
-  const tab = useCallback((props: IDockviewPanelHeaderProps) =>
-    <DockviewDefaultTab {...props} closeActionOverride={() => closePanel(props.api.id)} />, [closePanel]);
+  const tab = useCallback((props: IDockviewPanelHeaderProps) => {
+    const id = props.api.id;
+    const items: { label: string; run: () => void; separator?: boolean }[] = [
+      { label: t("Close"), run: () => closePanel(id) },
+      { label: t("Close others"), run: () => closeOthers(id) },
+      { label: t("Close to the right"), run: () => closeRight(id) },
+      { label: t("Close all"), run: closeAll },
+      { label: t("Open beside"), run: () => beside(id), separator: true },
+      { label: t("Move to new window"), run: () => popout(id) },
+    ];
+    return <ContextMenu.Root>
+      <ContextMenu.Trigger asChild><div className="flex h-full"><DockviewDefaultTab {...props} closeActionOverride={() => closePanel(id)} /></div></ContextMenu.Trigger>
+      <ContextMenu.Portal><ContextMenu.Content className={menuPanel}>
+        {items.map((item) => <div key={item.label}>{item.separator && <ContextMenu.Separator className="my-1 h-px bg-border" />}
+          <ContextMenu.Item onSelect={item.run} className={menuItem}>{item.label}</ContextMenu.Item></div>)}
+      </ContextMenu.Content></ContextMenu.Portal>
+    </ContextMenu.Root>;
+  }, [closePanel, closeOthers, closeRight, closeAll, beside, popout]);
 
   const components = useMemo(() => ({
     view: ({ params, api }: IDockviewPanelProps<{ route: Route }>) => {
@@ -303,42 +344,31 @@ export function Workspace({ product, productIcon, storageKey, views, nav, home, 
     });
     // Read the link first: restoring the layout rewrites the URL to its active tab.
     const linked = routeFromHash(location.hash);
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) api.fromJSON(JSON.parse(saved));
-      for (const p of [...api.panels]) { // discard removed views; refresh titles in the reader's language
-        const route = (p.params as { route?: Route } | undefined)?.route;
-        const view = byId.get(route?.view ?? "");
-        if (!view) p.api.close();
-        else p.setTitle(view.title(route?.params ?? {}));
-      }
-    } catch {
-      api.clear(); // a stale or corrupt layout falls back to the home view
-    }
-    if (compact) dockFloating(api);
+    loadLayout(scope.current);
     const sync = () => {
       setOpenTabs(api.panels.map((p) => ({ key: p.id, title: p.title ?? p.id })));
       setActive(api.activePanel?.id);
       const route = (api.activePanel?.params as { route?: Route } | undefined)?.route;
       if (route) { history.replaceState(null, "", routeToHash(route)); followed.current?.(route); visit.current(route, api.activePanel?.title ?? route.view); }
-      try { localStorage.setItem(storageKey, JSON.stringify(api.toJSON())); } catch { /* storage unavailable */ }
+      saveLayout(scope.current);
     };
     api.onDidLayoutChange(sync);
     api.onDidActivePanelChange(sync);
     if (linked && byId.has(linked.view)) open(linked);
     else if (api.panels.length === 0) open(home);
     sync();
-  }, [byId, home, open, storageKey, compact]);
+  }, [byId, home, open, loadLayout, saveLayout]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((v) => !v); }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "w" && dock.current?.activePanel) { e.preventDefault(); closePanel(dock.current.activePanel.id); }
     };
     const onHash = () => { const route = routeFromHash(location.hash); if (route) open(route); };
     addEventListener("keydown", onKey);
     addEventListener("hashchange", onHash);
     return () => { removeEventListener("keydown", onKey); removeEventListener("hashchange", onHash); };
-  }, [open]);
+  }, [open, closePanel]);
 
   const activePanel = () => dock.current?.activePanel;
   const builtInMenus: Menu[] = [
@@ -348,9 +378,11 @@ export function Workspace({ product, productIcon, storageKey, views, nav, home, 
       { label: t("Reset layout"), onSelect: () => unsaved.ask([...drafts.current.keys()], () => { dock.current?.clear(); open(home); }) },
     ] },
     { label: t("Window"), items: [
-      { label: t("Float tab"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) dock.current?.addFloatingGroup(p); } },
-      { label: t("Move tab to new window"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) popout(p.id); } },
-      { label: t("Close tab"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) closePanel(p.id); } },
+      { label: t("Open beside"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) beside(p.id); } },
+      { label: t("Move to new window"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) popout(p.id); } },
+      { label: t("Close"), shortcut: "⌘W", disabled: !active, onSelect: () => { const p = activePanel(); if (p) closePanel(p.id); } },
+      { label: t("Close others"), disabled: openTabs.length < 2, onSelect: () => { const p = activePanel(); if (p) closeOthers(p.id); } },
+      { label: t("Close all"), disabled: !openTabs.length, onSelect: closeAll },
       ...openTabs.map((t) => ({ label: t.title, onSelect: () => dock.current?.getPanel(t.key)?.api.setActive() })),
     ] },
   ];

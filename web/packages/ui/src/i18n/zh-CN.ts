@@ -1247,4 +1247,9 @@ export default {
   "No problems.": "没有问题。",
   "Workbench": "工作台",
   "The one editor container: breadcrumbs, status, history and publish actions, structure panel, main view, inspector and a diagnostics dock with remembered sizes.": "唯一的编辑器容器：面包屑、状态、历史与发布操作、结构面板、主视图、检查器和记住尺寸的诊断底栏。",
+  "Close others": "关闭其他",
+  "Close to the right": "关闭右侧",
+  "Close all": "关闭全部",
+  "Open beside": "在旁边打开",
+  "Move to new window": "移到新窗口",
 } as Record<string, string>;

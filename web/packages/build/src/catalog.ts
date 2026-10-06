@@ -48,4 +48,4 @@ export const entries: CatalogEntry[] = [
     constraints: ["The local example demonstrates a payload and result flow in the flow workbench; it does not execute a process.", "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs."],
   },
 ];
-export const api = ["contributions", "default", "ontology", "workshop", "automate", "aiFunctions", "code", "releases"];
+export const api = ["default"];

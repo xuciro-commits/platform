@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:177ea5dd5731203c",
+  "revision": "sha256:71489d4d50580ba4",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4595,7 +4595,6 @@
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/processes.tsx",
       "web/apps/catalog/src/Catalog.tsx",
-      "web/apps/catalog/src/Governance.tsx",
       "web/apps/catalog/src/Preview.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
@@ -4853,9 +4852,6 @@
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
-      "web/apps/catalog/src/Catalog.tsx",
-      "web/apps/catalog/src/Governance.tsx",
-      "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/session/Problems.tsx",
       "web/apps/workspace/src/shell/Home.tsx"
@@ -4905,8 +4901,7 @@
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
-      "web/packages/build/src/workshop/page-editor/WidgetLibrary.tsx",
-      "web/apps/catalog/src/Catalog.tsx"
+      "web/packages/build/src/workshop/page-editor/WidgetLibrary.tsx"
     ],
     "ui/status": [
       "web/packages/app/src/agents.tsx",
@@ -4926,8 +4921,6 @@
       "web/packages/platform/src/processes.tsx",
       "web/packages/pms/src/index.tsx",
       "web/apps/catalog/src/Catalog.tsx",
-      "web/apps/catalog/src/Governance.tsx",
-      "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
@@ -4958,9 +4951,6 @@
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/processes.tsx",
       "web/packages/pms/src/app.tsx",
-      "web/apps/catalog/src/Catalog.tsx",
-      "web/apps/catalog/src/Governance.tsx",
-      "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/shell/Applications.tsx",
@@ -5256,7 +5246,9 @@
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
-      "web/packages/build/src/workshop/editor.tsx"
+      "web/packages/build/src/workshop/editor.tsx",
+      "web/apps/catalog/src/Catalog.tsx",
+      "web/apps/catalog/src/Sandbox.tsx"
     ],
     "ui/data-table": [
       "web/packages/build/src/automate/workflow-runs.tsx",
@@ -5670,14 +5662,7 @@
     "@pkg/build": {
       "source": "web/packages/build/src/index.tsx",
       "symbols": [
-        "aiFunctions",
-        "automate",
-        "code",
-        "contributions",
-        "default",
-        "ontology",
-        "releases",
-        "workshop"
+        "default"
       ],
       "types": []
     }

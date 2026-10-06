@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>工业控制台</title>
+  <style>
+    body { margin: 0; background: #0b0f19; color: #e2e8f0; font-family: ui-monospace, monospace; padding: 20px; }
+    .card { background: #131c2e; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .title { font-size: 14px; font-weight: 600; color: #38bdf8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .metric { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 12px; }
+    .metric-name { font-size: 11px; color: #94a3b8; }
+    .metric-val { font-size: 24px; font-weight: 700; color: #22c55e; margin-top: 4px; }
+    .btn { background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%); border: 1px solid #475569; color: #f8fafc; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+    .btn:hover { border-color: #38bdf8; color: #38bdf8; }
+    .btn-danger { background: #dc2626; border-color: #ef4444; color: white; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="title">真空退火炉实时工况 (Annealing Furnace #3)</div>
+    <div class="grid">
+      <div class="metric"><div class="metric-name">炉温主控温度</div><div class="metric-val">842.6 ℃</div></div>
+      <div class="metric"><div class="metric-name">腔体气压</div><div class="metric-val">1.2e-4 Pa</div></div>
+      <div class="metric"><div class="metric-name">循环水流量</div><div class="metric-val">42.8 L/min</div></div>
+      <div class="metric"><div class="metric-name">主轴电机负载</div><div class="metric-val">68.4 %</div></div>
+    </div>
+  </div>
+  <div style="display: flex; gap: 10px;">
+    <button class="btn" onclick="alert('执行加热程序')">启动升温</button>
+    <button class="btn" onclick="alert('氮气吹扫中')">氮气保护吹扫</button>
+    <button class="btn btn-danger" onclick="alert('触发急停联锁')">急停控制</button>
+  </div>
+</body>
+</html>

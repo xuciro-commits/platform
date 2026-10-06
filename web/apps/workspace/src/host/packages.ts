@@ -12,8 +12,8 @@ export type Package = { serves: string[]; role?: string; public?: boolean; load:
 
 export const packages: Package[] = [
   { serves: [], public: true, load: () => import("@platform/catalog-app/app") },
-  { serves: ["build"], role: "builder", load: () => import("@pkg/build").then((m) => ({ default: m.default, contributions: m.contributions })) },
-  { serves: ["build"], role: "publisher", load: () => import("@pkg/build").then((m) => ({ default: m.releases })) },
+  { serves: ["build"], role: "builder", load: () => import("@pkg/build") },
+  { serves: ["build"], role: "publisher", load: () => import("@pkg/build") },
   { serves: ["crm"], load: () => import("@pkg/crm") },
   { serves: ["pms"], load: () => import("@pkg/pms/app") },
   { serves: ["hcm"], load: () => import("@pkg/hcm") },

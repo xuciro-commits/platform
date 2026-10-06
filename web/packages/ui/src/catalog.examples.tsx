@@ -60,7 +60,7 @@ export function ButtonGroups(){
 // Runnable owner examples use public APIs and synthetic values only. Nothing in
 // this bundle fetches a host or suggests that a fixture proves authorization.
 export function PreviewWorkspace({ children, onOpen }: { children: ReactNode; onOpen?: (route: Route) => void }) {
-  const workspace = useMemo(() => ({ open: (route: Route) => onOpen?.(route), close: () => {}, notify, palette: () => {}, recent: [], favorites: [], toggleFavorite: () => {} }), [onOpen]);
+  const workspace = useMemo(() => ({ open: (route: Route) => onOpen?.(route), close: () => {}, closeAll: () => {}, notify, palette: () => {}, recent: [], favorites: [], toggleFavorite: () => {} }), [onOpen]);
   return <WorkspaceContext.Provider value={workspace}>{children}</WorkspaceContext.Provider>;
 }
 

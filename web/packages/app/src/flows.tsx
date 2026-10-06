@@ -14,7 +14,7 @@ export function FlowInstanceView({ id }: { id: string }) {
   const live = !["done", "compensated", "canceled"].includes(instance.state);
   const next = flows.some((flow) => flow.id === instance.flow && flow.version > instance.version);
   return <div className="grid max-w-4xl gap-3">
-    <div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={() => open({ view: "inbox" }, { window: "float" })}>{t("Back to inbox")}</Button>
+    <div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={() => open({ view: "inbox" }, { window: "beside" })}>{t("Back to inbox")}</Button>
       {instance.subject && <Button variant="ghost" onClick={() => openRecord(instance.subject!)}>{t("Open related record")}</Button>}
     </div>
     {live && <div className="flex gap-2">

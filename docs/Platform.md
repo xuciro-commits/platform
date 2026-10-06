@@ -464,7 +464,7 @@
 
 ### 10.3 目标架构与不变式
 
-产品结构（Shell、Applications 门户、三种投影、功能块与菜单）归 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md)（2026-10-06，P0–P6 前端已落地）；构建者侧编辑器（Projects、Ontology Manager、Workshop 模块工作台、Automate、Releases）的产品结构与交互归 [ADR-0053](ADR/0053-builder-experience.md)（2026-10-06，实施中）；功能域、依赖层与术语归 [ADR-0047 §2–§4](ADR/0047-platform-composition-and-workspaces.md)。
+产品结构（Shell、Applications 门户、三种投影、功能块与菜单）归 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md)（2026-10-06，P0–P6 前端已落地）；构建者侧编辑器（Projects、Ontology Manager、Workshop 模块工作台、Automate、Releases）的产品结构与交互归 [ADR-0053](ADR/0053-builder-experience.md)（2026-10-06，P1–P7 已落地）；应用设计台的组织与左栏、资产库、代码沙箱与 Shell 页签模型归 [ADR-0054](ADR/0054-ide-workspaces.md)（2026-10-06，已落地）；功能域、依赖层与术语归 [ADR-0047 §2–§4](ADR/0047-platform-composition-and-workspaces.md)。
 
 本节定义即将落地实现的目标软件架构，而非当前已可直接调用的 API 现状。在确定最终序列化格式或增设代码包之前，必须首先确立其核心命名与边界。
 

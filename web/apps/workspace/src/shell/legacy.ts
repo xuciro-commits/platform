@@ -23,6 +23,8 @@ const retired: Record<string, Route | ((params?: Params) => Route)> = {
   model: (params) => ({ view: "object-type", params: keep(params, "object", "tab", "application") }),
   process: (params) => ({ view: "object-type", params: keep(params, "id", "field", "action", "access", "application") }),
   workflow: (params) => ({ view: "flow", params: keep(params, "id", "application") }),
+  "catalog-example": (params) => ({ view: "catalog", params: { ...keep(params, "id"), expand: "1" } }),
+  governance: { view: "catalog" },
   "candidate-test": (params): Route => {
     if (params?.processId) return { view: "flow", params: { id: params.processId } };
     if (params?.functionId) return { view: "function", params: { id: params.functionId } };
@@ -39,5 +41,5 @@ export const legacyRoute = (route: Route): Route | undefined => {
 /** The projection an old link asked for, by `surface` or by the retired view it named. */
 export function legacyProjection(route?: Route): Projection | undefined {
   if (!route) return undefined;
-  return projectionOfSurface(route.params?.surface) ?? (["catalog", "catalog-example"].includes(route.view) && route.params?.mode === "builder" ? "build" : undefined);
+  return projectionOfSurface(route.params?.surface);
 }

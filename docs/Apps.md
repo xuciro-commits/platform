@@ -266,9 +266,9 @@ node solutions/wms/assemble.mjs assemble
 
 当前收货汇总按作业状态分组，只有“已上架”组代表已完成收货，不是库存余额。单次收货数量已有跨对象校验；累计收货量、父单自动完结与库存台账尚缺。WMS 应用显式引用五个对象、收货流程和 Go/Wasm 计算；从应用本身审查/激活完整候选，闭合页面、动作和计算依赖。当前审批主管复用构建者角色，正式业务角色隔离仍待补齐。缺口统一归 [WorkQueue](WorkQueue.md)。
 
-## Platform Catalog
+## Asset Library / 资产库
 
-从 Apps 首页或应用切换器打开 **Platform Catalog / 平台资产目录**，沿统一 App Shell 保留导航、标签及当前宿主/租户/身份；离线目录用 `pnpm --dir web/apps/catalog dev`，默认端口 5174，复用同一应用声明与外壳。构建视角提供真实 Widget/Block/Studio 模板入口，开发视角提供公共导入、类型与源码。离线示例只有合成数据；到 Studio 的链接需填写正在运行的工作区地址（开发工作区通常为 5176）。
+从 Apps 门户、应用设计台左栏"探索"或应用切换器打开 **Asset Library / 资产库**（[ADR-0054](ADR/0054-ide-workspaces.md) D3）：左栏按层级的资产树（搜索、用法筛选），主区文档 + 可操作示例（可展开占满），右栏"怎么用"（导入片段、来源、归属包 API、组成、被谁使用、在应用设计台中打开/创建），底栏 Health（索引健康，实时算出）与 Runtime（当前宿主已授权能力）。同一应用含 **Sandbox / 代码沙箱**（D4）：片段 · 编辑器 · 预览 · 控制台。离线目录用 `pnpm --dir web/apps/catalog dev`，默认端口 5174，复用同一应用声明与外壳；离线示例只有合成数据。
 
 观测代码组件：在Catalog查“Original observation table / 原观测表”“Original observation statistics / 原观测统计”“Original availability history / 原可用率历史”“Original observation time series / 原观测时间序列”，开发视角可查看`@platform/ui`的ObservationTable、ObservationStatistics、ObservationAvailability及ObservationTimeSeries公共类型。调用方提供原EntityInfo、显式信号/单位和事件datetime字段，窗口为`{scope, records, total}`；scope包含原读取/查询身份，旧窗口不显示。表格列搜索/隐藏、元数据固定和行高只改变已读取窗口，选择/导出回调返回原记录和字段，不读取其他数据。统计调用方提供完整窗口答复与signal/threshold/windowRows/计数；最新样本和历史也需原scope。时间图支持最多500点及三种独立单位，保留缺值、原时间和记录身份；availability摘要默认与原窗口作用域、字段及total一致；提供显式averageInfo/averageField时，原资产数量/均值可独立于样本历史total，仍校验可读数值字段与共同作用域，SLO是明确呈现阈值。Catalog示例仅用固定合成数据，不保存文件或接入遥测。四类Workshop源组件可沿显式真实来源映射导入；原生配置/读取/冻结已接通，边界见[ADR-0046 §6.78](ADR/0046-application-studio-fusion.md#678-业务观测宽表窗口统计与真实时间序列)。
 

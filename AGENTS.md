@@ -38,7 +38,7 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 | `web/packages/build` | 构建者应用：Ontology / Workshop / Automate / AI Functions / Code / Projects / Releases |
 | `web/packages/platform` | 治理与运维应用：Control Panel / Runs / Data Connection / Agents / AI / Knowledge / Host Console |
 | `web/apps/workspace` | 唯一工作区：`session/`（身份）、`host/`（读取与决策）、`shell/`（Rail、Home、门户、Explorer、Lineage）、`chrome.tsx`（共享视图） |
-| `web/apps/catalog`、`web/e2e` | Platform Catalog；浏览器路线 |
+| `web/apps/catalog`、`web/e2e` | Asset Library（资产库 + 代码沙箱）；浏览器路线 |
 
 ## 检查
 

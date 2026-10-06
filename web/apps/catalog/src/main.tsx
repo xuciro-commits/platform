@@ -7,9 +7,9 @@ import "./styles.css";
 
 const previewWorkspace = new URLSearchParams(location.search).get("preview") === "pattern/workspace";
 function OfflineCatalog() {
-  const home = { view: "catalog", params: { mode: "developer" } };
+  const home = { view: "catalog" };
   return <Workspace product={catalogApp.title} storageKey="catalog.layout"
-    home={home} nav={catalogNavigation("developer")}
+    home={home} nav={catalogNavigation()}
     views={catalogApp.views} productIcon={catalogApp.icon}
     applications={{ apps: [{ id: catalogApp.id, title: catalogApp.title, icon: catalogApp.icon, category: "developer", home }], categories: [{ id: "developer", label: t("Developer") }], current: catalogApp.id, onSelect: () => { location.hash = routeToHash(home); } }}
     status={<span className="text-xs text-muted">{t("Public code assets")}</span>} />;

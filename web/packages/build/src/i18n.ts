@@ -3060,4 +3060,8 @@ register("zh-CN", {
   "And then": "然后",
   "Add an effect": "添加效果",
   "No published action of this object type yet. Publish the object type's actions, then add them here.": "该对象类型还没有已发布的动作。请先发布对象类型的动作，再在此添加。",
+  "Design applications: their object types, modules, automations and functions, and release them together.": "设计应用：它的对象类型、模块、自动化与函数，并一起发布。",
+  "Asset Library": "资产库",
+  "Builder": "应用设计台",
+  "User interface": "界面",
 });

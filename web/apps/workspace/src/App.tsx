@@ -197,6 +197,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     <HostContext.Provider value={host}>
       <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={surface === "studio" && studioApplication ? studioApplication.title || studioApplication.name : app?.title ?? t("Platform")} productIcon={app?.icon}
         storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
+        layoutScope={app?.id} scopeOf={(route) => shellViews.includes(route.view) ? undefined : owner.get(route.view) ?? pageApplication(route, definitions, current)}
         views={views} home={{ view: "home" }}
         rail={{ home: { view: "home" }, applications: { view: "portal" }, notifications: { route: { view: "notifications" }, unread },
           ...(host.can("agent.run.start") ? { assist: { view: "assistant" } } : {}) }}
@@ -205,7 +206,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
         onActiveRoute={setActiveRoute}
         nav={[
-          ...(surface === "studio" && studioApplications.length > 0 ? [{ label: t("Projects"), items: [
+          ...(surface === "studio" ? [{ label: t("Projects"), items: [
             { label: t("All projects"), icon: <LayoutGrid />, route: { view: "projects", params: { surface: "studio" } } },
             ...studioApplications.filter((record) => !record.archived)
               .map((record) => ({ label: record.title || record.name, icon: <Hammer />, route: { view: "project", params: { id: record.id, surface: "studio" } } })),
