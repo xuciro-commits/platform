@@ -42,11 +42,12 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 	member, ok := t.Member(s.Puller)
 	if !ok {
 		pull.Error = "The publishing member is no longer available"
-	} else if body, err := t.fetchSource(s); err != nil {
+	} else if raw, err := t.readSource(s); err != nil {
 		pull.Error = err.Error()
-	} else if rows, err := s.MapRows(body); err != nil {
+	} else if rows, err := s.MapRows(raw); err != nil {
 		pull.Error = err.Error()
 	} else {
+		pull.Cursor = s.Advance(raw)
 		t.records.mu.Lock()
 		et := t.records.types[s.Object]
 		t.records.mu.Unlock()
@@ -84,22 +85,64 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 		Target: &pb.EntityRef{Type: build.SourceType, Id: s.ID}, Schema: &pb.SchemaRef{Name: build.SchemaSourcePulled, Version: 1}, Payload: payload}, now)
 }
 
-// fetchSource reads the endpoint's answer with the guarded outbound sender:
-// private addresses only when the source allows them, one bounded body.
-func (t *Tenant) fetchSource(s build.Source) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, s.URL, nil)
+// readSource reads the source's rows by its profile (ADR-0070): json and csv
+// fetch one body, odata walks an entity set's pages, table queries a database.
+func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
+	var conn *build.Connection
+	if s.Connection != "" {
+		t.mu.Lock()
+		c, ok := platform.Get[build.Connection](t.automation(build.ID, false), s.Connection)
+		t.mu.Unlock()
+		if !ok || c.State != "ready" {
+			return nil, fmt.Errorf("the connection is not ready")
+		}
+		conn = &c
+	}
+	switch s.Profile {
+	case "odata":
+		return t.readOData(s, *conn)
+	case "table":
+		return t.readTable(s, *conn)
+	}
+	url, header, private := s.URL, s.Header, s.AllowPrivate
+	if conn != nil {
+		url, private = conn.Resolve(s.URL), conn.AllowPrivate
+		header = t.authorization(*conn)
+	}
+	body, err := t.fetchSource(url, header, private, s.Profile == "csv")
+	if err != nil {
+		return nil, err
+	}
+	return s.Decode(body)
+}
+
+// authorization is the Authorization header a connection's secret gives, or none.
+func (t *Tenant) authorization(c build.Connection) string {
+	if c.Secret == "" {
+		return ""
+	}
+	if v, ok := t.secret(c.Secret); ok && len(strings.TrimSpace(string(v))) > 0 {
+		return "Authorization: " + strings.TrimSpace(string(v))
+	}
+	return ""
+}
+
+// fetchSource reads an answer with the guarded outbound sender: private
+// addresses only when allowed, one bounded body.
+func (t *Tenant) fetchSource(url, header string, allowPrivate, csv bool) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("the URL is not valid")
 	}
-	req.Header.Set("Accept", "application/json")
-	if name, value, ok := strings.Cut(s.Header, ":"); ok && strings.TrimSpace(name) != "" {
+	req.Header.Set("Accept", map[bool]string{false: "application/json", true: "text/csv, text/plain"}[csv])
+	if name, value, ok := strings.Cut(header, ":"); ok && strings.TrimSpace(name) != "" {
 		req.Header.Set(strings.TrimSpace(name), strings.TrimSpace(value))
 	}
 	send := t.Outbound
 	if send == nil {
 		send = guarded
 	}
-	resp, err := send(req, s.AllowPrivate)
+	resp, err := send(req, allowPrivate)
 	if err != nil {
 		return nil, fmt.Errorf("the endpoint did not answer: %v", err)
 	}
