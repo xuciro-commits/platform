@@ -11,7 +11,7 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
   const definitions = useReadQuery<FlowDefinition[]>("/v1/flows");
   const [selected, setSelected] = useState(""), [step, setStep] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
-  const runs = useMemo(() => (inventory.data?.records ?? []).filter((run) => run.flow === `build.${name}`)
+  const runs = useMemo(() => (inventory.data?.records ?? []).filter((run) => name ? run.flow === `build.${name}` : run.flow.startsWith("build."))
     .sort((a, b) => (b.trace?.at(-1)?.at ?? "").localeCompare(a.trace?.at(-1)?.at ?? "")), [inventory.data, name]);
   const shown = runs.find((run) => run.id === selected) ?? runs[0];
   useEffect(() => { onRunSelect?.(shown); }, [shown, onRunSelect]);
