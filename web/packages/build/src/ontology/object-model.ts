@@ -18,10 +18,12 @@ export type Create_ = { object: string; via: string; sets?: Set_[] };
 export type Post_ = { object: string; match: Set_[]; field: string; amount: string; subtract?: boolean; floor?: boolean };
 export type Action = { name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[]; posts?: Post_[] };
 /** What one role of the builder app may do with the object (ADR-0037 18b). */
-export type Access = { role: string; read: "all" | "own" | "none"; create?: boolean; edit?: boolean; archive?: boolean };
-export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[]; implements?: string[]; extends?: string };
+export type Access = { role: string; read: "all" | "below" | "unit" | "own" | "none"; create?: boolean; edit?: boolean; archive?: boolean };
+/** The fields that place a record for row scopes: its owner (empty: creator) and its unit within a structure (ADR-0066). */
+export type ObjectScope = { owner?: string; unit?: string; structure?: string };
+export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[]; scope?: ObjectScope; implements?: string[]; extends?: string };
 /** The draft in hand: fields, lifecycle, access, and its shape — the interfaces it implements and the type it extends (ADR-0058 A2, A3). */
-export type Process = { states: State[]; actions: Action[]; access: Access[]; fields: Field[]; implements?: string[]; extends?: string };
+export type Process = { states: State[]; actions: Action[]; access: Access[]; fields: Field[]; scope?: ObjectScope; implements?: string[]; extends?: string };
 /** The reference an extension object carries to the record it extends. */
 export const baseField = "base";
 /** The fields of an interface the draft still lacks, by name and type. */

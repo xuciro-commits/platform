@@ -811,10 +811,50 @@ func assign(f reflect.Value, x any) error {
 // the Console assigns. Actions and fields name their own roles.
 type Access struct {
 	Role    string `json:"role" field:"required" help:"A role of the builder app, lower-case letters and digits" example:"desk"`
-	Read    string `json:"read" field:"required" choices:"all,own,none" help:"all: every record; own: those they created; none: not the object at all"`
+	Read    string `json:"read" field:"required" choices:"all,below,unit,own,none" help:"all: every record; below: those of the member's units and the units under them; unit: those of the member's own units; own: their own; none: not the object at all"`
 	Create  bool   `json:"create,omitempty"`
 	Edit    bool   `json:"edit,omitempty"`
 	Archive bool   `json:"archive,omitempty"`
+}
+
+// ObjectScope names the fields that place a record for row scopes (ADR-0066).
+type ObjectScope struct {
+	Owner     string `json:"owner,omitempty" help:"The field holding the member a record belongs to; empty: whoever created it"`
+	Unit      string `json:"unit,omitempty" help:"The field holding the record's organisational unit (a reference to org.unit, or its id)"`
+	Structure string `json:"structure,omitempty" help:"The organisation structure \"below\" follows, e.g. management"`
+}
+
+var readLevels = map[string]string{"all": platform.ScopeTenant, "below": platform.ScopeBelow, "unit": platform.ScopeUnit, "own": platform.ScopeOwn, "none": platform.ScopeNone}
+
+// checkScope: the scope fields exist and suit their use, and every read level
+// that needs one has it.
+func checkScope(o Object) error {
+	field := func(name string) *Field {
+		if i := slices.IndexFunc(o.Fields, func(f Field) bool { return f.Name == name }); i >= 0 {
+			return &o.Fields[i]
+		}
+		return nil
+	}
+	sc := o.Scope
+	if sc == nil {
+		sc = &ObjectScope{}
+	}
+	if sc.Owner != "" {
+		if f := field(sc.Owner); f == nil || f.Type != "text" && f.Type != "reference" {
+			return fmt.Errorf("the owner field %q is not a text or reference field of this object", sc.Owner)
+		}
+	}
+	if sc.Unit != "" {
+		if f := field(sc.Unit); f == nil || f.Type != "text" && f.Type != "reference" {
+			return fmt.Errorf("the unit field %q is not a text or reference field of this object", sc.Unit)
+		}
+	}
+	for _, a := range o.Access {
+		if (a.Read == "unit" || a.Read == "below") && (sc.Unit == "" || sc.Structure == "") {
+			return fmt.Errorf("the role %q reads by unit, so the object needs a unit field and a structure under Scope", a.Role)
+		}
+	}
+	return nil
 }
 
 // checkAccess refuses access people could not be given: a role that is not a
@@ -830,8 +870,8 @@ func checkAccess(o Object) error {
 			return fmt.Errorf("the role %q always does everything with what it builds", Builder)
 		case roles[a.Role]:
 			return fmt.Errorf("the role %q is given access twice", a.Role)
-		case !slices.Contains([]string{"all", "own", "none"}, a.Read):
-			return fmt.Errorf("the role %q reads %q; it reads all, own or none", a.Role, a.Read)
+		case readLevels[a.Read] == "":
+			return fmt.Errorf("the role %q reads %q; it reads all, below, unit, own or none", a.Role, a.Read)
 		case a.Read == "none" && (a.Create || a.Edit || a.Archive):
 			return fmt.Errorf("the role %q may not read the object, so it may not create, edit or archive it either", a.Role)
 		}
@@ -873,11 +913,17 @@ func access(o Object) (platform.Standard, platform.Scope, []string) {
 	std.Roles = []string{Builder}
 	std.CreateRoles, std.EditRoles, std.ArchiveRoles = []string{Builder}, []string{Builder}, []string{Builder}
 	scope := platform.Scope{Owner: platform.OwnerCreated, Levels: map[string]string{}, Default: platform.ScopeNone}
+	if o.Scope != nil {
+		if o.Scope.Owner != "" {
+			scope.Owner = o.Scope.Owner
+		}
+		scope.Unit, scope.Structure = o.Scope.Unit, o.Scope.Structure
+	}
 	scope.Levels[Builder] = platform.ScopeTenant
 	roles := []string{Builder}
 	for _, a := range o.Access {
 		roles = append(roles, a.Role)
-		scope.Levels[a.Role] = map[string]string{"all": platform.ScopeTenant, "own": platform.ScopeOwn, "none": platform.ScopeNone}[a.Read]
+		scope.Levels[a.Role] = readLevels[a.Read]
 		if a.Create {
 			std.CreateRoles = append(std.CreateRoles, a.Role)
 		}

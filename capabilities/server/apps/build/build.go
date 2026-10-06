@@ -49,6 +49,10 @@ type Object struct {
 	// Access is who may do what with it (ADR-0037 18b); empty: builder and
 	// user do everything, as before.
 	Access []Access `json:"access,omitempty" field:"aside" title:"Access"`
+	// Scope says which fields place a record for the row scopes of Access:
+	// its owner (for "own"; empty: whoever created it) and its organisational
+	// unit within a structure (for "unit" and "below") (ADR-0066).
+	Scope *ObjectScope `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`
 	// Implements names the interfaces this object carries the fields of; Extends
 	// names an installed object type this one adds fields to, one record per base
 	// record through its `base` reference (ADR-0058 A2, A3).
@@ -657,6 +661,9 @@ func (b *Build) check(o Object, id string) error {
 		return err
 	}
 	if err := checkFormulas(o.Fields); err != nil {
+		return err
+	}
+	if err := checkScope(o); err != nil {
 		return err
 	}
 	if err := checkProcess(o, b.conditionLookup); err != nil {

@@ -1,5 +1,5 @@
 import {actionDestinations,actionResultEdges} from "./process-rules";
-import { fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type Process, type State } from "./object-model";
+import { fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type ObjectScope, type Process, type State } from "./object-model";
 import { ShapeEditor } from "./shape";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../shared/workbench";
 // The object's process editor (ADR-0037): its states and the actions people
@@ -130,10 +130,11 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       <table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted"><th className="px-2 py-1 font-medium">{t("Role")}</th><th className="px-2 py-1 font-medium">{t("Read")}</th><th className="px-2 py-1 font-medium">{t("Create")}</th><th className="px-2 py-1 font-medium">{t("Edit")}</th><th className="px-2 py-1 font-medium">{t("Archive")}</th></tr></thead>
         <tbody>{process.access.map((a, at) => <tr key={`${a.role}:${at}`} className={cn("border-t border-border", chosen?.kind === "access" && chosen.at === at && "bg-row-selected")}>
           <td className="px-2 py-1.5"><Button variant="row" type="button" className="font-medium hover:underline" onClick={() => choose({ kind: "access", at })}>{a.role}</Button></td>
-          <td className="px-2 py-1.5"><Select value={a.read} onChange={(e) => change({ ...process, access: process.access.map((x, i) => i === at ? { ...x, read: e.target.value as Access["read"] } : x) })}><option value="all">{t("all")}</option><option value="own">{t("own")}</option><option value="none">{t("none")}</option></Select></td>
+          <td className="px-2 py-1.5"><Select value={a.read} onChange={(e) => change({ ...process, access: process.access.map((x, i) => i === at ? { ...x, read: e.target.value as Access["read"] } : x) })}>{readLevels.map((r) => <option key={r} value={r}>{t(r)}</option>)}</Select></td>
           {(["create", "edit", "archive"] as const).map((key) => <td key={key} className="px-2 py-1.5"><Checkbox checked={!!a[key]} onChange={(checked) => change({ ...process, access: process.access.map((x, i) => i === at ? { ...x, [key]: checked } : x) })}>{""}</Checkbox></td>)}
         </tr>)}</tbody></table>
       {!process.access.length && <p className="text-sm text-muted">{t("No roles yet. Without roles only builders see these records.")}</p>}
+      {process.access.length > 0 && <ScopeFields process={process} onChange={(scope) => change({ ...process, scope })} />}
     </div>,
     preview: <div className="min-h-0 flex-1 overflow-auto p-3"><Preview object={object} process={process} action={action} /></div>,
   };
@@ -302,7 +303,27 @@ function StateProperties({ state, onChange }: { state: State; onChange: (patch: 
   );
 }
 
-const reads = { all: () => t("Every record"), own: () => t("Only those they created"), none: () => t("Not at all") };
+const reads = { all: () => t("Every record"), below: () => t("Those of their units and the units below"), unit: () => t("Those of their own units"), own: () => t("Only their own"), none: () => t("Not at all") };
+const readLevels = ["all", "below", "unit", "own", "none"] as const;
+
+/** Which fields place a record for the row scopes above (ADR-0066): owner for "own", unit + structure for "unit" and "below". */
+function ScopeFields({ process, onChange }: { process: Process; onChange: (scope: ObjectScope) => void }) {
+  const scope = process.scope ?? {};
+  const candidates = process.fields.filter((f) => f.type === "text" || f.type === "reference");
+  const byUnit = process.access.some((a) => a.read === "unit" || a.read === "below");
+  const set = (patch: ObjectScope) => { const next = { ...scope, ...patch }; onChange(Object.fromEntries(Object.entries(next).filter(([, v]) => v)) as ObjectScope); };
+  const pick = (value: string | undefined, onPick: (v: string | undefined) => void, empty: string) => <Select value={value ?? ""} onChange={(e) => onPick(e.target.value || undefined)}>
+    <option value="">{empty}</option>{candidates.map((f) => <option key={f.name} value={f.name}>{f.title || f.name}{f.type === "reference" && f.ref ? ` → ${f.ref}` : ""}</option>)}</Select>;
+  return <Card className="grid gap-3 p-3">
+    <div><h3 className="text-sm font-semibold">{t("What places a record")}</h3><p className="text-xs text-muted">{t("Row scopes read these fields: own = the owner field (or whoever created it); unit and below = the unit field, following a structure of the organisation.")}</p></div>
+    <div className="grid gap-3 sm:grid-cols-3">
+      <Label text={t("Owner field")}>{pick(scope.owner, (owner) => set({ owner }), t("Whoever created it"))}</Label>
+      <Label text={t("Unit field")}>{pick(scope.unit, (unit) => set({ unit }), byUnit ? t("Required for unit and below") : t("None"))}</Label>
+      <Label text={t("Structure")}><Input placeholder="management" value={scope.structure ?? ""} onChange={(e) => set({ structure: e.target.value || undefined })} /></Label>
+    </div>
+    {byUnit && (!scope.unit || !scope.structure) && <p role="alert" className="text-xs text-danger">{t("A role reads by unit: choose the unit field and name the structure, or publishing is refused.")}</p>}
+  </Card>;
+}
 
 /** The left pane's third part: the roles of the builder app this object names, and what each may do. */
 
@@ -325,7 +346,7 @@ function AccessProperties({ access, fields, onChange, onFields }: {
           const read = e.target.value as Access["read"];
           onChange(read === "none" ? { read, create: false, edit: false, archive: false } : { read });
         }}>
-          {(["all", "own", "none"] as const).map((r) => <option key={r} value={r}>{reads[r]()}</option>)}
+          {readLevels.map((r) => <option key={r} value={r}>{reads[r]()}</option>)}
         </Select>
       </Label>
       <fieldset className="grid gap-1 text-xs"><legend className="mb-1">{t("What it may do")}</legend>
