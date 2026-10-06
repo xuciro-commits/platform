@@ -64,6 +64,8 @@ ADR-0057 的四个浪潮做完后，平台已经能让 FDE **不写代码**从�
 
 ### 2.3 顺序
 
+> 进度（2026-10-06）：Ⅰ-A/B → ADR-0070，Ⅰ-C/D → ADR-0071，Ⅰ-E/F → ADR-0072，Ⅰ-H → ADR-0073，Ⅰ-G → ADR-0074，Ⅰ-I → ADR-0075，全部落地；探针五步的手测路线在 docs/Testing.md「集成织物 Ⅰ-*」各行，删除项在 docs/Subtraction.md。Ⅰ 的代码面已齐，剩下的是按探针做一次端到端联调。
+
 ```
 Ⅰ-A Connection ─┬─ Ⅰ-B 文件 + 数据库 profile ── Ⅰ-C Dataset ── Ⅰ-D Pipeline（核心） ── Ⅰ-E Backing/Writeback ── 探针第 1–3 步
                  └─ Ⅰ-B OData profile（SAP 替身就绪后）                                    Ⅰ-F 血缘/健康 ── Ⅰ-H 企业模型 ── Ⅰ-G 主数据 ── Ⅰ-I Markings ── 探针第 4–5 步
