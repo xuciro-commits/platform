@@ -64,7 +64,7 @@ ADR-0057 的四个浪潮做完后，平台已经能让 FDE **不写代码**从�
 
 ### 2.3 顺序
 
-> As built：Ⅰ-A/B → ADR-0070，Ⅰ-C/D → ADR-0071，Ⅰ-E/F → ADR-0072，Ⅰ-H → ADR-0073，Ⅰ-G → ADR-0074，Ⅰ-I → ADR-0075，已实现这些后续 ADR 定义的有界首版。上表的更广目标仍有差距：文件 profile 目前为 HTTP CSV/JSON，没有 SFTP 或文件修改游标；Pipeline 为线性表单，未实现节点画布/独立试跑；血缘从当前定义推导，没有运行冻结来源、新鲜度 SLA/告警或应用运行统一入口；Writeback 具备投递应答回填，没有源回读对账；匹配只支持键归一化与字段优先来源；集成记录未纳入封存候选/环境晋级。不能把这些首版能力或单条测试称为完整 Ⅰ 已验收。探针五步的负责人路线在 Testing.md，未完成项与执行顺序归 WorkQueue；删除判断参考 Subtraction.md。
+> As built：Ⅰ-A/B → ADR-0070，Ⅰ-C/D → ADR-0071，Ⅰ-E/F → ADR-0072，Ⅰ-H → ADR-0073，Ⅰ-G → ADR-0074，Ⅰ-I → ADR-0075，已实现这些后续 ADR 定义的有界首版。上表的更广目标仍有差距：文件 profile 目前为 HTTP CSV/JSON，没有 SFTP 或文件修改游标；Pipeline 为线性表单，未实现节点画布/独立试跑；血缘从当前定义推导，没有运行冻结来源、新鲜度 SLA/告警或应用运行统一入口；Writeback 具备投递应答回填，当前仅支持 Build 所有对象，没有原生应用应答桥接或源回读对账；匹配只支持键归一化与字段优先来源；集成记录未纳入封存候选/环境晋级。不能把这些首版能力或单条测试称为完整 Ⅰ 已验收。探针五步的负责人路线在 Testing.md，未完成项与执行顺序归 WorkQueue；删除判断参考 Subtraction.md。
 
 ```
 Ⅰ-A Connection ─┬─ Ⅰ-B 文件 + 数据库 profile ── Ⅰ-C Dataset ── Ⅰ-D Pipeline（核心） ── Ⅰ-E Backing/Writeback ── 探针第 1–3 步

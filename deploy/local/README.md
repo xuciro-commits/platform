@@ -131,6 +131,8 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 | `buyer@plant.test` | ERP `plant-sz` | `buyer-1` | erp 采购员（buyer）；ai 用户 | 下采购订单、收货；超过审批限额的订单由 `sup@plant.test`（主管会计）审批 |
 | `accountant@plant.test` | ERP | `acc-1` | erp 会计（accountant）；ai 用户 | 起草、过账、冲销凭证，登记供应商发票 |
 
+制造主管的构建者角色通过控制面板的成员授权动作 `platform.member.grant`（app `build`、role `builder`）加入现有租户并记录在账本。新建演示租户也用此动作启用构建入口；已有接受结果的租户不要修改目录中成员的初始角色来代替授权，这会改变历史恢复的前置状态。
+
 - 本地 Rauthy 走 HTTP，所以 `rauthy/config.toml` 里设了 `[access] cookie_mode = 'danger-insecure'`：不设的话，Safari 会丢掉 Rauthy 的安全 cookie，浏览器登录会显示密码错误（密码其实是对的）。只用于本地。
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
 - 每个人只担一份职责，测试时换人登录就能看到权限的差别；要同时看两个人，用一个普通窗口加一个无痕窗口分别登录。

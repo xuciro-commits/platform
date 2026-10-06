@@ -1421,5 +1421,6 @@
   "The system's name, e.g. sap-hr": "系统名，如 sap-hr",
   "The enterprise model is tenant-readable; confidential or restricted rows cannot land there": "企业模型对租户成员可读；机密或受限数据不能写入其中",
   "A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules": "机密或受限连接必须先写入数据集，再通过管道应用字段读取规则",
-  "The last delivery attempt failed": "最近一次投递尝试失败"
+  "The last delivery attempt failed": "最近一次投递尝试失败",
+  "A writeback currently listens to objects owned by Build; native application objects need an owner callback": "回写目前只监听构建器所有的对象；原生应用对象需要所属应用的应答处理"
 }

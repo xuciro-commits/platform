@@ -115,6 +115,9 @@ func (b *Build) checkWriteback(c platform.Caller, w Writeback) *kernel.Error {
 	if !ok {
 		return refuse("The object {object} is not installed", w.Object)
 	}
+	if info.App != ID {
+		return refuse("A writeback currently listens to objects owned by Build; native application objects need an owner callback")
+	}
 	if w.On == "" || strings.ContainsAny(w.On, "./ ") {
 		return refuse("After action is the verb of the object's action: create, edit or a declared action's name")
 	}

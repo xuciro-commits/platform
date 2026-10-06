@@ -14,6 +14,8 @@
 - `result`：应答键（点分；OData v2 的 `d` 自动展开）→ 记录字段，送达后经对象自己的 `edit` 写回（SAP 的凭证号就这样回到记录上）；
 - 生命周期 `draft → published`，`pause` 停止**新**发送，已排队的照常发出。
 
+当前回写只支持 Build 所有的对象（包括构建者声明的业务对象）：计划器监听 Build 的裁决，应答经 Build 执行对象的 edit。其他原生应用的对象在发布时明确拒绝，避免保存一条永远不触发的回写；跨原生应用的监听及所属应用应答处理尚未实现。已发布回写的编辑重新执行连接和映射校验。
+
 宿主侧（`writebacks.go`）：
 
 - **计划**在 `eventEffects` 里与 webhook 并列：裁决被接受时读取已发布的 writeback，把请求冻结为效果 `Body`（`WritebackRequest`：method/url/body/allowPrivate/密钥**名**），`Endpoint = connection:<id>`，`Event = writeback/<name>`，`App = build`。它在输入内、也在回放内运行，因此回放重建同一意图而不重发；

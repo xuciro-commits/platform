@@ -72,7 +72,7 @@ func testWritebackQueuesAndReplaysOnce(t *testing.T, durable bool, journal *Jour
 
 	seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{build.ID: build.Builder}}}
 	compose := func() *Tenant {
-		tn, err := NewTenant(tenant, NewConsole(tenant, seat), build.New(tenant))
+		tn, err := NewTenant(tenant, NewConsole(tenant, seat), build.New(tenant), newStock(tenant))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -134,6 +134,11 @@ func testWritebackQueuesAndReplaysOnce(t *testing.T, durable bool, journal *Jour
 		"mapping":[{"from":"sku","to":"Material"},{"from":"qty","to":"QuantityInEntryUnit","convert":"string"},{"from":"id","to":"ReferenceDocument"}],
 		"result":[{"from":"MaterialDocument","to":"docno"}]}`)
 	submit("wb-publish", build.WritebackType+".publish", build.WritebackType, "W1", `{}`)
+	submit("native-wb", build.WritebackType+".create", build.WritebackType, "native", `{"name":"nativewriteback","title":"Native writeback","connection":"sap","object":"stock.item","on":"create"}`)
+	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "native-publish",
+		Target: &pb.EntityRef{Type: build.WritebackType, Id: "native"}, Schema: &pb.SchemaRef{Name: build.WritebackType + ".publish", Version: 1}, Payload: []byte(`{}`)}, at); err == nil || !strings.Contains(err.Message, "owner callback") {
+		t.Fatalf("published a writeback whose native owner cannot receive its answer: %v", err)
+	}
 	submit("unchecked-conn", build.ConnectionType+".create", build.ConnectionType, "unchecked", `{"name":"unchecked","title":"Unchecked","kind":"http","address":"https://unchecked.example.com/"}`)
 	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "invalid-active-writeback",
 		Target: &pb.EntityRef{Type: build.WritebackType, Id: "W1"}, Schema: &pb.SchemaRef{Name: build.WritebackType + ".edit", Version: 1}, Payload: []byte(`{"connection":"unchecked"}`)}, at); err == nil {
