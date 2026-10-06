@@ -35,4 +35,5 @@
 - UAF 1.4 到来时：`uaf/spec/` 加文件、`enterprise/migrations/1.3-1.4.json`、决策 `enterprise.model.upgrade`（ADR-0067 D2）。
 - XMI 导入/导出当前模型（D7 末项）。
 - 2D/3D 运营视图读取 `ActualLocation` 层级与 `ActualResource` 位置。
+- `core.site.unit` 目前存储企业组织元素 ID（文本）；企业模型是 Directory 私有状态，不是 host record store 中的对象。统一对象引用尚未接通，不能用 `ref:"enterprise.element"` 声明虚假的对象依赖，否则组合启动失败；`Caller.Enterprise()` 的模型读取仍可用。
 - 结构清理阶段：`Caller.Units` 删除、`Scope.Structure` 改名、`core` 的 site/location 投影到模型。
