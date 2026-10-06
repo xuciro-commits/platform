@@ -6,22 +6,22 @@
 // entries in the portal: the host still decides who holds the build role.
 import "./i18n";
 import { defineApp, type AppUI, type Host } from "@platform/app";
-import { PageEditor, PagesList } from "./editor";
-import { ProcessEditor, Objects } from "./process";
-import { ModelWorkbench } from "./model-editor/ModelWorkbench";
-import { WorkflowEditor, Workflows } from "./workflow";
-import { LinkTypeEditor, LinkTypes } from "./link-type";
-import { PropertyTypeEditor, PropertyTypes } from "./property-type";
-import { QueryEditor, Queries } from "./query";
-import { FunctionEditor, Functions } from "./function";
-import { ApplicationEditor, Applications } from "./application";
-import { CodeEditor, CodeFunctions } from "./code";
-import { ReleaseReview, releaseDraftsParam, releaseKinds, type ReleaseKind } from "./release";
-import { CandidateTest } from "./simulate";
-import { StudioOverview } from "./studio";
-import { StudioTemplates } from "./template-ui";
+import { PageEditor, PagesList } from "./workshop/editor";
+import { ProcessEditor, Objects } from "./ontology/process";
+import { ModelWorkbench } from "./ontology/ModelWorkbench";
+import { WorkflowEditor, Workflows } from "./automate/workflow";
+import { LinkTypeEditor, LinkTypes } from "./ontology/link-type";
+import { PropertyTypeEditor, PropertyTypes } from "./ontology/property-type";
+import { QueryEditor, Queries } from "./ontology/query";
+import { FunctionEditor, Functions } from "./functions/function";
+import { ApplicationEditor, Applications } from "./projects/application";
+import { CodeEditor, CodeFunctions } from "./functions/code";
+import { ReleaseReview, releaseDraftsParam, releaseKinds, type ReleaseKind } from "./releases/release";
+import { CandidateTest } from "./releases/simulate";
+import { StudioOverview } from "./projects/studio";
+import { StudioTemplates } from "./workshop/template-ui";
 import { t, type NavSection, type View } from "@platform/ui";
-import { ApplicationScope } from "./application-scope";
+import { ApplicationScope } from "./projects/application-scope";
 import { AppWindow, Boxes, Braces, Compass, FlaskConical, FolderKanban, GitBranch, LayoutList, LayoutTemplate, Link2, Network, PackageCheck, Search, Sparkles, Tags, Terminal, Workflow } from "lucide-react";
 
 const scoped = (p: Record<string, string | undefined>, node: React.ReactNode) => <ApplicationScope application={p.application}>{node}</ApplicationScope>;

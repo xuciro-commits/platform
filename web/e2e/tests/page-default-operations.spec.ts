@@ -1,16 +1,16 @@
-import {defaultOverviewFixture} from '../../packages/build/src/module-import/default-overview.fixture.mjs';
-import {defaultAnalyticsCompleteFixture} from '../../packages/build/src/module-import/default-analytics.fixture.mjs';
+import {defaultOverviewFixture} from '../../packages/build/src/workshop/module-import/default-overview.fixture.mjs';
+import {defaultAnalyticsCompleteFixture} from '../../packages/build/src/workshop/module-import/default-analytics.fixture.mjs';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {defaultMaintenanceFixture} from '../../packages/build/src/module-import/default-maintenance.fixture.mjs';
-import {defaultMapFixture} from '../../packages/build/src/module-import/default-map.fixture.mjs';
-import {defaultWorkflowFixture} from '../../packages/build/src/module-import/default-workflow.fixture.mjs';
-import {defaultTelemetryFixture} from '../../packages/build/src/module-import/default-telemetry.fixture.mjs';
+import {defaultMaintenanceFixture} from '../../packages/build/src/workshop/module-import/default-maintenance.fixture.mjs';
+import {defaultMapFixture} from '../../packages/build/src/workshop/module-import/default-map.fixture.mjs';
+import {defaultWorkflowFixture} from '../../packages/build/src/workshop/module-import/default-workflow.fixture.mjs';
+import {defaultTelemetryFixture} from '../../packages/build/src/workshop/module-import/default-telemetry.fixture.mjs';
 import {expect,test} from '@playwright/test';
 import {createServer} from 'node:http';
 import {readFileSync} from 'node:fs';
 import {decide,fresh,open,pageUIProfile,stableReadRevision} from './host';
-const source=readFileSync(new URL('../../packages/build/src/module-import/default.workshop.json',import.meta.url),'utf8'),original=JSON.parse(source);
+const source=readFileSync(new URL('../../packages/build/src/workshop/module-import/default.workshop.json',import.meta.url),'utf8'),original=JSON.parse(source);
 test('complete seven-page Workshop shares original actions computation attachments and telemetry across one frozen release',async({page,request},info)=>{
  test.setTimeout(480_000);page.setDefaultTimeout(10_000);
  let parent=fresh('PAGE');

@@ -1,14 +1,14 @@
-import {PageEditor} from "./editor";
+import {PageEditor} from "./workshop/editor";
 import "./i18n";
 import { CatalogFixture, sampleObject, samplePage } from "@platform/app/catalog/fixtures";
 import { PageWorkspaceExample } from "@platform/app/catalog/examples";
-import { QueryEditor } from "./query";
-import { ApplicationEditor } from "./application";
+import { QueryEditor } from "./ontology/query";
+import { ApplicationEditor } from "./projects/application";
 import { ComposedPage } from "@platform/app";
 import { t } from "@platform/ui";
-import { ProcessEditor } from "./process";
-import { WorkflowEditor } from "./workflow";
-import { pageTemplates, recordHandlingDraft } from "./templates";
+import { ProcessEditor } from "./ontology/process";
+import { WorkflowEditor } from "./automate/workflow";
+import { pageTemplates, recordHandlingDraft } from "./workshop/templates";
 
 export const MasterDetailExample = PageWorkspaceExample;
 export function RecordHandlingExample() {
@@ -55,8 +55,8 @@ const queryDefinitions = [
 const queryReads = {"/v1/records/build.query/QUERY-SAMPLE":{record:{...queryDeclaration,id:"QUERY-SAMPLE",revision:1,state:"published",version:1,published:JSON.stringify(queryDeclaration)}}};
 export const QueryStudioExample = () => <CatalogFixture reads={queryReads} roles={builderRole} definitions={queryDefinitions}><QueryEditor id="QUERY-SAMPLE" /></CatalogFixture>;
 
-import sampleModule from "./module-import/sample.workshop.json";
-import {compileWorkshopModule} from "./module-import/compile";
+import sampleModule from "./workshop/module-import/sample.workshop.json";
+import {compileWorkshopModule} from "./workshop/module-import/compile";
 import {pageUIProfile} from "@platform/app";
 import {Panel} from "@platform/ui";
 export function WorkshopImportExample(){

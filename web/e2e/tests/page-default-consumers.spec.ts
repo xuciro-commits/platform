@@ -1,5 +1,5 @@
 import {expect,test} from '@playwright/test';
-import {defaultConsumerGroup} from '../../packages/build/src/module-import/default-consumers.fixture.mjs';
+import {defaultConsumerGroup} from '../../packages/build/src/workshop/module-import/default-consumers.fixture.mjs';
 import {decide,fresh,open,pageUIProfile} from './host';
 test('original page and drawer title links and lifecycle consumers share authorized inputs and freeze together',async({page,request},info)=>{
  test.setTimeout(180_000);page.setDefaultTimeout(10_000);

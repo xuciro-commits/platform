@@ -1,6 +1,6 @@
 import {expect,test} from '@playwright/test';
 import {readFileSync} from 'node:fs';
-import {defaultAnalyticsComparisonGroup} from '../../packages/build/src/module-import/default-analytics.fixture.mjs';
+import {defaultAnalyticsComparisonGroup} from '../../packages/build/src/workshop/module-import/default-analytics.fixture.mjs';
 import {decide,fresh,open,pageUIProfile,stableReadRevision} from './host';
 
 test('original Operations multiselect and Analytics scatter ranking comparison share one frozen application with independent single selection',async({page,request},info)=>{

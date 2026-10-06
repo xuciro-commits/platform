@@ -1,6 +1,6 @@
 import {expect,test} from '@playwright/test';import {createServer} from 'node:http';import {readFileSync} from 'node:fs';
 import {decide,fresh,open,pageUIProfile} from './host';
-const original=JSON.parse(readFileSync(new URL('../../packages/build/src/module-import/default.workshop.json',import.meta.url),'utf8'));
+const original=JSON.parse(readFileSync(new URL('../../packages/build/src/workshop/module-import/default.workshop.json',import.meta.url),'utf8'));
 test('four original overlays freeze dismissal and shared record detail action and generated AI context',async({page,request},info)=>{
  test.setTimeout(180_000);page.setDefaultTimeout(10_000);const name=fresh('overlayai').replace(/[^a-z0-9]/gi,'').toLowerCase(),type=`build.${name}`,object=fresh('OBJ'),parent=fresh('PAGE'),app=fresh('APP'),fn=fresh('FN'),provider=fresh('provider').replace(/[^a-z0-9]/gi,''),headers={Authorization:'Bearer manager'},calls:any[]=[];
  const server=createServer(async(req,res)=>{let body='';for await(const chunk of req)body+=chunk;const raw=JSON.parse(body),input=JSON.parse(raw.messages.find((m:any)=>m.role==='user').content);calls.push(input);res.setHeader('Content-Type','application/json');res.end(JSON.stringify({choices:[{message:{content:JSON.stringify({summary:`Protocol fixture: ${input.name}`})}}],usage:{prompt_tokens:10,completion_tokens:12,cost:.001}}));});await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const address=server.address();if(!address||typeof address==='string')throw Error('fixture address');

@@ -1,6 +1,6 @@
 # 产品意图与方向
 
-面向 FDE 与客户构建者的 AI 业务应用平台。目标设计与年度验收归 [Platform §10](Platform.md#10-未来方向)，近期顺序只在 [WorkQueue](WorkQueue.md)，AI 执行规则归 [AGENTS](../AGENTS.md)。
+面向 FDE 与客户构建者的 AI 业务应用平台。目标设计归 [Platform §10](Platform.md#10-未来方向)，近期顺序在 [WorkQueue](WorkQueue.md)，工作规则在 [AGENTS](../AGENTS.md)。
 
 ## 我们在构建什么
 
@@ -31,10 +31,4 @@ CRM、MES、ERP 是目标验证领域，PMS、HCM、CSM 为参考应用；Music 
 
 Go 为主要后端，TypeScript/React 与共享 UI 为 Web，Rust 用于明确有系统优势的组件，Tauri 为桌面方案；内核契约语言中立，Lean 只在研发工具链。
 
-参考 Palantir 的共享语义和 AIP Logic、Retool/Appsmith 的构建反馈，以及 ServiceNow、Salesforce、SAP、Power Platform、Odoo/Frappe、APEX 的组合与交付能力。采纳范围及一手资料只在 Platform §10.1，不复制其数据模型或整套软件栈。
-
-## 文档与协作
-
-文档只收录长期决策、当前实现边界、可执行用法和必要待办。ADR 的 As built 维护一份当前摘要；更新时合并旧段落，不追加“本次/下一次”日志。提交过程和检查输出留在 Git 与会话。
-
-WorkQueue 只列当前、接下来几步及简短暂缓项；完成批次移除。日常增量按任务读取相关文档；仅改变事实的归属处需要更新。报告区分已接受目标、已实现与未验证，不能把历史测试当作本轮证据。年度门禁归 Platform §10.6，检查方法归 Testing，二者不重复充当任务队列。
+产品形态与功能切分对标 Palantir Foundry/AIP（Ontology、Workshop、Automate、AIP Logic、Control Panel 等），现行结构归 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md)；其他产品（Retool、ServiceNow、SAP、Power Platform 等）只作为局部技法参考，采纳边界在 Platform §10.1。不复制任何一家的数据模型或软件栈。

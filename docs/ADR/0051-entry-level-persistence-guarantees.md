@@ -1,6 +1,6 @@
 # ADR-0051：入口级持久化与恢复保证的精确表述（已落地）
 
-**状态：** 已完成（决策与文档），2026-10-05。来源是 `docs/review/README.md` 的三条平台影响项（P1 权限与副作用、P2 数据与持久化保证、P3 用户价值与成本）与 `docs/review/platform-priorities.md` 的"分层的证据表述""本次仍需 owner 决定的边界"。负责人已授权自行决策。
+**状态：** 已完成（决策与文档），2026-10-05。来源是 原 `docs/review/README.md`（已移除，见 Git 历史） 的三条平台影响项（P1 权限与副作用、P2 数据与持久化保证、P3 用户价值与成本）与 `docs/review/platform-priorities.md` 的"分层的证据表述""本次仍需 owner 决定的边界"。负责人已授权自行决策。
 **范围：** 只决定"每个入口分别陈述什么保证、不得宣称什么"，并裁决评审留给负责人的边界。不改 ADR-0038 的既有覆盖范围，不新增入口、不新增恢复矩阵队列、不重画架构图。
 **设计日期：** 2026-10-05。代码基线：`10ca8d1a`。
 
@@ -11,7 +11,7 @@
 | P1 流程 Agent 以宿主角色读取；取消/暂停后迟到工具意图可能提交 | 静态路径确认，已复现并修复 | 按 [ADR-0050](0050-model-accounting-and-run-scope.md) 收窄为"运行自己的应用 + 人代跑即其人"，并在模型返回处与步骤提交处都加运行状态围栏；两条都有复现测试（`TestAutomationRunReadsItsOwnAppNotTheHost`、`TestLateModelAnswerCannotActAfterCancel`） |
 | P2 不能把局部 accepted-result 恢复说成全平台原子提交或"恰好一次" | 已知边界，评审自己标明不是新漏洞 | 本稿第 2 节把"逐入口陈述、禁止全平台恰好一次"写成决定；覆盖范围仍归 ADR-0038，不复制第二份全入口矩阵 |
 | P3 缺的是关键业务旅程的可复验结果 | 方向确认 | 沿用 WorkQueue 现有批次与 ADR-0047 §12 的验收方式；本稿第 2 节 D5 写明什么不算外部业务价值证据 |
-| 旧建议：停工重写蓝图、加 G0–G4 门禁、建全入口恢复矩阵 | 评审已撤回 | 本仓库不再以建议形式保留；`docs/review/README.md` 顶部已标注落地状态 |
+| 旧建议：停工重写蓝图、加 G0–G4 门禁、建全入口恢复矩阵 | 评审已撤回 | 本仓库不再以建议形式保留；原 `docs/review/README.md`（已移除，见 Git 历史） 顶部已标注落地状态 |
 | AI 成本/留存（P4/P5） | 已实现 | [ADR-0050](0050-model-accounting-and-run-scope.md)（请求体上限与 token 上限、原子放行、未知用量标记、`transcript-days 0` 不保留且遗忘、按人读回自己的对话记录） |
 
 ## 2. 决定
@@ -56,6 +56,6 @@
 ## 6. 关系
 
 - [ADR-0038](0038-accepted-results-and-tenant-recovery.md)：accepted-result 与旧路径的覆盖边界，本稿只引用不复制。
-- [ADR-0014](0014-outbound-effects.md)：至少一次 + 幂等键；[ADR-0019](0019-postgres-journal.md)：日志与快照；[ADR-0026](0026-cross-authority-protocol.md)：不做跨权威全局事务；[ADR-0028](0028-file-bytes.md)：文件字节；[ADR-0043](0043-typed-ai-functions.md)/[ADR-0044](0044-capability-fabric.md)：模型与 Wasm 不承诺物理恰好一次。
+- [ADR-0014](0014-outbound-effects.md)：至少一次 + 幂等键；[ADR-0019](0019-read-models-analytics-snapshots.md)：日志与快照；[ADR-0026](0026-decisions-across-apps.md)：不做跨权威全局事务；[ADR-0028](0028-the-application-half.md)：文件字节；[ADR-0043](0043-typed-ai-functions.md)/[ADR-0044](0044-capability-fabric.md)：模型与 Wasm 不承诺物理恰好一次。
 - [ADR-0050](0050-model-accounting-and-run-scope.md)：本评审 AI 专项的实现与复现测试。
 - [ADR-0047](0047-platform-composition-and-workspaces.md) §12：对抗性验收方式与"两行业任务"证据口径。

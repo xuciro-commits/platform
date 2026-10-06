@@ -1,5 +1,5 @@
 import {expect,test} from '@playwright/test';
-import {defaultAnalyticsChartGroup} from '../../packages/build/src/module-import/default-analytics.fixture.mjs';
+import {defaultAnalyticsChartGroup} from '../../packages/build/src/workshop/module-import/default-analytics.fixture.mjs';
 import {decide,fresh,open,pageUIProfile,stableReadRevision} from './host';
 test('five original Analytics charts freeze complete aggregates and a line window independent of table pagination and sorting',async({page,request},info)=>{
  test.setTimeout(120_000);page.setDefaultTimeout(10_000);const name=fresh('graphs').replace(/[^a-z0-9]/gi,'').toLowerCase(),type=`build.${name}`,obj=fresh('OBJ'),id=fresh('PAGE'),headers={Authorization:'Bearer manager'};

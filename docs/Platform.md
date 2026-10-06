@@ -108,7 +108,7 @@
 | 已安装定义与有界页面 | 应用 API、宿主运行时、`@platform/app`、`@platform/ui` | 限定引用、依赖校验、授权目录、具类型记录选择/父来源绑定及只读样本预览。 | platform.AssetRef, Manifest.Pages；[ADR-0032](ADR/0032-shared-application-definitions.md)、[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 发布候选审查与活跃闭包（ADR-0039 20a–20b） | 应用 API、平台应用 `build`、宿主、`@pkg/build` | 规范候选、差异/依赖校验、持久字节、可续接发布工作台与活跃/运行一致性；有界对象/页面/应用闭包提交后一起安装并激活。 | platform.Candidate, Build.DraftReleaseAssets；[ADR-0039](ADR/0039-minimal-definition-release.md) |
 | 具名查询 (ADR-0040 21c) | 应用 API、宿主运行时、共享页面与智能体工具 | 成员、页面和 AI 共用受权纯查询；候选包含查询依赖。 | platform.NamedQuery, Tenant.RunQuery；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
-| 应用工坊总览 | 平台应用 `build`、`@pkg/build` | 能力卡片与资产图、搜索/状态、编辑器入口、选中资产测试/发布和返回上下文。 | `StudioOverview`；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
+| Projects / 共享资源总览 | 平台应用 `build`、`@pkg/build` | 能力卡片与资产图、搜索/状态、编辑器入口、选中资产测试/发布和返回上下文。 | `StudioOverview`；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 租户原生流程编写 | 平台应用 `build`、`flow`、`work`、宿主 | 共享 Block IDE、类型化输入/绑定、分支/集合/并发、原生调用、固定测试及只读运行；原 Flow/Work 与精确版本绑定。 | build.Process/TestPlan；[ADR-0044](ADR/0044-capability-fabric.md) |
 | 固定数据候选测试 (ADR-0040 21d) | 宿主、平台应用 `build`、共享 UI | 空内存租户的固定样本/预期/恢复核对；非物理沙箱。 | build.TestPlan, Tenant.SimulateCandidate；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 租户交付的应用 (ADR-0036) | 平台应用 `build`、宿主运行时、`web/apps/workspace` | 已发布页面及共享资源编组为应用，应用根闭合对象/流程/计算依赖并沿原候选激活；按成员可见页面进入启动器，不增加权限。 | platform.Application, Tenant.InstallApplication；[ADR-0036](ADR/0036-an-application-a-tenant-hands-to-its-people.md) |
@@ -148,7 +148,7 @@
 | 知识库 (ADR-0022) | 平台应用 `knowledge` | 权限内文本/向量检索、增量索引与引用来源；规模证据归 ADR-0033。 | knowledge.go, index.postings；[ADR-0022](ADR/0022-knowledge-memory-a2a.md) |
 | 协议 (ADR-0011) | 协议 | 版本化跨应用动作/读取/应答；住宿暂留与生产确认。 | platform.Protocol, Caller.Probe；[ADR-0011](ADR/0011-apps-interoperate-through-protocols.md) |
 | UI 库 | Web | 共享表格/表单/详情/工作区/画布；记录工作区集中任务、审批、流程，窄屏属性单列。 | @platform/ui |
-| 应用设计台融合（ADR-0046，持续实施） | 应用 API、Build、共享 UI | 原 V2 页面/应用契约、类型化会话、统一本体工作台、受控关系与共享属性；75 个原生插件、92 类来源有限 profile、七页完整 Module 装配、页头/slots 与原保存/候选路径。当前版本联合运行已具备，持续 Flow 的方案 A 已按 ADR-0047 §13.5 实现（批次 frame 与每次调用通道），必要持久恢复与体验/资源验收按各自 ADR 的边界；详细边界只归 ADR。 | platform/pageui、PageDocument、EditorWorkbench、app/semantic；[ADR-0046 §14](ADR/0046-application-studio-fusion.md#14-代价审阅点与当前实现边界) |
+| Workshop 页面编辑器（ADR-0046 §5–§6，持续实施） | 应用 API、Build、共享 UI | 原 V2 页面/应用契约、类型化会话、统一本体工作台、受控关系与共享属性；75 个原生插件、92 类来源有限 profile、七页完整 Module 装配、页头/slots 与原保存/候选路径。当前版本联合运行已具备，持续 Flow 的方案 A 已按 ADR-0047 §13.5 实现（批次 frame 与每次调用通道），必要持久恢复与体验/资源验收按各自 ADR 的边界；详细边界只归 ADR。 | platform/pageui、PageDocument、EditorWorkbench、app/semantic；[ADR-0046 §14](ADR/0046-application-studio-fusion.md#14-代价审阅点与当前实现边界) |
 | 业务观测（ADR-0046，F1e58） | 共享 UI | 原宽表的两轴虚拟化/固定与隐藏列、受控窗口统计、真实时间/独立单位三曲线和完整平均值/SLO可在代码及Catalog组合；原宿主最近1–100000条业务时间窗口统计及受控App读者已接通；四种原生观测/资产双确认、设计检查器、复制与冻结已接通；四类Workshop Module显式真实来源/查询/信号及资产消费者迁移已接通；更广来源配置及当前版本整页运行验收仍待验证。 | @platform/ui ObservationTable/ObservationStatistics/ObservationTimeSeries/ObservationAvailability；[ADR-0046 §6.78](ADR/0046-application-studio-fusion.md#678-业务观测宽表窗口统计与真实时间序列) |
 | 固定页面内容与受控嵌入（ADR-0046，F1e59） | 原页面/宿主/前端边缘、UI Kit、Build | 原页面内容摘要与64份发布内容、当前成员精确版本读取、固定子页面候选闭包、原类型化接口、独立会话、共同预算、隔离外部文档及四类来源有限导入已接通；原类型化集合输入与默认CustomWidget集合参数已接通；集合返回与更广来源模块仍待实施，当前版本默认嵌入待联合运行验收。 | [ADR-0046 §6.79](ADR/0046-application-studio-fusion.md#679-受控嵌入与组合页面) |
 | 记录 AI 呈现与会话（ADR-0046，F1e60） | 原 AI/函数宿主、应用 API、UI Kit、Build | 固定受权函数、原确认记录/类型化结果、三种原生呈现与有限来源导入已接通；问题/原调用历史、同owner状态与退役、候选函数评估门禁沿原路径。跨集合/知识上下文和真实模型质量仍待验证。 | [ADR-0046 §6.80](ADR/0046-application-studio-fusion.md#680-三种原生-ai-呈现与受控会话) |
@@ -161,7 +161,7 @@
 | 原集合构建与装配（ADR-0046，F1e62） | UI Kit、应用 API、Build | 类型化条件、同owner完整谓词输出、独立表格/计数、检查器/显式导入及共同冻结已接通；无效草稿保留已应用集合，原权限/版本/反馈预算保留，完整Module与更广集合形态待后续。 | [ADR-0046 §6.82](ADR/0046-application-studio-fusion.md#682-集合构建器与完整谓词装配) |
 | 共享空间呈现与附件标注（ADR-0046，F1e61） | UI Kit、Files、应用 API | 地图/图片标注/GLB 三类共享 UI、Catalog与原文件作者/revision标注决定、原生绑定/检查器、共同候选和有限来源导入已接通；3D最新样本沿固定原查询与当前权限确认，更多空间语义/完整来源配置待实施。 | [ADR-0046 §6.81](ADR/0046-application-studio-fusion.md#681-记录地图附件标注与原生-3d-场景) |
 | Platform Catalog (ADR-0045) | UI/app/build owner、Web 目录 | 六层复用发现、真实示例、开发/构建视角与有界查询；Studio 模板沿原草稿创建，租户能力沿原作用域读取。 | web/apps/catalog、scripts/catalog.mjs；[ADR-0045 §11](ADR/0045-platform-catalog.md#11-当前实现边界) |
-| 工作区与 UI 应用 API (ADR-0018/0047) | Web | 统一登录与原生/租户业务入口；工坊、租户控制台、开发参考按任务分区，入口切换保留原编辑标签。角色与执行检查保持原 owner。 | @platform/app, web/apps/workspace；[ADR-0047 §14](ADR/0047-platform-composition-and-workspaces.md#14-当前实现边界) |
+| 工作区与 UI 应用 API (ADR-0018/0047) | Web | 统一登录与 Rail/门户/投影（ADR-0052）；构建、治理、开发参考应用按任务分区，入口切换保留原编辑标签。角色与执行检查保持原 owner。 | @platform/app, web/apps/workspace；[ADR-0047 §14](ADR/0047-platform-composition-and-workspaces.md#14-当前实现边界) |
 | 边缘客户端与登录 | Web | HTTP 边缘客户端、发件箱、PKCE/OIDC 与可读拒绝。 | @platform/kernel |
 | 设置中心 | Web | 系统治理与运行设置界面。 | @pkg/platform |
 | 应用 UI 包 | Web | 业务视图组合共享 UI/API，跨记录共性能力归平台。 | @pkg/<id>, crm |
@@ -424,13 +424,13 @@
 
 最终目标是打造这样一个业务平台：FDE（前线部署工程师）能够在其上连接行业既有系统、清晰表达其业务含义与规则、拼装出高品质的操作级 UI、注入受管的 AI 智能体，并交付出客户能够安全自行演进修改的企业级应用。三层构建体系共享统一底座：平台开发者编写通用底层能力；FDE 编排并扩展特定行业解决方案；客户侧构建者在受控范围内编排允许的模型、页面、流程与 AI 逻辑。AI 通过相同的开放 API 协助各个层级的构建工作。业务操作人员获得清晰易懂的现代化业务软件，而无需面对平台底层的晦涩实现概念。
 
-**构建体验对标 Retool 与 Appsmith，组件的语义绑定对标 Palantir Workshop。** 工作流编辑以 [Retool Workflows IDE](https://docs.retool.com/workflows/quickstart) 的可见操作闭环为 1:1 交互标杆：节点目录与画布编排、选中配置、连线与分支、运行/逐节点结果、历史诊断、草稿与发布版本在同一工作上下文完成。1:1 指 FDE 的操作体验与反馈完整度；定义、权限与执行使用本平台类型化契约及原生 Flow/Work，不引入 Retool 的任意 JavaScript 或资源查询执行模型。[ADR-0044](ADR/0044-capability-fabric.md) 设计共享 React Flow IDE、统一原生/Wasm Block 和 Go/wazero 计算；不搬 Retool 的执行栈，不新增外部编排引擎。页面与工作区遵循相同的导航和反馈语言。
+**产品形态与功能切分完整对标 Palantir Foundry/AIP（2026-10-06 起，取代此前"构建体验对标 Retool/Appsmith、工作流 1:1 对齐 Retool Workflows"的提法）。** 一个 Shell、Applications 门户、Ontology 为中心的构建者应用（Ontology / Workshop / Automate / AI Functions / Code / Projects / Releases）、治理与运维应用（Control Panel / Runs / Data Connection / Agents / Host Console），以及记录与对象类型之间的 Open in / Lineage 路径，现行结构与批次见 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md)。对标的是功能切分、入口与交互语言；定义、权限与执行使用本平台类型化契约及原生 Flow/Work（[ADR-0044](ADR/0044-capability-fabric.md)），不引入任何外部执行栈或编排引擎。Retool 等产品的编辑器技法只在下表作为局部参考。
 
 **前端品质延续 [ADR-0004](ADR/0004-web-ui-stack.md) 的 shadcn 设计约定与 Palantir 紧凑信息质感。** 补充借鉴 [Apple HIG 设计原则](https://developer.apple.com/design/human-interface-guidelines/design-principles) 的清晰层级、视觉/行为一致、上下文保留和反馈；具体实现使用原 UI Kit、语义 token 与交互模式，以企业任务需要决定密度。代码品味是简单组合、公共契约和单一归属；代表性任务可用与必要检查通过后收尾，品质标准不要求每批无限打磨。Catalog 的应用标准见 [ADR-0045 §2](ADR/0045-platform-catalog.md#2-采用的方式与参考边界)。
 
 “达到与 AIP 相当的水准”意味着提供一条端到端无缝衔接的完整闭环体验：**连接 (connect) → 语义对齐 (ground) → 组装构建 (construct) → 测试仿真 (test) → 正式发布 (publish) → 运维运营 (operate) → 持续优化 (improve)**。AIP Logic 是官方针对可组合 AI 函数能力的产品命名。模型接入、智能体运行和可视化执行追踪只是该体验的部分组成拼图；仅靠其中任何一块都不足以建立对等竞争力。
 
-下表限定各参考产品的采纳范围；除上述工作流编辑交互外，产品名称不构成逐项复刻或系统依赖。
+下表限定各参考产品的采纳范围：Palantir 行决定产品结构；其余只借鉴单项技法，不构成逐项复刻或系统依赖。
 
 | 参考产品 | 值得借鉴的核心能力 | 明确的采纳边界 |
 |---|---|---|
@@ -464,7 +464,7 @@
 
 ### 10.3 目标架构与不变式
 
-平台功能架构、用户入口与前端收敛见已接受的 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md)（2026-10-05）；对标 Palantir Foundry/AIP 的 Shell、应用门户、对象中心工坊与功能块切分方案见 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md)（2026-10-06，P0 已落地）：区分功能域、依赖层、用户职责与工作入口，围绕应用及共享资源任务重组前端；先沿现有授权收敛入口。其 §11 明确入口/组织取代原则；原「越界事项」的处置（独立发布/只读审计、多审批规则、项目编辑委派、受控包安装、候选物理隔离/跨环境晋级/真实数据迁移）已按负责人指示本批实现（见 §14 末条），不再是不支持项；§13 持续 Flow 的方案 A 已实现。目标结构不自动改变当前实现摘要或扩大权限、版本与恢复保证。
+产品结构（Shell、Applications 门户、三种投影、功能块与菜单）归 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md)（2026-10-06，P0–P6 前端已落地）；功能域、依赖层与术语归 [ADR-0047 §2–§4](ADR/0047-platform-composition-and-workspaces.md)。
 
 本节定义即将落地实现的目标软件架构，而非当前已可直接调用的 API 现状。在确定最终序列化格式或增设代码包之前，必须首先确立其核心命名与边界。
 
@@ -508,9 +508,9 @@ flowchart TD
 
 #### B. 前端与构建器产品体验
 
-三类工作上下文共用外壳与设计系统：**业务运营 (operate)**、**应用工坊 (build)**、**系统治理 (administer)**。应用工坊提供应用全貌与资产依赖入口；打开对象、页面、工作流、AI 或发布审查时保持当前应用、选中资产和未保存状态，相关资产可在上下文中直达。平台统一规定导航、信息层级、密度、状态色、字体、间距、键盘焦点、浮层与过渡反馈。生成的记录页面是默认入口，不是唯一操作界面。
+一个 Shell、三种权限派生的工作区投影（**Operations / Build / Admin**）与一个按类别组织的 Applications 门户（ADR-0052）。构建者在 Projects 中保持当前应用上下文，在 Ontology / Workshop / Automate / AI Functions / Code 中编辑各类资产，在 Releases 中测试与激活；打开任一资产时保持选中与未保存状态。平台统一规定导航、信息层级、密度、状态色、字体、间距、键盘焦点、浮层与过渡反馈。生成的记录页面是默认入口，不是唯一操作界面。
 
-**应用设计台融合方向（2026-10-01）。** 负责人指定外包 Workshop 原型的页面编辑和本体设计交互作为目标体验；在现有 Go/React 平台中吸收布局文档、编辑操作、类型化绑定与语义资源工作台。当前 12 类平铺部件是已有切片，不是体验和表达能力上限。具体的 V2 页面、本体语义映射、组件契约、归属与迁移提案见 [ADR-0046](ADR/0046-application-studio-fusion.md)；设计提案不代表功能已经实现，原业务执行与发布权威保持既有归属。
+页面编辑器（Workshop 应用）的布局文档、页面变量、组件契约与迁移边界见 [ADR-0046 §5–§6](ADR/0046-application-studio-fusion.md)；其 §3 的"Application Studio"顶层结构已被 ADR-0052 取代。
 
 **Platform Catalog / 平台资产目录** 已替换 Gallery，作为体验规范与装配资产入口：基础规范→原子控件→功能组合→语义组件→页面/交互模式→场景装配；人类与 AI 共用 owner 维护的内容，构建使用与开发接入各有明确产物。当前边界见 [ADR-0045 §11](ADR/0045-platform-catalog.md#11-当前实现边界)；层级不参与授权或装配资格，Catalog 不取代原动作目录或能力执行入口。
 

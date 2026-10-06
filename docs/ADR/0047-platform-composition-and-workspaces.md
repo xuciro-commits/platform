@@ -2,7 +2,7 @@
 
 **意图：** 让业务人员知道在哪里完成工作，让构建者在同一个应用上下文中完成交付，让管理员能管理和恢复这份交付。以稳定的功能结构收敛现有菜单、应用、编辑器与后台，而不是继续按源码包和能力数量增加入口。
 
-**状态：** 功能架构已接受（2026-10-05），入口与应用构建、联合候选及生产直接安装替代已有实现，边界见 §14 与 [ADR-0048](0048-joint-draft-candidates-and-direct-install-retirement.md)。§11 的授权、项目、包生命周期、候选封存、晋级和迁移已有后端增量，§13 持续 Flow 方案 A 已实现（§13.5）；M5 的细分角色、项目、包/环境及宿主控制台前端任务面仍待接通，不能将后端检查外推为 M0–M6 全部界面交付。
+**状态：** 功能域、依赖层、术语与边界（§2–§4、§8、§10、§13）已接受（2026-10-05）；**§5–§6 的四种入口与页面清单、§9 的去向表、§14 的入口实现边界已被 [ADR-0052](0052-foundry-aligned-platform-experience.md) 取代**（一个 Shell + Applications 门户 + 三种投影）。入口与应用构建、联合候选及生产直接安装替代已有实现，边界见 §14 与 [ADR-0048](0048-joint-draft-candidates-and-direct-install-retirement.md)。§11 的授权、项目、包生命周期、候选封存、晋级和迁移已有后端增量，§13 持续 Flow 方案 A 已实现（§13.5）；M5 的细分角色、项目、包/环境及宿主控制台前端任务面仍待接通，不能将后端检查外推为 M0–M6 全部界面交付。
 **设计日期：** 2026-10-05。静态源码基线：`87b830767f75`；工作区已有文档改动不视为代码实现。
 **范围：** 前端功能架构、用户与权限职责、入口与页面、构建交付路线、能力归属及旧路径移除。原持续 Flow 提案保留在 §13（方案 A 已实现，见 §13.5）。
 
@@ -28,7 +28,7 @@
 
 - [工作区 App](../../web/apps/workspace/src/App.tsx)用固定包表加载 Catalog、Build、原生行业 UI 和 Settings；加载条件与 owner 角色相关。它是代码装配，不是租户在线安装。
 - [Settings](../../web/packages/platform/src/index.tsx)在同一 AppUI 中组织权限、安装清单、开发诊断、AI、集成、运行、知识与审计；默认首页是成员。后台功能的归属与用户任务被混在一起。
-- [Build 导航](../../web/packages/build/src/index.tsx)主要按对象、关系、属性、页面、查询、流程、函数分类；[Application 编辑器](../../web/packages/build/src/application.tsx)主要从已发布定义和流程中编组资源。
+- [Build 导航](../../web/packages/build/src/index.tsx)主要按对象、关系、属性、页面、查询、流程、函数分类；[Application 编辑器](../../web/packages/build/src/projects/application.tsx)主要从已发布定义和流程中编组资源。
 - [租户应用投影](../../web/apps/workspace/src/tenantApps.tsx)已按授权定义生成用户应用、页面分组与入口；这是业务工作台可复用的基础。
 - 原生 ERP/MES/PMS 的专业导航来自受审 AppUI，不都具有 Application 描述符；当前 `build.app` 要求至少一页。共享资源和无页面自动化不能靠空应用承载。
 - [AppUI](../../web/packages/app/src/index.tsx)仍将 ID 解释为后端 App 的 UI，并要求 view ID 全工作区唯一；[成员模型](../../capabilities/server/platform/app.go)是每个 owner 一个角色。
