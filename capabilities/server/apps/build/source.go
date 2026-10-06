@@ -84,6 +84,7 @@ type SourcePull struct {
 	Rows     int             `json:"rows"`
 	Applied  int             `json:"applied"`
 	Failed   int             `json:"failed"`
+	Merged   int             `json:"merged,omitempty"` // rows that became an edit of a matched record (ADR-0074)
 	Error    string          `json:"error,omitempty"`
 	Failures []SourceFailure `json:"failures,omitempty"`
 	// Cursor is the last incremental value the pull reached; kept on the source.

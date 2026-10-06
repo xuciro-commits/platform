@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -58,7 +59,7 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 	} else {
 		pull.Cursor = s.Advance(raw)
 		pull.Rows, pull.Applied = len(rows), 0
-		t.applyRows(member, s.Object, rows, now, &pull)
+		t.applyRows(member, s.Object, s.Name, rows, now, &pull)
 	}
 	payload, _ := json.Marshal(map[string]any{"pull": pull})
 	if member.ID == "" {
@@ -70,10 +71,16 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 
 // applyRows decides each mapped row as the member: the object's own create,
 // or edit on conflict, keyed by content; failures are counted on the summary.
-func (t *Tenant) applyRows(member platform.Member, object string, rows []build.SourceRow, now time.Time, pull *build.SourcePull) {
+func (t *Tenant) applyRows(member platform.Member, object, producer string, rows []build.SourceRow, now time.Time, pull *build.SourcePull) {
 	t.records.mu.Lock()
 	et := t.records.types[object]
 	t.records.mu.Unlock()
+	if resolver := t.resolver(member, object, producer, now); resolver != nil {
+		for i := range rows {
+			resolver.Resolve(&rows[i])
+		}
+		pull.Merged = resolver.Merged
+	}
 	for _, row := range rows {
 		if row.Error != "" {
 			pull.Fail(row.ID, row.Error)
@@ -98,6 +105,34 @@ func (t *Tenant) applyRows(member platform.Member, object string, rows []build.S
 		}
 		pull.Applied++
 	}
+}
+
+// resolver is the object's published matching rule (ADR-0074) over its
+// records as they are now, or nil when rows land as they come.
+func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *build.Resolver {
+	rules, _, _ := platform.Find[build.Match](t.automation(build.ID, false), platform.Query{Limit: 500})
+	i := slices.IndexFunc(rules, func(m build.Match) bool { return m.Object == object && m.State == "published" })
+	if i < 0 {
+		return nil
+	}
+	var records []map[string]any
+	for offset := 0; ; offset += 500 {
+		page, err := t.Records(member, object, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}}, now)
+		if err != nil {
+			break
+		}
+		for _, r := range page.Records {
+			raw, _ := json.Marshal(r)
+			var fields map[string]any
+			if json.Unmarshal(raw, &fields) == nil {
+				records = append(records, fields)
+			}
+		}
+		if len(page.Records) < 500 || len(records) >= page.Total {
+			break
+		}
+	}
+	return build.NewResolver(rules[i], producer, records)
 }
 
 // loadDataset appends rows as the dataset's next version, one journaled input.

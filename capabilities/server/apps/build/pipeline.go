@@ -101,8 +101,9 @@ type Expectation struct {
 type PipelineRun struct {
 	At          time.Time        `json:"at"`
 	Input       int              `json:"inputVersion"`
-	Rows        int              `json:"rows"`    // rows after the steps
-	Written     int              `json:"written"` // rows written to the output
+	Rows        int              `json:"rows"`             // rows after the steps
+	Written     int              `json:"written"`          // rows written to the output
+	Merged      int              `json:"merged,omitempty"` // rows merged into matched records (ADR-0074)
 	Quarantined int              `json:"quarantined"`
 	Failed      int              `json:"failed"` // rows the output refused
 	Error       string           `json:"error,omitempty"`

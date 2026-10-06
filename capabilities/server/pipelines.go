@@ -96,8 +96,8 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 					}
 				} else {
 					pull := build.SourcePull{}
-					t.applyRows(member, p.OutputObject, p.ObjectRows(kept), now, &pull)
-					run.Written, run.Failed, run.Failures = pull.Applied, pull.Failed, pull.Failures
+					t.applyRows(member, p.OutputObject, p.Name, p.ObjectRows(kept), now, &pull)
+					run.Written, run.Failed, run.Failures, run.Merged = pull.Applied, pull.Failed, pull.Failures, pull.Merged
 				}
 			}
 		}
