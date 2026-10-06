@@ -17,6 +17,7 @@ import { WorkflowRuns } from "./automate/workflow-runs";
 import { LinkTypeEditor, LinkTypes } from "./ontology/link-type";
 import { PropertyTypeEditor, PropertyTypes } from "./ontology/property-type";
 import { DataSourceEditor, DataSources } from "./ontology/data-source";
+import { ConnectionEditor, Connections } from "./ontology/connection";
 import { DecisionTableEditor, DecisionTables } from "./functions/decision-table";
 import { QueryEditor, Queries } from "./ontology/query";
 import { FunctionEditor, Functions } from "./functions/function";
@@ -27,7 +28,7 @@ import { ProjectHome, ProjectsList } from "./projects/project";
 import { StudioTemplates } from "./workshop/template-ui";
 import { t, type NavSection, type View } from "@platform/ui";
 import { ApplicationScope } from "./projects/application-scope";
-import { BookOpen, Boxes, Braces, Clock, Compass, Database, GitBranch, Hammer, History, LayoutList, LayoutTemplate, Link2, PackageCheck, Search, Sparkles, Table2, Tags, Workflow, Zap } from "lucide-react";
+import { BookOpen, Boxes, Braces, Clock, Compass, Database, GitBranch, Hammer, History, LayoutList, LayoutTemplate, Link2, PackageCheck, Plug, Search, Sparkles, Table2, Tags, Workflow, Zap } from "lucide-react";
 
 const scoped = (p: Record<string, string | undefined>, node: React.ReactNode) => <ApplicationScope application={p.application}>{node}</ApplicationScope>;
 const builder = (host: Host) => host.role("build") === "builder";
@@ -41,6 +42,7 @@ const views: View[] = [
   { id: "action-type", title: () => t("Action type"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><ActionTypeEditor id={p.id} action={p.action} /></ApplicationScope> : scoped(p, <ActionTypes />) },
   { id: "link-type", title: () => t("Relationships"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><LinkTypeEditor id={p.id} parent={p.parent} child={p.child} via={p.via} /></ApplicationScope> : <LinkTypes /> },
   { id: "property-type", title: () => t("Shared properties"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><PropertyTypeEditor id={p.id} /></ApplicationScope> : <PropertyTypes /> },
+  { id: "connection", title: (p) => p.id ? t("Connection") : t("Connections"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><ConnectionEditor id={p.id} /></ApplicationScope> : <Connections /> },
   { id: "data-source", title: (p) => p.id ? t("Data source") : t("Data sources"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><DataSourceEditor id={p.id} /></ApplicationScope> : <DataSources /> },
   { id: "query", title: () => t("Queries"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><QueryEditor id={p.id} /></ApplicationScope> : <Queries /> },
   // Interface
@@ -78,6 +80,7 @@ export default defineApp({
       { label: t("Relationships"), icon: <Link2 />, route: { view: "link-type" } },
       { label: t("Shared properties"), icon: <Tags />, route: { view: "property-type" } },
       { label: t("Queries"), icon: <Search />, route: { view: "query" } },
+      { label: t("Connections"), icon: <Plug />, route: { view: "connection" } },
       { label: t("Data sources"), icon: <Database />, route: { view: "data-source" } },
     ] },
     { label: t("Interface"), items: [

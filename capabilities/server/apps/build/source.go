@@ -1,11 +1,15 @@
 package build
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -35,8 +39,18 @@ type Source struct {
 	platform.Record
 	Name  string `json:"name" field:"required,search"`
 	Title string `json:"title" field:"required,search"`
-	// URL answers JSON over https (http only to a private address when allowed).
-	URL          string `json:"url" field:"required" title:"URL"`
+	// Connection is the system the source reads through (ADR-0070); empty: a bare JSON URL as in ADR-0061.
+	Connection string `json:"connection,omitempty" ref:"build.connection"`
+	// Profile is how rows are read: json (default), csv, odata (an entity set), table (a database table).
+	Profile string `json:"profile,omitempty" choices:"json,csv,odata,table"`
+	// URL answers JSON or CSV over https (http only to a private address when allowed); relative to the connection's address when one is set.
+	URL string `json:"url,omitempty" title:"URL"`
+	// Entity is the OData entity set or the schema.table a table profile reads; Filter narrows it ($filter, or a WHERE fragment).
+	Entity string `json:"entity,omitempty" title:"Entity or table"`
+	Filter string `json:"filter,omitempty" title:"Filter" help:"OData $filter, or a WHERE fragment of simple comparisons"`
+	// Since is the timestamp or sequence property an incremental pull orders by; Cursor the last value pulled.
+	Since        string `json:"since,omitempty" title:"Incremental column" help:"A timestamp or sequence property; each pull reads rows past the cursor"`
+	Cursor       string `json:"cursor,omitempty" field:"readonly"`
 	AllowPrivate bool   `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
 	// Header is one request header, "Name: value", typically Authorization.
 	Header string `json:"header,omitempty" title:"Request header" help:"One header such as Authorization: Bearer …"`
@@ -70,6 +84,8 @@ type SourcePull struct {
 	Failed   int             `json:"failed"`
 	Error    string          `json:"error,omitempty"`
 	Failures []SourceFailure `json:"failures,omitempty"`
+	// Cursor is the last incremental value the pull reached; kept on the source.
+	Cursor string `json:"cursor,omitempty"`
 }
 
 type SourceFailure struct {
@@ -79,12 +95,20 @@ type SourceFailure struct {
 
 func (b *Build) sourceEntity() platform.Entity {
 	return platform.Entity{Type: SourceType, Title: "Data source", Plural: "Data sources", Model: Source{}, Display: "title", Description: "An external JSON endpoint whose rows become records of one object, pulled on a period or on request.",
+		Validate: func(c platform.Caller, record any) *kernel.Error {
+			s := record.(*Source)
+			if s.State == "published" {
+				return b.checkSource(c, *s)
+			}
+			return nil
+		},
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{
 				{Name: "publish", Title: "Publish", Description: "Check the source and let the builder's job pull it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishSource},
 				{Name: "pull", Title: "Pull now", Description: "Ask for one pull at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}, Do: requestPull},
+				{Name: "reset", Title: "Reset cursor", Description: "Forget the incremental cursor and pull everything at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}, Do: resetCursor},
 				{Name: "pause", Title: "Pause", Description: "Stop pulling; the mapping stays.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}}}}}
 }
 
@@ -102,31 +126,66 @@ func requestPull(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) 
 	return nil
 }
 
+func resetCursor(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+	s, ok := record.(*Source)
+	if !ok {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	s.Cursor, s.Requested = "", true
+	return nil
+}
+
 func (b *Build) publishSource(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	s, ok := record.(*Source)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if err := b.checkSource(*s); err != nil {
+	if err := b.checkSource(c, *s); err != nil {
 		return err
 	}
 	s.Puller, s.Requested = c.ID, true
 	return nil
 }
 
-func (b *Build) checkSource(s Source) *kernel.Error {
+func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
 	if err := b.checkName(s.Name, s.ID); err != nil {
 		return refuse(err.Error())
 	}
-	u, err := url.Parse(s.URL)
-	if err != nil || u.Host == "" || u.Scheme != "https" && !(u.Scheme == "http" && s.AllowPrivate) {
-		return refuse("A data source answers over https; http only to a private address when allowed")
+	if !slices.Contains([]string{"", "json", "csv", "odata", "table"}, s.Profile) {
+		return refuse("A source profile is one of json, csv, odata, table")
 	}
-	if s.Header != "" && !strings.Contains(s.Header, ":") {
-		return refuse("A request header reads Name: value")
+	if s.Connection == "" {
+		if s.Profile == "odata" || s.Profile == "table" {
+			return refuse("An {profile} source reads through a connection", s.Profile)
+		}
+		u, err := url.Parse(s.URL)
+		if err != nil || u.Host == "" || u.Scheme != "https" && !(u.Scheme == "http" && s.AllowPrivate) {
+			return refuse("A data source answers over https; http only to a private address when allowed")
+		}
+		if s.Header != "" && !strings.Contains(s.Header, ":") {
+			return refuse("A request header reads Name: value")
+		}
+	} else {
+		conn, ok := platform.Get[Connection](c, s.Connection)
+		if !ok || conn.State != "ready" {
+			return refuse("The connection is not ready; check it first")
+		}
+		switch {
+		case (s.Profile == "odata") != (conn.Kind == "odata"), (s.Profile == "table") != (conn.Kind == "postgres"):
+			return refuse("A {profile} source needs a matching connection kind", s.Profile)
+		case s.Profile == "odata" && s.Entity == "":
+			return refuse("An OData source names its entity set")
+		case s.Profile == "table" && !tableName(s.Entity):
+			return refuse("A table source names schema.table")
+		case s.Profile == "table" && !simpleWhere(s.Filter):
+			return refuse("A table filter is a simple comparison such as plant = '1000' and active = true")
+		}
+	}
+	if s.Since != "" && !identifier(s.Since) {
+		return refuse("The incremental column is a plain identifier")
 	}
 	info, ok := b.lookupEntity(s.Object)
 	if !ok {
@@ -180,13 +239,17 @@ type SourceRow struct {
 	Error   string
 }
 
-// MapRows turns an endpoint's answer into the target's rows; the host decides
-// each as the publisher, outside any decision of the builder.
-func (s Source) MapRows(body []byte) ([]SourceRow, error) {
-	rows, err := rowsAt(body, s.Path)
-	if err != nil {
-		return nil, err
+// Decode turns an answer's body into rows for the json and csv profiles.
+func (s Source) Decode(body []byte) ([]map[string]any, error) {
+	if s.Profile == "csv" {
+		return csvRows(body)
 	}
+	return rowsAt(body, s.Path)
+}
+
+// MapRows turns decoded rows into the target's rows; the host decides each as
+// the publisher, outside any decision of the builder.
+func (s Source) MapRows(rows []map[string]any) ([]SourceRow, error) {
 	if len(rows) > sourceRows {
 		return nil, fmt.Errorf("the answer holds %d rows; a pull takes at most %d", len(rows), sourceRows)
 	}
@@ -235,10 +298,79 @@ func (b *Build) submitSourcePulled(c platform.Caller, s *pb.Submission, now time
 		return func(r *pb.ChangeRecord) {
 			pull := payload.Pull
 			src.Last, src.Requested = &pull, false
+			if pull.Cursor != "" && pull.Error == "" && pull.Failed == 0 {
+				src.Cursor = pull.Cursor
+			}
 			c.Put(r, src)
 		}, nil
 	})
 }
+
+// Advance is the cursor after rows: the greatest Since value seen, as text.
+func (s Source) Advance(rows []map[string]any) string {
+	if s.Since == "" {
+		return ""
+	}
+	best := s.Cursor
+	for _, row := range rows {
+		if v := scalar(row[s.Since]); v != "" {
+			a, anum := new(big.Rat).SetString(v)
+			b, bnum := new(big.Rat).SetString(best)
+			if best == "" || anum && bnum && a.Cmp(b) > 0 || (!anum || !bnum) && v > best {
+				best = v
+			}
+		}
+	}
+	return best
+}
+
+// csvRows reads a header row and the rows beneath it.
+func csvRows(body []byte) ([]map[string]any, error) {
+	r := csv.NewReader(bytes.NewReader(body))
+	r.FieldsPerRecord = -1
+	r.LazyQuotes = true
+	records, err := r.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("the answer is not CSV: %v", err)
+	}
+	if len(records) == 0 {
+		return nil, nil
+	}
+	head := records[0]
+	rows := make([]map[string]any, 0, len(records)-1)
+	for _, rec := range records[1:] {
+		row := map[string]any{}
+		for i, name := range head {
+			if i < len(rec) {
+				row[strings.TrimSpace(name)] = rec[i]
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}
+
+var identifierRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+func identifier(s string) bool { return identifierRE.MatchString(s) }
+func tableName(s string) bool {
+	parts := strings.Split(s, ".")
+	if len(parts) == 0 || len(parts) > 2 {
+		return false
+	}
+	for _, p := range parts {
+		if !identifier(p) {
+			return false
+		}
+	}
+	return true
+}
+
+// simpleWhere accepts "col op literal [and ...]" with quoted strings, numbers,
+// true/false and null - enough to pick a plant or a status, never a statement.
+var simpleWhereRE = regexp.MustCompile(`^\s*[A-Za-z_][A-Za-z0-9_]*\s*(=|<>|!=|<|>|<=|>=)\s*('[^';]*'|-?[0-9]+(\.[0-9]+)?|true|false|null)(\s+and\s+[A-Za-z_][A-Za-z0-9_]*\s*(=|<>|!=|<|>|<=|>=)\s*('[^';]*'|-?[0-9]+(\.[0-9]+)?|true|false|null))*\s*$`)
+
+func simpleWhere(s string) bool { return s == "" || simpleWhereRE.MatchString(strings.ToLower(s)) }
 
 // rowsAt is the array of objects at the dotted path inside a JSON answer.
 func rowsAt(body []byte, path string) ([]map[string]any, error) {
@@ -299,6 +431,10 @@ func convert(v any, to string) (any, error) {
 		return scalar(v), nil
 	case "number":
 		switch x := v.(type) {
+		case json.Number:
+			if _, err := x.Float64(); err == nil {
+				return x, nil
+			}
 		case float64:
 			return x, nil
 		case string:
