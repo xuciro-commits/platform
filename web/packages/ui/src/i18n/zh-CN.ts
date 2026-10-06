@@ -1256,4 +1256,10 @@ export default {
   "Flow left to right": "改为从左到右",
   "Expand all blocks": "展开全部节点",
   "Collapse all blocks": "折叠全部节点",
+  "Appearance": "外观",
+  "Follow system": "跟随系统",
+  "Light": "浅色",
+  "Dark": "深色",
+  "Standard look": "标准风格",
+  "Industrial look": "工业风格",
 } as Record<string, string>;

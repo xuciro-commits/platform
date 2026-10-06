@@ -26,8 +26,10 @@ export function Tag({ label, tone = "neutral", className }: { label: string; ton
   return (
     <span
       data-tone={tone}
+      data-ui="tag"
       className={cn("inline-flex h-[18px] items-center gap-1 rounded-sm border px-1.5 text-xs font-medium leading-none whitespace-nowrap", className)}
       style={{
+        ["--tone" as string]: `var(--tone-${tone})`,
         color: `var(--tone-${tone})`,
         borderColor: `color-mix(in oklch, var(--tone-${tone}) 35%, transparent)`,
         background: `color-mix(in oklch, var(--tone-${tone}) 10%, transparent)`,

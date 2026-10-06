@@ -1,0 +1,244 @@
+/* Industrial skin — `<html data-skin="industrial">` (ADR-0056).
+
+   For people who work in dim halls with oil, noise and gloves: a control-panel
+   look (Siemens/ABB/Fanuc pendants, oscilloscope keycaps, IEC 60073 signal
+   colours) instead of a flat SaaS page. Everything reads at arm's length:
+   bigger type, hard edges, strong borders, filled status, a 2px amber focus.
+
+   Performance rules, so this costs nothing on a 2-core panel PC:
+   - only colours, borders and hard (0-blur) shadows: no filter, backdrop-filter,
+     blur radii, animations or large gradients;
+   - the pressed state moves with `transform`, never layout;
+   - a theme switch is one attribute on <html>; nothing re-mounts.
+   Hooks are the `data-ui` attributes primitives already carry; nothing here
+   depends on Tailwind class names. */
+
+/* ---- Tokens: light "panel" (RAL 7035 grey panel, bright hall) --------------- */
+:root[data-skin="industrial"] {
+  --background: oklch(0.87 0.006 85);
+  --surface: oklch(0.94 0.005 85);
+  --foreground: oklch(0.17 0.01 250);
+  --muted: oklch(0.40 0.012 250);
+  --border: oklch(0.60 0.01 250);
+  --ring: oklch(0.80 0.165 78);                 /* safety amber */
+  --primary: oklch(0.42 0.095 240);             /* old signal blue */
+  --primary-foreground: oklch(0.98 0.005 85);
+  --row-hover: oklch(0.90 0.01 85);
+  --row-selected: oklch(0.90 0.07 85);
+  --tone-neutral: oklch(0.45 0.012 250);
+  --tone-info: oklch(0.45 0.10 240);
+  --tone-success: oklch(0.50 0.15 145);
+  --tone-warning: oklch(0.70 0.17 70);
+  --tone-danger: oklch(0.50 0.21 28);
+  --chart-5: oklch(0.50 0.14 300);
+  --chart-6: oklch(0.55 0.10 195);
+  /* panel materials */
+  --ind-key-top: oklch(0.985 0.004 85);
+  --ind-key-bottom: oklch(0.90 0.006 85);
+  --ind-key-edge: oklch(0.52 0.01 250);
+  --ind-key-shadow: oklch(0.42 0.01 250);
+  --ind-well: oklch(0.985 0.003 85);            /* recessed field */
+  --ind-well-text: var(--foreground);
+  --ind-chrome: oklch(0.30 0.015 250);          /* header / rails: gunmetal */
+  --ind-chrome-text: oklch(0.95 0.005 85);
+  --ind-chrome-border: oklch(0.22 0.01 250);
+  --ind-stripe: var(--ring);
+  --ind-primary-top: oklch(0.50 0.10 240);
+  --ind-primary-edge: oklch(0.26 0.07 240);
+  --ind-primary-shadow: oklch(0.22 0.06 240);
+  --ind-danger-top: oklch(0.58 0.21 28);
+  --ind-danger-edge: oklch(0.32 0.14 28);
+  --ind-danger-shadow: oklch(0.28 0.12 28);
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --font-sans: "IBM Plex Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  color-scheme: light;
+}
+
+/* ---- Tokens: dark "HMI" (dim workshop, pendant glass) ---------------------- */
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="industrial"]:not([data-theme="light"]) {
+    --background: oklch(0.21 0.008 250);
+    --surface: oklch(0.27 0.01 250);
+    --foreground: oklch(0.93 0.008 85);
+    --muted: oklch(0.72 0.012 85);
+    --border: oklch(0.42 0.012 250);
+    --primary: oklch(0.64 0.11 240);
+    --primary-foreground: oklch(0.12 0.01 250);
+    --row-hover: oklch(0.31 0.01 250);
+    --row-selected: oklch(0.36 0.06 85);
+    --tone-neutral: oklch(0.70 0.012 250);
+    --tone-info: oklch(0.70 0.11 240);
+    --tone-success: oklch(0.72 0.17 145);
+    --tone-warning: oklch(0.80 0.16 75);
+    --tone-danger: oklch(0.66 0.20 28);
+    --chart-5: oklch(0.72 0.13 300);
+    --chart-6: oklch(0.76 0.10 195);
+    --ind-key-top: oklch(0.40 0.01 250);
+    --ind-key-bottom: oklch(0.31 0.01 250);
+    --ind-key-edge: oklch(0.14 0.01 250);
+    --ind-key-shadow: oklch(0.10 0.01 250);
+    --ind-well: oklch(0.14 0.008 250);
+    --ind-well-text: oklch(0.95 0.03 85);
+    --ind-chrome: oklch(0.16 0.01 250);
+    --ind-chrome-text: oklch(0.93 0.008 85);
+    --ind-chrome-border: oklch(0.09 0.01 250);
+    --ind-primary-top: oklch(0.70 0.11 240);
+    --ind-primary-edge: oklch(0.40 0.09 240);
+    --ind-primary-shadow: oklch(0.34 0.08 240);
+    --ind-danger-top: oklch(0.72 0.19 28);
+    --ind-danger-edge: oklch(0.42 0.16 28);
+    --ind-danger-shadow: oklch(0.36 0.14 28);
+    color-scheme: dark;
+  }
+}
+:root[data-skin="industrial"][data-theme="dark"] {
+  --background: oklch(0.21 0.008 250);
+  --surface: oklch(0.27 0.01 250);
+  --foreground: oklch(0.93 0.008 85);
+  --muted: oklch(0.72 0.012 85);
+  --border: oklch(0.42 0.012 250);
+  --primary: oklch(0.64 0.11 240);
+  --primary-foreground: oklch(0.12 0.01 250);
+  --row-hover: oklch(0.31 0.01 250);
+  --row-selected: oklch(0.36 0.06 85);
+  --tone-neutral: oklch(0.70 0.012 250);
+  --tone-info: oklch(0.70 0.11 240);
+  --tone-success: oklch(0.72 0.17 145);
+  --tone-warning: oklch(0.80 0.16 75);
+  --tone-danger: oklch(0.66 0.20 28);
+  --chart-5: oklch(0.72 0.13 300);
+  --chart-6: oklch(0.76 0.10 195);
+  --ind-key-top: oklch(0.40 0.01 250);
+  --ind-key-bottom: oklch(0.31 0.01 250);
+  --ind-key-edge: oklch(0.14 0.01 250);
+  --ind-key-shadow: oklch(0.10 0.01 250);
+  --ind-well: oklch(0.14 0.008 250);
+  --ind-well-text: oklch(0.95 0.03 85);
+  --ind-chrome: oklch(0.16 0.01 250);
+  --ind-chrome-text: oklch(0.93 0.008 85);
+  --ind-chrome-border: oklch(0.09 0.01 250);
+  --ind-primary-top: oklch(0.70 0.11 240);
+  --ind-primary-edge: oklch(0.40 0.09 240);
+  --ind-primary-shadow: oklch(0.34 0.08 240);
+  --ind-danger-top: oklch(0.72 0.19 28);
+  --ind-danger-edge: oklch(0.42 0.16 28);
+  --ind-danger-shadow: oklch(0.36 0.14 28);
+  color-scheme: dark;
+}
+
+/* ---- Type: readable at a metre -------------------------------------------- */
+[data-skin="industrial"] body {
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: auto;                /* heavier strokes on dark glass */
+}
+[data-skin="industrial"] :is(h1, h2, h3, th) { font-weight: 700; letter-spacing: 0.01em; }
+[data-skin="industrial"] :focus-visible { outline: 2px solid var(--ring) !important; outline-offset: 1px; }
+
+/* ---- Keycaps: every button is a physical key ------------------------------- */
+[data-skin="industrial"] [data-ui="button"] {
+  border: 1px solid var(--ind-key-edge);
+  border-radius: 3px;
+  background: linear-gradient(var(--ind-key-top), var(--ind-key-bottom));
+  color: var(--foreground);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.55), 0 2px 0 var(--ind-key-shadow);
+  transition: none;
+}
+[data-skin="industrial"] [data-ui="button"]:hover { background: linear-gradient(var(--ind-key-top), var(--ind-key-top)); }
+[data-skin="industrial"] [data-ui="button"]:active,
+[data-skin="industrial"] [data-ui="button"][aria-pressed="true"] {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.35), 0 0 0 var(--ind-key-shadow);
+  background: var(--ind-key-bottom);
+}
+[data-skin="industrial"] [data-ui="button"][data-variant="primary"] {
+  --ind-key-top: var(--ind-primary-top);
+  --ind-key-bottom: var(--primary);
+  --ind-key-edge: var(--ind-primary-edge);
+  --ind-key-shadow: var(--ind-primary-shadow);
+  color: var(--primary-foreground);
+}
+[data-skin="industrial"] [data-ui="button"][data-variant="danger"] {
+  --ind-key-top: var(--ind-danger-top);
+  --ind-key-bottom: var(--tone-danger);
+  --ind-key-edge: var(--ind-danger-edge);
+  --ind-key-shadow: var(--ind-danger-shadow);
+  color: white;
+}
+/* Ghost, link and row buttons are text, not keys: a flat key field would be noise. */
+[data-skin="industrial"] [data-ui="button"]:is([data-variant="ghost"], [data-variant="link"], [data-variant="row"]) {
+  border-color: transparent; background: none; box-shadow: none; font-weight: 500;
+}
+[data-skin="industrial"] [data-ui="button"]:is([data-variant="ghost"], [data-variant="row"]):hover { background: var(--row-hover); }
+[data-skin="industrial"] [data-ui="button"]:is([data-variant="ghost"], [data-variant="link"], [data-variant="row"]):active { transform: none; box-shadow: none; }
+[data-skin="industrial"] [data-ui="button"]:disabled { opacity: 0.45; box-shadow: none; transform: none; }
+
+/* ---- Fields: recessed wells, like a pendant's display ---------------------- */
+[data-skin="industrial"] [data-ui="field"] {
+  background: var(--ind-well);
+  color: var(--ind-well-text);
+  border: 1px solid var(--ind-key-edge);
+  border-radius: 2px;
+  box-shadow: inset 0 2px 0 oklch(0 0 0 / 0.12);
+  min-height: 30px;
+  font-size: var(--text-base);
+}
+[data-skin="industrial"] [data-ui="field"]:focus-visible { border-color: var(--ring); outline-offset: 0; }
+[data-skin="industrial"] [data-ui="field"]::placeholder { color: var(--muted); opacity: 0.8; }
+[data-skin="industrial"] input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary); }
+
+/* ---- Cards: riveted-free, but a real edge ---------------------------------- */
+[data-skin="industrial"] [data-ui="card"] {
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 2px;
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.25);
+}
+[data-skin="industrial"] [data-ui="card"] > div:first-child > h2,
+[data-skin="industrial"] [data-ui="card"] > h2 { text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--text-xs); color: var(--muted); }
+
+/* ---- Status: filled lamps, read from across the room ----------------------- */
+[data-skin="industrial"] [data-ui="tag"] {
+  background: var(--tone, var(--tone-neutral)) !important;
+  border-color: color-mix(in oklch, var(--tone, var(--tone-neutral)) 75%, black) !important;
+  color: white !important;
+  border-radius: 2px;
+  height: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.25);
+}
+[data-skin="industrial"] [data-ui="tag"][data-tone="warning"] { color: oklch(0.2 0.02 70) !important; }
+[data-skin="industrial"] [data-ui="tag"] > span { background: currentColor !important; }
+
+/* ---- Chrome: gunmetal header and rails with a safety stripe ---------------- */
+[data-skin="industrial"] [data-ui="chrome"] {
+  background: var(--ind-chrome);
+  color: var(--ind-chrome-text);
+  border-color: var(--ind-chrome-border);
+}
+[data-skin="industrial"] header[data-ui="chrome"] { box-shadow: inset 0 -2px 0 var(--ind-stripe); }
+[data-skin="industrial"] [data-ui="chrome"] [data-ui="button"]:is([data-variant="ghost"], [data-variant="row"], [data-variant="default"]) { color: var(--ind-chrome-text); }
+[data-skin="industrial"] [data-ui="chrome"] [data-ui="button"]:is([data-variant="ghost"], [data-variant="row"]):hover { background: oklch(1 0 0 / 0.1); }
+[data-skin="industrial"] [data-ui="chrome"] .text-muted { color: color-mix(in oklch, var(--ind-chrome-text) 70%, transparent); }
+
+/* ---- Tables: ruled, striped header ----------------------------------------- */
+[data-skin="industrial"] thead th { background: var(--row-hover); border-bottom: 2px solid var(--border); text-transform: uppercase; letter-spacing: 0.04em; font-size: var(--text-xs); }
+[data-skin="industrial"] tbody td { border-bottom: 1px solid color-mix(in oklch, var(--border) 50%, transparent); }
+
+/* ---- Dock tabs: keyed tabs on the panel ------------------------------------ */
+[data-skin="industrial"] .platform-dock .dv-tab { border-right: 1px solid var(--border); font-weight: 600; }
+[data-skin="industrial"] .platform-dock .dv-tab.dv-active-tab { box-shadow: inset 0 2px 0 var(--ind-stripe); }
+[data-skin="industrial"] .platform-dock .dv-resize-container { border-radius: 3px; border: 2px solid var(--ind-key-edge); }
+
+/* ---- Canvas blocks: same keycap language ----------------------------------- */
+[data-skin="industrial"] .platform-block { border-radius: 3px; border: 1px solid var(--ind-key-edge); box-shadow: 0 2px 0 var(--ind-key-shadow); }
+
+@media (prefers-reduced-motion: reduce) { [data-skin="industrial"] * { transition: none !important; } }

@@ -383,6 +383,11 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       { label: navigationVisible ? t("Hide navigation") : t("Show navigation"), onSelect: toggleNavigation },
       { label: t("Reset layout"), onSelect: () => unsaved.ask([...drafts.current.keys()], () => { dock.current?.clear(); open(home); }) },
     ] },
+    { label: t("Appearance"), items: [
+      // A checkmark is the "shortcut" slot: the menu stays one shape.
+      ...([["system", t("Follow system")], ["light", t("Light")], ["dark", t("Dark")]] as const).map(([scheme, label]) => ({ label, shortcut: appearance.scheme === scheme ? "✓" : undefined, onSelect: () => appearance.setScheme(scheme) })),
+      ...([["default", t("Standard look")], ["industrial", t("Industrial look")]] as const).map(([skin, label]) => ({ label, shortcut: appearance.skin === skin ? "✓" : undefined, onSelect: () => appearance.setSkin(skin) })),
+    ] },
     { label: t("Window"), items: [
       { label: t("Open beside"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) beside(p.id); } },
       { label: t("Move to new window"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) popout(p.id); } },
@@ -418,7 +423,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       <div className={cn("grid h-dvh w-full min-w-0 max-w-full overflow-hidden bg-background text-foreground",
         rail && !compact ? "grid-cols-[44px_minmax(0,1fr)]" : "grid-cols-1", rail && compact ? "grid-rows-[36px_1fr_44px]" : "grid-rows-[36px_1fr]")}>
         {rail && !compact && (
-          <aside aria-label={t("Platform")} className="row-span-2 flex flex-col items-center gap-1 border-r border-border bg-surface py-1.5">
+          <aside aria-label={t("Platform")} data-ui="chrome" className="row-span-2 flex flex-col items-center gap-1 border-r border-border bg-surface py-1.5">
             {railItems.map(railButton)}
             <div className="my-1 h-px w-6 bg-border" />
             <RailList label={t("Recent")} icon={<Clock />} empty={t("Nothing opened yet.")}
@@ -432,7 +437,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
             </div>
           </aside>
         )}
-        <header className="flex min-w-0 items-center gap-2 overflow-hidden border-b border-border bg-surface px-2">
+        <header data-ui="chrome" className="flex min-w-0 items-center gap-2 overflow-hidden border-b border-border bg-surface px-2">
           <button type="button" aria-label={t("Toggle navigation")} aria-expanded={navigationVisible} onClick={toggleNavigation}
             className="rounded-sm p-1 text-muted hover:bg-row-hover hover:text-foreground"><PanelLeft className="size-4" /></button>
           {applications && applications.apps.length > 0
@@ -498,7 +503,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           </div>
         </div>
         {rail && compact && (
-          <nav aria-label={t("Platform")} className="flex items-center justify-around border-t border-border bg-surface px-2">
+          <nav aria-label={t("Platform")} data-ui="chrome" className="flex items-center justify-around border-t border-border bg-surface px-2">
             {railItems.map(railButton)}
             {workspaces && workspaces.options.length > 1 && <WorkspaceMenu workspaces={workspaces} />}
           </nav>

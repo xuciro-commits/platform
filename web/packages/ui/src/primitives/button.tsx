@@ -26,5 +26,6 @@ const button = cva(
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>;
 
 export function Button({ className, variant, size, type = "button", ...props }: ButtonProps) {
-  return <button type={type} className={cn(button({ variant, size }), className)} {...props} />;
+  // `data-ui`/`data-variant` are the skin hooks (themes/industrial.css); they carry no behaviour.
+  return <button type={type} data-ui="button" data-variant={variant ?? "default"} className={cn(button({ variant, size }), className)} {...props} />;
 }

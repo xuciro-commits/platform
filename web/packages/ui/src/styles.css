@@ -4,6 +4,7 @@
 @import "dockview-react/dist/styles/dockview.css";
 @import "@xyflow/react/dist/style.css";
 @source "./";
+@import "./themes/industrial.css";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
