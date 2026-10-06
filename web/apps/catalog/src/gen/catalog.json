@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:b25d39d1c639d275",
+  "revision": "sha256:78cb8abd400dcb34",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4682,6 +4682,7 @@
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/index.tsx",
       "web/packages/platform/src/knowledge.tsx",
@@ -4812,6 +4813,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
@@ -4864,6 +4866,7 @@
       "web/packages/build/src/workshop/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/processes.tsx"
@@ -4955,6 +4958,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/index.tsx",
       "web/packages/platform/src/knowledge.tsx",
@@ -4976,6 +4980,7 @@
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
@@ -4994,6 +4999,7 @@
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/processes.tsx",
@@ -5008,7 +5014,8 @@
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
-      "web/packages/build/src/workshop/page-editor/WidgetLibrary.tsx"
+      "web/packages/build/src/workshop/page-editor/WidgetLibrary.tsx",
+      "web/packages/platform/src/enterprise/index.tsx"
     ],
     "ui/status": [
       "web/packages/app/src/agents.tsx",
@@ -5026,6 +5033,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
@@ -5086,6 +5094,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
@@ -5382,6 +5391,7 @@
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/editor.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Sandbox.tsx"
     ],
@@ -5480,7 +5490,7 @@
       "web/packages/platform/src/knowledge.tsx"
     ],
     "ui/tree": [
-      "web/packages/platform/src/people.tsx"
+      "web/packages/platform/src/enterprise/index.tsx"
     ],
     "pattern/workspace": [
       "web/apps/catalog/src/main.tsx",

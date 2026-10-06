@@ -429,4 +429,5 @@ register("zh-CN", {
   "Shared with federated tenants (group, subsidiaries, partners)": "与联合租户共享（集团、子公司、合作伙伴）",
   "— member": "— 选择成员",
   "Add member": "添加成员",
+  "Relation": "关系说明",
 });
