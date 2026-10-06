@@ -35,10 +35,12 @@ const (
 	SchemaKindAdd         = "enterprise.kind.add"
 	SchemaViewSave        = "enterprise.view.save"
 	SchemaSeed            = "enterprise.model.seed"
+	SchemaApplyExample    = "enterprise.model.apply-example"
 
 	ReadOrganization  = "organization"
 	ReadModel         = "enterprise"
 	ReadMetamodel     = "enterprise-metamodel"
+	ReadExamples      = "enterprise-examples"
 	ReadPublished     = "enterprise-published" // the slice this tenant shares with the tenants it federates with
 	SchemaSliceImport = "enterprise.slice.import"
 
@@ -94,6 +96,9 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 		platform.Action{Schema: SchemaSliceImport, Target: ModelType, Capability: "federation", Title: "Import a published slice", Roles: admin,
 			Description: "Mirror what another tenant publishes — its organisations, capabilities, sites — read-only, owned there; relate your own elements to them. A connector delivers the slice.",
 			Payload:     []platform.Field{f("slice", "json", "The other tenant's enterprise-published answer", true)}},
+		platform.Action{Schema: SchemaApplyExample, Target: ModelType, Capability: "seed", Title: "Apply an enterprise example", Roles: admin,
+			Description: "Add an editable example to this enterprise model, preserving existing data.",
+			Payload:     []platform.Field{f("example", "string", "The versioned enterprise example", true), f("name", "string", "The enterprise's name", true), f("parent", "string", "An optional existing organisation to attach it to", false)}},
 		platform.Action{Schema: SchemaSeed, Target: ModelType, Capability: "seed", Title: "Seed from a template", Roles: admin,
 			Description: "Give an empty model its first shape for the enterprise's scale: S (≤100 people), M (≤1,000: a plant), L (≤10,000: divisions), XL (≤100,000: a group).",
 			Payload: []platform.Field{f("scale", "string", "S, M, L or XL; empty: from headcount", false), f("name", "string", "The enterprise's name", true), f("headcount", "number", "People, roughly", false),
@@ -118,7 +123,7 @@ func (e *Enterprise) Restore(raw json.RawMessage) error {
 
 func (e *Enterprise) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: "Enterprise", Version: "1", Actions: e.ledger.Catalog,
-		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished}, Everyone: []string{ReadModel, ReadMetamodel}}
+		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished, ReadExamples}, Everyone: []string{ReadModel, ReadMetamodel, ReadExamples}}
 }
 
 func (e *Enterprise) Declarations() []*pb.AuthorityDeclaration { return e.ledger.Declarations() }
@@ -152,6 +157,7 @@ type payload struct {
 	Layout                                                                                           map[string][2]float64
 	Calendar                                                                                         string
 	Published                                                                                        *bool
+	Example, Parent                                                                                  string
 	Slice                                                                                            *Slice
 }
 
@@ -208,6 +214,12 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			return func(*pb.ChangeRecord) {
 				m.Kinds = append(m.Kinds, Kind{ID: id, Name: p.Name, Kind: p.Kind, Matrix: p.Matrix})
 			}, nil
+		case SchemaApplyExample:
+			added, err := m.appendExample(p.Example, id, p.Name, p.Parent, today)
+			if err != nil {
+				return nil, invalid(err.Error())
+			}
+			return func(*pb.ChangeRecord) { *m = added }, nil
 		case SchemaSeed:
 			if len(m.Elements) > 0 {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "the model already has {n} elements; a template seeds only an empty model", len(m.Elements))
@@ -517,6 +529,12 @@ func (e *Enterprise) Read(_ platform.Caller, name string) (any, *kernel.Error) {
 	switch name {
 	case ReadOrganization:
 		return e.model.OrgSeed(), nil
+	case ReadExamples:
+		examples, err := ModelExamples()
+		if err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "enterprise examples are unavailable")
+		}
+		return examples, nil
 	case ReadModel:
 		return copyModel(e.model), nil
 	case ReadPublished:

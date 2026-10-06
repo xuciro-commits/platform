@@ -24,7 +24,7 @@ func TestEnterpriseHTTPAndLiveReads(t *testing.T) {
 	server := httptest.NewServer(NewHost(Tokens(map[string]string{"token": "user:admin@example.test"}), tn).Handler())
 	defer server.Close()
 	client := &http.Client{Timeout: 3 * time.Second}
-	paths := []string{"/v1/enterprise", "/v1/enterprise-metamodel", "/v1/enterprise-published"}
+	paths := []string{"/v1/enterprise", "/v1/enterprise-metamodel", "/v1/enterprise-published", "/v1/enterprise-examples"}
 	get := func(path string) *http.Response {
 		t.Helper()
 		request, _ := http.NewRequest("GET", server.URL+path, nil)
@@ -219,4 +219,28 @@ func TestLiveQueriesUseOriginalMemberAuthorizationAfterRevocation(t *testing.T) 
 	} else if result.Status == 200 {
 		t.Fatalf("revocation did not invalidate the protected query: %+v", result)
 	}
+}
+
+func TestEnterpriseAppliedExampleReplays(t *testing.T) {
+	compose := func() *Tenant {
+		seat := Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin, enterprise.ID: enterprise.Admin}}}
+		tn, err := NewTenant("example-replay", NewConsole("example-replay", seat), enterprise.New("example-replay", platform.OrgSeed{Units: []platform.Unit{{ID: "existing", Name: "Existing enterprise"}}}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tn
+	}
+	live := compose()
+	var entries []Entry
+	live.Record = func(entry Entry) { entries = append(entries, entry) }
+	admin, _ := live.Member("admin")
+	if _, err := live.Submit(admin, &pb.Submission{TenantId: live.ID, PrincipalId: admin.ID, Authority: enterprise.ID, IdempotencyKey: "example",
+		Target: &pb.EntityRef{Type: enterprise.ModelType, Id: "hotel-example"}, Schema: &pb.SchemaRef{Name: enterprise.SchemaApplyExample, Version: 1},
+		Payload: []byte(`{"example":"hotel-v1","name":"Example hotel","parent":"existing"}`)}, time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected one durable input, got %d", len(entries))
+	}
+	CheckReplay(t, live, entries, compose)
 }

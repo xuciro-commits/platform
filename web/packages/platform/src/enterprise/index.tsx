@@ -2,11 +2,12 @@
 // UAF grid. The palette comes from the metamodel's Enterprise Core profile,
 // links are checked against the stereotypes a cell allows, and every change is
 // a decision the host records. A fresh tenant starts from a scale template.
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, Input, Panel, Select, Tag, Tree, Workbench, t, type ColumnDef, type WorkbenchTab } from "@platform/ui";
 import { Link2, Network, Plus, Save, Table2, Workflow } from "lucide-react";
+import { EnterpriseExamples } from "./examples";
 import { Canvas, type Positions } from "./canvas";
 import { autoLayout, childrenOf, live, rootsOf, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PLACEMENT, RELATIONSHIP, VIEW, type Element, type GridCell, type Metamodel, type Model, type Relationship } from "./model";
 
@@ -17,14 +18,19 @@ const field = (label: string, control: ReactNode) => <label className="grid gap-
 
 export function Enterprise() {
   const host = useHost();
+  const [examples, setExamples] = useState(false);
+  const [preferredView, setPreferredView] = useState<string>();
   const model = useRead<Model>("/v1/enterprise");
   const meta = useRead<Metamodel>("/v1/enterprise-metamodel").data;
   const admin = host.role("enterprise") === "admin" || host.role("platform") === "admin";
   const decide: Decide = (schema, target, payload) => host.decide(schema, target, payload);
   if (model.error) return <p className="text-sm text-[var(--tone-danger)]">{String(model.error)}</p>;
   if (!model.data || !meta) return null;
-  if (model.data.elements.length === 0) return <SeedWizard decide={decide} admin={admin} />;
-  return <Modeler model={model.data} meta={meta} decide={decide} admin={admin} />;
+  return <>
+    {model.data.elements.length === 0 ? <><Button variant="ghost" onClick={() => setExamples(true)}>{t("Examples")}</Button><SeedWizard decide={decide} admin={admin} /></>
+      : <Modeler model={model.data} meta={meta} decide={decide} admin={admin} preferredView={preferredView} onExamples={() => setExamples(true)} />}
+    {examples && <EnterpriseExamples model={model.data} admin={admin} onClose={() => setExamples(false)} onApplied={setPreferredView} />}
+  </>;
 }
 
 // --- The wizard: three to five questions, then a template (ADR-0067 D6).
@@ -53,7 +59,7 @@ function SeedWizard({ decide, admin }: { decide: Decide; admin: boolean }) {
 }
 
 // --- The modeler proper.
-function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamodel; decide: Decide; admin: boolean }) {
+function Modeler({ model: m, meta, decide, admin, preferredView, onExamples }: { model: Model; meta: Metamodel; decide: Decide; admin: boolean; preferredView?: string; onExamples: () => void }) {
   const [viewId, setViewId] = useState<string>();
   const [day, setDay] = useState(today());
   const [mode, setMode] = useState<"canvas" | "tree" | "table">("canvas");
@@ -68,7 +74,9 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   const cell: GridCell | undefined = meta.grid.find((g) => g.id === (draft?.grid ?? view?.grid)) ?? meta.grid[0];
   const kinds = m.kinds.filter((k) => k.kind !== "legal" || cell?.id !== "Rs-Sr");
   const [kind, setKind] = useState<string>();
-  const placementKind = kind ?? m.kinds.find((k) => k.kind === "management")?.id ?? m.kinds[0]?.id ?? "";
+  useEffect(() => { if (preferredView) { setViewId(preferredView); setKind(undefined); setDraft(undefined); } }, [preferredView]);
+  const viewKind = m.kinds.find((k) => k.kind === "management" && m.relationships.some((r) => r.kind === k.id && view?.elements.includes(r.source) && view.elements.includes(r.target)));
+  const placementKind = kind ?? viewKind?.id ?? m.kinds.find((k) => k.kind === "management")?.id ?? m.kinds[0]?.id ?? "";
 
   // The working copy of the view: what is shown and where. Saved as a decision.
   const working = useMemo(() => {
@@ -143,6 +151,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
         <Input aria-label={t("As of")} type="date" value={day} onChange={(e) => setDay(e.target.value || today())} className="w-36" />
       </span>}
       actions={<>
+        <Button size="sm" variant="ghost" disabled={working.dirty} title={working.dirty ? t("Save the current view before opening examples.") : undefined} onClick={onExamples}>{t("Examples")}</Button>
         <Button size="sm" variant={mode === "canvas" ? "default" : "ghost"} onClick={() => setMode("canvas")} title={t("Canvas")}><Workflow /></Button>
         <Button size="sm" variant={mode === "tree" ? "default" : "ghost"} onClick={() => setMode("tree")} title={t("Tree")}><Network /></Button>
         <Button size="sm" variant={mode === "table" ? "default" : "ghost"} onClick={() => setMode("table")} title={t("Table")}><Table2 /></Button>
@@ -152,7 +161,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
       left={{ label: t("Model"), tabs, value: left, onChange: setLeft }}
       right={{ label: t("Inspector"), content: <Inspector element={sel} model={m} meta={meta} day={day} admin={admin} decide={decide} title={title} relLabel={relLabel}
         onRemove={() => { if (!sel) return; setWorking({ elements: working.elements.filter((id) => id !== sel.id) }); setSelected(undefined); }} /> }}>
-      {mode === "canvas" && <Canvas elements={shownElements} relationships={shownRels} positions={working.layout} selected={selected} linking={linking && admin}
+      {mode === "canvas" && <Canvas elements={shownElements} relationships={shownRels} positions={working.layout} selected={selected} linking={linking && admin} readOnly={!admin}
         onMove={(id, at) => setWorking({ layout: { ...working.layout, [id]: at } })} onSelect={setSelected} label={relLabel}
         onDrop={(stereotype, at) => setDialog({ kind: "element", stereotype, at })} onLink={(source, target) => setDialog({ kind: "link", source, target })} />}
       {mode === "tree" && <div className="p-2">

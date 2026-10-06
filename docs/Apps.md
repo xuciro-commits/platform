@@ -356,3 +356,5 @@ go run ./cmd/<id>-server -web ../../../web/apps/workspace/dist
 沿`GET /v1/link-types/{app}/{name}/{version}/{direction}/{id}`读取，direction为forward或reverse，version例如`1.link-1`；GET可用domain/search/sort/offset/limit，POST同一路径接受原Query JSON（包括完整集合谓词）。Web代码使用`EdgeClient.traverseLink(binding,direction,id,query)`。起点和目标继续按原权限读取，无权、缺失或隐藏字段不会退化到全对象列表。发布后保持关系身份、对象与回指形状；描述和双向名称可发布新版本，旧版本仍可读取。该API不新增级联删除或关系实例写入动作。
 
 固定页面内容：GET /v1/definitions的页面Definition.contentVersion为完整原页面描述的page.sha256.<64位摘要>，独立于原Version。沿GET /v1/pages/{app}/{name}/{contentVersion}或EdgeClient.pageContent(ref, contentVersion)读取该已发布内容的当前成员投影；不要对裁剪/翻译后的响应重新算摘要，也不要在403/未知版本时改读当前页。Build原Page记录最多保留64份不同已发布内容，相同描述重复发布只保留一份；保存候选未激活时不能当公开版本读取，历史不授予旧字段/动作权限。代码页只提供当前部署内容。此API尚不等于已具备父子页面嵌入，绑定和运行继续见[ADR-0046 §6.79](ADR/0046-application-studio-fusion.md#679-受控嵌入与组合页面)。
+
+控制面板 → 企业 → 示例：先选择小型企业、酒店、工厂或集团，再切换示例视图预览结构；填写应用后的企业名称，选择作为独立根节点加入或挂到已有组织，点击“应用示例”。应用后自动打开新增的组织视图，可继续改名、连线和保存布局。示例追加到当前租户的企业模型，不替换已有数据，也不创建新租户或授权；模型只读成员可以预览，enterprise 管理员才能应用。空模型也可从同一示例入口开始。
