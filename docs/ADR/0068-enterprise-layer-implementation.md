@@ -26,6 +26,8 @@
 4. **种子包是代码模板，不是 JSON**（`seeds.go`）：模板按参数生成（站点数、法人数、行业），JSON 表达不了；决策 `enterprise.model.seed` 只在空模型上执行。
 5. **`core` 的 person/site/location 投影、Seats `Units→Holds`、`Scope.Structure→Scope.Relationship` 改名未做**：接口可用、改名只是噪音，留到结构清理阶段（见 §4）。
 
+一致性补遗（同日）：动作表单对 `ref:"enterprise.element"` 字段渲染元素下拉（按 `stereotype` 过滤，读 `/v1/enterprise`）；`core.site.unit` 绑定 `ActualOrganization`；建模器检查器提供组织成员（`member:<id>` 的 `ActualOrganizationRole`）的添加与结束，覆盖原 org 视图的全部操作；建模器只组合 `@platform/ui`（`scripts/escapes.sh` 无新增）。
+
 ## 3. 验证
 
 `go test ./apps/enterprise/...`（模板四档无悬空关系、投影往返、决策校验与枚举拒绝、联邦 publish→import→只读→再导入），`TestLanguages`（`/v1/enterprise`、`/v1/enterprise-metamodel` 可读；中文齐全），`TestAPIContract`（`host.ts` 再生成），`pnpm exec tsc -p web/packages/platform`。
