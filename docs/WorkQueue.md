@@ -8,6 +8,8 @@
 
 功能架构与入口归 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md)，对标 Palantir 的 Shell/门户/功能块重构方案与批次归 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md)（P0–P6 的前端部分已落地，见其 §10–§11：Rail/Home/门户、工作区装配拆分、Ontology 与 Object Explorer、Build/Operate 分家、Lineage、Host Console；Data Connection 新接入类型与 Environments 的后端仍按下表 #134/#141 推进），联合草稿与直接安装退场归 [ADR-0048](ADR/0048-joint-draft-candidates-and-direct-install-retirement.md)。后端已有独立 Publisher/Auditor、项目编辑委派、包生命周期、环境晋级/迁移及宿主控制台 API；这些 API 和 Go 检查不等于对应前端任务已经可用。当前前端由 Builder 加载工坊设计，Publisher 通过独立交付入口审查封存定义并激活，Auditor 可进入成员/包/审计的只读任务；项目委派、应用关联运行与其余管理任务尚未接齐。
 
+下一浪潮（用一个工作台构建完整应用）的顶层分块与排序归 [ADR-0057](ADR/0057-complete-application-wave.md)：W1 = 共享本体 A、手持/扫码/打印 D1、环境晋级 UI G1；各块立独立 ADR 后再进入本表。
+
 整块交付后合入主线并更新两 Docker 宿主。以下是执行顺序；依赖栏只列实际前置。
 
 
