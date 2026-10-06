@@ -43,6 +43,8 @@ type Pipeline struct {
 	OutputDataset string `json:"outputDataset,omitempty" ref:"build.dataset" title:"Output dataset"`
 	OutputObject  string `json:"outputObject,omitempty" title:"Output object"`
 	Key           string `json:"key,omitempty" title:"Record id column"`
+	// OutputEnterprise lands the rows in the enterprise model instead (ADR-0073): one element per row.
+	OutputEnterprise *EnterpriseTarget `json:"outputEnterprise,omitempty" type:"json" title:"Enterprise model"`
 	// Every is a period, or empty: run when an input gains a version, or on request.
 	Every     string       `json:"every,omitempty" title:"Run every"`
 	State     string       `json:"state" field:"readonly"`
@@ -177,9 +179,19 @@ func (b *Build) checkPipeline(c platform.Caller, p Pipeline) *kernel.Error {
 			}
 		}
 	}
+	outputs := 0
+	for _, set := range []bool{p.OutputDataset != "", p.OutputObject != "", p.OutputEnterprise != nil} {
+		if set {
+			outputs++
+		}
+	}
 	switch {
-	case p.OutputDataset != "" && p.OutputObject != "", p.OutputDataset == "" && p.OutputObject == "":
-		return refuse("A pipeline writes either a dataset or an object")
+	case outputs != 1:
+		return refuse("A pipeline writes either a dataset, an object or the enterprise model")
+	case p.OutputEnterprise != nil:
+		if err := p.OutputEnterprise.check(); err != nil {
+			return refuse(err.Error())
+		}
 	case p.OutputDataset != "":
 		if p.OutputDataset == p.Input {
 			return refuse("A pipeline does not write its own input")

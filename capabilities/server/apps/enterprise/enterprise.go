@@ -43,6 +43,7 @@ const (
 	ReadPatterns       = "enterprise-patterns"  // the pattern catalogue with previews
 	SchemaPatternApply = "enterprise.pattern.apply"
 	SchemaSliceImport  = "enterprise.slice.import"
+	SchemaSliceSync    = "enterprise.slice.sync" // ADR-0073: a pipeline lands an external system's slice, diffed
 
 	// Admin stewards the model (the org app's role, kept so seats carry over).
 	Admin = "admin"
@@ -96,6 +97,9 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 		platform.Action{Schema: SchemaSliceImport, Target: ModelType, Capability: "federation", Title: "Import a published slice", Roles: admin,
 			Description: "Mirror what another tenant publishes — its organisations, capabilities, sites — read-only, owned there; relate your own elements to them. A connector delivers the slice.",
 			Payload:     []platform.Field{f("slice", "json", "The other tenant's enterprise-published answer", true)}},
+		platform.Action{Schema: SchemaSliceSync, Target: ModelType, Capability: "federation", Title: "Sync a system's slice", Roles: admin, Automation: true,
+			Description: "Land what an external system holds about the enterprise - organisational units, posts, locations, equipment - as elements and relationships owned on its behalf. Repeated syncs diff: new ids start today, missing ids close today, history stays.",
+			Payload:     []platform.Field{f("source", "string", "The system's name, e.g. sap-hr", true), f("elements", "json", "Elements with ids stable across syncs", true), f("relationships", "json", "Relationships between them, or to the tenant's own elements", false)}},
 		platform.Action{Schema: SchemaPatternApply, Target: ModelType, Capability: "seed", Title: "Add from a pattern", Roles: admin,
 			Description: "Graft a ready-made piece of enterprise — a company, plant, hotel, warehouse, department, line — under an organisation, or at the top. Rename and reshape it afterwards like anything else.",
 			Payload: []platform.Field{f("pattern", "string", "Pattern id: group, company, plant, hotel, warehouse, office, department, shared-services, line, team", true), f("name", "string", "The new root's name", true),
@@ -173,7 +177,13 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 		notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		conflict := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		var p payload
-		if json.Unmarshal(s.GetPayload(), &p) != nil {
+		if s.GetSchema().GetName() == SchemaSliceSync { // its elements are objects, not the view's id list
+			var head struct {
+				Source string `json:"source"`
+			}
+			json.Unmarshal(s.GetPayload(), &head)
+			p.Source = head.Source
+		} else if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid("the payload is not readable")
 		}
 		today := now.UTC().Format(time.DateOnly)
@@ -237,6 +247,53 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, invalid(err.Error())
 			}
 			return func(*pb.ChangeRecord) { m.Apply(p.Pattern, p.Under, p.Name, p.Params, today) }, nil
+		case SchemaSliceSync:
+			if p.Source == "" || strings.ContainsAny(p.Source, " :/") {
+				return nil, invalid("a sync names its source system")
+			}
+			var sync struct {
+				Elements      []Element      `json:"elements"`
+				Relationships []Relationship `json:"relationships"`
+			}
+			if json.Unmarshal(s.GetPayload(), &sync) != nil || sync.Elements == nil {
+				return nil, invalid("a sync carries elements")
+			}
+			owner, ids := "source:"+p.Source, map[string]bool{}
+			for i := range sync.Elements {
+				el := &sync.Elements[i]
+				switch {
+				case el.ID == "" || el.Name == "":
+					return nil, invalid("every synced element has an id and a name")
+				case mm.Stereotypes[el.Stereotype] == nil || mm.Relationship(el.Stereotype) || mm.Stereotypes[el.Stereotype].Abstract:
+					return nil, invalid("{stereotype} is not a concrete UAF {version} element stereotype", el.Stereotype, mm.Version)
+				case ids[el.ID]:
+					return nil, invalid("{element} is sent twice", el.ID)
+				}
+				if own := m.element(el.ID); own != nil && own.Owner != owner {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{element} is not {source}'s to change", el.ID, p.Source)
+				}
+				if err := checkProperties(mm, el.Stereotype, el.Properties); err != nil {
+					return nil, err
+				}
+				ids[el.ID] = true
+			}
+			for i := range sync.Relationships {
+				r := &sync.Relationships[i]
+				switch {
+				case r.ID == "" || r.Source == "" || r.Target == "":
+					return nil, invalid("every synced relationship has an id, a source and a target")
+				case !mm.Relationship(r.Stereotype):
+					return nil, invalid("{stereotype} is not a UAF {version} relationship stereotype", r.Stereotype, mm.Version)
+				case !ids[r.Source] && m.element(r.Source) == nil && !strings.HasPrefix(r.Source, "member:"):
+					return nil, invalid("{element} is not in the model nor in the sync", r.Source)
+				case !ids[r.Target] && m.element(r.Target) == nil:
+					return nil, invalid("{element} is not in the model nor in the sync", r.Target)
+				case r.Stereotype == Placement && r.Kind != "" && m.kind(r.Kind) == nil:
+					return nil, invalid("{kind} is not a relationship kind of this model", r.Kind)
+				}
+			}
+			source := p.Source
+			return func(*pb.ChangeRecord) { m.Sync(source, sync.Elements, sync.Relationships, today) }, nil
 		case SchemaSliceImport:
 			if p.Slice == nil || p.Slice.Tenant == "" || p.Slice.Tenant == e.tenant {
 				return nil, invalid("a slice names the tenant it comes from")
@@ -405,6 +462,9 @@ func checkProperties(mm *uaf.Metamodel, stereotype string, values map[string]any
 	}
 	props := mm.Properties(stereotype)
 	for name, v := range values {
+		if _, bag := v.(map[string]any); bag && strings.HasPrefix(name, "source:") {
+			continue // an external system's own attributes, kept under its name (ADR-0073)
+		}
 		i := slices.IndexFunc(props, func(p uaf.Property) bool { return p.Name == name })
 		if i < 0 {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{stereotype} has no property {name}", stereotype, name)
