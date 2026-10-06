@@ -382,7 +382,7 @@ export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(
 
 export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./agents";
 
-export { NewActions, PayloadFields, InlineActionForm, RecordActions, useRecordArchive } from "./actions";
+export { NewActions, PayloadFields, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions";
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages";
 export { ComposedPage, SectionView, isComposed } from "./sections";
 export { createWidgetDefinitions, createWidgetRegistry, widgetContracts, widgetContract, pageUIProfile, supportsPageUIProfile, type WidgetRegistry, type WidgetImplementation, type WidgetContract, type WidgetID } from "./widgets/registry";

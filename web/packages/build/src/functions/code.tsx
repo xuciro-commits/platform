@@ -1,5 +1,5 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { AssetControls } from "../shared/asset-controls";
+import { DraftStatus, PublishMenu } from "../shared/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
@@ -77,11 +77,11 @@ export function CodeEditor({ id }: { id: string }) {
   return <WorkflowFormProblems.Provider value={report}><div className="grid min-w-0 gap-3">
     <PageHeader title={draft.title || t("New code function")} description={t("Define its contract, compile an artifact, then review and activate its application candidate.")}
       actions={<div className="flex flex-wrap gap-2">
-        <Button onClick={() => open({ view: "code" })}>{t("Code functions")}</Button>
-<AssetControls type="build.code" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
+        <Button variant="ghost" onClick={() => open({ view: "code" })}>{t("Code functions")}</Button>
+        <DraftStatus state={draft.module ? "published" : "draft"} />
         <Button disabled={busy || invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
         <Button disabled={busy || invalid || !draft.id || draft.state === "compiling"} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
-        <Button variant="primary" disabled={busy || dirty || !draft.module || draft.state === "compiling"} onClick={() => open({ view: "release-review", params: { kind: "compute", id: draft.id } })}>{t("Review selected release")}</Button>
+        <PublishMenu type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || !draft.module || draft.state === "compiling"} onReview={() => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onDiscard={discardChanges} route={{ view: "code", params: { id } }} />
       </div>} />
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">

@@ -3,11 +3,11 @@ import "./i18n";
 import { CatalogFixture, sampleObject, samplePage } from "@platform/app/catalog/fixtures";
 import { PageWorkspaceExample } from "@platform/app/catalog/examples";
 import { QueryEditor } from "./ontology/query";
-import { ApplicationEditor } from "./projects/application";
+import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
 import { ComposedPage } from "@platform/app";
 import { t } from "@platform/ui";
-import { ProcessEditor } from "./ontology/process";
-import { WorkflowEditor } from "./automate/workflow";
+import { ObjectTypeEditor } from "./ontology/process";
+import { FlowEditor } from "./automate/workflow";
 import { pageTemplates, recordHandlingDraft } from "./workshop/templates";
 
 export const MasterDetailExample = PageWorkspaceExample;
@@ -35,8 +35,8 @@ const logicReads = {
   } },
   "/v1/capabilities": [], "/v1/flows": [],
 };
-export const ObjectStudioExample = () => <CatalogFixture reads={objectReads} roles={builderRole}><ProcessEditor id="OBJECT-SAMPLE" /></CatalogFixture>;
-export const LogicStudioExample = () => <CatalogFixture reads={logicReads} roles={builderRole}><WorkflowEditor id="FLOW-SAMPLE" /></CatalogFixture>;
+export const ObjectStudioExample = () => <CatalogFixture reads={objectReads} roles={builderRole}><ObjectTypeEditor id="OBJECT-SAMPLE" /></CatalogFixture>;
+export const LogicStudioExample = () => <CatalogFixture reads={logicReads} roles={builderRole}><FlowEditor id="FLOW-SAMPLE" /></CatalogFixture>;
 
 const applicationDefinitions = [{ ...samplePage, ref: { app: "build", kind: "page" as const, name: "samples" } },
   { ref: { app: "catalog", kind: "object" as const, name: sampleObject.type }, source: "code", version: "fixture-v1", contractVersion: 1, requires: [], entity: sampleObject }];
@@ -44,7 +44,7 @@ const applicationReads = {
   "/v1/records/build.app/APP-SAMPLE": { record: { id: "APP-SAMPLE", revision: 1, name: "sample", title: "Sample application", state: "draft", icon: "boxes", pages: ["samples"], resources: [applicationDefinitions[1]!.ref], groups: [] } },
   "/v1/records/build.process?limit=500&offset=0": { records: [], total: 0 },
 };
-export const ApplicationStudioExample = () => <CatalogFixture reads={applicationReads} roles={builderRole} definitions={applicationDefinitions}><ApplicationEditor id="APP-SAMPLE" /></CatalogFixture>;
+export const ApplicationStudioExample = () => <CatalogFixture reads={applicationReads} roles={builderRole} definitions={applicationDefinitions}><ModuleWorkbench id="APP-SAMPLE" /></CatalogFixture>;
 
 const querySource = {...sampleObject,app:"build",type:"build.sample"};
 const queryDeclaration = {name:"shared",title:"Shared query",description:"Read ready records.",object:querySource.type,domain:[["state","=","ready"]],sort:["id"],limit:20};

@@ -206,9 +206,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         onActiveRoute={setActiveRoute}
         nav={[
           ...(surface === "studio" && studioApplications.length > 0 ? [{ label: t("Projects"), items: [
-            { label: t("All projects"), icon: <LayoutGrid />, route: { view: "applications", params: { surface: "studio" } } },
+            { label: t("All projects"), icon: <LayoutGrid />, route: { view: "projects", params: { surface: "studio" } } },
             ...studioApplications.filter((record) => !record.archived)
-              .map((record) => ({ label: record.title || record.name, icon: <Hammer />, route: { view: "application", params: { id: record.id, surface: "studio" } } })),
+              .map((record) => ({ label: record.title || record.name, icon: <Hammer />, route: { view: "project", params: { id: record.id, surface: "studio" } } })),
           ] }] : []),
           ...(app?.nav(host) ?? []),
           ...(app?.dashboards?.some((d) => !d.for || d.for(host)) ? [{ label: t("Dashboards"), items: app.dashboards.filter((d) => !d.for || d.for(host))

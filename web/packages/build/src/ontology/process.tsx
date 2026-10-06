@@ -1,7 +1,7 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import {actionDestinations,actionResultEdges,stateInputValid,ruleInputValid,assignmentInputFits} from "./process-rules";
 import { recordPaths } from "../shared/record-paths";
-import { AssetControls } from "../shared/asset-controls";
+import { DraftStatus, PublishMenu, WorkbenchMessage, savingState, useAutoSave } from "../shared/workbench";
 // The object's process editor (ADR-0037): its states and the actions people
 // take on its records, in the page editor's three panes — what there is on the
 // left, what a person will see in the middle, the piece in hand on the right.
@@ -10,13 +10,11 @@ import { AssetControls } from "../shared/asset-controls";
 import { PayloadFields, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost, useReadQuery } from "@platform/app";
 import type {Api} from "@platform/kernel";
 import {
-  Button, Card, Checkbox, Disclosure, EditorWorkbench, Input, NodeCanvas, PageHeader, Panel, Select, StatusBar, StatusTag, Textarea, Toggles, canvasNodeHeight, canvasNodeWidth, cn, defineStatuses, layout, notify, t, useUnsavedChanges,
+  Button, Card, Checkbox, Disclosure, Input, NodeCanvas, Panel, PanelSection, ProblemList, Select, StatusBar, StructureRow, Textarea, Toggles, Workbench, canvasNodeHeight, canvasNodeWidth, cn, layout, notify, t, useUnsavedChanges, type WorkbenchProblem,
   type CanvasEdge, type CanvasNode, type NodeCatalog, type EntityInfo,
 } from "@platform/ui";
-import { ArrowDown, ArrowUp, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
+import { Boxes, Link2, Plus, Shield, Tags, Trash2, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useDirectInstall } from "../shared/release-profile";
-import { ModelWorkbench } from "./ModelWorkbench";
 import { useDraftSession } from "../session/DraftSession";
 
 type Field = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
@@ -35,7 +33,6 @@ type Process = { states: State[]; actions: Action[]; access: Access[]; fields: F
 /** What is in hand: a state, an action, or who may do what, by its place. */
 type Chosen = { kind: "field" | "state" | "action" | "access"; at: number } | undefined;
 
-const objectStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" } });
 const tones = ["info", "success", "warning", "danger", "neutral"];
 const inputTypes = ["text", "longtext", "integer", "decimal", "date", "boolean", "choice", "reference"];
 const fieldTypes = ["text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference"];
@@ -125,11 +122,8 @@ const nameOf = (title: string, taken: string[]) => {
 };
 
 /** The objects of this organisation: open one to give it states and actions. */
-export function Objects() {
-  return <ModelWorkbench />;
-}
-
-export function ProcessEditor({ id, initialField, initialAction, initialAccess }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean }) {
+type Tab = "overview" | "properties" | "links" | "actions" | "lifecycle" | "permissions" | "preview";
+export function ObjectTypeEditor({ id, initialField, initialAction, initialAccess, initialTab }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean; initialTab?: string }) {
   const { decide, entities, definitions } = useHost();
   const { open } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: ObjectRecord }>(`/v1/records/build.object/${encodeURIComponent(id)}`);
@@ -140,7 +134,7 @@ export function ProcessEditor({ id, initialField, initialAction, initialAccess }
   const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [] });
   const [chosen, setChosen] = useState<Chosen>();
   const initiallyChosen = useRef("");
-  const [center, setCenter] = useState<"map" | "preview">("map");
+  const [tab, setTab] = useState<Tab>((["overview", "properties", "links", "actions", "lifecycle", "permissions", "preview"] as Tab[]).includes(initialTab as Tab) ? initialTab as Tab : "overview");
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string>(); // why the host refused, kept on screen
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
@@ -155,12 +149,13 @@ export function ProcessEditor({ id, initialField, initialAction, initialAccess }
     const key = `${id}:${initialField ?? ""}:${initialAction ?? ""}:${initialAccess ?? false}`;
     if (!object || initiallyChosen.current === key) return;
     initiallyChosen.current = key;
-    if (initialField) { const at = object.fields.findIndex((field) => field.name === initialField); if (at >= 0) setChosen({ kind: "field", at }); }
-    else if (initialAction) { const at = object.actions?.findIndex((action) => action.name === initialAction) ?? -1; if (at >= 0) setChosen({ kind: "action", at }); }
-    else if (initialAccess && object.access?.length) setChosen({ kind: "access", at: 0 });
+    if (initialField) { const at = object.fields.findIndex((field) => field.name === initialField); if (at >= 0) { setChosen({ kind: "field", at }); setTab("properties"); } }
+    else if (initialAction) { const at = object.actions?.findIndex((action) => action.name === initialAction) ?? -1; if (at >= 0) { setChosen({ kind: "action", at }); setTab("actions"); } }
+    else if (initialAccess && object.access?.length) { setChosen({ kind: "access", at: 0 }); setTab("permissions"); }
   }, [object, id, initialField, initialAction, initialAccess]);
-  const directInstall = useDirectInstall();
-  if (!object) return <p className="text-sm text-muted">{t("Loading…")}</p>;
+  const saveRef = useRef<() => Promise<unknown>>(async () => false);
+  useAutoSave({ dirty, busy, save: () => saveRef.current() });
+  if (!object) return <Workbench storageKey="object-type" title={t("Object type")}><WorkbenchMessage>{query.isError ? t("The object type could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const parent = `build.${object.name}`;
   const targets = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent)
     && definitions.some((definition) => definition.source === "tenant" && definition.ref.app === "build" && definition.ref.kind === "object" && definition.ref.name === entity.type));
@@ -189,6 +184,7 @@ export function ProcessEditor({ id, initialField, initialAction, initialAccess }
     }
     return ok;
   };
+  saveRef.current = () => perform(save);
   const publish = async () => {
     setRefused(undefined);
     if (issues.length) { setRefused(issues.join(" ")); return; }
@@ -207,59 +203,111 @@ export function ProcessEditor({ id, initialField, initialAction, initialAccess }
   const action = chosen?.kind === "action" ? process.actions[chosen.at] : undefined;
   const state = chosen?.kind === "state" ? process.states[chosen.at] : undefined;
   const field = chosen?.kind === "field" ? process.fields[chosen.at] : undefined;
-  return (
-    <div className="flex flex-col gap-3 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
-      <PageHeader title={t("Design {object}", { object: object.title })}
-        description={t("Define fields, states, actions and access, then review the saved object and its dependencies.")}
-        actions={<div className="flex flex-wrap items-center gap-2">
-          <StatusTag status={object.state} registry={objectStates} />
-          <Button onClick={() => open({ view: "process" })}>{t("Back to objects")}</Button>
-          {object.state === "published" && <Button onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: object.name } })}>{t("Open records")}</Button>}
-<AssetControls type="build.object" record={object} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "process", params: { id } }} />
-          <Button variant="ghost" aria-label={t("Undo")} title={t("Undo")} disabled={!session.canUndo || busy} onClick={() => { session.undo(); setChosen(undefined); }}><Undo2 /></Button>
-          <Button variant="ghost" aria-label={t("Redo")} title={t("Redo")} disabled={!session.canRedo || busy} onClick={() => { session.redo(); setChosen(undefined); }}><Redo2 /></Button>
-          <Button onClick={() => void perform(save)} disabled={!dirty || busy}>{t("Save")}</Button>
-          {directInstall && <Button disabled={busy || issues.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>}
-          <Button variant="primary" disabled={busy || issues.length > 0} onClick={() => void perform(review)}>{t("Review release")}</Button>
-        </div>} />
-      <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
-      {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
-      {refused && <Panel role="alert" className="text-sm text-[var(--tone-danger)]">{t("The host refused it:")} {refused}</Panel>}
-      {issues.length > 0 && <Panel role="alert" className="text-xs text-[var(--tone-danger)]"><strong>{t("Check these rules before installing or reviewing a release:")}</strong>
-        <ul className="ml-4 list-disc">{issues.map((message, i) => <li key={i}>{message}</li>)}</ul></Panel>}
-      {dirty && <Panel role="status" className="text-xs text-muted">{t("Unsaved changes. Direct install and release review save first.")}</Panel>}
-      <fieldset disabled={busy} className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
-        <EditorWorkbench leftLabel={t("States and actions")} centerLabel={t("What people see")} rightLabel={t("The piece in hand")}
-          left={<div className="p-2">
-          <FieldsOutline fields={process.fields} chosen={chosen} onChoose={setChosen}
-            onAdd={() => { change({ ...process, fields: [...process.fields, { name: nameOf("field", process.fields.map((f) => f.name)), title: t("Field"), type: "text" }] }); setChosen({ kind: "field", at: process.fields.length }); }} />
-          <Outline process={process} chosen={chosen} onChoose={setChosen} onAddState={addState} onAddAction={addAction} onChange={change} />
-          <AccessOutline access={process.access} chosen={chosen} onChoose={setChosen}
-            onAdd={() => { change({ ...process, access: [...process.access, { role: nameOf("role", process.access.map((a) => a.role)), read: "own", create: true, edit: true }] }); setChosen({ kind: "access", at: process.access.length }); }}
-            onRemove={(i) => { change({ ...process, access: process.access.filter((_, at) => at !== i) }); setChosen(undefined); }} />
-          </div>}
-          right={<div className="p-2">
-          {field && chosen && <FieldProperties field={field} onRemove={() => { change({ ...process, fields: process.fields.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
-          {state && chosen && <StateProperties state={state} onChange={(patch) => change({ ...process, states: process.states.map((s, i) => i === chosen.at ? { ...s, ...patch } : s) })} />}
-          {chosen?.kind === "access" && process.access[chosen.at] && <AccessProperties access={process.access[chosen.at]!} fields={process.fields}
-            onChange={(patch) => change({ ...process, access: process.access.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })}
-            onFields={(fields) => change({ ...process, fields })} />}
-          {action && chosen && <ActionProperties action={action} states={process.states} fields={process.fields} parent={parent} targets={targets} entities={entities} roles={process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none")} approverRoles={["builder", ...(process.access.length ? process.access.filter((a) => a.read === "all").map((a) => a.role) : ["user"])]}
-            onChange={(patch) => change({ ...process, actions: process.actions.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })} />}
-          {!chosen && <Card className="p-3 text-xs text-muted">{t("Choose a field, state or action to configure it.")}</Card>}
-          </div>}>
-          <div className="min-h-0 flex-1 overflow-auto p-3">
-          <div role="tablist" aria-label={t("Object view")} className="mb-3 flex gap-1 border-b border-border pb-2">
-            <Button role="tab" aria-selected={center === "map"} size="sm" variant={center === "map" ? "primary" : "ghost"} onClick={() => setCenter("map")}>{t("Process map")}</Button>
-            <Button role="tab" aria-selected={center === "preview"} size="sm" variant={center === "preview" ? "primary" : "ghost"} onClick={() => setCenter("preview")}>{t("Record preview")}</Button>
-          </div>
-          {center === "map" ? <ProcessGraph key={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} />
-            : <Preview object={object} process={process} action={action} />}
-          </div>
-        </EditorWorkbench>
-      </fieldset>
+  const problems: WorkbenchProblem[] = issues.map((message, i) => ({ id: `issue:${i}`, text: message, locate: () => { const at = process.actions.findIndex((a) => message.startsWith(`${a.title || a.name}:`)); if (at >= 0) { setChosen({ kind: "action", at }); setTab("actions"); } } }));
+  const choose = (next: Chosen, section?: Tab) => { setChosen(next); if (section) setTab(section); };
+  const addField = () => { change({ ...process, fields: [...process.fields, { name: nameOf("field", process.fields.map((f) => f.name)), title: t("Field"), type: "text" }] }); choose({ kind: "field", at: process.fields.length }, "properties"); };
+  const addAccess = () => { change({ ...process, access: [...process.access, { role: nameOf("role", process.access.map((a) => a.role)), read: "own", create: true, edit: true }] }); choose({ kind: "access", at: process.access.length }, "permissions"); };
+  const references = process.fields.filter((f) => f.type === "reference");
+  const incoming = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent));
+  const roles = process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none");
+  const approverRoles = ["builder", ...(process.access.length ? process.access.map((a) => a.role) : [])];
+  const tabs: { id: Tab; title: string }[] = [
+    { id: "overview", title: t("Overview") }, { id: "properties", title: t("Properties") }, { id: "links", title: t("Links") }, { id: "actions", title: t("Actions") },
+    { id: "lifecycle", title: t("Lifecycle") }, { id: "permissions", title: t("Permissions") }, { id: "preview", title: t("Preview") },
+  ];
+  const structure = <div className="grid min-w-0 content-start">
+    <PanelSection title={t("Object type")}>
+      <StructureRow icon={<Boxes />} label={object.title} selected={!chosen && tab === "overview"} onClick={() => choose(undefined, "overview")} />
+    </PanelSection>
+    <PanelSection title={t("Properties")} actions={<Button size="sm" variant="ghost" aria-label={t("Add a property")} title={t("Add a property")} onClick={addField}><Plus /></Button>}>
+      {process.fields.map((f, at) => <StructureRow key={`${f.name}:${at}`} depth={1} icon={<Tags />} label={f.title || f.name} meta={t(f.type)} selected={chosen?.kind === "field" && chosen.at === at} onClick={() => choose({ kind: "field", at }, "properties")} />)}
+      {!process.fields.length && <p className="px-2 text-[11px] text-muted">{t("No properties yet.")}</p>}
+    </PanelSection>
+    <PanelSection title={t("Lifecycle")} actions={<Button size="sm" variant="ghost" aria-label={t("Add a state")} title={t("Add a state")} onClick={() => { addState(); setTab("lifecycle"); }}><Plus /></Button>}>
+      {process.states.map((s, at) => <StructureRow key={`${s.name}:${at}`} depth={1} icon={<span className={cn("size-2 rounded-full", `bg-[var(--tone-${s.tone ?? "info"})]`)} />} label={s.title || s.name} selected={chosen?.kind === "state" && chosen.at === at} onClick={() => choose({ kind: "state", at }, "lifecycle")} />)}
+    </PanelSection>
+    <PanelSection title={t("Actions")} actions={<Button size="sm" variant="ghost" aria-label={t("Add an action")} title={t("Add an action")} disabled={!process.states.length} onClick={() => { addAction(); setTab("actions"); }}><Plus /></Button>}>
+      {process.actions.map((a, at) => <StructureRow key={`${a.name}:${at}`} depth={1} icon={<Zap />} label={a.title || a.name} meta={a.to ? `→ ${process.states.find((s) => s.name === a.to)?.title ?? a.to}` : undefined} selected={chosen?.kind === "action" && chosen.at === at} onClick={() => choose({ kind: "action", at }, "actions")} />)}
+    </PanelSection>
+    <PanelSection title={t("Permissions")} actions={<Button size="sm" variant="ghost" aria-label={t("Add a role")} title={t("Add a role")} onClick={addAccess}><Plus /></Button>}>
+      {process.access.map((a, at) => <StructureRow key={`${a.role}:${at}`} depth={1} icon={<Shield />} label={a.role} meta={t(a.read)} selected={chosen?.kind === "access" && chosen.at === at} onClick={() => choose({ kind: "access", at }, "permissions")} />)}
+    </PanelSection>
+  </div>;
+  const inspector = <div className="p-2">
+    {field && chosen && <FieldProperties field={field} onRemove={() => { change({ ...process, fields: process.fields.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
+    {state && chosen && <StateProperties state={state} onChange={(patch) => change({ ...process, states: process.states.map((s, i) => i === chosen.at ? { ...s, ...patch } : s) })} />}
+    {chosen?.kind === "access" && process.access[chosen.at] && <AccessProperties access={process.access[chosen.at]!} fields={process.fields}
+      onChange={(patch) => change({ ...process, access: process.access.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })}
+      onFields={(fields) => change({ ...process, fields })} />}
+    {action && chosen && <div className="grid gap-2">
+      <ActionProperties action={action} states={process.states} fields={process.fields} parent={parent} targets={targets} entities={entities} roles={roles} approverRoles={approverRoles}
+        onChange={(patch) => change({ ...process, actions: process.actions.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })} />
+    </div>}
+    {!chosen && <p className="p-2 text-xs text-muted">{t("Select a property, state, action or role to edit it.")}</p>}
+  </div>;
+  const main: Record<Tab, ReactNode> = {
+    overview: <div className="grid max-w-3xl gap-4 p-4">
+      <div><h2 className="text-lg font-semibold">{object.title}</h2><p className="text-xs text-muted">{parent}</p></div>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+        {[[t("Properties"), process.fields.length], [t("States"), process.states.length], [t("Actions"), process.actions.length], [t("Roles"), process.access.length]].map(([label, n]) => <div key={String(label)} className="rounded-md border border-border p-3"><dt className="text-xs text-muted">{label}</dt><dd className="text-xl font-semibold">{n}</dd></div>)}
+      </dl>
+      <p className="text-sm text-muted">{t("Properties describe a record; the lifecycle says which states it passes through; actions are the governed steps people take; permissions say who may read and change it. Preview shows the object as people will see it.")}</p>
+      {object.state === "published" && <Button className="w-fit" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: object.name } })}>{t("Open records")}</Button>}
+    </div>,
+    properties: <div className="grid content-start gap-3 p-4">
+      <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Properties")}</h2><Button size="sm" onClick={addField}><Plus />{t("Add a property")}</Button></div>
+      <table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted"><th className="px-2 py-1 font-medium">{t("Title")}</th><th className="px-2 py-1 font-medium">{t("Name")}</th><th className="px-2 py-1 font-medium">{t("Type")}</th><th className="px-2 py-1 font-medium">{t("Required")}</th><th className="px-2 py-1 font-medium">{t("Shared property")}</th></tr></thead>
+        <tbody>{process.fields.map((f, at) => <tr key={`${f.name}:${at}`} aria-selected={chosen?.kind === "field" && chosen.at === at} className={cn("cursor-pointer border-t border-border hover:bg-row-hover", chosen?.kind === "field" && chosen.at === at && "bg-row-selected")} onClick={() => choose({ kind: "field", at })}>
+          <td className="px-2 py-1.5">{f.title || f.name}</td><td className="px-2 py-1.5 font-mono text-xs">{f.name}</td><td className="px-2 py-1.5">{t(f.type)}{f.type === "reference" && f.ref ? ` → ${f.ref}` : ""}</td><td className="px-2 py-1.5">{f.required ? "✓" : ""}</td><td className="px-2 py-1.5 text-xs text-muted">{f.property ? assetBindingKey(f.property) : ""}</td>
+        </tr>)}</tbody></table>
+      {!process.fields.length && <p className="text-sm text-muted">{t("No properties yet. Add one to describe the record.")}</p>}
+    </div>,
+    links: <div className="grid content-start gap-4 p-4">
+      <div className="grid gap-2"><h2 className="text-sm font-semibold">{t("References from this object")}</h2>
+        {references.length ? <ul className="divide-y divide-border rounded-md border border-border">{references.map((f) => <li key={f.name}><Button variant="row" type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-row-hover" onClick={() => choose({ kind: "field", at: process.fields.indexOf(f) }, "links")}><Link2 className="size-4 text-muted" /><span className="min-w-0 flex-1">{f.title || f.name}</span><span className="font-mono text-xs text-muted">→ {f.ref ?? t("unset")}</span></Button></li>)}</ul> : <p className="text-sm text-muted">{t("No reference properties. Add a property of type reference to link records.")}</p>}
+      </div>
+      <div className="grid gap-2"><h2 className="text-sm font-semibold">{t("Objects that reference this one")}</h2>
+        {incoming.length ? <ul className="divide-y divide-border rounded-md border border-border">{incoming.map((entity) => <li key={entity.type} className="flex items-center gap-2 px-3 py-2 text-sm"><Boxes className="size-4 text-muted" /><span className="min-w-0 flex-1">{entity.title}</span><span className="font-mono text-xs text-muted">{entity.type}</span></li>)}</ul> : <p className="text-sm text-muted">{t("Nothing references this object yet.")}</p>}
+      </div>
+      <Button className="w-fit" size="sm" onClick={() => open({ view: "link-type" })}>{t("Manage link types")}</Button>
+    </div>,
+    actions: <div className="grid content-start gap-3 p-4">
+      <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Action types")}</h2><Button size="sm" disabled={!process.states.length} onClick={() => { addAction(); }}><Plus />{t("Add an action")}</Button></div>
+      {!process.states.length && <p className="text-sm text-muted">{t("Add a lifecycle state first: every action starts from a state.")}</p>}
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{process.actions.map((a, at) => <Button variant="row" key={`${a.name}:${at}`} type="button" aria-pressed={chosen?.kind === "action" && chosen.at === at} onClick={() => choose({ kind: "action", at })}
+        className={cn("grid gap-1 rounded-md border p-3 text-left hover:border-primary", chosen?.kind === "action" && chosen.at === at ? "border-primary bg-row-selected" : "border-border")}>
+        <span className="flex items-center gap-2 text-sm font-medium"><Zap className="size-4 text-primary" /><span className="min-w-0 flex-1 truncate">{a.title || a.name}</span></span>
+        <span className="text-[11px] text-muted">{a.from.map((s) => process.states.find((x) => x.name === s)?.title ?? s).join(", ") || t("any state")} → {a.to ? process.states.find((s) => s.name === a.to)?.title ?? a.to : a.toInput ? t("chosen by input") : t("same state")}</span>
+        <span className="text-[11px] text-muted">{t("{inputs} parameters · {rules} rules · {conditions} criteria", { inputs: a.inputs?.length ?? 0, rules: (a.sets?.length ?? 0) + (a.creates?.length ?? 0), conditions: a.conditions?.length ?? 0 })}</span>
+      </Button>)}</div>
+    </div>,
+    lifecycle: <div className="min-h-0 flex-1 overflow-auto p-3"><ProcessGraph key={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} /></div>,
+    permissions: <div className="grid content-start gap-3 p-4">
+      <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Who may do what")}</h2><Button size="sm" onClick={addAccess}><Plus />{t("Add a role")}</Button></div>
+      <table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted"><th className="px-2 py-1 font-medium">{t("Role")}</th><th className="px-2 py-1 font-medium">{t("Read")}</th><th className="px-2 py-1 font-medium">{t("Create")}</th><th className="px-2 py-1 font-medium">{t("Edit")}</th><th className="px-2 py-1 font-medium">{t("Archive")}</th></tr></thead>
+        <tbody>{process.access.map((a, at) => <tr key={`${a.role}:${at}`} className={cn("border-t border-border", chosen?.kind === "access" && chosen.at === at && "bg-row-selected")}>
+          <td className="px-2 py-1.5"><Button variant="row" type="button" className="font-medium hover:underline" onClick={() => choose({ kind: "access", at })}>{a.role}</Button></td>
+          <td className="px-2 py-1.5"><Select value={a.read} onChange={(e) => change({ ...process, access: process.access.map((x, i) => i === at ? { ...x, read: e.target.value as Access["read"] } : x) })}><option value="all">{t("all")}</option><option value="own">{t("own")}</option><option value="none">{t("none")}</option></Select></td>
+          {(["create", "edit", "archive"] as const).map((key) => <td key={key} className="px-2 py-1.5"><Checkbox checked={!!a[key]} onChange={(checked) => change({ ...process, access: process.access.map((x, i) => i === at ? { ...x, [key]: checked } : x) })}>{""}</Checkbox></td>)}
+        </tr>)}</tbody></table>
+      {!process.access.length && <p className="text-sm text-muted">{t("No roles yet. Without roles only builders see these records.")}</p>}
+    </div>,
+    preview: <div className="min-h-0 flex-1 overflow-auto p-3"><Preview object={object} process={process} action={action} /></div>,
+  };
+  return <Workbench storageKey="object-type" crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }]} title={object.title}
+    status={<DraftStatus state={object.state} problems={issues.length} />} saving={savingState(dirty, busy, refused)}
+    history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setChosen(undefined); }, redo: () => { session.redo(); setChosen(undefined); } }}
+    actions={<PublishMenu type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "object-type", params: { id } }} />}
+    left={{ label: t("Object structure"), content: structure }}
+    right={{ label: t("Object inspector"), content: inspector }}
+    dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
+    {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
+    <div role="tablist" aria-label={t("Object sections")} className="flex shrink-0 gap-1 overflow-x-auto border-b border-border px-3 pt-2">
+      {tabs.map((item) => <Button variant="row" key={item.id} type="button" role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}
+        className={cn("whitespace-nowrap rounded-t border-b-2 px-3 py-1.5 text-sm", tab === item.id ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}>{item.title}</Button>)}
     </div>
-  );
+    <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[tab]}</fieldset>
+  </Workbench>;
 }
 
 /** The lifecycle is the semantic source. Canvas edges only edit its From/To declarations. */
@@ -332,16 +380,6 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
   </div>;
 }
 
-function FieldsOutline({ fields, chosen, onChoose, onAdd }: { fields: Field[]; chosen: Chosen; onChoose: (c: Chosen) => void; onAdd: () => void }) {
-  return <Card className="mb-3 grid gap-2 p-3">
-    <div className="flex items-center justify-between text-xs font-semibold text-muted">{t("Fields")}
-      <Button size="sm" variant="ghost" onClick={onAdd}><Plus className="size-3" />{t("Add a field")}</Button></div>
-    <ul className="grid gap-1">{fields.map((f, at) => <li key={`${f.name}:${at}`}>
-      <Button size="sm" variant="ghost" className={cn("w-full justify-start", chosen?.kind === "field" && chosen.at === at && "bg-row-selected")}
-        aria-pressed={chosen?.kind === "field" && chosen.at === at} onClick={() => onChoose({ kind: "field", at })}>{f.title || f.name} <span className="text-muted">· {t(f.type)}</span></Button>
-    </li>)}</ul>
-  </Card>;
-}
 
 function FieldProperties({ field, onChange, onRemove }: { field: Field; onChange: (patch: Partial<Field>) => void; onRemove: () => void }) {
   const {definitions}=useHost();
@@ -363,48 +401,6 @@ function FieldProperties({ field, onChange, onRemove }: { field: Field; onChange
 }
 
 /** The left pane: the states in order (a new record starts in the first), then the actions. */
-function Outline({ process, chosen, onChoose, onAddState, onAddAction, onChange }: {
-  process: Process; chosen: Chosen; onChoose: (c: Chosen) => void; onAddState: () => void; onAddAction: () => void; onChange: (p: Process) => void;
-}) {
-  const move = <T,>(list: T[], i: number, by: number) => {
-    const next = [...list];
-    const [x] = next.splice(i, 1);
-    next.splice(Math.max(0, Math.min(next.length, i + by)), 0, x!);
-    return next;
-  };
-  const row = (kind: "state" | "action", label: string, i: number, list: unknown[], set: (next: unknown[]) => void) => {
-    const inHand = chosen?.kind === kind && chosen.at === i;
-    return (
-      <li key={`${kind}${i}`}>
-        <div className={cn("flex items-center gap-0.5 rounded-md border px-1 py-0.5", inHand ? "border-primary bg-row-selected" : "border-border")}>
-          <Button variant="ghost" size="sm" className="min-w-0 flex-1 justify-start" aria-pressed={inHand} onClick={() => onChoose({ kind, at: i })}>
-            <span className="truncate">{label}</span>
-          </Button>
-          <Button size="sm" variant="ghost" aria-label={t("Move up")} onClick={() => { set(move(list, i, -1)); onChoose(undefined); }}><ArrowUp className="size-3" /></Button>
-          <Button size="sm" variant="ghost" aria-label={t("Move down")} onClick={() => { set(move(list, i, 1)); onChoose(undefined); }}><ArrowDown className="size-3" /></Button>
-          <Button size="sm" variant="ghost" aria-label={t("Remove {name}", { name: label })} onClick={() => { set(list.filter((_, at) => at !== i)); onChoose(undefined); }}><Trash2 className="size-3" /></Button>
-        </div>
-      </li>
-    );
-  };
-  return (
-    <Card className="grid content-start gap-3 p-3">
-      <div className="grid gap-1">
-        <div className="flex items-center justify-between text-xs font-semibold text-muted">{t("States")}
-          <Button size="sm" variant="ghost" onClick={onAddState}><Plus className="size-3" />{t("Add a state")}</Button></div>
-        <ul className="grid gap-1">{process.states.map((s, i) => row("state", s.title || s.name, i, process.states, (next) => onChange({ ...process, states: next as State[] })))}</ul>
-        {process.states.length === 0 ? <p className="text-xs text-muted">{t("Without states its records have no status and no actions.")}</p>
-          : <p className="text-xs text-muted">{t("A new record starts in the first.")}</p>}
-      </div>
-      <div className="grid gap-1 border-t border-border pt-3">
-        <div className="flex items-center justify-between text-xs font-semibold text-muted">{t("Actions")}
-          <Button size="sm" variant="ghost" disabled={process.states.length === 0} onClick={onAddAction}><Plus className="size-3" />{t("Add an action")}</Button></div>
-        <ul className="grid gap-1">{process.actions.map((a, i) => row("action", a.title || a.name, i, process.actions, (next) => onChange({ ...process, actions: next as Action[] })))}</ul>
-        {process.actions.length === 0 && <p className="text-xs text-muted">{t("Add the steps people take on a record.")}</p>}
-      </div>
-    </Card>
-  );
-}
 
 /** The middle pane: the status bar a record will show, and the chosen action's form, as people meet them. */
 function Preview({ object, process, action }: { object: ObjectRecord; process: Process; action?: Action }) {
@@ -622,32 +618,6 @@ function Rows<T>({ title, add, items, make, onChange, row }: {
 const reads = { all: () => t("Every record"), own: () => t("Only those they created"), none: () => t("Not at all") };
 
 /** The left pane's third part: the roles of the builder app this object names, and what each may do. */
-function AccessOutline({ access, chosen, onChoose, onAdd, onRemove }: {
-  access: Access[]; chosen: Chosen; onChoose: (c: Chosen) => void; onAdd: () => void; onRemove: (i: number) => void;
-}) {
-  return (
-    <Card className="mt-3 grid content-start gap-1 p-3">
-      <div className="flex items-center justify-between text-xs font-semibold text-muted">{t("Who may do what")}
-        <Button size="sm" variant="ghost" onClick={onAdd}><Plus className="size-3" />{t("Add a role")}</Button></div>
-      <ul className="grid gap-1">
-        {access.map((a, i) => {
-          const inHand = chosen?.kind === "access" && chosen.at === i;
-          return (
-            <li key={i} className={cn("flex items-center gap-0.5 rounded-md border px-1 py-0.5", inHand ? "border-primary bg-row-selected" : "border-border")}>
-              <Button variant="ghost" size="sm" className="min-w-0 flex-1 justify-start" aria-pressed={inHand} onClick={() => onChoose({ kind: "access", at: i })}>
-                <span className="truncate font-mono">{a.role}</span><span className="ml-auto truncate pl-1 text-[10px] text-muted">{reads[a.read]()}</span>
-              </Button>
-              <Button size="sm" variant="ghost" aria-label={t("Remove {name}", { name: a.role })} onClick={() => onRemove(i)}><Trash2 className="size-3" /></Button>
-            </li>
-          );
-        })}
-      </ul>
-      <p className="text-xs text-muted">{access.length === 0
-        ? t("None named: everyone with a role in the builder app reads and changes every record.")
-        : t("A role not named here does not see the object. The builder always sees and does everything. Roles are granted in Settings → Members.")}</p>
-    </Card>
-  );
-}
 
 /** The right pane for a role: which records it reads, what it may do, and the fields only it reads or sets. */
 function AccessProperties({ access, fields, onChange, onFields }: {
@@ -694,4 +664,9 @@ function AccessProperties({ access, fields, onChange, onFields }: {
       </fieldset>}
     </Card>
   );
+}
+
+/** The action type editor (ADR-0053 §6): the object workbench opened on one action, with its form and preview. */
+export function ActionTypeEditor({ id, action }: { id: string; action?: string }) {
+  return <ObjectTypeEditor key={`${id}:${action ?? ""}`} id={id} initialAction={action} initialTab={action ? "actions" : "actions"} />;
 }

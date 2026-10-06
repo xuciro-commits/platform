@@ -21,7 +21,7 @@ type Request = Api.ApprovalRequest;
 
 function StudioReference({ application, children }: { application?: string; children: ReactNode }) {
   const { open } = useWorkspace();
-  return <div className="grid gap-3">{application && <div><Button onClick={() => open({ view: "application", params: { id: application } })}>{t("Back to application")}</Button></div>}{children}</div>;
+  return <div className="grid gap-3">{application && <div><Button onClick={() => open({ view: "project", params: { id: application } })}>{t("Back to project")}</Button></div>}{children}</div>;
 }
 
 const requestStates = defineStatuses({ pending: { label: t("Pending"), tone: "warning" }, approved: { label: t("Approved"), tone: "success" },

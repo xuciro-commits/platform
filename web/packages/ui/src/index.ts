@@ -13,6 +13,7 @@ export { RetroButton, type RetroButtonProps } from "./primitives/retroButton";
 export { Input, Select, Textarea } from "./primitives/input";
 export { Card, Panel } from "./primitives/card";
 export { EditorWorkbench } from "./layout/EditorWorkbench";
+export { Workbench, ProblemList, StructureRow, PanelSection, type WorkbenchCrumb, type WorkbenchTab, type WorkbenchPanel, type WorkbenchHistory, type WorkbenchSaving, type WorkbenchProblem } from "./layout/Workbench";
 export { ContentTabs } from "./layout/ContentTabs";
 export {validChoiceInput} from "./components/choice";
 export {Separator} from "./primitives/separator";

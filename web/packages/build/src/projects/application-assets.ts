@@ -9,8 +9,8 @@ export function applicationAssetRef(kind: string, name: string): Api.AssetRef {
 export const applicationAssetKey = (ref: Api.AssetRef) => `${ref.app}/${ref.kind}/${ref.name}`;
 
 export const applicationAssetEditors = [
-  { kind: "object", type: "build.object", view: "process", label: "Objects" },
-  { kind: "flow", type: "build.process", view: "workflow", label: "Workflows" },
+  { kind: "object", type: "build.object", view: "object-type", label: "Objects" },
+  { kind: "flow", type: "build.process", view: "flow", label: "Flows" },
   { kind: "query", type: "build.query", view: "query", label: "Queries" },
   { kind: "function", type: "build.function", view: "function", label: "AI functions" },
   { kind: "compute", type: "build.code", view: "code", label: "Code functions" },

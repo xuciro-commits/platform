@@ -1,3 +1,4 @@
+import { Workbench, ProblemList, StructureRow, PanelSection } from "./layout/Workbench";
 import {CanvasEditor,CanvasRegion,useCanvasGesture,type CanvasModel} from "./layout/CanvasEditor";
 import {ApplicationHeader} from "./layout/ApplicationHeader";
 import {useTheme} from "./theme";
@@ -489,4 +490,14 @@ export function CanvasEditorExample(){
  resize={(id,axis,pixels)=>({[id]:{...sizes[id],[axis]:Math.min(800,Math.max(32,Math.round(pixels)))}})} onResize={next=>setSizes(old=>({...old,...next}))} onResetSize={(id,axis)=>setSizes(old=>({...old,[id]:{...old[id],[axis]:undefined}}))}>
   <div data-canvas-scroll className="overflow-auto p-6"><LayoutRegion><CanvasRegion id="root"><LayoutStack direction="rows">{order.map(id=><LayoutRegion key={id} size={sizes[id]}><CanvasExampleRegion id={id}/></LayoutRegion>)}</LayoutStack></CanvasRegion></LayoutRegion></div>
  </CanvasEditor></div>;
+}
+
+export function WorkbenchExample() {
+  return <div className="h-[28rem]"><Workbench storageKey="catalog-example" crumbs={[{ label: "Project" }, { label: "Module" }]} title="Receiving" saving="saved"
+    history={{ canUndo: true, canRedo: false, undo: () => {}, redo: () => {} }} actions={<Button variant="primary">Publish</Button>}
+    left={{ label: "Structure", tabs: [{ id: "layers", title: "Layers", content: <PanelSection title="Pages"><StructureRow label="Inbound tasks" selected /><StructureRow label="Putaway" depth={1} /></PanelSection> }, { id: "widgets", title: "Widgets", content: <p className="p-3 text-xs">Widget library</p> }] }}
+    right={{ label: "Inspector", tabs: [{ id: "properties", title: "Properties", content: <p className="p-3 text-xs">Properties</p> }, { id: "events", title: "Events", badge: 2, content: <p className="p-3 text-xs">Events</p> }] }}
+    dock={{ label: "Dock", tabs: [{ id: "problems", title: "Problems", badge: 1, content: <ProblemList problems={[{ id: "1", text: "A widget references a missing variable.", subject: "table-1" }]} /> }] }}>
+    <div className="flex flex-1 items-center justify-center text-sm text-muted">Canvas</div>
+  </Workbench></div>;
 }

@@ -1,1 +1,1 @@
-{"revision":"sha256:f3ecd458c29f50d4","owner":"@pkg/build","pages":["build.0.json"],"api":{"source":"web/packages/build/src/index.tsx","symbols":["aiFunctions","automate","code","contributions","default","ontology","releases","workshop"],"types":[]}}
+{"revision":"sha256:b76e32f103035188","owner":"@pkg/build","pages":["build.0.json"],"api":{"source":"web/packages/build/src/index.tsx","symbols":["aiFunctions","automate","code","contributions","default","ontology","releases","workshop"],"types":[]}}

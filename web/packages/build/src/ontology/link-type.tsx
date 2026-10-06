@@ -2,7 +2,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useState } from "react";
 import { useHost, useReadQuery, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
 import { Button, Input, Select, PageHeader, Panel, RecordList, Textarea, t, useUnsavedChanges } from "@platform/ui";
-import { AssetControls } from "../shared/asset-controls";
+import { ResourceControls as AssetControls } from "../shared/workbench";
 import { useDirectInstall } from "../shared/release-profile";
 
 type Draft = {id:string;revision:number;name:string;title:string;description:string;parent:string;child:string;via:string;forward:string;reverse:string;cardinality:string;deletePolicy:string;published?:string;version?:number};

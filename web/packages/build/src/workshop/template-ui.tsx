@@ -32,7 +32,7 @@ export function StudioTemplates({ initial }: { initial?: string }) {
       // page description and is not a protected version or execution binding.
       const description = `${t(template.summary)}\n${t("Created from template {template} (revision {revision}).", { template: template.id, revision: template.revision })}`;
       if (await host.decide("build.page.create", { type: "build.page", id }, recordHandlingDraft(object, name, title.trim(), fields, actions, description),
-        { expectedRevision: 0, onRefused: setError })) open({ view: "compose", params: { id } });
+        { expectedRevision: 0, onRefused: setError })) open({ view: "module", params: { page: id } });
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : t("The draft could not be created. Try again."));
     } finally { setBusy(false); }

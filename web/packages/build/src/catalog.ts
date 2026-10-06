@@ -33,19 +33,19 @@ export const entries: CatalogEntry[] = [
     id: "scenario/object-studio", owner: "@pkg/build", name: "Object design workbench", summary: "Inspect and edit fields, lifecycle states, transitions and access through the existing object designer.",
     layer: 5, authority: "example", maturity: "recommended", scope: "platform", uses: ["reference"], tags: ["object", "lifecycle", "fields", "access", "studio"],
     source: "web/packages/build/src/ontology/process.tsx", example: "ObjectStudioExample", dependencies: ["ui/block-canvas", "app/record-actions"],
-    constraints: ["This is the existing ProcessEditor with synthetic local data. Save and publish are refused in Catalog.", "A tenant object must be created, tested and published in the connected Application Studio.", "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions."],
+    constraints: ["This is the object type workbench with synthetic local data. Save and publish are refused in Catalog.", "A tenant object must be created, tested and published in the connected Application Studio.", "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions."],
   },
   {
-    id: "scenario/application-studio", owner: "@pkg/build", name: "Application release workbench", summary: "Create and organize saved pages and shared resources, then review their joint application candidate with the original editors.",
+    id: "scenario/application-studio", owner: "@pkg/build", name: "Workshop module workbench", summary: "The project's module: its pages, header and navigation, with the page editor inside and a live preview.",
     layer: 5, authority: "example", maturity: "recommended", scope: "platform", uses: ["reference"], tags: ["application", "resources", "release", "navigation", "studio"],
-    source: "web/packages/build/src/projects/application.tsx", example: "ApplicationStudioExample", dependencies: ["ui/panels", "app/record-actions"],
+    source: "web/packages/build/src/workshop/ModuleWorkbench.tsx", example: "ApplicationStudioExample", dependencies: ["ui/panels", "app/record-actions"],
     constraints: ["The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.", "Application resources refer to original owners; membership does not grant access. Release review freezes published dependencies using the existing candidate path."],
   },
   {
     id: "scenario/logic-studio", owner: "@pkg/build", name: "Logic design workbench", summary: "Compose typed platform blocks with the existing native workflow editor and shared canvas.",
     layer: 5, authority: "example", maturity: "recommended", scope: "platform", uses: ["reference"], tags: ["workflow", "logic", "block", "canvas", "studio"],
     source: "web/packages/build/src/automate/workflow.tsx", example: "LogicStudioExample", dependencies: ["ui/block-canvas", "app/compute-call", "app/agent-run"],
-    constraints: ["The local example demonstrates a payload and result flow in the original WorkflowEditor; it does not execute a process.", "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs."],
+    constraints: ["The local example demonstrates a payload and result flow in the flow workbench; it does not execute a process.", "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs."],
   },
 ];
 export const api = ["contributions", "default", "ontology", "workshop", "automate", "aiFunctions", "code", "releases"];

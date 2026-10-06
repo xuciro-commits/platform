@@ -1,17 +1,16 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import {FlowImportDialog} from "../workshop/module-import/FlowImportDialog";
-import { AssetControls } from "../shared/asset-controls";
+import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../shared/workbench";
 import {useDraftSession} from "../session/DraftSession";
 import {workflowInputs,workflowRunMatches} from "./workflow-session";
 // Logic Studio edits the one build.process definition. Its native Flow owner
 // compiles, executes and accepts outcomes; React Flow remains presentation.
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
-import { Button, Disclosure, EditorWorkbench, Input, NodeCanvas, PageHeader, Panel, RecordList, Tag, canvasNodeHeight, canvasNodeWidth, canvasPlacement, layout, t, useUnsavedChanges,
-  type BlockStatus, type CanvasAddContext, type CanvasEdge, type CanvasNode, type NodeCatalog, type NodeKind, type NodePort } from "@platform/ui";
-import { Blocks, Braces, Brain, ChevronDown, ChevronUp, Database, GitBranch, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Plus, Redo2, Search, Settings2, Undo2, Workflow, Zap } from "lucide-react";
+import { ActionMenu, Button, Input, NodeCanvas, PageHeader, Panel, ProblemList, RecordList, StructureRow, Workbench, canvasNodeHeight, canvasNodeWidth, canvasPlacement, layout, t, useUnsavedChanges,
+  type BlockStatus, type CanvasAddContext, type WorkbenchProblem, type CanvasEdge, type CanvasNode, type NodeCatalog, type NodeKind, type NodePort } from "@platform/ui";
+import { Blocks, Braces, Brain, Database, GitBranch, MoreHorizontal, Play, Plus, Search, Settings2, Workflow, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useDirectInstall } from "../shared/release-profile";
 import {useQueries} from "@tanstack/react-query";
 import { DataField, JSONEditor, WorkflowFormProblems, schemaIssue } from "./workflow-binding";
 import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
@@ -103,14 +102,14 @@ function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capabi
   return { ...root, id: `node:${step.name}`, addable: false, inputs, outputs };
 }
 
-export function Workflows() {
+export function Flows() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  return <div className="grid gap-3"><PageHeader title={t("Logic Studio")} description={t("Assemble native capabilities, typed code, human tasks and AI in one workflow.")}
-    actions={role("build") === "builder" && <Button onClick={() => open({ view: "workflow", params: { id: "new" } })}>{t("New workflow")}</Button>} />
-    <RecordList source={source} type="build.process" fields={["title", "name", "object", "version"]} onOpen={(record) => open({ view: "workflow", params: { id: record.id } })} /></div>;
+  return <div className="grid gap-3 p-4"><PageHeader title={t("Flows")} description={t("Branching logic: native capabilities, typed code, human tasks and AI on one map. For a plain trigger → effects rule, create an automation instead.")}
+    actions={role("build") === "builder" && <Button onClick={() => open({ view: "flow", params: { id: "new" } })}>{t("New flow")}</Button>} />
+    <RecordList source={source} type="build.process" fields={["title", "name", "object", "version"]} onOpen={(record) => open({ view: "flow", params: { id: record.id } })} /></div>;
 }
 
-export function WorkflowEditor({ id }: { id: string }) {
+export function FlowEditor({ id }: { id: string }) {
   const { decide, role, client, entities } = useHost(), { open, close } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`);
   const catalogQuery = useReadQuery<Capability[]>("/v1/capabilities");
@@ -121,8 +120,7 @@ export function WorkflowEditor({ id }: { id: string }) {
   const [chosen, setChosen] = useState("");
   const [importingFlow,setImportingFlow]=useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const [leftOpen, setLeftOpen] = useState(true), [rightOpen, setRightOpen] = useState(true), [dockOpen, setDockOpen] = useState(false);
-  const [dock, setDock] = useState<"run" | "history" | "test" | "release">("run");
+  const [dock, setDock] = useState<"problems" | "run" | "history" | "test" | "release">("problems");
   const [mountedDocks, setMountedDocks] = useState<Partial<Record<typeof dock, true>>>({});
   const [search, setSearch] = useState(""), [filter, setFilter] = useState("all");
   const [run, setRun] = useState<WorkflowRun>();
@@ -137,7 +135,7 @@ export function WorkflowEditor({ id }: { id: string }) {
     const next = { ...previous }; if (problem) next[key] = problem; else delete next[key]; return next;
   }), []);
   useEffect(()=>{const saved=query.data?.record;if(saved&&saved.revision>=baseRevision.current&&!dirty&&!busy&&loaded.current!==`${saved.id}:${saved.revision}`){session.load(saved);baseRevision.current=saved.revision;loaded.current=`${saved.id}:${saved.revision}`;}},[query.data,dirty,busy,session.load]);
-  useEffect(() => { if (dockOpen) setMountedDocks((previous) => previous[dock] ? previous : { ...previous, [dock]: true }); }, [dock, dockOpen]);
+  useEffect(() => { setMountedDocks((previous) => previous[dock] ? previous : { ...previous, [dock]: true }); }, [dock]);
   const change = useCallback((edit: Edit) => {if(lock.current)return;session.edit(edit);setError("");setValidation(undefined);},[session.edit]);
   const installed=useMemo(()=>{try{return query.data?.record?.published?JSON.parse(query.data.record.published) as WorkflowDraft:undefined;}catch{return undefined;}},[query.data?.record?.published]);
   const matchingRun=query.data?.record?.revision===baseRevision.current&&workflowRunMatches(draft,installed,run,dirty);
@@ -208,7 +206,7 @@ export function WorkflowEditor({ id }: { id: string }) {
         nodes.map((item) => ({ position: item.position, width: canvasNodeWidth, height: canvasNodeHeight(catalog.find((kind) => kind.id === item.kind)!) })));
       return { ...current, steps: [...steps, step], layout: { ...current.layout, [step.name]: position } };
     });
-    setChosen(step.name); setRightOpen(true);
+    setChosen(step.name);
   };
   const insert = (edge: CanvasEdge, kind: string, context: CanvasAddContext) => {
     const capability = capabilities.find((item) => capabilityKey(item) === kind); if (!capability) return;
@@ -217,7 +215,7 @@ export function WorkflowEditor({ id }: { id: string }) {
     step.next = edge.target;
     change((current) => ({ ...current, steps: [...current.steps.map((item) => item.name === edge.source ? withPath(item, edge.sourcePort, step.name) : item), step],
       layout: { ...current.layout, ...context.positions, [step.name]: context.position } }));
-    setChosen(step.name); setRightOpen(true);
+    setChosen(step.name);
   };
   const connect = (connection: { source: string; sourceHandle: string | null; target: string; targetHandle: string | null }) => {
     if ((connection.targetHandle?.startsWith("input:") || connection.targetHandle?.startsWith("binding:")) && connection.sourceHandle) {
@@ -258,7 +256,7 @@ export function WorkflowEditor({ id }: { id: string }) {
     baseRevision.current=revision+1;loaded.current=`${target}:${revision+1}`;
     if(!submitted.id){
       session.saved(submitted,{...submitted,id:target,revision:1});markSaved();
-      open({view:"workflow",params:{id:target}});close({view:"workflow",params:{id}});return target;
+      open({view:"flow",params:{id:target}});close({view:"flow",params:{id}});return target;
     }
     const fresh=await query.refetch();
     const confirmed=fresh.isSuccess&&fresh.data?.record?.revision===revision+1?fresh.data.record:undefined;
@@ -270,7 +268,6 @@ export function WorkflowEditor({ id }: { id: string }) {
     if (!response.ok) { setError(apiErrorMessage(response.body) ?? t("Workflow validation failed.")); return; }
     setValidation(response.body);
   };
-  const directInstall = useDirectInstall();
   const publish = async () => {
     if(!synchronized)return;
     if(dirty&&!await save())return;
@@ -285,7 +282,7 @@ export function WorkflowEditor({ id }: { id: string }) {
   const start = async () => {
     const key = runKey || crypto.randomUUID(); setRunKey(key);
     if(!synchronized)return;
-    if (await decide("build.process.run", { type: "build.process", id: draft.id }, { key, input: JSON.stringify(runInput) }, { quiet: true, onRefused: setError })) { setDock("history"); setDockOpen(true); }
+    if (await decide("build.process.run", { type: "build.process", id: draft.id }, { key, input: JSON.stringify(runInput) }, { quiet: true, onRefused: setError })) setDock("history");
   };
   const rename = (name: string) => {
     if (!node || !/^[a-z][a-z0-9]*$/.test(name) || draft.steps.some((step) => step.name === name && step !== node)) return;
@@ -297,58 +294,72 @@ export function WorkflowEditor({ id }: { id: string }) {
   const filtered = (catalogQuery.data??[]).filter((capability) => (filter === "all" || filter === "control" ? filter === "all" || capability.ref.kind === "control" : filter === "code" ? capability.kind === "compute" : capability.ref.kind !== "control" && capability.kind !== "compute")
     && [capability.title, t(capability.title), capability.description, capability.ref.app, capability.ref.name].some((value) => value.toLocaleLowerCase().includes(search.toLocaleLowerCase())));
   const groups = [...new Set(filtered.map((capability) => capability.group))];
-  if (role("build") !== "builder") return <PageHeader title={t("Logic Studio")} description={t("Only a builder can edit workflows.")} />;
-  if (id !== "new" && !draft.id) return <PageHeader title={t("Logic Studio")} description={query.isError ? t("The workflow could not be loaded.") : t("Loading…")} />;
-
-  return <WorkflowFormProblems.Provider value={reportProblem}><div className="flex min-h-0 flex-col gap-2" tabIndex={-1} onKeyDown={event=>{if(!(event.metaKey||event.ctrlKey))return;if(event.key.toLowerCase()==="s"){event.preventDefault();if(dirty&&!busy&&!importingFlow&&!brokenForm.length)void perform(save);}}}>
-    <PageHeader title={draft.title || t("New workflow")} description={t("Logic Studio · Native flow, one capability library")}
-      actions={<div className="flex items-center gap-1"><Tag label={dirty ? t("Unsaved") : draft.version ? `v${draft.version}` : t("Draft")} tone={dirty ? "warning" : draft.version ? "success" : "neutral"} />
-        <Button variant="ghost" onClick={() => open({ view: "studio" })}>{t("Studio overview")}</Button></div>} />
-    <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface px-2 py-1.5" role="toolbar" aria-label={t("Workflow actions")}>
-      <Button variant="ghost" onClick={() => setLeftOpen(!leftOpen)} aria-label={t("Toggle block library")}>{leftOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}</Button>
-      <Button variant="ghost" aria-label={t("Undo")} disabled={busy||!session.canUndo} onClick={()=>{session.undo();setValidation(undefined);}}><Undo2/></Button>
-      <Button variant="ghost" aria-label={t("Redo")} disabled={busy||!session.canRedo} onClick={()=>{session.redo();setValidation(undefined);}}><Redo2/></Button>
-      <Button variant="ghost" onClick={() => { setChosen(""); setRightOpen(true); }}><Settings2 className="mr-1 size-3.5" />{t("Settings")}</Button>
-      {draft.id && <Button disabled={busy} variant="ghost" onClick={() => confirmDiscard(() => void perform(async () => { const fresh = await query.refetch(); if (fresh.isSuccess&&fresh.data?.record) { markSaved(); session.load(fresh.data.record);baseRevision.current=fresh.data.record.revision;loaded.current=`${fresh.data.record.id}:${fresh.data.record.revision}`; setError(""); setValidation(undefined); } }))}>{t("Reload saved workflow")}</Button>}
-<AssetControls type="build.process" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "workflow", params: { id } }} />
-      <Button disabled={busy||!!draft.id} onClick={()=>setImportingFlow(true)}>{t("Import Workshop flow")}</Button>
-      <Button disabled={busy || brokenForm.length > 0 || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save workflow")}</Button>
-      <Button disabled={busy || brokenForm.length > 0} onClick={() => void perform(check)}>{t("Validate workflow")}</Button>
-      {directInstall && <Button disabled={busy || !synchronized || !draft.id || brokenForm.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>}
-      <span className="mx-1 h-5 w-px bg-border" />
-      <Button variant="primary" disabled={busy || !synchronized || !installed?.manual || dirty} onClick={() => { setDock("run"); setDockOpen(true); }}><Play className="mr-1 size-3" />{t("Run")}</Button>
-      <Button variant="ghost" onClick={() => { setDock("history"); setDockOpen(true); }}>{t("Runs")}</Button>
-      <Button variant="ghost" disabled={!draft.id || dirty || !synchronized} onClick={() => { setDock("release"); setDockOpen(true); }}>{t("Release")}</Button>
-      <Button variant="ghost" className="ml-auto" onClick={() => setRightOpen(!rightOpen)} aria-label={t("Toggle inspector")}>{rightOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}</Button>
+  if (role("build") !== "builder") return <Workbench storageKey="flow" title={t("Flow")}><WorkbenchMessage>{t("Only a builder can edit flows.")}</WorkbenchMessage></Workbench>;
+  if (id !== "new" && !draft.id) return <Workbench storageKey="flow" title={t("Flow")}><WorkbenchMessage>{query.isError ? t("The flow could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
+  const problems: WorkbenchProblem[] = [
+    ...Object.entries(formProblems).filter(([, problem]) => problem).map(([key, problem]) => ({ id: `form:${key}`, text: problem, subject: key })),
+    ...(validation && !validation.valid ? validation.issues.map((issue, i) => ({ id: `compile:${i}`, text: issue.message })) : []),
+    ...(error ? [{ id: "error", text: error }] : []),
+    ...(!synchronized ? [{ id: "sync", severity: "warning" as const, text: t("The current flow revision differs from this editing session. Reload before running or reviewing a release.") }] : []),
+    ...(catalogQuery.isError ? [{ id: "catalog", text: t("The capability library could not be loaded."), locate: () => void catalogQuery.refetch() }] : []),
+  ];
+  const library = <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="border-b border-border p-2"><div className="relative"><Search className="pointer-events-none absolute left-2 top-2 size-3.5 text-muted" /><Input className="pl-7" aria-label={t("Search capabilities")} placeholder={t("Search capabilities")} value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+      <div className="mt-2 flex gap-1">{["all", "native", "code", "control"].map((kind) => <Button variant="ghost" key={kind} type="button" className={`rounded px-2 py-1 text-[10px] ${filter === kind ? "bg-row-selected text-primary" : "text-muted hover:bg-row-hover"}`} onClick={() => setFilter(kind)}>{t(({ all: "All", native: "Native", code: "Code", control: "Logic" })[kind as "all"])}</Button>)}</div>
     </div>
-    <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
-    {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
-    {importingFlow&&<FlowImportDialog name={draft.name||"importedflow"} capabilities={capabilities} onClose={()=>setImportingFlow(false)} onApply={next=>{change(next);setChosen("");setImportingFlow(false);setFormProblems({});}}/>}
-    {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
-    {validation && <Panel role="status" className={`text-xs ${validation.valid ? "text-success" : "text-danger"}`}>{validation.valid ? t("The native compiler accepted this draft.") : validation.issues.map((issue) => issue.message).join(" ")}</Panel>}
-    {!synchronized&&<Panel role="alert">{t("The current workflow revision differs from this editing session. Reload before running or reviewing a release.")}</Panel>}
-    {run&&!matchingRun&&<Panel role="status" className="text-xs text-muted">{t("This run belongs to a different saved definition or the draft has changed. Inspect its recorded version in Executions.")}</Panel>}
-    {catalogQuery.isError && <Panel role="alert" className="text-xs text-danger">{t("The capability library could not be loaded.")} <Button onClick={() => void catalogQuery.refetch()}>{t("Retry")}</Button></Panel>}
-    <fieldset disabled={busy} className="min-w-0 border-0 p-0"><EditorWorkbench className="lg:h-[clamp(520px,calc(100vh-220px),900px)]" leftLabel={t("Block library")} centerLabel={t("Workflow map")} rightLabel={t("Workflow inspector")}
-      left={leftOpen && <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        <div className="border-b border-border p-3"><h3 className="mb-2 text-xs font-semibold">{t("Block library")}</h3><div className="relative"><Search className="pointer-events-none absolute left-2 top-2 size-3.5 text-muted" /><Input className="pl-7" aria-label={t("Search capabilities")} placeholder={t("Search capabilities")} value={search} onChange={(event) => setSearch(event.target.value)} /></div>
-          <div className="mt-2 flex gap-1">{["all", "native", "code", "control"].map((kind) => <Button variant="ghost" key={kind} type="button" className={`rounded px-2 py-1 text-[10px] ${filter === kind ? "bg-row-selected text-primary" : "text-muted hover:bg-row-hover"}`} onClick={() => setFilter(kind)}>{t(({ all: "All", native: "Native", code: "Code", control: "Logic" })[kind as "all"])}</Button>)}</div>
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto pb-2">{groups.map((group) => <div key={group}><h4 className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted">{t(group)}</h4>{filtered.filter((capability) => capability.group === group).map((capability) => <Button variant="row" key={capabilityKey(capability)} type="button" draggable className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-row-selected"
-          onClick={() => add(capabilityKey(capability))} title={capability.description} onDragStart={(event) => { event.dataTransfer.setData("application/platform-block", capabilityKey(capability)); event.dataTransfer.effectAllowed = "copy"; }}>
-          <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded border border-border text-primary">{icons[capability.kind] ?? <Blocks className="size-3.5" />}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{t(capability.title)}</span><span className="block truncate text-[10px] text-muted">{capability.ref.app} · {t(capability.source)}</span></span><Plus className="mt-1 size-3 shrink-0 text-muted" />
-        </Button>)}</div>)}</div>
-        <Disclosure className="max-h-[40%] overflow-auto border-t border-border p-2" defaultOpen summary={<span className="text-xs font-medium">{t("Available data")}</span>}><DataField title={t("Workflow input")} schema={draft.inputSchema} binding={{ source: "input" }} />
-          {draft.steps.filter((step) => step.name !== chosen).map((step) => <DataField key={step.name} title={step.title || step.name} schema={outputSchema(step, draft, capabilities)} binding={{ source: "step", step: step.name }} />)}
-          {draft.object && <DataField title={t("Source record")} binding={{ source: "subject" }} />}
-        </Disclosure>
-      </div>}
-      right={rightOpen && (node ? <WorkflowInspector step={node} steps={draft.steps} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun?run?.outputs?.[node.name]:undefined}
+    <div className="min-h-0 flex-1 overflow-auto pb-2">{groups.map((group) => <div key={group}><h4 className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted">{t(group)}</h4>{filtered.filter((capability) => capability.group === group).map((capability) => <Button variant="row" key={capabilityKey(capability)} type="button" draggable className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-row-selected"
+      onClick={() => add(capabilityKey(capability))} title={capability.description} onDragStart={(event) => { event.dataTransfer.setData("application/platform-block", capabilityKey(capability)); event.dataTransfer.effectAllowed = "copy"; }}>
+      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded border border-border text-primary">{icons[capability.kind] ?? <Blocks className="size-3.5" />}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{t(capability.title)}</span><span className="block truncate text-[10px] text-muted">{capability.ref.app} · {t(capability.source)}</span></span><Plus className="mt-1 size-3 shrink-0 text-muted" />
+    </Button>)}</div>)}</div>
+  </div>;
+  const data = <div className="grid content-start gap-1 p-2"><DataField title={t("Flow input")} schema={draft.inputSchema} binding={{ source: "input" }} />
+    {draft.steps.filter((step) => step.name !== chosen).map((step) => <DataField key={step.name} title={step.title || step.name} schema={outputSchema(step, draft, capabilities)} binding={{ source: "step", step: step.name }} />)}
+    {draft.object && <DataField title={t("Source record")} binding={{ source: "subject" }} />}
+  </div>;
+  const steps = <div className="grid content-start">
+    <StructureRow icon={<Settings2 />} label={draft.title || t("Flow settings")} selected={!chosen} onClick={() => setChosen("")} />
+    {draft.steps.map((step, at) => <StructureRow key={step.name} depth={1} icon={icons[step.kind] ?? <Blocks />} label={step.title || step.name} meta={at === 0 ? t("Entry") : undefined} selected={chosen === step.name} onClick={() => setChosen(step.name)} />)}
+    {!draft.steps.length && <p className="px-2 py-1 text-[11px] text-muted">{t("Drag a block onto the map, or pick one from the library.")}</p>}
+  </div>;
+  return <WorkflowFormProblems.Provider value={reportProblem}>
+    <Workbench storageKey="flow" crumbs={[{ label: t("Automate"), onClick: () => open({ view: "automation" }) }, { label: t("Flows"), onClick: () => open({ view: "flow" }) }]} title={draft.title || t("New flow")}
+      status={<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.filter((p) => p.severity !== "warning").length} />} saving={savingState(dirty, busy, error || undefined)}
+      history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setValidation(undefined); }, redo: () => { session.redo(); setValidation(undefined); } }}
+      actions={<>
+        <Button size="sm" variant="ghost" disabled={busy || brokenForm.length > 0} onClick={() => void perform(check)}>{t("Validate")}</Button>
+        <Button size="sm" variant={dock === "run" ? "primary" : "ghost"} disabled={busy || !synchronized || !installed?.manual || dirty} onClick={() => setDock("run")}><Play />{t("Run")}</Button>
+        <ActionMenu label={t("More flow commands")} icon={<MoreHorizontal />} commands={[
+          { id: "import", label: t("Import Workshop flow…"), disabled: busy || !!draft.id, run: () => setImportingFlow(true) },
+          ...(draft.id ? [{ id: "reload", label: t("Reload saved flow"), disabled: busy, run: () => confirmDiscard(() => void perform(async () => { const fresh = await query.refetch(); if (fresh.isSuccess && fresh.data?.record) { markSaved(); session.load(fresh.data.record); baseRevision.current = fresh.data.record.revision; loaded.current = `${fresh.data.record.id}:${fresh.data.record.revision}`; setError(""); setValidation(undefined); } })) }] : []),
+        ]} />
+        <PublishMenu type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onReview={() => setDock("release")} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "flow", params: { id } }} />
+      </>}
+      onKeyDown={(event) => { if (!(event.metaKey || event.ctrlKey)) return; if (event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy && !importingFlow && !brokenForm.length) void perform(save); } }}
+      left={{ label: t("Flow structure"), tabs: [
+        { id: "steps", title: t("Steps"), badge: draft.steps.length || undefined, content: steps },
+        { id: "blocks", title: t("Blocks"), content: library },
+        { id: "data", title: t("Data"), content: data },
+      ] }}
+      right={{ label: t("Flow inspector"), content: <div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
         onChange={(patch) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === chosen ? { ...step, ...patch } : step) }))} onRename={rename}
-        onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} onClose={() => setRightOpen(false)} />
-        : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} onClose={() => setRightOpen(false)} />)}>
-      <div className="min-h-[32rem] min-w-0 flex-1 lg:min-h-0"><NodeCanvas label={t("Workflow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
-        onSelect={(name) => { setChosen(name); setRightOpen(true); }} onOpen={(name) => { setChosen(name); setRightOpen(true); }} onAdd={add} onInsert={insert} onConnect={connect} onDisconnect={disconnect}
+        onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} onClose={() => setChosen("")} />
+        : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} onClose={() => setChosen("")} />}</div> }}
+      dock={{ label: t("Flow dock"), value: dock, onChange: (next) => setDock(next as typeof dock), tabs: [
+        { id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} empty={validation?.valid ? t("The native compiler accepted this draft.") : t("No problems.")} /> },
+        { id: "run", title: t("Run"), content: <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_280px]"><JSONEditor label={t("Run input (JSON)")} value={runInput} schema={installed?.inputSchema} onChange={setRunInput} rows={5} />
+          <div className="grid content-start gap-2"><h4 className="text-xs font-medium">{t("Run published flow")}</h4><p className="text-[11px] leading-5 text-muted">{t("Runs use the published version and real permissions. Actions and effects can change your platform data.")}</p>
+            <Input aria-label={t("Stable run key")} placeholder={t("Stable run key (generated on first run)")} value={runKey} onChange={(event) => setRunKey(event.target.value)} />
+            <Button variant="primary" disabled={busy || dirty || !synchronized || !installed?.manual || !!runIssue || brokenForm.length > 0} onClick={() => void perform(start)}><Play className="mr-1 size-3" />{t("Run published version")}</Button>
+            <Button variant="ghost" onClick={() => setRunKey(crypto.randomUUID())}>{t("New run key")}</Button>{!installed?.manual && <p className="text-xs text-muted">{t("Save and publish a manual flow before running it here.")}</p>}{dirty && <p className="text-xs text-muted">{t("Save or undo draft changes before running the published version.")}</p>}
+          </div></div> },
+        { id: "history", title: t("Runs"), content: <div className="p-3">{run && <p className="mb-2 flex items-center gap-2 text-[10px] text-muted">{run.id} · v{run.version}<Button variant="ghost" size="sm" type="button" className="text-primary" onClick={() => setRun(undefined)}>{t("Clear run overlay")}</Button></p>}{mountedDocks.history && <WorkflowRuns name={draft.name} versions={saved?.versions ?? draft.versions} onStepSelect={(name) => setChosen(name)} onRunSelect={setRun} />}</div> },
+        { id: "test", title: t("Test"), content: <div className="p-3">{mountedDocks.test && (draft.id && !dirty && synchronized ? <CandidateTest processId={draft.id} embedded onStepSelect={(name) => setChosen(name)} /> : <p className="text-xs text-muted">{t("Save the flow before isolated testing.")}</p>)}</div> },
+        { id: "release", title: t("Release"), content: <div className="p-3">{mountedDocks.release && (draft.id && !dirty && synchronized ? <ReleaseReview initialKind="flow" initialID={draft.id} embedded /> : <p className="text-xs text-muted">{t("Save the flow before release review.")}</p>)}</div> },
+      ] }}>
+      {importingFlow && <FlowImportDialog name={draft.name || "importedflow"} capabilities={capabilities} onClose={() => setImportingFlow(false)} onApply={(next) => { change(next); setChosen(""); setImportingFlow(false); setFormProblems({}); }} />}
+      {run && !matchingRun && <Panel role="status" className="m-2 text-xs text-muted">{t("This run belongs to a different saved definition or the draft has changed. Inspect its recorded version in Executions.")}</Panel>}
+      <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col border-0 p-0"><NodeCanvas label={t("Flow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
+        onSelect={(name) => setChosen(name)} onOpen={(name) => setChosen(name)} onAdd={add} onInsert={insert} onConnect={connect} onDisconnect={disconnect}
         onPositionsChange={(positions) => change((current) => ({ ...current, layout: { ...current.layout, ...positions } }))} onLayout={(positions) => change({ layout: positions })}
         onDelete={deleteNodes} onDuplicate={duplicate} history={{ canUndo: session.canUndo, canRedo: session.canRedo, onUndo: () => { session.undo(); setValidation(undefined); }, onRedo: () => { session.redo(); setValidation(undefined); } }}
         canConnect={(connection) => {
@@ -357,25 +368,7 @@ export function WorkflowEditor({ id }: { id: string }) {
           const seen = new Set<string>(), pending = [connection.target];
           while (pending.length) { const next = pending.pop()!; if (next === connection.source) return false; if (seen.has(next)) continue; seen.add(next); pending.push(...(successors.get(next) ?? [])); }
           return true;
-        }} /></div>
-    </EditorWorkbench>
-    </fieldset>
-    <div className="overflow-hidden rounded-xl border border-border bg-surface">
-      <div className="flex items-center gap-1 p-1.5"><Button variant="ghost" type="button" onClick={() => setDockOpen(!dockOpen)} className="rounded p-1 text-muted hover:bg-row-hover" aria-label={t(dockOpen ? "Collapse execution panel" : "Expand execution panel")}>{dockOpen ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}</Button>
-        {([ ["run", "Run input"], ["history", "Executions"], ["test", "Isolated test"], ["release", "Release"] ] as const).map(([key, label]) => <Button variant="ghost" key={key} type="button" className={`rounded px-3 py-1 text-xs ${dock === key && dockOpen ? "bg-row-selected text-primary" : "text-muted hover:bg-row-hover"}`} onClick={() => { setDock(key); setDockOpen(true); }}>{t(label)}</Button>)}
-        {run && <span className="ml-auto flex items-center gap-2 px-2 text-[10px] text-muted">{run.id} · v{run.version}<Button variant="ghost" type="button" className="text-primary" onClick={() => setRun(undefined)}>{t("Clear run overlay")}</Button></span>}
-      </div>
-      <div hidden={!dockOpen} className="max-h-[60vh] overflow-auto border-t border-border p-3">
-        {mountedDocks.run && <div hidden={dock !== "run"}><div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_280px]"><JSONEditor label={t("Run input (JSON)")} value={runInput} schema={installed?.inputSchema} onChange={setRunInput} rows={5} />
-          <div className="grid content-start gap-2"><h4 className="text-xs font-medium">{t("Run published workflow")}</h4><p className="text-[11px] leading-5 text-muted">{t("Runs use the published version and real permissions. Actions and effects can change your platform data.")}</p>
-            <Input aria-label={t("Stable run key")} placeholder={t("Stable run key (generated on first run)")} value={runKey} onChange={(event) => setRunKey(event.target.value)} />
-            <Button variant="primary" disabled={busy || dirty || !synchronized || !installed?.manual || !!runIssue || brokenForm.length > 0} onClick={() => void perform(start)}><Play className="mr-1 size-3" />{t("Run published version")}</Button>
-            <Button variant="ghost" onClick={() => setRunKey(crypto.randomUUID())}>{t("New run key")}</Button>{!installed?.manual && <p className="text-xs text-muted">{t("Save and publish a manual workflow before running it here.")}</p>}{dirty && <p className="text-xs text-muted">{t("Save or undo draft changes before running the published version.")}</p>}
-          </div></div></div>}
-        {mountedDocks.history && <div hidden={dock !== "history"}><WorkflowRuns name={draft.name} versions={saved?.versions ?? draft.versions} onStepSelect={(name) => { setChosen(name); setRightOpen(true); }} onRunSelect={setRun} /></div>}
-        {mountedDocks.test && <div hidden={dock !== "test"}>{draft.id && !dirty && synchronized ? <CandidateTest processId={draft.id} embedded onStepSelect={(name) => { setChosen(name); setRightOpen(true); }} /> : <p className="text-xs text-muted">{t("Save the workflow before isolated testing.")}</p>}</div>}
-        {mountedDocks.release && <div hidden={dock !== "release"}>{draft.id && !dirty && synchronized ? <ReleaseReview initialKind="flow" initialID={draft.id} embedded /> : <p className="text-xs text-muted">{t("Save the workflow before release review.")}</p>}</div>}
-      </div>
-    </div>
-  </div></WorkflowFormProblems.Provider>;
+        }} /></fieldset>
+    </Workbench>
+  </WorkflowFormProblems.Provider>;
 }

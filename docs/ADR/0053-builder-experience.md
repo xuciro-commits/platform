@@ -352,4 +352,28 @@ shared/      asset-controls, record-paths, release-profile（不变）
 
 ## 11. As built
 
-（随批次更新）
+P1–P4、P6、P7（前端部分）已落地于一次提交；P5（Go 契约：独立的 automation 记录、effects 链的服务端校验）仍待后端配合。
+
+**落地的结构**
+
+| ADR 决策 | 代码 |
+| --- | --- |
+| D6 单一 `Workbench` 容器（标题栏 · 结构 · 主区 · 检查器 · 底栏，尺寸记忆） | `@platform/ui` `layout/Workbench.tsx`（`Workbench`、`StructureRow`、`PanelSection`、`ProblemList`、`WorkbenchProblem`） |
+| D6 自动保存、`● Draft`、Publish 菜单 | `build/shared/workbench.tsx`（`useAutoSave`、`savingState`、`DraftStatus`、`PublishMenu`、`WorkbenchMessage`、`ResourceControls`） |
+| D1 Projects 取代 Application 编辑器 | `build/projects/project.tsx`（`ProjectsList`、`ProjectHome`：资源树 · 内容/设置 · 未发布变更底栏）、`projects/resources.ts`（资源种类与路由） |
+| D1 Workshop Module = 项目的页面 + 页头 + 导航 | `build/workshop/ModuleWorkbench.tsx`（模块树、页头编辑、分组、变量/查询汇总、模块预览）；`PageEditor` 作为模块内的页面视图（`module` 上下文） |
+| D4 页面编辑器：图层/组件库 · 画布 · 按选中对象切换的检查器 · 问题/变量底栏 · Preview 开关 | `build/workshop/editor.tsx`（`PageEditor({ id, module })`、`widgetInspectorTabs`）、`page-editor/WidgetLibrary.tsx` |
+| D2 对象类型工作台：Overview · Properties · Links · Actions · Lifecycle · Permissions · Preview | `build/ontology/process.tsx` `ObjectTypeEditor`；`ActionTypeEditor` 复用同一工作台并打开 Actions 分区 |
+| D3 Automate：自动化卡片（when/then 一句话） + 逻辑流程工作台 + Runs | `build/automate/automation.tsx`（`Automations`，暂以带触发器的 `build.process` 为自动化）、`automate/workflow.tsx`（`Flows`、`FlowEditor`） |
+| D8 Changes 视图（所有草稿一览 + 发布审查） | `build/releases/changes.tsx` |
+| D9 路由：`projects, project, object-type, action-type, module, automation, flow, runs, changes, release-history` | `build/index.tsx`；旧路由 `applications/application/studio/pages/compose/model/process/workflow/candidate-test` 由 `apps/workspace/src/shell/legacy.ts` 的别名表（含参数映射）转向 |
+| 删除 | `projects/application.tsx`、`projects/studio.tsx`、`shared/asset-controls.tsx`、`PagesList`、`Objects`、`Workflows`、`WorkflowEditor`、`ProcessEditor` |
+
+**与 §6–§7 的已知偏差（待 P5）**
+
+- Action type 尚无独立的子页签（Parameters / Form / Rules / Submission criteria / Side effects / Permissions）：`ActionProperties` 仍是一张表单，在对象工作台的检查器中编辑；卡片网格给出参数/规则/条件计数。
+- Automation 没有独立记录：卡片来自带触发器（对象 + 起始状态、非手动）的 `build.process`；"新建自动化" 打开流程工作台。线性 trigger→conditions→effects 卡片编辑器等 Go 契约落地后再做。
+- 事件 → effect 链（`effects: PageEffect[]`）未改动现有事件检查器。
+- AI 函数 / 代码函数仍用 `PageHeader` 页头，仅换上了 `DraftStatus` + `PublishMenu`，测试内嵌于编辑器（`CandidateTest embedded`）。
+- 属性 / 权限矩阵和变量底栏用原生 `<table>`（`scripts/escapes.sh` 已登记）。
+

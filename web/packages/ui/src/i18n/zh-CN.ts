@@ -1238,4 +1238,13 @@ export default {
   "Shared property": "共享属性",
   "Open in…": "在…中打开",
   "The host is unreachable.": "无法连接宿主。",
+  "Saved": "已保存",
+  "Not saved": "未保存",
+  "Toggle structure panel": "切换结构面板",
+  "Toggle dock": "切换底栏",
+  "Toggle inspector panel": "切换检查器面板",
+  "Editor": "编辑器",
+  "No problems.": "没有问题。",
+  "Workbench": "工作台",
+  "The one editor container: breadcrumbs, status, history and publish actions, structure panel, main view, inspector and a diagnostics dock with remembered sizes.": "唯一的编辑器容器：面包屑、状态、历史与发布操作、结构面板、主视图、检查器和记住尺寸的诊断底栏。",
 } as Record<string, string>;

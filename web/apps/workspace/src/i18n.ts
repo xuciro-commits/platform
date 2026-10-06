@@ -152,4 +152,5 @@ register("zh-CN", {
   "Every asset of {app}": "{app} 的全部资源",
   "Filter object types": "筛选对象类型",
   "What each installed asset is built from: applications over pages, pages over object types, functions and queries over the types they read. Click a node to open it.": "每个已安装资源由什么构成：应用建于页面之上，页面建于对象类型之上，函数与查询建于其读取的类型之上。点击节点即可打开。",
+  "Back to project": "返回项目",
 });

@@ -105,6 +105,8 @@ export const entries: CatalogEntry[] = [
     "primitives/card.tsx", ["Card", "Panel"], "Panels", { tags: ["inspector", "grouping"], dependencies: ["ui/button", "foundation/semantic-tokens"] }),
   asset("ui/editor-workbench", "Editor workbench", "Arrange a library, canvas and inspector with keyboard and pointer pane resizing.", 2,
     "layout/EditorWorkbench.tsx", ["EditorWorkbench"], "EditorPanels", { tags: ["editor", "layout", "inspector", "resize"], dependencies: ["ui/panels", "foundation/semantic-tokens"] }),
+  asset("ui/workbench", "Workbench", "The one editor container: breadcrumbs, status, history and publish actions, structure panel, main view, inspector and a diagnostics dock with remembered sizes.", 2,
+    "layout/Workbench.tsx", ["Workbench", "ProblemList", "StructureRow", "PanelSection"], "WorkbenchExample", { tags: ["editor", "layout", "inspector", "dock", "resize"], dependencies: ["ui/button", "foundation/semantic-tokens"] }),
   asset("ui/form", "Form submission", "Submit an ad hoc form on Enter without reloading the page.", 2,
     "primitives/controls.tsx", ["Form"], "Forms", { dependencies: ["ui/input", "ui/button"] }),
   asset("ui/disclosure", "Disclosure", "Reveal supporting details while keeping the summary visible.", 2,

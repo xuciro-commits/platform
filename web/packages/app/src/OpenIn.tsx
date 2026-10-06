@@ -16,7 +16,7 @@ export function OpenIn({ type, exclude = [] }: { type: string; exclude?: OpenInP
   const commands: ContextCommand[] = [];
   if (!exclude.includes("explorer")) commands.push({ id: "explorer", label: t("Object Explorer"), run: () => open({ view: "explorer", params: { type } }) });
   if (!exclude.includes("ontology") && builder && definition?.ref.app === "build") {
-    commands.push({ id: "ontology", label: t("Object type in Ontology"), run: () => open({ view: "model", params: { object: definition.ref.name } }) });
+    commands.push({ id: "ontology", label: t("Object type in Ontology"), run: () => open({ view: "object-type", params: { object: definition.ref.name } }) });
   }
   if (!exclude.includes("pages") && definition) {
     const key = assetKey(definition.ref);

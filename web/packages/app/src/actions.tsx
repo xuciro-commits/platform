@@ -122,6 +122,17 @@ export function NewActions({ type, covers = [], allowed, disabled = false, onCre
   </>;
 }
 
+/** Create a record of `type` from a menu or command palette: the caller
+ * renders the trigger, this hook offers the declared create actions and the
+ * dialog that takes the chosen one. */
+export function useNewRecord(type: string, onCreated?: (target: { type: string; id: string }) => void) {
+  const { catalog } = useHost();
+  const [taking, setTaking] = useState<ActionDeclaration>();
+  const offered = catalog.filter((a) => a.target === type && a.new);
+  const dialog = taking ? <ActionDialog declared={taking} type={type} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
+  return { offered, available: offered.length > 0, take: (schema?: string) => setTaking(schema ? offered.find((a) => a.schema === schema) : offered[0]), dialog };
+}
+
 /** The actions on one record the member may take, besides its lifecycle's transitions and the generated edit and archive. */
 export function RecordActions({ type, record, allowed, steps: withSteps = false }: {
   type: string; record: EntityRecord; allowed?: string[];

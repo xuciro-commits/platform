@@ -1,5 +1,5 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { AssetControls } from "../shared/asset-controls";
+import { ResourceControls as AssetControls } from "../shared/workbench";
 import { NewActions, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
   type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, Input, NodeCanvas, PageHeader, Panel, PropertyList, RecordList, Select, Tag,
@@ -50,7 +50,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const choose = (item: Resource) => { setCurrent(item.ref.name); setView("detail"); select(undefined); setTab("overview"); };
   useEffect(() => { setSeed(undefined); }, [current]);
   const edit = (item: Resource, parameters: Record<string, string> = {}) => {
-    if (item.draft && host.can("build.object.edit")) open({ view: "process", params: { id: item.draft.id, ...parameters } });
+    if (item.draft && host.can("build.object.edit")) open({ view: "object-type", params: { id: item.draft.id, ...parameters } });
   };
   const columns: ColumnDef<Resource>[] = [
     { accessorKey: "title", header: t("Object"), meta: { width: 210, pin: "left" } },
@@ -191,7 +191,7 @@ function PageFromModel({ seed, onClose }: { seed: PageSeed; onClose: () => void 
       const payload = { name, title: title.trim(), object: seed.object.name, document: lifted.document,
         sections: lifted.sections.map((section) => ({ ...section, object: section.object?.name })),
         selections: relation ? [{ name: "parent", object: seed.object }, { name: "related", object: relation.ref.object }] : [] };
-      if (await decide("build.page.create", { type: "build.page", id }, payload, { expectedRevision: 0, onRefused: setError })) open({ view: "compose", params: { id } });
+      if (await decide("build.page.create", { type: "build.page", id }, payload, { expectedRevision: 0, onRefused: setError })) open({ view: "module", params: { page: id } });
     } catch { setError(t("The page draft could not be created. Your choices are still here.")); }
     finally { setBusy(false); }
   };

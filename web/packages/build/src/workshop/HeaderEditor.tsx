@@ -1,7 +1,7 @@
 import type {Api} from "@platform/kernel";
 import {Button,Checkbox,Input,Select,Textarea,t} from "@platform/ui";
 
-export function ApplicationHeaderEditor({value,pages,onChange}:{value?:Api.ApplicationHeader;pages:string[];onChange:(header:Api.ApplicationHeader|undefined)=>void}){
+export function HeaderEditor({value,pages,onChange}:{value?:Api.ApplicationHeader;pages:string[];onChange:(header:Api.ApplicationHeader|undefined)=>void}){
  const update=(patch:Partial<Api.ApplicationHeader>)=>value&&onChange({...value,...patch});
  return <fieldset className="grid gap-2"><legend>{t("Application header")}</legend><Checkbox checked={!!value} onChange={enabled=>onChange(enabled?{variant:"horizontal",title:"",items:[{kind:"logo"},{kind:"title"},{kind:"tabs",pages:[...pages]}]}:undefined)}>{t("Show application header")}</Checkbox>{value&&<>
   <label className="grid gap-1 text-xs">{t("Header title")}<Input value={value.title} onChange={e=>update({title:e.target.value})}/></label>

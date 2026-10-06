@@ -208,7 +208,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   );
   return <div className="grid gap-3">
     {!embedded && <PageHeader title={t("Release review")} description={t(builder ? "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators." : "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.")}
-      actions={builder && scope && <Button onClick={() => open({ view: "application", params: { id: scope } })}>{t("Back to application")}</Button>} />}
+      actions={builder && scope && <Button onClick={() => open({ view: "project", params: { id: scope } })}>{t("Back to project")}</Button>} />}
     <Card className="grid gap-3 p-3" aria-label={t("Saved releases")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{t("Saved releases")}</h2>

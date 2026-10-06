@@ -1,21 +1,20 @@
 import {WidgetGlyph,LayoutGlyph} from "./WidgetGlyph";
 import { type LayoutKind } from "../page-layout";
 import {type Api} from "@platform/kernel";
-import { Button, Card, CommandMenu, Disclosure, Input, cn, t, useCanvasGesture, type ContextCommand } from "@platform/ui";
+import { Button, Card, CommandMenu, cn, t, useCanvasGesture, type ContextCommand } from "@platform/ui";
 import { useId, useState, type ReactNode } from "react";
 import { widgetContract } from "@platform/app";
 import { ChevronDown, ChevronRight, Columns2, Rows3, Settings2 } from "lucide-react";
 
 type Label = { id?: string; widget: string; title?: string };
 
-export function LayoutTree({document,sections,chosen,container,title,widgetTitles,widgets,onChoose,onContainer,onAdd,onGroup,onAddOverlay,commandsForNode}: {
+export function LayoutTree({document,sections,chosen,container,title,widgetTitles,onChoose,onContainer,onGroup,onAddOverlay,commandsForNode}: {
   document:Api.PageDocument;sections:Label[];chosen:number;container?:string;title:string;
-  widgetTitles:Record<string,()=>string>;widgets:readonly string[];
-  onChoose:(index:number)=>void;onContainer:(id:string)=>void;onAdd:(widget:string)=>void;
+  widgetTitles:Record<string,()=>string>;
+  onChoose:(index:number)=>void;onContainer:(id:string)=>void;
   onGroup:(kind:LayoutKind)=>void;onAddOverlay:()=>void;commandsForNode:(id:string)=>ContextCommand[];
 }) {
   const focusScope=useId();
-  const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const canvas=useCanvasGesture();
   const indexed = new Map(sections.map((section, i) => [section.id, { section, i }]));
@@ -75,16 +74,5 @@ export function LayoutTree({document,sections,chosen,container,title,widgetTitle
       </div>
       {sections.length === 0 && <p className="text-xs text-muted">{t("Add what people should see.")}</p>}
     </div>
-    <div className="grid gap-1">
-      <div className="text-xs font-semibold text-muted">{t("Add a widget")}</div>
-      <Input aria-label={t("Search widgets")} placeholder={t("Search widgets")} value={search} onChange={(event) => setSearch(event.target.value)} />
-      {[...new Set(widgets.map(id=>widgetContract(id)?.category??"Content"))].map(category=>{
-        const matches=widgets.filter(widget=>widgetContract(widget)?.category===category&&`${widgetTitles[widget]?.()??widget} ${category}`.toLowerCase().includes(search.toLowerCase()));
-        return matches.length?<Disclosure key={`${category}:${!!search}`} defaultOpen={!!search} className="grid gap-1" summary={<span className="py-1 text-[11px] font-semibold text-muted">{t(category)} · {matches.length}</span>}>
-          <div className="grid grid-cols-2 gap-1">{matches.map(widget=><Button key={widget} size="sm" variant="ghost" className="justify-start truncate border border-border" title={widgetTitles[widget]?.()||widget} onClick={()=>onAdd(widget)} style={{touchAction:'none',cursor:'grab'}} onPointerDown={event=>canvas?.start({kind:'new',type:widget,label:widgetTitles[widget]?.()||widget},event)}><span className="text-primary"><WidgetGlyph widget={widget}/></span>{widgetTitles[widget]?.()||widget}</Button>)}</div>
-        </Disclosure>:null;
-      })}
-    </div>
-
   </div>;
 }

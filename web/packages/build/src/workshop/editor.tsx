@@ -15,18 +15,20 @@ import {recordComparisonSource} from "./page-editor/record-comparison";
 import {searchInputObjects} from "@platform/app/search";
 import {pageLayoutDiagnostics} from "@platform/app";
 import { recordPaths } from "../shared/record-paths";
-import { AssetControls } from "../shared/asset-controls";
 // Application Studio page design (ADR-0046). Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
 // the same registered widgets; save and activation use the original Go path.
-import { ApplicationPage, ComposedPage, NewActions, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
+import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
 import {
-  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, Button, Card, CanvasEditor, CanvasRegion, ContentTabs, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useUnsavedChanges,
+  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, ActionMenu, Button, Card, CanvasEditor, CanvasRegion, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
-import { Copy, Clipboard, Columns2, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
+import { Copy, Clipboard, Columns2, Download, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, MoreHorizontal, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useDirectInstall } from "../shared/release-profile";
+import { ModuleTree, type ModuleContext } from "./ModuleWorkbench";
+import type { Route } from "@platform/ui";
+import { WidgetLibrary } from "./page-editor/WidgetLibrary";
+import { DraftStatus, PublishMenu, WorkbenchMessage, savingState, useAutoSave } from "../shared/workbench";
 import {pageUIManifest,type Api as HostApi} from "@platform/kernel";
 import { BindingEditor, WorkflowFormProblems } from "../automate/workflow-binding";
 import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, layoutID, stashWidget, restoreWidget, setLayoutKind } from "./page-layout";
@@ -58,7 +60,6 @@ type PageRecord = {
 type DraftObjectMetadata = { name: string; title: string; plural?: string; fields: (Omit<HostApi.FieldInfo, "choices"> & { choices?: string })[] };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
-const pageStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" } });
 
 const widgets = widgetContracts.map((contract) => contract.componentID);
 const widgetTitles: Record<string, () => string> = Object.fromEntries(widgetContracts.map((contract) => [contract.componentID, () => t(contract.title)]));
@@ -98,24 +99,10 @@ collectionBuilder:s.collectionBuilder,collectionOutputVariable:s.collectionOutpu
 });
 
 /** The pages of this organisation: open one to compose it. */
-export function PagesList() {
-  const { source } = useHost();
-  const { open } = useApplicationWorkspace();
-  return (
-    <div className="grid gap-3">
-      <PageHeader title={t("Pages")} description={t("Compose pages over your objects, then review a candidate to release them together.")}
-        actions={<NewActions type="build.page" />} />
-      <RecordList source={source} type="build.page" fields={["title", "name", "object", "state"]}
-        onOpen={(record) => open({ view: "compose", params: { id: record.id } })} />
-    </div>
-  );
-}
-
-export function PageEditor({ id }: { id: string }) {
+export function PageEditor({ id, module }: { id: string; module?: ModuleContext }) {
   const { decide, source, catalog, definitions } = useHost();
   const { open } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(id)}`);
-  const directInstall = useDirectInstall();
   const draftObjects = useRecordInventory<DraftObjectMetadata>("build.object");
   // Field pickers may describe a saved object before installation. These
   // authoring hints never replace runtime definitions, reads or permissions.
@@ -137,7 +124,8 @@ export function PageEditor({ id }: { id: string }) {
   const [importing,setImporting]=useState(false);
   const [compatibilityOpen,setCompatibilityOpen]=useState(false);
   const [importPackage,setImportPackage]=useState<{scope:string;pack:ImportPackage}>();
-  const [leftOpen, setLeftOpen] = useState(true), [rightOpen, setRightOpen] = useState(true);
+  const [leftTab, setLeftTab] = useState("layers"), [preview, setPreview] = useState(false);
+  const [inspectorTab, setInspectorTab] = useState<Record<string, string>>({});
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop"), [zoom, setZoom] = useState(100);
   const [refused, setRefused] = useState<string>();
   const [saving, setSaving] = useState(false), [publishing, setPublishing] = useState(false);
@@ -159,7 +147,7 @@ export function PageEditor({ id }: { id: string }) {
   }, [selection, sections, document]);
   const chosen = selection.kind === "widget" ? sections.findIndex((section) => section.id === selection.id) : selection.kind === "container" ? -2 : selection.kind === "variables" ? -3 : -1;
   const container = selection.kind === "container" ? selection.id : undefined;
-  const choose = (index: number) => { select(index < 0 || !sections[index]?.id ? { kind: "page" } : { kind: "widget", id: sections[index]!.id! }); setRightOpen(true); };
+  const choose = (index: number) => { select(index < 0 || !sections[index]?.id ? { kind: "page" } : { kind: "widget", id: sections[index]!.id! });  };
   const edit: typeof session.edit = (update, key) => { if (!lock.current) session.edit((old) => {
     const next = typeof update === "function" ? update(old) : { ...old, ...update };
     // Profile changes are explicit reviewed commands; ordinary editing retains
@@ -238,7 +226,9 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
     .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && [page?.object, ...selections.map((selection) => selection.object.name)].includes(f.ref))).map((d) => d.ref.name), [definitions, page?.object, selections]);
   const [queryPreviewOwner,setQueryPreviewOwner]=useState<string|undefined>(undefined);
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
-  if (!page) return <p className="text-sm text-muted">{t("Loading…")}</p>;
+  const saveRef = useRef<() => Promise<unknown>>(async () => false);
+  useAutoSave({ dirty, invalid, busy, save: () => saveRef.current() });
+  if (!page) return <Workbench storageKey="page" title={t("Page")}><WorkbenchMessage>{query.isError ? t("The page could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const info = authoringEntity(page.object);
 const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s) }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
   const add = (widget: string, destination?: { container: string; after?: string }, drop?:CanvasDrop) => {
@@ -261,7 +251,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       }
       return { ...old, document, sections: [...old.sections, section] };
     });
-    select({ kind: "widget", id: section.id! }); setRightOpen(true);
+    select({ kind: "widget", id: section.id! }); 
   };
   const duplicate = (index=chosen) => {
     const section=sections[index],leaf=Object.keys(document.nodes).find(id=>document.nodes[id]?.section===section?.id);
@@ -285,7 +275,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     if(result.issue){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError(result.issue)});return;}
     let draft=result.value.draft;
     if(after){const parent=Object.entries(draft.document.nodes).find(([,n])=>n.children?.includes(after))?.[0],unused=document.unusedWidgets?.find(e=>e.node===after);if(parent){const index=(draft.document.nodes[parent]!.children??[]).indexOf(after)+1;const next=canvasDrop(draft.document,result.value.root,{kind:'insert',parent,index},draft.sections);if(!next){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError("invalid")});return;}draft={...draft,document:next};}else if(unused){const section=draft.document.nodes[result.value.root]?.section;if(section)draft={...draft,document:stashWidget(draft.document,section)};}}
-    edit({...session.draft,...draft});const copied=draft.document.nodes[result.value.root];select(copied?.kind==='widget'?{kind:'widget',id:copied.section!}:{kind:'container',id:result.value.root});setRightOpen(true);
+    edit({...session.draft,...draft});const copied=draft.document.nodes[result.value.root];select(copied?.kind==='widget'?{kind:'widget',id:copied.section!}:{kind:'container',id:result.value.root});
     setClipboardNotice({scope:clipboardScope,text:result.value.shared.length?t("Layout pasted. External bindings kept: {bindings}",{bindings:result.value.shared.map(id=>document.variables?.[id]?.title||id).join(", ")}):t("Layout pasted with independent inputs and record selections.")});
   };
   const duplicateContainer=(root:string)=>{
@@ -311,7 +301,62 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     } catch { setRefused(t("The page could not be saved. Your draft is still here.")); return false; }
     finally { lock.current = false; setSaving(false); }
   };
+  const problemList: WorkbenchProblem[] = [
+    ...layoutProblems.map((issue, i) => ({ id: `layout:${i}`, text: t(issue.code), subject: issue.node, locate: () => canvasSelect(issue.node) })),
+    ...variableProblems.map((issue, i) => ({ id: `variable:${i}`, text: t(issue.code), subject: issue.variable, locate: () => select({ kind: "variables" }) })),
+    ...(selectionProblem ? [{ id: "selection", text: selectionProblem, locate: () => select({ kind: "page" }) }] : []),
+    ...Object.entries(formProblems).filter(([, problem]) => problem).map(([id, problem]) => ({ id: `form:${id}`, text: problem, subject: id })),
+    ...(inputProblem ? [{ id: "input", text: t("Bind each input to a writable text or decimal state in its own scope.") }] : []),
+    ...(queryProblem ? [{ id: "query", text: t("Each query needs a field for every condition and a limit within the budget.") }] : []),
+    ...(inlineProblem ? [{ id: "inline", text: t("An inline action needs exactly one action and valid defaults.") }] : []),
+    ...(tableEditProblem ? [{ id: "table-edit", text: t("Inline table editing needs an action and 1–{n} visible fields.", { n: pageVariableContract.tableEditing.maxFields }) }] : []),
+    ...(incompatible ? [{ id: "profile", text: t("This draft needs a newer workspace version. Its saved content has been preserved."), locate: () => setCompatibilityOpen(true) }] : []),
+    ...(loopProblem ? [{ id: "p0", text: t("Choose a query window for each loop before saving.") }] : []),
+    ...(overlayProblem ? [{ id: "p1", text: t("Add content to each overlay and bind every button before saving.") }] : []),
+    ...(leaderboardProblem ? [{ id: "p2", text: t("Bind ranking fields and a matching numeric/ID sorted Top-N query before saving.") }] : []),
+    ...(recordWorkInvalid ? [{ id: "p3", text: t("Bind the original row action parameters, bounded tile/action window or note state before saving.") }] : []),
+    ...(analysisProblem ? [{ id: "p4", text: t("Bind the original analysis fields, matching scalar or axis ports and query before saving.") }] : []),
+    ...(summaryProblem ? [{ id: "p5", text: t("Bind the summary field, query and matching statistics before saving.") }] : []),
+    ...(searchInputProblem ? [{ id: "p6", text: t("Bind search text to a query search in the same scope before saving.") }] : []),
+    ...(pickerValueProblem ? [{ id: "p7", text: t("Bind picker ID output to original text state with the same query owner before saving.") }] : []),
+    ...(pickerProblem ? [{ id: "p8", text: t("Bind a picker title and a 20-record ID-sorted query before saving.") }] : []),
+    ...(dateProblem ? [{ id: "p9", text: t("Bind the date input to its original scoped text state before saving.") }] : []),
+    ...(choiceProblem ? [{ id: "p10", text: t("Bind a scoped text state and valid static choices before saving.") }] : []),
+    ...(booleanProblem ? [{ id: "p11", text: t("Bind a boolean state with its original page or overlay owner before saving.") }] : []),
+    ...(rangeProblem ? [{ id: "p12", text: t("Bind distinct text states with one owner and a valid decimal range before saving.") }] : []),
+    ...(gaugeProblem ? [{ id: "p13", text: t("Bind a number variable and positive gauge maximum before saving.") }] : []),
+    ...(spacerProblem ? [{ id: "p14", text: t("Declare a finite nonnegative spacer size within the layout budget before saving.") }] : []),
+    ...(separatorProblem ? [{ id: "p15", text: t("Declare a bounded plain separator label or leave it absent before saving.") }] : []),
+    ...(noticeProblem ? [{ id: "p16", text: t("Choose a supported notice tone and bounded plain title and text before saving.") }] : []),
+    ...(alertProblem ? [{ id: "p17", text: t("Bind an original decimal value and a valid threshold, tone and plain message before saving.") }] : []),
+    ...(progressProblem ? [{ id: "p18", text: t("Bind a decimal numerator and exactly one positive fixed total or decimal denominator before saving.") }] : []),
+    ...(recordGanttProblem ? [{ id: "p19", text: t("Bind Gantt fields, a valid fixed range and an explicitly sorted plan before saving.") }] : []),
+    ...(recordCalendarProblem ? [{ id: "p20", text: t("Bind calendar fields, an initial month and an explicitly sorted plan before saving.") }] : []),
+    ...(recordEventsProblem ? [{ id: "p21", text: t("Bind event fields and an explicitly sorted query plan before saving.") }] : []),
+    ...(explorationProblem ? [{ id: "p22", text: t("Exploration views require original typed resources, published assets, retained relations and distinct object-specific output ports.") }] : []),
+    ...(contextProblem ? [{ id: "p23", text: t("Context views need their original navigation, record or personnel-query bindings; image URL, caption and height must satisfy the static image profile.") }] : []),
+    ...(workViewProblem||historyProblem ? [{ id: "p24", text: t("Work views use their original member services. Bounded history needs an original same-owner record resource and a window of 1–100 entries.") }] : []),
+    ...(collaborationProblem ? [{ id: "p25", text: t("Bind the original record resource and collaboration state in the same page or overlay before saving.") }] : []),
+    ...(recordComparisonProblem ? [{ id: "p26", text: t("Bind an original multi-selection resource, title and 1–64 comparison fields before saving.") }] : []),
+    ...(recordCardProblem ? [{ id: "p27", text: t("Bind an original record resource, title and at most four card properties before saving.") }] : []),
+    ...(sparklineProblem ? [{ id: "p28", text: t("Bind one original sparkline scalar and an optional ordered 30-record numeric window before saving.") }] : []),
+    ...(observationInvalid ? [{ id: "p29", text: t("Bind original observation time, signals, owned windows and matching record or statistic ports before saving.") }] : []),
+    ...(treemapProblem ? [{ id: "p30", text: t("Bind a visible treemap group, original query window and exclusive output type before saving.") }] : []),
+    ...(heatmapProblem ? [{ id: "p31", text: t("Bind two distinct heatmap axes, complete count and the original query set before saving.") }] : []),
+    ...(scatterProblem ? [{ id: "p32", text: t("Bind visible scatter fields and an ordered original window of at most 100 records before saving.") }] : []),
+    ...(recordChartProblem ? [{ id: "p33", text: t("Bind visible record chart axes and an explicitly sorted query plan before saving.") }] : []),
+    ...(recordListProblem ? [{ id: "p34", text: t("Bind a record card window, title and bounded summary fields before saving.") }] : []),
+    ...(titleProblem ? [{ id: "p35", text: t("Enter bounded heading text or bind the collection and its original count before saving.") }] : []),
+    ...(metricPresentationProblem ? [{ id: "p36", text: t("Metric units and static notes need supported directions and bounded text.") }] : []),
+    ...(statusTrackerProblem ? [{ id: "p37", text: t("Choose an original lifecycle field and valid stages before saving.") }] : []),
+    ...(recordLinksProblem ? [{ id: "p38", text: t("Choose valid related groups before saving.") }] : []),
+    ...(recordViewProblem ? [{ id: "p39", text: t("Choose at least one record tab before saving.") }] : []),
+    ...(groupProblem ? [{ id: "p40", text: t("Give every group button a bounded title and its own click binding.") }] : []),
+    ...(tablePresentationProblem ? [{ id: "p41", text: t("Table columns and controls need supported formats, density and bounded titles.") }] : []),
+    ...(incompatible ? [{ id: "p42", text: t("This draft needs a newer workspace version. Its saved content has been preserved.") }] : []),
+  ];
   const nothing = sections.length === 0;
+  saveRef.current = save;
   const publish = async () => {
     if (invalid || nothing || lock.current || dirty && !await save()) return;
     lock.current = true; setRefused(undefined); setPublishing(true);
@@ -324,7 +369,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   const canvasSelection = sections[chosen];
   const nodeID = container ?? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection?.id && node.kind === "widget")?.[0];
   const patchNode = (id: string, patch: Partial<HostApi.PageLayoutNode>) => edit((old) => ({ ...old, document: { ...old.document, nodes: { ...old.document.nodes, [id]: { ...old.document.nodes[id]!, ...patch } } } }), `node:${id}:${Object.keys(patch).join(",")}`);
-  const canvasSelect=(id:string)=>{const node=document.nodes[id];if(!node)return;if(node.kind==='widget'){const index=sections.findIndex(s=>s.id===node.section);if(index>=0)choose(index);}else{select({kind:'container',id});setRightOpen(true);}};
+  const canvasSelect=(id:string)=>{const node=document.nodes[id];if(!node)return;if(node.kind==='widget'){const index=sections.findIndex(s=>s.id===node.section);if(index>=0)choose(index);}else{select({kind:'container',id});}};
   const canvasEdit=(next:HostApi.PageDocument|undefined)=>{if(next)edit({document:next});};
   const canvasCommitDrop=(payload:CanvasPayload,target:CanvasDrop)=>{if(lock.current)return;if(payload.kind==='new')add(payload.type,undefined,target);else{const next=canvasDrop(document,payload.id,target,sections);if(next){canvasEdit(next);canvasSelect(payload.id);}else notify.error(t("This move would change a protected scope or exceed the layout limits."));}};
   const canvasCommitSizes=(sizes:Record<string,HostApi.PageLayoutSize>)=>{if(lock.current)return;const next=structuredClone(document);for(const [id,size]of Object.entries(sizes))if(next.nodes[id])next.nodes[id]!.size=Object.keys(size).length?size:undefined;if(!pageLayoutDiagnostics(next,sections).length)canvasEdit(next);};
@@ -356,141 +401,135 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   const selectionCommands=nodeID?canvasCommands(nodeID):[];
   const selectionCommand=(name:string)=>selectionCommands.find(command=>command.id===name);
   const runSelectionCommand=(name:string)=>{const command=selectionCommand(name);if(command&&!command.disabled&&!busy&&!incompatible)command.run();};
+  const canvasRoute: Route = module ? { view: "module", params: { id: module.project.id, application: module.project.id, page: id } } : { view: "module", params: { page: id } };
+  const objectRef = { app: page.object.split(".")[0]!, kind: "object", name: page.object };
+  const overlayEntries = container ? Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container) : [];
+  // --- Inspector tabs follow what is in hand: the page, a layout, or a widget (ADR-0053 §5.3).
+  const pageTabs: WorkbenchTab[] = [
+    { id: "page", title: t("Page"), content: <Settings value={{ title, description }} object={info?.title ?? page.object}
+      selections={selections} objects={definitions.filter((d) => d.ref.kind === "object" && d.entity).map((d) => d.ref).sort((a, b) => Number(b.name === page.object) - Number(a.name === page.object))}
+      onSelections={(next, rename) => edit((old) => ({ ...old, selections: next, sections: rename ? old.sections.map((s) => ({ ...s, selection: s.selection === rename.from ? rename.to : s.selection, parentSelection: s.parentSelection === rename.from ? rename.to : s.parentSelection })) : old.sections }))}
+      onChange={(patch) => edit(patch, `settings:${Object.keys(patch).join(",")}`)} /> },
+    { id: "variables", title: t("Variables"), badge: Object.keys(document.variables ?? {}).length || undefined, content: <VariablesPanel object={objectRef} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> },
+    { id: "queries", title: t("Queries"), badge: Object.keys(document.queries ?? {}).length || undefined, content: <QueriesPanel sections={sections} onPreviewOwner={setQueryPreviewOwner} document={document} object={objectRef} values={variableValues} onChange={(document) => edit({ document })} /> },
+    { id: "interface", title: t("Interface"), content: <InterfacePanel document={document} object={objectRef} onChange={(document) => edit({ document })} /> },
+  ];
+  const containerTabs: WorkbenchTab[] = container ? [
+    { id: "layout", title: t("Layout"), content: <div className="grid content-start gap-2 p-2">
+      {overlayEntries.map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
+        onChange={(patch) => edit({ document: { ...document, overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
+        onRemove={() => { const result = removeOverlay(document, id); edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}
+      <LayoutProperties sections={sections} document={document} id={container}
+        onPatch={patchNode} onChange={(kind) => edit((old) => ({ ...old, document: setLayoutKind(old.document, container, kind) }))}
+        onUngroup={() => canvasCommands(container).find((command) => command.id === "ungroup")?.run()} ungroupDisabled={!canvasUngroup(document, container, sections)} />
+    </div> },
+    { id: "appearance", title: t("Appearance"), content: <div className="grid content-start gap-2 p-2">
+      <LayoutSizing document={document} id={container} onPatch={patchNode} />
+      <NodeBindings document={document} id={container} button={false} input={false} onChange={(patch) => patchNode(container, patch)} />
+    </div> },
+  ] : [];
+  const widgetTabs: WorkbenchTab[] = canvasSelection ? widgetInspectorTabs({
+    section: canvasSelection, sections, document, info: authoringEntity(canvasSelection.object || page.object), object: page.object, selections, relatedObjects,
+    catalog: catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target })), onChange: (patch) => change(chosen, patch),
+    onResourcesChange: (patch, variables) => edit((old) => ({ ...old, document: { ...old.document, variables }, sections: old.sections.map((s) => s.id === canvasSelection.id ? { ...s, ...patch } : s) }), "graph-resources"),
+    events: (() => { const Inspector = widgetInspector(canvasSelection.widget, canvasSelection.configVersion ?? 0)?.events; return <InspectorFrame id={canvasSelection.id ?? String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion ?? 0} part="events">{Inspector && <Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons, document) => edit({ document, sections: sections.map((s) => s.id === canvasSelection.id ? { ...s, buttons } : s) })} document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} overlay={nodeID ? overlayOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}</InspectorFrame>; })(),
+    appearance: <>
+      {Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value && nodeID) canvasCommitDrop({ kind: "move", id: nodeID, label: canvasSelection.title ?? nodeID }, { kind: "into", parent: event.target.value }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
+      {nodeID && <LayoutSizing document={document} id={nodeID} onPatch={patchNode} />}
+      {nodeID && <NodeBindings document={document} id={nodeID} button={!!widgetContract(canvasSelection.widget)?.inputPorts.some((port) => port.bindingField === "enabledWhen") && canvasSelection.widget !== "input"} input={canvasSelection.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />}
+    </>,
+  }) : [];
+  const inspectorTabs = canvasSelection ? widgetTabs : container ? containerTabs : pageTabs;
+  const inspectorKey = canvasSelection ? `widget:${canvasSelection.id}` : container ? `container:${container}` : "page";
+  const inspectorValue = selection.kind === "variables" ? "variables" : selection.kind === "queries" ? "queries" : selection.kind === "interface" ? "interface" : inspectorTab[inspectorKey.split(":")[0]!];
+  const liveValues = Object.entries(variableValues);
+  const crumbs: WorkbenchCrumb[] = module ? [
+    { label: t("Projects"), onClick: () => open({ view: "projects" }) },
+    { label: module.project.title || module.project.name, onClick: () => open({ view: "project", params: { id: module.project.id } }) },
+    { label: t("Module"), onClick: () => module.openModule() },
+  ] : [{ label: t("Pages"), onClick: () => open({ view: "module" }) }];
   return <WorkflowFormProblems.Provider value={report}>
-    <div className="flex flex-col gap-2 lg:h-[calc(100dvh-8rem)] lg:min-h-0" tabIndex={-1} onKeyDown={(event) => {
-      const command = event.metaKey || event.ctrlKey;
-      const typing = (event.target as HTMLElement).closest("input,textarea,select,[contenteditable=true]");
-      if (command && event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy) void save(); }
-      if(!typing&&!busy&&!incompatible&&event.altKey&&nodeID&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();canvasEdit(canvasMove(document,nodeID,event.key==='ArrowUp'||event.key==='ArrowLeft'?-1:1,sections));return;}
-      if (!command || typing || busy) return;
-      if (event.key.toLowerCase() === "z") { event.preventDefault(); history(event.shiftKey ? "redo" : "undo"); }
-      if (event.key.toLowerCase() === "y") { event.preventDefault(); history("redo"); }
-      if (event.key.toLowerCase() === "d") { event.preventDefault(); runSelectionCommand("duplicate"); }
-      if (event.key.toLowerCase() === "c"&&nodeID&&!window.getSelection()?.toString()) { event.preventDefault(); runSelectionCommand("copy"); }
-      if (event.key.toLowerCase() === "v"&&nodeID&&session.clipboard) { event.preventDefault(); runSelectionCommand("paste"); }
-    }}>
-      <PageHeader title={title || page.title} description={t("Compose what people see, save your draft, then review its release candidate.")}
-        actions={<><StatusTag status={page.state} registry={pageStates} />{page.state === "published" && <Button onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: page.name } })}>{t("Open published page")}</Button>}</>} />
-      {!source.entity(page.object) && info && <p className="text-xs text-warning" role="status">{t("Field choices come from a saved object draft. Business data is available after joint activation.")}</p>}
-      <Card role="toolbar" aria-label={t("Page design actions")} className="flex flex-wrap items-center gap-1 px-2 py-1.5">
-        <Button variant="ghost" aria-label={t("Toggle widget library")} onClick={() => setLeftOpen(!leftOpen)}>{leftOpen ? <PanelLeftClose /> : <PanelLeftOpen />}</Button>
-        <Button variant="ghost" aria-label={t("Undo")} title={t("Undo")} disabled={!session.canUndo || busy} onClick={() => history("undo")}><Undo2 /></Button>
-        <Button variant="ghost" aria-label={t("Redo")} title={t("Redo")} disabled={!session.canRedo || busy} onClick={() => history("redo")}><Redo2 /></Button>
-        {([['duplicate','Duplicate selection',Copy],['copy','Copy selection',Copy],['paste','Paste into layout',Clipboard]]as const).map(([id,label,Icon])=><Button key={id} variant="ghost" title={t(label)} aria-label={t(label)} disabled={busy||incompatible||!selectionCommand(id)||selectionCommand(id)?.disabled} onClick={()=>runSelectionCommand(id)}><Icon/></Button>)}
-        <Button variant="ghost" disabled={busy} onClick={()=>setCompatibilityOpen(true)}>{t("Review page compatibility")}</Button>
-        <Button variant="ghost" disabled={busy} onClick={()=>setImporting(true)}>{t("Import Workshop module")}</Button>
-        <span className="mx-1 h-4 w-px bg-border" />
-        <AssetControls type="build.page" record={page} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "compose", params: { id } }} />
-        <span className="ml-auto text-xs text-muted" role="status">{dirty ? t("Unsaved") : t("Saved")}</span>
-        <Button onClick={() => void save()} disabled={!dirty || busy || invalid}>{saving ? t("Saving…") : t("Save")}</Button>
-        {directInstall && <Button onClick={() => void publish()} disabled={nothing || busy || invalid} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{publishing ? t("Installing…") : t("Direct install")}</Button>}
-        <Button variant="primary" onClick={() => void review()} disabled={nothing || busy || invalid}>{t("Review release")}</Button>
-        <Button variant="ghost" aria-label={t("Toggle inspector")} onClick={() => setRightOpen(!rightOpen)}>{rightOpen ? <PanelRightClose /> : <PanelRightOpen />}</Button>
-      </Card>
-      {refused && <Panel role="alert" className="text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
-      {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
-      {importing&&<ModuleImportDialog key={clipboardScope} open retained={importPackage?.scope===clipboardScope?importPackage.pack:undefined} object={page.object} profile={pageUIProfile} onClose={()=>setImporting(false)} onApply={(draft,pack)=>{setImportPackage({scope:clipboardScope,pack});edit(draft,"module-import");select({kind:"page"});setFormProblems({});setRefused(undefined);}}/>}
-      {compatibilityOpen&&<CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={()=>setCompatibilityOpen(false)} onLocate={id=>{select({kind:"widget",id});setRightOpen(true);setCompatibilityOpen(false);}} onApply={review=>{if(lock.current)return;const next=applyProfileUpgrade(session.draft,review);if(!next)return;session.edit(next,"profile-upgrade");setCompatibilityOpen(false);setFormProblems({});setRefused(undefined);}}/>}
-      {clipboardNotice?.scope===clipboardScope&&<Panel role={clipboardNotice.error?"alert":"status"}>{clipboardNotice.text}</Panel>}
-      {layoutProblems.length>0&&<Panel role="alert">{layoutProblems.map((issue,i)=><p key={i}>{issue.node}: {t(issue.code)}</p>)}</Panel>}
-      {variableProblems.length > 0 && <Panel role="alert" className="text-xs text-danger">{variableProblems.map((issue, index) => <p key={index}>{issue.variable}: {t(issue.code)}</p>)}</Panel>}
-      {loopProblem && <Panel role="status" className="text-xs text-muted">{t("Choose a query window for each loop before saving.")}</Panel>}
-      {overlayProblem && <Panel role="status" className="text-xs text-muted">{t("Add content to each overlay and bind every button before saving.")}</Panel>}
-      {leaderboardProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind ranking fields and a matching numeric/ID sorted Top-N query before saving.")}</Panel>}
-      {recordWorkInvalid&&<Panel role="alert" className="text-xs text-danger">{t("Bind the original row action parameters, bounded tile/action window or note state before saving.")}</Panel>}
-      {analysisProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind the original analysis fields, matching scalar or axis ports and query before saving.")}</Panel>}
-      {summaryProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind the summary field, query and matching statistics before saving.")}</Panel>}
-      {searchInputProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind search text to a query search in the same scope before saving.")}</Panel>}
-      {pickerValueProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind picker ID output to original text state with the same query owner before saving.")}</Panel>}
-      {pickerProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind a picker title and a 20-record ID-sorted query before saving.")}</Panel>}
-      {dateProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind the date input to its original scoped text state before saving.")}</Panel>}
-      {choiceProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind a scoped text state and valid static choices before saving.")}</Panel>}
-      {booleanProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind a boolean state with its original page or overlay owner before saving.")}</Panel>}
-      {rangeProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind distinct text states with one owner and a valid decimal range before saving.")}</Panel>}
-      {gaugeProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind a number variable and positive gauge maximum before saving.")}</Panel>}
-      {spacerProblem&&<Panel role="alert" className="text-xs text-danger">{t("Declare a finite nonnegative spacer size within the layout budget before saving.")}</Panel>}
-      {separatorProblem&&<Panel role="alert" className="text-xs text-danger">{t("Declare a bounded plain separator label or leave it absent before saving.")}</Panel>}
-      {noticeProblem&&<Panel role="alert" className="text-xs text-danger">{t("Choose a supported notice tone and bounded plain title and text before saving.")}</Panel>}
-      {alertProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind an original decimal value and a valid threshold, tone and plain message before saving.")}</Panel>}
-      {progressProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind a decimal numerator and exactly one positive fixed total or decimal denominator before saving.")}</Panel>}
-      {recordGanttProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind Gantt fields, a valid fixed range and an explicitly sorted plan before saving.")}</Panel>}
-      {recordCalendarProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind calendar fields, an initial month and an explicitly sorted plan before saving.")}</Panel>}
-      {recordEventsProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind event fields and an explicitly sorted query plan before saving.")}</Panel>}
-      {explorationProblem&&<Panel role="alert" className="text-xs text-danger">{t("Exploration views require original typed resources, published assets, retained relations and distinct object-specific output ports.")}</Panel>}
-      {contextProblem&&<Panel role="alert" className="text-xs text-danger">{t("Context views need their original navigation, record or personnel-query bindings; image URL, caption and height must satisfy the static image profile.")}</Panel>}
-      {(workViewProblem||historyProblem)&&<Panel role="alert" className="text-xs text-danger">{t("Work views use their original member services. Bounded history needs an original same-owner record resource and a window of 1–100 entries.")}</Panel>}
-      {collaborationProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind the original record resource and collaboration state in the same page or overlay before saving.")}</Panel>}
-      {recordComparisonProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind an original multi-selection resource, title and 1–64 comparison fields before saving.")}</Panel>}
-      {recordCardProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind an original record resource, title and at most four card properties before saving.")}</Panel>}
-      {sparklineProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind one original sparkline scalar and an optional ordered 30-record numeric window before saving.")}</Panel>}
-      {observationInvalid&&<Panel role="alert" className="text-xs text-danger">{t("Bind original observation time, signals, owned windows and matching record or statistic ports before saving.")}</Panel>}
-      {treemapProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind a visible treemap group, original query window and exclusive output type before saving.")}</Panel>}
-      {heatmapProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind two distinct heatmap axes, complete count and the original query set before saving.")}</Panel>}
-      {scatterProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind visible scatter fields and an ordered original window of at most 100 records before saving.")}</Panel>}
-      {recordChartProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind visible record chart axes and an explicitly sorted query plan before saving.")}</Panel>}
-      {recordListProblem&&<Panel role="alert" className="text-xs text-danger">{t("Bind a record card window, title and bounded summary fields before saving.")}</Panel>}
-      {titleProblem&&<Panel role="alert" className="text-xs text-danger">{t("Enter bounded heading text or bind the collection and its original count before saving.")}</Panel>}
-      {metricPresentationProblem&&<Panel role="alert" className="text-xs text-danger">{t("Metric units and static notes need supported directions and bounded text.")}</Panel>}
-      {statusTrackerProblem&&<Panel role="alert" className="text-xs text-danger">{t("Choose an original lifecycle field and valid stages before saving.")}</Panel>}
-      {recordLinksProblem&&<Panel role="alert" className="text-xs text-danger">{t("Choose valid related groups before saving.")}</Panel>}
-      {recordViewProblem&&<Panel role="alert" className="text-xs text-danger">{t("Choose at least one record tab before saving.")}</Panel>}
-      {groupProblem&&<Panel role="alert" className="text-xs text-danger">{t("Give every group button a bounded title and its own click binding.")}</Panel>}
-      {tablePresentationProblem&&<Panel role="alert" className="text-xs text-danger">{t("Table columns and controls need supported formats, density and bounded titles.")}</Panel>}
-      {selectionProblem && <Panel role="alert" className="text-xs text-danger">{selectionProblem}</Panel>}
-      {incompatible && <Panel role="alert" className="text-xs text-danger">{t("This draft needs a newer workspace version. Its saved content has been preserved.")}</Panel>}
-      <fieldset disabled={busy || incompatible} className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
-        <CanvasEditor model={canvasModel(document,sections,{...Object.fromEntries(Object.entries(widgetTitles).map(([id,title])=>[id,title()])),rows:t("Rows"),columns:t("Columns"),tabs:t("Tabs"),flow:t("Flow layout"),toolbar:t("Toolbar"),loop:t("Loop")})} selected={nodeID} revision={session.draft} zoom={zoom/100} disabled={busy||incompatible}
-          commands={selectionCommands} icon={canvasSelection?<WidgetGlyph widget={canvasSelection.widget}/>:<LayoutGlyph kind={document.nodes[nodeID??'']?.kind??'rows'}/>}
-          onSelect={canvasSelect} onDrop={canvasCommitDrop} onMove={(id,delta)=>canvasEdit(canvasMove(document,id,delta,sections))}
-          resize={(id,axis,pixels,rects)=>canvasResize(document,id,axis,pixels,rects)} onResize={canvasCommitSizes}
-          onResetSize={(id,axis)=>{const sizes=canvasResetSize(document,id,axis);if(sizes)canvasCommitSizes(sizes);}}>
-        <EditorWorkbench leftLabel={t("Widgets and layout")} centerLabel={t("The page")} rightLabel={t("The widget in hand")}
-          left={leftOpen && <><Button className="m-3" aria-pressed={selection.kind === "queries"} onClick={() => { select({kind:"queries"});setRightOpen(true); }}>{t("Query plans")}</Button><Button className="m-3" aria-pressed={selection.kind === "interface"} onClick={() => { select({ kind: "interface" }); setRightOpen(true); }}>{t("Page interface")}</Button><Button className="m-3" aria-pressed={selection.kind === "variables"} onClick={() => { select({ kind: "variables" }); setRightOpen(true); }}>{t("Page variables")}</Button><LayoutTree document={document} sections={sections} chosen={chosen} container={container} title={title||page.title}
-            widgetTitles={widgetTitles} widgets={widgets} onChoose={choose} onContainer={id=>canvasSelect(id)} onAdd={add}
-            onGroup={kind=>{if(!nodeID)return;const result=canvasGroup(document,nodeID,kind,sections);if(result){canvasEdit(result.document);select({kind:'container',id:result.id});}}}
-            onAddOverlay={()=>{const result=addOverlay(document,t("Overlay {n}",{n:Object.keys(document.overlays??{}).length+1}));canvasEdit(result.document);select({kind:'container',id:result.root});setRightOpen(true);}}
-            commandsForNode={canvasCommands} /></>}
-          right={rightOpen && (selection.kind === "queries" ? <QueriesPanel sections={sections} onPreviewOwner={setQueryPreviewOwner} document={document} object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} values={variableValues} onChange={(document)=>edit({document})}/> : selection.kind === "interface" ? <InterfacePanel document={document} object={{ app: page.object.split(".")[0]!, kind: "object", name: page.object }} onChange={(document) => edit({ document })} /> : selection.kind === "variables" ? <VariablesPanel object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> : <div className="grid content-start gap-2">{container && Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container).map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
-            onChange={(patch) => edit({ document: { ...document, overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
-            onRemove={() => { const result = removeOverlay(document, id); edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}{container ? <LayoutProperties sections={sections} document={document} id={container}
-            onPatch={patchNode} onChange={(kind) => edit((old) => ({ ...old, document: setLayoutKind(old.document, container, kind) }))}
-            onUngroup={() => canvasCommands(container).find(command=>command.id==='ungroup')?.run()} ungroupDisabled={!canvasUngroup(document,container,sections)} /> :
-          chosen < 0 ? <Settings value={{ title, description }} object={info?.title ?? page.object}
-            selections={selections} objects={definitions.filter((d) => d.ref.kind === "object" && d.entity).map((d) => d.ref).sort((a, b) => Number(b.name === page.object) - Number(a.name === page.object))}
-            onSelections={(next, rename) => edit((old) => ({ ...old, selections: next, sections: rename ? old.sections.map((s) => ({ ...s, selection: s.selection === rename.from ? rename.to : s.selection, parentSelection: s.parentSelection === rename.from ? rename.to : s.parentSelection })) : old.sections }))}
-            onChange={(patch) => edit(patch, `settings:${Object.keys(patch).join(",")}`)} /> :
-          <WidgetProperties key={`${canvasSelection?.id}/${canvasSelection?.widget}/${canvasSelection?.configVersion}`}
-            events={(() => { const Inspector=canvasSelection&&widgetInspector(canvasSelection.widget,canvasSelection.configVersion??0)?.events;return canvasSelection?<InspectorFrame id={canvasSelection.id??String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion??0} part="events">{Inspector&&<Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons,document)=>edit({document,sections:sections.map(s=>s.id===canvasSelection.id?{...s,buttons}:s)})} document={document} section={canvasSelection.id!} owner={nodeID?loopOwner(document,nodeID):undefined} overlay={nodeID?overlayOwner(document,nodeID):undefined} onChange={document=>edit({document})}/>}</InspectorFrame>:null; })()}
-            display={<> {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value&&nodeID) canvasCommitDrop({kind:'move',id:nodeID,label:canvasSelection?.title??nodeID},{kind:'into',parent:event.target.value}); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
-            {nodeID&&<LayoutSizing document={document} id={nodeID} onPatch={patchNode}/>}
-            {nodeID && <NodeBindings document={document} id={nodeID} button={!!canvasSelection&&!!widgetContract(canvasSelection.widget)?.inputPorts.some(port=>port.bindingField==="enabledWhen")&&canvasSelection.widget!=="input"} input={canvasSelection?.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />} </>} onResourcesChange={(patch,variables)=>edit(old=>({...old,document:{...old.document,variables},sections:old.sections.map(s=>s.id===canvasSelection?.id?{...s,...patch}:s)}),"graph-resources")} sections={sections} section={canvasSelection} info={authoringEntity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
-            document={document} object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
-            {!canvasSelection&&nodeID&&<LayoutSizing document={document} id={nodeID} onPatch={patchNode}/>}
-            {!canvasSelection && nodeID && <NodeBindings document={document} id={nodeID} button={false} input={false} onChange={(patch) => patchNode(nodeID, patch)} />}</div>)}>
-          <div className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-1.5">
-            <span className="mr-auto truncate text-xs font-medium">{title || page.title}</span>
+    <Workbench storageKey="page" crumbs={crumbs} title={title || page.title}
+      status={<DraftStatus state={page.state} problems={problemList.length} />} saving={savingState(dirty, saving, refused)}
+      history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => history("undo"), redo: () => history("redo") }}
+      actions={<>
+        <Button size="sm" variant={preview ? "primary" : "ghost"} aria-pressed={preview} onClick={() => { setPreview(!preview); select({ kind: "page" }); }}><Play />{t("Preview")}</Button>
+        <ActionMenu label={t("More page commands")} icon={<MoreHorizontal />} commands={[
+          { id: "import", label: t("Import Workshop module…"), icon: <Download />, disabled: busy, run: () => setImporting(true) },
+          { id: "compatibility", label: t("Review page compatibility…"), disabled: busy, run: () => setCompatibilityOpen(true) },
+          ...(page.state === "published" ? [{ id: "open", label: t("Open published page"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: page.name } }) }] : []),
+        ]} />
+        <PublishMenu type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} onReview={() => void review()} onInstall={() => void publish()} onDiscard={discardChanges} route={canvasRoute} />
+      </>}
+      onKeyDown={(event) => {
+        const command = event.metaKey || event.ctrlKey;
+        const typing = (event.target as HTMLElement).closest("input,textarea,select,[contenteditable=true]");
+        if (command && event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy) void save(); }
+        if (!typing && !busy && !incompatible && event.altKey && nodeID && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); canvasEdit(canvasMove(document, nodeID, event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1, sections)); return; }
+        if (!typing && !busy && nodeID && (event.key === "Delete" || event.key === "Backspace")) { event.preventDefault(); runSelectionCommand("delete"); return; }
+        if (!typing && event.key === "Escape" && nodeID) { const parent = Object.entries(document.nodes).find(([, n]) => n.children?.includes(nodeID))?.[0]; if (parent && parent !== document.root) canvasSelect(parent); else select({ kind: "page" }); return; }
+        if (!command || typing || busy) return;
+        if (event.key.toLowerCase() === "z") { event.preventDefault(); history(event.shiftKey ? "redo" : "undo"); }
+        if (event.key.toLowerCase() === "y") { event.preventDefault(); history("redo"); }
+        if (event.key.toLowerCase() === "d") { event.preventDefault(); runSelectionCommand("duplicate"); }
+        if (event.key.toLowerCase() === "c" && nodeID && !window.getSelection()?.toString()) { event.preventDefault(); runSelectionCommand("copy"); }
+        if (event.key.toLowerCase() === "v" && nodeID && session.clipboard) { event.preventDefault(); runSelectionCommand("paste"); }
+      }}
+      left={{ label: t("Page structure"), value: leftTab, onChange: setLeftTab, tabs: [
+        { id: "layers", title: t("Layers"), content: <div className="grid content-start">
+          {module && <ModuleTree context={module} compact />}
+          <LayoutTree document={document} sections={sections} chosen={chosen} container={container} title={title || page.title}
+            widgetTitles={widgetTitles} onChoose={choose} onContainer={(id) => canvasSelect(id)}
+            onGroup={(kind) => { if (!nodeID) return; const result = canvasGroup(document, nodeID, kind, sections); if (result) { canvasEdit(result.document); select({ kind: "container", id: result.id }); } }}
+            onAddOverlay={() => { const result = addOverlay(document, t("Overlay {n}", { n: Object.keys(document.overlays ?? {}).length + 1 })); canvasEdit(result.document); select({ kind: "container", id: result.root }); }}
+            commandsForNode={canvasCommands} />
+        </div> },
+        { id: "widgets", title: t("Widgets"), content: <WidgetLibrary widgets={widgets} widgetTitles={widgetTitles} onAdd={(widget) => add(widget)} /> },
+      ] }}
+      right={preview ? undefined : { label: t("Inspector"), value: inspectorValue, onChange: (next) => { if (["variables", "queries", "interface"].includes(next) && !canvasSelection && !container) select({ kind: next as "variables" | "queries" | "interface" }); else if (next === "page") select({ kind: "page" }); setInspectorTab((old) => ({ ...old, [inspectorKey.split(":")[0]!]: next })); },
+        tabs: [{ id: "__head", title: <span className="flex items-center gap-1">{canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : container ? <LayoutGlyph kind={document.nodes[container]?.kind ?? "rows"} /> : <Settings2 className="size-3" />}<span className="max-w-24 truncate">{canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}</span></span>, content: null }, ...inspectorTabs].filter((tab) => tab.id !== "__head") }}
+      dock={{ label: t("Page dock"), tabs: [
+        { id: "problems", title: t("Problems"), badge: problemList.length, content: <ProblemList problems={problemList} empty={t("No problems. The page can be published.")} /> },
+        { id: "variables", title: t("Variables"), badge: liveValues.length || undefined, content: liveValues.length ? <table className="w-full text-xs"><thead><tr className="text-left text-muted"><th className="px-3 py-1 font-medium">{t("Variable")}</th><th className="px-3 py-1 font-medium">{t("Type")}</th><th className="px-3 py-1 font-medium">{t("Current value")}</th></tr></thead>
+          <tbody>{liveValues.map(([name, value]) => <tr key={name} className="border-t border-border"><td className="px-3 py-1 font-mono">{document.variables?.[name]?.title || name}</td><td className="px-3 py-1 text-muted">{document.variables?.[name]?.type}</td><td className="max-w-md truncate px-3 py-1 font-mono">{JSON.stringify(value)}</td></tr>)}</tbody></table> : <p className="p-3 text-xs text-muted">{t("Variables show their live values here once the page renders.")}</p> },
+      ] }}>
+      {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
+      {!source.entity(page.object) && info && <p className="px-3 pt-2 text-xs text-warning" role="status">{t("Field choices come from a saved object draft. Business data is available after joint activation.")}</p>}
+      {importing && <ModuleImportDialog key={clipboardScope} open retained={importPackage?.scope === clipboardScope ? importPackage.pack : undefined} object={page.object} profile={pageUIProfile} onClose={() => setImporting(false)} onApply={(draft, pack) => { setImportPackage({ scope: clipboardScope, pack }); edit(draft, "module-import"); select({ kind: "page" }); setFormProblems({}); setRefused(undefined); }} />}
+      {compatibilityOpen && <CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={() => setCompatibilityOpen(false)} onLocate={(id) => { select({ kind: "widget", id }); setCompatibilityOpen(false); }} onApply={(review) => { if (lock.current) return; const next = applyProfileUpgrade(session.draft, review); if (!next) return; session.edit(next, "profile-upgrade"); setCompatibilityOpen(false); setFormProblems({}); setRefused(undefined); }} />}
+      <fieldset disabled={busy || incompatible} className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <CanvasEditor model={canvasModel(document, sections, { ...Object.fromEntries(Object.entries(widgetTitles).map(([id, title]) => [id, title()])), rows: t("Rows"), columns: t("Columns"), tabs: t("Tabs"), flow: t("Flow layout"), toolbar: t("Toolbar"), loop: t("Loop") })} selected={preview ? undefined : nodeID} revision={session.draft} zoom={zoom / 100} disabled={busy || incompatible || preview}
+          commands={selectionCommands} icon={canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : <LayoutGlyph kind={document.nodes[nodeID ?? ""]?.kind ?? "rows"} />}
+          onSelect={canvasSelect} onDrop={canvasCommitDrop} onMove={(id, delta) => canvasEdit(canvasMove(document, id, delta, sections))}
+          resize={(id, axis, pixels, rects) => canvasResize(document, id, axis, pixels, rects)} onResize={canvasCommitSizes}
+          onResetSize={(id, axis) => { const sizes = canvasResetSize(document, id, axis); if (sizes) canvasCommitSizes(sizes); }}>
+          <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1">
+            {([["duplicate", "Duplicate selection", Copy], ["copy", "Copy selection", Copy], ["paste", "Paste into layout", Clipboard]] as const).map(([cid, label, Icon]) => <Button key={cid} size="sm" variant="ghost" title={t(label)} aria-label={t(label)} disabled={busy || incompatible || preview || !selectionCommand(cid) || selectionCommand(cid)?.disabled} onClick={() => runSelectionCommand(cid)}><Icon /></Button>)}
+            <span className="mx-1 h-4 w-px bg-border" />
+            {(["rows", "columns", "tabs"] as const).map((kind) => <Button key={kind} size="sm" variant="ghost" disabled={!nodeID || preview} title={t(kind === "rows" ? "Group in rows" : kind === "columns" ? "Group in columns" : "Group in tabs")} aria-label={t(kind === "rows" ? "Group in rows" : kind === "columns" ? "Group in columns" : "Group in tabs")} onClick={() => { if (!nodeID) return; const result = canvasGroup(document, nodeID, kind, sections); if (result) { canvasEdit(result.document); select({ kind: "container", id: result.id }); } }}>{kind === "rows" ? <Rows3 /> : kind === "columns" ? <Columns2 /> : <Group />}</Button>)}
+            {clipboardNotice?.scope === clipboardScope && <span role={clipboardNotice.error ? "alert" : "status"} className={"ml-2 truncate text-xs " + (clipboardNotice.error ? "text-danger" : "text-muted")}>{clipboardNotice.text}</span>}
+            <span className="ml-auto" />
             {([["desktop", "Desktop preview", Monitor], ["tablet", "Tablet preview", Tablet], ["mobile", "Mobile preview", Smartphone]] as const).map(([device, label, Icon]) => <Button key={device} size="sm" variant="ghost" aria-label={t(label)} aria-pressed={viewport === device} onClick={() => setViewport(device)}><Icon /></Button>)}
             <Select aria-label={t("Canvas zoom")} value={zoom} onChange={(event) => setZoom(Number(event.target.value))} className="w-20">{[50, 75, 100, 125].map((value) => <option key={value} value={value}>{value}%</option>)}</Select>
           </div>
           <div data-canvas-scroll className="min-h-[24rem] flex-1 overflow-auto bg-canvas p-4">
             <div className="mx-auto" style={{ width: viewport === "desktop" ? "100%" : viewport === "tablet" ? 768 : 390, zoom: zoom / 100 }}>
-              <ApplicationPage pageRef={{app:"build",kind:"page",name:page.name}} route={{view:"compose",params:{id}}} preview><ComposedPage editingRoot={(() => {
-                if(selection.kind==="queries")return queryPreviewOwner?document.overlays?.[queryPreviewOwner]?.root:undefined;
+              <ApplicationPage pageRef={{ app: "build", kind: "page", name: page.name }} route={canvasRoute} preview><ComposedPage editingRoot={preview ? undefined : (() => {
+                if (selection.kind === "queries") return queryPreviewOwner ? document.overlays?.[queryPreviewOwner]?.root : undefined;
                 const node = container ?? (canvasSelection?.id ? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection.id)?.[0] : undefined);
                 return Object.values(document.overlays ?? {}).find((overlay) => {
-                  const includes = (id: string): boolean => id === node || [...(document.nodes[id]?.children ?? []),...(document.unusedWidgets??[]).filter(entry=>entry.parent===id).map(entry=>entry.node)].some(includes);
+                  const includes = (id: string): boolean => id === node || [...(document.nodes[id]?.children ?? []), ...(document.unusedWidgets ?? []).filter((entry) => entry.parent === id).map((entry) => entry.node)].some(includes);
                   return includes(overlay.root);
                 })?.root;
-              })()} onVariableValues={setVariableValues} page={asPage({ ...page, title, description, selections }, sections, document)} live={false} chosen={chosen} onChoose={choose}
-                notice={nothing && <Panel role="status" className="text-xs text-muted">{t("Add at least one widget before installing or reviewing a release.")}</Panel>}
-                wrapLayout={(id, _node, body) => <CanvasRegion key={id} id={id}>{body}</CanvasRegion>} /></ApplicationPage>
+              })()} onVariableValues={setVariableValues} page={asPage({ ...page, title, description, selections }, sections, document)} live={preview} chosen={preview ? -1 : chosen} onChoose={preview ? () => {} : choose}
+                notice={nothing && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted"><p>{t("This page is empty.")}</p><p className="mt-1 text-xs">{t("Drag a widget from the library, or pick one to add it here.")}</p><Button className="mt-3" size="sm" onClick={() => setLeftTab("widgets")}><Plus />{t("Add widget")}</Button></div>}
+                wrapLayout={preview ? undefined : (id, _node, body) => <CanvasRegion key={id} id={id}>{body}</CanvasRegion>} /></ApplicationPage>
             </div>
           </div>
-          <div className="flex items-center gap-2 border-t border-border px-3 py-1.5 text-[11px] text-muted" role="status">{t("Your records, as they are. Actions do not run while you compose.")}</div>
-        </EditorWorkbench>
+          <div className="flex items-center gap-2 border-t border-border px-3 py-1 text-[11px] text-muted" role="status">{preview ? t("Preview: your records as they are; actions run for real.") : t("Design: your records as they are. Actions do not run while you compose.")}</div>
         </CanvasEditor>
       </fieldset>
-    </div>
+    </Workbench>
   </WorkflowFormProblems.Provider>;
 }
 
@@ -504,41 +543,39 @@ type PropertiesProps = {
 };
 
 /** Inspector navigation is local UI; every panel edits the same DraftSession. */
-function WidgetProperties(props: PropertiesProps & { events: ReactNode; display: ReactNode }) {
-  const [tab, setTab] = useState("setup");
+/** The inspector tabs of the widget in hand (ADR-0053 §5.3): Properties, Data, Events, Appearance. */
+function widgetInspectorTabs(props: PropertiesProps & { section: Draft; events: ReactNode; appearance: ReactNode }): WorkbenchTab[] {
   const { section, sections, document, info, object, onChange, onResourcesChange } = props;
-  if (!section) return null;
   const leaf = Object.entries(document.nodes).find(([, node]) => node.section === section.id)?.[0];
   const overlay = leaf ? overlayOwner(document, leaf) : undefined;
   const Inspector = widgetInspector(section.widget, section.configVersion ?? 0)?.bindings;
   const contract = widgetContract(section.widget);
-  return <><div className="flex items-center gap-2 px-3 py-1 text-xs font-semibold text-muted"><WidgetGlyph widget={section.widget}/>{widgetTitles[section.widget]?.()??section.widget}</div><ContentTabs label={t("Widget inspector panels")} value={tab} onChange={setTab} items={[
-    { id: "setup", title: t("Setup"), content: <Card className="grid gap-3 p-3">
-      <label className="grid gap-1 text-xs">{t("Title")}
-        <Input value={section.title ?? ""} onChange={(event) => onChange({ title: event.target.value })} />
-      </label>
-      {section.widget === "input" && <label className="grid gap-1 text-xs">{t("Input presentation")}
-        <Select value={section.inputKind ?? ""} onChange={(event) => onChange({ inputKind: event.target.value || undefined })}>
-          <option value="">{t("Text input")}</option><option value="search">{t("Scoped record search")}</option>
-        </Select>
-      </label>}
-      <p className="text-xs text-muted">{t("Use layout groups to arrange this widget in rows or columns.")}</p>
-      {section.widget === "text" && <div className="grid gap-1 text-xs">
-        <span className="font-medium text-muted">{t("Words")}</span>
-        <MarkdownEditor value={section.text ?? ""} onChange={(text) => onChange({ text })} rows={6} placeholder={t("Write markdown here…")} />
-      </div>}
-    </Card> },
-    { id: "data", title: t("Data"), content: <Properties {...props} /> },
-    ...(Inspector ? [{ id: "props", title: t("Properties"), content: <Card className="grid gap-3 p-3">
-      <InspectorFrame id={section.id ?? "selected"} widget={section.widget} version={section.configVersion ?? 0} part="bindings">
-        <Inspector section={section} document={document} object={object} info={info} overlay={overlay}
-          itemOwner={leaf ? loopOwner(document, leaf) : undefined} sections={sections}
-          onResourcesChange={onResourcesChange} onChange={onChange} />
-      </InspectorFrame>
-    </Card> }] : []),
-    ...(contract && "events" in contract && contract.events.length ? [{ id: "events", title: t("Events"), content: props.events }] : []),
-    { id: "display", title: t("Display"), content: <div className="grid gap-2">{props.display}</div> },
-  ]} /></>;
+  return [
+    { id: "properties", title: t("Properties"), content: <div className="grid content-start gap-2 p-2">
+      <Card className="grid gap-3 p-3">
+        <label className="grid gap-1 text-xs">{t("Title")}<Input value={section.title ?? ""} onChange={(event) => onChange({ title: event.target.value })} /></label>
+        {section.widget === "input" && <label className="grid gap-1 text-xs">{t("Input presentation")}
+          <Select value={section.inputKind ?? ""} onChange={(event) => onChange({ inputKind: event.target.value || undefined })}>
+            <option value="">{t("Text input")}</option><option value="search">{t("Scoped record search")}</option>
+          </Select>
+        </label>}
+        {section.widget === "text" && <div className="grid gap-1 text-xs">
+          <span className="font-medium text-muted">{t("Words")}</span>
+          <MarkdownEditor value={section.text ?? ""} onChange={(text) => onChange({ text })} rows={6} placeholder={t("Write markdown here…")} />
+        </div>}
+      </Card>
+      {Inspector && <Card className="grid gap-3 p-3">
+        <InspectorFrame id={section.id ?? "selected"} widget={section.widget} version={section.configVersion ?? 0} part="bindings">
+          <Inspector section={section} document={document} object={object} info={info} overlay={overlay}
+            itemOwner={leaf ? loopOwner(document, leaf) : undefined} sections={sections}
+            onResourcesChange={onResourcesChange} onChange={onChange} />
+        </InspectorFrame>
+      </Card>}
+    </div> },
+    { id: "data", title: t("Data"), content: <div className="grid content-start gap-2 p-2"><Properties {...props} /></div> },
+    ...(contract && "events" in contract && contract.events.length ? [{ id: "events", title: t("Events"), badge: document.events?.filter((binding) => binding.source === section.id).length || undefined, content: <div className="grid content-start gap-2 p-2">{props.events}</div> }] : []),
+    { id: "appearance", title: t("Appearance"), content: <div className="grid content-start gap-2 p-2">{props.appearance}</div> },
+  ];
 }
 
 function Properties({ section, sections, document, info, catalog, object, selections, relatedObjects = [], onChange }: PropertiesProps) {
