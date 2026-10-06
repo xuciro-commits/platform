@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,9 +74,21 @@ func (t *Tenant) readOData(s build.Source, c build.Connection) ([]map[string]any
 		}
 		rows = append(rows, answer.Value...)
 		next = answer.NextLink
-		if next != "" && !strings.Contains(next, "://") {
-			next = c.Resolve(next)
+		if next != "" {
+			current, _ := url.Parse(c.Resolve(s.Entity))
+			ref, err := url.Parse(next)
+			if err != nil {
+				return nil, fmt.Errorf("the service returned an invalid next link")
+			}
+			resolved := current.ResolveReference(ref)
+			if resolved.Scheme != current.Scheme || resolved.Host != current.Host {
+				return nil, fmt.Errorf("the service next link leaves the connection's origin")
+			}
+			next = resolved.String()
 		}
+	}
+	if next != "" || len(rows) > 5000 {
+		return nil, fmt.Errorf("the OData result exceeds 20 pages or 5000 rows; narrow the filter")
 	}
 	return rows, nil
 }
@@ -115,7 +129,7 @@ func (t *Tenant) readTable(s build.Source, c build.Connection) ([]map[string]any
 	if s.Since != "" {
 		query += " order by " + s.Since
 	}
-	query += " limit 5000"
+	query += " limit 5001"
 	rows, err := conn.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("the query failed: %v", err)
@@ -134,16 +148,25 @@ func (t *Tenant) readTable(s build.Source, c build.Connection) ([]map[string]any
 		}
 		out = append(out, row)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(out) > 5000 {
+		if s.Since == "" || fmt.Sprint(out[4999][s.Since]) == fmt.Sprint(out[5000][s.Since]) {
+			return nil, fmt.Errorf("the table result exceeds 5000 rows at one cursor; narrow the filter")
+		}
+		out = out[:5000]
+	}
+	return out, nil
 }
 
-// plain turns driver values into what JSON rows hold: times as RFC 3339, numbers as float64.
+// plain preserves database timestamps and full-width integer row identities.
 func plain(v any) any {
 	switch x := v.(type) {
 	case time.Time:
-		return x.UTC().Format(time.RFC3339)
+		return x.UTC().Format(time.RFC3339Nano)
 	case int64:
-		return float64(x)
+		return json.Number(strconv.FormatInt(x, 10))
 	case int32:
 		return float64(x)
 	case int16:
@@ -197,14 +220,36 @@ func (t *Tenant) CheckConnections(now time.Time) {
 		if err != nil {
 			check.Error = err.Error()
 		}
-		payload, _ := json.Marshal(map[string]any{"check": check})
-		member := t.automation(build.ID, false).Member
-		t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "checked:" + c.ID + ":" + now.UTC().Format(time.RFC3339Nano),
-			Target: &pb.EntityRef{Type: build.ConnectionType, Id: c.ID}, Schema: &pb.SchemaRef{Name: build.SchemaConnectionChecked, Version: 1}, Payload: payload}, now)
+		payload, _ := json.Marshal(map[string]any{"revision": c.Revision, "check": check})
+		caller := t.automation(build.ID, false)
+		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: "checked:" + c.ID + ":" + now.UTC().Format(time.RFC3339Nano),
+			Target: &pb.EntityRef{Type: build.ConnectionType, Id: c.ID}, Schema: &pb.SchemaRef{Name: build.SchemaConnectionChecked, Version: 1}, Payload: payload}
+		func() {
+			t.mu.Lock()
+			defer t.mu.Unlock()
+			if t.quarantined() {
+				return
+			}
+			app := t.app(build.ID).(platform.ResultApp)
+			if t.AcceptResult != nil {
+				if _, err := t.submitAccepted(app, caller.Member, sub, now, true); err != nil {
+					log.Printf("tenant %s: connection check result refused: %v", t.ID, err)
+				}
+			} else if _, err := app.Submit(caller, sub, now); err == nil {
+				t.journal(app, caller.Member, sub, now)
+			} else {
+				log.Printf("tenant %s: connection check result refused: %v", t.ID, err)
+			}
+		}()
 	}
 }
 
 func (t *Tenant) checkConnection(c build.Connection) (string, error) {
+	if c.Secret != "" {
+		if value, ok := t.secret(c.Secret); !ok || len(strings.TrimSpace(string(value))) == 0 {
+			return "", fmt.Errorf("the named connection secret is unavailable")
+		}
+	}
 	switch c.Kind {
 	case "postgres":
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

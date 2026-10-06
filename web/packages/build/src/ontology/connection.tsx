@@ -1,14 +1,14 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
+import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
 
 // Connections (ADR-0070): the external systems a tenant reads through - a kind,
 // an address and the name of a secret the host holds. Check reaches the system
 // once from the host; sources then read through a ready connection.
-type Draft = { id: string; revision: number; name: string; title: string; kind: string; address: string; secret?: string; allowPrivate?: boolean; state: string; requested?: boolean;
-  last?: { at: string; ok: boolean; error?: string; detail?: string } };
-const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "", kind: "http", address: "", state: "draft" });
+type Draft = Api.Connection;
+const empty = (): Draft => ({ id: "", revision: 0, created: { at: "" } as Api.Stamp, changed: { at: "" } as Api.Stamp, name: "", title: "", kind: "http", address: "", state: "draft" });
 const KINDS = [["http", "HTTP / REST / files"], ["odata", "OData (SAP Gateway)"], ["postgres", "PostgreSQL (read-only)"]] as const;
 const placeholders: Record<string, string> = { http: "https://erp.example.com/api/", odata: "https://sap.example.com/sap/opu/odata/sap/API_PRODUCT_SRV/", postgres: "postgres://reader@mes-db.example.com:5432/mes?sslmode=require" };
 const fieldClass = "grid min-w-0 gap-1 text-xs";
@@ -66,7 +66,7 @@ export function ConnectionEditor({ id }: { id: string }) {
       <Panel title={t("System")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Connection name")}<Input disabled={draft.state === "ready"} value={draft.name} placeholder="sap" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Connection title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
-        <label className={fieldClass}>{t("Kind")}<Select value={draft.kind} onChange={(e) => patch({ kind: e.target.value })}>{KINDS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}</Select></label>
+        <label className={fieldClass}>{t("Kind")}<Select value={draft.kind} onChange={(e) => patch({ kind: e.target.value as Api.Connection["kind"] })}>{KINDS.map(([k, label]) => <option key={k} value={k}>{t(label)}</option>)}</Select></label>
         <label className={fieldClass}>{t("Address")}<Input value={draft.address} placeholder={placeholders[draft.kind]} onChange={(e) => patch({ address: e.target.value })} />
           <span className="text-[11px] text-muted">{draft.kind === "postgres" ? t("A postgres:// URL without the password; the secret is the password.") : t("The service root; sources give a path or an entity set beneath it.")}</span></label>
         <label className={fieldClass}>{t("Secret name")}<Input value={draft.secret ?? ""} placeholder="sap-reader" onChange={(e) => patch({ secret: e.target.value })} />

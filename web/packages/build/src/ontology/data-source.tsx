@@ -8,9 +8,9 @@ import { PERIODS, periodLabel } from "../automate/workflow-model";
 // Data sources (ADR-0061): an external JSON endpoint whose rows become records
 // of one object. The editor is the whole wizard - endpoint, rows, mapping,
 // period - and the last pull shows what happened.
-type Draft = Api.Source & { connection?: string; profile?: string; entity?: string; filter?: string; since?: string; cursor?: string; dataset?: string };
+type Draft = Api.Source & { dataset?: string };
+type ConnectionRow = Api.Connection;
 type DatasetRow = { id: string; title: string };
-type ConnectionRow = { id: string; name: string; title: string; kind: string; state: string };
 const PROFILES = [["json", "JSON"], ["csv", "CSV"], ["odata", "OData entity set"], ["table", "Database table"]] as const;
 const empty = (): Draft => ({ id: "", revision: 0, created: { at: "" } as Api.Stamp, changed: { at: "" } as Api.Stamp, name: "", title: "", url: "", object: "", key: "id", mapping: [], state: "draft" });
 const conversions = ["", "string", "number", "boolean", "date"];
@@ -81,7 +81,7 @@ export function DataSourceEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Connection")}<Select value={draft.connection ?? ""} onChange={(e) => { const c = connections.find((x) => x.id === e.target.value); patch({ connection: e.target.value, profile: c?.kind === "odata" ? "odata" : c?.kind === "postgres" ? "table" : profile === "odata" || profile === "table" ? "json" : profile }); }}>
           <option value="">{t("— none: a bare URL")}</option>{connections.map((c) => <option key={c.id} value={c.id}>{c.title} · {c.kind}</option>)}</Select>
           <span className="text-[11px] text-muted">{t("Ready connections only; the credential comes from the connection.")}</span></label>
-        <label className={fieldClass}>{t("Profile")}<Select value={profile} onChange={(e) => patch({ profile: e.target.value })}>{PROFILES.filter(([p]) => conn ? (conn.kind === "odata" ? p === "odata" : conn.kind === "postgres" ? p === "table" : p === "json" || p === "csv") : p === "json" || p === "csv").map(([p, label]) => <option key={p} value={p}>{label}</option>)}</Select></label>
+        <label className={fieldClass}>{t("Profile")}<Select value={profile} onChange={(e) => patch({ profile: e.target.value as Api.Source["profile"] })}>{PROFILES.filter(([p]) => conn ? (conn.kind === "odata" ? p === "odata" : conn.kind === "postgres" ? p === "table" : p === "json" || p === "csv") : p === "json" || p === "csv").map(([p, label]) => <option key={p} value={p}>{t(label)}</option>)}</Select></label>
         {(profile === "json" || profile === "csv") && <label className={fieldClass}>{t("URL")}<Input value={draft.url ?? ""} placeholder={conn ? "items.csv" : "https://erp.example.com/api/items"} onChange={(e) => patch({ url: e.target.value })} />{conn && <span className="text-[11px] text-muted">{t("Relative to the connection's address, or absolute.")}</span>}</label>}
         {(profile === "odata" || profile === "table") && <label className={fieldClass}>{profile === "odata" ? t("Entity set") : t("Table")}<Input value={draft.entity ?? ""} placeholder={profile === "odata" ? "A_Product" : "mes.confirmations"} onChange={(e) => patch({ entity: e.target.value })} /></label>}
         {(profile === "odata" || profile === "table") && <label className={fieldClass}>{t("Filter")}<Input value={draft.filter ?? ""} placeholder={profile === "odata" ? "Plant eq '1000'" : "plant = '1000' and active = true"} onChange={(e) => patch({ filter: e.target.value })} /></label>}

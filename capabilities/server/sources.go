@@ -123,6 +123,11 @@ func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
 			return nil, fmt.Errorf("the connection is not ready")
 		}
 		conn = &c
+		if c.Secret != "" {
+			if value, ok := t.secret(c.Secret); !ok || len(strings.TrimSpace(string(value))) == 0 {
+				return nil, fmt.Errorf("the named connection secret is unavailable")
+			}
+		}
 	}
 	switch s.Profile {
 	case "odata":
@@ -173,7 +178,10 @@ func (t *Tenant) fetchSource(url, header string, allowPrivate, csv bool) ([]byte
 		return nil, fmt.Errorf("the endpoint did not answer: %v", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, build.SourceBody+1))
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, build.SourceBody+1))
+	if readErr != nil {
+		return nil, fmt.Errorf("the response body could not be read")
+	}
 	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("the endpoint answered %d", resp.StatusCode)
 	}

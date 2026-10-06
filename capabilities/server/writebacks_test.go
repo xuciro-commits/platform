@@ -26,6 +26,9 @@ func TestWritebackQueuesAndReplaysOnce(t *testing.T) {
 	var calls []string
 	down := true
 	tn.Outbound = func(req *http.Request, _ bool) (*http.Response, error) {
+		if req.Method == http.MethodGet { // the connection check
+			return &http.Response{StatusCode: 200, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"d":{"EntitySets":["A_MaterialDocumentHeader"]}}`))}, nil
+		}
 		body, _ := io.ReadAll(req.Body)
 		calls = append(calls, req.Method+" "+req.URL.String()+" "+req.Header.Get("Idempotency-Key")+" "+req.Header.Get("Authorization")+" "+string(body))
 		if down {
@@ -46,6 +49,10 @@ func TestWritebackQueuesAndReplaysOnce(t *testing.T) {
 	submit("obj-publish", build.SchemaPublish, build.ObjectType, "O1", `{}`)
 	submit("conn", build.ConnectionType+".create", build.ConnectionType, "sap", `{"name":"sap","title":"SAP","kind":"odata","address":"https://sap.example.com/sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/","secret":"sap-writer"}`)
 	submit("conn-check", build.ConnectionType+".check", build.ConnectionType, "sap", `{}`)
+	tn.CheckConnections(at) // ready only once the host's check answered and was journaled
+	if c0, _ := platform.Get[build.Connection](tn.automation(build.ID, false), "sap"); c0.State != "ready" {
+		t.Fatalf("connection %+v", c0)
+	}
 	submit("wb", build.WritebackType+".create", build.WritebackType, "W1", `{"name":"grtosap","title":"Goods receipt to SAP","connection":"sap","object":"build.goodsreceipt","on":"create","path":"A_MaterialDocumentHeader",
 		"mapping":[{"from":"sku","to":"Material"},{"from":"qty","to":"QuantityInEntryUnit","convert":"string"},{"from":"id","to":"ReferenceDocument"}],
 		"result":[{"from":"MaterialDocument","to":"docno"}]}`)

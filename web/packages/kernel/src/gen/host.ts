@@ -479,6 +479,30 @@ export type ComputeSDKRequest = {
   output: ValueSchema;
 };
 
+export type Connection = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  name: string;
+  title: string;
+  kind: "http" | "odata" | "postgres";
+  address: string;
+  secret?: string;
+  allowPrivate?: boolean;
+  state: string;
+  requested?: boolean;
+  last?: ConnectionCheck;
+};
+
+export type ConnectionCheck = {
+  at: string;
+  ok: boolean;
+  error?: string;
+  detail?: string;
+};
+
 export type ConnectorError = {
   at: string;
   input: string;
@@ -2450,7 +2474,13 @@ export type Source = {
   archived?: boolean;
   name: string;
   title: string;
-  url: string;
+  connection?: string;
+  profile?: "json" | "csv" | "odata" | "table";
+  url?: string;
+  entity?: string;
+  filter?: string;
+  since?: string;
+  cursor?: string;
   allowPrivate?: boolean;
   header?: string;
   path?: string;
@@ -2482,6 +2512,7 @@ export type SourcePull = {
   failed: number;
   error?: string;
   failures?: SourceFailure[];
+  cursor?: string;
 };
 
 export type Stamp = {

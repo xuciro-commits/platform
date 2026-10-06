@@ -52,18 +52,28 @@ type ConnectionCheck struct {
 
 func (b *Build) connectionEntity() platform.Entity {
 	return platform.Entity{Type: ConnectionType, Title: "Connection", Plural: "Connections", Model: Connection{}, Display: "title",
+		Validate: func(c platform.Caller, record any) *kernel.Error {
+			next := record.(*Connection)
+			if err := b.validConnection(*next); err != nil {
+				return err
+			}
+			if old, ok := platform.Get[Connection](c, next.ID); ok && (old.Kind != next.Kind || old.Address != next.Address || old.Secret != next.Secret || old.AllowPrivate != next.AllowPrivate) {
+				next.State, next.Requested, next.Last = "draft", false, nil
+			}
+			return nil
+		},
 		Description: "An external system the tenant reads from: a kind, an address and the name of its credential in the host's secret store.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "ready", Title: "Ready", Tone: "success"}},
 			Transitions: []platform.Transition{
-				{Name: "check", Title: "Check", Description: "Reach the system once from the host and keep what answered.", From: []string{"draft", "ready"}, To: []string{"ready"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}, Do: b.checkConnection},
+				{Name: "check", Title: "Check", Description: "Reach the system once from the host and keep what answered.", From: []string{"draft", "ready"}, To: []string{"draft"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}, Do: b.checkConnection},
 				{Name: "retire", Title: "Retire", Description: "Stop sources from using the connection; the definition stays.", From: []string{"ready"}, To: []string{"draft"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}}}}}
 }
 
 func connectionActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaConnectionChecked, Target: ConnectionType, Capability: "integrations", Title: "Keep check result", Description: "Retain what one check of a connection found.", Roles: []string{Builder},
-		Payload: []platform.Field{{Name: "check", Type: "json", Required: true, Description: "When, whether it answered and what"}}}}
+	return []platform.Action{{Schema: SchemaConnectionChecked, Target: ConnectionType, Capability: "integrations", Title: "Keep check result", Description: "Retain what one check of a connection found.", Automation: true,
+		Payload: []platform.Field{{Name: "revision", Type: "integer", Required: true, Description: "The connection revision checked"}, {Name: "check", Type: "json", Required: true, Description: "When, whether it answered and what"}}}}
 }
 
 func (b *Build) checkConnection(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
@@ -91,6 +101,9 @@ func (b *Build) validConnection(c Connection) *kernel.Error {
 	u, err := url.Parse(c.Address)
 	if err != nil || u.Host == "" {
 		return refuse("The address is not a URL")
+	}
+	if _, has := u.User.Password(); has || u.Query().Has("password") || u.Query().Has("passfile") {
+		return refuse("The address carries no password; name a secret instead")
 	}
 	switch c.Kind {
 	case "postgres":
@@ -123,15 +136,20 @@ func (c Connection) Resolve(ref string) string {
 func (b *Build) submitConnectionChecked(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
-			Check ConnectionCheck `json:"check"`
+			Revision uint32          `json:"revision"`
+			Check    ConnectionCheck `json:"check"`
 		}
 		conn, ok := platform.Get[Connection](c, s.GetTarget().GetId())
-		if !ok || json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Check.At.IsZero() {
+		if !ok || json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Check.At.IsZero() || !conn.Requested || conn.Revision != payload.Revision {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Check result has no connection")
 		}
 		return func(r *pb.ChangeRecord) {
 			check := payload.Check
 			conn.Last, conn.Requested = &check, false
+			conn.State = "draft"
+			if check.OK {
+				conn.State = "ready"
+			}
 			c.Put(r, conn)
 		}, nil
 	})

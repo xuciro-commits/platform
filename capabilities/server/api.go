@@ -138,6 +138,7 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	s.of(reflect.TypeFor[files.ImageRegionsRequest]())
 	s.of(reflect.TypeFor[build.Table]())
 	s.of(reflect.TypeFor[build.Source]())
+	s.of(reflect.TypeFor[build.Connection]())
 	paths := map[string]any{}
 	for _, r := range h.routes {
 		method, path, _ := strings.Cut(r.Pattern, " ")

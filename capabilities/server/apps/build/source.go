@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/url"
 	"regexp"
 	"slices"
@@ -96,6 +97,13 @@ type SourceFailure struct {
 
 func (b *Build) sourceEntity() platform.Entity {
 	return platform.Entity{Type: SourceType, Title: "Data source", Plural: "Data sources", Model: Source{}, Display: "title", Description: "An external JSON endpoint whose rows become records of one object, pulled on a period or on request.",
+		Validate: func(c platform.Caller, record any) *kernel.Error {
+			s := record.(*Source)
+			if s.State == "published" {
+				return b.checkSource(c, *s)
+			}
+			return nil
+		},
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
@@ -305,7 +313,7 @@ func (b *Build) submitSourcePulled(c platform.Caller, s *pb.Submission, now time
 		return func(r *pb.ChangeRecord) {
 			pull := payload.Pull
 			src.Last, src.Requested = &pull, false
-			if pull.Cursor != "" && pull.Error == "" {
+			if pull.Cursor != "" && pull.Error == "" && pull.Failed == 0 {
 				src.Cursor = pull.Cursor
 			}
 			c.Put(r, src)
@@ -320,8 +328,12 @@ func (s Source) Advance(rows []map[string]any) string {
 	}
 	best := s.Cursor
 	for _, row := range rows {
-		if v := scalar(row[s.Since]); v != "" && (best == "" || v > best) {
-			best = v
+		if v := scalar(row[s.Since]); v != "" {
+			a, anum := new(big.Rat).SetString(v)
+			b, bnum := new(big.Rat).SetString(best)
+			if best == "" || anum && bnum && a.Cmp(b) > 0 || (!anum || !bnum) && v > best {
+				best = v
+			}
 		}
 	}
 	return best
@@ -434,6 +446,10 @@ func convert(v any, to string) (any, error) {
 		return scalar(v), nil
 	case "number":
 		switch x := v.(type) {
+		case json.Number:
+			if _, err := x.Float64(); err == nil {
+				return x, nil
+			}
 		case float64:
 			return x, nil
 		case string:
