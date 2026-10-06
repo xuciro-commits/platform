@@ -22,7 +22,6 @@ export type Admin = {
 };
 
 // The organisation (ADR-0012): units in several structures, memberships, all dated.
-export type Edge = Api.Edge;
 export type Chart = Api.OrgSeed;
 export const today = () => new Date().toISOString().slice(0, 10);
 export const active = (x: { from?: string; until?: string }, day: string) => (x.from ?? "") <= day && (!x.until || day < x.until);

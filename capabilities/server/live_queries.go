@@ -240,7 +240,7 @@ func (t *Tenant) liveVersion(query string) string {
 		owner = "build"
 	case "/v1/ai-limits", "/v1/ai-models", "/v1/ai-providers", "/v1/ai/vendors":
 		owner = "ai"
-	case "/v1/organization":
+	case "/v1/organization", "/v1/enterprise":
 		owner = "enterprise"
 	case "/v1/flows":
 		owner = "flow"
