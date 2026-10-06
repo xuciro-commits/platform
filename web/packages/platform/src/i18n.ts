@@ -427,4 +427,6 @@ register("zh-CN", {
   "Lower case, digits, dashes": "小写字母、数字、连字符",
   "owned by {tenant}": "归属于 {tenant}",
   "Shared with federated tenants (group, subsidiaries, partners)": "与联合租户共享（集团、子公司、合作伙伴）",
+  "— member": "— 选择成员",
+  "Add member": "添加成员",
 });

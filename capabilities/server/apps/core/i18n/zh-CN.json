@@ -31,7 +31,6 @@
  "A physical place the organisation operates: a plant, a warehouse, an office.": "组织运营的物理场所：工厂、仓库、办公室。",
  "Short unique code, e.g. SH01": "简短唯一编码，如 SH01",
  "Owned by unit": "所属组织单元",
- "The org unit (org.unit id) responsible for it": "负责该站点的组织单元（org.unit 的 id）",
  "Timezone": "时区",
  "IANA name, e.g. Asia/Shanghai": "IANA 时区名，如 Asia/Shanghai",
  "Location": "库位",
@@ -61,5 +60,6 @@
  "A currency amounts are kept in.": "金额的币种。",
  "ISO 4217, e.g. CNY": "ISO 4217，如 CNY",
  "Minor unit digits, usually 2": "辅币位数，通常为 2",
- "Symbol": "符号"
+ "Symbol": "符号",
+ "The organisation in the enterprise model responsible for it": "企业模型中负责该站点的组织"
 }

@@ -4,7 +4,8 @@
 // a decision the host records. A fresh tenant starts from a scale template.
 import { useMemo, useState, type ReactNode } from "react";
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Dialog, Input, Panel, Select, Tag, Tree, Workbench, t, type WorkbenchTab } from "@platform/ui";
+import type { Api } from "@platform/kernel";
+import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, Input, Panel, Select, Tag, Tree, Workbench, t, type ColumnDef, type WorkbenchTab } from "@platform/ui";
 import { Link2, Network, Plus, Save, Table2, Workflow } from "lucide-react";
 import { Canvas, type Positions } from "./canvas";
 import { autoLayout, childrenOf, live, rootsOf, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PLACEMENT, RELATIONSHIP, VIEW, type Element, type GridCell, type Metamodel, type Model, type Relationship } from "./model";
@@ -104,31 +105,37 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   const tabs: WorkbenchTab[] = [
     { id: "palette", title: t("Palette"), content: <div className="grid gap-1 p-2">
       <p className="px-1 text-xs text-muted">{cell ? `${cell.id} · ${cell.title}` : ""}</p>
-      {palette.map((p) => <button key={p.stereotype} type="button" draggable={admin} onDragStart={(e) => e.dataTransfer.setData("application/x-uaf-stereotype", p.stereotype)}
-        onClick={() => admin && setDialog({ kind: "element", stereotype: p.stereotype })}
-        className="flex items-center justify-between rounded-sm border border-border px-2 py-1.5 text-left text-sm hover:bg-row-hover" title={meta.stereotypes[p.stereotype]?.description}>
+      {palette.map((p) => <Button key={p.stereotype} variant="row" draggable={admin} onDragStart={(e) => e.dataTransfer.setData("application/x-uaf-stereotype", p.stereotype)}
+        onClick={() => admin && setDialog({ kind: "element", stereotype: p.stereotype })} className="justify-between border border-border" title={meta.stereotypes[p.stereotype]?.description}>
         <span>{p.title}</span><span className="font-mono text-[10px] text-muted">{p.stereotype}</span>
-      </button>)}
+      </Button>)}
       <p className="px-1 pt-2 text-[11px] text-muted">{t("Drag onto the canvas or click to add. UAF {version}.", { version: meta.version })}</p>
     </div> },
     { id: "elements", title: t("Elements"), badge: m.elements.length, content: <div className="grid gap-1 p-2">
       <Input placeholder={t("Find…")} value={filter} onChange={(e) => setFilter(e.target.value)} />
       {m.elements.filter((e) => live(e, day) && (!filter || e.name.toLowerCase().includes(filter.toLowerCase()) || e.id.includes(filter))).slice(0, 200).map((e) => {
         const shown = working.elements.includes(e.id);
-        return <button key={e.id} type="button" onClick={() => { setSelected(e.id); if (!shown) setWorking({ elements: [...working.elements, e.id], layout: autoLayout(m, [...working.elements, e.id], placementKind, day, working.layout) }); }}
-          className={`flex items-center gap-2 rounded-sm px-2 py-1 text-left text-sm hover:bg-row-hover ${selected === e.id ? "bg-row-selected" : ""}`}>
+        return <Button key={e.id} variant="row" aria-pressed={selected === e.id} onClick={() => { setSelected(e.id); if (!shown) setWorking({ elements: [...working.elements, e.id], layout: autoLayout(m, [...working.elements, e.id], placementKind, day, working.layout) }); }}
+          className={selected === e.id ? "bg-row-selected" : ""}>
           <span className="truncate">{e.name}</span><Tag label={e.kind || title(e.stereotype)} />{shown && <span className="ml-auto text-[10px] text-muted">{t("shown")}</span>}
-        </button>;
+        </Button>;
       })}
     </div> },
     { id: "views", title: t("Views"), badge: m.views.length, content: <div className="grid gap-1 p-2">
-      {m.views.map((v) => <button key={v.id} type="button" onClick={() => { setDraft(undefined); setViewId(v.id); }} className={`flex items-center gap-2 rounded-sm px-2 py-1 text-left text-sm hover:bg-row-hover ${view?.id === v.id ? "bg-row-selected" : ""}`}>
-        <span className="truncate">{v.name}</span><span className="ml-auto font-mono text-[10px] text-muted">{v.grid}</span></button>)}
+      {m.views.map((v) => <Button key={v.id} variant="row" aria-pressed={view?.id === v.id} onClick={() => { setDraft(undefined); setViewId(v.id); }} className={view?.id === v.id ? "bg-row-selected" : ""}>
+        <span className="truncate">{v.name}</span><span className="ml-auto font-mono text-[10px] text-muted">{v.grid}</span></Button>)}
       {admin && <Button size="sm" variant="ghost" onClick={() => setDialog({ kind: "view" })}><Plus />{t("New view")}</Button>}
     </div> },
   ];
 
   const sel = selected ? byId(selected) : undefined;
+  const tableColumns: ColumnDef<Element, unknown>[] = [
+    { id: "name", header: t("Name"), accessorFn: (e) => e.name },
+    { id: "type", header: t("Type"), accessorFn: (e) => title(e.stereotype) },
+    { id: "kind", header: t("Kind"), accessorFn: (e) => e.kind ?? "" },
+    { id: "parent", header: t("Parent"), accessorFn: (e) => { const r = m.relationships.find((r) => r.stereotype === PLACEMENT && r.source === e.id && r.kind === placementKind && live(r, day)); return r ? byId(r.target)?.name ?? "" : ""; } },
+    { id: "from", header: t("From"), accessorFn: (e) => e.from ?? "" },
+  ];
   return <>
     <Workbench storageKey="enterprise" title={t("Enterprise")} crumbs={[{ label: t("Enterprise") }, { label: working.name }]} saving={working.dirty ? "dirty" : "idle"}
       status={<span className="flex items-center gap-2 text-xs">
@@ -154,12 +161,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
           row={(e) => <><span className="font-medium">{e.name}</span><Tag label={e.kind || title(e.stereotype)} />{e.legal && <Tag label={t("legal entity")} tone="info" />}
             <span className="ml-auto text-xs text-muted">{m.relationships.filter((r) => r.stereotype === MEMBERSHIP && r.target === e.id && live(r, day)).length || ""}</span></>} />
       </div>}
-      {mode === "table" && <table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted"><th className="p-2">{t("Name")}</th><th>{t("Type")}</th><th>{t("Kind")}</th><th>{t("Parent")}</th><th>{t("From")}</th></tr></thead>
-        <tbody>{m.elements.filter((e) => live(e, day) && (!filter || e.name.toLowerCase().includes(filter.toLowerCase()))).map((e) => {
-          const parent = m.relationships.find((r) => r.stereotype === PLACEMENT && r.source === e.id && r.kind === placementKind && live(r, day));
-          return <tr key={e.id} onClick={() => setSelected(e.id)} className={`cursor-pointer border-t border-border hover:bg-row-hover ${selected === e.id ? "bg-row-selected" : ""}`}>
-            <td className="p-2 font-medium">{e.name}</td><td>{title(e.stereotype)}</td><td>{e.kind}</td><td>{parent ? byId(parent.target)?.name : ""}</td><td className="text-xs text-muted">{e.from}</td></tr>;
-        })}</tbody></table>}
+      {mode === "table" && <DataTable data={m.elements.filter((e) => live(e, day))} columns={tableColumns} getRowId={(e) => e.id} selectedId={selected} onRowClick={(e) => setSelected(e.id)} height={560} />}
     </Workbench>
 
     {dialog?.kind === "element" && <ElementDialog stereotype={dialog.stereotype} meta={meta} organisations={m.elements.filter((e) => e.stereotype === ORGANIZATION && live(e, day))} parent={sel?.stereotype === ORGANIZATION ? sel.id : undefined}
@@ -179,15 +181,15 @@ function ElementDialog({ stereotype, meta, organisations, parent, onClose, onSub
   const entry = meta.profile.find((p) => p.stereotype === stereotype);
   const [v, setV] = useState({ name: "", kind: entry?.kinds?.[0] ?? "", parent: parent ?? "", legal: false });
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={t("New {thing}", { thing: entry?.title ?? stereotype })}>
-    <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); void onSubmit({ ...v, parent: v.parent || undefined }); }}>
+    <Form className="grid gap-3" onSubmit={() => void onSubmit({ ...v, parent: v.parent || undefined })}>
       {field(t("Name"), <Input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />)}
       {field(t("Kind"), entry?.kinds?.length ? <Input list={`kinds-${stereotype}`} value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })} /> : <Input value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })} />)}
       {entry?.kinds?.length ? <datalist id={`kinds-${stereotype}`}>{entry.kinds.map((k) => <option key={k} value={k} />)}</datalist> : null}
       {stereotype === ORGANIZATION && field(t("Under"), <Select value={v.parent} onChange={(e) => setV({ ...v, parent: e.target.value })}><option value="">{t("— top level")}</option>{organisations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</Select>)}
-      {stereotype === ORGANIZATION && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={v.legal} onChange={(e) => setV({ ...v, legal: e.target.checked })} />{t("A legal entity")}</label>}
+      {stereotype === ORGANIZATION && <Checkbox className="text-sm" checked={v.legal} onChange={(legal) => setV({ ...v, legal })}>{t("A legal entity")}</Checkbox>}
       <p className="text-xs text-muted">{meta.stereotypes[stereotype]?.description}</p>
-      <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" disabled={!v.name}>{t("Add")}</Button></div>
-    </form>
+      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" disabled={!v.name}>{t("Add")}</Button></div>
+    </Form>
   </Dialog>;
 }
 
@@ -205,25 +207,25 @@ function LinkDialog({ source, target, cell, meta, kinds, defaultKind, title, onC
   const [v, setV] = useState({ stereotype: allowed[0] ?? "", kind: defaultKind, role: "", relation: "part of", share: "" });
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={t("Relate {source} to {target}", { source: source.name, target: target.name })}>
     {allowed.length === 0 ? <p className="text-sm text-muted">{t("This view draws no relationship between a {a} and a {b}.", { a: title(source.stereotype), b: title(target.stereotype) })}</p> :
-    <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); void onSubmit({ stereotype: v.stereotype, kind: v.stereotype === PLACEMENT ? v.kind : undefined, role: v.role || undefined, relation: v.stereotype === PLACEMENT ? v.relation : undefined, share: v.share ? +v.share : undefined }); }}>
+    <Form className="grid gap-3" onSubmit={() => void onSubmit({ stereotype: v.stereotype, kind: v.stereotype === PLACEMENT ? v.kind : undefined, role: v.role || undefined, relation: v.stereotype === PLACEMENT ? v.relation : undefined, share: v.share ? +v.share : undefined })}>
       {field(t("Relationship"), <Select value={v.stereotype} onChange={(e) => setV({ ...v, stereotype: e.target.value })}>{allowed.map((st) => <option key={st} value={st}>{title(st)} · {st}</option>)}</Select>)}
       {v.stereotype === PLACEMENT && field(t("Kind"), <Select value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })}>{kinds.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}</Select>)}
       {v.stereotype === PLACEMENT && field(t("Relation"), <Input value={v.relation} onChange={(e) => setV({ ...v, relation: e.target.value })} />)}
       {v.stereotype === PLACEMENT && field(t("Ownership share (0–1, optional)"), <Input type="number" step="0.01" min="0" max="1" value={v.share} onChange={(e) => setV({ ...v, share: e.target.value })} />)}
       {v.stereotype === MEMBERSHIP && field(t("Role"), <Input value={v.role} onChange={(e) => setV({ ...v, role: e.target.value })} />)}
-      <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit">{t("Relate")}</Button></div>
-    </form>}
+      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit">{t("Relate")}</Button></div>
+    </Form>}
   </Dialog>;
 }
 
 function ViewDialog({ grid, onClose, onSubmit }: { grid: GridCell[]; onClose: () => void; onSubmit: (name: string, grid: string) => Promise<void> }) {
   const [v, setV] = useState({ name: "", grid: grid[0]?.id ?? "Pr-Sr" });
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={t("New view")}>
-    <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); void onSubmit(v.name, v.grid); }}>
+    <Form className="grid gap-3" onSubmit={() => void onSubmit(v.name, v.grid)}>
       {field(t("Name"), <Input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />)}
       {field(t("UAF grid cell"), <Select value={v.grid} onChange={(e) => setV({ ...v, grid: e.target.value })}>{grid.map((g) => <option key={g.id} value={g.id}>{g.id} · {g.title}</option>)}</Select>)}
-      <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" disabled={!v.name}>{t("Create")}</Button></div>
-    </form>
+      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" disabled={!v.name}>{t("Create")}</Button></div>
+    </Form>
   </Dialog>;
 }
 
@@ -232,6 +234,8 @@ function Inspector({ element: el, model: m, meta, day, admin, decide, title, rel
 }) {
   const [edit, setEdit] = useState<{ name: string; kind: string; shortName: string }>();
   const [closing, setClosing] = useState<string>();
+  const [member, setMember] = useState<{ id: string; role: string }>();
+  const members = useRead<Api.MemberView[]>("/v1/members", undefined, el?.stereotype === ORGANIZATION && admin).data ?? [];
   if (!el) return <p className="p-3 text-sm text-muted">{t("Select an element to see its details, or drag one from the palette.")}</p>;
   const st = meta.stereotypes[el.stereotype];
   const rels = m.relationships.filter((r) => (r.source === el.id || r.target === el.id) && live(r, day));
@@ -244,9 +248,9 @@ function Inspector({ element: el, model: m, meta, day, admin, decide, title, rel
     {field(t("Short name"), <Input value={e.shortName} disabled={!admin} onChange={(x) => setEdit({ ...e, shortName: x.target.value })} />)}
     {edit && <div className="flex gap-2"><Button size="sm" onClick={async () => { if (await decide("enterprise.element.edit", { type: ELEMENT, id: el.id }, e)) setEdit(undefined); }}>{t("Save")}</Button><Button size="sm" variant="ghost" onClick={() => setEdit(undefined)}>{t("Cancel")}</Button></div>}
     <p className="flex flex-wrap gap-1">{el.legal && <Tag label={t("legal entity")} tone="info" />}{el.external && <Tag label="external" tone="warning" />}{el.owner && <Tag label={t("owned by {tenant}", { tenant: el.owner.replace(/^tenant:/, "") })} tone="warning" />}{el.from && <Tag label={`${t("from")} ${el.from}`} />}{el.until && <Tag label={`${t("until")} ${el.until}`} tone="warning" />}</p>
-    {admin && !el.owner && <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={!!el.published} onChange={(x) => void decide("enterprise.element.edit", { type: ELEMENT, id: el.id }, { published: x.target.checked })} />{t("Shared with federated tenants (group, subsidiaries, partners)")}</label>}
-    {!!st?.properties?.length && <details><summary className="cursor-pointer text-xs text-muted">{t("Tagged values")} ({st.properties.length})</summary>
-      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">{st.properties.map((p) => <span key={p.name} className="contents"><dt className="text-muted">{p.name}</dt><dd className="font-mono">{String((el.properties as Record<string, unknown> | undefined)?.[p.name] ?? "")} <span className="text-muted">{p.type}</span></dd></span>)}</dl></details>}
+    {admin && !el.owner && <Checkbox className="text-xs" checked={!!el.published} onChange={(published) => void decide("enterprise.element.edit", { type: ELEMENT, id: el.id }, { published })}>{t("Shared with federated tenants (group, subsidiaries, partners)")}</Checkbox>}
+    {!!st?.properties?.length && <Disclosure summary={<span className="text-xs text-muted">{t("Tagged values")} ({st.properties.length})</span>}>
+      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">{st.properties.map((p) => <span key={p.name} className="contents"><dt className="text-muted">{p.name}</dt><dd className="font-mono">{String((el.properties as Record<string, unknown> | undefined)?.[p.name] ?? "")} <span className="text-muted">{p.type}</span></dd></span>)}</dl></Disclosure>}
     <div>
       <p className="mb-1 text-xs font-semibold text-muted">{t("Relationships")} ({rels.length})</p>
       <div className="grid gap-1">{rels.map((r) => <p key={r.id} className="flex items-center gap-1 text-xs">
@@ -254,6 +258,19 @@ function Inspector({ element: el, model: m, meta, day, admin, decide, title, rel
         {admin && <Button size="sm" variant="ghost" className="ml-auto" onClick={() => void decide("enterprise.relationship.end", { type: RELATIONSHIP, id: r.id }, { until: day })}>{t("End")}</Button>}
       </p>)}</div>
     </div>
+    {el.stereotype === ORGANIZATION && <div>
+      <p className="mb-1 text-xs font-semibold text-muted">{t("Members")}</p>
+      <div className="grid gap-1">{m.relationships.filter((r) => r.stereotype === MEMBERSHIP && r.target === el.id && r.source.startsWith("member:") && live(r, day)).map((r) => <p key={r.id} className="flex items-center gap-1 text-xs">
+        <span className="font-mono">{r.source.slice(7)}</span><span className="text-muted">{r.role}</span>{r.primary && <Tag label="primary" tone="info" />}
+        {admin && <Button size="sm" variant="ghost" className="ml-auto" onClick={() => void decide("enterprise.relationship.end", { type: RELATIONSHIP, id: r.id }, { until: day })}>{t("End")}</Button>}
+      </p>)}</div>
+      {admin && (member ? <Form className="mt-1 grid gap-1" onSubmit={async () => { if (await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("mem", member.id) }, { stereotype: MEMBERSHIP, source: `member:${member.id}`, target: el.id, role: member.role })) setMember(undefined); }}>
+          <Select aria-label={t("Member")} value={member.id} onChange={(x) => setMember({ ...member, id: x.target.value })}><option value="">{t("— member")}</option>{members.map((x) => <option key={x.id} value={x.id}>{x.id}</option>)}</Select>
+          <Input aria-label={t("Role")} placeholder={t("Role (employee, chair, volunteer …)")} value={member.role} onChange={(x) => setMember({ ...member, role: x.target.value })} />
+          <div className="flex gap-1"><Button size="sm" type="submit" disabled={!member.id || !member.role}>{t("Add")}</Button><Button size="sm" variant="ghost" onClick={() => setMember(undefined)}>{t("Cancel")}</Button></div>
+        </Form>
+        : <Button size="sm" variant="ghost" className="mt-1" onClick={() => setMember({ id: "", role: "" })}><Plus />{t("Add member")}</Button>)}
+    </div>}
     <p className="text-xs text-muted">{st?.description}</p>
     <div className="flex flex-wrap gap-2">
       <Button size="sm" variant="ghost" onClick={onRemove}>{t("Hide from view")}</Button>

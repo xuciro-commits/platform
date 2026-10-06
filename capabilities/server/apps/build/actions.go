@@ -820,8 +820,8 @@ type Access struct {
 // ObjectScope names the fields that place a record for row scopes (ADR-0066).
 type ObjectScope struct {
 	Owner     string `json:"owner,omitempty" help:"The field holding the member a record belongs to; empty: whoever created it"`
-	Unit      string `json:"unit,omitempty" help:"The field holding the record's organisational unit (a reference to org.unit, or its id)"`
-	Structure string `json:"structure,omitempty" help:"The organisation structure \"below\" follows, e.g. management"`
+	Unit      string `json:"unit,omitempty" help:"The field holding the record's organisation (a reference to enterprise.element, or its id)"`
+	Structure string `json:"structure,omitempty" help:"The relationship kind \"below\" follows in the enterprise model, e.g. management"`
 }
 
 var readLevels = map[string]string{"all": platform.ScopeTenant, "below": platform.ScopeBelow, "unit": platform.ScopeUnit, "own": platform.ScopeOwn, "none": platform.ScopeNone}
