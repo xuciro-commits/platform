@@ -12,8 +12,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
+	"platformserver/apps/enterprise"
 	"platformserver/apps/flow"
-	"platformserver/apps/org"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -64,7 +64,7 @@ func reviewTenant(t *testing.T) (*Tenant, func(authority, schema, typ, id string
 	tn, err := NewTenant("t-1", NewConsole("t-1",
 		Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"desk": "clerk", "stock": "lead", ai.ID: ai.Admin, PlatformApp: Admin, AgentApp: AgentAdmin}}},
 		Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"desk": "viewer", "stock": "clerk"}}}),
-		org.New("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Site", Kind: "site"}},
+		enterprise.New("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Site", Kind: "site"}},
 			Units:       []platform.Unit{{ID: "plant", Kind: "plant"}, {ID: "L1", Kind: "line"}},
 			Edges:       []platform.Edge{{Structure: "site", Unit: "L1", Parent: "plant"}},
 			Memberships: []platform.Membership{{Party: "member:ana", Unit: "plant", Role: "lead"}}}),

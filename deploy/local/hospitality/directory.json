@@ -32,7 +32,7 @@
       "crm": "sales-manager",
       "pms": "manager",
       "platform": "admin",
-      "org": "admin",
+      "enterprise": "admin",
       "memstay": "keeper",
       "ai": "admin",
       "hcm": "employee",

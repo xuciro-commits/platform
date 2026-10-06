@@ -17,6 +17,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
 	"platformserver/apps/build"
+	"platformserver/apps/enterprise"
 	"platformserver/apps/files"
 	"platformserver/apps/flow"
 	"platformserver/apps/relations"
@@ -71,7 +72,9 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/ai-providers", Summary: "AI providers (AI administrators)", Answer: []ai.Provider{}},
 	{Pattern: "GET /v1/ai-models", Summary: "Models the caller may call, or all for AI administrators", Answer: []ai.Model{}},
 	{Pattern: "GET /v1/ai-usage", Summary: "Model calls and their totals", Answer: ai.AIUsage{}},
-	{Pattern: "GET /v1/organization", Summary: "The organisation's structures, units, edges and memberships", Answer: platform.OrgSeed{}},
+	{Pattern: "GET /v1/organization", Summary: "The organisation's structures, units, edges and memberships (a projection of the enterprise model)", Answer: platform.OrgSeed{}},
+	{Pattern: "GET /v1/enterprise", Summary: "The tenant's enterprise model: kinds, elements, relationships and views", Answer: enterprise.Model{}},
+	{Pattern: "GET /v1/enterprise-metamodel", Summary: "The UAF metamodel, Enterprise Core profile and grid cells the modeler draws from", Answer: enterprise.Metamodel{}},
 	{Pattern: "GET /v1/flows", Summary: "The flows the apps declare, in the caller's language", Answer: []flow.FlowDefinition{}},
 	{Pattern: "GET /v1/links", Summary: "Links between entities", Answer: []relations.Link{}},
 	{Pattern: "GET /v1/timeline", Summary: "Notes on entities' timelines", Answer: []relations.Note{}},

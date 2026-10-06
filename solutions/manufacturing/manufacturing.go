@@ -18,10 +18,10 @@ import (
 	"platformserver/apps/ai"
 	"platformserver/apps/build"
 	"platformserver/apps/core"
+	"platformserver/apps/enterprise"
 	"platformserver/apps/files"
 	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
-	"platformserver/apps/org"
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -31,7 +31,7 @@ import (
 // production.orders/1 (erp.New or erpadapter.New); seats belong to the plant's units.
 func NewTenant(id string, books platform.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
 	t, err := platformserver.NewTenant(id, platformserver.NewConsole(id, seats...),
-		org.New(id, mes.DemoOrganization(platformserver.Memberships(seats))), ai.New(id),
+		enterprise.New(id, mes.DemoOrganization(platformserver.Memberships(seats))), ai.New(id),
 		work.New(id), flow.New(id), platformserver.NewAgents(id), knowledge.New(id), files.New(id), relations.New(id), core.New(id), build.New(id),
 		mes.New(id, mes.DemoMaster()), books)
 	if err == nil {

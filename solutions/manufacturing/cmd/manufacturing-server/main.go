@@ -21,9 +21,9 @@ import (
 	"platformserver/apps/ai"
 	"platformserver/apps/build"
 	"platformserver/apps/core"
+	"platformserver/apps/enterprise"
 	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
-	"platformserver/apps/org"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -43,7 +43,7 @@ func main() {
 	}
 	supervisor := seat(mes.Supervisor)
 	for app, role := range map[string]string{erp.ID: erp.Controller, erpadapter.ID: erpadapter.Planner, platformserver.PlatformApp: platformserver.Admin,
-		org.ID: org.Admin, ai.ID: ai.Admin, flow.ID: flow.Admin,
+		enterprise.ID: enterprise.Admin, ai.ID: ai.Admin, flow.ID: flow.Admin,
 		platformserver.AgentApp: platformserver.AgentAdmin, knowledge.ID: knowledge.Editor, work.ID: work.Admin, build.ID: build.Builder, core.ID: core.Steward} {
 		supervisor[app] = role
 	}

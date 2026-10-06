@@ -178,7 +178,7 @@ func (t *Tenant) liveVersion(query string) string {
 	p := u.Path
 	c := &t.change
 	c.mu.Lock()
-	global, meta, seq := c.global, c.owners["platform"]+c.owners["org"]+c.owners["build"], c.seq
+	global, meta, seq := c.global, c.owners["platform"]+c.owners["enterprise"]+c.owners["build"], c.seq
 	owners := make(map[string]int64, len(c.owners))
 	for k, v := range c.owners {
 		owners[k] = v
@@ -241,7 +241,7 @@ func (t *Tenant) liveVersion(query string) string {
 	case "/v1/ai-limits", "/v1/ai-models", "/v1/ai-providers", "/v1/ai/vendors":
 		owner = "ai"
 	case "/v1/organization":
-		owner = "org"
+		owner = "enterprise"
 	case "/v1/flows":
 		owner = "flow"
 	case "/v1/agents", "/v1/runs", "/v1/memories":

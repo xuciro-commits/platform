@@ -64,7 +64,7 @@ export function MemberDetail({ id }: { id: string }) {
           ))}
         </div>
       </Panel>
-      {(role("org") || role("platform") === "admin") && <MemberUnits member={member.id} />}
+      {(role("enterprise") || role("platform") === "admin") && <MemberUnits member={member.id} />}
     </div>
   );
 }

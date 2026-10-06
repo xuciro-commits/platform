@@ -24,7 +24,7 @@ var demo = []platformserver.Seat{
 		platform.Membership{Unit: "sales-team", Role: "account executive", Primary: true},
 		platform.Membership{Unit: "offsite-2026", Role: "project lead"}),
 	seat("sales-only", "sales-2", map[string]string{"crm": "sales"}),
-	withUnits(seat("manager", "manager-1", map[string]string{"crm": "sales-manager", "pms": "manager", "memstay": lodging.Keeper, "platform": "admin", "org": "admin", "ai": "admin", "hcm": "hr", "work": "admin", "flow": "admin", "agent": "admin", "csm": "lead", "knowledge": "editor", build.ID: build.Builder}),
+	withUnits(seat("manager", "manager-1", map[string]string{"crm": "sales-manager", "pms": "manager", "memstay": lodging.Keeper, "platform": "admin", "enterprise": "admin", "ai": "admin", "hcm": "hr", "work": "admin", "flow": "admin", "agent": "admin", "csm": "lead", "knowledge": "editor", build.ID: build.Builder}),
 		platform.Membership{Unit: "hotel-a", Role: "general manager", Primary: true},
 		platform.Membership{Unit: "hotel-a", Role: "manager"}, platform.Membership{Unit: "hospitality", Role: "head"}, // HR's approvers (ADR-0017)
 		platform.Membership{Unit: "hotel-a-co", Role: "director"},

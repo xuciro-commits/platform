@@ -599,6 +599,22 @@ export type EffectKind = {
   irreversible?: boolean;
 };
 
+export type Element = {
+  id: string;
+  stereotype: string;
+  name: string;
+  shortName?: string;
+  kind?: string;
+  legal?: boolean;
+  external?: boolean;
+  from?: string;
+  until?: string;
+  closed?: string;
+  calendar?: string;
+  owner?: string;
+  properties?: Record<string, unknown>;
+};
+
 export type EndpointView = {
   id: string;
   kind: string;
@@ -614,6 +630,16 @@ export type EndpointView = {
   failing: number;
   health: string;
   delivered: number;
+};
+
+export type EnterpriseModel = {
+  uaf: string;
+  scale?: string;
+  kinds: Kind[];
+  elements: Element[];
+  relationships: Relationship[];
+  views: View[];
+  calendars?: Calendar[];
 };
 
 export type EntityInfo = {
@@ -634,6 +660,11 @@ export type EntityInfo = {
 
 /** The kernel contract's EntityRef (contract/proto). */
 export type EntityRef = EntityRefJson;
+
+export type Enumeration = {
+  name: string;
+  literals: string[];
+};
 
 export type ErrorBody = {
   code: string;
@@ -759,6 +790,16 @@ export type FunctionRun = {
   servedModel?: string;
   sources: string[];
   withheld?: boolean;
+};
+
+export type GridCell = {
+  id: string;
+  title: string;
+  domain: string;
+  aspect: string;
+  elements: string[];
+  relationships: string[];
+  scales?: string[];
 };
 
 export type HistogramBucket = {
@@ -901,6 +942,13 @@ export type JointDraftRef = {
   id: string;
 };
 
+export type Kind = {
+  id: string;
+  name: string;
+  kind: string;
+  matrix?: boolean;
+};
+
 export type LifecycleInfo = {
   field: string;
   initial: string;
@@ -1026,6 +1074,16 @@ export type Message = {
   content: string;
   toolCalls?: ToolCall[];
   toolCallId?: string;
+};
+
+export type Metamodel = {
+  version: string;
+  uri: string;
+  domains: string[];
+  profile: ProfileEntry[];
+  stereotypes: Record<string, Stereotype>;
+  enumerations: Record<string, Enumeration>;
+  grid: GridCell[];
 };
 
 export type MigrationManifest = {
@@ -1871,6 +1929,15 @@ export type ProcessStep = {
   flowVersion?: number;
 };
 
+export type ProfileEntry = {
+  stereotype: string;
+  title: string;
+  plural: string;
+  kinds?: string[];
+  scales?: string[];
+  icon?: string;
+};
+
 export type PromotionResult = {
   from: string;
   to: string;
@@ -1879,6 +1946,13 @@ export type PromotionResult = {
   active: boolean;
   key: string;
   assets: number;
+};
+
+export type Property = {
+  name: string;
+  type: string;
+  many?: boolean;
+  description?: string;
 };
 
 export type PropertyType = {
@@ -1982,6 +2056,20 @@ export type Related = {
   title: string;
   records: unknown[];
   total: number;
+};
+
+export type Relationship = {
+  id: string;
+  stereotype: string;
+  kind?: string;
+  source: string;
+  target: string;
+  role?: string;
+  relation?: string;
+  share?: number;
+  primary?: boolean;
+  from?: string;
+  until?: string;
 };
 
 export type ReleaseActivateRequest = {
@@ -2385,6 +2473,19 @@ export type State = {
   description?: string;
 };
 
+export type Stereotype = {
+  name: string;
+  id: string;
+  domain: string;
+  aspect?: string;
+  description?: string;
+  abstract?: boolean;
+  generals?: string[];
+  bases?: string[];
+  properties?: Property[];
+  constraints?: string[];
+};
+
 export type Structure = {
   id: string;
   name: string;
@@ -2614,6 +2715,16 @@ export type Vendor = {
   name: string;
   baseUrl: string;
   wire: string;
+};
+
+export type View = {
+  id: string;
+  name: string;
+  grid: string;
+  kind?: string;
+  elements: string[];
+  layout?: Record<string, number[]>;
+  asOf?: string;
 };
 
 export type WorkTask = {
