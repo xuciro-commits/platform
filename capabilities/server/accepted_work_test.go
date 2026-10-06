@@ -26,6 +26,7 @@ type resultWorker struct {
 	calls  int
 	reject bool
 	emit   bool
+	idle   bool
 }
 
 func newResultWorker(id string) *resultWorker {
@@ -76,6 +77,9 @@ func (w *resultWorker) write(c platform.Caller, id string, at time.Time) *kernel
 	return err
 }
 func (w *resultWorker) Run(c platform.Caller, _ string, at time.Time) *kernel.Error {
+	if w.idle {
+		return nil
+	}
 	return w.write(c, "job-"+at.UTC().Format(time.RFC3339Nano), at)
 }
 func (w *resultWorker) Handle(c platform.Caller, e platform.Event) *kernel.Error {
@@ -97,6 +101,27 @@ func resultWorkTenant(t *testing.T, id string) *Tenant {
 		t.Fatal(err)
 	}
 	return tn
+}
+
+func TestAcceptedIdleWorkDoesNotInvalidateBusinessData(t *testing.T) {
+	live := resultWorkTenant(t, "idle-work")
+	live.app("worker").(*resultWorker).idle = true
+	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	seq, data, _ := live.changeState()
+	for _, task := range live.jobs {
+		if task.App != "worker" {
+			continue
+		}
+		live.mu.Lock()
+		outcome := live.attempt(task, time.Now(), false)
+		live.mu.Unlock()
+		after, nextData, _ := live.changeState()
+		if outcome != "ok" || after != seq+1 || nextData != data {
+			t.Fatalf("idle work invalidated data: outcome=%s seq=%d/%d data=%d/%d", outcome, seq, after, data, nextData)
+		}
+		return
+	}
+	t.Fatal("worker job missing")
 }
 
 func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) {

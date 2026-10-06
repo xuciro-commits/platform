@@ -171,7 +171,11 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	t.enqueue(saved.At)
-	t.changed()
+	if len(saved.Changes) == 0 && saved.Notices == nil {
+		t.operationsChanged()
+	} else {
+		t.changed()
+	}
 	return saved.Outcome
 }
 

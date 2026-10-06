@@ -180,7 +180,7 @@ func (h *Host) Handler() http.Handler {
 			f(w, r, m, t)
 		})
 	}
-	handle(Route{Pattern: "GET /v1/changes", Summary: "Server-sent events: \"changed\" each time the tenant takes inputs, so a client reads again what it shows (F-32)", Answer: ""},
+	handle(Route{Pattern: "GET /v1/changes", Summary: "Server-sent events: changed for data changes, operations for queue-only progress (F-32)", Answer: ""},
 		func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) { followChanges(w, r, t) })
 	handle(Route{Pattern: "POST /v1/recovery/retry", Summary: "Retry recovery of this quarantined tenant from the durable journal after an operator repairs its cause (ADR-0038)",
 		Answer: TenantHealth{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

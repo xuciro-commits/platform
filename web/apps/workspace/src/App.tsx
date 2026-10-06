@@ -138,7 +138,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const studioApplications = useQuery({ queryKey: [token, tenant, "/v1/records/build.app", "inventory", 1000],
     queryFn: () => client.inventory<{ id: string; name: string; title: string; archived?: boolean }>("build.app"),
     enabled: ready && me?.profile.roles.build === "builder" });
-  const release = read<Api.ReleaseActive>("/v1/releases/active", 5000, { retry: false });
+  const release = read<Api.ReleaseActive>("/v1/releases/active", false, { retry: false });
   const releaseUnavailable = release.isError || release.fetchStatus === "paused";
   const [releaseOpen, setReleaseOpen] = useState(false);
   const protocols = read<ProtocolInfo[]>("/v1/protocols").data ?? [];
@@ -156,10 +156,23 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     const stop = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let first = true; // the stream opens with where the tenant stands
-    void client.follow(() => {
+    let dataChanged = false;
+    void client.follow((kind) => {
       if (first) { first = false; return; }
+      dataChanged ||= kind === "changed";
       clearTimeout(timer);
-      timer = setTimeout(() => { void queries.invalidateQueries(); setRevision((r) => r + 1); }, 200);
+      timer = setTimeout(() => {
+        if (dataChanged) {
+          void queries.invalidateQueries();
+          setRevision((r) => r + 1);
+        } else {
+          void queries.invalidateQueries({ predicate: (query) => {
+            const path = query.queryKey[2];
+            return typeof path === "string" && /^\/v1\/(health|work|deliveries|effects|endpoints|connectors|protocols|agent-overview|ai-usage|transcripts)(?:[/?]|$)/.test(path);
+          } });
+        }
+        dataChanged = false;
+      }, 200);
     }, stop.signal);
     return () => { stop.abort(); clearTimeout(timer); };
   }, [client, queries, ready]);

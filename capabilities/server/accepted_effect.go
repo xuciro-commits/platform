@@ -402,7 +402,11 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *ai.Usage
 		return
 	}
 	t.enqueue(saved.At)
-	t.changed()
+	if len(saved.Changes) == 0 && len(saved.Rows) == 0 && len(saved.States) == 0 && saved.Notices == nil {
+		t.operationsChanged()
+	} else {
+		t.changed()
+	}
 }
 
 func captureDirectEffectRows(d *stagedDecision, owner string, eventRows map[string]bool) ([]acceptedInputRow, error) {

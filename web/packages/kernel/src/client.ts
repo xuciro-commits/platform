@@ -74,11 +74,11 @@ export class EdgeClient {
 
   /**
    * Follows the tenant's changes (`GET /v1/changes`, server-sent events): calls
-   * `onChange` each time the host took inputs, until `signal` aborts; reconnects
+   * `onChange` for data changes or queue-only progress, until `signal` aborts; reconnects
    * after a dropped stream, waiting longer each time up to 30 s (F-32). Read
    * with fetch, as EventSource sends no Authorization header.
    */
-  async follow(onChange: () => void, signal: AbortSignal): Promise<void> {
+  async follow(onChange: (kind: "changed" | "operations") => void, signal: AbortSignal): Promise<void> {
     for (let wait = 1000; !signal.aborted; wait = Math.min(wait * 2, 30000)) {
       try {
         const response = await fetch(this.connection.server + "/v1/changes", { headers: this.headers(), signal });
@@ -92,7 +92,8 @@ export class EdgeClient {
           buffer += value;
           const events = buffer.split("\n\n");
           buffer = events.pop() ?? "";
-          if (events.some((e) => e.startsWith("event: changed"))) onChange();
+          if (events.some((e) => e.startsWith("event: changed\n"))) onChange("changed");
+          else if (events.some((e) => e.startsWith("event: operations\n"))) onChange("operations");
         }
       } catch {
         if (signal.aborted) return;

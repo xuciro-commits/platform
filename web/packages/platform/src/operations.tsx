@@ -9,8 +9,8 @@ import { useAdmin, when, type AppSettings, type AuditEntry, type Connector, type
 // (queued and failed deliveries, scheduled jobs), and every delivery attempt.
 export function Automation() {
   const { apps, decideOn } = useAdmin();
-  const deliveries = useRead<Delivery[]>("/v1/deliveries", 5000);
-  const work = useRead<Task[]>("/v1/work", 5000);
+  const deliveries = useRead<Delivery[]>("/v1/deliveries");
+  const work = useRead<Task[]>("/v1/work");
   const health = useRead<Api.TenantHealth>("/v1/health", 5000).data;
   const tone = (state: string) => (({ failed: "danger", retrying: "warning", queued: "info" }) as const)[state as "failed"] ?? "neutral";
   const taskColumns: ColumnDef<Task, any>[] = [
@@ -108,7 +108,7 @@ export function Integrations() {
 // Webhook endpoints and their effects (ADR-0014): events go out signed, at least
 // once with a stable key; outcomes are journaled, a replay never sends.
 function Webhooks() {
-  const endpoints = useRead<EndpointView[]>("/v1/endpoints", 5000);
+  const endpoints = useRead<EndpointView[]>("/v1/endpoints");
   const effects = useRead<Effect[]>("/v1/effects");
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const { apps, decideOn } = useAdmin();
