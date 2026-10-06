@@ -84,8 +84,11 @@ export function keepFresh(config: OidcConfig, session: OidcSession, renewed: (s:
 /** Ends the session here and at the provider. */
 export async function signOut(config: OidcConfig): Promise<void> {
   const session = JSON.parse(sessionStorage.getItem(SESSION) ?? "null") as OidcSession | null;
-  sessionStorage.removeItem(SESSION);
   const { end_session_endpoint } = await discover(config.issuer);
+  // Preserve the ID token if discovery fails, so a retry can still end the
+  // provider session instead of silently signing back into the rejected account.
+  sessionStorage.removeItem(SESSION);
+  sessionStorage.removeItem(PENDING);
   if (!end_session_endpoint) return location.assign(config.redirectUri);
   const url = new URL(end_session_endpoint);
   url.search = new URLSearchParams({ post_logout_redirect_uri: config.redirectUri, ...(session?.idToken ? { id_token_hint: session.idToken } : {}) }).toString();

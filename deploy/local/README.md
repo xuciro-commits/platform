@@ -92,6 +92,8 @@ PLATFORM_REHEARSE_BIN=/tmp/hospitality-server bash deploy/local/rehearse-lightwe
 
 主机的接口也在同一个地址下（`/v1/...`）。开发工作台时用 `.claude/launch.json` 的配置：`workspace-hospitality`（连内存里的酒店业主机 8496，开发令牌）、`workspace-manufacturing`（连 8491）、`workspace-app`（连单个应用的开发主机 8499）、`workspace-oidc`（连 Docker 里的 8495，要登录），页面在 http://localhost:5176（`workspace-manufacturing` 是 5175，`workspace-app` 是 5177）。
 
+账号登录到不属于自己的宿主时，提示页提供“退出并切换账号”，结束当前身份提供商会话并回到登录页；无需清理浏览器数据。退出同时清除该工作台记住的开发身份与租户选择。
+
 **本地 Rauthy 已经运行过的话**：它只在第一次启动时读取初始数据，所以还不认识新的登录客户端 `platform-web`，登录会报找不到客户端。重建一次身份认证的数据卷即可（里面只有测试账号，会按 `rauthy/bootstrap` 重新生成，账号密码不变）：
 
 ```bash

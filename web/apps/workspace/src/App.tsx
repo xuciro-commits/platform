@@ -80,8 +80,25 @@ function Recovery({ client, token, tenant }: { client: EdgeClient; token: string
 export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig; session: OidcSession }; identities: Identity[] }) {
   const [token, setToken] = useState(signedIn?.session.accessToken ?? remembered("workspace:identity") ?? preferred(identities));
   const [tenant, setTenant] = useState(remembered("workspace:tenant") ?? "");
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
   const client = useMemo(() => new EdgeClient({ server: "", token, tenant, principal: "" }), [token, tenant]);
-  useEffect(() => signedIn && keepFresh(signedIn.config, signedIn.session, (s) => { client.connection.token = s.accessToken; }), [client, signedIn]);
+  useEffect(() => signedIn && !signingOut ? keepFresh(signedIn.config, signedIn.session, (s) => { client.connection.token = s.accessToken; }) : undefined, [client, signedIn, signingOut]);
+  const leaveSession = async () => {
+    if (!signedIn || signingOut) return;
+    setSigningOut(true);
+    setSignOutError("");
+    sessionStorage.removeItem("workspace:identity");
+    sessionStorage.removeItem("workspace:tenant");
+    try {
+      await signOut(signedIn.config);
+    } catch {
+      const message = t("Could not reach the sign-in provider. Retry signing out.");
+      setSignOutError(message);
+      notify.error(message);
+      setSigningOut(false);
+    }
+  };
 
   const meQuery = useQuery({ queryKey: [token, tenant, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false });
   const me = meQuery.data;
@@ -269,7 +286,16 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     const problem = /HTTP 401/.test(String(meQuery.error))
       ? signedIn ? t("{email} is not a member of this host.", { email: signedIn.session.email }) : t("This host does not accept this identity.")
       : t("The host is unreachable.");
-    return <main className="grid h-dvh place-items-center text-sm text-muted">{problem}</main>;
+    return <main className="grid min-h-dvh place-items-center p-4">
+      <Card className="w-full max-w-md space-y-4 p-5">
+        <h1 className="text-lg font-semibold">{problem}</h1>
+        {signedIn && <>
+          <p className="text-sm text-muted">{t("Sign out and sign in with an account that belongs to this host.")}</p>
+          {signOutError && <p role="alert" className="text-sm text-danger">{signOutError}</p>}
+          <Button disabled={signingOut} onClick={() => void leaveSession()}>{signingOut ? t("Signing out…") : t("Sign out and switch account")}</Button>
+        </>}
+      </Card>
+    </main>;
   }
   if (!host || !apps || !ready) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
 
@@ -295,7 +321,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       : identities.filter((i) => i.tenant === me!.tenantId).map((i) => ({ id: `as:${i.token}`, label: `${i.member} · ${Object.entries(i.roles).map(([a, r]) => `${a} ${r}`).join(", ")}` }))),
   ];
   const onSwitch = (id: string) => {
-    if (id === "sign-out" && signedIn) void signOut(signedIn.config);
+    if (id === "sign-out" && signedIn) void leaveSession();
     if (id.startsWith("tenant:") || id.startsWith("as:")) {
       history.replaceState(null, "", "#/inbox");
       setActiveRoute(undefined);
