@@ -34,11 +34,13 @@ type Connection struct {
 	// Address is the service root URL, or for postgres a DSN without a password.
 	Address string `json:"address" field:"required" help:"Service root URL, or postgres://user@host:5432/db?sslmode=require without the password"`
 	// Secret names the credential in the host's secret store: the Authorization header's value for http/odata, the password for postgres.
-	Secret       string           `json:"secret,omitempty" title:"Secret name" help:"The credential's name in the host's secret store, never the credential"`
-	AllowPrivate bool             `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
-	State        string           `json:"state" field:"readonly"`
-	Requested    bool             `json:"requested,omitempty" field:"readonly" title:"Check requested"`
-	Last         *ConnectionCheck `json:"last,omitempty" field:"readonly" type:"json" title:"Last check"`
+	Secret       string `json:"secret,omitempty" title:"Secret name" help:"The credential's name in the host's secret store, never the credential"`
+	AllowPrivate bool   `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
+	// Marking classifies everything read through it (ADR-0075); datasets loaded from it are marked at least as high.
+	Marking   string           `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking" help:"What is read through it is at least this: internal, confidential or restricted"`
+	State     string           `json:"state" field:"readonly"`
+	Requested bool             `json:"requested,omitempty" field:"readonly" title:"Check requested"`
+	Last      *ConnectionCheck `json:"last,omitempty" field:"readonly" type:"json" title:"Last check"`
 }
 
 // ConnectionCheck is what one check found.
@@ -63,12 +65,12 @@ func (b *Build) connectionEntity() platform.Entity {
 			return nil
 		},
 		Description: "An external system the tenant reads from: a kind, an address and the name of its credential in the host's secret store.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "integrations"},
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "ready", Title: "Ready", Tone: "success"}},
 			Transitions: []platform.Transition{
-				{Name: "check", Title: "Check", Description: "Reach the system once from the host and keep what answered.", From: []string{"draft", "ready"}, To: []string{"draft"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}, Do: b.checkConnection},
-				{Name: "retire", Title: "Retire", Description: "Stop sources from using the connection; the definition stays.", From: []string{"ready"}, To: []string{"draft"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}}}}}
+				{Name: "check", Title: "Check", Description: "Reach the system once from the host and keep what answered.", From: []string{"draft", "ready"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.checkConnection},
+				{Name: "retire", Title: "Retire", Description: "Stop sources from using the connection; the definition stays.", From: []string{"ready"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
 }
 
 func connectionActions() []platform.Action {

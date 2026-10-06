@@ -48,7 +48,7 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 	} else if s.Dataset != "" {
 		pull.Cursor, pull.Rows = s.Advance(raw), len(raw)
 		if len(raw) > 0 || s.Cursor == "" {
-			if err := t.loadDataset(member, s.Dataset, "source:"+s.Name, raw, now); err != nil {
+			if err := t.loadDataset(member, s.Dataset, "source:"+s.Name, t.connectionMarking(s.Connection), raw, now); err != nil {
 				pull.Error = err.Message
 			} else {
 				pull.Applied = len(raw)
@@ -107,6 +107,15 @@ func (t *Tenant) applyRows(member platform.Member, object, producer string, rows
 	}
 }
 
+// connectionMarking is what a connection classifies everything read through it as (ADR-0075).
+func (t *Tenant) connectionMarking(connection string) string {
+	if connection == "" {
+		return ""
+	}
+	conn, _ := platform.Get[build.Connection](t.automation(build.ID, false), connection)
+	return conn.Marking
+}
+
 // resolver is the object's published matching rule (ADR-0074) over its
 // records as they are now, or nil when rows land as they come.
 func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *build.Resolver {
@@ -136,11 +145,11 @@ func (t *Tenant) resolver(member platform.Member, object, producer string, now t
 }
 
 // loadDataset appends rows as the dataset's next version, one journaled input.
-func (t *Tenant) loadDataset(member platform.Member, dataset, producer string, rows []map[string]any, now time.Time) *kernel.Error {
+func (t *Tenant) loadDataset(member platform.Member, dataset, producer, marking string, rows []map[string]any, now time.Time) *kernel.Error {
 	if rows == nil {
 		rows = []map[string]any{}
 	}
-	payload, _ := json.Marshal(map[string]any{"rows": rows, "producer": producer})
+	payload, _ := json.Marshal(map[string]any{"rows": rows, "producer": producer, "marking": marking})
 	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "load:" + dataset + ":" + producer + ":" + now.UTC().Format(time.RFC3339Nano),
 		Target: &pb.EntityRef{Type: build.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: build.SchemaDatasetLoad, Version: 1}, Payload: payload}, now)
 	return err

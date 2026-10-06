@@ -491,6 +491,7 @@ export type Connection = {
   address: string;
   secret?: string;
   allowPrivate?: boolean;
+  marking?: "internal" | "confidential" | "restricted";
   state: string;
   requested?: boolean;
   last?: ConnectionCheck;
@@ -2484,9 +2485,10 @@ export type Source = {
   allowPrivate?: boolean;
   header?: string;
   path?: string;
-  object: string;
-  key: string;
-  mapping: SourceField[];
+  dataset?: string;
+  object?: string;
+  key?: string;
+  mapping?: SourceField[];
   every?: string;
   state: string;
   puller?: string;
@@ -2510,6 +2512,7 @@ export type SourcePull = {
   rows: number;
   applied: number;
   failed: number;
+  merged?: number;
   error?: string;
   failures?: SourceFailure[];
   cursor?: string;

@@ -15,6 +15,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -173,6 +174,9 @@ func (t *Tenant) Export(m platform.Member, typ string, q platform.Query, now tim
 	if et == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
+	if t.restricted(typ) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Restricted data does not leave as CSV")
+	}
 	view, _ := viewOf(m, et)
 	var fields []platform.FieldInfo
 	header := []string{"id"}
@@ -232,4 +236,17 @@ func toCSV(v any) string {
 		return strings.Join(parts, ";")
 	}
 	return fmt.Sprint(v)
+}
+
+// restricted says whether typ holds restricted data (ADR-0075): a dataset or
+// version marked so, or an object a restricted pipeline writes.
+func (t *Tenant) restricted(typ string) bool {
+	c := t.automation(build.ID, false)
+	switch typ {
+	case build.DatasetType, build.DatasetVersionType:
+		sets, _, _ := platform.Find[build.Dataset](c, platform.Query{Limit: 500})
+		return slices.ContainsFunc(sets, func(d build.Dataset) bool { return d.Marking == "restricted" })
+	}
+	pipelines, _, _ := platform.Find[build.Pipeline](c, platform.Query{Limit: 500})
+	return slices.ContainsFunc(pipelines, func(p build.Pipeline) bool { return p.OutputObject == typ && p.Marking == "restricted" })
 }

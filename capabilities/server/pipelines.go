@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -54,6 +55,11 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 				others[s.Dataset], _, _ = build.DatasetRows(c, s.Dataset, 0)
 			}
 		}
+		for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
+			if ds, ok := platform.Get[build.Dataset](c, id); ok {
+				run.Marking = build.HigherMarking(run.Marking, ds.Marking)
+			}
+		}
 		t.mu.Unlock()
 		run.Input = version
 		if err != nil {
@@ -84,7 +90,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 						run.Written, run.Failed = len(elements), skipped
 					}
 				} else if p.OutputDataset != "" {
-					if err := t.loadDataset(member, p.OutputDataset, "pipeline:"+p.Name, kept, now); err != nil {
+					if err := t.loadDataset(member, p.OutputDataset, "pipeline:"+p.Name, run.Marking, kept, now); err != nil {
 						run.Error = err.Message
 					} else {
 						run.Written = len(kept)
@@ -94,6 +100,8 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 						}
 						t.mu.Unlock()
 					}
+				} else if open := t.unguarded(p.OutputObject, run.Marking); len(open) > 0 {
+					run.Error = "The input is " + run.Marking + " now; name who reads " + p.OutputObject + "'s fields " + strings.Join(open, ", ") + " first, or lower the marking"
 				} else {
 					pull := build.SourcePull{}
 					t.applyRows(member, p.OutputObject, p.Name, p.ObjectRows(kept), now, &pull)
@@ -111,3 +119,17 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 }
 
 const pipelineQuarantineKept = 50
+
+// unguarded are the object's fields every role reads, when marking forbids pouring into them (ADR-0075).
+func (t *Tenant) unguarded(object, marking string) []string {
+	if !build.Guarded(marking) {
+		return nil
+	}
+	t.records.mu.Lock()
+	et := t.records.types[object]
+	t.records.mu.Unlock()
+	if et == nil {
+		return nil
+	}
+	return build.UnguardedFields(et.info, nil)
+}

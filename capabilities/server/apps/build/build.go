@@ -190,7 +190,7 @@ func (b *Build) Manifest() platform.Manifest {
 	// Every role an object names is a role of this app, which the Console
 	// grants — one that only reads grants no action (ADR-0037 D4). Builder and
 	// Publisher are the two roles releases need (ADR-0047 §11).
-	roles := []string{User, Builder, Publisher}
+	roles := []string{User, Builder, Publisher, Integrator}
 	for _, typ := range sortedTypes(b.installed) {
 		for role := range b.installed[typ].Scope.Levels {
 			if !slices.Contains(roles, role) {

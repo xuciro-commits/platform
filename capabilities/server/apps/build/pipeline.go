@@ -43,6 +43,8 @@ type Pipeline struct {
 	OutputDataset string `json:"outputDataset,omitempty" ref:"build.dataset" title:"Output dataset"`
 	OutputObject  string `json:"outputObject,omitempty" title:"Output object"`
 	Key           string `json:"key,omitempty" title:"Record id column"`
+	// Marking (ADR-0075) is the highest marking an input carried when it ran; kept so lineage and the object gate see it.
+	Marking string `json:"marking,omitempty" field:"readonly" title:"Marking"`
 	// OutputEnterprise lands the rows in the enterprise model instead (ADR-0073): one element per row.
 	OutputEnterprise *EnterpriseTarget `json:"outputEnterprise,omitempty" type:"json" title:"Enterprise model"`
 	// Every is a period, or empty: run when an input gains a version, or on request.
@@ -101,9 +103,10 @@ type Expectation struct {
 type PipelineRun struct {
 	At          time.Time        `json:"at"`
 	Input       int              `json:"inputVersion"`
-	Rows        int              `json:"rows"`             // rows after the steps
-	Written     int              `json:"written"`          // rows written to the output
-	Merged      int              `json:"merged,omitempty"` // rows merged into matched records (ADR-0074)
+	Rows        int              `json:"rows"`              // rows after the steps
+	Written     int              `json:"written"`           // rows written to the output
+	Marking     string           `json:"marking,omitempty"` // the highest marking of the inputs (ADR-0075)
+	Merged      int              `json:"merged,omitempty"`  // rows merged into matched records (ADR-0074)
 	Quarantined int              `json:"quarantined"`
 	Failed      int              `json:"failed"` // rows the output refused
 	Error       string           `json:"error,omitempty"`
@@ -120,17 +123,17 @@ type QuarantinedRow struct {
 func (b *Build) pipelineEntity() platform.Entity {
 	return platform.Entity{Type: PipelineType, Title: "Pipeline", Plural: "Pipelines", Model: Pipeline{}, Display: "title",
 		Description: "Declared steps from a dataset to a dataset or an object, with expectations that quarantine bad rows.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "integrations"},
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Check the pipeline and let the host run it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishPipeline},
-				{Name: "run", Title: "Run now", Description: "Ask for one run at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}, Do: requestRun},
-				{Name: "pause", Title: "Pause", Description: "Stop running; the definition stays.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{Builder}, Capability: "integrations", Payload: []platform.Field{}}}}}
+				{Name: "publish", Title: "Publish", Description: "Check the pipeline and let the host run it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishPipeline},
+				{Name: "run", Title: "Run now", Description: "Ask for one run at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: requestRun},
+				{Name: "pause", Title: "Pause", Description: "Stop running; the definition stays.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
 }
 
 func pipelineActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaPipelineRan, Target: PipelineType, Capability: "integrations", Title: "Keep run result", Description: "Retain what one run of a pipeline did.", Roles: []string{Builder},
+	return []platform.Action{{Schema: SchemaPipelineRan, Target: PipelineType, Capability: "integrations", Title: "Keep run result", Description: "Retain what one run of a pipeline did.", Roles: []string{Builder, Integrator},
 		Payload: []platform.Field{{Name: "run", Type: "json", Required: true, Description: "The run's counts, quarantine and failures"}}}}
 }
 
@@ -208,7 +211,11 @@ func (b *Build) checkPipeline(c platform.Caller, p Pipeline) *kernel.Error {
 		if p.Key == "" {
 			return refuse("Name the column that is the record id")
 		}
-		_ = info
+		if marking := b.inputMarking(c, p); Guarded(marking) {
+			if open := UnguardedFields(info, nil); len(open) > 0 {
+				return refuse("The input is {marking}; name who reads {object}'s fields {fields} first, or lower the marking", marking, p.OutputObject, strings.Join(open, ", "))
+			}
+		}
 	}
 	if p.Every != "" {
 		every, err := time.ParseDuration(p.Every)
@@ -583,6 +590,7 @@ func (b *Build) submitPipelineRan(c platform.Caller, s *pb.Submission, now time.
 		return func(r *pb.ChangeRecord) {
 			run := payload.Run
 			p.Last, p.Requested = &run, false
+			p.Marking = HigherMarking(p.Marking, run.Marking)
 			c.Put(r, p)
 		}, nil
 	})
@@ -649,4 +657,26 @@ func keyOf(r map[string]any, cols []string) string {
 		parts[i] = scalar(r[c])
 	}
 	return strings.Join(parts, "\x1f")
+}
+
+// inputMarking is the highest marking of the datasets a pipeline reads.
+func (b *Build) inputMarking(c platform.Caller, p Pipeline) string {
+	marking := ""
+	for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
+		if ds, ok := platform.Get[Dataset](c, id); ok {
+			marking = HigherMarking(marking, ds.Marking)
+		}
+	}
+	return marking
+}
+
+// StepDatasets are the other datasets steps look up or join.
+func (p Pipeline) StepDatasets() []string {
+	var ids []string
+	for _, s := range p.Steps {
+		if s.Dataset != "" {
+			ids = append(ids, s.Dataset)
+		}
+	}
+	return ids
 }

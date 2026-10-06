@@ -29,6 +29,8 @@ type Dataset struct {
 	Title string `json:"title" field:"required,search"`
 	// Keep is how many versions stay; older ones are archived.
 	Keep int `json:"keep,omitempty" title:"Versions kept" help:"How many versions stay readable; default 3"`
+	// Marking (ADR-0075): raised by what loads it - the connection, the pipeline's input - and by hand; lowered only by hand.
+	Marking string `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking"`
 	// Producer is what loads it: the source or pipeline that writes versions (set by them, informational).
 	Producer string         `json:"producer,omitempty" field:"readonly"`
 	Schema   []DatasetField `json:"schema,omitempty" field:"readonly" type:"json"`
@@ -65,20 +67,20 @@ type DatasetVersion struct {
 func (b *Build) datasetEntity() platform.Entity {
 	return platform.Entity{Type: DatasetType, Title: "Dataset", Plural: "Datasets", Model: Dataset{}, Display: "title",
 		Description: "Rows as they came from a source or a pipeline: versioned, schema inferred, read only by builders.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "integrations"}}
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"}}
 }
 
 func (b *Build) datasetVersionEntity() platform.Entity {
 	return platform.Entity{Type: DatasetVersionType, Title: "Dataset version", Plural: "Dataset versions", Model: DatasetVersion{}, Display: "version",
 		Description: "One version of a dataset: its rows at one load.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Roles: []string{Builder}, Capability: "integrations"}}
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
+		Standard:    platform.Standard{Roles: []string{Builder, Integrator}, Capability: "integrations"}}
 }
 
 func datasetActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaDatasetLoad, Target: DatasetType, Capability: "integrations", Title: "Load a version", Description: "Append the rows one pull or run produced as the dataset's next version.", Roles: []string{Builder},
-		Payload: []platform.Field{{Name: "rows", Type: "json", Required: true, Description: "The rows, an array of objects"}, {Name: "producer", Type: "string", Description: "The source or pipeline that produced them"}}}}
+	return []platform.Action{{Schema: SchemaDatasetLoad, Target: DatasetType, Capability: "integrations", Title: "Load a version", Description: "Append the rows one pull or run produced as the dataset's next version.", Roles: []string{Builder, Integrator},
+		Payload: []platform.Field{{Name: "rows", Type: "json", Required: true, Description: "The rows, an array of objects"}, {Name: "producer", Type: "string", Description: "The source or pipeline that produced them"}, {Name: "marking", Type: "string", Description: "The marking the rows carry; raises the dataset's"}}}}
 }
 
 // DatasetSchema infers columns from rows: the widest type each column shows.
@@ -133,6 +135,7 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 		var payload struct {
 			Rows     []map[string]any `json:"rows"`
 			Producer string           `json:"producer"`
+			Marking  string           `json:"marking"`
 		}
 		ds, ok := platform.Get[Dataset](c, s.GetTarget().GetId())
 		if !ok {
@@ -171,6 +174,7 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 			if payload.Producer != "" {
 				ds.Producer = payload.Producer
 			}
+			ds.Marking = HigherMarking(ds.Marking, payload.Marking)
 			c.Put(r, ds)
 			c.Put(r, DatasetVersion{Record: platform.Record{ID: VersionID(ds.ID, ds.Version)}, Dataset: ds.ID, Version: ds.Version, At: now, Rows: len(payload.Rows), Data: data})
 			keep := ds.Keep
