@@ -1252,4 +1252,8 @@ export default {
   "Close all": "关闭全部",
   "Open beside": "在旁边打开",
   "Move to new window": "移到新窗口",
+  "Flow top to bottom": "改为从上到下",
+  "Flow left to right": "改为从左到右",
+  "Expand all blocks": "展开全部节点",
+  "Collapse all blocks": "折叠全部节点",
 } as Record<string, string>;

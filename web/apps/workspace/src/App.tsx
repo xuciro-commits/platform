@@ -89,6 +89,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const scope = useRef(selectionScope);
   scope.current = selectionScope;
   const [current, setCurrent] = useState<string>();
+  const chosen = useRef<string | undefined>(undefined);
   useEffect(() => { setCurrent(selectionScope ? remembered(selectionScope) : undefined); }, [selectionScope]);
   // The apps this member may open: the code packages above, and the
   // applications this tenant handed to its people (ADR-0036). The Host
@@ -130,6 +131,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     if (context) { if (context.id !== current) select(context.id); return; }
     const id = owner.get(activeRoute.view) ?? pageApplication(activeRoute, definitions, current)
       ?? (["records", "definitions"].includes(activeRoute.view) ? all.find((entry) => entry.surface === "developer")?.id : undefined);
+    if (chosen.current) { if (!id || id === chosen.current) chosen.current = undefined; else return; }
     if (id && id !== current && all.some((a) => a.id === id)) select(id);
   }, [activeRoute, all, app, current, definitions, owner, select, surface]);
   const views = useMemo(() => {
@@ -164,6 +166,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const openApplication = (id: string) => {
     const target = all.find((a) => a.id === id);
     if (!target) return;
+    chosen.current = id; // an explicit choice wins over tabs that surface while the layout swaps (React #185 ping-pong)
     select(id);
     location.hash = routeToHash(target.home);
   };

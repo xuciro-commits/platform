@@ -265,9 +265,12 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     closePanels(group.panels.slice(index + 1).map((p) => p.id));
   }, [closePanels]);
   // Switching application swaps the tab set (ADR-0054 D1): the old one is remembered, the new one restored; tabs just opened for the new application come along.
+  const switching = useRef(false);
   useEffect(() => {
     const api = dock.current;
     if (!api || layoutScope === scope.current) return;
+    switching.current = true; // intermediate active tabs during the swap are not "the reader went there"
+    try {
     const carried = api.panels.map((p) => (p.params as { route?: Route } | undefined)?.route).filter((r): r is Route => !!r && scopeOf?.(r) === layoutScope);
     for (const route of carried) api.getPanel(routeKey(route))?.api.close();
     saveLayout(scope.current);
@@ -276,6 +279,9 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     for (const route of carried) open(route);
     const linked = routeFromHash(location.hash);
     if (api.panels.length === 0) open(linked && byId.has(linked.view) ? linked : home);
+    } finally { switching.current = false; }
+    const route = (api.activePanel?.params as { route?: Route } | undefined)?.route;
+    if (route) { history.replaceState(null, "", routeToHash(route)); followed.current?.(route); }
   }, [layoutScope, scopeOf, saveLayout, loadLayout, open, byId, home]);
 
   const workspace = useMemo<WorkspaceApi>(() => ({
@@ -349,8 +355,8 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       setOpenTabs(api.panels.map((p) => ({ key: p.id, title: p.title ?? p.id })));
       setActive(api.activePanel?.id);
       const route = (api.activePanel?.params as { route?: Route } | undefined)?.route;
-      if (route) { history.replaceState(null, "", routeToHash(route)); followed.current?.(route); visit.current(route, api.activePanel?.title ?? route.view); }
-      saveLayout(scope.current);
+      if (route && !switching.current) { history.replaceState(null, "", routeToHash(route)); followed.current?.(route); visit.current(route, api.activePanel?.title ?? route.view); }
+      if (!switching.current) saveLayout(scope.current);
     };
     api.onDidLayoutChange(sync);
     api.onDidActivePanelChange(sync);

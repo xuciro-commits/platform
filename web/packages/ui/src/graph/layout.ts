@@ -44,12 +44,26 @@ export function layout(nodes: LayoutNode[], edges: LayoutEdge[], direction: "rig
       row.sort((a, b) => center(a) - center(b)); rankAll();
     }
   }
-  const widest = Math.max(1, ...layers.map((row) => row?.length ?? 0));
+  // Nodes with no connection at all are not a layer: they are packed into a
+  // grid after the connected part, so thirty unrelated objects do not become
+  // one thirty-high column beside a three-node chain.
+  const isolated = new Set(nodes.filter((n) => !out.get(n.id)!.length && !into.get(n.id)!.length).map((n) => n.id));
+  const connected = layers.map((row) => row?.filter((id) => !isolated.has(id)) ?? []).filter((row) => row.length);
+  const widest = Math.max(1, ...connected.map((row) => row.length));
+  const stepAlong = direction === "right" ? size.width + size.gapX : size.height + size.gapY * 2;
+  const stepAcross = direction === "right" ? size.height + size.gapY : size.width + size.gapX / 2;
   const positions = new Map<string, CanvasPosition>();
-  layers.forEach((row, i) => row?.forEach((id, j) => {
-    const along = i * (direction === "right" ? size.width + size.gapX : size.height + size.gapY * 2);
-    const across = (j + (widest - row.length) / 2) * (direction === "right" ? size.height + size.gapY : size.width + size.gapX / 2);
+  connected.forEach((row, i) => row.forEach((id, j) => {
+    const along = i * stepAlong, across = (j + (widest - row.length) / 2) * stepAcross;
     positions.set(id, direction === "right" ? { x: along, y: across } : { x: across, y: along });
   }));
+  if (isolated.size) {
+    const columns = Math.max(1, Math.ceil(Math.sqrt(isolated.size)));
+    const offset = connected.length ? connected.length * stepAlong + stepAlong / 2 : 0;
+    [...isolated].forEach((id, k) => {
+      const along = offset + Math.floor(k / columns) * stepAlong, across = (k % columns) * stepAcross;
+      positions.set(id, direction === "right" ? { x: along, y: across } : { x: across, y: along });
+    });
+  }
   return positions;
 }

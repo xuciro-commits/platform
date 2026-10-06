@@ -4,11 +4,13 @@
 // object's actions and this action's sections. Main: the section as a table or
 // preview. Right: the row in hand. Dock: this action's problems. The action
 // still lives in its object's record: the object draft session is shared.
-import { PayloadFields } from "@platform/app";
-import { Button, Card, Checkbox, Input, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Toggles, Workbench, cn, t, type EntityInfo, type WorkbenchProblem } from "@platform/ui";
+import { PayloadFields, useHost, useRecordInventory } from "@platform/app";
+import { Button, Card, Checkbox, DataTable, Input, PageHeader, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Toggles, Workbench, cn, t, type EntityInfo, type WorkbenchProblem } from "@platform/ui";
+import { useApplicationWorkspace } from "../projects/application-scope";
+import { DraftStatus } from "../shared/workbench";
 import { Boxes, CheckSquare, FileInput, ListChecks, Plus, Shield, Sparkles, Trash2, Wand2, Zap } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../shared/workbench";
+import { PublishMenu, WorkbenchMessage, savingState } from "../shared/workbench";
 import { assignmentInputFits } from "./process-rules";
 import { Label } from "./process";
 import { comparisonFits, conditionSubjects, inputTypes, nameOf, operators, type Action, type ApproverLevel, type Condition, type Create_, type Input_, type Set_ } from "./object-model";
@@ -26,6 +28,32 @@ const sections: { id: Section; title: () => string; icon: ReactNode }[] = [
   { id: "approval", title: () => t("Approval"), icon: <Shield /> },
   { id: "permissions", title: () => t("Permissions"), icon: <Shield /> },
 ];
+
+type ObjectDraft = { id: string; name: string; title: string; state: string; archived?: boolean; actions?: Action[]; states?: { name: string; title: string }[] };
+type ActionRow = { key: string; object: ObjectDraft; action: Action };
+
+/** Every action type of every object type this tenant drafts (Ontology Manager's Action types list): one row per action, opening its workbench. */
+export function ActionTypes() {
+  const { role } = useHost(), { open } = useApplicationWorkspace();
+  const inventory = useRecordInventory<ObjectDraft>("build.object");
+  if (role("build") !== "builder") return <PageHeader title={t("Action types")} description={t("Only a builder can edit action types.")} />;
+  const rows: ActionRow[] = (inventory.data?.records ?? []).filter((object) => !object.archived).flatMap((object) => (object.actions ?? []).map((action) => ({ key: `${object.id}:${action.name}`, object, action })));
+  const stateTitle = (object: ObjectDraft, name?: string) => object.states?.find((s) => s.name === name)?.title ?? name ?? "";
+  return <div className="grid min-w-0 gap-3">
+    <PageHeader title={t("Action types")} description={t("An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one.")} />
+    <DataTable<ActionRow> data={rows} getRowId={(row) => row.key} height={520} loading={inventory.isLoading} empty={t("No action types yet. Add a lifecycle state and an action to an object type.")}
+      onRowClick={(row) => open({ view: "action-type", params: { id: row.object.id, action: row.action.name } })}
+      columns={[
+        { id: "title", header: t("Action type"), accessorFn: (row) => row.action.title || row.action.name, meta: { width: 220, pin: "left" } },
+        { id: "object", header: t("Object type"), accessorFn: (row) => row.object.title || row.object.name, meta: { width: 180 } },
+        { id: "identity", header: t("Identity"), accessorFn: (row) => `build.${row.object.name}.${row.action.name}`, meta: { width: 260 } },
+        { id: "transition", header: t("Transition"), accessorFn: (row) => `${row.action.from.map((f) => stateTitle(row.object, f)).join(", ")} → ${row.action.to ? stateTitle(row.object, row.action.to) : row.action.toInput ? t("From input") : t("Where it was")}`, meta: { width: 240 } },
+        { id: "parameters", header: t("Parameters"), accessorFn: (row) => row.action.inputs?.length ?? 0, meta: { width: 100 } },
+        { id: "approval", header: t("Approval"), accessorFn: (row) => row.action.approval ? t("Yes") : "", meta: { width: 90 } },
+        { id: "state", header: t("Status"), accessorFn: (row) => row.object.state, cell: ({ row }) => <DraftStatus state={row.original.object.state} />, meta: { width: 110 } },
+      ]} />
+  </div>;
+}
 
 export function ActionTypeEditor({ id, action: initial }: { id: string; action?: string }) {
   const [pick, setPick] = useState<Pick>();

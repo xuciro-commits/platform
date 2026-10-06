@@ -9,7 +9,7 @@ import "./i18n";
 import { defineApp, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
 import { ObjectTypeEditor } from "./ontology/process";
-import { ActionTypeEditor } from "./ontology/action-type";
+import { ActionTypeEditor, ActionTypes } from "./ontology/action-type";
 import { ModelWorkbench } from "./ontology/ModelWorkbench";
 import { FlowEditor, Flows } from "./automate/workflow";
 import { AutomationEditor, Automations } from "./automate/automation";
@@ -36,7 +36,7 @@ const views: View[] = [
   { id: "project", title: () => t("Project"), render: (p) => <ApplicationScope key={p.id ?? "new"} application={p.id}><ProjectHome id={p.id ?? ""} /></ApplicationScope> },
   // Ontology
   { id: "object-type", title: (p) => p.id ? t("Object type") : t("Object types"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><ObjectTypeEditor id={p.id} initialField={p.field} initialAction={p.action} initialAccess={p.access === "true"} initialTab={p.tab} /></ApplicationScope> : scoped(p, <ModelWorkbench key={p.object ?? "catalog"} initialObject={p.object} initialTab={p.tab} />) },
-  { id: "action-type", title: () => t("Action type"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><ActionTypeEditor id={p.id} action={p.action} /></ApplicationScope> : scoped(p, <ModelWorkbench key="actions" initialTab="actions" />) },
+  { id: "action-type", title: () => t("Action type"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><ActionTypeEditor id={p.id} action={p.action} /></ApplicationScope> : scoped(p, <ActionTypes />) },
   { id: "link-type", title: () => t("Relationships"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><LinkTypeEditor id={p.id} parent={p.parent} child={p.child} via={p.via} /></ApplicationScope> : <LinkTypes /> },
   { id: "property-type", title: () => t("Shared properties"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><PropertyTypeEditor id={p.id} /></ApplicationScope> : <PropertyTypes /> },
   { id: "query", title: () => t("Queries"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><QueryEditor id={p.id} /></ApplicationScope> : <Queries /> },
@@ -75,11 +75,11 @@ export default defineApp({
       { label: t("Shared properties"), icon: <Tags />, route: { view: "property-type" } },
       { label: t("Queries"), icon: <Search />, route: { view: "query" } },
     ] },
-    { label: t("User interface"), items: [
+    { label: t("Interface"), items: [
       { label: t("Modules"), icon: <LayoutTemplate />, route: { view: "module" } },
       { label: t("Templates"), icon: <LayoutList />, route: { view: "studio-templates" } },
     ] },
-    { label: t("Automation"), items: [
+    { label: t("Logic"), items: [
       { label: t("Automations"), icon: <Zap />, route: { view: "automation" } },
       { label: t("Flows"), icon: <Workflow />, route: { view: "flow" } },
       { label: t("Runs"), icon: <Clock />, route: { view: "runs" } },

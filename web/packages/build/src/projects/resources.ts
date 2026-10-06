@@ -1,14 +1,15 @@
-// The resource kinds a project holds and the editor each opens (ADR-0053 §3).
-// A project is the `build.app` record: its `resources` are the Ontology,
-// logic and function assets it owns; its `pages`, header and navigation are
-// the project's Workshop module.
+// The resource kinds a project holds and the editor each opens (ADR-0055 §2).
+// A project is the host's `Application` (the `build.app` record): `resources`
+// are the Ontology, logic and function assets it owns; `pages`, `groups` and
+// `header` are its interface. The groups below are the host's asset kinds,
+// one to one — nothing here exists only in the builder.
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 
 export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "compute";
 
 export type ResourceKindInfo = {
-  kind: ResourceKind; type: string; view: string; group: "ontology" | "workshop" | "automate" | "functions";
+  kind: ResourceKind; type: string; view: string; group: "ontology" | "interface" | "logic" | "functions";
   label: string; plural: string; /** the AssetRef kind the host uses for this record type */ ref?: string;
 };
 
@@ -17,14 +18,14 @@ export const resourceKinds: ResourceKindInfo[] = [
   { kind: "link-type", type: "build.linktype", view: "link-type", group: "ontology", label: "Link type", plural: "Link types", ref: "link-type" },
   { kind: "property-type", type: "build.propertytype", view: "property-type", group: "ontology", label: "Shared property", plural: "Shared properties", ref: "property-type" },
   { kind: "query", type: "build.query", view: "query", group: "ontology", label: "Query", plural: "Queries", ref: "query" },
-  { kind: "page", type: "build.page", view: "module", group: "workshop", label: "Page", plural: "Pages", ref: "page" },
-  { kind: "flow", type: "build.process", view: "flow", group: "automate", label: "Logic flow", plural: "Logic flows", ref: "flow" },
+  { kind: "page", type: "build.page", view: "module", group: "interface", label: "Page", plural: "Pages", ref: "page" },
+  { kind: "flow", type: "build.process", view: "flow", group: "logic", label: "Logic flow", plural: "Logic flows", ref: "flow" },
   { kind: "function", type: "build.function", view: "function", group: "functions", label: "AI function", plural: "AI functions", ref: "function" },
   { kind: "compute", type: "build.code", view: "code", group: "functions", label: "Code function", plural: "Code functions", ref: "compute" },
 ];
 
 export const resourceGroups: { id: ResourceKindInfo["group"]; label: string }[] = [
-  { id: "ontology", label: "Ontology" }, { id: "workshop", label: "Workshop" }, { id: "automate", label: "Automate" }, { id: "functions", label: "Functions" },
+  { id: "ontology", label: "Ontology" }, { id: "interface", label: "Interface" }, { id: "logic", label: "Logic" }, { id: "functions", label: "Functions" },
 ];
 
 export const kindOfType = (type: string) => resourceKinds.find((kind) => kind.type === type);

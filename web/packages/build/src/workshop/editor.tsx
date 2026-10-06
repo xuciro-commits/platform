@@ -412,7 +412,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       onChange={(patch) => edit(patch, `settings:${Object.keys(patch).join(",")}`)} /> },
     { id: "variables", title: t("Variables"), badge: Object.keys(document.variables ?? {}).length || undefined, content: <VariablesPanel object={objectRef} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> },
     { id: "queries", title: t("Queries"), badge: Object.keys(document.queries ?? {}).length || undefined, content: <QueriesPanel sections={sections} onPreviewOwner={setQueryPreviewOwner} document={document} object={objectRef} values={variableValues} onChange={(document) => edit({ document })} /> },
-    { id: "interface", title: t("Interface"), content: <InterfacePanel document={document} object={objectRef} onChange={(document) => edit({ document })} /> },
+    { id: "interface", title: t("Inputs and outputs"), content: <InterfacePanel document={document} object={objectRef} onChange={(document) => edit({ document })} /> },
   ];
   const containerTabs: WorkbenchTab[] = container ? [
     { id: "layout", title: t("Layout"), content: <div className="grid content-start gap-2 p-2">

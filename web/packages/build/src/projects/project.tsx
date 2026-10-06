@@ -1,7 +1,7 @@
-// Projects (ADR-0053 §5.1): the container of everything a builder makes. A
-// project is the `build.app` record; its resource tree lists what it owns,
-// `+ New` creates a resource inside it, and its pages, header and navigation
-// are edited as the project's Workshop module.
+// Projects (ADR-0053 §5.1, ADR-0055 §2): the container of everything a builder
+// makes. A project is the host's Application (`build.app`); its tree lists what
+// it owns by the host's asset kinds, `+ New` creates a resource inside it, `Add
+// existing` brings one in, and its pages, navigation and header are its interface.
 import { pageUIProfile, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { ActionMenu, Button, Input, PanelSection, Select, ProblemList, StructureRow, Textarea, Workbench, notify, t, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
@@ -50,27 +50,42 @@ export function ProjectsList() {
   </div>;
 }
 
-/** Inventories of every resource type, keyed by kind, resolved to the records a project names. */
+export type OwnedResource = { kind: ResourceKindInfo; record?: ResourceRecord; ref: Api.AssetRef; title: string; installed: boolean; missing: boolean };
+
+/** Inventories of every resource type, keyed by kind, resolved to the records a project names — and to
+ * what the host has installed, so a published resource without a tenant draft is never called missing. */
 export function useProjectResources(project?: Project) {
+  const { definitions } = useHost();
   const inventories = Object.fromEntries(resourceKinds.map((kind) => [kind.kind, useRecordInventory<ResourceRecord>(kind.type)])) as Record<string, ReturnType<typeof useRecordInventory<ResourceRecord>>>;
   const owned = useMemo(() => {
-    const items: { kind: ResourceKindInfo; record?: ResourceRecord; ref: Api.AssetRef; title: string; missing?: boolean }[] = [];
+    const items: OwnedResource[] = [];
     if (!project) return items;
+    const installedKeys = new Set(definitions.map((d) => refKey(d.ref)));
+    const resolve = (kind: ResourceKindInfo, ref: Api.AssetRef, record: ResourceRecord | undefined, loaded: boolean): OwnedResource => {
+      const installed = installedKeys.has(refKey(ref));
+      const definition = installed ? definitions.find((d) => refKey(d.ref) === refKey(ref)) : undefined;
+      const title = record?.title ?? definition?.page?.title ?? definition?.entity?.title ?? definition?.query?.title ?? definition?.function?.title ?? ref.name;
+      return { kind, record, ref, title, installed, missing: !record && !installed && loaded };
+    };
     const pages = inventories.page?.data?.records ?? [];
     for (const name of project.pages ?? []) {
-      const record = pages.find((page) => page.name === name && !page.archived);
-      items.push({ kind: kindOfType("build.page")!, record, ref: { app: "build", kind: "page", name }, title: record?.title ?? name, missing: !record && !!inventories.page?.data });
+      items.push(resolve(kindOfType("build.page")!, { app: "build", kind: "page", name }, pages.find((page) => page.name === name && !page.archived), !!inventories.page?.data));
     }
     for (const ref of project.resources ?? []) {
       const kind = resourceKinds.find((item) => (item.ref ?? item.kind) === ref.kind);
       if (!kind) continue;
       const record = (inventories[kind.kind]?.data?.records ?? []).find((item) => !item.archived && refKey(resourceRef(kind, item.name)) === refKey(ref));
-      items.push({ kind, record, ref, title: record?.title ?? ref.name, missing: !record && !!inventories[kind.kind]?.data });
+      items.push(resolve(kind, ref, record, !!inventories[kind.kind]?.data));
     }
     return items;
-  }, [project, ...resourceKinds.map((kind) => inventories[kind.kind]?.data)]);
+  }, [project, definitions, ...resourceKinds.map((kind) => inventories[kind.kind]?.data)]);
+  /** Records of every kind that exist but are not in the project yet: what "Add existing" offers. */
+  const available = useMemo(() => {
+    const held = new Set(owned.map((item) => refKey(item.ref)));
+    return resourceKinds.flatMap((kind) => (inventories[kind.kind]?.data?.records ?? []).filter((record) => !record.archived && !held.has(refKey(kind.kind === "page" ? { app: "build", kind: "page", name: record.name } : resourceRef(kind, record.name)))).map((record) => ({ kind, record })));
+  }, [owned, ...resourceKinds.map((kind) => inventories[kind.kind]?.data)]);
   const loading = Object.values(inventories).some((inventory) => inventory.isLoading);
-  return { inventories, owned, loading };
+  return { inventories, owned, available, loading };
 }
 
 /** `+ New ▾`: create a resource and add it to the project in one step. */
@@ -92,7 +107,7 @@ export function ProjectHome({ id }: { id: string }) {
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
   const project = query.data?.record;
-  const { owned, loading } = useProjectResources(project);
+  const { owned, available, loading } = useProjectResources(project);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string>();
   const [tab, setTab] = useState<"resources" | "settings">("resources");
@@ -127,31 +142,32 @@ export function ProjectHome({ id }: { id: string }) {
     : { resources: (project.resources ?? []).filter((item) => refKey(item) !== refKey(ref)) });
   const builder = role("build") === "builder";
   const unpublished = owned.filter((item) => item.record && item.record.state !== "published");
-  const problems: WorkbenchProblem[] = owned.filter((item) => item.missing).map((item) => ({ id: refKey(item.ref), severity: "warning", text: t("{title} is listed but no saved draft exists.", { title: item.title }), subject: item.kind.label, locate: () => remove(item.ref) }));
+  const problems: WorkbenchProblem[] = owned.filter((item) => item.missing).map((item) => ({ id: refKey(item.ref), severity: "warning", text: t("{title} is listed but neither a draft nor a published definition exists. Remove it or create it.", { title: item.title }), subject: t(item.kind.label), locate: () => { setSelected(refKey(item.ref)); setTab("resources"); } }));
+  const addExisting = (kind: ResourceKindInfo, record: ResourceRecord) => patch(kind.kind === "page" ? { pages: [...new Set([...(project!.pages ?? []), record.name])] }
+    : { resources: [...(project!.resources ?? []), resourceRef(kind, record.name)] });
   const installed = definitions.find((d) => d.ref.app === "build" && d.ref.kind === "app" && d.ref.name === project?.name);
   const visible = owned.filter((item) => `${item.title} ${item.ref.name} ${t(item.kind.plural)}`.toLowerCase().includes(filter.toLowerCase()));
   const current = owned.find((item) => refKey(item.ref) === selected);
   if (!project) return <WorkbenchFrame title={t("Project")}>{query.isError ? t("The project could not be loaded.") : t("Loading…")}</WorkbenchFrame>;
+  const statusOf = (item: OwnedResource) => item.record ? (item.record.state === "published" ? undefined : t("draft")) : item.installed ? t("published") : item.missing ? t("missing") : undefined;
   const tree = <div className="grid min-w-0 content-start">
     <div className="p-2"><Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
-    <PanelSection title={t("Module")}>
-      <StructureRow icon={<Layers />} label={t("Pages, navigation and header")} meta={project.pages?.length ?? 0} onClick={() => open({ view: "module", params: { id: project.id, application: project.id } })} />
-    </PanelSection>
     {resourceGroups.map((group) => {
       const kinds = resourceKinds.filter((kind) => kind.group === group.id);
       const items = visible.filter((item) => kinds.includes(item.kind));
-      if (!items.length && filter) return null;
+      if (!items.length && filter && group.id !== "interface") return null;
       return <PanelSection key={group.id} title={t(group.label)}>
+        {group.id === "interface" && <StructureRow icon={<Layers />} label={t("Navigation and header")} meta={project.groups?.length || undefined} onClick={() => open({ view: "module", params: { id: project.id, application: project.id } })} />}
         {kinds.map((kind) => {
           const rows = items.filter((item) => item.kind === kind);
           if (!rows.length) return null;
           return <div key={kind.kind} className="grid">
             <StructureRow icon={kindIcon[kind.kind]} label={t(kind.plural)} meta={rows.length} className="font-medium" />
-            {rows.map((item) => <StructureRow key={refKey(item.ref)} depth={1} label={item.title} selected={selected === refKey(item.ref)} meta={item.record?.state === "published" ? undefined : item.missing ? t("missing") : t("draft")}
-              onClick={() => { setSelected(refKey(item.ref)); if (item.record) open(resourceRoute(item.kind, item.record.id, project.id)); }} />)}
+            {rows.map((item) => <StructureRow key={refKey(item.ref)} depth={1} label={item.title} selected={selected === refKey(item.ref)} meta={statusOf(item)}
+              onClick={() => { setSelected(refKey(item.ref)); setTab("resources"); if (item.record) open(resourceRoute(item.kind, item.record.id, project.id)); }} />)}
           </div>;
         })}
-        {!items.length && <p className="px-2 text-[11px] text-muted">{t("Nothing here yet.")}</p>}
+        {!items.length && group.id !== "interface" && <p className="px-2 text-[11px] text-muted">{t("Nothing here yet. Use New, or Add existing.")}</p>}
       </PanelSection>;
     })}
   </div>;
@@ -163,6 +179,10 @@ export function ProjectHome({ id }: { id: string }) {
         {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
         {builder && installed?.application && <Button size="sm" onClick={() => setImporting(true)}>{t("Import Workshop module")}</Button>}
         {builder && <Button size="sm" onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{unpublished.length}</span>}</Button>}
+        {builder && available.length > 0 && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" onChange={(event) => { const [kind, id] = event.target.value.split(":"); const found = available.find((item) => item.kind.kind === kind && item.record.id === id); if (found) void addExisting(found.kind, found.record); }}>
+          <option value="">{t("Add existing…")}</option>
+          {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={`${kind.kind}:${item.record.id}`}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
+        </Select>}
         {builder && <NewResourceMenu onCreated={(kind, target) => void addCreated(kind, target)} />}
         {builder && <Button size="sm" variant="primary" disabled={!project.pages?.length} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: importedDependencies.map((dependency) => `${dependency.kind}:${dependency.id}`).join(",") } : {}) } })}>{t("Publish")}</Button>}
       </>}
@@ -178,12 +198,15 @@ export function ProjectHome({ id }: { id: string }) {
             {current ? <div className="rounded-md border border-border p-4">
               <div className="flex items-center gap-2">{kindIcon[current.kind.kind]}<h2 className="min-w-0 flex-1 truncate font-semibold">{current.title}</h2><DraftStatus state={current.record?.state} /></div>
               <p className="mt-1 text-xs text-muted">{t(current.kind.label)} · {current.ref.name}</p>
+              {!current.record && current.installed && <p className="mt-2 text-xs text-muted">{t("Published and in use, but this tenant holds no draft of it: it was defined in code or by another tenant. It is part of the release as it is.")}</p>}
+              {current.missing && <p className="mt-2 text-xs text-danger">{t("Listed in the project, but nothing by this name exists. Remove it, or create it with New (same name) and it is picked up.")}</p>}
               <div className="mt-3 flex flex-wrap gap-2">
                 {current.record && <Button size="sm" variant="primary" onClick={() => open(resourceRoute(current.kind, current.record!.id, project.id))}>{t("Open")}</Button>}
+                {builder && current.missing && <NewResourceMenu onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
                 {builder && <Button size="sm" onClick={() => { remove(current.ref); setSelected(undefined); }}>{t("Remove from project")}</Button>}
               </div>
             </div> : <div className="rounded-md border border-dashed border-border p-6 text-sm text-muted">
-              {project.description || t("Choose a resource on the left, or create one with New.")}
+              {project.description || t("Choose a resource on the left, create one with New, or bring one in with Add existing.")}
             </div>}
             <div className="grid gap-2">
               <h2 className="text-sm font-semibold">{t("Unpublished changes")} <span className="text-muted">({unpublished.length})</span></h2>

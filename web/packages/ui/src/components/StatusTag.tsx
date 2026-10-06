@@ -41,5 +41,6 @@ export function Tag({ label, tone = "neutral", className }: { label: string; ton
 
 export function StatusTag({ status, registry, className }: { status: string; registry: StatusRegistry; className?: string }) {
   const entry = registry[status] ?? { label: status, tone: "neutral" as const };
-  return <Tag label={entry.label} tone={entry.tone} className={className} />;
+  // Registries are often built at module load, before the reader's language is known: translate when drawn.
+  return <Tag label={t(entry.label)} tone={entry.tone} className={className} />;
 }

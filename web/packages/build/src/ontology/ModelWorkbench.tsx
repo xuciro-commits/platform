@@ -3,7 +3,7 @@ import { ResourceControls as AssetControls } from "../shared/workbench";
 import { NewActions, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
   type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, Input, NodeCanvas, PageHeader, Panel, PropertyList, RecordList, Select, Tag,
-  canvasNodeHeight, canvasNodeWidth, layout, t, type CanvasEdge, type CanvasNode, type ColumnDef, type NodeCatalog } from "@platform/ui";
+  canvasNodeWidth, layout, t, type CanvasEdge, type CanvasNode, type ColumnDef, type NodeCatalog } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { Boxes, Database, GitBranch, Link2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -66,8 +66,9 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
       id: relation.ref.kind==="link-type"?`${relation.ref.binding.ref.app}/${relation.ref.binding.ref.name}`:`${relation.ref.object.name}/${relation.ref.field}`, source: relation.ref.object.name, target: relation.target.name, sourcePort: "out", targetPort: "in", label: relation.title,
     }));
     const positions = layout(shown.map((item) => ({ id: item.ref.name, label: item.title })), edges.map((edge) => ({ from: edge.source, to: edge.target })), "right",
-      { width: canvasNodeWidth, height: canvasNodeHeight(objectCatalog[0]!), gapX: 80, gapY: 32 });
-    const nodes: CanvasNode[] = shown.map((item) => ({ id: item.ref.name, kind: "object", label: item.title, detail: item.ref.name, position: positions.get(item.ref.name)! }));
+      { width: canvasNodeWidth, height: 74, gapX: 80, gapY: 32 });
+    // A relation graph is a map, not an editor: every object starts collapsed and the toolbar expands them all.
+    const nodes: CanvasNode[] = shown.map((item) => ({ id: item.ref.name, kind: "object", label: item.title, detail: item.ref.name, collapsed: true, position: positions.get(item.ref.name)! }));
     return { nodes, edges };
   }, [visible, model]);
   const related = resource ? model.relations.filter((relation) => relation.ref.object.name === current || relation.target.name === current) : [];
