@@ -126,9 +126,10 @@ export function removeOverlay(document: Document, id: string): { document: Docum
   remove(overlay.root); next.unusedWidgets=next.unusedWidgets?.filter(entry=>!!next.nodes[entry.node]&&!!next.nodes[entry.parent]); delete next.overlays![id];
   next.queries=Object.fromEntries(Object.entries(next.queries??{}).filter(([,q])=>q.owner!==id)); delete next.variables?.[overlay.openVariable];
   for (const [key, variable] of Object.entries(next.variables ?? {})) if (variable.scope === "overlay" && variable.owner === id) delete next.variables![key];
-  for (const event of next.events ?? []) if (event.target === overlay.openVariable) sections.add(event.source);
+  const touches = (event: Api.PageEventBinding) => event.effects?.some((effect) => effect.target === overlay.openVariable);
+  for (const event of next.events ?? []) if (touches(event)) sections.add(event.source);
   for (const section of sections) Object.assign(next, removeWidget(next, section));
-  next.events = next.events?.filter((event) => !sections.has(event.source) && event.target !== overlay.openVariable);
+  next.events = next.events?.filter((event) => !sections.has(event.source) && !touches(event));
   return { document: next, sections };
 }
 

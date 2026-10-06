@@ -1146,6 +1146,11 @@ export type PageAI = {
   suggestions?: string[];
 };
 
+export type PageActionEffect = {
+  ref: AssetRef;
+  recordVariable?: string;
+};
+
 export type PageActionParameter = {
   parameter: string;
   field: string;
@@ -1253,6 +1258,14 @@ export type PageDocument = {
   interface?: PageInterface;
 };
 
+export type PageEffect = {
+  kind: string;
+  target?: string;
+  value?: unknown;
+  action?: PageActionEffect;
+  navigate?: PageNavigation;
+};
+
 export type PageEmbedding = {
   readOnly?: boolean;
   kind: string;
@@ -1267,10 +1280,7 @@ export type PageEventBinding = {
   control?: string;
   source: string;
   event: string;
-  target: string;
-  value?: unknown;
-  navigate?: PageNavigation;
-  return?: boolean;
+  effects: PageEffect[];
 };
 
 export type PageEventTone = {
@@ -2501,7 +2511,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.105",
+  "uiProfile": "platform.page.v2.106",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -7702,7 +7712,8 @@ export const pageUIManifest = {
     "platform.page.v2.102",
     "platform.page.v2.103",
     "platform.page.v2.104",
-    "platform.page.v2.105"
+    "platform.page.v2.105",
+    "platform.page.v2.106"
   ],
   "runtime": {
     "telemetry": {

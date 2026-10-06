@@ -12,7 +12,7 @@ func sharedContextPage() Page {
 		p.Document.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	}
 	p.Document.Variables["active"] = PageVariable{Scope: "application", Type: "record", Mode: "shared", Writable: true, Source: &PageResourceSource{Kind: "application", Variable: "selected", Object: &p.Object}}
-	p.Document.Events = []PageEventBinding{{Source: "trail", Control: "home", Event: "click", Navigate: &PageNavigation{Page: AssetRef{App: "sample", Kind: AssetPage, Name: "home"}}}}
+	p.Document.Events = []PageEventBinding{{Source: "trail", Control: "home", Event: "click", Effects: []PageEffect{{Kind: "navigate", Navigate: &PageNavigation{Page: AssetRef{App: "sample", Kind: AssetPage, Name: "home"}}}}}}
 	return p
 }
 func TestSharedMaintenanceContextKeepsTypedInputAndLocalGraphOutputs(t *testing.T) {

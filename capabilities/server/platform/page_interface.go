@@ -154,8 +154,8 @@ func (p Page) NavigationTargets() []AssetRef {
 	var refs []AssetRef
 	if p.Document != nil {
 		for _, event := range p.Document.Events {
-			if event.Navigate != nil {
-				refs = append(refs, event.Navigate.Page)
+			if n := event.Navigation(); n != nil {
+				refs = append(refs, n.Page)
 			}
 		}
 		if p.Document.Interface != nil {
@@ -212,17 +212,17 @@ func (p Page) CheckRecordPorts() error {
 	return nil
 }
 
-func (d *PageDocument) checkNavigationEvent(event PageEventBinding) error {
-	if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.6") || event.Target != "" || len(event.Value) != 0 || event.Return && event.Navigate != nil {
-		return fmt.Errorf("page navigation needs one v2.6 handler")
+func (d *PageDocument) checkNavigationEffect(effect PageEffect) error {
+	if effect.Target != "" || len(effect.Value) != 0 || effect.Action != nil || (effect.Kind == "return") == (effect.Navigate != nil) {
+		return fmt.Errorf("page navigation needs one handler")
 	}
-	if event.Return {
+	if effect.Kind == "return" {
 		if d.Interface == nil {
 			return fmt.Errorf("page return needs an interface")
 		}
 		return nil
 	}
-	n := event.Navigate
+	n := effect.Navigate
 	c := pageWidgets.Runtime.Interface
 	if n == nil || n.Page.Check() != nil || n.Page.Kind != AssetPage || n.InterfaceVersion < 0 || n.InterfaceVersion > c.MaxVersion || len(n.Inputs) > c.MaxPorts || len(n.Results) > c.MaxPorts {
 		return fmt.Errorf("page navigation needs a page and bounded interface bindings")
@@ -245,7 +245,7 @@ func pageNavigationEdge(asset ReleaseAsset, target AssetRef) bool {
 		return false
 	}
 	for _, e := range p.Document.Events {
-		if e.Navigate != nil && e.Navigate.Page == target {
+		if n := e.Navigation(); n != nil && n.Page == target {
 			return true
 		}
 	}

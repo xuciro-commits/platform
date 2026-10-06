@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:71489d4d50580ba4",
+  "revision": "sha256:b68d2100bc89eefc",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4550,6 +4550,7 @@
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/link-type.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/property-type.tsx",
@@ -4567,6 +4568,7 @@
       "web/packages/build/src/workshop/module-import/ObservationImportFields.tsx",
       "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
+      "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutTree.tsx",
@@ -4626,6 +4628,7 @@
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/link-type.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/property-type.tsx",
@@ -4647,9 +4650,9 @@
       "web/packages/build/src/workshop/module-import/SpatialImportFields.tsx",
       "web/packages/build/src/workshop/module-import/UnusedImportFields.tsx",
       "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
+      "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
-      "web/packages/build/src/workshop/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/workshop/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
@@ -4733,6 +4736,7 @@
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/query.tsx",
       "web/packages/build/src/releases/release.tsx",
@@ -4741,9 +4745,9 @@
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/module-import/ApplicationImportFields.tsx",
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
+      "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
-      "web/packages/build/src/workshop/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/workshop/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
@@ -4825,6 +4829,7 @@
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/link-type.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/property-type.tsx",
@@ -4836,9 +4841,9 @@
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
+      "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutTree.tsx",
-      "web/packages/build/src/workshop/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/workshop/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
@@ -4897,7 +4902,6 @@
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/functions/code.tsx",
-      "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
@@ -5243,6 +5247,7 @@
     "ui/workbench": [
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
@@ -5280,6 +5285,7 @@
     ],
     "app/record-actions": [
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/releases/simulate.tsx",
@@ -5288,19 +5294,8 @@
     "ui/editor-workbench": [
       "web/packages/build/src/ontology/ModelWorkbench.tsx"
     ],
-    "app/semantic-selection": [
-      "web/packages/build/src/ontology/link-type.tsx",
-      "web/packages/build/src/ontology/process.tsx",
-      "web/packages/build/src/ontology/query.tsx",
-      "web/packages/build/src/workshop/editor.tsx",
-      "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
-      "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
-      "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
-      "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
-      "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx"
-    ],
     "ui/toggles": [
-      "web/packages/build/src/ontology/process.tsx",
+      "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/workshop/editor.tsx",
       "web/packages/build/src/workshop/module-import/BuilderImportFields.tsx",
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
@@ -5316,6 +5311,17 @@
       "web/packages/build/src/workshop/page-editor/widgets/RecordViewInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/StatusTrackerInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/TableInspector.tsx"
+    ],
+    "app/semantic-selection": [
+      "web/packages/build/src/ontology/link-type.tsx",
+      "web/packages/build/src/ontology/process.tsx",
+      "web/packages/build/src/ontology/query.tsx",
+      "web/packages/build/src/workshop/editor.tsx",
+      "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
+      "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
+      "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
+      "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
+      "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx"
     ],
     "app/application-sessions": [
       "web/packages/build/src/workshop/editor.tsx",

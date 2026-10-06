@@ -44,7 +44,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	submit(build.ObjectType, "child-object", "publish", map[string]any{})
 	doc := platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"table"}}, "table": {Kind: "widget", Section: "table"}}, Variables: map[string]platform.PageVariable{"picked": {Scope: "page", Type: "record-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "records", Section: "table"}}}}
 	doc.Variables["shown"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: platform.Raw(false)}
-	doc.Events = []platform.PageEventBinding{{Source: "table", Event: "select", Target: "shown", Value: platform.Raw(true)}}
+	doc.Events = []platform.PageEventBinding{{Source: "table", Event: "select", Effects: []platform.PageEffect{{Kind: "set", Target: "shown", Value: platform.Raw(true)}}}}
 	sections := []build.Section{{ID: "table", Widget: "table", ConfigVersion: 1, Fields: []string{"name", "secret"}, SelectionSetVariable: "picked"}}
 	search := false
 	sections[0].ShowSearch = &search
@@ -65,13 +65,13 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	root.Children = append(root.Children, "commands")
 	doc.Nodes[doc.Root] = root
 	sections = append(sections, build.Section{ID: "commands", Widget: "button-group", ConfigVersion: 1, Buttons: []platform.PageButton{{ID: "show", Title: "Show", Variant: "primary", Icon: "arrow"}, {ID: "hide", Title: "Hide", Variant: "danger", Icon: "trash"}}})
-	doc.Events = append(doc.Events, platform.PageEventBinding{Source: "commands", Control: "show", Event: "click", Target: "shown", Value: platform.Raw(true)}, platform.PageEventBinding{Source: "commands", Control: "hide", Event: "click", Target: "shown", Value: platform.Raw(false)})
+	doc.Events = append(doc.Events, platform.PageEventBinding{Source: "commands", Control: "show", Event: "click", Effects: []platform.PageEffect{{Kind: "set", Target: "shown", Value: platform.Raw(true)}}}, platform.PageEventBinding{Source: "commands", Control: "hide", Event: "click", Effects: []platform.PageEffect{{Kind: "set", Target: "shown", Value: platform.Raw(false)}}})
 	doc.Variables["privateOpen"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: platform.Raw(false)}
 	doc.Nodes["privateRoot"] = platform.PageLayoutNode{Kind: "rows", Children: []string{"privateBody"}}
 	doc.Nodes["privateBody"] = platform.PageLayoutNode{Kind: "widget", Section: "privateBody"}
 	doc.Overlays = map[string]platform.PageOverlay{"private": {Root: "privateRoot", Kind: "drawer", Title: "Private panel", OpenVariable: "privateOpen"}}
 	sections[3].Buttons = append(sections[3].Buttons, platform.PageButton{ID: "private", Title: "Private command", Icon: "trash"})
-	doc.Events = append(doc.Events, platform.PageEventBinding{Source: "commands", Control: "private", Event: "click", Target: "privateOpen", Value: platform.Raw(true)})
+	doc.Events = append(doc.Events, platform.PageEventBinding{Source: "commands", Control: "private", Event: "click", Effects: []platform.PageEffect{{Kind: "set", Target: "privateOpen", Value: platform.Raw(true)}}})
 	sections = append(sections, build.Section{ID: "privateBody", Widget: "detail", ConfigVersion: 1, Object: "build.private", Fields: []string{"note"}})
 	doc.Nodes["links"] = platform.PageLayoutNode{Kind: "widget", Section: "links"}
 	root = doc.Nodes[doc.Root]
@@ -1098,7 +1098,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					if member.ID == reader.ID && len(d.Page.Sections[0].TableColumns) != 1 {
 						t.Fatal("hidden column presentation escaped member projection")
 					}
-					if len(d.Page.Document.Events) != wantEvents || d.Page.Document.Events[0].Event != "select" || d.Page.Document.Events[0].Target != "shown" {
+					if len(d.Page.Document.Events) != wantEvents || d.Page.Document.Events[0].Event != "select" || d.Page.Document.Events[0].Effects[0].Target != "shown" {
 						t.Fatal("frozen selection event changed")
 					}
 					if d.Page.Sections[0].SelectionSetVariable != "picked" || d.Page.Document.Variables["picked"].Source.Kind != "records" {

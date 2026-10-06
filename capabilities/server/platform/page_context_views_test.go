@@ -28,7 +28,7 @@ func contextViewsPage() Page {
 		"assets":  {Object: object, Limit: 6, Sort: []string{"id"}},
 		"all":     {Object: people, Query: &all, Limit: 6, Sort: []string{"id"}},
 		"related": {Object: people, Query: &related, For: &PageValue{Variable: "active"}, Limit: 6, Sort: []string{"id"}},
-	}, Events: []PageEventBinding{{Source: "crumb", Event: "click", Control: "home", Navigate: &PageNavigation{Page: AssetRef{App: "sample", Kind: AssetPage, Name: "home"}}}}}}
+	}, Events: []PageEventBinding{{Source: "crumb", Event: "click", Control: "home", Effects: []PageEffect{{Kind: "navigate", Navigate: &PageNavigation{Page: AssetRef{App: "sample", Kind: AssetPage, Name: "home"}}}}}}}}
 	for _, s := range p.Sections {
 		p.Document.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	}
@@ -68,9 +68,9 @@ func TestContextViewsNativeOriginalBindings(t *testing.T) {
 		{"missing breadcrumb", func(p *Page) { p.Sections[1].Breadcrumb = nil }},
 		{"missing home", func(p *Page) { p.Document.Events = nil }},
 		{"wrong home control", func(p *Page) { p.Document.Events[0].Control = "current" }},
-		{"home scalar write", func(p *Page) { p.Document.Events[0].Navigate = nil }},
+		{"home scalar write", func(p *Page) { p.Document.Events[0].Effects[0] = PageEffect{Kind: "set", Target: "active", Value: Raw(true)} }},
 		{"home arguments", func(p *Page) {
-			p.Document.Events[0].Navigate.Inputs = map[string]PageValue{"arg": {Variable: "active"}}
+			p.Document.Events[0].Effects[0].Navigate.Inputs = map[string]PageValue{"arg": {Variable: "active"}}
 		}},
 		{"title without record", func(p *Page) { p.Sections[1].RecordVariable = "" }},
 		{"breadcrumb shared record", func(p *Page) {
@@ -297,7 +297,7 @@ func overlayContextViewsPage() Page {
 	}
 	d.Variables["open"] = PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: Raw(false)}
 	d.Overlays = map[string]PageOverlay{"panel": {Root: "panelRoot", Kind: "drawer", Title: "Original context panel", OpenVariable: "open"}}
-	d.Events = append(d.Events, PageEventBinding{Source: "trigger", Event: "click", Target: "open", Value: Raw(true)})
+	d.Events = append(d.Events, PageEventBinding{Source: "trigger", Event: "click", Effects: []PageEffect{{Kind: "set", Target: "open", Value: Raw(true)}}})
 	return p
 }
 func TestContextViewsPlannedProducerInOriginalOverlay(t *testing.T) {

@@ -38,7 +38,7 @@ func TestCollaborationInstallChecksActualRecordOwner(t *testing.T) {
 					"draft":  {Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("")}, "file": {Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("")}, "page": {Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("1")},
 				}}}
 				if widget == "breadcrumb" {
-					page.Document.Events = []platform.PageEventBinding{{Source: "collaboration", Event: "click", Control: "home", Navigate: &platform.PageNavigation{Page: platform.AssetRef{App: relations.ID, Kind: platform.AssetPage, Name: page.Name}}}}
+					page.Document.Events = []platform.PageEventBinding{{Source: "collaboration", Event: "click", Control: "home", Effects: []platform.PageEffect{{Kind: "navigate", Navigate: &platform.PageNavigation{Page: platform.AssetRef{App: relations.ID, Kind: platform.AssetPage, Name: page.Name}}}}}}
 				}
 				return page
 			}

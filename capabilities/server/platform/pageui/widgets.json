@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.105",
+  "uiProfile": "platform.page.v2.106",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5200,7 +5200,8 @@
     "platform.page.v2.102",
     "platform.page.v2.103",
     "platform.page.v2.104",
-    "platform.page.v2.105"
+    "platform.page.v2.105",
+    "platform.page.v2.106"
   ],
   "runtime": {
     "telemetry": {

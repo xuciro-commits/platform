@@ -316,7 +316,7 @@ func TestExplorationOriginalCodeAliasOwnerAndOverlayScope(t *testing.T) {
 	d.Queries["assets"] = q
 	d.Variables["open"] = PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: Raw(false)}
 	d.Overlays = map[string]PageOverlay{"panel": {Root: "panelRoot", Kind: "drawer", Title: "Original exploration", OpenVariable: "open"}}
-	d.Events = []PageEventBinding{{Source: "trigger", Event: "click", Target: "open", Value: Raw(true)}}
+	d.Events = []PageEventBinding{{Source: "trigger", Event: "click", Effects: []PageEffect{{Kind: "set", Target: "open", Value: Raw(true)}}}}
 	if err := d.Check(p.Sections); err != nil {
 		t.Fatal("original overlay exploration refused", err)
 	}
@@ -337,7 +337,7 @@ func TestExplorationDirectoryOriginalNavigationAndDependencyClosure(t *testing.T
 	p := explorationPage()
 	home := AssetRef{App: "sample", Kind: AssetPage, Name: "home"}
 	p.Sections[3].AssetDirectory.Items[0].Asset = AssetBinding{Ref: home, SourceVersion: "1"}
-	p.Document.Events = []PageEventBinding{{Source: "directory", Control: "assets", Event: "click", Navigate: &PageNavigation{Page: home}}}
+	p.Document.Events = []PageEventBinding{{Source: "directory", Control: "assets", Event: "click", Effects: []PageEffect{{Kind: "navigate", Navigate: &PageNavigation{Page: home}}}}}
 	if err := p.Document.Check(p.Sections); err != nil {
 		t.Fatal("explicit original page navigation rejected", err)
 	}
@@ -351,14 +351,14 @@ func TestExplorationDirectoryOriginalNavigationAndDependencyClosure(t *testing.T
 	}
 	for _, change := range []func(*PageDocument){
 		func(d *PageDocument) { d.Events[0].Control = "playbook" },
-		func(d *PageDocument) { d.Events[0].Navigate.Page.Name = "other" },
+		func(d *PageDocument) { d.Events[0].Effects[0].Navigate.Page.Name = "other" },
 		func(d *PageDocument) {
-			d.Events[0].Navigate.Inputs = map[string]PageValue{"record": {Variable: "active"}}
+			d.Events[0].Effects[0].Navigate.Inputs = map[string]PageValue{"record": {Variable: "active"}}
 		},
 	} {
 		p := explorationPage()
 		p.Sections[3].AssetDirectory.Items[0].Asset = AssetBinding{Ref: home, SourceVersion: "1"}
-		p.Document.Events = []PageEventBinding{{Source: "directory", Control: "assets", Event: "click", Navigate: &PageNavigation{Page: home}}}
+		p.Document.Events = []PageEventBinding{{Source: "directory", Control: "assets", Event: "click", Effects: []PageEffect{{Kind: "navigate", Navigate: &PageNavigation{Page: home}}}}}
 		change(p.Document)
 		if p.Document.Check(p.Sections) == nil {
 			t.Fatal("directory navigation did not retain exact original item")

@@ -169,6 +169,23 @@ export function useTransition(type: string) {
   return { take, dialog };
 }
 
+/** An action taken as one effect of a page event chain (ADR-0053 §11): at once
+ * when it takes no input, through its form otherwise. Resolves true when the
+ * host accepted it, false when the person cancelled, so the chain can stop. */
+export function useActionEffect() {
+  const { action, decide } = useHost();
+  const [taking, setTaking] = useState<{ declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; settle: (ok: boolean) => void }>();
+  const take = (schema: string, record?: Pick<EntityRecord, "id" | "revision">): Promise<boolean> => {
+    const declared = action(schema);
+    if (!declared || (declared.new ? !!record : !record)) return Promise.resolve(false);
+    if (!declared.payload.length && record) return decide(schema, { type: declared.target, id: record.id }, {}, { expectedRevision: record.revision, quiet: true });
+    return new Promise((settle) => setTaking({ declared, type: declared.target, record, settle }));
+  };
+  const close = (ok: boolean) => { taking?.settle(ok); setTaking(undefined); };
+  const dialog = taking && <ActionDialog declared={taking.declared} type={taking.type} record={taking.record} onClose={() => close(false)} onCompleted={() => close(true)} />;
+  return { take, dialog };
+}
+
 /** Uses the original declared archive action, with confirmation and revision checking. */
 export function useRecordArchive(type: string) {
   const { action } = useHost();

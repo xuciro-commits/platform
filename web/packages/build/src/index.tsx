@@ -8,7 +8,8 @@
 import "./i18n";
 import { defineApp, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
-import { ObjectTypeEditor, ActionTypeEditor } from "./ontology/process";
+import { ObjectTypeEditor } from "./ontology/process";
+import { ActionTypeEditor } from "./ontology/action-type";
 import { ModelWorkbench } from "./ontology/ModelWorkbench";
 import { FlowEditor, Flows } from "./automate/workflow";
 import { AutomationEditor, Automations } from "./automate/automation";

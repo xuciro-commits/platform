@@ -349,19 +349,14 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		if event.Event == "select" && sectionOwners[event.Source] != "" {
 			return fmt.Errorf("selection event does not support a loop producer")
 		}
-		if !accessible(event.Target, sectionOwners[event.Source], sectionOverlays[event.Source]) {
-			return fmt.Errorf("page event %s target escapes its presentation scope", event.Source)
-		}
-		if event.Navigate != nil {
-			for _, arg := range event.Navigate.Inputs {
-				if !accessible(arg.Variable, sectionOwners[event.Source], sectionOverlays[event.Source]) {
-					return fmt.Errorf("page navigation input escapes its presentation scope")
-				}
+		for _, id := range event.Variables() {
+			if !accessible(id, sectionOwners[event.Source], sectionOverlays[event.Source]) {
+				return fmt.Errorf("page event %s target escapes its presentation scope", event.Source)
 			}
-			for _, target := range event.Navigate.Results {
-				if !accessible(target, sectionOwners[event.Source], sectionOverlays[event.Source]) {
-					return fmt.Errorf("page navigation output escapes its presentation scope")
-				}
+		}
+		for _, id := range event.Reads() {
+			if !accessible(id, sectionOwners[event.Source], sectionOverlays[event.Source]) {
+				return fmt.Errorf("page event %s input escapes its presentation scope", event.Source)
 			}
 		}
 	}

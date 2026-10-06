@@ -75,7 +75,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  for(const section of sections)for(const value of [section.avatar?.contextVariable,section.avatar?.contextCollectionVariable])if(value)addVariable(value);
  for(const section of sections){for(const output of section.graphExplorer?.outputs??[])addVariable(output.variable);for(const id of [section.observation?.rowOutput,section.observation?.assetOutput])if(id)addVariable(id);}
  const locallyRead=new Set(variables);
- for(const event of events){if(event.target)addVariable(event.target);Object.values(event.navigate?.inputs??{}).flatMap(valueRefs).forEach(addVariable);Object.values(event.navigate?.results??{}).forEach(addVariable);}
+ for(const event of events)for(const effect of event.effects??[]){if(effect.target)addVariable(effect.target);if(effect.action?.recordVariable)addVariable(effect.action.recordVariable);Object.values(effect.navigate?.inputs??{}).flatMap(valueRefs).forEach(addVariable);Object.values(effect.navigate?.results??{}).forEach(addVariable);}
  if(missing.value)return {issue:"invalid"};
  const externalPorts=new Set([...Object.values(original.interface?.inputs??{}),...Object.values(original.interface?.outputs??{})].map(p=>p.variable));
  const overlayOpen=new Set(Object.values(original.overlays??{}).map(o=>o.openVariable));
@@ -99,7 +99,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  for(const section of sections)for(const id of Object.values(section.embedding?.results??{}))cloneState(id);
  for(const section of sections){for(const id of [section.observationSignalVariable,section.observationThresholdVariable,section.observationRowsVariable])if(id)cloneState(id);if(section.notepadVariable)cloneState(section.notepadVariable);if(section.analysisXVariable)cloneState(section.analysisXVariable);if(section.analysisYVariable)cloneState(section.analysisYVariable);for(const facet of section.facets??[])cloneState(facet.variable);if(section.filterSearchVariable)cloneState(section.filterSearchVariable);}
  for(const id of tabSelectors.keys())cloneState(id);
- for(const event of events)for(const id of [event.target,...Object.values(event.navigate?.results??{})])if(locallyRead.has(id))cloneState(id);
+ for(const event of events)for(const effect of event.effects??[])for(const id of [effect.target??"",...Object.values(effect.navigate?.results??{})])if(locallyRead.has(id))cloneState(id);
  for(const id of variables){const v=original.variables![id]!;if(v.source?.section&&sectionIDs.has(v.source.section))clonedVariables.add(id);}
  let changed=true;
  while(changed){changed=false;
@@ -164,8 +164,8 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
   document.variables={...document.variables,[mapped]:v};
  }
  for(const [id,mapped] of queryMap){const q=structuredClone(original.queries![id]!);if(q.owner===clip.overlay&&overlayID)q.owner=overlayID;if(q.itemOwner)q.itemOwner=nodeMap.get(q.itemOwner)!;q.input=q.input?variableMap.get(q.input)??q.input:undefined;if(q.search)q.search=remapValue(q.search);if(q.for)q.for=remapValue(q.for);if(q.conditions)q.conditions=q.conditions.map(c=>({...c,value:remapValue(c.value)}));if(q.set)q.set.inputs=q.set.inputs.map(id=>queryMap.get(id)??id);document.queries={...document.queries,[mapped]:q};}
- document.events=[...(document.events??[]),...events.map(source=>{const e=structuredClone(source);e.source=sectionMap.get(e.source)!;if(e.value!==undefined)e.value=tabValue(e.target,e.value);e.target=variableMap.get(e.target)??e.target;if(e.navigate){if(e.navigate.inputs)e.navigate.inputs=Object.fromEntries(Object.entries(e.navigate.inputs).map(([key,value])=>[key,remapValue(value)]));if(e.navigate.results)e.navigate.results=Object.fromEntries(Object.entries(e.navigate.results).map(([key,value])=>[key,variableMap.get(value)??value]));}return e;})];
- if(overlay&&entries[0])document.events.push({source:entries[0].id!,event:"click",target:variableMap.get(overlay.openVariable)!,value:true});
+ document.events=[...(document.events??[]),...events.map(source=>{const e=structuredClone(source);e.source=sectionMap.get(e.source)!;for(const f of e.effects??[]){if(f.target){if(f.value!==undefined)f.value=tabValue(f.target,f.value);f.target=variableMap.get(f.target)??f.target;}if(f.action?.recordVariable)f.action.recordVariable=variableMap.get(f.action.recordVariable)??f.action.recordVariable;if(f.navigate){if(f.navigate.inputs)f.navigate.inputs=Object.fromEntries(Object.entries(f.navigate.inputs).map(([key,value])=>[key,remapValue(value)]));if(f.navigate.results)f.navigate.results=Object.fromEntries(Object.entries(f.navigate.results).map(([key,value])=>[key,variableMap.get(value)??value]));}}return e;})];
+ if(overlay&&entries[0])document.events.push({source:entries[0].id!,event:"click",effects:[{kind:"set",target:variableMap.get(overlay.openVariable)!,value:true}]});
  const next={...current,document,sections:[...current.sections,...rewritten,...entries],selections:[...current.selections,...addedSelections]};
  if(Object.keys(document.nodes).length>256||Object.keys(document.overlays??{}).length>16||document.events.length>256||next.sections.length>128||(document.unusedWidgets?.length??0)>128||Object.keys(document.variables??{}).length>limits.maxVariables||Object.keys(document.queries??{}).length>(Number(document.uiProfile.split(".").at(-1))>=97?(limits.query.maxDeclaredPlans??limits.query.maxPlans):limits.query.maxPlans)||!withinLoopBudgets(document,limits,next.sections))return {issue:"budget"};
  return {value:{draft:next,root:nodeMap.get(clip.root)!,shared:[...new Set(shared)]}};

@@ -190,19 +190,15 @@ Inspector（选中 widget 时的页签）
 - *Appearance*：尺寸、对齐、间距、可见条件 `visibleWhen`、启用条件 `enabledWhen`、容器 gap/presentation。
 - *Advanced*：节点 id、slot、兼容性提示。
 
-**事件模型（契约升级，向后兼容）**
-今天 `PageEventBinding` 是"事件 → 一个 target 变量赋值 / navigate / return"。升级为**效果链**：
+**事件模型（契约升级，已落地，见 §11.2）**
+`PageEventBinding` 从"事件 → 一个 target 变量赋值 / navigate / return"升级为**效果链**，旧字段整体删除、不做折算：
 ```ts
-type PageEventBinding = {
-  source: string; control?: string; event: string;
-  effects: PageEffect[];            // 顺序执行；旧字段 target/value/navigate/return 由读取方折算为 effects[0]
-};
+type PageEventBinding = { source: string; control?: string; event: string; effects: PageEffect[] };  // 1..8，顺序执行
 type PageEffect =
-  | { kind: "set-variable"; target: string; value?: unknown; expression?: PageExpression }
-  | { kind: "open-overlay" | "close-overlay"; overlay: string }
-  | { kind: "navigate"; navigate: PageNavigation }
-  | { kind: "run-action"; action: AssetRef; inputs?: Record<string, PageValue> }
-  | { kind: "run-flow"; flow: string; inputs?: Record<string, PageValue> }
+  | { kind: "set"; target: string; value: unknown }                       // 页面状态写入；浮层开关也是写它的 openVariable
+  | { kind: "action"; action: { ref: AssetRef; recordVariable?: string } } // 在记录变量上执行本体动作；无记录变量 = 创建型动作
+  | { kind: "navigate"; navigate: PageNavigation }                        // 终止效果
+  | { kind: "return" }                                                     // 终止效果
   | { kind: "refresh-query"; query: string }
   | { kind: "return"; };
 ```
@@ -296,7 +292,7 @@ shared/      asset-controls, record-paths, release-profile（不变）
 
 | 变更 | 兼容策略 |
 |---|---|
-| `PageEventBinding.effects` | 新增字段；读取时旧 `target/value/navigate/return` 折算为单效果；写入始终用 `effects`。Go 校验扩展到效果里的引用。 |
+| `PageEventBinding.effects` | 替换 `target/value/navigate/return`；Go 校验每个效果（UI profile v2.106 起允许多效果与 `action`），发布时校验动作资产存在且创建型/记录型与 `recordVariable` 一致。 |
 | `Application` → 增加 `navigation: NavItem[]`（group/page/external，图标、可见条件） | `groups` 保留为派生；前端只写 `navigation`。 |
 | 新资源 `automation`（`Definition.automation`） | 新 kind；运行时在 host 的事件总线上订阅对象事件与计划任务，效果执行复用动作/流程/通知现有路径。 |
 | `Definition.action` 独立可寻址 | 已是 `AssetRef`；补 `requires` 以便 `changes` 列 diff。 |
@@ -363,7 +359,9 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 | D1 Projects 取代 Application 编辑器 | `build/projects/project.tsx`（`ProjectsList`、`ProjectHome`：资源树 · 内容/设置 · 未发布变更底栏）、`projects/resources.ts`（资源种类与路由） |
 | D1 Workshop Module = 项目的页面 + 页头 + 导航 | `build/workshop/ModuleWorkbench.tsx`（模块树、页头编辑、分组、变量/查询汇总、模块预览）；`PageEditor` 作为模块内的页面视图（`module` 上下文） |
 | D4 页面编辑器：图层/组件库 · 画布 · 按选中对象切换的检查器 · 问题/变量底栏 · Preview 开关 | `build/workshop/editor.tsx`（`PageEditor({ id, module })`、`widgetInspectorTabs`）、`page-editor/WidgetLibrary.tsx` |
-| D2 对象类型工作台：Overview · Properties · Links · Actions · Lifecycle · Permissions · Preview | `build/ontology/process.tsx` `ObjectTypeEditor`；`ActionTypeEditor` 复用同一工作台并打开 Actions 分区 |
+| D2 对象类型工作台：Overview · Properties · Links · Actions · Lifecycle · Permissions · Preview | `build/ontology/process.tsx` `ObjectTypeEditor`（草稿会话抽到 `object-draft.ts` `useObjectDraft`，类型与检查抽到 `object-model.ts`）；Actions 分区的检查器只给 `ActionSummary`（计数、问题、"Open action type"） |
+| §6 动作类型是一等资源：Overview · Parameters · Form · Rules · Submission criteria · Side effects · Approval · Permissions | `build/ontology/action-type.tsx` `ActionTypeEditor({id, action})`：左栏 = 对象的动作列表 + 分区；主区 = 分区的表格 / 表单预览；检查器编辑选中的行；底栏 Problems 只列本动作的问题。动作仍存于对象记录的 `actions[]`，与对象工作台共用同一草稿会话 |
+| §7 事件 → 效果链 | `build/workshop/page-editor/EffectsPanel.tsx` `EventEffects`（按钮：全部效果；按钮组：set / overlay / action；表格选择：仅 set）；运行时 `app/runtime/PageNavigation.ts` `usePageEffects` 顺序执行，`useActionEffect` 走动作表单或直接 `decide`，被拒绝/取消即停链；删除 `NavigationPanel.tsx`、`ButtonEventProperties` |
 | D3 Automate：自动化卡片（when/then 一句话） + 线性自动化编辑器 + 逻辑流程工作台 + Runs | `build/automate/automation.tsx`（`Automations` 列表仅收 `kind: "automation"` 的 `build.process`；`AutomationEditor`：触发器 · 条件 · 效果三张卡片，右侧复用 `WorkflowInspector`，底栏 Problems · Runs，保存时把卡片编译成步骤）、`automate/workflow.tsx`（`Flows`、`FlowEditor`） |
 | D8 Changes 视图（所有草稿一览 + 发布审查） | `build/releases/changes.tsx` |
 | D9 路由：`projects, project, object-type, action-type, module, automation, flow, runs, changes, release-history` | `build/index.tsx`；旧路由 `applications/application/studio/pages/compose/model/process/workflow/candidate-test` 由 `apps/workspace/src/shell/legacy.ts` 的别名表（含参数映射）转向 |
@@ -375,8 +373,7 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 
 **与 §6–§7 的仍存偏差**
 
-- Action type 尚无独立的子页签（Parameters / Form / Rules / Submission criteria / Side effects / Permissions）：`ActionProperties` 仍是一张表单，在对象工作台的检查器中编辑；卡片网格给出参数/规则/条件计数。
-- 事件 → effect 链（`effects: PageEffect[]`）未改动现有事件检查器。
+- 效果链里没有 `run-flow` 与表达式赋值；`action` 效果的输入只能来自动作表单（不接页面变量）。
 - AI 函数 / 代码函数仍用 `PageHeader` 页头，仅换上了 `DraftStatus` + `PublishMenu`，测试内嵌于编辑器（`CandidateTest embedded`）。
 - 属性 / 权限矩阵和变量底栏用原生 `<table>`（`scripts/escapes.sh` 已登记）。
 

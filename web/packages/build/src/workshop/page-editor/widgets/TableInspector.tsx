@@ -2,12 +2,12 @@ import { Button, Checkbox, Input,Select, Toggles, t, type EntityInfo } from "@pl
 import { tableEditableFields,useHost,widgetContract,pageVariableContract } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { variableAccessible } from "../../page-layout";
-import {ButtonEventProperties} from "../OverlayPanel";
+import {EventEffects, selectEffects} from "../EffectsPanel";
 import type {ButtonInspectorPorts} from "./ButtonInspector";
 
 export function TableSelectionInspector(props:ButtonInspectorPorts){
  const contract=widgetContract("table")!,event="events" in contract?contract.events.find(e=>e.id==="select"):undefined;
- return props.owner||!event?null:<ButtonEventProperties {...props} eventName={event.id}/>;
+ return props.owner||!event?null:<EventEffects {...props} eventName={event.id} allowed={selectEffects}/>;
 }
 
 export type TableDraft = {tablePresentation?:Api.PageTablePresentation;tableColumns?:Api.PageTableColumn[];showSearch?:boolean;id?:string;selectionSetVariable?:string; inlineEdit?:{action:string;fields:string[]};collectionVariable?:string; selectionVariable?:string; fields?:string[]; selection?:string; object?:string; filterVariable?:string; query?:string; parentSelection?:string; relation?:string };

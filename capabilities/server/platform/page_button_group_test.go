@@ -10,7 +10,7 @@ func TestButtonGroupControlsAndBindings(t *testing.T) {
 	d.UIProfile = PageUIProfile()
 	sections[len(sections)-2].Widget = "button-group"
 	sections[len(sections)-2].Buttons = []PageButton{{ID: "open", Title: "Open", Variant: "primary", Icon: "arrow"}, {ID: "close", Title: "Close", Variant: "danger", Icon: "trash"}}
-	d.Events = []PageEventBinding{{Source: "trigger", Control: "open", Event: "click", Target: "open", Value: json.RawMessage(`true`)}, {Source: "trigger", Control: "close", Event: "click", Target: "open", Value: json.RawMessage(`false`)}}
+	d.Events = []PageEventBinding{{Source: "trigger", Control: "open", Event: "click", Effects: []PageEffect{{Kind: "set", Target: "open", Value: json.RawMessage(`true`)}}}, {Source: "trigger", Control: "close", Event: "click", Effects: []PageEffect{{Kind: "set", Target: "open", Value: json.RawMessage(`false`)}}}}
 	if err := d.Check(sections); err != nil {
 		t.Fatal(err)
 	}

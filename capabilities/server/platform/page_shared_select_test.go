@@ -9,7 +9,7 @@ func TestRootSelectUpdatesOnlyWritableApplicationPresentationScalars(t *testing.
 	p.Document.Nodes = map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"table"}}, "table": {Kind: "widget", Section: "table"}}
 	p.Document.Queries = map[string]PageQuery{"result": {Object: p.Object, Limit: 3}}
 	p.Document.Variables = map[string]PageVariable{"result": {Scope: "page", Mode: "resource", Type: "object-set", Source: &PageResourceSource{Kind: "plan", Query: "result"}}, "detail": {Scope: "application", Mode: "shared", Type: "boolean", Writable: true, Source: &PageResourceSource{Kind: "application", Variable: "detail"}}}
-	p.Document.Events = []PageEventBinding{{Source: "table", Event: "select", Target: "detail", Value: Raw(true)}}
+	p.Document.Events = []PageEventBinding{{Source: "table", Event: "select", Effects: []PageEffect{{Kind: "set", Target: "detail", Value: Raw(true)}}}}
 	if err := p.Document.Check(p.Sections); err != nil {
 		t.Fatal(err)
 	}
@@ -29,11 +29,11 @@ func TestRootSelectUpdatesOnlyWritableApplicationPresentationScalars(t *testing.
 	}
 	v.Writable = true
 	p.Document.Variables["detail"] = v
-	p.Document.Events[0].Value = Raw("wrong")
+	p.Document.Events[0].Effects[0].Value = Raw("wrong")
 	if p.Document.Check(p.Sections) == nil {
 		t.Fatal("wrong literal accepted")
 	}
-	p.Document.Events[0].Value = Raw(true)
+	p.Document.Events[0].Effects[0].Value = Raw(true)
 	p.Document.Nodes["root"] = PageLayoutNode{Kind: "rows"}
 	if p.Document.rootPresentationSource("table") {
 		t.Fatal("non-root widget accepted")

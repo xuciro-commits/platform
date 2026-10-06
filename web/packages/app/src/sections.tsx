@@ -22,7 +22,7 @@ import { supportsPageUIProfile } from "./widgets/registry";
 import { useApplicationContext, useApplicationVariables } from "./runtime/ApplicationRuntime";
 import { usePageQueries } from "./runtime/PageQueries";
 import { planKey, variablePlan } from "./runtime/query-plans";
-import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavigation";
+import { inputSlot, usePageInputs, usePageEffects } from "./runtime/PageNavigation";
 import { NestedLoopRuntime } from "./runtime/NestedLoopRuntime";
 import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
 import {recordReadReference, type PageSessionStore} from "./runtime/Session";
@@ -179,7 +179,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const overlayValues = useMemo(() => Object.fromEntries(Object.keys(page.document?.overlays ?? {}).map((id) => [id, evaluateVariables(initialVariables, snapshot.scalars, pageVariableContract, allResources, undefined, id,session.property)])), [initialVariables, snapshot.scalars, allResources]);
 
   const collectionInputs={...queries.collectionInputs,...application.collectionInputs,...Object.fromEntries(Object.keys(initialVariables).flatMap(id=>{const shared=applicationVariable(id);return shared?[[id,application.collectionInputs[shared]??{status:"empty" as const}]]:[]}))};
-  const navigation = usePageNavigation(page, live, {...variables.values,...collectionInputs}, variables.set,pageCall);
+  const effects = usePageEffects(page, live, {...variables.values,...collectionInputs}, variables.set,pageCall);
   useEffect(() => { onVariableValues?.({...variables.values,...Object.fromEntries(Object.entries(initialVariables).filter(([,v])=>v.scope==="overlay").map(([id,v])=>[id,overlayValues[v.owner??""]?.[id]??{status:"empty" as const}]))}); }, [onVariableValues, variables.values, overlayValues]);
   const selectionQuery=(section:Section)=>{if(!(Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=15))return undefined;const v=initialVariables[section.collectionVariable??""];return v?.source?.kind==="plan"?planKey(v.source.query??""):v?.mode==="shared"?`application/${section.collectionVariable}`:section.id;};
   const onSelect = (key: string, record?: EntityRecord, query?:string) => session.select(key, record,query);
@@ -214,8 +214,9 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     const binding=(name:string,control?:string)=>page.document?.events?.find(event=>event.source===section.id&&event.event===name&&(event.control??"")===(control??""));
     const emit=(name:string,control?:string)=>{
       const event=binding(name,control);if(!event||overlay&&session.overlayEpoch(overlay)!==epoch)return;
-      if(event.navigate||event.return){navigation.emit(event,{values,set:(id,value)=>setContextState(id,value,context,overlay),isActive:()=> (!overlay||session.overlayEpoch(overlay)===epoch)&&(!context||context.session.hasLoopItem(context.owner,context.key)&&context.session.querySignature(context.queryKey)===context.signature)});return;}
-      if(typeof event.value==="string"||typeof event.value==="boolean"||isDecimal(event.value)||isStringSet(event.value))setContextState(event.target,event.value,context,overlay);
+      void effects.run(event,{values,set:(id,value)=>setContextState(id,value,context,overlay),
+        isActive:()=> (!overlay||session.overlayEpoch(overlay)===epoch)&&(!context||context.session.hasLoopItem(context.owner,context.key)&&context.session.querySignature(context.queryKey)===context.signature),
+        record:(variable)=>{ if(context&&initialVariables[variable]?.scope==="loop-item")return context.record; const slot=recordResourceSlot(page,variable)??(initialVariables[variable]?.mode==="input"||initialVariables[variable]?.mode==="shared"?inputSlot(variable):undefined); return slot?session.selected(slot):undefined; }});
     };
     const avatarContext=section.widget==="avatar-stack"&&section.avatar?.contextVariable?confirmedContext(page,section,section.avatar.contextVariable,session,snapshot):undefined;
     const collectionID=section.widget==="avatar-stack"?avatarCollectionVariable(section.avatar,avatarContext?.status,section.collectionVariable):section.collectionVariable;
@@ -365,7 +366,8 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&["object-set","decimal"].includes(initialVariables[id]?.type??"")&&!application.error).map(([id,result])=><Panel key={id} role="alert" className="flex gap-2">{result.status==="error"?t(result.code):""}<Button onClick={()=>application.retry(id)}>{t("Retry query")}</Button></Panel>)}
       {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&initialVariables[id]?.type==="record"&&!application.error).map(([id,result])=><Panel key={id} role="alert">{result.status==="error"?t(result.code):""}</Panel>)}
       {application.error && <Panel role="alert">{t(application.error)}</Panel>}
-      {(incoming.error || navigation.error) && <Panel role="alert">{t(incoming.error ?? navigation.error!)}</Panel>}
+      {(incoming.error || effects.error) && <Panel role="alert">{t(incoming.error ?? effects.error!)}</Panel>}
+      {effects.dialog}
       {incoming.error && !onChoose ? null : page.document ? page.document.formatVersion !== 2 || !supportsPageUIProfile(page.document.uiProfile)
         ? <Panel role="alert">{t("This page needs a newer workspace version. Refresh after updating the workspace.")}</Panel>
         : renderNode(editingRoot ?? page.document.root, new Set(), undefined, editingRoot ? overlayForRoot(editingRoot) : undefined) : <div className="grid gap-3 md:grid-cols-2">

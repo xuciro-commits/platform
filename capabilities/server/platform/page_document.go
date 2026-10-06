@@ -922,26 +922,23 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		out.Events = nil
 		bound := map[string]bool{}
 		for _, event := range d.Events {
-			if allowed[event.Source] && !missing[event.Target] {
-				valid := true
-				if event.Navigate != nil {
-					for _, arg := range event.Navigate.Inputs {
-						if arg.Variable != "" {
-							if _, ok := variables[arg.Variable]; !ok {
-								valid = false
-							}
-						}
-					}
-					for _, id := range event.Navigate.Results {
-						if _, ok := variables[id]; !ok {
-							valid = false
-						}
-					}
+			if !allowed[event.Source] {
+				continue
+			}
+			valid := true
+			for _, id := range event.Variables() {
+				if _, ok := variables[id]; !ok || missing[id] {
+					valid = false
 				}
-				if _, ok := variables[event.Target]; valid && (ok || event.Navigate != nil || event.Return) {
-					out.Events = append(out.Events, event)
-					bound[event.Source] = true
+			}
+			for _, id := range event.Reads() {
+				if _, ok := variables[id]; !ok {
+					valid = false
 				}
+			}
+			if valid {
+				out.Events = append(out.Events, event)
+				bound[event.Source] = true
 			}
 		}
 		changed := false

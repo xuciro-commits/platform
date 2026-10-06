@@ -99,7 +99,7 @@ func TestRecordComparisonOwnerAndVisibleProducer(t *testing.T) {
 	d.Nodes["trigger"] = PageLayoutNode{Kind: "widget", Section: "trigger"}
 	d.Nodes["panelRoot"] = PageLayoutNode{Kind: "rows", Children: []string{"table", "comparison"}}
 	d.Variables["open"] = PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: Raw(false)}
-	d.Events = []PageEventBinding{{Source: "trigger", Event: "click", Target: "open", Value: Raw(true)}}
+	d.Events = []PageEventBinding{{Source: "trigger", Event: "click", Effects: []PageEffect{{Kind: "set", Target: "open", Value: Raw(true)}}}}
 	d.Overlays = map[string]PageOverlay{"panel": {Root: "panelRoot", Kind: "modal", Title: "Compare", OpenVariable: "open"}}
 	p.Sections = append(p.Sections, Section{ID: "trigger", Widget: "button", ConfigVersion: 1})
 	v := d.Variables["picked"]

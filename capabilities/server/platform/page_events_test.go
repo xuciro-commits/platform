@@ -14,7 +14,7 @@ func overlayDocument() (*PageDocument, []Section) {
 	d.Nodes["overlay"] = PageLayoutNode{Kind: "toolbar", Children: []string{"body"}, Align: "end"}
 	d.Nodes["body"] = PageLayoutNode{Kind: "widget", Section: "body"}
 	d.Overlays = map[string]PageOverlay{"panel": {Root: "overlay", Kind: "drawer", Title: "Record work", OpenVariable: "open"}}
-	d.Events = []PageEventBinding{{Source: "trigger", Event: "click", Target: "open", Value: json.RawMessage(`true`)}}
+	d.Events = []PageEventBinding{{Source: "trigger", Event: "click", Effects: []PageEffect{{Kind: "set", Target: "open", Value: json.RawMessage(`true`)}}}}
 	return d, append(sections, Section{ID: "trigger", Widget: "button", ConfigVersion: 1}, Section{ID: "body", Widget: "detail", ConfigVersion: 1})
 }
 
@@ -39,8 +39,8 @@ func TestPageOverlayForestAndTypedEvents(t *testing.T) {
 		}, "initialized false"},
 		{"missing click", func(d *PageDocument) { d.Events = nil }, "click binding"},
 		{"duplicate click", func(d *PageDocument) { d.Events = append(d.Events, d.Events[0]) }, "one button"},
-		{"wrong type", func(d *PageDocument) { d.Events[0].Value = json.RawMessage(`"true"`) }, "matching state"},
-		{"missing target", func(d *PageDocument) { d.Events[0].Target = "missing" }, "matching state"},
+		{"wrong type", func(d *PageDocument) { d.Events[0].Effects[0].Value = json.RawMessage(`"true"`) }, "matching state"},
+		{"missing target", func(d *PageDocument) { d.Events[0].Effects[0].Target = "missing" }, "matching state"},
 		{"action event", func(d *PageDocument) { d.Events[0].Event = "submit" }, "one button"},
 		{"business source", func(d *PageDocument) { d.Events[0].Source = "table" }, "one button"},
 		{"invalid alignment", func(d *PageDocument) { n := d.Nodes["overlay"]; n.Align = "arbitrary"; d.Nodes["overlay"] = n }, "alignment"},
@@ -88,11 +88,11 @@ func TestPageClickCannotWriteUnknownTabIdentity(t *testing.T) {
 	d, sections := overlayDocument()
 	d.Nodes["columns"] = PageLayoutNode{Kind: "tabs", Children: []string{"table", "detail"}, ActiveVariable: "tab"}
 	d.Variables["tab"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: json.RawMessage(`"table"`)}
-	d.Events[0].Target, d.Events[0].Value = "tab", json.RawMessage(`"missing-child"`)
+	d.Events[0].Effects[0].Target, d.Events[0].Effects[0].Value = "tab", json.RawMessage(`"missing-child"`)
 	if err := d.Check(sections); err == nil || !strings.Contains(err.Error(), "tab value") {
 		t.Fatal(err)
 	}
-	d.Events[0].Value = json.RawMessage(`"detail"`)
+	d.Events[0].Effects[0].Value = json.RawMessage(`"detail"`)
 	if err := d.Check(sections); err != nil {
 		t.Fatal(err)
 	}
