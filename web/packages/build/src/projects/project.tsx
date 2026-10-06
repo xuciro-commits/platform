@@ -84,8 +84,16 @@ export function useProjectResources(project?: Project) {
     const held = new Set(owned.map((item) => refKey(item.ref)));
     return resourceKinds.flatMap((kind) => (inventories[kind.kind]?.data?.records ?? []).filter((record) => !record.archived && !held.has(refKey(kind.kind === "page" ? { app: "build", kind: "page", name: record.name } : resourceRef(kind, record.name)))).map((record) => ({ kind, record })));
   }, [owned, ...resourceKinds.map((kind) => inventories[kind.kind]?.data)]);
+  /** Object types other apps installed (the shared master data of `core`, HR's employees…): a project
+   * references them instead of defining its own (ADR-0058 A1). */
+  const shared = useMemo(() => {
+    const held = new Set(owned.map((item) => refKey(item.ref)));
+    return definitions.filter((d) => d.ref.kind === "object" && d.ref.app !== "build" && d.entity && !held.has(refKey(d.ref)))
+      .map((d) => ({ ref: d.ref, title: d.entity!.title || d.ref.name, app: d.ref.app }))
+      .sort((a, b) => (a.app === "core" ? 0 : 1) - (b.app === "core" ? 0 : 1) || a.title.localeCompare(b.title));
+  }, [owned, definitions]);
   const loading = Object.values(inventories).some((inventory) => inventory.isLoading);
-  return { inventories, owned, available, loading };
+  return { inventories, owned, available, shared, loading };
 }
 
 /** `+ New ▾`: create a resource and add it to the project in one step. */
@@ -107,7 +115,7 @@ export function ProjectHome({ id }: { id: string }) {
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
   const project = query.data?.record;
-  const { owned, available, loading } = useProjectResources(project);
+  const { owned, available, shared, loading } = useProjectResources(project);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string>();
   const [tab, setTab] = useState<"resources" | "settings">("resources");
@@ -164,7 +172,7 @@ export function ProjectHome({ id }: { id: string }) {
           return <div key={kind.kind} className="grid">
             <StructureRow icon={kindIcon[kind.kind]} label={t(kind.plural)} meta={rows.length} className="font-medium" />
             {rows.map((item) => <StructureRow key={refKey(item.ref)} depth={1} label={item.title} selected={selected === refKey(item.ref)} meta={statusOf(item)}
-              onClick={() => { setSelected(refKey(item.ref)); setTab("resources"); if (item.record) open(resourceRoute(item.kind, item.record.id, project.id)); }} />)}
+              onClick={() => { setSelected(refKey(item.ref)); setTab("resources"); if (item.record) open(resourceRoute(item.kind, item.record.id, project.id)); else if (item.installed && item.kind.kind === "object") open({ view: "object-type", params: { object: item.ref.name, application: project.id } }); }} />)}
           </div>;
         })}
         {!items.length && group.id !== "interface" && <p className="px-2 text-[11px] text-muted">{t("Nothing here yet. Use New, or Add existing.")}</p>}
@@ -179,8 +187,12 @@ export function ProjectHome({ id }: { id: string }) {
         {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
         {builder && installed?.application && <Button size="sm" onClick={() => setImporting(true)}>{t("Import Workshop module")}</Button>}
         {builder && <Button size="sm" onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{unpublished.length}</span>}</Button>}
-        {builder && available.length > 0 && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" onChange={(event) => { const [kind, id] = event.target.value.split(":"); const found = available.find((item) => item.kind.kind === kind && item.record.id === id); if (found) void addExisting(found.kind, found.record); }}>
+        {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" onChange={(event) => {
+          const [kind, id] = event.target.value.split(":");
+          if (kind === "shared") { const found = shared.find((item) => refKey(item.ref) === id); if (found) void patch({ resources: [...(project!.resources ?? []), found.ref] }); return; }
+          const found = available.find((item) => item.kind.kind === kind && item.record.id === id); if (found) void addExisting(found.kind, found.record); }}>
           <option value="">{t("Add existing…")}</option>
+          {shared.length > 0 && <optgroup label={t("Shared object types (platform and other apps)")}>{shared.map((item) => <option key={refKey(item.ref)} value={`shared:${refKey(item.ref)}`}>{item.title} · {item.app}</option>)}</optgroup>}
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={`${kind.kind}:${item.record.id}`}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
         {builder && <NewResourceMenu onCreated={(kind, target) => void addCreated(kind, target)} />}
@@ -202,6 +214,7 @@ export function ProjectHome({ id }: { id: string }) {
               {current.missing && <p className="mt-2 text-xs text-danger">{t("Listed in the project, but nothing by this name exists. Remove it, or create it with New (same name) and it is picked up.")}</p>}
               <div className="mt-3 flex flex-wrap gap-2">
                 {current.record && <Button size="sm" variant="primary" onClick={() => open(resourceRoute(current.kind, current.record!.id, project.id))}>{t("Open")}</Button>}
+                {!current.record && current.installed && current.kind.kind === "object" && <Button size="sm" variant="primary" onClick={() => open({ view: "object-type", params: { object: current.ref.name, application: project.id } })}>{t("Open in object model")}</Button>}
                 {builder && current.missing && <NewResourceMenu onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
                 {builder && <Button size="sm" onClick={() => { remove(current.ref); setSelected(undefined); }}>{t("Remove from project")}</Button>}
               </div>

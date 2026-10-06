@@ -3122,4 +3122,6 @@ register("zh-CN", {
   "An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one.": "动作类型定义人们如何改变一个对象：它的参数、规则、条件与副作用。每个动作属于一个对象类型；打开对象类型即可添加。",
   "No action types yet. Add a lifecycle state and an action to an object type.": "还没有动作类型。先给对象类型添加生命周期状态和动作。",
   "Inputs and outputs": "输入与输出",
+  "Open in object model": "在对象模型中打开",
+  "implements": "实现接口",
 });

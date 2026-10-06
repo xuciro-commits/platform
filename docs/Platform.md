@@ -132,6 +132,7 @@
 | 开发者工具套件 (ADR-0023) | 应用 API、宿主运行时 | 应用脚手架、API 发现与既有 MCP 工具；MCP 鉴权/资源仍有余项。 | docs/Apps.md, cmd/new-app；[ADR-0023](ADR/0023-meaning-languages-api-contract.md) |
 | 智能体对外门户 | 宿主运行时 | 受权 MCP/A2A 接入；非完整 AI 构建 SDK。 | POST /mcp, /a2a/<tenant>/<agent> |
 | 控制台 | 平台应用 `platform` | 成员、角色和运行配置的宿主治理入口。 | console.go |
+| 共享主数据与接口 (ADR-0058) | 平台应用 `core`、宿主运行时 | 人员/伙伴/站点/库位/物料/单位/币种一次定义、各应用引用；`Interface` 字段签名在组合时校验。 | capabilities/server/apps/core, platform.CheckInterfaces；[ADR-0058](ADR/0058-shared-ontology.md) |
 | 组织架构 (ADR-0012) | 平台应用 `org` | 随时间演进的单元、架构与成员归属。 | capabilities/server/apps/org, Caller.Units；[ADR-0012](ADR/0012-organization-model.md) |
 | 关联、时间线、评论与关注者 | 平台应用 `relations` | 规范链接、记录动态、评论/提及/关注。 | capabilities/server/apps/relations, Caller.Link |
 | 字段安全性与个人数据 (ADR-0028) | 应用 API、宿主运行时 | 行/字段/来源权限贯穿读取与派生；个人读取审计仍为易失状态。 | FieldInfo.Read, Write；[ADR-0028](ADR/0028-the-application-half.md) |

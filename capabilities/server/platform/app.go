@@ -206,6 +206,7 @@ type Manifest struct {
 	Pages         []Page        // bounded code page descriptors over those records/actions (ADR-0032 13b)
 	LinkTypes     []LinkType
 	PropertyTypes []PropertyType
+	Interfaces    []Interface  // shapes several entity types share (ADR-0058 A2)
 	Queries       []NamedQuery // named pure queries pages and agents share (ADR-0040 21c)
 	Functions     []AIFunction // typed, bounded inference through existing model effects (ADR-0043)
 	Operations    []Operation  // typed native or controlled Wasm computation (ADR-0044)

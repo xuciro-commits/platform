@@ -70,6 +70,9 @@ type Entity struct {
 	// Standard asks for generated create, edit and archive actions (D5),
 	// named <type>.create, <type>.edit and <type>.archive.
 	Standard Standard
+	// Implements names the interfaces this type carries the fields of
+	// (ADR-0058 A2); the host checks them when the tenant is composed.
+	Implements []string
 	// Lifecycle makes the type a document that moves through states (ADR-0017).
 	Lifecycle *Lifecycle
 	// Seed are the records the type starts with in a tenant (a deployment's or
@@ -285,7 +288,8 @@ type EntityInfo struct {
 	App            string         `json:"app"`
 	Display        string         `json:"display"`
 	Fields         []FieldInfo    `json:"fields"`
-	Standard       []string       `json:"standard"` // the generated actions' schemas
+	Standard       []string       `json:"standard"`             // the generated actions' schemas
+	Implements     []string       `json:"implements,omitempty"` // the interfaces it carries the fields of (ADR-0058 A2)
 	Lifecycle      *LifecycleInfo `json:"lifecycle,omitempty"`
 	Go             reflect.Type   `json:"-"`
 	Scope          Scope          `json:"-"`
@@ -320,7 +324,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}}
+	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements}
 	if info.Title == "" {
 		info.Title = e.Type
 	}

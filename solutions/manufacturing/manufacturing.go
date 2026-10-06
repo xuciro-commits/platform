@@ -17,6 +17,7 @@ import (
 	"platformserver"
 	"platformserver/apps/ai"
 	"platformserver/apps/build"
+	"platformserver/apps/core"
 	"platformserver/apps/files"
 	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
@@ -31,7 +32,7 @@ import (
 func NewTenant(id string, books platform.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
 	t, err := platformserver.NewTenant(id, platformserver.NewConsole(id, seats...),
 		org.New(id, mes.DemoOrganization(platformserver.Memberships(seats))), ai.New(id),
-		work.New(id), flow.New(id), platformserver.NewAgents(id), knowledge.New(id), files.New(id), relations.New(id), build.New(id),
+		work.New(id), flow.New(id), platformserver.NewAgents(id), knowledge.New(id), files.New(id), relations.New(id), core.New(id), build.New(id),
 		mes.New(id, mes.DemoMaster()), books)
 	if err == nil {
 		err = t.Connect(mes.DemoConnectors(id)...)
