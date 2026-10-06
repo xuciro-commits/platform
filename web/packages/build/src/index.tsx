@@ -17,6 +17,7 @@ import { WorkflowRuns } from "./automate/workflow-runs";
 import { LinkTypeEditor, LinkTypes } from "./ontology/link-type";
 import { PropertyTypeEditor, PropertyTypes } from "./ontology/property-type";
 import { DataSourceEditor, DataSources } from "./ontology/data-source";
+import { DecisionTableEditor, DecisionTables } from "./functions/decision-table";
 import { QueryEditor, Queries } from "./ontology/query";
 import { FunctionEditor, Functions } from "./functions/function";
 import { CodeEditor, CodeFunctions } from "./functions/code";
@@ -26,7 +27,7 @@ import { ProjectHome, ProjectsList } from "./projects/project";
 import { StudioTemplates } from "./workshop/template-ui";
 import { t, type NavSection, type View } from "@platform/ui";
 import { ApplicationScope } from "./projects/application-scope";
-import { BookOpen, Boxes, Braces, Clock, Compass, Database, GitBranch, Hammer, History, LayoutList, LayoutTemplate, Link2, PackageCheck, Search, Sparkles, Tags, Workflow, Zap } from "lucide-react";
+import { BookOpen, Boxes, Braces, Clock, Compass, Database, GitBranch, Hammer, History, LayoutList, LayoutTemplate, Link2, PackageCheck, Search, Sparkles, Table2, Tags, Workflow, Zap } from "lucide-react";
 
 const scoped = (p: Record<string, string | undefined>, node: React.ReactNode) => <ApplicationScope application={p.application}>{node}</ApplicationScope>;
 const builder = (host: Host) => host.role("build") === "builder";
@@ -51,6 +52,7 @@ const views: View[] = [
   { id: "runs", title: () => t("Runs"), render: (p) => scoped(p, <div className="p-4"><WorkflowRuns name={p.name ?? ""} onStepSelect={() => {}} /></div>) },
   // Functions
   { id: "function", title: () => t("AI functions"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><FunctionEditor id={p.id} /></ApplicationScope> : <Functions /> },
+  { id: "decision-table", title: (p) => p.id ? t("Decision table") : t("Decision tables"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><DecisionTableEditor id={p.id} /></ApplicationScope> : <DecisionTables /> },
   { id: "code", title: () => t("Code functions"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><CodeEditor id={p.id} /></ApplicationScope> : <CodeFunctions /> },
   // Releases
   { id: "changes", title: () => t("Changes"), render: (p) => scoped(p, <Changes key={`${p.kind ?? ""}:${p.id ?? ""}`} initialKind={p.kind} initialID={p.id} />) },
@@ -90,6 +92,7 @@ export default defineApp({
     { label: t("Functions"), items: [
       { label: t("AI functions"), icon: <Sparkles />, route: { view: "function" } },
       { label: t("Code functions"), icon: <Braces />, route: { view: "code" } },
+      { label: t("Decision tables"), icon: <Table2 />, route: { view: "decision-table" } },
     ] },
     { label: t("Releases"), items: [
       { label: t("Changes"), icon: <PackageCheck />, route: { view: "changes" } },

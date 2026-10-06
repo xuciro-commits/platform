@@ -1769,6 +1769,35 @@ export type Predicate = {
   terms?: Predicate[];
 };
 
+export type Table = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  name: string;
+  title: string;
+  description?: string;
+  inputs: TableColumn[];
+  outputs: TableColumn[];
+  rows: TableRow[];
+  default?: string[];
+  state: string;
+  version?: number;
+  published?: string;
+};
+
+export type TableColumn = {
+  name: string;
+  title?: string;
+  type: string;
+};
+
+export type TableRow = {
+  when: string[];
+  then: string[];
+};
+
 export type Source = {
   id: string;
   revision: number;
