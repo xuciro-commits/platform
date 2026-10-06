@@ -166,8 +166,8 @@ func TestPatternsGraft(t *testing.T) {
 	}
 	before := len(m.Elements)
 	for _, p := range Patterns() {
-		if p.Level <= 1 {
-			continue
+		if p.Params == nil {
+			t.Fatalf("%s: catalogue must encode params as an array for the modeler", p.ID)
 		}
 		if _, err := m.Apply(p.ID, root, "New "+p.Title, nil, "2026-10-06"); err != nil {
 			t.Fatalf("%s: %v", p.ID, err)

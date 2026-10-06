@@ -3,7 +3,7 @@ import {CanvasEditor,CanvasRegion,useCanvasGesture,type CanvasModel} from "./lay
 import {ApplicationHeader} from "./layout/ApplicationHeader";
 import {useTheme} from "./theme";
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { Plus } from "lucide-react";
+import { Building2, Plus, Users } from "lucide-react";
 import {AlignLeft,AlignCenter,AlignRight} from "lucide-react";
 import {InspectorField,InspectorSection} from "./components/InspectorControls";
 import {SegmentedChoice} from "./components/SegmentedChoice";
@@ -13,7 +13,7 @@ import {
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
-  Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
+  Chart, Pivot, Graph, BlockCanvas, DiagramCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView, type AttachedFile,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
   type FlowDefinition, type FlowInstanceData, type ChartSpec, type Route,
@@ -234,6 +234,14 @@ export function Charts() { return <Chart spec={chart} height={240} />; }
 const aggregateSource = { aggregate: async () => ({ columns: [{ name: "group", title: t("Group"), kind: "group" as const, type: "nominal" as const }, { name: "count", title: t("Count"), kind: "measure" as const, type: "quantitative" as const }], rows: [{ group: "Alpha", count: 12 }, { group: "Beta", count: 24 }] }) };
 export function Pivots() { return <Pivot source={aggregateSource} type="demo.record" query={{}} rows="group" measure="count" />; }
 export function Graphs() { return <Graph nodes={[{ id: "a", label: "Sample Alpha", tone: "success" }, { id: "b", label: "Sample Beta", tone: "info", current: true }]} edges={[{ from: "a", to: "b", label: t("Next") }]} height={230} />; }
+
+export function Diagrams() {
+  const [positions, setPositions] = useState({ a: { x: 0, y: 0 }, b: { x: 0, y: 140 } });
+  const [selected, setSelected] = useState<string>();
+  return <DiagramCanvas nodes={[{ id: "a", label: "Sample Alpha", icon: <Building2 /> }, { id: "b", label: "Sample Beta", icon: <Users /> }]}
+    edges={[{ id: "b-a", source: "b", target: "a", tree: true }]} positions={positions} height={300} editable selected={selected} onSelect={setSelected}
+    onPositionsChange={(next) => setPositions((current) => ({ ...current, ...next }))} />;
+}
 const nodeCatalog: NodeCatalog = [{ id: "value", title: t("Value"), category: "data", inputs: [], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }, { id: "transform", title: t("Transform"), category: "logic", inputs: [{ id: "in", label: t("Quantity"), type: "number" }], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }];
 export function Blocks() {
   const counter = useRef(3);

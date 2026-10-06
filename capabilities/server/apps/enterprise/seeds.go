@@ -17,8 +17,8 @@ import (
 //	4 Team        the working unit: line, shift, team, station
 //
 // A pattern builds a subtree whose root sits at one level, and can be grafted
-// under any organisation of a higher level — a plant under a company, a line
-// under a workshop. The scale templates (S/M/L/XL) are compositions of the
+// under any organisation — the levels describe the pattern, not a grafting
+// restriction. The scale templates (S/M/L/XL) are compositions of the
 // same patterns, so an empty tenant and a grown one get the same shapes.
 
 type Pattern struct {
@@ -66,10 +66,10 @@ func Patterns() []Pattern {
 		{ID: "department", Title: "Department", Level: 3, Description: "A function with a manager post and staff posts; optionally teams below it.",
 			Params: []platform.Field{knob("teams", "Teams (default 0)")}, build: buildDepartment},
 		{ID: "shared-services", Title: "Shared services", Level: 3, Description: "A shared service centre: finance, human resources and IT serving the whole enterprise.",
-			build: buildSharedServices},
+			Params: []platform.Field{}, build: buildSharedServices},
 		{ID: "line", Title: "Production line", Level: 4, Industry: "manufacturing", Description: "A line with a lead and operators, stations as locations and a machine at each.",
 			Params: []platform.Field{knob("stations", "Stations (default 3)")}, build: buildLine},
-		{ID: "team", Title: "Team", Level: 4, Description: "A team with a lead and staff posts.", build: buildTeam},
+		{ID: "team", Title: "Team", Level: 4, Description: "A team with a lead and staff posts.", Params: []platform.Field{}, build: buildTeam},
 	}
 	return out
 }

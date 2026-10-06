@@ -57,6 +57,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/date-input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.DateInputExample })),
   "ui/datetime-input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.DateTimeInputExample })),
   "ui/derived-mean": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.DerivedMeanExample })),
+  "ui/diagram-canvas": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Diagrams })),
   "ui/dialog": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Dialogs })),
   "ui/disclosure": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Disclosures })),
   "ui/editor-workbench": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.EditorPanels })),

@@ -221,7 +221,7 @@ func TestLiveQueriesUseOriginalMemberAuthorizationAfterRevocation(t *testing.T) 
 	}
 }
 
-func TestEnterpriseAppliedExampleReplays(t *testing.T) {
+func TestEnterpriseAppliedPatternReplays(t *testing.T) {
 	compose := func() *Tenant {
 		seat := Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin, enterprise.ID: enterprise.Admin}}}
 		tn, err := NewTenant("example-replay", NewConsole("example-replay", seat), enterprise.New("example-replay", platform.OrgSeed{Units: []platform.Unit{{ID: "existing", Name: "Existing enterprise"}}}))

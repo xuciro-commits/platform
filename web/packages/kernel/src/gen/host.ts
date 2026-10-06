@@ -1119,13 +1119,6 @@ export type Model = {
   dailyTokens?: number;
 };
 
-export type ModelExample = {
-  id: string;
-  title: string;
-  description: string;
-  model: EnterpriseModel;
-};
-
 export type NamedQuery = {
   name: string;
   title: string;
@@ -1849,6 +1842,17 @@ export type Passage = {
   score: number;
 };
 
+export type PatternInfo = {
+  id: string;
+  title: string;
+  description: string;
+  level: number;
+  industry?: string;
+  params: Field[];
+  levelName: string;
+  preview: Preview;
+};
+
 export type PersonalRead = {
   at: string;
   member: string;
@@ -1870,6 +1874,16 @@ export type Predicate = {
   left?: Binding;
   right?: Binding;
   terms?: Predicate[];
+};
+
+export type Preview = {
+  elements: number;
+  relationships: number;
+  organisations: number;
+  posts: number;
+  locations: number;
+  resources: number;
+  outline: string[];
 };
 
 export type Process = {
