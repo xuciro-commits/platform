@@ -52,7 +52,7 @@ type Source struct {
 	// Puller is the member who published the source; rows are decided as them.
 	Puller    string      `json:"puller,omitempty" field:"readonly" title:"Pulls as"`
 	Requested bool        `json:"requested,omitempty" field:"readonly" title:"Pull requested"`
-	Last      *SourcePull `json:"last,omitempty" field:"readonly" title:"Last pull"`
+	Last      *SourcePull `json:"last,omitempty" field:"readonly" type:"json" title:"Last pull"`
 }
 
 // SourceField maps one row field onto one object field, optionally converted.

@@ -40,30 +40,32 @@ const (
 // AgentRunRecord is one run of an agent.
 type AgentRunRecord struct {
 	platform.Record
-	Agent       string     `json:"agent" field:"readonly,search"` // "<app>.<name>"
-	Title       string     `json:"title" field:"readonly,search"`
-	Goal        string     `json:"goal" field:"readonly" type:"longtext"`
-	Ref         string     `json:"ref,omitempty" field:"readonly"`
-	Seen        string     `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
-	OnBehalf    string     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
-	Acts        bool       `json:"acts,omitempty" field:"readonly" title:"Acts without drafts"` // for its person, within their grants: an A2A caller
-	Language    string     `json:"language,omitempty" field:"readonly"`                         // the person's, which the agent answers in (ADR-0023 D6)
-	Flow        string     `json:"flow,omitempty" field:"readonly"`                             // the flow instance whose step started it
-	Token       int        `json:"token,omitempty" field:"readonly"`
-	Step        string     `json:"step,omitempty" field:"readonly"` // that step's name
-	State       string     `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
-	Model       string     `json:"model,omitempty" field:"readonly"`
-	Steps       []RunStep  `json:"steps" field:"readonly"`
-	StepsUsed   int        `json:"stepsUsed" field:"readonly" title:"Model turns"`
-	TokensUsed  int        `json:"tokensUsed" field:"readonly" title:"Tokens"`
-	ActionsUsed int        `json:"actionsUsed" field:"readonly" title:"Actions"`
-	Cost        float64    `json:"cost,omitempty" field:"readonly"`
-	Result      string     `json:"result,omitempty" field:"readonly" type:"longtext"`
-	Task        string     `json:"task,omitempty" field:"readonly"`
-	Stopped     string     `json:"stopped,omitempty" field:"readonly" title:"Why it stopped"`
-	Draft       []Draft    `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"` // at most one
-	Citations   []Citation `json:"citations,omitempty" field:"readonly" title:"Sources it read"`
-	Signals     []Signal   `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
+	Release           string     `json:"release,omitempty" field:"readonly" title:"Startup release"`
+	DefinitionVersion string     `json:"definitionVersion,omitempty" field:"readonly" title:"Startup agent definition"`
+	Agent             string     `json:"agent" field:"readonly,search"` // "<app>.<name>"
+	Title             string     `json:"title" field:"readonly,search"`
+	Goal              string     `json:"goal" field:"readonly" type:"longtext"`
+	Ref               string     `json:"ref,omitempty" field:"readonly"`
+	Seen              string     `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
+	OnBehalf          string     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
+	Acts              bool       `json:"acts,omitempty" field:"readonly" title:"Acts without drafts"` // for its person, within their grants: an A2A caller
+	Language          string     `json:"language,omitempty" field:"readonly"`                         // the person's, which the agent answers in (ADR-0023 D6)
+	Flow              string     `json:"flow,omitempty" field:"readonly"`                             // the flow instance whose step started it
+	Token             int        `json:"token,omitempty" field:"readonly"`
+	Step              string     `json:"step,omitempty" field:"readonly"` // that step's name
+	State             string     `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
+	Model             string     `json:"model,omitempty" field:"readonly"`
+	Steps             []RunStep  `json:"steps" field:"readonly"`
+	StepsUsed         int        `json:"stepsUsed" field:"readonly" title:"Model turns"`
+	TokensUsed        int        `json:"tokensUsed" field:"readonly" title:"Tokens"`
+	ActionsUsed       int        `json:"actionsUsed" field:"readonly" title:"Actions"`
+	Cost              float64    `json:"cost,omitempty" field:"readonly"`
+	Result            string     `json:"result,omitempty" field:"readonly" type:"longtext"`
+	Task              string     `json:"task,omitempty" field:"readonly"`
+	Stopped           string     `json:"stopped,omitempty" field:"readonly" title:"Why it stopped"`
+	Draft             []Draft    `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"` // at most one
+	Citations         []Citation `json:"citations,omitempty" field:"readonly" title:"Sources it read"`
+	Signals           []Signal   `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
 	// Withheld is set for a reader who may no longer read something the run
 	// derived its trace from; it is never journaled (#130).
 	Withheld bool `json:"withheld,omitempty" field:"readonly" title:"Part of this trace is no longer readable to you"`
@@ -199,6 +201,7 @@ func (a *Agents) Manifest() platform.Manifest {
 }
 
 func (a *Agents) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
+func (a *Agents) AcceptedActionSchemas() []string          { return []string{SchemaRunStart} }
 func (a *Agents) AcceptedLedger() *platform.Ledger         { return a.ledger }
 func (a *Agents) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
 func (a *Agents) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
@@ -390,7 +393,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			if a.t.suspended("agent:"+p.Agent) && !c.Replaying {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", p.Agent)
 			}
-			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0, now)
+			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0, now, !c.Replaying && (a.t.Record == nil || c.Staging()))
 			run.Acts, run.Language = p.Act, p.Language
 			return func(r *pb.ChangeRecord) { a.t.automated(c, AgentApp).Put(r, run) }, nil
 		case SchemaEvalStart:
@@ -489,13 +492,36 @@ func (a *Agents) signal(c platform.Caller, r *pb.ChangeRecord, id string, sig Si
 	}
 }
 
-func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token int, now time.Time) AgentRunRecord {
+func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token int, now time.Time, captureBinding bool) AgentRunRecord {
 	title := goal
 	if len(title) > 80 {
 		title = title[:77] + "..."
 	}
 	run := AgentRunRecord{Record: platform.Record{ID: id}, Agent: agent, Title: title, Goal: goal, Ref: ref, OnBehalf: onBehalf, Flow: flow, Step: step, Token: token,
 		State: "running", Steps: []RunStep{}}
+	recorded := captureBinding
+	if recorded {
+		run.Release = a.t.activeRelease
+	}
+	if d := a.defs[agent]; d != nil && recorded {
+		version := ""
+		if owner := a.t.app(d.app); owner != nil {
+			version = owner.Manifest().Version
+		}
+		digest, _ := canonicalDigest([]any{d.app, version, d.Name, d.Title, d.Instructions, d.Tools, d.Budget})
+		run.DefinitionVersion = "agent.sha256." + digest
+	}
+	if flow != "" && recorded {
+		if row, ok := a.t.Held("flow.instance/" + flow); ok {
+			raw, _ := json.Marshal(row)
+			var parent struct {
+				Release string `json:"release"`
+			}
+			if json.Unmarshal(raw, &parent) == nil {
+				run.Release = parent.Release
+			}
+		}
+	}
 	if typ, rid, ok := strings.Cut(ref, "/"); ok {
 		if view, err := a.t.Context(a.readsAs(run), typ, rid, now); err == nil {
 			raw, _ := json.Marshal(view)

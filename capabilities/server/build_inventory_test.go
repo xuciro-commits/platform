@@ -33,12 +33,12 @@ func TestBuilderInventoryRestoresAssetsBeyondFirstReadPage(t *testing.T) {
 	for index := 0; index <= 500; index++ {
 		id := fmt.Sprintf("D%04d", index)
 		object := build.Object{Record: platform.Record{ID: id}, Name: fmt.Sprintf("object%d", index), Title: "Source", Fields: []build.Field{{Name: "guest", Title: "Guest", Type: "text"}}, State: "draft"}
-		page := build.Page{Record: platform.Record{ID: id}, Name: fmt.Sprintf("page%d", index), Title: "Sources", Object: "build.source", List: []string{"guest"}, Detail: []string{"guest"}, State: "draft"}
+		page := build.Page{Record: platform.Record{ID: id}, Name: fmt.Sprintf("page%d", index), Title: "Sources", Object: "build.feed", List: []string{"guest"}, Detail: []string{"guest"}, State: "draft"}
 		app := build.Application{Record: platform.Record{ID: id}, Name: fmt.Sprintf("app%d", index), Title: "Source desk", Pages: []string{"sources"}, State: "draft"}
 		if index == 500 {
-			object.Name, object.State = "source", "published"
-			page.Name, page.State = "sources", "published"
-			app.Name, app.State = "sourcedesk", "published"
+			object.Name, object.State = "feed", "published"
+			page.Name, page.State = "feeds", "published"
+			app.Name, app.State, app.Pages = "feeddesk", "published", []string{"feeds"}
 			raw, _ := json.Marshal(object)
 			object.Published = string(raw)
 			raw, _ = json.Marshal(page)
@@ -58,7 +58,7 @@ func TestBuilderInventoryRestoresAssetsBeyondFirstReadPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, wanted := range []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.source"}, {App: build.ID, Kind: platform.AssetPage, Name: "sources"}, {App: build.ID, Kind: platform.AssetApp, Name: "sourcedesk"}} {
+	for _, wanted := range []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.feed"}, {App: build.ID, Kind: platform.AssetPage, Name: "feeds"}, {App: build.ID, Kind: platform.AssetApp, Name: "feeddesk"}} {
 		found := false
 		for _, asset := range assets {
 			if asset.Ref == wanted {
@@ -86,10 +86,10 @@ func TestBuilderInventoryRestoresAssetsBeyondFirstReadPage(t *testing.T) {
 		_, err := restored.Submit(member, &pb.Submission{TenantId: restored.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, at)
 		return err
 	}
-	if err := submit("build.source.create", "build.source", "S", "source", `{"guest":"Ada"}`); err != nil {
-		t.Fatalf("restored source was not installed: %v", err)
+	if err := submit("build.feed.create", "build.feed", "S", "feed", `{"guest":"Ada"}`); err != nil {
+		t.Fatalf("restored feed was not installed: %v", err)
 	}
-	if err := submit(build.ObjectType+".create", build.ObjectType, "NEW", "duplicate", `{"name":"source","title":"Another source","fields":[{"name":"guest","title":"Guest","type":"text"}]}`); err == nil || !strings.Contains(err.Message, "already") {
+	if err := submit(build.ObjectType+".create", build.ObjectType, "NEW", "duplicate", `{"name":"feed","title":"Another feed","fields":[{"name":"guest","title":"Guest","type":"text"}]}`); err == nil || !strings.Contains(err.Message, "already") {
 		t.Fatalf("ignored duplicate object name after the first page: %v", err)
 	}
 	// The existing 1000-definition release limit must reject, rather than

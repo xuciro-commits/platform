@@ -681,7 +681,7 @@ func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run AgentRunRecord
 
 // Start, Signal and Finished serve flows' agent steps (internal/host.Runs).
 func (a *Agents) Start(c platform.Caller, r *pb.ChangeRecord, s host.RunStart, now time.Time) {
-	a.t.automated(c, AgentApp).Put(r, a.create(s.ID, s.Agent, s.Goal, s.Ref, "", s.Flow, s.Step, s.Token, now))
+	a.t.automated(c, AgentApp).Put(r, a.create(s.ID, s.Agent, s.Goal, s.Ref, "", s.Flow, s.Step, s.Token, now, !c.Replaying && (a.t.Record == nil || c.Staging())))
 }
 
 func (a *Agents) Signal(c platform.Caller, r *pb.ChangeRecord, run string, s host.RunSignal, now time.Time) {

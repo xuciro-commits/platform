@@ -67,6 +67,8 @@ export type AgentRunRecord = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  release?: string;
+  definitionVersion?: string;
   agent: string;
   title: string;
   goal: string;
@@ -173,19 +175,6 @@ export type AppInfo = {
   interfaces: Interface[];
 };
 
-export type Interface = {
-  name: string;
-  title: string;
-  description?: string;
-  fields: InterfaceField[];
-};
-
-export type InterfaceField = {
-  name: string;
-  type: string;
-  title: string;
-};
-
 export type AppSettings = {
   app: string;
   settings: SettingValue[];
@@ -219,6 +208,31 @@ export type ApplicationHeaderItem = {
   label?: string;
   text?: string;
   action?: string;
+};
+
+export type ApplicationRun = {
+  id: string;
+  kind: string;
+  title: string;
+  resource?: AssetRef;
+  resourceName: string;
+  state: string;
+  version?: string;
+  release?: string;
+  dependencies?: string;
+  module?: string;
+  node?: string;
+  error?: string;
+  association: string;
+  shared: string[];
+  created: string;
+};
+
+export type ApplicationRunPage = {
+  application: AssetRef;
+  title: string;
+  runs: ApplicationRun[];
+  total: number;
 };
 
 export type ApprovalRequest = {
@@ -613,8 +627,9 @@ export type EntityInfo = {
   display: string;
   fields: FieldInfo[];
   standard: string[];
-  lifecycle?: LifecycleInfo;
   implements?: string[];
+  extends?: string;
+  lifecycle?: LifecycleInfo;
 };
 
 /** The kernel contract's EntityRef (contract/proto). */
@@ -868,6 +883,19 @@ export type InstalledPackage = {
   retained?: RetainedArtifact[];
 };
 
+export type Interface = {
+  name: string;
+  title: string;
+  description?: string;
+  fields: InterfaceField[];
+};
+
+export type InterfaceField = {
+  name: string;
+  type: string;
+  title: string;
+};
+
 export type JointDraftRef = {
   kind: string;
   id: string;
@@ -1098,6 +1126,13 @@ export type OperationRef = {
 };
 
 export type OperationResult = {
+  ownerVersion?: string;
+  ref?: AssetRef;
+  definition?: string;
+  version?: number;
+  module?: string;
+  dependencies?: string;
+  release?: string;
   id: string;
   state: string;
   output?: unknown;
@@ -1769,77 +1804,6 @@ export type Predicate = {
   terms?: Predicate[];
 };
 
-export type Table = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  name: string;
-  title: string;
-  description?: string;
-  inputs: TableColumn[];
-  outputs: TableColumn[];
-  rows: TableRow[];
-  default?: string[];
-  state: string;
-  version?: number;
-  published?: string;
-};
-
-export type TableColumn = {
-  name: string;
-  title?: string;
-  type: string;
-};
-
-export type TableRow = {
-  when: string[];
-  then: string[];
-};
-
-export type Source = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  name: string;
-  title: string;
-  url: string;
-  allowPrivate?: boolean;
-  header?: string;
-  path?: string;
-  object: string;
-  key: string;
-  mapping: SourceField[];
-  every?: string;
-  state: string;
-  puller?: string;
-  requested?: boolean;
-  last?: SourcePull;
-};
-
-export type SourceField = {
-  from: string;
-  to: string;
-  convert?: string;
-};
-
-export type SourcePull = {
-  at: string;
-  rows: number;
-  applied: number;
-  failed: number;
-  error?: string;
-  failures?: SourceFailure[];
-};
-
-export type SourceFailure = {
-  id: string;
-  outcome: string;
-};
-
 export type Process = {
   id: string;
   revision: number;
@@ -1849,11 +1813,11 @@ export type Process = {
   name: string;
   title: string;
   kind?: "flow" | "automation";
-  every?: string;
-  scheduler?: string;
   object?: string;
   when?: string;
   manual?: boolean;
+  every?: string;
+  scheduler?: string;
   input?: unknown;
   inputSchema?: ValueSchema;
   steps: ProcessStep[];
@@ -2366,6 +2330,48 @@ export type SimulationStep = {
   compute?: ComputeFixture;
 };
 
+export type Source = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  name: string;
+  title: string;
+  url: string;
+  allowPrivate?: boolean;
+  header?: string;
+  path?: string;
+  object: string;
+  key: string;
+  mapping: SourceField[];
+  every?: string;
+  state: string;
+  puller?: string;
+  requested?: boolean;
+  last?: SourcePull;
+};
+
+export type SourceFailure = {
+  id: string;
+  outcome: string;
+};
+
+export type SourceField = {
+  from: string;
+  to: string;
+  convert?: string;
+};
+
+export type SourcePull = {
+  at: string;
+  rows: number;
+  applied: number;
+  failed: number;
+  error?: string;
+  failures?: SourceFailure[];
+};
+
 export type Stamp = {
   by?: string;
   at?: string;
@@ -2417,6 +2423,35 @@ export type SupportRead = {
   health: TenantHealth;
   audit: AuditEntry[];
   answers?: SupportAnswer[];
+};
+
+export type Table = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  name: string;
+  title: string;
+  description?: string;
+  inputs: TableColumn[];
+  outputs: TableColumn[];
+  rows: TableRow[];
+  default?: string[];
+  state: string;
+  version?: number;
+  published?: string;
+};
+
+export type TableColumn = {
+  name: string;
+  title?: string;
+  type: string;
+};
+
+export type TableRow = {
+  when: string[];
+  then: string[];
 };
 
 export type Task = {

@@ -11,6 +11,14 @@ import (
 // and require the entire reconstructed row to match that exact digest. Never
 // accept differences in business values, receipts or other history fields.
 func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
+	prior = legacyAgentBindingImage(prior, image)
+	if prior != nil {
+		if before, err := acceptedRowOf(image.Type, image.ID, prior); err == nil {
+			if digest, err := canonicalDigest(before); err == nil && digest == image.Before {
+				return prior
+			}
+		}
+	}
 	if prior == nil || image.App != AgentApp || image.Type != RunType || len(prior.history) == 0 || len(image.History) <= len(prior.history) {
 		return nil
 	}
@@ -66,4 +74,63 @@ func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
 		return nil
 	}
 	return recovered
+}
+
+// Additive startup fields omitted by a legacy replay may be recovered only
+// from the already committed row image. The caller still requires the exact
+// predecessor digest; no version is inferred from today's agent registry.
+func legacyAgentBindingImage(prior *row, image acceptedBatchRow) *row {
+	if prior == nil || image.App != AgentApp || image.Type != RunType || len(image.History) < len(prior.history) {
+		return prior
+	}
+	run, ok := prior.value.Interface().(AgentRunRecord)
+	if !ok {
+		return prior
+	}
+	var saved AgentRunRecord
+	if json.Unmarshal(image.Value, &saved) != nil {
+		return prior
+	}
+	changed := false
+	if run.Release == "" && saved.Release != "" {
+		run.Release = saved.Release
+		changed = true
+	}
+	if run.DefinitionVersion == "" && saved.DefinitionVersion != "" {
+		run.DefinitionVersion = saved.DefinitionVersion
+		changed = true
+	}
+	if !changed {
+		return prior
+	}
+	history := copyHistory(prior.history)
+	for i, entry := range history {
+		fields := map[string]FieldChange{}
+		for _, field := range entry.Fields {
+			fields[field.Field] = field
+		}
+		ordered := []FieldChange{}
+		for _, field := range image.History[i].Fields {
+			if field.Field == "release" || field.Field == "definitionVersion" {
+				if existing, ok := fields[field.Field]; ok {
+					ordered = append(ordered, existing)
+					delete(fields, field.Field)
+				} else {
+					ordered = append(ordered, field)
+				}
+			} else {
+				existing, ok := fields[field.Field]
+				if !ok {
+					return prior
+				}
+				ordered = append(ordered, existing)
+				delete(fields, field.Field)
+			}
+		}
+		if len(fields) > 0 {
+			return prior
+		}
+		history[i].Fields = ordered
+	}
+	return &row{value: reflect.ValueOf(&run).Elem(), history: history}
 }

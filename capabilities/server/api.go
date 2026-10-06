@@ -16,6 +16,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
+	"platformserver/apps/build"
 	"platformserver/apps/files"
 	"platformserver/apps/flow"
 	"platformserver/apps/relations"
@@ -131,6 +132,8 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	// Original page call values also belong to the generated application API.
 	s.of(reflect.TypeFor[platform.PageCollectionInput]())
 	s.of(reflect.TypeFor[files.ImageRegionsRequest]())
+	s.of(reflect.TypeFor[build.Table]())
+	s.of(reflect.TypeFor[build.Source]())
 	paths := map[string]any{}
 	for _, r := range h.routes {
 		method, path, _ := strings.Cut(r.Pattern, " ")

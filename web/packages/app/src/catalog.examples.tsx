@@ -1,7 +1,7 @@
 import "./i18n";
 import { useEffect,useMemo,useRef,useState } from "react";
 import { Panel, t } from "@platform/ui";
-import { ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
+import { ApplicationRuns, OperationRunView, ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
 import type {Api} from "@platform/kernel";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";
 import {ObservationStatistics,type EntityInfo} from "@platform/ui";
@@ -73,3 +73,10 @@ export function ApplicationSessionsExample() {
   const definitions: Definition[] = [...sampleDefinitions, definition, {ref:{app:"catalog",kind:"app",name:"shared"},source:"code",version:"fixture-1",contractVersion:1,requires:[],application:{name:"shared",title:t("Shared application"),pages:["shared"],uiProfile:"platform.page.v2.12",variables,queries}}];
   return <CatalogFixture definitions={definitions}><ApplicationSessionsProvider><div className="grid gap-3 md:grid-cols-2">{["first","second"].map((view) => <ApplicationPage key={view} pageRef={definition.ref} route={{view,params:{application:"catalog:shared",instance:"example"}}}><ComposedPage page={definition.page} live={false} /></ApplicationPage>)}</div></ApplicationSessionsProvider></CatalogFixture>;
 }
+
+const runtimeExampleReads={
+ "/v1/applications/catalog/sample/runs?offset=0&limit=50":{application:{app:"catalog",kind:"app",name:"sample"},title:"Sample application",total:1,runs:[{id:"SAMPLE-CALL",kind:"compute",title:"Sample calculation",resource:{app:"catalog",kind:"compute",name:"sample"},resourceName:"sample",state:"failed",version:"1",release:"release:sample-original",dependencies:"dependencies:sample",module:"sha256:sample",node:"calculate",error:"Synthetic failure",association:"resource",shared:["Sample shared application"],created:"2026-10-06T00:00:00Z"}]},
+ "/v1/capabilities/calls/compute/SAMPLE-CALL":{id:"SAMPLE-CALL",state:"failed",generation:1,error:"Synthetic failure",version:1,release:"release:sample-original",dependencies:"dependencies:sample",module:"sha256:sample",definition:"definition:sample"},
+};
+export const ApplicationRunsExample=()=> <CatalogFixture reads={runtimeExampleReads}><ApplicationRuns owner="catalog" name="sample"/></CatalogFixture>;
+export const OperationRunExample=()=> <CatalogFixture reads={runtimeExampleReads}><OperationRunView id="SAMPLE-CALL"/></CatalogFixture>;

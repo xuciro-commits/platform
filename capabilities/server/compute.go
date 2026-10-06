@@ -93,6 +93,9 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	hash, _ := canonicalDigest(q.Inputs)
 	id := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, owner, q.Key, operationEndpoint)
 	call := platform.OperationCall{ID: id, Definition: definition, InputHash: hash, Version: version, Module: op.Binding.Module, Sources: slices.Clone(q.Sources), Dependencies: closure.ID, Release: release}
+	if !c.Replaying && (t.Record == nil || c.Staging()) {
+		call.OwnerVersion = app.Manifest().Version
+	}
 	for _, intent := range pending {
 		if intent.ID == id {
 			return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation request key is already planned")
@@ -180,6 +183,16 @@ func (t *Tenant) operationResult(c platform.Caller, id string) (platform.Operati
 }
 func operationResultOf(x platform.Effect) platform.OperationResult {
 	r := platform.OperationResult{ID: x.ID, State: "pending", Error: x.Error, Generation: x.Generation, Millis: x.Millis}
+	var binding operationBinding
+	if json.Unmarshal([]byte(x.Body), &binding) == nil && binding.Build == nil {
+		r.Ref = &platform.AssetRef{App: x.App, Kind: platform.AssetCompute, Name: binding.Definition.Name}
+		r.OwnerVersion = binding.Call.OwnerVersion
+		r.Definition = binding.Call.Definition
+		r.Version = binding.Call.Version
+		r.Module = binding.Call.Module
+		r.Dependencies = binding.Call.Dependencies
+		r.Release = binding.Call.Release
+	}
 	switch x.State {
 	case "delivered":
 		r.State = "completed"

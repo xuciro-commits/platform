@@ -25,7 +25,7 @@ export function ShapeEditor({ process, parent, entities, onChange }: { process: 
     if (type) fields.unshift({ name: baseField, title: entities.find((e) => e.type === type)?.title ?? t("Base record"), type: "reference", ref: type, required: true, inverse: parent.split(".").pop() });
     onChange({ ...process, extends: type, fields, states: type ? [] : process.states, actions: type ? [] : process.actions });
   };
-  return <section className="grid gap-3 rounded-md border border-border p-3">
+  return <div className="grid gap-3 rounded-md border border-border p-3">
     <h3 className="text-sm font-semibold">{t("Shape")}</h3>
     <div className="grid gap-2">
       <p className="text-xs text-muted">{t("Interfaces this object implements. Pages and queries written against an interface work for every object implementing it.")}</p>
@@ -45,5 +45,5 @@ export function ShapeEditor({ process, parent, entities, onChange }: { process: 
       </Select>
       <span className="text-muted">{t("An extension adds fields to an installed object: one record per base record through its required base reference. Its lifecycle stays the base type's, so it has no states or actions of its own.")}</span>
     </label>
-  </section>;
+  </div>;
 }

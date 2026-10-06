@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"platformserver/platform"
 	"slices"
 	"strings"
 	"time"
@@ -28,13 +29,19 @@ type LiveQueryFrame struct {
 const liveReadBudget = 1 << 20
 
 func liveReadAllowed(p string) bool {
+	if strings.HasPrefix(p, "/v1/applications/") && strings.HasSuffix(p, "/runs") {
+		return true
+	}
+	if strings.HasPrefix(p, "/v1/capabilities/") {
+		return true
+	}
 	if strings.HasPrefix(p, "/v1/records/") || strings.HasPrefix(p, "/v1/aggregates/") || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") {
 		return true
 	}
 	return slices.Contains([]string{"/v1/members", "/v1/organization", "/v1/packages", "/v1/settings", "/v1/audit", "/v1/personal-reads", "/v1/inbox", "/v1/capabilities", "/v1/release-profile", "/v1/ai-limits", "/v1/ai-models", "/v1/ai-providers", "/v1/ai/vendors", "/v1/me", "/v1/actions", "/v1/entities", "/v1/definitions", "/v1/apps", "/v1/protocols", "/v1/notifications", "/v1/views", "/v1/flows", "/v1/agents", "/v1/runs", "/v1/memories", "/v1/releases/active", "/v1/releases/candidates", "/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/endpoints", "/v1/connectors", "/v1/agent-overview", "/v1/ai-usage"}, p) || strings.HasPrefix(p, "/v1/releases/candidates/")
 }
 func liveOperationRead(p string) bool {
-	return strings.HasPrefix(p, "/v1/capabilities/calls/compute/") || slices.Contains([]string{"/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/endpoints", "/v1/connectors", "/v1/protocols", "/v1/agent-overview", "/v1/ai-usage"}, p)
+	return strings.HasPrefix(p, "/v1/applications/") && strings.HasSuffix(p, "/runs") || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") || slices.Contains([]string{"/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/endpoints", "/v1/connectors", "/v1/protocols", "/v1/agent-overview", "/v1/ai-usage"}, p)
 }
 
 type liveCapture struct {
@@ -176,7 +183,42 @@ func (t *Tenant) liveVersion(query string) string {
 	for k, v := range c.owners {
 		owners[k] = v
 	}
+	ops := make(map[string]int64)
+	for k, v := range c.opsOwners {
+		ops[k] = v
+	}
 	c.mu.Unlock()
+	if strings.HasPrefix(p, "/v1/applications/") && strings.HasSuffix(p, "/runs") {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		parts := strings.Split(p, "/")
+		if len(parts) != 6 {
+			return fmt.Sprint(seq)
+		}
+		ref := platform.AssetRef{App: parts[3], Kind: platform.AssetApp, Name: parts[4]}
+		_, graphs, err := t.applicationRunGraphsLocked(ref)
+		if err != nil {
+			return fmt.Sprint(global, meta, seq)
+		}
+		relevant := []string{}
+		for _, graph := range graphs {
+			for r := range graph {
+				if r.Kind == platform.AssetCompute {
+					relevant = append(relevant, r.App)
+				}
+			}
+		}
+		slices.Sort(relevant)
+		relevant = slices.Compact(relevant)
+		operationVersion := ops[""]
+		for _, owner := range relevant {
+			operationVersion += ops[owner]
+		}
+		t.records.mu.Lock()
+		a, b := t.records.liveVersions["flow.instance"], t.records.liveVersions["agent.run"]
+		t.records.mu.Unlock()
+		return fmt.Sprintf("%d/%d/%d/%d/%d", global, meta, a, b, operationVersion)
+	}
 	if liveOperationRead(p) || p == "/v1/notifications" || p == "/v1/audit" || p == "/v1/inbox" || p == "/v1/personal-reads" {
 		return fmt.Sprint(seq)
 	}

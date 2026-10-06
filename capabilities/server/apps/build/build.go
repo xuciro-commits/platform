@@ -126,9 +126,10 @@ func New(tenant string) *Build {
 	actions = append(actions, evaluationActions()...)
 	actions = append(actions, platform.EntityActions(b.codeEntity())...)
 	actions = append(actions, platform.EntityActions(b.sourceEntity())...)
+	actions = append(actions, platform.EntityActions(b.tableEntity())...)
 	actions = append(actions, sourceActions()...)
 	actions = append(actions, codeActions()...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, TableType)
 	return b
 }
 

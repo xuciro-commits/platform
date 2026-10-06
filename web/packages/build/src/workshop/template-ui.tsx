@@ -45,9 +45,9 @@ export function StudioTemplates({ initial }: { initial?: string }) {
   return <div className="grid max-w-5xl gap-4">
     <PageHeader title={t("Studio templates")} description={t("Start with an existing controlled page. Bind your object before creating its draft.")} />
     {!host.can("build.page.create") ? <Panel role="status" className="text-sm text-muted">{t("Creating a page draft requires the original build.page.create permission.")}</Panel> : <>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{pageTemplates.map((item) => <button key={item.id} type="button" onClick={() => setTemplateId(item.id)} aria-pressed={item.id === template.id}
-        className={`grid gap-1 rounded-lg border p-3 text-left ${item.id === template.id ? "border-accent bg-accent/5" : "border-border hover:bg-surface-raised"}`}>
-        <span className="text-sm font-semibold">{t(item.title)}</span><span className="text-xs text-muted">{t(item.summary)}</span><span className="font-mono text-[10px] text-muted">{item.id} · {item.revision}</span></button>)}</div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{pageTemplates.map((item) => <div key={item.id} role="button" tabIndex={0} onClick={() => setTemplateId(item.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setTemplateId(item.id); }} aria-pressed={item.id === template.id}
+        className={`grid cursor-pointer gap-1 rounded-lg border p-3 text-left ${item.id === template.id ? "border-accent bg-accent/5" : "border-border hover:bg-surface-raised"}`}>
+        <span className="text-sm font-semibold">{t(item.title)}</span><span className="text-xs text-muted">{t(item.summary)}</span><span className="font-mono text-[10px] text-muted">{item.id} · {item.revision}</span></div>)}</div>
       <Form className="grid gap-4" onSubmit={() => void create()}>
         <Panel className="grid gap-3 p-4">
           <h3 className="text-sm font-semibold">{t("Required bindings")}</h3>
