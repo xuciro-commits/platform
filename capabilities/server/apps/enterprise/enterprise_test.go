@@ -149,3 +149,37 @@ func TestFederation(t *testing.T) {
 		t.Fatalf("after re-import: %d elements %+v", len(m.Elements), m.Relationships)
 	}
 }
+
+func TestPatternsGraft(t *testing.T) {
+	m, err := Template(SeedParams{Scale: "M", Industry: "manufacturing", Name: "Acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := ""
+	for _, el := range m.Elements {
+		if el.Stereotype == Organization && len(m.Of(el.ID, Placement, true, "2026-10-06")) == 0 {
+			root = el.ID
+		}
+	}
+	if root == "" {
+		t.Fatal("template has no root organisation")
+	}
+	before := len(m.Elements)
+	for _, p := range Patterns() {
+		if p.Level <= 1 {
+			continue
+		}
+		if _, err := m.Apply(p.ID, root, "New "+p.Title, nil, "2026-10-06"); err != nil {
+			t.Fatalf("%s: %v", p.ID, err)
+		}
+	}
+	if len(m.Elements) <= before {
+		t.Fatal("patterns added nothing")
+	}
+	if _, err := m.Apply("nope", "", "x", nil, ""); err == nil {
+		t.Fatal("unknown pattern accepted")
+	}
+	if pv, ok := PatternPreview("hotel", "", Params{"floors": 12}); !ok || len(pv.Outline) == 0 {
+		t.Fatal("hotel preview empty")
+	}
+}
