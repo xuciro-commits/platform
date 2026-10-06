@@ -1,7 +1,7 @@
 import type { CatalogEntry } from "@platform/catalog";
 import { pageTemplates } from "./workshop/templates";
 
-const template = pageTemplates[0];
+const template = pageTemplates.find((item) => item.id === "build/record-handling")!;
 export const entries: CatalogEntry[] = [
  {id:"scenario/page-studio",owner:"@pkg/build",name:"Page design workbench",summary:"Edit the original page draft with layout gestures, scoped commands, inspectors and undo history.",layer:5,authority:"example",maturity:"recommended",scope:"platform",uses:["reference"],source:"web/packages/build/src/workshop/editor.tsx",example:"PageStudioExample",dependencies:["ui/canvas-editor","app/composed-page"],tags:["studio","editor","layout"],constraints:["The local example uses the production PageEditor with synthetic records. Host writes, save and publication are refused in Catalog."]},
   {
