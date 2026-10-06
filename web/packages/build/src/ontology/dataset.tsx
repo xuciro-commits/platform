@@ -2,6 +2,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
 import { Button, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
+import { DatasetLineage } from "./lineage";
 
 // Datasets (ADR-0071): rows as they came from a source or a pipeline, kept as
 // versions with an inferred schema. A builder names one; sources and pipelines
@@ -73,6 +74,7 @@ export function DatasetEditor({ id }: { id: string }) {
         {last && <p className="flex flex-wrap items-center gap-2 text-xs"><span>{t("Latest load")}: v{last.version} · {new Date(last.at).toLocaleString()} · {t("{rows} rows", { rows: last.rows })} · {Math.round(last.bytes / 1024)} KB</span>
           {last.drift?.length ? <Tag label={`${t("Drift")}: ${last.drift.join(" ")}`} tone="warning" /> : null}</p>}
       </Panel>
+      {draft.id && <div className="lg:col-span-2"><DatasetLineage dataset={draft.id} /></div>}
       <Panel title={t("Rows")} className="grid min-w-0 content-start gap-2 lg:col-span-2"
         actions={versions.length > 1 ? <Select value={String(version)} onChange={(e) => setShown(Number(e.target.value))}>{versions.map((v) => <option key={v} value={v}>v{v}</option>)}</Select> : undefined}>
         {!latest ? <p className="text-xs text-muted">{t("No rows yet. Publish a source that feeds this dataset, or a pipeline that writes it.")}</p> :

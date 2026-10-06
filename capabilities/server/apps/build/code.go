@@ -137,6 +137,9 @@ func (b *Build) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time
 	})
 }
 func (b *Build) Answer(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *kernel.Error {
+	if strings.HasPrefix(effect.Endpoint, WritebackEndpoint) {
+		return b.answered(c, effect, out, now)
+	}
 	if effect.Endpoint != "operation" || !strings.HasPrefix(effect.Target, CodeType+"/") {
 		return nil
 	}
