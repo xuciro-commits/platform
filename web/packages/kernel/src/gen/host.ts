@@ -1917,6 +1917,14 @@ export type ReleaseActive = {
   id: string;
 };
 
+export type ReleaseAsset = {
+  ref: AssetRef;
+  contractVersion: number;
+  sourceVersion: string;
+  requires: AssetRef[];
+  body: unknown;
+};
+
 export type ReleaseDraftClosure = {
   drafts: JointDraftRef[];
 };
@@ -2011,6 +2019,7 @@ export type RunStep = {
 
 export type SavedReleaseReview = {
   preview: ReleasePreview;
+  assets: ReleaseAsset[];
   active: boolean;
   runningMatches: boolean;
   runningDiagnostic?: string;

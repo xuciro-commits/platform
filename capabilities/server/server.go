@@ -481,8 +481,8 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	handle(Route{Pattern: "GET /v1/releases/candidates", Summary: "Builder-only saved release inventory from committed candidate bytes", Query: []Param{{"offset", "Candidates to skip"}, {"limit", "Candidates in the page, 1 to 100 (default 20)"}}, Answer: ReleasePage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if m.Roles[build.ID] != build.Builder {
+	handle(Route{Pattern: "GET /v1/releases/candidates", Summary: "Builder and publisher saved release inventory from committed candidate bytes", Query: []Param{{"offset", "Candidates to skip"}, {"limit", "Candidates in the page, 1 to 100 (default 20)"}}, Answer: ReleasePage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -508,8 +508,8 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	handle(Route{Pattern: "GET /v1/releases/candidates/{id}", Summary: "Builder-only saved candidate review against actual running definitions", Answer: SavedReleaseReview{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if m.Roles[build.ID] != build.Builder {
+	handle(Route{Pattern: "GET /v1/releases/candidates/{id}", Summary: "Builder and publisher review of sealed definitions against actual running definitions", Answer: SavedReleaseReview{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -592,7 +592,7 @@ func (h *Host) Handler() http.Handler {
 		WriteJSON(w, http.StatusOK, t.Translate(answer, t.Language(m, r)))
 	})
 	handle(Route{Pattern: "POST /v1/releases/candidates", Summary: "Persist exact, immutable bytes for a builder-reviewed candidate; does not activate it (ADR-0039 20a)", Body: ReleaseSaveRequest{}, Answer: ReleaseSaved{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if m.Roles[build.ID] != build.Builder {
+		if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -638,8 +638,8 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, ReleaseEvaluationStarted{ID: id})
 	})
-	handle(Route{Pattern: "POST /v1/releases/active", Summary: "Builder-only atomic installation and activation of a saved object/page/application closure (ADR-0039 20b)", Body: ReleaseActivateRequest{}, Answer: ReleaseActive{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if m.Roles[build.ID] != build.Builder {
+	handle(Route{Pattern: "POST /v1/releases/active", Summary: "Builder and publisher atomic installation and activation of a saved object/page/application closure (ADR-0039 20b)", Body: ReleaseActivateRequest{}, Answer: ReleaseActive{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}

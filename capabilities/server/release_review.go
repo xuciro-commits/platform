@@ -23,21 +23,22 @@ type ReleasePage struct {
 }
 
 type SavedReleaseReview struct {
-	Preview              ReleasePreview      `json:"preview"`
-	Active               bool                `json:"active"`
-	RunningMatches       bool                `json:"runningMatches"`
-	RunningDiagnostic    string              `json:"runningDiagnostic,omitempty"`
-	CanActivate          bool                `json:"canActivate"`
-	ActivationDiagnostic string              `json:"activationDiagnostic,omitempty"`
-	UpgradePlan          *ReleaseUpgradePlan `json:"upgradePlan,omitempty"`
+	Preview              ReleasePreview          `json:"preview"`
+	Assets               []platform.ReleaseAsset `json:"assets"`
+	Active               bool                    `json:"active"`
+	RunningMatches       bool                    `json:"runningMatches"`
+	RunningDiagnostic    string                  `json:"runningDiagnostic,omitempty"`
+	CanActivate          bool                    `json:"canActivate"`
+	ActivationDiagnostic string                  `json:"activationDiagnostic,omitempty"`
+	UpgradePlan          *ReleaseUpgradePlan     `json:"upgradePlan,omitempty"`
 }
 
 func (t *Tenant) SavedReleases(m platform.Member, offset, limit int) (ReleasePage, error) {
 	if err := t.admits(m); err != nil {
 		return ReleasePage{}, err
 	}
-	if m.Roles[build.ID] != build.Builder {
-		return ReleasePage{}, fmt.Errorf("builder role required")
+	if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
+		return ReleasePage{}, fmt.Errorf("builder or publisher role required")
 	}
 	if offset < 0 || limit < 1 || limit > 100 {
 		return ReleasePage{}, fmt.Errorf("release page needs a nonnegative offset and a limit from 1 to 100")
@@ -88,8 +89,8 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	if err := t.admits(m); err != nil {
 		return SavedReleaseReview{}, err
 	}
-	if m.Roles[build.ID] != build.Builder {
-		return SavedReleaseReview{}, fmt.Errorf("builder role required")
+	if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
+		return SavedReleaseReview{}, fmt.Errorf("builder or publisher role required")
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -101,7 +102,7 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	if err != nil {
 		return SavedReleaseReview{}, err
 	}
-	reply := SavedReleaseReview{Active: t.activeRelease == id, Preview: ReleasePreview{
+	reply := SavedReleaseReview{Assets: saved.Assets, Active: t.activeRelease == id, Preview: ReleasePreview{
 		CandidateID: id, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{},
 	}}
 	for _, asset := range saved.Assets {

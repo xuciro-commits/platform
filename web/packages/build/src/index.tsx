@@ -16,9 +16,17 @@ import { ReleaseReview, releaseDraftsParam, releaseKinds, type ReleaseKind } fro
 import { CandidateTest } from "./simulate";
 import { StudioOverview } from "./studio";
 import { StudioTemplates } from "./template-ui";
-import { t, type NavSection } from "@platform/ui";
+import { t, type NavSection, type View } from "@platform/ui";
 import { ApplicationScope } from "./application-scope";
-import { AppWindow, Boxes, Hammer, LayoutList } from "lucide-react";
+import { AppWindow, Boxes, Hammer, LayoutList, PackageCheck } from "lucide-react";
+
+const releaseView: View = { id: "release-review", title: () => t("Release review"), render: (p) => <ApplicationScope application={p.application}><ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={releaseDraftsParam(p.drafts, releaseKinds)} /></ApplicationScope> };
+
+export const contributions = [defineApp({
+  id: "build-delivery", serves: ["build"], surface: "tenant", title: t("Release delivery"), icon: <PackageCheck />,
+  home: { view: "release-review" }, views: [releaseView],
+  nav: () => [{ label: t("Delivery"), items: [{ label: t("Release review"), icon: <PackageCheck />, route: { view: "release-review", params: { surface: "tenant" } } }] }],
+})];
 
 export default defineApp({
   id: "build",
@@ -41,7 +49,7 @@ export default defineApp({
     { id: "query", title: () => t("Queries"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><QueryEditor id={p.id} /></ApplicationScope> : <Queries /> },
     { id: "function", title: () => t("AI functions"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><FunctionEditor id={p.id} /></ApplicationScope> : <Functions /> },
     { id: "code", title: () => t("Code functions"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><CodeEditor id={p.id} /></ApplicationScope> : <CodeFunctions /> },
-    { id: "release-review", title: () => t("Release review"), render: (p) => <ApplicationScope application={p.application}><ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={releaseDraftsParam(p.drafts, releaseKinds)} /></ApplicationScope> },
+    releaseView,
     { id: "candidate-test", title: () => t("Test a candidate"), render: (p) => <ApplicationScope application={p.application}><CandidateTest key={p.functionId ?? p.processId ?? p.objectId ?? "object"} processId={p.processId} functionId={p.functionId} objectId={p.objectId} /></ApplicationScope> },
   ],
   opens: { "build.app": "application", "build.page": "compose", "build.object": "process", "build.process": "workflow", "build.linktype":"link-type", "build.propertytype":"property-type", "build.query": "query", "build.function": "function", "build.code": "code" }, // open a semantic asset in its editor

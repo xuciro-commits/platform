@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Release delivery": "应用交付",
+  "A builder or publisher role is required to review releases.": "审查发布需要构建者或发布者角色。",
+  "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.": "审查已封存候选的定义并激活发布。定义编辑由构建者负责。",
+  "Sealed definitions": "已封存定义",
+  "These definitions come from this immutable candidate, including its original versions and dependencies.": "这些定义来自此不可变候选，包含其原始版本与依赖。",
+  "Required function evaluations are missing. Ask a builder to complete them before activation.": "缺少所需函数评测，请构建者完成评测后再激活。",
   "Storage upgrade plan": "存储升级计划",
   "Add optional fields without changing existing values or record history. Required fields, type changes and removals are refused.": "新增可选字段，保留已有值与记录历史；拒绝新增必填字段、类型变更和字段删除。",
   "{count} existing records": "{count} 条已有记录",

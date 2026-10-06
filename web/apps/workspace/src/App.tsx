@@ -23,7 +23,8 @@ type ProtocolInfo = Api.ProtocolInfo;
 // Settings serves the platform's apps.
 const packages: { serves: string[]; role?: string; public?: boolean; load: () => Promise<{ default: AppUI; contributions?: AppUI[] }> }[] = [
   { serves: [], public: true, load: () => import("@platform/catalog-app/app") },
-  { serves: ["build"], role: "builder", load: () => import("@pkg/build") },
+  { serves: ["build"], role: "builder", load: () => import("@pkg/build").then(module => ({ default: module.default })) },
+  { serves: ["build"], role: "publisher", load: () => import("@pkg/build").then(module => ({ default: module.contributions[0]! })) },
   { serves: ["crm"], load: () => import("@pkg/crm") },
   { serves: ["pms"], load: () => import("@pkg/pms/app") },
   { serves: ["hcm"], load: () => import("@pkg/hcm") },

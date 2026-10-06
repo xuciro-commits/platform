@@ -13,12 +13,15 @@ import { Glossary, Knowledge } from "./knowledge";
 function tenantNavigation(host: Host): NavSection[] {
   const nav = (label: string, icon: React.ReactNode, view: string) => ({ label, icon, route: { view, params: { surface: "tenant" } } });
   const admin = host.role("platform") === "admin";
+  const auditor = host.role("platform") === "auditor";
   const builder = host.role("build") === "builder";
   const sections: NavSection[] = [
     { label: t("Tenant console"), items: [nav(t("Overview"), <Blocks />, "tenant-overview")] },
     { label: t("Delivery and operations"), items: [
-      ...(builder ? [
+      ...(builder || host.role("build") === "publisher" ? [
         { label: t("Release review"), icon: <Blocks />, route: { view: "release-review", params: { surface: "tenant" } } },
+      ] : []),
+      ...(builder ? [
         { label: t("Test a candidate"), icon: <FlaskConical />, route: { view: "candidate-test", params: { surface: "tenant" } } },
       ] : []),
       ...(admin ? [nav(t("Automation"), <Workflow />, "automation")] : []),
@@ -32,11 +35,11 @@ function tenantNavigation(host: Host): NavSection[] {
       ...(host.role("ai") ? [nav(t("Playground"), <MessageSquare />, "ai-playground")] : []),
     ] },
     { label: t("Access and governance"), items: [
-      ...(admin ? [nav(t("Members"), <Users />, "members")] : []),
+      ...(admin || auditor ? [nav(t("Members"), <Users />, "members")] : []),
       ...(admin || host.role("org") ? [nav(t("Organisation"), <Network />, "organization")] : []),
+      ...(admin || auditor ? [nav(t("Installed packages"), <Blocks />, "apps"), nav(t("Audit"), <History />, "audit")] : []),
       ...(admin ? [
-        nav(t("Installed packages"), <Blocks />, "apps"), nav(t("Capability matrix"), <Grid3x3 />, "matrix"),
-        nav(t("Protocols"), <Cable />, "protocols"), nav(t("Audit"), <History />, "audit"),
+        nav(t("Capability matrix"), <Grid3x3 />, "matrix"), nav(t("Protocols"), <Cable />, "protocols"),
       ] : []),
     ] },
   ];

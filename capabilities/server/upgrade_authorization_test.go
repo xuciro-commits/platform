@@ -113,6 +113,47 @@ func TestAuditorReadsWithoutDeciding(t *testing.T) {
 	}
 }
 
+func TestPublisherReviewsSealedDefinitionsAfterDraftChanges(t *testing.T) {
+	tn, member, submit := upgradeTenant(t, "publisher-review")
+	payload := map[string]any{"name": "pubsample", "title": "Original release object",
+		"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}},
+		"states": []map[string]any{{"name": "open", "title": "Open"}}}
+	if got := submit("dana", "build.object.create", "build.object", "OBJ-PUB", payload); got != "ok" {
+		t.Fatal(got)
+	}
+	preview, err := tn.PreviewRelease(member("dana"), "object", "OBJ-PUB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tn.SaveReleaseCandidate(member("dana"), "object", "OBJ-PUB", preview.CandidateID, "save", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if got := submit("dana", "build.object.edit", "build.object", "OBJ-PUB", map[string]any{"title": "Mutated draft"}); got != "ok" {
+		t.Fatal(got)
+	}
+	list, err := tn.SavedReleases(member("pat"), 0, 20)
+	if err != nil || len(list.Candidates) != 1 {
+		t.Fatalf("publisher inventory: %+v %v", list, err)
+	}
+	review, err := tn.ReviewSavedRelease(member("pat"), preview.CandidateID)
+	if err != nil || len(review.Assets) == 0 {
+		t.Fatalf("publisher review: %+v %v", review, err)
+	}
+	frozen := false
+	for _, asset := range review.Assets {
+		if strings.Contains(string(asset.Body), "Mutated draft") {
+			t.Fatal("sealed review leaked a later draft")
+		}
+		frozen = frozen || strings.Contains(string(asset.Body), "Original release object")
+	}
+	if !frozen {
+		t.Fatal("review omitted the original definition")
+	}
+	if _, err := tn.SavedReleases(member("aud"), 0, 20); err == nil {
+		t.Fatal("auditor acquired publisher candidate access")
+	}
+}
+
 func TestProjectDelegationIsTargetScoped(t *testing.T) {
 	tn, member, submit := upgradeTenant(t, "t-proj")
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)

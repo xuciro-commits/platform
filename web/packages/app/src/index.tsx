@@ -86,10 +86,10 @@ export function useRead<T>(path: string, refetchInterval?: number): T | undefine
 
 /** A bounded complete inventory, rather than a single record-list page. The
  * caller receives an error if the advertised inventory cannot be read whole. */
-export function useRecordInventory<T>(type: string, limit = 1000): UseQueryResult<{ records: T[] }> {
+export function useRecordInventory<T>(type: string, limit = 1000, enabled = true): UseQueryResult<{ records: T[] }> {
   const { client } = useHost();
   const path = `/v1/records/${encodeURIComponent(type)}`;
-  return useQuery({ queryKey: [client.connection.token, client.connection.tenant, path, "inventory", limit], queryFn: () => client.inventory<T>(type, limit) });
+  return useQuery({ queryKey: [client.connection.token, client.connection.tenant, path, "inventory", limit], queryFn: () => client.inventory<T>(type, limit), enabled });
 }
 
 /** The member's installed semantic assets, through the host's one registry. */

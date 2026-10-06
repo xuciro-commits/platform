@@ -2,6 +2,15 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Package": "软件包",
+  "Namespace": "命名空间",
+  "Sealed artifact": "封存制品",
+  "Controlled packages, their installed versions and sealed artifacts. This inventory does not grant lifecycle permissions.": "受控软件包、已安装版本与封存制品。查看清单不会获得生命周期操作权限。",
+  "Package inventory could not be loaded.": "无法加载软件包清单。",
+  "No controlled packages installed": "尚未安装受控软件包",
+  "Built-in application modules": "内置应用模块",
+  "draining": "正在排空",
+  "retired": "已退役",
   "AI assistance": "AI 助手",
   "Tenant console": "租户控制台",
   "Delivery and operations": "交付与运行",

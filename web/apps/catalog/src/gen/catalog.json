@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:9a06a1619d343976",
+  "revision": "sha256:cc4411937a40e229",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5588,6 +5588,7 @@
     "@pkg/build": {
       "source": "web/packages/build/src/index.tsx",
       "symbols": [
+        "contributions",
         "default"
       ],
       "types": []

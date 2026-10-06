@@ -1,5 +1,6 @@
 // Settings: the apps a tenant runs, their capability matrix and protocols (ADR-0010, ADR-0011).
-import { useReadQuery as useRead } from "@platform/app";
+import { useHost, useReadQuery as useRead } from "@platform/app";
+import type { Api } from "@platform/kernel";
 import { DataTable, PageHeader, Panel, Select, Tag, type ColumnDef, t } from "@platform/ui";
 import { useAdmin, type AppInfo, type ProtocolInfo } from "./shared";
 
@@ -18,10 +19,21 @@ function tiers(apps: AppInfo[]): AppInfo[][] {
 
 export function Apps() {
   const { apps } = useAdmin();
+  const { role } = useHost();
+  const packages = useRead<Api.PackageView[]>("/v1/packages");
+  const installed = (packages.data ?? []).flatMap(item => item.installed ? [item.installed] : []);
+  const columns: ColumnDef<Api.InstalledPackage, any>[] = [
+    { accessorKey: "id", header: t("Package") },
+    { accessorKey: "version", header: t("Version") },
+    { accessorKey: "namespace", header: t("Namespace") },
+    { accessorKey: "state", header: t("State"), cell: cell => <Tag label={t(cell.getValue())} /> },
+    { accessorKey: "artifact", header: t("Sealed artifact"), cell: cell => <span className="break-all font-mono text-xs">{cell.getValue() ?? "—"}</span> },
+  ];
   return (
     <>
-      <PageHeader title={t("Installed packages")} description={t("Apps this tenant runs, from their manifests. Apps know no other app; columns follow protocols: an app consumes only protocols provided to its left.")} />
-      <div className="flex gap-6 overflow-x-auto">
+      <PageHeader title={t("Installed packages")} description={t("Controlled packages, their installed versions and sealed artifacts. This inventory does not grant lifecycle permissions.")} />
+      {packages.isError ? <p role="alert">{t("Package inventory could not be loaded.")}</p> : <DataTable data={installed} columns={columns} getRowId={item => item.id} height={220} empty={t("No controlled packages installed")} />}
+      {role("platform") === "admin" && <><h2 className="my-3 text-sm font-semibold">{t("Built-in application modules")}</h2><div className="flex gap-6 overflow-x-auto">
         {tiers(apps).map((tier, i) => (
           <div key={i} className="grid content-start gap-3">
             <h2 className="text-xs uppercase text-muted">{["Platform and business apps", "Consumers of their protocols"][i] ?? `Tier ${i + 1}`}</h2>
@@ -37,7 +49,7 @@ export function Apps() {
             ))}
           </div>
         ))}
-      </div>
+      </div></>}
     </>
   );
 }

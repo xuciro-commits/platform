@@ -52,11 +52,14 @@ export const releaseKinds: ReleaseKind[] = kinds.map((item) => item.kind);
 
 export function ReleaseReview({ initialKind = "object", initialID = "", initialDrafts = [], embedded = false }: { initialKind?: ReleaseKind; initialID?: string; initialDrafts?: JointChoice[]; embedded?: boolean } = {}) {
   const { client, role } = useHost();
+  const builder = role("build") === "builder";
+  const mayRelease = builder || role("build") === "publisher";
   const scope = useApplicationScope();
   const { open } = useWorkspace();
   const [kind, setKind] = useState<ReleaseKind>(initialKind);
   const [id, setId] = useState(initialID);
   const [review, setReview] = useState<Api.ReleasePreview>();
+  const [assets, setAssets] = useState<Api.ReleaseAsset[]>([]);
   const [candidateKey, setCandidateKey] = useState("");
   const [savedID, setSavedID] = useState("");
   const [offset, setOffset] = useState(0);
@@ -73,14 +76,14 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [busy, setBusy] = useState(false);
   const [joint, setJoint] = useState<JointChoice[]>(initialDrafts);
   const [jointNote, setJointNote] = useState("");
-  const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20`);
+  const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20`, undefined, mayRelease);
   const activeID = inventory.data?.activeId ?? "";
   const selected = kinds.find((item) => item.kind === kind)!;
-  const query = useRecordInventory<Record>(selected.type);
-  const functions = useRecordInventory<Record>("build.function");
-  const plans = useRecordInventory<EvaluationPlan>("build.testplan");
-  const applications = useRecordInventory<Record>("build.app");
-  const reports = useRecordInventory<EvaluationReport>("build.evaluation");
+  const query = useRecordInventory<Record>(selected.type, 1000, builder);
+  const functions = useRecordInventory<Record>("build.function", 1000, builder);
+  const plans = useRecordInventory<EvaluationPlan>("build.testplan", 1000, builder);
+  const applications = useRecordInventory<Record>("build.app", 1000, builder);
+  const reports = useRecordInventory<EvaluationReport>("build.evaluation", 1000, mayRelease);
   const records = query.data?.records ?? [];
   const functionNames = (review?.included ?? []).filter((ref) => ref.app === "build" && ref.kind === "function").map((ref) => ref.name);
   const eligiblePlans = (plans.data?.records ?? []).filter((plan) => plan.evaluation?.length && functions.data?.records.some((fn) => fn.id === plan.function && functionNames.includes(fn.name)));
@@ -90,8 +93,8 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const scopedApplication = scope ? applications.data?.records.find((item) => item.id === scope) : undefined;
   const passedFunctions = (reports.data?.records ?? []).filter((item) => item.candidate === savedID && item.state === "passed").map((item) => item.function);
   const evaluated = functionNames.every((name) => passedFunctions.includes(name));
-  if (role("build") !== "builder") {
-    return <PageHeader title={t("Release review")} description={t("Only a builder can review complete release definitions.")} />;
+  if (!mayRelease) {
+    return <PageHeader title={t("Release review")} description={t("A builder or publisher role is required to review releases.")} />;
   }
   const loadSaved = async (candidateID: string) => {
     if (!candidateID) return;
@@ -101,6 +104,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Saved releases could not be loaded."));
       else {
         setReview(result.body.preview); setSavedID(candidateID); setSavedReview(true);
+        setAssets(result.body.assets ?? []);
         setRunningMatches(result.body.runningMatches); setRunningDiagnostic(result.body.runningDiagnostic ?? "");
         setCanActivate(result.body.canActivate); setActivationDiagnostic(result.body.activationDiagnostic ?? "");
         setUpgradePlan(result.body.upgradePlan);
@@ -203,8 +207,8 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     </div>
   );
   return <div className="grid gap-3">
-    {!embedded && <PageHeader title={t("Release review")} description={t("Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators.")}
-      actions={scope && <Button onClick={() => open({ view: "application", params: { id: scope } })}>{t("Back to application")}</Button>} />}
+    {!embedded && <PageHeader title={t("Release review")} description={t(builder ? "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators." : "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.")}
+      actions={builder && scope && <Button onClick={() => open({ view: "application", params: { id: scope } })}>{t("Back to application")}</Button>} />}
     <Card className="grid gap-3 p-3" aria-label={t("Saved releases")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{t("Saved releases")}</h2>
@@ -212,7 +216,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       </div>
       <p className="break-all text-xs text-muted">{activeID ? <>{t("Current active release")}: <code>{activeID}</code></> : t("No active release yet.")}</p>
       {inventory.isError ? <p role="alert" className="text-sm text-danger">{t("Saved releases could not be loaded.")}</p> : <label className="grid gap-1 text-xs">{t("Saved candidate")}
-        <Select disabled={busy || inventory.isLoading} value={savedReview ? savedID : ""} onChange={(event) => void loadSaved(event.target.value)}>
+        <Select aria-label={t("Saved candidate")} disabled={busy || inventory.isLoading} value={savedReview ? savedID : ""} onChange={(event) => void loadSaved(event.target.value)}>
           <option value="">{t("Choose a saved candidate")}</option>
           {inventory.data?.candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title} · {candidate.assets} {t("assets")} · {candidate.id.slice(-8)}{candidate.id === activeID ? ` · ${t("Active")}` : ""}</option>)}
           {savedReview && !inventory.data?.candidates.some((candidate) => candidate.id === savedID) && <option value={savedID}>{savedID}</option>}
@@ -225,7 +229,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         {activeID && <Button size="sm" disabled={busy} onClick={() => void loadSaved(activeID)}>{t("Review active release")}</Button>}
       </div>}
     </Card>
-    <Card className="grid gap-3 p-3">
+    {builder && <><Card className="grid gap-3 p-3">
       {!embedded && <label className="grid gap-1 text-xs">{t("Definition kind")}
         <Select value={kind} onChange={(event) => { setKind(event.target.value as ReleaseKind); setId(""); setReview(undefined); setSavedID(""); setSavedReview(false); setPlanID(""); setReportID(""); setError(""); setJoint([]); setJointNote(""); }}>
           {kinds.map((item) => <option key={item.kind} value={item.kind}>{t(item.label)}</option>)}
@@ -260,6 +264,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       {jointNote && <p className="text-xs text-muted" role="status">{jointNote}</p>}
       <Button disabled={!joint.length || busy} onClick={() => void inspect(joint)}>{busy ? t("Checking…") : t("Check joint candidate")}</Button>
     </Card>
+    </>}
     {error && <Card className="p-3 text-sm text-danger" role="alert">{error}</Card>}
     {review && <Card className="grid gap-3 p-3" aria-live="polite">
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold">{savedReview ? t("Saved candidate review") : review.diagnostic ? t("Candidate rejected") : (review.drafts?.length ?? 0) > 1 ? t("Joint candidate ready for review") : t("Candidate ready for review")}</span>
@@ -267,6 +272,10 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       </div>
       {review.currentId && <p className="break-all text-xs">{t("Installed candidate")}: <code>{review.currentId}</code></p>}
       {review.candidateId && <p className="break-all text-xs">{savedReview ? t("Saved candidate") : t("Draft candidate")}: <code>{review.candidateId}</code></p>}
+      {savedReview && <details className="rounded border border-border p-3"><summary className="cursor-pointer text-sm font-semibold">{t("Sealed definitions")} · {assets.length}</summary>
+        <p className="my-2 text-xs text-muted">{t("These definitions come from this immutable candidate, including its original versions and dependencies.")}</p>
+        {assets.map(asset => <details key={`${asset.ref.app}/${asset.ref.kind}/${asset.ref.name}`} className="my-2"><summary className="cursor-pointer font-mono text-xs">{asset.ref.app}/{asset.ref.kind}/{asset.ref.name}</summary><pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(asset, null, 2)}</pre></details>)}
+      </details>}
       {savedReview && <p className="text-sm" role="status">{runningDiagnostic ? t("Current definitions could not be compared with this candidate.") : runningMatches ? t("Running definitions match this saved release.") : t("Running definitions differ from this saved release.")}</p>}
       {savedReview && !runningMatches && canActivate && <p className="text-sm">{t("Activation installs the candidate's included objects, pages, applications, workflows, AI functions and code functions together.")}</p>}
       {savedReview && activationDiagnostic && <p role="alert" className="text-sm text-warning">{activationDiagnostic}</p>}
@@ -299,7 +308,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       {!review.diagnostic && review.candidateId && <div className="grid gap-2">
         {!savedReview && <Button disabled={busy || Boolean(savedID)} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>}
         {savedID && activeID !== savedID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
-        {savedID && functionNames.length > 0 && <div className="grid gap-2 rounded border border-border p-3">
+        {builder && savedID && functionNames.length > 0 && <div className="grid gap-2 rounded border border-border p-3">
           <div className="text-sm font-semibold">{t("Measured function evaluation")}</div>
           <p className="text-xs text-muted">{t("A saved synthetic plan runs real model calls. A passing report for each included function is required before activation.")}</p>
           <label className="grid gap-1 text-xs">{t("Evaluation plan")}
@@ -316,6 +325,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
           {report && <p className="text-sm" role="status">{t("Report state")}: {t(report.state)} · {t("Quality")}: {Math.round(report.quality * 100)}% · {t("Reported USD cost")}: {report.costComplete ? report.costUsd : t("Unknown")} · {t("Peak latency (ms)")}: {report.peakLatencyMillis} · {t("Calls")}: {report.attempts.length}</p>}
           {!eligiblePlans.length && <p className="text-xs text-warning">{t("Save a function test plan with evaluation cases before running the release evaluation.")}</p>}
         </div>}
+        {!builder && functionNames.length > 0 && !evaluated && <p role="status" className="text-sm text-warning">{t("Required function evaluations are missing. Ask a builder to complete them before activation.")}</p>}
         {savedID && <Button variant="default" disabled={busy || activeID === savedID || !evaluated || savedReview && !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
         {activeID === savedID && savedID && <p className="break-all text-sm" role="status">{savedReview && !runningMatches ? t("Active release differs from running definitions.") : t("Release active for operators.")} <code>{activeID}</code></p>}
       </div>}

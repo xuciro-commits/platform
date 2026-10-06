@@ -48,4 +48,4 @@ export const entries: CatalogEntry[] = [
     constraints: ["The local example demonstrates a payload and result flow in the original WorkflowEditor; it does not execute a process.", "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs."],
   },
 ];
-export const api = ["default"];
+export const api = ["contributions", "default"];

@@ -1,11 +1,12 @@
 // Settings: members and the organisation (ADR-0012).
-import { useReadQuery as useRead } from "@platform/app";
+import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Panel, Select, Tag, Tree, useWorkspace, type ColumnDef, t } from "@platform/ui";
 import { useState } from "react";
 import { z } from "zod";
 import { active, kind, today, useAdmin, type Chart, type Edge, type Member } from "./shared";
 
 export function Members() {
+  const { can } = useHost();
   const members = useRead<Member[]>("/v1/members");
   const { decide } = useAdmin();
   const { open } = useWorkspace();
@@ -20,47 +21,50 @@ export function Members() {
   return (
     <>
       <PageHeader title={t("Members and access")} description={t("People, services and AI agents of this tenant, with their role in each app. Changes apply on the next request.")}
-        actions={<Button variant="primary" onClick={() => setAdding(true)}>{t("Add member")}</Button>} />
+        actions={can("platform.member.add") && <Button variant="primary" onClick={() => setAdding(true)}>{t("Add member")}</Button>} />
       {members.error ? <p className="text-sm text-[var(--tone-danger)]">{String(members.error)} {t("— administrators only.")}</p> :
         <DataTable data={members.data ?? []} columns={columns} getRowId={(m) => m.id} height="calc(100dvh - 190px)"
           onRowClick={(m) => open({ view: "member", params: { id: m.id } }, { window: "float" })} />}
-      <Dialog open={adding} onOpenChange={setAdding} title={t("Add member")}>
+      {can("platform.member.add") && <Dialog open={adding} onOpenChange={setAdding} title={t("Add member")}>
         <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, t(t("Lower case, digits, dashes"))), subject: z.string().regex(/^(user|client):.+/, t("user:<email> or client:<id>")), agent: z.boolean() })}
           defaultValues={{ id: "", subject: "", agent: false }} submitLabel={t("Add")} onCancel={() => setAdding(false)}
           fields={[{ name: "id", label: t("Member ID") }, { name: "subject", label: t("Signs in as (user:<email> or client:<id>)") },
             { name: "agent", label: t("AI agent (what it causes that cannot be recalled waits for a person's approval)"), kind: "checkbox" }]}
           onSubmit={async (v) => { if (await decide("platform.member.add", v.id, { subject: v.subject, agent: v.agent })) setAdding(false); }} />
-      </Dialog>
+      </Dialog>}
     </>
   );
 }
 
 export function MemberDetail({ id }: { id: string }) {
+  const { can, role } = useHost();
   const member = useRead<Member[]>("/v1/members").data?.find((m) => m.id === id);
   const { apps, decide } = useAdmin();
   if (!member) return <p className="text-sm text-muted">{t("No member")} {id}.</p>;
+  const roleApps = can("platform.member.grant") || can("platform.member.revoke") ? apps.filter(app => app.roles.length)
+    : Object.keys(member.roles).map(id => ({ id, roles: [] as string[], capabilities: [] as { name: string }[] }));
   return (
     <div className="grid max-w-3xl gap-4">
       <EntityCard title={member.id} subtitle={member.subjects.join(", ")} status={<Tag label={kind(member)} />}
         properties={[[t("Apps with a role"), Object.keys(member.roles).join(", ") || t("none")]]} />
       <Panel title={t("Role in each app")}>
         <div className="grid grid-cols-[10rem_1fr_auto] items-center gap-2 text-sm">
-          {apps.filter((a) => a.roles.length).map((a) => (
+          {roleApps.map((a) => (
             <div key={a.id} className="contents">
               <span className="font-mono text-xs">{a.id}</span>
-              <Select aria-label={t("Role in {app}", { app: a.id })} value={member.roles[a.id] ?? ""}
+              {can("platform.member.grant") || can("platform.member.revoke") ? <Select aria-label={t("Role in {app}", { app: a.id })} value={member.roles[a.id] ?? ""}
                 onChange={(e) => void (e.target.value
                   ? decide("platform.member.grant", member.id, { app: a.id, role: e.target.value })
                   : decide("platform.member.revoke", member.id, { app: a.id }))}>
                 <option value="">{t("— no role")}</option>
                 {a.roles.map((r) => <option key={r} value={r}>{r}</option>)}
-              </Select>
+              </Select> : <span className="font-mono text-xs">{member.roles[a.id] ?? t("— no role")}</span>}
               <span className="text-xs text-muted">{a.capabilities.map((c) => c.name).join(", ")}</span>
             </div>
           ))}
         </div>
       </Panel>
-      <MemberUnits member={member.id} />
+      {(role("org") || role("platform") === "admin") && <MemberUnits member={member.id} />}
     </div>
   );
 }
