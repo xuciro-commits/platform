@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.106",
+  "uiProfile": "platform.page.v2.107",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -893,7 +893,8 @@
           "inputKind": {
             "type": "string",
             "enum": [
-              "search"
+              "search",
+              "scan"
             ]
           }
         }
@@ -5201,7 +5202,8 @@
     "platform.page.v2.103",
     "platform.page.v2.104",
     "platform.page.v2.105",
-    "platform.page.v2.106"
+    "platform.page.v2.106",
+    "platform.page.v2.107"
   ],
   "runtime": {
     "telemetry": {
@@ -5589,7 +5591,8 @@
     },
     "detailPresentation": {
       "requiredUIProfile": "platform.page.v2.35",
-      "maxColumns": 4
+      "maxColumns": 4,
+      "barcodeRequiredUIProfile": "platform.page.v2.107"
     },
     "recordView": {
       "requiredUIProfile": "platform.page.v2.36",
@@ -5784,7 +5787,8 @@
       "requiredUIProfile": "platform.page.v2.63"
     },
     "input": {
-      "searchRequiredUIProfile": "platform.page.v2.66"
+      "searchRequiredUIProfile": "platform.page.v2.66",
+      "scanRequiredUIProfile": "platform.page.v2.107"
     },
     "terms": {
       "requiredUIProfile": "platform.page.v2.67",
@@ -5900,6 +5904,12 @@
     },
     "recordMap": {
       "sharedUIProfile": "platform.page.v2.101"
+    },
+    "device": {
+      "requiredUIProfile": "platform.page.v2.107",
+      "kinds": [
+        "handheld"
+      ]
     }
   },
   "layout": {

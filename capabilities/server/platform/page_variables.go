@@ -131,7 +131,12 @@ type pageRuntimeContract struct {
 	} `json:"terms"`
 	Input struct {
 		SearchRequiredUIProfile string `json:"searchRequiredUIProfile"`
+		ScanRequiredUIProfile   string `json:"scanRequiredUIProfile"`
 	} `json:"input"`
+	Device struct {
+		RequiredUIProfile string   `json:"requiredUIProfile"`
+		Kinds             []string `json:"kinds"`
+	} `json:"device"`
 	Spacer struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 	} `json:"spacer"`
@@ -281,8 +286,9 @@ type pageRuntimeContract struct {
 		Tabs              []string `json:"tabs"`
 	} `json:"recordView"`
 	DetailPresentation struct {
-		RequiredUIProfile string `json:"requiredUIProfile"`
-		MaxColumns        int    `json:"maxColumns"`
+		RequiredUIProfile        string `json:"requiredUIProfile"`
+		BarcodeRequiredUIProfile string `json:"barcodeRequiredUIProfile"`
+		MaxColumns               int    `json:"maxColumns"`
 	} `json:"detailPresentation"`
 	TablePresentation struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`

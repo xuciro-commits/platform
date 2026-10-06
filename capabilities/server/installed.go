@@ -721,6 +721,9 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					return err
 				}
 			}
+			if err := s.CheckDetailBarcode(info); err != nil {
+				return fmt.Errorf("%s: %w", where, err)
+			}
 		case "actions":
 			if len(s.Actions) == 0 {
 				return fmt.Errorf("%s: no actions to offer", where)

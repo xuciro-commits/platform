@@ -2526,7 +2526,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.106",
+  "uiProfile": "platform.page.v2.107",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3420,7 +3420,8 @@ export const pageUIManifest = {
           "inputKind": {
             "type": "string",
             "enum": [
-              "search"
+              "search",
+              "scan"
             ]
           }
         }
@@ -7728,7 +7729,8 @@ export const pageUIManifest = {
     "platform.page.v2.103",
     "platform.page.v2.104",
     "platform.page.v2.105",
-    "platform.page.v2.106"
+    "platform.page.v2.106",
+    "platform.page.v2.107"
   ],
   "runtime": {
     "telemetry": {
@@ -8116,7 +8118,8 @@ export const pageUIManifest = {
     },
     "detailPresentation": {
       "requiredUIProfile": "platform.page.v2.35",
-      "maxColumns": 4
+      "maxColumns": 4,
+      "barcodeRequiredUIProfile": "platform.page.v2.107"
     },
     "recordView": {
       "requiredUIProfile": "platform.page.v2.36",
@@ -8311,7 +8314,8 @@ export const pageUIManifest = {
       "requiredUIProfile": "platform.page.v2.63"
     },
     "input": {
-      "searchRequiredUIProfile": "platform.page.v2.66"
+      "searchRequiredUIProfile": "platform.page.v2.66",
+      "scanRequiredUIProfile": "platform.page.v2.107"
     },
     "terms": {
       "requiredUIProfile": "platform.page.v2.67",
@@ -8427,6 +8431,12 @@ export const pageUIManifest = {
     },
     "recordMap": {
       "sharedUIProfile": "platform.page.v2.101"
+    },
+    "device": {
+      "requiredUIProfile": "platform.page.v2.107",
+      "kinds": [
+        "handheld"
+      ]
     }
   },
   "layout": {
