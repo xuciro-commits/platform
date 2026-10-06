@@ -66,6 +66,12 @@ type Start struct {
 	// named (ADR-0028 D8); its key is the record's ID. Either this or On.
 	Type string
 	When func(c Caller, record any) bool
+	// Every starts an instance once per period (ADR-0057 E1, a tenant's
+	// scheduled automation): its key is the period's start time, so a tick
+	// never starts the same period twice. At least a minute. OnBehalf is the
+	// member its steps act as — the one who published the schedule.
+	Every    time.Duration
+	OnBehalf string
 }
 
 // Step is one step: exactly one of Act, Wait, Ask, Call, All, Any or Agent.

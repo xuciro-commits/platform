@@ -11,7 +11,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDraftSession } from "../session/DraftSession";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState, useAutoSave } from "../shared/workbench";
 import { WorkflowInspector } from "./workflow-inspector";
-import { capabilityKey, initialStep, nextStepName, type Capability, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
+import { PERIODS, capabilityKey, initialStep, nextStepName, periodLabel, type Capability, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { WorkflowRuns } from "./workflow-runs";
 import { workflowInputs } from "./workflow-session";
 
@@ -37,7 +37,7 @@ const effectKinds = (steps: WorkflowStep[]) => {
   return Object.entries(counts).map(([kind, n]) => `${n} × ${t(kind)}`).join(" · ");
 };
 const sentence = (titleOf: (type: string) => string, stateOf: (type: string, name: string) => string, row: WorkflowDraft) =>
-  t("a {object} reaches {state}", { object: titleOf(row.object), state: stateOf(row.object, row.when) });
+  row.every ? periodLabel(row.every) : t("a {object} reaches {state}", { object: titleOf(row.object), state: stateOf(row.object, row.when) });
 
 /** Automations as cards: trigger on the left, effects on the right, state as a tag. */
 export function Automations() {
@@ -107,7 +107,7 @@ export function AutomationEditor({ id }: { id: string }) {
   };
   const problems: WorkbenchProblem[] = [
     ...(!draft.title ? [{ id: "title", text: t("Give the automation a title."), locate: () => setChosen("trigger") }] : []),
-    ...(!draft.object || !draft.when ? [{ id: "trigger", text: t("Choose the object type and the state that start it."), locate: () => setChosen("trigger") }] : []),
+    ...(!draft.every && (!draft.object || !draft.when) ? [{ id: "trigger", text: t("Choose the object type and the state that start it, or a schedule."), locate: () => setChosen("trigger") }] : []),
     ...(!effects.length ? [{ id: "effects", text: t("Add at least one effect.") }] : []),
     ...(error ? [{ id: "host", text: error }] : []),
   ];
@@ -145,9 +145,11 @@ export function AutomationEditor({ id }: { id: string }) {
     right={{ label: t("Automation inspector"), content: <div className="p-2">
       {chosen === "trigger" && <div className="grid gap-3">
         <label className="grid gap-1 text-xs">{t("Title")}<Input value={draft.title} onChange={(event) => change({ title: event.target.value })} /></label>
-        <label className="grid gap-1 text-xs">{t("Object type")}<Select value={draft.object} disabled={!!draft.published} onChange={(event) => change({ object: event.target.value, when: objects.find((item) => item.type === event.target.value)?.states[0]?.name ?? "" })}><option value="">{t("Choose an object type")}</option>{objects.map((item) => <option key={item.type} value={item.type}>{item.title}</option>)}</Select></label>
-        <label className="grid gap-1 text-xs">{t("When it reaches")}<Select value={draft.when} onChange={(event) => change({ when: event.target.value })}><option value="">{t("Choose a state")}</option>{object?.states.map((state) => <option key={state.name} value={state.name}>{state.title}</option>)}</Select></label>
-        <p className="text-[11px] text-muted">{t("The record that reached the state is the subject of every effect: actions run on it, functions read it.")}</p>
+        <label className="grid gap-1 text-xs">{t("Starts")}<Select value={draft.every ? draft.every : ""} disabled={!!draft.published} onChange={(event) => change(event.target.value ? { every: event.target.value, object: "", when: "" } : { every: undefined })}><option value="">{t("When a record reaches a state")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>
+        {draft.every && <p className="text-[11px] text-muted">{t("A scheduled automation has no subject record; each period starts one run, acting as the member who published it.")}</p>}
+        {!draft.every && <label className="grid gap-1 text-xs">{t("Object type")}<Select value={draft.object} disabled={!!draft.published} onChange={(event) => change({ object: event.target.value, when: objects.find((item) => item.type === event.target.value)?.states[0]?.name ?? "" })}><option value="">{t("Choose an object type")}</option>{objects.map((item) => <option key={item.type} value={item.type}>{item.title}</option>)}</Select></label>}
+        {!draft.every && <label className="grid gap-1 text-xs">{t("When it reaches")}<Select value={draft.when} onChange={(event) => change({ when: event.target.value })}><option value="">{t("Choose a state")}</option>{object?.states.map((state) => <option key={state.name} value={state.name}>{state.title}</option>)}</Select></label>}
+        {!draft.every && <p className="text-[11px] text-muted">{t("The record that reached the state is the subject of every effect: actions run on it, functions read it.")}</p>}
       </div>}
       {chosen === "condition" && condition && <div className="grid gap-3">
         <label className="grid gap-1 text-xs">{t("Field")}<Select value={condition.condition?.left?.path?.[0] ?? ""} onChange={(event) => setSteps({ ...condition, condition: { ...condition.condition!, left: { source: "subject", path: [event.target.value] } } }, effects)}><option value="">{t("Choose a field")}</option>{object?.fields.map((field) => <option key={field.name} value={field.name}>{field.title}</option>)}</Select></label>

@@ -3,7 +3,7 @@ import type { Api } from "@platform/kernel";
 import { ArrowDownToLine, Braces, Plus, X } from "lucide-react";
 import { useContext, useEffect, useId, useState, type ReactNode } from "react";
 import { BindingEditor, JSONEditor, PredicateEditor, SchemaEditor, WorkflowFormProblems } from "./workflow-binding";
-import { parameterSchema, sourceCapability, type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
+import { PERIODS, parameterSchema, periodLabel, sourceCapability, type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import {useHost} from "@platform/app";
 
 const textSchema: ValueSchema = { type: "string" };
@@ -42,11 +42,12 @@ export function WorkflowSettings({ draft, onChange, objects, onClose }: { draft:
     <div className="grid gap-3 overflow-auto p-3">
       <label className={fieldClass}>{t("Workflow name")}<Input disabled={!!draft.published} value={draft.name} placeholder="stockallocation" onChange={(event) => onChange({ name: event.target.value })} /></label>
       <label className={fieldClass}>{t("Workflow title")}<Input value={draft.title} onChange={(event) => onChange({ title: event.target.value })} /></label>
-      <Checkbox checked={draft.manual ?? false} onChange={(manual) => onChange({ manual })}>{t("Manual or API start")}</Checkbox>
-      <label className={fieldClass}>{t("Source object")}<Select disabled={!!draft.published} value={draft.object} onChange={(event) => onChange({ object: event.target.value, when: objects.find((item) => item.type === event.target.value)?.states[0]?.name ?? "" })}>
+      <Checkbox checked={draft.manual ?? false} disabled={!!draft.every} onChange={(manual) => onChange({ manual })}>{t("Manual or API start")}</Checkbox>
+      <label className={fieldClass}>{t("Repeat every")}<Select disabled={!!draft.published} value={draft.every ?? ""} onChange={(event) => onChange(event.target.value ? { every: event.target.value, manual: false, object: "", when: "" } : { every: undefined })}><option value="">{t("Not scheduled")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>
+      <label className={fieldClass}>{t("Source object")}<Select disabled={!!draft.published || !!draft.every} value={draft.object} onChange={(event) => onChange({ object: event.target.value, when: objects.find((item) => item.type === event.target.value)?.states[0]?.name ?? "" })}>
         <option value="">{t("No source record")}</option>{objects.map((item) => <option key={item.type} value={item.type}>{item.title}</option>)}
       </Select></label>
-      {!draft.manual && <label className={fieldClass}>{t("Start state")}<Select value={draft.when} onChange={(event) => onChange({ when: event.target.value })}><option value="">{t("Choose a state")}</option>{object?.states.map((state) => <option key={state.name} value={state.name}>{state.title}</option>)}</Select></label>}
+      {!draft.manual && !draft.every && <label className={fieldClass}>{t("Start state")}<Select value={draft.when} onChange={(event) => onChange({ when: event.target.value })}><option value="">{t("Choose a state")}</option>{object?.states.map((state) => <option key={state.name} value={state.name}>{state.title}</option>)}</Select></label>}
       <Disclosure defaultOpen summary={<span className="text-xs font-medium">{t("Workflow input schema")}</span>}>
         <SchemaEditor schema={draft.inputSchema ?? { type: "object", properties: {} }} onChange={(inputSchema) => onChange({ inputSchema })} /></Disclosure>
       <JSONEditor label={t("Default workflow input")} value={draft.input ?? {}} schema={draft.inputSchema} onChange={(input) => onChange({ input })} />

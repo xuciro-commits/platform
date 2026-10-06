@@ -2,8 +2,8 @@ import type {WorkflowDraft} from "./workflow-model";
 
 /** The exact owner inputs; record stamps and published history are not edits. */
 export function workflowInputs(draft:WorkflowDraft){
- const {name,title,kind,object,when,manual,input,inputSchema,steps,layout}=draft;
- return {name,title,...(kind?{kind}:{}),object,when,manual:!!manual,input:input??{},inputSchema,steps,layout:layout??{}};
+ const {name,title,kind,object,when,manual,every,input,inputSchema,steps,layout}=draft;
+ return {name,title,...(kind?{kind}:{}),object,when,manual:!!manual,...(every?{every}:{}),input:input??{},inputSchema,steps,layout:layout??{}};
 }
 
 function canonical(value:unknown):unknown{

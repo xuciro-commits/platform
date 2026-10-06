@@ -135,3 +135,7 @@ export function workflowDiagnostics(draft: WorkflowDraft): Record<string, BlockD
   for (const step of draft.steps) if (!reached.has(step.name)) add(step.name, "This step is disconnected from the entry.", "warning");
   return issues;
 }
+
+/** Schedule periods a process may repeat at (ADR-0057 E1); the owner accepts any Go duration of a minute or more. */
+export const PERIODS = ["15m", "1h", "24h", "168h"] as const;
+export const periodLabel = (every: string) => ({ "15m": t("every 15 minutes"), "1h": t("every hour"), "24h": t("every day"), "168h": t("every week") })[every] ?? t("every {period}", { period: every });

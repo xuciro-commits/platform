@@ -29,12 +29,18 @@ const (
 // the host checks (checkAutomation) so the card editor and the map agree.
 type Process struct {
 	platform.Record
-	Name        string                  `json:"name" field:"required,search"`
-	Title       string                  `json:"title" field:"required,search"`
-	Kind        string                  `json:"kind,omitempty" enum:"flow,automation" title:"Authoring shape"`
-	Object      string                  `json:"object,omitempty" title:"Source object"`
-	When        string                  `json:"when,omitempty" title:"Record start state"`
-	Manual      bool                    `json:"manual,omitempty" title:"Manual start"`
+	Name   string `json:"name" field:"required,search"`
+	Title  string `json:"title" field:"required,search"`
+	Kind   string `json:"kind,omitempty" enum:"flow,automation" title:"Authoring shape"`
+	Object string `json:"object,omitempty" title:"Source object"`
+	When   string `json:"when,omitempty" title:"Record start state"`
+	Manual bool   `json:"manual,omitempty" title:"Manual start"`
+	// Every schedules the process instead of a record state or a hand: a Go
+	// duration such as 15m, 1h or 24h, at least 1m (ADR-0057 E1). A scheduled
+	// process has no source record; its steps act as the member who published it.
+	Every string `json:"every,omitempty" title:"Repeat every" help:"A period such as 15m, 1h or 24h; empty: not scheduled"`
+	// Scheduler is the member who published the schedule: scheduled runs act as them.
+	Scheduler   string                  `json:"scheduler,omitempty" field:"readonly" title:"Runs as"`
 	Input       json.RawMessage         `json:"input,omitempty" type:"json" title:"Default input"`
 	InputSchema *platform.ValueSchema   `json:"inputSchema,omitempty" type:"json" title:"Input schema"`
 	Steps       []ProcessStep           `json:"steps" field:"aside"`
@@ -117,6 +123,11 @@ func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A process may retain at most 64 published versions")
 	}
 	p.Version++
+	if p.Every != "" {
+		p.Scheduler = c.ID
+	} else {
+		p.Scheduler = ""
+	}
 	fl := b.flowOf(*p)
 	if c.Staging() {
 		if err := procs.Validate(b, fl); err != nil {
@@ -206,7 +217,16 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 			return err
 		}
 	}
-	if !p.Manual {
+	if p.Every != "" {
+		every, parseErr := time.ParseDuration(p.Every)
+		if parseErr != nil || every < time.Minute || every > 366*24*time.Hour {
+			return refuse("A schedule repeats every period between 1m and a year, such as 15m, 1h or 24h")
+		}
+		if p.Manual || p.Object != "" || p.When != "" {
+			return refuse("A scheduled process has no source record and is not started by hand")
+		}
+	}
+	if !p.Manual && p.Every == "" {
 		var states []platform.State
 		if entity.Type == p.Object && entity.Lifecycle != nil {
 			states = entity.Lifecycle.States
@@ -531,7 +551,10 @@ func processImage(image []byte) (Process, error) {
 // flowOf compiles every declarative block into the existing native owner.
 func (b *Build) flowOf(p Process) platform.Flow {
 	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{Builder}, Start: platform.Start{Manual: p.Manual}}
-	if !p.Manual {
+	if p.Every != "" {
+		fl.Start.Every, _ = time.ParseDuration(p.Every)
+		fl.Start.OnBehalf = p.Scheduler
+	} else if !p.Manual {
 		fl.Start.Type = p.Object
 		stateField := "state"
 		if info, ok := b.lookupEntity(p.Object); ok && info.Lifecycle != nil {
@@ -881,8 +904,8 @@ func checkAutomation(p Process) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
-	if p.Manual || p.Object == "" || p.When == "" {
-		return refuse("An automation starts when a record of an object reaches a state")
+	if p.Manual || p.Every == "" && (p.Object == "" || p.When == "") {
+		return refuse("An automation starts when a record of an object reaches a state, or on a schedule")
 	}
 	if len(p.Steps) == 0 {
 		return refuse("An automation needs at least one effect")

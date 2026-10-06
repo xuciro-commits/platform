@@ -1778,6 +1778,8 @@ export type Process = {
   name: string;
   title: string;
   kind?: "flow" | "automation";
+  every?: string;
+  scheduler?: string;
   object?: string;
   when?: string;
   manual?: boolean;
