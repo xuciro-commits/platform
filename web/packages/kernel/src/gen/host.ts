@@ -1119,6 +1119,13 @@ export type Model = {
   dailyTokens?: number;
 };
 
+export type ModelExample = {
+  id: string;
+  title: string;
+  description: string;
+  model: EnterpriseModel;
+};
+
 export type NamedQuery = {
   name: string;
   title: string;

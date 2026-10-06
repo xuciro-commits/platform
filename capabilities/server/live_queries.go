@@ -38,7 +38,7 @@ func liveReadAllowed(p string) bool {
 	if strings.HasPrefix(p, "/v1/records/") || strings.HasPrefix(p, "/v1/aggregates/") || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") {
 		return true
 	}
-	return slices.Contains([]string{"/v1/members", "/v1/organization", "/v1/enterprise", "/v1/enterprise-metamodel", "/v1/enterprise-published", "/v1/packages", "/v1/settings", "/v1/audit", "/v1/personal-reads", "/v1/inbox", "/v1/capabilities", "/v1/release-profile", "/v1/ai-limits", "/v1/ai-models", "/v1/ai-providers", "/v1/ai/vendors", "/v1/me", "/v1/actions", "/v1/entities", "/v1/definitions", "/v1/apps", "/v1/protocols", "/v1/notifications", "/v1/views", "/v1/flows", "/v1/agents", "/v1/runs", "/v1/memories", "/v1/releases/active", "/v1/releases/candidates", "/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/endpoints", "/v1/connectors", "/v1/agent-overview", "/v1/ai-usage"}, p) || strings.HasPrefix(p, "/v1/releases/candidates/")
+	return slices.Contains([]string{"/v1/members", "/v1/organization", "/v1/enterprise", "/v1/enterprise-metamodel", "/v1/enterprise-patterns", "/v1/enterprise-published", "/v1/packages", "/v1/settings", "/v1/audit", "/v1/personal-reads", "/v1/inbox", "/v1/capabilities", "/v1/release-profile", "/v1/ai-limits", "/v1/ai-models", "/v1/ai-providers", "/v1/ai/vendors", "/v1/me", "/v1/actions", "/v1/entities", "/v1/definitions", "/v1/apps", "/v1/protocols", "/v1/notifications", "/v1/views", "/v1/flows", "/v1/agents", "/v1/runs", "/v1/memories", "/v1/releases/active", "/v1/releases/candidates", "/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/endpoints", "/v1/connectors", "/v1/agent-overview", "/v1/ai-usage"}, p) || strings.HasPrefix(p, "/v1/releases/candidates/")
 }
 func liveOperationRead(p string) bool {
 	return strings.HasPrefix(p, "/v1/applications/") && strings.HasSuffix(p, "/runs") || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") || slices.Contains([]string{"/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/endpoints", "/v1/connectors", "/v1/protocols", "/v1/agent-overview", "/v1/ai-usage"}, p)
@@ -240,7 +240,7 @@ func (t *Tenant) liveVersion(query string) string {
 		owner = "build"
 	case "/v1/ai-limits", "/v1/ai-models", "/v1/ai-providers", "/v1/ai/vendors":
 		owner = "ai"
-	case "/v1/organization", "/v1/enterprise", "/v1/enterprise-metamodel", "/v1/enterprise-published":
+	case "/v1/organization", "/v1/enterprise", "/v1/enterprise-metamodel", "/v1/enterprise-patterns", "/v1/enterprise-published":
 		owner = "enterprise"
 	case "/v1/flows":
 		owner = "flow"

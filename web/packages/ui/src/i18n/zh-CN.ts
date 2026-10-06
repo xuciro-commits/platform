@@ -1266,4 +1266,10 @@ export default {
   "Standard look": "标准风格",
   "Industrial look": "工业风格",
   "Print": "打印",
+  "Arrange": "排布",
+  "Tree, top down": "树状·自上而下",
+  "Tree, left to right": "树状·自左向右",
+  "Radial": "放射",
+  "Drag from one element to another to relate them.": "从一个元素拖到另一个元素即可建立关系。",
+  "Nothing shown yet.": "尚未显示任何内容。",
 } as Record<string, string>;

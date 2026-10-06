@@ -67,6 +67,16 @@
 .platform-block-palette-item:hover, .platform-block-palette-item:focus-visible, .platform-block-palette-item[aria-selected="true"] { background: var(--row-selected); outline: none; }
 .platform-block-palette-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border); color: var(--primary); }
 .platform-block-palette-icon svg { width: 15px; height: 15px; }
+/* Entity/relationship diagrams: an icon, a caption and a name; the owner picks icons. */
+.platform-diagram-node { position: relative; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--foreground); text-align: left; box-shadow: 0 2px 5px #00000008; transition: border-color 120ms, box-shadow 120ms; }
+.platform-diagram-node:hover { border-color: color-mix(in oklch, var(--block-color), var(--border) 60%); }
+.platform-diagram-node-selected { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary), transparent 78%); }
+.platform-diagram-node-linking { cursor: crosshair; }
+.platform-diagram-flag { position: absolute; right: 8px; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--tone-info); }
+.platform-diagram-handle { width: 8px; height: 8px; border: 1px solid var(--border); background: var(--surface); opacity: 0; }
+.platform-diagram-node-linking .platform-diagram-handle { opacity: 1; }
+.platform-diagram-handle-active { inset: 0 !important; width: 100% !important; height: 100% !important; transform: none !important; border-radius: 10px; background: transparent; border: 0; opacity: 1; }
+.platform-diagram .react-flow__node { border-radius: 10px; }
 .platform-block-edge-label { position: absolute; padding: 2px 5px; border-radius: 4px; background: var(--surface); color: var(--muted); font-size: 10px; pointer-events: none; }
 .platform-block-edge-add { position: absolute; display: flex; align-items: center; justify-content: center; pointer-events: all; width: 20px; height: 20px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--muted); opacity: 0.7; transition: opacity 120ms, border-color 120ms; }
 .platform-block-edge-add:hover { opacity: 1; color: var(--primary); border-color: var(--primary); }

@@ -50,3 +50,11 @@
 - **规模模板＝模式的组合**：`Template(SeedParams)` 现在用同一批模式搭建（行业决定场地模式：hospitality→hotel、logistics/trade→warehouse、services/other→office、其余→plant）。向导与模式共用一套代码，没有第二份种子数据。
 - Web：建模器左栏新增 Patterns 页签（按层分组，选中组织时默认嫁接其下），空模型页提供"从一个单元开始"。
 - 本地助手的"示例/Examples"工作应改建在此之上：示例＝某个模式的预览/一次 apply，不再单独维护整模型文件。
+
+## 6. 画布：共享 DiagramCanvas 与图标（补充决定）
+
+走查体感：元素点击后堆在默认位置、不能缩放、没有布局。原因是企业建模器自己用 SVG 画了一个画布。改为：
+
+- `@platform/ui` 新增 **`DiagramCanvas`**（`graph/DiagramCanvas.tsx`，React Flow）：实体/关系图通用画布——缩放、平移、适应、迷你地图（>12 节点）、拖动、拖放（owner 指定 dataTransfer 类型）、连线模式（任意元素拖到任意元素）、**排布菜单**（`graph/diagramLayouts.ts`：树状自上而下 / 树状自左向右 / 放射 / 网格；owner 用 `edge.tree` 标出层级边）。流程类画布仍用 `BlockCanvas`（有端口语义），两者共用 `CanvasFrame` 与样式。企业、对象图、血缘等以后都用 `DiagramCanvas`，不再各画一套。
+- 节点契约：图标 + 小字类别 + 名称 + 色调 + 右上角标记（共享/外部）。**图标由 owner 按语义提供**；企业建模器 `enterprise/canvas.tsx` 先按 kind（group/plant/hotel/warehouse/department/team/machine/room…）再按 UAF stereotype 映射 lucide 图标，Palette 与树视图同一映射，对齐 SAP Signavio / ArchiMate 的"一类一象形"。
+- 新元素无保存位置时由共享树状布局排在已放置元素之下（`model.ts: autoLayout` 改为调用 `diagramLayout`，删除自带的布局算法）。

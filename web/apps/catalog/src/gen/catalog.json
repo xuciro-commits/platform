@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:78cb8abd400dcb34",
+  "revision": "sha256:57df698081d8eda1",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4682,6 +4682,7 @@
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/enterprise/examples.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/index.tsx",
@@ -4813,6 +4814,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/enterprise/examples.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/knowledge.tsx",
@@ -4958,6 +4960,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/enterprise/examples.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/index.tsx",
@@ -4980,6 +4983,7 @@
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/enterprise/examples.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/knowledge.tsx",
@@ -5033,6 +5037,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/enterprise/examples.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",

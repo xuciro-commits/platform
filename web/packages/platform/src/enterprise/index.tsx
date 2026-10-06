@@ -7,7 +7,7 @@ import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, Input, Panel, Select, Tag, Tree, Workbench, t, type ColumnDef, type WorkbenchTab } from "@platform/ui";
 import { Link2, Network, Plus, Puzzle, Save, Table2, Workflow } from "lucide-react";
-import { Canvas, type Positions } from "./canvas";
+import { Canvas, STEREOTYPE_DROP, elementIcon, type Positions } from "./canvas";
 import { autoLayout, childrenOf, live, rootsOf, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PLACEMENT, RELATIONSHIP, VIEW, type Element, type GridCell, type Metamodel, type Model, type PatternInfo, type Relationship } from "./model";
 
 type Decide = (schema: string, target: { type: string; id: string }, payload: unknown) => Promise<boolean>;
@@ -115,9 +115,9 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   const tabs: WorkbenchTab[] = [
     { id: "palette", title: t("Palette"), content: <div className="grid gap-1 p-2">
       <p className="px-1 text-xs text-muted">{cell ? `${cell.id} · ${cell.title}` : ""}</p>
-      {palette.map((p) => <Button key={p.stereotype} variant="row" draggable={admin} onDragStart={(e) => e.dataTransfer.setData("application/x-uaf-stereotype", p.stereotype)}
+      {palette.map((p) => <Button key={p.stereotype} variant="row" draggable={admin} onDragStart={(e) => e.dataTransfer.setData(STEREOTYPE_DROP, p.stereotype)}
         onClick={() => admin && setDialog({ kind: "element", stereotype: p.stereotype })} className="justify-between border border-border" title={meta.stereotypes[p.stereotype]?.description}>
-        <span>{p.title}</span><span className="font-mono text-[10px] text-muted">{p.stereotype}</span>
+        <span className="flex items-center gap-2 [&_svg]:size-4 [&_svg]:text-muted">{elementIcon({ stereotype: p.stereotype, kind: p.kinds?.[0] })}{p.title}</span><span className="font-mono text-[10px] text-muted">{p.stereotype}</span>
       </Button>)}
       <p className="px-1 pt-2 text-[11px] text-muted">{t("Drag onto the canvas or click to add. UAF {version}.", { version: meta.version })}</p>
     </div> },
@@ -174,13 +174,13 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
       left={{ label: t("Model"), tabs, value: left, onChange: setLeft }}
       right={{ label: t("Inspector"), content: <Inspector element={sel} model={m} meta={meta} day={day} admin={admin} decide={decide} title={title} relLabel={relLabel}
         onRemove={() => { if (!sel) return; setWorking({ elements: working.elements.filter((id) => id !== sel.id) }); setSelected(undefined); }} /> }}>
-      {mode === "canvas" && <Canvas elements={shownElements} relationships={shownRels} positions={working.layout} selected={selected} linking={linking && admin}
-        onMove={(id, at) => setWorking({ layout: { ...working.layout, [id]: at } })} onSelect={setSelected} label={relLabel}
-        onDrop={(stereotype, at) => setDialog({ kind: "element", stereotype, at })} onLink={(source, target) => setDialog({ kind: "link", source, target })} />}
+      {mode === "canvas" && <div className="h-full min-h-[480px]"><Canvas elements={shownElements} relationships={shownRels} positions={working.layout} selected={selected} linking={linking && admin} admin={admin}
+        label={relLabel} title={title} onPositions={(layout) => setWorking({ layout })} onSelect={setSelected}
+        onDrop={(stereotype, at) => setDialog({ kind: "element", stereotype, at })} onLink={(source, target) => setDialog({ kind: "link", source, target })} /></div>}
       {mode === "tree" && <div className="p-2">
         <Tree roots={rootsOf(m, placementKind, day).map(byId).filter((e): e is Element => !!e)} children={(e) => childrenOf(m, e.id, placementKind, day).map(byId).filter((x): x is Element => !!x && live(x, day))}
           id={(e) => e.id} selected={selected} onSelect={(e) => setSelected(e.id)}
-          row={(e) => <><span className="font-medium">{e.name}</span><Tag label={e.kind || title(e.stereotype)} />{e.legal && <Tag label={t("legal entity")} tone="info" />}
+          row={(e) => <><span className="[&_svg]:size-4 [&_svg]:text-muted">{elementIcon(e)}</span><span className="font-medium">{e.name}</span><Tag label={e.kind || title(e.stereotype)} />{e.legal && <Tag label={t("legal entity")} tone="info" />}
             <span className="ml-auto text-xs text-muted">{m.relationships.filter((r) => r.stereotype === MEMBERSHIP && r.target === e.id && live(r, day)).length || ""}</span></>} />
       </div>}
       {mode === "table" && <DataTable data={m.elements.filter((e) => live(e, day))} columns={tableColumns} getRowId={(e) => e.id} selectedId={selected} onRowClick={(e) => setSelected(e.id)} height={560} />}

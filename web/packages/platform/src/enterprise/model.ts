@@ -1,6 +1,7 @@
 // The enterprise model as the host serves it (ADR-0067): UAF-typed elements,
 // relationships and views, plus the metamodel the palette draws from.
 import type { Api } from "@platform/kernel";
+import { diagramLayout } from "@platform/ui";
 
 export type Model = Api.EnterpriseModel;
 export type Element = Api.Element;
@@ -39,29 +40,17 @@ export const rootsOf = (m: Model, kind: string, day: string) => {
   return [...new Set(edges.map((e) => e.target))].filter((p) => !children.has(p));
 };
 
-/** A tree layout for elements with no saved position: roots left to right,
- * each subtree below its root, so a fresh view reads as an organisation chart. */
+/** Positions for a view: saved ones kept, the rest arranged as an organisation
+ * chart by the shared layout, below whatever is already placed. */
 export function autoLayout(m: Model, shown: string[], kind: string, day: string, saved: Record<string, number[]> = {}): Record<string, [number, number]> {
   const out: Record<string, [number, number]> = {};
-  for (const [id, p] of Object.entries(saved)) if (p?.length === 2) out[id] = [p[0]!, p[1]!];
-  const set = new Set(shown);
-  const placed = new Set(Object.keys(out));
-  const width = (id: string): number => {
-    const kids = childrenOf(m, id, kind, day).filter((c) => set.has(c) && !placed.has(c));
-    return kids.length ? kids.reduce((n, c) => n + width(c), 0) : 1;
-  };
-  let x = 40;
-  const put = (id: string, left: number, depth: number) => {
-    if (placed.has(id)) return;
-    const w = width(id);
-    out[id] = [left + (w * 180) / 2 - 70, 40 + depth * 110];
-    let cursor = left;
-    for (const c of childrenOf(m, id, kind, day).filter((c) => set.has(c) && !placed.has(c))) { put(c, cursor, depth + 1); cursor += width(c) * 180; }
-  };
-  const roots = rootsOf(m, kind, day).filter((r) => set.has(r) && !placed.has(r));
-  for (const r of roots) { put(r, x, 0); x += width(r) * 180; }
-  let y = 40;
-  for (const id of shown) if (!out[id]) { out[id] = [x + 20, y]; y += 70; if (y > 600) { y = 40; x += 180; } }
+  for (const [id, p] of Object.entries(saved)) if (p?.length === 2 && shown.includes(id)) out[id] = [p[0]!, p[1]!];
+  const missing = shown.filter((id) => !out[id]);
+  if (missing.length === 0) return out;
+  const set = new Set(missing);
+  const edges = m.relationships.filter((r) => r.stereotype === PLACEMENT && r.kind === kind && live(r, day) && set.has(r.source) && set.has(r.target)).map((r) => ({ from: r.source, to: r.target, tree: true }));
+  const below = Object.values(out).reduce((y, p) => Math.max(y, p[1] + 120), 40);
+  for (const [id, p] of Object.entries(diagramLayout("tree-down", missing.map((id) => ({ id })), edges))) out[id] = [p.x + 40, p.y + below];
   return out;
 }
 
