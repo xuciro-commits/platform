@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApplicationImport";
 import type { ApplicationImportDependency } from "../workshop/module-import/application-import";
 import { DraftStatus, savingState, useAutoSave } from "../shared/workbench";
+import { ProjectRuns } from "./project-runs";
 import { kindOfType, refKey, resourceGroups, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
 
 export type Project = Api.Application & { id: string; revision: number; state: string; archived?: boolean; changed?: Api.Stamp };
@@ -118,7 +119,7 @@ export function ProjectHome({ id }: { id: string }) {
   const { owned, available, shared, loading } = useProjectResources(project);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string>();
-  const [tab, setTab] = useState<"resources" | "settings">("resources");
+  const [tab, setTab] = useState<"resources" | "runs" | "settings">("resources");
   const [settings, setSettings] = useState<{ title: string; name: string; description: string; icon: string }>();
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [importing, setImporting] = useState(false);
@@ -202,8 +203,8 @@ export function ProjectHome({ id }: { id: string }) {
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         <div role="tablist" aria-label={t("Project sections")} className="flex gap-1 border-b border-border px-3 pt-2">
-          {(["resources", "settings"] as const).map((item) => <Button variant="row" key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)}
-            className={"rounded-t border-b-2 px-3 py-1.5 text-sm " + (tab === item ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}>{t(item === "resources" ? "Overview" : "Settings")}</Button>)}
+          {(["resources", "runs", "settings"] as const).map((item) => <Button variant="row" key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)}
+            className={"rounded-t border-b-2 px-3 py-1.5 text-sm " + (tab === item ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}>{t(item === "resources" ? "Overview" : item === "runs" ? "Runs" : "Settings")}</Button>)}
         </div>
         {tab === "resources" && <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="grid content-start gap-4">
@@ -246,6 +247,7 @@ export function ProjectHome({ id }: { id: string }) {
             </div>
           </aside>
         </div>}
+        {tab === "runs" && <ProjectRuns owned={owned} />}
         {tab === "settings" && settings && <div className="grid max-w-xl gap-3 p-4">
           <label className="grid gap-1 text-xs">{t("Title")}<Input value={settings.title} disabled={!builder} onChange={(event) => setSettings({ ...settings, title: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Name")}<Input value={settings.name} disabled={!builder} onChange={(event) => setSettings({ ...settings, name: event.target.value })} /></label>
