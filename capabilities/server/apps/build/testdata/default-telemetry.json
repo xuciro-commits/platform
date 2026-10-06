@@ -639,29 +639,49 @@
         "source": "import_widget_50",
         "control": "import_control_52",
         "event": "click",
-        "target": "import_open_39",
-        "value": true
+        "effects": [
+          {
+            "kind": "set",
+            "target": "import_open_39",
+            "value": true
+          }
+        ]
       },
       {
         "source": "import_widget_50",
         "control": "import_control_53",
         "event": "click",
-        "target": "import_open_54",
-        "value": true
+        "effects": [
+          {
+            "kind": "set",
+            "target": "import_open_54",
+            "value": true
+          }
+        ]
       },
       {
         "source": "import_widget_50",
         "control": "import_control_55",
         "event": "click",
-        "target": "import_open_56",
-        "value": true
+        "effects": [
+          {
+            "kind": "set",
+            "target": "import_open_56",
+            "value": true
+          }
+        ]
       },
       {
         "source": "import_widget_50",
         "control": "import_control_57",
         "event": "click",
-        "target": "import_open_58",
-        "value": true
+        "effects": [
+          {
+            "kind": "set",
+            "target": "import_open_58",
+            "value": true
+          }
+        ]
       }
     ],
     "unusedWidgets": [

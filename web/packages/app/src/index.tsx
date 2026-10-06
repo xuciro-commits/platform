@@ -21,6 +21,8 @@ import { NewActions, RecordActions, useTransition, useRecordArchive } from "./ac
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 export { ComputeCall } from "./capability";
 export { FlowInstanceView } from "./flows";
+export { OpenIn, type OpenInPlace } from "./OpenIn";
+import { OpenIn as OpenInMenu } from "./OpenIn";
 export { pageDocumentFromSections } from "./pageDocument";
 export { semanticModelView, semanticPropertyTypes, assetBindingKey, propertyKey, relationKey, type SemanticPropertyType, type PropertyRef, type ReferenceRelationRef, type SemanticRelation, type SemanticModelView } from "./semantic/model";
 export { SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect } from "./semantic/Selector";
@@ -134,12 +136,12 @@ export function findDefinition(definitions: Definition[], ref: AssetRef): Defini
  * in the view the owning app registers for its type, else the generic record
  * page. Apps link to each other's records without knowing each other (D5).
  */
-export function useOpenRecord(): (ref: string | { type: string; id: string }, options?: { window: "tab" | "float" | "popout" }) => void {
+export function useOpenRecord(): (ref: string | { type: string; id: string }, options?: { window: "tab" | "beside" | "popout" }) => void {
   const { opens } = useHost();
   const { open } = useWorkspace();
   return (ref, options) => {
     const { type, id } = typeof ref === "string" ? { type: ref.split("/")[0]!, id: ref.split("/").slice(1).join("/") } : ref;
-    open({ view: opens.get(type) ?? "record", params: opens.has(type) ? { id } : { type, id } }, options ?? { window: "float" });
+    open({ view: opens.get(type) ?? "record", params: opens.has(type) ? { id } : { type, id } }, options ?? { window: "beside" });
   };
 }
 
@@ -149,11 +151,27 @@ export type Dashboard = { id: string; title: string; description?: string; for?:
 /** A task surface is presentation context; it never grants owner permissions. */
 export type WorkspaceSurface = "work" | "studio" | "tenant" | "developer";
 
+/**
+ * Where an application sits in the Applications portal (ADR-0052 §3.2). A
+ * category is display grouping only; it never grants owner permissions.
+ * `business` is every application a tenant hands to its people; the others
+ * are the platform's own tools.
+ */
+export type PlatformAppCategory = "business" | "ontology" | "build" | "operate" | "govern" | "developer";
+
+/** The portal category an app lands in when it declares none: by its surface, for the packages that still declare one. */
+export const categoryOf = (app: Pick<AppUI, "category" | "surface">): PlatformAppCategory =>
+  app.category ?? ({ studio: "build", tenant: "govern", developer: "developer" } as Record<string, PlatformAppCategory>)[app.surface ?? "work"] ?? "business";
+
 /** An app's contribution to the workspace, in typed code (AGENTS.md rule 5). */
 export type AppUI = {
   /** Stable UI contribution identity; existing native app ids are retained. */
   id: string;
   surface?: WorkspaceSurface;
+  /** Portal category (ADR-0052); defaults from `surface`, then `business`. */
+  category?: PlatformAppCategory;
+  /** One line under the title in the portal and on Home. */
+  description?: string;
   /** Explicit owner bindings, independent of the contribution's display name. */
   serves?: string[];
   /** Navigation projection only; every read/action still checks its owner. */
@@ -325,10 +343,11 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
         comments={can("platform.comment.add") ? comments : undefined}
         tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); } } : undefined}
         actions={(r) => <>
-          <Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" }, { window: "float" })}>{t("Back to inbox")}</Button>
+          <Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" }, { window: "beside" })}>{t("Back to inbox")}</Button>
           {(["work.approval", "work.task", "flow.instance"].includes(type) && typeof (r.target ?? r.ref ?? r.subject) === "string") && <Button size="sm" variant="ghost" onClick={() => openRecord(String(r.target ?? r.ref ?? r.subject))}>{t("Open related record")}</Button>}
           <RecordActions type={type} record={r} allowed={advice ? (allowed ?? catalog.map((a) => a.schema)).filter((schema) => schema !== advice!.action) : allowed} />
-          {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>{t("Ask the assistant")}</Button>}
+          <OpenInMenu type={type} />
+          {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "beside" })}>{t("Ask the assistant")}</Button>}
           {can(`${type}.edit`) && (!allowed || allowed.includes(`${type}.edit`)) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>{t("Edit")}</Button>}
           {can(`${type}.archive`) && (!allowed || allowed.includes(`${type}.archive`)) && !r.archived && <Button size="sm" variant="danger" onClick={() => archive.take(r)}>{t("Archive")}</Button>}
         </>} />
@@ -364,7 +383,7 @@ export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(
 
 export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./agents";
 
-export { NewActions, PayloadFields, InlineActionForm, RecordActions, useRecordArchive } from "./actions";
+export { NewActions, PayloadFields, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions";
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages";
 export { ComposedPage, SectionView, isComposed } from "./sections";
 export { createWidgetDefinitions, createWidgetRegistry, widgetContracts, widgetContract, pageUIProfile, supportsPageUIProfile, type WidgetRegistry, type WidgetImplementation, type WidgetContract, type WidgetID } from "./widgets/registry";

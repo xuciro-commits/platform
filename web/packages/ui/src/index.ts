@@ -13,6 +13,7 @@ export { RetroButton, type RetroButtonProps } from "./primitives/retroButton";
 export { Input, Select, Textarea } from "./primitives/input";
 export { Card, Panel } from "./primitives/card";
 export { EditorWorkbench } from "./layout/EditorWorkbench";
+export { Workbench, ProblemList, StructureRow, PanelSection, type WorkbenchCrumb, type WorkbenchTab, type WorkbenchPanel, type WorkbenchHistory, type WorkbenchSaving, type WorkbenchProblem } from "./layout/Workbench";
 export { ContentTabs } from "./layout/ContentTabs";
 export {validChoiceInput} from "./components/choice";
 export {Separator} from "./primitives/separator";
@@ -46,7 +47,7 @@ export {AIResult,type AIResultProps,type AIResultTurn} from "./components/AIResu
 export {ExternalFrame,validExternalFrame,type ExternalFrameProps,type ExternalFrameConfig} from "./components/ExternalFrame";
 export {StaticImage,validStaticImage,validStaticImageURL,type StaticImageProps,type StaticImageConfig} from "./components/StaticImage";
 export { Sheet } from "./primitives/sheet";
-export { Workspace, useWorkspace, useViewCall, useUnsavedChanges, notify, type Launcher, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
+export { Workspace, useWorkspace, useViewCall, useUnsavedChanges, notify, type Applications, type PlatformApplication, type Workspaces, type Rail, type RecentEntry, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";
 export { Graph, layout, type GraphNode, type GraphEdge } from "./graph/Graph";
@@ -68,6 +69,7 @@ export { useViewVisible } from "./shell/ViewVisibility";
 export {Spacer,RegionPresentation,LayoutRegion,LayoutStack,type LayoutSize} from "./layout/LayoutRegion";
 
 export {CommandMenu,type ContextCommand} from "./components/CommandMenu";
+export { ActionMenu } from "./components/ActionMenu";
 
 export {FacetChoices} from "./fields/FacetChoices";
 

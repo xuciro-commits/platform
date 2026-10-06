@@ -172,6 +172,7 @@ export type AppInfo = {
   provides: string[];
   consumes: string[];
   emits: EffectKind[];
+  interfaces: Interface[];
 };
 
 export type AppSettings = {
@@ -626,6 +627,8 @@ export type EntityInfo = {
   display: string;
   fields: FieldInfo[];
   standard: string[];
+  implements?: string[];
+  extends?: string;
   lifecycle?: LifecycleInfo;
 };
 
@@ -878,6 +881,19 @@ export type InstalledPackage = {
   installedAt?: string;
   changedAt?: string;
   retained?: RetainedArtifact[];
+};
+
+export type Interface = {
+  name: string;
+  title: string;
+  description?: string;
+  fields: InterfaceField[];
+};
+
+export type InterfaceField = {
+  name: string;
+  type: string;
+  title: string;
 };
 
 export type JointDraftRef = {
@@ -1180,6 +1196,11 @@ export type PageAI = {
   suggestions?: string[];
 };
 
+export type PageActionEffect = {
+  ref: AssetRef;
+  recordVariable?: string;
+};
+
 export type PageActionParameter = {
   parameter: string;
   field: string;
@@ -1272,6 +1293,8 @@ export type PageComputeResource = {
 export type PageDetailPresentation = {
   columns: number;
   hideNull?: boolean;
+  barcode?: string;
+  print?: boolean;
 };
 
 export type PageDocument = {
@@ -1285,6 +1308,15 @@ export type PageDocument = {
   events?: PageEventBinding[];
   queries?: Record<string, PageQuery>;
   interface?: PageInterface;
+  device?: string;
+};
+
+export type PageEffect = {
+  kind: string;
+  target?: string;
+  value?: unknown;
+  action?: PageActionEffect;
+  navigate?: PageNavigation;
 };
 
 export type PageEmbedding = {
@@ -1301,10 +1333,7 @@ export type PageEventBinding = {
   control?: string;
   source: string;
   event: string;
-  target: string;
-  value?: unknown;
-  navigate?: PageNavigation;
-  return?: boolean;
+  effects: PageEffect[];
 };
 
 export type PageEventTone = {
@@ -1783,9 +1812,12 @@ export type Process = {
   archived?: boolean;
   name: string;
   title: string;
+  kind?: "flow" | "automation";
   object?: string;
   when?: string;
   manual?: boolean;
+  every?: string;
+  scheduler?: string;
   input?: unknown;
   inputSchema?: ValueSchema;
   steps: ProcessStep[];
@@ -2298,6 +2330,48 @@ export type SimulationStep = {
   compute?: ComputeFixture;
 };
 
+export type Source = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  name: string;
+  title: string;
+  url: string;
+  allowPrivate?: boolean;
+  header?: string;
+  path?: string;
+  object: string;
+  key: string;
+  mapping: SourceField[];
+  every?: string;
+  state: string;
+  puller?: string;
+  requested?: boolean;
+  last?: SourcePull;
+};
+
+export type SourceFailure = {
+  id: string;
+  outcome: string;
+};
+
+export type SourceField = {
+  from: string;
+  to: string;
+  convert?: string;
+};
+
+export type SourcePull = {
+  at: string;
+  rows: number;
+  applied: number;
+  failed: number;
+  error?: string;
+  failures?: SourceFailure[];
+};
+
 export type Stamp = {
   by?: string;
   at?: string;
@@ -2349,6 +2423,35 @@ export type SupportRead = {
   health: TenantHealth;
   audit: AuditEntry[];
   answers?: SupportAnswer[];
+};
+
+export type Table = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  name: string;
+  title: string;
+  description?: string;
+  inputs: TableColumn[];
+  outputs: TableColumn[];
+  rows: TableRow[];
+  default?: string[];
+  state: string;
+  version?: number;
+  published?: string;
+};
+
+export type TableColumn = {
+  name: string;
+  title?: string;
+  type: string;
+};
+
+export type TableRow = {
+  when: string[];
+  then: string[];
 };
 
 export type Task = {
@@ -2534,7 +2637,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.105",
+  "uiProfile": "platform.page.v2.107",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3428,7 +3531,8 @@ export const pageUIManifest = {
           "inputKind": {
             "type": "string",
             "enum": [
-              "search"
+              "search",
+              "scan"
             ]
           }
         }
@@ -7735,7 +7839,9 @@ export const pageUIManifest = {
     "platform.page.v2.102",
     "platform.page.v2.103",
     "platform.page.v2.104",
-    "platform.page.v2.105"
+    "platform.page.v2.105",
+    "platform.page.v2.106",
+    "platform.page.v2.107"
   ],
   "runtime": {
     "telemetry": {
@@ -8123,7 +8229,8 @@ export const pageUIManifest = {
     },
     "detailPresentation": {
       "requiredUIProfile": "platform.page.v2.35",
-      "maxColumns": 4
+      "maxColumns": 4,
+      "barcodeRequiredUIProfile": "platform.page.v2.107"
     },
     "recordView": {
       "requiredUIProfile": "platform.page.v2.36",
@@ -8318,7 +8425,8 @@ export const pageUIManifest = {
       "requiredUIProfile": "platform.page.v2.63"
     },
     "input": {
-      "searchRequiredUIProfile": "platform.page.v2.66"
+      "searchRequiredUIProfile": "platform.page.v2.66",
+      "scanRequiredUIProfile": "platform.page.v2.107"
     },
     "terms": {
       "requiredUIProfile": "platform.page.v2.67",
@@ -8434,6 +8542,12 @@ export const pageUIManifest = {
     },
     "recordMap": {
       "sharedUIProfile": "platform.page.v2.101"
+    },
+    "device": {
+      "requiredUIProfile": "platform.page.v2.107",
+      "kinds": [
+        "handheld"
+      ]
     }
   },
   "layout": {

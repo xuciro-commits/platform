@@ -1,70 +1,36 @@
+// The Asset Library (ADR-0054 D3–D4): public reference content for builders and
+// developers — the assets with their live examples, and a sandbox for
+// prototypes. Runtime access still uses the signed-in host.
 import { defineApp } from "@platform/app";
-import {
-  Boxes,
-  Terminal,
-  Network,
-  BookOpen,
-} from "lucide-react";
+import { BookOpen, Boxes, Terminal } from "lucide-react";
 import { t, type NavSection } from "@platform/ui";
-import { Catalog, CatalogExample, catalogTitle } from "./Catalog";
+import { Catalog, catalogTitle } from "./Catalog";
 import { SandboxView } from "./Sandbox";
-import { GovernanceView } from "./Governance";
 
-/** Public reference content; runtime access still uses the signed-in host. */
-export function catalogNavigation(mode: "builder" | "developer" = "builder"): NavSection[] {
-  return [
-    {
-      label: t("Platform Catalog"),
-      items: [
-        { label: t("All assets"), icon: <Boxes />, route: { view: "catalog", params: { mode } } },
-        { label: t("Sandbox"), icon: <Terminal />, route: { view: "sandbox" } },
-        { label: t("Quality and compatibility"), icon: <Network />, route: { view: "governance" } },
-      ],
-    },
-  ];
+export function catalogNavigation(): NavSection[] {
+  return [{ label: t("Asset Library"), items: [
+    { label: t("All assets"), icon: <Boxes />, route: { view: "catalog" } },
+    { label: t("Sandbox"), icon: <Terminal />, route: { view: "sandbox" } },
+  ] }];
 }
 
 export default defineApp({
   id: "catalog",
   surface: "developer",
-  get title() {
-    return t("Platform Catalog");
-  },
+  category: "developer",
+  description: t("Reusable UI, App API and patterns, with live examples and a sandbox."),
+  get title() { return t("Asset Library"); },
   icon: <BookOpen />,
-  home: { view: "catalog", params: { mode: "developer" } },
+  home: { view: "catalog" },
   nav: (host) => [
-    ...catalogNavigation("developer"),
+    ...catalogNavigation(),
     ...(host.role("build") === "builder" || host.role("platform") === "admin" ? [{ label: t("Data diagnostics"), items: [
       { label: t("Records"), route: { view: "records", params: { surface: "developer" } } },
       { label: t("Definitions"), route: { view: "definitions", params: { surface: "developer" } } },
     ] }] : []),
   ],
   views: [
-    {
-      id: "catalog-example",
-      title: (p) => `${catalogTitle(p.id)} · ${t("Live example")}`,
-      render: (p) => <CatalogExample id={p.id} mode={p.mode === "builder" ? "builder" : "developer"} />,
-    },
-    {
-      id: "catalog",
-      title: (p) => catalogTitle(p.id, p.layer),
-      render: (p) => (
-        <Catalog
-          initialID={p.id}
-          initialLayer={p.layer}
-          initialMode={p.mode === "developer" ? "developer" : "builder"}
-        />
-      ),
-    },
-    {
-      id: "sandbox",
-      title: (p) => (p.tab ? t(p.tab === "inspirations" ? "Inspirations" : p.tab === "convert" ? "Convert component" : "Live playground") : t("Sandbox")),
-      render: (p) => <SandboxView tab={p.tab} />,
-    },
-    {
-      id: "governance",
-      title: (p) => (p.tab ? t(p.tab === "diffs" ? "Version diffs" : p.tab === "quality" ? "Quality check" : "Impact analysis") : t("Governance")),
-      render: (p) => <GovernanceView tab={p.tab} />,
-    },
+    { id: "catalog", title: (p) => catalogTitle(p.id, p.layer), render: (p) => <Catalog initialID={p.id} initialLayer={p.layer} initialExpand={p.expand === "1"} /> },
+    { id: "sandbox", title: () => t("Sandbox"), render: () => <SandboxView /> },
   ],
 });

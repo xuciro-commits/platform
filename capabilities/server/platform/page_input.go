@@ -6,7 +6,13 @@ func (d *PageDocument) checkInputPresentation(s Section) error {
 	if s.InputKind == "" {
 		return nil
 	}
-	if s.Widget != "input" || s.InputKind != "search" || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Input.SearchRequiredUIProfile) {
+	// A scan input is a search input read by a barcode scanner or camera
+	// (ADR-0057 D1): the same text state drives the same query search.
+	required := pageWidgets.Runtime.Input.SearchRequiredUIProfile
+	if s.InputKind == "scan" {
+		required = pageWidgets.Runtime.Input.ScanRequiredUIProfile
+	}
+	if s.Widget != "input" || s.InputKind != "search" && s.InputKind != "scan" || !PageUIProfileSupports(d.UIProfile, required) {
 		return fmt.Errorf("search presentation needs its original input and profile")
 	}
 	id := ""

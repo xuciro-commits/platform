@@ -17,7 +17,7 @@ func TestTableSelectionEventProfileAndState(t *testing.T) {
 	}
 	d.Variables["shown"] = PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: json.RawMessage(`false`)}
 	index := len(d.Events)
-	d.Events = append(d.Events, PageEventBinding{Source: source, Event: "select", Target: "shown", Value: json.RawMessage(`true`)})
+	d.Events = append(d.Events, PageEventBinding{Source: source, Event: "select", Effects: []PageEffect{{Kind: "set", Target: "shown", Value: json.RawMessage(`true`)}}})
 	if err := d.Check(p.Sections); err != nil {
 		t.Fatal(err)
 	}
@@ -26,16 +26,16 @@ func TestTableSelectionEventProfileAndState(t *testing.T) {
 		t.Fatal("old profile accepted selection event")
 	}
 	d.UIProfile = PageUIProfile()
-	d.Events[index].Value = json.RawMessage(`"true"`)
+	d.Events[index].Effects[0].Value = json.RawMessage(`"true"`)
 	if d.Check(p.Sections) == nil {
 		t.Fatal("selection event accepted mismatched literal")
 	}
-	d.Events[index].Value = json.RawMessage(`true`)
-	d.Events[index].Return = true
+	d.Events[index].Effects[0].Value = json.RawMessage(`true`)
+	d.Events[index].Effects = []PageEffect{{Kind: "return"}}
 	if d.Check(p.Sections) == nil {
 		t.Fatal("selection event executed navigation")
 	}
-	d.Events[index].Return = false
+	d.Events[index].Effects = []PageEffect{{Kind: "set", Target: "shown", Value: json.RawMessage(`true`)}}
 	d.Events = append(d.Events, d.Events[index])
 	if d.Check(p.Sections) == nil {
 		t.Fatal("duplicate selection handlers accepted")

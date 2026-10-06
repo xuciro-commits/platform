@@ -719,43 +719,67 @@
         "source": "import_widget_19",
         "event": "click",
         "control": "home",
-        "target": "",
-        "navigate": {
-          "page": {
-            "app": "build",
-            "kind": "page",
-            "name": "overview"
-          },
-          "interfaceVersion": 0
-        }
+        "effects": [
+          {
+            "kind": "navigate",
+            "navigate": {
+              "page": {
+                "app": "build",
+                "kind": "page",
+                "name": "overview"
+              },
+              "interfaceVersion": 0
+            }
+          }
+        ]
       },
       {
         "source": "import_widget_71",
         "control": "import_control_73",
         "event": "click",
-        "target": "import_open_60",
-        "value": true
+        "effects": [
+          {
+            "kind": "set",
+            "target": "import_open_60",
+            "value": true
+          }
+        ]
       },
       {
         "source": "import_widget_71",
         "control": "import_control_74",
         "event": "click",
-        "target": "import_open_75",
-        "value": true
+        "effects": [
+          {
+            "kind": "set",
+            "target": "import_open_75",
+            "value": true
+          }
+        ]
       },
       {
         "source": "import_widget_71",
         "control": "import_control_76",
         "event": "click",
-        "target": "import_open_77",
-        "value": true
+        "effects": [
+          {
+            "kind": "set",
+            "target": "import_open_77",
+            "value": true
+          }
+        ]
       },
       {
         "source": "import_widget_71",
         "control": "import_control_78",
         "event": "click",
-        "target": "import_open_79",
-        "value": true
+        "effects": [
+          {
+            "kind": "set",
+            "target": "import_open_79",
+            "value": true
+          }
+        ]
       }
     ],
     "unusedWidgets": [

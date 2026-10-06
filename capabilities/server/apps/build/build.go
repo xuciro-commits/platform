@@ -48,9 +48,18 @@ type Object struct {
 	Actions []Action `json:"actions,omitempty" field:"aside" title:"Actions"`
 	// Access is who may do what with it (ADR-0037 18b); empty: builder and
 	// user do everything, as before.
-	Access    []Access `json:"access,omitempty" field:"aside" title:"Access"`
-	State     string   `json:"state" field:"readonly" choices:"draft,published"`
-	Installed string   `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
+	Access []Access `json:"access,omitempty" field:"aside" title:"Access"`
+	// Scope says which fields place a record for the row scopes of Access:
+	// its owner (for "own"; empty: whoever created it) and its organisational
+	// unit within a structure (for "unit" and "below") (ADR-0066).
+	Scope *ObjectScope `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`
+	// Implements names the interfaces this object carries the fields of; Extends
+	// names an installed object type this one adds fields to, one record per base
+	// record through its `base` reference (ADR-0058 A2, A3).
+	Implements []string `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
+	Extends    string   `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
+	State      string   `json:"state" field:"readonly" choices:"draft,published"`
+	Installed  string   `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
 	// Published is the definition as it was last published, which is what is
 	// installed and what a restore installs again — not the draft beside it.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
@@ -68,6 +77,9 @@ type Field struct {
 	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
 	Required bool   `json:"required,omitempty"`
 	Search   bool   `json:"search,omitempty" title:"Searchable"`
+	// Formula computes an integer or decimal field from the record's other
+	// number fields at every decision; such a field is read-only (ADR-0064).
+	Formula string `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
 	// Read and Write, when set, are the roles that read and set it (ADR-0028 D3).
 	Read  []string `json:"read,omitempty" title:"Read by" help:"Roles that read it; empty: every role that reads the object"`
 	Write []string `json:"write,omitempty" title:"Set by" help:"Roles that set it; empty: every role that edits the object"`
@@ -93,6 +105,7 @@ type Build struct {
 	queries       map[string]Query
 	functions     map[string]Function
 	codes         map[string]Code
+	tables        map[string]Table // published decision tables, by name (ADR-0062)
 }
 
 // Attach is called by the host when a tenant is composed.
@@ -100,7 +113,7 @@ func (b *Build) Attach(h host.Host) { b.host = h }
 
 // New is a tenant's builder app.
 func New(tenant string) *Build {
-	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, codes: map[string]Code{}}
+	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, codes: map[string]Code{}, tables: map[string]Table{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
@@ -112,8 +125,11 @@ func New(tenant string) *Build {
 	actions = append(actions, functionCallActions([]string{Builder, User})...)
 	actions = append(actions, evaluationActions()...)
 	actions = append(actions, platform.EntityActions(b.codeEntity())...)
+	actions = append(actions, platform.EntityActions(b.sourceEntity())...)
+	actions = append(actions, platform.EntityActions(b.tableEntity())...)
+	actions = append(actions, sourceActions()...)
 	actions = append(actions, codeActions()...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, TableType)
 	return b
 }
 
@@ -157,7 +173,7 @@ func (b *Build) settings() []platform.Setting {
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity(), b.sourceEntity(), b.tableEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -562,6 +578,9 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetSchema().GetName() == SchemaCodeCompiled {
 		return b.submitCodeCompiled(c, s, now)
 	}
+	if s.GetSchema().GetName() == SchemaSourcePulled {
+		return b.submitSourcePulled(c, s, now)
+	}
 	if name := s.GetSchema().GetName(); name == SchemaFunctionCall || name == SchemaFunctionAnswer {
 		return b.submitFunctionCall(c, s, now)
 	}
@@ -609,7 +628,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity(), b.sourceEntity(), b.tableEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -642,13 +661,69 @@ func (b *Build) check(o Object, id string) error {
 	if err := checkFields(o.Fields, b.fieldKnown); err != nil {
 		return err
 	}
+	if err := checkFormulas(o.Fields); err != nil {
+		return err
+	}
+	if err := checkScope(o); err != nil {
+		return err
+	}
 	if err := checkProcess(o, b.conditionLookup); err != nil {
 		return err
 	}
 	if err := b.checkCreates(o); err != nil {
 		return err
 	}
+	if err := b.checkPosts(o); err != nil {
+		return err
+	}
+	if err := b.checkShape(o); err != nil {
+		return err
+	}
 	return checkAccess(o)
+}
+
+// BaseField is the reference an extension object carries to the record it extends.
+const BaseField = "base"
+
+// checkShape refuses an interface the tenant's apps do not declare or whose
+// fields the object lacks, and an extension of a type that is not there, of
+// itself, with a lifecycle of its own, or whose base field is not the base.
+func (b *Build) checkShape(o Object) error {
+	if len(o.Implements) > 0 {
+		var declared []platform.Interface
+		if b.host != nil {
+			declared = b.host.Interfaces()
+		}
+		info, err := platform.Describe(ID, Entity(o), func(reflect.Type) string { return "" })
+		if err != nil {
+			return err
+		}
+		for k, name := range o.Implements {
+			if slices.Contains(o.Implements[:k], name) {
+				return fmt.Errorf("the interface %s is listed twice", name)
+			}
+			i := slices.IndexFunc(declared, func(i platform.Interface) bool { return i.Name == name })
+			if i < 0 {
+				return fmt.Errorf("no app declares the interface %s", name)
+			}
+			if err := declared[i].Implements(info); err != nil {
+				return err
+			}
+		}
+	}
+	if o.Extends != "" {
+		if o.Extends == TypeOf(o.Name) || !b.fieldKnown(o.Extends) {
+			return fmt.Errorf("the object cannot extend %s: not an object type this tenant has", o.Extends)
+		}
+		if len(o.States) > 0 || len(o.Actions) > 0 {
+			return fmt.Errorf("an extension adds fields to %s; its lifecycle stays the base type's", o.Extends)
+		}
+		k := slices.IndexFunc(o.Fields, func(f Field) bool { return f.Name == BaseField })
+		if k < 0 || o.Fields[k].Type != "reference" || o.Fields[k].Ref != o.Extends || !o.Fields[k].Required {
+			return fmt.Errorf("an extension of %s needs a required reference field %q pointing at it", o.Extends, BaseField)
+		}
+	}
+	return nil
 }
 
 // checkName refuses a name that is not a name, or one already taken.
@@ -961,6 +1036,9 @@ func (b *Build) Reinstall() error {
 	if err := b.installProcesses(); err != nil {
 		return err
 	}
+	if err := b.installTables(); err != nil {
+		return err
+	}
 	for _, a := range applications { // after the pages they hold
 		was, ok := wasPublished[Application](a.Published)
 		if !ok || a.Archived {
@@ -979,7 +1057,7 @@ func Entity(o Object) platform.Entity { return entityWith(o, nil, nil) }
 
 // entity is the declaration as installed: its actions may create related
 // records through this builder's host (ADR-0040 21c).
-func (b *Build) entity(o Object) platform.Entity { return entityWith(o, b.create, b.conditionLookup) }
+func (b *Build) entity(o Object) platform.Entity { return entityWith(o, b, b.conditionLookup) }
 
 func entityWith(o Object, creates creator, lookup func(string) (platform.EntityInfo, bool)) platform.Entity {
 	// StructOf interns identical shapes. The entity identity keeps two named
@@ -1006,6 +1084,9 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		}
 		if f.Search {
 			marks = append(marks, "search")
+		}
+		if f.Formula != "" {
+			marks = append(marks, "readonly")
 		}
 		if len(marks) > 0 {
 			tag += fmt.Sprintf(` field:"%s"`, strings.Join(marks, ","))
@@ -1041,7 +1122,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Compute: computeOf(o), Validate: validateOf(o, model)}
 }
 
 // page is the list and detail page a defined object comes with: the same

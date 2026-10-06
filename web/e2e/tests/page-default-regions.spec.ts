@@ -1,7 +1,7 @@
 import {expect,test} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {decide,fresh,open,pageUIProfile} from './host';
-const original=JSON.parse(readFileSync(new URL('../../packages/build/src/module-import/default.workshop.json',import.meta.url),'utf8'));
+const original=JSON.parse(readFileSync(new URL('../../packages/build/src/workshop/module-import/default.workshop.json',import.meta.url),'utf8'));
 test('five actual default regions keep presentation across import inspector freeze collapse and overlay lifetimes',async({page,request},info)=>{
  test.setTimeout(120_000);page.setDefaultTimeout(10_000);
  const name=fresh('regions').replace(/[^a-z0-9]/gi,'').toLowerCase(),type=`build.${name}`,obj=fresh('OBJ'),parent=fresh('PAGE'),app=fresh('APP'),headers={Authorization:'Bearer manager'};

@@ -109,7 +109,7 @@ test("tenant properties open the original object editor at the selected field", 
   const operator = await page.context().newPage();
   await open(operator, "desk", `/model?object=build.${name}`);
   await expect(operator.getByRole("region", { name: "Semantic inspector", exact: true })).toHaveCount(0);
-  await expect(operator.getByRole("button", { name: "Application Studio", exact: true })).toHaveCount(0);
+  await expect(operator.getByRole("button", { name: "Projects", exact: true })).toHaveCount(0);
   await expect(decide(request, "desk", "build", "build.object.edit", { type: "build.object", id }, { title: "Unauthorized" })).rejects.toThrow(/POLICY_DENIED/);
 });
 

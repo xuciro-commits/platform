@@ -2,7 +2,8 @@
 // host (`GET /v1/entities`) becomes a kit entity, a list page with server-side
 // search, sort and paging, a record page (fields, related records, history) and
 // generated forms. Components take a RecordSource, so the kit knows no client.
-import { ChevronLeft, ChevronRight, History as HistoryIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, History as HistoryIcon, Printer } from "lucide-react";
+import { Barcode } from "./barcode";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { useViewVisible } from "../shell/ViewVisibility";
@@ -486,13 +487,24 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         {r.archived && <Tag label="archived" />}
         {!detailOnly && <span className="ml-auto flex flex-wrap gap-1">{actions?.(r)}</span>}
       </header>);
-  const properties=(<section className="rounded-md border border-border bg-surface p-3">
+  const barcode=detailPresentation?.barcode?detailPresentation.barcode==="id"?r.id:String(r[detailPresentation.barcode]??""):"";
+  // Extension records (ADR-0058 A3): a type that extends this one pairs one record per base record; its
+  // fields show as the base record's own, as far as the reader may read them (the host already filters).
+  const extensions=view.related.flatMap(rel=>{const relInfo=source.entity(rel.type);const row=rel.records[0];if(!relInfo||!row||rel.field!=="base"||(relInfo as {extends?:string}).extends!==type)return [];const relEntity=entityFrom(relInfo);return [{rel,relInfo,relEntity,row}];});
+  const properties=(<section className="rounded-md border border-border bg-surface p-3" data-print-label={detailPresentation?.print||undefined}>
+        {barcode&&<div className="mb-3 flex justify-center overflow-hidden"><Barcode text={barcode}/></div>}
+        {detailPresentation?.print&&<div className="mb-3 flex justify-end print:hidden"><Button size="sm" onClick={()=>window.print()}><Printer/>{t("Print")}</Button></div>}
         <PropertyList columns={detailPresentation?.columns as 1|2|3|4|undefined} items={[...[...new Set(fields??info.fields.map(f=>f.name))].flatMap(name=>{const f=info.fields.find(f=>f.name===name);return !f||detailPresentation?.hideNull&&(r[name]===undefined||r[name]===null||r[name]==="")?[]:[[f.title,entity.fields[name]!.display(r[name] as never,r)] as [string,ReactNode]];}),
           ...(!detailOnly ? [[t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
             [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]] as [string, ReactNode][] : [])]} />
+        {extensions.map(({rel,relInfo,relEntity,row})=><div key={rel.type} className="mt-3 border-t border-border pt-3">
+          <h3 className="mb-1 text-xs font-semibold text-muted">{relInfo.title}</h3>
+          <PropertyList columns={detailPresentation?.columns as 1|2|3|4|undefined} items={relInfo.fields.filter(f=>f.name!=="base"&&!(detailPresentation?.hideNull&&(row[f.name]===undefined||row[f.name]===null||row[f.name]==="")))
+            .map(f=>[f.title,relEntity.fields[f.name]!.display(row[f.name] as never,row)] as [string,ReactNode])}/>
+        </div>)}
       </section>);
   const groups=detailOnly&&!recordTabs&&!linksOnly?[]:recordLinks===undefined?[...view.related,...(view.linked??[])].map(rel=>({rel,title:undefined as string|undefined})):recordLinks.flatMap(group=>{const target=source.entity(group.object.name),field=target?.fields.find(f=>f.name===group.field&&f.type==="reference"&&f.ref===type&&!!f.inverse),rel=view.related.find(r=>r.type===group.object.name&&r.field===group.field);return field&&target?.app===group.object.app&&rel?[{rel,title:group.title}]:[];});
-  const related=detailOnly&&!recordTabs&&!linksOnly?[]:groups.flatMap(({rel,title}) => {
+  const related=detailOnly&&!recordTabs&&!linksOnly?[]:groups.filter(({rel})=>!extensions.some(x=>x.rel===rel)).flatMap(({rel,title}) => {
     const relInfo=source.entity(rel.type),relEntity=relInfo&&entityFrom(relInfo);if(!relEntity)return [];
     return [<section key={`${rel.type}.${rel.field}`}>
       <h2 className="mb-1 text-sm font-semibold">{title||relInfo.plural} <span className="font-normal text-muted">({rel.total}{rel.field === "link" ? t(", linked") : rel.relation ? <>{" · "}{rel.relation}</> : <>{t(", by")} {rel.field}</>})</span></h2>

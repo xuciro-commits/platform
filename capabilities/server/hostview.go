@@ -271,6 +271,15 @@ func (h hostView) Entity(typ string) (platform.EntityInfo, bool) { return h.t.en
 
 func (h hostView) Declares(name string) bool { return h.t.declares(name) }
 
+// Interfaces are the shapes declared across the tenant's apps (ADR-0058 A2).
+func (h hostView) Interfaces() []platform.Interface {
+	manifests := make([]platform.Manifest, len(h.t.apps))
+	for k, a := range h.t.apps {
+		manifests[k] = a.Manifest()
+	}
+	return platform.Interfaces(manifests)
+}
+
 func (h hostView) Readable(m platform.Member, ref string, now time.Time) bool {
 	return h.t.Readable(m, ref, now)
 }

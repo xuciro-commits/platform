@@ -19,46 +19,49 @@ func TestCompilerRejectsBranchOnlyAndEscapedIterationBindings(t *testing.T) {
 	}
 }
 
-func TestProcessStoredNodeDecodesOnceToCanonicalBindings(t *testing.T) {
+func TestProcessStepDecodesStrictly(t *testing.T) {
 	var process Process
-	if err := json.Unmarshal([]byte(`{"name":"review","steps":[{"name":"ask","ask":"user","answers":["yes"],"branches":{"yes":"done"},"inputs":{"threshold":10}},{"name":"done","act":"close"}]}`), &process); err != nil {
+	if err := json.Unmarshal([]byte(`{"name":"review","steps":[{"name":"ask","kind":"ask","ask":"user","answers":["yes"],"cases":{"yes":"done"},"inputs":{"threshold":{"source":"literal","value":10}}},{"name":"done","kind":"action","act":"close"}]}`), &process); err != nil {
 		t.Fatal(err)
 	}
 	if process.Steps[0].Kind != "ask" || process.Steps[0].Cases["yes"] != "done" || process.Steps[0].Inputs["threshold"].Source != "literal" || process.Steps[1].Kind != "action" {
-		t.Fatalf("stored node was not normalized: %+v", process)
+		t.Fatalf("step was not decoded: %+v", process)
 	}
-	canonical, _ := json.Marshal(process)
-	if strings.Contains(string(canonical), `"branches"`) {
-		t.Fatalf("legacy branch representation survived canonical output: %s", canonical)
+	if err := json.Unmarshal([]byte(`{"name":"review","steps":[{"name":"ask","ask":"user","branches":{"yes":"done"}}]}`), &process); err == nil {
+		t.Fatal("an older step representation must be refused, not upgraded")
 	}
 }
 
-func TestRetainedLegacyProcessKeepsItsOriginalReleaseDefinition(t *testing.T) {
-	raw := []byte(`{"id":"P","name":"review","title":"Review","object":"build.item","when":"open","steps":[{"name":"review","ask":"user","answers":["yes"],"branches":{"yes":"finish"}},{"name":"finish","act":"close"}],"version":1}`)
-	var saved Process
-	if err := json.Unmarshal(raw, &saved); err != nil {
-		t.Fatal(err)
+func TestAutomationShape(t *testing.T) {
+	act := func(name, next string) ProcessStep {
+		return ProcessStep{Name: name, Kind: "action", Act: "close", Next: next}
 	}
-	asset, err := processReleaseAsset(saved, "1")
-	if err != nil {
-		t.Fatal(err)
+	base := Process{Name: "notify", Kind: "automation", Object: "build.item", When: "open"}
+	ok := base
+	ok.Steps = []ProcessStep{act("first", "second"), act("second", "")}
+	if err := checkAutomation(ok); err != nil {
+		t.Fatalf("a linear automation is accepted: %v", err)
 	}
-	var envelope platform.FlowReleaseDescriptor
-	json.Unmarshal(asset.Body, &envelope)
-	if strings.Contains(string(envelope.Definition), `"kind"`) || !strings.Contains(string(envelope.Definition), `"branches"`) {
-		t.Fatalf("decoding changed retained release identity: %s", envelope.Definition)
+	withCondition := base
+	withCondition.Steps = []ProcessStep{{Name: "when", Kind: "branch", Cases: map[string]string{"true": "first", "false": "stop"}}, act("first", ""), {Name: "stop", Kind: "end"}}
+	if err := checkAutomation(withCondition); err != nil {
+		t.Fatalf("a condition first, ending when false, is accepted: %v", err)
 	}
-	if saved.Steps[0].Kind != "ask" || saved.Steps[0].Cases["yes"] != "finish" {
-		t.Fatal("retained version did not compile through canonical nodes")
-	}
-	saved.Version = 2
-	saved.originalDefinition = nil
-	next, err := processReleaseAsset(saved, "1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	json.Unmarshal(next.Body, &envelope)
-	if !strings.Contains(string(envelope.Definition), `"kind"`) || strings.Contains(string(envelope.Definition), `"branches"`) {
-		t.Fatal("new publication preserved the legacy editing representation")
+	for name, bad := range map[string]func(p *Process){
+		"manual":    func(p *Process) { p.Manual = true; p.Steps = ok.Steps },
+		"no effect": func(p *Process) { p.Steps = nil },
+		"loop": func(p *Process) {
+			p.Steps = []ProcessStep{{Name: "each", Kind: "foreach", Body: "first"}, act("first", "")}
+		},
+		"broken chain": func(p *Process) { p.Steps = []ProcessStep{act("first", ""), act("second", "")} },
+		"late branch": func(p *Process) {
+			p.Steps = []ProcessStep{act("first", "when"), {Name: "when", Kind: "branch", Cases: map[string]string{"true": "second"}}, act("second", "")}
+		},
+	} {
+		p := base
+		bad(&p)
+		if checkAutomation(p) == nil {
+			t.Fatalf("%s: refused", name)
+		}
 	}
 }

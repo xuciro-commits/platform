@@ -520,6 +520,7 @@ func runWorkFrom(current func() []*Tenant) {
 					continue
 				}
 				t.Evaluate(Now())
+				t.PullSources(Now())
 				t.Embed(Now())
 				t.PurgeTranscripts(Now())
 				t.SweepUploads(Now())

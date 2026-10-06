@@ -22,22 +22,33 @@ const (
 
 // Process is the single declarative definition compiled to native Flow/Step.
 // Canvas positions are presentation; step IDs and typed references are logic.
+//
+// Kind says how the builder authored it (ADR-0053 §7): a "flow" is the free
+// node graph; an "automation" is the linear sentence "when a record of Object
+// reaches When, [if Condition,] run these effects" - the same steps, in a shape
+// the host checks (checkAutomation) so the card editor and the map agree.
 type Process struct {
 	platform.Record
-	originalDefinition json.RawMessage
-	Name               string                  `json:"name" field:"required,search"`
-	Title              string                  `json:"title" field:"required,search"`
-	Object             string                  `json:"object,omitempty" title:"Source object"`
-	When               string                  `json:"when,omitempty" title:"Record start state"`
-	Manual             bool                    `json:"manual,omitempty" title:"Manual start"`
-	Input              json.RawMessage         `json:"input,omitempty" type:"json" title:"Default input"`
-	InputSchema        *platform.ValueSchema   `json:"inputSchema,omitempty" type:"json" title:"Input schema"`
-	Steps              []ProcessStep           `json:"steps" field:"aside"`
-	Layout             map[string]NodePosition `json:"layout,omitempty" type:"json" title:"Canvas layout"`
-	State              string                  `json:"state" field:"readonly" choices:"draft,published"`
-	Version            int                     `json:"version,omitempty" field:"readonly"`
-	Published          string                  `json:"published,omitempty" field:"readonly" type:"longtext"`
-	Versions           []string                `json:"versions,omitempty" field:"readonly"`
+	Name   string `json:"name" field:"required,search"`
+	Title  string `json:"title" field:"required,search"`
+	Kind   string `json:"kind,omitempty" enum:"flow,automation" title:"Authoring shape"`
+	Object string `json:"object,omitempty" title:"Source object"`
+	When   string `json:"when,omitempty" title:"Record start state"`
+	Manual bool   `json:"manual,omitempty" title:"Manual start"`
+	// Every schedules the process instead of a record state or a hand: a Go
+	// duration such as 15m, 1h or 24h, at least 1m (ADR-0057 E1). A scheduled
+	// process has no source record; its steps act as the member who published it.
+	Every string `json:"every,omitempty" title:"Repeat every" help:"A period such as 15m, 1h or 24h; empty: not scheduled"`
+	// Scheduler is the member who published the schedule: scheduled runs act as them.
+	Scheduler   string                  `json:"scheduler,omitempty" field:"readonly" title:"Runs as"`
+	Input       json.RawMessage         `json:"input,omitempty" type:"json" title:"Default input"`
+	InputSchema *platform.ValueSchema   `json:"inputSchema,omitempty" type:"json" title:"Input schema"`
+	Steps       []ProcessStep           `json:"steps" field:"aside"`
+	Layout      map[string]NodePosition `json:"layout,omitempty" type:"json" title:"Canvas layout"`
+	State       string                  `json:"state" field:"readonly" choices:"draft,published"`
+	Version     int                     `json:"version,omitempty" field:"readonly"`
+	Published   string                  `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Versions    []string                `json:"versions,omitempty" field:"readonly"`
 }
 
 type NodePosition struct {
@@ -112,6 +123,11 @@ func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A process may retain at most 64 published versions")
 	}
 	p.Version++
+	if p.Every != "" {
+		p.Scheduler = c.ID
+	} else {
+		p.Scheduler = ""
+	}
 	fl := b.flowOf(*p)
 	if c.Staging() {
 		if err := procs.Validate(b, fl); err != nil {
@@ -193,7 +209,24 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 	if old, ok := wasPublished[Process](p.Published); ok && (old.Name != p.Name || old.Object != p.Object) {
 		return refuse("A published process keeps its name and object")
 	}
-	if !p.Manual {
+	if p.Kind != "" && p.Kind != "flow" && p.Kind != "automation" {
+		return refuse("A process is authored as a flow or an automation")
+	}
+	if p.Kind == "automation" {
+		if err := checkAutomation(p); err != nil {
+			return err
+		}
+	}
+	if p.Every != "" {
+		every, parseErr := time.ParseDuration(p.Every)
+		if parseErr != nil || every < time.Minute || every > 366*24*time.Hour {
+			return refuse("A schedule repeats every period between 1m and a year, such as 15m, 1h or 24h")
+		}
+		if p.Manual || p.Object != "" || p.When != "" {
+			return refuse("A scheduled process has no source record and is not started by hand")
+		}
+	}
+	if !p.Manual && p.Every == "" {
 		var states []platform.State
 		if entity.Type == p.Object && entity.Lifecycle != nil {
 			states = entity.Lifecycle.States
@@ -518,7 +551,10 @@ func processImage(image []byte) (Process, error) {
 // flowOf compiles every declarative block into the existing native owner.
 func (b *Build) flowOf(p Process) platform.Flow {
 	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{Builder}, Start: platform.Start{Manual: p.Manual}}
-	if !p.Manual {
+	if p.Every != "" {
+		fl.Start.Every, _ = time.ParseDuration(p.Every)
+		fl.Start.OnBehalf = p.Scheduler
+	} else if !p.Manual {
 		fl.Start.Type = p.Object
 		stateField := "state"
 		if info, ok := b.lookupEntity(p.Object); ok && info.Lifecycle != nil {
@@ -857,4 +893,54 @@ func predicateSubject(p platform.Predicate) bool {
 		}
 	}
 	return false
+}
+
+// checkAutomation holds an automation to its sentence (ADR-0053 §7): it starts
+// from a record reaching a state, never by hand; at most one condition, first,
+// whose false path ends the run; then effects - actions, AI and compute steps -
+// one after another, each leading to the next, the last to nothing. Anything
+// richer is a flow and is edited on the map.
+func checkAutomation(p Process) *kernel.Error {
+	refuse := func(message string, args ...any) *kernel.Error {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
+	}
+	if p.Manual || p.Every == "" && (p.Object == "" || p.When == "") {
+		return refuse("An automation starts when a record of an object reaches a state, or on a schedule")
+	}
+	if len(p.Steps) == 0 {
+		return refuse("An automation needs at least one effect")
+	}
+	ends := map[string]bool{}
+	for _, s := range p.Steps {
+		if s.Kind == "end" {
+			ends[s.Name] = true
+		}
+	}
+	chain := slices.DeleteFunc(slices.Clone(p.Steps), func(s ProcessStep) bool { return s.Kind == "end" })
+	for i, s := range chain {
+		last := i == len(chain)-1
+		next := ""
+		if !last {
+			next = chain[i+1].Name
+		}
+		switch s.Kind {
+		case "branch":
+			if i != 0 {
+				return refuse("An automation's condition comes first, before its effects")
+			}
+			if s.Cases["true"] != next || (s.Cases["false"] != "" && !ends[s.Cases["false"]]) {
+				return refuse("An automation's condition leads to its first effect when true and ends the run when false")
+			}
+		case "action", "ai", "compute":
+			if s.Next != next || len(s.Cases) > 0 || len(s.Branches) > 0 || s.Body != "" {
+				return refuse("An automation's effects run one after another; step {name} leaves that line", s.Name)
+			}
+		default:
+			return refuse("An automation's effects are actions, AI functions and compute operations; {name} is a {kind} step, which belongs on a flow map", s.Name, s.Kind)
+		}
+	}
+	if len(chain) == 0 || chain[len(chain)-1].Kind == "branch" {
+		return refuse("An automation needs at least one effect after its condition")
+	}
+	return nil
 }

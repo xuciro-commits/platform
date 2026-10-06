@@ -1,5 +1,5 @@
 import {expect,test} from '@playwright/test';import {readFileSync} from 'node:fs';import {decide,fresh,open,pageUIProfile} from './host';
-const original=JSON.parse(readFileSync(new URL('../../packages/build/src/module-import/default.workshop.json',import.meta.url),'utf8'));
+const original=JSON.parse(readFileSync(new URL('../../packages/build/src/workshop/module-import/default.workshop.json',import.meta.url),'utf8'));
 test('three original action overlays preserve defaults drafts native criteria references creates and frozen configuration',async({page,request},info)=>{
  test.setTimeout(180_000);page.setDefaultTimeout(10_000);const name=fresh('forms').replace(/[^a-z0-9]/gi,'').toLowerCase(),type=`build.${name}`,operator=`build.${name}operator`,work=`build.${name}work`,obj=fresh('OBJ'),op=fresh('OBJ'),wo=fresh('OBJ'),parent=fresh('PAGE'),app=fresh('APP'),headers={Authorization:'Bearer manager'},states=['Active','Warning','Maintenance','Offline','Decommissioned'].map(title=>({name:title.toLowerCase(),title}));
  const fields=[{name:'name',title:'Name',type:'text',search:true},{name:'priority',title:'Priority',type:'choice',choices:'Low,High'},{name:'owner',title:'Owner',type:'text'},{name:'lastinspection',title:'Last inspection',type:'datetime'}];

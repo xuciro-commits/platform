@@ -285,6 +285,19 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
+	{ // interfaces, once every entity is described (ADR-0058 A2)
+		manifests := make([]platform.Manifest, len(apps))
+		infos := map[string]platform.EntityInfo{}
+		for k, a := range apps {
+			manifests[k] = a.Manifest()
+		}
+		for _, et := range t.records.sortedTypes() {
+			infos[et.info.Type] = et.info
+		}
+		if err := platform.CheckInterfaces(manifests, infos); err != nil {
+			return nil, fmt.Errorf("tenant %s: %v", id, err)
+		}
+	}
 	if err := t.registerDefinitions(); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
@@ -1050,7 +1063,7 @@ func (t *Tenant) Apps() []AppInfo {
 	for _, a := range t.apps {
 		m := a.Manifest()
 		info := AppInfo{ID: m.ID, Version: m.Version, Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
-			Roles: m.AllRoles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]platform.EffectKind{}, m.Emits...)}
+			Roles: m.AllRoles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]platform.EffectKind{}, m.Emits...), Interfaces: append([]platform.Interface{}, m.Interfaces...)}
 		for input, journaled := range m.Inputs {
 			info.Inputs = append(info.Inputs, input+map[bool]string{true: "", false: " (not journaled)"}[journaled])
 		}
@@ -1103,6 +1116,7 @@ type AppInfo struct {
 	Provides     []string                  `json:"provides"`
 	Consumes     []string                  `json:"consumes"`
 	Emits        []platform.EffectKind     `json:"emits"`
+	Interfaces   []platform.Interface      `json:"interfaces"` // the shapes this app declares (ADR-0058 A2)
 }
 
 // checkManifest refuses a manifest the host could not honour: every app's

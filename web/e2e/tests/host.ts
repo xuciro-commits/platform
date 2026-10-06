@@ -28,8 +28,10 @@ export async function open(page: Page, token: string, route: string) {
 }
 
 /** Task surfaces share the shell and leave existing editor tabs mounted. */
+/** Opens a platform application from the header's application switcher (ADR-0052); "Home" goes to the rail's Home. */
 export async function switchWorkspace(page: Page, title: string) {
-  await page.getByRole("button", { name: "Workspaces", exact: true }).click();
+  if (title === "Home") { await page.getByRole("button", { name: "Home", exact: true }).first().click(); return; }
+  await page.getByRole("button", { name: "Switch application", exact: true }).click();
   await page.getByRole("menuitemradio", { name: title, exact: true }).click();
 }
 

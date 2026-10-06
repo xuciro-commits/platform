@@ -1,5 +1,5 @@
 import {expect,test} from '@playwright/test';
-import {defaultAnalyticsFacetGroup} from '../../packages/build/src/module-import/default-analytics.fixture.mjs';
+import {defaultAnalyticsFacetGroup} from '../../packages/build/src/workshop/module-import/default-analytics.fixture.mjs';
 import {decide,fresh,open,pageUIProfile} from './host';
 test('five untouched Analytics facets share complete counts and original set Owner and numeric predicates in one frozen page',async({page,request},info)=>{
  test.setTimeout(120_000);page.setDefaultTimeout(10_000);

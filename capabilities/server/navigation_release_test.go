@@ -38,9 +38,9 @@ func TestFrozenNavigationPagesActivateAndReplayAsOneClosure(t *testing.T) {
 	submit(build.ObjectType, "object", "create", map[string]any{"name": "note", "title": "Note", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}})
 	submit(build.ObjectType, "object", "publish", map[string]any{})
 	makeDoc := func(target string) *platform.PageDocument {
-		d := &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"button"}}, "button": {Kind: "widget", Section: "button"}}, Variables: map[string]platform.PageVariable{"flag": {Scope: "page", Type: "boolean", Mode: "state", Initial: json.RawMessage(`false`)}}, Interface: &platform.PageInterface{Version: 1}, Events: []platform.PageEventBinding{{Source: "button", Event: "click", Target: "flag", Value: json.RawMessage(`true`)}}}
+		d := &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"button"}}, "button": {Kind: "widget", Section: "button"}}, Variables: map[string]platform.PageVariable{"flag": {Scope: "page", Type: "boolean", Mode: "state", Initial: json.RawMessage(`false`)}}, Interface: &platform.PageInterface{Version: 1}, Events: []platform.PageEventBinding{{Source: "button", Event: "click", Effects: []platform.PageEffect{{Kind: "set", Target: "flag", Value: json.RawMessage(`true`)}}}}}
 		if target != "" {
-			d.Events[0] = platform.PageEventBinding{Source: "button", Event: "click", Navigate: &platform.PageNavigation{Page: platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: target}, InterfaceVersion: 1}}
+			d.Events[0] = platform.PageEventBinding{Source: "button", Event: "click", Effects: []platform.PageEffect{{Kind: "navigate", Navigate: &platform.PageNavigation{Page: platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: target}, InterfaceVersion: 1}}}}
 		}
 		return d
 	}
@@ -89,7 +89,7 @@ func TestFrozenNavigationPagesActivateAndReplayAsOneClosure(t *testing.T) {
 			if err := json.Unmarshal([]byte(page.Published), &published); err != nil {
 				t.Fatal(err)
 			}
-			nav := published.Document.Events[0].Navigate
+			nav := published.Document.Events[0].Effects[0].Navigate
 			if broken == "target" {
 				nav.Page.Name = "missing"
 			} else {
@@ -114,7 +114,7 @@ func TestFrozenNavigationPagesActivateAndReplayAsOneClosure(t *testing.T) {
 	for _, current := range []*Tenant{tn, replayed} {
 		for _, d := range current.definitions {
 			if d.Ref.Kind == platform.AssetPage && (d.Ref.Name == "first" || d.Ref.Name == "second") {
-				if d.Page.Document.Interface.Version != 1 || d.Page.Document.Events[0].Navigate == nil {
+				if d.Page.Document.Interface.Version != 1 || d.Page.Document.Events[0].Effects[0].Navigate == nil {
 					t.Fatal("activation or replay lost frozen navigation")
 				}
 			}

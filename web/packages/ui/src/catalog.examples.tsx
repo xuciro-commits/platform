@@ -1,3 +1,4 @@
+import { Workbench, ProblemList, StructureRow, PanelSection } from "./layout/Workbench";
 import {CanvasEditor,CanvasRegion,useCanvasGesture,type CanvasModel} from "./layout/CanvasEditor";
 import {ApplicationHeader} from "./layout/ApplicationHeader";
 import {useTheme} from "./theme";
@@ -17,7 +18,7 @@ import {
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
   type FlowDefinition, type FlowInstanceData, type ChartSpec, type Route,
 } from "./index";
-import { WorkspaceContext } from "./shell/Workspace";
+import { WorkspaceContext, useWorkspace } from "./shell/Workspace";
 import {RecordActionGrid} from "./records/RecordActionGrid";
 import {ObservationTable} from "./records/ObservationTable";
 import {ObservationStatistics} from "./records/ObservationStatistics";
@@ -59,7 +60,7 @@ export function ButtonGroups(){
 // Runnable owner examples use public APIs and synthetic values only. Nothing in
 // this bundle fetches a host or suggests that a fixture proves authorization.
 export function PreviewWorkspace({ children, onOpen }: { children: ReactNode; onOpen?: (route: Route) => void }) {
-  const workspace = useMemo(() => ({ open: (route: Route) => onOpen?.(route), close: () => {}, notify }), [onOpen]);
+  const workspace = useMemo(() => ({ open: (route: Route) => onOpen?.(route), close: () => {}, closeAll: () => {}, notify, palette: () => {}, recent: [], favorites: [], toggleFavorite: () => {} }), [onOpen]);
   return <WorkspaceContext.Provider value={workspace}>{children}</WorkspaceContext.Provider>;
 }
 
@@ -254,9 +255,39 @@ export function MasterDetail() {
   const [selected, setSelected] = useState<string>();
   return <RecordWorkspace title={t("Records")} source={demoSource} type={demoInfo.type} selected={selected} onSelect={setSelected} detail={(id) => <RecordPage source={demoSource} type={demoInfo.type} id={id} />} />;
 }
-const views = [{ id: "catalog-records", title: () => t("Records"), render: () => <MasterDetail /> }, { id: "catalog-graph", title: () => t("Steps"), render: () => <Blocks /> }];
+// The shell with every region the platform uses (ADR-0052): rail, application
+// switcher, context pane, dock. Synthetic applications; nothing is authorized here.
+function ShellHome() {
+  const { applications, recent, favorites, open } = useWorkspace();
+  return <div className="grid max-w-3xl gap-4">
+    <h1 className="text-xl font-semibold tracking-tight">{t("Home")}</h1>
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
+      {applications?.apps.map((a) => <Button key={a.id} onClick={() => applications.onSelect(a.id)} className="grid h-auto justify-items-start gap-1 p-3 [&>svg]:size-5 [&>svg]:text-primary">{a.icon}<span className="font-medium">{a.title}</span><span className="text-xs text-muted">{favorites.includes(a.id) ? "★ " : ""}{applications.categories.find((c) => c.id === a.category)?.label}</span></Button>)}
+    </div>
+    <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Recent")}</h2>
+    {recent.length === 0 ? <p className="text-sm text-muted">{t("Nothing opened yet.")}</p> : recent.slice(0, 6).map((r) => <Button key={r.title + r.at} variant="row" onClick={() => open(r.route)}>{r.title}</Button>)}
+  </div>;
+}
+const views = [
+  { id: "catalog-home", title: () => t("Home"), render: () => <ShellHome /> },
+  { id: "catalog-portal", title: () => t("Applications"), render: () => <ShellHome /> },
+  { id: "catalog-records", title: () => t("Records"), render: () => <MasterDetail /> },
+  { id: "catalog-graph", title: () => t("Steps"), render: () => <Blocks /> },
+];
 export function WorkspaceShell() {
-  return <Workspace product={t("Catalog preview")} storageKey="platform.catalog.workspace-preview" views={views} home={{ view: "catalog-records" }} nav={[{ label: t("Preview"), items: [{ label: t("Records"), route: { view: "catalog-records" } }, { label: t("Steps"), route: { view: "catalog-graph" } }] }]} />;
+  const [current, setCurrent] = useState("records");
+  const [projection, setProjection] = useState("operations");
+  const apps = [
+    { id: "records", title: t("Records"), icon: <Plus />, category: "business", description: t("Sample records"), home: { view: "catalog-records" } },
+    { id: "steps", title: t("Steps"), icon: <AlignLeft />, category: "build", description: t("Typed block canvas"), home: { view: "catalog-graph" } },
+  ];
+  const categories = [{ id: "business", label: t("Business applications") }, { id: "build", label: t("Build") }];
+  return <Workspace product={t("Catalog preview")} storageKey="platform.catalog.workspace-preview" views={views} home={{ view: "catalog-home" }}
+    rail={{ home: { view: "catalog-home" }, applications: { view: "catalog-portal" }, notifications: { route: { view: "catalog-home" }, unread: 2 } }}
+    applications={{ apps, categories, current, onSelect: (id) => { setCurrent(id); location.hash = `#/${apps.find((a) => a.id === id)!.home.view}`; } }}
+    workspaces={{ options: [{ id: "operations", title: t("Operations") }, { id: "build", title: t("Build") }], current: projection, onSelect: setProjection }}
+    session={{ tenant: "demo", principal: "ada", options: [{ id: "ada", label: "ada · demo" }], current: "ada", onSwitch: () => {} }}
+    nav={[{ label: current === "records" ? t("Records") : t("Steps"), items: current === "records" ? [{ label: t("Records"), route: { view: "catalog-records" } }] : [{ label: t("Steps"), route: { view: "catalog-graph" } }] }]} />;
 }
 
 export function MetalButtons() {
@@ -459,4 +490,14 @@ export function CanvasEditorExample(){
  resize={(id,axis,pixels)=>({[id]:{...sizes[id],[axis]:Math.min(800,Math.max(32,Math.round(pixels)))}})} onResize={next=>setSizes(old=>({...old,...next}))} onResetSize={(id,axis)=>setSizes(old=>({...old,[id]:{...old[id],[axis]:undefined}}))}>
   <div data-canvas-scroll className="overflow-auto p-6"><LayoutRegion><CanvasRegion id="root"><LayoutStack direction="rows">{order.map(id=><LayoutRegion key={id} size={sizes[id]}><CanvasExampleRegion id={id}/></LayoutRegion>)}</LayoutStack></CanvasRegion></LayoutRegion></div>
  </CanvasEditor></div>;
+}
+
+export function WorkbenchExample() {
+  return <div className="h-[28rem]"><Workbench storageKey="catalog-example" crumbs={[{ label: "Project" }, { label: "Module" }]} title="Receiving" saving="saved"
+    history={{ canUndo: true, canRedo: false, undo: () => {}, redo: () => {} }} actions={<Button variant="primary">Publish</Button>}
+    left={{ label: "Structure", tabs: [{ id: "layers", title: "Layers", content: <PanelSection title="Pages"><StructureRow label="Inbound tasks" selected /><StructureRow label="Putaway" depth={1} /></PanelSection> }, { id: "widgets", title: "Widgets", content: <p className="p-3 text-xs">Widget library</p> }] }}
+    right={{ label: "Inspector", tabs: [{ id: "properties", title: "Properties", content: <p className="p-3 text-xs">Properties</p> }, { id: "events", title: "Events", badge: 2, content: <p className="p-3 text-xs">Events</p> }] }}
+    dock={{ label: "Dock", tabs: [{ id: "problems", title: "Problems", badge: 1, content: <ProblemList problems={[{ id: "1", text: "A widget references a missing variable.", subject: "table-1" }]} /> }] }}>
+    <div className="flex flex-1 items-center justify-center text-sm text-muted">Canvas</div>
+  </Workbench></div>;
 }

@@ -118,11 +118,14 @@ async function assemble() {
   if (!preview.included.some((ref) => ref.kind === "flow" && ref.name === `build.${fixture.process.name}`)) {
     throw new Error("The application release did not include its native receiving flow");
   }
-  // Example business data is separate from the controlled definitions.
-  await ensure("build.wmsitem", { id: "WMS-ITEM-001", sku: "ITEM-001", name: "Precision fastener / 精密紧固件", unit: "pcs", unitsperpallet: 50 });
-  await ensure("build.wmslocation", { id: "WMS-LOC-A01", code: "A-01", zone: "Receiving / 收货区", description: "Receiving probe destination / 收货验证库位" });
+  // Example business data is separate from the controlled definitions. The
+  // material and the location are the platform's shared master data (ADR-0058),
+  // kept by core's steward — the builder seat holds that role on the dev host.
+  await ensure("core.site", { id: "WMS-SITE-001", code: "WH01", name: "Probe warehouse / 验证仓库", kind: "warehouse", active: true });
+  await ensure("core.material", { id: "WMS-ITEM-001", code: "ITEM-001", name: "Precision fastener / 精密紧固件", kind: "component", baseUom: "uom-pce", active: true });
+  await ensure("core.location", { id: "WMS-LOC-A01", code: "A-01", name: "Receiving / 收货区", kind: "dock", site: "WMS-SITE-001", active: true });
   await ensure("build.wmsreceipt", { id: "WMS-RECEIPT-001", number: "RCV-001", supplier: "Sample supplier / 示例供应商", arrival: new Date().toISOString().slice(0, 10) }, operator);
-  await ensure("build.wmsreceiptline", { id: "WMS-LINE-001", receipt: "WMS-RECEIPT-001", item: "WMS-ITEM-001", expected: 125, lot: "LOT-001" }, operator);
+  await ensure("build.wmsreceiptline", { id: "WMS-LINE-001", receipt: "WMS-RECEIPT-001", item: "WMS-ITEM-001", expected: 125, unitsperpallet: 50, lot: "LOT-001" }, operator);
   if (!await record("build.wmstask", "WMS-TASK-001", operator)) {
     await ensure("build.wmstask", { id: "WMS-TASK-001", name: "PUT-001", line: "WMS-LINE-001", location: "WMS-LOC-A01", quantity: 125, unitsperpallet: 50 }, operator);
   }

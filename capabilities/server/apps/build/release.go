@@ -490,9 +490,6 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 	slices.SortFunc(actions, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
 	actions = slices.Compact(actions)
 	definition := json.RawMessage(published(saved))
-	if len(saved.originalDefinition) > 0 {
-		definition = slices.Clone(saved.originalDefinition)
-	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(definition, &fields); err != nil {
 		return platform.ReleaseAsset{}, err

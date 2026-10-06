@@ -555,15 +555,6 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
-  "Application runtime diagnostics": "应用运行诊断",
-  "Inspect authorized current and historical resource-linked runs without claiming exclusive application origin.": "查看获权的当前及历史资源关联运行，不将共享资源视为应用独占。",
-  "Authorized calculation run": "获权计算运行",
-  "Read the original computation binding and result; retry through the original authorized effect action.": "读取计算原始绑定和结果，通过原获权效果动作重试。",
-  "shared": "共享",
-  "failed": "失败",
-  "completed": "已完成",
-  "denied": "拒绝",
-
  "External document": "外部文档",
  "Spacer": "空白",
  "Spacer configuration is unavailable or incompatible.": "空白配置不可用或不兼容。",
@@ -646,4 +637,10 @@ register("zh-CN", {
   "Kanban board": "看板",
   "Kanban fields or lifecycle are unavailable.": "看板字段或生命周期不可用。",
   "This board shows the current query window.": "此看板显示当前查询窗口。",
+  "Object type in Ontology": "在本体中查看对象类型",
+  "Page: {title}": "页面：{title}",
+  "Scan a code": "扫描条码",
+  "Scan or type a code": "扫描或输入编码",
+  "The camera is not available.": "摄像头不可用。",
+  "Camera": "摄像头",
 });

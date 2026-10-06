@@ -108,10 +108,10 @@ func testFrozenContextViewsMemberProjectionReplayAndSnapshot(t *testing.T, overl
 		}
 		doc.Variables["open"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: platform.Raw(false)}
 		doc.Overlays = map[string]platform.PageOverlay{"panel": {Root: "panelRoot", Kind: "drawer", Title: "Original context panel", OpenVariable: "open"}}
-		doc.Events = append(doc.Events, platform.PageEventBinding{Source: "trigger", Event: "click", Target: "open", Value: platform.Raw(true)})
+		doc.Events = append(doc.Events, platform.PageEventBinding{Source: "trigger", Event: "click", Effects: []platform.PageEffect{{Kind: "set", Target: "open", Value: platform.Raw(true)}}})
 	}
 	for _, crumb := range []struct{ id, home string }{{"crumb", "home"}, {"secretCrumb", "home"}, {"privateHomeCrumb", "privatehome"}} {
-		doc.Events = append(doc.Events, platform.PageEventBinding{Source: crumb.id, Event: "click", Control: "home", Navigate: &platform.PageNavigation{Page: platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: crumb.home}}})
+		doc.Events = append(doc.Events, platform.PageEventBinding{Source: crumb.id, Event: "click", Control: "home", Effects: []platform.PageEffect{{Kind: "navigate", Navigate: &platform.PageNavigation{Page: platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: crumb.home}}}}})
 	}
 	submit(build.PageType, "context", "create", map[string]any{"name": "context", "title": "Context views", "object": asset.Name, "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "context")

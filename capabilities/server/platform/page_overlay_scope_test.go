@@ -42,12 +42,12 @@ func TestOverlayScopeBindings(t *testing.T) {
 		{"constant input", func(d *PageDocument) { v := d.Variables["local"]; v.Mode = "constant"; d.Variables["local"] = v }},
 		{"missing binding", func(d *PageDocument) { n := d.Nodes["input"]; n.ValueVariable = ""; d.Nodes["input"] = n }},
 		{"page event writes overlay local", func(d *PageDocument) {
-			d.Events[0].Target, d.Events[0].Value = "local", json.RawMessage(`"leak"`)
+			d.Events[0].Effects[0].Target, d.Events[0].Effects[0].Value = "local", json.RawMessage(`"leak"`)
 		}},
 		{"page navigation returns to overlay local", func(d *PageDocument) {
-			d.Events[0] = PageEventBinding{Source: "trigger", Event: "click", Navigate: &PageNavigation{
+			d.Events[0] = PageEventBinding{Source: "trigger", Event: "click", Effects: []PageEffect{{Kind: "navigate", Navigate: &PageNavigation{
 				Page: AssetRef{App: "build", Kind: AssetPage, Name: "handler"}, InterfaceVersion: 1, Results: map[string]string{"result": "local"},
-			}}
+			}}}}
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

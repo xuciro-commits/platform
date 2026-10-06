@@ -89,6 +89,8 @@ type Host interface {
 	Entity(typ string) (platform.EntityInfo, bool)
 	// Declares says whether an entity type, a field (<type>.<field>) or an action exists.
 	Declares(name string) bool
+	// Interfaces are the shapes declared across the tenant's apps (ADR-0058 A2).
+	Interfaces() []platform.Interface
 	// Seen marks an app's notifications with any of keys read for everyone.
 	Seen(c platform.Caller, keys ...string)
 	// Invoke submits a protocol action to the tenant's provider for c's app,

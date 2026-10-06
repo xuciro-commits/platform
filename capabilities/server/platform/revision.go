@@ -259,13 +259,22 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 				}
 				if page.Document != nil {
 					for _, event := range page.Document.Events {
-						if event.Navigate != nil {
-							target, ok := lookup[event.Navigate.Page]
+						for _, effect := range event.Effects {
+							if effect.Kind == "action" && effect.Action != nil {
+								asset, ok := lookup[effect.Action.Ref]
+								action, err := releaseActionDescriptor(asset.Body)
+								if !ok || err != nil || action.New == (effect.Action.RecordVariable != "") {
+									return fmt.Errorf("page action effect %s is unavailable", effect.Action.Ref)
+								}
+							}
+						}
+						if n := event.Navigation(); n != nil {
+							target, ok := lookup[n.Page]
 							var targetPage Page
 							if !ok || json.Unmarshal(target.Body, &targetPage) != nil {
-								return fmt.Errorf("page navigation target %s is unavailable", event.Navigate.Page)
+								return fmt.Errorf("page navigation target %s is unavailable", n.Page)
 							}
-							if err := CheckPageNavigation(page, targetPage, *event.Navigate); err != nil {
+							if err := CheckPageNavigation(page, targetPage, *n); err != nil {
 								return err
 							}
 						}

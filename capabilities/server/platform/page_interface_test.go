@@ -8,7 +8,7 @@ import (
 
 func interfacePage(name string) Page {
 	object := AssetRef{App: "sample", Kind: AssetObject, Name: "sample.record"}
-	return Page{Name: name, Layout: "composed", Object: object, Sections: []Section{{ID: "detail", Widget: "detail", ConfigVersion: 1, RecordVariable: "record"}, {ID: "button", Widget: "button", ConfigVersion: 1}}, Document: &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"detail", "button"}}, "detail": {Kind: "widget", Section: "detail"}, "button": {Kind: "widget", Section: "button"}}, Variables: map[string]PageVariable{"record": {Scope: "page", Type: "record", Mode: "input"}, "visited": {Scope: "page", Type: "boolean", Mode: "constant", Initial: json.RawMessage(`true`)}, "returned": {Scope: "page", Type: "boolean", Mode: "state", Initial: json.RawMessage(`false`)}}, Interface: &PageInterface{Version: 1, Inputs: map[string]PagePort{"record": {Variable: "record", Type: "record", Object: &object, Required: true}}, Outputs: map[string]PagePort{"visited": {Variable: "visited", Type: "boolean", Required: true}}}, Events: []PageEventBinding{{Source: "button", Event: "click", Return: true}}}}
+	return Page{Name: name, Layout: "composed", Object: object, Sections: []Section{{ID: "detail", Widget: "detail", ConfigVersion: 1, RecordVariable: "record"}, {ID: "button", Widget: "button", ConfigVersion: 1}}, Document: &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"detail", "button"}}, "detail": {Kind: "widget", Section: "detail"}, "button": {Kind: "widget", Section: "button"}}, Variables: map[string]PageVariable{"record": {Scope: "page", Type: "record", Mode: "input"}, "visited": {Scope: "page", Type: "boolean", Mode: "constant", Initial: json.RawMessage(`true`)}, "returned": {Scope: "page", Type: "boolean", Mode: "state", Initial: json.RawMessage(`false`)}}, Interface: &PageInterface{Version: 1, Inputs: map[string]PagePort{"record": {Variable: "record", Type: "record", Object: &object, Required: true}}, Outputs: map[string]PagePort{"visited": {Variable: "visited", Type: "boolean", Required: true}}}, Events: []PageEventBinding{{Source: "button", Event: "click", Effects: []PageEffect{{Kind: "return"}}}}}}
 }
 func navigation(target string) *PageNavigation {
 	return &PageNavigation{Page: AssetRef{App: "sample", Kind: AssetPage, Name: target}, InterfaceVersion: 1, Inputs: map[string]PageValue{"record": {Variable: "record"}}, Results: map[string]string{"visited": "returned"}}
@@ -55,10 +55,8 @@ func TestPageInterfacesAndNavigationTypes(t *testing.T) {
 
 func TestCandidateClosesExplicitPageNavigationCycles(t *testing.T) {
 	a, b := interfacePage("a"), interfacePage("b")
-	a.Document.Events[0].Return = false
-	a.Document.Events[0].Navigate = navigation("b")
-	b.Document.Events[0].Return = false
-	b.Document.Events[0].Navigate = navigation("a")
+	a.Document.Events[0].Effects[0] = PageEffect{Kind: "navigate", Navigate: navigation("b")}
+	b.Document.Events[0].Effects[0] = PageEffect{Kind: "navigate", Navigate: navigation("a")}
 	aa, err := PageReleaseAsset("sample", "1", a)
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +74,7 @@ func TestCandidateClosesExplicitPageNavigationCycles(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An owner-added structural edge must not inherit the navigation-cycle exception.
-	a.Document.Events[0] = PageEventBinding{Source: "button", Event: "click", Target: "returned", Value: json.RawMessage(`true`)}
+	a.Document.Events[0] = PageEventBinding{Source: "button", Event: "click", Effects: []PageEffect{{Kind: "set", Target: "returned", Value: json.RawMessage(`true`)}}}
 	aa, _ = PageReleaseAsset("sample", "1", a)
 	aa.Requires = append(aa.Requires, bb.Ref)
 	if _, err := Candidate([]AssetRef{aa.Ref}, []ReleaseAsset{aa, bb, object}); err == nil || !strings.Contains(err.Error(), "cycle") {

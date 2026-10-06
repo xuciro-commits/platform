@@ -244,9 +244,12 @@ func (f *Flows) Validate(a platform.App, fl platform.Flow) error {
 func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 	id := m.ID + "." + fl.Name
 	d := &flowDef{app: m.ID, Flow: fl, steps: map[string]*platform.Step{}}
-	byEvent, byState := len(fl.Start.On) > 0 && fl.Start.Begin != nil, fl.Start.Type != "" && fl.Start.When != nil
-	if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || boolCount(byEvent, byState, fl.Start.Manual) != 1 {
-		return nil, fmt.Errorf("flow %s: name, title, version, steps and one start — on events, or on a record's state — are required", id)
+	byEvent, byState, byClock := len(fl.Start.On) > 0 && fl.Start.Begin != nil, fl.Start.Type != "" && fl.Start.When != nil, fl.Start.Every > 0
+	if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || boolCount(byEvent, byState, fl.Start.Manual, byClock) != 1 {
+		return nil, fmt.Errorf("flow %s: name, title, version, steps and one start — on events, on a record's state, by hand or on a schedule — are required", id)
+	}
+	if byClock && fl.Start.Every < time.Minute {
+		return nil, fmt.Errorf("flow %s: a schedule repeats at least every minute", id)
 	}
 	if byState && !slices.ContainsFunc(m.Entities, func(e platform.Entity) bool { return e.Type == fl.Start.Type }) && (m.ID != "build" || f.host == nil || !f.host.Declares(fl.Start.Type)) {
 		return nil, fmt.Errorf("flow %s starts on the state of %s, not an entity type of %s", id, fl.Start.Type, m.ID)
@@ -563,6 +566,9 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 
 // Run takes what is due: retries, timeouts, times and conditions.
 func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
+	if err := f.tick(c, now); err != nil {
+		return err
+	}
 	running, readErr := f.running(c)
 	if readErr != nil {
 		return readErr

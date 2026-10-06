@@ -4,6 +4,7 @@
 @import "dockview-react/dist/styles/dockview.css";
 @import "@xyflow/react/dist/style.css";
 @source "./";
+@import "./themes/industrial.css";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
@@ -208,4 +209,20 @@ body {
     max-width: 100% !important;
     flex: 0 0 auto !important;
   }
+}
+
+/* ADR-0057 D1: a page laid out for a handheld terminal — one column, large
+   type and targets for gloved fingers; the scan field is the first thing. */
+[data-device="handheld"] { font-size: 1.0625rem; }
+[data-device="handheld"] .platform-layout-columns { flex-direction: column; flex-wrap: nowrap; }
+[data-device="handheld"] .platform-layout-columns > .platform-layout-region { width: 100% !important; min-width: 0 !important; max-width: 100% !important; flex: 0 0 auto !important; }
+[data-device="handheld"] button, [data-device="handheld"] [data-ui="field"] { min-height: 2.75rem; font-size: 1rem; }
+[data-device="handheld"] [data-scan-input] [data-ui="field"] { min-height: 3.25rem; font-size: 1.375rem; }
+[data-device="handheld"] table td, [data-device="handheld"] table th { padding-block: 0.625rem; }
+
+/* Printing a record page prints the label (or the page), not the chrome. */
+@media print {
+  body:has([data-print-label]) > * { visibility: hidden; }
+  body:has([data-print-label]) [data-print-label] { visibility: visible; position: fixed; inset: 0; margin: 0; border: 0; background: #fff; color: #000; }
+  body:has([data-print-label]) [data-print-label] * { visibility: visible; }
 }

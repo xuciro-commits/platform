@@ -1,6 +1,6 @@
 # ADR-0046: 融合外包编辑体验与平台语义的应用设计台
 
-**状态：** 已接受，分批实施，2026-10-01（#141，关联 #123/#132/#138）。负责人明确要求“开始执行落地ADR0046”；按 F1–F6 推进，产品方向、文档/组件契约和迁移路线已有实施授权。活动批次只在 [WorkQueue](../WorkQueue.md)，工程检查与体验验收保持区分。
+**状态：** 已接受，分批实施，2026-10-01（#141，关联 #123/#132/#138）。**§3 的"Application Studio / 应用设计台"顶层结构已被 [ADR-0052](0052-foundry-aligned-platform-experience.md) 取代**：页面编辑器现为 Workshop 应用，本体视图为 Ontology 应用，Logic 为 Automate / AI Functions / Code，测试发布为 Releases；§5–§6 的页面文档、容器、变量与组件契约继续有效。外包原型源码（原 `references/application-studio/`）已从仓库移除，需要时取 Git 历史 `1487b6b` 之前的版本。负责人明确要求“开始执行落地ADR0046”；按 F1–F6 推进，产品方向、文档/组件契约和迁移路线已有实施授权。活动批次只在 [WorkQueue](../WorkQueue.md)，工程检查与体验验收保持区分。
 
 **与既有决策的关系：** 延续 [ADR-0018](0018-one-workspace.md) 的一个工作区、[ADR-0040](0040-semantic-builder-and-relationship-model.md) 的统一语义及多种创作界面、[ADR-0039](0039-minimal-definition-release.md) 的冻结候选与激活、[ADR-0044](0044-capability-fabric.md) 的原能力执行路径，以及 [ADR-0045](0045-platform-catalog.md) 的规范主人与 Catalog。接受本文后，扩展 [ADR-0035](0035-a-page-is-a-layout-of-bound-widgets.md) 的平铺页面表达范围；不改变 K1–K9，也不改变原应用的业务权威。
 
@@ -19,12 +19,12 @@
 
 平台基线为 `53e913e` 加审查时的工作树，其中已有未提交的页面选择、应用交付、动作条件等工作。下表以工作树源码为证据，不把未提交状态称为主线交付，也不重复原有验收。
 
-外包来源为本机 `palantir-workshop-replica-specification-4`。审查时对其 `src/`、`public/`、`scripts/` 及 `package.json`、`pnpm-lock.yaml`、`next.config.ts`、`tsconfig.json` 共 76 个文件计算快照摘要：`afb6bc77e3e25233573c37750eab4181c56a1e24d43ea6ad55c0771cb196f99d`。算法为相对路径排序，逐项拼接路径 UTF-8、NUL、文件 SHA-256 原始字节，再取整体 SHA-256。排除依赖目录、构建产物、浏览器状态和凭据。来源已固定在 [workshop-source.tar.gz](../../references/application-studio/workshop-source.tar.gz)，逐文件摘要和归属说明在 [workshop-source.json](../../references/application-studio/workshop-source.json)。原交付未包含独立许可文件；这是负责人提供并授权内部融合的材料，依赖继续遵循各自许可。归档不包含环境文件、凭据或构建产物，不作为第二条运行路径。
+外包来源为本机 `palantir-workshop-replica-specification-4`。审查时对其 `src/`、`public/`、`scripts/` 及 `package.json`、`pnpm-lock.yaml`、`next.config.ts`、`tsconfig.json` 共 76 个文件计算快照摘要：`afb6bc77e3e25233573c37750eab4181c56a1e24d43ea6ad55c0771cb196f99d`。算法为相对路径排序，逐项拼接路径 UTF-8、NUL、文件 SHA-256 原始字节，再取整体 SHA-256。排除依赖目录、构建产物、浏览器状态和凭据。来源已固定在 `workshop-source.tar.gz`（原 `references/application-studio/workshop-source.tar.gz`，已移出仓库，见 Git 历史），逐文件摘要和归属说明在 `workshop-source.json`（原 `references/application-studio/workshop-source.json`，已移出仓库，见 Git 历史）。原交付未包含独立许可文件；这是负责人提供并授权内部融合的材料，依赖继续遵循各自许可。归档不包含环境文件、凭据或构建产物，不作为第二条运行路径。
 
 | 对象 | 审查时事实 | 融合含义 |
 |---|---|---|
 | 平台定义 | [Page/Section/Application](../../capabilities/server/platform/definition.go) 具有具名选择、关系、查询、动作和固定计算引用；页面仍为平铺部件 | 保留资产与绑定语义，扩展页面文档结构 |
-| 平台编辑/运行 | [PageEditor](../../web/packages/build/src/editor.tsx) 使用原动作与 revision；[ComposedPage](../../web/packages/app/src/sections.tsx) 使用调用者数据源和共享组件 | 复用保存、授权与运行基础，更新编辑体验和共同渲染路径 |
+| 平台编辑/运行 | [PageEditor](../../web/packages/build/src/workshop/editor.tsx) 使用原动作与 revision；[ComposedPage](../../web/packages/app/src/sections.tsx) 使用调用者数据源和共享组件 | 复用保存、授权与运行基础，更新编辑体验和共同渲染路径 |
 | 对象与动作 | [build.Object/Field](../../capabilities/server/apps/build/build.go)、[Action](../../capabilities/server/apps/build/actions.go) 已有字段、状态、权限、引用及动作 | 本体编辑器面向这些语义资产，原生代码对象和租户对象都要可发现 |
 | 能力与计算 | [CapabilityDescriptor](../../capabilities/server/platform/block.go)、[ValueSchema](../../capabilities/server/platform/operation.go)、[能力调用](../../web/packages/app/src/index.tsx) 已有共同入口 | Query/Action/AI/Compute/Flow 复用原 owner，不导入浏览器业务执行器 |
 | 外包页面 | `types.ts`、`moduleOps.ts`、`layoutOps.ts`、`SectionRenderer.tsx` 有递归布局、编辑命令和共用渲染 | 是文档与呈现机制的移植来源 |
@@ -1293,7 +1293,7 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 吸收清单以实际行为验收，下面是迁移归属，不宣称外包已完整实现每个名称所代表的产品能力。所有92个类型都保留可追踪去向，首次迁移时建立owner维护的机器可读映射，并检查数量、重复和缺失。
 
-当前机器清单为`web/packages/build/src/module-import/widgets.json`，固定实际源`types.ts`的SHA-256、92个唯一类型、原分类、共享能力owner、目标及profile/planned状态。转换适配归Build，绑定统一归应用API；共享控件/内容展示可归UI，资源读取、分析、动作及嵌入能力边界归应用API，不由UI拥有业务执行。八个profile由同目录纯转换器消费，其他状态不授予Renderer资格。Catalog的`scenario/workshop-import`提供原生草稿转换示例及边界，原Widget Registry仍是运行注册的唯一归属。
+当前机器清单为`web/packages/build/src/workshop/module-import/widgets.json`，固定实际源`types.ts`的SHA-256、92个唯一类型、原分类、共享能力owner、目标及profile/planned状态。转换适配归Build，绑定统一归应用API；共享控件/内容展示可归UI，资源读取、分析、动作及嵌入能力边界归应用API，不由UI拥有业务执行。八个profile由同目录纯转换器消费，其他状态不授予Renderer资格。Catalog的`scenario/workshop-import`提供原生草稿转换示例及边界，原Widget Registry仍是运行注册的唯一归属。
 
 | 组 / 数量 | 外包类型 | 融合归属与边界 |
 |---|---|---|
@@ -1361,7 +1361,7 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 规范组件清单归 `capabilities/server/platform/pageui/widgets.json`，当前 UI profile 为 `platform.page.v2.105`，75 个原生组件的配置版本均为 1。应用 API 的 `widgets/plugins.ts` 与 Build 检查器消费同一身份/版本；未知版本拒绝，不选择“最新”实现。已支持旧 V2 profile 的升级需要审查和新候选；尚无实际配置版本差异时不制造空迁移版本，未来差异仍须显式迁移且保留历史字节。
 
-来源去向归 `web/packages/build/src/module-import/widgets.json`：92 个唯一来源类型均有受控导入 profile。它表示每种类型有可追踪路径，不表示每种原配置和事件组合都兼容。完整来源捕获仍为七页、85 个组件实例、68 个变量、四个浮层与一个持续 Flow；实例数与类型数不是同一指标。未支持配置仍定位拒绝并保留原文/报告，外包模拟本体、数据源、浏览器执行器与任意供应商代码不进入平台执行。
+来源去向归 `web/packages/build/src/workshop/module-import/widgets.json`：92 个唯一来源类型均有受控导入 profile。它表示每种类型有可追踪路径，不表示每种原配置和事件组合都兼容。完整来源捕获仍为七页、85 个组件实例、68 个变量、四个浮层与一个持续 Flow；实例数与类型数不是同一指标。未支持配置仍定位拒绝并保留原文/报告，外包模拟本体、数据源、浏览器执行器与任意供应商代码不进入平台执行。
 
 七个默认页面（Operations、Overview、Analytics、Maintenance、Map、Workflow、Telemetry）已有整页转换与共同应用编排；Maintenance 的风险计算绑定真实固定版本 Go/Wasm 能力，不降级为常量。页头/导航、具名 slots 和完整组件子树沿原 Application/Page 契约处理。来源算法的业务正确性、模型质量和真实遥测接入仍由各自 owner 与真实任务证明，导入成功不授予这些保证。
 

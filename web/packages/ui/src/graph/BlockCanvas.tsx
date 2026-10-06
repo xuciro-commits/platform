@@ -1,5 +1,5 @@
 import { ConnectionLineType, MarkerType, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, type Connection } from "@xyflow/react";
-import { AlignHorizontalJustifyStart, Copy, Maximize, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
+import { AlignHorizontalJustifyStart, ArrowDown, ArrowRight, ChevronsDownUp, ChevronsUpDown, Copy, Maximize, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../i18n";
 import { BlockInteraction, BlockNode, type FlowBlockNode } from "./BlockNode";
@@ -37,7 +37,10 @@ const center = (element: HTMLElement | null) => {
 };
 const editableTarget = (target: EventTarget | null) => target instanceof HTMLElement && !!target.closest("input,textarea,select,[contenteditable=true]");
 
-function CanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onConnect, onDisconnect, onAdd, onInsert, onPositionsChange, onLayout, onDelete, onDuplicate, canConnect, history, label, height = 320, mode, direction = "right", children }: BlockCanvasProps) {
+function CanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onConnect, onDisconnect, onAdd, onInsert, onPositionsChange, onLayout, onDelete, onDuplicate, canConnect, history, label, height = 320, mode, direction: initialDirection = "right", children }: BlockCanvasProps) {
+  // The reader may re-flow the same graph the other way; the owner's direction is the starting point.
+  const [direction, setDirection] = useState(initialDirection);
+  useEffect(() => { setDirection(initialDirection); }, [initialDirection]);
   const editable = mode === "edit" || mode !== "view" && !!(onConnect || onDisconnect || onAdd || onDelete || onPositionsChange);
   const container = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, fitView, getViewport, setCenter } = useReactFlow<FlowBlockNode, FlowBlockEdge>();
@@ -46,6 +49,7 @@ function CanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onCo
   const externalSelection = useRef<string | undefined>(undefined);
   const copied = useRef<{ nodes: CanvasNode[]; edges: CanvasEdge[] } | undefined>(undefined);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const allCollapsed = nodes.length > 0 && nodes.every((node) => collapsed[node.id] ?? node.collapsed ?? false);
   const [palette, setPalette] = useState<CanvasAddContext>();
   const [connectionIssue, setConnectionIssue] = useState<string>();
   const [refit, setRefit] = useState(0);
@@ -114,9 +118,9 @@ function CanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onCo
     else if (linked.length && onDisconnect) onDisconnect(linked);
   };
   const addContext = () => ({ position: screenToFlowPosition(center(container.current)) });
-  const arrange = () => {
+  const arrange = (flow = direction) => {
     const compact = nodes.every((node) => node.compact);
-    const positions = Object.fromEntries(layout(nodes, edges.map((edge) => ({ from: edge.source, to: edge.target })), direction,
+    const positions = Object.fromEntries(layout(nodes, edges.map((edge) => ({ from: edge.source, to: edge.target })), flow,
       { width: compact ? 160 : canvasNodeWidth, height: compact ? 58 : Math.max(58, ...catalog.map((kind) => canvasNodeHeight(kind))), gapX: 80, gapY: 36 }));
     localPositions.current = positions;
     setFlowNodes((current) => current.map((node) => ({ ...node, position: positions[node.id]! })));
@@ -230,7 +234,9 @@ function CanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onCo
       </BlockInteraction.Provider>
       <div className="nodrag nopan platform-block-toolbar" aria-label={t("Canvas tools")}>
         {editable && onAdd && <button type="button" className="platform-block-tool platform-block-tool-primary" onClick={() => setPalette(addContext())} title={t("Add block (N)")}><Plus /><span>{t("Add block")}</span></button>}
-        <button type="button" className="platform-block-tool" onClick={arrange} title={t("Tidy up workflow")} aria-label={t("Tidy up workflow")}><AlignHorizontalJustifyStart /></button>
+        <button type="button" className="platform-block-tool" onClick={() => arrange()} title={t("Tidy up workflow")} aria-label={t("Tidy up workflow")}><AlignHorizontalJustifyStart /></button>
+        <button type="button" className="platform-block-tool" onClick={() => { const next = direction === "right" ? "down" : "right"; setDirection(next); arrange(next); }} title={t(direction === "right" ? "Flow top to bottom" : "Flow left to right")} aria-label={t(direction === "right" ? "Flow top to bottom" : "Flow left to right")}>{direction === "right" ? <ArrowDown /> : <ArrowRight />}</button>
+        {catalog.some((kind) => kind.inputs.length || kind.outputs.length) && !nodes.every((node) => node.compact) && <button type="button" className="platform-block-tool" onClick={() => setCollapsed(Object.fromEntries(nodes.map((node) => [node.id, !allCollapsed])))} title={t(allCollapsed ? "Expand all blocks" : "Collapse all blocks")} aria-label={t(allCollapsed ? "Expand all blocks" : "Collapse all blocks")}>{allCollapsed ? <ChevronsUpDown /> : <ChevronsDownUp />}</button>}
         <button type="button" className="platform-block-tool" onClick={() => void fitView({ ...fitting, duration: 220 })} title={t("Fit canvas")} aria-label={t("Fit canvas")}><Maximize /></button>
         {editable && history && <><span className="mx-0.5 h-4 w-px bg-border" />
           <button type="button" className="platform-block-tool" disabled={!history.canUndo} onClick={history.onUndo} title={t("Undo")} aria-label={t("Undo")}><Undo2 /></button>

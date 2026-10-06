@@ -166,7 +166,7 @@ function SFCTable({ initial = "work", title, description }: { initial?: keyof ty
           <option value="done">{t("Done or scrapped")}</option><option value="all">{t("All")}</option>
         </Select>} />
       <DataTable data={sfcs} columns={columns} getRowId={(s) => s.id} height="calc(100dvh - 190px)"
-        onRowClick={(s) => open({ view: "sfc", params: { id: s.id } }, { window: "float" })} loading={!sfcData} empty={t("Nothing here")} />
+        onRowClick={(s) => open({ view: "sfc", params: { id: s.id } }, { window: "beside" })} loading={!sfcData} empty={t("Nothing here")} />
     </>
   );
 }

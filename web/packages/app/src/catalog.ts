@@ -25,7 +25,7 @@ export const entries: CatalogEntry[] = [
     dependencies: ["ui/record-list", "app/record-actions"], states: ["loading", "empty", "error"],
     snippet: 'import { Records } from "@platform/app";\n<Records type="your.object" />',
   }),
-  asset("record-detail", "Authorized record detail", "Read a record with history, tasks and the actions offered to the current member.", ["RecordDetail"], "RecordDetailExample", {
+  asset("record-detail", "Authorized record detail", "Read a record with history, tasks and the actions offered to the current member.", ["RecordDetail", "OpenIn"], "RecordDetailExample", {
     dependencies: ["ui/record-page", "app/record-actions"], uses: ["code", "widget"], widgets: ["detail", "timeline", "tasks"],
     states: ["loading", "error", "pending", "conflict"], snippet: 'import { RecordDetail } from "@platform/app";\n<RecordDetail type="your.object" id={selectedID} />',
   }),
@@ -46,7 +46,7 @@ export const entries: CatalogEntry[] = [
     tags: ["aggregate", "chart", "metric"], uses: ["code", "widget"], widgets: ["chart", "metric"], source: "web/packages/app/src/index.tsx",
     snippet: 'import { DashboardView } from "@platform/app";\n<DashboardView dashboard={dashboard} />',
   }),
-  asset("record-actions", "Declared action controls", "Render original action payloads and offered transitions without duplicating role rules.", ["NewActions", "RecordActions", "PayloadFields", "InlineActionForm"], "ActionsExample", {
+  asset("record-actions", "Declared action controls", "Render original action payloads and offered transitions without duplicating role rules.", ["NewActions", "useNewRecord", "RecordActions", "PayloadFields", "InlineActionForm"], "ActionsExample", {
     uses: ["code", "widget"], widgets: ["actions", "inline-action"], dependencies: ["ui/button", "app/generated-form"], source: "web/packages/app/src/actions.tsx",
     states: ["pending", "refused", "conflict"], snippet: 'import { RecordActions } from "@platform/app";\n<RecordActions type="your.object" record={record} steps />',
   }),
@@ -88,5 +88,5 @@ export const entries: CatalogEntry[] = [
 
 /** Nonvisual public API, attached to the existing public owner rather than visual cards. */
 export const api = ["AppEntry", "AssetRef", "Definition", "Me", "Decision", "Host", "HostContext", "useHost", "useRecordArchive", "useReadQuery", "useRead", "useRecordInventory",
-  "useDefinitions", "useCapabilities", "useInvokeCapability", "assetKey", "findDefinition", "useOpenRecord", "Dashboard", "AppUI", "defineApp", "SavedView", "newId",
+  "useDefinitions", "useCapabilities", "useInvokeCapability", "assetKey", "findDefinition", "useOpenRecord", "Dashboard", "AppUI", "defineApp", "PlatformAppCategory", "categoryOf", "SavedView", "newId",
   "runStates", "AgentInfo", "AgentRun", "Citation", "Memory", "Passage", "RunDraft", "RunSignal", "RunStep", "isPageDefinition", "isComposed", "pageDocumentFromSections", "createWidgetRegistry", "createWidgetDefinitions", "WidgetRegistry", "widgetContracts", "widgetContract", "pageUIProfile", "supportsPageUIProfile", "searchInputObjects", "parsePageDecimal", "isPageDecimal", "isPageDecimalDraft", "PageDecimalValue", "pageVariableContract", "pageVariableValues", "pageVariableDiagnostics", "pageLayoutDiagnostics", "PageVariableValue", "WidgetImplementation", "WidgetContract", "WidgetID", "semanticModelView", "semanticPropertyTypes", "assetBindingKey", "SemanticPropertyType", "propertyKey", "relationKey", "PropertyRef", "ReferenceRelationRef", "SemanticRelation", "SemanticModelView"];

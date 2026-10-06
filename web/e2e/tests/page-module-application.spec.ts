@@ -1,6 +1,6 @@
 import {expect,test} from '@playwright/test';import {readFileSync} from 'node:fs';
 import {decide,fresh,open,pageUIProfile} from './host';
-const sample=JSON.parse(readFileSync(new URL('../../packages/build/src/module-import/sample.workshop.json',import.meta.url),'utf8'));
+const sample=JSON.parse(readFileSync(new URL('../../packages/build/src/workshop/module-import/sample.workshop.json',import.meta.url),'utf8'));
 test('module interface binds grouped record views to an original frozen application across pages overlays and instances',async({page,request},info)=>{
  test.setTimeout(150_000);page.setDefaultTimeout(10_000);const name=fresh('moduleapp').replace(/[^a-z0-9]/gi,'').toLowerCase(),type=`build.${name}`,object=fresh('OBJ'),app=fresh('APP'),first=fresh('PAGE'),second=fresh('PAGE'),headers={Authorization:'Bearer manager'},ref={app:'build',kind:'object',name:type},application=`build:${name}app`;
  await decide(request,'manager','build','build.object.create',{type:'build.object',id:object},{name,title:'Shared imported assets',fields:[{name:'note',title:'Note',type:'text'}],states:[{name:'open',title:'Open'},{name:'done',title:'Done'}],actions:[{name:'close',title:'Complete original asset',from:['open'],to:'done'}]});await decide(request,'manager','build','build.object.publish',{type:'build.object',id:object},{});for(const id of ['A','B'])await decide(request,'desk','build',`${type}.create`,{type,id},{note:`ORIGINAL-${id}`});

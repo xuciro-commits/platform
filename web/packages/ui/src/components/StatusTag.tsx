@@ -26,8 +26,10 @@ export function Tag({ label, tone = "neutral", className }: { label: string; ton
   return (
     <span
       data-tone={tone}
+      data-ui="tag"
       className={cn("inline-flex h-[18px] items-center gap-1 rounded-sm border px-1.5 text-xs font-medium leading-none whitespace-nowrap", className)}
       style={{
+        ["--tone" as string]: `var(--tone-${tone})`,
         color: `var(--tone-${tone})`,
         borderColor: `color-mix(in oklch, var(--tone-${tone}) 35%, transparent)`,
         background: `color-mix(in oklch, var(--tone-${tone}) 10%, transparent)`,
@@ -41,5 +43,6 @@ export function Tag({ label, tone = "neutral", className }: { label: string; ton
 
 export function StatusTag({ status, registry, className }: { status: string; registry: StatusRegistry; className?: string }) {
   const entry = registry[status] ?? { label: status, tone: "neutral" as const };
-  return <Tag label={entry.label} tone={entry.tone} className={className} />;
+  // Registries are often built at module load, before the reader's language is known: translate when drawn.
+  return <Tag label={t(entry.label)} tone={entry.tone} className={className} />;
 }

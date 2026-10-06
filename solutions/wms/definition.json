@@ -33,14 +33,14 @@
     ],
     "resources": [
       {
-        "app": "build",
+        "app": "core",
         "kind": "object",
-        "name": "build.wmsitem"
+        "name": "core.material"
       },
       {
-        "app": "build",
+        "app": "core",
         "kind": "object",
-        "name": "build.wmslocation"
+        "name": "core.location"
       },
       {
         "app": "build",
@@ -70,92 +70,6 @@
     ]
   },
   "objects": [
-    {
-      "id": "WMS-ITEM",
-      "name": "wmsitem",
-      "title": "Item / 物料",
-      "plural": "Item / 物料",
-      "fields": [
-        {
-          "name": "sku",
-          "title": "SKU / 物料编码",
-          "type": "text",
-          "required": true,
-          "search": true
-        },
-        {
-          "name": "name",
-          "title": "Name / 名称",
-          "type": "text",
-          "required": true,
-          "search": true
-        },
-        {
-          "name": "unit",
-          "title": "Unit / 单位",
-          "type": "text",
-          "required": true
-        },
-        {
-          "name": "unitsperpallet",
-          "title": "Units per pallet / 每托盘数量",
-          "type": "integer",
-          "required": true
-        }
-      ],
-      "access": [
-        {
-          "role": "user",
-          "read": "all",
-          "create": false,
-          "edit": false,
-          "archive": false
-        },
-        {
-          "role": "supervisor",
-          "read": "all"
-        }
-      ]
-    },
-    {
-      "id": "WMS-LOCATION",
-      "name": "wmslocation",
-      "title": "Location / 库位",
-      "plural": "Location / 库位",
-      "fields": [
-        {
-          "name": "code",
-          "title": "Code / 库位编码",
-          "type": "text",
-          "required": true,
-          "search": true
-        },
-        {
-          "name": "zone",
-          "title": "Zone / 库区",
-          "type": "text",
-          "required": true
-        },
-        {
-          "name": "description",
-          "title": "Description / 说明",
-          "type": "longtext"
-        }
-      ],
-      "access": [
-        {
-          "role": "user",
-          "read": "all",
-          "create": false,
-          "edit": false,
-          "archive": false
-        },
-        {
-          "role": "supervisor",
-          "read": "all"
-        }
-      ]
-    },
     {
       "id": "WMS-RECEIPT",
       "name": "wmsreceipt",
@@ -275,15 +189,21 @@
         },
         {
           "name": "item",
-          "title": "Item / 物料",
+          "title": "Material / 物料",
           "type": "reference",
-          "ref": "build.wmsitem",
+          "ref": "core.material",
           "inverse": "receiptlines",
           "required": true
         },
         {
           "name": "expected",
           "title": "Expected quantity / 预计数量",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "unitsperpallet",
+          "title": "Units per pallet / 每托数量",
           "type": "integer",
           "required": true
         },
@@ -337,7 +257,7 @@
           "name": "location",
           "title": "Destination / 目标库位",
           "type": "reference",
-          "ref": "build.wmslocation",
+          "ref": "core.location",
           "inverse": "tasks",
           "required": true
         },
@@ -685,45 +605,52 @@
     {
       "id": "WMS-PAGE-ITEMS",
       "name": "wmsitems",
-      "title": "Items / 物料",
-      "object": "build.wmsitem",
+      "title": "Materials / 物料",
+      "object": "core.material",
       "list": [
-        "sku",
+        "code",
         "name",
-        "unit",
-        "unitsperpallet"
+        "kind",
+        "baseUom"
       ],
       "detail": [
-        "sku",
+        "code",
         "name",
-        "unit",
-        "unitsperpallet"
+        "kind",
+        "baseUom",
+        "barcode",
+        "group",
+        "active"
       ],
       "actions": [
-        "build.wmsitem.create",
-        "build.wmsitem.edit",
-        "build.wmsitem.archive"
+        "core.material.create",
+        "core.material.edit",
+        "core.material.archive"
       ]
     },
     {
       "id": "WMS-PAGE-LOCATIONS",
       "name": "wmslocations",
       "title": "Locations / 库位",
-      "object": "build.wmslocation",
+      "object": "core.location",
       "list": [
         "code",
-        "zone",
-        "description"
+        "name",
+        "kind",
+        "site"
       ],
       "detail": [
         "code",
-        "zone",
-        "description"
+        "name",
+        "kind",
+        "site",
+        "parent",
+        "active"
       ],
       "actions": [
-        "build.wmslocation.create",
-        "build.wmslocation.edit",
-        "build.wmslocation.archive"
+        "core.location.create",
+        "core.location.edit",
+        "core.location.archive"
       ]
     },
     {
@@ -882,7 +809,6 @@
             "unitsperpallet": {
               "source": "subject",
               "path": [
-                "item",
                 "unitsperpallet"
               ]
             }
@@ -933,12 +859,13 @@
         "receipt",
         "item",
         "expected",
-        "lot"
+        "unitsperpallet"
       ],
       "detail": [
         "receipt",
         "item",
         "expected",
+        "unitsperpallet",
         "lot",
         "note"
       ],
@@ -962,6 +889,7 @@
             "receipt",
             "item",
             "expected",
+            "unitsperpallet",
             "lot",
             "note"
           ],
@@ -1006,7 +934,6 @@
             "unitsperpallet": {
               "source": "subject",
               "path": [
-                "item",
                 "unitsperpallet"
               ]
             }

@@ -2,7 +2,7 @@ import {expect,test} from "@playwright/test";
 import {readFile} from "node:fs/promises";
 import {readFileSync} from "node:fs";
 import {decide,fresh,open,pageUIProfile} from "./host";
-const sample=JSON.parse(readFileSync(new URL("../../packages/build/src/module-import/sample.workshop.json",import.meta.url),"utf8"));
+const sample=JSON.parse(readFileSync(new URL("../../packages/build/src/workshop/module-import/sample.workshop.json",import.meta.url),"utf8"));
 
 test("Workshop JSON becomes an undoable native draft and frozen original record work while retaining source and refusal diagnostics",async({page,request},info)=>{
  test.setTimeout(90_000);

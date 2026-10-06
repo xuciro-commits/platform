@@ -18,7 +18,7 @@ async function signIn(page: Page, email: string) {
   await page.locator('button[type="submit"]').click();
   await page.locator('input[type="password"]').fill(password);
   await page.locator('button[type="submit"]').click();
-  await expect(page.getByRole("button", { name: "Application Studio" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Projects" }).first()).toBeVisible();
   const token = await page.evaluate(() => (JSON.parse(sessionStorage.getItem("oidc:session") ?? "null") as { accessToken?: string } | null)?.accessToken);
   if (!token) throw new Error("OIDC sign-in returned no browser session");
   return token;
@@ -67,7 +67,7 @@ for (const fixture of fixtures) {
         await decide(request, token, "build", `${fixture.type}.create`, { type: fixture.type, id: source }, { note: "Browser recovery sample" });
       }
       await page.goto("/#/home");
-      await page.getByRole("button", { name: "Application Studio" }).first().click();
+      await page.getByRole("button", { name: "Projects" }).first().click();
       await page.getByRole("button", { name: fixture.page, exact: true }).click();
       await page.getByRole("textbox", { name: "Search" }).first().fill(source);
       await page.getByRole("row").filter({ hasText: source }).click();

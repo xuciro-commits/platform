@@ -95,7 +95,7 @@ func testFrozenExploration(t *testing.T, overlay bool) {
 		doc.Queries["assets"] = q
 		doc.Variables["open"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: platform.Raw(false)}
 		doc.Overlays = map[string]platform.PageOverlay{"panel": {Root: "panelRoot", Kind: "drawer", Title: "Original exploration", OpenVariable: "open"}}
-		doc.Events = []platform.PageEventBinding{{Source: "trigger", Event: "click", Target: "open", Value: platform.Raw(true)}}
+		doc.Events = []platform.PageEventBinding{{Source: "trigger", Event: "click", Effects: []platform.PageEffect{{Kind: "set", Target: "open", Value: platform.Raw(true)}}}}
 	}
 	submit(build.PageType, "page", "create", map[string]any{"name": "explore", "title": "Original exploration", "object": asset.Name, "sections": sections, "document": doc})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "page")

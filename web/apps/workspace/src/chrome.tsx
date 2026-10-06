@@ -3,44 +3,29 @@
 // (ADR-0013), the outbox (K5), every record the member may read (ADR-0016),
 // and the assistant, agent runs and global search (ADR-0021).
 import "./i18n";
-import { ApplicationRuns, OperationRunView, ApplicationPage, Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { ApplicationPage, Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
   useWorkspace, type ColumnDef, type InboxTask, type View,
  t } from "@platform/ui";
 import { useState, type ReactNode } from "react";
+import { ApplicationsPortal } from "./shell/Applications";
+import { Home } from "./shell/Home";
+import { ObjectExplorer } from "./shell/Explorer";
+import { Lineage } from "./shell/Lineage";
+import { projectionOfSurface, type Projection } from "./shell/registry";
 
 type Notification = Api.Notification;
 type Request = Api.ApprovalRequest;
 
 function StudioReference({ application, children }: { application?: string; children: ReactNode }) {
   const { open } = useWorkspace();
-  return <div className="grid gap-3">{application && <div><Button onClick={() => open({ view: "application", params: { id: application } })}>{t("Back to application")}</Button></div>}{children}</div>;
+  return <div className="grid gap-3">{application && <div><Button onClick={() => open({ view: "project", params: { id: application } })}>{t("Back to project")}</Button></div>}{children}</div>;
 }
 
 const requestStates = defineStatuses({ pending: { label: t("Pending"), tone: "warning" }, approved: { label: t("Approved"), tone: "success" },
   rejected: { label: t("Rejected"), tone: "danger" }, refused: { label: t("Refused when run"), tone: "danger" }, withdrawn: { label: t("Withdrawn"), tone: "neutral" } });
-
-// The launcher as a page: every app the member may open, like a home screen.
-function Home({ apps: appsOf, onSelect }: { apps: () => AppUI[]; onSelect: (id: string) => void }) {
-  const apps = appsOf(); // read when the launcher draws: an application published while it is open belongs here
-  const { me } = useHost();
-  return (
-    <>
-      <PageHeader title={t("Welcome, {name}", { name: me.principalId })} description={t("The apps of {tenant} you hold a role in. One sign-in opens all of them.", { tenant: me.tenantId })} />
-      <div className="grid max-w-4xl grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
-        {apps.map((a) => (
-          <Button key={a.id} type="button" onClick={() => onSelect(a.id)}
-            className="grid h-auto justify-items-center gap-2 whitespace-normal p-4 text-sm [&_svg]:size-7 [&_svg]:text-primary">
-            {a.icon}<span className="font-medium">{a.title}</span>
-            <span className="text-xs text-muted">{me.apps.find((e) => e.id === a.id)?.role ?? ""}</span>
-          </Button>
-        ))}
-      </div>
-    </>
-  );
-}
 
 function MyInbox() {
   const tasks = useRead<InboxTask[]>("/v1/inbox") ?? [];
@@ -218,25 +203,26 @@ function Saved({ id }: { id: string }) {
   return view ? <Records type={view.entity} saved={view} /> : <p className="text-sm text-muted">{t("No saved view")} {id}.</p>;
 }
 
-export const chromeViews = (apps: () => AppUI[], select: (id: string) => void, definitions: () => Definition[] = () => []): View[] => [
+export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[] = () => []): View[] => [
   { id: "saved", title: () => t("Saved view"), render: (p) => <Saved id={p.id ?? ""} /> },
   { id: "dashboard", title: (p) => apps().find((a) => a.id === p.app)?.dashboards?.find((d) => d.id === p.id)?.title ?? t("Dashboard"),
     render: (p) => { const d = apps().find((a) => a.id === p.app)?.dashboards?.find((x) => x.id === p.id); return d ? <DashboardView dashboard={d} /> : <p className="text-sm text-muted">{t("No dashboard.")}</p>; } },
-  { id: "home", title: () => t("Application launcher"), render: () => <Home apps={apps} onSelect={select} /> },
+  { id: "home", title: () => t("Home"), render: () => <Home /> },
+  { id: "portal", title: () => t("Applications"), render: (p) => <ApplicationsPortal projection={(p.workspace as Projection | undefined) ?? projectionOfSurface(p.surface)} /> },
   { id: "inbox", title: () => t("Inbox"), render: () => <MyInbox /> },
   { id: "requests", title: () => t("My requests"), render: () => <MyRequests /> },
   { id: "notifications", title: () => t("Notifications"), render: () => <Notifications /> },
   { id: "outbox", title: () => t("Outbox"), render: () => <Outbox /> },
+  { id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} /> },
+  { id: "lineage", title: () => t("Lineage"), render: (p) => <Lineage ref={p.ref} /> },
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
   { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },
   { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /></StudioReference> },
   { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} params={p} /> },
   { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview params={p} /></StudioReference> },
   { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
-  { id: "application-runs", title: () => t("Application runs"), render: (p) => <ApplicationRuns key={`${p.app}:${p.name}`} owner={p.app??"build"} name={p.name??""}/> },
-  { id: "operation-run", title: () => t("Calculation run"), render: (p) => <OperationRunView id={p.id??""} application={p.application}/> },
-  { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} application={p.application} /> },
-  { id: "flow", title: (p) => p.id ?? t("Flow"), render: (p) => <FlowInstanceView id={p.id ?? ""} application={p.application} /> },
+  { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} /> },
+  { id: "flow", title: (p) => p.id ?? t("Flow"), render: (p) => <FlowInstanceView id={p.id ?? ""} /> },
   { id: "assistant", title: (p) => p.about ? `${t("Assistant")}: ${p.about}` : t("Assistant"), render: (p) => <Assistant about={p.about} /> },
   { id: "search", title: () => t("Search"), render: () => <Search /> },
 ];

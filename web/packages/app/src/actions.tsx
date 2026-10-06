@@ -122,6 +122,17 @@ export function NewActions({ type, covers = [], allowed, disabled = false, onCre
   </>;
 }
 
+/** Create a record of `type` from a menu or command palette: the caller
+ * renders the trigger, this hook offers the declared create actions and the
+ * dialog that takes the chosen one. */
+export function useNewRecord(type: string, onCreated?: (target: { type: string; id: string }) => void) {
+  const { catalog } = useHost();
+  const [taking, setTaking] = useState<ActionDeclaration>();
+  const offered = catalog.filter((a) => a.target === type && a.new);
+  const dialog = taking ? <ActionDialog declared={taking} type={type} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
+  return { offered, available: offered.length > 0, take: (schema?: string) => setTaking(schema ? offered.find((a) => a.schema === schema) : offered[0]), dialog };
+}
+
 /** The actions on one record the member may take, besides its lifecycle's transitions and the generated edit and archive. */
 export function RecordActions({ type, record, allowed, steps: withSteps = false }: {
   type: string; record: EntityRecord; allowed?: string[];
@@ -155,6 +166,23 @@ export function useTransition(type: string) {
     else void decide(schema, { type, id: record.id }, {}, { expectedRevision: record.revision });
   };
   const dialog = taking && <ActionDialog declared={taking.declared} type={type} record={taking.record} initial={taking.initial} onClose={() => setTaking(undefined)} />;
+  return { take, dialog };
+}
+
+/** An action taken as one effect of a page event chain (ADR-0053 §11): at once
+ * when it takes no input, through its form otherwise. Resolves true when the
+ * host accepted it, false when the person cancelled, so the chain can stop. */
+export function useActionEffect() {
+  const { action, decide } = useHost();
+  const [taking, setTaking] = useState<{ declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; settle: (ok: boolean) => void }>();
+  const take = (schema: string, record?: Pick<EntityRecord, "id" | "revision">): Promise<boolean> => {
+    const declared = action(schema);
+    if (!declared || (declared.new ? !!record : !record)) return Promise.resolve(false);
+    if (!declared.payload.length && record) return decide(schema, { type: declared.target, id: record.id }, {}, { expectedRevision: record.revision, quiet: true });
+    return new Promise((settle) => setTaking({ declared, type: declared.target, record, settle }));
+  };
+  const close = (ok: boolean) => { taking?.settle(ok); setTaking(undefined); };
+  const dialog = taking && <ActionDialog declared={taking.declared} type={taking.type} record={taking.record} onClose={() => close(false)} onCompleted={() => close(true)} />;
   return { take, dialog };
 }
 

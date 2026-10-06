@@ -67,7 +67,7 @@ func (d *PageDocument) checkContextViews(s Section) error {
 		}
 		found := false
 		for _, e := range d.Events {
-			if e.Source == s.ID && e.Control == "home" && e.Event == "click" && e.Navigate != nil && len(e.Navigate.Inputs) == 0 && len(e.Navigate.Results) == 0 {
+			if n := e.Navigation(); e.Source == s.ID && e.Control == "home" && e.Event == "click" && e.Only("navigate") && n != nil && len(n.Inputs) == 0 && len(n.Results) == 0 {
 				found = true
 			}
 		}

@@ -1,8 +1,8 @@
 import {useTheme} from "../theme";
 import { Command } from "cmdk";
 import { DockviewDefaultTab, DockviewReact, themeLight,themeDark, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps } from "dockview-react";
-import { ChevronDown, LayoutGrid, PanelLeft, Search } from "lucide-react";
-import { DropdownMenu, Menubar } from "radix-ui";
+import { Bell, ChevronDown, Clock, Grid2x2, Home as HomeIcon, LayoutGrid, PanelLeft, Search, Sparkles, Star } from "lucide-react";
+import { ContextMenu, DropdownMenu, Menubar } from "radix-ui";
 import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
@@ -29,16 +29,33 @@ export type Session = {
   options: { id: string; label: string }[]; current: string; onSwitch: (id: string) => void;
 };
 
-/** The apps a member may open (ADR-0018): the launcher in the menu bar and the palette switch between them. */
-export type Launcher = { apps: { id: string; title: string; icon?: ReactNode }[]; current?: string; label?: string; onSelect: (id: string) => void };
+/** A platform application in the Applications portal (ADR-0052 §3.2): a stable id, a category and a home route. */
+export type PlatformApplication = { id: string; title: string; icon?: ReactNode; description?: string; category: string; home: Route };
+/** The portal: every application this member may open, its categories in display order, and the one in front. */
+export type Applications = { apps: PlatformApplication[]; categories: { id: string; label: string }[]; current?: string; onSelect: (id: string) => void };
+/** The workspace projections a member may switch between (Operations / Build / Admin); projection never grants permissions. */
+export type Workspaces = { options: { id: string; title: string; icon?: ReactNode }[]; current: string; onSelect: (id: string) => void };
+/** The constant left rail (ADR-0052 §3.1): where Home, the portal, notifications and the assistant live. */
+export type Rail = { home: Route; applications: Route; notifications?: { route: Route; unread?: number }; assist?: Route };
+/** A route the member opened, remembered by the shell for the Recent list and Home. */
+export type RecentEntry = { route: Route; title: string; app?: string; at: number };
 
-type OpenOptions = { window?: "tab" | "float" | "popout" };
+/** Where a route opens: the current group, a group beside it (split right, like an IDE's "open to the side"), or a separate window. */
+type OpenOptions = { window?: "tab" | "beside" | "popout" };
 type Unsaved = {
   register: (panel: string, owner: symbol, discard?: () => void) => void;
   ask: (panels: string[], run: () => void) => void;
 };
-type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; notify: typeof toast; unsaved?: Unsaved;
-  transfer?: (from: string, route: Route, input: unknown, result: (value: unknown) => void) => void };
+type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; closeAll: () => void; notify: typeof toast; unsaved?: Unsaved;
+  transfer?: (from: string, route: Route, input: unknown, result: (value: unknown) => void) => void;
+  /** Opens the search and command palette (⌘K). */
+  palette: () => void;
+  /** Routes opened recently in this shell, newest first (per `storageKey`). */
+  recent: RecentEntry[];
+  /** Platform application ids the member starred, and the switch. */
+  favorites: string[]; toggleFavorite: (app: string) => void;
+  /** The portal and rail this shell was given, for views that list applications (Home). */
+  applications?: Applications; rail?: Rail; workspaces?: Workspaces; };
 const PanelContext = createContext<string | undefined>(undefined);
 const ViewCallContext = createContext<{ input?: unknown; expired?: boolean; returnValue?: (value: unknown) => void } | undefined>(undefined);
 export const useViewCall = () => useContext(ViewCallContext);
@@ -97,29 +114,23 @@ class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void 
   }
 }
 
-/** Narrow workspaces use full-width tabs, while retaining each record's context. */
-function dockFloating(api: DockviewApi) {
-  const root = api.groups.find((group) => group.api.location.type === "grid");
-  if (!root) return;
-  const active = api.activePanel;
-  for (const group of [...api.groups].filter((group) => group.api.location.type === "floating")) {
-    for (const panel of [...group.panels]) {
-      panel.api.setRenderer("always");
-      panel.api.moveTo({ group: root });
-    }
-  }
-  active?.api.setActive();
-}
-
 /**
- * The platform shell: menu bar, session, navigation, a docking workspace whose
- * tabs are routes (one per entity), a command palette (⌘K) and notifications.
- * The layout survives restarts (per `storageKey`); the active tab is in the URL.
+ * The platform shell (ADR-0052): a constant rail (Home, search, notifications,
+ * applications, recent, favorites, assistant, workspaces, account), a header
+ * with the current application and its menus, a context pane with that
+ * application's navigation, and a docking workspace whose tabs are routes
+ * (one per entity) with a command palette (⌘K).
+ * Tabs are grouped by application (ADR-0054 D1): each `layoutScope` has its own
+ * remembered layout, swapped in when the scope changes; the recent/favorites memory is per `storageKey`; the active tab is in the URL.
  */
-export function Workspace({ product, storageKey, views, nav, home, menus = [], commands = [], session, status, launcher, entryPoints, onActiveRoute, onLanguage, search }: {
-  product: string; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
+export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, views, nav, home, menus = [], commands = [], session, status, applications, workspaces, rail, onActiveRoute, onLanguage, search }: {
+  product: string; productIcon?: ReactNode; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
+  /** The application whose tabs are shown; its layout is remembered apart from the others'. */
+  layoutScope?: string;
+  /** The scope a route belongs to (undefined for the shell's own views, which open in any scope). */
+  scopeOf?: (route: Route) => string | undefined;
   menus?: Menu[]; commands?: ShellCommand[]; session?: Session; status?: ReactNode;
-  launcher?: Launcher; entryPoints?: Launcher; onActiveRoute?: (route: Route) => void;
+  applications?: Applications; workspaces?: Workspaces; rail?: Rail; onActiveRoute?: (route: Route) => void;
   /** Records matching what is typed in the palette (⌘K), opened on choice: the palette searches data, not only commands. */
   search?: (text: string) => Promise<{ id: string; label: string; detail?: string; open: () => void }[]>;
   /** Keeps a chosen language beyond this browser, e.g. as the member's preference; the page reloads in it after. */
@@ -147,7 +158,21 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
       else run();
     },
   }), []);
-  const closePanel = useCallback((id: string) => unsaved.ask([id], () => dock.current?.getPanel(id)?.api.close()), [unsaved]);
+  const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
+  const closePanels = useCallback((ids: string[]) => unsaved.ask(ids, () => { for (const id of ids) dock.current?.getPanel(id)?.api.close(); }), [unsaved]);
+  const closePanel = useCallback((id: string) => closePanels([id]), [closePanels]);
+  const scope = useRef(layoutScope);
+  const layoutKey = (id: string | undefined) => `${storageKey}:${id ?? "shell"}`;
+  const saveLayout = useCallback((id: string | undefined) => { try { if (dock.current) localStorage.setItem(layoutKey(id), JSON.stringify(dock.current.toJSON())); } catch { /* storage unavailable */ } }, [storageKey]);
+  const loadLayout = useCallback((id: string | undefined) => {
+    const api = dock.current; if (!api) return;
+    try { const saved = localStorage.getItem(layoutKey(id)); if (saved) api.fromJSON(JSON.parse(saved)); else api.clear(); } catch { api.clear(); }
+    for (const p of [...api.panels]) { // discard removed views; refresh titles in the reader's language
+      const route = (p.params as { route?: Route } | undefined)?.route;
+      const view = byId.get(route?.view ?? "");
+      if (!view) p.api.close(); else p.setTitle(view.title(route?.params ?? {}));
+    }
+  }, [storageKey]);
   const popout = useCallback((id: string) => unsaved.ask([id], () => {
     const panel = dock.current?.getPanel(id);
     if (panel) void dock.current?.addPopoutGroup(panel, { onDidOpen: ({ window: child }) => {
@@ -174,6 +199,24 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     const wait = setTimeout(() => { void search(typed).then((hits) => { if (live) setFound(hits); }).catch(() => undefined); }, 200);
     return () => { live = false; clearTimeout(wait); };
   }, [search, typed]);
+  // What the member comes back to (ADR-0052 §4.2): recent routes and starred applications, per shell.
+  const navKey = `${storageKey}:nav`;
+  const [memory, setMemory] = useState<{ recent: RecentEntry[]; favorites: string[] }>(() => {
+    try { const saved = localStorage.getItem(navKey); if (saved) return { recent: [], favorites: [], ...JSON.parse(saved) }; } catch { /* storage unavailable */ }
+    return { recent: [], favorites: [] };
+  });
+  const remember = useCallback((change: (m: { recent: RecentEntry[]; favorites: string[] }) => { recent: RecentEntry[]; favorites: string[] }) => setMemory((m) => {
+    const next = change(m);
+    try { localStorage.setItem(navKey, JSON.stringify(next)); } catch { /* storage unavailable */ }
+    return next;
+  }), [navKey]);
+  const toggleFavorite = useCallback((app: string) => remember((m) => ({ ...m, favorites: m.favorites.includes(app) ? m.favorites.filter((id) => id !== app) : [...m.favorites, app] })), [remember]);
+  const currentApp = useRef(applications?.current); currentApp.current = applications?.current;
+  const visited = useCallback((route: Route, title: string) => {
+    if (rail && [routeKey(rail.home), routeKey(rail.applications)].includes(routeKey(route))) return; // the rail's own places are not "recent"
+    const key = routeKey(route);
+    remember((m) => ({ ...m, recent: [{ route, title, app: currentApp.current, at: Date.now() }, ...m.recent.filter((r) => routeKey(r.route) !== key)].slice(0, 20) }));
+  }, [rail, remember]);
   const [navOpen, setNavOpen] = useState(nav.length > 0);
   const [compact, setCompact] = useState(() => typeof matchMedia !== "undefined" && matchMedia("(max-width: 639px)").matches);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -185,11 +228,10 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   }, []);
   const navigationVisible = compact ? mobileNavOpen : navOpen;
   const toggleNavigation = () => compact ? setMobileNavOpen((open) => !open) : setNavOpen((open) => !open);
-  const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
-  useEffect(() => { if (compact && dock.current) dockFloating(dock.current); }, [compact]);
 
   const followed = useRef(onActiveRoute);
   followed.current = onActiveRoute;
+  const visit = useRef(visited); visit.current = visited;
 
   const open = useCallback((route: Route, options: OpenOptions = {}) => {
     const api = dock.current;
@@ -197,35 +239,80 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     if (!api || !view) return;
     const key = routeKey(route);
     const title = view.title(route.params ?? {});
-    const floating = options.window === "float" && !compact ? api.groups.find((g) => g.api.location.type === "floating") : undefined;
     let panel = api.getPanel(key);
-    if (panel && floating && panel.group !== floating) {
-      panel.api.setRenderer("always");
-      panel.api.moveTo({ group: floating });
-    }
-    if (!panel && options.window === "float" && !compact) {
-      // One floating window above the page: what opens next joins it as a tab, so people click back and forth.
-      const width = Math.min(820, api.width - 48), height = Math.max(280, api.height - 64);
-      panel = floating
-        ? api.addPanel({ id: key, component: "view", renderer: "always", title, params: { route }, position: { referenceGroup: floating } })
-        : api.addPanel({ id: key, component: "view", renderer: "onlyWhenVisible", title, params: { route }, floating: { width, height, x: api.width - width - 24, y: 32 } });
+    if (!panel && options.window === "beside" && !compact && api.activePanel) {
+      // Beside the current tab: the other grid group if there is one, else a new group to the right.
+      const current = api.activePanel.group;
+      const other = api.groups.find((g) => g !== current && g.api.location.type === "grid") ?? api.addGroup({ referencePanel: api.activePanel, direction: "right" });
+      panel = api.addPanel({ id: key, component: "view", title, params: { route }, position: { referenceGroup: other } });
     }
     panel ??= api.addPanel({ id: key, component: "view", title, params: { route } });
     if (options.window === "popout") popout(panel.id);
     panel.api.setActive();
   }, [byId, compact, popout]);
+  const beside = useCallback((id: string) => {
+    const api = dock.current, panel = api?.getPanel(id);
+    if (!api || !panel) return;
+    const other = api.groups.find((g) => g !== panel.group && g.api.location.type === "grid") ?? api.addGroup({ referencePanel: panel, direction: "right" });
+    panel.api.moveTo({ group: other });
+    panel.api.setActive();
+  }, []);
+  const closeAll = useCallback(() => closePanels((dock.current?.panels ?? []).map((p) => p.id)), [closePanels]);
+  const closeOthers = useCallback((id: string) => closePanels((dock.current?.panels ?? []).filter((p) => p.id !== id).map((p) => p.id)), [closePanels]);
+  const closeRight = useCallback((id: string) => {
+    const group = dock.current?.getPanel(id)?.group; if (!group) return;
+    const index = group.panels.findIndex((p) => p.id === id);
+    closePanels(group.panels.slice(index + 1).map((p) => p.id));
+  }, [closePanels]);
+  // Switching application swaps the tab set (ADR-0054 D1): the old one is remembered, the new one restored; tabs just opened for the new application come along.
+  const switching = useRef(false);
+  useEffect(() => {
+    const api = dock.current;
+    if (!api || layoutScope === scope.current) return;
+    switching.current = true; // intermediate active tabs during the swap are not "the reader went there"
+    try {
+    const carried = api.panels.map((p) => (p.params as { route?: Route } | undefined)?.route).filter((r): r is Route => !!r && scopeOf?.(r) === layoutScope);
+    for (const route of carried) api.getPanel(routeKey(route))?.api.close();
+    saveLayout(scope.current);
+    scope.current = layoutScope;
+    loadLayout(layoutScope);
+    for (const route of carried) open(route);
+    const linked = routeFromHash(location.hash);
+    if (api.panels.length === 0) open(linked && byId.has(linked.view) ? linked : home);
+    } finally { switching.current = false; }
+    const route = (api.activePanel?.params as { route?: Route } | undefined)?.route;
+    if (route) { history.replaceState(null, "", routeToHash(route)); followed.current?.(route); }
+  }, [layoutScope, scopeOf, saveLayout, loadLayout, open, byId, home]);
 
   const workspace = useMemo<WorkspaceApi>(() => ({
-    open, notify: toast, close: (route) => closePanel(routeKey(route)), unsaved,
+    open, notify: toast, close: (route) => closePanel(routeKey(route)), closeAll, unsaved,
     transfer: (from, route, input, result) => {
       if (!dock.current?.getPanel(from)) return;
       const id = transfers.current.start(from, input, result), called = { ...route, params: { ...route.params, call: id } };
       transfers.current.bind(id, routeKey(called)); open(called);
     },
-  }), [open, closePanel, unsaved]);
+    palette: () => setPaletteOpen(true),
+    recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail, workspaces,
+  }), [open, closePanel, closeAll, unsaved, memory, toggleFavorite, applications, rail, workspaces]);
 
-  const tab = useCallback((props: IDockviewPanelHeaderProps) =>
-    <DockviewDefaultTab {...props} closeActionOverride={() => closePanel(props.api.id)} />, [closePanel]);
+  const tab = useCallback((props: IDockviewPanelHeaderProps) => {
+    const id = props.api.id;
+    const items: { label: string; run: () => void; separator?: boolean }[] = [
+      { label: t("Close"), run: () => closePanel(id) },
+      { label: t("Close others"), run: () => closeOthers(id) },
+      { label: t("Close to the right"), run: () => closeRight(id) },
+      { label: t("Close all"), run: closeAll },
+      { label: t("Open beside"), run: () => beside(id), separator: true },
+      { label: t("Move to new window"), run: () => popout(id) },
+    ];
+    return <ContextMenu.Root>
+      <ContextMenu.Trigger asChild><div className="flex h-full"><DockviewDefaultTab {...props} closeActionOverride={() => closePanel(id)} /></div></ContextMenu.Trigger>
+      <ContextMenu.Portal><ContextMenu.Content className={menuPanel}>
+        {items.map((item) => <div key={item.label}>{item.separator && <ContextMenu.Separator className="my-1 h-px bg-border" />}
+          <ContextMenu.Item onSelect={item.run} className={menuItem}>{item.label}</ContextMenu.Item></div>)}
+      </ContextMenu.Content></ContextMenu.Portal>
+    </ContextMenu.Root>;
+  }, [closePanel, closeOthers, closeRight, closeAll, beside, popout]);
 
   const components = useMemo(() => ({
     view: ({ params, api }: IDockviewPanelProps<{ route: Route }>) => {
@@ -263,42 +350,31 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     });
     // Read the link first: restoring the layout rewrites the URL to its active tab.
     const linked = routeFromHash(location.hash);
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) api.fromJSON(JSON.parse(saved));
-      for (const p of [...api.panels]) { // discard removed views; refresh titles in the reader's language
-        const route = (p.params as { route?: Route } | undefined)?.route;
-        const view = byId.get(route?.view ?? "");
-        if (!view) p.api.close();
-        else p.setTitle(view.title(route?.params ?? {}));
-      }
-    } catch {
-      api.clear(); // a stale or corrupt layout falls back to the home view
-    }
-    if (compact) dockFloating(api);
+    loadLayout(scope.current);
     const sync = () => {
       setOpenTabs(api.panels.map((p) => ({ key: p.id, title: p.title ?? p.id })));
       setActive(api.activePanel?.id);
       const route = (api.activePanel?.params as { route?: Route } | undefined)?.route;
-      if (route) { history.replaceState(null, "", routeToHash(route)); followed.current?.(route); }
-      try { localStorage.setItem(storageKey, JSON.stringify(api.toJSON())); } catch { /* storage unavailable */ }
+      if (route && !switching.current) { history.replaceState(null, "", routeToHash(route)); followed.current?.(route); visit.current(route, api.activePanel?.title ?? route.view); }
+      if (!switching.current) saveLayout(scope.current);
     };
     api.onDidLayoutChange(sync);
     api.onDidActivePanelChange(sync);
     if (linked && byId.has(linked.view)) open(linked);
     else if (api.panels.length === 0) open(home);
     sync();
-  }, [byId, home, open, storageKey, compact]);
+  }, [byId, home, open, loadLayout, saveLayout]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((v) => !v); }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "w" && dock.current?.activePanel) { e.preventDefault(); closePanel(dock.current.activePanel.id); }
     };
     const onHash = () => { const route = routeFromHash(location.hash); if (route) open(route); };
     addEventListener("keydown", onKey);
     addEventListener("hashchange", onHash);
     return () => { removeEventListener("keydown", onKey); removeEventListener("hashchange", onHash); };
-  }, [open]);
+  }, [open, closePanel]);
 
   const activePanel = () => dock.current?.activePanel;
   const builtInMenus: Menu[] = [
@@ -307,22 +383,72 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
       { label: navigationVisible ? t("Hide navigation") : t("Show navigation"), onSelect: toggleNavigation },
       { label: t("Reset layout"), onSelect: () => unsaved.ask([...drafts.current.keys()], () => { dock.current?.clear(); open(home); }) },
     ] },
+    { label: t("Appearance"), items: [
+      // A checkmark is the "shortcut" slot: the menu stays one shape.
+      ...([["system", t("Follow system")], ["light", t("Light")], ["dark", t("Dark")]] as const).map(([scheme, label]) => ({ label, shortcut: appearance.scheme === scheme ? "✓" : undefined, onSelect: () => appearance.setScheme(scheme) })),
+      ...([["default", t("Standard look")], ["industrial", t("Industrial look")]] as const).map(([skin, label]) => ({ label, shortcut: appearance.skin === skin ? "✓" : undefined, onSelect: () => appearance.setSkin(skin) })),
+    ] },
     { label: t("Window"), items: [
-      { label: t("Float tab"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) dock.current?.addFloatingGroup(p); } },
-      { label: t("Move tab to new window"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) popout(p.id); } },
-      { label: t("Close tab"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) closePanel(p.id); } },
+      { label: t("Open beside"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) beside(p.id); } },
+      { label: t("Move to new window"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) popout(p.id); } },
+      { label: t("Close"), shortcut: "⌘W", disabled: !active, onSelect: () => { const p = activePanel(); if (p) closePanel(p.id); } },
+      { label: t("Close others"), disabled: openTabs.length < 2, onSelect: () => { const p = activePanel(); if (p) closeOthers(p.id); } },
+      { label: t("Close all"), disabled: !openTabs.length, onSelect: closeAll },
       ...openTabs.map((t) => ({ label: t.title, onSelect: () => dock.current?.getPanel(t.key)?.api.setActive() })),
     ] },
   ];
 
+  const favoriteApps = (applications?.apps ?? []).filter((a) => memory.favorites.includes(a.id));
+  const starred = !!applications?.current && memory.favorites.includes(applications.current);
+  type RailItem = { id: string; label: string; icon: ReactNode; badge?: number; active?: boolean; run: () => void };
+  const railItems: RailItem[] = rail ? [
+    { id: "home", label: t("Home"), icon: <HomeIcon />, active: active === routeKey(rail.home), run: () => open(rail.home) },
+    { id: "search", label: t("Search"), icon: <Search />, run: () => setPaletteOpen(true) },
+    ...(rail.notifications ? [{ id: "notifications", label: t("Notifications"), icon: <Bell />, badge: rail.notifications.unread, active: active === routeKey(rail.notifications.route), run: () => open(rail.notifications!.route) }] : []),
+    { id: "applications", label: t("Applications"), icon: <Grid2x2 />, active: active === routeKey(rail.applications), run: () => open(rail.applications) },
+  ] : [];
+  const railButton = (item: RailItem) => (
+    <button key={item.id} type="button" title={item.label} aria-label={item.label} aria-current={item.active ? "page" : undefined} onClick={item.run}
+      className={cn("relative grid size-9 place-items-center rounded-md text-muted hover:bg-row-hover hover:text-foreground [&_svg]:size-4", item.active && "bg-row-selected text-foreground")}>
+      {item.icon}{item.badge ? <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-4 text-primary-foreground">{item.badge > 99 ? "99+" : item.badge}</span> : null}
+    </button>
+  );
+  const sessionMenu = session && <SessionMenu compact={!!rail && !compact} session={{ ...session, onSwitch: (id) => unsaved.ask([...drafts.current.keys()], () => session.onSwitch(id)) }}
+    onLanguageSelect={(id) => unsaved.ask([...drafts.current.keys()], () => {
+      void Promise.resolve(onLanguage?.(id)).catch(() => undefined).finally(() => setLanguage(id));
+    })} />;
+
   return (
     <WorkspaceContext.Provider value={workspace}>
-      <div className="grid h-dvh w-full min-w-0 max-w-full grid-rows-[36px_1fr] overflow-hidden bg-background text-foreground">
-        <header className="flex min-w-0 items-center gap-2 overflow-hidden border-b border-border bg-surface px-2">
+      <div className={cn("grid h-dvh w-full min-w-0 max-w-full overflow-hidden bg-background text-foreground",
+        rail && !compact ? "grid-cols-[44px_minmax(0,1fr)]" : "grid-cols-1", rail && compact ? "grid-rows-[36px_1fr_44px]" : "grid-rows-[36px_1fr]")}>
+        {rail && !compact && (
+          <aside aria-label={t("Platform")} data-ui="chrome" className="row-span-2 flex flex-col items-center gap-1 border-r border-border bg-surface py-1.5">
+            {railItems.map(railButton)}
+            <div className="my-1 h-px w-6 bg-border" />
+            <RailList label={t("Recent")} icon={<Clock />} empty={t("Nothing opened yet.")}
+              items={memory.recent.slice(0, 12).map((r) => ({ id: routeKey(r.route), label: r.title, detail: r.app ? applications?.apps.find((a) => a.id === r.app)?.title : undefined, run: () => open(r.route) }))} />
+            <RailList label={t("Favorites")} icon={<Star />} empty={t("Star an application to keep it here.")}
+              items={favoriteApps.map((a) => ({ id: a.id, label: a.title, icon: a.icon, run: () => applications!.onSelect(a.id) }))} />
+            <div className="mt-auto flex flex-col items-center gap-1">
+              {rail.assist && railButton({ id: "assist", label: t("Assistant"), icon: <Sparkles />, active: active === routeKey(rail.assist), run: () => open(rail.assist!) })}
+              {workspaces && workspaces.options.length > 1 && <WorkspaceMenu workspaces={workspaces} />}
+              {sessionMenu}
+            </div>
+          </aside>
+        )}
+        <header data-ui="chrome" className="flex min-w-0 items-center gap-2 overflow-hidden border-b border-border bg-surface px-2">
           <button type="button" aria-label={t("Toggle navigation")} aria-expanded={navigationVisible} onClick={toggleNavigation}
             className="rounded-sm p-1 text-muted hover:bg-row-hover hover:text-foreground"><PanelLeft className="size-4" /></button>
-          {entryPoints && <AppMenu launcher={entryPoints} product={entryPoints.apps.find((entry) => entry.id === entryPoints.current)?.title ?? product} label={t("Workspaces")} />}
-          {launcher ? <AppMenu launcher={launcher} product={product} label={launcher.label} /> : !entryPoints && <span className="pr-2 text-sm font-semibold tracking-tight">{product}</span>}
+          {applications && applications.apps.length > 0
+            ? <AppMenu applications={applications} product={product} icon={productIcon} />
+            : <span className="flex items-center gap-2 pr-2 text-sm font-semibold tracking-tight [&_svg]:size-4 [&_svg]:text-muted">{productIcon}{product}</span>}
+          {applications?.current && (
+            <button type="button" aria-label={starred ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={starred} onClick={() => toggleFavorite(applications.current!)}
+              className={cn("rounded-sm p-1 hover:bg-row-hover", starred ? "text-[var(--tone-warning)]" : "text-muted hover:text-foreground")}>
+              <Star className="size-3.5" fill={starred ? "currentColor" : "none"} />
+            </button>
+          )}
           <Menubar.Root className="hidden items-center sm:flex">
             {[...menus, ...builtInMenus].map((menu) => (
               <Menubar.Menu key={menu.label}>
@@ -347,15 +473,12 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
           </button>
           <div className="ml-auto flex items-center gap-2">
             <span className="max-sm:hidden">{status}</span>
-            {session && <SessionMenu session={{ ...session, onSwitch: (id) => unsaved.ask([...drafts.current.keys()], () => session.onSwitch(id)) }}
-              onLanguageSelect={(id) => unsaved.ask([...drafts.current.keys()], () => {
-                void Promise.resolve(onLanguage?.(id)).catch(() => undefined).finally(() => setLanguage(id));
-              })} />}
+            {(!rail || compact) && sessionMenu}
           </div>
         </header>
-        <div className={cn("relative grid min-h-0 min-w-0", !compact && navOpen ? "grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1")}>
+        <div className={cn("relative grid min-h-0 min-w-0", !compact && navOpen && nav.length > 0 ? "grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1")}>
           {compact && mobileNavOpen && <button type="button" aria-label={t("Close navigation")} className="fixed inset-0 z-20 bg-black/25" onClick={() => setMobileNavOpen(false)} />}
-          {(!compact && navOpen || compact && mobileNavOpen) && (
+          {nav.length > 0 && (!compact && navOpen || compact && mobileNavOpen) && (
             <nav aria-label={t("Main")} className={cn("overflow-auto border-r border-border bg-surface p-2",
               compact && "fixed inset-y-9 left-0 z-30 w-[min(19rem,85vw)] shadow-lg")}>
               {nav.map((section) => (
@@ -379,6 +502,12 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
             <DockviewReact defaultRenderer="always" defaultTabComponent={tab} components={components} onReady={onReady} theme={appearance.theme==="dark"?themeDark:themeLight} />
           </div>
         </div>
+        {rail && compact && (
+          <nav aria-label={t("Platform")} data-ui="chrome" className="flex items-center justify-around border-t border-border bg-surface px-2">
+            {railItems.map(railButton)}
+            {workspaces && workspaces.options.length > 1 && <WorkspaceMenu workspaces={workspaces} />}
+          </nav>
+        )}
       </div>
       <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")}
         overlayClassName="fixed inset-0 z-40 bg-black/30"
@@ -394,18 +523,19 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
               ))}
             </Command.Group>
           )}
-          {entryPoints && (
-            <Command.Group heading={t("Workspaces")} className={paletteGroup}>
-              {entryPoints.apps.map((entry) => <Command.Item key={entry.id} value={`workspace ${entry.title}`} className={paletteItem}
-                onSelect={() => { entryPoints.onSelect(entry.id); setPaletteOpen(false); }}>{entry.icon}{entry.title}</Command.Item>)}
+          {applications && applications.apps.length > 0 && (
+            <Command.Group heading={t("Applications")} className={paletteGroup}>
+              {applications.apps.map((a) => (
+                <Command.Item key={a.id} value={`app ${a.title} ${applications.categories.find((c) => c.id === a.category)?.label ?? ""}`} className={paletteItem}
+                  onSelect={() => { applications.onSelect(a.id); setPaletteOpen(false); }}>{a.icon}{a.title}
+                  <span className="ml-auto text-xs text-muted">{applications.categories.find((c) => c.id === a.category)?.label}</span></Command.Item>
+              ))}
             </Command.Group>
           )}
-          {launcher && (
-            <Command.Group heading={t("Apps")} className={paletteGroup}>
-              {launcher.apps.map((a) => (
-                <Command.Item key={a.id} value={`app ${a.title}`} className={paletteItem}
-                  onSelect={() => { launcher.onSelect(a.id); setPaletteOpen(false); }}>{a.icon}{a.title}</Command.Item>
-              ))}
+          {workspaces && workspaces.options.length > 1 && (
+            <Command.Group heading={t("Workspaces")} className={paletteGroup}>
+              {workspaces.options.map((entry) => <Command.Item key={entry.id} value={`workspace ${entry.title}`} className={paletteItem}
+                onSelect={() => { workspaces.onSelect(entry.id); setPaletteOpen(false); }}>{entry.icon}{entry.title}</Command.Item>)}
             </Command.Group>
           )}
           {nav.map((section) => (
@@ -457,19 +587,75 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   );
 }
 
-function AppMenu({ launcher, product, label = t("Apps") }: { launcher: Launcher; product: string; label?: string }) {
+/** The application switcher in the header: the portal's applications by category, the current one marked. */
+function AppMenu({ applications, product, icon }: { applications: Applications; product: string; icon?: ReactNode }) {
+  const current = applications.apps.find((a) => a.id === applications.current);
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label={label} className="flex h-7 min-w-0 max-w-56 items-center gap-2 rounded-md px-2 text-sm font-semibold tracking-tight hover:bg-row-hover max-sm:max-w-28">
-        <LayoutGrid className="size-4 shrink-0 text-muted" /><span className="truncate">{product}</span><ChevronDown className="size-3.5 shrink-0 text-muted" />
+      <DropdownMenu.Trigger aria-label={t("Switch application")} className="flex h-7 min-w-0 max-w-64 items-center gap-2 rounded-md px-2 text-sm font-semibold tracking-tight hover:bg-row-hover max-sm:max-w-32 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted">
+        {current?.icon ?? icon ?? <LayoutGrid />}<span className="truncate">{current?.title ?? product}</span><ChevronDown className="size-3.5 shrink-0 text-muted" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" sideOffset={4} className={menuPanel}>
+        <DropdownMenu.Content align="start" sideOffset={4} className={cn(menuPanel, "max-h-[70vh] min-w-60 overflow-auto")}>
+          <DropdownMenu.RadioGroup value={applications.current ?? ""} onValueChange={applications.onSelect}>
+            {applications.categories.map((category) => {
+              const apps = applications.apps.filter((a) => a.category === category.id);
+              if (apps.length === 0) return null;
+              return <div key={category.id}>
+                <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{category.label}</DropdownMenu.Label>
+                {apps.map((a) => (
+                  <DropdownMenu.RadioItem key={a.id} value={a.id} className={cn(menuItem, "gap-2 [&_svg]:size-3.5")}>
+                    <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{a.icon}{a.title}
+                  </DropdownMenu.RadioItem>
+                ))}
+              </div>;
+            })}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+/** A rail entry that opens a list: Recent, Favorites. */
+function RailList({ label, icon, items, empty }: { label: string; icon: ReactNode; empty: string; items: { id: string; label: string; detail?: string; icon?: ReactNode; run: () => void }[] }) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger title={label} aria-label={label}
+        className="grid size-9 place-items-center rounded-md text-muted hover:bg-row-hover hover:text-foreground data-[state=open]:bg-row-hover data-[state=open]:text-foreground [&_svg]:size-4">
+        {icon}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content side="right" align="start" sideOffset={6} className={cn(menuPanel, "max-h-[70vh] min-w-56 max-w-80 overflow-auto")}>
           <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{label}</DropdownMenu.Label>
-          <DropdownMenu.RadioGroup value={launcher.current ?? ""} onValueChange={launcher.onSelect}>
-            {launcher.apps.map((a) => (
-              <DropdownMenu.RadioItem key={a.id} value={a.id} className={cn(menuItem, "gap-2 [&_svg]:size-3.5")}>
-                <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{a.icon}{a.title}
+          {items.length === 0 && <p className="px-2 py-1.5 text-xs text-muted">{empty}</p>}
+          {items.map((item) => (
+            <DropdownMenu.Item key={item.id} onSelect={item.run} className={cn(menuItem, "gap-2 pl-2 [&_svg]:size-3.5")}>
+              {item.icon}<span className="truncate">{item.label}</span>{item.detail && <span className="ml-auto truncate pl-3 text-xs text-muted">{item.detail}</span>}
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+/** The projection switch at the bottom of the rail: Operations, Build, Admin. */
+function WorkspaceMenu({ workspaces }: { workspaces: Workspaces }) {
+  const current = workspaces.options.find((o) => o.id === workspaces.current);
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger title={t("Workspaces")} aria-label={`${t("Workspaces")}: ${current?.title ?? ""}`}
+        className="grid size-9 place-items-center rounded-md text-muted hover:bg-row-hover hover:text-foreground data-[state=open]:bg-row-hover [&_svg]:size-4">
+        {current?.icon ?? <LayoutGrid />}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content side="right" align="end" sideOffset={6} className={menuPanel}>
+          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Workspaces")}</DropdownMenu.Label>
+          <DropdownMenu.RadioGroup value={workspaces.current} onValueChange={workspaces.onSelect}>
+            {workspaces.options.map((o) => (
+              <DropdownMenu.RadioItem key={o.id} value={o.id} className={cn(menuItem, "gap-2 [&_svg]:size-3.5")}>
+                <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{o.icon}{o.title}
               </DropdownMenu.RadioItem>
             ))}
           </DropdownMenu.RadioGroup>
@@ -479,21 +665,31 @@ function AppMenu({ launcher, product, label = t("Apps") }: { launcher: Launcher;
   );
 }
 
-function SessionMenu({ session, onLanguageSelect }: { session: Session; onLanguageSelect: (id: string) => void }) {
+function SessionMenu({ session, onLanguageSelect, compact = false }: { session: Session; onLanguageSelect: (id: string) => void; compact?: boolean }) {
+  const avatar = <span className="grid size-5 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+    {session.principal.slice(0, 1).toUpperCase()}
+  </span>;
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label={`${session.principal} · ${session.tenant}`} className="flex h-7 shrink-0 items-center gap-2 rounded-md border border-border px-2 text-sm hover:bg-row-hover">
-        <span className="grid size-5 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-          {session.principal.slice(0, 1).toUpperCase()}
-        </span>
-        <span className="text-left leading-tight max-sm:hidden">
-          <span className="block text-sm">{session.principal}</span>
-          <span className="block text-xs text-muted">{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
-        </span>
-        <ChevronDown className="size-3.5 text-muted" />
+      <DropdownMenu.Trigger aria-label={`${session.principal} · ${session.tenant}`} title={compact ? `${session.principal} · ${session.tenant}` : undefined}
+        className={compact ? "grid size-9 place-items-center rounded-md hover:bg-row-hover data-[state=open]:bg-row-hover"
+          : "flex h-7 shrink-0 items-center gap-2 rounded-md border border-border px-2 text-sm hover:bg-row-hover"}>
+        {avatar}
+        {!compact && <>
+          <span className="text-left leading-tight max-sm:hidden">
+            <span className="block text-sm">{session.principal}</span>
+            <span className="block text-xs text-muted">{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
+          </span>
+          <ChevronDown className="size-3.5 text-muted" />
+        </>}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" sideOffset={4} className={menuPanel}>
+        <DropdownMenu.Content side={compact ? "right" : "bottom"} align="end" sideOffset={4} className={menuPanel}>
+          <DropdownMenu.Label className="px-2 py-1 text-xs">
+            <span className="block text-sm text-foreground">{session.principal}</span>
+            <span className="block text-muted">{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
+          </DropdownMenu.Label>
+          <DropdownMenu.Separator className="my-1 h-px bg-border" />
           <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Switch tenant or identity")}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={session.current} onValueChange={session.onSwitch}>
             {session.options.map((o) => (

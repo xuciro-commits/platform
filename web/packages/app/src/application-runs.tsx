@@ -40,7 +40,7 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
     <Button size="sm" disabled={offset+50>=(query.data?.total??0)} onClick={()=>setOffset(offset+50)}>{t("Next page")}</Button></div>
   </>}
   {selected&&<Panel className="grid min-w-0 gap-3">
-   <div className="flex flex-wrap gap-2"><Button onClick={()=>open({view:selected.kind==="flow"?"flow":selected.kind==="agent"?"run":"operation-run",params:{id:selected.id,application}}, {window:"float"})}>{t("Open run")}</Button>
+   <div className="flex flex-wrap gap-2"><Button onClick={()=>open({view:selected.kind==="flow"?"flow":selected.kind==="agent"?"run":"operation-run",params:{id:selected.id,application}}, {window:"beside"})}>{t("Open run")}</Button>
     {source&&<Button onClick={()=>open({view:selected.kind==="flow"?"workflow":"code",params:{id:source.id,...(draft?{application:draft.id}:{})}})}>{t("Open current source editor")}</Button>}
     {selected.kind==="agent"&&<Button onClick={()=>open({view:"agents",params:{surface:"tenant"}})}>{t("Current agent registry")}</Button>}
    </div>
@@ -48,7 +48,7 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
    <RunBinding run={selected}/>
    {selected.error&&<p role="alert">{selected.node?`${t("Failed node")}: ${selected.node} · `:""}{selected.error}</p>}
    {!!selected.shared.length&&<p role="status" className="text-xs text-muted">{t("Also referenced by: {applications}",{applications:selected.shared.join(", ")})}</p>}
-   {selected.kind==="flow"?<FlowInstanceView id={selected.id} application={application}/>:selected.kind==="agent"?<RunView id={selected.id} application={application}/>:<OperationRunView id={selected.id} application={application}/>}
+   {selected.kind==="flow"?<FlowInstanceView id={selected.id}/>:selected.kind==="agent"?<RunView id={selected.id} application={application}/>:<OperationRunView id={selected.id} application={application}/>}
   </Panel>}
  </div>;
 }

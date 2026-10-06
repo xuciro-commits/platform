@@ -1,5 +1,5 @@
 import {expect,test} from '@playwright/test';
-import {defaultAnalyticsSelectionGroup} from '../../packages/build/src/module-import/default-analytics.fixture.mjs';
+import {defaultAnalyticsSelectionGroup} from '../../packages/build/src/workshop/module-import/default-analytics.fixture.mjs';
 import {decide,fresh,open,pageUIProfile,stableReadRevision} from './host';
 
 test('original Analytics scatter and ranking share authorized selection with original properties across frozen pages',async({page,request},info)=>{

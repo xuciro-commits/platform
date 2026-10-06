@@ -46,9 +46,9 @@ func TestConversationFunctionBindsOriginalQuestionsHistoryAndPermissions(t *test
 			t.Fatal(schema, err)
 		}
 	}
-	must("builder", build.ID, build.ObjectType, "object", build.ObjectType+".create", map[string]any{"name": "source", "title": "Source", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}})
+	must("builder", build.ID, build.ObjectType, "object", build.ObjectType+".create", map[string]any{"name": "item", "title": "Item", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}})
 	must("builder", build.ID, build.ObjectType, "object", build.ObjectType+".publish", map[string]any{})
-	f := platform.RecordAdviceFunction("build.source", []string{"name"}, []string{build.Builder, build.User})
+	f := platform.RecordAdviceFunction("build.item", []string{"name"}, []string{build.Builder, build.User})
 	f.Name = "chat"
 	f.Conversation = true
 	must("builder", build.ID, build.FunctionType, "function", build.FunctionType+".create", f)
@@ -56,8 +56,8 @@ func TestConversationFunctionBindsOriginalQuestionsHistoryAndPermissions(t *test
 	must("builder", ai.ID, ai.ProviderType, "local", ai.SchemaProviderAdd, map[string]string{"kind": "local", "baseUrl": provider.URL})
 	must("builder", ai.ID, ai.ModelType, "local/probe", ai.SchemaModelEnable, map[string]string{"access": "users"})
 	must("builder", PlatformApp, SettingType, "ai/app-model", SchemaSettingSet, map[string]string{"value": "local/probe"})
-	must("reader", build.ID, "build.source", "A", "build.source.create", map[string]string{"name": "Original record"})
-	must("reader", build.ID, "build.source", "B", "build.source.create", map[string]string{"name": "Other record"})
+	must("reader", build.ID, "build.item", "A", "build.item.create", map[string]string{"name": "Original record"})
+	must("reader", build.ID, "build.item", "B", "build.item.create", map[string]string{"name": "Other record"})
 	call := func(source, question string, history []string) map[string]any {
 		return map[string]any{"name": "chat", "version": 1, "source": source, "question": question, "history": history}
 	}
@@ -113,7 +113,7 @@ func TestConversationFunctionBindsOriginalQuestionsHistoryAndPermissions(t *test
 	if !ok || kept.Question != "Second question" || len(kept.History) != 1 || kept.History[0] != "first" || !kept.Contract.Conversation {
 		t.Fatal("conversation snapshot lost its original call binding")
 	}
-	must("builder", build.ID, "build.source", "A", "build.source.archive", map[string]any{})
+	must("builder", build.ID, "build.item", "A", "build.item.archive", map[string]any{})
 	out, _ = tn.sendModel(tn.outbound[len(tn.outbound)-1].Effect, at.Add(2*time.Second))
 	if out.Result == "delivered" {
 		t.Fatal("an archived source released accepted conversation input")

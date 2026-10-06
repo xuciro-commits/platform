@@ -20,7 +20,7 @@ func loopDocument() (*PageDocument, []Section) {
 		"item":     {Scope: "loop-item", Owner: "loop", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "item", Node: "loop"}},
 		"expanded": {Scope: "loop-item", Owner: "loop", Type: "boolean", Mode: "state", Initial: json.RawMessage(`false`)},
 	}
-	d.Events = []PageEventBinding{{Source: "toggle", Event: "click", Target: "expanded", Value: json.RawMessage(`true`)}}
+	d.Events = []PageEventBinding{{Source: "toggle", Event: "click", Effects: []PageEffect{{Kind: "set", Target: "expanded", Value: json.RawMessage(`true`)}}}}
 	sections[2].RecordVariable = "item"
 	return d, append(sections, Section{ID: "toggle", Widget: "button", ConfigVersion: 1})
 }

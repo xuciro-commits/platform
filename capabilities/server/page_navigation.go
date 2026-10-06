@@ -31,7 +31,7 @@ func filterPageNavigation(definitions []platform.Definition) []platform.Definiti
 		removed := map[string]bool{}
 		directoryControls := map[string]map[string]bool{}
 		doc.Events = slices.DeleteFunc(slices.Clone(doc.Events), func(e platform.PageEventBinding) bool {
-			if e.Navigate != nil && !visible[e.Navigate.Page] {
+			if n := e.Navigation(); n != nil && !visible[n.Page] {
 				directory := slices.ContainsFunc(page.Sections, func(s platform.Section) bool {
 					return s.ID == e.Source && s.Widget == "asset-directory" && s.AssetDirectory != nil
 				})
@@ -86,10 +86,10 @@ func (t *Tenant) checkPageNavigation(p platform.Page, owner string) error {
 		return nil
 	}
 	for _, event := range p.Document.Events {
-		if event.Navigate == nil {
+		nav := event.Navigation()
+		if nav == nil {
 			continue
 		}
-		nav := event.Navigate
 		var target *platform.Page
 		for _, definition := range t.definitions {
 			if definition.Ref == nav.Page {
