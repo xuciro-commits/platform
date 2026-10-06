@@ -1,3 +1,4 @@
+import { ObjectLineage } from "./lineage";
 import {actionDestinations,actionResultEdges} from "./process-rules";
 import { fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type ObjectScope, type Process, type State } from "./object-model";
 import { ShapeEditor } from "./shape";
@@ -17,13 +18,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useObjectDraft } from "./object-draft";
 
 /** The objects of this organisation: open one to give it states and actions. */
-type Tab = "overview" | "properties" | "links" | "actions" | "lifecycle" | "permissions" | "preview";
+type Tab = "overview" | "properties" | "links" | "actions" | "lifecycle" | "permissions" | "data" | "preview";
 export function ObjectTypeEditor({ id, initialField, initialAction, initialAccess, initialTab }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean; initialTab?: string }) {
   const [chosen, setChosen] = useState<Chosen>();
   const draft = useObjectDraft(id, () => setChosen(undefined));
   const { object, process, dirty, busy, refused, change, issues, parent, entities, session, discardChanges, open } = draft;
   const initiallyChosen = useRef("");
-  const [tab, setTab] = useState<Tab>((["overview", "properties", "links", "actions", "lifecycle", "permissions", "preview"] as Tab[]).includes(initialTab as Tab) ? initialTab as Tab : "overview");
+  const [tab, setTab] = useState<Tab>((["overview", "properties", "links", "actions", "lifecycle", "permissions", "data", "preview"] as Tab[]).includes(initialTab as Tab) ? initialTab as Tab : "overview");
   useEffect(() => {
     const key = `${id}:${initialField ?? ""}:${initialAction ?? ""}:${initialAccess ?? false}`;
     if (!object || initiallyChosen.current === key) return;
@@ -56,7 +57,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   const incoming = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent));
   const tabs: { id: Tab; title: string }[] = [
     { id: "overview", title: t("Overview") }, { id: "properties", title: t("Properties") }, { id: "links", title: t("Links") }, { id: "actions", title: t("Actions") },
-    { id: "lifecycle", title: t("Lifecycle") }, { id: "permissions", title: t("Permissions") }, { id: "preview", title: t("Preview") },
+    { id: "lifecycle", title: t("Lifecycle") }, { id: "permissions", title: t("Permissions") }, { id: "data", title: t("Data") }, { id: "preview", title: t("Preview") },
   ];
   const structure = <div className="grid min-w-0 content-start">
     <PanelSection title={t("Object type")}>
@@ -136,6 +137,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       {!process.access.length && <p className="text-sm text-muted">{t("No roles yet. Without roles only builders see these records.")}</p>}
       {process.access.length > 0 && <ScopeFields process={process} onChange={(scope) => change({ ...process, scope })} />}
     </div>,
+    data: <div className="grid max-w-4xl content-start gap-3 p-4"><ObjectLineage object={`build.${object.name}`} fields={process.fields.map((f) => ({ name: f.name, title: f.title || f.name }))} /></div>,
     preview: <div className="min-h-0 flex-1 overflow-auto p-3"><Preview object={object} process={process} action={action} /></div>,
   };
   return <Workbench storageKey="object-type" crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }]} title={object.title}

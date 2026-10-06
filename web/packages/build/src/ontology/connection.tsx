@@ -2,6 +2,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
+import { MarkingField, integrates } from "./marking";
 import { Button, Checkbox, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
 
 // Connections (ADR-0070): the external systems a tenant reads through - a kind,
@@ -15,7 +16,7 @@ const fieldClass = "grid min-w-0 gap-1 text-xs";
 
 export function Connections() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("Connections")} description={t("Only a builder can edit connections.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Connections")} description={t("Only a builder or integrator can edit connections.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Connections")} description={t("The systems this tenant reads from. A connection names its credential in the host's secret store; the credential itself never enters a definition or a release.")}
       actions={<Button onClick={() => open({ view: "connection", params: { id: "new" } })}>{t("New connection")}</Button>} />
@@ -35,8 +36,8 @@ export function ConnectionEditor({ id }: { id: string }) {
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The connection could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
   const save = async (): Promise<{ id: string; revision: number } | undefined> => {
     const target = draft.id || crypto.randomUUID(), expected = baseRevision.current;
-    const { name, title, kind, address, secret, allowPrivate } = draft;
-    const payload = { name, title, kind, address, secret: secret ?? "", allowPrivate: !!allowPrivate };
+    const { name, title, kind, address, secret, allowPrivate, marking } = draft;
+    const payload = { name, title, kind, address, secret: secret ?? "", allowPrivate: !!allowPrivate, marking: marking ?? "" };
     if (!await decide(`build.connection.${draft.id ? "edit" : "create"}`, { type: "build.connection", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
     baseRevision.current = expected + 1; loaded.current = `${target}:${expected + 1}`;
     setDraft((d) => ({ ...d, id: target, revision: expected + 1 })); markSaved(); setDirty(false);
@@ -49,7 +50,7 @@ export function ConnectionEditor({ id }: { id: string }) {
     if (!saved) return;
     if (await decide(`build.connection.${name}`, { type: "build.connection", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) { const result = await query.refetch(); if (result.data?.record) load(result.data.record); }
   };
-  if (role("build") !== "builder") return <PageHeader title={t("Connections")} description={t("Only a builder can edit connections.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Connections")} description={t("Only a builder or integrator can edit connections.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Connections")} description={query.isError ? t("The connection could not be loaded.") : t("Loading…")} />;
   const last = draft.last;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
@@ -72,6 +73,7 @@ export function ConnectionEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Secret name")}<Input value={draft.secret ?? ""} placeholder="sap-reader" onChange={(e) => patch({ secret: e.target.value })} />
           <span className="text-[11px] text-muted">{t("Looked up by the host (PLATFORM_SECRETS_DIR or PLATFORM_SECRET_<NAME>). For http and OData its content is the Authorization header's value, such as Basic … or Bearer ….")}</span></label>
         <Checkbox checked={!!draft.allowPrivate} onChange={(allowPrivate) => patch({ allowPrivate })}>{t("Allow http and private addresses (on-premise systems)")}</Checkbox>
+        <MarkingField value={draft.marking ?? ""} onChange={(marking) => patch({ marking: marking as Api.Connection["marking"] })} help={t("Everything read through it is at least this; datasets loaded from it are raised to it.")} />
       </Panel>
       <Panel title={t("Last check")} className="grid min-w-0 content-start gap-2">
         {!last ? <p className="text-xs text-muted">{t("Not checked yet.")}</p> : <>

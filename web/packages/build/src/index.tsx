@@ -18,6 +18,11 @@ import { LinkTypeEditor, LinkTypes } from "./ontology/link-type";
 import { PropertyTypeEditor, PropertyTypes } from "./ontology/property-type";
 import { DataSourceEditor, DataSources } from "./ontology/data-source";
 import { ConnectionEditor, Connections } from "./ontology/connection";
+import { DatasetEditor, Datasets } from "./ontology/dataset";
+import { PipelineEditor, Pipelines } from "./ontology/pipeline";
+import { WritebackEditor, Writebacks } from "./ontology/writeback";
+import { MatchEditor, Matches } from "./ontology/match";
+import { IntegrationHealth } from "./ontology/integration-health";
 import { DecisionTableEditor, DecisionTables } from "./functions/decision-table";
 import { QueryEditor, Queries } from "./ontology/query";
 import { FunctionEditor, Functions } from "./functions/function";
@@ -28,10 +33,21 @@ import { ProjectHome, ProjectsList } from "./projects/project";
 import { StudioTemplates } from "./workshop/template-ui";
 import { t, type NavSection, type View } from "@platform/ui";
 import { ApplicationScope } from "./projects/application-scope";
-import { BookOpen, Boxes, Braces, Clock, Compass, Database, GitBranch, Hammer, History, LayoutList, LayoutTemplate, Link2, PackageCheck, Plug, Search, Sparkles, Table2, Tags, Workflow, Zap } from "lucide-react";
+import { Activity, BookOpen, Boxes, Braces, Clock, Compass, Database, Fingerprint, GitBranch, GitMerge, Hammer, History, Layers, LayoutList, LayoutTemplate, Link2, PackageCheck, Plug, Search, Send, Sparkles, Table2, Tags, Workflow, Zap } from "lucide-react";
 
 const scoped = (p: Record<string, string | undefined>, node: React.ReactNode) => <ApplicationScope application={p.application}>{node}</ApplicationScope>;
 const builder = (host: Host) => host.role("build") === "builder";
+// An integrator connects, maps and runs integrations without designing objects or pages (ADR-0075).
+const integrator = (host: Host) => host.role("build") === "integrator";
+const integration = (): NavSection => ({ label: t("Integration"), items: [
+  { label: t("Connections"), icon: <Plug />, route: { view: "connection" } },
+  { label: t("Data sources"), icon: <Database />, route: { view: "data-source" } },
+  { label: t("Datasets"), icon: <Layers />, route: { view: "dataset" } },
+  { label: t("Pipelines"), icon: <GitMerge />, route: { view: "pipeline" } },
+  { label: t("Writebacks"), icon: <Send />, route: { view: "writeback" } },
+  { label: t("Matching rules"), icon: <Fingerprint />, route: { view: "match" } },
+  { label: t("Integration health"), icon: <Activity />, route: { view: "integration-health" } },
+] });
 
 const views: View[] = [
   // Projects
@@ -44,6 +60,11 @@ const views: View[] = [
   { id: "property-type", title: () => t("Shared properties"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><PropertyTypeEditor id={p.id} /></ApplicationScope> : <PropertyTypes /> },
   { id: "connection", title: (p) => p.id ? t("Connection") : t("Connections"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><ConnectionEditor id={p.id} /></ApplicationScope> : <Connections /> },
   { id: "data-source", title: (p) => p.id ? t("Data source") : t("Data sources"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><DataSourceEditor id={p.id} /></ApplicationScope> : <DataSources /> },
+  { id: "dataset", title: (p) => p.id ? t("Dataset") : t("Datasets"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><DatasetEditor id={p.id} /></ApplicationScope> : <Datasets /> },
+  { id: "pipeline", title: (p) => p.id ? t("Pipeline") : t("Pipelines"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><PipelineEditor id={p.id} /></ApplicationScope> : <Pipelines /> },
+  { id: "integration-health", title: () => t("Integration health"), render: () => <IntegrationHealth /> },
+  { id: "writeback", title: (p) => p.id ? t("Writeback") : t("Writebacks"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><WritebackEditor id={p.id} /></ApplicationScope> : <Writebacks /> },
+  { id: "match", title: (p) => p.id ? t("Matching rule") : t("Matching rules"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><MatchEditor id={p.id} /></ApplicationScope> : <Matches /> },
   { id: "query", title: () => t("Queries"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><QueryEditor id={p.id} /></ApplicationScope> : <Queries /> },
   // Interface
   { id: "module", title: (p) => p.page ? t("Page") : p.id ? t("Module") : t("Modules"), render: (p) => <ApplicationScope key={`${p.id ?? ""}:${p.page ?? ""}`} application={p.application ?? p.id}><ModuleWorkbench id={p.id} page={p.page} /></ApplicationScope> },
@@ -80,9 +101,8 @@ export default defineApp({
       { label: t("Relationships"), icon: <Link2 />, route: { view: "link-type" } },
       { label: t("Shared properties"), icon: <Tags />, route: { view: "property-type" } },
       { label: t("Queries"), icon: <Search />, route: { view: "query" } },
-      { label: t("Connections"), icon: <Plug />, route: { view: "connection" } },
-      { label: t("Data sources"), icon: <Database />, route: { view: "data-source" } },
     ] },
+    integration(),
     { label: t("Interface"), items: [
       { label: t("Modules"), icon: <LayoutTemplate />, route: { view: "module" } },
       { label: t("Templates"), icon: <LayoutList />, route: { view: "studio-templates" } },
@@ -106,7 +126,7 @@ export default defineApp({
       { label: t("Lineage"), icon: <GitBranch />, route: { view: "lineage" } },
       { label: t("Asset Library"), icon: <BookOpen />, route: { view: "catalog" } },
     ] },
-  ] : [ // a publisher reviews and activates; the editors stay read-only for them
+  ] : integrator(host) ? [integration()] : [ // a publisher reviews and activates; the editors stay read-only for them
     { label: t("Releases"), items: [
       { label: t("Changes"), icon: <PackageCheck />, route: { view: "changes" } },
       { label: t("Release history"), icon: <History />, route: { view: "release-history" } },

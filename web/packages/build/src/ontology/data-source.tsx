@@ -1,3 +1,4 @@
+import { integrates } from "./marking";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
@@ -8,8 +9,9 @@ import { PERIODS, periodLabel } from "../automate/workflow-model";
 // Data sources (ADR-0061): an external JSON endpoint whose rows become records
 // of one object. The editor is the whole wizard - endpoint, rows, mapping,
 // period - and the last pull shows what happened.
-type Draft = Api.Source;
+type Draft = Omit<Api.Source, "mapping" | "object" | "key"> & { dataset?: string; object: string; key: string; mapping: Api.SourceField[] };
 type ConnectionRow = Api.Connection;
+type DatasetRow = { id: string; title: string };
 const PROFILES = [["json", "JSON"], ["csv", "CSV"], ["odata", "OData entity set"], ["table", "Database table"]] as const;
 const empty = (): Draft => ({ id: "", revision: 0, created: { at: "" } as Api.Stamp, changed: { at: "" } as Api.Stamp, name: "", title: "", url: "", object: "", key: "id", mapping: [], state: "draft" });
 const conversions = ["", "string", "number", "boolean", "date"];
@@ -17,11 +19,11 @@ const fieldClass = "grid min-w-0 gap-1 text-xs";
 
 export function DataSources() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("Data sources")} description={t("Only a builder can edit data sources.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Data sources")} description={t("Pull rows from a JSON or CSV endpoint, an OData entity set or a database table into one object, on a period or on request. Each row is the object's own create or edit, decided once per content.")}
       actions={<Button onClick={() => open({ view: "data-source", params: { id: "new" } })}>{t("New data source")}</Button>} />
-    <RecordList source={source} type="build.source" fields={["title", "name", "object", "every", "state"]} onOpen={(record) => open({ view: "data-source", params: { id: record.id } })} />
+    <RecordList source={source} type="build.source" fields={["title", "name", "object", "dataset", "every", "state"]} onOpen={(record) => open({ view: "data-source", params: { id: record.id } })} />
   </div>;
 }
 
@@ -29,6 +31,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const { decide, role, entities } = useHost(), { open, close } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.source/${encodeURIComponent(id)}`, 5000);
   const connections = (useReadQuery<{ records: ConnectionRow[] }>("/v1/records/build.connection?limit=100").data?.records ?? []).filter((c) => c.state === "ready");
+  const datasets = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200").data?.records ?? [];
   const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const load = (record: Draft) => { setDraft({ ...empty(), ...record, mapping: record.mapping ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
@@ -38,8 +41,8 @@ export function DataSourceEditor({ id }: { id: string }) {
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The data source could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
   const save = async (): Promise<{ id: string; revision: number } | undefined> => {
     const target = draft.id || crypto.randomUUID(), expected = baseRevision.current;
-    const { name, title, url, allowPrivate, header, path, object, key, mapping, every, connection, profile, entity, filter, since } = draft;
-    const payload = { name, title, url: url ?? "", allowPrivate: !!allowPrivate, header: header ?? "", path: path ?? "", object, key, mapping, every: every ?? "",
+    const { name, title, url, allowPrivate, header, path, object, key, mapping, every, connection, profile, entity, filter, since, dataset } = draft;
+    const payload = { name, title, url: url ?? "", allowPrivate: !!allowPrivate, header: header ?? "", path: path ?? "", object: dataset ? "" : object, key: dataset ? "" : key, mapping: dataset ? [] : mapping, every: every ?? "", dataset: dataset ?? "",
       connection: connection ?? "", profile: profile ?? "json", entity: entity ?? "", filter: filter ?? "", since: since ?? "" };
     if (!await decide(`build.source.${draft.id ? "edit" : "create"}`, { type: "build.source", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
     baseRevision.current = expected + 1; loaded.current = `${target}:${expected + 1}`;
@@ -56,7 +59,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const target = entities.find((entity) => entity.type === draft.object);
   const writable = (target?.fields ?? []).filter((field) => !field.readOnly);
   const setMapping = (mapping: Api.SourceField[]) => patch({ mapping });
-  if (role("build") !== "builder") return <PageHeader title={t("Data sources")} description={t("Only a builder can edit data sources.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Data sources")} description={query.isError ? t("The data source could not be loaded.") : t("Loading…")} />;
   const last = draft.last;
   const profile = draft.profile || "json", conn = connections.find((c) => c.id === draft.connection);
@@ -91,6 +94,10 @@ export function DataSourceEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Pull every")}<Select value={draft.every ?? ""} onChange={(e) => patch({ every: e.target.value })}><option value="">{t("Only when asked")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>
       </Panel>
       <Panel title={t("Target and mapping")} className="grid min-w-0 content-start gap-3">
+        <label className={fieldClass}>{t("Rows go to")}<Select value={draft.dataset ? "dataset" : "object"} onChange={(e) => e.target.value === "dataset" ? patch({ dataset: datasets[0]?.id ?? "", object: "", mapping: [] }) : patch({ dataset: "" })}>
+          <option value="object">{t("An object, mapped here")}</option><option value="dataset">{t("A dataset, as they came")}</option></Select></label>
+        {draft.dataset ? <label className={fieldClass}>{t("Target dataset")}<Select value={draft.dataset} onChange={(e) => patch({ dataset: e.target.value })}>{datasets.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</Select>
+          <span className="text-[11px] text-muted">{t("Each pull becomes a new version; a pipeline maps the rows to an object later.")}</span></label> : <>
         <label className={fieldClass}>{t("Target object")}<Select value={draft.object} onChange={(e) => patch({ object: e.target.value, mapping: [] })}><option value="">{t("Choose an object type")}</option>{entities.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</Select></label>
         <label className={fieldClass}>{t("Row id field")}<Input value={draft.key} placeholder="id" onChange={(e) => patch({ key: e.target.value })} /><span className="text-[11px] text-muted">{t("The row field whose value becomes the record id; the same id edits the existing record.")}</span></label>
         <div className="grid gap-2">
@@ -102,7 +109,7 @@ export function DataSourceEditor({ id }: { id: string }) {
             <Button size="sm" variant="ghost" onClick={() => setMapping(draft.mapping.filter((_, j) => j !== i))}>{t("Remove")}</Button>
           </div>)}
           <div><Button size="sm" disabled={!draft.object} onClick={() => setMapping([...draft.mapping, { from: "", to: writable.find((f) => !draft.mapping.some((m) => m.to === f.name))?.name ?? "", convert: "" }])}>{t("Add mapping")}</Button></div>
-        </div>
+        </div></>}
       </Panel>
       <Panel title={t("Last pull")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         {!last ? <p className="text-xs text-muted">{t("Not pulled yet.")}</p> : <>

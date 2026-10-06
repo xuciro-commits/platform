@@ -522,6 +522,7 @@ func runWorkFrom(current func() []*Tenant) {
 				t.Evaluate(Now())
 				t.PullSources(Now())
 				t.CheckConnections(Now())
+				t.RunPipelines(Now())
 				t.Embed(Now())
 				t.PurgeTranscripts(Now())
 				t.SweepUploads(Now())

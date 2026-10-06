@@ -59,6 +59,12 @@ PLATFORM_SCREENSHOTS=1 pnpm --dir web/e2e exec playwright test --grep 'compose a
 | 工作区与辅助操作 | 导航/返回上下文、未保存提醒、搜索、文件、评论、导入导出和异常提示；一般布局、窄屏、中文、键盘及画布手感由人判断 |
 | 企业模型（ADR-0067） | 控制面板 → Enterprise：空租户先走向导（名称、人数、站点、法人、行业）得到模板；画布拖入 Palette 元素、Link 连两元素只给相容关系、保存视图；树/表切换、截至日期回看；检查器改名/关闭/添加成员/共享开关；成员详情页"Organisation"面板与 `/v1/organization` 投影一致；业务动作里 `ref:"enterprise.element"` 字段出现元素下拉；Patterns 页签选中组织后 Add a Plant/Hotel/Department（改旋钮、看预览大纲）→ 树中出现子树；空模型页"从一个单元开始"也能建模型；画布滚轮缩放/拖动平移/适应、"排布"切换四种布局、Link 模式从元素拖到元素、每类元素有图标 |
 | 集成织物 Ⅰ-A/B（ADR-0070） | 构建器 → Ontology → Connections：新建 http/OData/postgres 连接（地址不含密码、密钥名）→ Check 数秒内出"可达/失败"与详情；Data source 选就绪连接后 Profile 随种类收窄（OData 实体集/过滤/增量列、数据库表/WHERE 片段、CSV）；Publish/Pull now 后 Last pull 计数，增量列有值时显示游标，Reset cursor 重拉；对未就绪连接或 `1=1; drop` 式过滤发布被拒 |
+| 集成织物 Ⅰ-C/D（ADR-0071） | 构建器 → Ontology → Datasets：新建数据集；Data source 选 "Rows go to: A dataset" 指向它并 Publish/Pull now → 数据集出现 v1、Schema 推断、Rows 预览；再建 Pipeline：输入该数据集，加 filter/cast/compute/aggregate 等步骤与 notnull/range 期望，输出另一数据集或对象 → Publish 后数秒内 Last run 显示行数/写入/隔离（隔离行带原因）；再次 Pull 数据源出 v2 时管道自动再跑，同版本不重跑；输出对象时记录在对象页可见且重复运行不重复建 |
+| 集成织物 Ⅰ-E（ADR-0072） | 构建器 → Ontology → Writebacks：新建回写（对象 + create/动作名、就绪的 http/OData 连接、路径 `A_MaterialDocumentHeader`、请求体映射、应答映射 `d.MaterialDocument → docno`）→ Publish；在对象页新建一条记录 → 设置 → 集成 里出现 `connection:<id>` 端点的效果并送达，回写页 Deliveries 计数 +1、最近应答可见，记录的 docno 被填上；把目标地址改成不可达再建一条 → 效果 retrying、回写页显示排队数，恢复后保持同一键重试并回填；外部系统按该键去重；对象类型 → Data 页能从字段点到管道、数据集、数据源、连接 |
+| 集成织物 Ⅰ-H（ADR-0073） | 构建器 → Ontology → Datasets：建数据集 `sapom`，粘贴/加载几行 `{objid, stext, parent, costcenter}`；Pipelines：新建管道，输入 `sapom`，Write to = The enterprise model，Source system `sap-om`、Stereotype ActualOrganization、Id 列 objid、Name 列 stext、Kind `=department`、Parent 列 parent、Root = 公司元素 id、Placed in kind = 组织树的关系类别（如 management）→ Publish → Run now；企业模型组织树里出现 `sap-om:*` 单元挂在公司之下，元素属性中有 `source:sap-om.costcenter`；去掉一行再加载并运行 → 该单元在"今天"关闭（Until），其余不动；没有企业模型 admin 角色的发布者运行时，管道 Last run 报错说明需要该角色 |
+| 集成织物 Ⅰ-G（ADR-0074） | 构建器 → Ontology → Matching rules：新建规则，对象 = 物料类对象，键 `partno` 归一化 digits，优先来源 `description → sapmaterials` → Publish；两条管道（SAP、MES）都把对象写为输出；先运行 SAP 管道落 `000000123`，再运行 MES 管道落 `M-123`（带 weight）→ 对象列表仍是一条 `000000123`，描述是 SAP 的、重量是 MES 的，MES 管道最近一次运行显示"1 行由匹配规则合并"；Pause 规则后再落 `M-123` → 变成第二条记录 |
+| 集成织物 Ⅰ-I（ADR-0075） | 构建器 → Datasets：把 HR 数据集标记为 confidential；Pipelines：建一条写入 Employee 对象的管道 → Publish 被拒并列出未指明读者的字段；对象类型里给这些字段设 Read by = hr 并发布 → 管道可发布、运行；输出到另一数据集的管道运行后该数据集自动变为 confidential，管道标题旁出现标记；把数据集改为 restricted → 列表的 CSV 导出被拒；机密连接直写对象、机密管道写企业模型均被拒，编辑已发布管道也不能绕过；给一名成员 build 角色 `integrator` → 左栏只有 Integration 分组，能建连接/数据源/管道，看不到对象类型与页面 |
+| 集成织物探针（ADR-0069 §1 五步） | ① Connections 建 SAP 替身（OData，`Marking` internal）、HR（http/csv）、MES（postgres）三条连接并 Check 到 ready；Data sources 各建一个，目标 = 数据集，Pull 后 Datasets 里出现版本与结构；② Pipelines：SAP 物料 → `core.material`（Matching rule 让 MES 零件并入）、HR 员工 → `hcm.employee`（HR 数据集 confidential → 字段先设读者）、SAP 工厂 → 企业模型（outputEnterprise，挂到公司下）；③ Writebacks：WMS 收货对象的 create 经 SAP 连接 POST `A_MaterialDocumentHeader`，应答 `d.MaterialDocument → docno`；在收货页收一张单，替身收到带 Idempotency-Key 的请求，docno 回填；④ 收货页任一字段 → 对象类型 Data 页 → 管道 → 数据集 → 数据源 → 连接，最近一次同步时间可见；⑤ 停掉替身再收两单 → Integration health 显示该连接排队 2、页面照常读；恢复后两单各送达一次，Deliveries 计数 +2、替身没有重复凭证 |
 
 权限、数据、版本及恢复保证不能仅交给截图证明。人工走查负责可用性和任务体验；自动回归负责其规范边界。负责人认可只在相关 ADR 简短记录日期与范围，不为每次工程增量重新验收。
 
@@ -67,3 +73,11 @@ PLATFORM_SCREENSHOTS=1 pnpm --dir web/e2e exec playwright test --grep 'compose a
 对象/页面/应用/流程/代码候选支持冻结安装；AI 版本/评测仍归函数 owner。拒绝、追加失败及追加后应用前崩溃保留旧运行或恢复已接受结果；通用升级迁移、退役和客户扩展保留未完成，边界归 ADR-0039。隔离编译/计算不等于候选数据的物理沙箱。
 
 阶段集成按 Platform §10.6 核对两行业完整旅程、权限、隔离、在途版本及恢复；真实模型质量使用实际任务和供应商评测，替身只证明协议和治理。无真实客户或生产数据时标为内部演练。当前能力边界查 ADR，本文不保存旧检查点的“当时尚未完成”清单。
+
+### 集成织物自动检查的范围
+
+`web/e2e/tests/integration-fabric.spec.ts` 在酒店与制造两个实际开发宿主中运行：从界面保存数据集/数据源/管道，验证转换、坏行隔离、行预览与血缘跳转，再用实际 HTTP 替身验证 503 排队、稳定幂等键、201 后凭证号回填和租户未隔离。先跑 `scripts/verify.sh web-check`，再在 `web/e2e` 运行 `PLATFORM_SCREENSHOTS=1 pnpm exec playwright test tests/integration-fabric.spec.ts`。企业模型同步、匹配、标记传播和受限导出分别由根包 `pipelines_enterprise_test.go`、`matches_test.go`、`markings_test.go` 覆盖；它们不代替上表的负责人完整探针走查。
+
+设置 `PLATFORM_TEST_DATABASE` 指向专用测试 PostgreSQL 后，根包 `TestPostgresTableProfilePullAndReplay` 检查真实只读表接入、数字增量游标和重放；`TestJournalWritebackCallbackAndReplay` 检查真实接受结果落盘及快照恢复。测试地址不含密码，凭据仍通过受控密钥提供。
+
+当前全量 `scripts/verify.sh web` 路线尚未通过：旧 application/Main 导航、function/release 按钮、Process 步骤和页面事件 fixtures 需要对齐现行 ADR-0052/0053/0054 的入口与声明。不得以本节的两条增量路线冒充全量浏览器或部署恢复演练通过；遗留路线维护归 WorkQueue。

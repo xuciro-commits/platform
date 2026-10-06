@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -44,38 +45,23 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 		pull.Error = "The publishing member is no longer available"
 	} else if raw, err := t.readSource(s); err != nil {
 		pull.Error = err.Error()
+	} else if s.Dataset != "" {
+		pull.Cursor, pull.Rows = s.Advance(raw), len(raw)
+		if len(raw) > 0 || s.Cursor == "" {
+			if err := t.loadDataset(member, s.Dataset, "source:"+s.Name, t.connectionMarking(s.Connection), raw, now); err != nil {
+				pull.Error = err.Message
+			} else {
+				pull.Applied = len(raw)
+			}
+		}
 	} else if rows, err := s.MapRows(raw); err != nil {
 		pull.Error = err.Error()
+	} else if build.Guarded(t.connectionMarking(s.Connection)) {
+		pull.Error = "A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules"
 	} else {
 		pull.Cursor = s.Advance(raw)
-		t.records.mu.Lock()
-		et := t.records.types[s.Object]
-		t.records.mu.Unlock()
-		for _, row := range rows {
-			pull.Rows++
-			if row.Error != "" {
-				pull.Fail(row.ID, row.Error)
-				continue
-			}
-			if et == nil {
-				pull.Fail(row.ID, "the target object is no longer installed")
-				continue
-			}
-			try := func(verb, key string) *kernel.Error {
-				_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: et.info.App, IdempotencyKey: key,
-					Target: &pb.EntityRef{Type: s.Object, Id: row.ID}, Schema: &pb.SchemaRef{Name: s.Object + verb, Version: 1}, Payload: row.Payload}, now)
-				return err
-			}
-			err := try(".create", row.Key)
-			if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_CONFLICT {
-				err = try(".edit", row.Key+":edit")
-			}
-			if err != nil {
-				pull.Fail(row.ID, err.Code.String()+": "+err.Message)
-				continue
-			}
-			pull.Applied++
-		}
+		pull.Rows, pull.Applied = len(rows), 0
+		t.applyRows(member, s.Object, s.Name, rows, now, &pull)
 	}
 	payload, _ := json.Marshal(map[string]any{"pull": pull})
 	if member.ID == "" {
@@ -83,6 +69,92 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 	}
 	t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "pulled:" + s.ID + ":" + now.UTC().Format(time.RFC3339Nano),
 		Target: &pb.EntityRef{Type: build.SourceType, Id: s.ID}, Schema: &pb.SchemaRef{Name: build.SchemaSourcePulled, Version: 1}, Payload: payload}, now)
+}
+
+// applyRows decides each mapped row as the member: the object's own create,
+// or edit on conflict, keyed by content; failures are counted on the summary.
+func (t *Tenant) applyRows(member platform.Member, object, producer string, rows []build.SourceRow, now time.Time, pull *build.SourcePull) {
+	t.records.mu.Lock()
+	et := t.records.types[object]
+	t.records.mu.Unlock()
+	if resolver := t.resolver(member, object, producer, now); resolver != nil {
+		for i := range rows {
+			resolver.Resolve(&rows[i])
+		}
+		pull.Merged = resolver.Merged
+	}
+	for _, row := range rows {
+		if row.Error != "" {
+			pull.Fail(row.ID, row.Error)
+			continue
+		}
+		if et == nil {
+			pull.Fail(row.ID, "the target object is no longer installed")
+			continue
+		}
+		try := func(verb, key string) *kernel.Error {
+			_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: et.info.App, IdempotencyKey: key,
+				Target: &pb.EntityRef{Type: object, Id: row.ID}, Schema: &pb.SchemaRef{Name: object + verb, Version: 1}, Payload: row.Payload}, now)
+			return err
+		}
+		err := try(".create", row.Key)
+		if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_CONFLICT {
+			err = try(".edit", row.Key+":edit")
+		}
+		if err != nil {
+			pull.Fail(row.ID, err.Code.String()+": "+err.Message)
+			continue
+		}
+		pull.Applied++
+	}
+}
+
+// connectionMarking is what a connection classifies everything read through it as (ADR-0075).
+func (t *Tenant) connectionMarking(connection string) string {
+	if connection == "" {
+		return ""
+	}
+	conn, _ := platform.Get[build.Connection](t.automation(build.ID, false), connection)
+	return conn.Marking
+}
+
+// resolver is the object's published matching rule (ADR-0074) over its
+// records as they are now, or nil when rows land as they come.
+func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *build.Resolver {
+	rules, _, _ := platform.Find[build.Match](t.automation(build.ID, false), platform.Query{Limit: 500})
+	i := slices.IndexFunc(rules, func(m build.Match) bool { return m.Object == object && m.State == "published" })
+	if i < 0 {
+		return nil
+	}
+	var records []map[string]any
+	for offset := 0; ; offset += 500 {
+		page, err := t.Records(member, object, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}}, now)
+		if err != nil {
+			break
+		}
+		for _, r := range page.Records {
+			raw, _ := json.Marshal(r)
+			var fields map[string]any
+			if json.Unmarshal(raw, &fields) == nil {
+				records = append(records, fields)
+			}
+		}
+		if len(page.Records) < 500 || len(records) >= page.Total {
+			break
+		}
+	}
+	return build.NewResolver(rules[i], producer, records)
+}
+
+// loadDataset appends rows as the dataset's next version, one journaled input.
+func (t *Tenant) loadDataset(member platform.Member, dataset, producer, marking string, rows []map[string]any, now time.Time) *kernel.Error {
+	if rows == nil {
+		rows = []map[string]any{}
+	}
+	payload, _ := json.Marshal(map[string]any{"rows": rows, "producer": producer, "marking": marking})
+	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "load:" + dataset + ":" + producer + ":" + now.UTC().Format(time.RFC3339Nano),
+		Target: &pb.EntityRef{Type: build.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: build.SchemaDatasetLoad, Version: 1}, Payload: payload}, now)
+	return err
 }
 
 // readSource reads the source's rows by its profile (ADR-0070): json and csv

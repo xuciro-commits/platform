@@ -491,6 +491,7 @@ export type Connection = {
   address: string;
   secret?: string;
   allowPrivate?: boolean;
+  marking?: "internal" | "confidential" | "restricted";
   state: string;
   requested?: boolean;
   last?: ConnectionCheck;
@@ -949,6 +950,16 @@ export type InstalledPackage = {
   installedAt?: string;
   changedAt?: string;
   retained?: RetainedArtifact[];
+};
+
+export type IntegrationEffect = {
+  id: string;
+  endpoint: string;
+  event: string;
+  state: string;
+  due: string;
+  last?: string;
+  error?: string;
 };
 
 export type Interface = {
@@ -2484,9 +2495,10 @@ export type Source = {
   allowPrivate?: boolean;
   header?: string;
   path?: string;
-  object: string;
-  key: string;
-  mapping: SourceField[];
+  dataset?: string;
+  object?: string;
+  key?: string;
+  mapping?: SourceField[];
   every?: string;
   state: string;
   puller?: string;
@@ -2510,6 +2522,7 @@ export type SourcePull = {
   rows: number;
   applied: number;
   failed: number;
+  merged?: number;
   error?: string;
   failures?: SourceFailure[];
   cursor?: string;

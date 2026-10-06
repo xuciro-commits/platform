@@ -318,3 +318,92 @@ func (m *Model) Import(s Slice) {
 	}
 	m.Relationships = append(rels, s.Relationships...)
 }
+
+// Sync (ADR-0073) lands what an external system holds about the enterprise -
+// SAP HR/OM organisational units, AD departments, MES equipment - as a slice
+// this model owns on the system's behalf (Owner "source:<name>"). Unlike
+// Import it diffs instead of replacing: a new id is added from today, a known
+// id is updated in place, an id the system no longer sends is closed today
+// (its history stays), and a closed id that returns reopens. Relationships
+// come and go the same way, by their ids.
+type SyncResult struct {
+	Added, Changed, Closed, Reopened, Related, Ended int
+}
+
+func (m *Model) Sync(source string, elements []Element, relationships []Relationship, today Date) SyncResult {
+	owner, res := "source:"+source, SyncResult{}
+	seen := map[string]bool{}
+	for _, in := range elements {
+		seen[in.ID] = true
+		if cur := m.element(in.ID); cur != nil {
+			changed := cur.Name != in.Name || cur.ShortName != in.ShortName || cur.Kind != in.Kind || cur.Legal != in.Legal || cur.External != in.External || !sameProperties(cur.Properties, in.Properties)
+			if cur.Until != "" && cur.Closed == syncClosed(source) {
+				cur.Until, cur.Closed = "", ""
+				res.Reopened++
+			} else if changed {
+				res.Changed++
+			}
+			cur.Name, cur.ShortName, cur.Kind, cur.Legal, cur.External, cur.Properties = in.Name, in.ShortName, in.Kind, in.Legal, in.External, in.Properties
+			if in.Until != "" {
+				cur.Until = in.Until
+			}
+			continue
+		}
+		in.Owner, in.Published = owner, false
+		if in.From == "" {
+			in.From = today
+		}
+		m.Elements = append(m.Elements, in)
+		res.Added++
+	}
+	for i := range m.Elements {
+		e := &m.Elements[i]
+		if e.Owner == owner && !seen[e.ID] && e.Until == "" {
+			e.Until, e.Closed = today, syncClosed(source)
+			res.Closed++
+		}
+	}
+	prefix := "sync:" + source + ":"
+	seenRel := map[string]bool{}
+	for _, in := range relationships {
+		if !strings.HasPrefix(in.ID, prefix) {
+			in.ID = prefix + in.ID
+		}
+		seenRel[in.ID] = true
+		if cur := m.relationship(in.ID); cur != nil {
+			if cur.Until != "" && in.Until == "" {
+				cur.Until = ""
+				res.Reopened++
+			}
+			cur.Kind, cur.Role, cur.Relation, cur.Share, cur.Primary = in.Kind, in.Role, in.Relation, in.Share, in.Primary
+			if in.Until != "" {
+				cur.Until = in.Until
+			}
+			continue
+		}
+		if in.From == "" {
+			in.From = today
+		}
+		m.Relationships = append(m.Relationships, in)
+		res.Related++
+	}
+	for i := range m.Relationships {
+		r := &m.Relationships[i]
+		if strings.HasPrefix(r.ID, prefix) && !seenRel[r.ID] && r.Until == "" {
+			r.Until = today
+			res.Ended++
+		}
+	}
+	return res
+}
+
+func syncClosed(source string) string { return "no longer in " + source }
+
+func sameProperties(a, b map[string]any) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	x, _ := json.Marshal(a)
+	y, _ := json.Marshal(b)
+	return string(x) == string(y)
+}

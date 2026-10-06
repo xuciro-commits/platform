@@ -209,7 +209,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
         onActiveRoute={setActiveRoute}
         nav={[
-          ...(surface === "studio" ? [{ label: t("Projects"), items: [
+          ...(surface === "studio" && host.role("build") === "builder" ? [{ label: t("Projects"), items: [
             { label: t("All projects"), icon: <LayoutGrid />, route: { view: "projects", params: { surface: "studio" } } },
             ...studioApplications.filter((record) => !record.archived)
               .map((record) => ({ label: record.title || record.name, icon: <Hammer />, route: { view: "project", params: { id: record.id, surface: "studio" } } })),
