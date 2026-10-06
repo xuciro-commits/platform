@@ -56,6 +56,10 @@ type Entity struct {
 	// Compute, when set, fills the record's computed fields right before every
 	// decision on it is checked; it receives a pointer to the record.
 	Compute func(record any)
+	// Validate, when set, may refuse a record after Compute and before the
+	// store's own checks: cross-record rules such as one extension record per
+	// base record (ADR-0058 A3). It receives a pointer to the record.
+	Validate func(c Caller, record any) *kernel.Error
 
 	Type   string // a data class the app is authority for, e.g. "crm.opportunity"
 	Title  string // "Opportunity"
@@ -76,6 +80,9 @@ type Entity struct {
 	// Implements names the interfaces this type carries the fields of
 	// (ADR-0058 A2); the host checks them when the tenant is composed.
 	Implements []string
+	// Extends names the type this one adds fields to, one record per base
+	// record through its `base` reference (ADR-0058 A3); its pages merge them.
+	Extends string
 	// Lifecycle makes the type a document that moves through states (ADR-0017).
 	Lifecycle *Lifecycle
 	// Seed are the records the type starts with in a tenant (a deployment's or
@@ -293,6 +300,7 @@ type EntityInfo struct {
 	Fields         []FieldInfo    `json:"fields"`
 	Standard       []string       `json:"standard"`             // the generated actions' schemas
 	Implements     []string       `json:"implements,omitempty"` // the interfaces it carries the fields of (ADR-0058 A2)
+	Extends        string         `json:"extends,omitempty"`    // the type it adds fields to (ADR-0058 A3)
 	Lifecycle      *LifecycleInfo `json:"lifecycle,omitempty"`
 	Go             reflect.Type   `json:"-"`
 	Scope          Scope          `json:"-"`
@@ -327,7 +335,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements}
+	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends}
 	if info.Title == "" {
 		info.Title = e.Type
 	}
@@ -547,6 +555,14 @@ func Find[T any](c Caller, q Query) ([]T, int, *kernel.Error) {
 		out[i] = v.(T)
 	}
 	return out, total, err
+}
+
+// FindOf is Find for a model type known only at run time (a defined object's).
+func (c Caller) FindOf(t reflect.Type, q Query) ([]any, int, *kernel.Error) {
+	if c.rt == nil {
+		return nil, 0, notFound()
+	}
+	return c.rt.Find(c, t, q)
 }
 
 // Records is every record of T, archived ones included, ordered by ID.

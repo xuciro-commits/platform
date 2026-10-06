@@ -324,6 +324,11 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 	if e.Compute != nil {
 		e.Compute(v.Interface())
 	}
+	if e.Validate != nil {
+		if err := e.Validate(c, v.Interface()); err != nil {
+			return nil, err
+		}
+	}
 	value := v.Elem().Interface()
 	if err := c.rt.Check(c, value); err != nil {
 		return nil, err
@@ -391,6 +396,11 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission) (func(*pb.Chang
 	}
 	if e.Compute != nil {
 		e.Compute(v.Interface())
+	}
+	if e.Validate != nil {
+		if err := e.Validate(c, v.Interface()); err != nil {
+			return nil, err
+		}
 	}
 	value := v.Elem().Interface()
 	if err := c.rt.Check(c, value); err != nil {

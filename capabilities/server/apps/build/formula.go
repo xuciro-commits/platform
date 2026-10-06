@@ -1,12 +1,17 @@
 package build
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
 	"strconv"
 	"strings"
 	"unicode"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 // Computed fields (ADR-0064, ADR-0057 block B1): an integer or decimal field
@@ -272,5 +277,34 @@ func computeOf(o Object) func(record any) {
 				f.SetFloat(result)
 			}
 		}
+	}
+}
+
+// validateOf is the entity hook of an extension object (ADR-0058 A3): one
+// extension record per base record, so the base type's pages can merge the
+// extension's fields as if they were its own.
+func validateOf(o Object, model any) func(c platform.Caller, record any) *kernel.Error {
+	if o.Extends == "" {
+		return nil
+	}
+	typ := reflect.TypeOf(model)
+	return func(c platform.Caller, record any) *kernel.Error {
+		v := reflect.ValueOf(record).Elem()
+		base := v.FieldByName(goName(BaseField))
+		if !base.IsValid() || base.String() == "" {
+			return nil
+		}
+		id := v.Field(0).Interface().(platform.Record).ID
+		domain, _ := json.Marshal([][]any{{BaseField, "=", base.String()}})
+		found, _, err := c.FindOf(typ, platform.Query{Domain: domain})
+		if err != nil {
+			return nil // the base's records are not readable here; the store still checks the reference
+		}
+		for _, f := range found {
+			if other := reflect.ValueOf(f).Field(0).Interface().(platform.Record); other.ID != id && !other.Archived {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{base} already has its {object} record", base.String(), o.Title)
+			}
+		}
+		return nil
 	}
 }
