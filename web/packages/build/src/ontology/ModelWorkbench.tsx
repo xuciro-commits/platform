@@ -5,11 +5,12 @@ import { NewActions, newId, pageDocumentFromSections, semanticModelView, assetBi
 import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, Input, NodeCanvas, PageHeader, Panel, PropertyList, RecordList, Select, Tag,
   canvasNodeWidth, layout, t, type CanvasEdge, type CanvasNode, type ColumnDef, type NodeCatalog } from "@platform/ui";
 import type { Api } from "@platform/kernel";
-import { Boxes, Database, GitBranch, Link2 } from "lucide-react";
+import { Boxes, Database, GitBranch, Layers, Link2 } from "lucide-react";
+import { useInterfaces } from "./shape";
 import { useEffect, useMemo, useState } from "react";
 
 type DraftProperty = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
-type ObjectDraft = { id: string; revision: number; archived?: boolean; name: string; title: string; state: string; fields: DraftProperty[]; actions?: { name: string; title: string }[]; access?: { role: string; read: string }[] };
+type ObjectDraft = { id: string; revision: number; archived?: boolean; name: string; title: string; state: string; fields: DraftProperty[]; actions?: { name: string; title: string }[]; access?: { role: string; read: string }[]; implements?: string[]; extends?: string };
 type Resource = { ref: Api.AssetRef; title: string; source: string; installed?: Definition; draft?: ObjectDraft; fields: (Api.FieldInfo | DraftProperty)[] };
 type Selection = { kind: "property"; ref: PropertyRef } | { kind: "relation"; relation: SemanticRelation; inbound: boolean } | { kind: "action"; definition: Definition };
 type PageSeed = { object: Api.AssetRef; field?: string; relation?: SemanticRelation };
@@ -32,7 +33,8 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const propertyInventory=useRecordInventory<{id:string;name:string}>("build.propertytype");
   const model = useMemo(() => semanticModelView(host.definitions), [host.definitions]);
   const [search, setSearch] = useState(""), [origin, setOrigin] = useState("all");
-  const [current, setCurrent] = useState(initialObject ?? ""), [view, setView] = useState<"catalog" | "graph" | "detail" | "shared">(initialObject ? "detail" : "catalog");
+  const [current, setCurrent] = useState(initialObject ?? ""), [view, setView] = useState<"catalog" | "graph" | "detail" | "shared" | "interfaces">(initialObject ? "detail" : "catalog");
+  const interfaces = useInterfaces();
   const [shared,setShared]=useState("");
   const [tab, setTab] = useState(initialTab ?? "overview"), [selection, select] = useState<Selection>();
   const [seed, setSeed] = useState<PageSeed>();
@@ -86,6 +88,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
       <Button variant={view === "catalog" ? "primary" : "ghost"} onClick={() => setView("catalog")}><Boxes />{t("Model catalog")}</Button>
       <Button variant={view === "graph" ? "primary" : "ghost"} onClick={() => setView("graph")}><GitBranch />{t("Relationship graph")}</Button>
       <Button variant={view === "shared" ? "primary" : "ghost"} onClick={() => setView("shared")}><Boxes />{t("Shared property catalog")}</Button>
+      <Button variant={view === "interfaces" ? "primary" : "ghost"} onClick={() => setView("interfaces")}><Layers />{t("Interfaces")}</Button>
       <label className="ml-auto flex min-w-0 items-center gap-2 text-xs">{t("Source")}<Select value={origin} onChange={(event) => setOrigin(event.target.value)}>
         <option value="all">{t("All sources")}</option><option value="code">{t("Native code")}</option><option value="tenant">{t("Tenant definitions")}</option>
       </Select></label>
@@ -130,13 +133,20 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
       </div>}>
       <div className="min-h-[26rem] flex-1 overflow-auto p-3">
         {view==="shared"&&<DataTable data={sharedProperties} getRowId={p=>assetBindingKey(p.binding)} searchable={false} height="100%" onRowClick={p=>setShared(assetBindingKey(p.binding))} empty={t("No published shared property yet.")} columns={[{id:"title",header:t("Shared property"),accessorFn:p=>p.property.title},{id:"name",header:t("Identity"),accessorFn:p=>p.binding.ref.name},{id:"type",header:t("Type"),accessorFn:p=>t(p.property.type)},{id:"version",header:t("Version"),accessorFn:p=>p.binding.sourceVersion}]}/>}
+        {view === "interfaces" && <div className="grid gap-3"><p className="text-xs text-muted">{t("An interface is a shape several objects share; a page or query written against it works for all of them. Apps declare interfaces; objects implement them.")}</p>
+          {interfaces.map((shape) => { const implementers = resources.filter((item) => item.installed?.entity?.implements?.includes(shape.name)); return <div key={shape.name} className="grid gap-1 rounded-md border border-border p-3">
+            <div className="flex items-center gap-2"><Layers className="size-4 text-primary" /><span className="text-sm font-semibold">{shape.title}</span><span className="font-mono text-xs text-muted">{shape.name}</span><Tag label={shape.app} /></div>
+            {shape.description && <p className="text-xs text-muted">{shape.description}</p>}
+            <p className="text-xs">{shape.fields.map((f) => `${f.name}: ${t(f.type)}`).join(" · ")}</p>
+            <div className="flex flex-wrap gap-1">{implementers.map((item) => <Button key={item.ref.name} size="sm" onClick={() => choose(item)}>{item.title}</Button>)}{!implementers.length && <span className="text-xs text-muted">{t("No installed object implements it yet.")}</span>}</div>
+          </div>; })}{!interfaces.length && <p className="text-xs text-muted">{t("No app declares an interface yet.")}</p>}</div>}
         {view === "catalog" && <DataTable data={visible} columns={columns} getRowId={(item) => item.ref.name} height="100%" loading={inventory.isLoading} searchable={false}
           onRowClick={(item) => item.draft && !item.installed ? edit(item) : choose(item)} empty={t("No matching objects.")} />}
         {view === "graph" && <div className="flex h-full min-h-[25rem] flex-col"><p className="mb-2 text-xs text-muted" role="status">{t("Showing {shown} of {total} objects", { shown: graph.nodes.length, total: visible.length })}</p>
           <NodeCanvas catalog={objectCatalog} nodes={graph.nodes} edges={graph.edges} selected={current} height="100%" label={t("Relationship graph")}
             onSelect={(name) => { setCurrent(name); select(undefined); }} onOpen={(name) => { const item = resources.find((item) => item.ref.name === name); if (item) choose(item); }} /></div>}
         {view === "detail" && resource && <div className="grid gap-3">
-          <div className="flex items-center gap-3"><Database className="size-6 text-primary" /><div className="min-w-0 flex-1"><h2 className="text-base font-semibold">{resource.title}</h2><p className="font-mono text-xs text-muted">{resource.ref.name}{(resource.installed?.entity as { implements?: string[] } | undefined)?.implements?.length ? <> · {t("implements")} {(resource.installed!.entity as { implements?: string[] }).implements!.join(", ")}</> : null}</p></div><Tag label={t(resource.installed ? "Published" : "Draft")} /></div>
+          <div className="flex items-center gap-3"><Database className="size-6 text-primary" /><div className="min-w-0 flex-1"><h2 className="text-base font-semibold">{resource.title}</h2><p className="font-mono text-xs text-muted">{resource.ref.name}{resource.installed?.entity?.implements?.length ? <> · {t("implements")} {resource.installed.entity.implements.join(", ")}</> : null}{resource.draft?.extends ? <> · {t("extends")} {resource.draft.extends}</> : null}</p></div><Tag label={t(resource.installed ? "Published" : "Draft")} /></div>
           <div role="tablist" aria-label={t("Object resource views")} className="flex flex-wrap gap-1 border-b border-border pb-2">
             {[["overview", "Overview"], ["properties", "Properties"], ["links", "Relationships"], ["actions", "Actions"], ["data", "Data"], ["usage", "Usage"], ["access", "Access"]].map(([key, label]) => <Button key={key} size="sm" variant={tab === key ? "primary" : "ghost"} role="tab" aria-selected={tab === key} onClick={() => { setTab(key!); select(undefined); }}>{t(label!)}</Button>)}
           </div>

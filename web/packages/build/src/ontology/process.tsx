@@ -1,5 +1,6 @@
 import {actionDestinations,actionResultEdges} from "./process-rules";
 import { fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type Process, type State } from "./object-model";
+import { ShapeEditor } from "./shape";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../shared/workbench";
 // The object's process editor (ADR-0037): its states and the actions people
 // take on its records, in the page editor's three panes — what there is on the
@@ -93,6 +94,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
         {[[t("Properties"), process.fields.length], [t("States"), process.states.length], [t("Actions"), process.actions.length], [t("Roles"), process.access.length]].map(([label, n]) => <div key={String(label)} className="rounded-md border border-border p-3"><dt className="text-xs text-muted">{label}</dt><dd className="text-xl font-semibold">{n}</dd></div>)}
       </dl>
       <p className="text-sm text-muted">{t("Properties describe a record; the lifecycle says which states it passes through; actions are the governed steps people take; permissions say who may read and change it. Preview shows the object as people will see it.")}</p>
+      <ShapeEditor process={process} parent={parent} entities={entities} onChange={change} />
       {object.state === "published" && <Button className="w-fit" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: object.name } })}>{t("Open records")}</Button>}
     </div>,
     properties: <div className="grid content-start gap-3 p-4">

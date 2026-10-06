@@ -30,7 +30,7 @@
 
 **工作台**：项目主页"添加已有…"新增"共享对象类型（平台与其他应用）"组，列出所有非 build 安装的对象类型（core 置顶）；加入后在"本体"组显示为 *已发布*，点击在对象模型工作台打开。WMS 探针据此把 `wmsitems/wmslocations` 的自造主数据换成 `core.material/core.location`——这是 A 块的验收路线。
 
-## 3. A2 Interface（契约已落地，工作台下一批）
+## 3. A2 Interface（已落地）
 
 ```go
 type Interface struct { Name, Title, Description string; Fields []InterfaceField }   // Manifest.Interfaces
@@ -42,13 +42,20 @@ Entity.Implements []string                                                      
 - 宿主在组合租户时（`NewTenant`，所有实体描述完成后）用 `platform.CheckInterfaces` 校验：接口命名空间属于声明方、不重复、实现方字段齐全且类型一致，否则拒绝组合——与现有"清单校验"同级，不是运行时检查；
 - 接口无存储、无动作；core 的 6 个编码类型实现 `core.coded`。
 
-下一批：build 对象草稿 `implements[]`（发布时按宿主接口校验）、具名查询与记录选择器可面向接口、对象模型工作台的 Interface 页签。需要先重新生成 `host.ts`（`EntityInfo.implements` 已加入 Go 契约）。
+第二批已落地：
+- `internal/host.Host.Interfaces()` 把租户所有应用声明的接口交给组合方；`GET /v1/apps` 的 `AppInfo.interfaces` 对前端可见；
+- build 对象草稿 `implements[]`：`checkShape` 在保存/发布前按宿主接口校验（接口必须有应用声明、字段齐全且类型一致），编译出的 `Entity.Implements` 随对象安装；
+- 对象类型编辑器"概述"页签的 **Shape** 区块：勾选接口、一键补齐缺少字段；对象模型工作台新增 **Interfaces** 视图（接口 → 实现者）。
 
-## 4. A3 扩展字段（设计，下一批）
+待做：具名查询与记录选择器可面向接口（"所有实现 core.coded 的对象"），留给 B 块的查询工作台。`host.ts` 中 `AppInfo.interfaces`/`Interface`/`EntityInfo.implements` 为手工镜像，`go run ./cmd/api-types` 重新生成后应无差异。
+
+## 4. A3 扩展字段（声明已落地，读时合并待做）
 
 不改共享类型的存储：应用声明一个**扩展对象类型** `build.<x>`，`extends: "core.person"`，与基类型 1:1（以基记录 id 为键），字段、动作、权限都属于扩展方。宿主在读取基记录时按读者权限合并扩展字段（沿 ADR-0033 派生内容的"读时重查、无权隐去"路径），页面的详情/表格把扩展字段当作基类型的字段呈现。这样 WMS 给人员加"叉车证到期日"，HR 看不到也改不了，而人员仍只有一张表。与关系字段 + inverse 的区别只在呈现与权限归属：合并呈现、扩展方拥有。
 
+已落地的部分：build 对象 `extends: "<type>"`。`checkShape` 要求基类型是租户已有的对象类型、不是自身、扩展对象没有自己的状态与动作、且带一个必填引用字段 `base` 指向基类型（编辑器选择"Extends"时自动加上，inverse 为扩展对象名）。这样扩展记录已经按 1:1 关系存储、可在页面里作为基记录的关联区块呈现。**未做**：宿主读基记录时合并扩展字段（需要 records 读路径按读者权限重查扩展表），仍按关系呈现；多条扩展记录指向同一基记录目前不被拒绝（唯一性约束随读时合并一起做）。
+
 ## 5. 做减法
 
-- 行业应用自造的主数据类型在接入 core 后删除（先 WMS 探针，再 MES 的 DemoMaster 中与 core 重叠的部分）；
+- 行业应用自造的主数据类型在接入 core 后删除：WMS 探针已删 `wmsitem`/`wmslocation`，收货明细引用 `core.material`、作业引用 `core.location`，"每托数量"归收货明细，主数据页面直接面向 `core.material`/`core.location`（装配脚本用 steward 身份种 `core.site/material/location`，制造组合的 supervisor 座席持 `core.steward`）；下一步是 MES 的 DemoMaster 中与 core 重叠的部分；
 - 不做"共享本体项目"这一额外容器；不做跨租户共享。

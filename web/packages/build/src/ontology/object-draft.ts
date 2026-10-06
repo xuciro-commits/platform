@@ -10,14 +10,14 @@ import { useDraftSession } from "../session/DraftSession";
 import { useAutoSave } from "../shared/workbench";
 import { actionIssues, type ObjectRecord, type Process } from "./object-model";
 
-const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [] });
+const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], implements: record.implements ?? [], extends: record.extends ?? "" });
 
 export function useObjectDraft(id: string, onReset?: () => void) {
   const { decide, entities, definitions } = useHost();
   const { open } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: ObjectRecord }>(`/v1/records/build.object/${encodeURIComponent(id)}`);
   const object = query.data?.record;
-  const session = useDraftSession<Process>({ states: [], actions: [], access: [], fields: [] });
+  const session = useDraftSession<Process>({ states: [], actions: [], access: [], fields: [], implements: [], extends: "" });
   const { draft: process, dirty } = session;
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const [busy, setBusy] = useState(false);

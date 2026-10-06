@@ -48,9 +48,14 @@ type Object struct {
 	Actions []Action `json:"actions,omitempty" field:"aside" title:"Actions"`
 	// Access is who may do what with it (ADR-0037 18b); empty: builder and
 	// user do everything, as before.
-	Access    []Access `json:"access,omitempty" field:"aside" title:"Access"`
-	State     string   `json:"state" field:"readonly" choices:"draft,published"`
-	Installed string   `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
+	Access []Access `json:"access,omitempty" field:"aside" title:"Access"`
+	// Implements names the interfaces this object carries the fields of; Extends
+	// names an installed object type this one adds fields to, one record per base
+	// record through its `base` reference (ADR-0058 A2, A3).
+	Implements []string `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
+	Extends    string   `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
+	State      string   `json:"state" field:"readonly" choices:"draft,published"`
+	Installed  string   `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
 	// Published is the definition as it was last published, which is what is
 	// installed and what a restore installs again — not the draft beside it.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
@@ -648,7 +653,54 @@ func (b *Build) check(o Object, id string) error {
 	if err := b.checkCreates(o); err != nil {
 		return err
 	}
+	if err := b.checkShape(o); err != nil {
+		return err
+	}
 	return checkAccess(o)
+}
+
+// BaseField is the reference an extension object carries to the record it extends.
+const BaseField = "base"
+
+// checkShape refuses an interface the tenant's apps do not declare or whose
+// fields the object lacks, and an extension of a type that is not there, of
+// itself, with a lifecycle of its own, or whose base field is not the base.
+func (b *Build) checkShape(o Object) error {
+	if len(o.Implements) > 0 {
+		var declared []platform.Interface
+		if b.host != nil {
+			declared = b.host.Interfaces()
+		}
+		info, err := platform.Describe(ID, Entity(o), func(reflect.Type) string { return "" })
+		if err != nil {
+			return err
+		}
+		for k, name := range o.Implements {
+			if slices.Contains(o.Implements[:k], name) {
+				return fmt.Errorf("the interface %s is listed twice", name)
+			}
+			i := slices.IndexFunc(declared, func(i platform.Interface) bool { return i.Name == name })
+			if i < 0 {
+				return fmt.Errorf("no app declares the interface %s", name)
+			}
+			if err := declared[i].Implements(info); err != nil {
+				return err
+			}
+		}
+	}
+	if o.Extends != "" {
+		if o.Extends == TypeOf(o.Name) || !b.fieldKnown(o.Extends) {
+			return fmt.Errorf("the object cannot extend %s: not an object type this tenant has", o.Extends)
+		}
+		if len(o.States) > 0 || len(o.Actions) > 0 {
+			return fmt.Errorf("an extension adds fields to %s; its lifecycle stays the base type's", o.Extends)
+		}
+		k := slices.IndexFunc(o.Fields, func(f Field) bool { return f.Name == BaseField })
+		if k < 0 || o.Fields[k].Type != "reference" || o.Fields[k].Ref != o.Extends || !o.Fields[k].Required {
+			return fmt.Errorf("an extension of %s needs a required reference field %q pointing at it", o.Extends, BaseField)
+		}
+	}
+	return nil
 }
 
 // checkName refuses a name that is not a name, or one already taken.
@@ -1041,7 +1093,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements)}
 }
 
 // page is the list and detail page a defined object comes with: the same

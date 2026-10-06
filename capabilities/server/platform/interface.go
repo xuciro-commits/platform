@@ -14,17 +14,17 @@ import (
 // entities, so a page or query written against the interface works for all
 // of them. An interface carries no storage and no actions of its own.
 type Interface struct {
-	Name        string           // <app>.<name>, lower-case letters and digits
-	Title       string           // what people call it
-	Description string           // what implementing it means
-	Fields      []InterfaceField // the fields an implementation must have
+	Name        string           `json:"name"`                  // <app>.<name>, lower-case letters and digits
+	Title       string           `json:"title"`                 // what people call it
+	Description string           `json:"description,omitempty"` // what implementing it means
+	Fields      []InterfaceField `json:"fields"`                // the fields an implementation must have
 }
 
 // InterfaceField is one field an implementation must have, by name and kind.
 type InterfaceField struct {
-	Name  string
-	Type  string // a FieldInfo type: text, integer, decimal, money, date, datetime, boolean, choice, reference, references, tags, longtext
-	Title string
+	Name  string `json:"name"`
+	Type  string `json:"type"` // a FieldInfo type: text, integer, decimal, money, date, datetime, boolean, choice, reference, references, tags, longtext
+	Title string `json:"title"`
 }
 
 var interfaceName = regexp.MustCompile(`^[a-z][a-z0-9]*\.[a-z][a-z0-9]*$`)

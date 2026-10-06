@@ -17,8 +17,14 @@ export type Create_ = { object: string; via: string; sets?: Set_[] };
 export type Action = { name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[] };
 /** What one role of the builder app may do with the object (ADR-0037 18b). */
 export type Access = { role: string; read: "all" | "own" | "none"; create?: boolean; edit?: boolean; archive?: boolean };
-export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[] };
-export type Process = { states: State[]; actions: Action[]; access: Access[]; fields: Field[] };
+export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[]; implements?: string[]; extends?: string };
+/** The draft in hand: fields, lifecycle, access, and its shape — the interfaces it implements and the type it extends (ADR-0058 A2, A3). */
+export type Process = { states: State[]; actions: Action[]; access: Access[]; fields: Field[]; implements?: string[]; extends?: string };
+/** The reference an extension object carries to the record it extends. */
+export const baseField = "base";
+/** The fields of an interface the draft still lacks, by name and type. */
+export const missingInterfaceFields = (fields: Field[], shape: { fields: { name: string; type: string; title: string }[] }) =>
+  shape.fields.filter((need) => !fields.some((f) => f.name === need.name && f.type === need.type));
 /** What is in hand: a state, an action, or who may do what, by its place. */
 export type Chosen = { kind: "field" | "state" | "action" | "access"; at: number } | undefined;
 

@@ -170,6 +170,20 @@ export type AppInfo = {
   provides: string[];
   consumes: string[];
   emits: EffectKind[];
+  interfaces: Interface[];
+};
+
+export type Interface = {
+  name: string;
+  title: string;
+  description?: string;
+  fields: InterfaceField[];
+};
+
+export type InterfaceField = {
+  name: string;
+  type: string;
+  title: string;
 };
 
 export type AppSettings = {
@@ -600,6 +614,7 @@ export type EntityInfo = {
   fields: FieldInfo[];
   standard: string[];
   lifecycle?: LifecycleInfo;
+  implements?: string[];
 };
 
 /** The kernel contract's EntityRef (contract/proto). */
