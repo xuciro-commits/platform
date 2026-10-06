@@ -245,6 +245,18 @@ func (d *stagedDecision) Units(c platform.Caller, structure string, now time.Tim
 	}
 	return d.tenant.directory.Units("member:"+c.ID, structure, now.UTC().Format(time.DateOnly))
 }
+func (d *stagedDecision) Element(c platform.Caller, id string, now time.Time) (platform.ElementInfo, bool) {
+	if d.tenant.directory == nil {
+		return platform.ElementInfo{}, false
+	}
+	return d.tenant.directory.Element(id, now.UTC().Format(time.DateOnly))
+}
+func (d *stagedDecision) Related(c platform.Caller, element, stereotype string, outgoing bool, now time.Time) []string {
+	if d.tenant.directory == nil {
+		return nil
+	}
+	return d.tenant.directory.Related(element, stereotype, outgoing, now.UTC().Format(time.DateOnly))
+}
 func (d *stagedDecision) Links(c platform.Caller, entity string) []string {
 	if d.tenant.linker == nil {
 		return nil

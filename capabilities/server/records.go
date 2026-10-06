@@ -965,6 +965,10 @@ func (t *Tenant) readableLocked(m platform.Member, ref string, now time.Time) bo
 
 func (t *Tenant) readableIn(store *recordStore, m platform.Member, ref string, now time.Time) bool {
 	typ, id, _ := strings.Cut(ref, "/")
+	if typ == "enterprise.element" && t.directory != nil { // the model is every member's to read (ADR-0067 D3)
+		_, ok := t.directory.Element(id, now.UTC().Format(time.DateOnly))
+		return ok
+	}
 	et := store.types[typ]
 	if et == nil {
 		return false

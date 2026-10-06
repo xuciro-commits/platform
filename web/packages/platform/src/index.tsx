@@ -8,7 +8,8 @@ import "./i18n";
 import { defineApp, useHost, type AppUI, type Host } from "@platform/app";
 import { Button, Card, PageHeader, useWorkspace, type NavSection, type View, t } from "@platform/ui";
 import { ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Cable, Database, FlaskConical, Grid3x3, History, MessageSquare, Network, PlugZap, Route, Server, SlidersHorizontal, Upload, Users, Workflow } from "lucide-react";
-import { Members, MemberDetail, Organization } from "./people";
+import { Members, MemberDetail } from "./people";
+import { Enterprise } from "./enterprise";
 import { Apps, Matrix, Protocols } from "./apps";
 import { Automation, Integrations, AppSettingsView, Audit } from "./operations";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
@@ -26,7 +27,7 @@ function controlPanelNavigation(host: Host): NavSection[] {
     { label: t("Overview"), items: [item(t("Control Panel"), <SlidersHorizontal />, "control-panel")] },
     { label: t("Identity and access"), items: [
       ...(admin(host) || auditor(host) ? [item(t("Members"), <Users />, "members")] : []),
-      ...(admin(host) || host.role("org") ? [item(t("Organisation"), <Network />, "organization")] : []),
+      ...(admin(host) || host.role("enterprise") ? [item(t("Enterprise"), <Network />, "enterprise")] : []),
     ] },
     { label: t("Packages and capabilities"), items: [
       ...(admin(host) || auditor(host) ? [item(t("Installed packages"), <Blocks />, "apps")] : []),
@@ -56,7 +57,7 @@ const controlPanelViews: View[] = [
   { id: "control-panel", title: () => t("Control Panel"), render: () => <ControlPanelOverview /> },
   { id: "members", title: () => t("Members"), render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
-  { id: "organization", title: () => t("Organisation"), render: () => <Organization /> },
+  { id: "enterprise", title: () => t("Enterprise"), render: () => <Enterprise /> },
   { id: "apps", title: () => t("Installed packages"), render: () => <Apps /> },
   { id: "matrix", title: () => t("Capability matrix"), render: () => <Matrix /> },
   { id: "protocols", title: () => t("Protocols"), render: () => <Protocols /> },
@@ -67,11 +68,11 @@ const controlPanelViews: View[] = [
 
 export const controlPanel = defineApp({
   id: "platform",
-  serves: ["platform", "org", "ai"],
+  serves: ["platform", "enterprise", "ai"],
   surface: "tenant",
   category: "govern",
   description: t("Members, organisation, installed packages, connections, models and the audit trail."),
-  for: (host) => ["platform", "org"].some((owner) => !!host.role(owner)) || host.role("ai") === "admin",
+  for: (host) => ["platform", "enterprise"].some((owner) => !!host.role(owner)) || host.role("ai") === "admin",
   title: t("Control Panel"),
   icon: <SlidersHorizontal />,
   home: { view: "control-panel" },

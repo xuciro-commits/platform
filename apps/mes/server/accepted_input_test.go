@@ -14,8 +14,8 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
 	"platformserver/apps/ai"
+	"platformserver/apps/enterprise"
 	"platformserver/apps/flow"
-	"platformserver/apps/org"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -93,7 +93,7 @@ func TestJournalAcceptedEquipmentCrashAndRestart(t *testing.T) {
 		p := New(id, DemoMaster())
 		seat := platformserver.Seat{Subjects: []string{member.ID}, Member: member}
 		tn, err := platformserver.NewTenant(id, platformserver.NewConsole(id, seat),
-			org.New(id, DemoOrganization(nil)), ai.New(id), work.New(id), flow.New(id),
+			enterprise.New(id, DemoOrganization(nil)), ai.New(id), work.New(id), flow.New(id),
 			platformserver.NewAgents(id), p)
 		if err == nil {
 			err = tn.Connect(DemoConnectors(id)...)

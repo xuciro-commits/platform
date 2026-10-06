@@ -32,7 +32,7 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 | 位置 | 内容 |
 |---|---|
 | `contract/` | K1–K9 规范、向量、生成类型、Go 参考实现；`lean/` 有界证明 |
-| `capabilities/server/` | 宿主运行时；`platform/` 是应用唯一可导入的应用 API；`internal/host` 宿主内接口；`apps/` 平台应用（build/flow/ai/work/org/knowledge/files/relations） |
+| `capabilities/server/` | 宿主运行时；`platform/` 是应用唯一可导入的应用 API；`internal/host` 宿主内接口；`apps/` 平台应用（build/flow/ai/work/enterprise/knowledge/files/relations/core） |
 | `apps/<id>/server/` | 自治业务应用；`protocols/` 跨应用协议；`solutions/` 组合宿主 |
 | `web/packages/ui`、`web/packages/app` | 共享 UI Kit 与前端应用 API |
 | `web/packages/build` | 构建者应用：Ontology / Workshop / Automate / AI Functions / Code / Projects / Releases |
@@ -43,3 +43,15 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 ## 检查
 
 统一入口 `scripts/verify.sh <step>`：`contract`、`formal`、`capabilities`、`composition`、`web-check`、`web`、`pms`、`mes`、`deploy`、`format`、`ci`。按影响面选：Go 宿主 → `capabilities format`；应用/协议 → `composition format`；Web → `web-check`（整块交付或发布节点再选一条 `web` 浏览器路线）；纯文档 → 链接与 `git diff --check`。外观与手感靠截图和负责人走查，不写像素断言。
+
+## 沙箱（Arena 等离线代理环境）里怎么干活
+
+网络只通 GitHub、npm、PyPI；Go 模块代理全封。仓库自带离线所需，照做即可：
+
+1. **Go**：`cd /home/user/platform && bash scripts/sandbox-go.sh`，然后 `export PATH=/home/user/.go-toolchain/go/bin:$PATH GOFLAGS=-mod=vendor GOTOOLCHAIN=local GOPATH=/home/user/.gopath GOCACHE=/home/user/.gocache`（脚本会打印这一行）。工具链来自 `tools/go/`（找不到则 `pip download go-bin`），依赖来自 `capabilities/server/vendor/`（已提交，别跑 `go mod tidy`/`go mod vendor`）。`go build ./...`、`go vet`、`go test` 都在 `capabilities/server/` 目录下跑；`apps/*/server`、`solutions/*` 是独立模块、依赖未 vendor，只能 `gofmt`，编译交给本地。
+2. **Web**：`cd web && corepack pnpm install --frozen-lockfile`（npm 可达，约 5 秒），检查按包跑 `corepack pnpm exec tsc -p web/packages/<pkg>`；`pnpm -r typecheck` 会 OOM（2 核）。无浏览器：Playwright 不可用，UI 只能 tsc + 代码走查，报告时写明"未在浏览器观察"。
+3. **宿主类型变了**：`go run ./cmd/api-types`（在 `capabilities/server/`）再生成 `web/packages/kernel/src/gen/host.ts`，否则 `TestAPIContract` 失败。文案变了：补 `i18n/zh-CN.json` / 包内 `i18n.ts`，否则 `TestLanguages` 失败。
+4. **轻量验证**：`go test ./apps/<改动包>/... ./platform/...` + 根包按名跑 `go test . -run 'TestLanguages|TestAPIContract'`；全量根包测试约 40 秒，`TestRecordsAtScale` 计时抖动可忽略。
+5. **沙箱会被重置**：`/home/user/platform` 以外（上传文件、`~/.gocache`）全丢，分支 HEAD 可能回退到旧树。每个整块做完立刻 `git commit && git push origin <会话分支>`；重置后 `git fetch && git reset --hard origin/<分支> && git clean -fd`，再跑第 1 步。需要长期保留的外部文件（规范、工具）提交进仓库（`docs/standards/`、`tools/`）。
+6. **分支纪律**：只在会话分支上提交与推送，**不要 merge**（任一方向）；需要 main 上的内容用 `git checkout origin/main -- <路径>` 复制后正常提交。
+7. **写文件**：编辑工具的相对路径以仓库根为准；拿不准就用绝对路径。

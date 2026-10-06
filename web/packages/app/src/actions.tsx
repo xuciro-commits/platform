@@ -28,6 +28,7 @@ export function PayloadFields({ fields, values, onChange, preview = false }: { f
         {f.choices?.length ? <Select id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value || undefined)}>
             <option value="">—</option>{f.choices.map((c) => <option key={c} value={c}>{t(c)}</option>)}</Select>
           : f.ref ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
+            : f.ref === "enterprise.element" ? <ElementPicker id={id} stereotype={f.stereotype} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
             : <RecordPicker id={id} type={f.ref} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
           : f.from ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
             : <ReadPicker id={id} field={f} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
@@ -48,6 +49,21 @@ function ReadPicker({ id, field, value, onChange }: { id: string; field: Field; 
     <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">—</option>
       {items.map((x) => <option key={key(x)} value={key(x)}>{field.label ? `${String(x[field.label] ?? "")} · ${key(x)}` : key(x)}</option>)}
+    </Select>
+  );
+}
+
+/** The live elements of the enterprise model, narrowed to a UAF stereotype, for a payload
+ * field tagged ref:"enterprise.element" (ADR-0067 D8). The model is every member's to read. */
+function ElementPicker({ id, stereotype, value, onChange }: { id: string; stereotype?: string; value: string; onChange: (id: string) => void }) {
+  const { client } = useHost();
+  const model = useQuery({ queryKey: ["read", "enterprise"], queryFn: () => client.get<Api.EnterpriseModel>("/v1/enterprise") }).data;
+  const today = new Date().toISOString().slice(0, 10);
+  const items = (model?.elements ?? []).filter((e) => (!stereotype || e.stereotype === stereotype) && (e.from ?? "") <= today && (!e.until || today < e.until));
+  return (
+    <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">—</option>
+      {items.map((e) => <option key={e.id} value={e.id}>{e.name}{e.kind ? ` · ${e.kind}` : ""}</option>)}
     </Select>
   );
 }

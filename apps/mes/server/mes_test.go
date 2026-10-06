@@ -13,8 +13,8 @@ import (
 	"platformkernel/kernel"
 	"platformserver"
 	"platformserver/apps/ai"
+	"platformserver/apps/enterprise"
 	"platformserver/apps/flow"
-	"platformserver/apps/org"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -95,7 +95,7 @@ func plantTenantOf(t *testing.T, seed []platform.Membership, disable ...string) 
 		}
 	}
 	tn, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, platformserver.Seat{Subjects: []string{"admin"},
-		Member: platform.Member{ID: "admin", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin, ai.ID: ai.Admin}}}), org.New(tenant, DemoOrganization(seed)), ai.New(tenant), work.New(tenant), flow.New(tenant), platformserver.NewAgents(tenant), p)
+		Member: platform.Member{ID: "admin", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin, ai.ID: ai.Admin}}}), enterprise.New(tenant, DemoOrganization(seed)), ai.New(tenant), work.New(tenant), flow.New(tenant), platformserver.NewAgents(tenant), p)
 	if err == nil {
 		err = tn.Connect(DemoConnectors(tenant)...)
 	}

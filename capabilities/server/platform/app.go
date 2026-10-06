@@ -165,6 +165,8 @@ type Runtime interface {
 	Setting(c Caller, name string) string
 	Emit(c Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error)
 	Units(c Caller, structure string, now time.Time) []string
+	Element(c Caller, id string, now time.Time) (ElementInfo, bool)
+	Related(c Caller, element, stereotype string, outgoing bool, now time.Time) []string
 	Links(c Caller, entity string) []string
 	Link(c Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error
 	Deliver(c Caller, dataClass, from, to string, now time.Time) *kernel.Error

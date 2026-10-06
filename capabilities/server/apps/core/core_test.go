@@ -36,7 +36,7 @@ func TestCoreDeclarations(t *testing.T) {
 			t.Errorf("%s: title or description not translated", e.Type)
 		}
 		for _, f := range info.Fields {
-			if f.Type == "reference" && !strings.HasPrefix(f.Ref, ID+".") {
+			if f.Type == "reference" && !strings.HasPrefix(f.Ref, ID+".") && f.Ref != "enterprise.element" { // the enterprise model is the one layer below (ADR-0067 D8)
 				t.Errorf("%s.%s references %s outside core", e.Type, f.Name, f.Ref)
 			}
 			if zh[f.Title] == "" {

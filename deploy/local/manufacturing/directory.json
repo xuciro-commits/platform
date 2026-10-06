@@ -8,7 +8,7 @@
       "mes": "supervisor",
       "erp": "controller",
       "platform": "admin",
-      "org": "admin",
+      "enterprise": "admin",
       "ai": "admin",
       "work": "admin",
       "flow": "admin",
