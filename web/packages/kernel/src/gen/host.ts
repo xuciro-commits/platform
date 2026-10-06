@@ -1769,6 +1769,48 @@ export type Predicate = {
   terms?: Predicate[];
 };
 
+export type Source = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  name: string;
+  title: string;
+  url: string;
+  allowPrivate?: boolean;
+  header?: string;
+  path?: string;
+  object: string;
+  key: string;
+  mapping: SourceField[];
+  every?: string;
+  state: string;
+  puller?: string;
+  requested?: boolean;
+  last?: SourcePull;
+};
+
+export type SourceField = {
+  from: string;
+  to: string;
+  convert?: string;
+};
+
+export type SourcePull = {
+  at: string;
+  rows: number;
+  applied: number;
+  failed: number;
+  error?: string;
+  failures?: SourceFailure[];
+};
+
+export type SourceFailure = {
+  id: string;
+  outcome: string;
+};
+
 export type Process = {
   id: string;
   revision: number;
