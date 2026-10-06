@@ -21,6 +21,7 @@ import { ConnectionEditor, Connections } from "./ontology/connection";
 import { DatasetEditor, Datasets } from "./ontology/dataset";
 import { PipelineEditor, Pipelines } from "./ontology/pipeline";
 import { WritebackEditor, Writebacks } from "./ontology/writeback";
+import { MatchEditor, Matches } from "./ontology/match";
 import { IntegrationHealth } from "./ontology/integration-health";
 import { DecisionTableEditor, DecisionTables } from "./functions/decision-table";
 import { QueryEditor, Queries } from "./ontology/query";
@@ -32,7 +33,7 @@ import { ProjectHome, ProjectsList } from "./projects/project";
 import { StudioTemplates } from "./workshop/template-ui";
 import { t, type NavSection, type View } from "@platform/ui";
 import { ApplicationScope } from "./projects/application-scope";
-import { Activity, BookOpen, Boxes, Braces, Clock, Compass, Database, GitBranch, GitMerge, Hammer, History, Layers, LayoutList, LayoutTemplate, Link2, PackageCheck, Plug, Search, Send, Sparkles, Table2, Tags, Workflow, Zap } from "lucide-react";
+import { Activity, BookOpen, Boxes, Braces, Clock, Compass, Database, Fingerprint, GitBranch, GitMerge, Hammer, History, Layers, LayoutList, LayoutTemplate, Link2, PackageCheck, Plug, Search, Send, Sparkles, Table2, Tags, Workflow, Zap } from "lucide-react";
 
 const scoped = (p: Record<string, string | undefined>, node: React.ReactNode) => <ApplicationScope application={p.application}>{node}</ApplicationScope>;
 const builder = (host: Host) => host.role("build") === "builder";
@@ -52,6 +53,7 @@ const views: View[] = [
   { id: "pipeline", title: (p) => p.id ? t("Pipeline") : t("Pipelines"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><PipelineEditor id={p.id} /></ApplicationScope> : <Pipelines /> },
   { id: "integration-health", title: () => t("Integration health"), render: () => <IntegrationHealth /> },
   { id: "writeback", title: (p) => p.id ? t("Writeback") : t("Writebacks"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><WritebackEditor id={p.id} /></ApplicationScope> : <Writebacks /> },
+  { id: "match", title: (p) => p.id ? t("Matching rule") : t("Matching rules"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><MatchEditor id={p.id} /></ApplicationScope> : <Matches /> },
   { id: "query", title: () => t("Queries"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><QueryEditor id={p.id} /></ApplicationScope> : <Queries /> },
   // Interface
   { id: "module", title: (p) => p.page ? t("Page") : p.id ? t("Module") : t("Modules"), render: (p) => <ApplicationScope key={`${p.id ?? ""}:${p.page ?? ""}`} application={p.application ?? p.id}><ModuleWorkbench id={p.id} page={p.page} /></ApplicationScope> },
@@ -93,6 +95,7 @@ export default defineApp({
       { label: t("Datasets"), icon: <Layers />, route: { view: "dataset" } },
       { label: t("Pipelines"), icon: <GitMerge />, route: { view: "pipeline" } },
       { label: t("Writebacks"), icon: <Send />, route: { view: "writeback" } },
+      { label: t("Matching rules"), icon: <Fingerprint />, route: { view: "match" } },
       { label: t("Integration health"), icon: <Activity />, route: { view: "integration-health" } },
     ] },
     { label: t("Interface"), items: [

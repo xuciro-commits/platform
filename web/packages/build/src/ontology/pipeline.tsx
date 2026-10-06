@@ -12,7 +12,7 @@ import { cell } from "./dataset";
 type Measure = { fn: string; column?: string; to: string };
 type Step = { kind: string; columns?: string[]; from?: string; to?: string; column?: string; type?: string; op?: string; value?: string; formula?: string; dataset?: string; match?: string; as?: string; outer?: boolean; desc?: boolean; measures?: Measure[] };
 type Expectation = { column: string; rule: string; value?: string };
-type Run = { at: string; inputVersion: number; rows: number; written: number; quarantined: number; failed: number; error?: string; outputVersion?: number;
+type Run = { merged?: number; at: string; inputVersion: number; rows: number; written: number; quarantined: number; failed: number; error?: string; outputVersion?: number;
   quarantine?: { reason: string; row: Record<string, unknown> }[]; failures?: { id: string; outcome: string }[] };
 // ADR-0073: rows land in the enterprise model as elements owned on the source system's behalf.
 type EnterpriseTarget = { source: string; stereotype: string; id: string; name: string; shortName?: string; kind?: string; parent?: string; root?: string; in?: string; relation?: string; at?: string; atKind?: string; from?: string; until?: string; properties?: string[] };
@@ -157,7 +157,7 @@ export function PipelineEditor({ id }: { id: string }) {
         {!last ? <p className="text-xs text-muted">{t("Not run yet.")}</p> : <>
           <p className="flex flex-wrap items-center gap-2 text-xs"><Tag label={last.error ? t("Failed") : last.quarantined || last.failed ? t("Partly written") : t("Written")} tone={last.error ? "danger" : last.quarantined || last.failed ? "warning" : "success"} />
             <span>{new Date(last.at).toLocaleString()}</span><span>{t("input v{v}", { v: last.inputVersion })}</span>
-            <span>{t("{rows} rows · {written} written · {quarantined} quarantined · {failed} refused", { rows: last.rows, written: last.written, quarantined: last.quarantined, failed: last.failed })}</span>
+            <span>{t("{rows} rows · {written} written · {quarantined} quarantined · {failed} refused", { rows: last.rows, written: last.written, quarantined: last.quarantined, failed: last.failed })}{last.merged ? ` · ${t("{n} merged by the matching rule", { n: last.merged })}` : ""}</span>
             {last.outputVersion ? <span>{t("output v{v}", { v: last.outputVersion })}</span> : null}</p>
           {last.error && <p className="text-xs text-danger">{last.error}</p>}
           {last.quarantine?.length ? <ul className="grid gap-1 text-xs">{last.quarantine.map((q, i) => <li key={i} className="font-mono break-all"><span className="text-warning">{q.reason}</span> · {Object.entries(q.row).map(([k, v]) => `${k}=${cell(v)}`).join(" ")}</li>)}</ul> : null}
