@@ -76,26 +76,51 @@ func (s *Stereotype) Relationship() bool {
 
 // Is reports whether s is name or specialises it.
 func (m *Metamodel) Is(s, name string) bool {
-	for seen := map[string]bool{}; s != "" && !seen[s]; {
-		if s == name {
+	return m.is(s, name, map[string]bool{})
+}
+
+func (m *Metamodel) is(s, name string, seen map[string]bool) bool {
+	if s == name {
+		return true
+	}
+	if seen[s] {
+		return false
+	}
+	seen[s] = true
+	st := m.Stereotypes[s]
+	if st == nil {
+		return false
+	}
+	for _, g := range st.Generals {
+		if m.is(g, name, seen) {
 			return true
 		}
-		seen[s] = true
-		st := m.Stereotypes[s]
-		if st == nil {
+	}
+	return false
+}
+
+// Relationship reports whether the stereotype, or one it specialises, extends
+// a UML relationship metaclass.
+func (m *Metamodel) Relationship(s string) bool {
+	seen := map[string]bool{}
+	var walk func(string) bool
+	walk = func(n string) bool {
+		st := m.Stereotypes[n]
+		if st == nil || seen[n] {
 			return false
 		}
-		for _, g := range st.Generals[1:] {
-			if m.Is(g, name) {
+		seen[n] = true
+		if st.Relationship() {
+			return true
+		}
+		for _, g := range st.Generals {
+			if walk(g) {
 				return true
 			}
 		}
-		if len(st.Generals) == 0 {
-			return false
-		}
-		s = st.Generals[0]
+		return false
 	}
-	return false
+	return walk(s)
 }
 
 // Properties are the stereotype's own and inherited tagged values.

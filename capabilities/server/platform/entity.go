@@ -262,6 +262,9 @@ type FieldInfo struct {
 	// records hold; the host fills them when it translates (ADR-0023).
 	ChoiceTitles []string `json:"choiceTitles,omitempty"`
 	Ref          string   `json:"ref,omitempty"` // the entity type a reference points to
+	// Stereotype narrows a reference to the enterprise model (ref:"enterprise.element")
+	// to one UAF stereotype, tag stereo:"ActualLocation" (ADR-0067 D8).
+	Stereotype string `json:"stereotype,omitempty"`
 	// Inverse names the relation from the referenced record back to this one
 	// ("opportunities" on an account), tag inverse:"…" (ADR-0040 21b D1).
 	Inverse string `json:"inverse,omitempty"`
@@ -658,7 +661,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		case ft.Kind() == reflect.String && sf.Tag.Get("ref") != "":
 			// A reference named by the type it points at, rather than Ref[T]: how
 			// a definition a tenant authored says it (ADR-0034 D1).
-			f.Type, f.Ref = "reference", sf.Tag.Get("ref")
+			f.Type, f.Ref, f.Stereotype = "reference", sf.Tag.Get("ref"), sf.Tag.Get("stereo")
 		case ft.Kind() == reflect.String && refined == "date", ft.Kind() == reflect.String && refined == "longtext":
 			f.Type = refined
 		case ft.Kind() == reflect.String && sf.Tag.Get("choices") != "":

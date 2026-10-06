@@ -86,6 +86,9 @@ type Field struct {
 	// a picker of the records the member may read (ADR-0028 D5, F-36).
 	Choices []string `json:"choices,omitempty"`
 	Ref     string   `json:"ref,omitempty"`
+	// Stereotype narrows a reference to the enterprise model (Ref
+	// "enterprise.element") to one UAF stereotype (ADR-0067 D8).
+	Stereotype string `json:"stereotype,omitempty"`
 	// From names a read of the declaring app whose items the field chooses
 	// from, when the values are not records here (an ERP's planned orders a
 	// plant reads through a protocol): Key is the item's value, Label what

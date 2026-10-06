@@ -1,6 +1,6 @@
 # ADR-0067 — 企业建模层：以 OMG UAF 为语义基础的租户级企业模型
 
-**状态：** 提议 → 待负责人确认后进入实施（2026-10-06）
+**状态：** 已接受并实施（2026-10-06）；实施记录与偏离见 [ADR-0068](0068-enterprise-layer-implementation.md)
 **依据：** `docs/standards/uaf/1.3/`（UAF 1.3 Profile XMI `dtc-24-11-06.xml`，Measurements Library `dtc-24-11-07.xml`，规范 HTML）
 **取代/收编：** ADR-0012（组织模型）的存储与 API 归入本层；ADR-0058 A1 `core` 主数据包中的 person/site/location 成为本层的投影。
 
@@ -24,7 +24,7 @@ UAF 1.3 是 DoDAF/MODAF/NAF 的统一（OMG 正式标准，2024-11），用 UML/
 
 | 负责人的词 | UAF 构造型（类型 / 实例） | 现有平台概念（将成为投影） |
 |---|---|---|
-| 集团、公司、事业部、工厂、部门、团队 | Organization / **ActualOrganization**（`shortName`、关系 ActualOrganizationRelationship） | `org.unit`（Kind 开放词汇）、`org.structure`、Edge |
+| 集团、公司、事业部、工厂、部门、团队 | Organization / **ActualOrganization**（`shortName`、关系 ActualResourceRelationship） | `org.unit`（Kind 开放词汇）、`org.structure`、Edge |
 | 人员 | Person / **ActualPerson** | `core.person` |
 | 岗位、职责 | Post / **ActualPost**、Responsibility / **ActualResponsibility**、FillsPost、ResponsibleFor | 无（ADR-0012 明确"暂未引入"） |
 | 能力、胜任力 | **Capability**（`kind`）、CapabilityConfiguration、Competence、RequiresCompetence | 无 |
@@ -34,7 +34,7 @@ UAF 1.3 是 DoDAF/MODAF/NAF 的统一（OMG 正式标准，2024-11），用 UML/
 | 设施、场地 | Facility（Resources）、**ActualLocation**（Actual Resources） | `core.site`、`core.location` |
 | 项目 | Project / **ActualProject**、ProjectMilestone、ActualProjectRole | 无 |
 | 目标、愿景、机会、阶段 | EnterpriseGoal、EnterpriseObjective、EnterpriseVision、Opportunity、StrategicPhase / ActualEnterprisePhase、**WholeLifeEnterprise** | 无 |
-| 关系 | 组合/聚合（ownedMember）、ActualOrganizationRelationship、FillsPost、ResponsibleFor、IsCapableToPerform、MapsToCapability、Exhibits、OwnsRisk、Phases 等 | Edge、Membership |
+| 关系 | 组合/聚合（ownedMember）、ActualResourceRelationship、FillsPost、ResponsibleFor、IsCapableToPerform、MapsToCapability、Exhibits、OwnsRisk、Phases 等 | Edge、Membership |
 
 **吸收方式（D1）：平台不手写企业元模型，而是加载 UAF XMI 生成元模型注册表。**
 - 宿主启动时用 `encoding/xml` 解析 `docs/standards/uaf/<ver>/dtc-*.xml`（`go:embed` 进二进制，无网络依赖），得到 `enterprise.Metamodel{Version, URI, Stereotypes[name]{Package(领域/视角), Generalizations, Extension bases(UML 基类), Properties{name,type,multiplicity,enum}, Constraints(OCL 文本，只作提示), Comment}, Enumerations, DataTypes(Measurements)}`。XMI 中 272 构造型 / 437 属性 / 402 泛化 / 21 枚举全部可解释；今天的解析器原型（见 §9）已验证该文件可完整读取。
@@ -63,7 +63,7 @@ UAF 1.3 是 DoDAF/MODAF/NAF 的统一（OMG 正式标准，2024-11），用 UML/
 
 **实体（app `enterprise`）：**
 - `enterprise.element` — `{id, stereotype, uaf, name, shortName, kind(构造型的 kind 枚举值), properties(json，按元模型属性校验), from, until, closed, tags, owner(租户或联邦来源), external}`。类型元素（Organization、Post、Capability、System）与实例元素（ActualOrganization、ActualPost、ActualPerson、ActualResource）同一张表，用 `stereotype` 区分；实例通过关系 `typedBy` 指向类型元素（UAF 的 `InstanceSpecification.classifier`）。
-- `enterprise.relationship` — `{id, stereotype(UAF 关系构造型或 `member`/`typedBy`), from, to, kind(如 ActualOrganizationRelationship 的 legal/management/finance/site/project/governance…=原 Structure.Kind), share, from, until, properties}`。原 `Edge`、`Membership` 都是它的实例。
+- `enterprise.relationship` — `{id, stereotype(UAF 关系构造型或 `member`/`typedBy`), from, to, kind(如 ActualResourceRelationship 的 legal/management/finance/site/project/governance…=原 Structure.Kind), share, from, until, properties}`。原 `Edge`、`Membership` 都是它的实例。
 - `enterprise.view` — 一张图：`{id, grid: "Pr-Sr"|"St-Tx"|"Rs-Sr"|"Pj-Rm"|…(UAF 网格坐标), elements[], relationships[], layout, asOf(有效时间切片)}`。图是模型的投影而非真相：删除图不删除元素。
 - `enterprise.profile` — 租户启用的构造型清单、规模档位、UAF 版本、联邦设置。
 

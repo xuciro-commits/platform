@@ -36,9 +36,11 @@ const (
 	SchemaViewSave        = "enterprise.view.save"
 	SchemaSeed            = "enterprise.model.seed"
 
-	ReadOrganization = "organization"
-	ReadModel        = "enterprise"
-	ReadMetamodel    = "enterprise-metamodel"
+	ReadOrganization  = "organization"
+	ReadModel         = "enterprise"
+	ReadMetamodel     = "enterprise-metamodel"
+	ReadPublished     = "enterprise-published" // the slice this tenant shares with the tenants it federates with
+	SchemaSliceImport = "enterprise.slice.import"
 
 	// Admin stewards the model (the org app's role, kept so seats carry over).
 	Admin = "admin"
@@ -47,6 +49,7 @@ const (
 // Enterprise is one tenant's enterprise model app.
 type Enterprise struct {
 	mu     sync.Mutex
+	tenant string
 	model  Model
 	ledger *platform.Ledger
 }
@@ -67,7 +70,8 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 				f("legal", "boolean", "A legal entity", false), f("external", "boolean", "Outside the tenant's own enterprise", false), f("properties", "json", "Tagged values of the stereotype", false), from, until}},
 		platform.Action{Schema: SchemaElementEdit, Target: ElementType, Capability: "elements", Title: "Edit element", Roles: admin,
 			Description: "Rename an element or change its kind, short name or tagged values.",
-			Payload:     []platform.Field{f("name", "string", "Name", false), f("kind", "string", "Kind", false), f("shortName", "string", "Short name", false), f("properties", "json", "Tagged values", false), f("calendar", "string", "Working calendar id", false)}},
+			Payload: []platform.Field{f("name", "string", "Name", false), f("kind", "string", "Kind", false), f("shortName", "string", "Short name", false), f("properties", "json", "Tagged values", false), f("calendar", "string", "Working calendar id", false),
+				f("published", "boolean", "Share it with the tenants this one federates with (group, subsidiaries, partners)", false)}},
 		platform.Action{Schema: SchemaElementClose, Target: ElementType, Capability: "elements", Title: "Close element", Roles: admin,
 			Description: "End an element (dissolved, merged into another, decommissioned); its history stays.",
 			Payload:     []platform.Field{f("until", "date", "Last day + 1", true), f("reason", "string", "e.g. merged into <element>", false)}},
@@ -76,7 +80,7 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 			Payload:     []platform.Field{f("name", "string", "Name", true), f("kind", "string", "Kind", true), f("matrix", "boolean", "An organisation may have several parents", false)}},
 		platform.Action{Schema: SchemaRelationshipAdd, Target: RelationshipType, Capability: "relationships", Title: "Relate", Roles: admin,
 			Description: "Relate two elements: place an organisation under a parent in a kind, make a party a member, fill a post, give a capability, assign responsibility.",
-			Payload: []platform.Field{f("stereotype", "string", "UAF relationship stereotype, e.g. ActualOrganizationRelationship, ActualOrganizationRole, FillsPost, IsCapableToPerform, ResponsibleFor", true),
+			Payload: []platform.Field{f("stereotype", "string", "UAF relationship stereotype, e.g. ActualResourceRelationship, ActualOrganizationRole, FillsPost, IsCapableToPerform, ResponsibleFor", true),
 				f("source", "string", "Source element id, or member:<id> for a membership", true), f("target", "string", "Target element id", true),
 				f("kind", "string", "For a placement: the relationship kind id", false), f("role", "string", "For a membership: employee, chair, volunteer …", false),
 				f("relation", "string", "e.g. part of, owned by, reports to", false), f("share", "number", "Ownership share", false), f("primary", "boolean", "The party's primary organisation", false), from, until}},
@@ -87,12 +91,15 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 			Description: "Save a drawing over the model: the elements it shows, where, in which UAF grid cell.",
 			Payload: []platform.Field{f("name", "string", "Name", true), f("grid", "string", "UAF grid cell, e.g. Pr-Sr, St-Tx, Rs-Sr, Pj-Rm", true),
 				f("elements", "json", "Element ids shown", false), f("layout", "json", "Positions by element id", false), f("asOf", "date", "The day the view shows", false)}},
+		platform.Action{Schema: SchemaSliceImport, Target: ModelType, Capability: "federation", Title: "Import a published slice", Roles: admin,
+			Description: "Mirror what another tenant publishes — its organisations, capabilities, sites — read-only, owned there; relate your own elements to them. A connector delivers the slice.",
+			Payload:     []platform.Field{f("slice", "json", "The other tenant's enterprise-published answer", true)}},
 		platform.Action{Schema: SchemaSeed, Target: ModelType, Capability: "seed", Title: "Seed from a template", Roles: admin,
 			Description: "Give an empty model its first shape for the enterprise's scale: S (≤100 people), M (≤1,000: a plant), L (≤10,000: divisions), XL (≤100,000: a group).",
 			Payload: []platform.Field{f("scale", "string", "S, M, L or XL; empty: from headcount", false), f("name", "string", "The enterprise's name", true), f("headcount", "number", "People, roughly", false),
 				f("sites", "number", "Sites or plants", false), f("legalEntities", "number", "Legal entities", false), f("industry", "string", "manufacturing, hospitality, services …", false)}},
 	)
-	return &Enterprise{model: FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType)}
+	return &Enterprise{tenant: tenant, model: FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType)}
 }
 
 // Snapshot and Restore: the model as decisions left it (ADR-0019 D6).
@@ -111,7 +118,7 @@ func (e *Enterprise) Restore(raw json.RawMessage) error {
 
 func (e *Enterprise) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: "Enterprise", Version: "1", Actions: e.ledger.Catalog,
-		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel}, Everyone: []string{ReadModel, ReadMetamodel}}
+		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished}, Everyone: []string{ReadModel, ReadMetamodel}}
 }
 
 func (e *Enterprise) Declarations() []*pb.AuthorityDeclaration { return e.ledger.Declarations() }
@@ -144,6 +151,8 @@ type payload struct {
 	Elements                                                                                         []string
 	Layout                                                                                           map[string][2]float64
 	Calendar                                                                                         string
+	Published                                                                                        *bool
+	Slice                                                                                            *Slice
 }
 
 func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -174,7 +183,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, invalid("an element needs a name")
 			case st == nil:
 				return nil, invalid("{stereotype} is not a UAF {version} stereotype", p.Stereotype, mm.Version)
-			case st.Relationship():
+			case mm.Relationship(p.Stereotype):
 				return nil, invalid("{stereotype} relates elements; add it with Relate", p.Stereotype)
 			case st.Abstract:
 				return nil, invalid("{stereotype} is abstract; choose one of its specialisations", p.Stereotype)
@@ -214,6 +223,23 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				seeded.Calendars = m.Calendars
 				*m = seeded
 			}, nil
+		case SchemaSliceImport:
+			if p.Slice == nil || p.Slice.Tenant == "" || p.Slice.Tenant == e.tenant {
+				return nil, invalid("a slice names the tenant it comes from")
+			}
+			owner := "tenant:" + p.Slice.Tenant
+			for i := range p.Slice.Elements {
+				el := &p.Slice.Elements[i]
+				if mm.Stereotypes[el.Stereotype] == nil {
+					return nil, invalid("{stereotype} is not in UAF {version}", el.Stereotype, mm.Version)
+				}
+				if own := m.element(el.ID); own != nil && own.Owner != owner {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{element} is this tenant's own; the slice may not replace it", el.ID)
+				}
+				el.Owner, el.Published = owner, false
+			}
+			slice := *p.Slice
+			return func(*pb.ChangeRecord) { m.Import(slice) }, nil
 		case SchemaViewSave:
 			if p.Name == "" || p.Grid == "" {
 				return nil, invalid("a view needs a name and a grid cell")
@@ -237,7 +263,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 		case SchemaRelationshipAdd:
 			st := mm.Stereotypes[p.Stereotype]
 			switch {
-			case st == nil || !st.Relationship() && p.Stereotype != Typed:
+			case st == nil || !mm.Relationship(p.Stereotype) && p.Stereotype != Typed && p.Stereotype != Membership: // a role is a slot in UAF, not a UML relationship; it still joins two elements here
 				return nil, invalid("{stereotype} is not a UAF relationship stereotype", p.Stereotype)
 			case m.relationship(id) != nil:
 				return nil, conflict
@@ -333,6 +359,9 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				}
 				if p.Kind != "" {
 					el.Kind = p.Kind
+				}
+				if p.Published != nil {
+					el.Published = *p.Published
 				}
 				if p.ShortName != "" {
 					el.ShortName = p.ShortName
@@ -465,6 +494,23 @@ type Metamodel struct {
 	Grid         []GridCell                  `json:"grid"`
 }
 
+// Element and Related serve host.Directory for the apps (ADR-0067 D3).
+func (e *Enterprise) Element(id string, day Date) (platform.ElementInfo, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	el := e.model.element(id)
+	if el == nil || !e.model.live(id, day) {
+		return platform.ElementInfo{}, false
+	}
+	return platform.ElementInfo{ID: el.ID, Stereotype: el.Stereotype, Name: el.Name, Kind: el.Kind, Owner: el.Owner}, true
+}
+
+func (e *Enterprise) Related(element, stereotype string, outgoing bool, day Date) []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.model.Of(element, stereotype, outgoing, day)
+}
+
 func (e *Enterprise) Read(_ platform.Caller, name string) (any, *kernel.Error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -473,6 +519,8 @@ func (e *Enterprise) Read(_ platform.Caller, name string) (any, *kernel.Error) {
 		return e.model.OrgSeed(), nil
 	case ReadModel:
 		return copyModel(e.model), nil
+	case ReadPublished:
+		return e.model.Published(e.tenant), nil
 	case ReadMetamodel:
 		mm := uaf.Current()
 		return Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations, Grid: Grid()}, nil

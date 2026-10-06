@@ -31,3 +31,13 @@ func TestProfile(t *testing.T) {
 		t.Fatalf("ActualProject properties %v", m.Properties("ActualProject"))
 	}
 }
+
+func TestLineage(t *testing.T) {
+	m := Current()
+	if !m.Is("ActualOrganization", "ActualResource") || m.Is("ActualOrganization", "Capability") || m.Is("UAFElement", "ActualOrganization") {
+		t.Fatal("Is does not follow generalisations")
+	}
+	if !m.Relationship("ActualResourceRelationship") || !m.Relationship("FillsPost") || m.Relationship("ActualOrganization") || m.Relationship("ActualOrganizationRole") {
+		t.Fatal("Relationship does not read the UML base")
+	}
+}

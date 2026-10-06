@@ -612,6 +612,7 @@ export type Element = {
   closed?: string;
   calendar?: string;
   owner?: string;
+  published?: boolean;
   properties?: Record<string, unknown>;
 };
 
@@ -679,6 +680,7 @@ export type Field = {
   description: string;
   choices?: string[];
   ref?: string;
+  stereotype?: string;
   from?: string;
   key?: string;
   label?: string;
@@ -702,6 +704,7 @@ export type FieldInfo = {
   choices?: string[];
   choiceTitles?: string[];
   ref?: string;
+  stereotype?: string;
   inverse?: string;
   knowledge?: boolean;
   read?: string[];

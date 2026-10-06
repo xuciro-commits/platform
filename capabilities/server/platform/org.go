@@ -107,3 +107,55 @@ func (c Caller) Units(structure string, now time.Time) []string {
 	}
 	return c.rt.Units(c, structure, now)
 }
+
+// ElementInfo is what an app learns about an element of the enterprise model
+// (ADR-0067 D3) without owning it: enough to type a reference and label it.
+type ElementInfo struct {
+	ID         string `json:"id"`
+	Stereotype string `json:"stereotype"`
+	Name       string `json:"name"`
+	Kind       string `json:"kind,omitempty"`
+	Owner      string `json:"owner,omitempty"` // "tenant:<id>" when federated in
+}
+
+// Enterprise is the caller's window on the tenant's enterprise model
+// (ADR-0067 D3): the one place apps ask who sits where, what a site holds and
+// what an organisation can do. Day is the input's day (now), so replays agree.
+type Enterprise struct{ c Caller }
+
+func (c Caller) Enterprise() Enterprise { return Enterprise{c} }
+
+// Units are the organisations the caller belongs to in kind ("" for all),
+// with those below them.
+func (e Enterprise) Units(kind string, now time.Time) []string { return e.c.Units(kind, now) }
+
+// Element is the element id, when it is live on now's day.
+func (e Enterprise) Element(id string, now time.Time) (ElementInfo, bool) {
+	if e.c.rt == nil {
+		return ElementInfo{}, false
+	}
+	return e.c.rt.Element(e.c, id, now)
+}
+
+// Related are the elements joined to element by stereotype on now's day.
+func (e Enterprise) Related(element, stereotype string, outgoing bool, now time.Time) []string {
+	if e.c.rt == nil {
+		return nil
+	}
+	return e.c.rt.Related(e.c, element, stereotype, outgoing, now)
+}
+
+// Capable are the capabilities an organisation or resource performs («IsCapableToPerform»).
+func (e Enterprise) Capable(element string, now time.Time) []string {
+	return e.Related(element, "IsCapableToPerform", true, now)
+}
+
+// Located is where an element sits («ActualResourceRelationship» to a location or organisation), nearest first.
+func (e Enterprise) Located(element string, now time.Time) []string {
+	return e.Related(element, "ActualResourceRelationship", true, now)
+}
+
+// Of are the elements the organisation owns («OwnsProcess»: posts, resources, goals, projects).
+func (e Enterprise) Of(organisation string, now time.Time) []string {
+	return e.Related(organisation, "OwnsProcess", true, now)
+}

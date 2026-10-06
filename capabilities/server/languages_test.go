@@ -58,7 +58,9 @@ func TestLanguages(t *testing.T) {
 		{"/v1/me", "fr,zh;q=0.5", `"title":"设置"`},          // the first the tenant speaks
 		{"/v1/actions", "zh-CN", `"title":"授予角色"`},
 		{"/v1/entities", "zh-CN", `"title":"任务"`},
-		{"/v1/entities", "zh-CN", `"choiceTitles":["进行中",`}, // a task's states; the choices stay the values records hold
+		{"/v1/enterprise", "", `"uaf":"1.3"`},                                 // the enterprise model (ADR-0067), readable by everyone
+		{"/v1/enterprise-metamodel", "", `"stereotype":"ActualOrganization"`}, // the UAF profile the modeler draws from
+		{"/v1/entities", "zh-CN", `"choiceTitles":["进行中",`},                   // a task's states; the choices stay the values records hold
 		{"/v1/settings", "zh-CN", `"title":"智能体使用的模型"`},
 	} {
 		if got := call(c.path, c.language); !strings.Contains(got, c.contains) {

@@ -220,4 +220,9 @@ type Directory interface {
 	// Calendar is the working calendar of party ("member:<id>"; "" for the
 	// tenant's) on day (ADR-0028 D7).
 	Calendar(party string, day platform.Date) platform.Calendar
+	// Element is an element of the enterprise model live on day (ADR-0067 D3).
+	Element(id string, day platform.Date) (platform.ElementInfo, bool)
+	// Related are the elements joined to element by a relationship stereotype
+	// on day: those it points at (outgoing) or those pointing at it.
+	Related(element, stereotype string, outgoing bool, day platform.Date) []string
 }

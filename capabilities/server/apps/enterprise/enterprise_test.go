@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"platformkernel/kernel"
+
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 )
@@ -83,5 +85,67 @@ func TestOrgProjection(t *testing.T) {
 	}
 	if got := e.Model().Of("l1", Performs, true, "2026-02-01"); len(got) != 1 || got[0] != "cap-1" {
 		t.Fatalf("capabilities of l1 %v", got)
+	}
+	// what the host's Directory answers the apps (ADR-0067 D3)
+	if info, ok := e.Element("l1", "2026-02-01"); !ok || info.Stereotype != Organization || info.Kind != "line" {
+		t.Fatalf("element l1 %+v %v", info, ok)
+	}
+	if _, ok := e.Element("l1", "2019-01-01"); ok {
+		t.Fatal("l1 is live before it starts")
+	}
+	if got := e.Related("cap-1", Performs, false, "2026-02-01"); len(got) != 1 || got[0] != "l1" {
+		t.Fatalf("performers of cap-1 %v", got)
+	}
+}
+
+// Federation (ADR-0067 D5): a subsidiary publishes, the group imports read-only.
+func TestFederation(t *testing.T) {
+	sub := New("sub", platform.OrgSeed{})
+	grp := New("grp", platform.OrgSeed{})
+	at := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	do := func(e *Enterprise, tenant, schema, typ, id string, body any) *kernel.Error {
+		raw, _ := json.Marshal(body)
+		c := platform.Caller{Tenant: tenant, ID: "ann", App: ID, Roles: map[string]string{ID: Admin}}
+		_, err := e.Submit(c, &pb.Submission{TenantId: tenant, PrincipalId: "ann", Authority: ID, IdempotencyKey: schema + id, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Target: &pb.EntityRef{Type: typ, Id: id}, Payload: raw}, at)
+		return err
+	}
+	must := func(err *kernel.Error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("%v: %s", err, err.Message)
+		}
+	}
+	must(do(sub, "sub", SchemaElementAdd, ElementType, "co", map[string]any{"stereotype": Organization, "name": "Acme Industrial", "legal": true}))
+	must(do(sub, "sub", SchemaElementAdd, ElementType, "hr", map[string]any{"stereotype": Organization, "name": "HR"}))
+	must(do(sub, "sub", SchemaElementAdd, ElementType, "cap", map[string]any{"stereotype": Capability, "name": "Machining"}))
+	must(do(sub, "sub", SchemaRelationshipAdd, RelationshipType, "r1", map[string]any{"stereotype": Performs, "source": "co", "target": "cap"}))
+	published := true
+	for _, id := range []string{"co", "cap"} {
+		must(do(sub, "sub", SchemaElementEdit, ElementType, id, map[string]any{"published": published}))
+	}
+	slice, _ := sub.Read(platform.Caller{}, ReadPublished)
+	sl := slice.(Slice)
+	if len(sl.Elements) != 2 || len(sl.Relationships) != 1 || sl.Elements[0].Owner != "tenant:sub" {
+		t.Fatalf("slice %+v", sl)
+	}
+	must(do(grp, "grp", SchemaElementAdd, ElementType, "group", map[string]any{"stereotype": Organization, "name": "Acme Group", "legal": true}))
+	must(do(grp, "grp", SchemaKindAdd, ModelType, "legal", map[string]any{"name": "Ownership", "kind": "legal"}))
+	must(do(grp, "grp", SchemaSliceImport, ModelType, "sub", map[string]any{"slice": sl}))
+	must(do(grp, "grp", SchemaRelationshipAdd, RelationshipType, "own", map[string]any{"stereotype": Placement, "kind": "legal", "source": "co", "target": "group", "share": 1}))
+	if err := do(grp, "grp", SchemaElementEdit, ElementType, "co", map[string]any{"name": "Renamed"}); err == nil {
+		t.Fatal("a mirrored element was edited in the group")
+	}
+	if got := grp.Units("", "legal", "2026-02-01"); len(got) != 0 {
+		t.Fatalf("units %v", got)
+	}
+	if !grp.Model().below("legal", "group", "co", "2026-02-01") {
+		t.Fatal("the subsidiary is not below the group in the legal kind")
+	}
+	// a second import with the capability unpublished drops it, keeps the group's own ownership edge
+	sl.Elements = sl.Elements[:1]
+	sl.Relationships = nil
+	must(do(grp, "grp", SchemaSliceImport, ModelType, "sub-2", map[string]any{"slice": sl}))
+	if m := grp.Model(); len(m.Elements) != 2 || len(m.Relationships) != 1 || m.Relationships[0].ID != "own" {
+		t.Fatalf("after re-import: %d elements %+v", len(m.Elements), m.Relationships)
 	}
 }

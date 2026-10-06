@@ -142,7 +142,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	if !c.Replaying && !l.Catalog.Enabled(s.GetSchema().GetName()) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
-	rules = l.checked(c, s, rules)
+	rules = l.checked(c, s, now, rules)
 	probing := c.rt != nil && c.rt.Probing()
 	refused := false // the kernel's policy step said no
 	changes := l.changes
@@ -207,7 +207,7 @@ func (l *Ledger) denied(c Caller, s *pb.Submission) *kernel.Error {
 // checked puts before rules the check of the payload's declared choices and
 // references (ADR-0028 D5): after the policy, as the kernel's order has it
 // (K6 T2); a replay does not check again.
-func (l *Ledger) checked(c Caller, s *pb.Submission, rules func() (func(*pb.ChangeRecord), *kernel.Error)) func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, rules func() (func(*pb.ChangeRecord), *kernel.Error)) func() (func(*pb.ChangeRecord), *kernel.Error) {
 	declared, _ := l.Catalog.Action(s.GetSchema().GetName())
 	return func() (func(*pb.ChangeRecord), *kernel.Error) {
 		if !c.Replaying {
@@ -220,6 +220,11 @@ func (l *Ledger) checked(c Caller, s *pb.Submission, rules func() (func(*pb.Chan
 				}
 				if len(f.Choices) > 0 && !slices.Contains(f.Choices, v) || f.Ref != "" && c.rt != nil && !c.rt.Readable(c, f.Ref+"/"+v) {
 					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				}
+				if f.Ref == "enterprise.element" && f.Stereotype != "" && c.rt != nil {
+					if el, ok := c.rt.Element(c, v, now); !ok || el.Stereotype != f.Stereotype {
+						return nil, Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} names {element}, which is not a {stereotype}", f.Name, v, f.Stereotype)
+					}
 				}
 			}
 		}

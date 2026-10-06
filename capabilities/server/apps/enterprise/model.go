@@ -3,6 +3,7 @@ package enterprise
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 
 	"platformserver/platform"
 )
@@ -11,7 +12,7 @@ import (
 // typed by UAF stereotypes, in valid time, plus the views drawn over them.
 // What ADR-0012 called units, structures, edges and memberships are the
 // Personnel-domain corner of it: «ActualOrganization» elements, relationship
-// kinds, «ActualOrganizationRelationship» and «ActualOrganizationRole».
+// kinds, «ActualResourceRelationship» and «ActualOrganizationRole».
 
 const (
 	// Stereotypes the platform itself relies on (all UAF 1.3).
@@ -24,12 +25,12 @@ const (
 	Capability   = "Capability"
 	Goal         = "EnterpriseGoal"
 	// Relationship stereotypes.
-	Placement  = "ActualOrganizationRelationship" // unit under parent, in a kind
-	Membership = "ActualOrganizationRole"         // party (member:<id> or element id) in an organisation, with a role
-	FillsPost  = "FillsPost"                      // person holds post
-	Performs   = "IsCapableToPerform"             // organisation/resource has capability
-	Owns       = "ResponsibleFor"                 // organisation answers for resource/location/project
-	Typed      = "typedBy"                        // instance → its type element (platform, not UAF)
+	Placement  = "ActualResourceRelationship" // unit under parent, in a kind
+	Membership = "ActualOrganizationRole"     // party (member:<id> or element id) in an organisation, with a role
+	FillsPost  = "FillsPost"                  // person holds post
+	Performs   = "IsCapableToPerform"         // organisation/resource has capability
+	Owns       = "ResponsibleFor"             // organisation answers for resource/location/project
+	Typed      = "typedBy"                    // instance → its type element (platform, not UAF)
 )
 
 type Date = platform.Date
@@ -56,7 +57,8 @@ type Element struct {
 	Until      Date           `json:"until,omitempty"`
 	Closed     string         `json:"closed,omitempty"`
 	Calendar   string         `json:"calendar,omitempty"`
-	Owner      string         `json:"owner,omitempty"` // "tenant:<id>" when federated in from another tenant (read-only here)
+	Owner      string         `json:"owner,omitempty"`     // "tenant:<id>" when federated in from another tenant (read-only here)
+	Published  bool           `json:"published,omitempty"` // shared with the tenants this one federates with (ADR-0067 D5)
 	Properties map[string]any `json:"properties,omitempty"`
 }
 
@@ -122,13 +124,13 @@ func (m *Model) relationship(id string) *Relationship {
 }
 
 // live says the element exists on day: open, or not yet closed.
-func (m *Model) live(id string, day Date) bool {
+func (m Model) live(id string, day Date) bool {
 	e := m.element(id)
 	return e != nil && activeOn(e.From, e.Until, day)
 }
 
 // below reports whether unit sits (transitively) under ancestor in kind on day.
-func (m *Model) below(kind, ancestor, unit string, day Date) bool {
+func (m Model) below(kind, ancestor, unit string, day Date) bool {
 	for seen := map[string]bool{}; unit != "" && !seen[unit]; {
 		seen[unit] = true
 		i := slices.IndexFunc(m.Relationships, func(r Relationship) bool {
@@ -147,7 +149,7 @@ func (m *Model) below(kind, ancestor, unit string, day Date) bool {
 
 // units are the organisations party belongs to on day, directly or through a
 // member organisation, and every one below them in kind ("" for none below).
-func (m *Model) units(party, kind string, day Date) []string {
+func (m Model) units(party, kind string, day Date) []string {
 	var out []string
 	add := func(u string) bool {
 		if slices.Contains(out, u) {
@@ -258,4 +260,61 @@ func cutPrefix(s, p string) (string, bool) {
 		return s[len(p):], true
 	}
 	return s, false
+}
+
+// Slice is what one tenant publishes to another (ADR-0067 D5): the elements
+// it marked published, with the relationships among them. The receiving
+// tenant imports it read-only, owned by "tenant:<id>", and may relate its own
+// elements to them (a subsidiary under the group, a shared capability).
+type Slice struct {
+	Tenant        string         `json:"tenant"`
+	UAF           string         `json:"uaf"`
+	Elements      []Element      `json:"elements"`
+	Relationships []Relationship `json:"relationships"`
+}
+
+// Published is the slice this model offers.
+func (m Model) Published(tenant string) Slice {
+	out := Slice{Tenant: tenant, UAF: m.UAF, Elements: []Element{}, Relationships: []Relationship{}}
+	in := map[string]bool{}
+	for _, e := range m.Elements {
+		if e.Published && e.Owner == "" {
+			e.Owner, e.Published = "tenant:"+tenant, false
+			out.Elements = append(out.Elements, e)
+			in[e.ID] = true
+		}
+	}
+	for _, r := range m.Relationships {
+		if in[r.Source] && in[r.Target] {
+			r.ID = "fed:" + tenant + ":" + r.ID
+			out.Relationships = append(out.Relationships, r)
+		}
+	}
+	return out
+}
+
+// Import replaces what this model mirrors from a tenant with the slice:
+// elements and relationships owned there; the tenant's own relationships to
+// mirrored elements are kept while their ends still exist.
+func (m *Model) Import(s Slice) {
+	owner := "tenant:" + s.Tenant
+	kept := m.Elements[:0]
+	for _, e := range m.Elements {
+		if e.Owner != owner {
+			kept = append(kept, e)
+		}
+	}
+	m.Elements = append(kept, s.Elements...)
+	ids := map[string]bool{}
+	for _, e := range m.Elements {
+		ids[e.ID] = true
+	}
+	prefix := "fed:" + s.Tenant + ":"
+	rels := m.Relationships[:0]
+	for _, r := range m.Relationships {
+		if !strings.HasPrefix(r.ID, prefix) && ids[r.Source] && (ids[r.Target] || strings.HasPrefix(r.Source, "member:")) {
+			rels = append(rels, r)
+		}
+	}
+	m.Relationships = append(rels, s.Relationships...)
 }

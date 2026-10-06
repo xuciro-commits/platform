@@ -16,7 +16,7 @@ export const RELATIONSHIP = "enterprise.relationship";
 export const VIEW = "enterprise.view";
 export const MODEL = "enterprise.model";
 
-export const PLACEMENT = "ActualOrganizationRelationship";
+export const PLACEMENT = "ActualResourceRelationship";
 export const MEMBERSHIP = "ActualOrganizationRole";
 export const FILLS_POST = "FillsPost";
 export const PERFORMS = "IsCapableToPerform";

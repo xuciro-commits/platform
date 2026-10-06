@@ -67,6 +67,20 @@ func (r runtime) Units(c platform.Caller, structure string, now time.Time) []str
 	return r.t.directory.Units("member:"+c.ID, structure, now.UTC().Format(time.DateOnly))
 }
 
+func (r runtime) Element(c platform.Caller, id string, now time.Time) (platform.ElementInfo, bool) {
+	if r.t.directory == nil {
+		return platform.ElementInfo{}, false
+	}
+	return r.t.directory.Element(id, now.UTC().Format(time.DateOnly))
+}
+
+func (r runtime) Related(c platform.Caller, element, stereotype string, outgoing bool, now time.Time) []string {
+	if r.t.directory == nil {
+		return nil
+	}
+	return r.t.directory.Related(element, stereotype, outgoing, now.UTC().Format(time.DateOnly))
+}
+
 func (r runtime) Links(c platform.Caller, entity string) []string {
 	if r.t.linker == nil {
 		return nil
