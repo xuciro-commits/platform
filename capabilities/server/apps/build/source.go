@@ -55,10 +55,12 @@ type Source struct {
 	Header string `json:"header,omitempty" title:"Request header" help:"One header such as Authorization: Bearer …"`
 	// Path is the dotted path to the array of rows inside the answer; empty: the answer is the array.
 	Path string `json:"path,omitempty" title:"Rows at" help:"Dotted path to the array, such as data.items; empty when the answer is the array"`
-	// Object is the tenant's type the rows become; Key the row field that is the record's id.
-	Object  string        `json:"object" field:"required" title:"Target object"`
-	Key     string        `json:"key" field:"required" title:"Row id field"`
-	Mapping []SourceField `json:"mapping" title:"Field mapping"`
+	// Dataset keeps the rows as they came (ADR-0071); a pipeline maps them later. Otherwise Object is the
+	// tenant's type the rows become directly, Key the row field that is the record's id.
+	Dataset string        `json:"dataset,omitempty" ref:"build.dataset" title:"Target dataset"`
+	Object  string        `json:"object,omitempty" title:"Target object"`
+	Key     string        `json:"key,omitempty" title:"Row id field"`
+	Mapping []SourceField `json:"mapping,omitempty" title:"Field mapping"`
 	// Every is a period such as 15m or 24h; empty: pulled only when asked.
 	Every string `json:"every,omitempty" title:"Pull every" help:"A period such as 15m, 1h or 24h; empty: only when asked"`
 	State string `json:"state" field:"readonly"`
@@ -179,6 +181,15 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 	if s.Since != "" && !identifier(s.Since) {
 		return refuse("The incremental column is a plain identifier")
 	}
+	if s.Dataset != "" {
+		if s.Object != "" {
+			return refuse("A source feeds either a dataset or an object")
+		}
+		if _, ok := platform.Get[Dataset](c, s.Dataset); !ok {
+			return refuse("The target dataset does not exist")
+		}
+		return checkEvery(s.Every)
+	}
 	info, ok := b.lookupEntity(s.Object)
 	if !ok {
 		return refuse("The target object {object} is not installed", s.Object)
@@ -197,10 +208,14 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 		}
 		seen[m.To] = true
 	}
-	if s.Every != "" {
-		every, parseErr := time.ParseDuration(s.Every)
-		if parseErr != nil || every < time.Minute || every > 366*24*time.Hour {
-			return refuse("A source pulls every period between 1m and a year, such as 15m, 1h or 24h")
+	return checkEvery(s.Every)
+}
+
+func checkEvery(every string) *kernel.Error {
+	if every != "" {
+		d, parseErr := time.ParseDuration(every)
+		if parseErr != nil || d < time.Minute || d > 366*24*time.Hour {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source pulls every period between 1m and a year, such as 15m, 1h or 24h")
 		}
 	}
 	return nil
