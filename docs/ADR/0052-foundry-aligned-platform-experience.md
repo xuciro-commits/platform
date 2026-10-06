@@ -262,12 +262,12 @@ My work（收件箱/审批/申请/通知）不是独立应用：它是 Home 的�
 | 批 | 范围 | 可见结果 / 停止条件 | 检查 |
 |---|---|---|---|
 | **P0 Shell 与门户**（本 ADR 随附） | `@platform/ui` `Workspace` → Rail 布局；workspace 新增 Home、Applications portal、Favorites、Recent；`AppUI.category`；门户分类；旧 surface 路由译码 | 所有现有 view 可从新 Rail 到达；Home 为默认页；收藏/最近可用；`entryPoints` 双下拉移除 | web-check |
-| P1 工作区装配拆分 | `App.tsx` 拆成 session/host/registry/shell；`definePlatformApp` 与 view 命名空间；`decodeLegacy` | 行为等价；路由归属由注册表回答；旧链接测试 | web-check + 成组 web |
-| P2 Ontology 与 Object Explorer | 对象中心工作台（§3.3）；Object Explorer 统一入口；记录标准布局与 Open in | 构建者在一页完成对象/属性/链接/动作；业务成员从记录 Open in | web-check + 成组 web |
-| P3 Build 与 Operate 分家 | Workshop/AI Functions/Agents/Automate/Code/Evals/Candidates 作为平台应用；Control Panel 四分区；Runs 独立 | Studio 旧 nav 与 Tenant console 旧 nav 删除 | web-check + 成组 web |
-| P4 Data Connection 与 Lineage | 与 WorkQueue #134 合流；资源依赖图 | 首个接入在 Data Connection 完成；候选闭包可视化 | capabilities + web |
-| P5 Packages / Environments / Host Console | 与 WorkQueue #141 第 5–7 批合流 | 门户对应分类出现并可操作 | capabilities + deploy |
-| P6 收口 | 两行业路线、旧路径移除、文档合并 | ADR-0047 M6 验收 | 全量 |
+| P1 工作区装配拆分（已完成，§11） | `App.tsx` 拆成 session/host/registry/shell；`definePlatformApp` 与 view 命名空间；`decodeLegacy` | 行为等价；路由归属由注册表回答；旧链接测试 | web-check + 成组 web |
+| P2 Ontology 与 Object Explorer（已完成，§11） | 对象中心工作台（§3.3）；Object Explorer 统一入口；记录标准布局与 Open in | 构建者在一页完成对象/属性/链接/动作；业务成员从记录 Open in | web-check + 成组 web |
+| P3 Build 与 Operate 分家（已完成，§11） | Workshop/AI Functions/Agents/Automate/Code/Evals/Candidates 作为平台应用；Control Panel 四分区；Runs 独立 | Studio 旧 nav 与 Tenant console 旧 nav 删除 | web-check + 成组 web |
+| P4 Data Connection 与 Lineage（前端已完成，§11） | 与 WorkQueue #134 合流；资源依赖图 | 首个接入在 Data Connection 完成；候选闭包可视化 | capabilities + web |
+| P5 Packages / Environments / Host Console（前端已完成，§11） | 与 WorkQueue #141 第 5–7 批合流 | 门户对应分类出现并可操作 | capabilities + deploy |
+| P6 收口（前端已完成，§11） | 两行业路线、旧路径移除、文档合并 | ADR-0047 M6 验收 | 全量 |
 
 ---
 
@@ -279,3 +279,19 @@ My work（收件箱/审批/申请/通知）不是独立应用：它是 Home 的�
 - `@platform/app`：`AppUI.category`、`PlatformAppCategory`；`WorkspaceSurface` 保留为类型别名供译码期使用。
 - `web/apps/workspace`：`shell/Home.tsx`（搜索、我的工作、最近、收藏、推广应用）、`shell/Applications.tsx`（门户）、`shell/navigation.ts`（recent/favorites 持久化）、`registry.ts`（包表 → 分类 → 投影）；`App.tsx` 改为装配，`entryPoints`/`chooseSurface` 删除；`#/home` 译码到 `applications`。
 - `@platform/catalog-app`、`@pkg/build`、`@pkg/platform`：声明 `category`，不改 view。
+
+## 11. P1–P6 实现摘要（As built，2026-10-06）
+
+一次提交完成 §9 的六个批次中不需要后端改动的全部前端部分；后端能力（Data Connection 的新接入类型、Environments 的宿主侧 API）仍归 WorkQueue #134 / #141，门户入口已就位。
+
+**P1 工作区装配拆分。** `web/apps/workspace/src/App.tsx` 从 412 行降为组合根：`session/`（`identity.ts` 记忆的身份与租户、`Problems.tsx` 恢复页与拒绝页、`ReleaseInformation.tsx`）、`host/`（`packages.ts` 包表；`usePlatformHost.ts` 读取、决策、outbox、record source、`opens` 表、`/v1/host/me` 探测）、`shell/legacy.ts`（`shellViews`、`legacyRoute` 退役路由重定向、`legacyProjection` 旧 `surface` 译码）。**决定：不引入 view 命名空间**——view id 在整个工作区仍然唯一（`#/<view>`），由 `owner` 表回答归属；命名空间会迫使所有编辑器与 e2e 改路由却不带来新能力。退役路由：`tenant-overview` → `portal?workspace=admin`，`launcher` → `portal`。
+
+**P2 Ontology 与 Object Explorer。** `@pkg/build` 不再是一个"Application Studio"，而是七个门户应用（§3.3）：`ontology`（Object types = 既有对象中心 `ModelWorkbench`、Relationships、Shared properties、Queries；Explore 分组链接 Object Explorer 与 Lineage）、`workshop`（Pages、Templates）、`automate`（Workflows，持 flow 角色时附 Workflow runs）、`ai-functions`、`code`（developer 分类）、`releases`（Release review、Test a candidate；publisher 角色只装载此应用）、`build`=**Projects**（All projects、Shared resources、Templates、Discover capabilities；默认导出，保留 `surface:"studio"` 以维持当前项目上下文 nav）。工作区新增 Shell 视图 `explorer`（`shell/Explorer.tsx`：左侧按应用分组的对象类型列表 + 右侧 `RecordList`，`?type=` 直达）与 `lineage`。`@platform/app` 新增 `OpenIn`（`OpenIn.tsx`）并接入 `RecordDetail` 的动作区：Object Explorer / Object type in Ontology（构建者且 `build` 对象）/ 页面（`page.object` 命中）/ Lineage；`@platform/ui` 新增 `ActionMenu`（下拉命令按钮，与 `CommandMenu` 共用 `ContextCommand`）。
+
+**P3 Build 与 Operate 分家。** `@pkg/platform` 从一个 15 项单列的"Tenant console"拆为：`platform`=**Control Panel**（Identity and access / Packages and capabilities / Models / Audit 四分区，概览页按分区成卡）、`runs`（Workflow runs、Automation and deliveries；operate 分类）、`data-connection`（Integrations=连接器与 Webhook、Lineage；ontology 分类）、`agents`（Agents、Evaluations）、`ai`、`knowledge`、`host-console`。Studio 平铺 nav 与 Tenant console 单列 nav 均已删除；Delivery 不再同时出现在 Studio 与 Tenant console 两处。
+
+**P4 Data Connection 与 Lineage。** `shell/Lineage.tsx` 以 `Definition.requires` 画 `@platform/ui` `Graph`：按应用看全部资源，或聚焦一项资源的上下游闭包；节点打开定义/页面。Data Connection 应用承载既有 Integrations 并链接 Lineage；新的接入类型仍待 #134。
+
+**P5 Packages / Environments / Host Console。** Packages 即 Control Panel 的 Installed packages（`/v1/packages`）。**Host Console** 作为 govern 分类的宿主级应用（`@pkg/platform/src/host.tsx`）：租户总览（`GET /v1/host/overview`，健康/生命周期/失败工作/候选/支持会话/生效发布）、租户详情（受信任制品、支持会话、迁移清单；Suspend/Resume/Decommission 带原因；开启支持会话）、Promote a release（`POST …/promotions`）、Migrate records（`POST …/migrations`）——即 Environments 的前端。工作区仅在 `/v1/host/me` 对当前主体应答时显示它（`usePlatformHost.hostAdmin`）；不改任何后端路由。
+
+**P6 收口。** e2e 选择器改为新应用名（Projects / Control Panel / Runs / Releases；项目上下文从下拉改为 nav 分组）；Catalog 提示语、zh-CN 词条（ui 共享词 + 各包）补齐；`scripts/escapes.sh` 对本次新文件为零新增（Home/Applications/Explorer 改用 `Button` 与 `role="region"`）；Catalog 产物重生成。未做：两行业路线的页面迁移（ADR-0047 M6）仍按 WorkQueue 推进。

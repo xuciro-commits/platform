@@ -149,4 +149,7 @@ register("zh-CN", {
   "This page is not open to you.": "这个页面没有对你开放。",
   "It may have been withdrawn, or it shows records you may not read. Whoever builds your organisation's applications can tell you which.": "它可能已被收回，或者它显示的记录你无权查看。负责搭建本组织应用的人可以告诉你是哪一种。",
   "Back to your apps": "回到你的应用",
+  "Every asset of {app}": "{app} 的全部资源",
+  "Filter object types": "筛选对象类型",
+  "What each installed asset is built from: applications over pages, pages over object types, functions and queries over the types they read. Click a node to open it.": "每个已安装资源由什么构成：应用建于页面之上，页面建于对象类型之上，函数与查询建于其读取的类型之上。点击节点即可打开。",
 });

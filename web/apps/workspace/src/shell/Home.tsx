@@ -38,13 +38,12 @@ export function Home() {
     <div className="mx-auto grid max-w-6xl gap-6">
       <header className="grid gap-3">
         <h1 className="text-xl font-semibold tracking-tight">{greeting.replace("{name}", me.principalId)}</h1>
-        <button type="button" onClick={palette}
-          className="flex h-10 w-full max-w-2xl items-center gap-2 rounded-md border border-border bg-surface px-3 text-left text-sm text-muted hover:text-foreground">
+        <Button onClick={palette} className="h-10 w-full max-w-2xl justify-start gap-2 px-3 font-normal text-muted hover:text-foreground">
           <Search className="size-4" /><span>{t("Search records, applications and commands…")}</span><kbd className="ml-auto text-xs">⌘K</kbd>
-        </button>
+        </Button>
       </header>
 
-      <section aria-labelledby="home-work">
+      <div role="region" aria-labelledby="home-work">
         <h2 id="home-work" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t("My work")}</h2>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2">
           <Count icon={<Inbox />} label={t("Inbox")} count={inbox?.length} route={{ view: "inbox" }} hint={t("Approvals and tasks waiting for you")} />
@@ -52,10 +51,10 @@ export function Home() {
           <Count icon={<Bell />} label={t("Notifications")} count={notifications?.filter((n) => !n.read).length} route={{ view: "notifications" }} hint={t("Unread")} />
           {can("agent.run.start") && <Count icon={<Star />} label={t("Assistant")} count={undefined} route={{ view: "assistant" }} hint={t("Ask about your records and tasks")} />}
         </div>
-      </section>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section aria-labelledby="home-recent">
+        <div role="region" aria-labelledby="home-recent">
           <h2 id="home-recent" className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted"><Clock className="size-3.5" />{t("Recent")}</h2>
           <Card className="grid gap-0.5 p-1">
             {recent.length === 0 && <p className="p-2 text-sm text-muted">{t("Nothing opened yet. What you open shows up here.")}</p>}
@@ -66,18 +65,18 @@ export function Home() {
               </Button>
             ))}
           </Card>
-        </section>
-        <section aria-labelledby="home-favorites">
+        </div>
+        <div role="region" aria-labelledby="home-favorites">
           <h2 id="home-favorites" className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted"><Star className="size-3.5" />{t("Favorites")}</h2>
           <Card className="grid gap-0.5 p-1">
             {starred.length === 0 && <p className="p-2 text-sm text-muted">{t("Star an application to keep it here.")}</p>}
             {starred.map((a) => <ApplicationTile key={a.id} app={a} compact />)}
           </Card>
-        </section>
+        </div>
       </div>
 
       {business.length > 0 && (
-        <section aria-labelledby="home-apps">
+        <div role="region" aria-labelledby="home-apps">
           <div className="mb-2 flex items-center justify-between">
             <h2 id="home-apps" className="text-xs font-semibold uppercase tracking-wide text-muted">{categories[0]!.label()}</h2>
             <Button variant="link" size="sm" onClick={() => open({ view: "portal" })}>{t("All applications")}<ArrowRight /></Button>
@@ -85,15 +84,15 @@ export function Home() {
           <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
             {business.map((a) => <ApplicationTile key={a.id} app={a} role={me.apps.find((e) => e.id === a.id)?.role} />)}
           </div>
-        </section>
+        </div>
       )}
       {tools.length > 0 && (
-        <section aria-labelledby="home-tools">
+        <div role="region" aria-labelledby="home-tools">
           <h2 id="home-tools" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t("Platform tools")}</h2>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-1">
             {tools.map((a) => <ApplicationTile key={a.id} app={a} compact />)}
           </div>
-        </section>
+        </div>
       )}
     </div>
   );

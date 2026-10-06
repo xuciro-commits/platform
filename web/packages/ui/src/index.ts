@@ -68,6 +68,7 @@ export { useViewVisible } from "./shell/ViewVisibility";
 export {Spacer,RegionPresentation,LayoutRegion,LayoutStack,type LayoutSize} from "./layout/LayoutRegion";
 
 export {CommandMenu,type ContextCommand} from "./components/CommandMenu";
+export { ActionMenu } from "./components/ActionMenu";
 
 export {FacetChoices} from "./fields/FacetChoices";
 

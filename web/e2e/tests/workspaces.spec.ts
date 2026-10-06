@@ -32,7 +32,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await page.getByRole("menuitemradio", { name: "Knowledge", exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Documents", exact: true })).toBeVisible();
 
-  await switchWorkspace(page, "Application Studio");
+  await switchWorkspace(page, "Projects");
   await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Shared resources", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Shared resources", exact: true })).toBeVisible();
   await page.goto(`/#/application?id=${appID}`); // an existing deep link
@@ -42,20 +42,24 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await page.getByRole("button", { name: "Activate release", exact: true }).click();
   await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
 
-  await switchWorkspace(page, "Tenant console");
+  // Operations are their own applications now (ADR-0052 P3): Control Panel governs,
+  // Runs operates, Releases delivers. None of them carries business navigation.
+  await switchWorkspace(page, "Control Panel");
   const nav = page.getByRole("navigation", { name: "Main", exact: true });
-  await expect(nav.getByRole("button", { name: "Workflow runs", exact: true })).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Members", exact: true })).toBeVisible();
   await expect(nav.getByRole("button", { name: "Documents", exact: true })).toHaveCount(0);
+  await switchWorkspace(page, "Runs");
+  await expect(nav.getByRole("button", { name: "Workflow runs", exact: true })).toBeVisible();
+  await switchWorkspace(page, "Releases");
   await nav.getByRole("button", { name: "Release review", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Switch application", exact: true })).toContainText("Tenant console");
-  await nav.getByRole("button", { name: "Workflow runs", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Switch application", exact: true })).toContainText("Releases");
   if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("tenant-operations.png"), fullPage: true });
 
   const operatorContext = await browser.newContext({ baseURL: "http://127.0.0.1:18496", locale: "en-US" });
   try {
     const operator = await operatorContext.newPage();
     await open(operator, "desk", "/home");
-    await expect(operator.getByRole("button", { name: "Application Studio", exact: true })).toHaveCount(0);
+    await expect(operator.getByRole("button", { name: "Projects", exact: true })).toHaveCount(0);
     await operator.getByRole("button", { name: "WMS entry probe", exact: true }).click();
     await expect(operator.getByRole("heading", { name: "Receiving workspace", exact: true })).toBeVisible();
     const recordID = fresh("RECEIPT");

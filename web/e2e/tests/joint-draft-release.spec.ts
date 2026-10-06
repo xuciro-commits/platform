@@ -25,9 +25,7 @@ for (const fixture of [
       // Construction starts with saved drafts, without a preliminary install.
       // Both the page and the qualified Object ref open their original editors.
       await open(page, fixture.builder, `/application?id=${applicationID}`);
-      await page.getByRole("button", { name: "Studio applications", exact: true }).click();
-      await expect(page.getByRole("menuitemradio", { name: new RegExp(`${fixture.title} application$`) })).toBeVisible();
-      await page.keyboard.press("Escape");
+      await expect(page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: new RegExp(`${fixture.title} application$`) })).toBeVisible();
       await page.getByRole("button", { name: "+ Create page", exact: true }).click();
       const create = page.getByRole("dialog", { name: "Create page", exact: true });
       await create.getByLabel(/^ID/).fill(pageID);

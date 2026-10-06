@@ -6,7 +6,7 @@
 
 主线是应用设计台 → 候选测试与发布 → 业务入口 → 运行与诊断。按整条任务路线的断点排序，优先把已有后端能力接成可操作任务，再补数据接入与通用表单能力。WMS 继续作为受控装配探针，不扩写行业专用应用；不能据此宣称平台已具备完整 ERP/MES 的行业语义。
 
-功能架构与入口归 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md)，对标 Palantir 的 Shell/门户/功能块重构方案与批次归 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md)（P0 Rail、Home 与 Applications 门户已落地；P1 工作区装配拆分、P2 Ontology 与 Object Explorer、P3 Build/Operate 分家按其 §9 顺序与下表合流），联合草稿与直接安装退场归 [ADR-0048](ADR/0048-joint-draft-candidates-and-direct-install-retirement.md)。后端已有独立 Publisher/Auditor、项目编辑委派、包生命周期、环境晋级/迁移及宿主控制台 API；这些 API 和 Go 检查不等于对应前端任务已经可用。当前前端由 Builder 加载工坊设计，Publisher 通过独立交付入口审查封存定义并激活，Auditor 可进入成员/包/审计的只读任务；项目委派、应用关联运行与其余管理任务尚未接齐。
+功能架构与入口归 [ADR-0047](ADR/0047-platform-composition-and-workspaces.md)，对标 Palantir 的 Shell/门户/功能块重构方案与批次归 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md)（P0–P6 的前端部分已落地，见其 §10–§11：Rail/Home/门户、工作区装配拆分、Ontology 与 Object Explorer、Build/Operate 分家、Lineage、Host Console；Data Connection 新接入类型与 Environments 的后端仍按下表 #134/#141 推进），联合草稿与直接安装退场归 [ADR-0048](ADR/0048-joint-draft-candidates-and-direct-install-retirement.md)。后端已有独立 Publisher/Auditor、项目编辑委派、包生命周期、环境晋级/迁移及宿主控制台 API；这些 API 和 Go 检查不等于对应前端任务已经可用。当前前端由 Builder 加载工坊设计，Publisher 通过独立交付入口审查封存定义并激活，Auditor 可进入成员/包/审计的只读任务；项目委派、应用关联运行与其余管理任务尚未接齐。
 
 **交付规则：** 按完整批次交付：适用检查通过后合入主线、更新两 Docker 宿主，再推进下一批；分支实现不计为主线交付，已有检查仅在冲突或实质变化时补受影响部分。
 

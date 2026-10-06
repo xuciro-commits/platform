@@ -136,7 +136,7 @@ export function Catalog({ initialID, initialLayer, initialMode = "builder" }: { 
             {!host && <Input aria-label={t("Workspace URL")} className="w-64" value={workspaceURL} placeholder={t("Workspace URL")}
               onChange={(e) => setWorkspaceURL(e.target.value)} />}
             <Button variant="primary" disabled={!!host && host.role("build") !== "builder"} onClick={() => openStudio(entry)}
-              title={host && host.role("build") !== "builder" ? t("Only builders can open Application Studio.") : undefined}>
+              title={host && host.role("build") !== "builder" ? t("Only builders can open Projects.") : undefined}>
               {t(entry.template ? "Create in Studio" : "Open in Studio")}
             </Button>
             <span className="text-xs text-muted">{t("Creates or edits a controlled draft; nothing is published automatically.")}</span>

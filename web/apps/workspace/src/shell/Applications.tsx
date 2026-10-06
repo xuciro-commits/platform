@@ -22,10 +22,10 @@ export function ApplicationTile({ app, role, compact = false }: { app: PlatformA
           {!compact && (app.description || role) && <span className="line-clamp-2 text-xs text-muted">{app.description ?? role}</span>}
         </span>
       </Button>
-      <button type="button" aria-label={starred ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={starred} onClick={() => toggleFavorite(app.id)}
-        className={`absolute right-1.5 top-1.5 rounded-sm p-1 hover:bg-row-hover ${starred ? "text-[var(--tone-warning)]" : "text-muted opacity-0 focus-visible:opacity-100 group-hover:opacity-100"}`}>
+      <Button variant="ghost" size="icon" aria-label={starred ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={starred} onClick={() => toggleFavorite(app.id)}
+        className={`absolute right-1 top-1 size-6 ${starred ? "text-[var(--tone-warning)]" : "text-muted opacity-0 focus-visible:opacity-100 group-hover:opacity-100"}`}>
         <Star className="size-3.5" fill={starred ? "currentColor" : "none"} />
-      </button>
+      </Button>
     </div>
   );
 }
@@ -54,23 +54,23 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
         </div>
       </div>
       {favorites.length > 0 && !query && (
-        <section className="mb-5">
+        <div className="mb-5">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t("Favorites")}</h2>
           <div className="grid max-w-6xl grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
             {apps.filter((a) => favorites.includes(a.id)).map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}
           </div>
-        </section>
+        </div>
       )}
       {ordered.map((category) => {
         const inCategory = apps.filter((a) => a.category === category.id);
         if (inCategory.length === 0) return null;
         return (
-          <section key={category.id} className="mb-5">
+          <div key={category.id} className="mb-5">
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{category.label()}</h2>
             <div className="grid max-w-6xl grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
               {inCategory.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}
             </div>
-          </section>
+          </div>
         );
       })}
       {apps.length === 0 && <p className="text-sm text-muted">{t("No application matches.")}</p>}

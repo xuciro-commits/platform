@@ -20,6 +20,8 @@ import { NewActions, RecordActions, useTransition, useRecordArchive } from "./ac
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 export { ComputeCall } from "./capability";
 export { FlowInstanceView } from "./flows";
+export { OpenIn, type OpenInPlace } from "./OpenIn";
+import { OpenIn as OpenInMenu } from "./OpenIn";
 export { pageDocumentFromSections } from "./pageDocument";
 export { semanticModelView, semanticPropertyTypes, assetBindingKey, propertyKey, relationKey, type SemanticPropertyType, type PropertyRef, type ReferenceRelationRef, type SemanticRelation, type SemanticModelView } from "./semantic/model";
 export { SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect } from "./semantic/Selector";
@@ -343,6 +345,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
           <Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" }, { window: "float" })}>{t("Back to inbox")}</Button>
           {(["work.approval", "work.task", "flow.instance"].includes(type) && typeof (r.target ?? r.ref ?? r.subject) === "string") && <Button size="sm" variant="ghost" onClick={() => openRecord(String(r.target ?? r.ref ?? r.subject))}>{t("Open related record")}</Button>}
           <RecordActions type={type} record={r} allowed={advice ? (allowed ?? catalog.map((a) => a.schema)).filter((schema) => schema !== advice!.action) : allowed} />
+          <OpenInMenu type={type} />
           {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>{t("Ask the assistant")}</Button>}
           {can(`${type}.edit`) && (!allowed || allowed.includes(`${type}.edit`)) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>{t("Edit")}</Button>}
           {can(`${type}.archive`) && (!allowed || allowed.includes(`${type}.archive`)) && !r.archived && <Button size="sm" variant="danger" onClick={() => archive.take(r)}>{t("Archive")}</Button>}

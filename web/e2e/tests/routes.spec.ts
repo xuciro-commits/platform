@@ -89,7 +89,7 @@ test("route 20: field security", async ({ page, request }) => {
 test("route 29: define an object, publish it, use it", async ({ page }) => {
   const name = `visit${Date.now().toString(36).slice(-5)}`;
   await open(page, "manager", "/home");
-  await switchWorkspace(page, "Application Studio"); // the app, from the launcher
+  await switchWorkspace(page, "Projects"); // the app, from the launcher
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Shared resources", exact: true }).click();
   await page.getByRole("button", { name: "Objects and relationships", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Objects" })).toBeVisible();
@@ -131,7 +131,7 @@ test("route 30: compose a page of widgets and use it", async ({ page, request })
   await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Composed " + account, kind: "company" });
   await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Composed offsite " + opp });
   await open(page, "manager", "/home");
-  await switchWorkspace(page, "Application Studio");
+  await switchWorkspace(page, "Projects");
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Shared resources", exact: true }).click();
   await page.getByRole("button", { name: "Pages", exact: true }).click();
   await page.getByRole("button", { name: "Create page" }).click();
@@ -186,7 +186,7 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Handed offsite " + opp });
   // A page to hand over, composed as in route 30.
   await open(page, "manager", "/home");
-  await switchWorkspace(page, "Application Studio");
+  await switchWorkspace(page, "Projects");
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Shared resources", exact: true }).click();
   await page.getByRole("button", { name: "Pages", exact: true }).click();
   await page.getByRole("button", { name: "Create page" }).click();
@@ -235,7 +235,7 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   await expect(nav.getByRole("button", { name: "Objects", exact: true })).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "Definitions", exact: true })).toHaveCount(0);
   // Old unambiguous page links also resolve membership, even from Studio.
-  await switchWorkspace(page, "Application Studio");
+  await switchWorkspace(page, "Projects");
   await page.goto(`/#/page?app=build&kind=page&name=${pageName}`);
   await expect(nav.getByRole("button", { name: "Handed offsites", exact: true })).toHaveCount(1);
 });

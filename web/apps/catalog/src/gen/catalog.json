@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:93b65bcf81bfe94a",
+  "revision": "sha256:b0eafe1b33477b3f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -539,7 +539,8 @@
       ],
       "source": "web/packages/app/src/index.tsx",
       "exports": [
-        "RecordDetail"
+        "RecordDetail",
+        "OpenIn"
       ],
       "example": "RecordDetailExample",
       "constraints": [
@@ -1499,7 +1500,8 @@
       "layer": 2,
       "source": "web/packages/ui/src/components/CommandMenu.tsx",
       "exports": [
-        "CommandMenu"
+        "CommandMenu",
+        "ActionMenu"
       ],
       "example": "ContextCommands",
       "authority": "api",
@@ -4481,6 +4483,10 @@
     }
   },
   "consumers": {
+    "ui/command-menu": [
+      "web/packages/app/src/OpenIn.tsx",
+      "web/packages/build/src/page-editor/LayoutTree.tsx"
+    ],
     "ui/button": [
       "web/packages/app/src/actions.tsx",
       "web/packages/app/src/agents.tsx",
@@ -4539,6 +4545,7 @@
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/index.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
@@ -4551,7 +4558,10 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/session/Problems.tsx",
+      "web/apps/workspace/src/session/ReleaseInformation.tsx",
       "web/apps/workspace/src/shell/Applications.tsx",
+      "web/apps/workspace/src/shell/Explorer.tsx",
       "web/apps/workspace/src/shell/Home.tsx"
     ],
     "ui/input": [
@@ -4659,6 +4669,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
@@ -4667,7 +4678,9 @@
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx",
-      "web/apps/workspace/src/shell/Applications.tsx"
+      "web/apps/workspace/src/shell/Applications.tsx",
+      "web/apps/workspace/src/shell/Explorer.tsx",
+      "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "ui/checkbox": [
       "web/packages/app/src/actions.tsx",
@@ -4704,6 +4717,7 @@
       "web/packages/build/src/workflow-binding.tsx",
       "web/packages/build/src/workflow-inspector.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/processes.tsx"
     ],
@@ -4792,6 +4806,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/index.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
@@ -4799,8 +4814,8 @@
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Governance.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
-      "web/apps/workspace/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/session/Problems.tsx",
       "web/apps/workspace/src/shell/Home.tsx"
     ],
     "ui/dialog": [
@@ -4815,11 +4830,12 @@
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
       "web/apps/pms-desk/src/App.tsx",
-      "web/apps/workspace/src/App.tsx"
+      "web/apps/workspace/src/session/ReleaseInformation.tsx"
     ],
     "ui/record-lookup": [
       "web/packages/app/src/actions.tsx",
@@ -4832,6 +4848,7 @@
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/template-ui.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/processes.tsx",
       "web/apps/pms-desk/src/App.tsx"
@@ -4862,6 +4879,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/processes.tsx",
@@ -4895,6 +4913,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/index.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
@@ -4905,11 +4924,14 @@
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx",
-      "web/apps/workspace/src/shell/Applications.tsx"
+      "web/apps/workspace/src/shell/Applications.tsx",
+      "web/apps/workspace/src/shell/Explorer.tsx",
+      "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "ui/graph": [
       "web/packages/app/src/agents.tsx",
-      "web/packages/mes/src/index.tsx"
+      "web/packages/mes/src/index.tsx",
+      "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "ui/observation-statistics": [
       "web/packages/app/src/catalog.examples.tsx",
@@ -4957,7 +4979,8 @@
       "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
       "web/packages/build/src/workflow.tsx",
-      "web/apps/workspace/src/chrome.tsx"
+      "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/shell/Explorer.tsx"
     ],
     "ui/record-page": [
       "web/packages/app/src/index.tsx",
@@ -5262,6 +5285,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/processes.tsx",
@@ -5271,9 +5295,6 @@
     ],
     "ui/inspector-controls": [
       "web/packages/build/src/page-editor/LayoutProperties.tsx"
-    ],
-    "ui/command-menu": [
-      "web/packages/build/src/page-editor/LayoutTree.tsx"
     ],
     "app/records": [
       "web/packages/crm/src/index.tsx",
@@ -5290,7 +5311,8 @@
     "app/record-detail": [
       "web/packages/crm/src/index.tsx",
       "web/packages/mes/src/index.tsx",
-      "web/apps/workspace/src/chrome.tsx"
+      "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/shell/Explorer.tsx"
     ],
     "ui/entity-form": [
       "web/packages/csm/src/index.tsx",
@@ -5310,9 +5332,6 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/App.tsx"
     ],
-    "app/decision-confirmation": [
-      "web/apps/workspace/src/App.tsx"
-    ],
     "app/flow-instance": [
       "web/apps/workspace/src/chrome.tsx"
     ],
@@ -5330,6 +5349,9 @@
     ],
     "app/knowledge-search": [
       "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/decision-confirmation": [
+      "web/apps/workspace/src/host/usePlatformHost.ts"
     ]
   },
   "api": {
@@ -5574,6 +5596,7 @@
         "Memory",
         "ObservationStatisticsRead",
         "ObservationStatisticsRequest",
+        "OpenInPlace",
         "PageDecimalValue",
         "PageVariableValue",
         "Passage",
@@ -5599,8 +5622,14 @@
     "@pkg/build": {
       "source": "web/packages/build/src/index.tsx",
       "symbols": [
+        "aiFunctions",
+        "automate",
+        "code",
         "contributions",
-        "default"
+        "default",
+        "ontology",
+        "releases",
+        "workshop"
       ],
       "types": []
     }

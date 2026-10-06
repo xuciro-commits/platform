@@ -50,7 +50,7 @@ test("business forms keep refused input and a separate supervisor approves witho
     expect(actions.some((action: { schema: string }) => action.schema.startsWith("build.object."))).toBe(false);
     await inbox.getByRole("button", { name: "Home", exact: true }).first().click();
     await expect(inbox.getByRole("heading", { name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
-    await expect(inbox.getByRole("button", { name: "Application Studio", exact: true })).toHaveCount(0);
+    await expect(inbox.getByRole("button", { name: "Projects", exact: true })).toHaveCount(0);
     const approved = await (await request.get(`/v1/records/${type}/${id}`, { headers: { Authorization: "Bearer desk" } })).json();
     expect(approved.record.state).toBe("approved");
   } finally { await supervisor.close(); }

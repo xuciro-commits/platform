@@ -12,6 +12,8 @@ import {
 import { useState, type ReactNode } from "react";
 import { ApplicationsPortal } from "./shell/Applications";
 import { Home } from "./shell/Home";
+import { ObjectExplorer } from "./shell/Explorer";
+import { Lineage } from "./shell/Lineage";
 import { projectionOfSurface, type Projection } from "./shell/registry";
 
 type Notification = Api.Notification;
@@ -211,6 +213,8 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "requests", title: () => t("My requests"), render: () => <MyRequests /> },
   { id: "notifications", title: () => t("Notifications"), render: () => <Notifications /> },
   { id: "outbox", title: () => t("Outbox"), render: () => <Outbox /> },
+  { id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} /> },
+  { id: "lineage", title: () => t("Lineage"), render: (p) => <Lineage ref={p.ref} /> },
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
   { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },
   { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /></StudioReference> },

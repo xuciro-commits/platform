@@ -7,7 +7,7 @@ register("zh-CN", {
   "Data diagnostics": "数据诊断",
   "Records": "记录",
   "Definitions": "定义",
-  "Only builders can open Application Studio.": "只有构建者可以打开应用设计台。",
+  "Only builders can open Projects.": "只有构建者可以打开项目。",
   "Platform Catalog": "平台资产库",
   "Components": "组件库",
   "All components": "全部组件",

@@ -25,7 +25,7 @@ export const entries: CatalogEntry[] = [
     dependencies: ["ui/record-list", "app/record-actions"], states: ["loading", "empty", "error"],
     snippet: 'import { Records } from "@platform/app";\n<Records type="your.object" />',
   }),
-  asset("record-detail", "Authorized record detail", "Read a record with history, tasks and the actions offered to the current member.", ["RecordDetail"], "RecordDetailExample", {
+  asset("record-detail", "Authorized record detail", "Read a record with history, tasks and the actions offered to the current member.", ["RecordDetail", "OpenIn"], "RecordDetailExample", {
     dependencies: ["ui/record-page", "app/record-actions"], uses: ["code", "widget"], widgets: ["detail", "timeline", "tasks"],
     states: ["loading", "error", "pending", "conflict"], snippet: 'import { RecordDetail } from "@platform/app";\n<RecordDetail type="your.object" id={selectedID} />',
   }),

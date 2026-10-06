@@ -10,7 +10,7 @@ test("Catalog leads a builder to a controlled Studio draft", async ({ page, requ
   await appMenu.click();
   await expect(page.getByRole("menuitemradio", { name: /Platform Catalog/ })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
-  await switchWorkspace(page, "Application Studio");
+  await switchWorkspace(page, "Projects");
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Discover capabilities", exact: true }).click();
   const nav = page.getByRole("navigation", { name: "Main", exact: true });
   await expect(nav.getByRole("button", { name: "Inspector", exact: true })).toHaveCount(0);
@@ -27,7 +27,7 @@ test("Catalog leads a builder to a controlled Studio draft", async ({ page, requ
   if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("platform-catalog.png"), fullPage: true });
   await asset.getByRole("button", { name: "Create in Studio" }).click();
   await appMenu.click();
-  await expect(page.getByRole("menuitemradio", { name: /Application Studio/ })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("menuitemradio", { name: /Projects/ })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
   await page.getByRole("combobox", { name: "Object", exact: true }).selectOption("crm.opportunity");
   const name = `catalog${Date.now().toString(36)}`;

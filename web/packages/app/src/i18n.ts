@@ -593,4 +593,6 @@ register("zh-CN", {
   "Kanban board": "看板",
   "Kanban fields or lifecycle are unavailable.": "看板字段或生命周期不可用。",
   "This board shows the current query window.": "此看板显示当前查询窗口。",
+  "Object type in Ontology": "在本体中查看对象类型",
+  "Page: {title}": "页面：{title}",
 });
