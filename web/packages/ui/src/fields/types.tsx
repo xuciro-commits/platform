@@ -67,6 +67,16 @@ export const text = (o: Common & { placeholder?: string; maxLength?: number }): 
   editor: input("text", (s) => s, String, { placeholder: o.placeholder }), compare: byString, operators: textOps, text: (v) => v ?? "",
 });
 
+/** Structured values remain read-only here; their owner supplies any schema-aware editor. */
+export const json = (o: Common): FieldType<unknown> => {
+  const format = (value: unknown) => value === undefined ? "" : JSON.stringify(value) ?? "";
+  return {
+    type: "json", ...o, readOnly: true, width: o.width ?? 320,
+    display: (value) => value === undefined ? muted : <code className="line-clamp-3 whitespace-pre-wrap break-all text-xs" title={format(value)}>{format(value)}</code>,
+    schema: z.json(), text: format, compare: (a, b) => format(a).localeCompare(format(b)), operators: [],
+  };
+};
+
 
 export const longText = (o: Common & { rows?: number; placeholder?: string }): FieldType<string> => ({
   ...text(o), type: "longText",

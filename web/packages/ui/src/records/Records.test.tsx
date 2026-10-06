@@ -8,6 +8,17 @@ for (const [key, value] of [["offsetWidth", 800], ["offsetHeight", 280]] as cons
 const pending = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; };
 const entity = { app: "sample", type: "sample.item", title: "Item", plural: "Items", display: "id", fields: [], standard: [] };
 const record = (id: string) => ({ id, revision: 1, created: {}, changed: {} } as EntityRecord);
+
+test("JSON fields render structured flow outputs and nested line values without treating objects as React children",async()=>{
+ const info={...entity,fields:[{name:"outputs",title:"Outputs",type:"json" as const,readOnly:true},{name:"trace",title:"Trace",type:"lines" as const,fields:[{name:"result",title:"Result",type:"json" as const}]}]};
+ const outputs={service:{name:"pms",values:[null,false,0]}},row={...record("FLOW"),outputs,trace:[{result:outputs}]},source:RecordSource={entity:()=>info,list:vi.fn(),get:async()=>({record:row,history:[],following:false,related:[],linked:[],activity:[],tasks:[],approvals:[],processes:[],files:[],comments:[]})};
+ const list=render(<RecordList source={source} type={info.type} window={{query:{limit:10},page:{records:[row],total:1},maxOffset:10,onChange:vi.fn()}}/>);
+ expect(screen.getByRole("cell",{name:JSON.stringify(outputs)})).toBeTruthy();
+ list.unmount();
+ render(<RecordPage source={source} type={info.type} id="FLOW" detailOnly/>);
+ await waitFor(()=>expect(screen.getAllByText(JSON.stringify(outputs))).toHaveLength(2));
+});
+
 test("record status highlights only the real current state, never emits transitions and removes hidden lifecycle metadata",async()=>{
  const info={...entity,fields:[{name:"state",title:"State",type:"choice" as const}],lifecycle:{field:"state",initial:"open",states:[{name:"open",title:"Open"},{name:"done",title:"Done"}],transitions:[{name:"close",schema:"sample.item.close",title:"Finish",from:["open"],to:["done"]}]}},get=vi.fn(async()=>({record:{...record("A"),state:"done"}} as unknown as RecordView)),source:RecordSource={scope:"actor",entity:()=>info,list:vi.fn(),get},config={field:"state",stages:["open","done"]};
  const {rerender}=render(<RecordStatus source={source} type={info.type} id="A" config={config}/>);await waitFor(()=>expect(screen.getByText("Done").closest("li")?.getAttribute("aria-current")).toBe("step"));expect(screen.getByText("Open").closest("li")?.getAttribute("aria-current")).toBeNull();expect(screen.queryByRole("button")).toBeNull();expect(get).toHaveBeenCalledTimes(1);

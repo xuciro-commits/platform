@@ -236,7 +236,7 @@ type FieldInfo struct {
 	Property *AssetBinding `json:"property,omitempty"`
 	Name     string        `json:"name"`
 	Title    string        `json:"title"`
-	Type     string        `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines"`
+	Type     string        `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines,json"`
 	Required bool          `json:"required,omitempty"`
 	Search   bool          `json:"search,omitempty"`
 	ReadOnly bool          `json:"readOnly,omitempty"`

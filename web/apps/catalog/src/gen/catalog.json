@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:e9eaeea1f3bb48fc",
+  "revision": "sha256:d14b5845e9ec1ad0",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1916,6 +1916,7 @@
       "source": "web/packages/ui/src/fields/types.tsx",
       "exports": [
         "field.text",
+        "field.json",
         "field.longText",
         "field.markdown",
         "field.number",
@@ -1947,6 +1948,7 @@
       ],
       "tags": [
         "text",
+        "json",
         "longText",
         "markdown",
         "number",

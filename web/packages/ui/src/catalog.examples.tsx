@@ -167,6 +167,7 @@ export function Headers() { return <div className="grid gap-3"><PageHeader title
 export function CollectionTitles(){return <div className="grid gap-3"><CollectionTitle title="Permitted assets" value="620"/><CollectionTitle title="Permitted assets"/><CollectionTitle title="Permitted assets" error={t("Resource read failed")}/></div>;}
 
 const fieldSamples: [string, FieldType, unknown][] = [
+  ["json", field.json({ label: "json" }), { service: { name: "sample", values: [null, false, 0] } }],
   ["text", field.text({ label: "text" }), "Sample"], ["longText", field.longText({ label: "longText" }), "Several lines of text."],
   ["markdown", field.markdown({ label: "markdown" }), "**Sample**"], ["number", field.number({ label: "number" }), 12],
   ["currency", field.currency({ label: "currency", currency: "EUR" }), 42.5], ["percent", field.percent({ label: "percent" }), 0.65],

@@ -633,7 +633,7 @@ export type FieldInfo = {
   property?: AssetBinding;
   name: string;
   title: string;
-  type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags" | "lines";
+  type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags" | "lines" | "json";
   required?: boolean;
   search?: boolean;
   readOnly?: boolean;

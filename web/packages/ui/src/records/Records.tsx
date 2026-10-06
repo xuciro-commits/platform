@@ -16,7 +16,7 @@ import {pageUIManifest} from "@platform/kernel";
 import { PropertyList } from "../components/EntityCard";
 import { Tag } from "../components/StatusTag";
 import { columnsFor, defineEntity, type Entity } from "../fields/entity";
-import { checkbox, date, datetime, longText, markdown, multiSelect, number, singleSelect, tags, text, type FieldType } from "../fields/types";
+import { checkbox, date, datetime, json, longText, markdown, multiSelect, number, singleSelect, tags, text, type FieldType } from "../fields/types";
 import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
 import { RecordLookup } from "./RecordLookup";
@@ -108,6 +108,7 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
     const common = { label: f.title, help: f.help, required: f.required, readOnly: f.readOnly };
     fields[f.name] = (() => {
       switch (f.type) {
+        case "json": return json(common);
         case "longtext":
           return info.type === "knowledge.document" && f.name === "text"
             ? markdown(common)
