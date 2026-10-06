@@ -48,4 +48,4 @@ Ontology › **Writebacks**：列表 + 编辑器（对象与动作、连接/方�
 
 ## 下一步
 
-Ⅰ-F 健康面（连接/数据源/管道/回写的一页总览 + 故障工单接入）、Ⅰ-H 企业模型落地、Ⅰ-G 主数据；探针完整走查见 Testing.md。
+Ⅰ-F 健康总览已随本 ADR 落地为构建器 Ontology › Integration health（只读、从定义与发件箱推导）；后续 Ⅰ-H 企业模型落地、Ⅰ-G 主数据；探针完整走查见 Testing.md。
