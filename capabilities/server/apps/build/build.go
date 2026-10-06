@@ -659,6 +659,9 @@ func (b *Build) check(o Object, id string) error {
 	if err := b.checkCreates(o); err != nil {
 		return err
 	}
+	if err := b.checkPosts(o); err != nil {
+		return err
+	}
 	if err := b.checkShape(o); err != nil {
 		return err
 	}
@@ -1040,7 +1043,7 @@ func Entity(o Object) platform.Entity { return entityWith(o, nil, nil) }
 
 // entity is the declaration as installed: its actions may create related
 // records through this builder's host (ADR-0040 21c).
-func (b *Build) entity(o Object) platform.Entity { return entityWith(o, b.create, b.conditionLookup) }
+func (b *Build) entity(o Object) platform.Entity { return entityWith(o, b, b.conditionLookup) }
 
 func entityWith(o Object, creates creator, lookup func(string) (platform.EntityInfo, bool)) platform.Entity {
 	// StructOf interns identical shapes. The entity identity keeps two named

@@ -14,7 +14,9 @@ export type Condition = { field: string; operator: string; value?: string; value
 export type ApproverLevel = { title: string; role: string; all?: boolean };
 export type Approval = { pending: string; rejected?: string; levels: ApproverLevel[] };
 export type Create_ = { object: string; via: string; sets?: Set_[] };
-export type Action = { name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[] };
+/** A posting to a balance kept on another object (ADR-0063): match fields identify the balance, the amount is added or subtracted. */
+export type Post_ = { object: string; match: Set_[]; field: string; amount: string; subtract?: boolean; floor?: boolean };
+export type Action = { name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[]; posts?: Post_[] };
 /** What one role of the builder app may do with the object (ADR-0037 18b). */
 export type Access = { role: string; read: "all" | "own" | "none"; create?: boolean; edit?: boolean; archive?: boolean };
 export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[]; implements?: string[]; extends?: string };

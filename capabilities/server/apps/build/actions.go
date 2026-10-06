@@ -46,6 +46,9 @@ type Action struct {
 	// Creates are related records it makes in the same decision (ADR-0040 21c
 	// D2): all of them and the record's change commit together, or none does.
 	Creates []Create `json:"creates,omitempty" title:"What it creates"`
+	// Posts add to or subtract from balances kept on other objects, under the
+	// same decision (ADR-0063).
+	Posts []Post `json:"posts,omitempty" title:"What it posts"`
 }
 
 // Create is a record of another defined object made when an action is taken:
@@ -56,9 +59,13 @@ type Create struct {
 	Sets   []Set  `json:"sets,omitempty" title:"What it sets"`
 }
 
-// creator makes one related record inside the decision being taken; nil where
-// no host is attached (descriptors, validation), which refuses a Create.
-type creator func(c platform.Caller, cr Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error)
+// creator makes one related record, or one balance after a posting, inside
+// the decision being taken; nil where no host is attached (descriptors,
+// validation), which refuses a Create or a Post.
+type creator interface {
+	create(c platform.Caller, cr Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error)
+	post(c platform.Caller, p Post, inputs map[string]any, record any, now time.Time) (any, *kernel.Error)
+}
 
 // ActionApproval uses the work app's approval chain for a tenant action.
 type ActionApproval struct {
@@ -481,7 +488,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 // stored puts an action's related records under the change that took it, as
 // Do built and checked them from the same inputs (ADR-0040 21c).
 func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.ChangeRecord, any, time.Time) {
-	if len(a.Creates) == 0 || creates == nil {
+	if len(a.Creates) == 0 && len(a.Posts) == 0 || creates == nil {
 		return nil
 	}
 	return func(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
@@ -489,7 +496,12 @@ func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.Chang
 		_ = json.Unmarshal(r.GetSubmission().GetPayload(), &inputs)
 		rec := reflect.ValueOf(record).Elem().Field(0).Interface().(platform.Record)
 		for i, cr := range a.Creates {
-			if value, err := creates(c, cr, inputs, TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err == nil {
+			if value, err := creates.create(c, cr, inputs, TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err == nil {
+				c.Put(r, value)
+			}
+		}
+		for _, p := range a.Posts {
+			if value, err := creates.post(c, p, inputs, record, now); err == nil {
 				c.Put(r, value)
 			}
 		}
@@ -642,7 +654,15 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		if creates == nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{action} cannot create records here", a.Title)
 		}
-		if _, err := creates(c, cr, inputs, TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err != nil {
+		if _, err := creates.create(c, cr, inputs, TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err != nil {
+			return err
+		}
+	}
+	for _, p := range a.Posts {
+		if creates == nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{action} cannot post balances here", a.Title)
+		}
+		if _, err := creates.post(c, p, inputs, v.Addr().Interface(), now); err != nil {
 			return err
 		}
 	}

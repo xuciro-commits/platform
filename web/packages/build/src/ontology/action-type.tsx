@@ -13,11 +13,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { PublishMenu, WorkbenchMessage, savingState } from "../shared/workbench";
 import { assignmentInputFits } from "./process-rules";
 import { Label } from "./process";
-import { comparisonFits, conditionSubjects, inputTypes, nameOf, operators, type Action, type ApproverLevel, type Condition, type Create_, type Input_, type Set_ } from "./object-model";
+import { comparisonFits, conditionSubjects, inputTypes, nameOf, operators, type Action, type ApproverLevel, type Condition, type Create_, type Input_, type Post_, type Set_ } from "./object-model";
 import { useObjectDraft } from "./object-draft";
 
 type Section = "overview" | "parameters" | "form" | "rules" | "criteria" | "effects" | "approval" | "permissions";
-type Pick = { kind: "parameter" | "rule" | "criterion" | "effect"; at: number } | undefined;
+type Pick = { kind: "parameter" | "rule" | "criterion" | "effect" | "posting"; at: number } | undefined;
 const sections: { id: Section; title: () => string; icon: ReactNode }[] = [
   { id: "overview", title: () => t("Overview"), icon: <Zap /> },
   { id: "parameters", title: () => t("Parameters"), icon: <FileInput /> },
@@ -73,8 +73,10 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
   };
   const issues = action ? draft.issuesOf(action.name) : [];
   const problems: WorkbenchProblem[] = issues.map((text, i) => ({ id: `issue:${i}`, text }));
-  const inputs = action?.inputs ?? [], sets = action?.sets ?? [], conditions = action?.conditions ?? [], creates = action?.creates ?? [];
+  const inputs = action?.inputs ?? [], sets = action?.sets ?? [], conditions = action?.conditions ?? [], creates = action?.creates ?? [], posts = action?.posts ?? [];
+  const balances = entities.filter((e) => e.type.startsWith("build.") && e.type !== parent && e.fields.some((f) => !f.readOnly && ["integer", "decimal", "money"].includes(f.type)));
   const sources = [...inputs.map((i) => ({ value: i.name, label: t("Input: {name}", { name: i.title }) })), { value: "$me", label: t("The person taking it") }, { value: "$now", label: t("Now") }];
+  const postSources = [...sources.filter((s) => s.value !== "$now"), ...process.fields.map((f) => ({ value: `record.${f.name}`, label: t("This record: {name}", { name: f.title || f.name }) }))];
   const subjects = action ? conditionSubjects(process, action, parent, entities) : [];
   const stateTitle = (s?: string) => process.states.find((x) => x.name === s)?.title ?? s ?? "";
   const go = (next: Section, picked?: Pick) => { setSection(next); setPick(picked); };
@@ -124,7 +126,10 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
       (c) => <><span className="min-w-0 flex-1 truncate font-medium">{subjects.find((s) => s.value === c.field)?.label ?? c.field} {t(c.operator)} {c.valueField ? subjects.find((s) => s.value === c.valueField)?.label : c.value}</span><span className="truncate text-xs text-muted">{c.message}</span></>, t("No criteria. The action can always be submitted from its starting states.")),
     effects: <>{list<Create_>(creates, "effect", (next) => patch({ creates: next }), { label: t("Create a related record"), make: () => relatedCreate(targets[0]?.type ?? "", undefined, targets, parent, inputs), disabled: !targets.length },
       (c) => <><span className="min-w-0 flex-1 truncate font-medium">{t("Create {object}", { object: targets.find((x) => x.type === c.object)?.title ?? c.object })}</span><span className="text-xs text-muted">{t("via {field}", { field: c.via })}</span></>, targets.length ? t("No side effects. Related records can be created when the action commits.") : t("Publish a related object with a reference to this object first."))}
-      <p className="px-4 text-xs text-muted">{t("Related records commit with this action. The target object's create permissions still apply.")}</p></>,
+      <p className="px-4 text-xs text-muted">{t("Related records commit with this action. The target object's create permissions still apply.")}</p>
+      {list<Post_>(posts, "posting", (next) => patch({ posts: next }), { label: t("Post to a balance"), make: () => ({ object: balances[0]?.type ?? "", match: [], field: balances[0]?.fields.find((f) => ["integer", "decimal", "money"].includes(f.type))?.name ?? "", amount: inputs[0]?.name ?? "=1" }), disabled: !balances.length },
+        (p) => <><span className="min-w-0 flex-1 truncate font-medium">{t("{sign} {amount} to {object}.{field}", { sign: p.subtract ? "−" : "+", amount: p.amount.startsWith("=") ? p.amount.slice(1) : postSources.find((x) => x.value === p.amount)?.label ?? p.amount, object: balances.find((x) => x.type === p.object)?.title ?? p.object, field: p.field })}</span><span className="text-xs text-muted">{p.match.map((m) => m.field).join(", ")}</span></>, balances.length ? t("No postings. Quantities and amounts can accumulate on a balance object when the action commits.") : t("Publish an object with an integer, decimal or money field to keep balances."))}
+      <p className="px-4 text-xs text-muted">{t("A balance is one record per distinct set of match values; it is created on the first posting. Reverse with a posting of the other sign.")}</p></>,
     approval: <div className="grid max-w-xl content-start gap-3 p-4 text-sm">
       <Checkbox checked={!!action.approval} disabled={!!action.toInput && !action.approval} onChange={(enabled) => patch({ approval: enabled ? { pending: process.states.find((s) => s.name !== action.from[0] && s.name !== action.to)?.name ?? "", levels: [{ title: t("Approver"), role: approverRoles[0] ?? "builder" }] } : undefined })}>{t("Wait for approval")}</Checkbox>
       {action.approval && <>
@@ -160,6 +165,8 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
       <ConditionEditor condition={conditions[pick.at]!} subjects={subjects} onChange={(p) => patch({ conditions: conditions.map((x, i) => i === pick.at ? { ...x, ...p } : x) })} /></RowCard>}
     {pick.kind === "effect" && creates[pick.at] && <RowCard title={t("Side effect")} onRemove={() => { patch({ creates: creates.filter((_, i) => i !== pick.at) }); setPick(undefined); }}>
       <CreateEditor create={creates[pick.at]!} inputs={inputs} sources={sources} parent={parent} targets={targets} onChange={(next) => patch({ creates: creates.map((x, i) => i === pick.at ? next : x) })} /></RowCard>}
+    {pick.kind === "posting" && posts[pick.at] && <RowCard title={t("Posting")} onRemove={() => { patch({ posts: posts.filter((_, i) => i !== pick.at) }); setPick(undefined); }}>
+      <PostEditor post={posts[pick.at]!} sources={postSources} balances={balances} onChange={(next) => patch({ posts: posts.map((x, i) => i === pick.at ? next : x) })} /></RowCard>}
   </div> : <p className="p-3 text-xs text-muted">{t("Select a row to edit it here.")}</p>;
 
   return <Workbench storageKey="action-type" title={action?.title || t("Action type")}
@@ -266,6 +273,25 @@ function CreateEditor({ create, inputs, sources, parent, targets, onChange }: { 
     <p className="text-xs text-muted">{t("The parent reference is filled automatically. Required target fields need a mapping.")}</p>
     <Rows<Set_> title={t("Fields of the new record")} add={t("Map a field")} items={sets} make={() => ({ field: fields[0]?.name ?? "", from: sources[0]?.value ?? "" })} onChange={(next) => onChange({ ...create, sets: next })}
       row={(set, patch) => <AssignmentEditor fields={fields} sources={sources} set={set} onChange={patch} />} />
+  </>;
+}
+
+function PostEditor({ post, sources, balances, onChange }: { post: Post_; sources: { value: string; label: string }[]; balances: EntityInfo[]; onChange: (next: Post_) => void }) {
+  const balance = balances.find((item) => item.type === post.object);
+  const numeric = balance?.fields.filter((f) => !f.readOnly && ["integer", "decimal", "money"].includes(f.type)) ?? [];
+  const keys = balance?.fields.filter((f) => !f.readOnly && f.name !== post.field) ?? [];
+  return <>
+    <Label text={t("Balance object")}><Select value={post.object} onChange={(event) => { const next = balances.find((item) => item.type === event.target.value); onChange({ ...post, object: event.target.value, match: [], field: next?.fields.find((f) => ["integer", "decimal", "money"].includes(f.type))?.name ?? "" }); }}>
+      <option value="">{t("Choose an object")}</option>{balances.map((item) => <option key={item.type} value={item.type}>{item.title} · {item.type}</option>)}</Select></Label>
+    <Label text={t("Balance field")}><Select value={post.field} onChange={(event) => onChange({ ...post, field: event.target.value })}>
+      <option value="">{t("Choose a field")}</option>{numeric.map((field) => <option key={field.name} value={field.name}>{field.title} · {field.type}</option>)}</Select></Label>
+    <Label text={t("Amount")}><Select value={post.amount.startsWith("=") ? "=" : post.amount} onChange={(event) => onChange({ ...post, amount: event.target.value })}>
+      <option value="">{t("Choose a source")}</option>{sources.filter((s) => s.value !== "$me").map((source) => <option key={source.value} value={source.value}>{source.label}</option>)}<option value="=">{t("A fixed value")}</option></Select></Label>
+    {post.amount.startsWith("=") && <Label text={t("Value")}><Input value={post.amount.slice(1)} onChange={(event) => onChange({ ...post, amount: `=${event.target.value}` })} /></Label>}
+    <Checkbox checked={!!post.subtract} onChange={(subtract) => onChange({ ...post, subtract })}>{t("Subtract instead of add")}</Checkbox>
+    <Checkbox checked={!!post.floor} onChange={(floor) => onChange({ ...post, floor })}>{t("Refuse when the balance would fall below zero")}</Checkbox>
+    <Rows<Set_> title={t("Balance identified by")} add={t("Add a match field")} items={post.match} make={() => ({ field: keys[0]?.name ?? "", from: sources[0]?.value ?? "" })} onChange={(next) => onChange({ ...post, match: next })}
+      row={(set, patch) => <AssignmentEditor fields={keys} sources={sources} set={set} onChange={patch} />} />
   </>;
 }
 
