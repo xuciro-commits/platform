@@ -11,7 +11,7 @@ import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
 import { ObjectTypeEditor, ActionTypeEditor } from "./ontology/process";
 import { ModelWorkbench } from "./ontology/ModelWorkbench";
 import { FlowEditor, Flows } from "./automate/workflow";
-import { Automations } from "./automate/automation";
+import { AutomationEditor, Automations } from "./automate/automation";
 import { WorkflowRuns } from "./automate/workflow-runs";
 import { LinkTypeEditor, LinkTypes } from "./ontology/link-type";
 import { PropertyTypeEditor, PropertyTypes } from "./ontology/property-type";
@@ -79,7 +79,7 @@ export const automate = defineApp({
   description: t("Automations that run when records change; logic flows for branching work; the runs of both."),
   home: { view: "automation" },
   views: [
-    { id: "automation", title: () => t("Automations"), render: (p) => scoped(p, <Automations />) },
+    { id: "automation", title: (p) => p.id ? t("Automation") : t("Automations"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><AutomationEditor id={p.id} /></ApplicationScope> : scoped(p, <Automations />) },
     { id: "flow", title: (p) => p.id ? t("Flow") : t("Flows"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><FlowEditor id={p.id} /></ApplicationScope> : scoped(p, <Flows />) },
     { id: "runs", title: () => t("Runs"), render: (p) => scoped(p, <div className="p-4"><WorkflowRuns name={p.name ?? ""} onStepSelect={() => {}} /></div>) },
   ],

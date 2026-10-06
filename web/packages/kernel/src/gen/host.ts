@@ -1749,6 +1749,7 @@ export type Process = {
   archived?: boolean;
   name: string;
   title: string;
+  kind?: "flow" | "automation";
   object?: string;
   when?: string;
   manual?: boolean;

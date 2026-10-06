@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:b76e32f103035188",
+  "revision": "sha256:177ea5dd5731203c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4520,6 +4520,7 @@
   "consumers": {
     "ui/command-menu": [
       "web/packages/app/src/OpenIn.tsx",
+      "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow.tsx",
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/shared/workbench.tsx",
@@ -4738,6 +4739,7 @@
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/HeaderEditor.tsx",
+      "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/module-import/ApplicationImportFields.tsx",
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
@@ -5248,6 +5250,14 @@
       "web/packages/app/src/widgets/WorkViews.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
+    "ui/workbench": [
+      "web/packages/build/src/automate/automation.tsx",
+      "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/ontology/process.tsx",
+      "web/packages/build/src/projects/project.tsx",
+      "web/packages/build/src/workshop/ModuleWorkbench.tsx",
+      "web/packages/build/src/workshop/editor.tsx"
+    ],
     "ui/data-table": [
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
@@ -5269,13 +5279,6 @@
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/process.tsx"
-    ],
-    "ui/workbench": [
-      "web/packages/build/src/automate/workflow.tsx",
-      "web/packages/build/src/ontology/process.tsx",
-      "web/packages/build/src/projects/project.tsx",
-      "web/packages/build/src/workshop/ModuleWorkbench.tsx",
-      "web/packages/build/src/workshop/editor.tsx"
     ],
     "app/composed-page": [
       "web/packages/build/src/catalog.examples.tsx",
