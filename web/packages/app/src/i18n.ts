@@ -595,4 +595,8 @@ register("zh-CN", {
   "This board shows the current query window.": "此看板显示当前查询窗口。",
   "Object type in Ontology": "在本体中查看对象类型",
   "Page: {title}": "页面：{title}",
+  "Scan a code": "扫描条码",
+  "Scan or type a code": "扫描或输入编码",
+  "The camera is not available.": "摄像头不可用。",
+  "Camera": "摄像头",
 });

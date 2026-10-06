@@ -1262,4 +1262,5 @@ export default {
   "Dark": "深色",
   "Standard look": "标准风格",
   "Industrial look": "工业风格",
+  "Print": "打印",
 } as Record<string, string>;

@@ -3136,4 +3136,13 @@ register("zh-CN", {
   "An extension adds fields to an installed object: one record per base record through its required base reference. Its lifecycle stays the base type's, so it has no states or actions of its own.": "扩展为已安装的对象增加字段：每条基础记录对应一条扩展记录，通过必填的 base 引用关联。生命周期仍属于基础类型，因此扩展没有自己的状态和动作。",
   "An interface is a shape several objects share; a page or query written against it works for all of them. Apps declare interfaces; objects implement them.": "接口是多个对象共享的形态；针对接口编写的页面或查询对它们全部有效。应用声明接口，对象实现接口。",
   "No installed object implements it yet.": "还没有已安装的对象实现它。",
+  "Barcode scan (search by scanner or camera)": "条码扫描（扫码枪或摄像头检索）",
+  "Device": "设备",
+  "Desk: columns as laid out": "桌面：按布局分栏",
+  "Handheld terminal: one column, large targets": "手持终端：单列、大按钮",
+  "Barcode": "条码",
+  "None": "无",
+  "Record ID": "记录 ID",
+  "Offer printing as a label": "提供标签打印",
+  "The barcode is Code 128 over a text field; printing prints only this detail.": "条码为文本字段的 Code 128；打印时只打印这个详情区块。",
 });

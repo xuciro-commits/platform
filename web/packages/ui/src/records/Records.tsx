@@ -2,7 +2,8 @@
 // host (`GET /v1/entities`) becomes a kit entity, a list page with server-side
 // search, sort and paging, a record page (fields, related records, history) and
 // generated forms. Components take a RecordSource, so the kit knows no client.
-import { ChevronLeft, ChevronRight, History as HistoryIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, History as HistoryIcon, Printer } from "lucide-react";
+import { Barcode } from "./barcode";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { useViewVisible } from "../shell/ViewVisibility";
@@ -486,7 +487,10 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         {r.archived && <Tag label="archived" />}
         {!detailOnly && <span className="ml-auto flex flex-wrap gap-1">{actions?.(r)}</span>}
       </header>);
-  const properties=(<section className="rounded-md border border-border bg-surface p-3">
+  const barcode=detailPresentation?.barcode?detailPresentation.barcode==="id"?r.id:String(r[detailPresentation.barcode]??""):"";
+  const properties=(<section className="rounded-md border border-border bg-surface p-3" data-print-label={detailPresentation?.print||undefined}>
+        {barcode&&<div className="mb-3 flex justify-center overflow-hidden"><Barcode text={barcode}/></div>}
+        {detailPresentation?.print&&<div className="mb-3 flex justify-end print:hidden"><Button size="sm" onClick={()=>window.print()}><Printer/>{t("Print")}</Button></div>}
         <PropertyList columns={detailPresentation?.columns as 1|2|3|4|undefined} items={[...[...new Set(fields??info.fields.map(f=>f.name))].flatMap(name=>{const f=info.fields.find(f=>f.name===name);return !f||detailPresentation?.hideNull&&(r[name]===undefined||r[name]===null||r[name]==="")?[]:[[f.title,entity.fields[name]!.display(r[name] as never,r)] as [string,ReactNode]];}),
           ...(!detailOnly ? [[t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
             [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]] as [string, ReactNode][] : [])]} />

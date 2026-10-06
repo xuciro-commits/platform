@@ -165,11 +165,11 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const incompatible=!compatibility.supported||compatibility.issues.length>0;
 const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => !document.nodes[overlay.root]?.children?.length && !document.unusedWidgets?.some(entry=>entry.parent===overlay.root) || !overlay.title.trim()) || sections.some(section=>{const contract=widgetContract(section.widget);return contract&&"events" in contract&&contract.events.some(event=>event.required&&!document.events?.some(binding=>binding.source===section.id&&binding.event===event.id));}); const groupProblem=sections.some(s=>s.widget==="button-group"&&(!(s.buttons?.length)||s.buttons.length>pageVariableContract.buttonGroup.maxButtons||s.buttons.some((b,i)=>!b.title||new TextEncoder().encode(b.title).length>pageVariableContract.buttonGroup.maxTitleBytes||s.buttons?.some((other,j)=>i!==j&&b.id===other.id)||!document.events?.some(e=>e.source===s.id&&e.control===b.id&&e.event==="click"))));
   const loopProblem = Object.values(document.nodes).some((node) => node.kind === "loop" && (!node.loop || !document.variables?.[node.loop.collection]));
-  const searchInputProblem=sections.some(s=>s.inputKind!==undefined&&(s.widget!=="input"||s.inputKind!=="search"||searchInputObjects(document,Object.values(document.nodes).find(n=>n.section===s.id)?.valueVariable).length===0));
+  const searchInputProblem=sections.some(s=>s.inputKind!==undefined&&(s.widget!=="input"||s.inputKind!=="search"&&s.inputKind!=="scan"||searchInputObjects(document,Object.values(document.nodes).find(n=>n.section===s.id)?.valueVariable).length===0));
   const inputProblem = Object.entries(document.nodes).some(([id, node]) => {
     if (!sections.some((s) => s.id === node.section && s.widget === "input")) return false;
     const variable = document.variables?.[node.valueVariable ?? ""];
-    return sections.find(s=>s.id===node.section)?.inputKind==="search"&&searchInputObjects(document,node.valueVariable).length===0||!variable || !(variable.mode === "state" || variable.mode === "shared" && variable.writable) || !["string","decimal"].includes(variable.type) || !variableAccessible(variable, loopOwner(document, id), overlayOwner(document, id));
+    return ["search","scan"].includes(sections.find(s=>s.id===node.section)?.inputKind??"")&&searchInputObjects(document,node.valueVariable).length===0||!variable || !(variable.mode === "state" || variable.mode === "shared" && variable.writable) || !["string","decimal"].includes(variable.type) || !variableAccessible(variable, loopOwner(document, id), overlayOwner(document, id));
   });
   const variableProblems = pageVariableDiagnostics(document.variables ?? {});
   const queryProblem = !queryInventoryBudget(document,sections as unknown as HostApi.Section[],pageVariableContract.query).valid || Object.values(document.queries??{}).some((q)=>q.limit<1||q.limit>pageVariableContract.query.maxLimit||(q.conditions??[]).some((c)=>!c.field));
@@ -406,7 +406,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   const overlayEntries = container ? Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container) : [];
   // --- Inspector tabs follow what is in hand: the page, a layout, or a widget (ADR-0053 §5.3).
   const pageTabs: WorkbenchTab[] = [
-    { id: "page", title: t("Page"), content: <Settings value={{ title, description }} object={info?.title ?? page.object}
+    { id: "page", title: t("Page"), content: <Settings value={{ title, description }} object={info?.title ?? page.object} device={document.device ?? ""} onDevice={(device) => edit({ document: { ...document, device: device || undefined } }, "settings:device")}
       selections={selections} objects={definitions.filter((d) => d.ref.kind === "object" && d.entity).map((d) => d.ref).sort((a, b) => Number(b.name === page.object) - Number(a.name === page.object))}
       onSelections={(next, rename) => edit((old) => ({ ...old, selections: next, sections: rename ? old.sections.map((s) => ({ ...s, selection: s.selection === rename.from ? rename.to : s.selection, parentSelection: s.parentSelection === rename.from ? rename.to : s.parentSelection })) : old.sections }))}
       onChange={(patch) => edit(patch, `settings:${Object.keys(patch).join(",")}`)} /> },
@@ -556,7 +556,7 @@ function widgetInspectorTabs(props: PropertiesProps & { section: Draft; events: 
         <label className="grid gap-1 text-xs">{t("Title")}<Input value={section.title ?? ""} onChange={(event) => onChange({ title: event.target.value })} /></label>
         {section.widget === "input" && <label className="grid gap-1 text-xs">{t("Input presentation")}
           <Select value={section.inputKind ?? ""} onChange={(event) => onChange({ inputKind: event.target.value || undefined })}>
-            <option value="">{t("Text input")}</option><option value="search">{t("Scoped record search")}</option>
+            <option value="">{t("Text input")}</option><option value="search">{t("Scoped record search")}</option><option value="scan">{t("Barcode scan (search by scanner or camera)")}</option>
           </Select>
         </label>}
         {section.widget === "text" && <div className="grid gap-1 text-xs">
@@ -739,8 +739,8 @@ function Properties({ section, sections, document, info, catalog, object, select
 
 /** The page's own settings: what people call it and what it is for. Its name
  *  and its object are its identity — pages, applications and links name them. */
-function Settings({ value, object, selections, objects, onSelections, onChange }: {
-  value: { title: string; description: string }; object: string;
+function Settings({ value, object, selections, objects, onSelections, onChange, device, onDevice }: {
+  value: { title: string; description: string }; object: string; device: string; onDevice: (device: string) => void;
   selections: HostApi.SelectionVariable[]; objects: HostApi.AssetRef[];
   onSelections: (next: HostApi.SelectionVariable[], rename?: { from: string; to: string }) => void;
   onChange: (patch: Partial<{ title: string; description: string }>) => void;
@@ -755,6 +755,12 @@ function Settings({ value, object, selections, objects, onSelections, onChange }
         <Textarea rows={4} value={value.description} onChange={(e) => onChange({ description: e.target.value })} />
       </label>
       <p className="text-xs text-muted">{t("It shows {object}. Its name and object stay as they are: applications and links name them.", { object })}</p>
+      <label className="grid gap-1 text-xs">{t("Device")}
+        <Select value={device} onChange={(e) => onDevice(e.target.value)}>
+          <option value="">{t("Desk: columns as laid out")}</option>
+          {pageVariableContract.device.kinds.map((kind) => <option key={kind} value={kind}>{t(kind === "handheld" ? "Handheld terminal: one column, large targets" : kind)}</option>)}
+        </Select>
+      </label>
       <fieldset className="grid gap-3 border-t border-border pt-3">
         <legend className="text-xs font-semibold">{t("Record selections")}</legend>
         <p className="text-xs text-muted">{t("A table writes a selection; details and actions read it. Each selection holds records of one object.")}</p>

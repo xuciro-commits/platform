@@ -1258,6 +1258,8 @@ export type PageComputeResource = {
 export type PageDetailPresentation = {
   columns: number;
   hideNull?: boolean;
+  barcode?: string;
+  print?: boolean;
 };
 
 export type PageDocument = {
@@ -1271,6 +1273,7 @@ export type PageDocument = {
   events?: PageEventBinding[];
   queries?: Record<string, PageQuery>;
   interface?: PageInterface;
+  device?: string;
 };
 
 export type PageEffect = {
