@@ -1,6 +1,7 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
+import { MarkingField, integrates } from "./marking";
 import { Button, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
 import { DatasetLineage } from "./lineage";
 
@@ -9,7 +10,7 @@ import { DatasetLineage } from "./lineage";
 // load it; this page shows the schema, the versions kept and the rows of one.
 type Field = { name: string; type: string };
 type Load = { at: string; version: number; rows: number; bytes: number; drift?: string[] };
-type Draft = { id: string; revision: number; name: string; title: string; keep?: number; producer?: string; schema?: Field[]; version?: number; last?: Load };
+type Draft = { id: string; revision: number; name: string; title: string; keep?: number; marking?: string; producer?: string; schema?: Field[]; version?: number; last?: Load };
 type Version = { id: string; version: number; at: string; rows: number; archived?: boolean; data?: Record<string, unknown>[] };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "" });
 const fieldClass = "grid min-w-0 gap-1 text-xs";
@@ -17,11 +18,11 @@ const PREVIEW = 50;
 
 export function Datasets() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("Datasets")} description={t("Only a builder can edit datasets.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Datasets")} description={t("Rows as they came, in versions. A source loads a dataset instead of mapping straight to an object; a pipeline reads one and writes another or an object.")}
       actions={<Button onClick={() => open({ view: "dataset", params: { id: "new" } })}>{t("New dataset")}</Button>} />
-    <RecordList source={source} type="build.dataset" fields={["title", "name", "producer", "version", "keep"]} onOpen={(record) => open({ view: "dataset", params: { id: record.id } })} />
+    <RecordList source={source} type="build.dataset" fields={["title", "name", "producer", "version", "marking"]} onOpen={(record) => open({ view: "dataset", params: { id: record.id } })} />
   </div>;
 }
 
@@ -40,14 +41,14 @@ export function DatasetEditor({ id }: { id: string }) {
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The dataset could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
   const save = async () => {
     const target = draft.id || crypto.randomUUID(), expected = baseRevision.current;
-    const payload = { name: draft.name, title: draft.title, keep: Number(draft.keep) || 0 };
+    const payload = { name: draft.name, title: draft.title, keep: Number(draft.keep) || 0, marking: draft.marking ?? "" };
     if (!await decide(`build.dataset.${draft.id ? "edit" : "create"}`, { type: "build.dataset", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
     baseRevision.current = expected + 1; loaded.current = `${target}:${expected + 1}`;
     setDraft((d) => ({ ...d, id: target, revision: expected + 1 })); markSaved(); setDirty(false);
     if (!draft.id) { open({ view: "dataset", params: { id: target } }); close({ view: "dataset", params: { id } }); }
     else await query.refetch();
   };
-  if (role("build") !== "builder") return <PageHeader title={t("Datasets")} description={t("Only a builder can edit datasets.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Datasets")} description={query.isError ? t("The dataset could not be loaded.") : t("Loading…")} />;
   const last = draft.last, latest = draft.version ?? 0, keep = draft.keep || 3;
   const versions = Array.from({ length: Math.min(latest, keep) }, (_, i) => latest - i);
@@ -66,6 +67,7 @@ export function DatasetEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Dataset title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
         <label className={fieldClass}>{t("Versions kept")}<Input type="number" min={1} max={50} value={draft.keep ?? ""} placeholder="3" onChange={(e) => patch({ keep: Number(e.target.value) })} />
           <span className="text-[11px] text-muted">{t("Older versions keep their row count but lose their rows.")}</span></label>
+        <MarkingField value={draft.marking ?? ""} onChange={(marking) => patch({ marking })} help={t("Raised by what loads it - the connection, the pipeline's input; lowered only here. Confidential and restricted data only reaches object fields that name their readers; restricted never leaves as CSV.")} />
         {draft.producer && <p className="text-xs text-muted">{t("Loaded by")}: <span className="font-mono">{draft.producer}</span></p>}
       </Panel>
       <Panel title={t("Schema")} className="grid min-w-0 content-start gap-2">

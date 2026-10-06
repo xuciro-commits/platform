@@ -1,3 +1,4 @@
+import { integrates } from "./marking";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
@@ -18,7 +19,7 @@ const fieldClass = "grid min-w-0 gap-1 text-xs";
 
 export function Writebacks() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("Writebacks")} description={t("Only a builder can edit writebacks.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Writebacks")} description={t("Send an object's accepted actions to an external system. Each decision becomes one request, queued in the connection's order and retried with the same key, so an outage delays it and never duplicates it.")}
       actions={<Button onClick={() => open({ view: "writeback", params: { id: "new" } })}>{t("New writeback")}</Button>} />
@@ -54,7 +55,7 @@ export function WritebackEditor({ id }: { id: string }) {
     if (!saved) return;
     if (await decide(`build.writeback.${name}`, { type: "build.writeback", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) { const result = await query.refetch(); if (result.data?.record) load(result.data.record); }
   };
-  if (role("build") !== "builder") return <PageHeader title={t("Writebacks")} description={t("Only a builder can edit writebacks.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Writebacks")} description={query.isError ? t("The writeback could not be loaded.") : t("Loading…")} />;
   const target = entities.find((entity) => entity.type === draft.object);
   const fields = target?.fields ?? [], writable = fields.filter((f) => !f.readOnly);

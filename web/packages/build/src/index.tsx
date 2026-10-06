@@ -37,6 +37,17 @@ import { Activity, BookOpen, Boxes, Braces, Clock, Compass, Database, Fingerprin
 
 const scoped = (p: Record<string, string | undefined>, node: React.ReactNode) => <ApplicationScope application={p.application}>{node}</ApplicationScope>;
 const builder = (host: Host) => host.role("build") === "builder";
+// An integrator connects, maps and runs integrations without designing objects or pages (ADR-0075).
+const integrator = (host: Host) => host.role("build") === "integrator";
+const integration = (): NavSection => ({ label: t("Integration"), items: [
+  { label: t("Connections"), icon: <Plug />, route: { view: "connection" } },
+  { label: t("Data sources"), icon: <Database />, route: { view: "data-source" } },
+  { label: t("Datasets"), icon: <Layers />, route: { view: "dataset" } },
+  { label: t("Pipelines"), icon: <GitMerge />, route: { view: "pipeline" } },
+  { label: t("Writebacks"), icon: <Send />, route: { view: "writeback" } },
+  { label: t("Matching rules"), icon: <Fingerprint />, route: { view: "match" } },
+  { label: t("Integration health"), icon: <Activity />, route: { view: "integration-health" } },
+] });
 
 const views: View[] = [
   // Projects
@@ -90,14 +101,8 @@ export default defineApp({
       { label: t("Relationships"), icon: <Link2 />, route: { view: "link-type" } },
       { label: t("Shared properties"), icon: <Tags />, route: { view: "property-type" } },
       { label: t("Queries"), icon: <Search />, route: { view: "query" } },
-      { label: t("Connections"), icon: <Plug />, route: { view: "connection" } },
-      { label: t("Data sources"), icon: <Database />, route: { view: "data-source" } },
-      { label: t("Datasets"), icon: <Layers />, route: { view: "dataset" } },
-      { label: t("Pipelines"), icon: <GitMerge />, route: { view: "pipeline" } },
-      { label: t("Writebacks"), icon: <Send />, route: { view: "writeback" } },
-      { label: t("Matching rules"), icon: <Fingerprint />, route: { view: "match" } },
-      { label: t("Integration health"), icon: <Activity />, route: { view: "integration-health" } },
     ] },
+    integration(),
     { label: t("Interface"), items: [
       { label: t("Modules"), icon: <LayoutTemplate />, route: { view: "module" } },
       { label: t("Templates"), icon: <LayoutList />, route: { view: "studio-templates" } },
@@ -121,7 +126,7 @@ export default defineApp({
       { label: t("Lineage"), icon: <GitBranch />, route: { view: "lineage" } },
       { label: t("Asset Library"), icon: <BookOpen />, route: { view: "catalog" } },
     ] },
-  ] : [ // a publisher reviews and activates; the editors stay read-only for them
+  ] : integrator(host) ? [integration()] : [ // a publisher reviews and activates; the editors stay read-only for them
     { label: t("Releases"), items: [
       { label: t("Changes"), icon: <PackageCheck />, route: { view: "changes" } },
       { label: t("Release history"), icon: <History />, route: { view: "release-history" } },

@@ -1,3 +1,4 @@
+import { integrates } from "./marking";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
@@ -17,7 +18,7 @@ const fieldClass = "grid min-w-0 gap-1 text-xs";
 
 export function Matches() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("Matching rules")} description={t("Only a builder can edit matching rules.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Matching rules")} description={t("Only a builder or integrator can edit matching rules.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Matching rules")} description={t("Say when rows from different systems are the same party, material or site, and whose value wins per field. One published rule per object; it applies to every source and pipeline writing it.")}
       actions={<Button onClick={() => open({ view: "match", params: { id: "new" } })}>{t("New matching rule")}</Button>} />
@@ -53,7 +54,7 @@ export function MatchEditor({ id }: { id: string }) {
     if (!saved) return;
     if (await decide(`build.match.${name}`, { type: "build.match", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) { const result = await query.refetch(); if (result.data?.record) load(result.data.record); }
   };
-  if (role("build") !== "builder") return <PageHeader title={t("Matching rules")} description={t("Only a builder can edit matching rules.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Matching rules")} description={t("Only a builder or integrator can edit matching rules.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Matching rules")} description={query.isError ? t("The matching rule could not be loaded.") : t("Loading…")} />;
   const target = entities.find((entity) => entity.type === draft.object);
   const fields = target?.fields ?? [], writable = fields.filter((f) => !f.readOnly);

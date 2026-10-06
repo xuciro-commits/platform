@@ -1,3 +1,4 @@
+import { integrates } from "./marking";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
@@ -8,7 +9,7 @@ import { PERIODS, periodLabel } from "../automate/workflow-model";
 // Data sources (ADR-0061): an external JSON endpoint whose rows become records
 // of one object. The editor is the whole wizard - endpoint, rows, mapping,
 // period - and the last pull shows what happened.
-type Draft = Api.Source & { dataset?: string };
+type Draft = Omit<Api.Source, "mapping" | "object" | "key"> & { dataset?: string; object: string; key: string; mapping: Api.SourceField[] };
 type ConnectionRow = Api.Connection;
 type DatasetRow = { id: string; title: string };
 const PROFILES = [["json", "JSON"], ["csv", "CSV"], ["odata", "OData entity set"], ["table", "Database table"]] as const;
@@ -18,7 +19,7 @@ const fieldClass = "grid min-w-0 gap-1 text-xs";
 
 export function DataSources() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("Data sources")} description={t("Only a builder can edit data sources.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Data sources")} description={t("Pull rows from a JSON or CSV endpoint, an OData entity set or a database table into one object, on a period or on request. Each row is the object's own create or edit, decided once per content.")}
       actions={<Button onClick={() => open({ view: "data-source", params: { id: "new" } })}>{t("New data source")}</Button>} />
@@ -58,7 +59,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const target = entities.find((entity) => entity.type === draft.object);
   const writable = (target?.fields ?? []).filter((field) => !field.readOnly);
   const setMapping = (mapping: Api.SourceField[]) => patch({ mapping });
-  if (role("build") !== "builder") return <PageHeader title={t("Data sources")} description={t("Only a builder can edit data sources.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Data sources")} description={query.isError ? t("The data source could not be loaded.") : t("Loading…")} />;
   const last = draft.last;
   const profile = draft.profile || "json", conn = connections.find((c) => c.id === draft.connection);

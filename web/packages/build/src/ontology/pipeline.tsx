@@ -1,6 +1,7 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
+import { MarkingTag, integrates } from "./marking";
 import { Button, Checkbox, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
 import { PERIODS, periodLabel } from "../automate/workflow-model";
 import { cell } from "./dataset";
@@ -19,7 +20,7 @@ type EnterpriseTarget = { source: string; stereotype: string; id: string; name: 
 const STEREOTYPES = ["ActualOrganization", "ActualPost", "ActualPerson", "ActualLocation", "ActualResource", "ActualProject"];
 const AT_KINDS = ["ResponsibleFor", "FillsPost", "ActualOrganizationRole", "IsCapableToPerform"];
 const EMPTY_ENTERPRISE: EnterpriseTarget = { source: "", stereotype: "ActualOrganization", id: "", name: "" };
-type Draft = { id: string; revision: number; name: string; title: string; input: string; steps: Step[]; expectations: Expectation[]; outputDataset?: string; outputObject?: string; outputEnterprise?: EnterpriseTarget; key?: string; every?: string; state: string; requested?: boolean; last?: Run };
+type Draft = { id: string; revision: number; name: string; title: string; input: string; steps: Step[]; expectations: Expectation[]; outputDataset?: string; outputObject?: string; outputEnterprise?: EnterpriseTarget; key?: string; every?: string; marking?: string; state: string; requested?: boolean; last?: Run };
 type DatasetRow = { id: string; name: string; title: string; schema?: { name: string; type: string }[] };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "", input: "", steps: [], expectations: [], state: "draft" });
 const KINDS = ["select", "rename", "cast", "filter", "compute", "lookup", "join", "dedupe", "aggregate", "sort"];
@@ -35,7 +36,7 @@ const kindHelp = (kind: string): string => ({
 
 export function Pipelines() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("Pipelines")} description={t("Only a builder can edit pipelines.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Pipelines")} description={t("Only a builder or integrator can edit pipelines.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Pipelines")} description={t("Transform a dataset into another dataset or into records of an object, step by step, with expectations that quarantine bad rows instead of writing them.")}
       actions={<Button onClick={() => open({ view: "pipeline", params: { id: "new" } })}>{t("New pipeline")}</Button>} />
@@ -70,7 +71,7 @@ export function PipelineEditor({ id }: { id: string }) {
     if (!saved) return;
     if (await decide(`build.pipeline.${name}`, { type: "build.pipeline", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) { const result = await query.refetch(); if (result.data?.record) load(result.data.record); }
   };
-  if (role("build") !== "builder") return <PageHeader title={t("Pipelines")} description={t("Only a builder can edit pipelines.")} />;
+  if (!integrates(role("build"))) return <PageHeader title={t("Pipelines")} description={t("Only a builder or integrator can edit pipelines.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Pipelines")} description={query.isError ? t("The pipeline could not be loaded.") : t("Loading…")} />;
   const last = draft.last, input = datasets.find((d) => d.id === draft.input);
   const columns = input?.schema?.map((f) => f.name) ?? [];
@@ -86,7 +87,8 @@ export function PipelineEditor({ id }: { id: string }) {
   const target = entities.find((entity) => entity.type === draft.outputObject);
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader title={draft.title || t("New pipeline")} description={t("Input → steps → expectations → output. Publish lets the host run it whenever the input gains a version; Run now asks for one run within seconds.")}
-      actions={<div className="flex min-w-0 flex-wrap gap-2">
+      actions={<div className="flex min-w-0 flex-wrap items-center gap-2">
+        <MarkingTag marking={draft.marking} />
         <Button onClick={() => open({ view: "pipeline" })}>{t("Pipelines")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
         <Button disabled={busy || !dirty && !!draft.id} onClick={() => void perform(save)}>{t("Save pipeline")}</Button>
