@@ -8,6 +8,7 @@
       "mes": "supervisor",
       "erp": "controller",
       "platform": "admin",
+      "build": "builder",
       "enterprise": "admin",
       "ai": "admin",
       "work": "admin",

@@ -118,7 +118,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 
 | 邮箱 | 主机 / 租户 | 成员 ID | 角色 | 组织 |
 |---|---|---|---|---|
-| `sup@plant.test` | MES `plant-sz` | `sup-1` | mes 主管；platform、org、ai 管理员 | 工厂 `plant-sz`（管两条线） |
+| `sup@plant.test` | MES `plant-sz` | `sup-1` | mes 主管；platform、enterprise、ai 管理员；build 构建者（builder） | 工厂 `plant-sz`（管两条线） |
 | `op1@plant.test` | MES | `op-l1` | mes 操作员；ai 用户 | 产线 `L1` |
 | `op2@plant.test` | MES | `op-l2` | mes 操作员；ai 用户 | 产线 `L2` |
 | `qa1@plant.test` | MES | `qa-1` | mes 质量；ai 用户 | — |
