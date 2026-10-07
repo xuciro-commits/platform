@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
 	"platformserver/platform"
 )
@@ -185,6 +186,11 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 		}
 	}
 	result := PromotionResult{From: from.ID, To: to.ID, Candidate: candidate.ID, Digest: artifact.Digest, Active: activate, Key: key, Assets: len(candidate.Assets)}
+	if activate {
+		if err := to.materialiseDrafts(candidate, member, now); err != nil {
+			return result, err
+		}
+	}
 	to.mu.Lock()
 	defer to.mu.Unlock()
 	if to.quarantined() {
@@ -300,4 +306,63 @@ func (t *Tenant) grantUsable(id string, now time.Time) (SupportGrant, error) {
 func jsonPayload(v any) json.RawMessage {
 	raw, _ := json.Marshal(v)
 	return raw
+}
+
+// materialiseDrafts gives an environment the builder drafts a candidate's
+// assets are published onto. Activation writes "published" onto the owning
+// draft row (release_install.go); an environment that never authored the
+// application has none, so each missing draft is created here through the
+// builder's own create action, as the promoting member, with the writable
+// fields of the sealed image and a key derived from the candidate (so the
+// member needs the builder role there; a publisher activates only what is
+// already drafted). The draft is addressed by its asset name, which is what
+// the candidate carries; a draft that already exists under that name is left
+// as it is, activation reconciles it.
+func (t *Tenant) materialiseDrafts(candidate platform.ReleaseCandidate, member platform.Member, now time.Time) error {
+	drafts, err := build.DraftsOf(candidate)
+	if err != nil {
+		return err
+	}
+	for _, draft := range drafts {
+		t.records.mu.Lock()
+		et := t.records.types[draft.Type]
+		exists := false
+		if et != nil {
+			nameField, _ := et.info.Field("name")
+			for _, row := range et.rows {
+				if row.value.FieldByIndex(nameField.Index).String() == draft.Name && !row.value.FieldByName("Record").Interface().(platform.Record).Archived {
+					exists = true
+					break
+				}
+			}
+		}
+		t.records.mu.Unlock()
+		if et == nil {
+			return fmt.Errorf("%s does not host %s", t.ID, draft.Type)
+		}
+		if exists {
+			continue
+		}
+		var image map[string]any
+		if err := json.Unmarshal(draft.Image, &image); err != nil {
+			return err
+		}
+		payload := map[string]any{}
+		for _, f := range et.info.Fields {
+			if v, ok := image[f.Name]; ok && !f.ReadOnly && v != nil {
+				payload[f.Name] = v
+			}
+		}
+		raw, _ := json.Marshal(payload)
+		sub := &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID,
+			IdempotencyKey: "promotion:" + candidate.ID + ":" + draft.Type + "/" + draft.Name,
+			Target:         &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Schema: &pb.SchemaRef{Name: draft.Type + ".create", Version: 1}, Payload: raw}
+		if _, refusal := t.Submit(member, sub, now); refusal != nil && refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
+			if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+				return fmt.Errorf("%s has no draft for %s/%s; creating it needs the builder role in %s (a publisher can only activate what is already drafted there)", t.ID, draft.Type, draft.Name, t.ID)
+			}
+			return fmt.Errorf("create draft %s/%s in %s: %s", draft.Type, draft.Name, t.ID, refusal.Code)
+		}
+	}
+	return nil
 }

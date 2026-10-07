@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:acf6f53eb33d32e7",
+  "revision": "sha256:67647191da747274",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5687,6 +5687,7 @@
         "useTheme",
         "useUnsavedChanges",
         "useViewCall",
+        "useViewTitle",
         "useViewVisible",
         "useWorkspace",
         "validateCanvasConnection",

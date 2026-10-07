@@ -928,7 +928,7 @@ export default {
   "Undoing:": "撤销中：",
   "Undone": "已撤销",
   "Unknown": "未知",
-  "Unknown entity type": "未知实体类型",
+  "No activated object {type} here yet. Its records appear once a release that includes it is active; a draft shows its fields in the object model.": "这里还没有已激活的对象 {type}。包含它的发布激活后才会出现记录；草稿阶段可在对象模型里查看字段。",
   "View": "视图",
   "Wait": "等待",
   "Waiting": "等待中",

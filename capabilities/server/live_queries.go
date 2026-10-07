@@ -32,13 +32,20 @@ func liveReadAllowed(p string) bool {
 	if strings.HasPrefix(p, "/v1/applications/") && strings.HasSuffix(p, "/runs") {
 		return true
 	}
-	if strings.HasPrefix(p, "/v1/capabilities/") {
+	if strings.HasPrefix(p, "/v1/capabilities/") || strings.HasPrefix(p, "/v1/releases/candidates/") {
 		return true
 	}
-	if strings.HasPrefix(p, "/v1/records/") || strings.HasPrefix(p, "/v1/aggregates/") || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") {
+	if strings.HasPrefix(p, "/v1/records/") || strings.HasPrefix(p, "/v1/aggregates/") {
 		return true
 	}
-	return slices.Contains([]string{"/v1/access", "/v1/permissions", "/v1/projects", "/v1/authz/explain", "/v1/members", "/v1/tenant", "/v1/account", "/v1/tokens", "/v1/sessions", "/v1/organization", "/v1/enterprise", "/v1/enterprise-metamodel", "/v1/enterprise-patterns", "/v1/enterprise-published", "/v1/packages", "/v1/settings", "/v1/audit", "/v1/personal-reads", "/v1/inbox", "/v1/requests", "/v1/capabilities", "/v1/release-profile", "/v1/ai-limits", "/v1/ai-models", "/v1/ai-providers", "/v1/ai/vendors", "/v1/me", "/v1/actions", "/v1/entities", "/v1/definitions", "/v1/apps", "/v1/protocols", "/v1/notifications", "/v1/views", "/v1/flows", "/v1/agents", "/v1/runs", "/v1/memories", "/v1/releases/active", "/v1/releases/candidates", "/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/integration-effects", "/v1/endpoints", "/v1/connectors", "/v1/agent-overview", "/v1/ai-usage"}, p) || strings.HasPrefix(p, "/v1/releases/candidates/")
+	// One segment under /v1/ is a platform read or an app's own read (served
+	// by GET /v1/{read}, e.g. an MES page's /v1/master); the mux check below
+	// still requires a GET route to exist. The stream itself, sign-in and the
+	// API description are not watched.
+	if rest, ok := strings.CutPrefix(p, "/v1/"); ok && rest != "" && !strings.Contains(rest, "/") {
+		return !slices.Contains([]string{"changes", "sign-in", "openapi.json"}, rest)
+	}
+	return slices.Contains([]string{"/v1/authz/explain", "/v1/ai/vendors"}, p)
 }
 func liveOperationRead(p string) bool {
 	return strings.HasPrefix(p, "/v1/applications/") && strings.HasSuffix(p, "/runs") || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") || slices.Contains([]string{"/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/integration-effects", "/v1/endpoints", "/v1/connectors", "/v1/protocols", "/v1/agent-overview", "/v1/ai-usage"}, p)

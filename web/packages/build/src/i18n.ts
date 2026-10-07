@@ -3348,6 +3348,7 @@ register("zh-CN", {
   "Choose a resource on the left, or create one with New.": "在左侧选择一个资源，或用“新建”创建。",
   "Unpublished changes": "未发布的变更",
   "Everything in this project is published.": "此项目中的所有内容都已发布。",
+  "Nothing to publish yet: the project has no resources.": "还没有可发布的内容：项目里还没有资源。",
   "Contents": "内容",
   "A published version is in the Applications portal. Saved edits remain drafts until the next release.": "已发布版本在应用门户中。保存的编辑在下次发布前仍为草稿。",
   "Not published yet. Publish reviews every draft in this project and activates them together.": "尚未发布。发布会审查此项目中的每个草稿并一起激活。",

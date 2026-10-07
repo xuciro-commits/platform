@@ -199,14 +199,20 @@ func (w Writeback) Fields(answer []byte) map[string]any {
 		// OData v2 wraps in d; a bare value is nothing to map.
 		return nil
 	}
+	// OData v2 wraps the entity in d. A mapping written against the raw
+	// answer (d.MaterialDocument) and one written against the entity
+	// (MaterialDocument) both find it (UX-14).
+	unwrapped := in
 	if d, ok := in["d"].(map[string]any); ok && len(in) == 1 {
-		in = d
+		unwrapped = d
 	}
 	out := map[string]any{}
 	for _, m := range w.Result {
 		v, ok := lookupPath(in, m.From)
 		if !ok {
-			continue
+			if v, ok = lookupPath(unwrapped, m.From); !ok {
+				continue
+			}
 		}
 		if c, err := convert(v, m.Convert); err == nil {
 			out[m.To] = c

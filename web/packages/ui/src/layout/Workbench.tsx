@@ -3,6 +3,7 @@ import { ChevronRight, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelL
 import { t } from "../i18n";
 import { cn } from "../lib/cn";
 import { Button } from "../primitives/button";
+import { useViewTitle } from "../shell/Workspace";
 
 /** The one editor container (ADR-0053 §4): title bar with breadcrumbs,
  * status, history and publish actions; a structure panel on the left; the
@@ -25,6 +26,7 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
   left?: WorkbenchPanel; right?: WorkbenchPanel; dock?: WorkbenchPanel; children: ReactNode; className?: string; mainLabel?: string;
   onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void;
 }) {
+  useViewTitle(typeof title === "string" ? title : undefined);
   const [layout, setLayout] = useState<Layout>(() => read(storageKey));
   const [drag, setDrag] = useState<{ side: "left" | "right" | "dock"; at: number; size: number }>();
   useEffect(() => { try { localStorage.setItem(`workbench:${storageKey}`, JSON.stringify(layout)); } catch { /* private mode */ } }, [layout, storageKey]);

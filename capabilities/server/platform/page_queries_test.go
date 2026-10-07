@@ -188,3 +188,19 @@ func TestFrozenQueryObjectChoiceProjection(t *testing.T) {
 		}
 	}
 }
+
+// A builder object's "only when" is the tag form in its saved body; the query
+// checker reads it as the parsed condition instead of refusing the candidate.
+func TestQueryObjectDescriptorReadsConditionalFields(t *testing.T) {
+	info, err := queryObjectDescriptor([]byte(`{"type":"build.item","fields":[{"name":"kind","type":"choice","choices":"refund,return,other"},{"name":"why","type":"text","when":"kind=refund,return"},{"name":"note","type":"text","when":""}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	why, ok := info.Field("why")
+	if !ok || why.When == nil || why.When.Field != "kind" || len(why.When.In) != 2 {
+		t.Fatalf("condition not read: %+v", why.When)
+	}
+	if note, _ := info.Field("note"); note.When != nil {
+		t.Fatalf("an empty condition became %+v", note.When)
+	}
+}

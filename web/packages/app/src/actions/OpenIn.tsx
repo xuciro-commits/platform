@@ -21,7 +21,7 @@ export function OpenIn({ type, exclude = [] }: { type: string; exclude?: OpenInP
   if (!exclude.includes("pages") && definition) {
     const key = assetKey(definition.ref);
     for (const page of definitions.filter((d) => d.page && assetKey(d.page.object) === key)) {
-      commands.push({ id: `page:${assetKey(page.ref)}`, label: t("Page: {title}", { title: page.page!.title }),
+      commands.push({ id: `page:${assetKey(page.ref)}`, label: t("Page: {title}", { title: page.page!.title || page.ref.name }),
         run: () => open({ view: "page", params: { app: page.ref.app, kind: page.ref.kind, name: page.ref.name } }) });
     }
   }

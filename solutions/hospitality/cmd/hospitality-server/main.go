@@ -5,6 +5,7 @@ package main
 import (
 	"flag"
 	"log"
+	_ "time/tzdata" // members' time zones resolve without a zoneinfo on the image (UX-13)
 
 	"hospitality"
 	"lodging"

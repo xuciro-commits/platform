@@ -302,7 +302,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
     const handle = setTimeout(load, 150);
     return () => { current = false; stop?.(); clearTimeout(handle); };
   }, [sourceIdentity, source.revision, pageKey, view, windowKey, visible]);
-  if (!info || !entity) return <p className="text-sm text-muted">{t("Unknown entity type")} {type}.</p>;
+  if (!info || !entity) return <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted">{t("No activated object {type} here yet. Its records appear once a release that includes it is active; a draft shows its fields in the object model.", { type })}</p>;
   const columnsOf = presentRecordColumns([{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
     ...columnsFor(entity,[...new Set(fields??listed(entity))].filter(name=>listed(entity).includes(name))).map((c) => ({ ...c, enableSorting: false }))],entity,info,columnPresentation);
   const total = page?.total ?? 0;
@@ -533,8 +533,8 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
       </section>}
       {!detailOnly && info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
       {properties}
-      {!detailOnly && (view.files.length > 0 || files) && <Files key={JSON.stringify([source.scope,type,id])} attached={view.files} files={files} />}
-      {!detailOnly && (view.comments.length > 0 || comments) && <Comments key={JSON.stringify([source.scope,type,id])} list={view.comments} following={view.following} comments={comments} />}
+      {!detailOnly && (view.files.length > 0 || files) && <Files key={JSON.stringify(["files",source.scope,type,id])} attached={view.files} files={files} />}
+      {!detailOnly && (view.comments.length > 0 || comments) && <Comments key={JSON.stringify(["comments",source.scope,type,id])} list={view.comments} following={view.following} comments={comments} />}
       {!detailOnly && related}
       {!detailOnly && (view.activity?.length ?? 0) > 0 && (
         <section>

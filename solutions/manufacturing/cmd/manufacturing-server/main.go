@@ -12,6 +12,7 @@ import (
 	"flag"
 	"log"
 	"time"
+	_ "time/tzdata" // members' time zones resolve without a zoneinfo on the image (UX-13)
 
 	"erp"
 	"erpadapter"

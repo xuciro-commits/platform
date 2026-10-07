@@ -190,7 +190,7 @@ export const entries: CatalogEntry[] = [
 /** Public nonvisual API, classified explicitly rather than pretending to be UI. */
 export const api = [
   "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
-  "defineEntity", "columnsFor", "recordSchema", "activeValues", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useUnsavedChanges", "notify",
+  "defineEntity", "columnsFor", "recordSchema", "activeValues", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useViewTitle", "useUnsavedChanges", "notify",
   "routeKey", "routeToHash", "routeFromHash", "layout", "diagramLayout", "diagramLayouts", "neighborhoodPositions", "canvasNodeHeight", "canvasNodeWidth", "canvasPlacement", "validateCanvasConnection",
   "flowStates", "useChartData", "groupDomain", "aggregateQuery", "aggregateValues", "columnOf",
   "groupable", "measurable", "entityFrom", "setCurrency", "humanizeKernelError",

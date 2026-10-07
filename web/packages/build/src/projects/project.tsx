@@ -243,7 +243,7 @@ export function ProjectHome({ id }: { id: string }) {
             </div>}
             <div className="grid gap-2">
               <h2 className="text-sm font-semibold">{t("Unpublished changes")} <span className="text-muted">({unpublished.length})</span></h2>
-              {!unpublished.length && <p className="text-xs text-muted">{loading ? t("Loading…") : t("Everything in this project is published.")}</p>}
+              {!unpublished.length && <p className="text-xs text-muted">{loading ? t("Loading…") : !owned.length ? t("Nothing to publish yet: the project has no resources.") : t("Everything in this project is published.")}</p>}
               <ul className="divide-y divide-border rounded-md border border-border">
                 {unpublished.slice(0, 12).map((item) => <li key={refKey(item.ref)}>
                   <Button variant="row" type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-row-hover" onClick={() => item.record && open(resourceRoute(item.kind, item.record.id, project.id))}>

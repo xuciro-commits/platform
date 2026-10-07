@@ -67,7 +67,7 @@ function Explain({ catalog }: { catalog: AppPermissions[] }) {
         <Tag label={v.allow ? t("allowed") : t("not allowed")} tone={v.allow ? "success" : "danger"} />
         <span>{v.reason}</span>
         <span className="text-xs text-muted">{t("rule")}: {v.rule}{v.role ? ` (${v.role})` : ""}{v.policy ? ` ${v.policy}` : ""}</span>
-        <span className="text-xs text-muted">{t("holds")}: {answer.data.roles.join(", ") || t("none")} · {t("needs")}: {answer.data.allowed.join(", ") || "—"}</span>
+        <span className="text-xs text-muted">{t("holds")}: {(answer.data.roles ?? []).join(", ") || t("none")} · {t("needs")}: {(answer.data.allowed ?? []).join(", ") || "—"}</span>
       </p>}
     </Panel>
   );

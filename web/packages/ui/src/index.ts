@@ -47,7 +47,7 @@ export {AIResult,type AIResultProps,type AIResultTurn} from "./components/AIResu
 export {ExternalFrame,validExternalFrame,type ExternalFrameProps,type ExternalFrameConfig} from "./components/ExternalFrame";
 export {StaticImage,validStaticImage,validStaticImageURL,type StaticImageProps,type StaticImageConfig} from "./components/StaticImage";
 export { Sheet } from "./primitives/sheet";
-export { Workspace, useWorkspace, useViewCall, useUnsavedChanges, notify, type Applications, type PlatformApplication, type Workspaces, type Rail, type RecentEntry, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
+export { Workspace, useWorkspace, useViewCall, useViewTitle, useUnsavedChanges, notify, type Applications, type PlatformApplication, type Workspaces, type Rail, type RecentEntry, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";
 export { Graph, layout, type GraphNode, type GraphEdge } from "./graph/Graph";

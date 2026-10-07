@@ -32,12 +32,25 @@ export function PayloadFields({ fields, values, onChange, preview = false }: { f
             : <RecordPicker id={id} type={f.ref} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
           : f.from ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
             : <ReadPicker id={id} field={f} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
+          : f.type === "json" ? <JsonInput id={id} value={value} onChange={set} />
           : f.type === "string" && String(value ?? "").length > 60 ? <Textarea id={id} rows={4} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
           : <Input id={id} type={f.type === "integer" || f.type === "number" ? "number" : f.type === "date" ? "date" : f.type === "datetime" ? "datetime-local" : "text"} value={value === undefined ? "" : String(value)}
               onChange={(e) => set(f.type === "integer" || f.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value)} />}
       </div>
     );
   })}</>;
+}
+
+/** A structured payload field (type json, e.g. a dataset load's rows): typed as text, submitted
+ * as the parsed value once it parses; until then the text stays and the field reads as invalid (UX-07). */
+function JsonInput({ id, value, onChange }: { id: string; value: unknown; onChange: (v: unknown) => void }) {
+  const [text, setText] = useState(() => value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value, null, 2));
+  const [invalid, setInvalid] = useState(false);
+  return <Textarea id={id} rows={6} className="font-mono" aria-invalid={invalid} value={text} placeholder='[{"id": 1}]' onChange={(e) => {
+    const next = e.target.value; setText(next);
+    if (!next.trim()) { setInvalid(false); onChange(undefined); return; }
+    try { onChange(JSON.parse(next)); setInvalid(false); } catch { setInvalid(true); onChange(next); }
+  }} />;
 }
 
 /** A list of the items of an app's read, for a payload field whose values are not records here (#129). */

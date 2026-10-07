@@ -16,6 +16,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     go build -trimpath -o /manufacturing-server ./cmd/manufacturing-server
 
 FROM alpine:3.22
+RUN apk add --no-cache tzdata
 ARG PLATFORM_REVISION
 LABEL org.opencontainers.image.revision=$PLATFORM_REVISION
 COPY --from=build /manufacturing-server /usr/local/bin/manufacturing-server
