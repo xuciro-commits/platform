@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:acf6f53eb33d32e7",
+  "revision": "sha256:4c9be5a5f6527140",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4640,6 +4640,7 @@
   },
   "consumers": {
     "ui/command-menu": [
+      "web/packages/app/src/OpenIn.tsx",
       "web/packages/app/src/actions/OpenIn.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow.tsx",
@@ -5687,6 +5688,7 @@
         "useTheme",
         "useUnsavedChanges",
         "useViewCall",
+        "useViewTitle",
         "useViewVisible",
         "useWorkspace",
         "validateCanvasConnection",
