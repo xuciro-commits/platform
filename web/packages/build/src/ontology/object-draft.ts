@@ -1,14 +1,13 @@
 // One draft session over a `build.object` record, shared by the object type
 // workbench and the action type workbench (ADR-0053 §5–§6): both edit the same
-// record through its own action, autosave it and publish it; the host checks
+// record through its own action, explicitly save it and publish it; the host checks
 // everything again at publication.
 import { useHost, useReadQuery } from "@platform/app";
 import { notify, t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDraftSession } from "../session/DraftSession";
-import { useAutoSave } from "../editor/workbench";
-import { actionIssues, type ObjectRecord, type Process } from "./object-model";
+import { actionIssues, objectChanges, type ObjectRecord, type Process } from "./object-model";
 
 const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", numbering: record.numbering });
 
@@ -19,20 +18,19 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const object = query.data?.record;
   const session = useDraftSession<Process>({ states: [], actions: [], access: [], fields: [], implements: [], extends: "" });
   const { draft: process, dirty } = session;
+  const baseline = useRef(process);
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string>(); // why the host refused, kept on screen
   const reset = useRef(onReset); reset.current = onReset;
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
-    if (object) { session.load(hydrate(object)); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`; }
+    if (object) { baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`; }
     setRefused(undefined); reset.current?.();
   });
   useEffect(() => {
     if (!object || dirty || busy || loaded.current === `${object.id}:${object.revision}`) return;
-    session.load(hydrate(object)); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`;
+    baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`;
   }, [object, dirty, busy, session.load]);
-  const saveRef = useRef<() => Promise<unknown>>(async () => false);
-  useAutoSave({ dirty, busy, save: () => saveRef.current() });
 
   const parent = object ? `build.${object.name}` : "";
   const targets = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent)
@@ -43,12 +41,15 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const save = async () => {
     setRefused(undefined);
     const expectedRevision = baseRevision.current;
-    const ok = await decide("build.object.edit", { type: "build.object", id }, process, { expectedRevision, onRefused: setRefused });
+    const changes = objectChanges(process, baseline.current);
+    if (!Object.keys(changes).length) return true;
+    const ok = await decide("build.object.edit", { type: "build.object", id }, changes, { expectedRevision, onRefused: setRefused });
     if (ok) {
       const result = await query.refetch();
       const confirmed = result.isSuccess && result.data?.record?.revision === expectedRevision + 1 ? result.data.record : undefined;
       baseRevision.current = expectedRevision + 1; loaded.current = `${id}:${baseRevision.current}`;
-      session.saved(process, confirmed ? hydrate(confirmed) : undefined); markSaved();
+      baseline.current = confirmed ? hydrate(confirmed) : process;
+      session.saved(process, confirmed ? baseline.current : undefined); markSaved();
     }
     return ok;
   };
@@ -57,7 +58,6 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     try { await action(); } catch { setRefused(t("The object request could not be completed. Your draft is still here.")); }
     finally { lock.current = false; setBusy(false); }
   };
-  saveRef.current = () => perform(save);
   const publish = async () => {
     setRefused(undefined);
     if (issues.length) { setRefused(issues.join(" ")); return; }

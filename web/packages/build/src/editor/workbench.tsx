@@ -33,9 +33,9 @@ export function DraftStatus({ state, problems = 0, archived }: { state?: string;
 }
 
 /** Publish ▾: review the release, install directly where the tenant allows it, discard the draft, archive. */
-export function PublishMenu({ type, record, dirty, busy = false, invalid = false, empty = false, onReview, onInstall, onDiscard, route, extra = [] }: {
+export function PublishMenu({ type, record, dirty, busy = false, invalid = false, empty = false, onReview, onInstall, onSave, onDiscard, route, extra = [] }: {
   type: string; record?: { id?: string; revision?: number; archived?: boolean; state?: string }; dirty: boolean; busy?: boolean; invalid?: boolean; empty?: boolean;
-  onReview: () => void; onInstall?: () => void; onDiscard?: () => void; route?: Route; extra?: ContextCommand[];
+  onReview: () => void; onInstall?: () => void; onSave?: () => void; onDiscard?: () => void; route?: Route; extra?: ContextCommand[];
 }) {
   const { open, close } = useWorkspace();
   const application = useApplicationScope();
@@ -52,6 +52,7 @@ export function PublishMenu({ type, record, dirty, busy = false, invalid = false
     ...(record?.id && !record.archived && archive.available ? [{ id: "archive", label: t("Archive…"), danger: true, disabled: busy, run: () => archive.take({ id: record.id!, revision: record.revision ?? 0 }, leave) }] : []),
   ];
   return <>
+    {onSave && <Button size="sm" disabled={busy || !dirty} onClick={onSave}>{t("Save")}</Button>}
     <div className="flex items-center">
       <Button variant="primary" size="sm" className="rounded-r-none" disabled={busy || invalid || empty} onClick={onReview} title={invalid ? t("Fix the problems first.") : empty ? t("Nothing to publish yet.") : undefined}>{t("Publish")}</Button>
       <ActionMenu label={t("Publish options")} variant="primary" icon={<ChevronDown />} commands={commands} />

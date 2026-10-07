@@ -29,6 +29,15 @@ export type ObjectScope = { owner?: string; unit?: string; structure?: string };
 export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[]; scope?: ObjectScope; implements?: string[]; extends?: string; numbering?: Numbering_ };
 /** The draft in hand: fields, lifecycle, access, and its shape — the interfaces it implements and the type it extends (ADR-0058 A2, A3). */
 export type Process = { states: State[]; actions: Action[]; access: Access[]; fields: Field[]; scope?: ObjectScope; implements?: string[]; extends?: string; numbering?: Numbering_ };
+/** An edit changes only the parts the person touched; null explicitly clears an optional part. */
+export function objectChanges(draft: Process, saved: Process): Record<string, unknown> {
+  const changes: Record<string, unknown> = {};
+  const keys = new Set([...Object.keys(saved), ...Object.keys(draft)] as (keyof Process)[]);
+  for (const key of keys) {
+    if (JSON.stringify(draft[key]) !== JSON.stringify(saved[key])) changes[key] = draft[key] ?? null;
+  }
+  return changes;
+}
 /** The reference an extension object carries to the record it extends. */
 export const baseField = "base";
 /** The fields of an interface the draft still lacks, by name and type. */

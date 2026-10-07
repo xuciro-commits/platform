@@ -174,7 +174,7 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
     crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }, { label: object.title, onClick: () => open({ view: "object-type", params: { id, tab: "actions" } }) }]}
     status={<DraftStatus state={object.state} problems={issues.length} />} saving={savingState(dirty, busy, refused)}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setPick(undefined); }, redo: () => { session.redo(); setPick(undefined); } }}
-    actions={<PublishMenu type="build.object" record={object} dirty={dirty} busy={busy} invalid={draft.issues.length > 0} onReview={() => void draft.perform(draft.review)} onInstall={() => void draft.perform(draft.publish)} onDiscard={discardChanges} route={{ view: "action-type", params: { id, action: name ?? "" } }} />}
+    actions={<PublishMenu type="build.object" record={object} dirty={dirty} busy={busy} invalid={draft.issues.length > 0} onSave={() => void draft.perform(draft.save)} onReview={() => void draft.perform(draft.review)} onInstall={() => void draft.perform(draft.publish)} onDiscard={discardChanges} route={{ view: "action-type", params: { id, action: name ?? "" } }} />}
     left={{ label: t("Action structure"), content: <div className="grid min-w-0 content-start">
       <PanelSection title={object.title} actions={<Button size="sm" variant="ghost" aria-label={t("Add an action")} title={t("Add an action")} disabled={!process.states.length} onClick={addAction}><Plus /></Button>}>
         <StructureRow icon={<Boxes />} label={t("Object type")} onClick={() => open({ view: "object-type", params: { id } })} />

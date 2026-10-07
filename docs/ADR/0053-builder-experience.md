@@ -259,7 +259,7 @@ AI 函数与代码函数套 Workbench：Structure = `Signature · Instructions/C
 | Undo/Redo | 任何草稿改动（含 Inspector 表单输入，按字段去抖合并） |
 | 删除 | `Delete` 删节点，若有子节点先确认；删除含被引用变量时 Problems 立即提示 |
 | 问题导航 | Problems 行点击 → 选中元素 + 滚动画布 + 高亮 Inspector 字段 |
-| 自动保存 | 500ms 去抖；标题栏显示 `Saving… / Saved · 12:03`；离线/失败显示重试 |
+| 草稿保存 | 对象/动作编辑器显式点击 Save；新增字段、状态、动作只改本地草稿，保存仅提交相对已加载版本的差异；拒绝保留草稿，不自动重试。发布审查仍先保存。其他编辑器保留现行自动保存实现 |
 | 发布 | `Publish ▾ → Publish now` 弹出摘要（将发布 N 个资源，含依赖）→ 确认；成功后状态徽标变 Published，Problems 清空 |
 | 空状态 | 新模块：三选一 —— 从空白 / 从模板 / 导入 Workshop；新页面：选起始布局 |
 | 命令面板 | `⌘K`：资源跳转 + `New …` + 当前编辑器命令（Add widget…, Wrap in tabs…） |
@@ -314,7 +314,7 @@ shared/      asset-controls, record-paths, release-profile（不变）
 | D3 | 事件改为效果链 | 维持单 target | 任何真实页面都需要"点击→设变量→开抽屉→刷新查询"的链；单 target 迫使用户造中间变量。 |
 | D4 | 自动化 = 线性卡片流，不是自由画布 | 复用流程画布 | 自动化 90% 是一触发多效果；画布增加理解成本。复杂逻辑交给逻辑流程。 |
 | D5 | 逻辑流程改为节点图 | 保持步骤列表 | 分支/循环/并行在列表里不可读；位置数据已存在。 |
-| D6 | 无"保存"按钮，自动保存 + 显式 Publish | 保存/发布双按钮 | 草稿会话已经自动提交；"保存"按钮只制造"我保存了没"的焦虑。 |
+| D6 | 对象/动作编辑器手动保存 + 显式 Publish；其他编辑器保留现行自动保存 | 所有编辑器一律自动保存 | 负责人走查确认对象声明需要明确提交时机；新增不触发后台写入，拒绝不重复提交。 |
 | D7 | Workbench 是唯一编辑器容器，放 `@platform/ui` | 每编辑器自建布局 | 一致的快捷键、面板记忆、Problems 行为只做一次。 |
 | D8 | Project 作用域取代 `ApplicationScope` | 继续按应用过滤 | 资源属于项目而非应用；一个对象被多个模块用。 |
 | D9 | Preview 并入每个编辑器 | 独立"候选测试"视图 | 测试与编辑在同屏才会被用。 |
@@ -355,7 +355,7 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 | ADR 决策 | 代码 |
 | --- | --- |
 | D6 单一 `Workbench` 容器（标题栏 · 结构 · 主区 · 检查器 · 底栏，尺寸记忆） | `@platform/ui` `layout/Workbench.tsx`（`Workbench`、`StructureRow`、`PanelSection`、`ProblemList`、`WorkbenchProblem`） |
-| D6 自动保存、`● Draft`、Publish 菜单 | `build/editor/workbench.tsx`（`useAutoSave`、`savingState`、`DraftStatus`、`PublishMenu`、`WorkbenchMessage`、`ResourceControls`） |
+| D6 草稿保存、`● Draft`、Publish 菜单 | `build/editor/workbench.tsx`（对象/动作的 Save、其他编辑器的 `useAutoSave`、`savingState`、`DraftStatus`、`PublishMenu`、`WorkbenchMessage`、`ResourceControls`） |
 | D1 Projects 取代 Application 编辑器 | `build/projects/project.tsx`（`ProjectsList`、`ProjectHome`：资源树 · 内容/设置 · 未发布变更底栏）、`projects/resources.ts`（资源种类与路由） |
 | D1 Workshop Module = 项目的页面 + 页头 + 导航 | `build/workshop/ModuleWorkbench.tsx`（模块树、页头编辑、分组、变量/查询汇总、模块预览）；`PageEditor` 作为模块内的页面视图（`module` 上下文） |
 | D4 页面编辑器：图层/组件库 · 画布 · 按选中对象切换的检查器 · 问题/变量底栏 · Preview 开关 | `build/workshop/editor.tsx`（`PageEditor({ id, module })`、`widgetInspectorTabs`）、`page-editor/WidgetLibrary.tsx` |
