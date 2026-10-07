@@ -45,7 +45,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     change({ ...process, actions: [...process.actions, { name: nameOf("action", process.actions.map((a) => a.name)), title, from: from ? [from] : [], to: process.states[1]?.name }] });
     setChosen({ kind: "action", at: process.actions.length });
   };
-  const { publish, review, perform } = draft;
+  const { save, publish, review, perform } = draft;
   const action = chosen?.kind === "action" ? process.actions[chosen.at] : undefined;
   const state = chosen?.kind === "state" ? process.states[chosen.at] : undefined;
   const field = chosen?.kind === "field" ? process.fields[chosen.at] : undefined;
@@ -72,6 +72,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     </PanelSection>
     <PanelSection title={t("Actions")} actions={<Button size="sm" variant="ghost" aria-label={t("Add an action")} title={t("Add an action")} disabled={!process.states.length} onClick={() => { addAction(); setTab("actions"); }}><Plus /></Button>}>
       {process.actions.map((a, at) => <StructureRow key={`${a.name}:${at}`} depth={1} icon={<Zap />} label={a.title || a.name} meta={a.to ? `→ ${process.states.find((s) => s.name === a.to)?.title ?? a.to}` : undefined} selected={chosen?.kind === "action" && chosen.at === at} onClick={() => choose({ kind: "action", at }, "actions")} />)}
+      {!process.states.length && <p className="px-2 text-[11px] text-muted">{t("Add a lifecycle state first: every action starts from a state.")}</p>}
     </PanelSection>
     <PanelSection title={t("Permissions")} actions={<Button size="sm" variant="ghost" aria-label={t("Add a role")} title={t("Add a role")} onClick={addAccess}><Plus /></Button>}>
       {process.access.map((a, at) => <StructureRow key={`${a.role}:${at}`} depth={1} icon={<Shield />} label={a.role} meta={t(a.read)} selected={chosen?.kind === "access" && chosen.at === at} onClick={() => choose({ kind: "access", at }, "permissions")} />)}
@@ -144,7 +145,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   return <Workbench storageKey="object-type" crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }]} title={object.title}
     status={<DraftStatus state={object.state} problems={issues.length} />} saving={savingState(dirty, busy, refused)}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setChosen(undefined); }, redo: () => { session.redo(); setChosen(undefined); } }}
-    actions={<PublishMenu type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "object-type", params: { id } }} />}
+    actions={<PublishMenu type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "object-type", params: { id } }} />}
     left={{ label: t("Object structure"), content: structure }}
     right={{ label: t("Object inspector"), content: inspector }}
     dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
