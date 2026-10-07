@@ -17,6 +17,8 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     go build -trimpath -o /hospitality-server ./cmd/hospitality-server
 
 FROM alpine:3.22
+ARG PLATFORM_REVISION
+LABEL org.opencontainers.image.revision=$PLATFORM_REVISION
 COPY --from=build /hospitality-server /usr/local/bin/hospitality-server
 # The workspace (ADR-0018), built beforehand: pnpm --dir web/apps/workspace build
 COPY web/apps/workspace/dist /web

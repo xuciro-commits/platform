@@ -49,7 +49,10 @@ services:
   manufacturing-server:
     # Permit the non-root host to append tenants.json through its owning group.
     group_add: ["${TENANTS_GID:-20}"]
-    build: { context: ../.., dockerfile: solutions/manufacturing/Dockerfile }
+    build:
+      context: ../..
+      dockerfile: solutions/manufacturing/Dockerfile
+      args: { PLATFORM_REVISION: "${PLATFORM_REVISION:-}" }
     command:
       - -addr=0.0.0.0:8490
       - -database=postgres://platform:platform-local-only@postgres:5432/platform
@@ -76,7 +79,10 @@ services:
 
   hospitality-server:
     group_add: ["${TENANTS_GID:-20}"]
-    build: { context: ../.., dockerfile: solutions/hospitality/Dockerfile }
+    build:
+      context: ../..
+      dockerfile: solutions/hospitality/Dockerfile
+      args: { PLATFORM_REVISION: "${PLATFORM_REVISION:-}" }
     command:
       - -addr=0.0.0.0:8495
       - -database=postgres://platform:platform-local-only@postgres:5432/platform

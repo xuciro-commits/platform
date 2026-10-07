@@ -193,19 +193,15 @@ cd apps/mes/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantL
 
 制造内存演示宿主的 `operator-l1`、`operator-l2` 同时持有 `build.user`，用于路线 43 的对象操作与人工收件箱探针；它们不能编辑构建器定义。此演示角色不修改 OIDC 部署的角色绑定。
 
-### WMS 装配走查环境
+### WMS 与应用工作台的部署关系
 
-当前 WMS 权限与收货走查入口为 `http://127.0.0.1:18505`，应用切换器选择 **WMS / 仓库管理**。构建者为 `manager`（`manager-1`），普通操作员为 `desk`（`desk-1`），业务主管为 `business-supervisor`（`business-supervisor-1`，仅 `build.supervisor`，由装配脚本经原授权动作配置）；这里只复用酒店组合宿主提供平台应用，没有添加 WMS 源码服务。应用编辑器 `/#/application?id=WMS-APP` 归集五个对象、收货流程及 Go/Wasm 算法，页面单独管理导航；`/#/release-review?kind=app&id=WMS-APP` 从应用审查完整候选。`PUT-001` 实收 125 件，经真实 Go/Wasm 计算 3 个托盘并由主管批准后已上架。18503 保留 `PUT-PARTIAL` / `PUT-OVER` 的跨对象校验样本，18502 保留前一版 `PUT-BOUND` 待审批样本，18501 保留此前收货样本及用户数据。
+本地只有两个业务工作区入口：酒店 solution `http://localhost:8495/`、制造 solution `http://localhost:8490/`。各自的宿主容器提供 API 与工作区；共同使用本地 PostgreSQL、RustFS、Rauthy 和计算服务，记录/日志/权限按租户隔离，不是两套独立的物理基础设施。
 
-宿主以 `PLATFORM_CODE_BUILDER_SOCKET`、`PLATFORM_WASM_WORKER_SOCKET` 连接已有 `.build/compute-review/builder.sock` 和 `worker.sock`，从 `solutions/hospitality` 启动：
+WMS 是在应用工作台保存并发布的 `build.app` 与对象/页面/流程/代码定义，复用所在 solution 的宿主、域名和端口，不启动 WMS 专用服务。酒店工作区可从 Projects 新建 WMS；保存为草稿后可在设计台继续编辑，交付后业务成员从应用门户打开。制造工作区同样可以创建受控应用。
 
-```sh
-PLATFORM_CODE_BUILDER_SOCKET="$PWD/../../.build/compute-review/builder.sock" \
-PLATFORM_WASM_WORKER_SOCKET="$PWD/../../.build/compute-review/worker.sock" \
-go run ./cmd/hospitality-server -addr 127.0.0.1:18505 -web ../../web/apps/workspace/dist
-```
+旧 `18505` 内存走查宿主已停止，误建的第三个 `wms-review` 容器和配置已撤回；本地不再把它作为入口。酒店和制造数据卷未清空。装配探针命令与所需身份/角色见 [Apps](../../docs/Apps.md#wms-受控装配探针)，`PLATFORM_URL` 指向这两个正式本地入口之一。
 
-编译 driver 仍需上文固定镜像与运行中的 Docker；装配命令见 [Apps](../../docs/Apps.md#wms-受控装配探针)。这些独立开发宿主是内存验证环境，停机丢失记录/制品；源码定义可重装，操作记录不能据此恢复。原 18498、18500、18501、18502、18503、18504 走查实例保留，未为此重启。需要持久化时使用已有 PostgreSQL/FileStore 部署路径，当前结果不构成持久部署验收。
+每次更新 main 后运行 `deploy/local/update.sh`：构建工作区、重建两台宿主、校验 Git 版本标记、健康及实际提供的页面资源。原数据卷和租户配置保留。
 
 ## 接入外部系统时填什么
 

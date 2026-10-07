@@ -256,7 +256,7 @@ WMS 自己只有三个对象：收货单、收货明细、收货作业；物料�
 在配置了编译/执行 socket 的开发宿主上，从仓库根运行以下命令。环境和开发身份见 [部署说明](../deploy/local/README.md#wms-装配走查环境)：
 
 ```sh
-PLATFORM_URL=http://127.0.0.1:18505 \
+PLATFORM_URL=http://localhost:8495 \
 PLATFORM_BUILDER_TOKEN=manager PLATFORM_OPERATOR_TOKEN=desk \
 PLATFORM_APPROVER_TOKEN=business-supervisor \
 node solutions/wms/assemble.mjs assemble
