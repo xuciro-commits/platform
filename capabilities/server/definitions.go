@@ -319,7 +319,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			}
 			def.PropertyVersions = maps.Clone(def.PropertyVersions)
 			visible := func(version string) bool {
-				if m.Roles[def.Ref.App] == "builder" {
+				if m.Holds(def.Ref.App, "builder") {
 					return true
 				}
 				for _, e := range entities {
@@ -384,7 +384,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				}
 			}
 		case platform.AssetFunction:
-			if def.Function == nil || !slices.Contains(def.Function.Roles, m.Roles[def.Ref.App]) {
+			if def.Function == nil || !m.May(def.Ref.App, def.Function.Name, def.Function.Roles).Allow {
 				continue
 			}
 			info, ok := entities[def.Function.Object]
@@ -395,7 +395,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				continue
 			}
 		case platform.AssetCompute:
-			if def.Operation == nil || !slices.Contains(def.Operation.Roles, m.Roles[def.Ref.App]) {
+			if def.Operation == nil || !m.May(def.Ref.App, def.Operation.Name, def.Operation.Roles).Allow {
 				continue
 			}
 		case platform.AssetPage:
@@ -454,7 +454,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 					}
 					section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool {
 						field, visible := shown.Field(name)
-						return !visible || section.Widget == "form" && (field.ReadOnly || !field.Writes(m.Roles[shown.App]))
+						return !visible || section.Widget == "form" && (field.ReadOnly || !field.WritesAny(m.RolesIn(shown.App)))
 					})
 					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
 					if (section.Widget == "chart" || section.Widget == "metric" || (section.Widget == "pivot" || section.Widget == "heatmap")) && !checkAggregateSection(section, shown) {
@@ -592,7 +592,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 					}
 					if section.Widget == "form" && slices.ContainsFunc(slices.Collect(maps.Keys(section.Inputs)), func(name string) bool {
 						field, writable := shown.Field(name)
-						if !writable || !field.Writes(m.Roles[shown.App]) {
+						if !writable || !field.WritesAny(m.RolesIn(shown.App)) {
 							return true
 						}
 						binding := section.Inputs[name]
@@ -630,7 +630,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 						edit := *section.InlineEdit
 						edit.Fields = slices.DeleteFunc(slices.Clone(edit.Fields), func(name string) bool {
 							f, visible := shown.Field(name)
-							return !visible || f.ReadOnly || !f.Writes(m.Roles[shown.App])
+							return !visible || f.ReadOnly || !f.WritesAny(m.RolesIn(shown.App))
 						})
 						if _, offered := actions[edit.Action.Name]; !offered || len(edit.Fields) == 0 {
 							section.InlineEdit = nil
@@ -660,9 +660,9 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 							continue
 						}
 						function, _, exists := owner.FunctionDefinition(section.Function.Ref.Name, version)
-						if !exists || !slices.Contains(function.Roles, m.Roles[section.Function.Ref.App]) || slices.ContainsFunc(function.Fields, func(name string) bool {
+						if !exists || !m.May(section.Function.Ref.App, function.Name, function.Roles).Allow || slices.ContainsFunc(function.Fields, func(name string) bool {
 							field, found := shown.Field(name)
-							return !found || !field.Reads(m.Roles[section.Function.Ref.App])
+							return !found || !field.ReadsAny(m.RolesIn(section.Function.Ref.App))
 						}) {
 							continue
 						}
@@ -672,7 +672,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 					}
 					if section.Operation != nil {
 						op, _, err := t.pageOperation(section.Operation)
-						if err != nil || !slices.Contains(op.Roles, m.Roles[section.Operation.Ref.App]) || slices.ContainsFunc(slices.Collect(maps.Values(section.Inputs)), func(binding platform.Binding) bool {
+						if err != nil || !m.May(section.Operation.Ref.App, op.Name, op.Roles).Allow || slices.ContainsFunc(slices.Collect(maps.Values(section.Inputs)), func(binding platform.Binding) bool {
 							if binding.Source != "subject" || len(binding.Path) == 0 {
 								return false
 							}
@@ -694,7 +694,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 							ref := page.RecordResourceObject(c.Compute.RecordVariable)
 							object, ok := entities[ref.Name]
 							op, _, err := t.pageOperation(&c.Compute.Operation)
-							if !ok || err != nil || !slices.Contains(op.Roles, m.Roles[c.Compute.Operation.Ref.App]) || page.CheckComputeResource(*c.Compute, object, op, v.Type) != nil {
+							if !ok || err != nil || !m.May(c.Compute.Operation.Ref.App, op.Name, op.Roles).Allow || page.CheckComputeResource(*c.Compute, object, op, v.Type) != nil {
 								delete(doc.Variables, id)
 								continue
 							}
@@ -820,7 +820,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		application.Header = application.VisibleHeader()
 		application.Resources = slices.DeleteFunc(slices.Clone(application.Resources), func(ref platform.AssetRef) bool {
 			if ref.Kind == platform.AssetFlow {
-				return m.Roles["build"] != "builder" || t.procs == nil || !t.procs.HasPublishedFlow(ref.Name)
+				return !m.Holds("build", "builder") || t.procs == nil || !t.procs.HasPublishedFlow(ref.Name)
 			}
 			return !visibleResources[ref]
 		})

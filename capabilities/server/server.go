@@ -287,6 +287,19 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, chain)
 	})
+	handle(Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors; ADR-0078)", Answer: Explanation{},
+		Query: []Param{{"member", "the member to ask about"}, {"permission", "an action's schema, or <app>:read:<name>"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if !m.Holds(PlatformApp, Admin) && !m.Holds(PlatformApp, Auditor) {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED})
+			return
+		}
+		out, err := t.Explain(r.URL.Query().Get("member"), r.URL.Query().Get("permission"))
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
 	metadata(Route{Pattern: "GET /v1/actions", Summary: "The caller's catalog: the actions their roles permit, in their language (ADR-0008)", Answer: []platform.Action{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Catalog(m), t.Language(m, r)))
 	})

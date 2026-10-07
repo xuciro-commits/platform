@@ -558,4 +558,9 @@ register("zh-CN", {
   "Permission": "权限",
   "allowed": "允许",
   "not allowed": "不允许",
+  "Why may — or may not — someone do something?": "某人为什么能——或不能——做某事？",
+  "Explain": "解释",
+  "rule": "规则",
+  "holds": "持有",
+  "needs": "需要",
 });

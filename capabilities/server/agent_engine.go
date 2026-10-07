@@ -602,7 +602,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		protocol, schema, _ := strings.Cut(tool.schema, "#")
 		if person != nil {
 			owner, provided, ok := t.provider(tool.schema)
-			if !ok || !owner.Manifest().Actions.Permits(person.Roles[owner.Manifest().ID], provided) {
+			if !ok || !owner.Manifest().Actions.PermitsAny(person.RolesIn(owner.Manifest().ID), provided) {
 				return "refused: " + person.ID + " may not " + schema + " at the provider", nil
 			}
 			if !run.Acts {

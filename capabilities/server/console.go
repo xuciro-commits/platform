@@ -401,7 +401,7 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 			return nil, invalid
 		}
 		return func(*pb.ChangeRecord) {
-			d.deriveRoles(m, today(m))
+			d.migrateGrants(m)
 			m.Grants = slices.DeleteFunc(m.Grants, func(g platform.Grant) bool {
 				return g.App == p.App && (p.Role == "" || g.Role == p.Role) && (p.Unit == "" || g.Unit == p.Unit)
 			})
@@ -427,7 +427,7 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		}
 	}
 	return func(r *pb.ChangeRecord) {
-		d.deriveRoles(m, today(m))
+		d.migrateGrants(m)
 		m.Grants = slices.DeleteFunc(m.Grants, func(g platform.Grant) bool { return g.App == p.App && g.Role == p.Role && g.Unit == p.Unit })
 		if p.App == "enterprise" && d.enterpriseRoles() && !c.Replaying {
 			m.Grants = slices.DeleteFunc(m.Grants, func(g platform.Grant) bool { return g.App == "org" })
@@ -461,7 +461,7 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	if name == "account" {
 		return d.Account(c.ID), nil
 	}
-	if t == nil || c.Role() != Admin && (c.Role() != Auditor || !auditorMayRead(name)) {
+	if t == nil || !c.Holds(PlatformApp, Admin) && (!c.Holds(PlatformApp, Auditor) || !auditorMayRead(name)) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	switch name {

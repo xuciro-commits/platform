@@ -37,22 +37,27 @@ func (d *Console) currentMember(m *platform.Member) platform.Member {
 		}
 	}
 	today := out.Today(time.Now())
+	d.migrateGrants(&out)
 	d.deriveRoles(&out, today)
 	out.Grants = slices.DeleteFunc(slices.Clone(out.Grants), func(g platform.Grant) bool { return !g.Active(today) })
 	return out
 }
 
-// deriveRoles projects a member's grants onto Roles (ADR-0078 §3.3): a member
-// without grants is legacy — their Roles become grants; one with grants holds
-// the ones active today, and Roles is the primary role per app (the app's
-// first declared role among them) for the places that ask for one.
-func (d *Console) deriveRoles(m *platform.Member, today string) {
-	if len(m.Grants) == 0 {
-		for _, app := range slices.Sorted(maps.Keys(m.Roles)) {
-			m.Grants = append(m.Grants, platform.Grant{App: app, Role: m.Roles[app]})
-		}
+// migrateGrants turns a legacy member's Roles into grants (ADR-0078 §3.3):
+// before grants existed, Roles was what they held.
+func (d *Console) migrateGrants(m *platform.Member) {
+	if len(m.Grants) > 0 {
 		return
 	}
+	for _, app := range slices.Sorted(maps.Keys(m.Roles)) {
+		m.Grants = append(m.Grants, platform.Grant{App: app, Role: m.Roles[app]})
+	}
+}
+
+// deriveRoles projects a member's grants onto Roles: the primary role per
+// app among the grants active today (the app's first declared role held),
+// for the places that ask for one.
+func (d *Console) deriveRoles(m *platform.Member, today string) {
 	active := slices.DeleteFunc(slices.Clone(m.Grants), func(g platform.Grant) bool { return !g.Active(today) })
 	m.Roles = map[string]string{}
 	for _, g := range active {

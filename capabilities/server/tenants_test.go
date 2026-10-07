@@ -188,4 +188,26 @@ func TestGrantsAddUpAndExpire(t *testing.T) {
 	if !strings.Contains(string(snap), `"grants"`) {
 		t.Fatal("grants not in the directory snapshot")
 	}
+
+	// ADR-0078 §3.4: the engine decides by any role held, and explains.
+	if x, err := tn.Explain("admin", "a.note"); err != nil || x.Verdict.Allow || x.Verdict.Rule != "none" || x.Verdict.Reason == "" {
+		t.Fatalf("explain before grant: %+v %v", x, err)
+	}
+	if got := decide(SchemaGrant, `{"app":"a","role":"writer"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if x, _ := tn.Explain("admin", "a.note"); !x.Verdict.Allow || x.Verdict.Role != "writer" || x.App != "a" {
+		t.Fatalf("explain after grant: %+v", x)
+	}
+	if x, _ := tn.Explain("admin", "platform:read:members"); !x.Verdict.Allow {
+		t.Fatalf("explain read: %+v", x)
+	}
+	if _, err := tn.Explain("nobody", "a.note"); err == nil {
+		t.Fatal("unknown member explained")
+	}
+	admin, _ := tn.member("admin")
+	if _, err := tn.Submit(admin, &pb.Submission{TenantId: "g", PrincipalId: "admin", Authority: "a", IdempotencyKey: "note-1",
+		Target: &pb.EntityRef{Type: "a.topic", Id: "t1"}, Schema: &pb.SchemaRef{Name: "a.note", Version: 1}, Payload: json.RawMessage(`{"text":"hi"}`)}, now); err != nil {
+		t.Fatalf("second role did not unlock the action: %v", err)
+	}
 }

@@ -3,7 +3,6 @@ package build
 import (
 	"fmt"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 
@@ -81,7 +80,7 @@ func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, pare
 	if creators == nil {
 		creators = related.Standard.Roles
 	}
-	if !related.Standard.Create || c.Role() != Builder && !slices.Contains(creators, c.Role()) {
+	if !related.Standard.Create || !c.Holds(c.App, Builder) && !c.May(c.App, "create", creators).Allow {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} may not create {object}", c.ID, cr.Object)
 	}
 	v := reflect.New(reflect.TypeOf(related.Model)).Elem()

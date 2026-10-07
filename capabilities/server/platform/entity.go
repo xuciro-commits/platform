@@ -3,6 +3,7 @@ package platform
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/platform/authz"
 	"reflect"
 	"slices"
 	"strings"
@@ -242,6 +243,17 @@ func (s Scope) Level(role string) string {
 		return ScopeTenant
 	}
 	return s.Default
+}
+
+// LevelFor is the widest level any of roles gives (ADR-0078 §3.3); none without a role.
+func (s Scope) LevelFor(roles []string) string {
+	levels := make([]string, 0, len(roles))
+	for _, r := range roles {
+		if r != "" {
+			levels = append(levels, s.Level(r))
+		}
+	}
+	return authz.Widest(levels)
 }
 
 // FieldInfo describes one field, for the host's reads and the UI kit's pages.
@@ -703,6 +715,16 @@ func (f FieldInfo) Reads(role string) bool {
 // Writes reports whether a member holding role sets it through generated actions.
 func (f FieldInfo) Writes(role string) bool {
 	return f.Reads(role) && (len(f.Write) == 0 || slices.Contains(f.Write, role))
+}
+
+// ReadsAny reports whether a member holding any of roles reads it (ADR-0078 §3.3: roles add up).
+func (f FieldInfo) ReadsAny(roles []string) bool {
+	return len(f.Read) == 0 || slices.ContainsFunc(roles, f.Reads)
+}
+
+// WritesAny reports whether a member holding any of roles sets it.
+func (f FieldInfo) WritesAny(roles []string) bool {
+	return slices.ContainsFunc(roles, f.Writes) || len(roles) == 0 && f.Writes("")
 }
 
 // describeDerived resolves Entity.Derived and Entity.Withheld to field indices

@@ -80,8 +80,8 @@ const (
 	Assistant  Role = "assistant" // an AI agent acting within the lines it is granted
 )
 
-// roleOf is a caller's role in this app.
-func roleOf(c platform.Caller) Role { return Role(c.Role()) }
+// holds reports whether the caller holds role in this app (any of their roles, ADR-0078).
+func holds(c platform.Caller, role Role) bool { return c.Holds(c.App, string(role)) }
 
 // SiteStructure is the organisation structure the plant's rules read (ADR-0012):
 // a member works on the lines it belongs to there, directly or through the plant.
@@ -226,7 +226,7 @@ func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bo
 	case SchemaStart, SchemaComplete:
 		return known && onLine(p.lineOf(sfc))
 	case SchemaNC:
-		return roleOf(who) == Quality || known && onLine(p.lineOf(sfc))
+		return holds(who, Quality) || known && onLine(p.lineOf(sfc))
 	case SchemaSign:
 		return true
 	case SchemaResend, SchemaConfirm, SchemaAnswer:
@@ -236,7 +236,7 @@ func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bo
 		return true // host function planning enforces the source's read scope
 	case SchemaReason:
 		refs, _ := p.identity.Resolve(&pb.EntityRef{Type: DowntimeType, Id: s.GetTarget().GetId()})
-		return roleOf(who) == Supervisor || len(refs) > 0 && onLine(p.resourceLine(resourceOfEvent(refs[0].ID)))
+		return holds(who, Supervisor) || len(refs) > 0 && onLine(p.resourceLine(resourceOfEvent(refs[0].ID)))
 	}
 	return false
 }

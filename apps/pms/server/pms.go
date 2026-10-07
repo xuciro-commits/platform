@@ -349,7 +349,7 @@ func reservations(c platform.Caller) []Reservation {
 // Input takes channel bookings; only a channel connector sends them.
 func (h *Hotel) Input(c platform.Caller, _ string, body []byte, now time.Time) (any, *kernel.Error) {
 	var b ChannelBooking
-	if c.Role() != string(Channel) && !c.Replaying || json.Unmarshal(body, &b) != nil {
+	if !c.Holds(c.App, string(Channel)) && !c.Replaying || json.Unmarshal(body, &b) != nil {
 		return nil, denied()
 	}
 	return h.IngestChannelBooking(c, b, now)

@@ -534,7 +534,7 @@ func (b *Build) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.
 
 // Draft archival never retires installed definitions or retained runtime versions.
 func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kernel.Error {
-	if c.Role() != Builder {
+	if !c.Holds(c.App, Builder) {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	published := false

@@ -233,7 +233,7 @@ func (d *Console) decideProfile(c platform.Caller, s *pb.Submission) (func(*pb.C
 	if d.members[id] == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if c.ID != id && c.Role() != Admin && !c.Replaying {
+	if c.ID != id && !c.Holds(PlatformApp, Admin) && !c.Replaying {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	var fields map[string]json.RawMessage

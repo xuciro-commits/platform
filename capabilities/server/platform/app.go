@@ -8,6 +8,7 @@ package platform
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/platform/authz"
 	"reflect"
 	"regexp"
 	"slices"
@@ -79,6 +80,12 @@ func (m Member) RolesIn(app string) []string {
 // Holds reports whether the member holds role in app, among any of their roles.
 func (m Member) Holds(app, role string) bool { return slices.Contains(m.RolesIn(app), role) }
 
+// May asks the engine (ADR-0078 §3.4) whether the member may exercise a
+// permission of app that names roles: any role they hold there suffices.
+func (m Member) May(app, permission string, roles []string) authz.Verdict {
+	return authz.Decide(authz.Request{Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: roles})
+}
+
 // Location is the member's timezone, UTC when unknown.
 func (m Member) Location() *time.Location {
 	if m.Timezone != "" {
@@ -103,9 +110,6 @@ type Caller struct {
 	Automation bool
 	rt         Runtime
 }
-
-// Role is the member's primary role in the app being called ("" for none).
-func (c Caller) Role() string { return c.Roles[c.App] }
 
 // RolesHere are every role the member holds in the app being called.
 func (c Caller) RolesHere() []string { return c.RolesIn(c.App) }

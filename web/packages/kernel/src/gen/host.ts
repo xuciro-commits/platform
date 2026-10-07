@@ -748,6 +748,15 @@ export type ErrorBody = {
   detail?: string;
 };
 
+export type Explanation = {
+  member: string;
+  permission: string;
+  app: string;
+  roles: string[];
+  allowed: string[];
+  verdict: Verdict;
+};
+
 export type Field = {
   name: string;
   type: string;
@@ -2907,6 +2916,14 @@ export type Vendor = {
   name: string;
   baseUrl: string;
   wire: string;
+};
+
+export type Verdict = {
+  allow: boolean;
+  rule: string;
+  reason: string;
+  role?: string;
+  policy?: string;
 };
 
 export type View = {

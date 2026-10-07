@@ -102,9 +102,9 @@ type entityType struct {
 // in the app may not read, so search, filters, sort, grouping and forms never
 // reach them; the rows are shared. hidden are those fields.
 func viewOf(m platform.Member, et *entityType) (view *entityType, hidden []platform.FieldInfo) {
-	role := m.Roles[et.info.App]
+	roles := m.RolesIn(et.info.App)
 	for _, f := range et.info.Fields {
-		if !f.Reads(role) {
+		if !f.ReadsAny(roles) {
 			hidden = append(hidden, f)
 		}
 	}
@@ -112,7 +112,7 @@ func viewOf(m platform.Member, et *entityType) (view *entityType, hidden []platf
 		return et, nil
 	}
 	info := et.info
-	info.Fields = slices.DeleteFunc(slices.Clone(info.Fields), func(f platform.FieldInfo) bool { return !f.Reads(role) })
+	info.Fields = slices.DeleteFunc(slices.Clone(info.Fields), func(f platform.FieldInfo) bool { return !f.ReadsAny(roles) })
 	return &entityType{info: info, rows: et.rows}, hidden
 }
 
@@ -944,11 +944,11 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 	defer t.records.mu.Unlock()
 	out := []platform.EntityInfo{}
 	for _, et := range t.records.types {
-		role := m.Roles[et.info.App]
-		if role != "" && et.info.Scope.Level(role) == platform.ScopeNone && et.info.Scope.Participants == nil {
-			continue // a type this role does not see at all (ADR-0037 18b)
+		roles := m.RolesIn(et.info.App)
+		if len(roles) > 0 && et.info.Scope.LevelFor(roles) == platform.ScopeNone && et.info.Scope.Participants == nil {
+			continue // a type none of these roles sees at all (ADR-0037 18b)
 		}
-		if role != "" || et.info.Scope.Participants != nil || et.info.Scope.Through != nil { // participants, and what belongs to a record, are read without a role
+		if len(roles) > 0 || et.info.Scope.Participants != nil || et.info.Scope.Through != nil { // participants, and what belongs to a record, are read without a role
 			view, _ := viewOf(m, et)
 			out = append(out, view.info)
 		}
@@ -994,7 +994,7 @@ func (t *Tenant) visible(m platform.Member, et *entityType, now time.Time) (func
 }
 
 func (t *Tenant) visibleIn(store *recordStore, m platform.Member, et *entityType, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
-	role, scope := m.Roles[et.info.App], et.info.Scope
+	roles, scope := m.RolesIn(et.info.App), et.info.Scope
 	if scope.Through != nil { // readable when the record it belongs to is; the store's lock is held by whoever calls it
 		seen := map[string]bool{}
 		return func(v reflect.Value) bool {
@@ -1010,27 +1010,28 @@ func (t *Tenant) visibleIn(store *recordStore, m platform.Member, et *entityType
 	participant := func(v reflect.Value) bool {
 		return scope.Participants != nil && slices.Contains(scope.Participants(v.Interface()), m.ID)
 	}
-	if role == "" {
+	if len(roles) == 0 {
 		if scope.Participants == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return participant, nil
 	}
-	base, err := t.scoped(m, et, role, now)
+	base, err := t.scoped(m, et, roles, now)
 	if base == nil || err != nil || scope.Participants == nil {
 		return base, err
 	}
 	return func(v reflect.Value) bool { return base(v) || participant(v) }, nil
 }
 
-// scoped is the scope m's role gives over a type's records (nil: all of them).
-func (t *Tenant) scoped(m platform.Member, et *entityType, role string, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
+// scoped is the widest scope m's roles give over a type's records (nil: all of them).
+func (t *Tenant) scoped(m platform.Member, et *entityType, roles []string, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
 	scope := et.info.Scope
+	level := scope.LevelFor(roles)
 	field := func(name string) func(reflect.Value) string {
 		f, _ := et.info.Field(name)
 		return func(v reflect.Value) string { return v.FieldByIndex(f.Index).String() }
 	}
-	switch scope.Level(role) {
+	switch level {
 	case platform.ScopeNone:
 		return func(reflect.Value) bool { return false }, nil
 	case platform.ScopeOwn:
@@ -1043,7 +1044,7 @@ func (t *Tenant) scoped(m platform.Member, et *entityType, role string, now time
 		var units []string
 		if t.directory != nil {
 			structure := scope.Structure
-			if scope.Level(role) == platform.ScopeUnit {
+			if level == platform.ScopeUnit {
 				structure = ""
 			}
 			units = t.directory.Units("member:"+m.ID, structure, m.Today(now))

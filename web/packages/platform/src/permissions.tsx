@@ -2,10 +2,13 @@
 // against — per app, per role, the actions it may call — read from the host,
 // never written here. Holders counts who has each role today.
 import { useReadQuery as useRead } from "@platform/app";
-import { PageHeader, Panel, Tag, t } from "@platform/ui";
+import { Button, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
+import { useState } from "react";
+import type { Member } from "./shared";
 
 type AppPermissions = Api.AppPermissions;
+type Explanation = Api.Explanation;
 
 export function Permissions() {
   const catalog = useRead<AppPermissions[]>("/v1/permissions");
@@ -14,6 +17,7 @@ export function Permissions() {
       <PageHeader title={t("Roles and permissions")} description={t("What each role in each app may do, as the apps declare it. A member holds roles through grants; a permission's id names the action.")} />
       {catalog.error && <p className="text-sm text-[var(--tone-danger)]">{String(catalog.error)} {t("— administrators only.")}</p>}
       <div className="grid max-w-5xl gap-4">
+        <Explain catalog={catalog.data ?? []} />
         {(catalog.data ?? []).map((app) => <AppMatrix key={app.app} app={app} />)}
       </div>
     </>
@@ -39,6 +43,36 @@ function AppMatrix({ app }: { app: AppPermissions }) {
             </tr>)}
           </tbody>
         </table>}
+    </Panel>
+  );
+}
+
+// Ask the engine why (ADR-0078 §3.4): a member, a permission, the verdict with its rule.
+function Explain({ catalog }: { catalog: AppPermissions[] }) {
+  const members = useRead<Member[]>("/v1/members").data ?? [];
+  const permissions = Array.from(new Set(catalog.flatMap((a) => a.roles.flatMap((r) => r.actions.map((x) => x.id))))).sort();
+  const [member, setMember] = useState("");
+  const [permission, setPermission] = useState("");
+  const [asked, setAsked] = useState<{ member: string; permission: string } | null>(null);
+  const answer = useRead<Explanation>(`/v1/authz/explain?member=${encodeURIComponent(asked?.member ?? "")}&permission=${encodeURIComponent(asked?.permission ?? "")}`, undefined, asked !== null);
+  const v = answer.data?.verdict;
+  return (
+    <Panel title={t("Why may — or may not — someone do something?")}>
+      <form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={(e) => { e.preventDefault(); if (member && permission) setAsked({ member, permission }); }}>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("Member")}</span>
+          <Select value={member} onChange={(e) => setMember(e.target.value)}><option value="">—</option>{members.map((m) => <option key={m.id} value={m.id}>{m.profile.displayName || m.id}</option>)}</Select></label>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("Permission")}</span>
+          <Input list="platform-permission-ids" value={permission} onChange={(e) => setPermission(e.target.value)} placeholder="app.entity.verb · app:read:name" className="w-72" />
+          <datalist id="platform-permission-ids">{permissions.map((p) => <option key={p} value={p} />)}</datalist></label>
+        <Button type="submit" variant="primary" disabled={!member || !permission}>{t("Explain")}</Button>
+      </form>
+      {answer.error && <p className="mt-2 text-xs text-[var(--tone-danger)]">{String(answer.error)}</p>}
+      {answer.data && v && <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+        <Tag label={v.allow ? t("allowed") : t("not allowed")} tone={v.allow ? "success" : "danger"} />
+        <span>{v.reason}</span>
+        <span className="text-xs text-muted">{t("rule")}: {v.rule}{v.role ? ` (${v.role})` : ""}{v.policy ? ` ${v.policy}` : ""}</span>
+        <span className="text-xs text-muted">{t("holds")}: {answer.data.roles.join(", ") || t("none")} · {t("needs")}: {answer.data.allowed.join(", ") || "—"}</span>
+      </p>}
     </Panel>
   );
 }

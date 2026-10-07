@@ -457,7 +457,7 @@ type Total struct {
 func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	admin := c.Role() == Admin
+	admin := c.Holds(c.App, Admin)
 	switch name {
 	case "ai-providers":
 		if !admin {

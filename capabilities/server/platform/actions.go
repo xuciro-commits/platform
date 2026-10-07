@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"platformserver/platform/authz"
 	"slices"
 	"sync"
 	"time"
@@ -181,6 +182,23 @@ func (c *Catalog) Permits(role, schema string) bool {
 // PermitsAny reports whether any of roles may call schema (a member with several grants, ADR-0078).
 func (c *Catalog) PermitsAny(roles []string, schema string) bool {
 	return slices.ContainsFunc(c.ForRoles(roles), func(a Action) bool { return a.Schema == schema })
+}
+
+// Decide asks the engine whether the caller's roles let them call schema
+// (ADR-0078 §3.4); a disabled capability is no action at all. Replay and
+// automation bypass in the ledger, which knows whether it is probing.
+func (c *Catalog) Decide(caller Caller, schema string) authz.Verdict {
+	a, ok := c.Action(schema)
+	if !ok || !c.Enabled(schema) {
+		return authz.Verdict{Rule: "none", Reason: "no action " + schema}
+	}
+	allowed := slices.Clone(a.Roles)
+	for i, r := range allowed {
+		if r == AnyMember {
+			allowed[i] = authz.AnyMember
+		}
+	}
+	return authz.Decide(authz.Request{Subject: authz.Subject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent}, Permission: schema, Allowed: allowed})
 }
 
 // For is the catalog a caller with role receives: enabled actions it may call.

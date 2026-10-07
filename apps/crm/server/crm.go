@@ -170,7 +170,7 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	o, known := platform.Get[Opportunity](who, id)
 	owns := func() bool { // closing and planning are for the owner or a manager
 		schema := s.GetSchema().GetName()
-		return schema != SchemaClose && schema != SchemaPlan || who.Role() == string(Manager) || known && o.Owner == who.ID
+		return schema != SchemaClose && schema != SchemaPlan || who.Holds(who.App, string(Manager)) || known && o.Owner == who.ID
 	}
 	return c.ledger.Receive(who, s, now, owns, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		invalid := fail(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
