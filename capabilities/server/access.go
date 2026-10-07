@@ -118,7 +118,9 @@ func (d *Console) decideAccess(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		p.ID = id
 		return func(*pb.ChangeRecord) {
 			d.roles[id] = &p
-			app.Manifest().Actions.DefineRole(id, p.Actions)
+			if !c.Staging() {
+				app.Manifest().Actions.DefineRole(id, p.Actions)
+			}
 		}, nil
 	case SchemaRoleRemove:
 		r := d.roles[id]
@@ -127,7 +129,7 @@ func (d *Console) decideAccess(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		}
 		return func(*pb.ChangeRecord) {
 			delete(d.roles, id)
-			if app := d.t.app(r.App); app != nil {
+			if app := d.t.app(r.App); app != nil && !c.Staging() {
 				app.Manifest().Actions.DefineRole(id, nil)
 			}
 		}, nil

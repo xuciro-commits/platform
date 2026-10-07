@@ -21,7 +21,7 @@ import (
 // standing is a decision of the directory: invited when added before they
 // sign in, suspended (nothing is held until resumed), left (offboarded: the
 // subjects go, the grants go, the record stays for history). A personal token
-// is a credential the host issues for scripts and integrations, kept hashed,
+// is a credential the host issues for scripts and integrations, derived from a private key,
 // bounded in time and scope; a session is the host's memory of a credential
 // it saw, which a member may end.
 const (
@@ -153,9 +153,8 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 	return nil, invalid
 }
 
-// decideToken issues or revokes a personal token (ADR-0079 §5). The secret is
-// made here and handed back through the record's payload once; the directory
-// keeps its hash.
+// decideToken issues or revokes a personal token (ADR-0079 §5). The directory
+// keeps its issuing change, never the secret; Minted derives it for collection.
 func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
@@ -219,6 +218,16 @@ func tokenHash(secret string) string {
 
 // mintWindow is how long after issue a token's secret may be collected.
 const mintWindow = 10 * time.Minute
+
+// A recovered token remains usable, but its one-time delivery window belongs
+// to the issuing process. Restarting must not reopen a collected secret.
+func (d *Console) closeTokenSecretWindows() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for id := range d.tokens {
+		d.minted[id] = true
+	}
+}
 
 // Minted hands out a token's secret once, to the member who issued it,
 // within mintWindow of the issue.
@@ -291,6 +300,17 @@ func sessionID(credential string) string { return tokenHash(credential)[:16] }
 // member ended that session, which the host then refuses.
 func (d *Console) noticed(member, credential, agent string, kind string, now time.Time) bool {
 	id := sessionID(credential)
+	token := ""
+	if kind == "token" {
+		d.mu.Lock()
+		for key, t := range d.tokens {
+			if t.Member == member && hmac.Equal([]byte(tokenSecret(d.tenant, t.ID, t.Change)), []byte(credential)) {
+				token = key
+				break
+			}
+		}
+		d.mu.Unlock()
+	}
 	d.sessions.mu.Lock()
 	defer d.sessions.mu.Unlock()
 	if d.sessions.revoked[id] {
@@ -301,7 +321,7 @@ func (d *Console) noticed(member, credential, agent string, kind string, now tim
 	}
 	s := d.sessions.seen[member][id]
 	if s == nil {
-		s = &Session{ID: id, Kind: kind, First: now, Agent: summarize(agent)}
+		s = &Session{ID: id, Kind: kind, Token: token, First: now, Agent: summarize(agent)}
 		d.sessions.seen[member][id] = s
 	}
 	s.Last = now

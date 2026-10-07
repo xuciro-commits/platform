@@ -54,4 +54,8 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 4. **轻量验证**：`go test ./apps/<改动包>/... ./platform/...` + 根包按名跑 `go test . -run 'TestLanguages|TestAPIContract'`；全量根包测试约 40 秒，`TestRecordsAtScale` 计时抖动可忽略。
 5. **沙箱会被重置**：`/home/user/platform` 以外（上传文件、`~/.gocache`）全丢，分支 HEAD 可能回退到旧树。每个整块做完立刻 `git commit && git push origin <会话分支>`；重置后 `git fetch && git reset --hard origin/<分支> && git clean -fd`，再跑第 1 步。需要长期保留的外部文件（规范、工具）提交进仓库（`docs/standards/`、`tools/`）。
 6. **分支纪律**：只在会话分支上提交与推送，**不要 merge**（任一方向）；需要 main 上的内容用 `git checkout origin/main -- <路径>` 复制后正常提交。
+   - **交接以固定提交为准**：交出分支前先提交并推送全部待交付改动，注明来源分支 HEAD、上次已取回的 main SHA、改动路径；未确认接入 main 的分支工作不能被 main 版本覆盖或 reset。
+   - **本地集成**：由负责人授权的本地代理在 main 按路径合成。以上次双方确认的内容基点区分两边独有文件与重叠文件，重叠文件三方合成；生成物由工具重生成。路径复制不建立 Git 祖先关系，不能把 `git merge-base` 当作最近同步点，也不能只看提交号宣称已经同步。
+   - **分支已有新工作时的取回（常态）**：分支代理不停工等待回执，所以回执到达时分支通常已有新提交。这时**不整树覆盖**，而是以上次确认的内容基点 B（双方都认可的 main SHA 或分支 SHA）做按路径三方取回：`git diff --name-only B origin/main` 为 main 变化集 M，`git diff --name-only B HEAD` 为分支变化集 S；M∖S 直接 `git checkout origin/main -- <路径>`，M∩S 用 `git merge-file`（base=B）三方合成，生成物重生成。取回后的同步确认不是 tree 相同，而是 **`git diff --name-only <main-SHA> HEAD` 恰好等于本块新工作的路径清单**（回执里列出这份清单与新的冻结 HEAD）；下一次本地集成以该 main SHA 为新的内容基点 B。
+   - **反向取回后再开工**（仅当分支没有新工作时适用整树复制）：本地代理推送整合后的 main SHA 并给出回执后，分支代理确认自己的来源改动全部保留，再按路径取回该 main SHA（包含代码、测试、文档、生成物），提交并推送到自己的分支；在没有新开发改动时，以两边 tree SHA 相同作为同步确认，并回报分支提交号。完成确认后再开始下一块；后续新增提交按下一次交接处理。
 7. **写文件**：编辑工具的相对路径以仓库根为准；拿不准就用绝对路径。

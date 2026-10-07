@@ -47,6 +47,8 @@ services:
       - rauthy:/app/data
 
   manufacturing-server:
+    # Permit the non-root host to append tenants.json through its owning group.
+    group_add: ["${TENANTS_GID:-20}"]
     build: { context: ../.., dockerfile: solutions/manufacturing/Dockerfile }
     command:
       - -addr=0.0.0.0:8490
@@ -55,12 +57,13 @@ services:
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -tenants=/etc/manufacturing/tenants.json
       - -templates=/etc/templates
+      - -host-admins=user:sup@plant.test
       - -web=/web
       - -project
       - -files=http://rustfs:9000/platform
     ports: ["127.0.0.1:${MANUFACTURING_PORT:-8490}:8490"]
     volumes: [./manufacturing/tenants.json:/etc/manufacturing/tenants.json, ../templates:/etc/templates:ro, compute-sockets:/run/platform-compute]
-    environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
+    environment: { PLATFORM_PERSONAL_TOKEN_KEY: "${PLATFORM_PERSONAL_TOKEN_KEY:-}", PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
       PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only,
       PLATFORM_WASM_WORKER_SOCKET: /run/platform-compute/worker.sock, PLATFORM_CODE_BUILDER_SOCKET: /run/platform-compute/builder.sock }
     depends_on:
@@ -72,6 +75,7 @@ services:
     restart: on-failure
 
   hospitality-server:
+    group_add: ["${TENANTS_GID:-20}"]
     build: { context: ../.., dockerfile: solutions/hospitality/Dockerfile }
     command:
       - -addr=0.0.0.0:8495
@@ -80,13 +84,14 @@ services:
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -tenants=/etc/hospitality/tenants.json
       - -templates=/etc/templates
+      - -host-admins=user:manager@hotel.test
       - -web=/web
       - -project
       - -files=http://rustfs:9000/platform
     ports: ["127.0.0.1:${HOSPITALITY_PORT:-8495}:8495"]
     volumes: [./hospitality/tenants.json:/etc/hospitality/tenants.json, ../templates:/etc/templates:ro, compute-sockets:/run/platform-compute]
     # Webhook signing secrets, referenced by name from endpoints (ADR-0014 D5); local-only.
-    environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
+    environment: { PLATFORM_PERSONAL_TOKEN_KEY: "${PLATFORM_PERSONAL_TOKEN_KEY:-}", PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
       PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only,
       PLATFORM_WASM_WORKER_SOCKET: /run/platform-compute/worker.sock, PLATFORM_CODE_BUILDER_SOCKET: /run/platform-compute/builder.sock }
     depends_on:

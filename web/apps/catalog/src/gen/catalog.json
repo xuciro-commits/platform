@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:079a572e209939f9",
+  "revision": "sha256:fc25c5cec0e50dcb",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2049,7 +2049,8 @@
         "field.attachment",
         "field.link",
         "field.formula",
-        "field.timestamp"
+        "field.timestamp",
+        "field.applies"
       ],
       "example": "Fields",
       "authority": "api",
@@ -5613,7 +5614,8 @@
     "pattern/workspace": [
       "web/apps/catalog/src/main.tsx",
       "web/apps/pms-desk/src/App.tsx",
-      "web/apps/workspace/src/App.tsx"
+      "web/apps/workspace/src/App.tsx",
+      "web/apps/workspace/src/HostOnly.tsx"
     ],
     "app/flow-instance": [
       "web/apps/workspace/src/chrome.tsx"
@@ -5641,6 +5643,7 @@
     "@platform/ui": {
       "source": "web/packages/ui/src/index.ts",
       "symbols": [
+        "activeValues",
         "aggregateQuery",
         "aggregateValues",
         "applyFilters",

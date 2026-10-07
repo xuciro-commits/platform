@@ -6,6 +6,8 @@ import (
 	"slices"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -133,4 +135,22 @@ func (t *Tenant) legacyConsolePredecessor(saved acceptedState, prior json.RawMes
 	}
 	hash, err := canonicalDigest(current)
 	return changed && err == nil && hash == saved.Before
+}
+
+// Retired in ADR-0079. Replay keeps the original schema, change identity and
+// Member.Language bytes; the current account projects them until edited.
+const legacyMemberLanguage = "platform.member.language"
+
+func (d *Console) replayMemberLanguage(s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+	var p struct{ Language string }
+	if s.GetTarget().GetType() != MemberType || json.Unmarshal(s.GetPayload(), &p) != nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	d.mu.Lock()
+	member := d.members[s.GetTarget().GetId()]
+	d.mu.Unlock()
+	if member == nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	return func(*pb.ChangeRecord) { d.mu.Lock(); defer d.mu.Unlock(); member.Language = p.Language }, nil
 }

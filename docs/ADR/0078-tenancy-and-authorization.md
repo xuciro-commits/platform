@@ -1,6 +1,7 @@
 # ADR-0078 — 租户与授权：租户即边界、权限即一等概念、一个授权引擎（XXL）
 
-状态：接受；A–E 已按下方「实际边界」交付，其余条目仍是设计 · 2026-10-06，边界核对 2026-10-07 · 承接 ADR-0012（组织与单位）、ADR-0025 D4、ADR-0028 D3（字段读写角色）、ADR-0037 18b（角色与范围）、ADR-0066（范围设计器）、ADR-0067/0068/0073（企业模型）、ADR-0075（Markings）、ADR-0069 第二程
+状态：接受，已实现有界基座；统一标记策略等退出判据尚未满足 · 2026-10-06 · 承接 ADR-0012（组织与单位）、ADR-0025 D4、ADR-0028 D3（字段读写角色）、ADR-0037 18b（角色与范围）、ADR-0066（范围设计器）、ADR-0067/0068/0073（企业模型）、ADR-0075（Markings）、ADR-0069 第二程
+
 
 ## 实际边界（As-built，2026-10-07）
 
@@ -119,11 +120,11 @@ permission := <app>.<entity>.<verb>          // 动作，等于今天的 action 
 
 | 块 | 内容 | 规模 |
 |---|---|---|
-| **A 租户** | `platform.tenant` 记录与 Organisation 页；模板与 `POST /v1/host/tenants`；`tenants.json` 取代 `directory.json`；语言/时区/币种统一来源 | L |
-| **B 权限目录与多授予** | `platform.Permissions(manifest)`；`Member.Grants` + 派生 `Roles`；`Permits(roles[])`、Scope/字段取并集；授予的单位/时效；Members 页重做。**已交付 2026-10-06**：`Grant{App,Role,Unit,Structure,From,Until,By,Reason,At}`、`RolesIn/Holds`、`Catalog.ForRoles/PermitsAny`、`GET /v1/permissions`、Roles 面板与矩阵页；字段级 read/write、页面/函数/操作的角色判定与 Scope 并集留给 C 的引擎（避免在 ~30 个调用点各写一次） | XL |
-| **C 引擎** | `platform/authz`：Decide/Verdict/explain；把 Submit/Read/narrow/export/navigation/agents 全部切到引擎；`related` 谓词；Markings 改写为内置策略。**部分交付 2026-10-06**（只有动作判定进了引擎；Read/narrow/export 按多角色并集但仍走记录存储；`related` 谓词未做，见顶部「实际边界」）：`authz.Decide(Request, policies...) Verdict{Allow,Rule,Reason,Role,Policy}`，顺序 bypass → deny 策略 → 角色 → allow 策略 → 解释；`Catalog.Decide`、`Member.May`、`FieldInfo.ReadsAny/WritesAny`、`Scope.LevelFor`（多角色取最宽）；ledger/记录可见性/字段遮蔽/页面/函数/操作/构建器/各行业 app 全部改为按全部角色判定，`Caller.Role()` 已删除；`GET /v1/authz/explain?member&permission` + 「Roles and permissions」页顶部的解释器。策略（`platform.policy`）的存储与编辑归 D；代码中不存在 Markings，该项作废 | XL |
-| **D 自定义角色、策略、委托、团队** | `platform.role`、`platform.policy`、`platform.team`、`member.delegate`；Roles/Policies 页；表达式变量。**已交付 2026-10-06**：`platform.role.save/remove`（租户自定义角色 = 某 app 可调用动作的集合，`Catalog.DefineRole`，不得覆盖 app 自带角色，可像任何角色一样授予、进矩阵）；`platform.policy.save/remove`（deny/allow × 权限或前缀 × `where{member,app,agent,target}` × 起止日，经 `Catalog.UsePolicies` 进引擎，deny 优先于任何角色）；`platform.team.save/remove`（成员在团队期间共同持有团队授予，`By=team:<id>`）；`platform.member.delegate`（任何成员把自己在某 app 持有的角色委托给他人至某日，`By=委托人`，管理员可撤销）；`GET /v1/access`；「Roles and permissions」页三栏 + 表单，My account 的「Delegate my roles」。表达式变量未做：`where` 以精确匹配代替，够用前不加 | L |
-| **E 减法与迁移** | 删 `c.Role()` 单角色调用点、`SettingLanguage`、`directory.json`、Markings 的专用 if；两行业应用的角色声明迁到目录；Testing/Platform §10.6 行。**已结 2026-10-06**：`c.Role()` 随 C 删除，`directory.json` 随 A 删除，Markings 不存在；`SettingLanguage` 是租户默认语言（Account.Effective 的回退），保留；行业应用的角色随各自 manifest 进 `GET /v1/permissions` 目录，无需迁移；Testing 行见 docs/Testing.md「基座补课」各行 | M |
+| **A 租户** | `platform.tenant` 记录与 Organisation 页；模板与 `POST /v1/host/tenants`；`tenants.json` 取代 `directory.json`；语言/时区/币种统一来源。宿主管理员以 `-host-admins` 显式配置认证主体，与租户角色隔离；本地容器可写回租户配置，重启沿原日志恢复。登录域、MFA 与会话时长当前只存为设置，尚不驱动 IdP/认证执行 | L |
+| **B 权限目录与多授予** | `platform.Permissions(manifest)`；`Member.Grants` + 派生 `Roles`；`Permits(roles[])`、Scope/字段取并集；授予的单位/时效；Members 页重做。**已交付 2026-10-06**：`Grant{App,Role,Unit,Structure,From,Until,By,Reason,At}`、`RolesIn/Holds`、`Catalog.ForRoles/PermitsAny`、`GET /v1/permissions`、Roles 面板与矩阵页；字段级 read/write、页面/函数/操作的多角色判定与 Scope 并集由 C 接入 | XL |
+| **C 引擎** | `platform/authz`：Decide/Verdict/explain；把 Submit/Read/narrow/export/navigation/agents 全部切到引擎；`related` 谓词；Markings 改写为内置策略。**部分交付 2026-10-06**（只有动作判定进了引擎；Read/narrow/export 按多角色并集但仍走记录存储；`related` 谓词未做，见顶部「实际边界」）：`authz.Decide(Request, policies...) Verdict{Allow,Rule,Reason,Role,Policy}`，顺序 bypass → deny 策略 → 角色 → allow 策略 → 解释；`Catalog.Decide`、`Member.May`、`FieldInfo.ReadsAny/WritesAny`、`Scope.LevelFor`（多角色取最宽）；ledger/记录可见性/字段遮蔽/页面/函数/操作/构建器/各行业 app 全部改为按全部角色判定，`Caller.Role()` 已删除；`GET /v1/authz/explain?member&permission` + 「Roles and permissions」页顶部的解释器。策略（`platform.policy`）的存储与编辑归 D；ADR-0075 的 Markings 已存在（`apps/build/marking.go`、`markings_test.go`）；现行传播、机密字段读者及受限导出保护保留，统一为引擎内置策略尚未实现 | XL |
+| **D 自定义角色、策略、委托、团队** | `platform.role`、`platform.policy`、`platform.team`、`member.delegate`；Roles/Policies 页；表达式变量。**已交付 2026-10-06**：`platform.role.save/remove`（租户自定义角色 = 某 app 可调用动作的集合，`Catalog.DefineRole`，不得覆盖 app 自带角色，可像任何角色一样授予、进矩阵）；`platform.policy.save/remove`（deny/allow × 权限或前缀 × `where{member,app,agent,target}` × 起止日，经 `Catalog.UsePolicies` 进引擎，deny 优先于任何角色）；`platform.team.save/remove`（成员在团队期间共同持有团队授予，`By=team:<id>`）；`platform.member.delegate`（任何成员把自己在某 app 持有的角色委托给他人至某日，`By=委托人`，管理员可撤销）；已决 Console 草稿完整隔离，角色目录只在持久化接受结果后安装，移除角色同步撤销其目录权限；`GET /v1/access`；「Roles and permissions」页三栏 + 表单，My account 的「Delegate my roles」。表达式变量未做：`where` 以精确匹配代替，够用前不加 | L |
+| **E 减法与迁移** | 删 `c.Role()` 单角色调用点、`SettingLanguage`、`directory.json`、Markings 的专用 if；两行业应用的角色声明迁到目录；Testing/Platform §10.6 行。**已实现边界**：`c.Role()` 随 C 删除，`directory.json` 随 A 删除，Markings 的现有专用保护保留，尚未迁入内置策略；`SettingLanguage` 是租户默认语言（Account.Effective 的回退），保留；行业应用的角色随各自 manifest 进 `GET /v1/permissions` 目录，无需迁移；Testing 行见 docs/Testing.md「基座补课」各行 | M |
 
 顺序 A → B → （ADR-0079 的 A/B 可并行）→ C → D → E。B 之前 ADR-0079 的 Profile 已能用（它只依赖成员 ID）。
 
