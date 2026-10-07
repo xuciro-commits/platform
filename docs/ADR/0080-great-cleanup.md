@@ -129,5 +129,8 @@ capabilities/server/
 | `definitionsFrom` 634 行：页面可见性 380 行、应用可见性 115 行内联在一个 switch 里 | `visiblePage` / `visibleApplication` 两个函数，主体 130 行 | `9629d9b` |
 | `checkSections` 613 行：每节校验 + 50 个 widget 的 switch 在一个循环体里 | `checkSection` / `checkWidget`，主体 45 行 | `9629d9b` |
 | `platform/pageui` 分包（第 4 波复查） | **放弃**：`page_*` 用 `Definition`（16 处）而 `Definition.Page` 又指回 `*Page`，分包必然成环；唯一出路是先抽 `AssetRef/EntityInfo/Field/Action/LinkType/NamedQuery` 为更低的声明包并改 46 个调用文件 + `apps/*/server`（沙箱编不了）。收益小于风险，`page_` 前缀族保留为 `platform` 内的一组文件 | 决定 |
+| `SimulateCandidate` 326 行，步骤循环内联 | `candidateRun.step`，主体 150 行 | `9ffa436` |
+| `applyAcceptedBatch` 248 行；`Deployment.Serve` 250 行 | `applyBatchRows`；`Deployment.listen` / `createTenant` | `db00604` |
+| 包级无说明，Tenant 组件只能靠读 host.go 字段注释 | `capabilities/server/doc.go` 组件地图；AGENTS.md 导航行指向它 | wave 5 |
 
 （继续追加）
