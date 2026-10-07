@@ -2,6 +2,8 @@ package platformserver
 
 import (
 	"encoding/json"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,12 +24,14 @@ import (
 //     the builder role that edits definitions;
 //   - projects: a tenant-level organisational association that also carries
 //     asset edit delegation. A project names members and the assets assigned to
-//     it; a member listed as an editor of a project may edit those assets
-//     without the app-wide builder role. The elevation is computed per
-//     submission from its target and is enforced on the submission path, so a
-//     direct API call is checked exactly like the professional editor and a
-//     filtered list never masquerades as isolation. Activation still requires
-//     the app-wide builder or publisher role.
+//     it; an editor of a live project holds the builder role through it (a
+//     derived grant, `By: project:<id>`, ADR-0078 §3.3), so the Studio, the
+//     reads and the action catalogue open for them like for any builder. The
+//     bound is enforced on the submission path from each submission's target:
+//     a builder role held only through projects may draft the named assets and
+//     nothing else, so a direct API call is checked exactly like the
+//     professional editor and a filtered list never masquerades as isolation.
+//     Publishing and activation stay with the app-wide builder or publisher.
 //
 // None of these change what a definition edit or an activation means: they only
 // decide who may ask for one.
@@ -180,36 +184,61 @@ func (p BuildProject) covers(ref ProjectAsset) bool {
 	return false
 }
 
-// delegatedElevation returns the member with builder rights on the asset this
-// submission edits, when a project delegates them. Anything that is not an
-// asset edit inside the build app is left untouched, and activation schemas are
-// never delegated.
-func (t *Tenant) delegatedElevation(m platform.Member, s *pb.Submission) platform.Member {
-	if m.Agent || s == nil || s.GetTarget() == nil {
-		return m
+// projectGrants are the builder grants a member holds through projects
+// (WorkQueue #141, ADR-0078 §3.3): editor of a live project → builder in the
+// build app, `By: project:<id>`. The grant is real for reading, loading the
+// Studio and the action catalogue; delegatedBound keeps its writes to the
+// assets the projects name. Call with d.mu held.
+func (d *Console) projectGrantsLocked(member string) []platform.Grant {
+	var out []platform.Grant
+	if m := d.members[member]; m != nil && m.Agent {
+		return out
 	}
-	d := consoleOf(t)
-	if d == nil {
-		return m
+	for _, id := range slices.Sorted(maps.Keys(d.projects)) {
+		p := d.projects[id]
+		if p.Archived {
+			continue
+		}
+		for _, e := range p.Members {
+			if e.Member == member && e.Role == ProjectEditorRole {
+				out = append(out, platform.Grant{App: build.ID, Role: build.Builder, By: "project:" + id, Reason: p.Title})
+				break
+			}
+		}
 	}
+	return out
+}
+
+// delegatedBound refuses what a member whose builder role comes only from
+// projects may not do in the build app: anything but a draft edit of an asset
+// one of their projects names. A member who holds the builder role in their
+// own right (directly, by team or delegation) is not bounded. Agents hold no
+// project delegation.
+func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Error {
 	owner := t.owner["action:"+s.GetSchema().GetName()]
 	if owner == nil || owner.Manifest().ID != build.ID {
-		return m
+		return nil
 	}
+	viaProject := false
+	var independent []string
+	for _, g := range m.Grants {
+		if g.App == build.ID {
+			if strings.HasPrefix(g.By, "project:") {
+				viaProject = true
+			} else {
+				independent = append(independent, g.Role)
+			}
+		}
+	}
+	if !viaProject || slices.Contains(independent, build.Builder) || owner.Manifest().Actions.PermitsAny(independent, s.GetSchema().GetName()) { // preserve only actions held independently
+		return nil
+	}
+	d := consoleOf(t)
 	ref, ok := delegatedAsset(s)
-	if !ok || !d.edits(m.ID, ref) {
-		return m
+	if m.Agent || d == nil || !ok || !d.edits(m.ID, ref) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project delegation covers only the draft edits of the assets your projects name; {action} on {target} is outside it", s.GetSchema().GetName(), target(s))
 	}
-	if m.Roles[build.ID] == build.Builder {
-		return m
-	}
-	out := m
-	out.Roles = map[string]string{}
-	for app, role := range m.Roles {
-		out.Roles[app] = role
-	}
-	out.Roles[build.ID] = build.Builder
-	return out
+	return nil
 }
 
 // delegatedAsset maps a draft-edit submission to the asset it edits. Only the
@@ -248,4 +277,21 @@ func auditorMayRead(name string) bool {
 		}
 	}
 	return false
+}
+
+// holdsIndependentBuildRole excludes the builder derived from a project when
+// authorizing app-wide release work. Old recorded seats without grants keep
+// their explicit Roles value.
+func holdsIndependentBuildRole(m platform.Member, roles ...string) bool {
+	held := false
+	for _, g := range m.Grants {
+		if g.App != build.ID {
+			continue
+		}
+		held = true
+		if !strings.HasPrefix(g.By, "project:") && slices.Contains(roles, g.Role) {
+			return true
+		}
+	}
+	return !held && slices.Contains(roles, m.Roles[build.ID])
 }

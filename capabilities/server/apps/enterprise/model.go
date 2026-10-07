@@ -168,12 +168,26 @@ func (m Model) units(party, kind string, day Date) []string {
 			}
 		}
 	}
+	return m.descendants(out, kind, day)
+}
+
+// descendants expands only active elements and placements of the named structure.
+func (m Model) descendants(units []string, kind string, day Date) []string {
+	var out []string
+	add := func(id string) {
+		if m.live(id, day) && !slices.Contains(out, id) {
+			out = append(out, id)
+		}
+	}
+	for _, id := range units {
+		add(id)
+	}
 	if kind == "" {
 		return out
 	}
 	for i := 0; i < len(out); i++ {
 		for _, r := range m.Relationships {
-			if r.Stereotype == Placement && r.Kind == kind && r.Target == out[i] && activeOn(r.From, r.Until, day) && m.live(r.Source, day) {
+			if r.Stereotype == Placement && r.Kind == kind && r.Target == out[i] && activeOn(r.From, r.Until, day) {
 				add(r.Source)
 			}
 		}

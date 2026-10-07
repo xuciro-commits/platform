@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:fc25c5cec0e50dcb",
+  "revision": "sha256:117eb172e7e4a8a0",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4728,6 +4728,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/apps.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/index.tsx",
@@ -5014,6 +5015,7 @@
       "web/packages/build/src/ontology/property-type.tsx",
       "web/packages/build/src/ontology/query.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
+      "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/editor.tsx",

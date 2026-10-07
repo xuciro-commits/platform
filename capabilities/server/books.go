@@ -137,6 +137,13 @@ func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time
 			}
 		}
 	}
+	return t.submitAutomated(app, caller, sub, now)
+}
+
+// submitAutomated records sub as the platform's own decision, by caller (an
+// app's automation); t.mu is held.
+func (t *Tenant) submitAutomated(app platform.App, caller platform.Caller, sub *pb.Submission, now time.Time) *kernel.Error {
+	sub.PrincipalId = caller.ID
 	if result, ok := app.(platform.ResultApp); ok && t.AcceptResult != nil {
 		_, err := t.submitAccepted(result, caller.Member, sub, now, true)
 		return err

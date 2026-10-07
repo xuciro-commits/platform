@@ -56,6 +56,7 @@ type Console struct {
 	tenant   string
 	members  map[string]*platform.Member
 	subjects map[string]string    // subject → member ID
+	then     func()               // what the decision being applied says once the lock is released
 	profiles map[string]*Profile  // member ID → profile (ADR-0079)
 	tokens   map[string]*Token    // ADR-0079 §5, hashed
 	minted   map[string]bool      // token secrets already handed out
@@ -144,7 +145,7 @@ func (d *Console) Identities() []Identity {
 	defer d.mu.Unlock()
 	out := []Identity{}
 	for subject, id := range d.subjects {
-		if m := d.members[id]; m != nil {
+		if m := d.members[id]; m != nil && m.Status != platform.MemberLeft {
 			out = append(out, Identity{Token: subject, Tenant: d.tenant, Member: id, Roles: d.currentMember(m).Roles})
 		}
 	}
@@ -200,12 +201,6 @@ func (d *Console) Restore(raw json.RawMessage) error {
 	if d.profiles == nil {
 		d.profiles = map[string]*Profile{}
 	}
-	if s.Projects != nil {
-		d.projects = s.Projects
-	}
-	if s.Packages != nil {
-		d.packages = s.Packages
-	}
 	d.restoreAccess(s)
 	return nil
 }
@@ -213,6 +208,13 @@ func (d *Console) Restore(raw json.RawMessage) error {
 // restoreAccess takes the access configuration (ADR-0078 D) and tokens
 // (ADR-0079 D) of a decided state.
 func (d *Console) restoreAccess(s consoleState) {
+	d.projects, d.packages = s.Projects, s.Packages
+	if d.projects == nil {
+		d.projects = map[string]*BuildProject{}
+	}
+	if d.packages == nil {
+		d.packages = map[string]*InstalledPackage{}
+	}
 	if d.t != nil {
 		for id, role := range d.roles {
 			next := s.Roles[id]
@@ -266,6 +268,9 @@ func (d *Console) holding(app, role string) []string {
 
 // addressLocked is the email a member signs in with ("" for services and agents). Call with d.mu held.
 func (d *Console) addressLocked(member string) string {
+	if m := d.members[member]; m != nil && m.Status == platform.MemberLeft {
+		return ""
+	}
 	var out []string
 	for subject, id := range d.subjects {
 		if email, ok := strings.CutPrefix(subject, "user:"); ok && id == member {
@@ -300,7 +305,7 @@ func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.De
 // remain outside this path until their respective owners can be staged too.
 func (d *Console) AcceptedLedger() *platform.Ledger { return d.ledger }
 func (*Console) AcceptedActionSchemas() []string {
-	return []string{SchemaAdd, SchemaInvite, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard, SchemaGrant, SchemaRevoke, SchemaDelegate, SchemaTokenIssue, SchemaTokenRevoke, SchemaRoleSave, SchemaRoleRemove, SchemaPolicySave, SchemaPolicyDrop, SchemaTeamSave, SchemaTeamRemove, SchemaProfileUpdate, SchemaOperationCall, SchemaProjectSave, SchemaProjectArchive,
+	return []string{SchemaAdd, SchemaInvite, SchemaJoin, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard, SchemaGrant, SchemaRevoke, SchemaDelegate, SchemaTokenIssue, SchemaTokenRevoke, SchemaRoleSave, SchemaRoleRemove, SchemaPolicySave, SchemaPolicyDrop, SchemaTeamSave, SchemaTeamRemove, SchemaProfileUpdate, SchemaOperationCall, SchemaProjectSave, SchemaProjectArchive,
 		SchemaPackageInstall, SchemaPackageUpgrade, SchemaPackageDrain, SchemaPackageRetire}
 }
 
@@ -426,7 +431,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				apply, err = d.decideAccess(c, s)
 			case s.GetSchema().GetName() == SchemaDelegate:
 				apply, err = d.decideDelegate(c, s)
-			case slices.Contains([]string{SchemaInvite, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard}, s.GetSchema().GetName()):
+			case slices.Contains([]string{SchemaInvite, SchemaJoin, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard}, s.GetSchema().GetName()):
 				apply, err = d.decideLifecycle(c, s)
 			default:
 				apply, err = d.decideMember(c, s)
@@ -437,8 +442,13 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 			}
 			return func(r *pb.ChangeRecord) {
 				d.mu.Lock()
-				defer d.mu.Unlock()
 				apply(r)
+				then := d.then
+				d.then = nil
+				d.mu.Unlock()
+				if then != nil { // what the decision tells others, outside the console's lock
+					then()
+				}
 			}, err
 		}
 		if declared.Target == PackageType {
@@ -491,7 +501,8 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		if !strings.HasPrefix(p.Subject, "user:") && !strings.HasPrefix(p.Subject, "client:") {
 			return nil, invalid
 		}
-		if m != nil || d.subjects[p.Subject] != "" {
+		bound := d.members[d.subjects[p.Subject]]
+		if m != nil || bound != nil && bound.Status != platform.MemberLeft {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		return func(*pb.ChangeRecord) {

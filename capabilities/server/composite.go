@@ -185,7 +185,10 @@ func (t *Tenant) stageCompositeLocked(m platform.Member, edits []CompositeEdit, 
 		sub := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID,
 			IdempotencyKey: key + "#" + strconv.Itoa(i), Target: edit.Target,
 			Schema: &pb.SchemaRef{Name: edit.Schema, Version: 1}, Payload: edit.Payload}
-		if _, err := draft.Submit(t.delegatedElevation(m, sub), sub, now); err != nil {
+		if err := t.delegatedBound(m, sub); err != nil {
+			return nil, fmt.Errorf("edit %d: %s refused (%s)", i+1, edit.Schema, err.Error())
+		}
+		if _, err := draft.Submit(m, sub, now); err != nil {
 			return nil, fmt.Errorf("edit %d: %s refused (%s)", i+1, edit.Schema, err.Error())
 		}
 	}

@@ -215,6 +215,8 @@ type Directory interface {
 	// Units are the units party ("member:<id>") belongs to on day, and those
 	// below them in structure ("" for the units themselves).
 	Units(party, structure string, day platform.Date) []string
+	// Below expands units only through active placements of this structure.
+	Below(units []string, structure string, day platform.Date) []string
 	// Holders are the members with role (any, when empty) in unit or a unit above it in structure on day.
 	Holders(structure, unit, role string, day platform.Date) []string
 	// Calendar is the working calendar of party ("member:<id>"; "" for the

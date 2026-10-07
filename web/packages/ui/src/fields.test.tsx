@@ -84,7 +84,7 @@ test("a record form uses field editors and reports field errors", async () => {
   fireEvent.change(screen.getByLabelText("Supplier"), { target: { value: "buyer@example.com" } });
   fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "raw" } });
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save" })); });
-  expect(submit).toHaveBeenCalledWith({ name: "Bolt", kind: "raw", supplier: "buyer@example.com" }, expect.anything());
+  expect(submit).toHaveBeenCalledWith({ name: "Bolt", kind: "raw", supplier: "buyer@example.com" }); // one value: the form never leaks the DOM event
 });
 
 // Words a person types, with no list to choose from: the editor of a tags field

@@ -34,7 +34,7 @@ function controlPanelNavigation(host: Host): NavSection[] {
       ...(admin(host) || host.role("enterprise") ? [item(t("Enterprise"), <Network />, "enterprise")] : []),
     ] },
     { label: t("Packages and capabilities"), items: [
-      ...(admin(host) || auditor(host) ? [item(t("Installed packages"), <Blocks />, "apps")] : []),
+      ...(admin(host) || auditor(host) ? [item(t("Packages"), <Blocks />, "apps")] : []),
       ...(admin(host) ? [item(t("Capability matrix"), <Grid3x3 />, "matrix"), item(t("Protocols"), <Cable />, "protocols"), item(t("App settings"), <SlidersHorizontal />, "app-settings")] : []),
     ] },
     { label: t("Models"), items: [...(host.role("ai") === "admin" ? [item(t("Providers and models"), <Bot />, "ai-providers")] : [])] },
@@ -65,7 +65,7 @@ const controlPanelViews: View[] = [
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
   { id: "permissions", title: () => t("Roles and permissions"), render: () => <Permissions /> },
   { id: "enterprise", title: () => t("Enterprise"), render: () => <Enterprise /> },
-  { id: "apps", title: () => t("Installed packages"), render: () => <Apps /> },
+  { id: "apps", title: () => t("Packages"), render: () => <Apps /> },
   { id: "matrix", title: () => t("Capability matrix"), render: () => <Matrix /> },
   { id: "protocols", title: () => t("Protocols"), render: () => <Protocols /> },
   { id: "app-settings", title: () => t("App settings"), render: () => <AppSettingsView /> },

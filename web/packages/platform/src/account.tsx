@@ -146,6 +146,9 @@ export function MyAccount() {
       <PageHeader title={t("My account")} description={t("How the platform addresses you and behaves for you. What you leave empty follows {tenant}.", { tenant: tenant.data?.name ?? me.tenantId })}
         actions={<span className="flex gap-1"><Tag label={me.principalId} /><Tag label={me.tenantId} tone="info" /></span>} />
       {account.data && <ProfileForm member={me.principalId} account={account.data} languages={me.languages} tenant={tenant.data} self />}
+      {account.data && <Panel title={t("Identities")} description={t("What signs in as you: a verified address from the identity provider, or a client id. An administrator binds them when adding or inviting you; a personal token is not an identity.")} className="mt-4 max-w-3xl">
+        <ul className="grid gap-1 text-sm">{(account.data.subjects ?? []).map((s) => <li key={s} className="font-mono text-xs">{s}</li>)}</ul>
+      </Panel>}
       <Delegate />
       <Tokens />
       <Sessions />

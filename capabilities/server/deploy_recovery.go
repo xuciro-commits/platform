@@ -41,7 +41,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 			err = fmt.Errorf("tenant %s recovery panicked: %v", id, failure)
 		}
 	}()
-	fresh, err := d.Rebuild(id)
+	fresh, err := d.rebuildTenant(id)
 	if err != nil {
 		return fmt.Errorf("compose tenant %s: %w", id, err)
 	}

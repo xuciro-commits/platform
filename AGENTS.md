@@ -53,8 +53,13 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 3. **宿主类型变了**：`go run ./cmd/api-types`（在 `capabilities/server/`）再生成 `web/packages/kernel/src/gen/host.ts`，否则 `TestAPIContract` 失败。文案变了：补 `i18n/zh-CN.json` / 包内 `i18n.ts`，否则 `TestLanguages` 失败。
 4. **轻量验证**：`go test ./apps/<改动包>/... ./platform/...` + 根包按名跑 `go test . -run 'TestLanguages|TestAPIContract'`；全量根包测试约 40 秒，`TestRecordsAtScale` 计时抖动可忽略。
 5. **沙箱会被重置**：`/home/user/platform` 以外（上传文件、`~/.gocache`）全丢，分支 HEAD 可能回退到旧树。每个整块做完立刻 `git commit && git push origin <会话分支>`；重置后 `git fetch && git reset --hard origin/<分支> && git clean -fd`，再跑第 1 步。需要长期保留的外部文件（规范、工具）提交进仓库（`docs/standards/`、`tools/`）。
-6. **分支纪律**：只在会话分支上提交与推送，**不要 merge**（任一方向）；需要 main 上的内容用 `git checkout origin/main -- <路径>` 复制后正常提交。
-   - **交接以固定提交为准**：交出分支前先提交并推送全部待交付改动，注明来源分支 HEAD、上次已取回的 main SHA、改动路径；未确认接入 main 的分支工作不能被 main 版本覆盖或 reset。
-   - **本地集成**：由负责人授权的本地代理在 main 按路径合成。以上次双方确认的内容基点区分两边独有文件与重叠文件，重叠文件三方合成；生成物由工具重生成。路径复制不建立 Git 祖先关系，不能把 `git merge-base` 当作最近同步点，也不能只看提交号宣称已经同步。
-   - **反向取回后再开工**：本地代理推送整合后的 main SHA 并给出回执后，分支代理确认自己的来源改动全部保留，再按路径取回该 main SHA（包含代码、测试、文档、生成物），提交并推送到自己的分支；在没有新开发改动时，以两边 tree SHA 相同作为同步确认，并回报分支提交号。完成确认后再开始下一块；后续新增提交按下一次交接处理。
+6. **分支纪律与双代理同步协议**（分支代理 = Arena 会话分支；集成代理 = 负责人授权的本地代理，在 main 上工作。双方都遵守，目标是不丢任何一行已提交代码）：
+   - **永不 merge / cherry-pick / rebase / reset 到对方分支**（任一方向）。跨分支取内容只有一种方式：按路径复制，然后正常 commit/push 到自己的分支。路径复制不建立 Git 祖先关系，所以 `git merge-base` 不是同步点，提交号相同与否也不说明已同步。
+   - **内容基点 B**：双方每轮以同一个「上次已确认同步」的提交为比较基点（上一轮回执里写明的 main SHA 或分支 SHA）。本轮一切「谁改了什么」都用 `git diff --name-only B <对方HEAD>` 与 `git diff --name-only B HEAD` 算，不凭记忆。
+   - **交接（分支 → main）**：分支代理先 commit/push 全部待交付改动，回执写明：冻结 HEAD、本轮基点 B、`git diff --name-only B HEAD` 的路径清单。集成代理只拿这个冻结 HEAD。
+   - **集成（main 上）**：集成代理按路径合成——仅一边变化的文件逐字节取该边，两边都变的文件以 B 为 base 三方合成（`git merge-file`），生成物（`host.ts`、Catalog json 等）用工具重生成而不是手拷。不删除任何一边的业务修复。回执写明：main 提交 SHA、冲突文件及解法、测试边界。
+   - **取回（main → 分支，常态）**：回执到达时分支通常已有新提交——分支代理不停工等回执。分支代理先核对 main 确实含自己冻结 HEAD 的全部路径，然后同样按路径三方取回：M = `git diff --name-only B <main-SHA>`，S = `git diff --name-only B HEAD`；M∖S 直接 `git checkout <main-SHA> -- <路径>`，M∩S 三方合成，生成物重生成；提交并推送。
+   - **同步确认不是 tree 相同**，而是：`git diff --name-only <main-SHA> HEAD` **恰好等于**本轮新工作的路径清单（分支回执里列出这份清单与新的冻结 HEAD）。只有分支没有任何新工作时，才退化为 tree SHA 相同（此时也可以用 `git restore --source=<main-SHA> --staged --worktree -- .` 整树复制再提交；有新工作时**不做整树覆盖**）。
+   - **下一轮基点**：取回后，该 main SHA 成为新的 B；分支在此之上的提交就是下一次交接的内容。
+   - 注意 fetch/pull 只把对象拉进仓库，不等于工作树已同步；沙箱重置后先 `git fetch && git reset --hard origin/<会话分支>` 恢复自己的分支，再按上面取回。
 7. **写文件**：编辑工具的相对路径以仓库根为准；拿不准就用绝对路径。

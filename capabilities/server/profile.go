@@ -65,6 +65,9 @@ type Account struct {
 		Email        string `json:"email"`
 		Digest       string `json:"digest"`
 	} `json:"effective"`
+	// Subjects are the identities that sign in as this member (ADR-0079 §2):
+	// bound by the administrator who added or invited them, sorted.
+	Subjects []string `json:"subjects"`
 }
 
 func profileActions() []platform.Action {
@@ -119,9 +122,9 @@ func tenantSettings() []platform.Setting {
 		{Name: SettingNumberFormat, Title: "Number format", Type: "choice", Default: "1,234.56", Choices: []string{"1,234.56", "1.234,56", "1 234,56"}},
 		{Name: SettingWeekStart, Title: "Week starts on", Type: "choice", Default: "monday", Choices: []string{"monday", "sunday", "saturday"}},
 		{Name: SettingFiscalStart, Title: "Fiscal year starts", Type: "text", Default: "01-01", Description: "MM-DD of the first day of the fiscal year."},
-		{Name: SettingDomains, Title: "Sign-in domains", Type: "text", Description: "Comma-separated mail domains whose users may join as members without an invitation; empty: invitation only."},
-		{Name: SettingMFA, Title: "Require a second factor", Type: "boolean", Default: "false", Description: "Asked of the identity provider for every sign-in."},
-		{Name: SettingSessionHours, Title: "Session length (hours)", Type: "integer", Default: "12", Description: "How long a sign-in lasts before the identity provider is asked again."},
+		{Name: SettingDomains, Title: "Sign-in domains", Type: "text", Description: "Comma-separated mail domains whose people become members on first sign-in, holding nothing until granted; empty: invitation only."},
+		{Name: SettingMFA, Title: "Require a second factor", Type: "boolean", Default: "false", Description: "Every sign-in must carry the identity provider's word that a second factor was used (amr); a host whose provider does not say admits none."},
+		{Name: SettingSessionHours, Title: "Session length (hours)", Type: "integer", Default: "12", Description: "How long a sign-in lasts on this host before the identity provider is asked again; 0: as long as the credential."},
 		{Name: SettingDigest, Title: "Mail digest", Type: "choice", Default: "instant", Choices: []string{"instant", "hourly", "daily"}, Description: "How notifications are mailed until a member chooses."},
 	}
 }
@@ -205,6 +208,15 @@ func (d *Console) account(member string, def defaults) Account {
 	out.Effective.NumberFormat = or(out.NumberFormat, SettingNumberFormat)
 	out.Effective.WeekStart = or(out.WeekStart, SettingWeekStart)
 	out.Effective.Digest = or(out.Digest, SettingDigest)
+	for subject, id := range d.subjects {
+		if id == member {
+			out.Subjects = append(out.Subjects, subject)
+		}
+	}
+	slices.Sort(out.Subjects)
+	if out.Subjects == nil {
+		out.Subjects = []string{}
+	}
 	out.Effective.Email = out.Email
 	if out.Effective.Email == "" {
 		out.Effective.Email = d.addressLocked(member)

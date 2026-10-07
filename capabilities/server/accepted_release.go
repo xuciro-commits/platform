@@ -172,7 +172,7 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
-	if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
+	if !holdsIndependentBuildRole(m, build.Builder, build.Publisher) {
 		return "", fmt.Errorf("builder or publisher role required")
 	}
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
@@ -225,7 +225,7 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
-	if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
+	if !holdsIndependentBuildRole(m, build.Builder, build.Publisher) {
 		return "", fmt.Errorf("builder or publisher role required")
 	}
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {

@@ -1,8 +1,9 @@
 // Settings: the apps a tenant runs, their capability matrix and protocols (ADR-0010, ADR-0011).
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { DataTable, PageHeader, Panel, Select, Tag, type ColumnDef, t } from "@platform/ui";
-import { useAdmin, type AppInfo, type ProtocolInfo } from "./shared";
+import { Button, DataTable, PageHeader, Panel, Select, Tag, type ColumnDef, t } from "@platform/ui";
+import { useState } from "react";
+import { useAdmin, when, type AppInfo, type ProtocolInfo } from "./shared";
 
 // Tiers of the protocol graph: an app sits one column right of the providers of
 // the protocols it consumes (providers are enabled before their consumers).
@@ -21,18 +22,10 @@ export function Apps() {
   const { apps } = useAdmin();
   const { role } = useHost();
   const packages = useRead<Api.PackageView[]>("/v1/packages");
-  const installed = (packages.data ?? []).flatMap(item => item.installed ? [item.installed] : []);
-  const columns: ColumnDef<Api.InstalledPackage, any>[] = [
-    { accessorKey: "id", header: t("Package") },
-    { accessorKey: "version", header: t("Version") },
-    { accessorKey: "namespace", header: t("Namespace") },
-    { accessorKey: "state", header: t("State"), cell: cell => <Tag label={t(cell.getValue())} /> },
-    { accessorKey: "artifact", header: t("Sealed artifact"), cell: cell => <span className="break-all font-mono text-xs">{cell.getValue() ?? "—"}</span> },
-  ];
   return (
     <>
-      <PageHeader title={t("Installed packages")} description={t("Controlled packages, their installed versions and sealed artifacts. This inventory does not grant lifecycle permissions.")} />
-      {packages.isError ? <p role="alert">{t("Package inventory could not be loaded.")}</p> : <DataTable data={installed} columns={columns} getRowId={item => item.id} height={220} empty={t("No controlled packages installed")} />}
+      <PageHeader title={t("Packages")} description={t("The package index beside what this tenant has installed. Install, upgrade, drain and retire are decisions: a package that fails its precheck changes nothing, and what it brought stays readable after it leaves.")} />
+      {packages.isError ? <p role="alert">{t("Package inventory could not be loaded.")}</p> : <PackageList items={packages.data ?? []} />}
       {role("platform") === "admin" && <><h2 className="my-3 text-sm font-semibold">{t("Built-in application modules")}</h2><div className="flex gap-6 overflow-x-auto">
         {tiers(apps).map((tier, i) => (
           <div key={i} className="grid content-start gap-3">
@@ -51,6 +44,62 @@ export function Apps() {
         ))}
       </div></>}
     </>
+  );
+}
+
+const stateTone = (state?: string): "neutral" | "success" | "warning" => state === "active" ? "success" : state === "draining" ? "warning" : "neutral";
+
+/** One card per package: what the index offers, what is installed, the precheck, and the decision that applies next. */
+function PackageList({ items }: { items: Api.PackageView[] }) {
+  const { can, decide } = useHost();
+  const [refused, setRefused] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState("");
+  if (!items.length) return <p className="text-sm text-muted">{t("No packages: the host offers no index and nothing is installed.")}</p>;
+  const act = async (schema: string, id: string, payload: unknown) => {
+    setBusy(id); setRefused((r) => ({ ...r, [id]: "" }));
+    await decide(schema, { type: "platform.package", id }, payload, { onRefused: (reason) => setRefused((r) => ({ ...r, [id]: reason })) }); // the host's own reason stays on the card
+    setBusy("");
+  };
+  return (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {items.map(({ descriptor: d, installed: held, precheck }) => {
+        const id = d.id || held?.id || "";
+        const state = held?.state;
+        const newer = !!held && state !== "retired" && !!d.version && d.version !== held.version;
+        const next = !held || state === "retired" ? "install" : state === "active" ? "drain" : state === "draining" ? "retire" : undefined;
+        return (
+          <Panel key={id} className="grid content-start gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{d.title || held?.title || id}</span><span className="font-mono text-xs text-muted">{id}</span>
+              <Tag label={state ? t(state) : t("not installed")} tone={stateTone(state)} />
+            </div>
+            {d.description && <p className="text-xs text-muted">{d.description}</p>}
+            <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-0.5 text-xs">
+              <dt className="text-muted">{t("Namespace")}</dt><dd className="font-mono">{d.namespace || held?.namespace}</dd>
+              <dt className="text-muted">{t("Offered")}</dt><dd>{d.version || "—"}{d.compatibility ? ` · ${t("platform API {v}", { v: d.compatibility })}` : ""}</dd>
+              <dt className="text-muted">{t("Installed")}</dt><dd>{held ? `${held.version}${held.installedAt ? ` · ${when(held.installedAt)}` : ""}` : "—"}</dd>
+              <dt className="text-muted">{t("Requires")}</dt><dd>{d.requires?.length ? d.requires.join(", ") : t("nothing")}</dd>
+              <dt className="text-muted">{t("Contributions")}</dt><dd>{(held?.contributions ?? d.contributions ?? []).map((c) => c.title || c.view).join(", ") || "—"}</dd>
+              {held?.artifact && <><dt className="text-muted">{t("Sealed artifact")}</dt><dd className="break-all font-mono">{held.artifact}</dd></>}
+              {!!held?.retained?.length && <><dt className="text-muted">{t("Retained")}</dt><dd>{held.retained.map((r) => `${r.version} (${when(r.at)})`).join(", ")}</dd></>}
+            </dl>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <Tag label={precheck.ok ? t("precheck ok") : t("precheck failed")} tone={precheck.ok ? "success" : "danger"} />
+              {!!precheck.missing?.length && <span className="text-[var(--tone-danger)]">{t("needs {packages} installed first", { packages: precheck.missing.join(", ") })}</span>}
+              {precheck.problems?.map((x) => <span key={x} className="text-[var(--tone-danger)]">{x}</span>)}
+            </div>
+            {can("platform.package.install") && <div className="flex flex-wrap gap-2">
+              {next === "install" && <Button size="sm" variant="primary" disabled={!precheck.ok || busy === id} title={precheck.ok ? undefined : t("Fix the precheck first")} onClick={() => void act("platform.package.install", id, { id, version: d.version })}>{t("Install")}</Button>}
+              {newer && <Button size="sm" variant="primary" disabled={!precheck.ok || busy === id} onClick={() => void act("platform.package.upgrade", id, { id, version: d.version })}>{t("Upgrade to {v}", { v: d.version })}</Button>}
+              {next === "drain" && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.drain", id, { id })}>{t("Drain")}</Button>}
+              {next === "retire" && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.retire", id, { id })}>{t("Retire")}</Button>}
+            </div>}
+            {state === "draining" && <p className="text-xs text-muted">{t("Draining: nothing new starts from its contributions; work in flight finishes. Retire when it is quiet.")}</p>}
+            {refused[id] && <p className="text-xs text-[var(--tone-danger)]">{refused[id]}</p>}
+          </Panel>
+        );
+      })}
+    </div>
   );
 }
 

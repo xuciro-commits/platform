@@ -50,7 +50,8 @@ type Deployment struct {
 	TokenTTL time.Duration
 	// Packages is a directory of package descriptors (ADR-0047 §10.3): the
 	// index the console lists and prechecks. Empty: no packages offered.
-	Packages string
+	Packages     string
+	packageIndex *PackageIndex
 	// Rebuild composes a fresh, unstarted tenant with the same durable app and
 	// connector declarations. Required for an in-process recovery retry.
 	Rebuild func(id string) (*Tenant, error)
@@ -262,6 +263,9 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	if err := d.configurePersonalTokens(); err != nil {
 		return err
 	}
+	if err := d.preparePackageIndex(tenants); err != nil {
+		return err
+	}
 	registry := newTenantRegistry(tenants)
 	flush := exportTelemetry(ctx, filepath.Base(os.Args[0])) // traces and metrics, when an OTLP endpoint is set (ADR-0027 D5)
 	defer flush(context.Background())
@@ -347,11 +351,12 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		}
 	}
 	authenticate := Authenticate(func(token string) (string, bool) { return token, token != "" })
+	var attest Attest
 	if d.Issuer != "" {
 		if d.Keys == "" {
 			return fmt.Errorf("-oidc-keys is required with -oidc-issuer")
 		}
-		authenticate = OIDC(d.Issuer, d.Keys)
+		authenticate, attest = OIDCProvider(d.Issuer, d.Keys)
 	}
 	if pgPool, pg := pool(journal); journal != nil && d.Project && pg {
 		for _, t := range tenants {
@@ -390,6 +395,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		}
 	}
 	host := NewHost(authenticate, tenants...)
+	host.SecondFactor = attest
 	host.HostAdmins = d.hostAdministrators()
 	host.tenantsFrom = registry.list
 	host.Templates = d.Templates
@@ -409,7 +415,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 			if err := d.specs.add(spec); err != nil {
 				return nil, err
 			}
-			t, err := d.Rebuild(spec.ID)
+			t, err := d.rebuildTenant(spec.ID)
 			if err != nil {
 				return nil, err
 			}
@@ -612,4 +618,34 @@ func (d *Deployment) configurePersonalTokens() error {
 	}
 	UseTokenKey([]byte(key))
 	return nil
+}
+
+// preparePackageIndex gives every tenant the offered deployment catalogue;
+// installed package state remains in each tenant's accepted Console state.
+func (d *Deployment) preparePackageIndex(tenants []*Tenant) error {
+	index, err := LoadPackageIndex(d.Packages)
+	if err != nil {
+		return err
+	}
+	d.packageIndex = index
+	for _, tenant := range tenants {
+		d.bindPackageIndex(tenant)
+	}
+	return nil
+}
+
+func (d *Deployment) bindPackageIndex(tenant *Tenant) {
+	if console := consoleOf(tenant); console != nil && d.packageIndex != nil {
+		console.index = d.packageIndex
+	}
+}
+
+// Recovery and host-created tenants receive the same offered catalogue.
+func (d *Deployment) rebuildTenant(id string) (*Tenant, error) {
+	tenant, err := d.Rebuild(id)
+	if err != nil {
+		return nil, err
+	}
+	d.bindPackageIndex(tenant)
+	return tenant, nil
 }

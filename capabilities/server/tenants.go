@@ -308,7 +308,7 @@ func (d *Deployment) Run(development TenantSpec) error {
 	}
 	var tenants []*Tenant
 	for _, spec := range d.Tenants(development) {
-		t, err := d.Rebuild(spec.ID)
+		t, err := d.rebuildTenant(spec.ID)
 		if err != nil {
 			return err
 		}
