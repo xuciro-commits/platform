@@ -178,13 +178,24 @@ func (c *Catalog) Permits(role, schema string) bool {
 	return slices.ContainsFunc(c.For(role), func(a Action) bool { return a.Schema == schema })
 }
 
+// PermitsAny reports whether any of roles may call schema (a member with several grants, ADR-0078).
+func (c *Catalog) PermitsAny(roles []string, schema string) bool {
+	return slices.ContainsFunc(c.ForRoles(roles), func(a Action) bool { return a.Schema == schema })
+}
+
 // For is the catalog a caller with role receives: enabled actions it may call.
-func (c *Catalog) For(role string) []Action {
+func (c *Catalog) For(role string) []Action { return c.ForRoles([]string{role}) }
+
+// ForRoles is the catalog of a caller holding roles: the union of what each may call.
+func (c *Catalog) ForRoles(roles []string) []Action {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	out := []Action{}
 	for _, a := range c.actions {
-		if !c.disabled[a.Capability] && (slices.Contains(a.Roles, role) || slices.Contains(a.Roles, AnyMember)) {
+		if c.disabled[a.Capability] {
+			continue
+		}
+		if slices.Contains(a.Roles, AnyMember) || slices.ContainsFunc(roles, func(r string) bool { return r != "" && slices.Contains(a.Roles, r) }) {
 			out = append(out, a)
 		}
 	}

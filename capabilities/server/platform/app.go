@@ -17,12 +17,17 @@ import (
 	"platformkernel/kernel"
 )
 
-// Member is a person, service or AI agent of a tenant (ADR-0010) with one role
-// per app. What a rule scopes by is the member's organisation (ADR-0012).
+// Member is a person, service or AI agent of a tenant (ADR-0010). Grants are
+// what they hold (ADR-0078 §3.3): roles in apps, each optionally bounded to a
+// unit and a time. Roles is derived from the active grants by the host — the
+// primary role per app (the app's first declared role the member holds) —
+// for the many places that ask for one; RolesIn answers with all of them.
+// What a rule scopes by is the member's organisation (ADR-0012).
 type Member struct {
 	ID     string            `json:"id"`
 	Tenant string            `json:"tenant"`
 	Roles  map[string]string `json:"roles"`
+	Grants []Grant           `json:"grants,omitempty"`
 	// Agent marks an AI agent: an irreversible effect it causes waits for a
 	// person's approval, and it cannot give one (ADR-0014 D6).
 	Agent bool `json:"agent,omitempty"`
@@ -36,6 +41,41 @@ type Member struct {
 	// the member is this zone's day.
 	Timezone string `json:"timezone,omitempty"`
 }
+
+// Grant is one role a member holds in an app (ADR-0078 §3.3): everywhere in
+// the app, or within a unit of a structure; from a day, until a day; given by
+// someone for a reason. Dates are YYYY-MM-DD, inclusive from, exclusive until.
+type Grant struct {
+	App       string    `json:"app"`
+	Role      string    `json:"role"`
+	Unit      string    `json:"unit,omitempty"`
+	Structure string    `json:"structure,omitempty"`
+	From      string    `json:"from,omitempty"`
+	Until     string    `json:"until,omitempty"`
+	By        string    `json:"by,omitempty"`
+	Reason    string    `json:"reason,omitempty"`
+	At        time.Time `json:"at,omitzero"`
+}
+
+// Active reports whether the grant holds on day (YYYY-MM-DD).
+func (g Grant) Active(day string) bool { return (g.From == "" || g.From <= day) && (g.Until == "" || day < g.Until) }
+
+// RolesIn are every role the member holds in app, the primary first.
+func (m Member) RolesIn(app string) []string {
+	var out []string
+	if r := m.Roles[app]; r != "" {
+		out = append(out, r)
+	}
+	for _, g := range m.Grants {
+		if g.App == app && !slices.Contains(out, g.Role) {
+			out = append(out, g.Role)
+		}
+	}
+	return out
+}
+
+// Holds reports whether the member holds role in app, among any of their roles.
+func (m Member) Holds(app, role string) bool { return slices.Contains(m.RolesIn(app), role) }
 
 // Location is the member's timezone, UTC when unknown.
 func (m Member) Location() *time.Location {
@@ -62,8 +102,11 @@ type Caller struct {
 	rt         Runtime
 }
 
-// Role is the member's role in the app being called ("" for none).
+// Role is the member's primary role in the app being called ("" for none).
 func (c Caller) Role() string { return c.Roles[c.App] }
+
+// RolesHere are every role the member holds in the app being called.
+func (c Caller) RolesHere() []string { return c.RolesIn(c.App) }
 
 // Staging reports that this decision is still private. An app may validate
 // a definition now, but must not install it until the accepted result commits.

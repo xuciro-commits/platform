@@ -2,6 +2,9 @@ package platformserver
 
 import (
 	"encoding/json"
+	"maps"
+	"slices"
+	"time"
 
 	"platformserver/platform"
 )
@@ -27,8 +30,58 @@ func (d *Console) currentMember(m *platform.Member) platform.Member {
 			}
 			delete(out.Roles, "org")
 		}
+		for i := range out.Grants {
+			if out.Grants[i].App == "org" {
+				out.Grants[i].App = "enterprise"
+			}
+		}
 	}
+	today := out.Today(time.Now())
+	d.deriveRoles(&out, today)
+	out.Grants = slices.DeleteFunc(slices.Clone(out.Grants), func(g platform.Grant) bool { return !g.Active(today) })
 	return out
+}
+
+// deriveRoles projects a member's grants onto Roles (ADR-0078 §3.3): a member
+// without grants is legacy — their Roles become grants; one with grants holds
+// the ones active today, and Roles is the primary role per app (the app's
+// first declared role among them) for the places that ask for one.
+func (d *Console) deriveRoles(m *platform.Member, today string) {
+	if len(m.Grants) == 0 {
+		for _, app := range slices.Sorted(maps.Keys(m.Roles)) {
+			m.Grants = append(m.Grants, platform.Grant{App: app, Role: m.Roles[app]})
+		}
+		return
+	}
+	active := slices.DeleteFunc(slices.Clone(m.Grants), func(g platform.Grant) bool { return !g.Active(today) })
+	m.Roles = map[string]string{}
+	for _, g := range active {
+		if m.Roles[g.App] == "" {
+			m.Roles[g.App] = d.primaryRole(g.App, active)
+		}
+	}
+}
+
+// primaryRole is the app's first declared role among grants, else the first granted.
+func (d *Console) primaryRole(app string, grants []platform.Grant) string {
+	held := func(role string) bool {
+		return slices.ContainsFunc(grants, func(g platform.Grant) bool { return g.App == app && g.Role == role })
+	}
+	if d.t != nil {
+		if a := d.t.app(app); a != nil {
+			for _, role := range a.Manifest().AllRoles() {
+				if held(role) {
+					return role
+				}
+			}
+		}
+	}
+	for _, g := range grants {
+		if g.App == app {
+			return g.Role
+		}
+	}
+	return ""
 }
 
 // A changed bootstrap may contain enterprise instead of org before the first

@@ -102,7 +102,7 @@ permission := <app>.<entity>.<verb>          // 动作，等于今天的 action 
 | 块 | 内容 | 规模 |
 |---|---|---|
 | **A 租户** | `platform.tenant` 记录与 Organisation 页；模板与 `POST /v1/host/tenants`；`tenants.json` 取代 `directory.json`；语言/时区/币种统一来源 | L |
-| **B 权限目录与多授予** | `platform.Permissions(manifest)`；`Member.Grants` + 派生 `Roles`；`Permits(roles[])`、Scope/字段取并集；授予的单位/时效；Members 页重做 | XL |
+| **B 权限目录与多授予** | `platform.Permissions(manifest)`；`Member.Grants` + 派生 `Roles`；`Permits(roles[])`、Scope/字段取并集；授予的单位/时效；Members 页重做。**已交付 2026-10-06**：`Grant{App,Role,Unit,Structure,From,Until,By,Reason,At}`、`RolesIn/Holds`、`Catalog.ForRoles/PermitsAny`、`GET /v1/permissions`、Roles 面板与矩阵页；字段级 read/write、页面/函数/操作的角色判定与 Scope 并集留给 C 的引擎（避免在 ~30 个调用点各写一次） | XL |
 | **C 引擎** | `platform/authz`：Decide/Verdict/explain；把 Submit/Read/narrow/export/navigation/agents 全部切到引擎；`related` 谓词；Markings 改写为内置策略 | XL |
 | **D 自定义角色、策略、委托、团队** | `platform.role`、`platform.policy`、`platform.team`、`member.delegate`；Roles/Policies 页；表达式变量 | L |
 | **E 减法与迁移** | 删 `c.Role()` 单角色调用点、`SettingLanguage`、`directory.json`、Markings 的专用 if；两行业应用的角色声明迁到目录；Testing/Platform §10.6 行 | M |

@@ -209,6 +209,14 @@ export type AppInfo = {
   interfaces: Interface[];
 };
 
+export type AppPermissions = {
+  app: string;
+  title: string;
+  reads: string[];
+  everyone: string[];
+  roles: RolePermissions[];
+};
+
 export type AppSettings = {
   app: string;
   settings: SettingValue[];
@@ -862,6 +870,18 @@ export type FunctionRun = {
   withheld?: boolean;
 };
 
+export type Grant = {
+  app: string;
+  role: string;
+  unit?: string;
+  structure?: string;
+  from?: string;
+  until?: string;
+  by?: string;
+  reason?: string;
+  at?: string;
+};
+
 export type GridCell = {
   id: string;
   title: string;
@@ -1113,6 +1133,7 @@ export type Member = {
   id: string;
   tenant: string;
   roles: Record<string, string>;
+  grants?: Grant[];
   agent?: boolean;
   language?: string;
   timezone?: string;
@@ -1122,6 +1143,7 @@ export type MemberView = {
   id: string;
   tenant: string;
   roles: Record<string, string>;
+  grants?: Grant[];
   agent?: boolean;
   language?: string;
   timezone?: string;
@@ -1935,6 +1957,12 @@ export type PatternInfo = {
   preview: Preview;
 };
 
+export type PermissionAction = {
+  id: string;
+  title: string;
+  scope: string;
+};
+
 export type PersonalRead = {
   at: string;
   member: string;
@@ -2301,6 +2329,12 @@ export type RetainedArtifact = {
   version: string;
   digest?: string;
   at: string;
+};
+
+export type RolePermissions = {
+  role: string;
+  holders: number;
+  actions: PermissionAction[];
 };
 
 export type RunStep = {

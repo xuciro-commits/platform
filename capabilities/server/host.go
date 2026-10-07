@@ -1027,10 +1027,10 @@ func (t *Tenant) Catalog(m platform.Member) []platform.Action {
 		entities[info.Type] = info
 	}
 	for _, a := range t.apps {
-		for _, action := range a.Manifest().Actions.For(m.Roles[a.Manifest().ID]) {
+		for _, action := range a.Manifest().Actions.ForRoles(m.RolesIn(a.Manifest().ID)) {
 			if !slices.ContainsFunc(action.Uses, func(used string) bool {
 				owner, schema, _ := t.provider(used)
-				return owner == nil || !owner.Manifest().Actions.Permits(m.Roles[owner.Manifest().ID], schema)
+				return owner == nil || !owner.Manifest().Actions.PermitsAny(m.RolesIn(owner.Manifest().ID), schema)
 			}) {
 				// Generated create/edit forms use this member's writable fields.
 				// Custom actions keep their own declared inputs and policy.

@@ -7,8 +7,9 @@
 import "./i18n";
 import { defineApp, useHost, type AppUI, type Host } from "@platform/app";
 import { Button, Card, PageHeader, useWorkspace, type NavSection, type View, t } from "@platform/ui";
-import { ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, CircleUser, Database, FlaskConical, Grid3x3, History, MessageSquare, Network, PlugZap, Route, Server, SlidersHorizontal, Upload, Users, Workflow } from "lucide-react";
+import { ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, CircleUser, Database, FlaskConical, Grid3x3, History, KeyRound, MessageSquare, Network, PlugZap, Route, Server, SlidersHorizontal, Upload, Users, Workflow } from "lucide-react";
 import { Members, MemberDetail } from "./people";
+import { Permissions } from "./permissions";
 import { MyAccount } from "./account";
 import { Organisation } from "./organisation";
 import { Enterprise } from "./enterprise";
@@ -29,7 +30,7 @@ function controlPanelNavigation(host: Host): NavSection[] {
     { label: t("Overview"), items: [item(t("Control Panel"), <SlidersHorizontal />, "control-panel"), item(t("My account"), <CircleUser />, "account")] },
     { label: t("Identity and access"), items: [
       ...(admin(host) ? [item(t("Organisation"), <Building2 />, "organisation")] : []),
-      ...(admin(host) || auditor(host) ? [item(t("Members"), <Users />, "members")] : []),
+      ...(admin(host) || auditor(host) ? [item(t("Members"), <Users />, "members"), item(t("Roles and permissions"), <KeyRound />, "permissions")] : []),
       ...(admin(host) || host.role("enterprise") ? [item(t("Enterprise"), <Network />, "enterprise")] : []),
     ] },
     { label: t("Packages and capabilities"), items: [
@@ -62,6 +63,7 @@ const controlPanelViews: View[] = [
   { id: "organisation", title: () => t("Organisation"), render: () => <Organisation /> },
   { id: "members", title: () => t("Members"), render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
+  { id: "permissions", title: () => t("Roles and permissions"), render: () => <Permissions /> },
   { id: "enterprise", title: () => t("Enterprise"), render: () => <Enterprise /> },
   { id: "apps", title: () => t("Installed packages"), render: () => <Apps /> },
   { id: "matrix", title: () => t("Capability matrix"), render: () => <Matrix /> },

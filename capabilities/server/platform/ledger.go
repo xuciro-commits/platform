@@ -160,7 +160,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	}
 	receiver := kernel.Receiver{Changes: changes, Authorities: l.authorities,
 		Policy: func(kernel.Caller, *pb.Submission) bool {
-			ok := c.Replaying && !probing || c.Automation || l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())
+			ok := c.Replaying && !probing || c.Automation || l.Catalog.PermitsAny(c.RolesHere(), s.GetSchema().GetName()) && (allowed == nil || allowed())
 			refused = !ok
 			return ok
 		}}
@@ -198,10 +198,10 @@ func (l *Ledger) denied(c Caller, s *pb.Submission) *kernel.Error {
 	if c.Role() == "" {
 		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} holds no role in {app}, so may not {action}", c.ID, c.App, action)
 	}
-	if l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) {
+	if l.Catalog.PermitsAny(c.RolesHere(), s.GetSchema().GetName()) {
 		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} may not {action} on this record", c.ID, action)
 	}
-	return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The role {role} in {app} may not {action}", c.Role(), c.App, action)
+	return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The role {role} in {app} may not {action}", strings.Join(c.RolesHere(), ", "), c.App, action)
 }
 
 // checked puts before rules the check of the payload's declared choices and

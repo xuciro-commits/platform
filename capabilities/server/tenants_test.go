@@ -136,3 +136,56 @@ func TestReachDueAndMemberToday(t *testing.T) {
 		t.Errorf("today without a zone: %s", got)
 	}
 }
+
+// ADR-0078 §3.3: grants add up; Roles is the primary role per app; a grant
+// past its until day no longer holds; revoke removes one role or all.
+func TestGrantsAddUpAndExpire(t *testing.T) {
+	seat := Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}
+	tn, err := NewTenant("g", NewConsole("g", seat), newNotes("g", "a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tn.Record = func(Entry) {}
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	decide := func(schema, payload string) string {
+		admin, _ := tn.member("admin")
+		_, err := tn.Submit(admin, &pb.Submission{TenantId: "g", PrincipalId: "admin", Authority: PlatformApp, IdempotencyKey: schema + payload,
+			Target: &pb.EntityRef{Type: MemberType, Id: "admin"}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: json.RawMessage(payload)}, now)
+		if err != nil {
+			return err.Error()
+		}
+		return "ok"
+	}
+	if got := decide(SchemaGrant, `{"app":"a","role":"writer","until":"2026-10-7"}`); got != "ERROR_CODE_INVALID_ARGUMENT" {
+		t.Fatalf("bad day accepted: %s", got)
+	}
+	if got := decide(SchemaGrant, `{"app":"a","role":"writer","reason":"covers"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := decide(SchemaGrant, `{"app":"platform","role":"auditor","until":"2000-01-01"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	m, _ := tn.member("admin")
+	if m.Roles[PlatformApp] != Admin || m.Roles["a"] != "writer" || len(m.Grants) != 2 || !m.Holds("a", "writer") || m.Holds(PlatformApp, "auditor") {
+		t.Fatalf("grants %+v roles %v", m.Grants, m.Roles)
+	}
+	if m.Grants[1].By != "admin" || m.Grants[1].Reason != "covers" || m.Grants[1].At.IsZero() {
+		t.Fatalf("grant provenance %+v", m.Grants[1])
+	}
+	if got := decide(SchemaRevoke, `{"app":"a","role":"other"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if m, _ = tn.member("admin"); m.Roles["a"] != "writer" {
+		t.Fatal("revoking an unheld role removed the held one")
+	}
+	if got := decide(SchemaRevoke, `{"app":"a"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if m, _ = tn.member("admin"); m.Roles["a"] != "" || m.Roles[PlatformApp] != Admin {
+		t.Fatalf("after revoke %v", m.Roles)
+	}
+	snap, _ := consoleOf(tn).Snapshot()
+	if !strings.Contains(string(snap), `"grants"`) {
+		t.Fatal("grants not in the directory snapshot")
+	}
+}

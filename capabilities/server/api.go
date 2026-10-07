@@ -52,6 +52,7 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/packages", Summary: "The package index beside what this tenant has installed, with precheck results (administrators)", Answer: []PackageView{}},
 	{Pattern: "GET /v1/notifications", Summary: "The caller's notifications, newest first, in their language", Answer: []platform.Notification{}},
 	{Pattern: "GET /v1/members", Summary: "The tenant's members with their roles and profiles (administrators)", Answer: []MemberView{}},
+	{Pattern: "GET /v1/permissions", Summary: "The permission catalog: every app's roles and what each may do, derived from the manifests (administrators, auditors; ADR-0078)", Answer: []AppPermissions{}},
 	{Pattern: "GET /v1/tenant", Summary: "The tenant's record: its settings, apps and standing (every member; ADR-0078)", Answer: TenantRecord{}},
 	{Pattern: "GET /v1/account", Summary: "The caller's profile over the tenant's defaults (ADR-0079)", Answer: Account{}},
 	{Pattern: "GET /v1/audit", Summary: "Accepted inputs, newest first, rebuilt from the journal (administrators)", Answer: []AuditEntry{}},

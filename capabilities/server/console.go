@@ -73,10 +73,17 @@ func ConsoleActions() *platform.Catalog {
 			Payload: []platform.Field{{Name: "subject", Type: "string", Required: true, Description: "user:<email> or client:<id>"},
 				{Name: "agent", Type: "boolean", Description: "An AI agent: its irreversible effects wait for a person's approval"}}, Roles: admin},
 		{Schema: SchemaGrant, Target: MemberType, Capability: "members", Title: "Grant role",
-			Description: "Give a member a role in an app, replacing the role held there.",
-			Payload:     []platform.Field{app, {Name: "role", Type: "string", Required: true, Description: "A role the app defines"}}, Roles: admin},
+			Description: "Give a member a role in an app, alongside the roles held there; optionally within a unit and until a day.",
+			Payload: []platform.Field{app, {Name: "role", Type: "string", Required: true, Description: "A role the app defines"},
+				{Name: "unit", Type: "string", Description: "Only within this unit of the enterprise"},
+				{Name: "structure", Type: "string", Description: "The structure the unit belongs to"},
+				{Name: "from", Type: "string", Description: "Holds from this day (YYYY-MM-DD)"},
+				{Name: "until", Type: "string", Description: "Holds until this day, exclusive (YYYY-MM-DD)"},
+				{Name: "reason", Type: "string", Description: "Why"}}, Roles: admin},
 		{Schema: SchemaRevoke, Target: MemberType, Capability: "members", Title: "Revoke role",
-			Description: "Remove a member's role in an app.", Payload: []platform.Field{app}, Roles: admin},
+			Description: "Remove a member's role in an app: one role, or every role held there.",
+			Payload: []platform.Field{app, {Name: "role", Type: "string", Description: "Only this role; every role when empty"},
+				{Name: "unit", Type: "string", Description: "Only the grant within this unit"}}, Roles: admin},
 	}
 	actions = append(actions, profileActions()...)
 	actions = append(actions, operationsActions()...)
@@ -183,7 +190,7 @@ func (d *Console) holding(app, role string) []string {
 	defer d.mu.Unlock()
 	var out []string
 	for id, m := range d.members {
-		if d.currentMember(m).Roles[app] == role {
+		if d.currentMember(m).Holds(app, role) {
 			out = append(out, id)
 		}
 	}
@@ -214,7 +221,7 @@ func clone(m *platform.Member) platform.Member {
 
 func (d *Console) Manifest() platform.Manifest {
 	return platform.Manifest{ID: PlatformApp, Title: "Settings", Version: "1", Actions: d.ledger.Catalog, Roles: []string{Admin, Auditor},
-		Reads:    []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "projects", "packages", "contributions"},
+		Reads:    []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "projects", "packages", "contributions"},
 		Everyone: []string{"notifications", "tenant", "account"}, Inputs: map[string]bool{"heartbeat": false},
 		Settings: tenantSettings()}
 }
@@ -365,12 +372,13 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
-		Subject, App, Role string
-		Agent              bool
+		Subject, App, Role, Unit, Structure, From, Until, Reason string
+		Agent                                                   bool
 	}
 	if json.Unmarshal(s.GetPayload(), &p) != nil {
 		return nil, invalid
 	}
+	today := func(m *platform.Member) string { return d.currentMember(m).Today(time.Now()) }
 	id := s.GetTarget().GetId()
 	m := d.members[id]
 	if s.GetSchema().GetName() == SchemaAdd {
@@ -393,10 +401,14 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 			return nil, invalid
 		}
 		return func(*pb.ChangeRecord) {
-			delete(m.Roles, p.App)
+			d.deriveRoles(m, today(m))
+			m.Grants = slices.DeleteFunc(m.Grants, func(g platform.Grant) bool {
+				return g.App == p.App && (p.Role == "" || g.Role == p.Role) && (p.Unit == "" || g.Unit == p.Unit)
+			})
 			if p.App == "enterprise" && d.enterpriseRoles() && !c.Replaying {
-				delete(m.Roles, "org")
+				m.Grants = slices.DeleteFunc(m.Grants, func(g platform.Grant) bool { return g.App == "org" })
 			}
+			d.deriveRoles(m, today(m))
 		}, nil
 	}
 	// SchemaGrant: only a role the app defines, in an app the tenant runs.
@@ -406,11 +418,23 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 	if app := d.t.app(p.App); app == nil || !slices.Contains(app.Manifest().AllRoles(), p.Role) {
 		return nil, invalid
 	}
-	return func(*pb.ChangeRecord) {
-		m.Roles[p.App] = p.Role
-		if p.App == "enterprise" && d.enterpriseRoles() && !c.Replaying {
-			delete(m.Roles, "org")
+	if p.Unit != "" && p.Structure == "" {
+		return nil, invalid
+	}
+	for _, day := range []string{p.From, p.Until} {
+		if _, err := time.Parse(time.DateOnly, day); day != "" && err != nil {
+			return nil, invalid
 		}
+	}
+	return func(r *pb.ChangeRecord) {
+		d.deriveRoles(m, today(m))
+		m.Grants = slices.DeleteFunc(m.Grants, func(g platform.Grant) bool { return g.App == p.App && g.Role == p.Role && g.Unit == p.Unit })
+		if p.App == "enterprise" && d.enterpriseRoles() && !c.Replaying {
+			m.Grants = slices.DeleteFunc(m.Grants, func(g platform.Grant) bool { return g.App == "org" })
+		}
+		m.Grants = append(m.Grants, platform.Grant{App: p.App, Role: p.Role, Unit: p.Unit, Structure: p.Structure,
+			From: p.From, Until: p.Until, By: c.ID, Reason: p.Reason, At: r.GetRecordedTime().AsTime()})
+		d.deriveRoles(m, today(m))
 	}, nil
 }
 
@@ -459,6 +483,8 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		return t.Health(time.Now()), nil
 	case "personal-reads":
 		return t.PersonalReads(), nil
+	case "permissions":
+		return t.Permissions(), nil
 	case "projects":
 		return d.ProjectViews(), nil
 	case "packages":
