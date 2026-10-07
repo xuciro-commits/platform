@@ -15,6 +15,7 @@ import { chromeViews } from "./chrome";
 import { packages } from "./host/packages";
 import { usePlatformHost } from "./host/usePlatformHost";
 import { IDENTITY_KEY, TENANT_KEY, forget, preferred, remember, remembered, type Identity } from "./session/identity";
+import { HostOnly, type HostAdmin } from "./HostOnly";
 import { Recovery, ReleaseInformation, SignInProblem } from "./session/Problems";
 import { legacyProjection, legacyRoute, shellViews } from "./shell/legacy";
 import { availableProjections, categories, portalEntry, projections, type Projection } from "./shell/registry";
@@ -49,6 +50,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const meQuery = useQuery({ queryKey: [token, tenant, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false });
   const connectionUnavailable = meQuery.isError && /live connection unavailable|HTTP (400|413)/.test(String(meQuery.error));
   const me = meQuery.isError && !connectionUnavailable ? undefined : meQuery.data;
+  // A subject the host names an administrator may be a member of no tenant: the console still opens for them.
+  const noMember = meQuery.isError && /HTTP 401/.test(String(meQuery.error));
+  const hostAdminQuery = useQuery({ queryKey: [token, "host-only"], queryFn: () => client.get<HostAdmin>("/v1/host/me"), enabled: noMember, retry: false });
   const meRefetch = useRef(meQuery.refetch); meRefetch.current = meQuery.refetch;
   useEffect(() => client.subscribeRead("/v1/me", () => { void meRefetch.current(); }), [client]);
   const identityScope = me ? JSON.stringify([me.tenantId, me.principalId]) : undefined;
@@ -160,6 +164,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   if (meQuery.error && !(connectionUnavailable && me)) {
     if (/HTTP 503/.test(String(meQuery.error))) return <Recovery client={client} token={token} tenant={tenant} />;
+    if (noMember && hostAdminQuery.isPending) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
+    if (noMember && hostAdminQuery.data) return <HostOnly client={client} token={token} admin={hostAdminQuery.data} email={signedIn?.session.email} onSignOut={signedIn ? () => void leaveSession() : undefined} />;
     const problem = /HTTP 401/.test(String(meQuery.error))
       ? signedIn ? t("{email} is not a member of this host.", { email: signedIn.session.email }) : t("This host does not accept this identity.")
       : t("The host is unreachable.");

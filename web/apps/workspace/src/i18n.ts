@@ -155,4 +155,8 @@ register("zh-CN", {
   "Back to project": "返回项目",
   "Run and diagnose": "运行与诊断",
   "Application runs": "应用运行",
+  "Host": "宿主",
+  "Sign out": "退出登录",
+  "{n} tenants": "{n} 个租户",
+  "A host administrator takes no tenant decisions.": "宿主管理员不做租户内的决定。",
 });

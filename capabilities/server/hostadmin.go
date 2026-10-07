@@ -285,7 +285,7 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 			WriteJSON(w, http.StatusOK, result)
 		})
 	h.hostRoute(mux, Route{Pattern: "POST /v1/host/tenants/{tenant}/migrations", Summary: "Migrate real records from another tenant into this one through its generated actions (host administrators)", Answer: MigrationResult{}},
-		func(w http.ResponseWriter, r *http.Request, subject string, to *Tenant) {
+		func(w http.ResponseWriter, r *http.Request, _ string, to *Tenant) {
 			var body struct {
 				From        string   `json:"from"`
 				Types       []string `json:"types"`
@@ -327,10 +327,6 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 				return
 			}
 			to.rememberMigration(result, target.ID, h.Now())
-			for i := range result.Types {
-				_ = i
-			}
-			_ = subject
 			WriteJSON(w, http.StatusOK, result)
 		})
 	h.hostRoute(mux, Route{Pattern: "GET /v1/host/tenants/{tenant}/migrations", Summary: "What the host console moved in or out of this tenant (host administrators)", Answer: []MigrationManifest{}},

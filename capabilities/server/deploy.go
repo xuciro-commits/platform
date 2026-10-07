@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -49,6 +50,10 @@ type Deployment struct {
 	// Packages is a directory of package descriptors (ADR-0047 §10.3): the
 	// index the console lists and prechecks. Empty: no packages offered.
 	Packages string
+	// HostAdmins are the subjects that may open the host console, comma
+	// separated (`user:<email>`, `client:<id>`); they need no seat in any
+	// tenant. Empty: the console answers nobody.
+	HostAdmins string
 	// Rebuild composes a fresh, unstarted tenant with the same durable app and
 	// connector declarations. Required for an in-process recovery retry.
 	Rebuild func(id string) (*Tenant, error)
@@ -77,6 +82,7 @@ func Flags(addr string) *Deployment {
 	flag.StringVar(&d.Mint, "mint-token", "", "print an access token for this subject and stop (<user:email> or <client:id>, as the seats name them)")
 	flag.DurationVar(&d.TokenTTL, "token-ttl", 12*time.Hour, "how long a minted token is accepted")
 	flag.StringVar(&d.Packages, "packages", "", "directory of package descriptors the console offers (empty: no packages)")
+	flag.StringVar(&d.HostAdmins, "host-admins", "", "subjects that may open the host console, comma separated (user:<email> or client:<id>; they need no tenant seat; empty: nobody)")
 	return d
 }
 
@@ -382,6 +388,14 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	}
 	host := NewHost(authenticate, tenants...)
 	host.tenantsFrom = registry.list
+	for _, subject := range strings.Split(d.HostAdmins, ",") {
+		if subject = strings.TrimSpace(subject); subject != "" {
+			if host.HostAdmins == nil {
+				host.HostAdmins = map[string]bool{}
+			}
+			host.HostAdmins[subject] = true
+		}
+	}
 	host.Templates = d.Templates
 	if d.Rebuild != nil { // the host console creates tenants (ADR-0078 §2.2)
 		var createMu sync.Mutex

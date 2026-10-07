@@ -223,11 +223,10 @@ func TestHostConsoleLifecycleAndSupport(t *testing.T) {
 	tn, member, _ := upgradeTenant(t, "t-host")
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	host := NewHost(Tokens(map[string]string{"host-token": "user:ops@example.test"}), tn)
-	host.HostAdmins = map[string]bool{"user:ops@example.test": true, "user:outsider@example.test": false}
+	host.HostAdmins = map[string]bool{"user:ops@example.test": true}
 	mux := http.NewServeMux()
 	host.hostConsoleRoutes(mux)
 	host.environmentRoutes(mux)
-	host.HostAdmins = map[string]bool{"user:ops@example.test": true}
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
@@ -507,5 +506,39 @@ func TestStagedResultChannel(t *testing.T) {
 	}
 	if _, err := tn.ReadStagedResult(*handle); err == nil {
 		t.Fatal("a tampered staged result passed its digest")
+	}
+}
+
+// A subject the deployment names a host administrator holds no seat in any
+// tenant: the workspace gets 401 from /v1/me and opens the console alone from
+// /v1/host/me (WorkQueue #141).
+func TestPureHostAdministratorLoadsConsoleOnly(t *testing.T) {
+	tn, _, _ := upgradeTenant(t, "t-host-only")
+	host := NewHost(Tokens(map[string]string{"ops": "user:ops@example.test", "stranger": "user:stranger@example.test"}), tn)
+	host.HostAdmins = map[string]bool{"user:ops@example.test": true}
+	srv := httptest.NewServer(host.Handler())
+	defer srv.Close()
+	get := func(path, token string) (int, string) {
+		request, _ := http.NewRequest(http.MethodGet, srv.URL+path, nil)
+		request.Header.Set("Authorization", "Bearer "+token)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		body, _ := io.ReadAll(response.Body)
+		return response.StatusCode, string(body)
+	}
+	if code, _ := get("/v1/me", "ops"); code != http.StatusUnauthorized {
+		t.Fatalf("a host administrator without a seat is not a member: %d", code)
+	}
+	if code, body := get("/v1/host/me", "ops"); code != http.StatusOK || !strings.Contains(body, `"subject":"user:ops@example.test"`) || !strings.Contains(body, `"t-host-only"`) {
+		t.Fatalf("host/me: %d %s", code, body)
+	}
+	if code, _ := get("/v1/host/overview", "ops"); code != http.StatusOK {
+		t.Fatalf("overview: %d", code)
+	}
+	if code, _ := get("/v1/host/me", "stranger"); code != http.StatusUnauthorized {
+		t.Fatalf("a stranger is not a host administrator: %d", code)
 	}
 }

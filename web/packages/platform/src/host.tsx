@@ -214,14 +214,17 @@ export function HostPromotions({ tenant, from: initialFrom, candidate: initialCa
   const [grant, setGrant] = useState("");
   const [activate, setActivate] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<Api.PromotionResult>();
   const chosenCandidate = candidate || artifacts.data?.find((a) => !a.active)?.candidate || artifacts.data?.[0]?.candidate || "";
+  const chosenArtifact = artifacts.data?.find((a) => a.candidate === chosenCandidate);
   const chosenGrant = grant || grants.data?.[0]?.id || "";
   const submit = async () => {
     setBusy(true);
-    const result = await call<Api.PromotionResult>(`/v1/host/tenants/${encodeURIComponent(target)}/promotions`,
+    const outcome = await call<Api.PromotionResult>(`/v1/host/tenants/${encodeURIComponent(target)}/promotions`,
       { from: source, candidate: chosenCandidate, key: `promote:${source}:${chosenCandidate}:${Date.now()}`, activate, targetGrant: chosenGrant });
     setBusy(false);
-    if (result) notify.success(activate ? t("Promoted and activated in {tenant}.", { tenant: target }) : t("Promoted into {tenant}.", { tenant: target }));
+    setResult(outcome);
+    if (outcome) notify.success(activate ? t("Promoted and activated in {tenant}.", { tenant: target }) : t("Promoted into {tenant}.", { tenant: target }));
   };
   return <>
     <PageHeader title={t("Promote a release")} description={t("Move a sealed candidate from one tenant into another — development to test, test to production — through a support session on the target.")} />
@@ -232,13 +235,20 @@ export function HostPromotions({ tenant, from: initialFrom, candidate: initialCa
       </div>
       <label className="grid gap-1 text-sm">{t("Candidate")}<Select value={chosenCandidate} onChange={(e) => setCandidate(e.target.value)}>
         {(artifacts.data ?? []).map((a) => <option key={a.candidate} value={a.candidate}>{a.candidate}{a.active ? ` · ${t("active")}` : ""}{a.verified ? "" : ` · ${t("unverified")}`}</option>)}
-      </Select></label>
+      </Select>{chosenArtifact && <span className="text-xs text-muted">
+        {t("{n} assets", { n: chosenArtifact.assets })} · {chosenArtifact.verified ? t("verified") : t("unverified")}{chosenArtifact.digest ? ` · ${chosenArtifact.digest.slice(0, 12)}` : ""}{chosenArtifact.note ? ` · ${chosenArtifact.note}` : ""}
+      </span>}</label>
       <label className="grid gap-1 text-sm">{t("Support session on the target")}<Select value={chosenGrant} onChange={(e) => setGrant(e.target.value)}>
         {(grants.data ?? []).map((g) => <option key={g.id} value={g.id}>{g.id} · {g.member} · {t("until {time}", { time: when(g.expires) })}</option>)}
       </Select>{!grants.data?.length && <span className="text-xs text-muted">{t("Open a support session on the target tenant first.")}</span>}</label>
       <Checkbox checked={activate} onChange={setActivate}>{t("Activate after promotion")}</Checkbox>
       <div><Button type="submit" variant="primary" disabled={busy || !source || !target || source === target || !chosenCandidate || !chosenGrant}>{busy ? t("Promoting…") : t("Promote")}</Button></div>
     </Form>
+    {result && <Panel className="mt-4 grid max-w-2xl gap-1 p-3 text-sm">
+      <div className="flex items-center gap-2"><strong>{t("Last promotion")}</strong><Tag label={result.active ? t("Active") : t("Promoted")} tone={result.active ? "success" : "info"} /></div>
+      <div className="font-mono text-xs">{result.from} → {result.to} · {result.candidate} · {t("{n} assets", { n: result.assets })} · {result.digest.slice(0, 12)}</div>
+      <div className="text-xs text-muted">{t("Idempotency key")}: <code>{result.key}</code>{!result.active && ` · ${t("The target's own activation and business permissions are unchanged.")}`}</div>
+    </Panel>}
   </>;
 }
 
@@ -257,15 +267,28 @@ export function HostMigrations({ tenant }: { tenant?: string }) {
   const [sourceGrant, setSourceGrant] = useState("");
   const [targetGrant, setTargetGrant] = useState("");
   const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<Api.MigrationResult>();
   const chosenSource = sourceGrant || sourceGrants.data?.[0]?.id || "";
   const chosenTarget = targetGrant || targetGrants.data?.[0]?.id || "";
   const list = types.split(/[\s,]+/).filter(Boolean);
   const submit = async () => {
     setBusy(true);
-    const result = await call<Api.MigrationResult>(`/v1/host/tenants/${encodeURIComponent(target)}/migrations`, { from: source, types: list, sourceGrant: chosenSource, targetGrant: chosenTarget });
+    const outcome = await call<Api.MigrationResult>(`/v1/host/tenants/${encodeURIComponent(target)}/migrations`, { from: source, types: list, sourceGrant: chosenSource, targetGrant: chosenTarget });
     setBusy(false);
-    if (result) notify.success(t("Migrated into {tenant}: {types}.", { tenant: target, types: list.join(", ") }));
+    setResult(outcome);
+    if (outcome) {
+      const refused = outcome.types.reduce((n, type) => n + (type.refused?.length ?? 0), 0);
+      (refused ? notify.error : notify.success)(refused ? t("Migrated into {tenant} with {n} refused rows.", { tenant: target, n: refused }) : t("Migrated into {tenant}: {types}.", { tenant: target, types: list.join(", ") }));
+    }
   };
+  const refusedColumns: ColumnDef<Api.ImportRow & { type: string }, any>[] = [
+    { accessorKey: "type", header: t("Type"), meta: { width: 160 } },
+    { accessorKey: "row", header: t("Row"), meta: { width: 70 } },
+    { accessorKey: "id", header: t("Record"), meta: { width: 160 } },
+    { accessorKey: "action", header: t("Action"), meta: { width: 200 } },
+    { accessorKey: "outcome", header: t("Outcome") },
+  ];
+  const refusedRows = (result?.types ?? []).flatMap((type) => (type.refused ?? []).map((row) => ({ ...row, type: type.type })));
   const grantOptions = (grants?: Grant[]) => (grants ?? []).map((g) => <option key={g.id} value={g.id}>{g.id} · {g.member}</option>);
   return <>
     <PageHeader title={t("Migrate records")} description={t("Copy records of chosen types from one tenant into another through its own actions, under a support session on each side.")} />
@@ -279,5 +302,14 @@ export function HostMigrations({ tenant }: { tenant?: string }) {
       <label className="grid gap-1 text-sm">{t("Record types")}<Input required value={types} onChange={(e) => setTypes(e.target.value)} placeholder="crm.account, crm.contact" /></label>
       <div><Button type="submit" variant="primary" disabled={busy || !source || !target || source === target || !list.length || !chosenSource || !chosenTarget}>{busy ? t("Migrating…") : t("Migrate")}</Button></div>
     </Form>
+    {result && <Panel className="mt-4 grid max-w-3xl gap-2 p-3 text-sm">
+      <div className="flex items-center gap-2"><strong>{t("Last migration")}</strong><span className="font-mono text-xs">{result.from} → {result.to}</span><span className="text-xs text-muted">{t("Idempotency key")}: <code>{result.key}</code> · {t("Run again, the same rows answer as they did the first time; nothing is written twice.")}</span></div>
+      <ul className="grid gap-1 font-mono text-xs">
+        {result.types.map((type) => <li key={type.type} className="flex items-center gap-2">
+          <span>{type.type}</span><Tag label={t("{written} of {rows} written", { written: type.written, rows: type.rows })} tone={type.refused?.length ? "warning" : "success"} />
+        </li>)}
+      </ul>
+      {refusedRows.length > 0 && <DataTable data={refusedRows} columns={refusedColumns} getRowId={(r) => `${r.type}:${r.row}`} height={Math.min(260, 40 + refusedRows.length * 32)} />}
+    </Panel>}
   </>;
 }
