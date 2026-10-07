@@ -23,7 +23,9 @@ import (
 // for support sessions, promotion and migration. It is the contract the web
 // release workbench and the host console are written against.
 func TestApplicationLifecycleOverHTTP(t *testing.T) {
-	seats := append(upgradeSeats(), Seat{Subjects: []string{"user:ops@example.test"}, Member: platform.Member{ID: "ops", Roles: map[string]string{build.ID: build.User}}})
+	seats := append(upgradeSeats(),
+		Seat{Subjects: []string{"user:ops@example.test"}, Member: platform.Member{ID: "ops", Roles: map[string]string{build.ID: build.User}}},
+		Seat{Subjects: []string{"user:pub-only@example.test"}, Member: platform.Member{ID: "pub-only", Roles: map[string]string{build.ID: build.Publisher}}})
 	compose := func(id string) *Tenant {
 		tn, err := NewTenant(id, NewConsole(id, seats...), work.New(id), build.New(id))
 		if err != nil {
@@ -158,7 +160,7 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 	if code, _ := call(http.MethodPost, "", "dana", "/v1/host/tenants/prod/support", map[string]any{"member": "pat", "reason": "release", "minutes": 30}); code != http.StatusUnauthorized {
 		t.Fatalf("a tenant member opened the host console: %d", code)
 	}
-	code, pub := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/support", map[string]any{"member": "pat", "reason": "promote v1 as publisher", "minutes": 30})
+	code, pub := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/support", map[string]any{"member": "pub-only", "reason": "promote v1 as publisher", "minutes": 30})
 	if code != http.StatusOK {
 		t.Fatalf("publisher support session: %d %v", code, pub)
 	}

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:4c9be5a5f6527140",
+  "revision": "sha256:67647191da747274",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4640,7 +4640,6 @@
   },
   "consumers": {
     "ui/command-menu": [
-      "web/packages/app/src/OpenIn.tsx",
       "web/packages/app/src/actions/OpenIn.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow.tsx",

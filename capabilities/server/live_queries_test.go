@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/build"
 	"platformserver/apps/enterprise"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -17,14 +18,14 @@ import (
 )
 
 func TestApprovalRequestsJoinSharedLiveReads(t *testing.T) {
-	seat := Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{PlatformApp: Admin, work.ID: "member"}}}
-	tn, err := NewTenant("live-requests", NewConsole("live-requests", seat), work.New("live-requests"))
+	seat := Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{PlatformApp: Admin, work.ID: "member", build.ID: build.Builder}}}
+	tn, err := NewTenant("live-requests", NewConsole("live-requests", seat), work.New("live-requests"), build.New("live-requests"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(NewHost(Tokens(map[string]string{"builder": "builder"}), tn).Handler())
 	defer server.Close()
-	paths := []string{"/v1/me", "/v1/requests", "/v1/inbox"}
+	paths := []string{"/v1/me", "/v1/requests", "/v1/inbox", "/v1/releases/active", "/v1/releases/candidates"}
 	watch, _ := json.Marshal(paths)
 	req, _ := http.NewRequest("GET", server.URL+"/v1/changes?"+url.Values{"watch": {string(watch)}}.Encode(), nil)
 	req.Header.Set("Authorization", "Bearer builder")

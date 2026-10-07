@@ -246,11 +246,11 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 // draftName is the name of the builder draft a submission edits: the payload's
 // on a create, the record's otherwise; empty when neither says.
 func (t *Tenant) draftName(s *pb.Submission) string {
-	var payload struct {
-		Name string `json:"name"`
-	}
-	_ = json.Unmarshal(s.GetPayload(), &payload)
-	if payload.Name != "" {
+	if strings.HasSuffix(s.GetSchema().GetName(), ".create") {
+		var payload struct {
+			Name string `json:"name"`
+		}
+		_ = json.Unmarshal(s.GetPayload(), &payload)
 		return payload.Name
 	}
 	t.records.mu.Lock()

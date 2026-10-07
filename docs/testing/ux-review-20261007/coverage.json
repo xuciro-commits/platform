@@ -269,7 +269,17 @@
       "screenshots": [
         "06-conditional-field.jpg",
         "08-release-condition-blocker.jpg"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "含required when的对象/页面/应用联合候选成功封存激活；refund显示必填why并拦空值，切other隐藏why且提交payload不含why、返回200。",
+        "screenshots": [
+          "retest-UX-01-conditional-joint-candidate.png",
+          "retest-UX-01-conditional-app-active.png",
+          "retest-UX-01-conditional-required-form.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-02",
@@ -277,7 +287,15 @@
       "summary": "新空项目同时显示所有内容已发布和尚未发布",
       "screenshots": [
         "02-project-empty.jpg"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "新建空应用显示还没有可发布的内容、发布禁用，不再声称所有内容已发布。",
+        "screenshots": [
+          "retest-UX-02-empty-project.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-03",
@@ -285,7 +303,15 @@
       "summary": "同类页签只显示类别名，多个项目/模块无法辨认",
       "screenshots": [
         "05-action-desktop-full.jpg"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "打开两个不同项目及对象编辑器，页签显示项目/对象类型与各自名称，不再仅同类通用标题。",
+        "screenshots": [
+          "retest-UX-03-named-project-tabs.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-04",
@@ -293,7 +319,15 @@
       "summary": "未激活对象的页面预览显示未知实体类型，草稿空态像错误",
       "screenshots": [
         "07-page-draft-preview.jpg"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "未激活对象的页面设计预览显示联合激活说明，不再显示未知实体错误。",
+        "screenshots": [
+          "retest-UX-04-draft-preview-explanation.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-06",
@@ -302,7 +336,16 @@
       "repro": "hotel-a 从 UI 保存封存并激活 UX-APP 联合候选；hotel-test 只有初始管理员，没有 app 草稿；支持会话 manager-test；晋级并激活",
       "screenshots": [
         "12-promotion-refusal.jpg"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "先以仅publisher的ux-publisher支持会话向无草稿hotel-test晋级，409明确needs the builder role；本地补齐成员幂等键后，manager-test builder支持会话晋级同一封存候选200并active。",
+        "screenshots": [
+          "retest-UX-06-publisher-only-refusal.png",
+          "retest-UX-06-empty-target-activated.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-07",
@@ -310,7 +353,15 @@
       "summary": "Dataset 的 Load a version 表单把合法 JSON 数组作为字符串提交，拒绝 A load carries an array of rows",
       "screenshots": [
         "13-dataset-load-json-refusal.jpg"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "原始三行JSON数组经文本编辑器解析后提交200，数据集生成v4；未再按字符串拒绝。",
+        "screenshots": [
+          "retest-UX-07-json-array-loaded.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-08",
@@ -318,7 +369,15 @@
       "summary": "权限解释器选择 desk-1 + platform.member.grant 后整页崩溃：Cannot read properties of null (reading join)",
       "screenshots": [
         "22-permission-explainer-crash.jpg"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "desk-1 + platform.member.grant显示不允许、rule=none、持有/需要角色，页面未崩溃。",
+        "screenshots": [
+          "retest-UX-08-denial-explained.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-09",
@@ -327,7 +386,15 @@
       "screenshots": [
         "20-record-detail-duplicate-files.jpg",
         "21-record-files-growing.jpg"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "同一CRM记录提交评论并实时更新后文件区块保持1份。",
+        "screenshots": [
+          "retest-UX-09-files-single-after-update.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-10",
@@ -335,7 +402,16 @@
       "summary": "自动对象页标题为空，页签只剩 Close tab，Open in 菜单为 Page:",
       "screenshots": [
         "19-generated-object-page.jpg"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "新联合发布的自动对象页显示UX条件收货标题；页签和Open in回落不再为空。 实际Open in菜单显示两个非空页面名称。",
+        "screenshots": [
+          "retest-UX-10-generated-page-title.png",
+          "retest-UX-10-open-in-page-titles.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-11",
@@ -345,7 +421,16 @@
       "screenshots": [
         "33-project-delegation-form.png",
         "37-delegated-outside-scope-refusal.png"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "项目仍配置object uxitem，草稿ID UX-ITEM，desk-1（独立build:user+项目builder）字段编辑200；UX-RETEST-ITEM范围外编辑403。额外Go回归验证payload改名不能冒领项目外旧草稿。",
+        "screenshots": [
+          "retest-UX-11-name-scope-success.png",
+          "retest-UX-11-outside-scope-refused.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-12",
@@ -355,7 +440,15 @@
       "screenshots": [
         "61-mes-live-query-refusal.png",
         "62-mes-unknown-entity-after-refresh.png"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "MES车间订单包含UX-SO，携带master/planned-orders及发布读取的共享订阅200；刷新后实体与列表仍正常。额外共享订阅Go回归覆盖嵌套发布读取。",
+        "screenshots": [
+          "retest-UX-12-mes-orders-live.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-13",
@@ -364,7 +457,15 @@
       "repro": "我的账户单独修改时区Asia/Shanghai保存400；UTC可保存。两台Dockerfile未安装tzdata，镜像未找到zoneinfo。",
       "screenshots": [
         "72-timezone-shanghai-refusal.png"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "实际重建镜像后Asia/Shanghai保存200，刷新保留且预览显示上海时间。",
+        "screenshots": [
+          "retest-UX-13-shanghai-persisted.png"
+        ],
+        "date": "2026-10-07"
+      }
     },
     {
       "id": "UX-14",
@@ -375,8 +476,30 @@
         "78-writeback-delivery-result.png",
         "82-writeback-reply-filled.png",
         "92-reply-mapping-without-d-prefix.png"
-      ]
+      ],
+      "status": "passed",
+      "retest": {
+        "observed": "仍按原示例d.MaterialDocument映射到why，新业务create真实投递后记录回填UXDOC，无需去掉d前缀。",
+        "screenshots": [
+          "retest-UX-14-d-prefix-reply-filled.png"
+        ],
+        "date": "2026-10-07"
+      }
     }
   ],
-  "scope": "阶段性走查总结；按负责人指令在匹配规则节点暂停。reviewed表示所列观察完成，不代表Testing整行全部通过或负责人验收。"
+  "scope": "阶段性走查总结；按负责人指令在匹配规则节点暂停。reviewed表示所列观察完成，不代表Testing整行全部通过或负责人验收。",
+  "retest": {
+    "date": "2026-10-07",
+    "sourceHead": "680cd1d",
+    "contentBase": "0218c8b",
+    "runtimeRevision": "47b9e097bf7fc3fb167772ae1d27bd60fd592e17",
+    "findingsPassed": 13,
+    "scope": "13条原发现逐项复测通过；28条Testing完整路线及负责人体验验收仍未全部完成。",
+    "integrationCorrections": [
+      "将OpenIn修复放回实际导入的actions/OpenIn.tsx，删除未使用副本",
+      "编辑委派只按已有目标草稿name判范围，拒绝payload冒领",
+      "保留releases/active及releases/candidates共享订阅",
+      "晋级派生草稿幂等键包含成员，拒绝后授权成员可重试"
+    ]
+  }
 }

@@ -355,7 +355,7 @@ func (t *Tenant) materialiseDrafts(candidate platform.ReleaseCandidate, member p
 		}
 		raw, _ := json.Marshal(payload)
 		sub := &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID,
-			IdempotencyKey: "promotion:" + candidate.ID + ":" + draft.Type + "/" + draft.Name,
+			IdempotencyKey: "promotion:" + candidate.ID + ":" + member.ID + ":" + draft.Type + "/" + draft.Name,
 			Target:         &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Schema: &pb.SchemaRef{Name: draft.Type + ".create", Version: 1}, Payload: raw}
 		if _, refusal := t.Submit(member, sub, now); refusal != nil && refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
 			if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {

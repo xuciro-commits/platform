@@ -89,6 +89,13 @@ func TestProjectDelegationWithIndependentReadRole(t *testing.T) {
 	if got := submit("mo", "build.object.edit", build.ObjectType, "allowed", map[string]any{"title": "No longer named"}); got != "ERROR_CODE_POLICY_DENIED" {
 		t.Fatalf("an asset the project no longer names was edited: %s", got)
 	}
+	if got := submit("dana", SchemaProjectSave, ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "future"}}}); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := submit("mo", "build.object.edit", build.ObjectType, "allowed", map[string]any{"name": "future", "title": "Claimed by payload"}); got != "ERROR_CODE_POLICY_DENIED" {
+		t.Fatalf("a payload name claimed an existing draft outside the project: %s", got)
+	}
+
 }
 
 func TestAcceptedInvitationIncludesMailIntent(t *testing.T) {
