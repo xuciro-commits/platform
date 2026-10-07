@@ -33,17 +33,22 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	if role := m.Roles[build.ID]; role != build.Builder && role != build.Integrator {
+	if !m.Holds(build.ID, build.Builder) && !m.Holds(build.ID, build.Integrator) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	out := []IntegrationEffect{}
 	for _, effect := range t.Effects(now) {
-		if effect.App != build.ID || !strings.HasPrefix(effect.Event, "writeback/") || !strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint) {
+		writeback := strings.HasPrefix(effect.Event, "writeback/") && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
+		books := strings.HasPrefix(effect.Event, "journal/") && effect.Endpoint == build.BooksEndpoint
+		if effect.App != build.ID || !writeback && !books {
 			continue
 		}
 		item := IntegrationEffect{ID: effect.ID, Endpoint: effect.Endpoint, Event: effect.Event, State: effect.State, Due: effect.Due, Last: effect.Last}
 		if effect.Error != "" {
 			item.Error = "The last delivery attempt failed"
+			if books && (strings.Contains(effect.Error, "closed") || strings.Contains(effect.Error, "fiscal period")) {
+				item.Error = "Waiting for an open fiscal period"
+			}
 		}
 		out = append(out, item)
 	}

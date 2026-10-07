@@ -19,6 +19,7 @@ export function IntegrationHealth() {
   if (!integrates(role("build"))) return <PageHeader title={t("Integration health")} description={t("Only a builder can see integration health.")} />;
   const when = (at?: string) => at ? new Date(at).toLocaleString() : "";
   const rows: Row[] = [
+    ...effects.filter((x) => x.endpoint === "core:books" && x.event.startsWith("journal/")).map((x): Row => ({ id: x.id, title: `${t("Journal entry")} · ${x.event.slice(8)}`, view: role("core") ? "master-data" : "", state: x.state, when: when(x.last), summary: x.error ? t(x.error) : t(x.state), tone: x.state === "delivered" ? "success" : x.state === "pending" || x.state === "retrying" ? "warning" : "danger" })),
     ...connections.map((c): Row => ({ id: c.id, title: `${t("Connection")} · ${c.title} · ${c.kind}`, view: "connection", state: c.state, when: when(c.last?.at),
       summary: !c.last ? t("Not checked yet.") : c.last.ok ? `${t("Reachable")} ${c.last.detail ?? ""}` : c.last.error ?? t("Failed"), tone: !c.last ? undefined : c.last.ok ? "success" : "danger" })),
     ...sources.map((s): Row => ({ id: s.id, title: `${t("Source")} · ${s.title} → ${s.dataset ? `${t("Dataset")} ${l.datasets.find((d) => d.id === s.dataset)?.title ?? s.dataset}` : s.object}`, view: "data-source", state: s.state, when: when(s.last?.at),
@@ -31,13 +32,13 @@ export function IntegrationHealth() {
   ];
   const bad = rows.filter((r) => r.tone === "danger").length, warn = rows.filter((r) => r.tone === "warning").length;
   const columns: ColumnDef<Row, unknown>[] = [
-    { id: "title", header: t("Integration"), accessorFn: (r) => r.title, cell: ({ row: { original: r } }) => <Button size="sm" variant="ghost" onClick={() => open({ view: r.view, params: { id: r.id } })}>{r.title}</Button> },
-    { id: "state", header: t("State"), accessorFn: (r) => r.state, cell: ({ row: { original: r } }) => <Tag label={r.state} tone={r.state === "published" || r.state === "ready" ? "success" : "warning"} /> },
+    { id: "title", header: t("Integration"), accessorFn: (r) => r.title, cell: ({ row: { original: r } }) => <Button size="sm" variant="ghost" disabled={!r.view} onClick={() => open({ view: r.view, params: r.view === "master-data" ? { type: "core.journal" } : { id: r.id } })}>{r.title}</Button> },
+    { id: "state", header: t("State"), accessorFn: (r) => r.state, cell: ({ row: { original: r } }) => <Tag label={r.state} tone={r.state === "published" || r.state === "ready" || r.state === "delivered" ? "success" : r.state === "failed" || r.state === "rejected" ? "danger" : "warning"} /> },
     { id: "summary", header: t("Last outcome"), accessorFn: (r) => r.summary, cell: ({ row: { original: r } }) => r.tone ? <Tag label={r.summary} tone={r.tone} /> : <span className="text-muted">{r.summary}</span> },
     { id: "when", header: t("Last activity"), accessorFn: (r) => r.when ?? "" },
   ];
   return <div className="grid gap-3">
-    <PageHeader title={t("Integration health")} description={t("Every connection, source, pipeline and writeback with its last outcome. Red needs a hand; amber is partial; attempts themselves are in Settings → Integrations.")}
+    <PageHeader title={t("Integration health")} description={t("Every connection, source, pipeline, writeback and journal delivery with its last outcome. Red needs a hand; amber is partial; attempts themselves are in Settings → Integrations.")}
       actions={<div className="flex gap-2"><Tag label={t("{n} failing", { n: bad })} tone={bad ? "danger" : undefined} /><Tag label={t("{n} partial", { n: warn })} tone={warn ? "warning" : undefined} /></div>} />
     <Panel>
       {rows.length === 0 ? <p className="text-xs text-muted">{t("No integrations yet. Start with a connection.")}</p> :

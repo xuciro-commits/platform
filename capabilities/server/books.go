@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformkernel/kernel"
 	"strings"
 	"time"
 
@@ -50,10 +51,10 @@ func (t *Tenant) journalEffects(e platform.Event) []platform.Effect {
 			}
 			entry, err := journal.Entry(e.Record.GetChangeId(), record, inputs, s.GetPrincipalId(), at, today)
 			if err != nil {
-				entry.Text = "not booked: " + err.Error()
+				entry["error"] = err.Error()
 			}
 			return []platform.Effect{{ID: fmt.Sprintf("%s:%s:%s:books", t.ID, build.ID, e.Record.GetChangeId()), Endpoint: build.BooksEndpoint, Event: "journal/" + o.Name + "." + a.Name,
-				App: build.ID, Key: e.Record.GetChangeId(), Target: target(s), At: at, State: "pending", Due: at, Body: build.EntryBody(entry)}}
+				App: build.ID, Key: e.Record.GetChangeId(), Target: target(s), At: at, State: "pending", Due: at, Body: t.bookBody(entry, typ, s.GetTarget().GetId(), a.Reverses)}}
 		}
 	}
 	return nil
@@ -64,22 +65,39 @@ func (t *Tenant) journalEffects(e platform.Event) []platform.Effect {
 // entry itself is rejected and stays visible in the effect log.
 func (t *Tenant) sendBooks(x platform.Effect, now time.Time) platform.Outcome {
 	out := platform.Outcome{Effect: x.ID}
-	books, ok := t.app(core.ID).(*core.Core)
-	if !ok {
+	app := t.app(core.ID)
+	if app == nil {
 		out.Result, out.Detail = "retry", "the books are not installed"
 		return out
 	}
+	var reverse struct {
+		ID    string `json:"reverse"`
+		Error string `json:"error"`
+	}
+	json.Unmarshal([]byte(x.Body), &reverse)
+	if reverse.Error != "" {
+		out.Result, out.Detail = "rejected", reverse.Error
+		return out
+	}
 	var entry core.Journal
-	if json.Unmarshal([]byte(x.Body), &entry) != nil || len(entry.Lines) == 0 {
+	if json.Unmarshal([]byte(x.Body), &entry) != nil || len(entry.Lines) == 0 && reverse.ID == "" {
 		out.Result, out.Detail = "rejected", "nothing to book"
 		return out
 	}
-	err := books.Post(t.automation(core.ID, false), entry, "books:"+x.Key, now)
+	payload, _ := json.Marshal(map[string]any{"date": entry.Date, "text": entry.Text, "currency": entry.Currency, "lines": entry.Lines, "source": entry.Source})
+	sub := &pb.Submission{TenantId: t.ID, Authority: core.ID, IdempotencyKey: "books:" + x.Key,
+		Target: &pb.EntityRef{Type: core.JournalType, Id: entry.ID}, Schema: &pb.SchemaRef{Name: core.JournalType + ".create", Version: 1}, Payload: payload}
+	if reverse.ID != "" {
+		sub.Target.Id = reverse.ID
+		sub.Schema.Name = core.JournalType + ".reverse"
+		sub.Payload, _ = json.Marshal(map[string]any{"date": entry.Date})
+	}
+	err := t.submitBooks(app, sub, now)
 	if err != nil {
 		out.Detail = err.Code.String() + ": " + err.Message
 	}
 	switch {
-	case err == nil, err.Code == pb.ErrorCode_ERROR_CODE_CONFLICT, err.Code == pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT:
+	case err == nil:
 		out.Result = "delivered"
 	case strings.Contains(err.Message, "closed") || strings.Contains(err.Message, "No fiscal period"):
 		out.Result = "retry"
@@ -91,3 +109,62 @@ func (t *Tenant) sendBooks(x platform.Effect, now time.Time) platform.Outcome {
 
 // booksEndpoint is the single ordered lane entries go through.
 func booksEndpoint() *Endpoint { return &Endpoint{ID: build.BooksEndpoint, Kind: "books"} }
+
+// submitBooks uses the same accepted-result boundary as other host-owned decisions.
+func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time) *kernel.Error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.quarantined() {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
+	caller := t.automation(core.ID, false)
+	sub.PrincipalId = caller.ID
+	if sub.GetSchema().GetName() == core.JournalType+".create" {
+		if _, exists := platform.Get[core.Journal](caller, sub.GetTarget().GetId()); !exists {
+			var entry core.Journal
+			json.Unmarshal(sub.GetPayload(), &entry)
+			if err := core.CheckPosting(caller, entry); err != nil {
+				return err
+			}
+		}
+	} else {
+		// A committed reversal may be retried after losing the effect answer.
+		// Its original receipt owns idempotency; only a fresh reversal needs preflight.
+		original, exists := platform.Get[core.Journal](caller, sub.GetTarget().GetId())
+		if !exists || original.State != "reversed" {
+			if err := core.CheckReversal(caller, sub.GetTarget().GetId(), sub.GetPayload(), now); err != nil {
+				return err
+			}
+		}
+	}
+	if result, ok := app.(platform.ResultApp); ok && t.AcceptResult != nil {
+		_, err := t.submitAccepted(result, caller.Member, sub, now, true)
+		return err
+	}
+	_, err := app.Submit(caller, sub, now)
+	if err == nil {
+		t.journal(app, caller.Member, sub, now)
+		t.enqueue(now)
+	}
+	return err
+}
+
+func (t *Tenant) bookBody(entry map[string]any, typ, id, reverses string) string {
+	if reverses == "" {
+		return build.EntryBody(entry)
+	}
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	if et := t.records.types[typ]; et != nil {
+		if row := et.rows[id]; row != nil {
+			for i := len(row.history) - 1; i >= 0; i-- {
+				h := row.history[i]
+				if h.Schema == typ+"."+reverses {
+					raw, _ := json.Marshal(map[string]any{"reverse": "jnl-" + h.Change, "date": entry["date"]})
+					return string(raw)
+				}
+			}
+		}
+	}
+	return `{}`
+}

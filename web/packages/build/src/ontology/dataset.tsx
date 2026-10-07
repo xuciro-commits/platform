@@ -75,7 +75,7 @@ export function DatasetEditor({ id }: { id: string }) {
     <PageHeader title={draft.title || t("New dataset")} description={t("Name it, then point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "dataset" })}>{t("Datasets")}</Button>
-        {!!draft.schema?.length && <Button disabled={busy || !!error} onClick={() => void perform(() => draftObject())}>{t("Draft an object from this schema")}</Button>}
+        {role("build") === "builder" && !!draft.schema?.length && <Button disabled={busy || dirty || !!error} onClick={() => void perform(draftObject)}>{t("Draft an object from this schema")}</Button>}
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
         <Button variant="primary" disabled={busy || !dirty && !!draft.id} onClick={() => void perform(save)}>{t("Save dataset")}</Button>
         {query.data?.record && !dirty && !busy && <RecordActions type="build.dataset" record={query.data.record} allowed={["build.dataset.load"]} />}

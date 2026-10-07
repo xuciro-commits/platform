@@ -485,6 +485,9 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 
 // confirm does a drafted action as the person who confirmed it, correlated to the run.
 func (a *Agents) confirm(c platform.Caller, run AgentRunRecord, d Draft, payload string, now time.Time) (string, *kernel.Error) {
+	if a.changedDefinition(run, a.def(run.Agent)) {
+		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The agent definition changed; start a new run")
+	}
 	t := a.t
 	key := fmt.Sprintf("agent:%s:%d:confirm", run.ID, d.Step+1)
 	if d.Kind == "protocol" {
@@ -534,12 +537,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 		run.Release = a.t.activeRelease
 	}
 	if d := a.def(agent); d != nil && recorded {
-		version := ""
-		if owner := a.t.app(d.app); owner != nil {
-			version = owner.Manifest().Version
-		}
-		digest, _ := canonicalDigest([]any{d.app, version, d.Name, d.Title, d.Instructions, d.Tools, d.Budget})
-		run.DefinitionVersion = "agent.sha256." + digest
+		run.DefinitionVersion = a.definitionVersion(d)
 	}
 	if flow != "" && recorded {
 		if row, ok := a.t.Held("flow.instance/" + flow); ok {
@@ -591,7 +589,7 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		if c.Roles[AgentApp] != AgentAdmin && c.Roles[d.app] == "" {
 			continue
 		}
-		out = append(out, AgentInfo{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
+		out = append(out, AgentInfo{ID: id, App: d.app, Title: d.Title, Instructions: visibleAgentInstructions(c, d), Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
 	}
 	return out, nil
 }
@@ -621,4 +619,27 @@ type AgentInfo struct {
 	Instructions string          `json:"instructions"`
 	Tools        []string        `json:"tools"`
 	Budget       platform.Budget `json:"budget"`
+}
+
+func (a *Agents) definitionVersion(d *agentDef) string {
+	version := ""
+	if owner := a.t.app(d.app); owner != nil {
+		version = owner.Manifest().Version
+	}
+	parts := []any{d.app, version, d.Name, d.Title, d.Instructions, d.Tools, d.Budget}
+	if b, ok := a.t.app(d.app).(*build.Build); ok {
+		parts = append(parts, b.AgentVersion(d.Name))
+	}
+	digest, _ := canonicalDigest(parts)
+	return "agent.sha256." + digest
+}
+func (a *Agents) changedDefinition(run AgentRunRecord, d *agentDef) bool {
+	return d != nil && d.app == build.ID && run.DefinitionVersion != "" && run.DefinitionVersion != a.definitionVersion(d)
+}
+
+func visibleAgentInstructions(c platform.Caller, d *agentDef) string {
+	if d.app == build.ID && !c.Holds(AgentApp, AgentAdmin) && !c.Holds(build.ID, build.Builder) {
+		return ""
+	}
+	return d.Instructions
 }

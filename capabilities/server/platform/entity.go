@@ -61,6 +61,8 @@ type Entity struct {
 	// store's own checks: cross-record rules such as one extension record per
 	// base record (ADR-0058 A3). It receives a pointer to the record.
 	Validate func(c Caller, record any) *kernel.Error
+	// ValidateAt supplies the accepted input's clock to time-dependent rules.
+	ValidateAt func(c Caller, record any, now time.Time) *kernel.Error
 
 	Type   string // a data class the app is authority for, e.g. "crm.opportunity"
 	Title  string // "Opportunity"

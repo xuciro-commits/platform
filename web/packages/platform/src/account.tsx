@@ -5,7 +5,7 @@
 // form on a member's page (people.tsx).
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t } from "@platform/ui";
+import { Button, Form, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
 import type { Member } from "./shared";
 
@@ -167,7 +167,7 @@ function Delegate() {
   const chosenApp = apps.includes(app) ? app : apps[0];
   return (
     <Panel title={t("Delegate my roles")} description={t("For an absence or a handover: another member holds what you hold in an app, until the day you set. You keep your own roles; an administrator can revoke the delegation.")} className="mt-4 max-w-3xl">
-      <form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={async (e) => { e.preventDefault(); if (await decide("platform.member.delegate", { type: "platform.member", id: to }, { app: chosenApp, until, reason })) setDone(t("Delegated {app} to {who} until {day}.", { app: chosenApp ?? "", who: to, day: until })); }}>
+      <Form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={async () => { if (await decide("platform.member.delegate", { type: "platform.member", id: to }, { app: chosenApp, until, reason })) setDone(t("Delegated {app} to {who} until {day}.", { app: chosenApp ?? "", who: to, day: until })); }}>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("App")}</span><Select value={chosenApp} onChange={(e) => setApp(e.target.value)}>{apps.map((a) => <option key={a} value={a}>{a}</option>)}</Select></label>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("To")}</span>
           {members.length ? <Select value={to} onChange={(e) => setTo(e.target.value)}><option value="">—</option>{members.filter((m) => m.id !== me.principalId).map((m) => <option key={m.id} value={m.id}>{m.profile.displayName || m.id}</option>)}</Select>
@@ -175,7 +175,7 @@ function Delegate() {
         <label className="grid gap-1"><span className="text-xs text-muted">{t("Until")}</span><Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} /></label>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("Reason (optional)")}</span><Input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
         <Button type="submit" variant="primary" disabled={!to || !until}>{t("Delegate")}</Button>
-      </form>
+      </Form>
       {done && <p className="mt-2 text-xs text-muted">{done}</p>}
     </Panel>
   );
@@ -192,8 +192,7 @@ function Tokens() {
   const [until, setUntil] = useState("");
   const [secret, setSecret] = useState<{ id: string; secret: string } | null>(null);
   if (!can("platform.token.issue")) return null;
-  const issue = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const issue = async () => {
     const id = "t" + Date.now().toString(36);
     const payload = { label, scopes: scopes.split(/[\s,]+/).filter(Boolean), until };
     if (!(await decide("platform.token.issue", { type: "platform.token", id }, payload))) return;
@@ -211,12 +210,12 @@ function Tokens() {
         <code className="block select-all break-all font-mono text-xs">{secret.secret}</code>
         <Button size="sm" className="mt-1" onClick={() => { void navigator.clipboard?.writeText(secret.secret); setSecret(null); }}>{t("Copied, hide it")}</Button>
       </div>}
-      <form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={issue}>
+      <Form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={issue}>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("Label")}</span><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t("CI, a notebook, …")} /></label>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("Scopes")}</span><Input value={scopes} onChange={(e) => setScopes(e.target.value)} placeholder={t("Permission patterns, such as mes.order.* ; empty: everything you may do")} className="w-80" /></label>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("Until")}</span><Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} /></label>
         <Button type="submit" variant="primary" disabled={!label}>{t("Issue personal token")}</Button>
-      </form>
+      </Form>
       <div className="mt-3 grid gap-1 text-sm">
         {(tokens.data ?? []).length === 0 && <p className="text-xs text-muted">{t("No personal tokens.")}</p>}
         {(tokens.data ?? []).map((x) => (

@@ -1,6 +1,9 @@
 package platformserver
 
 import (
+	"context"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -15,11 +18,72 @@ import (
 // balanced entry into the books of its month, is refused into a closed month
 // and lands in the next open one instead, and reverses by opposite entry.
 func TestBooksFromBuilderActions(t *testing.T) {
-	seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{build.ID: build.Builder, core.ID: core.Accountant}}}
-	tn, err := NewTenant("books", NewConsole("books", seat), core.New("books"), build.New("books"))
+	for _, durable := range []bool{false, true} {
+		name := "legacy"
+		if durable {
+			name = "accepted-result"
+		}
+		t.Run(name, func(t *testing.T) { testBooksFromBuilderActions(t, durable, nil) })
+	}
+}
+
+func TestJournalBooksFromBuilderActions(t *testing.T) {
+	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
+	if dsn == "" {
+		t.Skip("PLATFORM_TEST_DATABASE is not set")
+	}
+	store, err := OpenJournal(context.Background(), dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer store.Close()
+	testBooksFromBuilderActions(t, true, store)
+}
+
+func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
+	tenant := "books"
+	if store != nil {
+		tenant = fmt.Sprintf("books-%d", time.Now().UnixNano())
+		if _, err := store.Entries(context.Background(), tenant, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{build.ID: build.Builder, core.ID: core.Accountant}}}
+	compose := func() *Tenant {
+		tn, err := NewTenant(tenant, NewConsole(tenant, seat), core.New(tenant), build.New(tenant))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tn
+	}
+	tn := compose()
+	var journal []Entry
+	capture := func(tn *Tenant) {
+		tn.Record = func(e Entry) {
+			if store != nil {
+				if err := store.Append(context.Background(), tenant, e); err != nil {
+					t.Fatal(err)
+				}
+			}
+			journal = append(journal, e)
+		}
+
+		if durable {
+			tn.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+				if store != nil {
+					raw, err := store.AppendAccepted(context.Background(), tenant, e, key, hash)
+					if err != nil {
+						return nil, err
+					}
+					e.Body = raw
+				}
+				journal = append(journal, e)
+				return e.Body, nil
+			}
+		}
+	}
+	capture(tn)
 	member, _ := tn.Member("dana")
 	at := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
 	submit := func(key, app, schema, typ, target, payload string, when time.Time) {
@@ -62,13 +126,37 @@ func TestBooksFromBuilderActions(t *testing.T) {
 		t.Fatalf("September's receipt should post to October, marked: %+v", e)
 	}
 	// Reverse through the object's cancel: an opposite entry, the balance nets to zero.
+	submit("edit-posted", build.ID, "build.goodsreceipt.edit", "build.goodsreceipt", "gr1", `{"amount":999}`, at)
 	submit("cancel1", build.ID, "build.goodsreceipt.cancel", "build.goodsreceipt", "gr1", `{}`, at.Add(time.Minute))
+	if durable {
+		// Lose the effect answer after core commits the reversal, then recover.
+		var queued platform.Effect
+		for _, effect := range tn.Effects(at) {
+			if effect.Event == "journal/goodsreceipt.cancel" {
+				queued = effect
+			}
+		}
+		if outcome := tn.sendBooks(queued, at.Add(time.Minute)); outcome.Result != "delivered" {
+			t.Fatalf("commit reversal: %+v", outcome)
+		}
+		restored := compose()
+		if err := restored.Replay(journal); err != nil {
+			t.Fatal(err)
+		}
+		tn = restored
+		capture(tn)
+	}
 	tn.Dispatch(at.Add(time.Minute))
 	tb, _ := tn.app(core.ID).Read(c, core.ReadTrialBalance+"/2026-10")
 	balance := tb.(core.TrialBalance)
 	if len(balance.Rows) != 2 || balance.Debit != balance.Credit || balance.Rows[0].Account != "1403" || balance.Rows[0].Balance != 80 {
 		t.Fatalf("trial balance %+v", balance)
 	}
+	original, _ := platform.Get[core.Journal](c, "jnl-chg-5")
+	if original.State != "reversed" || original.Reversed != original.ID+"-rev" {
+		t.Fatalf("original journal was not reversed: %+v", original)
+	}
+	submit("archive-receipt", build.ID, "build.goodsreceipt.archive", "build.goodsreceipt", "gr1", `{}`, at)
 	// An unbalanced hand entry and one into a month nobody opened are refused.
 	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: core.ID, IdempotencyKey: "bad",
 		Target: &pb.EntityRef{Type: core.JournalType, Id: "bad"}, Schema: &pb.SchemaRef{Name: core.JournalType + ".create", Version: 1},
@@ -86,9 +174,35 @@ func TestBooksFromBuilderActions(t *testing.T) {
 	if entries, _, _ = platform.Find[core.Journal](c, platform.Query{Limit: 10}); len(entries) != 3 {
 		t.Fatalf("the late receipt must wait, got %d entries", len(entries))
 	}
+	if durable {
+		// Recovery must restore attempts and their due time before continuing the lane.
+		restored := compose()
+		if err := restored.Replay(journal); err != nil {
+			t.Fatal(err)
+		}
+		tn = restored
+		capture(tn)
+		c = tn.automation(core.ID, false)
+		tn.Dispatch(at.Add(4 * time.Minute))
+		if tn.quarantined() {
+			t.Fatal("retry after recovery quarantined the tenant")
+		}
+	}
 	submit("reopen-nov", core.ID, core.PeriodType+".reopen", core.PeriodType, "per-2026-11", `{}`, at)
 	tn.Dispatch(at.Add(10 * time.Minute))
 	if entries, _, _ = platform.Find[core.Journal](c, platform.Query{Limit: 10}); len(entries) != 4 {
 		t.Fatalf("after November opens the receipt lands, got %d entries: %+v", len(entries), tn.Deliveries())
 	}
+	held, _ := tn.Held("build.goodsreceipt/gr3")
+	if toMap(held)["number"] != "GR2026-0003" {
+		t.Fatal("archive reused an existing document number")
+	}
+	submit("next-year", build.ID, "build.goodsreceipt.create", "build.goodsreceipt", "next", `{"amount":1,"receivedon":"2027-01-05"}`, at.AddDate(1, 0, 0))
+	held, _ = tn.Held("build.goodsreceipt/next")
+	if toMap(held)["number"] != "GR2027-0001" {
+		t.Fatal("numbering used the wall clock rather than decision time")
+	}
+
+	CheckReplay(t, tn, journal, compose)
+
 }

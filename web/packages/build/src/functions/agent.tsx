@@ -52,20 +52,20 @@ export function AgentEditor({ id }: { id: string }) {
     const { name, title, description, instructions, tools, steps, tokens, actions, cost, checkpoints, handoffRole, cases } = draft;
     return { name, title, description, instructions, tools, steps: steps || 0, tokens: tokens || 0, actions: actions || 0, cost: cost || 0, checkpoints: checkpoints ?? [], handoffRole: handoffRole ?? "", cases: cases ?? [] };
   };
-  const save = async (): Promise<number | undefined> => {
+  const save = async (): Promise<{ id: string; revision: number } | undefined> => {
     const target = draft.id || crypto.randomUUID();
     if (!await decide(`build.agent.${draft.id ? "edit" : "create"}`, { type: "build.agent", id: target }, payload(), { expectedRevision: draft.id ? draft.revision : 0, quiet: true, onRefused: setError })) return;
     const revision = draft.id ? draft.revision + 1 : 1;
     markSaved(); setDirty(false);
     if (!draft.id) { open({ view: "agent", params: { id: target } }); close({ view: "agent", params: { id } }); }
     else { const r = await query.refetch(); if (r.data?.record) load(r.data.record); }
-    return revision;
+    return { id: target, revision };
   };
   const publish = async () => {
     if (issues.length) { setError(issues.join(" ")); return; }
-    const revision = dirty ? await save() : draft.revision;
-    if (revision === undefined) return;
-    if (await decide("build.agent.publish", { type: "build.agent", id: draft.id }, {}, { expectedRevision: revision, quiet: true, onRefused: setError })) {
+    const saved = dirty || !draft.id ? await save() : { id: draft.id, revision: draft.revision };
+    if (!saved) return;
+    if (await decide("build.agent.publish", { type: "build.agent", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) {
       const r = await query.refetch(); if (r.data?.record) load(r.data.record);
     }
   };
@@ -74,7 +74,7 @@ export function AgentEditor({ id }: { id: string }) {
   const cases = draft.cases ?? [];
   const setCase = (i: number, patch: Partial<Case>) => change({ cases: cases.map((c, at) => at === i ? { ...c, ...patch } : c) });
   return <div className="grid min-w-0 gap-3">
-    <PageHeader title={draft.title || t("New agent")} description={t("Save the declaration, then publish it: people ask it from any record it may read, flows give it steps, and its cases run against the model before it meets people.")}
+    <PageHeader title={draft.title || t("New agent")} description={t("Save the declaration, then publish it: people ask it from any record it may read and flows give it steps. Evaluate its declared cases in Agents.")}
       actions={<div className="flex flex-wrap gap-2">
         <Button variant="ghost" onClick={() => open({ view: "agent" })}>{t("Agents")}</Button>
         <DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />
@@ -82,7 +82,7 @@ export function AgentEditor({ id }: { id: string }) {
         <Button disabled={busy || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save agent")}</Button>
         <Button variant="primary" disabled={busy || issues.length > 0} onClick={() => void perform(publish)}>{t("Publish")}</Button>
       </div>} />
-    {draft.version ? <Panel role="status" className="text-xs">{t("Installed as build.{name}, version {version}. Runs keep the version they started with.", { name: draft.name, version: draft.version })}</Panel> : null}
+    {draft.version ? <Panel role="status" className="text-xs">{t("Installed as build.{name}, version {version}. A changed definition stops existing runs.", { name: draft.name, version: draft.version })}</Panel> : null}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     <fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-2">
       <Panel title={t("Agent")} className="grid content-start gap-3">
@@ -109,7 +109,7 @@ export function AgentEditor({ id }: { id: string }) {
         </div>
       </Panel>
       <Panel title={t("Evaluation cases")} className="grid content-start gap-2 lg:col-span-2">
-        <p className="text-xs text-muted">{t("Each case is a goal about a record and what a dry run must come to. They run three times each against the model before the agent meets people, and again when its model changes.")}</p>
+        <p className="text-xs text-muted">{t("Each case is a goal about a record and what a dry run must come to. Run the declared suite in Agents to evaluate a model; publishing does not run it automatically.")}</p>
         {cases.map((c, i) => <div key={i} className="grid gap-2 rounded-md border border-border p-2 sm:grid-cols-[1fr_2fr_1fr_1fr_auto]">
           <label className={fieldClass}>{t("Case")}<Input value={c.name} onChange={(e) => setCase(i, { name: e.target.value })} /></label>
           <label className={fieldClass}>{t("Goal")}<Input value={c.goal} onChange={(e) => setCase(i, { goal: e.target.value })} /></label>

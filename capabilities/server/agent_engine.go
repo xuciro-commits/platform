@@ -159,6 +159,8 @@ func (a *Agents) due(now time.Time) []turn {
 		switch {
 		case d == nil:
 			x.stop = "the agent is no longer declared"
+		case a.changedDefinition(run, d):
+			x.stop = "the agent definition changed; start a new run"
 		case run.OnBehalf != "" && (reader.Tenant != t.ID || reader.Roles[d.app] == ""):
 			x.stop = "the person no longer has access to this agent's app"
 		case name == "":
@@ -432,6 +434,9 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		}
 	case d == nil:
 		step.Outcome = "the agent is no longer declared"
+		stop(step.Outcome)
+	case a.changedDefinition(run, d):
+		step.Outcome = "the agent definition changed; start a new run"
 		stop(step.Outcome)
 	case run.StepsUsed > d.Budget.Steps || run.TokensUsed > d.Budget.Tokens || d.Budget.Cost > 0 && run.Cost > d.Budget.Cost:
 		// The reply that crossed the budget: what it cost is kept, and no

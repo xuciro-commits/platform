@@ -91,7 +91,7 @@ func refuse(message string, args ...any) *kernel.Error {
 
 func bookEntities() []platform.Entity {
 	books := platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Accountant}}
-	return []platform.Entity{
+	entities := []platform.Entity{
 		{Type: AccountType, Title: "Account", Model: Account{}, Display: "name", Synonyms: "GL account,ledger account,chart of accounts",
 			Description: "One line of the chart of accounts; entries post to postable accounts, summary accounts total them.", Standard: books, Implements: []string{Coded},
 			Validate: validateAccount},
@@ -107,8 +107,12 @@ func bookEntities() []platform.Entity {
 			Lifecycle: &platform.Lifecycle{Field: "state", Initial: "posted", States: []platform.State{{Name: "posted", Title: "Posted", Tone: "success"}, {Name: "reversed", Title: "Reversed", Tone: "neutral"}},
 				Transitions: []platform.Transition{
 					{Name: "reverse", Title: "Reverse", Description: "Post the opposite entry today; nothing is deleted.", From: []string{"posted"}, To: []string{"reversed"}, Roles: []string{Accountant},
-						Payload: []platform.Field{{Name: "date", Type: "string", Description: "The reversal's posting date; default today"}}, Do: reverseJournal}}}},
+						Payload: []platform.Field{{Name: "date", Type: "string", Description: "The reversal's posting date; default today"}}, Do: reverseJournal, After: storeReversal}}}},
 	}
+	for i := range entities {
+		entities[i].Scope = platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Steward: platform.ScopeTenant, Accountant: platform.ScopeTenant}}
+	}
+	return entities
 }
 
 func validateAccount(c platform.Caller, record any) *kernel.Error {
@@ -171,6 +175,24 @@ func computeJournal(record any) {
 	}
 }
 
+// CheckPosting validates a pending posting before a durable key is reserved.
+func CheckPosting(c platform.Caller, j Journal) *kernel.Error {
+	computeJournal(&j)
+	return validateJournal(c, &j)
+}
+
+func CheckReversal(c platform.Caller, id string, payload json.RawMessage, now time.Time) *kernel.Error {
+	j, ok := platform.Get[Journal](c, id)
+	if !ok {
+		return refuse("The journal entry does not exist")
+	}
+	if j.State != "posted" {
+		return nil
+	}
+	_, err := reversal(c, &j, payload, now)
+	return err
+}
+
 // validateJournal is the whole discipline of the books: balanced lines on
 // postable accounts, dated into an open period - or the next one, visibly.
 func validateJournal(c platform.Caller, record any) *kernel.Error {
@@ -227,6 +249,22 @@ func validateJournal(c platform.Caller, record any) *kernel.Error {
 
 func reverseJournal(c platform.Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error {
 	j := record.(*Journal)
+	rev, err := reversal(c, j, payload, now)
+	if err != nil {
+		return err
+	}
+	j.Reversed = rev.ID
+	return nil
+}
+
+func storeReversal(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
+	rev, err := reversal(c, record.(*Journal), r.GetSubmission().GetPayload(), now)
+	if err == nil {
+		c.Put(r, rev)
+	}
+}
+
+func reversal(c platform.Caller, j *Journal, payload json.RawMessage, now time.Time) (Journal, *kernel.Error) {
 	var p struct {
 		Date string `json:"date"`
 	}
@@ -240,13 +278,9 @@ func reverseJournal(c platform.Caller, record any, payload json.RawMessage, now 
 	}
 	computeJournal(&rev)
 	if err := validateJournal(c, &rev); err != nil {
-		return err
+		return Journal{}, err
 	}
-	if err := c.Put(nil, rev); err != nil {
-		return err
-	}
-	j.Reversed = rev.ID
-	return nil
+	return rev, nil
 }
 
 func firstNonEmpty(a, b string) string {

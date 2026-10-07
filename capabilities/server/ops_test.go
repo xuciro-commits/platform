@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -17,11 +18,29 @@ import (
 // action as its tool once published, and the rule tells the role's holders
 // once when a record comes to match.
 func TestBuilderAgentsAndAlerts(t *testing.T) {
+	for _, durable := range []bool{false, true} {
+		name := "legacy"
+		if durable {
+			name = "accepted-result"
+		}
+		t.Run(name, func(t *testing.T) { testBuilderAgentsAndAlerts(t, durable) })
+	}
+}
+func testBuilderAgentsAndAlerts(t *testing.T, durable bool) {
 	dana := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{build.ID: build.Builder}}}
 	wes := Seat{Subjects: []string{"wes"}, Member: platform.Member{ID: "wes", Roles: map[string]string{build.ID: "desk"}}}
-	tn, err := NewTenant("ops", NewConsole("ops", dana, wes), ai.New("ops"), work.New("ops"), NewAgents("ops"), build.New("ops"))
-	if err != nil {
-		t.Fatal(err)
+	compose := func() *Tenant {
+		tn, err := NewTenant("ops", NewConsole("ops", dana, wes), ai.New("ops"), work.New("ops"), NewAgents("ops"), build.New("ops"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tn
+	}
+	tn := compose()
+	var journal []Entry
+	tn.Record = func(e Entry) { journal = append(journal, e) }
+	if durable {
+		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { journal = append(journal, e); return e.Body, nil }
 	}
 	member, _ := tn.Member("dana")
 	at := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
@@ -64,6 +83,29 @@ func TestBuilderAgentsAndAlerts(t *testing.T) {
 		t.Fatalf("the agent's case must require asking")
 	}
 
+	// Private instructions are visible only to the author or an agent administrator.
+	wesMember, _ := tn.Member("wes")
+	public, _ := tn.agents.Read(platform.NewCaller(runtime{tn}, wesMember, AgentApp, false, false), "agents")
+	if public.([]AgentInfo)[0].Instructions != "" || infos[0].Instructions == "" {
+		t.Fatal("private instructions leaked or author lost them")
+	}
+	def := tn.agents.def("build.expediter")
+	if err := def.Guard(tn.automation(build.ID, false), platform.AgentRun{}, "build.order.expedite", "o-1", json.RawMessage(`{}`)); err == nil {
+		t.Fatal("autonomous checkpoint bypassed its guard")
+	}
+	if err := def.Guard(tn.automation(build.ID, false), platform.AgentRun{OnBehalf: "wes"}, "build.order.expedite", "o-1", json.RawMessage(`{}`)); err != nil {
+		t.Fatal("a personal run must use normal draft confirmation")
+	}
+	run := tn.agents.create("old-run", "build.expediter", "Expedite", "build.order/o-1", "wes", "", "", 0, at, true)
+	submit("agent-update", build.AgentType+".edit", build.AgentType, "A1", `{"instructions":"Ask before expediting."}`)
+	submit("agent-republish", build.SchemaAgentPublish, build.AgentType, "A1", `{}`)
+	if !tn.agents.changedDefinition(run, tn.agents.def(run.Agent)) {
+		t.Fatal("new publication did not invalidate startup binding")
+	}
+	if _, err := tn.agents.confirm(platform.NewCaller(runtime{tn}, wesMember, AgentApp, false, false), run, Draft{}, "{}", at); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
+		t.Fatalf("old draft confirmation: %v", err)
+	}
+
 	// Alert: told once per record when quantity passes 100, to the desk.
 	refused("alert-bad", build.AlertType+".create", build.AlertType, "R1", `{"name":"big","title":"Big order","object":"build.order","field":"size","operator":">","value":"100","message":"Check capacity.","active":true}`, "no field")
 	submit("alert", build.AlertType+".create", build.AlertType, "R1", `{"name":"big","title":"Big order","object":"build.order","field":"qty","operator":">","value":"100","message":"Check capacity.","role":"desk","active":true}`)
@@ -83,4 +125,6 @@ func TestBuilderAgentsAndAlerts(t *testing.T) {
 	if n := tn.notificationsFor("dana"); len(n) != 0 {
 		t.Fatalf("the builder is not the desk: %+v", n)
 	}
+	CheckReplay(t, tn, journal, compose)
+
 }

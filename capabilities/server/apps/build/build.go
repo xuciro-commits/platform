@@ -279,13 +279,22 @@ func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Er
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
 func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish}
+	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish}
 }
 
 // publicationImage reads and verifies the already committed record image
 // without rerunning builder action rules or publishing a second decision.
 func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
 	switch schema {
+	case SchemaAgentPublish:
+		var record Agent
+		if err := json.Unmarshal(image, &record); err != nil {
+			return platform.Entity{}, nil, nil, nil, err
+		}
+		if _, ok := wasPublished[Agent](record.Published); !ok {
+			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted agent has no published definition")
+		}
+		return b.agentEntity(), nil, nil, nil, nil
 	case SchemaPublish:
 		var record Object
 		if err := json.Unmarshal(image, &record); err != nil {
@@ -327,6 +336,18 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaAgentPublish {
+		var record Agent
+		if err := json.Unmarshal(image, &record); err != nil {
+			return err
+		}
+		agent, ok := wasPublished[Agent](record.Published)
+		if !ok {
+			return fmt.Errorf("accepted agent has no published definition")
+		}
+		return b.checkAgent(agent)
+	}
+
 	if schema == SchemaPropertyType {
 		l, err := propertyTypeImage(image)
 		if err != nil {
@@ -398,6 +419,19 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 // Installation reconstructs the runtime registry from the saved published
 // image, not by running the publish transition or making another journal entry.
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaAgentPublish {
+		var record Agent
+		if err := json.Unmarshal(image, &record); err != nil {
+			return err
+		}
+		agent, ok := wasPublished[Agent](record.Published)
+		if !ok {
+			return fmt.Errorf("accepted agent has no published definition")
+		}
+		b.agents[agent.Name] = agent
+		return nil
+	}
+
 	if schema == SchemaPropertyType {
 		l, err := propertyTypeImage(image)
 		if err != nil {
@@ -1203,7 +1237,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Compute: computeOf(o), Validate: validateAll(validateOf(o, model), numberingOf(o, model))}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Compute: computeOf(o), Validate: validateOf(o, model), ValidateAt: numberingOf(o, model)}
 }
 
 // page is the list and detail page a defined object comes with: the same

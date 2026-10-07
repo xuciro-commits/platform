@@ -16,16 +16,17 @@ import (
 	"platformserver/platform"
 )
 
-func TestIntegratorSeesOnlyWritebackDeliveryMetadata(t *testing.T) {
+func TestIntegratorSeesOnlyIntegrationDeliveryMetadata(t *testing.T) {
 	now := time.Now()
 	tn := &Tenant{ID: "metadata", outbound: []*effect{
 		{Effect: platform.Effect{ID: "own", App: build.ID, Endpoint: "connection:c", Event: "writeback:wrong", Body: "private"}},
 		{Effect: platform.Effect{ID: "allowed", App: build.ID, Endpoint: "connection:c", Event: "writeback/orders", Body: "private-request", Error: "private-answer", State: "retrying"}},
+		{Effect: platform.Effect{ID: "book", App: build.ID, Endpoint: build.BooksEndpoint, Event: "journal/receipt.post", Body: "private-journal", Target: "private-record", Error: "No fiscal period is open private-period", State: "retrying"}},
 		{Effect: platform.Effect{ID: "other", App: "erp", Endpoint: "connection:c", Event: "writeback/orders", Body: "private-other"}},
 	}}
 	member := platform.Member{ID: "integrator", Tenant: tn.ID, Roles: map[string]string{build.ID: build.Integrator}}
 	rows, err := tn.integrationEffects(member, now)
-	if err != nil || len(rows) != 1 || rows[0].ID != "allowed" {
+	if err != nil || len(rows) != 2 || rows[0].ID != "book" || rows[0].Error != "Waiting for an open fiscal period" || rows[1].ID != "allowed" {
 		t.Fatalf("metadata: %+v %v", rows, err)
 	}
 	body, _ := json.Marshal(rows)

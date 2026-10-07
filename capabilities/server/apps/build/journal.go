@@ -11,8 +11,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
-
-	"platformserver/apps/core"
 )
 
 // JournalPost (ADR-0076) is what a decision books: lines whose accounts and
@@ -109,8 +107,8 @@ func (a Action) Reversal(of Action) ([]Post, *JournalPost) {
 // Entry evaluates the declaration against the decision: the record after the
 // action and the inputs given. The id is the decision's change id, so a
 // replay lands the same entry once.
-// Entry books the posting; today is the date where the person who decided is (ADR-0079 §3).
-func (j JournalPost) Entry(changeID string, record map[string]any, inputs map[string]any, me string, now time.Time, today string) (core.Journal, error) {
+// today is the decider's local date (ADR-0079).
+func (j JournalPost) Entry(changeID string, record map[string]any, inputs map[string]any, me string, now time.Time, today string) (map[string]any, error) {
 	source := func(from string) any {
 		switch {
 		case from == "$me":
@@ -127,45 +125,39 @@ func (j JournalPost) Entry(changeID string, record map[string]any, inputs map[st
 		}
 		return record[from]
 	}
-	entry := core.Journal{Date: today, Source: ID + "/" + changeID}
-	entry.ID = "jnl-" + changeID
+	entry := map[string]any{"id": "jnl-" + changeID, "date": today, "source": ID + "/" + changeID}
 	if j.Date != "" {
 		if d := textOf(source(j.Date)); len(d) >= 10 {
-			entry.Date = d[:10]
+			entry["date"] = d[:10]
 		}
 	}
-	if strings.HasPrefix(j.Text, "=") {
-		entry.Text = j.Text[1:]
-	} else if j.Text != "" {
-		entry.Text = textOf(source(j.Text))
+	if j.Text != "" {
+		entry["text"] = textOf(source(j.Text))
 	}
+	lines := []map[string]any{}
 	for i, l := range j.Lines {
-		line := core.JournalLine{Account: textOf(source(l.Account)), Text: l.Text, Object: textOf(source(l.Object)), Partner: textOf(source(l.Partner))}
-		var err error
-		if l.Debit != "" {
-			line.Debit, err = number(source(l.Debit))
-		} else {
-			line.Credit, err = number(source(l.Credit))
+		from, side := l.Debit, "debit"
+		if from == "" {
+			from, side = l.Credit, "credit"
 		}
+		amount, err := number(source(from))
 		if err != nil {
 			return entry, fmt.Errorf("line %d: the amount is not a number", i+1)
 		}
-		if line.Debit == 0 && line.Credit == 0 {
-			continue // a zero line books nothing
+		if amount == 0 {
+			continue
 		}
-		entry.Lines = append(entry.Lines, line)
+		lines = append(lines, map[string]any{"account": textOf(source(l.Account)), side: amount, "text": l.Text, "object": textOf(source(l.Object)), "partner": textOf(source(l.Partner))})
 	}
-	if len(entry.Lines) == 0 {
+	if len(lines) == 0 {
 		return entry, fmt.Errorf("nothing to book")
 	}
+	entry["lines"] = lines
 	return entry, nil
 }
 
-// EntryBody is what the effect carries.
-func EntryBody(entry core.Journal) string {
-	raw, _ := json.Marshal(entry)
-	return string(raw)
-}
+// EntryBody serializes the frozen action payload; core owns the journal model.
+func EntryBody(entry map[string]any) string { raw, _ := json.Marshal(entry); return string(raw) }
 
 // EffectivePosts and EffectiveJournal are what the action really posts and
 // books: its own, or the reverse of the action it reverses.
@@ -233,26 +225,26 @@ func (n Numbering) Format(seq, year int) string {
 
 // numberingOf gives a new record the next number: the count of records so far
 // (this year, when yearly) plus one, which is gapless because nothing is deleted.
-func numberingOf(o Object, model any) func(c platform.Caller, record any) *kernel.Error {
+func numberingOf(o Object, model any) func(c platform.Caller, record any, now time.Time) *kernel.Error {
 	if o.Numbering == nil {
 		return nil
 	}
 	n, typ := *o.Numbering, reflect.TypeOf(model)
-	return func(c platform.Caller, record any) *kernel.Error {
+	return func(c platform.Caller, record any, now time.Time) *kernel.Error {
 		v := reflect.ValueOf(record).Elem()
 		field := v.FieldByName(goName(n.Field))
 		if !field.IsValid() || field.Kind() != reflect.String || field.String() != "" || v.Field(0).Interface().(platform.Record).Revision > 0 {
 			return nil
 		}
-		year := time.Now().UTC().Year()
-		_, count, err := c.FindOf(typ, platform.Query{Limit: 1})
+		year := now.UTC().Year()
+		_, count, err := c.FindOf(typ, platform.Query{Limit: 1, Archived: true})
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The number range is not readable here")
 		}
 		seq := count + 1
 		if n.Yearly {
 			prefix := n.Prefix + strconv.Itoa(year) + "-"
-			all, _, _ := c.FindOf(typ, platform.Query{Limit: 100000})
+			all, _, _ := c.FindOf(typ, platform.Query{Limit: 100000, Archived: true})
 			seq = 1
 			for _, r := range all {
 				if strings.HasPrefix(reflect.ValueOf(r).FieldByName(goName(n.Field)).String(), prefix) {
@@ -261,26 +253,6 @@ func numberingOf(o Object, model any) func(c platform.Caller, record any) *kerne
 			}
 		}
 		field.SetString(n.Format(seq, year))
-		return nil
-	}
-}
-
-func validateAll(fns ...func(c platform.Caller, record any) *kernel.Error) func(c platform.Caller, record any) *kernel.Error {
-	var live []func(c platform.Caller, record any) *kernel.Error
-	for _, f := range fns {
-		if f != nil {
-			live = append(live, f)
-		}
-	}
-	if len(live) == 0 {
-		return nil
-	}
-	return func(c platform.Caller, record any) *kernel.Error {
-		for _, f := range live {
-			if err := f(c, record); err != nil {
-				return err
-			}
-		}
 		return nil
 	}
 }

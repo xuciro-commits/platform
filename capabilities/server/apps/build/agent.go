@@ -66,7 +66,7 @@ func (b *Build) agentEntity() platform.Entity {
 			return nil
 		},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this agent as its next version; running evaluations keep the version they started with.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "functions", Payload: []platform.Field{}, Do: b.publishAgent}}}}
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this agent as its next version; a changed definition stops existing runs.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "functions", Payload: []platform.Field{}, Do: b.publishAgent}}}}
 }
 
 func (b *Build) checkAgent(a Agent) error {
@@ -219,3 +219,5 @@ func (a Agent) definition() platform.Agent {
 	}
 	return d
 }
+
+func (b *Build) AgentVersion(name string) int { return b.agents[name].Version }

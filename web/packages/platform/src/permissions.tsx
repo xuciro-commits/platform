@@ -2,7 +2,7 @@
 // against — per app, per role, the actions it may call — read from the host,
 // never written here. Holders counts who has each role today.
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Dialog, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
+import { Button, Form, Checkbox, DataTable, type ColumnDef, Dialog, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
 import { useAdmin, type Member } from "./shared";
@@ -29,22 +29,16 @@ export function Permissions() {
 function AppMatrix({ app }: { app: AppPermissions }) {
   const ids = Array.from(new Set(app.roles.flatMap((r) => r.actions.map((a) => a.id))));
   const title = (id: string) => app.roles.flatMap((r) => r.actions).find((a) => a.id === id)?.title ?? id;
+  type Row = { id: string; title: string };
+  const columns: ColumnDef<Row, unknown>[] = [
+    { id: "permission", header: t("Permission"), accessorKey: "title", cell: ({ row: { original } }) => <span><span className="font-medium">{original.title}</span> <span className="font-mono text-muted">{original.id}</span></span> },
+    ...app.roles.map((role): ColumnDef<Row, unknown> => ({ id: role.role, header: () => <span><span className="font-mono">{role.role}</span> <Tag label={String(role.holders)} tone={role.holders ? "info" : "neutral"} /></span>, meta: { width: 120 }, accessorFn: (row) => role.actions.some((action) => action.id === row.id), cell: ({ getValue }) => <span aria-label={getValue() ? t("allowed") : t("not allowed")}>{getValue() ? "●" : "·"}</span> })),
+  ];
   return (
     <Panel title={<span>{app.title} <span className="ml-1 font-mono text-xs text-muted">{app.app}</span></span>}
       description={app.everyone.length ? t("Any member may read: {reads}", { reads: app.everyone.join(", ") }) : undefined}>
       {ids.length === 0 ? <p className="text-xs text-muted">{t("Declares no actions.")}</p> :
-        <table className="w-full text-xs">
-          <thead><tr className="text-left text-muted">
-            <th className="py-1 pr-2 font-normal">{t("Permission")}</th>
-            {app.roles.map((r) => <th key={r.role} className="px-2 py-1 font-normal"><span className="font-mono">{r.role}</span> <Tag label={String(r.holders)} tone={r.holders ? "info" : "neutral"} /></th>)}
-          </tr></thead>
-          <tbody>
-            {ids.map((id) => <tr key={id} className="border-t border-border">
-              <td className="py-1 pr-2"><span className="font-medium">{title(id)}</span> <span className="font-mono text-muted">{id}</span></td>
-              {app.roles.map((r) => <td key={r.role} className="px-2 py-1 text-center" aria-label={r.actions.some((a) => a.id === id) ? t("allowed") : t("not allowed")}>{r.actions.some((a) => a.id === id) ? "●" : <span className="text-muted">·</span>}</td>)}
-            </tr>)}
-          </tbody>
-        </table>}
+        <DataTable data={ids.map((id) => ({ id, title: title(id) }))} columns={columns} getRowId={(row) => row.id} searchable={false} height={Math.min(480, 40 + ids.length * 28)} />}
     </Panel>
   );
 }
@@ -60,14 +54,14 @@ function Explain({ catalog }: { catalog: AppPermissions[] }) {
   const v = answer.data?.verdict;
   return (
     <Panel title={t("Why may — or may not — someone do something?")}>
-      <form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={(e) => { e.preventDefault(); if (member && permission) setAsked({ member, permission }); }}>
+      <Form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={() => { if (member && permission) setAsked({ member, permission }); }}>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("Member")}</span>
           <Select value={member} onChange={(e) => setMember(e.target.value)}><option value="">—</option>{members.map((m) => <option key={m.id} value={m.id}>{m.profile.displayName || m.id}</option>)}</Select></label>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("Permission")}</span>
           <Input list="platform-permission-ids" value={permission} onChange={(e) => setPermission(e.target.value)} placeholder="app.entity.verb · app:read:name" className="w-72" />
           <datalist id="platform-permission-ids">{permissions.map((p) => <option key={p} value={p} />)}</datalist></label>
         <Button type="submit" variant="primary" disabled={!member || !permission}>{t("Explain")}</Button>
-      </form>
+      </Form>
       {answer.error && <p className="mt-2 text-xs text-[var(--tone-danger)]">{String(answer.error)}</p>}
       {answer.data && v && <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
         <Tag label={v.allow ? t("allowed") : t("not allowed")} tone={v.allow ? "success" : "danger"} />
@@ -127,15 +121,15 @@ function RoleForm({ catalog, onSubmit, onCancel }: { catalog: AppPermissions[]; 
   const [actions, setActions] = useState<string[]>([]);
   const ids = Array.from(new Set((catalog.find((a) => a.app === app)?.roles ?? []).flatMap((r) => r.actions.map((x) => x.id))));
   return (
-    <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); void onSubmit(id, { app, title, actions }); }}>
+    <Form className="grid gap-3" onSubmit={() => { void onSubmit(id, { app, title, actions }); }}>
       {field(t("App"), <Select value={app} onChange={(e) => { setApp(e.target.value); setActions([]); }}>{catalog.map((a) => <option key={a.app} value={a.app}>{a.title}</option>)}</Select>)}
       {field(t("Role ID"), <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="shift-lead" />)}
       {field(t("Title"), <Input value={title} onChange={(e) => setTitle(e.target.value)} />)}
       <fieldset className="grid max-h-60 gap-1 overflow-auto text-sm"><legend className="text-xs text-muted">{t("May call")}</legend>
-        {ids.map((x) => <label key={x} className="flex items-center gap-2"><input type="checkbox" checked={actions.includes(x)} onChange={(e) => setActions(e.target.checked ? [...actions, x] : actions.filter((y) => y !== x))} /><span className="font-mono text-xs">{x}</span></label>)}
+        {ids.map((x) => <Checkbox key={x} checked={actions.includes(x)} onChange={(checked) => setActions(checked ? [...actions, x] : actions.filter((y) => y !== x))}><span className="font-mono text-xs">{x}</span></Checkbox>)}
       </fieldset>
       <div className="flex justify-end gap-2"><Button type="button" onClick={onCancel}>{t("Cancel")}</Button><Button type="submit" variant="primary" disabled={!idPattern.test(id) || actions.length === 0}>{t("Define")}</Button></div>
-    </form>
+    </Form>
   );
 }
 
@@ -150,16 +144,16 @@ function PolicyForm({ members, onSubmit, onCancel }: { members: Member[]; onSubm
   const [until, setUntil] = useState("");
   const where = { ...(member ? { member } : {}), ...(agent ? { agent: "true" } : {}) };
   return (
-    <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); void onSubmit(id, { title, effect, permission, where, ...(from ? { from } : {}), ...(until ? { until } : {}) }); }}>
+    <Form className="grid gap-3" onSubmit={() => { void onSubmit(id, { title, effect, permission, where, ...(from ? { from } : {}), ...(until ? { until } : {}) }); }}>
       {field(t("Policy ID"), <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="freeze-closing" />)}
       {field(t("Title"), <Input value={title} onChange={(e) => setTitle(e.target.value)} />)}
       {field(t("Effect"), <Select value={effect} onChange={(e) => setEffect(e.target.value)}><option value="deny">{t("deny")}</option><option value="allow">{t("allow")}</option></Select>)}
       {field(t("Permission (an action, or a prefix ending in *)"), <Input value={permission} onChange={(e) => setPermission(e.target.value)} placeholder="mes.order.*" />)}
       {field(t("Only for member (optional)"), <Select value={member} onChange={(e) => setMember(e.target.value)}><option value="">—</option>{members.map((m) => <option key={m.id} value={m.id}>{m.profile.displayName || m.id}</option>)}</Select>)}
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={agent} onChange={(e) => setAgent(e.target.checked)} />{t("Only when an AI agent acts")}</label>
+      <Checkbox className="text-sm" checked={agent} onChange={setAgent}>{t("Only when an AI agent acts")}</Checkbox>
       <div className="grid grid-cols-2 gap-2">{field(t("From (optional)"), <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />)}{field(t("Until (optional)"), <Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} />)}</div>
       <div className="flex justify-end gap-2"><Button type="button" onClick={onCancel}>{t("Cancel")}</Button><Button type="submit" variant="primary" disabled={!idPattern.test(id) || !permission}>{t("Set policy")}</Button></div>
-    </form>
+    </Form>
   );
 }
 
@@ -171,15 +165,15 @@ function TeamForm({ members, catalog, onSubmit, onCancel }: { members: Member[];
   const parsed = grants.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => { const [app, role] = l.split(/[:\s]+/); return { app, role }; });
   const valid = parsed.every((g) => catalog.some((a) => a.app === g.app && a.roles.some((r) => r.role === g.role)));
   return (
-    <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); void onSubmit(id, { name, members: chosen, grants: parsed }); }}>
+    <Form className="grid gap-3" onSubmit={() => { void onSubmit(id, { name, members: chosen, grants: parsed }); }}>
       {field(t("Team ID"), <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="night-shift" />)}
       {field(t("Name"), <Input value={name} onChange={(e) => setName(e.target.value)} />)}
       <fieldset className="grid max-h-48 gap-1 overflow-auto text-sm"><legend className="text-xs text-muted">{t("Members")}</legend>
-        {members.map((m) => <label key={m.id} className="flex items-center gap-2"><input type="checkbox" checked={chosen.includes(m.id)} onChange={(e) => setChosen(e.target.checked ? [...chosen, m.id] : chosen.filter((y) => y !== m.id))} />{m.profile.displayName || m.id}</label>)}
+        {members.map((m) => <Checkbox key={m.id} checked={chosen.includes(m.id)} onChange={(checked) => setChosen(checked ? [...chosen, m.id] : chosen.filter((y) => y !== m.id))}>{m.profile.displayName || m.id}</Checkbox>)}
       </fieldset>
       {field(t("Grants, one per line as app: role"), <Textarea rows={3} value={grants} onChange={(e) => setGrants(e.target.value)} placeholder={"mes: operator\nplatform: auditor"} />)}
       {!valid && <p className="text-xs text-[var(--tone-danger)]">{t("A line names an app or role that does not exist.")}</p>}
       <div className="flex justify-end gap-2"><Button type="button" onClick={onCancel}>{t("Cancel")}</Button><Button type="submit" variant="primary" disabled={!idPattern.test(id) || !name || !valid}>{t("Save team")}</Button></div>
-    </form>
+    </Form>
   );
 }

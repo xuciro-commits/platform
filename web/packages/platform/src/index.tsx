@@ -5,7 +5,7 @@
 // the Host Console for host administrators. One package, several entries in the
 // portal; the host still decides which roles each member holds.
 import "./i18n";
-import { defineApp, useHost, type AppUI, type Host } from "@platform/app";
+import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/app";
 import { Button, Card, PageHeader, useWorkspace, type NavSection, type View, t } from "@platform/ui";
 import { ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, CircleUser, Database, FlaskConical, Grid3x3, History, KeyRound, MessageSquare, Network, PlugZap, Route, Server, SlidersHorizontal, Upload, Users, Workflow } from "lucide-react";
 import { Members, MemberDetail } from "./people";
@@ -183,5 +183,13 @@ export const hostConsole = defineApp({
   ] }],
 });
 
-export const contributions: AppUI[] = [runs, dataConnection, agents, ai, knowledge, hostConsole];
+const masterData = defineApp({
+  id: "core", serves: ["core"], category: "ontology", title: t("Master data"), icon: <BookOpen />,
+  description: t("Shared master data and accounting records."),
+  for: (host) => !!host.role("core"), home: { view: "master-data", params: { type: "core.account" } },
+  views: [{ id: "master-data", title: () => t("Master data"), render: (p) => <Records key={p.type} type={p.type ?? "core.account"} /> }],
+  nav: (host) => [{ label: t("Master data"), items: host.entities.filter((e) => e.app === "core").map((e) => ({ label: e.plural, icon: <BookOpen />, route: { view: "master-data", params: { type: e.type } } })) }],
+});
+
+export const contributions: AppUI[] = [runs, dataConnection, agents, ai, knowledge, hostConsole, masterData];
 export default controlPanel;

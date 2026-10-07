@@ -176,7 +176,9 @@ func Entities() []platform.Entity {
 			entities[i].Seed = DefaultAccounts()
 		}
 		if entities[i].Type == PeriodType {
-			entities[i].Seed = DefaultPeriods(time.Now().UTC().Year())
+			// A seed is a replay baseline, so its year cannot follow the wall clock.
+			// Later fiscal periods are created by an accountant's journaled decisions.
+			entities[i].Seed = DefaultPeriods(2026)
 		}
 	}
 	return entities
@@ -202,6 +204,9 @@ func (c *Core) Manifest() platform.Manifest {
 		Interfaces: Interfaces(), Roles: []string{Steward, Accountant}, Reads: []string{ReadTrialBalance}}
 }
 
+func (*Core) AcceptedActionSchemas() []string { return []string{JournalType + ".reverse"} }
+
+func (c *Core) AcceptedLedger() *platform.Ledger         { return c.ledger }
 func (c *Core) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
 func (c *Core) Snapshot() (json.RawMessage, error)       { return c.ledger.Snapshot() }
 func (c *Core) Restore(raw json.RawMessage) error        { return c.ledger.Restore(raw) }
@@ -212,15 +217,6 @@ func (c *Core) Read(caller platform.Caller, name string) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }
 
-// Journal posts one balanced entry on behalf of an application's accepted
-// decision (apps/build Journal → host): caller is the host's automation,
-// key the decision's change id, so a replay lands the same entry once.
-func (c *Core) Post(caller platform.Caller, j Journal, key string, now time.Time) *kernel.Error {
-	payload, _ := json.Marshal(map[string]any{"date": j.Date, "text": j.Text, "currency": j.Currency, "lines": j.Lines, "source": j.Source})
-	_, err := c.Submit(caller, &pb.Submission{TenantId: caller.Tenant, PrincipalId: caller.ID, Authority: ID, IdempotencyKey: key,
-		Target: &pb.EntityRef{Type: JournalType, Id: j.ID}, Schema: &pb.SchemaRef{Name: JournalType + ".create", Version: 1}, Payload: payload}, now)
-	return err
-}
 func (c *Core) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
