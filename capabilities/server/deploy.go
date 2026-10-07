@@ -405,36 +405,18 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		host.CreateTenant = func(req CreateTenantRequest, by string) (*Tenant, error) {
 			createMu.Lock()
 			defer createMu.Unlock()
-			now := Now()
-			spec, tpl, err := d.spec(req, by, now)
+			t, err := d.createTenant(req, by, files, func(t *Tenant) error {
+				if journal == nil {
+					memoryJournal(t)
+					return nil
+				}
+				return d.restoreTenants(ctx, journal, code, []*Tenant{t}, restored, fresh)
+			}, seed)
 			if err != nil {
-				return nil, err
-			}
-			if d.specs == nil {
-				d.specs = &specs{file: d.TenantsFile}
-			}
-			if err := d.specs.add(spec); err != nil {
-				return nil, err
-			}
-			t, err := d.rebuildTenant(spec.ID)
-			if err != nil {
-				return nil, err
-			}
-			t.Files = files
-			if journal == nil {
-				memoryJournal(t)
-			} else if err := d.restoreTenants(ctx, journal, code, []*Tenant{t}, restored, fresh); err != nil {
-				return nil, err
-			}
-			if err := seed(t); err != nil {
-				return nil, err
-			}
-			if err := firstDecisions(t, spec, tpl, now); err != nil {
 				return nil, err
 			}
 			registry.add(t)
 			watch(t)
-			log.Printf("created tenant %s for %s", spec.ID, by)
 			return t, nil
 		}
 	}
@@ -460,6 +442,18 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		// delivery path's development tokens are not accepted here (ADR-0049 D3).
 		host.SignWith(signer, d.TokenTTL)
 	}
+	return d.listen(ctx, host, func() {
+		if snapshots != nil {
+			for _, t := range registry.list() {
+				snapshots.save(ctx, t, true)
+			}
+		}
+	})
+}
+
+// listen serves host until the process is told to stop or the listener fails;
+// requests in flight finish, then atExit runs (the final snapshots).
+func (d *Deployment) listen(ctx context.Context, host *Host, atExit func()) error {
 	server := &http.Server{Addr: d.Addr, Handler: host.Handler()}
 	stop, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -474,12 +468,40 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	shutdown, done := context.WithTimeout(ctx, 10*time.Second)
 	defer done()
 	server.Shutdown(shutdown) // requests in flight finish; no new ones
-	if snapshots != nil {
-		for _, t := range registry.list() {
-			snapshots.save(ctx, t, true)
-		}
-	}
+	atExit()
 	return nil
+}
+
+// createTenant records a new tenant's spec, builds it, opens its journal and
+// files, seeds it and applies the template's first decisions.
+func (d *Deployment) createTenant(req CreateTenantRequest, by string, files FileStore, open, seed func(*Tenant) error) (*Tenant, error) {
+	now := Now()
+	spec, tpl, err := d.spec(req, by, now)
+	if err != nil {
+		return nil, err
+	}
+	if d.specs == nil {
+		d.specs = &specs{file: d.TenantsFile}
+	}
+	if err := d.specs.add(spec); err != nil {
+		return nil, err
+	}
+	t, err := d.rebuildTenant(spec.ID)
+	if err != nil {
+		return nil, err
+	}
+	t.Files = files
+	if err := open(t); err != nil {
+		return nil, err
+	}
+	if err := seed(t); err != nil {
+		return nil, err
+	}
+	if err := firstDecisions(t, spec, tpl, now); err != nil {
+		return nil, err
+	}
+	log.Printf("created tenant %s for %s", spec.ID, by)
+	return t, nil
 }
 
 // roundSize is the items a tenant takes in one round before the next tenant's turn.
