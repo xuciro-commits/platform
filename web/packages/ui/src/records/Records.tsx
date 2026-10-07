@@ -110,7 +110,7 @@ export function entityFrom(info: EntityInfo, options: Options = {}, source?: Rec
 function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source?: RecordSource): Record<string, FieldType<any, EntityRecord>> {
   const fields: Record<string, FieldType<any, EntityRecord>> = {};
   for (const f of infos) {
-    const common = { label: f.title, help: f.help, required: f.required, readOnly: f.readOnly };
+    const common = { label: f.title, help: f.help, required: f.required, readOnly: f.readOnly, when: f.when };
     fields[f.name] = (() => {
       switch (f.type) {
         case "json": return json(common);

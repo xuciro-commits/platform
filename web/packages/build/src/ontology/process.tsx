@@ -78,7 +78,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     </PanelSection>
   </div>;
   const inspector = <div className="p-2">
-    {field && chosen && <FieldProperties field={field} onRemove={() => { change({ ...process, fields: process.fields.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
+    {field && chosen && <FieldProperties field={field} others={process.fields.filter((_, at) => at !== chosen.at)} onRemove={() => { change({ ...process, fields: process.fields.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
     {state && chosen && <StateProperties state={state} onChange={(patch) => change({ ...process, states: process.states.map((s, i) => i === chosen.at ? { ...s, ...patch } : s) })} />}
     {chosen?.kind === "access" && process.access[chosen.at] && <AccessProperties access={process.access[chosen.at]!} fields={process.fields}
       onChange={(patch) => change({ ...process, access: process.access.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })}
@@ -228,8 +228,14 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
 }
 
 
-function FieldProperties({ field, onChange, onRemove }: { field: Field; onChange: (patch: Partial<Field>) => void; onRemove: () => void }) {
+function FieldProperties({ field, others, onChange, onRemove }: { field: Field; others: Field[]; onChange: (patch: Partial<Field>) => void; onRemove: () => void }) {
   const {definitions}=useHost();
+  // "Only when" (#138): another unconditional choice or boolean field, and the values that make this one apply.
+  const conditions = others.filter((f) => (f.type === "choice" || f.type === "boolean") && !f.when && f.name);
+  const [whenField, whenValues] = (field.when ?? "").split("=") as [string, string | undefined];
+  const on = conditions.find((f) => f.name === whenField);
+  const allowed = on ? (on.type === "boolean" ? ["true", "false"] : (on.choices ?? "").split(",").map((c) => c.trim()).filter(Boolean)) : [];
+  const picked = (whenValues ?? "").split(",").filter(Boolean);
   const bound=field.property?semanticPropertyTypes(definitions).find(p=>assetBindingKey(p.binding)===assetBindingKey(field.property!)):undefined;
   return <Card className="grid content-start gap-3 p-3">
     <div className="text-xs font-semibold text-muted">{t("Field")}</div>
@@ -245,6 +251,14 @@ function FieldProperties({ field, onChange, onRemove }: { field: Field; onChange
     {field.formula && <p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
     <Checkbox checked={!!field.search} onChange={(search) => onChange({ search })}>{t("Searchable")}</Checkbox>
+    {conditions.length > 0 && <Label text={t("Only when")}>
+      <Select value={on?.name ?? ""} onChange={(e) => onChange({ when: e.target.value ? `${e.target.value}=` : undefined })}>
+        <option value="">{t("Always")}</option>{conditions.map((f) => <option key={f.name} value={f.name}>{f.title || f.name}</option>)}
+      </Select>
+      {on && <span className="mt-1 flex flex-wrap gap-2">{allowed.map((v) => <Checkbox key={v} checked={picked.includes(v)} onChange={(c) => onChange({ when: `${on.name}=${(c ? [...picked, v] : picked.filter((x) => x !== v)).join(",")}` })}>{t(v)}</Checkbox>)}</span>}
+      {on && picked.length === 0 && <span className="text-xs text-danger">{t("Pick at least one value.")}</span>}
+      {on && <span className="text-xs text-muted">{t("The field is asked for — and required, if marked so — only while {field} is one of these; otherwise it stays empty.", { field: on.title || on.name })}</span>}
+    </Label>}
     <Button variant="danger" onClick={onRemove}>{t("Remove field")}</Button>
   </Card>;
 }

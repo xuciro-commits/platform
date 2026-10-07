@@ -22,7 +22,7 @@ func TestProjectionColumns(t *testing.T) {
 		defs = append(defs, c.name+" "+c.sqlType)
 	}
 	want := "id text primary key, revision bigint, created_at timestamptz, created_by text, changed_at timestamptz, changed_by text, archived boolean, " +
-		"name text, note text, qty bigint, price_amount bigint, price_currency text, line text, owner text, kind text, bin text, tags text[], due date"
+		"name text, note text, qty bigint, price_amount bigint, price_currency text, line text, owner text, kind text, serial text, bin text, tags text[], due date"
 	if got := strings.Join(defs, ", "); got != want {
 		t.Fatalf("columns\n%s\nwant\n%s", got, want)
 	}

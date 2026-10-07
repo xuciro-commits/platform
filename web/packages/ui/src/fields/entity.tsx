@@ -3,7 +3,7 @@ import { Plus, X } from "lucide-react";
 import { z } from "zod";
 import { Button } from "../primitives/button";
 import { Select } from "../primitives/input";
-import type { FieldType, Operator } from "./types";
+import { applies, type FieldType, type Operator } from "./types";
 import { t } from "../i18n";
 
 /** An entity's fields in display order, keyed by the record's property names. */
@@ -36,11 +36,27 @@ export function columnsFor<R>(entity: Entity<R>, keys: string[] = Object.keys(en
 
 /** Validation for a whole record: each editable field's schema, optional unless required. */
 export function recordSchema<R>(entity: Entity<R>, keys: string[] = Object.keys(entity.fields)) {
-  return z.object(Object.fromEntries(keys.filter((k) => !entity.fields[k]!.readOnly).map((k) => {
+  const shown = keys.filter((k) => !entity.fields[k]!.readOnly);
+  const blank = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+  const object = z.object(Object.fromEntries(shown.map((k) => {
     const f = entity.fields[k]!;
-    const schema = f.required ? f.schema.refine((v) => v !== "" && !(Array.isArray(v) && v.length === 0), t("Required")) : f.schema.optional();
-    return [k, f.required ? schema : z.preprocess((v) => (v === "" ? undefined : v), schema)];
+    // A conditional field is required only while it applies: the object-level check below decides.
+    const required = f.required && !f.when;
+    const schema = required ? f.schema.refine((v) => v !== "" && !(Array.isArray(v) && v.length === 0), t("Required")) : f.schema.optional();
+    return [k, required ? schema : z.preprocess((v) => (v === "" ? undefined : v), schema)];
   })));
+  return object.superRefine((values, ctx) => {
+    for (const k of shown) {
+      const f = entity.fields[k]!;
+      if (f.when && f.required && applies(f, values as Record<string, unknown>) && blank((values as Record<string, unknown>)[k]))
+        ctx.addIssue({ code: "custom", path: [k], message: t("Required") });
+    }
+  });
+}
+
+/** The values of a form with its inactive conditional fields left out (#138): the host refuses a value a condition does not allow. */
+export function activeValues<R>(entity: Entity<R>, values: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(values).filter(([k]) => applies(entity.fields[k] ?? {}, values)));
 }
 
 export type Filter = { field: string; operator: string; arg?: unknown };

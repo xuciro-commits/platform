@@ -1,9 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm, type DefaultValues, type FieldValues, type Path } from "react-hook-form";
+import { Controller, useForm, useWatch, type DefaultValues, type FieldValues, type Path } from "react-hook-form";
 import type { z } from "zod";
 import { Button } from "../primitives/button";
-import { recordSchema, type Entity } from "../fields/entity";
-import { checkbox, date, datetime, longText, markdown, number, singleSelect, text, type FieldType } from "../fields/types";
+import { activeValues, recordSchema, type Entity } from "../fields/entity";
+import { applies, checkbox, date, datetime, longText, markdown, number, singleSelect, text, type FieldType } from "../fields/types";
 import { t } from "../i18n";
 
 /** A field of an ad hoc form; `kind` picks a platform field type for its editor. */
@@ -53,8 +53,9 @@ export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLab
   submitLabel?: string; onCancel?: () => void;
 }) {
   const shown = (keys ?? Object.keys(entity.fields)).filter((k) => !entity.fields[k]!.readOnly && entity.fields[k]!.editor);
+  // A conditional field (#138) that does not apply is kept in the form's state but not sent.
   return <FieldForm schema={recordSchema(entity, shown)} fields={shown.map((k) => ({ name: k, type: entity.fields[k]! }))}
-    defaultValues={defaultValues} onSubmit={onSubmit} submitLabel={submitLabel} onCancel={onCancel} />;
+    defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} submitLabel={submitLabel} onCancel={onCancel} />;
 }
 
 function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel }: {
@@ -63,9 +64,14 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
 }) {
   const { control, handleSubmit, formState: { errors, isSubmitting } } =
     useForm<Record<string, unknown>>({ resolver: zodResolver(schema as never) as never, defaultValues: defaultValues as never });
+  // Conditional fields (#138) follow the values they depend on; what was typed into a hidden field stays until the form closes.
+  const conditions = fields.flatMap(({ type }) => (type.when ? [type.when.field] : []));
+  const watched = useWatch({ control, name: conditions });
+  const current = Object.fromEntries(conditions.map((name, i) => [name, watched[i]]));
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="grid gap-3" noValidate>
       {fields.map(({ name, type }) => {
+        if (!applies(type, current)) return null;
         const error = (errors as Record<string, { message?: string }>)[name]?.message;
         const id = `field-${name}`;
         const helpId = type.help ? `${id}-help` : undefined;

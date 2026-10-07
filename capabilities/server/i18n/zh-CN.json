@@ -2,7 +2,7 @@
   "State from input": "状态取自输入",
   "Reference object": "引用对象",
   "Minimum length": "最小长度",
-  "Only when": "仅在满足条件时",
+  "Only when": "仅当",
   "{input} is shorter than its required minimum": "{input}短于要求的最小长度",
   "The selected state is unavailable": "所选状态不可用",
   "Property type": "共享属性类型",
@@ -1591,5 +1591,8 @@
   "Suspend member": "停用成员",
   "The member keeps their roles on record but holds nothing and cannot act until resumed; their sessions end.": "成员的角色仍留在记录中，但在恢复前不持有任何权限、不能操作；其会话全部结束。",
   "The member leaves: their subjects and tokens go, their grants end, their record and history stay. Not reversible; add them again if they return.": "成员离开：其登录身份与令牌被移除，授权终止，记录与历史保留。不可撤销；若其回归请重新添加。",
-  "The token stops working at once. Administrators revoke anyone's.": "令牌立即失效。管理员可撤销任何人的令牌。"
+  "The token stops working at once. Administrators revoke anyone's.": "令牌立即失效。管理员可撤销任何人的令牌。",
+  "{field} is required when {condition} is {values}": "当 {condition} 为 {values} 时，{field} 为必填",
+  "{field} applies only when {condition} is {values}": "仅当 {condition} 为 {values} 时才可填写 {field}",
+  "field=value,value — another choice or boolean field of this object and the values that make this field apply": "字段=值,值——本对象的另一个选项或布尔字段，以及使本字段适用的值"
 }

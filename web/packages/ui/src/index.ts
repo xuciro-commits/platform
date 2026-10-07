@@ -37,7 +37,7 @@ export { EntityForm, RecordForm, type Field } from "./components/EntityForm";
 export { Markdown, MarkdownEditor, parseInline } from "./components/Markdown";
 export * as field from "./fields/types";
 export type { FieldType, EditorProps, Operator, Option, Attachment } from "./fields/types";
-export { defineEntity, columnsFor, recordSchema, applyFilters, valueOf, FilterBar, type Entity, type Filter } from "./fields/entity";
+export { defineEntity, columnsFor, recordSchema, activeValues, applyFilters, valueOf, FilterBar, type Entity, type Filter } from "./fields/entity";
 export { EntityCard, PropertyList } from "./components/EntityCard";
 export { PageHeader } from "./components/PageHeader";
 export { NotificationList, type NotificationItem, type NotificationListProps } from "./components/NotificationList";
