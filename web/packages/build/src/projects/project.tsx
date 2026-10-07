@@ -9,7 +9,7 @@ import { Boxes, Braces, FolderKanban, Layers, LayoutTemplate, Link2, Plus, Searc
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApplicationImport";
 import type { ApplicationImportDependency } from "../workshop/module-import/application-import";
-import { DraftStatus, savingState, useAutoSave } from "../shared/workbench";
+import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
 import { ProjectRuns } from "./project-runs";
 import { ProjectRoles } from "./project-roles";
 import { kindOfType, refKey, resourceGroups, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";

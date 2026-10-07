@@ -2,7 +2,7 @@ import { ObjectLineage } from "./lineage";
 import {actionDestinations,actionResultEdges} from "./process-rules";
 import { fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type Numbering_, type ObjectScope, type Process, type State } from "./object-model";
 import { ShapeEditor } from "./shape";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../shared/workbench";
+import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 // The object's process editor (ADR-0037): its states and the actions people
 // take on its records, in the page editor's three panes — what there is on the
 // left, what a person will see in the middle, the piece in hand on the right.

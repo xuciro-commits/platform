@@ -7,7 +7,7 @@ import { notify, t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDraftSession } from "../session/DraftSession";
-import { useAutoSave } from "../shared/workbench";
+import { useAutoSave } from "../editor/workbench";
 import { actionIssues, type ObjectRecord, type Process } from "./object-model";
 
 const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", numbering: record.numbering });

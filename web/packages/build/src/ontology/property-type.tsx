@@ -3,8 +3,8 @@ import {useEffect,useRef,useState} from "react";
 import type {Api} from "@platform/kernel";
 import {useHost,useReadQuery,semanticPropertyTypes} from "@platform/app";
 import {Button,Input,PageHeader,Panel,RecordList,Select,Textarea,t,useUnsavedChanges} from "@platform/ui";
-import { ResourceControls as AssetControls } from "../shared/workbench";
-import { useDirectInstall } from "../shared/release-profile";
+import { ResourceControls as AssetControls } from "../editor/workbench";
+import { useDirectInstall } from "../releases/release-profile";
 
 type Draft = Api.PropertyType & {id:string;revision:number;published?:string;version?:number};
 const empty = ():Draft => ({id:"",revision:0,name:"",title:"",description:"",type:"text"});

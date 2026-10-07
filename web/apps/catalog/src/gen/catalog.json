@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:d9cab9e6850e3f49",
+  "revision": "sha256:37824f039d52f1ab",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4643,8 +4643,8 @@
       "web/packages/app/src/actions/OpenIn.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/editor/workbench.tsx",
       "web/packages/build/src/projects/project.tsx",
-      "web/packages/build/src/shared/workbench.tsx",
       "web/packages/build/src/workshop/editor.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutTree.tsx"
     ],
@@ -4670,6 +4670,7 @@
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/editor/workbench.tsx",
       "web/packages/build/src/functions/agent.tsx",
       "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
@@ -4696,7 +4697,6 @@
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
-      "web/packages/build/src/shared/workbench.tsx",
       "web/packages/build/src/workshop/HeaderEditor.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/editor.tsx",
@@ -5105,6 +5105,7 @@
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
+      "web/packages/build/src/editor/workbench.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/connection.tsx",
@@ -5118,7 +5119,6 @@
       "web/packages/build/src/projects/project-runs.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/release.tsx",
-      "web/packages/build/src/shared/workbench.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",

@@ -65,7 +65,7 @@ capabilities/server/
 
 - `@platform/ui/src` 顶层 29 项 → `primitives/ components/ records/ graph/ layout/ shell/ fields/ spatial/ i18n/` 九个目录 + `index.ts`、`catalog.ts`、`theme.ts`、`styles.css`；根上不再有散文件。
 - `@platform/app/src` 顶层 23 项 → `runtime/ widgets/ semantic/ exploration/ collaboration/ work/ host/` + `index.ts`。
-- `@platform/build/src` 目录已成形；`shared/` 消化进 `projects/`（它只被项目工作台用）或 `@platform/ui`。
+- `@platform/build/src` 目录已成形；`shared/` 已解散（见 §5）：编辑器外壳进 `editor/`，其余各归其主。
 - 每个目录一个 `index.ts` 作为唯一出口；包根 `index.ts` 只转发目录出口。`scripts/escapes.sh` 保持通过；`catalog` 重生成。
 - 导入路径：包内相对路径随文件走；包外只经包名，所以搬动不改外部导入。
 
@@ -132,5 +132,7 @@ capabilities/server/
 | `SimulateCandidate` 326 行，步骤循环内联 | `candidateRun.step`，主体 150 行 | `9ffa436` |
 | `applyAcceptedBatch` 248 行；`Deployment.Serve` 250 行 | `applyBatchRows`；`Deployment.listen` / `createTenant` | `db00604` |
 | 包级无说明，Tenant 组件只能靠读 host.go 字段注释 | `capabilities/server/doc.go` 组件地图；AGENTS.md 导航行指向它 | wave 5 |
+| `@platform/build/src/shared/`（3 个文件，"工具箱目录"） | 解散：`workbench.tsx` → `editor/workbench.tsx`（所有构建者编辑器共用的外壳，§2 那句"只被项目工作台用"是错的，被 12 个编辑器引用）；`release-profile.tsx` → `releases/`；`record-paths.ts` → `ontology/`。18 个导入改路径，catalog 重生成只变 source 路径 | wave 5 |
+| `docs/Testing.md` 没有结构整理的检查行 | 加一行：零行为变更的检查组合 | wave 5 |
 
 （继续追加）

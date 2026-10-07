@@ -1,5 +1,5 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { ResourceControls as AssetControls } from "../shared/workbench";
+import { ResourceControls as AssetControls } from "../editor/workbench";
 import { NewActions, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
   type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, Input, NodeCanvas, PageHeader, Panel, PropertyList, RecordList, Select, Tag,

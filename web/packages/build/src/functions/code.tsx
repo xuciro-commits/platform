@@ -1,5 +1,5 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { DraftStatus, PublishMenu } from "../shared/workbench";
+import { DraftStatus, PublishMenu } from "../editor/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";

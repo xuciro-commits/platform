@@ -5,7 +5,7 @@ import { useRecordArchive } from "@platform/app";
 import { ActionMenu, Button, StatusTag, defineStatuses, t, useWorkspace, type ContextCommand, type Route, type WorkbenchSaving } from "@platform/ui";
 import { ChevronDown, Rocket } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
-import { useDirectInstall } from "./release-profile";
+import { useDirectInstall } from "../releases/release-profile";
 import { useApplicationScope } from "../projects/application-scope";
 
 const draftStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" }, archived: { label: t("Archived"), tone: "neutral" } });

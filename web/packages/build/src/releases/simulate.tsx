@@ -1,5 +1,5 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { ResourceControls as AssetControls } from "../shared/workbench";
+import { ResourceControls as AssetControls } from "../editor/workbench";
 import { PayloadFields, useHost, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, Disclosure, FlowView, Input, PageHeader, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api, type ActionDeclaration } from "@platform/kernel";

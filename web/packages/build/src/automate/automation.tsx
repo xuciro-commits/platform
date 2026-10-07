@@ -9,7 +9,7 @@ import { ArrowDown, ArrowUp, Brain, Clock, MoreHorizontal, Plus, Trash2, Workflo
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDraftSession } from "../session/DraftSession";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState, useAutoSave } from "../shared/workbench";
+import { DraftStatus, PublishMenu, WorkbenchMessage, savingState, useAutoSave } from "../editor/workbench";
 import { WorkflowInspector } from "./workflow-inspector";
 import { PERIODS, capabilityKey, initialStep, nextStepName, periodLabel, type Capability, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { WorkflowRuns } from "./workflow-runs";

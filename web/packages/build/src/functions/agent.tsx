@@ -3,7 +3,7 @@
 // cases they must pass. Publishing installs one as build.<name>; the host runs
 // it like any agent - every step journaled, drafts confirmed by a person.
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { DraftStatus } from "../shared/workbench";
+import { DraftStatus } from "../editor/workbench";
 import { installedObjects, type WorkflowObject } from "../automate/workflow-model";
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, RecordList, Select, Textarea, Toggles, t, useUnsavedChanges } from "@platform/ui";
