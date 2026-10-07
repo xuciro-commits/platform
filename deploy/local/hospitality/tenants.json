@@ -135,5 +135,33 @@
         ]
       }
     ]
+  },
+  {
+    "id": "hotel-test",
+    "name": "Hotel Test",
+    "template": "hospitality",
+    "settings": {
+      "name": "Hotel Test",
+      "timezone": "Europe/Berlin",
+      "currency": "EUR",
+      "country": "DE"
+    },
+    "seats": [
+      {
+        "subjects": [
+          "user:manager@hotel.test"
+        ],
+        "id": "manager-test",
+        "roles": {
+          "platform": "admin",
+          "enterprise": "admin",
+          "ai": "admin",
+          "work": "admin",
+          "flow": "admin",
+          "agent": "admin",
+          "build": "builder"
+        }
+      }
+    ]
   }
 ]

@@ -1,6 +1,6 @@
 # 测试
 
-验证方法与人工走查入口。环境、账号和服务地址归 [部署说明](../deploy/local/README.md)。
+验证方法与人工走查入口。环境、账号和服务地址归 [部署说明](../deploy/local/README.md)。 本地业务入口固定为酒店 `8495`、制造 `8490`；WMS 复用所在工作区。酒店的 `hotel-a` → `hotel-test` 用于同宿主晋级；改存储的 v2 先晋级不激活，再到目标审阅升级计划。
 
 ## 检查选择与停止
 
@@ -17,6 +17,7 @@
 | 成组交付、重要集成或发布节点 | 按影响面选择一条联合浏览器路线；需要全量验收时 `scripts/verify.sh web` 共用一次完整 Playwright，不按每个组件重复 |
 | 纯样式/布局/文案 | `pnpm --dir web check`，启动查看并截所改页面；不要求重跑浏览器业务路线 |
 | 结构整理（搬文件、拆函数、Tenant 组件化，ADR-0080） | 零行为变更：`go build ./... && go vet .` 加全量 `go test .`（基线仅 `TestRecordsAtScale`）；web 侧对应包 `tsc --noEmit` 与 `node scripts/catalog.mjs generate` 零语义差异；`scripts/cleanup-inventory.sh` 看规模数字；不加新测试 |
+| 环境生命周期（定义→候选→封存→激活→晋级→迁移→升级，ADR-0047 §11 / ADR-0080 §3.1） | `go test -run 'TestApplicationLifecycle' .`：`environment_lifecycle_test.go` 走租户方法，`environment_http_test.go` 走 `Host.Handler()` 的真实路由（含宿主控制台）；本地两租户 Compose 宿主上用 `node solutions/wms/assemble.mjs promote`（`PLATFORM_HOST_TOKEN`/`PLATFORM_TARGET_TENANT`/`PLATFORM_TARGET_MEMBER`）把 WMS 的激活候选晋级到另一个租户并迁移主数据 |
 | 应用全生命周期跨环境（发布、晋级、迁移、升级、恢复） | `go test -run TestApplicationLifecycleAcrossEnvironments .`：一个对象+页面+应用的联合候选在 dev 封存激活，业务写入后晋级到 prod，`MigrateRecords` 迁数据（二次运行零写入），v2 加一个可选标量经两环境各自审阅的计划激活，最后 prod 从快照+日志尾恢复并通过 `CheckReplay`；改动候选/发布/环境/迁移任一 owner 时先跑它 |
 | 提交/恢复/激活语义或部署 | 对应持久化/故障检查及 `scripts/verify.sh deploy`；纯发布导航不自动触发 |
 
@@ -54,6 +55,7 @@ PLATFORM_SCREENSHOTS=1 pnpm --dir web/e2e exec playwright test --grep 'compose a
 | 任务 | 操作与结果 |
 |---|---|
 | 构建与交付 | 构建者在工坊选择对象、编辑字段/状态/权限：新增字段/状态不自动提交，未保存时可新增起始状态及动作；点击 Save 后保存。字段尚未有效时保存被拒，只提示一次且保留输入，修正后可再保存；离开时提示未保存。组合页面和流程，保存固定计划，测试后审查并保存候选；沿当前支持的发布/激活路径交付，操作员完成记录动作或收件箱任务 |
+| 项目设置同步 | 同一项目在两个浏览器页签打开 Settings；空闲时不提交。第一页改 Description 后第二页跟随，第二页改 Title 后第一页跟随，原 Description 保留。自动：`web/e2e/tests/project-settings-sync.spec.ts`。 |
 | 酒店销售 | 建客户/商机，预留住宿或团队房间，确认与拒绝原因可理解；无外部提供方时走人工答复 |
 | 制造与 ERP | 生产订单下达、SFC 流转/不合格处置、跨应用确认；ERP 凭证平衡/连续编号、采购审批及收货记账 |
 | 人工协同 | 请假提交、审批、驳回/再提交和代办，申请人与审批人看到正确状态；私有字段只对授权角色可见 |

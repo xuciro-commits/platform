@@ -143,6 +143,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 	if err := t.releases.commit(saved.Key, saved.Digest, saved.CandidateID, saved.Bytes, saved.Active); err != nil {
 		return saved, err
 	}
+	t.releases.rememberRequest(saved.Key, saved.RequestHash)
 	if saved.Version == 3 {
 		t.committed.saveAnswer("release:"+saved.Key, raw)
 	}
@@ -381,7 +382,15 @@ func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedRelease) (
 	entry := Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: saved.At}
 	if t.AcceptResult == nil {
 		// The in-memory development host journals through Record, like its
-		// other inputs; replay applies the same saved bytes.
+		// other inputs; replay applies the same saved bytes. A retried key is
+		// answered as a journal would: the same request is done, another
+		// request under it is refused.
+		if prior, ok := t.releases.request(saved.Key); ok {
+			if prior != saved.RequestHash {
+				return "", fmt.Errorf("release key %s belongs to another request", saved.Key)
+			}
+			return candidateID, nil
+		}
 		if _, err := t.applyAcceptedRelease(raw); err != nil {
 			return "", err
 		}

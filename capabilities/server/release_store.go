@@ -21,6 +21,24 @@ type releaseStore struct {
 	applied    map[string]string
 	active     string
 	sealed     map[string]SealedArtifact
+	// requests remembers the request hash behind each applied key, so the
+	// in-memory host answers a retried command without a journal to ask;
+	// it is not part of the snapshot (the journal is the durable record).
+	requests map[string]string
+}
+
+// request is the request hash an applied key answered, when this process
+// applied it.
+func (r *releaseStore) request(key string) (string, bool) {
+	h, ok := r.requests[key]
+	return h, ok
+}
+
+func (r *releaseStore) rememberRequest(key, hash string) {
+	if r.requests == nil {
+		r.requests = map[string]string{}
+	}
+	r.requests[key] = hash
 }
 
 // raw is a candidate's exact bytes, nil when it is not saved.

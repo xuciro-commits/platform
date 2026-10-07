@@ -221,7 +221,7 @@ export function HostPromotions({ tenant, from: initialFrom, candidate: initialCa
   const submit = async () => {
     setBusy(true);
     const outcome = await call<Api.PromotionResult>(`/v1/host/tenants/${encodeURIComponent(target)}/promotions`,
-      { from: source, candidate: chosenCandidate, key: `promote:${source}:${chosenCandidate}:${Date.now()}`, activate, targetGrant: chosenGrant });
+      { from: source, candidate: chosenCandidate, key: `promote:${source}:${target}:${chosenCandidate}:${activate ? "activate" : "hold"}`, activate, targetGrant: chosenGrant });
     setBusy(false);
     setResult(outcome);
     if (outcome) notify.success(activate ? t("Promoted and activated in {tenant}.", { tenant: target }) : t("Promoted into {tenant}.", { tenant: target }));
@@ -242,12 +242,13 @@ export function HostPromotions({ tenant, from: initialFrom, candidate: initialCa
         {(grants.data ?? []).map((g) => <option key={g.id} value={g.id}>{g.id} · {g.member} · {t("until {time}", { time: when(g.expires) })}</option>)}
       </Select>{!grants.data?.length && <span className="text-xs text-muted">{t("Open a support session on the target tenant first.")}</span>}</label>
       <Checkbox checked={activate} onChange={setActivate}>{t("Activate after promotion")}</Checkbox>
+      <span className="text-xs text-muted">{t("Repeating the same promotion answers as the first time. A candidate that changes storage cannot be activated here: promote it without activation, then a release holder in the target reviews the upgrade plan in its release workbench.")}</span>
       <div><Button type="submit" variant="primary" disabled={busy || !source || !target || source === target || !chosenCandidate || !chosenGrant}>{busy ? t("Promoting…") : t("Promote")}</Button></div>
     </Form>
     {result && <Panel className="mt-4 grid max-w-2xl gap-1 p-3 text-sm">
       <div className="flex items-center gap-2"><strong>{t("Last promotion")}</strong><Tag label={result.active ? t("Active") : t("Promoted")} tone={result.active ? "success" : "info"} /></div>
       <div className="font-mono text-xs">{result.from} → {result.to} · {result.candidate} · {t("{n} assets", { n: result.assets })} · {result.digest.slice(0, 12)}</div>
-      <div className="text-xs text-muted">{t("Idempotency key")}: <code>{result.key}</code>{!result.active && ` · ${t("The target's own activation and business permissions are unchanged.")}`}</div>
+      <div className="text-xs text-muted">{t("Idempotency key")}: <code>{result.key}</code>{!result.active && ` · ${t("The target's own activation and business permissions are unchanged.")} ${t("Activate it in the target's release workbench.")}`}</div>
     </Panel>}
   </>;
 }
