@@ -159,6 +159,10 @@ services:
 
 volumes:
   pgdata:
+    name: ${PLATFORM_DATA_NAMESPACE:-${COMPOSE_PROJECT_NAME}}_pgdata
   rauthy:
+    name: ${PLATFORM_DATA_NAMESPACE:-${COMPOSE_PROJECT_NAME}}_rauthy
   files:
+    name: ${PLATFORM_DATA_NAMESPACE:-${COMPOSE_PROJECT_NAME}}_files
   compute-sockets:
+    name: ${PLATFORM_DATA_NAMESPACE:-${COMPOSE_PROJECT_NAME}}_compute-sockets
