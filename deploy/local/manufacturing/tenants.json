@@ -1,0 +1,150 @@
+[
+  {
+    "id": "plant-sz",
+    "name": "Shenzhen Plant",
+    "template": "manufacturing",
+    "settings": {
+      "name": "Shenzhen Plant",
+      "timezone": "Asia/Shanghai",
+      "language": "zh-CN",
+      "currency": "CNY",
+      "country": "CN"
+    },
+    "seats": [
+      {
+        "subjects": [
+          "user:sup@plant.test"
+        ],
+        "id": "sup-1",
+        "roles": {
+          "mes": "supervisor",
+          "erp": "controller",
+          "platform": "admin",
+          "enterprise": "admin",
+          "ai": "admin",
+          "work": "admin",
+          "flow": "admin",
+          "agent": "admin",
+          "knowledge": "editor"
+        },
+        "units": [
+          {
+            "unit": "plant-sz",
+            "role": "supervisor"
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "user:op1@plant.test"
+        ],
+        "id": "op-l1",
+        "roles": {
+          "mes": "operator",
+          "ai": "user"
+        },
+        "units": [
+          {
+            "unit": "L1",
+            "role": "operator"
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "user:op2@plant.test"
+        ],
+        "id": "op-l2",
+        "roles": {
+          "mes": "operator",
+          "ai": "user"
+        },
+        "units": [
+          {
+            "unit": "L2",
+            "role": "operator"
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "user:qa1@plant.test"
+        ],
+        "id": "qa-1",
+        "roles": {
+          "mes": "quality",
+          "ai": "user"
+        }
+      },
+      {
+        "subjects": [
+          "user:qa2@plant.test"
+        ],
+        "id": "qa-2",
+        "roles": {
+          "mes": "quality",
+          "ai": "user"
+        }
+      },
+      {
+        "subjects": [
+          "client:mes-gateway"
+        ],
+        "id": "gateway-l1",
+        "roles": {
+          "mes": "gateway"
+        }
+      },
+      {
+        "subjects": [
+          "client:mes-assistant"
+        ],
+        "id": "agent-l1",
+        "agent": true,
+        "roles": {
+          "mes": "assistant"
+        },
+        "units": [
+          {
+            "unit": "L1",
+            "role": "assistant"
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "user:buyer@plant.test"
+        ],
+        "id": "buyer-1",
+        "roles": {
+          "erp": "buyer",
+          "ai": "user"
+        },
+        "units": [
+          {
+            "unit": "plant-sz",
+            "role": "buyer",
+            "primary": true
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "user:accountant@plant.test"
+        ],
+        "id": "acc-1",
+        "roles": {
+          "erp": "accountant",
+          "ai": "user"
+        },
+        "units": [
+          {
+            "unit": "plant-sz",
+            "role": "accountant",
+            "primary": true
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -25,7 +25,7 @@ func schemas(actions []platform.Action) []string {
 func TestCatalogPerCaller(t *testing.T) {
 	p := newPlant(t)
 	assistant := member("agent-l1", Assistant, "L1")
-	read, lang := platformserver.SchemaNotificationRead, platformserver.SchemaLanguage
+	read, lang := platformserver.SchemaNotificationRead, platformserver.SchemaProfileUpdate
 	// Every member may call the platform's declared operations (ADR-0047 §13).
 	call := platformserver.SchemaOperationCall
 	for _, c := range []struct {

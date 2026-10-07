@@ -88,7 +88,7 @@ func own(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.
 }
 
 func ownOrHR(c platform.Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error {
-	if c.Role() == HR || c.Replaying {
+	if c.Holds(c.App, HR) || c.Replaying {
 		return nil
 	}
 	return own(c, record, payload, now)

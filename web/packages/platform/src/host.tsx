@@ -38,6 +38,7 @@ const lifecycleLabel = (tenant: TenantView) => tenant.quarantined ? t("Quarantin
 export function HostOverview() {
   const overview = useReadQuery<Api.HostOverview>("/v1/host/overview", 10000);
   const { open } = useWorkspace();
+  const [creating, setCreating] = useState(false);
   const tenants = overview.data?.tenants ?? [];
   const columns: ColumnDef<TenantView, any>[] = [
     { accessorKey: "id", header: t("Tenant"), meta: { width: 160 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
@@ -52,7 +53,9 @@ export function HostOverview() {
   ];
   const faults = tenants.filter((tenant) => tenant.quarantined || tenant.failedWork > 0);
   return <>
-    <PageHeader title={t("Host Console")} description={t("Every tenant this host runs: health, lifecycle, support and the artifacts it trusts. Actions here are recorded in the tenant's audit.")} />
+    <PageHeader title={t("Host Console")} description={t("Every tenant this host runs: health, lifecycle, support and the artifacts it trusts. Actions here are recorded in the tenant's audit.")}
+      actions={!overview.isError && <Button variant="primary" onClick={() => setCreating(true)}>{t("Create tenant")}</Button>} />
+    <CreateTenantDialog open={creating} onOpenChange={setCreating} />
     <div className="mb-4 grid gap-3 md:grid-cols-4">
       <Metric label={t("Tenants")} value={tenants.length} />
       <Metric label={t("Quarantined")} value={tenants.filter((tenant) => tenant.quarantined).length} tone={faults.length ? "danger" : undefined} />
@@ -143,6 +146,37 @@ export function HostTenant({ tenant }: { tenant: string }) {
     </Dialog>
     <SupportDialog tenant={tenant} open={support} onOpenChange={setSupport} />
   </>;
+}
+
+/** A new tenant from a template (ADR-0078 §2.2): its first administrator holds admin in every app; settings are decided and journaled. */
+function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const call = useConsole();
+  const templates = useReadQuery<Api.TenantTemplate[]>("/v1/host/templates").data ?? [];
+  const { open: openView } = useWorkspace();
+  const [id, setId] = useState("");
+  const [name, setName] = useState("");
+  const [template, setTemplate] = useState("");
+  const [admin, setAdmin] = useState("");
+  const chosen = templates.find((x) => x.name === template);
+  const submit = async () => {
+    const created = await call<TenantView>("/v1/host/tenants", { id, name, template, admin: admin.includes(":") ? admin : `user:${admin}` });
+    if (created) { notify.success(t("Tenant {id} created.", { id: created.id })); onOpenChange(false); setId(""); setName(""); setAdmin(""); openView({ view: "host-tenant", params: { tenant: created.id } }); }
+  };
+  return <Dialog open={open} onOpenChange={onOpenChange} title={t("Create tenant")}>
+    <Form className="grid gap-3" onSubmit={() => void submit()}>
+      <p className="text-sm text-muted">{t("A tenant is a hard boundary: its own members, records, settings and audit. Subsidiaries and sites normally live inside one tenant's enterprise model.")}</p>
+      <label className="grid gap-1 text-sm">{t("Tenant ID")}<Input required pattern="[a-z][a-z0-9-]{1,31}" value={id} onChange={(e) => setId(e.target.value)} placeholder="acme" />
+        <span className="text-xs text-muted">{t("Lower case, digits, dashes; it cannot change later.")}</span></label>
+      <label className="grid gap-1 text-sm">{t("Organisation name")}<Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Ltd" /></label>
+      <label className="grid gap-1 text-sm">{t("Template")}<Select value={template} onChange={(e) => setTemplate(e.target.value)}>
+        <option value="">{t("— platform defaults")}</option>
+        {templates.map((x) => <option key={x.name} value={x.name}>{x.title}</option>)}
+      </Select>{chosen?.description && <span className="text-xs text-muted">{chosen.description}</span>}</label>
+      <label className="grid gap-1 text-sm">{t("First administrator")}<Input required value={admin} onChange={(e) => setAdmin(e.target.value)} placeholder="jane@acme.test" />
+        <span className="text-xs text-muted">{t("Their sign-in email (or client:<id>); they administer every app and invite the rest.")}</span></label>
+      <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{t("Cancel")}</Button><Button type="submit" variant="primary">{t("Create")}</Button></div>
+    </Form>
+  </Dialog>;
 }
 
 function SupportDialog({ tenant, open, onOpenChange }: { tenant: string; open: boolean; onOpenChange: (open: boolean) => void }) {

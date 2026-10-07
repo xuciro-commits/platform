@@ -20,22 +20,19 @@ func main() {
 	seat := func(token, id string, roles map[string]string) platformserver.Seat {
 		return platformserver.Seat{Subjects: []string{token}, Member: platform.Member{ID: id, Roles: roles}}
 	}
-	seats := deployment.Seats([]platformserver.Seat{
+	development := []platformserver.Seat{
 		seat("planner", "planner-1", map[string]string{erpadapter.ID: erpadapter.Planner, platformserver.PlatformApp: platformserver.Admin}),
 		seat("erp", "erp", map[string]string{erpadapter.ID: erpadapter.Connector}),
-	})
+	}
 	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
+		seats := deployment.SeatsFor(id)
 		t, err := platformserver.NewTenant(id, platformserver.NewConsole(id, seats...), erpadapter.New(id))
 		if err == nil {
 			err = t.Connect(erpadapter.Poll("erp"))
 		}
 		return t, err
 	}
-	t, err := deployment.Rebuild("dev")
-	if err == nil {
-		err = deployment.Serve(t)
-	}
-	if err != nil {
+	if err := deployment.Run(platformserver.TenantSpec{ID: "dev", Seats: development}); err != nil {
 		log.Fatal(err)
 	}
 }

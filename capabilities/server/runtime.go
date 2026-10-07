@@ -64,7 +64,7 @@ func (r runtime) Units(c platform.Caller, structure string, now time.Time) []str
 	if r.t.directory == nil {
 		return nil
 	}
-	return r.t.directory.Units("member:"+c.ID, structure, now.UTC().Format(time.DateOnly))
+	return r.t.directory.Units("member:"+c.ID, structure, c.Today(now))
 }
 
 func (r runtime) Element(c platform.Caller, id string, now time.Time) (platform.ElementInfo, bool) {

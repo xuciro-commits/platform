@@ -636,7 +636,7 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 			x = c.ID
 		case set.From == "$now":
 			if types[set.Field] == "date" {
-				x = now.UTC().Format(time.DateOnly)
+				x = c.Today(now)
 			} else {
 				x = now.UTC()
 			}

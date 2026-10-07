@@ -243,7 +243,7 @@ func (d *stagedDecision) Units(c platform.Caller, structure string, now time.Tim
 	if d.tenant.directory == nil {
 		return nil
 	}
-	return d.tenant.directory.Units("member:"+c.ID, structure, now.UTC().Format(time.DateOnly))
+	return d.tenant.directory.Units("member:"+c.ID, structure, c.Today(now))
 }
 func (d *stagedDecision) Element(c platform.Caller, id string, now time.Time) (platform.ElementInfo, bool) {
 	if d.tenant.directory == nil {

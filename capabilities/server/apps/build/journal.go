@@ -107,7 +107,8 @@ func (a Action) Reversal(of Action) ([]Post, *JournalPost) {
 // Entry evaluates the declaration against the decision: the record after the
 // action and the inputs given. The id is the decision's change id, so a
 // replay lands the same entry once.
-func (j JournalPost) Entry(changeID string, record map[string]any, inputs map[string]any, me string, now time.Time) (map[string]any, error) {
+// today is the decider's local date (ADR-0079).
+func (j JournalPost) Entry(changeID string, record map[string]any, inputs map[string]any, me string, now time.Time, today string) (map[string]any, error) {
 	source := func(from string) any {
 		switch {
 		case from == "$me":
@@ -124,7 +125,7 @@ func (j JournalPost) Entry(changeID string, record map[string]any, inputs map[st
 		}
 		return record[from]
 	}
-	entry := map[string]any{"id": "jnl-" + changeID, "date": now.UTC().Format(time.DateOnly), "source": ID + "/" + changeID}
+	entry := map[string]any{"id": "jnl-" + changeID, "date": today, "source": ID + "/" + changeID}
 	if j.Date != "" {
 		if d := textOf(source(j.Date)); len(d) >= 10 {
 			entry["date"] = d[:10]

@@ -35,19 +35,21 @@ type letter struct {
 	Text    string `json:"text"`
 }
 
-// mailNotice makes the email effects of a notice given to a member at address,
-// in the member's language (opsMu held).
-func (t *Tenant) mailNotice(n platform.Notification, address, lang string) {
-	for _, planned := range t.planMailNotice(n, address, lang) {
+// mailNotice makes the email effects of a notice given to a member, as the
+// member wants them: address, language and when (opsMu held).
+func (t *Tenant) mailNotice(n platform.Notification, to Reach) {
+	for _, planned := range t.planMailNotice(n, to) {
 		t.outbound = append(t.outbound, &effect{Effect: planned})
 	}
 }
 
-func (t *Tenant) planMailNotice(n platform.Notification, address, lang string) []platform.Effect {
+func (t *Tenant) planMailNotice(n platform.Notification, to Reach) []platform.Effect {
 	var effects []platform.Effect
-	if address == "" {
+	address, lang := to.Address, to.Language
+	if address == "" || !to.Mail {
 		return effects
 	}
+	due := to.Due(n.At)
 	for _, ep := range t.endpoints {
 		if ep.Kind != "email" || !slices.Contains(ep.Notifications, n.App) {
 			continue
@@ -58,7 +60,7 @@ func (t *Tenant) planMailNotice(n platform.Notification, address, lang string) [
 		}
 		body, _ := json.Marshal(letter{To: address, Subject: t.Say(lang, n.Title), Text: strings.TrimSpace(text) + "\n\n— " + t.ID + " · " + n.App})
 		effects = append(effects, platform.Effect{ID: fmt.Sprintf("%s:notice:%s:%s", t.ID, n.ID, ep.ID), Endpoint: ep.ID,
-			Event: n.App + "/notification", Target: n.Ref, At: n.At, State: "pending", Due: n.At, Body: string(body)})
+			Event: n.App + "/notification", Target: n.Ref, At: n.At, State: "pending", Due: due, Body: string(body)})
 	}
 	return effects
 }

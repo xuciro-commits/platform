@@ -33,7 +33,7 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	if role := m.Roles[build.ID]; role != build.Builder && role != build.Integrator {
+	if !m.Holds(build.ID, build.Builder) && !m.Holds(build.ID, build.Integrator) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	out := []IntegrationEffect{}

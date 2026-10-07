@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -22,10 +21,15 @@ import (
 // Deployment is how a host binary runs (ADR-0007, ADR-0010): in memory with
 // development tokens, or with a PostgreSQL journal and an OpenID provider.
 type Deployment struct {
-	Addr, Database, Issuer, Keys, Directory, Web string
-	Files                                        string // http(s)://host:port/bucket of an S3-compatible store (ADR-0028); empty: memory
-	Project                                      bool
-	SnapshotEvery                                int64
+	Addr, Database, Issuer, Keys, Web string
+	// TenantsFile lists the host's tenants with their seats and starting
+	// settings (ADR-0078 §2.2); the console appends to it. Empty: the
+	// binary's development tenant. TemplatesDir holds tenant templates.
+	TenantsFile, TemplatesDir string
+	specs                     *specs
+	Files                     string // http(s)://host:port/bucket of an S3-compatible store (ADR-0028); empty: memory
+	Project                   bool
+	SnapshotEvery             int64
 	// Profile is which infrastructure the host runs on (ADR-0049 D1):
 	// "delivery" keeps the PostgreSQL journal, the S3 file bytes and an
 	// external OpenID provider; "lightweight" keeps everything in one data
@@ -61,7 +65,8 @@ func Flags(addr string) *Deployment {
 	flag.StringVar(&d.Issuer, "oidc-issuer", "", "OpenID issuer whose access tokens are accepted (empty: development tokens, the token is the subject)")
 	flag.StringVar(&d.Keys, "oidc-keys", "", "JWKS URL of the issuer, when the server reaches it on another address")
 	flag.StringVar(&d.Files, "files", "", "S3-compatible store of file bytes, http(s)://host:port/bucket, keys from PLATFORM_S3_ACCESS_KEY and PLATFORM_S3_SECRET_KEY (empty: memory)")
-	flag.StringVar(&d.Directory, "directory", "", "JSON file with the seats of every tenant (empty: the built-in development seats)")
+	flag.StringVar(&d.TenantsFile, "tenants", "", "JSON file with the host's tenants, their seats and starting settings; the host console appends to it (empty: the built-in development tenant)")
+	flag.StringVar(&d.TemplatesDir, "templates", "", "directory of tenant templates the host console offers (empty: none)")
 	flag.BoolVar(&d.Project, "project", false, "copy records into PostgreSQL tables per tenant for tools outside the host (ADR-0019; needs -database)")
 	flag.Int64Var(&d.SnapshotEvery, "snapshot-every", 10000, "save each tenant's state every this many journal entries and at shutdown, and start from the newest snapshot of this code (ADR-0019; 0: replay the whole journal)")
 	flag.StringVar(&d.Web, "web", "", "directory of the workspace's build, served at / (ADR-0018; empty: API only)")
@@ -151,22 +156,6 @@ func (d *Deployment) lightweightState() (Journals, FileStore, *LocalIdP, error) 
 		return nil, nil, nil, err
 	}
 	return journal, files, idp, nil
-}
-
-// Seats reads the directory file, or returns the development seats.
-func (d *Deployment) Seats(development []Seat) []Seat {
-	if d.Directory == "" {
-		return development
-	}
-	var seats []Seat
-	raw, err := os.ReadFile(d.Directory)
-	if err == nil {
-		err = json.Unmarshal(raw, &seats)
-	}
-	if err != nil {
-		log.Fatalf("directory: %v", err)
-	}
-	return seats
 }
 
 // restoreTenants brings every tenant to the journal's state before the host
@@ -268,12 +257,14 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	flush := exportTelemetry(ctx, filepath.Base(os.Args[0])) // traces and metrics, when an OTLP endpoint is set (ADR-0027 D5)
 	defer flush(context.Background())
 	var lightweightFiles FileStore // the lightweight profile's bytes open with its journal, all in -data
+	var files FileStore
 	switch {
 	case d.Files != "":
 		store, err := NewS3Files(ctx, d.Files)
 		if err != nil {
 			return err
 		}
+		files = store
 		for _, t := range tenants {
 			t.Files = store
 		}
@@ -291,6 +282,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 			return err
 		}
 		defer journal.Close()
+		files = lightweightFiles
 		for _, t := range tenants {
 			t.Files = lightweightFiles
 		}
@@ -306,34 +298,43 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 			return err
 		}
 	}
-	if journal == nil {
-		// The development host still uses the accepted-result boundary. Its
-		// memory journal, like all of its records, ends with this process.
-		for _, tenant := range tenants {
-			var mu sync.Mutex
-			var entries []Entry
-			appendEntry := func(e Entry) {
-				mu.Lock()
-				entries = append(entries, e)
-				mu.Unlock()
-			}
-			if tenant.Record == nil {
-				tenant.Record = appendEntry
-			}
-			if tenant.AcceptResult == nil {
-				tenant.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
-					appendEntry(e)
-					return e.Body, nil
-				}
+	// The development host still uses the accepted-result boundary. Its
+	// memory journal, like all of its records, ends with this process.
+	memoryJournal := func(tenant *Tenant) {
+		var mu sync.Mutex
+		var entries []Entry
+		appendEntry := func(e Entry) {
+			mu.Lock()
+			entries = append(entries, e)
+			mu.Unlock()
+		}
+		if tenant.Record == nil {
+			tenant.Record = appendEntry
+		}
+		if tenant.AcceptResult == nil {
+			tenant.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+				appendEntry(e)
+				return e.Body, nil
 			}
 		}
 	}
-	for _, t := range tenants {
+	seed := func(t *Tenant) error {
 		if d.Seed != nil && !t.quarantined() && (journal == nil || fresh[t.ID]) {
 			if err := d.Seed(t, time.Now()); err != nil {
 				return fmt.Errorf("seed %s: %w", t.ID, err)
 			}
 			log.Printf("seeded %s", t.ID)
+		}
+		return nil
+	}
+	if journal == nil {
+		for _, tenant := range tenants {
+			memoryJournal(tenant)
+		}
+	}
+	for _, t := range tenants {
+		if err := seed(t); err != nil {
+			return err
 		}
 	}
 	authenticate := Authenticate(func(token string) (string, bool) { return token, token != "" })
@@ -360,19 +361,66 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	runWorkFrom(registry.list)
 	observeFrom(registry.list)
 	var snapshots *snapshotter
+	watch := func(original *Tenant) {
+		if snapshots == nil {
+			return
+		}
+		snapshots.mu.Lock()
+		snapshots.saved[original.ID] = restored[original.ID] // what was replayed since is worth saving too
+		snapshots.mu.Unlock()
+		go func() {
+			for range time.Tick(5 * time.Second) {
+				snapshots.save(ctx, registry.current(original.ID), false)
+			}
+		}()
+	}
 	if journal != nil && d.SnapshotEvery > 0 {
 		snapshots = &snapshotter{journal: journal, code: code, every: d.SnapshotEvery, saved: map[string]int64{}}
 		for _, original := range tenants {
-			snapshots.saved[original.ID] = restored[original.ID] // what was replayed since is worth saving too
-			go func() {
-				for range time.Tick(5 * time.Second) {
-					snapshots.save(ctx, registry.current(original.ID), false)
-				}
-			}()
+			watch(original)
 		}
 	}
 	host := NewHost(authenticate, tenants...)
 	host.tenantsFrom = registry.list
+	host.Templates = d.Templates
+	if d.Rebuild != nil { // the host console creates tenants (ADR-0078 §2.2)
+		var createMu sync.Mutex
+		host.CreateTenant = func(req CreateTenantRequest, by string) (*Tenant, error) {
+			createMu.Lock()
+			defer createMu.Unlock()
+			now := Now()
+			spec, tpl, err := d.spec(req, by, now)
+			if err != nil {
+				return nil, err
+			}
+			if d.specs == nil {
+				d.specs = &specs{file: d.TenantsFile}
+			}
+			if err := d.specs.add(spec); err != nil {
+				return nil, err
+			}
+			t, err := d.Rebuild(spec.ID)
+			if err != nil {
+				return nil, err
+			}
+			t.Files = files
+			if journal == nil {
+				memoryJournal(t)
+			} else if err := d.restoreTenants(ctx, journal, code, []*Tenant{t}, restored, fresh); err != nil {
+				return nil, err
+			}
+			if err := seed(t); err != nil {
+				return nil, err
+			}
+			if err := firstDecisions(t, spec, tpl, now); err != nil {
+				return nil, err
+			}
+			registry.add(t)
+			watch(t)
+			log.Printf("created tenant %s for %s", spec.ID, by)
+			return t, nil
+		}
+	}
 	if journal != nil && d.Rebuild != nil {
 		var recoveryMu sync.Mutex
 		host.Recover = func(ctx context.Context, id string) error {

@@ -98,10 +98,10 @@ func TestTenantComposition(t *testing.T) {
 		}
 		return out
 	}
-	if got := schemas(bo); !slices.Equal(got, []string{SchemaLanguage, SchemaNotificationRead, SchemaOperationCall, "b.note"}) {
+	if got := schemas(bo); !slices.Equal(got, []string{SchemaProfileUpdate, SchemaDelegate, SchemaTokenIssue, SchemaTokenRevoke, SchemaNotificationRead, SchemaOperationCall, "b.note"}) {
 		t.Fatalf("bo is offered %v", got)
 	}
-	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaLanguage,
+	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaProfileUpdate, SchemaRoleSave, SchemaRoleRemove, SchemaPolicySave, SchemaPolicyDrop, SchemaTeamSave, SchemaTeamRemove, SchemaDelegate, SchemaInvite, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard, SchemaTokenIssue, SchemaTokenRevoke,
 		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaProtocolBind, SchemaNotificationRead,
 		SchemaEndpointAdd, SchemaEndpointRemove, SchemaEffectRetry, SchemaEffectDiscard, SchemaEffectApprove, SchemaOperationCall,
 		SchemaProjectSave, SchemaProjectArchive, SchemaPackageInstall, SchemaPackageUpgrade, SchemaPackageDrain, SchemaPackageRetire, "a.note", "b.note"}) {
@@ -184,7 +184,7 @@ func TestHostHTTPAndConsole(t *testing.T) {
 		}
 	}
 	if status, body := call("GET", "/v1/members", "ana-token", ""); status != 200 ||
-		!strings.Contains(body, `"id":"agent-1","tenant":"t-1","roles":{},"subjects":["client:agent"]`) {
+		!strings.Contains(body, `"id":"agent-1","tenant":"t-1","roles":{},"timezone":"UTC","subjects":["client:agent"],"profile":{"member":"agent-1"}`) {
 		t.Fatalf("members: %d %s", status, body)
 	}
 	if status, _ := call("GET", "/v1/members", "bo-token", ""); status != 403 {

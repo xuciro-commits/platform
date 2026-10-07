@@ -71,7 +71,7 @@ func (t *Tenant) readDeclaredQueryFrom(store *recordStore, c platform.Caller, q 
 		sources = append(sources, ref)
 		if et != nil {
 			for _, field := range et.info.Fields {
-				if field.Reads(c.Roles[et.info.App]) {
+				if field.ReadsAny(c.RolesIn(et.info.App)) {
 					sources = append(sources, ref+"#"+field.Name)
 				}
 			}
@@ -138,7 +138,7 @@ func (t *Tenant) readRecordPathFrom(store *recordStore, c platform.Caller, typ, 
 		var fields map[string]json.RawMessage
 		_ = json.Unmarshal(raw, &fields)
 		value, visible := fields[name]
-		if !known || !declared || !field.Reads(c.Roles[info.App]) {
+		if !known || !declared || !field.ReadsAny(c.RolesIn(info.App)) {
 			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record input is unavailable to this member")
 		}
 		if !visible {

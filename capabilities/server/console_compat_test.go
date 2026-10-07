@@ -38,7 +38,7 @@ func TestAcceptedConsoleEnterpriseRenameReplay(t *testing.T) {
 	}
 	live := compose("org")
 	attach(live)
-	decide(live, SchemaLanguage, "old-language", `{"language":"en"}`)
+	decide(live, SchemaGrant, "old-grant", `{"app":"org","role":"admin"}`)
 	restored := compose("enterprise")
 	prior, _ := restored.app(PlatformApp).(*Console).AcceptedState()
 	batch, _, err := decodeAcceptedBatch(entries[0].Body)

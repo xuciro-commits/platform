@@ -151,7 +151,7 @@ func (a *App) Input(c platform.Caller, name string, body []byte, now time.Time) 
 	switch {
 	case name != "planned-orders":
 		return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
-	case c.Role() != Connector && !c.Replaying:
+	case !c.Holds(c.App, Connector) && !c.Replaying:
 		return nil, fail(pb.ErrorCode_ERROR_CODE_POLICY_DENIED)
 	case json.Unmarshal(body, &page) != nil:
 		return nil, fail(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)

@@ -65,7 +65,11 @@ type Host struct {
 	// HostAdmins are the subjects that may open the host console (ADR-0047
 	// §6.5): an independent scope, not a tenant's administrators.
 	HostAdmins map[string]bool
-	routes     []Route // as Handler registered them: the API contract's source (api.go)
+	// Templates and CreateTenant are how the host console adds a tenant
+	// (ADR-0078 §2.2); a host without a Rebuild leaves CreateTenant nil.
+	Templates    func() []TenantTemplate
+	CreateTenant func(CreateTenantRequest, string) (*Tenant, error)
+	routes       []Route // as Handler registered them: the API contract's source (api.go)
 }
 
 // SignWith makes the host take the lightweight provider's tokens and sign the
@@ -75,6 +79,7 @@ type Host struct {
 // with a key it does not verify.
 func (h *Host) SignWith(idp *LocalIdP, ttl time.Duration) {
 	h.authenticate = idp.Authenticate()
+	UseTokenKey(idp.key)
 	h.Mint = func(subject string) string {
 		token, err := idp.Mint(subject, ttl, h.Now())
 		if err != nil {
@@ -110,15 +115,31 @@ const TenantHeader = "Platform-Tenant"
 const chatMaxBytes = 1 << 20
 
 func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
-	subject, ok := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	want := r.Header.Get(TenantHeader)
+	now := h.Now()
+	if strings.HasPrefix(credential, tokenPrefix) { // a personal token (ADR-0079 §5)
+		for _, t := range h.currentTenants() {
+			if d := consoleOf(t); d != nil && (want == "" || t.ID == want) {
+				if m, ok := d.MemberByToken(credential, now); ok && d.noticed(m.ID, credential, r.UserAgent(), "token", now) {
+					return m, t, true
+				}
+			}
+		}
+		return platform.Member{}, nil, false
+	}
+	subject, ok := h.authenticate(credential)
 	if !ok {
 		return platform.Member{}, nil, false
 	}
-	want := r.Header.Get(TenantHeader)
 	for _, t := range h.currentTenants() {
 		if d := consoleOf(t); d == nil || want != "" && t.ID != want {
 			continue
 		} else if m, ok := d.Member(subject); ok {
+			if !d.noticed(m.ID, credential, r.UserAgent(), "sign-in", now) {
+				return platform.Member{}, nil, false // a session the member ended
+			}
+			d.seen(m.ID, now)
 			return m, t, true
 		}
 	}
@@ -260,8 +281,12 @@ func (h *Host) Handler() http.Handler {
 	})
 	metadata(Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: MeView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		lang := t.Language(m, r)
-		WriteJSON(w, http.StatusOK, t.Translate(MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
-			Language: lang, Languages: t.languages(), Preferred: m.Language, Currency: t.setting(t.automation(PlatformApp, false), SettingCurrency)}, lang))
+		view := MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
+			Language: lang, Languages: t.languages(), Preferred: m.Language, Currency: t.setting(t.automation(PlatformApp, false), SettingCurrency)}
+		if d, ok := t.app(PlatformApp).(*Console); ok {
+			view.Account, view.Tenant = d.Account(m.ID), d.tenantRecord()
+		}
+		WriteJSON(w, http.StatusOK, t.Translate(view, lang))
 	})
 	metadata(Route{Pattern: "GET /v1/declarations", Summary: "The data classes and their authorities the tenant's apps declare (K5)", Answer: []*pb.AuthorityDeclaration{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		out := []json.RawMessage{}
@@ -278,6 +303,36 @@ func (h *Host) Handler() http.Handler {
 			return
 		}
 		WriteJSON(w, http.StatusOK, chain)
+	})
+	handle(Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors; ADR-0078)", Answer: Explanation{},
+		Query: []Param{{"member", "the member to ask about"}, {"permission", "an action's schema, or <app>:read:<name>"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if !m.Holds(PlatformApp, Admin) && !m.Holds(PlatformApp, Auditor) {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED})
+			return
+		}
+		out, err := t.Explain(r.URL.Query().Get("member"), r.URL.Query().Get("permission"))
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
+	handle(Route{Pattern: "GET /v1/sessions", Summary: "The caller's sessions: the credentials the host has seen act as them, the current one marked (ADR-0079 §5)", Answer: []Session{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, consoleOf(t).Sessions(m.ID, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")))
+	})
+	handle(Route{Pattern: "POST /v1/sessions/end-others", Summary: "End every session of the caller but this one: the host refuses those credentials from now on (ADR-0079 §5)", Answer: map[string]int{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, map[string]int{"ended": consoleOf(t).EndOtherSessions(m.ID, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))})
+	})
+	handle(Route{Pattern: "GET /v1/tokens", Summary: "The caller's personal tokens, never their secrets (ADR-0079 §5)", Answer: []TokenView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, consoleOf(t).Tokens(m.ID, h.Now()))
+	})
+	handle(Route{Pattern: "GET /v1/tokens/{id}/secret", Summary: "The secret of a token the caller just issued, once (ADR-0079 §5)", Answer: map[string]string{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		secret, ok := consoleOf(t).Minted(r.PathValue("id"), m.ID, time.Now())
+		if !ok {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND})
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]string{"secret": secret})
 	})
 	metadata(Route{Pattern: "GET /v1/actions", Summary: "The caller's catalog: the actions their roles permit, in their language (ADR-0008)", Answer: []platform.Action{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Catalog(m), t.Language(m, r)))

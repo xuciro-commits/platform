@@ -8,28 +8,121 @@ package platform
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/platform/authz"
 	"reflect"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 )
 
-// Member is a person, service or AI agent of a tenant (ADR-0010) with one role
-// per app. What a rule scopes by is the member's organisation (ADR-0012).
+// Member is a person, service or AI agent of a tenant (ADR-0010). Grants are
+// what they hold (ADR-0078 §3.3): roles in apps, each optionally bounded to a
+// unit and a time. Roles is derived from the active grants by the host — the
+// primary role per app (the app's first declared role the member holds) —
+// for the many places that ask for one; RolesIn answers with all of them.
+// What a rule scopes by is the member's organisation (ADR-0012).
 type Member struct {
 	ID     string            `json:"id"`
 	Tenant string            `json:"tenant"`
 	Roles  map[string]string `json:"roles"`
+	Grants []Grant           `json:"grants,omitempty"`
+	// Status is the member's standing (ADR-0079 §4): "" active, invited
+	// (added, not yet signed in), suspended (holds nothing until resumed),
+	// left (offboarded: no subjects, no grants; the record stays for history).
+	Status string `json:"status,omitempty"`
+	// Scopes bound a caller signed in with a personal token (ADR-0079 §5):
+	// permission patterns (exact, or a prefix ending in *); nil is unbounded.
+	Scopes []string `json:"scopes,omitempty"`
 	// Agent marks an AI agent: an irreversible effect it causes waits for a
 	// person's approval, and it cannot give one (ADR-0014 D6).
 	Agent bool `json:"agent,omitempty"`
-	// Language is the member's own choice (ADR-0023 6b), such as "zh-CN";
-	// empty: the tenant's default, else what the browser asks for.
+	// Language is the member's own choice (ADR-0023 6b, ADR-0079), such as
+	// "zh-CN", derived from their profile when the host hands a member to an
+	// app; empty: the tenant's default, else what the browser asks for.
 	Language string `json:"language,omitempty"`
+	// Timezone is the IANA zone the member works in (ADR-0079 §3), derived
+	// from their profile over the tenant's default when the host hands a
+	// member to an app; empty: UTC. Every "today" a decision defaults for
+	// the member is this zone's day.
+	Timezone string `json:"timezone,omitempty"`
 }
+
+// Grant is one role a member holds in an app (ADR-0078 §3.3): everywhere in
+// the app, or within a unit of a structure; from a day, until a day; given by
+// someone for a reason. Dates are YYYY-MM-DD, inclusive from, exclusive until.
+type Grant struct {
+	App       string    `json:"app"`
+	Role      string    `json:"role"`
+	Unit      string    `json:"unit,omitempty"`
+	Structure string    `json:"structure,omitempty"`
+	From      string    `json:"from,omitempty"`
+	Until     string    `json:"until,omitempty"`
+	By        string    `json:"by,omitempty"`
+	Reason    string    `json:"reason,omitempty"`
+	At        time.Time `json:"at,omitzero"`
+}
+
+// Active reports whether the grant holds on day (YYYY-MM-DD).
+func (g Grant) Active(day string) bool {
+	return (g.From == "" || g.From <= day) && (g.Until == "" || day < g.Until)
+}
+
+// RolesIn are every role the member holds in app, the primary first.
+func (m Member) RolesIn(app string) []string {
+	var out []string
+	if r := m.Roles[app]; r != "" {
+		out = append(out, r)
+	}
+	for _, g := range m.Grants {
+		if g.App == app && !slices.Contains(out, g.Role) {
+			out = append(out, g.Role)
+		}
+	}
+	return out
+}
+
+// Holds reports whether the member holds role in app, among any of their roles.
+func (m Member) Holds(app, role string) bool { return slices.Contains(m.RolesIn(app), role) }
+
+// May asks the engine (ADR-0078 §3.4) whether the member may exercise a
+// permission of app that names roles: any role they hold there suffices.
+func (m Member) May(app, permission string, roles []string) authz.Verdict {
+	return authz.Decide(authz.Request{Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: roles})
+}
+
+// Active reports whether the member may act at all: not suspended, not left.
+func (m Member) Active() bool { return m.Status != MemberSuspended && m.Status != MemberLeft }
+
+// InScope reports whether the caller's token scopes, if any, cover permission.
+func (m Member) InScope(permission string) bool {
+	return m.Scopes == nil || slices.ContainsFunc(m.Scopes, func(p string) bool {
+		return p == permission || strings.HasSuffix(p, "*") && strings.HasPrefix(permission, strings.TrimSuffix(p, "*"))
+	})
+}
+
+// Member standings (ADR-0079 §4).
+const (
+	MemberInvited   = "invited"
+	MemberSuspended = "suspended"
+	MemberLeft      = "left"
+)
+
+// Location is the member's timezone, UTC when unknown.
+func (m Member) Location() *time.Location {
+	if m.Timezone != "" {
+		if loc, err := time.LoadLocation(m.Timezone); err == nil {
+			return loc
+		}
+	}
+	return time.UTC
+}
+
+// Today is now's date where the member is, as a decision defaults it.
+func (m Member) Today(now time.Time) string { return now.In(m.Location()).Format(time.DateOnly) }
 
 // Caller is a member as one app sees it. Replaying marks the journal replay:
 // who could act was decided when the input was accepted (ADR-0008). Automation
@@ -43,8 +136,8 @@ type Caller struct {
 	rt         Runtime
 }
 
-// Role is the member's role in the app being called ("" for none).
-func (c Caller) Role() string { return c.Roles[c.App] }
+// RolesHere are every role the member holds in the app being called.
+func (c Caller) RolesHere() []string { return c.RolesIn(c.App) }
 
 // Staging reports that this decision is still private. An app may validate
 // a definition now, but must not install it until the accepted result commits.

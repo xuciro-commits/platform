@@ -162,7 +162,7 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 // accidentally retain both roots or remove the only root. Standard records
 // still own reference validation, permissions, revisions and persistence.
 func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error {
-	if c.Role() != Builder {
+	if !c.Holds(c.App, Builder) {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	if err := checkTestPlanFields(s.GetPayload()); err != nil {

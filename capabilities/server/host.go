@@ -72,7 +72,7 @@ type Tenant struct {
 	// hostLifecycle is the host console's lifecycle for this tenant (ADR-0047
 	// §6.5): "" or "open" runs, "suspended" and "decommissioned" block
 	// ordinary requests; support are its authorized support sessions.
-	hostLifecycle string
+	hostLifecycle atomic.Pointer[string] // read without the lock (health, the tenant record)
 	support       []SupportGrant
 	// sealed are the candidate artifacts written to the file store (item 5),
 	// and migrations what the host console moved in or out of this tenant.
@@ -205,6 +205,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		}
 		if d, ok := a.(*Console); ok {
 			d.t = t
+			defer d.applyAccess() // once every app is known
 		}
 		if x, ok := a.(models); ok {
 			t.ai = x
@@ -1027,10 +1028,10 @@ func (t *Tenant) Catalog(m platform.Member) []platform.Action {
 		entities[info.Type] = info
 	}
 	for _, a := range t.apps {
-		for _, action := range a.Manifest().Actions.For(m.Roles[a.Manifest().ID]) {
+		for _, action := range a.Manifest().Actions.ForRoles(m.RolesIn(a.Manifest().ID)) {
 			if !slices.ContainsFunc(action.Uses, func(used string) bool {
 				owner, schema, _ := t.provider(used)
-				return owner == nil || !owner.Manifest().Actions.Permits(m.Roles[owner.Manifest().ID], schema)
+				return owner == nil || !owner.Manifest().Actions.PermitsAny(m.RolesIn(owner.Manifest().ID), schema)
 			}) {
 				// Generated create/edit forms use this member's writable fields.
 				// Custom actions keep their own declared inputs and policy.

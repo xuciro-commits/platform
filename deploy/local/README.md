@@ -63,7 +63,7 @@ TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mi
 ```
 
 - `-data` 就是**全部**持久状态：`journal/journal.jsonl`（条目）、`journal/snapshots/`（本代码最新的两份快照）、`journal/derived/`（向量与转写）、`files/<tenant>/<hash>`（文件字节，内容寻址）、`idp.key`（签名密钥，0600）。备份和迁移就是复制这一个目录。
-- 身份：轻量宿主只接受自己用 `idp.key` 签发的 token；交付宿主的开发 token（把 subject 原文当凭据）在这里是 401。席位仍是 `-directory` 或内置的演示席位。
+- 身份：轻量宿主只接受自己用 `idp.key` 签发的 token；交付宿主的开发 token（把 subject 原文当凭据）在这里是 401。租户与席位来自 `-tenants`（宿主控制台新建的租户会追加进该文件）或内置的演示租户。
 - 与轻量 profile 互斥的开关会被拒绝：`-database`、`-files`、`-oidc-issuer`、`-oidc-keys`、`-project`；交付 profile 则拒绝 `-data`、`-idp-key`。
 - 重启语义与 PostgreSQL 日志一致：启动时读本代码的最新快照、重放其余条目、损坏日志则隔离该租户；`/v1/sign-in`、`/v1/me`、权限拒绝与审计不因 profile 而变。
 
@@ -137,7 +137,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
 - 每个人只担一份职责，测试时换人登录就能看到权限的差别；要同时看两个人，用一个普通窗口加一个无痕窗口分别登录。
 - 新加的账号要 Rauthy 重新初始化才有（本地数据可丢）：`cd deploy/local && docker compose rm -sf rauthy && docker volume rm platform_rauthy && docker compose up -d rauthy`，再重建两个主机。
-- 成员名单来自 `manufacturing/directory.json` 和 `hospitality/directory.json`。`sup@plant.test` 同时是 ERP 的主管会计（controller）。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
+- 租户、成员名单与起始设置来自 `manufacturing/tenants.json` 和 `hospitality/tenants.json`（ADR-0078）；模板在 `deploy/templates/`。`sup@plant.test` 同时是 ERP 的主管会计（controller）。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
 
 ## 服务账号与 AI 代理（client credentials）
 

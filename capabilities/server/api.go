@@ -51,7 +51,11 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/contributions", Summary: "This tenant's namespaced contributions: every app's views and installed packages' views", Answer: []Contribution{}},
 	{Pattern: "GET /v1/packages", Summary: "The package index beside what this tenant has installed, with precheck results (administrators)", Answer: []PackageView{}},
 	{Pattern: "GET /v1/notifications", Summary: "The caller's notifications, newest first, in their language", Answer: []platform.Notification{}},
-	{Pattern: "GET /v1/members", Summary: "The tenant's members with their roles (administrators)", Answer: []MemberView{}},
+	{Pattern: "GET /v1/members", Summary: "The tenant's members with their roles and profiles (administrators)", Answer: []MemberView{}},
+	{Pattern: "GET /v1/permissions", Summary: "The permission catalog: every app's roles and what each may do, derived from the manifests (administrators, auditors; ADR-0078)", Answer: []AppPermissions{}},
+	{Pattern: "GET /v1/access", Summary: "The tenant's own access configuration: custom roles, policies and teams (administrators, auditors; ADR-0078)", Answer: AccessConfig{}},
+	{Pattern: "GET /v1/tenant", Summary: "The tenant's record: its settings, apps and standing (every member; ADR-0078)", Answer: TenantRecord{}},
+	{Pattern: "GET /v1/account", Summary: "The caller's profile over the tenant's defaults (ADR-0079)", Answer: Account{}},
 	{Pattern: "GET /v1/audit", Summary: "Accepted inputs, newest first, rebuilt from the journal (administrators)", Answer: []AuditEntry{}},
 	{Pattern: "GET /v1/deliveries", Summary: "Delivery attempts of events to subscribers (administrators)", Answer: []Delivery{}},
 	{Pattern: "GET /v1/work", Summary: "Owned work: deliveries and jobs (administrators)", Answer: []Task{}},
@@ -119,6 +123,8 @@ type MeView struct {
 	Languages   []string        `json:"languages"`           // the languages the tenant has dictionaries for
 	Preferred   string          `json:"preferred,omitempty"` // the member's own choice
 	Currency    string          `json:"currency"`            // the tenant's, the default of amounts people enter (ADR-0024)
+	Account     Account         `json:"account"`             // the member's profile over the tenant's defaults (ADR-0079)
+	Tenant      TenantRecord    `json:"tenant"`              // the tenant's record (ADR-0078)
 }
 
 // SignIn tells the workspace how to sign in: an OpenID issuer and client, or

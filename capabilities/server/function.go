@@ -64,7 +64,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	if !found {
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function is not declared")
 	}
-	if f.Check() != nil || !slices.Contains(f.Roles, member.Roles[owner]) {
+	if f.Check() != nil || !member.May(owner, f.Name, f.Roles).Allow {
 		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This member cannot call the AI function")
 	}
 	target := r.GetSubmission().GetTarget()
@@ -104,7 +104,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	sources := []string{}
 	for _, name := range f.Fields {
 		field, found := et.info.Field(name)
-		if !found || !field.Reads(member.Roles[et.info.App]) {
+		if !found || !field.ReadsAny(member.RolesIn(et.info.App)) {
 			store.mu.Unlock()
 			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
 		}
@@ -163,7 +163,7 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	if !ok || member.Tenant != t.ID || f.Check() != nil || err != nil || hashErr != nil ||
 		definition != binding.Call.Definition || hash != binding.Call.InputHash || ask.Model != binding.Call.Model ||
 		ask.Prompt.System != f.SystemPrompt() || ask.Prompt.MaxTokens != f.MaxTokens || len(ask.Prompt.User) > f.MaxInputBytes ||
-		!sourceOK || sourceID == "" || sourceType != f.Object || !replyOK || replyID != ask.Call || t.authorityOf(replyType) != app || !slices.Contains(f.Roles, member.Roles[owner]) ||
+		!sourceOK || sourceID == "" || sourceType != f.Object || !replyOK || replyID != ask.Call || t.authorityOf(replyType) != app || !member.May(owner, f.Name, f.Roles).Allow ||
 		member.Agent && t.suspended(member.ID) || len(binding.Call.Sources) < len(f.Fields) || !f.Conversation && len(binding.Call.Sources) != len(f.Fields) || f.Conversation && len(binding.Call.Sources) > len(f.Fields)+16 {
 		return false
 	}

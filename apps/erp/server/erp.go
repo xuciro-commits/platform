@@ -348,7 +348,7 @@ func (a *App) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	if name == ProductionOrders { // the protocol's read: the host lets only its consumers ask
 		return productionOrders(c), nil
 	}
-	if name != TrialBalance && name != OnHand || c.Role() == "" {
+	if name != TrialBalance && name != OnHand || len(c.RolesHere()) == 0 {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if name == OnHand {

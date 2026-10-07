@@ -270,7 +270,7 @@ func reversal(c platform.Caller, j *Journal, payload json.RawMessage, now time.T
 	}
 	json.Unmarshal(payload, &p)
 	if p.Date == "" {
-		p.Date = now.UTC().Format(time.DateOnly)
+		p.Date = c.Today(now)
 	}
 	rev := Journal{Record: platform.Record{ID: j.ID + "-rev"}, Date: p.Date, Text: "Reversal of " + firstNonEmpty(j.Number, j.ID) + " " + j.Text, Currency: j.Currency, Reverses: j.ID, Source: j.Source}
 	for _, l := range j.Lines {

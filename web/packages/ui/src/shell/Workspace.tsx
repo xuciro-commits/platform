@@ -26,7 +26,11 @@ export type Menu = { label: string; items: MenuItem[] };
 export type ShellCommand = { id: string; label: string; group?: string; shortcut?: string; run: () => void };
 export type Session = {
   tenant: string; principal: string; detail?: string;
+  /** The member's display name (ADR-0079), shown over the principal when set. */
+  name?: string;
   options: { id: string; label: string }[]; current: string; onSwitch: (id: string) => void;
+  /** Opens the member's own account page, when the host has one. */
+  onAccount?: () => void;
 };
 
 /** A platform application in the Applications portal (ADR-0052 §3.2): a stable id, a category and a home route. */
@@ -666,8 +670,9 @@ function WorkspaceMenu({ workspaces }: { workspaces: Workspaces }) {
 }
 
 function SessionMenu({ session, onLanguageSelect, compact = false }: { session: Session; onLanguageSelect: (id: string) => void; compact?: boolean }) {
+  const shown = session.name || session.principal;
   const avatar = <span className="grid size-5 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-    {session.principal.slice(0, 1).toUpperCase()}
+    {shown.slice(0, 1).toUpperCase()}
   </span>;
   return (
     <DropdownMenu.Root>
@@ -677,7 +682,7 @@ function SessionMenu({ session, onLanguageSelect, compact = false }: { session: 
         {avatar}
         {!compact && <>
           <span className="text-left leading-tight max-sm:hidden">
-            <span className="block text-sm">{session.principal}</span>
+            <span className="block text-sm">{shown}</span>
             <span className="block text-xs text-muted">{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
           </span>
           <ChevronDown className="size-3.5 text-muted" />
@@ -686,9 +691,10 @@ function SessionMenu({ session, onLanguageSelect, compact = false }: { session: 
       <DropdownMenu.Portal>
         <DropdownMenu.Content side={compact ? "right" : "bottom"} align="end" sideOffset={4} className={menuPanel}>
           <DropdownMenu.Label className="px-2 py-1 text-xs">
-            <span className="block text-sm text-foreground">{session.principal}</span>
-            <span className="block text-muted">{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
+            <span className="block text-sm text-foreground">{shown}</span>
+            <span className="block text-muted">{session.name ? `${session.principal} · ` : ""}{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
           </DropdownMenu.Label>
+          {session.onAccount && <DropdownMenu.Item className={menuItem} onSelect={() => session.onAccount?.()}>{t("My account")}</DropdownMenu.Item>}
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
           <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Switch tenant or identity")}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={session.current} onValueChange={session.onSwitch}>

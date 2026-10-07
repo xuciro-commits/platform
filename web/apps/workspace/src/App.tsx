@@ -7,7 +7,7 @@
 import "./i18n";
 import { ApplicationSessionsProvider, categoryOf, HostContext, type AppUI, type Me } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
-import { Button, Workspace, notify, routeToHash, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
+import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Bookmark, Gauge, Hammer, LayoutGrid, SlidersHorizontal, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -121,6 +121,20 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       if (selected) remember(`${selectionScope}:${selected.surface ?? "work"}`, selected.id);
     }
   }, [selectionScope]);
+  const { setScheme } = useTheme();
+  const homeOpened = useRef<string | undefined>(undefined);
+  useEffect(() => { // the member's own appearance and start page follow them to any browser (ADR-0079 §3)
+    if (!me || !ready) return;
+    const theme = me.account?.theme;
+    if (theme === "light" || theme === "dark" || theme === "system") setScheme(theme);
+    const home = me.account?.homePage;
+    const key = `${me.tenantId}:${me.principalId}`;
+    if (home && homeOpened.current !== key && (!location.hash || location.hash === "#/home" || location.hash === "#/")) {
+      homeOpened.current = key;
+      const target = all.find((a) => a.id === home);
+      if (target) { select(target.id); location.hash = routeToHash(target.home); }
+    }
+  }, [me?.account?.theme, me?.account?.homePage, ready, all.length]);
   useEffect(() => {
     if (!activeRoute) return;
     const retired = legacyRoute(activeRoute);
@@ -206,7 +220,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           ...(host.can("agent.run.start") ? { assist: { view: "assistant" } } : {}) }}
         applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
         workspaces={{ options: held.map((id) => ({ id, title: projections.find((p) => p.id === id)!.title(), icon: projectionIcon[id] })), current: projection, onSelect: chooseProjection }}
-        onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
+        onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}
         onActiveRoute={setActiveRoute}
         nav={[
           ...(surface === "studio" && host.role("build") === "builder" ? [{ label: t("Projects"), items: [
@@ -243,8 +257,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
               release.data?.id ? <>{t("Last activated release")}: <code>{release.data.id.split(":").at(-1)?.slice(0, 10)}</code></> : t("No activated release")}
           </Button>
         </div>}
-        session={{ tenant: me!.tenantId, principal: me!.principalId, detail: signedIn?.session.email, options: sessionOptions,
-          current: signedIn ? "" : `as:${token}`, onSwitch }} />
+        session={{ tenant: me!.tenant?.name || me!.tenantId, principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions,
+          current: signedIn ? "" : `as:${token}`, onSwitch,
+          onAccount: all.some((a) => a.id === "platform") ? () => { select("platform"); location.hash = routeToHash({ view: "account" }); } : undefined }} />
       <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} /></ApplicationSessionsProvider>
     </HostContext.Provider>
   );

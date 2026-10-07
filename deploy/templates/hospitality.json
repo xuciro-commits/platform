@@ -1,0 +1,11 @@
+{
+  "title": "Hotel",
+  "description": "A property: PMS, CRM, CSM, HCM and loyalty; the first administrator administers every app.",
+  "settings": {
+    "timezone": "Europe/Berlin",
+    "currency": "EUR",
+    "weekStart": "monday",
+    "dateFormat": "dmy",
+    "numberFormat": "1.234,56"
+  }
+}

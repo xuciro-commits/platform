@@ -225,9 +225,9 @@ export function AppSettingsView() {
   return (
     <>
       <PageHeader title={t("App settings")} description={t("Values within the rules each app's code defines: thresholds, switches, choices. Rules themselves are code.")} />
-      {settings.data?.length === 0 && <p className="text-sm text-muted">{t("No app in this tenant declares settings.")}</p>}
+      {settings.data?.filter((a) => a.app !== "platform").length === 0 && <p className="text-sm text-muted">{t("No app in this tenant declares settings.")}</p>}
       <div className="grid max-w-3xl gap-3">
-        {settings.data?.map((a) => (
+        {settings.data?.filter((a) => a.app !== "platform").map((a) => ( // the tenant's own settings are the Organisation page's
           <Panel key={a.app} title={<span className="font-mono">{a.app}</span>}>
             <div className="grid gap-3">
               {a.settings.map((s) => {

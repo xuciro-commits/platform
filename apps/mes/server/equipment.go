@@ -49,7 +49,7 @@ func resourceOfEvent(id string) string { resource, _, _ := strings.Cut(id, "#");
 func (p *Plant) DeliverStates(gateway platform.Caller, b StateBatch, now time.Time) (*pb.FactRecord, *kernel.Error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if gateway.Tenant != p.tenant || roleOf(gateway) != Gateway && !gateway.Replaying {
+	if gateway.Tenant != p.tenant || !holds(gateway, Gateway) && !gateway.Replaying {
 		return nil, denied
 	}
 	if b.BatchID == "" || b.Resource == "" || len(b.Samples) == 0 || p.resourceLine(b.Resource) == "" {

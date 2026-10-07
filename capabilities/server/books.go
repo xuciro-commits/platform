@@ -45,7 +45,11 @@ func (t *Tenant) journalEffects(e platform.Event) []platform.Effect {
 			inputs := map[string]any{}
 			json.Unmarshal(s.GetPayload(), &inputs)
 			at := e.Record.GetRecordedTime().AsTime()
-			entry, err := journal.Entry(e.Record.GetChangeId(), record, inputs, s.GetPrincipalId(), at)
+			today := at.UTC().Format(time.DateOnly)
+			if who, ok := t.member(s.GetPrincipalId()); ok {
+				today = who.Today(at) // the posting date is the decider's day (ADR-0079 §3)
+			}
+			entry, err := journal.Entry(e.Record.GetChangeId(), record, inputs, s.GetPrincipalId(), at, today)
 			if err != nil {
 				entry["error"] = err.Error()
 			}

@@ -7,8 +7,11 @@
 import "./i18n";
 import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/app";
 import { Button, Card, PageHeader, useWorkspace, type NavSection, type View, t } from "@platform/ui";
-import { ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Cable, Database, FlaskConical, Grid3x3, History, MessageSquare, Network, PlugZap, Route, Server, SlidersHorizontal, Upload, Users, Workflow } from "lucide-react";
+import { ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, CircleUser, Database, FlaskConical, Grid3x3, History, KeyRound, MessageSquare, Network, PlugZap, Route, Server, SlidersHorizontal, Upload, Users, Workflow } from "lucide-react";
 import { Members, MemberDetail } from "./people";
+import { Permissions } from "./permissions";
+import { MyAccount } from "./account";
+import { Organisation } from "./organisation";
 import { Enterprise } from "./enterprise";
 import { Apps, Matrix, Protocols } from "./apps";
 import { Automation, Integrations, AppSettingsView, Audit } from "./operations";
@@ -24,9 +27,10 @@ const auditor = (host: Host) => host.role("platform") === "auditor";
 function controlPanelNavigation(host: Host): NavSection[] {
   const item = (label: string, icon: React.ReactNode, view: string) => ({ label, icon, route: { view } });
   const sections: NavSection[] = [
-    { label: t("Overview"), items: [item(t("Control Panel"), <SlidersHorizontal />, "control-panel")] },
+    { label: t("Overview"), items: [item(t("Control Panel"), <SlidersHorizontal />, "control-panel"), item(t("My account"), <CircleUser />, "account")] },
     { label: t("Identity and access"), items: [
-      ...(admin(host) || auditor(host) ? [item(t("Members"), <Users />, "members")] : []),
+      ...(admin(host) ? [item(t("Organisation"), <Building2 />, "organisation")] : []),
+      ...(admin(host) || auditor(host) ? [item(t("Members"), <Users />, "members"), item(t("Roles and permissions"), <KeyRound />, "permissions")] : []),
       ...(admin(host) || host.role("enterprise") ? [item(t("Enterprise"), <Network />, "enterprise")] : []),
     ] },
     { label: t("Packages and capabilities"), items: [
@@ -55,8 +59,11 @@ function ControlPanelOverview() {
 
 const controlPanelViews: View[] = [
   { id: "control-panel", title: () => t("Control Panel"), render: () => <ControlPanelOverview /> },
+  { id: "account", title: () => t("My account"), render: () => <MyAccount /> },
+  { id: "organisation", title: () => t("Organisation"), render: () => <Organisation /> },
   { id: "members", title: () => t("Members"), render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
+  { id: "permissions", title: () => t("Roles and permissions"), render: () => <Permissions /> },
   { id: "enterprise", title: () => t("Enterprise"), render: () => <Enterprise /> },
   { id: "apps", title: () => t("Installed packages"), render: () => <Apps /> },
   { id: "matrix", title: () => t("Capability matrix"), render: () => <Matrix /> },
@@ -72,7 +79,7 @@ export const controlPanel = defineApp({
   surface: "tenant",
   category: "govern",
   description: t("Members, organisation, installed packages, connections, models and the audit trail."),
-  for: (host) => ["platform", "enterprise"].some((owner) => !!host.role(owner)) || host.role("ai") === "admin",
+  for: () => true, // every member has an account here (ADR-0079); the rest of the panel follows their roles
   title: t("Control Panel"),
   icon: <SlidersHorizontal />,
   home: { view: "control-panel" },

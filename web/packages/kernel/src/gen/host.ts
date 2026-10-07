@@ -25,6 +25,46 @@ export type AIUsage = {
   totals: Total[];
 };
 
+export type AccessConfig = {
+  roles: CustomRole[];
+  policies: PolicyRecord[];
+  teams: Team[];
+};
+
+export type Account = {
+  member: string;
+  displayName?: string;
+  givenName?: string;
+  familyName?: string;
+  title?: string;
+  pronouns?: string;
+  email?: string;
+  phone?: string;
+  language?: string;
+  timezone?: string;
+  dateFormat?: string;
+  numberFormat?: string;
+  weekStart?: string;
+  inApp?: boolean;
+  mail?: boolean;
+  digest?: string;
+  quietFrom?: string;
+  quietTo?: string;
+  homePage?: string;
+  theme?: string;
+  density?: string;
+  lastSeen?: string;
+  effective: {
+    language: string;
+    timezone: string;
+    dateFormat: string;
+    numberFormat: string;
+    weekStart: string;
+    email: string;
+    digest: string;
+  };
+};
+
 export type Action = {
   schema: string;
   target: string;
@@ -173,6 +213,14 @@ export type AppInfo = {
   consumes: string[];
   emits: EffectKind[];
   interfaces: Interface[];
+};
+
+export type AppPermissions = {
+  app: string;
+  title: string;
+  reads: string[];
+  everyone: string[];
+  roles: RolePermissions[];
 };
 
 export type AppSettings = {
@@ -544,6 +592,21 @@ export type Contribution = {
   state: string;
 };
 
+export type CreateTenantRequest = {
+  id: string;
+  name: string;
+  template?: string;
+  admin: string;
+  settings?: Record<string, string>;
+};
+
+export type CustomRole = {
+  id: string;
+  app: string;
+  title: string;
+  actions: string[];
+};
+
 export type Definition = {
   contentVersion?: string;
   propertyType?: PropertyType;
@@ -698,6 +761,15 @@ export type ErrorBody = {
   detail?: string;
 };
 
+export type Explanation = {
+  member: string;
+  permission: string;
+  app: string;
+  roles: string[];
+  allowed: string[];
+  verdict: Verdict;
+};
+
 export type Field = {
   name: string;
   type: string;
@@ -818,6 +890,18 @@ export type FunctionRun = {
   servedModel?: string;
   sources: string[];
   withheld?: boolean;
+};
+
+export type Grant = {
+  app: string;
+  role: string;
+  unit?: string;
+  structure?: string;
+  from?: string;
+  until?: string;
+  by?: string;
+  reason?: string;
+  at?: string;
 };
 
 export type GridCell = {
@@ -1063,23 +1147,34 @@ export type MeView = {
   languages: string[];
   preferred?: string;
   currency: string;
+  account: Account;
+  tenant: TenantRecord;
 };
 
 export type Member = {
   id: string;
   tenant: string;
   roles: Record<string, string>;
+  grants?: Grant[];
+  status?: string;
+  scopes?: string[];
   agent?: boolean;
   language?: string;
+  timezone?: string;
 };
 
 export type MemberView = {
   id: string;
   tenant: string;
   roles: Record<string, string>;
+  grants?: Grant[];
+  status?: string;
+  scopes?: string[];
   agent?: boolean;
   language?: string;
+  timezone?: string;
   subjects: string[];
+  profile: Profile;
 };
 
 export type Membership = {
@@ -1888,12 +1983,28 @@ export type PatternInfo = {
   preview: Preview;
 };
 
+export type PermissionAction = {
+  id: string;
+  title: string;
+  scope: string;
+};
+
 export type PersonalRead = {
   at: string;
   member: string;
   type: string;
   ids: string[];
   fields: string[];
+};
+
+export type PolicyRecord = {
+  id: string;
+  title: string;
+  effect: string;
+  permission: string;
+  where?: Record<string, string>;
+  from?: string;
+  until?: string;
 };
 
 export type Precheck = {
@@ -1986,6 +2097,31 @@ export type ProcessStep = {
   untilSeconds?: number;
   flow?: string;
   flowVersion?: number;
+};
+
+export type Profile = {
+  member: string;
+  displayName?: string;
+  givenName?: string;
+  familyName?: string;
+  title?: string;
+  pronouns?: string;
+  email?: string;
+  phone?: string;
+  language?: string;
+  timezone?: string;
+  dateFormat?: string;
+  numberFormat?: string;
+  weekStart?: string;
+  inApp?: boolean;
+  mail?: boolean;
+  digest?: string;
+  quietFrom?: string;
+  quietTo?: string;
+  homePage?: string;
+  theme?: string;
+  density?: string;
+  lastSeen?: string;
 };
 
 export type ProfileEntry = {
@@ -2231,6 +2367,12 @@ export type RetainedArtifact = {
   at: string;
 };
 
+export type RolePermissions = {
+  role: string;
+  holders: number;
+  actions: PermissionAction[];
+};
+
 export type RunStep = {
   at: string;
   tool: string;
@@ -2401,6 +2543,16 @@ export type Section = {
 export type SelectionVariable = {
   name: string;
   object: AssetRef;
+};
+
+export type Session = {
+  id: string;
+  kind: string;
+  token?: string;
+  agent?: string;
+  first: string;
+  last: string;
+  current: boolean;
 };
 
 export type SettingValue = {
@@ -2642,6 +2794,13 @@ export type TaskSummary = {
   answer?: string;
 };
 
+export type Team = {
+  id: string;
+  name: string;
+  members: string[];
+  grants: Grant[];
+};
+
 export type TenantHealth = {
   status: string;
   recoveryError?: string;
@@ -2655,6 +2814,24 @@ export type TenantHealth = {
   openBreakers: number;
   connectorsFailing: number;
   endpointsFailing: number;
+};
+
+export type TenantRecord = {
+  id: string;
+  name: string;
+  settings: Record<string, string>;
+  apps: string[];
+  members: number;
+  status: string;
+  since?: string;
+};
+
+export type TenantTemplate = {
+  name: string;
+  title: string;
+  description?: string;
+  settings?: Record<string, string>;
+  adminRoles?: Record<string, string>;
 };
 
 export type Token = {
@@ -2673,6 +2850,16 @@ export type Token = {
   operation?: string;
   loop?: LoopFrame;
   results?: Record<string, unknown>;
+};
+
+export type TokenView = {
+  id: string;
+  label: string;
+  scopes: string[];
+  until?: string;
+  issued: string;
+  lastUsed?: string;
+  expired: boolean;
 };
 
 export type Tool = {
@@ -2783,6 +2970,14 @@ export type Vendor = {
   name: string;
   baseUrl: string;
   wire: string;
+};
+
+export type Verdict = {
+  allow: boolean;
+  rule: string;
+  reason: string;
+  role?: string;
+  policy?: string;
 };
 
 export type View = {

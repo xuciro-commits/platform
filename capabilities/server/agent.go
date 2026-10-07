@@ -638,7 +638,7 @@ func (a *Agents) changedDefinition(run AgentRunRecord, d *agentDef) bool {
 }
 
 func visibleAgentInstructions(c platform.Caller, d *agentDef) string {
-	if d.app == build.ID && c.Roles[AgentApp] != AgentAdmin && c.Roles[build.ID] != build.Builder {
+	if d.app == build.ID && !c.Holds(AgentApp, AgentAdmin) && !c.Holds(build.ID, build.Builder) {
 		return ""
 	}
 	return d.Instructions
