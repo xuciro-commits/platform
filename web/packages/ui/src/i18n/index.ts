@@ -3,7 +3,7 @@
 // host as Accept-Language so declarations arrive translated. Every package
 // registers its own dictionary, keyed by the English source text: a missing
 // translation shows English.
-import zhCN from "./i18n/zh-CN";
+import zhCN from "./zh-CN";
 
 export type Dictionary = Record<string, string>;
 

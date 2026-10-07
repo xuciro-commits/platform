@@ -1,5 +1,5 @@
 import { Button, FlowView, t, useWorkspace, type FlowDefinition, type FlowInstanceData } from "@platform/ui";
-import { ChainGraph, useHost, useOpenRecord, useReadQuery } from "./index";
+import { ChainGraph, useHost, useOpenRecord, useReadQuery } from "../index";
 
 /** One runtime record view for every member; original reads/actions authorize access. */
 export function FlowInstanceView({ id }: { id: string }) {

@@ -1,6 +1,6 @@
 import {Panel,RecordPage,RecordStatus,RecordLinks,t,type EntityRecord,type RecordSource} from '@platform/ui';
 import type {Api} from '@platform/kernel';
-import {NewActions,RecordActions} from '../actions';
+import {NewActions,RecordActions} from '../actions/actions';
 import {useOpenRecord} from '../index';
 import {pageVariableContract} from '../runtime/PageRuntime';
 type RecordPorts={source?:RecordSource;object:string;record?:EntityRecord};

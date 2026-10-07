@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { layout } from "./graph/Graph";
+import { layout } from "./Graph";
 
 const n = (...ids: string[]) => ids.map((id) => ({ id, label: id }));
 

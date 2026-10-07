@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {PropertyList,t,type EntityRecord} from '@platform/ui';
 import type {Api} from '@platform/kernel';
 import {GeneratedForm,newId,useHost,useInvokeCapability} from '../index';
-import {prefixOf} from '../actions';
+import {prefixOf} from '../actions/actions';
 export type FormProps={object:string;parentObject:string;config:Pick<Api.Section,'fields'|'inputs'|'relation'>;live:boolean;master?:EntityRecord};
 export function CreateFormRenderer({object:type,parentObject:parentType,config:section,live,master}:FormProps) {
   const { decide, source } = useHost();

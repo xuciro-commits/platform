@@ -4,7 +4,7 @@ import {ExternalFrame,Panel,t} from "@platform/ui";
 import {pageUIManifest,type Api} from "@platform/kernel";
 const limits=pageUIManifest.runtime.embedding;
 import {useHost} from "../index";
-import {ComposedPage} from "../sections";
+import {ComposedPage} from "../pages/sections";
 import {checkPortValues,navigationValues,readPageEnvelope} from "../runtime/page-values";
 import type {VariableResult} from "../runtime/variables";
 import {PageEmbeddingBudget,pageEmbeddingCost} from "../runtime/embedding-budget";

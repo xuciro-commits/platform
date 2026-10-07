@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateCanvasConnection, type CanvasEdge, type CanvasNode, type NodeCatalog } from "./graph/NodeCanvas";
+import { validateCanvasConnection, type CanvasEdge, type CanvasNode, type NodeCatalog } from "./NodeCanvas";
 
 const catalog: NodeCatalog = [
   { id: "state", title: "State", category: "lifecycle", inputs: [{ id: "result", label: "Result", type: "result" }], outputs: [{ id: "take", label: "Take", type: "start" }] },

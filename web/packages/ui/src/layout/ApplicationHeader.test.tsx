@@ -1,7 +1,7 @@
 import {cleanup,fireEvent,render,screen,within} from "@testing-library/react";
 import {afterEach,expect,it} from "vitest";
 import {ApplicationHeader} from "./ApplicationHeader";
-import {useTheme} from "../theme";
+import {useTheme} from "../themes/theme";
 
 afterEach(()=>{cleanup();delete document.documentElement.dataset.theme;});
 it("keeps declared page order, invokes native callbacks and preserves vertical collapse",()=>{

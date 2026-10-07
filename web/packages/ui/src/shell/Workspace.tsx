@@ -1,4 +1,4 @@
-import {useTheme} from "../theme";
+import {useTheme} from "../themes/theme";
 import { Command } from "cmdk";
 import { DockviewDefaultTab, DockviewReact, themeLight,themeDark, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps } from "dockview-react";
 import { Bell, ChevronDown, Clock, Grid2x2, Home as HomeIcon, LayoutGrid, PanelLeft, Search, Sparkles, Star } from "lucide-react";

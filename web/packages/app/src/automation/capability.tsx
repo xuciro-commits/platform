@@ -1,7 +1,7 @@
 import { type Api } from "@platform/kernel";
 import { Button, Panel, Textarea, t, type EntityRecord } from "@platform/ui";
 import { useEffect, useState } from "react";
-import { useInvokeCapability, useReadQuery } from "./index";
+import { useInvokeCapability, useReadQuery } from "../index";
 
 function example(schema?: Api.ValueSchema, depth = 0): unknown {
   if (!schema || depth > 12) return null;

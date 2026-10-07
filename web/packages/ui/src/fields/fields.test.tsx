@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { DataTable, RecordForm, applyFilters, columnsFor, defineEntity, field, recordSchema } from "./index";
+import { DataTable, RecordForm, applyFilters, columnsFor, defineEntity, field, recordSchema } from "../index";
 
 afterEach(cleanup);
 Element.prototype.getBoundingClientRect = () => ({ width: 800, height: 280, top: 0, left: 0, right: 800, bottom: 280, x: 0, y: 0, toJSON: () => ({}) });

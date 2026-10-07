@@ -1,5 +1,5 @@
 import type { Api } from "@platform/kernel";
-import { pageUIProfile, widgetContract } from "./widgets/registry";
+import { pageUIProfile, widgetContract } from "../widgets/registry";
 
 type Document = Api.PageDocument;
 
