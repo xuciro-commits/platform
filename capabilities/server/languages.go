@@ -354,3 +354,7 @@ func (p pattern) splits(s string, limit int) [][]string {
 	}
 	return out
 }
+
+// Say is the translation of s into lang for the apps' servers (apps/*/server),
+// which only know the Tenant; the dictionaries belong to the translator.
+func (t *Tenant) Say(lang, s string) string { return t.i18n.Say(lang, s) }
