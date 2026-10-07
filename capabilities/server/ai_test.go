@@ -352,7 +352,7 @@ func TestAILimits(t *testing.T) {
 	expect("the model was not called", fmt.Sprint(calls.Load()-before), "0")
 	decide(ai.ID, ai.SchemaLimitSet, ai.LimitType, "bo", map[string]int{"dailyTokens": 1000})
 	expect("his own limit", chat("bo"), "ok")
-	expect("said in Chinese", tn.Say("zh-CN", "bo used its 40 tokens for today"), "bo 今天的 40 个 token 已用完")
+	expect("said in Chinese", tn.i18n.Say("zh-CN", "bo used its 40 tokens for today"), "bo 今天的 40 个 token 已用完")
 
 	// Calls a minute, whatever the tokens.
 	decide(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingPerMinute, map[string]string{"value": "2"})

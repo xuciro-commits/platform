@@ -53,8 +53,7 @@ type Tenant struct {
 	memStore        journal.Memory // the Store without one
 	knowledge       glossary       // the knowledge app: documents are searched, terms read (ADR-0022)
 	index           index          // passages cut from documents and knowledge fields
-	dictionaries    sync.Map       // language → map[string]string, merged from the platform's and the apps' (ADR-0023)
-	patternCache    sync.Map       // language → []pattern
+	i18n            translator     // says declarations and messages in a language (ADR-0023)
 	agentRun        string         // the run whose agent is submitting, under mu: its effects name it
 	mu              sync.Mutex
 	fault           atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
@@ -169,6 +168,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	t := &Tenant{ID: id, apps: apps, refusals: map[string]refusedResult{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
 		connectors: kernel.NewConnectors(), records: newRecordStore(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}}
 	t.staged = stagedChannel{tenant: id, files: t.files}
+	t.i18n = translator{apps: func() []platform.App { return t.apps }}
 	claim := func(name string, a platform.App) error {
 		if other := t.owner[name]; other != nil {
 			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other.Manifest().ID, a.Manifest().ID)

@@ -295,7 +295,7 @@ func (h *Host) Handler() http.Handler {
 			return
 		}
 		record, err := t.Submit(m, sub, h.Now())
-		Reply(w, record, t.said(err, t.Language(m, r)))
+		Reply(w, record, t.i18n.said(err, t.Language(m, r)))
 	})
 	handle(Route{Pattern: "POST /v1/connectors/{input}", Summary: "Deliver a connector's batch or page as the connector's member (K8)", Body: json.RawMessage{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(r.Body)
@@ -318,11 +318,11 @@ func (h *Host) Handler() http.Handler {
 	metadata(Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: MeView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		lang := t.Language(m, r)
 		view := MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
-			Language: lang, Languages: t.languages(), Preferred: m.Language, Currency: t.setting(t.automation(PlatformApp, false), SettingCurrency)}
+			Language: lang, Languages: t.i18n.languages(), Preferred: m.Language, Currency: t.setting(t.automation(PlatformApp, false), SettingCurrency)}
 		if d, ok := t.app(PlatformApp).(*Console); ok {
 			view.Account, view.Tenant = d.Account(m.ID), d.tenantRecord()
 		}
-		WriteJSON(w, http.StatusOK, t.Translate(view, lang))
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(view, lang))
 	})
 	metadata(Route{Pattern: "GET /v1/declarations", Summary: "The data classes and their authorities the tenant's apps declare (K5)", Answer: []*pb.AuthorityDeclaration{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		out := []json.RawMessage{}
@@ -371,13 +371,13 @@ func (h *Host) Handler() http.Handler {
 		WriteJSON(w, http.StatusOK, map[string]string{"secret": secret})
 	})
 	metadata(Route{Pattern: "GET /v1/actions", Summary: "The caller's catalog: the actions their roles permit, in their language (ADR-0008)", Answer: []platform.Action{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.Translate(t.Catalog(m), t.Language(m, r)))
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Catalog(m), t.Language(m, r)))
 	})
 	metadata(Route{Pattern: "GET /v1/apps", Summary: "The tenant's apps from their manifests", Answer: []AppInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.Translate(t.Apps(), t.Language(m, r)))
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Apps(), t.Language(m, r)))
 	})
 	metadata(Route{Pattern: "GET /v1/protocols", Summary: "The protocols apps provide and consume, and the provider bound to each (ADR-0011)", Answer: []ProtocolInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.Translate(t.Protocols(), t.Language(m, r)))
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Protocols(), t.Language(m, r)))
 	})
 	handle(Route{Pattern: "POST /v1/protocols/{protocol}/{version}/{action}", Summary: "Call a protocol's action at the provider the tenant binds", Body: ProtocolCall{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var call struct {
@@ -420,7 +420,7 @@ func (h *Host) Handler() http.Handler {
 			case err != nil && !started:
 				Reply(w, nil, err)
 			case failure != nil && failure.Quota && !started:
-				WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.Say(t.Language(m, r), failure.Detail)}})
+				WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
 			case failure != nil:
 				event("error", map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": failure.Detail, "usage": answer.Usage})
 			default:
@@ -433,7 +433,7 @@ func (h *Host) Handler() http.Handler {
 		case err != nil:
 			Reply(w, nil, err)
 		case failure != nil && failure.Quota:
-			WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.Say(t.Language(m, r), failure.Detail)}})
+			WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
 		case failure != nil:
 			WriteJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": failure.Detail}, "usage": answer.Usage})
 		default:
@@ -455,7 +455,7 @@ func (h *Host) Handler() http.Handler {
 		WriteJSON(w, http.StatusOK, ai.Vendors)
 	})
 	metadata(Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language (ADR-0016, ADR-0023)", Answer: []platform.EntityInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.Translate(t.Entities(m), t.Language(m, r)))
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Entities(m), t.Language(m, r)))
 	})
 	handle(Route{Pattern: "GET /v1/applications/{app}/{name}/runs", Summary: "Authorized runs related to current or retained application resources; shared use does not imply exclusive application origin", Answer: ApplicationRunPage{}, Query: []Param{{"offset", "Nonnegative run offset"}, {"limit", "1–100, default 50"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		offset, limit := pageBounds(r, 0, 50)
@@ -467,7 +467,7 @@ func (h *Host) Handler() http.Handler {
 		WriteJSON(w, http.StatusOK, answer)
 	})
 	metadata(Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies (ADR-0032)", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.Translate(t.Definitions(m), t.Language(m, r)))
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Definitions(m), t.Language(m, r)))
 	})
 	metadata(Route{Pattern: "GET /v1/pages/{app}/{name}/{contentVersion}", Summary: "Read exact published page content through current member discovery permissions (ADR-0046)", Answer: platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.PageContentDefinition(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetPage, Name: r.PathValue("name")}, r.PathValue("contentVersion"))
@@ -475,10 +475,10 @@ func (h *Host) Handler() http.Handler {
 			Reply(w, nil, err)
 			return
 		}
-		WriteJSON(w, http.StatusOK, t.Translate(answer, t.Language(m, r)))
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
 	})
 	metadata(Route{Pattern: "GET /v1/capabilities", Summary: "Typed Block projections of the caller's installed owner capabilities (ADR-0044)", Answer: []platform.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.Translate(t.Capabilities(m), t.Language(m, r)))
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Capabilities(m), t.Language(m, r)))
 	})
 	metadata(Route{Pattern: "GET /v1/capabilities/{app}/{kind}/{name}", Summary: "Read a callable owner's exact retained input/output schema", Query: []Param{{"version", "Retained query/compute/AI ordinal; zero selects code declarations or the installed compute/AI version"}}, Answer: platform.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		version := 0
@@ -495,7 +495,7 @@ func (h *Host) Handler() http.Handler {
 			Reply(w, nil, err)
 			return
 		}
-		WriteJSON(w, http.StatusOK, t.Translate(answer, t.Language(m, r)))
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
 	})
 	handle(Route{Pattern: "POST /v1/capabilities/invoke", Summary: "Route a typed call to its canonical query, action, AI or compute owner", Body: platform.CapabilityInvocation{}, Answer: platform.CapabilityResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var q platform.CapabilityInvocation
@@ -695,7 +695,7 @@ func (h *Host) Handler() http.Handler {
 			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
 			return
 		}
-		WriteJSON(w, http.StatusOK, t.Translate(answer, t.Language(m, r)))
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
 	})
 	handle(Route{Pattern: "POST /v1/releases/candidates", Summary: "Persist exact, immutable bytes for a builder-reviewed candidate; does not activate it (ADR-0039 20a)", Body: ReleaseSaveRequest{}, Answer: ReleaseSaved{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
@@ -981,7 +981,7 @@ func (h *Host) Handler() http.Handler {
 			Reply(w, nil, err)
 			return
 		}
-		if activity, ok := t.TranslateMessages(view.Activity, t.Language(m, r)).([]any); ok {
+		if activity, ok := t.i18n.TranslateMessages(view.Activity, t.Language(m, r)).([]any); ok {
 			view.Activity = activity
 		}
 		WriteJSON(w, http.StatusOK, view)
@@ -994,10 +994,10 @@ func (h *Host) Handler() http.Handler {
 			return
 		}
 		if declarationReads[r.PathValue("read")] {
-			out = t.Translate(out, t.Language(m, r))
+			out = t.i18n.Translate(out, t.Language(m, r))
 		}
 		if messageReads[r.PathValue("read")] {
-			out = t.TranslateMessages(out, t.Language(m, r))
+			out = t.i18n.TranslateMessages(out, t.Language(m, r))
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
