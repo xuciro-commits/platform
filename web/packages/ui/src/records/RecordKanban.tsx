@@ -8,7 +8,7 @@ import type {EntityRecord} from "./Records";
 
 export type KanbanLane={name:string;title:string;tone?:Tone};
 export type KanbanMove={schema:string;title:string;from:string[];to:string;input?:string};
-export const kanbanMoveKey=(move:KanbanMove)=>move.input?`${move.schema}/${move.to}`:move.schema;
+const kanbanMoveKey=(move:KanbanMove)=>move.input?`${move.schema}/${move.to}`:move.schema;
 export function kanbanMove(record:EntityRecord,field:string,target:string,moves:KanbanMove[]) {
  const matching=moves.filter(m=>m.from.includes(String(record[field]))&&m.to===target&&m.to!==record[field]);
  return matching.length===1?matching[0]:undefined;

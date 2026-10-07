@@ -3,7 +3,7 @@ import type {ImportTarget} from "./compile";
 
 export const observationSourceTypes=["TelemetryTable","TelemetryStats","ObservabilityChart","TimeSeriesAnalysis"];
 export type ObservationImportBinding={migration:"actual-business-observations"|"";sampleQuery:Api.AssetBinding;timeField:string;signals:(Api.PageObservationSignal&{sourceIndex?:number})[];metadata?:Api.PageObservationMetadata;assetField?:string;contextQuery?:Api.AssetBinding;assetConsumers?:"original-producer"|"observation-table"};
-export function retainedObservationQuery(target:Pick<ImportTarget,"definitions">,binding:Api.AssetBinding|undefined):Api.NamedQuery|undefined {
+function retainedObservationQuery(target:Pick<ImportTarget,"definitions">,binding:Api.AssetBinding|undefined):Api.NamedQuery|undefined {
  if(!binding||!binding.ref||binding.ref.kind!=="query"||typeof binding.sourceVersion!=="string"||!binding.sourceVersion||Object.keys(binding).some(k=>!["ref","sourceVersion"].includes(k))||Object.keys(binding.ref).some(k=>!["app","kind","name"].includes(k)))return;
  const d=target.definitions?.find(d=>d.ref.app===binding.ref.app&&d.ref.kind==="query"&&d.ref.name===binding.ref.name);
  return d?.queryVersions?.[binding.sourceVersion]??(d?.version===binding.sourceVersion?d.query:undefined);

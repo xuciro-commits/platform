@@ -51,7 +51,7 @@ export function sourceCapability(step: WorkflowStep, capabilities: Capability[])
     }
   });
 }
-export function stepPaths(step: WorkflowStep): { port: string; title: string; target: string }[] {
+function stepPaths(step: WorkflowStep): { port: string; title: string; target: string }[] {
   const paths = [
     ...(step.next ? [{ port: "next", title: t(step.kind === "switch" ? "Default" : step.kind === "foreach" || step.kind === "while" ? "Done" : "Continue"), target: step.next }] : []),
     ...(step.error ? [{ port: "error", title: t("Error"), target: step.error }] : []),

@@ -1,6 +1,6 @@
 export type RuleInput={name:string;type:string;choices?:string;required?:boolean;ref?:string;minLength?:number};
 export type StateAction={from:string[];to?:string;toInput?:string;inputs?:RuleInput[];approval?:unknown};
-export const ruleChoices=(value:string|undefined)=>[...new Set((value??'').split(',').map(v=>v.trim()).filter(Boolean))];
+const ruleChoices=(value:string|undefined)=>[...new Set((value??'').split(',').map(v=>v.trim()).filter(Boolean))];
 /** The original declaration owns destinations; canvas gestures cannot rewrite choice inputs. */
 export function actionDestinations(a:StateAction):string[]{return a.toInput?ruleChoices(a.inputs?.find(i=>i.name===a.toInput)?.choices):a.to?[a.to]:a.from;}
 export function actionResultEdges(a:StateAction):string[]{return a.toInput||a.to?actionDestinations(a):[];}

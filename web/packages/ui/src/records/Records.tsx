@@ -685,7 +685,7 @@ export function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer
 }
 
 /** An approval chain drawn as a graph (#122): the requester, each level with its approvers and who decided, and how it ended. */
-export function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
+function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
   const nodes: GraphNode[] = [{ id: "requester", label: a.requester, detail: t("asked"), tone: "success" }];
   const edges: GraphEdge[] = [];
   let previous = "requester";

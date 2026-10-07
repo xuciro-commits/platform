@@ -60,7 +60,7 @@ export type OwnedResource = { kind: ResourceKindInfo; record?: ResourceRecord; r
 
 /** Inventories of every resource type, keyed by kind, resolved to the records a project names — and to
  * what the host has installed, so a published resource without a tenant draft is never called missing. */
-export function useProjectResources(project?: Project) {
+function useProjectResources(project?: Project) {
   const { definitions } = useHost();
   const inventories = Object.fromEntries(resourceKinds.map((kind) => [kind.kind, useRecordInventory<ResourceRecord>(kind.type)])) as Record<string, ReturnType<typeof useRecordInventory<ResourceRecord>>>;
   const owned = useMemo(() => {
@@ -103,7 +103,7 @@ export function useProjectResources(project?: Project) {
 }
 
 /** `+ New ▾`: create a resource and add it to the project in one step. */
-export function NewResourceMenu({ onCreated, children, disabled }: { onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
+function NewResourceMenu({ onCreated, children, disabled }: { onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
   const { role } = useHost();
   const creators = Object.fromEntries(resourceKinds.map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target))])) as Record<string, ReturnType<typeof useNewRecord>>;
   if (role("build") !== "builder") return null;

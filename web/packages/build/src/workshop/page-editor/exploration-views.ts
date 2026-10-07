@@ -3,9 +3,9 @@ import {loopOwner,overlayOwner} from "../page-layout";
 import {collaborationRecordSource} from "./collaboration";
 import type {AuthoringSection} from "./draft";
 type Info={app?:string;fields:{name:string;type:string;choices?:string[]}[]};
-export const explorationWidgets=["resource-list","asset-directory","graph-explorer","vertex-graph"];
-export const sameAsset=(a:Api.AssetRef|undefined,b:Api.AssetRef|undefined)=>!!a&&!!b&&a.app===b.app&&a.kind===b.kind&&a.name===b.name;
-export function retainedExplorationAsset(definitions:Api.Definition[],b:Api.AssetBinding|undefined){if(!b?.sourceVersion)return undefined;const d=definitions.find(d=>sameAsset(d.ref,b.ref));return d&&(d.version===b.sourceVersion||b.ref.kind==="link-type"&&d.linkVersions?.[b.sourceVersion]||b.ref.kind==="query"&&d.queryVersions?.[b.sourceVersion]||b.ref.kind==="property"&&d.propertyVersions?.[b.sourceVersion])?d:undefined;}
+const explorationWidgets=["resource-list","asset-directory","graph-explorer","vertex-graph"];
+const sameAsset=(a:Api.AssetRef|undefined,b:Api.AssetRef|undefined)=>!!a&&!!b&&a.app===b.app&&a.kind===b.kind&&a.name===b.name;
+function retainedExplorationAsset(definitions:Api.Definition[],b:Api.AssetBinding|undefined){if(!b?.sourceVersion)return undefined;const d=definitions.find(d=>sameAsset(d.ref,b.ref));return d&&(d.version===b.sourceVersion||b.ref.kind==="link-type"&&d.linkVersions?.[b.sourceVersion]||b.ref.kind==="query"&&d.queryVersions?.[b.sourceVersion]||b.ref.kind==="property"&&d.propertyVersions?.[b.sourceVersion])?d:undefined;}
 export function retainedExplorationLink(definitions:Api.Definition[],b:Api.AssetBinding|undefined){const d=retainedExplorationAsset(definitions,b);return b?.ref.kind==="link-type"?(d?.linkVersions?.[b.sourceVersion]??(d?.version===b.sourceVersion?d.linkType:undefined)):undefined;}
 export function explorationViewProblem(document:Api.PageDocument,sections:AuthoringSection[],s:AuthoringSection,pageObject:string,entity:(name:string)=>Info|undefined,definitions:Api.Definition[]):boolean {
  if(!explorationWidgets.includes(s.widget))return false;

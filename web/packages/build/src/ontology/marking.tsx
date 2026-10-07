@@ -2,7 +2,7 @@ import { Select, Tag, t } from "@platform/ui";
 
 // Markings (ADR-0075): a bounded classification that travels with data from
 // connection to dataset to pipeline. Unmarked, internal, confidential, restricted.
-export const MARKINGS = ["", "internal", "confidential", "restricted"] as const;
+const MARKINGS = ["", "internal", "confidential", "restricted"] as const;
 const tones: Record<string, "warning" | "danger" | undefined> = { confidential: "warning", restricted: "danger" };
 
 export function MarkingTag({ marking }: { marking?: string }) {

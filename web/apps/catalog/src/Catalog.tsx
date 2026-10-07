@@ -15,7 +15,7 @@ import { CatalogPreview } from "./Preview";
 export { CatalogPreview };
 
 const index = data as CatalogIndex;
-export const catalogLayers = ["Foundations", "Primitives", "Composites", "Semantic UI", "Patterns", "Scenarios"];
+const catalogLayers = ["Foundations", "Primitives", "Composites", "Semantic UI", "Patterns", "Scenarios"];
 export function catalogTitle(id?: string, layer?: string): string {
   const entry = index.entries.find((asset) => asset.id === id);
   if (entry) return localizeEntry(index, entry, language()).name;

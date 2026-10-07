@@ -8,7 +8,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useDirectInstall } from "./release-profile";
 import { useApplicationScope } from "../projects/application-scope";
 
-export const draftStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" }, archived: { label: t("Archived"), tone: "neutral" } });
+const draftStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" }, archived: { label: t("Archived"), tone: "neutral" } });
 
 /** Save a dirty, valid draft after a pause; the caller's `save` owns locking and refetch. */
 export function useAutoSave({ enabled = true, dirty, invalid = false, busy = false, save, delay = 900 }: {
