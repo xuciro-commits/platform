@@ -80,7 +80,7 @@ capabilities/server/
 |---|---|---|---|
 | **0 盘点** | `scripts/cleanup-inventory.sh`：包/文件/函数长度、`Tenant` 方法数、死导出（Go 用 `go vet` + 自写符号扫描，Web 用上一轮脚本固化）；本 ADR §0 数字由它产出 | 无 | 脚本进 `scripts/`，`verify.sh` 可选步骤 |
 | **1 零依赖搬家** | `journal/`、`idp/`、`platform/pageui/`、`decimal_condition`→`platform` 值包；web `ui`/`app` 顶层目录化 | 低（纯移动，编译器把关） | 全绿；`host.ts` 零 diff |
-| **2 组件化 Tenant（上半）** | `compute/`、`agents/`、`release/`（含 `simulate_*`，它是 release 候选的测试封存）：先在根包内把 `func (t *Tenant)` 改成组件方法 + 小接口，再 `git mv` 进包。**`accepted/` 不在本波**（曾在回执里口误写入，以本表为准）。每个组件一个提交、一次交接：固定 HEAD + B + 路径/重命名映射 | 中 | `Tenant` 方法数 399 → < 250 |
+| **2 组件化 Tenant（上半）** | `compute/`、`agents/`、`release/`（含 `simulate_*`，它是 release 候选的测试封存）：先在根包内把 `func (t *Tenant)` 改成组件方法 + 小接口，再 `git mv` 进包。**`accepted/` 不在本波**（曾在回执里口误写入，以本表为准）。每个组件一个提交、一次交接：固定 HEAD + B + 路径/重命名映射 | 中 | **退出标准改为状态归属**（第 2 波实测：方法只换接收者是空转）：`Tenant` 结构体字段 80 → < 55，每个组件自有锁或明确"受 t.mu 保护"；方法数作为参考值记录 |
 | **3 组件化 Tenant（下半）** | `accepted/`、`console/`、`integration/`、`pages/` | 高（accepted 与提交管线纠缠） | `Tenant` 方法数 < 120；根包 < 12k 行 |
 | **4 面条与屎** | 长函数拆分；`legacy_*.go` 归集；删替代路径、死符号、"曾经"注释；`definitions.go`/`installed.go` 按组件拆 | 中 | 无 > 150 行函数（登记例外 ≤ 5 个）；§5 清单闭合 |
 | **5 收尾** | `doc.go` 地图、AGENTS.md 目录规则改写、ADR 本表落地状态 | 无 | 本 ADR 状态改为"已落地" |
@@ -109,5 +109,10 @@ capabilities/server/
 | `decimal_condition.go` 一个函数单独成文件 | 变成 `platform.DecimalValue.Condition` | `896f73e` |
 | `@platform/ui` 9 个测试平铺在 src 根、`i18n.ts` 与 `i18n/` 目录分家、`theme.ts` 与 `themes/` 分家 | 测试搬到被测对象旁；`i18n/index.ts`；`themes/theme.ts` | `83c0fa2` |
 | `@platform/app` 11 个顶层文件 | `pages/ actions/ automation/`；`record-actions.test.mjs` 从 `collaboration/` 搬到 `actions/` | `83c0fa2` |
+| 每调用结果通道 5 个 Tenant 方法 + `t.staged` 字段；`StagedResults`/`reclaimStaged` 无人调用 | `stagedChannel` 组件（自有锁，只要 tenant id 与 files）；两个死方法删除 | `0cbb…` wave 2 |
+| 发布状态 4 个字段（candidates/applied/active/sealed）被 9 个文件直接写，不变性检查重复三处 | `releaseStore` 组件：`put/commit/seal` 统一检查 | `4491b80` |
+| `Store==nil` 时 Tenant 自带第二套向量/转录实现（derivedMu/vectorMemory/transcripts） | `journal.Memory` 实现 `Store`，Tenant 只剩 `store()`；~50 行删除 | wave 2 |
+| `seqMu/sequences`、`computeCancels`（借用 opsMu） | `sequences`、`cancels` 组件，自有锁 | `d9e8709` |
+| `languages.go` 把翻译与 AI 术语表混在一起，`dictionaries/patternCache` 挂在 Tenant | `translator` 组件（只依赖 apps 列表），`languages.go` 只剩请求语言/Texts/术语表 | `787cb1c` |
 
 （继续追加）
