@@ -58,8 +58,8 @@ func (*stagedDecision) StagedDecision() {}
 
 func (t *Tenant) newStagedDecision() *stagedDecision {
 	sequences := t.sequences.clone()
+	notices, noticeSeq := t.notices.state()
 	t.opsMu.Lock()
-	notices, noticeSeq := slices.Clone(t.notices), t.noticeSeq
 	descriptors, marks := t.connectors.State()
 	t.opsMu.Unlock()
 	connectors := kernel.NewConnectors()

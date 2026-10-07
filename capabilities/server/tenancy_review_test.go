@@ -108,7 +108,7 @@ func TestAcceptedInvitationIncludesMailIntent(t *testing.T) {
 	if _, err := tn.Submit(admin, sub, now); err == nil {
 		t.Fatal("failed append accepted invite")
 	}
-	if _, ok := tn.Member("new"); ok || len(tn.notices) != 0 || len(tn.outbound) != 0 {
+	if _, ok := tn.Member("new"); ok || len(tn.notices.all) != 0 || len(tn.outbound) != 0 {
 		t.Fatal("failed invite leaked state or intent")
 	}
 	fail = false

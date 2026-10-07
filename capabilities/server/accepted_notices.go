@@ -78,15 +78,14 @@ func (t *Tenant) validateAcceptedNotices(n *acceptedNotices) error {
 	if n == nil {
 		return nil
 	}
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	before, err := canonicalDigest(t.notices)
-	if err != nil || n.Base != t.noticeSeq || n.Before != before || n.Seq < n.Base || len(n.Notices) > noticesKept {
+	current, seq := t.notices.state()
+	before, err := canonicalDigest(current)
+	if err != nil || n.Base != seq || n.Before != before || n.Seq < n.Base || len(n.Notices) > noticesKept {
 		return fmt.Errorf("notification result predecessor differs")
 	}
 	ids := map[string]bool{}
 	prior := map[string]platform.Notification{}
-	for _, x := range t.notices {
+	for _, x := range current {
 		prior[x.ID] = x
 	}
 	for _, x := range n.Notices {
@@ -103,7 +102,7 @@ func (t *Tenant) validateAcceptedNotices(n *acceptedNotices) error {
 	}
 	// The only operations are appending stable numbered notices and marking
 	// existing ones read. Retention may drop a prefix, never an arbitrary row.
-	expected := slices.Clone(t.notices)
+	expected := current
 	for i, x := range expected {
 		if found := slices.IndexFunc(n.Notices, func(n platform.Notification) bool { return n.ID == x.ID }); found >= 0 {
 			expected[i].Read = n.Notices[found].Read
@@ -144,9 +143,9 @@ func (t *Tenant) applyAcceptedNotices(n *acceptedNotices) {
 	if n == nil {
 		return
 	}
+	t.notices.restore(slices.Clone(n.Notices), n.Seq)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	t.notices, t.noticeSeq = slices.Clone(n.Notices), n.Seq
 	t.acted += n.Seq - n.Base
 	for _, planned := range n.Effects {
 		t.outbound = append(t.outbound, &effect{Effect: planned, span: t.current()})

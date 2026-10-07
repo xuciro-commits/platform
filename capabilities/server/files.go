@@ -50,25 +50,13 @@ func (t *Tenant) Upload(m platform.Member, name, contentType string, body io.Rea
 	if err := t.files().Put(context.Background(), t.ID+"/"+hash, data, contentType); err != nil {
 		return Upload{}, http.StatusServiceUnavailable, err
 	}
-	t.opsMu.Lock()
-	if t.uploads == nil {
-		t.uploads = map[string]time.Time{}
-	}
-	t.uploads[hash] = now
-	t.opsMu.Unlock()
+	t.uploads.add(hash, now)
 	return Upload{Hash: hash, Size: len(data), ContentType: contentType, Name: name}, http.StatusOK, nil
 }
 
 // SweepUploads removes bytes uploaded more than a day ago that no file attaches.
 func (t *Tenant) SweepUploads(now time.Time) {
-	t.opsMu.Lock()
-	var old []string
-	for hash, at := range t.uploads {
-		if now.Sub(at) > 24*time.Hour {
-			old = append(old, hash)
-		}
-	}
-	t.opsMu.Unlock()
+	old := t.uploads.olderThan(now, 24*time.Hour)
 	if len(old) == 0 {
 		return
 	}
@@ -78,9 +66,7 @@ func (t *Tenant) SweepUploads(now time.Time) {
 		if !slices.ContainsFunc(attached, func(f files.File) bool { return f.Hash == hash }) {
 			t.files().Delete(context.Background(), t.ID+"/"+hash)
 		}
-		t.opsMu.Lock()
-		delete(t.uploads, hash)
-		t.opsMu.Unlock()
+		t.uploads.forget(hash)
 	}
 }
 

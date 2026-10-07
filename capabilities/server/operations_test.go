@@ -177,7 +177,7 @@ func TestOperations(t *testing.T) {
 	}
 	view := func(tn *Tenant) string {
 		c := tn.Connectors(now)
-		raw, _ := json.Marshal([]any{c[0].Disabled, c[0].LastSeen, tn.notices, tn.Settings()})
+		raw, _ := json.Marshal([]any{c[0].Disabled, c[0].LastSeen, tn.notices.all, tn.Settings()})
 		return string(raw)
 	}
 	if view(again) != view(tn) {

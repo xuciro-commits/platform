@@ -180,7 +180,8 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 		return tenantState{}, nil, 0, err
 	}
 	s.Marks, s.LastError = marks, maps.Clone(t.lastError)
-	s.Notices, s.NoticeSeq, s.Settings, s.Endpoints = slices.Clone(t.notices), t.noticeSeq, maps.Clone(t.settings), t.endpoints
+	s.Notices, s.NoticeSeq = t.notices.state()
+	s.Settings, s.Endpoints = t.settings.clone(), t.endpoints
 	s.Sequences = t.sequences.clone()
 	for _, x := range t.outbound {
 		s.Outbound = append(s.Outbound, effectState{Effect: x.Effect, Since: x.since})
@@ -428,10 +429,9 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if t.lastError == nil {
 		t.lastError = map[string]ConnectorError{}
 	}
-	t.notices, t.noticeSeq, t.settings, t.endpoints = s.Notices, s.NoticeSeq, s.Settings, s.Endpoints
-	if t.settings == nil {
-		t.settings = map[string]string{}
-	}
+	t.notices.restore(s.Notices, s.NoticeSeq)
+	t.settings.restore(s.Settings)
+	t.endpoints = s.Endpoints
 	t.sequences.restore(s.Sequences)
 	t.outbound = nil
 	for _, x := range s.Outbound {

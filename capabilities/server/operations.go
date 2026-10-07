@@ -560,22 +560,18 @@ func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Tim
 	defer t.opsMu.Unlock()
 	var out []string
 	for _, m := range members {
-		if n.Key != "" && slices.ContainsFunc(t.notices, func(x platform.Notification) bool { return x.Member == m && x.App == c.App && x.Key == n.Key }) {
-			continue
-		}
 		to, known := delivery[m]
 		if !known {
 			to = Reach{InApp: true}
 		}
-		t.noticeSeq++
 		x := n
-		x.ID, x.Member, x.App, x.At, x.Read = fmt.Sprintf("n-%d", t.noticeSeq), m, c.App, now, !to.InApp // what the member muted in the workspace is kept read
-		t.notices = append(t.notices, x)
+		x.App, x.At, x.Read = c.App, now, !to.InApp // what the member muted in the workspace is kept read
+		x, posted := t.notices.post(x, m)
+		if !posted {
+			continue
+		}
 		t.mailNotice(x, to)
 		out = append(out, m)
-	}
-	if len(t.notices) > noticesKept {
-		t.notices = t.notices[len(t.notices)-noticesKept:]
 	}
 	t.trimEffects()
 	t.acted += len(out)
@@ -584,15 +580,7 @@ func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Tim
 
 // notificationsFor is member's notifications, newest first.
 func (t *Tenant) notificationsFor(member string) []platform.Notification {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	out := []platform.Notification{}
-	for i := len(t.notices) - 1; i >= 0; i-- {
-		if t.notices[i].Member == member {
-			out = append(out, t.notices[i])
-		}
-	}
-	return out
+	return t.notices.forMember(member)
 }
 
 // App settings.
@@ -612,7 +600,7 @@ func (t *Tenant) setting(c platform.Caller, name string) string {
 	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	if v, ok := t.settings[app+"/"+name]; ok {
+	if v, ok := t.settings.get(app + "/" + name); ok {
 		return v
 	}
 	return a.Manifest().Settings[i].Default
@@ -640,7 +628,7 @@ func (t *Tenant) Settings() []AppSettings {
 		}
 		s := AppSettings{App: m.ID}
 		for _, x := range m.Settings {
-			v, ok := t.settings[m.ID+"/"+x.Name]
+			v, ok := t.settings.get(m.ID + "/" + x.Name)
 			if !ok {
 				v = x.Default
 			}
@@ -715,7 +703,7 @@ func (t *Tenant) decideSetting(_ platform.Caller, s *pb.Submission, _ time.Time)
 	if !a.Manifest().Settings[i].Accepts(p.Value) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.settings[id] = p.Value; t.opsMu.Unlock() }, nil
+	return func(*pb.ChangeRecord) { t.settings.set(id, p.Value) }, nil
 }
 
 func (t *Tenant) decideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
@@ -741,21 +729,12 @@ func (t *Tenant) decideWork(_ platform.Caller, s *pb.Submission, now time.Time) 
 
 func (t *Tenant) decideNotification(c platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
-	t.opsMu.Lock()
-	i := slices.IndexFunc(t.notices, func(x platform.Notification) bool { return x.ID == id })
-	mine := i >= 0 && t.notices[i].Member == c.ID
-	t.opsMu.Unlock()
-	if i < 0 {
+	owner, found := t.notices.owner(id)
+	if !found {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if !mine {
+	if owner != c.ID {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	return func(*pb.ChangeRecord) {
-		t.opsMu.Lock()
-		defer t.opsMu.Unlock()
-		if i := slices.IndexFunc(t.notices, func(x platform.Notification) bool { return x.ID == id }); i >= 0 {
-			t.notices[i].Read = true
-		}
-	}, nil
+	return func(*pb.ChangeRecord) { t.notices.markRead(id) }, nil
 }

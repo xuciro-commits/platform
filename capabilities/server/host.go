@@ -102,10 +102,9 @@ type Tenant struct {
 	connectors  *kernel.Connectors
 	descriptors map[string]*pb.ConnectorDescriptor
 	lastError   map[string]ConnectorError
-	notices     []platform.Notification
-	noticeSeq   int
-	settings    map[string]string // "<app>/<name>" → value
-	sequences   sequences         // number counters (ADR-0024)
+	notices     noticeBoard   // notifications (notices.go)
+	settings    settingValues // "<app>/<name>" → value (settings.go)
+	sequences   sequences     // number counters (ADR-0024)
 	endpoints   []*Endpoint
 	outbound    []*effect
 	// Secrets resolves a secret's name (default: PLATFORM_SECRETS_DIR, then
@@ -129,10 +128,10 @@ type Tenant struct {
 	Compiler      CodeCompiler
 	cancels       cancels // running operations' cancel handles
 	memFiles      memoryFiles
-	uploads       map[string]time.Time // hashes uploaded and when, until attached or swept (volatile)
-	personal      []PersonalRead       // reads of personal data (ADR-0028 D4), volatile
-	probing       bool                 // a submission for approval is being checked, not applied
-	requests      []request            // accepted decisions' requests of other apps, run with their events (ADR-0026)
+	uploads       uploads        // hashes uploaded and not yet attached (uploads.go)
+	personal      []PersonalRead // reads of personal data (ADR-0028 D4), volatile
+	probing       bool           // a submission for approval is being checked, not applied
+	requests      []request      // accepted decisions' requests of other apps, run with their events (ADR-0026)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -166,7 +165,7 @@ func (t *Tenant) remember(e AuditEntry) {
 // protocols no earlier app provides, and manifests the host could not honour.
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	t := &Tenant{ID: id, apps: apps, refusals: map[string]refusedResult{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
-		connectors: kernel.NewConnectors(), records: newRecordStore(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}}
+		connectors: kernel.NewConnectors(), records: newRecordStore(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}}
 	t.staged = stagedChannel{tenant: id, files: t.files}
 	t.i18n = translator{apps: func() []platform.App { return t.apps }}
 	claim := func(name string, a platform.App) error {

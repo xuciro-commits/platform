@@ -100,9 +100,7 @@ func snapshot(t *Tenant) string {
 	for _, e := range t.Endpoints() { // health depends on the secret store, not the journal
 		endpoints = append(endpoints, []any{e.Endpoint, e.Pending, e.Delivers})
 	}
-	t.opsMu.Lock()
-	notices := slices.Clone(t.notices)
-	t.opsMu.Unlock()
+	notices, _ := t.notices.state()
 	bindings := []any{}
 	for _, p := range t.Protocols() {
 		bindings = append(bindings, []string{p.ID, p.Bound})
