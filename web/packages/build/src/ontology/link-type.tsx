@@ -2,8 +2,8 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useState } from "react";
 import { useHost, useReadQuery, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
 import { Button, Input, Select, PageHeader, Panel, RecordList, Textarea, t, useUnsavedChanges } from "@platform/ui";
-import { ResourceControls as AssetControls } from "../shared/workbench";
-import { useDirectInstall } from "../shared/release-profile";
+import { ResourceControls as AssetControls } from "../editor/workbench";
+import { useDirectInstall } from "../releases/release-profile";
 
 type Draft = {id:string;revision:number;name:string;title:string;description:string;parent:string;child:string;via:string;forward:string;reverse:string;cardinality:string;deletePolicy:string;published?:string;version?:number};
 const empty=():Draft=>({id:"",revision:0,name:"",title:"",description:"",parent:"",child:"",via:"",forward:"children",reverse:"parent",cardinality:"one-to-many",deletePolicy:"owner"});

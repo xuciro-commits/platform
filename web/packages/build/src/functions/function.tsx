@@ -1,5 +1,5 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { DraftStatus, PublishMenu } from "../shared/workbench";
+import { DraftStatus, PublishMenu } from "../editor/workbench";
 import { CandidateTest } from "../releases/simulate";
 // This editor writes build.function's native declaration. The three stages
 // visualize that declaration; execution belongs to the host model effect path.

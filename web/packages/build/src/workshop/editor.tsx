@@ -14,7 +14,7 @@ import {collaborationRecordSource,recordInputOwner,historyViewProblem,isCollabor
 import {recordComparisonSource} from "./page-editor/record-comparison";
 import {searchInputObjects} from "@platform/app/search";
 import {pageLayoutDiagnostics} from "@platform/app";
-import { recordPaths } from "../shared/record-paths";
+import { recordPaths } from "../ontology/record-paths";
 // Application Studio page design (ADR-0046). Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
 // the same registered widgets; save and activation use the original Go path.
@@ -28,7 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ModuleTree, type ModuleContext } from "./ModuleWorkbench";
 import type { Route } from "@platform/ui";
 import { WidgetLibrary } from "./page-editor/WidgetLibrary";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState, useAutoSave } from "../shared/workbench";
+import { DraftStatus, PublishMenu, WorkbenchMessage, savingState, useAutoSave } from "../editor/workbench";
 import {pageUIManifest,type Api as HostApi} from "@platform/kernel";
 import { BindingEditor, WorkflowFormProblems } from "../automate/workflow-binding";
 import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, layoutID, stashWidget, restoreWidget, setLayoutKind } from "./page-layout";

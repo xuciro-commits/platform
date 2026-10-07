@@ -1,6 +1,6 @@
 # ADR-0080 大扫除：代码结构与边界重整（The Great Cleanup）
 
-状态：接受，执行中 · 2026-10-07 · 承接 AGENTS.md 规则（单一归属、无重复路径、做减法）、ADR-0052–0079 的全部交付；不改变任何对外契约（API、`host.ts`、动作/读名、账本 schema、页面/包描述符）。
+状态：接受，第 0/1/2/4/5 波已落地，第 3 波待评估 · 2026-10-07 · 承接 AGENTS.md 规则（单一归属、无重复路径、做减法）、ADR-0052–0079 的全部交付；不改变任何对外契约（API、`host.ts`、动作/读名、账本 schema、页面/包描述符）。
 
 ## 0. 为什么现在做
 
@@ -65,7 +65,7 @@ capabilities/server/
 
 - `@platform/ui/src` 顶层 29 项 → `primitives/ components/ records/ graph/ layout/ shell/ fields/ spatial/ i18n/` 九个目录 + `index.ts`、`catalog.ts`、`theme.ts`、`styles.css`；根上不再有散文件。
 - `@platform/app/src` 顶层 23 项 → `runtime/ widgets/ semantic/ exploration/ collaboration/ work/ host/` + `index.ts`。
-- `@platform/build/src` 目录已成形；`shared/` 消化进 `projects/`（它只被项目工作台用）或 `@platform/ui`。
+- `@platform/build/src` 目录已成形；`shared/` 已解散（见 §5）：编辑器外壳进 `editor/`，其余各归其主。
 - 每个目录一个 `index.ts` 作为唯一出口；包根 `index.ts` 只转发目录出口。`scripts/escapes.sh` 保持通过；`catalog` 重生成。
 - 导入路径：包内相对路径随文件走；包外只经包名，所以搬动不改外部导入。
 
@@ -86,6 +86,8 @@ capabilities/server/
 | **5 收尾** | `doc.go` 地图、AGENTS.md 目录规则改写、ADR 本表落地状态 | 无 | 本 ADR 状态改为"已落地" |
 
 每波都可独立停下；停在任何一波，仓库都是绿的、结构都比之前清楚。
+
+**落地状态（2026-10-07，`ca2eb4c`）**：第 0/1/2 波完成（Tenant 字段 80 → 56，16 个组件文件，各自持锁或注明受 `t.mu`/`opsMu` 保护）；第 4 波完成到"再拆只是搬行数"的程度（>150 行函数 33 → 15，剩余登记为例外：`routesBuild`/`routesRecords` 是路由表，`checkWidget` 是 50 个 widget 的校验表，`visiblePage`/`registerDefinitions`/`ApplicationRuns`/`candidateWithBindings` 是逐字段过滤，其余 ≤ 230 行）；三个零引用函数删除；第 5 波 `doc.go`/AGENTS.md/Testing.md/`shared/` 解散完成。**第 3 波（accepted/console/integration 分包）未做**：它需要先看 GPT 组合编译（`apps/*/server` 可见类型）的结果，且 `pageui` 的经验表明分包收益要重新评估——留给下一轮，以本表为准。
 
 ## 3.1 大扫除之后的第一件事（负责人已定，记在这里免得丢）
 
@@ -132,5 +134,8 @@ capabilities/server/
 | `SimulateCandidate` 326 行，步骤循环内联 | `candidateRun.step`，主体 150 行 | `9ffa436` |
 | `applyAcceptedBatch` 248 行；`Deployment.Serve` 250 行 | `applyBatchRows`；`Deployment.listen` / `createTenant` | `db00604` |
 | 包级无说明，Tenant 组件只能靠读 host.go 字段注释 | `capabilities/server/doc.go` 组件地图；AGENTS.md 导航行指向它 | wave 5 |
+| `@platform/build/src/shared/`（3 个文件，"工具箱目录"） | 解散：`workbench.tsx` → `editor/workbench.tsx`（所有构建者编辑器共用的外壳，§2 那句"只被项目工作台用"是错的，被 12 个编辑器引用）；`release-profile.tsx` → `releases/`；`record-paths.ts` → `ontology/`。18 个导入改路径，catalog 重生成只变 source 路径 | wave 5 |
+| `docs/Testing.md` 没有结构整理的检查行 | 加一行：零行为变更的检查组合 | wave 5 |
+| 全仓引用计数（含 apps/solutions）只出现一次的函数：`projectEntity`（authorization.go）、`equalJSON`（narrow.go）、`candidateTestTenant`（simulate_candidate.go） | 删除；`BuildProject` 类型保留（console/api 用） | wave 4 |
 
 （继续追加）

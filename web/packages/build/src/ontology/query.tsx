@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
 import { Button, Card, Checkbox, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
-import { ResourceControls as AssetControls } from "../shared/workbench";
-import { useDirectInstall } from "../shared/release-profile";
+import { ResourceControls as AssetControls } from "../editor/workbench";
+import { useDirectInstall } from "../releases/release-profile";
 
 type Term = [string,string,string|number|boolean];
 type Draft = Omit<Api.NamedQuery,"domain"> & { id:string; revision:number; domain:Term[]; published?:string; version?:number };

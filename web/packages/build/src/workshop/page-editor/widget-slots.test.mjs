@@ -7,7 +7,7 @@ registerHooks({resolve(s,c,next){if(s==="@platform/app")return {url:"data:text/j
 const {addWidgetSlot}=await import("./widget-slots.ts");
 const {appendWidget,removeWidget,stashWidget,restoreWidget,widgetSubtreeSections}=await import("../page-layout.ts");
 const {copyLayout,pasteLayout}=await import("./clipboard.ts");
-const {pageLayoutDiagnostics}=await import("../../../../app/src/layout.ts");
+const {pageLayoutDiagnostics}=await import("../../../../app/src/pages/layout.ts");
 const fixture=()=>({title:"Original",description:"",selections:[],sections:[{id:"table",widget:"table",configVersion:1},{id:"label",widget:"text",configVersion:1,text:"Original child"}],document:{formatVersion:2,uiProfile:manifest.uiProfile,root:"root",nodes:{root:{kind:"rows",children:["table"]},table:{kind:"widget",section:"table",children:["footer"]},footer:{kind:"flow",slot:"footer",children:["label"]},label:{kind:"widget",section:"label"}}}});
 const limits={...manifest.runtime,selectionWriters:[],selectionWidgets:[],references:{}};
 test("all three slot owners consume declared names and old profiles never silently upgrade",()=>{

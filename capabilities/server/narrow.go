@@ -1,7 +1,6 @@
 package platformserver
 
 import (
-	"encoding/json"
 	"reflect"
 	"slices"
 	"strings"
@@ -369,11 +368,6 @@ func empty(v reflect.Value, fields [][]int) {
 	for _, path := range fields {
 		v.FieldByIndex(path).SetZero()
 	}
-}
-
-func equalJSON(raw []byte, v any) bool {
-	other, _ := json.Marshal(v)
-	return string(raw) == string(other)
 }
 
 // refsIn are the records ("<type>/<id>") a value carries, at any depth: what a

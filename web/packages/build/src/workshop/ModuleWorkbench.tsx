@@ -8,7 +8,7 @@ import { ApplicationHeader, Button, Checkbox, Input, PanelSection, Select, Probl
 import { ArrowDown, ArrowUp, FolderKanban, LayoutTemplate, Layers, PanelTop, Plus, Settings2, Trash2, Variable } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDraftSession } from "../session/DraftSession";
-import { DraftStatus, savingState, useAutoSave, WorkbenchMessage } from "../shared/workbench";
+import { DraftStatus, savingState, useAutoSave, WorkbenchMessage } from "../editor/workbench";
 import type { Project } from "../projects/project";
 import { PageEditor } from "./editor";
 import { HeaderEditor } from "./HeaderEditor";

@@ -16,6 +16,7 @@
 | Web 日常编码与同类组件批次 | `scripts/verify.sh web-check`：生成一致性、Catalog、`pnpm check` 的类型、单元测试与构建；开发中按问题选择原 owner 的 `go test` 和单元测试 |
 | 成组交付、重要集成或发布节点 | 按影响面选择一条联合浏览器路线；需要全量验收时 `scripts/verify.sh web` 共用一次完整 Playwright，不按每个组件重复 |
 | 纯样式/布局/文案 | `pnpm --dir web check`，启动查看并截所改页面；不要求重跑浏览器业务路线 |
+| 结构整理（搬文件、拆函数、Tenant 组件化，ADR-0080） | 零行为变更：`go build ./... && go vet .` 加全量 `go test .`（基线仅 `TestRecordsAtScale`）；web 侧对应包 `tsc --noEmit` 与 `node scripts/catalog.mjs generate` 零语义差异；`scripts/cleanup-inventory.sh` 看规模数字；不加新测试 |
 | 提交/恢复/激活语义或部署 | 对应持久化/故障检查及 `scripts/verify.sh deploy`；纯发布导航不自动触发 |
 
 通过后只有新代码、失败修复或环境变化才重跑；文档更新不是重跑理由。新增测试先确认它能发现哪种实际回归、哪一层是规范主人；已由服务端/契约证明的规则不在浏览器逐项重测。

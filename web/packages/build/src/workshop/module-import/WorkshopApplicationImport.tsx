@@ -4,7 +4,7 @@ import {Button,Input,Panel,Select,t,type EntityInfo} from '@platform/ui';
 import {SemanticObjectSelect} from '@platform/app';
 import type {Api} from '@platform/kernel';
 import {ModuleImportDialog} from './ModuleImportDialog';
-import {useDirectInstall} from '../../shared/release-profile';
+import {useDirectInstall} from '../../releases/release-profile';
 import {parseWorkshopModule} from './compile';
 import {importDependencies,importedPageWrites,saveImportedPages,type ApplicationImportPrepared,type ApplicationImportReport,type ImportDraftObject,type ImportPageDestination,type ImportedPageRecord,type ImportPageWrite,type ImportSaveProgress} from './application-import';
 

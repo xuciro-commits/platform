@@ -7,10 +7,10 @@
 import { PayloadFields, useHost, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, Input, PageHeader, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Toggles, Workbench, cn, t, type EntityInfo, type WorkbenchProblem } from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { DraftStatus } from "../shared/workbench";
+import { DraftStatus } from "../editor/workbench";
 import { Boxes, CheckSquare, FileInput, ListChecks, Plus, Shield, Sparkles, Trash2, Wand2, Zap } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { PublishMenu, WorkbenchMessage, savingState } from "../shared/workbench";
+import { PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 import { assignmentInputFits } from "./process-rules";
 import { Label } from "./process";
 import { comparisonFits, conditionSubjects, inputTypes, nameOf, operators, type Action, type ApproverLevel, type Condition, type Create_, type Input_, type JournalLine_, type Post_, type Set_ } from "./object-model";

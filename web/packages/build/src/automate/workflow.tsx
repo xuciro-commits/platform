@@ -1,6 +1,6 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import {FlowImportDialog} from "../workshop/module-import/FlowImportDialog";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../shared/workbench";
+import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 import {useDraftSession} from "../session/DraftSession";
 import {workflowInputs,workflowRunMatches} from "./workflow-session";
 // Logic Studio edits the one build.process definition. Its native Flow owner

@@ -6,7 +6,7 @@ const manifest=JSON.parse(readFileSync(new URL('../../../../../../capabilities/s
 registerHooks({resolve(s,c,next){
  if(s==='@platform/ui/canvas-snapping')return {url:new URL('../../../../ui/src/layout/canvas-snapping.ts',import.meta.url).href,shortCircuit:true};
  if(s==='@platform/kernel')return {url:'data:text/javascript,'+encodeURIComponent(`export const pageUIManifest=${JSON.stringify(manifest)};`),shortCircuit:true};
- if(s==='@platform/app')return {url:'data:text/javascript,'+encodeURIComponent(`export const pageUIProfile=${JSON.stringify(manifest.uiProfile)},pageVariableContract=${JSON.stringify(manifest.runtime)};export {pageLayoutDiagnostics} from ${JSON.stringify(new URL('../../../../app/src/layout.ts',import.meta.url).href)};`),shortCircuit:true};
+ if(s==='@platform/app')return {url:'data:text/javascript,'+encodeURIComponent(`export const pageUIProfile=${JSON.stringify(manifest.uiProfile)},pageVariableContract=${JSON.stringify(manifest.runtime)};export {pageLayoutDiagnostics} from ${JSON.stringify(new URL('../../../../app/src/pages/layout.ts',import.meta.url).href)};`),shortCircuit:true};
  try{return next(s,c);}catch(e){if(s.startsWith('./')||s.startsWith('../'))return next(s+'.ts',c);throw e;}
 }});
 const {canvasDrop,canvasMove,canvasResize,canvasResetSize}=await import('./canvas-layout.ts');

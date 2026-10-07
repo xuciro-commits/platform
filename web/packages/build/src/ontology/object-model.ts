@@ -1,7 +1,7 @@
 // The object type's authoring model (ADR-0037, ADR-0053 §5–§6): what a
 // `build.object` record holds, and the early authoring checks the editors show
 // before the host's authoritative publication check.
-import { recordPaths } from "../shared/record-paths";
+import { recordPaths } from "./record-paths";
 import { stateInputValid, ruleInputValid, assignmentInputFits } from "./process-rules";
 import type { Api } from "@platform/kernel";
 import { t, type EntityInfo } from "@platform/ui";

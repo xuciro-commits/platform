@@ -411,9 +411,6 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 	return nil
 }
 
-func candidateTestTenant(candidate platform.ReleaseCandidate, member platform.Member, others ...platform.Member) (*Tenant, error) {
-	return candidateTestTenantWithEnvironment(candidate, member, simulationEnvironment{}, others...)
-}
 func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, member platform.Member, environment simulationEnvironment, others ...platform.Member) (*Tenant, error) {
 	b := build.New(member.Tenant)
 	member.Roles = maps.Clone(member.Roles)
