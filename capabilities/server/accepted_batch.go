@@ -549,14 +549,9 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 	if err := draft.validateLinkConstraints(); err != nil {
 		return false, err
 	}
-	t.seqMu.Lock()
-	for key, n := range result.Sequences {
-		if result.SequenceBases[key] != t.sequences[key] || n <= t.sequences[key] {
-			t.seqMu.Unlock()
-			return false, fmt.Errorf("record batch sequence %s does not advance", key)
-		}
+	if err := t.sequences.check(result.SequenceBases, result.Sequences); err != nil {
+		return false, err
 	}
-	t.seqMu.Unlock()
 	checks := map[string]*kernel.ChangeLog{}
 	for app, ledger := range ledgers {
 		checks[app] = ledger.ForkAcceptedChanges()
@@ -597,11 +592,7 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 	if err := t.applyAcceptedObservations(result.Observations); err != nil {
 		return false, err
 	}
-	t.seqMu.Lock()
-	for key, n := range result.Sequences {
-		t.sequences[key] = n
-	}
-	t.seqMu.Unlock()
+	t.sequences.set(result.Sequences)
 	if len(result.Submission) > 0 {
 		if t.acceptedAnswers == nil {
 			t.acceptedAnswers = map[string]json.RawMessage{}

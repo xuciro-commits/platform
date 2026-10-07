@@ -106,8 +106,7 @@ type Tenant struct {
 	notices     []platform.Notification
 	noticeSeq   int
 	settings    map[string]string // "<app>/<name>" → value
-	seqMu       sync.Mutex
-	sequences   map[string]int // "<app>/<sequence>/<year>" → the last number taken (ADR-0024)
+	sequences   sequences         // number counters (ADR-0024)
 	endpoints   []*Endpoint
 	outbound    []*effect
 	// Secrets resolves a secret's name (default: PLATFORM_SECRETS_DIR, then
@@ -126,15 +125,15 @@ type Tenant struct {
 	agents    *Agents         // AI agents (ADR-0021)
 	ctx       context.Context // the span of the work being done under mu (telemetry.go)
 	// Files keeps file bytes (ADR-0028 D1); nil: memory, for development and tests.
-	Files          FileStore
-	ComputeWorker  WasmWorker
-	Compiler       CodeCompiler
-	computeCancels map[string]context.CancelFunc // volatile handles, never ownership
-	memFiles       memoryFiles
-	uploads        map[string]time.Time // hashes uploaded and when, until attached or swept (volatile)
-	personal       []PersonalRead       // reads of personal data (ADR-0028 D4), volatile
-	probing        bool                 // a submission for approval is being checked, not applied
-	requests       []request            // accepted decisions' requests of other apps, run with their events (ADR-0026)
+	Files         FileStore
+	ComputeWorker WasmWorker
+	Compiler      CodeCompiler
+	cancels       cancels // running operations' cancel handles
+	memFiles      memoryFiles
+	uploads       map[string]time.Time // hashes uploaded and when, until attached or swept (volatile)
+	personal      []PersonalRead       // reads of personal data (ADR-0028 D4), volatile
+	probing       bool                 // a submission for approval is being checked, not applied
+	requests      []request            // accepted decisions' requests of other apps, run with their events (ADR-0026)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -168,7 +167,7 @@ func (t *Tenant) remember(e AuditEntry) {
 // protocols no earlier app provides, and manifests the host could not honour.
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	t := &Tenant{ID: id, apps: apps, refusals: map[string]refusedResult{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
-		connectors: kernel.NewConnectors(), records: newRecordStore(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}, sequences: map[string]int{}}
+		connectors: kernel.NewConnectors(), records: newRecordStore(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}}
 	t.staged = stagedChannel{tenant: id, files: t.files}
 	claim := func(name string, a platform.App) error {
 		if other := t.owner[name]; other != nil {

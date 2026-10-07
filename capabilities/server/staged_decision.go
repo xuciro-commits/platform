@@ -57,9 +57,7 @@ var _ platform.Runtime = (*stagedDecision)(nil)
 func (*stagedDecision) StagedDecision() {}
 
 func (t *Tenant) newStagedDecision() *stagedDecision {
-	t.seqMu.Lock()
-	sequences := maps.Clone(t.sequences)
-	t.seqMu.Unlock()
+	sequences := t.sequences.clone()
 	t.opsMu.Lock()
 	notices, noticeSeq := slices.Clone(t.notices), t.noticeSeq
 	descriptors, marks := t.connectors.State()

@@ -160,7 +160,7 @@ func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) 
 	out = live.attempt(task, at, false)
 	live.mu.Unlock()
 	if out != "ok" || len(entries) != 2 || len(live.queues["worker"]) != 0 ||
-		len(live.notices) != 2 || live.sequences["worker/document/0"] != 1 {
+		len(live.notices) != 2 || live.sequences.last["worker/document/0"] != 1 {
 		t.Fatalf("accepted work did not apply once: %s fault=%+v", out, live.fault.Load())
 	}
 	saved, err := decodeAcceptedWork(entries[1].Body)
@@ -193,7 +193,7 @@ func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) 
 			t.Fatalf("job result: %s fault=%+v", out, live.fault.Load())
 		}
 	}
-	if live.sequences["worker/document/0"] != 3 {
+	if live.sequences.last["worker/document/0"] != 3 {
 		t.Fatal("jobs did not allocate exactly the next numbers")
 	}
 	CheckReplay(t, live, entries, func() *Tenant { return resultWorkTenant(t, live.ID) })
@@ -218,7 +218,7 @@ func TestAcceptedWorkRefusalDiscardsBusinessChangesAndCommitsRetry(t *testing.T)
 		out := live.attempt(task, when, false)
 		live.mu.Unlock()
 		if out == "ok" || len(live.records.types["worker.document"].rows) != 0 ||
-			live.sequences["worker/document/0"] != 0 || len(live.notices) != 0 {
+			live.sequences.last["worker/document/0"] != 0 || len(live.notices) != 0 {
 			t.Fatalf("refused work exposed partial business changes: %s", out)
 		}
 	}
@@ -289,7 +289,7 @@ func TestJournalAcceptedWorkCrashBeforeApplication(t *testing.T) {
 		t.Fatal(err)
 	}
 	if recovered.app("worker").(*resultWorker).calls != 0 ||
-		recovered.sequences["worker/document/0"] != 1 || len(recovered.notices) != 2 {
+		recovered.sequences.last["worker/document/0"] != 1 || len(recovered.notices) != 2 {
 		t.Fatal("durable work result was lost or re-executed")
 	}
 	CheckReplay(t, recovered, entries, func() *Tenant { return resultWorkTenant(t, id) })
