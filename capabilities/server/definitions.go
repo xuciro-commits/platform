@@ -399,387 +399,11 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				continue
 			}
 		case platform.AssetPage:
-			if m.Roles[def.Ref.App] == "" || def.Page == nil {
-				continue
-			}
-			page := *def.Page
-			digest, err := platform.PageContentVersion(page)
-			if err != nil {
-				continue
-			}
-			def.ContentVersion = digest
-			info, ok := entities[page.Object.Name]
+			visible, ok := t.visiblePage(def, m, entities, actions, registeredDefinitions)
 			if !ok {
 				continue
 			}
-			visibleFields := map[string]bool{}
-			page.Selections = slices.DeleteFunc(slices.Clone(page.Selections), func(selection platform.SelectionVariable) bool {
-				_, visible := entities[selection.Object.Name]
-				return !visible
-			})
-			selections := map[string]bool{}
-			for _, selection := range page.Selections {
-				selections[selection.Name] = true
-			}
-			for _, field := range info.Fields {
-				visibleFields[field.Name] = true
-			}
-			page.ListFields = slices.DeleteFunc(slices.Clone(page.ListFields), func(name string) bool { return !visibleFields[name] })
-			page.DetailFields = slices.DeleteFunc(slices.Clone(page.DetailFields), func(name string) bool { return !visibleFields[name] })
-			page.Actions = slices.DeleteFunc(slices.Clone(page.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
-			// A composed page's widgets are trimmed the same way: a field or an
-			// action this member may not have is not on the page (ADR-0035).
-			if len(page.Sections) > 0 {
-				sections := make([]platform.Section, 0, len(page.Sections))
-				for _, section := range page.Sections {
-					if slices.ContainsFunc(section.ServiceDependencies(), func(ref platform.AssetRef) bool {
-						if ref.Kind != platform.AssetObject {
-							return false // write permission does not control discovery of a readable service
-						}
-						service, visible := entities[ref.Name]
-						return !visible || service.App != ref.App
-					}) {
-						continue
-					}
-					if section.Selection != "" && !selections[section.Selection] || section.ParentSelection != "" && !selections[section.ParentSelection] {
-						continue
-					}
-					shown := info
-					if section.Object.Name != "" && section.Object.Name != page.Object.Name {
-						other, ok := entities[section.Object.Name]
-						if !ok {
-							continue // its object is not this member's to read
-						}
-						shown = other
-					}
-					section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool {
-						field, visible := shown.Field(name)
-						return !visible || section.Widget == "form" && (field.ReadOnly || !field.WritesAny(m.RolesIn(shown.App)))
-					})
-					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
-					if (section.Widget == "chart" || section.Widget == "metric" || (section.Widget == "pivot" || section.Widget == "heatmap")) && !checkAggregateSection(section, shown) {
-						continue
-					}
-					if section.Widget == "record-list" && section.CardLabel != "id" {
-						if _, ok := shown.Field(section.CardLabel); !ok {
-							continue
-						}
-					}
-					if section.CheckLeaderboard(shown) != nil {
-						continue
-					}
-					if section.CheckHistogram(shown) != nil {
-						continue
-					}
-					if section.Avatar != nil {
-						avatar := *section.Avatar
-						avatar.DetailFields = slices.DeleteFunc(slices.Clone(avatar.DetailFields), func(name string) bool { _, ok := shown.Field(name); return name != "id" && !ok })
-						section.Avatar = &avatar
-					}
-					if section.CheckResourceList(shown) != nil {
-						continue
-					}
-					projected, ok := page.ProjectExploration(section, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
-						e, ok := entities[ref.Name]
-						return e, ok && e.App == ref.App
-					}, func(b platform.AssetBinding) (platform.LinkType, bool) {
-						for _, d := range registeredDefinitions {
-							if d.Ref == b.Ref {
-								if selected := d.LinkVersion(b.SourceVersion); selected != nil && selected.LinkType != nil {
-									return *selected.LinkType, true
-								}
-							}
-						}
-						return platform.LinkType{}, false
-					})
-					if !ok {
-						continue
-					}
-					section = projected
-					if section.CheckContextViews(shown) != nil {
-						continue
-					}
-					if section.CheckRecordComparison(shown) != nil {
-						continue
-					}
-					if section.CheckRecordCard(shown) != nil {
-						continue
-					}
-					if section.CheckSparkline(shown) != nil {
-						continue
-					}
-					if section.CheckTerms(shown) != nil {
-						continue
-					}
-					if section.Widget == "action-table" {
-						if len(section.Actions) != 1 {
-							continue
-						}
-						a, offered := actions[section.Actions[0].Name]
-						if !offered || section.CheckActionTable(shown, a) != nil {
-							continue
-						}
-					}
-					if page.CheckObservation(section, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
-						e, ok := entities[ref.Name]
-						return e, ok && e.App == ref.App
-					}) != nil {
-						continue
-					}
-					if section.CheckCollectionAnalysis(shown) != nil {
-						if section.Analysis != nil && section.Analysis.Kind == "record-axes" && page.Document != nil {
-							doc := *page.Document
-							doc.Variables = maps.Clone(doc.Variables)
-							delete(doc.Variables, section.AnalysisXVariable)
-							delete(doc.Variables, section.AnalysisYVariable)
-							page.Document = &doc
-						}
-						continue
-					}
-					if section.CheckSummary(shown) != nil {
-						continue
-					}
-					if section.CheckRecordGantt(shown) != nil {
-						continue
-					}
-					if section.CheckRecordPicker(shown) != nil {
-						continue
-					}
-					if section.CheckRecordCalendar(shown) != nil {
-						continue
-					}
-					if section.CheckRecordEvents(shown) != nil {
-						continue
-					}
-					if section.CheckCollectionBuilderFields(shown) != nil || section.CheckMap(shown) != nil || page.CheckSceneBinding(section, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
-						actual, ok := entities[ref.Name]
-						return actual, ok && actual.App == ref.App
-					}) != nil {
-						continue
-					}
-					if section.CheckScatter(shown) != nil {
-						continue
-					}
-					if section.CheckRecordChart(shown) != nil {
-						continue
-					}
-					if section.CheckTimeline(shown) != nil {
-						continue
-					}
-					if section.CheckStatusTracker(shown) != nil {
-						continue
-					}
-					if page.CheckKanban(section, shown) != nil {
-						continue
-					}
-					parentType := page.Object.Name
-					if section.ParentSelection != "" {
-						for _, selection := range page.Selections {
-							if selection.Name == section.ParentSelection {
-								parentType = selection.Object.Name
-							}
-						}
-					}
-					if section.Relation != "" && !slices.ContainsFunc(shown.Fields, func(f platform.FieldInfo) bool {
-						return f.Type == "reference" && f.Ref == parentType && f.Inverse == section.Relation
-					}) {
-						continue // the member cannot follow this parent reference
-					}
-					if section.Widget == "form" {
-						if _, offered := actions[shown.Type+".create"]; !offered {
-							continue
-						}
-					}
-					if section.Widget == "form" && slices.ContainsFunc(slices.Collect(maps.Keys(section.Inputs)), func(name string) bool {
-						field, writable := shown.Field(name)
-						if !writable || !field.WritesAny(m.RolesIn(shown.App)) {
-							return true
-						}
-						binding := section.Inputs[name]
-						if binding.Source != "subject" {
-							return false
-						}
-						_, err := platform.RecordPathField(parentType, binding.Path, func(typ string) (platform.EntityInfo, bool) {
-							info, visible := entities[typ]
-							return info, visible
-						})
-						return err != nil
-					}) {
-						continue // no manual-input fallback for a hidden bound source
-					}
-					if section.Widget == "record-links" {
-						section.RecordLinks = slices.DeleteFunc(slices.Clone(section.RecordLinks), func(group platform.PageRecordLink) bool {
-							probe := section
-							probe.RecordLinks = []platform.PageRecordLink{group}
-							return probe.CheckRecordLinks(shown, func(typ string) (platform.EntityInfo, bool) { info, ok := entities[typ]; return info, ok }) != nil
-						})
-						if len(section.RecordLinks) == 0 {
-							continue
-						}
-					}
-					section.TableColumns = slices.DeleteFunc(slices.Clone(section.TableColumns), func(c platform.PageTableColumn) bool {
-						return c.Field != "id" && !slices.Contains(section.Fields, c.Field)
-					})
-					if len(section.Facets) > 0 && slices.ContainsFunc(section.Facets, func(f platform.PageFacet) bool { _, ok := shown.Field(f.Field); return !ok }) {
-						continue
-					}
-					if section.Widget == "filter" && len(section.Fields) == 0 && len(section.Facets) == 0 && section.FilterSearchVariable == "" {
-						continue
-					}
-					if section.InlineEdit != nil {
-						edit := *section.InlineEdit
-						edit.Fields = slices.DeleteFunc(slices.Clone(edit.Fields), func(name string) bool {
-							f, visible := shown.Field(name)
-							return !visible || f.ReadOnly || !f.WritesAny(m.RolesIn(shown.App))
-						})
-						if _, offered := actions[edit.Action.Name]; !offered || len(edit.Fields) == 0 {
-							section.InlineEdit = nil
-						} else {
-							section.InlineEdit = &edit
-						}
-					}
-					if section.Widget == "inline-action" && len(section.Actions) == 1 && len(section.ActionDefaults) > 0 {
-						a, ok := actions[section.Actions[0].Name]
-						if !ok || section.CheckInlineAction(shown, a) != nil {
-							continue
-						}
-					}
-					if section.Widget == "inline-action" && len(section.Actions) != 1 {
-						continue
-					}
-					if section.Function != nil {
-						owner, ok := t.app(section.Function.Ref.App).(interface {
-							FunctionDefinition(string, int) (platform.AIFunction, int, bool)
-						})
-						if !ok {
-							continue
-						}
-						versionText, ok := strings.CutPrefix(section.Function.SourceVersion, t.app(section.Function.Ref.App).Manifest().Version+".function-")
-						version, err := strconv.Atoi(versionText)
-						if !ok || err != nil {
-							continue
-						}
-						function, _, exists := owner.FunctionDefinition(section.Function.Ref.Name, version)
-						if !exists || !m.May(section.Function.Ref.App, function.Name, function.Roles).Allow || slices.ContainsFunc(function.Fields, func(name string) bool {
-							field, found := shown.Field(name)
-							return !found || !field.ReadsAny(m.RolesIn(section.Function.Ref.App))
-						}) {
-							continue
-						}
-					}
-					if _, creates := actions[shown.Type+".create"]; section.Widget == "form" && !creates {
-						continue // a form this member could not submit is not on their page
-					}
-					if section.Operation != nil {
-						op, _, err := t.pageOperation(section.Operation)
-						if err != nil || !m.May(section.Operation.Ref.App, op.Name, op.Roles).Allow || slices.ContainsFunc(slices.Collect(maps.Values(section.Inputs)), func(binding platform.Binding) bool {
-							if binding.Source != "subject" || len(binding.Path) == 0 {
-								return false
-							}
-							_, ok := shown.Field(binding.Path[0])
-							return !ok
-						}) {
-							continue
-						}
-					}
-					sections = append(sections, section)
-				}
-				page.Sections = sections
-				if page.Document != nil {
-					doc := *page.Document
-					doc.Queries = map[string]platform.PageQuery{}
-					doc.Variables = maps.Clone(doc.Variables)
-					for id, v := range doc.Variables {
-						if c := v.Source; c != nil && c.Compute != nil {
-							ref := page.RecordResourceObject(c.Compute.RecordVariable)
-							object, ok := entities[ref.Name]
-							op, _, err := t.pageOperation(&c.Compute.Operation)
-							if !ok || err != nil || !m.May(c.Compute.Operation.Ref.App, op.Name, op.Roles).Allow || page.CheckComputeResource(*c.Compute, object, op, v.Type) != nil {
-								delete(doc.Variables, id)
-								continue
-							}
-						}
-						if v.Mode == "aggregate" && v.Source != nil {
-							q := doc.Queries[v.Source.Query]
-							if q.Object.Name == "" {
-								q = page.Document.Queries[v.Source.Query]
-							}
-							info, ok := entities[q.Object.Name]
-							if !ok || doc.CheckAggregateScalar(v, info) != nil {
-								delete(doc.Variables, id)
-							}
-						}
-						if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
-							info, ok := entities[v.Source.Object.Name]
-							if !ok || page.CheckPropertySchema(v, info) != nil {
-								delete(doc.Variables, id)
-							}
-						}
-						if v.Mode == "shared" && (v.Type == "record" || v.Type == "filter" || v.Type == "record-set") && v.Source != nil && v.Source.Object != nil {
-							if _, ok := entities[v.Source.Object.Name]; !ok {
-								delete(doc.Variables, id)
-							}
-						}
-					}
-					for id, q := range page.Document.Queries {
-						info, ok := entities[q.Object.Name]
-						if !ok {
-							continue
-						}
-						var named *platform.Definition
-						if q.Query != nil {
-							for i := range registeredDefinitions {
-								if registeredDefinitions[i].Ref == q.Query.Ref {
-									named = registeredDefinitions[i].QuerySourceVersion(q.Query.SourceVersion)
-									break
-								}
-							}
-						}
-						if named != nil && named.LinkType != nil {
-							l := named.LinkType
-							parent, pok := entities[l.Parent.Name]
-							child, cok := entities[l.Child.Name]
-							if !pok || !cok || l.CheckSchema(parent, child) != nil {
-								named = nil
-							}
-						}
-						if page.CheckResourceListQuery(id, named) == nil && page.CheckAvatarQuery(id, named, info) == nil && page.CheckQuerySchema(q, info, named) == nil && (named == nil || named.LinkType != nil || named.Query != nil && checkNamedQuery(*named.Query, info) == nil) {
-							doc.Queries[id] = q
-						}
-					}
-					page.Document = &doc
-				}
-				page.Document = page.Document.Visible(sections)
-				// Removing a resource producer also removes dependent visibility
-				// branches. Repeat to closure without exposing orphan inputs.
-				if page.Document != nil {
-					for {
-						visible := map[string]bool{}
-						for _, node := range page.Document.Nodes {
-							if node.Kind == "widget" {
-								visible[node.Section] = true
-							}
-						}
-						before := len(page.Sections)
-						page.Sections = slices.DeleteFunc(page.Sections, func(section platform.Section) bool { return !visible[section.ID] })
-						if len(page.Sections) == before {
-							break
-						}
-						page.Document = page.Document.Visible(page.Sections)
-					}
-				}
-			}
-			if page.Document != nil {
-				for i, s := range page.Sections {
-					if s.Widget == "button-group" {
-						page.Sections[i].Buttons = slices.DeleteFunc(slices.Clone(s.Buttons), func(b platform.PageButton) bool {
-							return !slices.ContainsFunc(page.Document.Events, func(e platform.PageEventBinding) bool { return e.Source == s.ID && e.Control == b.ID })
-						})
-					}
-				}
-			}
-			def.Requires = append([]platform.AssetRef{page.Object}, page.Actions...)
-			def.Page = &page
+			def = visible
 		case platform.AssetApp:
 			continue // after the pages, below: an application is offered with them
 		}
@@ -798,120 +422,9 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		visibleResources[def.Ref] = true
 	}
 	for _, registered := range registeredDefinitions {
-		if registered.Ref.Kind != platform.AssetApp || registered.Application == nil || m.Roles[registered.Ref.App] == "" {
-			continue
+		if def, ok := t.visibleApplication(registered, m, out, entities, opens, visibleResources); ok {
+			out = append(out, def)
 		}
-		def, application := registered, *registered.Application
-		closed := func(name string) bool {
-			return !opens[platform.AssetRef{App: def.Ref.App, Kind: platform.AssetPage, Name: name}]
-		}
-		application.Pages = slices.DeleteFunc(slices.Clone(application.Pages), closed)
-		if len(application.Pages) == 0 {
-			continue
-		}
-		// A heading over none of this member's pages is not in their navigation.
-		groups := make([]platform.AppGroup, 0, len(application.Groups))
-		for _, g := range application.Groups {
-			if g.Pages = slices.DeleteFunc(slices.Clone(g.Pages), closed); len(g.Pages) > 0 {
-				groups = append(groups, g)
-			}
-		}
-		application.Groups = groups
-		application.Header = application.VisibleHeader()
-		application.Resources = slices.DeleteFunc(slices.Clone(application.Resources), func(ref platform.AssetRef) bool {
-			if ref.Kind == platform.AssetFlow {
-				return !m.Holds("build", "builder") || t.procs == nil || !t.procs.HasPublishedFlow(ref.Name)
-			}
-			return !visibleResources[ref]
-		})
-		application.Queries = maps.Clone(application.Queries)
-		application.Variables = maps.Clone(application.Variables)
-		for id, q := range application.Queries {
-			info, ok := entities[q.Object.Name]
-			var named *platform.Definition
-			if q.Query != nil {
-				for _, d := range out {
-					if d.Ref == q.Query.Ref {
-						named = d.QuerySourceVersion(q.Query.SourceVersion)
-						break
-					}
-				}
-			}
-			if named != nil && named.LinkType != nil {
-				l := named.LinkType
-				parent, pok := entities[l.Parent.Name]
-				child, cok := entities[l.Child.Name]
-				if !pok || !cok || l.CheckSchema(parent, child) != nil {
-					named = nil
-				}
-			}
-			if !ok || application.QueryPage().CheckQuerySchema(q, info, named) != nil {
-				delete(application.Queries, id)
-			}
-		}
-		for changed := true; changed; {
-			changed = false
-			for id, q := range application.Queries {
-				missing := q.MissingSetInput(application.Queries)
-				for _, param := range q.Variables() {
-					if _, ok := application.Variables[param]; !ok {
-						missing = true
-					}
-				}
-				if missing {
-					delete(application.Queries, id)
-					changed = true
-				}
-			}
-			for id, v := range application.Variables {
-				missing := false
-				if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
-					info, ok := entities[v.Source.Object.Name]
-					_, parent := application.Variables[v.Source.Variable]
-					missing = !ok || !parent || application.QueryPage().CheckPropertySchema(v, info) != nil
-				}
-				if v.Mode == "aggregate" && v.Source != nil {
-					_, ok := application.Queries[v.Source.Query]
-					missing = !ok
-				}
-				if v.Mode == "resource" && v.Source != nil {
-					if (v.Source.Kind == "record" || v.Source.Kind == "filter" || v.Source.Kind == "record-set") && v.Source.Object != nil {
-						_, ok := entities[v.Source.Object.Name]
-						missing = !ok
-						if ok && v.Type == "filter" {
-							source := *v.Source
-							info := entities[source.Object.Name]
-							source.Fields = slices.DeleteFunc(slices.Clone(source.Fields), func(name string) bool {
-								field, exists := info.Field(name)
-								return !exists || (field.Type != "choice" && field.Type != "boolean" && field.Type != "reference")
-							})
-							v.Source = &source
-							application.Variables[id] = v
-							missing = len(source.Fields) == 0
-						}
-					} else {
-						_, ok := application.Queries[v.Source.Query]
-						missing = !ok
-					}
-				}
-				if v.Expression != nil {
-					for _, arg := range v.Expression.Args {
-						if arg.Variable != "" {
-							if _, ok := application.Variables[arg.Variable]; !ok {
-								missing = true
-							}
-						}
-					}
-				}
-				if missing {
-					delete(application.Variables, id)
-					changed = true
-				}
-			}
-		}
-		def.Requires = application.Dependencies(def.Ref.App)
-		def.Application = &application
-		out = append(out, def)
 	}
 	out = filterExplorationAssets(out)
 	slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
@@ -921,4 +434,512 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		}
 	}
 	return out
+}
+
+// visiblePage is a page definition as m sees it: absent unless they may open
+// it, with the fields, actions, sections, buttons and services they may not
+// see removed and its content version computed.
+func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entities map[string]platform.EntityInfo, actions map[string]platform.Action, registeredDefinitions []platform.Definition) (platform.Definition, bool) {
+	if m.Roles[def.Ref.App] == "" || def.Page == nil {
+		return def, false
+	}
+	page := *def.Page
+	digest, err := platform.PageContentVersion(page)
+	if err != nil {
+		return def, false
+	}
+	def.ContentVersion = digest
+	info, ok := entities[page.Object.Name]
+	if !ok {
+		return def, false
+	}
+	visibleFields := map[string]bool{}
+	page.Selections = slices.DeleteFunc(slices.Clone(page.Selections), func(selection platform.SelectionVariable) bool {
+		_, visible := entities[selection.Object.Name]
+		return !visible
+	})
+	selections := map[string]bool{}
+	for _, selection := range page.Selections {
+		selections[selection.Name] = true
+	}
+	for _, field := range info.Fields {
+		visibleFields[field.Name] = true
+	}
+	page.ListFields = slices.DeleteFunc(slices.Clone(page.ListFields), func(name string) bool { return !visibleFields[name] })
+	page.DetailFields = slices.DeleteFunc(slices.Clone(page.DetailFields), func(name string) bool { return !visibleFields[name] })
+	page.Actions = slices.DeleteFunc(slices.Clone(page.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
+	// A composed page's widgets are trimmed the same way: a field or an
+	// action this member may not have is not on the page (ADR-0035).
+	if len(page.Sections) > 0 {
+		sections := make([]platform.Section, 0, len(page.Sections))
+		for _, section := range page.Sections {
+			if slices.ContainsFunc(section.ServiceDependencies(), func(ref platform.AssetRef) bool {
+				if ref.Kind != platform.AssetObject {
+					return false // write permission does not control discovery of a readable service
+				}
+				service, visible := entities[ref.Name]
+				return !visible || service.App != ref.App
+			}) {
+				continue
+			}
+			if section.Selection != "" && !selections[section.Selection] || section.ParentSelection != "" && !selections[section.ParentSelection] {
+				continue
+			}
+			shown := info
+			if section.Object.Name != "" && section.Object.Name != page.Object.Name {
+				other, ok := entities[section.Object.Name]
+				if !ok {
+					continue // its object is not this member's to read
+				}
+				shown = other
+			}
+			section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool {
+				field, visible := shown.Field(name)
+				return !visible || section.Widget == "form" && (field.ReadOnly || !field.WritesAny(m.RolesIn(shown.App)))
+			})
+			section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
+			if (section.Widget == "chart" || section.Widget == "metric" || (section.Widget == "pivot" || section.Widget == "heatmap")) && !checkAggregateSection(section, shown) {
+				continue
+			}
+			if section.Widget == "record-list" && section.CardLabel != "id" {
+				if _, ok := shown.Field(section.CardLabel); !ok {
+					continue
+				}
+			}
+			if section.CheckLeaderboard(shown) != nil {
+				continue
+			}
+			if section.CheckHistogram(shown) != nil {
+				continue
+			}
+			if section.Avatar != nil {
+				avatar := *section.Avatar
+				avatar.DetailFields = slices.DeleteFunc(slices.Clone(avatar.DetailFields), func(name string) bool { _, ok := shown.Field(name); return name != "id" && !ok })
+				section.Avatar = &avatar
+			}
+			if section.CheckResourceList(shown) != nil {
+				continue
+			}
+			projected, ok := page.ProjectExploration(section, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+				e, ok := entities[ref.Name]
+				return e, ok && e.App == ref.App
+			}, func(b platform.AssetBinding) (platform.LinkType, bool) {
+				for _, d := range registeredDefinitions {
+					if d.Ref == b.Ref {
+						if selected := d.LinkVersion(b.SourceVersion); selected != nil && selected.LinkType != nil {
+							return *selected.LinkType, true
+						}
+					}
+				}
+				return platform.LinkType{}, false
+			})
+			if !ok {
+				continue
+			}
+			section = projected
+			if section.CheckContextViews(shown) != nil {
+				continue
+			}
+			if section.CheckRecordComparison(shown) != nil {
+				continue
+			}
+			if section.CheckRecordCard(shown) != nil {
+				continue
+			}
+			if section.CheckSparkline(shown) != nil {
+				continue
+			}
+			if section.CheckTerms(shown) != nil {
+				continue
+			}
+			if section.Widget == "action-table" {
+				if len(section.Actions) != 1 {
+					continue
+				}
+				a, offered := actions[section.Actions[0].Name]
+				if !offered || section.CheckActionTable(shown, a) != nil {
+					continue
+				}
+			}
+			if page.CheckObservation(section, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+				e, ok := entities[ref.Name]
+				return e, ok && e.App == ref.App
+			}) != nil {
+				continue
+			}
+			if section.CheckCollectionAnalysis(shown) != nil {
+				if section.Analysis != nil && section.Analysis.Kind == "record-axes" && page.Document != nil {
+					doc := *page.Document
+					doc.Variables = maps.Clone(doc.Variables)
+					delete(doc.Variables, section.AnalysisXVariable)
+					delete(doc.Variables, section.AnalysisYVariable)
+					page.Document = &doc
+				}
+				continue
+			}
+			if section.CheckSummary(shown) != nil {
+				continue
+			}
+			if section.CheckRecordGantt(shown) != nil {
+				continue
+			}
+			if section.CheckRecordPicker(shown) != nil {
+				continue
+			}
+			if section.CheckRecordCalendar(shown) != nil {
+				continue
+			}
+			if section.CheckRecordEvents(shown) != nil {
+				continue
+			}
+			if section.CheckCollectionBuilderFields(shown) != nil || section.CheckMap(shown) != nil || page.CheckSceneBinding(section, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+				actual, ok := entities[ref.Name]
+				return actual, ok && actual.App == ref.App
+			}) != nil {
+				continue
+			}
+			if section.CheckScatter(shown) != nil {
+				continue
+			}
+			if section.CheckRecordChart(shown) != nil {
+				continue
+			}
+			if section.CheckTimeline(shown) != nil {
+				continue
+			}
+			if section.CheckStatusTracker(shown) != nil {
+				continue
+			}
+			if page.CheckKanban(section, shown) != nil {
+				continue
+			}
+			parentType := page.Object.Name
+			if section.ParentSelection != "" {
+				for _, selection := range page.Selections {
+					if selection.Name == section.ParentSelection {
+						parentType = selection.Object.Name
+					}
+				}
+			}
+			if section.Relation != "" && !slices.ContainsFunc(shown.Fields, func(f platform.FieldInfo) bool {
+				return f.Type == "reference" && f.Ref == parentType && f.Inverse == section.Relation
+			}) {
+				continue // the member cannot follow this parent reference
+			}
+			if section.Widget == "form" {
+				if _, offered := actions[shown.Type+".create"]; !offered {
+					continue
+				}
+			}
+			if section.Widget == "form" && slices.ContainsFunc(slices.Collect(maps.Keys(section.Inputs)), func(name string) bool {
+				field, writable := shown.Field(name)
+				if !writable || !field.WritesAny(m.RolesIn(shown.App)) {
+					return true
+				}
+				binding := section.Inputs[name]
+				if binding.Source != "subject" {
+					return false
+				}
+				_, err := platform.RecordPathField(parentType, binding.Path, func(typ string) (platform.EntityInfo, bool) {
+					info, visible := entities[typ]
+					return info, visible
+				})
+				return err != nil
+			}) {
+				continue // no manual-input fallback for a hidden bound source
+			}
+			if section.Widget == "record-links" {
+				section.RecordLinks = slices.DeleteFunc(slices.Clone(section.RecordLinks), func(group platform.PageRecordLink) bool {
+					probe := section
+					probe.RecordLinks = []platform.PageRecordLink{group}
+					return probe.CheckRecordLinks(shown, func(typ string) (platform.EntityInfo, bool) { info, ok := entities[typ]; return info, ok }) != nil
+				})
+				if len(section.RecordLinks) == 0 {
+					continue
+				}
+			}
+			section.TableColumns = slices.DeleteFunc(slices.Clone(section.TableColumns), func(c platform.PageTableColumn) bool {
+				return c.Field != "id" && !slices.Contains(section.Fields, c.Field)
+			})
+			if len(section.Facets) > 0 && slices.ContainsFunc(section.Facets, func(f platform.PageFacet) bool { _, ok := shown.Field(f.Field); return !ok }) {
+				continue
+			}
+			if section.Widget == "filter" && len(section.Fields) == 0 && len(section.Facets) == 0 && section.FilterSearchVariable == "" {
+				continue
+			}
+			if section.InlineEdit != nil {
+				edit := *section.InlineEdit
+				edit.Fields = slices.DeleteFunc(slices.Clone(edit.Fields), func(name string) bool {
+					f, visible := shown.Field(name)
+					return !visible || f.ReadOnly || !f.WritesAny(m.RolesIn(shown.App))
+				})
+				if _, offered := actions[edit.Action.Name]; !offered || len(edit.Fields) == 0 {
+					section.InlineEdit = nil
+				} else {
+					section.InlineEdit = &edit
+				}
+			}
+			if section.Widget == "inline-action" && len(section.Actions) == 1 && len(section.ActionDefaults) > 0 {
+				a, ok := actions[section.Actions[0].Name]
+				if !ok || section.CheckInlineAction(shown, a) != nil {
+					continue
+				}
+			}
+			if section.Widget == "inline-action" && len(section.Actions) != 1 {
+				continue
+			}
+			if section.Function != nil {
+				owner, ok := t.app(section.Function.Ref.App).(interface {
+					FunctionDefinition(string, int) (platform.AIFunction, int, bool)
+				})
+				if !ok {
+					continue
+				}
+				versionText, ok := strings.CutPrefix(section.Function.SourceVersion, t.app(section.Function.Ref.App).Manifest().Version+".function-")
+				version, err := strconv.Atoi(versionText)
+				if !ok || err != nil {
+					continue
+				}
+				function, _, exists := owner.FunctionDefinition(section.Function.Ref.Name, version)
+				if !exists || !m.May(section.Function.Ref.App, function.Name, function.Roles).Allow || slices.ContainsFunc(function.Fields, func(name string) bool {
+					field, found := shown.Field(name)
+					return !found || !field.ReadsAny(m.RolesIn(section.Function.Ref.App))
+				}) {
+					continue
+				}
+			}
+			if _, creates := actions[shown.Type+".create"]; section.Widget == "form" && !creates {
+				continue // a form this member could not submit is not on their page
+			}
+			if section.Operation != nil {
+				op, _, err := t.pageOperation(section.Operation)
+				if err != nil || !m.May(section.Operation.Ref.App, op.Name, op.Roles).Allow || slices.ContainsFunc(slices.Collect(maps.Values(section.Inputs)), func(binding platform.Binding) bool {
+					if binding.Source != "subject" || len(binding.Path) == 0 {
+						return false
+					}
+					_, ok := shown.Field(binding.Path[0])
+					return !ok
+				}) {
+					continue
+				}
+			}
+			sections = append(sections, section)
+		}
+		page.Sections = sections
+		if page.Document != nil {
+			doc := *page.Document
+			doc.Queries = map[string]platform.PageQuery{}
+			doc.Variables = maps.Clone(doc.Variables)
+			for id, v := range doc.Variables {
+				if c := v.Source; c != nil && c.Compute != nil {
+					ref := page.RecordResourceObject(c.Compute.RecordVariable)
+					object, ok := entities[ref.Name]
+					op, _, err := t.pageOperation(&c.Compute.Operation)
+					if !ok || err != nil || !m.May(c.Compute.Operation.Ref.App, op.Name, op.Roles).Allow || page.CheckComputeResource(*c.Compute, object, op, v.Type) != nil {
+						delete(doc.Variables, id)
+						continue
+					}
+				}
+				if v.Mode == "aggregate" && v.Source != nil {
+					q := doc.Queries[v.Source.Query]
+					if q.Object.Name == "" {
+						q = page.Document.Queries[v.Source.Query]
+					}
+					info, ok := entities[q.Object.Name]
+					if !ok || doc.CheckAggregateScalar(v, info) != nil {
+						delete(doc.Variables, id)
+					}
+				}
+				if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
+					info, ok := entities[v.Source.Object.Name]
+					if !ok || page.CheckPropertySchema(v, info) != nil {
+						delete(doc.Variables, id)
+					}
+				}
+				if v.Mode == "shared" && (v.Type == "record" || v.Type == "filter" || v.Type == "record-set") && v.Source != nil && v.Source.Object != nil {
+					if _, ok := entities[v.Source.Object.Name]; !ok {
+						delete(doc.Variables, id)
+					}
+				}
+			}
+			for id, q := range page.Document.Queries {
+				info, ok := entities[q.Object.Name]
+				if !ok {
+					continue
+				}
+				var named *platform.Definition
+				if q.Query != nil {
+					for i := range registeredDefinitions {
+						if registeredDefinitions[i].Ref == q.Query.Ref {
+							named = registeredDefinitions[i].QuerySourceVersion(q.Query.SourceVersion)
+							break
+						}
+					}
+				}
+				if named != nil && named.LinkType != nil {
+					l := named.LinkType
+					parent, pok := entities[l.Parent.Name]
+					child, cok := entities[l.Child.Name]
+					if !pok || !cok || l.CheckSchema(parent, child) != nil {
+						named = nil
+					}
+				}
+				if page.CheckResourceListQuery(id, named) == nil && page.CheckAvatarQuery(id, named, info) == nil && page.CheckQuerySchema(q, info, named) == nil && (named == nil || named.LinkType != nil || named.Query != nil && checkNamedQuery(*named.Query, info) == nil) {
+					doc.Queries[id] = q
+				}
+			}
+			page.Document = &doc
+		}
+		page.Document = page.Document.Visible(sections)
+		// Removing a resource producer also removes dependent visibility
+		// branches. Repeat to closure without exposing orphan inputs.
+		if page.Document != nil {
+			for {
+				visible := map[string]bool{}
+				for _, node := range page.Document.Nodes {
+					if node.Kind == "widget" {
+						visible[node.Section] = true
+					}
+				}
+				before := len(page.Sections)
+				page.Sections = slices.DeleteFunc(page.Sections, func(section platform.Section) bool { return !visible[section.ID] })
+				if len(page.Sections) == before {
+					break
+				}
+				page.Document = page.Document.Visible(page.Sections)
+			}
+		}
+	}
+	if page.Document != nil {
+		for i, s := range page.Sections {
+			if s.Widget == "button-group" {
+				page.Sections[i].Buttons = slices.DeleteFunc(slices.Clone(s.Buttons), func(b platform.PageButton) bool {
+					return !slices.ContainsFunc(page.Document.Events, func(e platform.PageEventBinding) bool { return e.Source == s.ID && e.Control == b.ID })
+				})
+			}
+		}
+	}
+	def.Requires = append([]platform.AssetRef{page.Object}, page.Actions...)
+	def.Page = &page
+	return def, true
+}
+
+// visibleApplication is an application definition as m sees it: absent unless
+// they may open one of its pages (ADR-0036); its pages, groups, resources,
+// queries and variables are narrowed to the definitions visible so far.
+func (t *Tenant) visibleApplication(registered platform.Definition, m platform.Member, visible []platform.Definition, entities map[string]platform.EntityInfo, opens, visibleResources map[platform.AssetRef]bool) (platform.Definition, bool) {
+	if registered.Ref.Kind != platform.AssetApp || registered.Application == nil || m.Roles[registered.Ref.App] == "" {
+		return platform.Definition{}, false
+	}
+	def, application := registered, *registered.Application
+	closed := func(name string) bool {
+		return !opens[platform.AssetRef{App: def.Ref.App, Kind: platform.AssetPage, Name: name}]
+	}
+	application.Pages = slices.DeleteFunc(slices.Clone(application.Pages), closed)
+	if len(application.Pages) == 0 {
+		return platform.Definition{}, false
+	}
+	// A heading over none of this member's pages is not in their navigation.
+	groups := make([]platform.AppGroup, 0, len(application.Groups))
+	for _, g := range application.Groups {
+		if g.Pages = slices.DeleteFunc(slices.Clone(g.Pages), closed); len(g.Pages) > 0 {
+			groups = append(groups, g)
+		}
+	}
+	application.Groups = groups
+	application.Header = application.VisibleHeader()
+	application.Resources = slices.DeleteFunc(slices.Clone(application.Resources), func(ref platform.AssetRef) bool {
+		if ref.Kind == platform.AssetFlow {
+			return !m.Holds("build", "builder") || t.procs == nil || !t.procs.HasPublishedFlow(ref.Name)
+		}
+		return !visibleResources[ref]
+	})
+	application.Queries = maps.Clone(application.Queries)
+	application.Variables = maps.Clone(application.Variables)
+	for id, q := range application.Queries {
+		info, ok := entities[q.Object.Name]
+		var named *platform.Definition
+		if q.Query != nil {
+			for _, d := range visible {
+				if d.Ref == q.Query.Ref {
+					named = d.QuerySourceVersion(q.Query.SourceVersion)
+					break
+				}
+			}
+		}
+		if named != nil && named.LinkType != nil {
+			l := named.LinkType
+			parent, pok := entities[l.Parent.Name]
+			child, cok := entities[l.Child.Name]
+			if !pok || !cok || l.CheckSchema(parent, child) != nil {
+				named = nil
+			}
+		}
+		if !ok || application.QueryPage().CheckQuerySchema(q, info, named) != nil {
+			delete(application.Queries, id)
+		}
+	}
+	for changed := true; changed; {
+		changed = false
+		for id, q := range application.Queries {
+			missing := q.MissingSetInput(application.Queries)
+			for _, param := range q.Variables() {
+				if _, ok := application.Variables[param]; !ok {
+					missing = true
+				}
+			}
+			if missing {
+				delete(application.Queries, id)
+				changed = true
+			}
+		}
+		for id, v := range application.Variables {
+			missing := false
+			if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
+				info, ok := entities[v.Source.Object.Name]
+				_, parent := application.Variables[v.Source.Variable]
+				missing = !ok || !parent || application.QueryPage().CheckPropertySchema(v, info) != nil
+			}
+			if v.Mode == "aggregate" && v.Source != nil {
+				_, ok := application.Queries[v.Source.Query]
+				missing = !ok
+			}
+			if v.Mode == "resource" && v.Source != nil {
+				if (v.Source.Kind == "record" || v.Source.Kind == "filter" || v.Source.Kind == "record-set") && v.Source.Object != nil {
+					_, ok := entities[v.Source.Object.Name]
+					missing = !ok
+					if ok && v.Type == "filter" {
+						source := *v.Source
+						info := entities[source.Object.Name]
+						source.Fields = slices.DeleteFunc(slices.Clone(source.Fields), func(name string) bool {
+							field, exists := info.Field(name)
+							return !exists || (field.Type != "choice" && field.Type != "boolean" && field.Type != "reference")
+						})
+						v.Source = &source
+						application.Variables[id] = v
+						missing = len(source.Fields) == 0
+					}
+				} else {
+					_, ok := application.Queries[v.Source.Query]
+					missing = !ok
+				}
+			}
+			if v.Expression != nil {
+				for _, arg := range v.Expression.Args {
+					if arg.Variable != "" {
+						if _, ok := application.Variables[arg.Variable]; !ok {
+							missing = true
+						}
+					}
+				}
+			}
+			if missing {
+				delete(application.Variables, id)
+				changed = true
+			}
+		}
+	}
+	def.Requires = application.Dependencies(def.Ref.App)
+	def.Application = &application
+	return def, true
 }
