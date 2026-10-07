@@ -186,6 +186,9 @@ func (d *Console) defaults() defaults {
 // account is member's effective profile over the tenant's defaults. Call with d.mu held.
 func (d *Console) account(member string, def defaults) Account {
 	out := Account{Profile: Profile{Member: member}}
+	if m := d.members[member]; m != nil {
+		out.Language = m.Language
+	}
 	if p := d.profiles[member]; p != nil {
 		out.Profile = *p
 	}
@@ -266,7 +269,7 @@ func (d *Console) decideProfile(c platform.Caller, s *pb.Submission) (func(*pb.C
 	return func(*pb.ChangeRecord) {
 		cur := d.profiles[id]
 		if cur == nil {
-			cur = &Profile{Member: id}
+			cur = &Profile{Member: id, Language: d.members[id].Language}
 			d.profiles[id] = cur
 		}
 		set := func(name string, dst *string, v string) {

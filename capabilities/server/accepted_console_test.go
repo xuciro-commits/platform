@@ -149,3 +149,93 @@ func TestJournalAcceptedConsoleCrashAfterCommit(t *testing.T) {
 	}
 	CheckReplay(t, recovered, entries, compose)
 }
+
+// An unavailable append must not leak directory or catalog changes. Repeating
+// grants exercises slice compaction, rather than only appending a first grant.
+func TestAcceptedConsoleAccessIsolation(t *testing.T) {
+	compose := func() *Tenant {
+		tn, err := NewTenant("access-isolation", NewConsole("access-isolation",
+			Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}},
+			Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{}}}), newNotes("access-isolation", "a"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tn
+	}
+	tn := compose()
+	d := consoleOf(tn)
+	var entries []Entry
+	seq := 0
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	decide := func(schema, typ, id, payload string) {
+		t.Helper()
+		seq++
+		admin, _ := tn.Member("admin")
+		sub := &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: PlatformApp, IdempotencyKey: fmt.Sprint(seq), Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}
+		before, _ := d.AcceptedState()
+		permitted := tn.app("a").Manifest().Actions.PermitsAny([]string{"scribe"}, "a.note")
+		tn.AcceptResult = func(Entry, string, string) ([]byte, error) {
+			got, _ := d.AcceptedState()
+			if schema == SchemaMemberSuspend && !d.noticed("bo", "old-session", "", "sign-in", now) {
+				t.Fatal("failed append ended a session")
+			}
+			if string(got) != string(before) {
+				t.Fatal("staging changed live directory")
+			}
+			if tn.app("a").Manifest().Actions.PermitsAny([]string{"scribe"}, "a.note") != permitted {
+				t.Fatal("staging changed live catalog")
+			}
+			return nil, errors.New("append unavailable")
+		}
+		if _, err := tn.Submit(admin, sub, now); err == nil {
+			t.Fatal("failed append succeeded")
+		}
+		after, _ := d.AcceptedState()
+		if string(after) != string(before) {
+			t.Fatal("failed append changed state")
+		}
+		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+		if _, err := tn.Submit(admin, sub, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	decide(SchemaRoleSave, RoleType, "scribe", `{"app":"a","actions":["a.note"]}`)
+	decide(SchemaGrant, MemberType, "bo", `{"app":"a","role":"scribe"}`)
+	decide(SchemaGrant, MemberType, "bo", `{"app":"a","role":"scribe","reason":"replacement"}`)
+	decide(SchemaGrant, MemberType, "bo", `{"app":"a","role":"writer"}`)
+	decide(SchemaRevoke, MemberType, "bo", `{"app":"a","role":"writer"}`)
+	if bo, _ := tn.Member("bo"); !bo.Holds("a", "scribe") || bo.Holds("a", "writer") {
+		t.Fatal("role-specific revoke changed another grant")
+	}
+	decide(SchemaProfileUpdate, ProfileType, "bo", `{"mail":true,"displayName":"Before"}`)
+	decide(SchemaProfileUpdate, ProfileType, "bo", `{"mail":false,"displayName":"After"}`)
+	if a := d.Account("bo"); a.Mail == nil || *a.Mail || a.DisplayName != "After" {
+		t.Fatal("profile not committed")
+	}
+	d.noticed("bo", "old-session", "", "sign-in", now)
+	decide(SchemaTokenIssue, TokenType, "ci", `{"label":"CI"}`)
+	secret, ok := d.Minted("ci", "admin", now)
+	if !ok {
+		t.Fatal("token secret unavailable")
+	}
+	if !d.noticed("admin", secret, "", "token", now) {
+		t.Fatal("token session refused")
+	}
+	if sessions := d.Sessions("admin", secret); len(sessions) != 1 || sessions[0].Token != "ci" {
+		t.Fatal("token session lacks owning token")
+	}
+	decide(SchemaTokenRevoke, TokenType, "ci", `{}`)
+	if len(d.Sessions("admin", secret)) != 0 || d.noticed("admin", secret, "", "token", now) {
+		t.Fatal("revoked token session survived")
+	}
+	decide(SchemaMemberSuspend, MemberType, "bo", `{}`)
+	decide(SchemaMemberResume, MemberType, "bo", `{}`)
+	if d.noticed("bo", "old-session", "", "sign-in", now) {
+		t.Fatal("resume revived a suspended session")
+	}
+	decide(SchemaRoleRemove, RoleType, "scribe", `{}`)
+	if x, _ := tn.Explain("bo", "a.note"); x.Verdict.Allow {
+		t.Fatal("removed role still permits actions")
+	}
+	CheckReplay(t, tn, entries, compose)
+}

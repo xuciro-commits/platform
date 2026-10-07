@@ -5,6 +5,7 @@
 # project on its own ports and removes it afterwards. Needs docker, curl, jq.
 set -euo pipefail
 cd "$(dirname "$0")"
+export PLATFORM_PERSONAL_TOKEN_KEY="$(openssl rand -hex 32)"
 export PG_PORT=55433 IDP_PORT=58480 MANUFACTURING_PORT=58490 HOSPITALITY_PORT=58495 SINK_PORT=58497 FILES_PORT=59000 FILES_CONSOLE_PORT=59001
 compose() { docker compose -p platform-rehearsal -f compose.yaml "$@"; }
 IDP=http://localhost:$IDP_PORT/auth/v1 MANUFACTURING=http://localhost:$MANUFACTURING_PORT HOSPITALITY=http://localhost:$HOSPITALITY_PORT SINK=http://localhost:$SINK_PORT

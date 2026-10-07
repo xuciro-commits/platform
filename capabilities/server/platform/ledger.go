@@ -80,6 +80,14 @@ func (l *Ledger) Extend(classes []string, actions []Action) error {
 	return nil
 }
 
+// HistoricalSchemas retains retired schemas for journal and snapshot recovery.
+// It adds no catalog action, so ordinary Receive still refuses these schemas.
+func (l *Ledger) HistoricalSchemas(schemas ...*pb.SchemaRef) *kernel.Error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.schemas.Learn(schemas...)
+}
+
 // Declarations are the package's authority declarations, for edges (K5 A9).
 func (l *Ledger) Declarations() []*pb.AuthorityDeclaration { return l.declarations }
 

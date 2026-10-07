@@ -22,7 +22,14 @@ docker pull ghcr.io/tinygo-org/tinygo@sha256:52907162ca3ba807c3c0914e07daffc1fe0
 ```
 
 ```bash
-cd deploy/local && docker compose up -d --build
+cd deploy/local
+# Only on first setup; preserve this key across restarts. Never commit .env.
+if ! rg -q '^PLATFORM_PERSONAL_TOKEN_KEY=' .env 2>/dev/null; then
+  printf 'PLATFORM_PERSONAL_TOKEN_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
+fi
+chmod 600 .env
+chmod g+w hospitality/tenants.json manufacturing/tenants.json
+docker compose up -d --build
 ```
 
 ```bash
@@ -241,3 +248,9 @@ sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://
 | `http://webhook-sink:8080/a2a`（供应商智能体替身） | 可留空（真实对方填存放其令牌的密钥名） | 勾"内部地址"；外发类型 `mes/lead-time` |
 
 发布我们自己的智能体：App settings → Agents → "Published over A2A" 填 `csm.triage`；卡片在 `http://localhost:8495/a2a/hotel-a/csm.triage/.well-known/agent-card.json`，调用方用成员令牌按 A2A 1.0 JSON-RPC 发 `SendMessage`（请求头 `A2A-Version: 1.0`）。
+
+宿主控制台的管理员由 `-host-admins` 显式指定 OIDC subject，租户的 platform.admin 不自动获得宿主权限。本地酒店配置 `user:manager@hotel.test`，制造配置 `user:sup@plant.test`；其它账号访问 `/v1/host/*` 被拒绝。新租户由模板创建并写入可写的 tenants.json，需在生产配置中选择实际宿主运维身份。
+
+新建租户需要写回挂载的 `tenants.json`。宿主仍以 `nobody` 运行，Compose 用 `TENANTS_GID` 加入文件所属组（macOS 的默认 staff 为 20）；启动前运行 `chmod g+w deploy/local/{hospitality,manufacturing}/tenants.json`，其他系统以 `TENANTS_GID=$(id -g) docker compose -f deploy/local/compose.yaml up -d --build` 启动。文件只含租户配置与身份引用，不含登录密钥。
+
+OIDC delivery 使用 `PLATFORM_PERSONAL_TOKEN_KEY`（至少 32 字节）签发个人令牌，未配置时拒绝启动；该密钥独立于 OIDC 公钥，重启时必须保留，轮换会使已签发的个人令牌失效。开发令牌宿主只用于开发；lightweight 使用其已有的私有签名密钥。

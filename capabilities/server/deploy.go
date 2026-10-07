@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -22,6 +23,7 @@ import (
 // development tokens, or with a PostgreSQL journal and an OpenID provider.
 type Deployment struct {
 	Addr, Database, Issuer, Keys, Web string
+	HostAdmins                        string // explicit authenticated subjects; tenant roles do not imply host authority
 	// TenantsFile lists the host's tenants with their seats and starting
 	// settings (ADR-0078 §2.2); the console appends to it. Empty: the
 	// binary's development tenant. TemplatesDir holds tenant templates.
@@ -63,6 +65,7 @@ func Flags(addr string) *Deployment {
 	flag.StringVar(&d.Addr, "addr", addr, "listen address")
 	flag.StringVar(&d.Database, "database", "", "PostgreSQL URL of the journal (empty: memory only)")
 	flag.StringVar(&d.Issuer, "oidc-issuer", "", "OpenID issuer whose access tokens are accepted (empty: development tokens, the token is the subject)")
+	flag.StringVar(&d.HostAdmins, "host-admins", "", "comma-separated authenticated subjects allowed to administer this host; empty: no host administrators")
 	flag.StringVar(&d.Keys, "oidc-keys", "", "JWKS URL of the issuer, when the server reaches it on another address")
 	flag.StringVar(&d.Files, "files", "", "S3-compatible store of file bytes, http(s)://host:port/bucket, keys from PLATFORM_S3_ACCESS_KEY and PLATFORM_S3_SECRET_KEY (empty: memory)")
 	flag.StringVar(&d.TenantsFile, "tenants", "", "JSON file with the host's tenants, their seats and starting settings; the host console appends to it (empty: the built-in development tenant)")
@@ -198,6 +201,9 @@ func (d *Deployment) restoreTenants(ctx context.Context, journal Journals, code 
 			log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 			continue
 		}
+		if console := consoleOf(t); console != nil {
+			console.closeTokenSecretWindows()
+		}
 		fresh[t.ID] = after == 0 && len(entries) == 0
 		if t.procs != nil {
 			if err := t.procs.Check(); err != nil { // running instances need their flow's version (ADR-0020 D6)
@@ -252,6 +258,9 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		}
 		fmt.Println(token)
 		return nil
+	}
+	if err := d.configurePersonalTokens(); err != nil {
+		return err
 	}
 	registry := newTenantRegistry(tenants)
 	flush := exportTelemetry(ctx, filepath.Base(os.Args[0])) // traces and metrics, when an OTLP endpoint is set (ADR-0027 D5)
@@ -381,6 +390,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		}
 	}
 	host := NewHost(authenticate, tenants...)
+	host.HostAdmins = d.hostAdministrators()
 	host.tenantsFrom = registry.list
 	host.Templates = d.Templates
 	if d.Rebuild != nil { // the host console creates tenants (ADR-0078 §2.2)
@@ -577,4 +587,29 @@ func runWorkFrom(current func() []*Tenant) {
 			}
 		}
 	}()
+}
+
+// Host authority is a deployment choice, independent of tenant membership.
+func (d *Deployment) hostAdministrators() map[string]bool {
+	out := map[string]bool{}
+	for _, subject := range strings.Split(d.HostAdmins, ",") {
+		if subject = strings.TrimSpace(subject); subject != "" {
+			out[subject] = true
+		}
+	}
+	return out
+}
+
+// OIDC verifies identities with a public key; personal tokens need a separate,
+// durable private secret. An external issuer must never use the development key.
+func (d *Deployment) configurePersonalTokens() error {
+	if d.Issuer == "" {
+		return nil
+	}
+	key := os.Getenv("PLATFORM_PERSONAL_TOKEN_KEY")
+	if len(key) < 32 {
+		return fmt.Errorf("OIDC delivery requires PLATFORM_PERSONAL_TOKEN_KEY of at least 32 bytes")
+	}
+	UseTokenKey([]byte(key))
+	return nil
 }

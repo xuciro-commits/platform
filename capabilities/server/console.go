@@ -112,6 +112,9 @@ func NewConsole(tenant string, seats ...Seat) *Console {
 		packages: map[string]*InstalledPackage{},
 		index:    &PackageIndex{},
 		ledger:   platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ProfileType, RoleType, PolicyType, TeamType, TokenType, ProjectType, PackageType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType)}
+	if err := d.ledger.HistoricalSchemas(&pb.SchemaRef{Name: legacyMemberLanguage, Version: 1}); err != nil {
+		panic(err)
+	}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -210,6 +213,16 @@ func (d *Console) Restore(raw json.RawMessage) error {
 // restoreAccess takes the access configuration (ADR-0078 D) and tokens
 // (ADR-0079 D) of a decided state.
 func (d *Console) restoreAccess(s consoleState) {
+	if d.t != nil {
+		for id, role := range d.roles {
+			next := s.Roles[id]
+			if next == nil || next.App != role.App {
+				if app := d.t.app(role.App); app != nil {
+					app.Manifest().Actions.DefineRole(id, nil)
+				}
+			}
+		}
+	}
 	d.roles, d.policies, d.teams, d.tokens = map[string]*CustomRole{}, map[string]*PolicyRecord{}, map[string]*Team{}, map[string]*Token{}
 	if s.Tokens != nil {
 		d.tokens = s.Tokens
@@ -269,6 +282,8 @@ func (d *Console) addressLocked(member string) string {
 func clone(m *platform.Member) platform.Member {
 	out := *m
 	out.Roles = maps.Clone(m.Roles)
+	out.Grants = slices.Clone(m.Grants)
+	out.Scopes = slices.Clone(m.Scopes)
 	return out
 }
 
@@ -292,29 +307,42 @@ func (*Console) AcceptedActionSchemas() []string {
 func (d *Console) ForkAcceptedState() (platform.App, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	members := make(map[string]*platform.Member, len(d.members))
-	for id, member := range d.members {
-		copy := clone(member)
-		members[id] = &copy
+
+	raw, err := json.Marshal(d.state())
+	if err != nil {
+		return nil, err
 	}
-	projects := make(map[string]*BuildProject, len(d.projects))
-	for id, project := range d.projects {
-		copy := *project
-		projects[id] = &copy
+	var state consoleState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return nil, err
 	}
-	packages := make(map[string]*InstalledPackage, len(d.packages))
-	for id, p := range d.packages {
-		copy := *p
-		packages[id] = &copy
+	// Every mutable slice, pointer and map belongs to this private decision.
+	fork := NewConsole(d.tenant)
+	fork.ledger, fork.index, fork.t = d.ledger, d.index, d.t
+	fork.members, fork.subjects = state.Members, state.Subjects
+	if state.Profiles != nil {
+		fork.profiles = state.Profiles
 	}
-	profiles := make(map[string]*Profile, len(d.profiles))
-	for id, p := range d.profiles {
-		copy := *p
-		profiles[id] = &copy
+	if state.Projects != nil {
+		fork.projects = state.Projects
 	}
-	return &Console{tenant: d.tenant, members: members, subjects: maps.Clone(d.subjects), profiles: profiles, projects: projects,
-		packages: packages, index: d.index, ledger: d.ledger, t: d.t,
-		roles: maps.Clone(d.roles), policies: maps.Clone(d.policies), teams: maps.Clone(d.teams), tokens: maps.Clone(d.tokens), minted: d.minted, lastSeen: d.lastSeen}, nil
+	if state.Packages != nil {
+		fork.packages = state.Packages
+	}
+	if state.Roles != nil {
+		fork.roles = state.Roles
+	}
+	if state.Policies != nil {
+		fork.policies = state.Policies
+	}
+	if state.Teams != nil {
+		fork.teams = state.Teams
+	}
+	if state.Tokens != nil {
+		fork.tokens = state.Tokens
+	}
+	fork.minted, fork.lastSeen = maps.Clone(d.minted), maps.Clone(d.lastSeen)
+	return fork, nil
 }
 
 func (d *Console) AcceptedState() (json.RawMessage, error) {
@@ -354,6 +382,17 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	// Session revocations are exposed only after the standing/token decision commits.
+	for id, member := range state.Members {
+		if old := d.members[id]; old != nil && old.Status != member.Status && !member.Active() {
+			d.endSessions(id, "")
+		}
+	}
+	for id, token := range d.tokens {
+		if state.Tokens[id] == nil {
+			d.endSessions(token.Member, id)
+		}
+	}
 	d.members, d.subjects, d.profiles = state.Members, state.Subjects, state.Profiles
 	if d.profiles == nil {
 		d.profiles = map[string]*Profile{}
@@ -367,6 +406,9 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 // (effects, endpoints, settings) may notify members by role as they apply.
 func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		if c.Replaying && s.GetSchema().GetName() == legacyMemberLanguage {
+			return d.replayMemberLanguage(s)
+		}
 		declared, _ := d.ledger.Catalog.Action(s.GetSchema().GetName())
 		if declared.Target == OperationType {
 			return d.decideOperation(c, s, now)
@@ -589,10 +631,15 @@ func (d *Console) Input(c platform.Caller, name string, _ []byte, now time.Time)
 // else the tenant's default; "" is English, or what the browser asks for.
 func (d *Console) language(member string) string {
 	d.mu.Lock()
-	p := d.profiles[member]
+	preferred := ""
+	if p := d.profiles[member]; p != nil {
+		preferred = p.Language
+	} else if m := d.members[member]; m != nil {
+		preferred = m.Language
+	}
 	d.mu.Unlock()
-	if p != nil && p.Language != "" {
-		return p.Language
+	if preferred != "" {
+		return preferred
 	}
 	return d.tenantDefault(SettingLanguage)
 }

@@ -28,15 +28,16 @@ func TestCatalogPerCaller(t *testing.T) {
 	read, lang := platformserver.SchemaNotificationRead, platformserver.SchemaProfileUpdate
 	// Every member may call the platform's declared operations (ADR-0047 §13).
 	call := platformserver.SchemaOperationCall
+	delegate, issue, revoke := platformserver.SchemaDelegate, platformserver.SchemaTokenIssue, platformserver.SchemaTokenRevoke
 	for _, c := range []struct {
 		who  platform.Caller
 		want []string
 	}{
-		{sup, []string{lang, read, call, SchemaAdvice, SchemaRelease, SchemaReason, SchemaConfirm, SchemaAnswer, SchemaResend}},
-		{op1, []string{lang, read, call, SchemaStart, SchemaComplete, SchemaNC, SchemaReason}},
-		{qa1, []string{lang, read, call, SchemaNC, SchemaSign}},
-		{assistant, []string{lang, read, call, SchemaReason, SchemaResend}},
-		{gw, []string{lang, read, call}}, // every member chooses its language and marks its own notifications
+		{sup, []string{lang, delegate, issue, revoke, read, call, SchemaAdvice, SchemaRelease, SchemaReason, SchemaConfirm, SchemaAnswer, SchemaResend}},
+		{op1, []string{lang, delegate, issue, revoke, read, call, SchemaStart, SchemaComplete, SchemaNC, SchemaReason}},
+		{qa1, []string{lang, delegate, issue, revoke, read, call, SchemaNC, SchemaSign}},
+		{assistant, []string{lang, delegate, issue, revoke, read, call, SchemaReason, SchemaResend}},
+		{gw, []string{lang, delegate, issue, revoke, read, call}}, // every member chooses its language and marks its own notifications
 	} {
 		if got := schemas(p.tenant.Catalog(c.who.Member)); !slices.Equal(got, c.want) {
 			t.Errorf("%s: catalog %v, want %v", c.who.ID, got, c.want)

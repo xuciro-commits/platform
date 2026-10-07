@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"google.golang.org/protobuf/encoding/protojson"
 	"testing"
 	"time"
 
@@ -31,14 +32,20 @@ func TestAcceptedConsoleEnterpriseRenameReplay(t *testing.T) {
 		t.Helper()
 		admin, _ := tn.Member("admin")
 		sub := &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: PlatformApp, IdempotencyKey: key,
-			Target: &pb.EntityRef{Type: MemberType, Id: "admin"}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}
+			Target: func() *pb.EntityRef {
+				if schema == SchemaAdd {
+					return &pb.EntityRef{Type: MemberType, Id: "extra"}
+				}
+				return &pb.EntityRef{Type: MemberType, Id: "admin"}
+			}(), Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}
 		if _, err := tn.Submit(admin, sub, now); err != nil {
 			t.Fatal(err)
 		}
 	}
 	live := compose("org")
 	attach(live)
-	decide(live, SchemaGrant, "old-grant", `{"app":"org","role":"admin"}`)
+	// A valid Console decision freezes the directory with its legacy org role.
+	decide(live, SchemaAdd, "old-add", `{"subject":"user:extra@example.test"}`)
 	restored := compose("enterprise")
 	prior, _ := restored.app(PlatformApp).(*Console).AcceptedState()
 	batch, _, err := decodeAcceptedBatch(entries[0].Body)
@@ -97,4 +104,61 @@ func TestAcceptedConsoleEnterpriseRenameReplay(t *testing.T) {
 	if member.Roles["enterprise"] != "admin" || member.Roles["org"] != "" {
 		t.Fatal("snapshot lost the canonical grant")
 	}
+}
+
+func TestRetiredMemberLanguageReplaysWithoutReopeningAction(t *testing.T) {
+	compose := func() *Tenant {
+		tn, err := NewTenant("legacy-language", NewConsole("legacy-language", Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tn
+	}
+	tn := compose()
+	admin, _ := tn.Member("admin")
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	sub := &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: PlatformApp, IdempotencyKey: "old-language", Target: &pb.EntityRef{Type: MemberType, Id: admin.ID}, Schema: &pb.SchemaRef{Name: legacyMemberLanguage, Version: 1}, Payload: []byte(`{"language":"zh-CN"}`)}
+	raw, _ := protojson.Marshal(sub)
+	principal, _ := json.Marshal(admin)
+	entries := []Entry{{App: PlatformApp, Kind: "submission", Principal: principal, Body: raw, At: now}}
+	if err := tn.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	d := consoleOf(tn)
+	if got := d.Account("admin").Effective.Language; got != "zh-CN" {
+		t.Fatalf("legacy preference lost: %q", got)
+	}
+	if got := d.language("admin"); got != "zh-CN" {
+		t.Fatal("legacy notification language lost")
+	}
+	for _, action := range tn.Catalog(admin) {
+		if action.Schema == legacyMemberLanguage {
+			t.Fatal("retired action is public")
+		}
+	}
+	sub.IdempotencyKey = "new-old-language"
+	if _, err := tn.Submit(admin, sub, now); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA {
+		t.Fatalf("retired live action allowed: %v", err)
+	}
+	CheckReplay(t, tn, entries, compose)
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	sub.Schema.Name = SchemaProfileUpdate
+	sub.Target.Type = ProfileType
+	sub.IdempotencyKey = "new-profile"
+	sub.Payload = []byte(`{"displayName":"Manager"}`)
+	if _, err := tn.Submit(admin, sub, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if d.Account("admin").Effective.Language != "zh-CN" {
+		t.Fatal("unrelated profile edit cleared legacy language")
+	}
+	sub.IdempotencyKey = "clear-profile-language"
+	sub.Payload = []byte(`{"language":""}`)
+	if _, err := tn.Submit(admin, sub, now.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if d.Account("admin").Effective.Language != "" {
+		t.Fatal("language cannot return to default")
+	}
+	CheckReplay(t, tn, entries, compose)
 }

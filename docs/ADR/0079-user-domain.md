@@ -1,6 +1,6 @@
 # ADR-0079 — 用户域：身份、成员、档案、偏好与生命周期（XL）
 
-状态：接受，待实施 · 2026-10-06 · 承接 ADR-0023（语言）、ADR-0067（企业模型中的人）、ADR-0078（租户与授权）
+状态：接受，已实现有界用户域；离职移交等退出判据尚未满足 · 2026-10-06 · 承接 ADR-0023（语言）、ADR-0067（企业模型中的人）、ADR-0078（租户与授权）
 
 ## 0. 为什么现在
 
@@ -64,9 +64,9 @@ Identity  ──signs in as──▶  Member  ──has one──▶  Profile
 |---|---|---|
 | **A 成员实体化 + Profile** | `platform.member`/`platform.identity`/`platform.profile` 成为 Console 账本实体（快照/回放沿账本）；`Member.Language` 迁到 profile；My account 页（称呼/本地化/通知）；Members 页读新实体 | L |
 | **B 偏好生效** | `Caller.Location` 与所有"今天/现在"；通知 channels/digest/quietHours；主页/密度落盘 | M |
-| **C 生命周期** | invite/suspend/resume/offboard、撤销表、自助加入、服务账号。**已交付 2026-10-06**：`Member.Status` ∈ {active(空), invited, suspended, left}；`platform.member.invite{subject}`（尚未登录者先入目录、可先授予；首次登录即转 active——由宿主的 `lastSeen` 内存派生，不是决定）、`.suspend{reason}`（角色留在记录上但一无所持、不能操作，会话全部结束）、`.resume`、`.offboard{reason}`（登录身份与令牌移除、授予清空、记录与历史保留，不可逆；`Member(subject)` 不再认得）；不能改自己的状态。Members 页「Standing」列与成员页「Standing」面板。「撤销表」即宿主的 `sessionTable.revoked`；「自助加入」不做（邀请即席位，SaaS 外部注册不属本期）；服务账号仍是 `platform.member.add` 的 `client:` 主体 | M |
-| **D 会话与令牌** | sessions 视图、退出其它会话、`platform.token`。**已交付 2026-10-06**：`platform.token.issue{label,scopes[],until}`（任何成员，target=`platform.token/<id>`；密钥 `pat_…` = HMAC(宿主签名密钥, 租户/令牌/决定 change id)，账本与状态都不存密钥或哈希，`GET /v1/tokens/{id}/secret` 签发后十分钟内对签发人给一次；持令牌者得 `Member.Scopes`，越界动作被引擎以 `token-scope` 拒绝；令牌不能再签令牌）、`platform.token.revoke`（本人或管理员）、`GET /v1/tokens`；`Host.member` 接受 `Bearer pat_…`。会话：宿主内存按凭证哈希记 sign-in/token、UA 摘要、首末时间，`GET /v1/sessions`，`POST /v1/sessions/end-others` 让宿主此后拒绝其它凭证；停用/离职/撤销令牌同时结束会话。My account 新增「Personal tokens」「Sessions」两栏 | S |
-| **E 减法** | 删 `Console.members` 内存 map 与 `subjects` 表、`SchemaLanguage`、`MemberView`、`Identities()` 开发令牌清单改从实体派生；`directory.json` 的 seats 变成首次导入。**已结 2026-10-06**：`SchemaLanguage` 与 `directory.json` 已不存在；`Console.members`/`subjects` 就是 Console 的已决状态（随账本快照/回放），`MemberView` 是生成到 `host.ts` 的应答类型，`Identities()` 已从该状态派生——三者是模型本身而非残留，保留；`Profile.LastSeen`、令牌 `LastUsed` 与会话改为宿主内存，不再污染已决状态 | S |
+| **C 生命周期** | invite/suspend/resume/offboard、撤销表、自助加入、服务账号。**已交付 2026-10-06**：`Member.Status` ∈ {active(空), invited, suspended, left}；`platform.member.invite{subject}`（尚未登录者先入目录、可先授予；首次登录即转 active——由宿主的 `lastSeen` 内存派生，不是决定，宿主重启后 invited 的活动显示需再次登录）、`.suspend{reason}`（角色留在记录上但一无所持、不能操作，会话全部结束）、`.resume`、`.offboard{reason}`（登录身份与令牌移除、授予清空、记录与历史保留，不可逆；`Member(subject)` 不再认得）；不能改自己的状态；离职尚不自动移交 work/flow 待办，也不写企业模型任职 Until，§7 的该项仍未满足。Members 页「Standing」列与成员页「Standing」面板。「撤销表」即宿主的 `sessionTable.revoked`；「自助加入」不做（邀请即席位，SaaS 外部注册不属本期）；服务账号仍是 `platform.member.add` 的 `client:` 主体 | M |
+| **D 会话与令牌** | sessions 视图、退出其它会话、`platform.token`。**已交付 2026-10-06**：`platform.token.issue{label,scopes[],until}`（任何成员，target=`platform.token/<id>`；密钥 `pat_…` = HMAC(宿主签名密钥, 租户/令牌/决定 change id)，账本与状态都不存密钥或哈希，`GET /v1/tokens/{id}/secret` 仅签发进程内、签发后十分钟内对签发人给一次，重启关闭已有令牌的密钥展示窗口但令牌仍可使用；持令牌者得 `Member.Scopes`，越界动作被引擎以 `token-scope` 拒绝；令牌不能再签令牌）、`platform.token.revoke`（本人或管理员）、`GET /v1/tokens`；`Host.member` 接受 `Bearer pat_…`。会话：宿主内存按凭证哈希记 sign-in/token、UA 摘要、首末时间，`GET /v1/sessions`，`POST /v1/sessions/end-others` 让宿主此后拒绝其它凭证；停用/离职/撤销令牌在接受结果提交后结束正式会话；令牌会话绑定其令牌 ID，撤销不留下会话条目。OIDC delivery 必须配置独立、持久化的 `PLATFORM_PERSONAL_TOKEN_KEY`（至少 32 字节），不使用开发默认密钥；lightweight 使用已有私有签名密钥。撤销表与活动时间仍为进程内存，重启不保留已结束的登录会话；同一凭证在两浏览器不是两条会话。My account 新增「Personal tokens」「Sessions」两栏 | S |
+| **E 减法** | 删 `Console.members` 内存 map 与 `subjects` 表、`SchemaLanguage`、`MemberView`、`Identities()` 开发令牌清单改从实体派生；`directory.json` 的 seats 变成首次导入。**已结 2026-10-06**：`platform.member.language` 不再进入线上目录，新提交被拒；历史 schema 仅在账本恢复注册，保留原提交/成员语言字节，并投影为账户偏好，后续档案编辑可显式回到租户默认。`directory.json` 已删除；`Console.members`/`subjects` 就是 Console 的已决状态（随账本快照/回放），`MemberView` 是生成到 `host.ts` 的应答类型，`Identities()` 已从该状态派生——三者是模型本身而非残留，保留；`Profile.LastSeen`、令牌 `LastUsed` 与会话改为宿主内存，不再污染已决状态 | S |
 
 A 可与 ADR-0078 A 并行；B 依赖 A；C 的授予部分依赖 ADR-0078 B。
 
