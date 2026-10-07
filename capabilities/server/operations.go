@@ -81,6 +81,7 @@ func (t *Tenant) enqueue(now time.Time) {
 				o.Observe(e.Event, names[1:])
 			}
 		}
+		t.raiseAlerts(e.Event, now)
 		if e.plan != nil {
 			t.opsMu.Lock()
 			for _, planned := range e.plan.Effects {

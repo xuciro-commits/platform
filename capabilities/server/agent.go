@@ -12,6 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -136,7 +137,9 @@ type Agents struct {
 	t      *Tenant
 	ledger *platform.Ledger
 	defs   map[string]*agentDef // "<app>.<name>"
-	busy   map[string]bool      // runs whose model is being called
+	// buildStamp is the builder's agent stamp the defs were last read at.
+	buildStamp string
+	busy       map[string]bool // runs whose model is being called
 }
 
 func NewAgents(tenant string) *Agents {
@@ -217,6 +220,33 @@ func agentToolName(s string) string {
 
 func rationale() map[string]any {
 	return map[string]any{"type": "string", "description": "Why you take this step, in one sentence"}
+}
+
+// def is an agent by ID. Builder-declared agents (ADR-0077) come and go with
+// publications, so the builder's are re-read whenever its stamp changes.
+func (a *Agents) def(id string) *agentDef {
+	a.refresh()
+	return a.defs[id]
+}
+
+func (a *Agents) refresh() {
+	app := a.t.app(build.ID)
+	if app == nil {
+		return
+	}
+	b, ok := app.(*build.Build)
+	if !ok || b.AgentStamp() == a.buildStamp {
+		return
+	}
+	for id, d := range a.defs {
+		if d.app == build.ID {
+			delete(a.defs, id)
+		}
+	}
+	a.buildStamp = b.AgentStamp()
+	// A builder agent that no longer compiles (an object unpublished under it)
+	// is simply absent until it is published again.
+	_ = a.declare(app)
 }
 
 // declare registers an app's agents and their tools (NewTenant).
@@ -367,7 +397,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 		Payload                                   json.RawMessage
 	}
 	json.Unmarshal(s.GetPayload(), &p)
-	d := a.defs[p.Agent]
+	d := a.def(p.Agent)
 	id := s.GetTarget().GetId()
 	run, known := platform.Get[AgentRunRecord](a.t.automated(c, AgentApp), id)
 	allowed := func() bool {
@@ -459,7 +489,7 @@ func (a *Agents) confirm(c platform.Caller, run AgentRunRecord, d Draft, payload
 	key := fmt.Sprintf("agent:%s:%d:confirm", run.ID, d.Step+1)
 	if d.Kind == "protocol" {
 		protocol, schema, _ := strings.Cut(d.Action, "#")
-		_, _, err := t.invoke(platform.NewCaller(runtime{t}, c.Member, a.defs[run.Agent].app, c.Replaying, false), protocol, schema, d.Target, []byte(payload), key, run.ID, now)
+		_, _, err := t.invoke(platform.NewCaller(runtime{t}, c.Member, a.def(run.Agent).app, c.Replaying, false), protocol, schema, d.Target, []byte(payload), key, run.ID, now)
 		if err != nil {
 			return "", err
 		}
@@ -503,7 +533,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 	if recorded {
 		run.Release = a.t.activeRelease
 	}
-	if d := a.defs[agent]; d != nil && recorded {
+	if d := a.def(agent); d != nil && recorded {
 		version := ""
 		if owner := a.t.app(d.app); owner != nil {
 			version = owner.Manifest().Version
@@ -549,12 +579,13 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		mine, _ := json.Marshal([]any{[]any{"onBehalf", "=", c.ID}})
 		out, _, _ := platform.Find[AgentRunRecord](a.t.automated(c, AgentApp), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
 		out = slices.DeleteFunc(out, func(run AgentRunRecord) bool {
-			d := a.defs[run.Agent]
+			d := a.def(run.Agent)
 			return d == nil || c.Roles[d.app] == ""
 		})
 		return out, nil
 	}
 	out := []AgentInfo{}
+	a.refresh()
 	for _, id := range slices.Sorted(maps.Keys(a.defs)) {
 		d := a.defs[id]
 		if c.Roles[AgentApp] != AgentAdmin && c.Roles[d.app] == "" {

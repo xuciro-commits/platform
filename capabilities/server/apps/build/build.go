@@ -106,6 +106,7 @@ type Build struct {
 	propertyTypes map[string]PropertyType
 	queries       map[string]Query
 	functions     map[string]Function
+	agents        map[string]Agent
 	codes         map[string]Code
 	tables        map[string]Table // published decision tables, by name (ADR-0062)
 }
@@ -115,7 +116,7 @@ func (b *Build) Attach(h host.Host) { b.host = h }
 
 // New is a tenant's builder app.
 func New(tenant string) *Build {
-	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, codes: map[string]Code{}, tables: map[string]Table{}}
+	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
@@ -138,10 +139,12 @@ func New(tenant string) *Build {
 	actions = append(actions, datasetActions()...)
 	actions = append(actions, pipelineActions()...)
 	actions = append(actions, platform.EntityActions(b.tableEntity())...)
+	actions = append(actions, platform.EntityActions(b.agentEntity())...)
+	actions = append(actions, platform.EntityActions(b.alertEntity())...)
 	actions = append(actions, sourceActions()...)
 	actions = append(actions, connectionActions()...)
 	actions = append(actions, codeActions()...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType)
 	return b
 }
 
@@ -185,7 +188,7 @@ func (b *Build) settings() []platform.Setting {
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -201,7 +204,7 @@ func (b *Build) Manifest() platform.Manifest {
 		}
 	}
 	slices.Sort(roles)
-	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Settings: b.settings(), Reads: []string{ReadReleaseProfile}, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Operations: b.operationDeclarations(),
+	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Settings: b.settings(), Reads: []string{ReadReleaseProfile}, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -652,7 +655,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -1021,6 +1024,15 @@ func (b *Build) Reinstall() error {
 		}
 		if err := b.installFunction(platform.Caller{Replaying: true}, f); err != nil {
 			return err
+		}
+	}
+	agents, err := b.agentInventory()
+	if err != nil {
+		return err
+	}
+	for _, record := range agents {
+		if a, ok := wasPublished[Agent](record.Published); ok && !record.Archived {
+			b.agents[a.Name] = a
 		}
 	}
 	codes, err := b.codeInventory()
