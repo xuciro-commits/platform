@@ -108,6 +108,30 @@ type Catalog struct {
 	mu       sync.RWMutex
 	actions  []Action
 	disabled map[string]bool
+	custom   map[string][]string   // tenant-defined roles → the schemas they may call (ADR-0078 §3.3)
+	policies func() []authz.Policy // the tenant's policies, asked at decision time (ADR-0078 §3.4)
+}
+
+// DefineRole declares a tenant's custom role: a name and the enabled actions
+// it may call. Declaring it again replaces it; no schemas removes it.
+func (c *Catalog) DefineRole(role string, schemas []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.custom == nil {
+		c.custom = map[string][]string{}
+	}
+	if len(schemas) == 0 {
+		delete(c.custom, role)
+		return
+	}
+	c.custom[role] = slices.Clone(schemas)
+}
+
+// UsePolicies gives the catalog the tenant's policies to decide with.
+func (c *Catalog) UsePolicies(policies func() []authz.Policy) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.policies = policies
 }
 
 func NewCatalog(actions ...Action) *Catalog {
@@ -188,6 +212,12 @@ func (c *Catalog) PermitsAny(roles []string, schema string) bool {
 // (ADR-0078 §3.4); a disabled capability is no action at all. Replay and
 // automation bypass in the ledger, which knows whether it is probing.
 func (c *Catalog) Decide(caller Caller, schema string) authz.Verdict {
+	return c.DecideOn(caller, schema, "")
+}
+
+// DecideOn decides schema on a target ("<type>/<id>"), which policies may
+// read as attributes: member, app, agent, target type.
+func (c *Catalog) DecideOn(caller Caller, schema, target string) authz.Verdict {
 	a, ok := c.Action(schema)
 	if !ok || !c.Enabled(schema) {
 		return authz.Verdict{Rule: "none", Reason: "no action " + schema}
@@ -198,7 +228,24 @@ func (c *Catalog) Decide(caller Caller, schema string) authz.Verdict {
 			allowed[i] = authz.AnyMember
 		}
 	}
-	return authz.Decide(authz.Request{Subject: authz.Subject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent}, Permission: schema, Allowed: allowed})
+	c.mu.RLock()
+	for role, schemas := range c.custom {
+		if slices.Contains(schemas, schema) {
+			allowed = append(allowed, role)
+		}
+	}
+	policies := c.policies
+	c.mu.RUnlock()
+	attrs := map[string]string{"member": caller.ID, "app": caller.App, "target": a.Target}
+	if caller.Agent {
+		attrs["agent"] = "true"
+	}
+	var rules []authz.Policy
+	if policies != nil {
+		rules = policies()
+	}
+	return authz.Decide(authz.Request{Subject: authz.Subject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent},
+		Permission: schema, Resource: target, Allowed: allowed, Attributes: attrs}, rules...)
 }
 
 // For is the catalog a caller with role receives: enabled actions it may call.
@@ -213,7 +260,9 @@ func (c *Catalog) ForRoles(roles []string) []Action {
 		if c.disabled[a.Capability] {
 			continue
 		}
-		if slices.Contains(a.Roles, AnyMember) || slices.ContainsFunc(roles, func(r string) bool { return r != "" && slices.Contains(a.Roles, r) }) {
+		if slices.Contains(a.Roles, AnyMember) || slices.ContainsFunc(roles, func(r string) bool {
+			return r != "" && (slices.Contains(a.Roles, r) || slices.Contains(c.custom[r], a.Schema))
+		}) {
 			out = append(out, a)
 		}
 	}
@@ -232,8 +281,21 @@ func (c *Catalog) Roles() []string {
 			}
 		}
 	}
+	for r := range c.custom {
+		if !slices.Contains(out, r) {
+			out = append(out, r)
+		}
+	}
 	slices.Sort(out)
 	return out
+}
+
+// Custom reports whether role is one the tenant defined.
+func (c *Catalog) Custom(role string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	_, ok := c.custom[role]
+	return ok
 }
 
 // CapabilityInfo is one capability of an app: its actions and whether it is active.

@@ -55,8 +55,11 @@ type Console struct {
 	mu       sync.Mutex
 	tenant   string
 	members  map[string]*platform.Member
-	subjects map[string]string   // subject → member ID
-	profiles map[string]*Profile // member ID → profile (ADR-0079)
+	subjects map[string]string        // subject → member ID
+	profiles map[string]*Profile      // member ID → profile (ADR-0079)
+	roles    map[string]*CustomRole   // ADR-0078 §3.3
+	policies map[string]*PolicyRecord // ADR-0078 §3.4
+	teams    map[string]*Team
 	projects map[string]*BuildProject
 	packages map[string]*InstalledPackage
 	index    *PackageIndex
@@ -86,6 +89,7 @@ func ConsoleActions() *platform.Catalog {
 				{Name: "unit", Type: "string", Description: "Only the grant within this unit"}}, Roles: admin},
 	}
 	actions = append(actions, profileActions()...)
+	actions = append(actions, accessActions()...)
 	actions = append(actions, operationsActions()...)
 	actions = append(actions, effectActions()...)
 	actions = append(actions, operationActions()...)
@@ -97,10 +101,11 @@ func ConsoleActions() *platform.Catalog {
 // NewConsole seeds a tenant's directory of members; changes recorded later replay on top.
 func NewConsole(tenant string, seats ...Seat) *Console {
 	d := &Console{tenant: tenant, members: map[string]*platform.Member{}, subjects: map[string]string{}, profiles: map[string]*Profile{},
+		roles: map[string]*CustomRole{}, policies: map[string]*PolicyRecord{}, teams: map[string]*Team{},
 		projects: map[string]*BuildProject{},
 		packages: map[string]*InstalledPackage{},
 		index:    &PackageIndex{},
-		ledger:   platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ProfileType, ProjectType, PackageType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType)}
+		ledger:   platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ProfileType, RoleType, PolicyType, TeamType, ProjectType, PackageType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -145,12 +150,30 @@ type consoleState struct {
 	Profiles map[string]*Profile          `json:"profiles,omitempty"`
 	Projects map[string]*BuildProject     `json:"projects,omitempty"`
 	Packages map[string]*InstalledPackage `json:"packages,omitempty"`
+	Roles    map[string]*CustomRole       `json:"roles,omitempty"`
+	Policies map[string]*PolicyRecord     `json:"policies,omitempty"`
+	Teams    map[string]*Team             `json:"teams,omitempty"`
+}
+
+// state is the directory as snapshots and accepted-state digests see it.
+func (d *Console) state() consoleState {
+	s := consoleState{Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: d.projects, Packages: d.packages}
+	if len(d.roles) > 0 {
+		s.Roles = d.roles
+	}
+	if len(d.policies) > 0 {
+		s.Policies = d.policies
+	}
+	if len(d.teams) > 0 {
+		s.Teams = d.teams
+	}
+	return s
 }
 
 func (d *Console) Snapshot() (json.RawMessage, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.ledger.SnapshotWith(consoleState{Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: d.projects, Packages: d.packages})
+	return d.ledger.SnapshotWith(d.state())
 }
 
 func (d *Console) Restore(raw json.RawMessage) error {
@@ -170,6 +193,17 @@ func (d *Console) Restore(raw json.RawMessage) error {
 	if s.Packages != nil {
 		d.packages = s.Packages
 	}
+	d.roles, d.policies, d.teams = map[string]*CustomRole{}, map[string]*PolicyRecord{}, map[string]*Team{}
+	if s.Roles != nil {
+		d.roles = s.Roles
+	}
+	if s.Policies != nil {
+		d.policies = s.Policies
+	}
+	if s.Teams != nil {
+		d.teams = s.Teams
+	}
+	d.applyAccess()
 	return nil
 }
 
@@ -221,7 +255,7 @@ func clone(m *platform.Member) platform.Member {
 
 func (d *Console) Manifest() platform.Manifest {
 	return platform.Manifest{ID: PlatformApp, Title: "Settings", Version: "1", Actions: d.ledger.Catalog, Roles: []string{Admin, Auditor},
-		Reads:    []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "projects", "packages", "contributions"},
+		Reads:    []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "projects", "packages", "contributions"},
 		Everyone: []string{"notifications", "tenant", "account"}, Inputs: map[string]bool{"heartbeat": false},
 		Settings: tenantSettings()}
 }
@@ -232,7 +266,7 @@ func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.De
 // remain outside this path until their respective owners can be staged too.
 func (d *Console) AcceptedLedger() *platform.Ledger { return d.ledger }
 func (*Console) AcceptedActionSchemas() []string {
-	return []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaProfileUpdate, SchemaOperationCall, SchemaProjectSave, SchemaProjectArchive,
+	return []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaDelegate, SchemaRoleSave, SchemaRoleRemove, SchemaPolicySave, SchemaPolicyDrop, SchemaTeamSave, SchemaTeamRemove, SchemaProfileUpdate, SchemaOperationCall, SchemaProjectSave, SchemaProjectArchive,
 		SchemaPackageInstall, SchemaPackageUpgrade, SchemaPackageDrain, SchemaPackageRetire}
 }
 
@@ -266,7 +300,7 @@ func (d *Console) ForkAcceptedState() (platform.App, error) {
 func (d *Console) AcceptedState() (json.RawMessage, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return json.Marshal(consoleState{Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: d.projects, Packages: d.packages})
+	return json.Marshal(d.state())
 }
 
 func (d *Console) ValidateAcceptedState(raw json.RawMessage) error {
@@ -316,13 +350,18 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 		if declared.Target == OperationType {
 			return d.decideOperation(c, s, now)
 		}
-		if declared.Target == MemberType || declared.Target == ProfileType {
+		if declared.Target == MemberType || declared.Target == ProfileType || declared.Target == RoleType || declared.Target == PolicyType || declared.Target == TeamType {
 			d.mu.Lock()
 			var apply func(*pb.ChangeRecord)
 			var err *kernel.Error
-			if declared.Target == ProfileType {
+			switch {
+			case declared.Target == ProfileType:
 				apply, err = d.decideProfile(c, s)
-			} else {
+			case declared.Target != MemberType:
+				apply, err = d.decideAccess(c, s)
+			case s.GetSchema().GetName() == SchemaDelegate:
+				apply, err = d.decideDelegate(c, s)
+			default:
 				apply, err = d.decideMember(c, s)
 			}
 			d.mu.Unlock()
@@ -485,6 +524,8 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		return t.PersonalReads(), nil
 	case "permissions":
 		return t.Permissions(), nil
+	case "access":
+		return d.Access(), nil
 	case "projects":
 		return d.ProjectViews(), nil
 	case "packages":

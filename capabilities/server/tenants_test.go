@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -209,5 +210,97 @@ func TestGrantsAddUpAndExpire(t *testing.T) {
 	if _, err := tn.Submit(admin, &pb.Submission{TenantId: "g", PrincipalId: "admin", Authority: "a", IdempotencyKey: "note-1",
 		Target: &pb.EntityRef{Type: "a.topic", Id: "t1"}, Schema: &pb.SchemaRef{Name: "a.note", Version: 1}, Payload: json.RawMessage(`{"text":"hi"}`)}, now); err != nil {
 		t.Fatalf("second role did not unlock the action: %v", err)
+	}
+}
+
+// ADR-0078 D: a custom role, a policy, a team and a delegation, each through the engine.
+func TestAccessConfiguration(t *testing.T) {
+	seats := []Seat{
+		{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}},
+		{Subjects: []string{"user:bo@example.test"}, Member: platform.Member{ID: "bo", Roles: map[string]string{}}},
+		{Subjects: []string{"user:cy@example.test"}, Member: platform.Member{ID: "cy", Roles: map[string]string{}}},
+	}
+	tn, err := NewTenant("x", NewConsole("x", seats...), newNotes("x", "a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tn.Record = func(Entry) {}
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	seq := 0
+	decide := func(who, app, schema, typ, id, payload string) string {
+		m, _ := tn.member(who)
+		seq++
+		_, err := tn.Submit(m, &pb.Submission{TenantId: "x", PrincipalId: who, Authority: app, IdempotencyKey: fmt.Sprint("k", seq),
+			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: json.RawMessage(payload)}, now)
+		if err != nil {
+			return err.Error()
+		}
+		return "ok"
+	}
+	note := func(who string) string { return decide(who, "a", "a.note", "a.topic", "t", `{"text":"x"}`) }
+	if got := note("bo"); got == "ok" {
+		t.Fatal("bo could note without a role")
+	}
+	// A custom role over the app's action; held like any role.
+	if got := decide("admin", PlatformApp, SchemaRoleSave, RoleType, "writer", `{"app":"a","title":"x","actions":["a.note"]}`); got != "ERROR_CODE_INVALID_ARGUMENT" {
+		t.Fatalf("declared role overwritten: %s", got)
+	}
+	if got := decide("admin", PlatformApp, SchemaRoleSave, RoleType, "scribe", `{"app":"a","title":"Scribe","actions":["a.note"]}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := decide("admin", PlatformApp, SchemaGrant, MemberType, "bo", `{"app":"a","role":"scribe"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := note("bo"); got != "ok" {
+		t.Fatalf("custom role did not unlock the action: %s", got)
+	}
+	if x, _ := tn.Explain("bo", "a.note"); !x.Verdict.Allow || x.Verdict.Role != "scribe" {
+		t.Fatalf("%+v", x)
+	}
+	// A deny policy wins over the role; removed, the role is back.
+	if got := decide("admin", PlatformApp, SchemaPolicySave, PolicyType, "freeze", `{"effect":"deny","permission":"a.*","where":{"member":"bo"}}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := note("bo"); !strings.Contains(got, "POLICY_DENIED") {
+		t.Fatalf("policy ignored: %s", got)
+	}
+	if x, _ := tn.Explain("bo", "a.note"); x.Verdict.Allow || x.Verdict.Policy != "freeze" {
+		t.Fatalf("%+v", x)
+	}
+	if got := decide("admin", PlatformApp, SchemaPolicyDrop, PolicyType, "freeze", `{}`); got != "ok" {
+		t.Fatal(got)
+	}
+	// A team: cy holds the team's grant while a member of it.
+	if got := decide("admin", PlatformApp, SchemaTeamSave, TeamType, "desk", `{"name":"Desk","members":["cy"],"grants":[{"app":"a","role":"writer"}]}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if cy, _ := tn.member("cy"); !cy.Holds("a", "writer") || cy.Grants[0].By != "team:desk" {
+		t.Fatalf("team grant missing: %+v", cy.Grants)
+	}
+	if got := decide("admin", PlatformApp, SchemaTeamRemove, TeamType, "desk", `{}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if cy, _ := tn.member("cy"); cy.Holds("a", "writer") {
+		t.Fatal("team grant survived the team")
+	}
+	// Delegation: bo gives cy what bo holds in a, until a day; cy cannot delegate what cy lacks.
+	if got := decide("cy", PlatformApp, SchemaDelegate, MemberType, "bo", `{"app":"a","until":"2026-12-01"}`); !strings.Contains(got, "POLICY_DENIED") {
+		t.Fatalf("delegated nothing: %s", got)
+	}
+	if got := decide("bo", PlatformApp, SchemaDelegate, MemberType, "cy", `{"app":"a","until":"2026-12-01","reason":"holiday"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	cy, _ := tn.member("cy")
+	if !cy.Holds("a", "scribe") || cy.Grants[0].By != "bo" || cy.Grants[0].Until != "2026-12-01" || note("cy") != "ok" {
+		t.Fatalf("delegation: %+v", cy.Grants)
+	}
+	// Survives a snapshot and restore, custom role included.
+	snap, _ := consoleOf(tn).Snapshot()
+	restored, _ := NewTenant("x", NewConsole("x", seats...), newNotes("x", "a"))
+	if err := consoleOf(restored).Restore(snap); err != nil {
+		t.Fatal(err)
+	}
+	if access := consoleOf(restored).Access(); len(access.Roles) != 1 || !restored.app("a").Manifest().Actions.PermitsAny([]string{"scribe"}, "a.note") {
+		t.Fatalf("custom role not restored: %+v", access)
 	}
 }

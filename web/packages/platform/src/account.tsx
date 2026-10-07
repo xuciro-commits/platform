@@ -7,6 +7,7 @@ import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
+import type { Member } from "./shared";
 
 export type Account = Api.Account;
 export type Profile = Api.Profile;
@@ -143,6 +144,35 @@ export function MyAccount() {
       <PageHeader title={t("My account")} description={t("How the platform addresses you and behaves for you. What you leave empty follows {tenant}.", { tenant: tenant.data?.name ?? me.tenantId })}
         actions={<span className="flex gap-1"><Tag label={me.principalId} /><Tag label={me.tenantId} tone="info" /></span>} />
       {account.data && <ProfileForm member={me.principalId} account={account.data} languages={me.languages} tenant={tenant.data} self />}
+      <Delegate />
     </>
+  );
+}
+
+// Hand what I hold in an app to someone else until a day (ADR-0078 §3.3).
+function Delegate() {
+  const { me, decide, can } = useHost();
+  const apps = Object.keys(me.profile.roles ?? {});
+  const members = useRead<Member[]>("/v1/members").data ?? [];
+  const [app, setApp] = useState(apps[0] ?? "");
+  const [to, setTo] = useState("");
+  const [until, setUntil] = useState("");
+  const [reason, setReason] = useState("");
+  const [done, setDone] = useState("");
+  if (!can("platform.member.delegate") || apps.length === 0) return null;
+  const chosenApp = apps.includes(app) ? app : apps[0];
+  return (
+    <Panel title={t("Delegate my roles")} description={t("For an absence or a handover: another member holds what you hold in an app, until the day you set. You keep your own roles; an administrator can revoke the delegation.")} className="mt-4 max-w-3xl">
+      <form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={async (e) => { e.preventDefault(); if (await decide("platform.member.delegate", { type: "platform.member", id: to }, { app: chosenApp, until, reason })) setDone(t("Delegated {app} to {who} until {day}.", { app: chosenApp ?? "", who: to, day: until })); }}>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("App")}</span><Select value={chosenApp} onChange={(e) => setApp(e.target.value)}>{apps.map((a) => <option key={a} value={a}>{a}</option>)}</Select></label>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("To")}</span>
+          {members.length ? <Select value={to} onChange={(e) => setTo(e.target.value)}><option value="">—</option>{members.filter((m) => m.id !== me.principalId).map((m) => <option key={m.id} value={m.id}>{m.profile.displayName || m.id}</option>)}</Select>
+            : <Input value={to} onChange={(e) => setTo(e.target.value)} placeholder={t("Member ID")} />}</label>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("Until")}</span><Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} /></label>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("Reason (optional)")}</span><Input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+        <Button type="submit" variant="primary" disabled={!to || !until}>{t("Delegate")}</Button>
+      </form>
+      {done && <p className="mt-2 text-xs text-muted">{done}</p>}
+    </Panel>
   );
 }

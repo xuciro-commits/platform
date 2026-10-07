@@ -239,7 +239,7 @@ func delegatedAsset(s *pb.Submission) (ProjectAsset, bool) {
 
 // Auditor read surface: the administrator reads an auditor may use.
 var auditorReads = []string{"audit", "deliveries", "work", "connectors", "settings",
-	"endpoints", "effects", "health", "personal-reads", "permissions", "members", "projects", "packages", "notifications"}
+	"endpoints", "effects", "health", "personal-reads", "permissions", "access", "members", "projects", "packages", "notifications"}
 
 func auditorMayRead(name string) bool {
 	for _, r := range auditorReads {

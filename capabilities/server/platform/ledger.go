@@ -160,7 +160,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	}
 	receiver := kernel.Receiver{Changes: changes, Authorities: l.authorities,
 		Policy: func(kernel.Caller, *pb.Submission) bool {
-			ok := c.Replaying && !probing || c.Automation || l.Catalog.Decide(c, s.GetSchema().GetName()).Allow && (allowed == nil || allowed())
+			ok := c.Replaying && !probing || c.Automation || l.Catalog.DecideOn(c, s.GetSchema().GetName(), s.GetTarget().GetType()+"/"+s.GetTarget().GetId()).Allow && (allowed == nil || allowed())
 			refused = !ok
 			return ok
 		}}
@@ -196,7 +196,7 @@ func (l *Ledger) denied(c Caller, s *pb.Submission) *kernel.Error {
 	if declared, ok := l.Catalog.Action(action); ok && declared.Title != "" {
 		action = declared.Title
 	}
-	v := l.Catalog.Decide(c, s.GetSchema().GetName())
+	v := l.Catalog.DecideOn(c, s.GetSchema().GetName(), s.GetTarget().GetType()+"/"+s.GetTarget().GetId())
 	switch {
 	case v.Allow:
 		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} may not {action} on this record", c.ID, action)

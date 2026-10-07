@@ -25,6 +25,12 @@ export type AIUsage = {
   totals: Total[];
 };
 
+export type AccessConfig = {
+  roles: CustomRole[];
+  policies: PolicyRecord[];
+  teams: Team[];
+};
+
 export type Account = {
   member: string;
   displayName?: string;
@@ -592,6 +598,13 @@ export type CreateTenantRequest = {
   template?: string;
   admin: string;
   settings?: Record<string, string>;
+};
+
+export type CustomRole = {
+  id: string;
+  app: string;
+  title: string;
+  actions: string[];
 };
 
 export type Definition = {
@@ -1980,6 +1993,16 @@ export type PersonalRead = {
   fields: string[];
 };
 
+export type PolicyRecord = {
+  id: string;
+  title: string;
+  effect: string;
+  permission: string;
+  where?: Record<string, string>;
+  from?: string;
+  until?: string;
+};
+
 export type Precheck = {
   id: string;
   version: string;
@@ -2755,6 +2778,13 @@ export type TaskSummary = {
   title: string;
   state: string;
   answer?: string;
+};
+
+export type Team = {
+  id: string;
+  name: string;
+  members: string[];
+  grants: Grant[];
 };
 
 export type TenantHealth = {

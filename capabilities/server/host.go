@@ -205,6 +205,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		}
 		if d, ok := a.(*Console); ok {
 			d.t = t
+			defer d.applyAccess() // once every app is known
 		}
 		if x, ok := a.(models); ok {
 			t.ai = x
