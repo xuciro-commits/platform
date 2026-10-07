@@ -952,6 +952,16 @@ export type InstalledPackage = {
   retained?: RetainedArtifact[];
 };
 
+export type IntegrationEffect = {
+  id: string;
+  endpoint: string;
+  event: string;
+  state: string;
+  due: string;
+  last?: string;
+  error?: string;
+};
+
 export type Interface = {
   name: string;
   title: string;

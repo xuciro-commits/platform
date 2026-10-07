@@ -68,7 +68,9 @@ func TestContextViewsNativeOriginalBindings(t *testing.T) {
 		{"missing breadcrumb", func(p *Page) { p.Sections[1].Breadcrumb = nil }},
 		{"missing home", func(p *Page) { p.Document.Events = nil }},
 		{"wrong home control", func(p *Page) { p.Document.Events[0].Control = "current" }},
-		{"home scalar write", func(p *Page) { p.Document.Events[0].Effects[0] = PageEffect{Kind: "set", Target: "active", Value: Raw(true)} }},
+		{"home scalar write", func(p *Page) {
+			p.Document.Events[0].Effects[0] = PageEffect{Kind: "set", Target: "active", Value: Raw(true)}
+		}},
 		{"home arguments", func(p *Page) {
 			p.Document.Events[0].Effects[0].Navigate.Inputs = map[string]PageValue{"arg": {Variable: "active"}}
 		}},

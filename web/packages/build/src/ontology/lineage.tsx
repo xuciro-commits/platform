@@ -1,6 +1,6 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useReadQuery } from "@platform/app";
-import { Button, Panel, Tag, t } from "@platform/ui";
+import { Button, DataTable, Panel, Tag, t } from "@platform/ui";
 
 // Lineage (ADR-0072 §3): where an object's data comes from and where its
 // decisions go, read from the integration definitions themselves - no second
@@ -66,7 +66,11 @@ export function ObjectLineage({ object, fields }: { object: string; fields: { na
       {pipes.map((p) => <Chain key={p.id} items={[{ label: `${t("Pipeline")} ${p.title} · ${t("id")} ${p.key}`, route: { view: "pipeline", params: { id: p.id } }, state: p.state }, ...upstream(p.input, l), ...(p.steps ?? []).flatMap((s) => s.dataset ? upstream(s.dataset, l) : [])]} />)}
     </Panel>
     <Panel title={t("Field by field")}>
-      <table className="w-full text-xs"><tbody>{fields.map((f) => { const from = feeders(f.name); return <tr key={f.name} className="border-t border-border"><td className="px-2 py-1 font-medium">{f.title}</td><td className="px-2 py-1 font-mono text-muted">{f.name}</td><td className="px-2 py-1">{from.length ? from.join(" · ") : <span className="text-muted">{t("entered here")}</span>}</td></tr>; })}</tbody></table>
+      <DataTable data={fields} getRowId={(f) => f.name} searchable={false} height={Math.min(360, 40 + fields.length * 28)} columns={[
+        { id: "title", header: t("Field"), accessorFn: (f) => f.title },
+        { id: "name", header: t("Name"), accessorFn: (f) => f.name },
+        { id: "origin", header: t("Comes from"), accessorFn: (f) => feeders(f.name).join(" · ") || t("entered here") },
+      ]} />
     </Panel>
     {wbs.length > 0 && <Panel title={t("Goes to")} className="grid gap-1">
       {wbs.map((w) => { const c = l.connections.find((c) => c.id === w.connection); return <p key={w.id} className="flex flex-wrap items-center gap-2 text-xs">

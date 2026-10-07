@@ -118,7 +118,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 
 | 邮箱 | 主机 / 租户 | 成员 ID | 角色 | 组织 |
 |---|---|---|---|---|
-| `sup@plant.test` | MES `plant-sz` | `sup-1` | mes 主管；platform、org、ai 管理员 | 工厂 `plant-sz`（管两条线） |
+| `sup@plant.test` | MES `plant-sz` | `sup-1` | mes 主管；platform、enterprise、ai 管理员；build 构建者（builder） | 工厂 `plant-sz`（管两条线） |
 | `op1@plant.test` | MES | `op-l1` | mes 操作员；ai 用户 | 产线 `L1` |
 | `op2@plant.test` | MES | `op-l2` | mes 操作员；ai 用户 | 产线 `L2` |
 | `qa1@plant.test` | MES | `qa-1` | mes 质量；ai 用户 | — |
@@ -130,6 +130,8 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 | `deputy@hotel.test` | 酒店业 | `deputy-1` | crm 销售经理、csm lead、hcm 员工；ai 用户 | `hotel-a` 副总经理：经理不在时代批（委托审批的被委托人） |
 | `buyer@plant.test` | ERP `plant-sz` | `buyer-1` | erp 采购员（buyer）；ai 用户 | 下采购订单、收货；超过审批限额的订单由 `sup@plant.test`（主管会计）审批 |
 | `accountant@plant.test` | ERP | `acc-1` | erp 会计（accountant）；ai 用户 | 起草、过账、冲销凭证，登记供应商发票 |
+
+制造主管的构建者角色通过控制面板的成员授权动作 `platform.member.grant`（app `build`、role `builder`）加入现有租户并记录在账本。新建演示租户也用此动作启用构建入口；已有接受结果的租户不要修改目录中成员的初始角色来代替授权，这会改变历史恢复的前置状态。
 
 - 本地 Rauthy 走 HTTP，所以 `rauthy/config.toml` 里设了 `[access] cookie_mode = 'danger-insecure'`：不设的话，Safari 会丢掉 Rauthy 的安全 cookie，浏览器登录会显示密码错误（密码其实是对的）。只用于本地。
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。

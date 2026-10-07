@@ -56,6 +56,8 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 		}
 	} else if rows, err := s.MapRows(raw); err != nil {
 		pull.Error = err.Error()
+	} else if build.Guarded(t.connectionMarking(s.Connection)) {
+		pull.Error = "A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules"
 	} else {
 		pull.Cursor = s.Advance(raw)
 		pull.Rows, pull.Applied = len(rows), 0

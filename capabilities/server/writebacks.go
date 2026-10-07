@@ -10,10 +10,45 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/apps/build"
 	"platformserver/platform"
 )
+
+// IntegrationEffect exposes delivery metadata, without requests or answers.
+type IntegrationEffect struct {
+	ID       string    `json:"id"`
+	Endpoint string    `json:"endpoint"`
+	Event    string    `json:"event"`
+	State    string    `json:"state"`
+	Due      time.Time `json:"due"`
+	Last     time.Time `json:"last,omitzero"`
+	Error    string    `json:"error,omitempty"`
+}
+
+func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]IntegrationEffect, *kernel.Error) {
+	if err := t.admits(m); err != nil {
+		return nil, err
+	}
+	if role := m.Roles[build.ID]; role != build.Builder && role != build.Integrator {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	out := []IntegrationEffect{}
+	for _, effect := range t.Effects(now) {
+		if effect.App != build.ID || !strings.HasPrefix(effect.Event, "writeback/") || !strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint) {
+			continue
+		}
+		item := IntegrationEffect{ID: effect.ID, Endpoint: effect.Endpoint, Event: effect.Event, State: effect.State, Due: effect.Due, Last: effect.Last}
+		if effect.Error != "" {
+			item.Error = "The last delivery attempt failed"
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
 
 // Writebacks (ADR-0072) ride the ADR-0014 outbox: an accepted decision that a
 // published writeback listens for becomes an effect addressed to the

@@ -13,6 +13,10 @@ export type Package = { serves: string[]; role?: string; public?: boolean; load:
 export const packages: Package[] = [
   { serves: [], public: true, load: () => import("@platform/catalog-app/app") },
   { serves: ["build"], role: "builder", load: () => import("@pkg/build") },
+  { serves: ["build"], role: "integrator", load: async () => {
+    const app = await import("@pkg/build");
+    return { ...app, default: { ...app.default, home: { view: "connection" } } };
+  } },
   { serves: ["build"], role: "publisher", load: () => import("@pkg/build") },
   { serves: ["crm"], load: () => import("@pkg/crm") },
   { serves: ["pms"], load: () => import("@pkg/pms/app") },

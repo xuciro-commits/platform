@@ -1,8 +1,8 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
-import { useHost, useReadQuery } from "@platform/app";
+import { RecordActions, useHost, useReadQuery } from "@platform/app";
 import { MarkingField, integrates } from "./marking";
-import { Button, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
+import { Button, DataTable, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsavedChanges, type ColumnDef, type EntityRecord } from "@platform/ui";
 import { DatasetLineage } from "./lineage";
 
 // Datasets (ADR-0071): rows as they came from a source or a pipeline, kept as
@@ -28,7 +28,7 @@ export function Datasets() {
 
 export function DatasetEditor({ id }: { id: string }) {
   const { decide, role } = useHost(), { open, close } = useApplicationWorkspace();
-  const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.dataset/${encodeURIComponent(id)}`, 5000);
+  const query = useReadQuery<{ record?: Draft & EntityRecord }>(`/v1/records/build.dataset/${encodeURIComponent(id)}`, 5000);
   const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [shown, setShown] = useState(0);
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
@@ -78,6 +78,7 @@ export function DatasetEditor({ id }: { id: string }) {
         {!!draft.schema?.length && <Button disabled={busy || !!error} onClick={() => void perform(() => draftObject())}>{t("Draft an object from this schema")}</Button>}
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
         <Button variant="primary" disabled={busy || !dirty && !!draft.id} onClick={() => void perform(save)}>{t("Save dataset")}</Button>
+        {query.data?.record && !dirty && !busy && <RecordActions type="build.dataset" record={query.data.record} allowed={["build.dataset.load"]} />}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
@@ -101,8 +102,7 @@ export function DatasetEditor({ id }: { id: string }) {
         {!latest ? <p className="text-xs text-muted">{t("No rows yet. Publish a source that feeds this dataset, or a pipeline that writes it.")}</p> :
           versionQuery.data?.record?.archived ? <p className="text-xs text-muted">{t("This version is no longer kept.")}</p> :
           <div className="overflow-auto">
-            <table className="w-full text-left text-xs"><thead><tr>{columns.map((c) => <th key={c} className="whitespace-nowrap px-2 py-1 font-medium text-muted">{c}</th>)}</tr></thead>
-              <tbody>{rows.slice(0, PREVIEW).map((row, i) => <tr key={i} className="border-t border-border">{columns.map((c) => <td key={c} className="max-w-[16rem] truncate px-2 py-1 font-mono">{cell(row[c])}</td>)}</tr>)}</tbody></table>
+            <DataTable data={rows.slice(0, PREVIEW)} getRowId={(row) => String(rows.indexOf(row))} searchable={false} height={Math.min(420, 40 + rows.length * 28)} columns={columns.map((name): ColumnDef<Record<string, unknown>, unknown> => ({ id: name, header: name, accessorFn: (row) => row[name], cell: (context) => <span className="font-mono">{cell(context.getValue())}</span> }))} />
             {rows.length > PREVIEW && <p className="px-2 py-1 text-[11px] text-muted">{t("First {n} of {rows} rows", { n: PREVIEW, rows: rows.length })}</p>}
           </div>}
       </Panel>

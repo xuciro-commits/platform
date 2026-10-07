@@ -1,6 +1,8 @@
 package platformserver
 
 import (
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +39,20 @@ func TestMarkingsTravelAndGate(t *testing.T) {
 	submit("obj-publish", build.SchemaPublish, build.ObjectType, "O1", `{}`)
 	submit("ds", build.DatasetType+".create", build.DatasetType, "hr", `{"name":"hr","title":"HR","marking":"confidential"}`)
 	submit("ds-out", build.DatasetType+".create", build.DatasetType, "hrclean", `{"name":"hrclean","title":"HR clean"}`)
+	submit("enterprise-p", build.PipelineType+".create", build.PipelineType, "EP", `{"name":"hrtoenterprise","title":"HR to enterprise","input":"hr","outputEnterprise":{"source":"hr","stereotype":"ActualPerson","id":"pernr","name":"name"}}`)
+	if err := try("enterprise-publish", build.PipelineType+".publish", build.PipelineType, "EP", `{}`); err == nil {
+		t.Fatal("confidential rows published into the tenant-readable enterprise model")
+	}
+	submit("conn", build.ConnectionType+".create", build.ConnectionType, "C", `{"name":"hrconnection","title":"HR connection","kind":"http","address":"https://hr.example","marking":"confidential"}`)
+	submit("conn-check", build.ConnectionType+".check", build.ConnectionType, "C", `{}`)
+	tn.Outbound = func(*http.Request, bool) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`[]`))}, nil
+	}
+	tn.CheckConnections(at)
+	submit("direct", build.SourceType+".create", build.SourceType, "S", `{"name":"hrdirect","title":"HR direct","connection":"C","profile":"json","object":"build.employee","key":"pernr","mapping":[{"from":"salary","to":"salary"}]}`)
+	if err := try("direct-publish", build.SourceType+".publish", build.SourceType, "S", `{}`); err == nil {
+		t.Fatal("classified source bypassed dataset/pipeline field access rules")
+	}
 	submit("p", build.PipelineType+".create", build.PipelineType, "P1", `{"name":"hrtoemployee","title":"HR to employees","input":"hr","outputObject":"build.employee","key":"pernr"}`)
 	if err := try("p-publish", build.PipelineType+".publish", build.PipelineType, "P1", `{}`); err == nil || !strings.Contains(err.Message, "salary") {
 		t.Fatalf("publishing into open fields should be refused naming them: %v", err)

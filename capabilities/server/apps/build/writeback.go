@@ -16,8 +16,8 @@ import (
 // object is sent to an external system through a Connection: an HTTP request
 // whose body is mapped from the action's payload. The sending is an ADR-0014
 // effect - at least once, in order per connection, with the decision's change
-// id as the idempotency key - so an outage queues it and recovery replays it
-// once. The answer can write fields back onto the record (the document number
+// id as the idempotency key - so an outage queues it and the receiver can
+// deduplicate retries. The answer can write fields back onto the record (the document number
 // SAP assigned, say) through the object's own edit.
 const (
 	WritebackType           = "build.writeback"
@@ -64,9 +64,16 @@ type WritebackAns struct {
 
 func (b *Build) writebackEntity() platform.Entity {
 	return platform.Entity{Type: WritebackType, Title: "Writeback", Plural: "Writebacks", Model: Writeback{}, Display: "title",
-		Description: "An accepted action on an object sent to an external system through a connection: queued, in order, delivered once per decision.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
+		Description: "An accepted action on an object sent to an external system through a connection: queued, in order, retried with the same key for receiver deduplication.",
+		Validate: func(c platform.Caller, record any) *kernel.Error {
+			w := record.(*Writeback)
+			if w.State == "published" {
+				return b.checkWriteback(c, *w)
+			}
+			return nil
+		},
+		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{
 				{Name: "publish", Title: "Publish", Description: "Check the writeback and send every matching decision from now on.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishWriteback},
@@ -74,7 +81,7 @@ func (b *Build) writebackEntity() platform.Entity {
 }
 
 func writebackActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaWritebackAnswered, Target: WritebackType, Capability: "integrations", Title: "Keep answer", Description: "Retain what the external system answered to one writeback.", Roles: []string{Builder, Integrator},
+	return []platform.Action{{Schema: SchemaWritebackAnswered, Target: WritebackType, Capability: "integrations", Title: "Keep answer", Description: "Retain what the external system answered to one writeback.", Automation: true,
 		Payload: []platform.Field{{Name: "answer", Type: "json", Required: true, Description: "The attempt's result and the answer's first bytes"}}}}
 }
 
@@ -107,6 +114,9 @@ func (b *Build) checkWriteback(c platform.Caller, w Writeback) *kernel.Error {
 	info, ok := b.lookupEntity(w.Object)
 	if !ok {
 		return refuse("The object {object} is not installed", w.Object)
+	}
+	if info.App != ID {
+		return refuse("A writeback currently listens to objects owned by Build; native application objects need an owner callback")
 	}
 	if w.On == "" || strings.ContainsAny(w.On, "./ ") {
 		return refuse("After action is the verb of the object's action: create, edit or a declared action's name")

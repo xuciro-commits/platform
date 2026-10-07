@@ -199,6 +199,11 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 		}
 		return checkEvery(s.Every)
 	}
+	if s.Connection != "" {
+		if conn, ok := platform.Get[Connection](c, s.Connection); ok && Guarded(conn.Marking) {
+			return refuse("A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules")
+		}
+	}
 	info, ok := b.lookupEntity(s.Object)
 	if !ok {
 		return refuse("The target object {object} is not installed", s.Object)

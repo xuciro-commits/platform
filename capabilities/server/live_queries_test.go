@@ -8,12 +8,59 @@ import (
 	"net/url"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/enterprise"
+	"platformserver/apps/work"
 	"platformserver/platform"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestApprovalRequestsJoinSharedLiveReads(t *testing.T) {
+	seat := Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{PlatformApp: Admin, work.ID: "member"}}}
+	tn, err := NewTenant("live-requests", NewConsole("live-requests", seat), work.New("live-requests"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(NewHost(Tokens(map[string]string{"builder": "builder"}), tn).Handler())
+	defer server.Close()
+	paths := []string{"/v1/me", "/v1/requests", "/v1/inbox"}
+	watch, _ := json.Marshal(paths)
+	req, _ := http.NewRequest("GET", server.URL+"/v1/changes?"+url.Values{"watch": {string(watch)}}.Encode(), nil)
+	req.Header.Set("Authorization", "Bearer builder")
+	client := &http.Client{Timeout: 3 * time.Second}
+	response, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("shared approval reads: HTTP %d", response.StatusCode)
+	}
+	reader := bufio.NewReader(response.Body)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		var frame LiveQueryFrame
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &frame); err != nil {
+			t.Fatal(err)
+		}
+		if len(frame.Results) != len(paths) {
+			t.Fatalf("missing snapshots: %+v", frame)
+		}
+		for _, result := range frame.Results {
+			if result.Status != http.StatusOK {
+				t.Fatalf("%s: HTTP %d", result.Path, result.Status)
+			}
+		}
+		break
+	}
+}
 
 func TestEnterpriseHTTPAndLiveReads(t *testing.T) {
 	seat := Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin, enterprise.ID: enterprise.Admin}}}

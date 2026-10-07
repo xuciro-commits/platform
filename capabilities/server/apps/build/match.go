@@ -48,8 +48,15 @@ type Preference struct {
 func (b *Build) matchEntity() platform.Entity {
 	return platform.Entity{Type: MatchType, Title: "Matching rule", Plural: "Matching rules", Model: Match{}, Display: "title",
 		Description: "When rows from different systems are one party, material or site, and whose value wins per field.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
+		Validate: func(c platform.Caller, record any) *kernel.Error {
+			m := record.(*Match)
+			if m.State == "published" {
+				return b.checkMatch(c, *m)
+			}
+			return nil
+		},
+		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{
 				{Name: "publish", Title: "Publish", Description: "Check the rule and apply it to every row landing in the object from now on.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishMatch},
@@ -61,6 +68,14 @@ func (b *Build) publishMatch(c platform.Caller, record any, _ json.RawMessage, _
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
+	if err := b.checkMatch(c, *m); err != nil {
+		return err
+	}
+	m.Publisher = c.ID
+	return nil
+}
+
+func (b *Build) checkMatch(c platform.Caller, m Match) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -101,7 +116,6 @@ func (b *Build) publishMatch(c platform.Caller, record any, _ json.RawMessage, _
 			return refuse("{object} already has the published rule {rule}; edit that one", m.Object, other.Title)
 		}
 	}
-	m.Publisher = c.ID
 	return nil
 }
 

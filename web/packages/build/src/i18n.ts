@@ -1991,7 +1991,7 @@ register("zh-CN", {
   "Nothing yet.": "暂无。",
   "Read by": "被读取",
   "Only a builder can edit writebacks.": "只有搭建者可以编辑回写。",
-  "Send an object's accepted actions to an external system. Each decision becomes one request, queued in the connection's order and retried with the same key, so an outage delays it and never duplicates it.": "把对象上被接受的动作发送到外部系统。每个裁决成为一个请求，按连接顺序排队并用同一键重试：断网只会延迟，绝不重复。",
+  "Send an object's accepted actions to an external system. Each decision becomes one request, queued in the connection's order and retried with the same key so the receiver can deduplicate retries.": "把对象上被接受的动作发送到外部系统。每个裁决成为一个请求，按连接顺序排队并用同一键重试：由接收方按幂等键去重。",
   "New writeback": "新建回写",
   "The writeback could not be saved or loaded. Your draft is still here.": "回写无法保存或加载。你的草稿仍在。",
   "The writeback could not be loaded.": "回写无法加载。",
@@ -3623,4 +3623,7 @@ register("zh-CN", {
   "Database table": "数据库表",
   "CSV": "CSV",
   "JSON": "JSON",
+  "Last outcome": "最近结果",
+  "Last activity": "最近活动",
+  "The last delivery attempt failed": "最近一次投递尝试失败",
 });

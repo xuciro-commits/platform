@@ -1,6 +1,6 @@
 # 做减法清单（由人执行）
 
-ADR-0070–0074 落地后，下面这些路径已被 Connection / Source / Dataset / Pipeline / Writeback / Matching rule 取代。沙箱不能编译独立 Go 模块（`apps/*`、`solutions/*`），所以删除由人在本地执行；每项给出"删什么"与"随手要改什么"。按顺序做，每做完一项跑 `scripts/verify.sh go` 与 `scripts/verify.sh web`。
+ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback / Matching rule。下面列出可迁移的旧路径；现有制造方案仍引用 `erpadapter`，完整探针与负责人走查通过前保留它。沙箱不能编译独立 Go 模块（`apps/*`、`solutions/*`），本地删除须与调用方迁移一起验证。每项完成后按影响面运行 `scripts/verify.sh capabilities composition web`；这里是迁移范围参考，执行顺序仍以 WorkQueue 为准。
 
 ## 1. `apps/erpadapter` + `web/packages/erpadapter`（ADR-0070 §减法、ADR-0072 §减法）
 

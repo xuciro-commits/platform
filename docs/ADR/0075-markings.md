@@ -15,11 +15,12 @@ Connection 与 Dataset 各有一个 `marking`：`internal` < `confidential` < `r
 ### 2. 编译到既有机制，而不是新查一次权限
 
 - **机密/受限 → 对象字段必须指明读者**：管道以 confidential/restricted 输入写对象时，若对象有任何字段未设 ADR-0028 D3 的 `read` 角色，发布被拒并列出字段名；运行时输入标记升高后同样拒绝并写进 Last run。这样"谁能看到工资"仍由对象字段的读角色回答，Markings 只保证没有人把机密数据倒进人人可读的字段。
+- **防止其他目标绕过字段读者**：confidential/restricted 连接只能先进入数据集，再通过管道应用对象字段规则；禁止直接写对象。企业模型当前为租户可读，因此机密/受限管道的企业模型输出在发布及运行时都拒绝。已发布管道的编辑也重新验证目标规则。
 - **受限不出 CSV**：`GET /v1/export/{type}` 对 restricted 的数据集/版本，以及被 restricted 管道写入的对象，一律 POLICY_DENIED。
 
 ### 3. Integrator 角色
 
-Builder 应用新增角色 `integrator`：Connections / Data sources / Datasets / Pipelines / Writebacks / Matching rules / Integration health 的全部读写与动作，**不含**对象、页面、流程、函数与发布。构建器左栏给 integrator 一个仅"Integration"分组；页面上原本只放行 builder 的检查改为 builder 或 integrator。接入外部系统的人从此不必是设计本体的人。
+Builder 应用新增角色 `integrator`：Connections / Data sources / Datasets / Pipelines / Writebacks / Matching rules / Integration health 的全部读写与动作，**不含**对象、页面、流程、函数与发布。构建器左栏给 integrator 一个仅"Integration"分组；页面上原本只放行 builder 的检查改为 builder 或 integrator。投递状态通过限定为 build 回写的元数据视图读取，管理效果端点仍按原授权拒绝。接入外部系统的人从此不必是设计本体的人。
 
 ### 4. 没做的
 

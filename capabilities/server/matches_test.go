@@ -32,6 +32,10 @@ func TestMatchingRuleConvergesMaterials(t *testing.T) {
 	submit("obj-publish", build.SchemaPublish, build.ObjectType, "O1", `{}`)
 	submit("rule", build.MatchType+".create", build.MatchType, "M1", `{"name":"materialmatch","title":"Same material","object":"build.material","keys":[{"fields":["partno"],"normalize":"digits"}],"prefer":[{"field":"description","producer":"sapmaterials"}]}`)
 	submit("rule-publish", build.MatchType+".publish", build.MatchType, "M1", `{}`)
+	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "invalid-active-rule",
+		Target: &pb.EntityRef{Type: build.MatchType, Id: "M1"}, Schema: &pb.SchemaRef{Name: build.MatchType + ".edit", Version: 1}, Payload: []byte(`{"keys":[{"fields":["unknown"],"normalize":"digits"}]}`)}, at); err == nil {
+		t.Fatal("edited a published matching rule past its field validation")
+	}
 	for _, ds := range []string{"sap", "mes"} {
 		submit("ds-"+ds, build.DatasetType+".create", build.DatasetType, ds, `{"name":"`+ds+`","title":"`+ds+`"}`)
 	}

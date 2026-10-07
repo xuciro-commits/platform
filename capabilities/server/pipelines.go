@@ -77,17 +77,21 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 				}
 				run.Quarantine = quarantined
 				if p.OutputEnterprise != nil {
-					elements, rels, skipped := p.OutputEnterprise.Slice(kept)
-					payload, _ := json.Marshal(map[string]any{"source": p.OutputEnterprise.Source, "elements": elements, "relationships": rels})
-					_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: enterprise.ID, IdempotencyKey: "sync:" + p.ID + ":" + now.UTC().Format(time.RFC3339Nano),
-						Target: &pb.EntityRef{Type: enterprise.ModelType, Id: "model"}, Schema: &pb.SchemaRef{Name: enterprise.SchemaSliceSync, Version: 1}, Payload: payload}, now)
-					switch {
-					case err != nil && err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED:
-						run.Error = "The pipeline runs as its publisher, who needs the Enterprise admin role to land elements in the model"
-					case err != nil:
-						run.Error = err.Code.String() + ": " + err.Message
-					default:
-						run.Written, run.Failed = len(elements), skipped
+					if build.Guarded(run.Marking) {
+						run.Error = "The enterprise model is tenant-readable; confidential or restricted rows cannot land there"
+					} else {
+						elements, rels, skipped := p.OutputEnterprise.Slice(kept)
+						payload, _ := json.Marshal(map[string]any{"source": p.OutputEnterprise.Source, "elements": elements, "relationships": rels})
+						_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: enterprise.ID, IdempotencyKey: "sync:" + p.ID + ":" + now.UTC().Format(time.RFC3339Nano),
+							Target: &pb.EntityRef{Type: enterprise.ModelType, Id: "model"}, Schema: &pb.SchemaRef{Name: enterprise.SchemaSliceSync, Version: 1}, Payload: payload}, now)
+						switch {
+						case err != nil && err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED:
+							run.Error = "The pipeline runs as its publisher, who needs the Enterprise admin role to land elements in the model"
+						case err != nil:
+							run.Error = err.Code.String() + ": " + err.Message
+						default:
+							run.Written, run.Failed = len(elements), skipped
+						}
 					}
 				} else if p.OutputDataset != "" {
 					if err := t.loadDataset(member, p.OutputDataset, "pipeline:"+p.Name, run.Marking, kept, now); err != nil {

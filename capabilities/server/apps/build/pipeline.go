@@ -122,6 +122,13 @@ type QuarantinedRow struct {
 
 func (b *Build) pipelineEntity() platform.Entity {
 	return platform.Entity{Type: PipelineType, Title: "Pipeline", Plural: "Pipelines", Model: Pipeline{}, Display: "title",
+		Validate: func(c platform.Caller, record any) *kernel.Error {
+			p := record.(*Pipeline)
+			if p.State == "published" {
+				return b.checkPipeline(c, *p)
+			}
+			return nil
+		},
 		Description: "Declared steps from a dataset to a dataset or an object, with expectations that quarantine bad rows.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
@@ -193,6 +200,9 @@ func (b *Build) checkPipeline(c platform.Caller, p Pipeline) *kernel.Error {
 	case outputs != 1:
 		return refuse("A pipeline writes either a dataset, an object or the enterprise model")
 	case p.OutputEnterprise != nil:
+		if Guarded(b.inputMarking(c, p)) {
+			return refuse("The enterprise model is tenant-readable; confidential or restricted rows cannot land there")
+		}
 		if err := p.OutputEnterprise.check(); err != nil {
 			return refuse(err.Error())
 		}

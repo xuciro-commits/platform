@@ -8,7 +8,7 @@ import { Button, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsave
 // Writebacks (ADR-0072): an accepted action on an object sent to an external
 // system through a connection. The sending is an outbound effect - queued in
 // the connection's order, retried with the same idempotency key, delivered
-// once - and the answer can write fields back onto the record.
+// with receiver deduplication - and the answer can write fields back onto the record.
 type Field = { from: string; to: string; convert?: string };
 type Answer = { at: string; effect: string; target: string; result: string; detail?: string; answer?: string };
 type Draft = { id: string; revision: number; name: string; title: string; connection: string; object: string; on: string; method?: string; path?: string; mapping: Field[]; result: Field[]; state: string; sent?: number; rejected?: number; failed?: number; answers?: Answer[] };
@@ -21,7 +21,7 @@ export function Writebacks() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (!integrates(role("build"))) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Writebacks")} description={t("Send an object's accepted actions to an external system. Each decision becomes one request, queued in the connection's order and retried with the same key, so an outage delays it and never duplicates it.")}
+    <PageHeader title={t("Writebacks")} description={t("Send an object's accepted actions to an external system. Each decision becomes one request, queued in the connection's order and retried with the same key so the receiver can deduplicate retries.")}
       actions={<Button onClick={() => open({ view: "writeback", params: { id: "new" } })}>{t("New writeback")}</Button>} />
     <RecordList source={source} type="build.writeback" fields={["title", "object", "on", "connection", "sent", "failed", "state"]} onOpen={(record) => open({ view: "writeback", params: { id: record.id } })} />
   </div>;
@@ -31,7 +31,7 @@ export function WritebackEditor({ id }: { id: string }) {
   const { decide, role, entities } = useHost(), { open, close } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.writeback/${encodeURIComponent(id)}`, 5000);
   const connections = (useReadQuery<{ records: ConnectionRow[] }>("/v1/records/build.connection?limit=100").data?.records ?? []).filter((c) => c.state === "ready" && c.kind !== "postgres");
-  const effects = useReadQuery<Api.Effect[]>("/v1/effects", 5000).data ?? [];
+  const effects = useReadQuery<Api.IntegrationEffect[]>("/v1/integration-effects", 5000).data ?? [];
   const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const load = (record: Draft) => { setDraft({ ...empty(), ...record, mapping: record.mapping ?? [], result: record.result ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
@@ -108,7 +108,7 @@ export function WritebackEditor({ id }: { id: string }) {
       <Panel title={t("Deliveries")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         <p className="flex flex-wrap items-center gap-2 text-xs">
           <Tag label={t("{n} delivered", { n: draft.sent ?? 0 })} tone="success" /><Tag label={t("{n} rejected", { n: draft.rejected ?? 0 })} tone={draft.rejected ? "danger" : undefined} /><Tag label={t("{n} failed", { n: draft.failed ?? 0 })} tone={draft.failed ? "danger" : undefined} />
-          {queue.length > 0 && <Tag label={t("{n} queued", { n: queue.length })} tone="warning" />}{queue[0]?.error && <span className="text-warning">{queue[0].error}</span>}
+          {queue.length > 0 && <Tag label={t("{n} queued", { n: queue.length })} tone="warning" />}{queue[0]?.error && <span className="text-warning">{t(queue[0].error)}</span>}
         </p>
         {queue.length > 0 && <p className="text-[11px] text-muted">{t("Queued decisions go in order once the system answers; Settings → Integrations shows every attempt.")}</p>}
         {draft.answers?.length ? <ul className="grid gap-1 text-xs">{draft.answers.map((a, i) => <li key={i} className="flex flex-wrap items-center gap-2 font-mono break-all">

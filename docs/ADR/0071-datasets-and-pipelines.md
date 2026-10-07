@@ -12,7 +12,7 @@
 - 读：`/v1/records/build.dataset/{id}` 与 `/v1/records/build.datasetversion/{id}@{n}`，没有新的 read；
 - Source 新增 `dataset` 目标（与 `object` 二选一）：命中时每次拉取把**原始行**作为数据集下一版本（`loadDataset`），映射字段留空——"映射"从数据源迁到管道，这正是 ADR-0070 §2 预留的收口。老的 object 直映射保留给小而稳定的接口。
 
-Dataset 是 Foundry 的 dataset（不可变版本、schema 推断、drift 可见），但没有独立存储层：版本就是记录，走同一账本、同一回放、同一候选/环境晋级。
+Dataset 是 Foundry 的 dataset（不可变版本、schema 推断、drift 可见），但没有独立存储层：版本就是记录，走同一账本与回放。Connection/Source/Dataset/Pipeline 是租户内的集成记录，当前不在封存候选的定义清单中，不能据此声称可随候选跨环境晋级。
 
 ### 2. Pipeline：声明式步骤 + 期望 + 一个输出
 
@@ -47,7 +47,7 @@ Dataset 是 Foundry 的 dataset（不可变版本、schema 推断、drift 可见
 
 ### 4. 构建器
 
-Ontology › **Datasets**（列表；编辑器：名称/标题/保留版本数、推断的结构与最近装载漂移、按版本预览前 50 行）、**Pipelines**（列表；编辑器：输入数据集与列、线性步骤表单（按 kind 显示字段、上下移动）、期望、输出二选一、Publish/Run now/Pause、最近运行含隔离行与拒绝）。Data source 编辑器增加 "Rows go to: object | dataset" 分支。
+Ontology › **Datasets**（列表；编辑器：名称/标题/保留版本数、通过原记录动作 Load a version 手动加载 JSON 行、推断的结构与最近装载漂移、按版本预览前 50 行）、**Pipelines**（列表；编辑器：输入数据集与列、线性步骤表单（按 kind 显示字段、上下移动）、期望、输出二选一、Publish/Run now/Pause、最近运行含隔离行与拒绝）。Data source 编辑器增加 "Rows go to: object | dataset" 分支。
 
 ## 做减法
 
@@ -63,4 +63,4 @@ Ontology › **Datasets**（列表；编辑器：名称/标题/保留版本数�
 
 ## 下一步
 
-Ⅰ-E Backing + Writeback（ADR-0072）：对象字段"由哪个数据集的哪一列支撑"的声明，动作写回 Connection（幂等键 + 断网排队/重放）。
+Ⅰ-E 已由 [ADR-0072](0072-writebacks-and-lineage.md) 实施。完整集成探针与负责人走查按 Testing / WorkQueue 执行。

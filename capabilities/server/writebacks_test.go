@@ -1,9 +1,12 @@
 package platformserver
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,14 +16,88 @@ import (
 	"platformserver/platform"
 )
 
+func TestIntegratorSeesOnlyWritebackDeliveryMetadata(t *testing.T) {
+	now := time.Now()
+	tn := &Tenant{ID: "metadata", outbound: []*effect{
+		{Effect: platform.Effect{ID: "own", App: build.ID, Endpoint: "connection:c", Event: "writeback:wrong", Body: "private"}},
+		{Effect: platform.Effect{ID: "allowed", App: build.ID, Endpoint: "connection:c", Event: "writeback/orders", Body: "private-request", Error: "private-answer", State: "retrying"}},
+		{Effect: platform.Effect{ID: "other", App: "erp", Endpoint: "connection:c", Event: "writeback/orders", Body: "private-other"}},
+	}}
+	member := platform.Member{ID: "integrator", Tenant: tn.ID, Roles: map[string]string{build.ID: build.Integrator}}
+	rows, err := tn.integrationEffects(member, now)
+	if err != nil || len(rows) != 1 || rows[0].ID != "allowed" {
+		t.Fatalf("metadata: %+v %v", rows, err)
+	}
+	body, _ := json.Marshal(rows)
+	if strings.Contains(string(body), "private") || strings.Contains(string(body), "body") || strings.Contains(string(body), "target") {
+		t.Fatalf("delivery metadata leaked a payload: %s", body)
+	}
+	member.Roles[build.ID] = build.User
+	if _, err := tn.integrationEffects(member, now); err == nil {
+		t.Fatal("ordinary member read integration delivery metadata")
+	}
+}
+
 // A published writeback turns the object's accepted create into an effect on
 // the connection: an outage queues it (retry with the same key), the next
 // attempt delivers it, and the answer's document number lands on the record.
 func TestWritebackQueuesAndReplaysOnce(t *testing.T) {
-	seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{build.ID: build.Builder}}}
-	tn, err := NewTenant("writebacks", NewConsole("writebacks", seat), build.New("writebacks"))
+	for _, durable := range []bool{false, true} {
+		name := "direct"
+		if durable {
+			name = "accepted-result"
+		}
+		t.Run(name, func(t *testing.T) { testWritebackQueuesAndReplaysOnce(t, durable, nil) })
+	}
+}
+
+func TestJournalWritebackCallbackAndReplay(t *testing.T) {
+	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
+	if dsn == "" {
+		t.Skip("PLATFORM_TEST_DATABASE is not set")
+	}
+	journal, err := OpenJournal(context.Background(), dsn)
 	if err != nil {
 		t.Fatal(err)
+	}
+	defer journal.Close()
+	testWritebackQueuesAndReplaysOnce(t, true, journal)
+}
+
+func testWritebackQueuesAndReplaysOnce(t *testing.T, durable bool, journal *Journal) {
+	tenant := "writebacks"
+	if journal != nil {
+		tenant = fmt.Sprintf("writebacks-%d", time.Now().UnixNano())
+	}
+
+	seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{build.ID: build.Builder}}}
+	compose := func() *Tenant {
+		tn, err := NewTenant(tenant, NewConsole(tenant, seat), build.New(tenant), newStock(tenant))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	if durable {
+		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	}
+	if journal != nil {
+		ctx := context.Background()
+		if _, err := journal.Entries(ctx, tenant, 0); err != nil {
+			t.Fatal(err)
+		}
+		tn.Record = func(e Entry) {
+			if err := journal.Append(ctx, tenant, e); err != nil {
+				t.Fatal(err)
+			}
+		}
+		tn.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+			return journal.AppendAccepted(ctx, tenant, e, key, hash)
+		}
+		defer journal.pool.Exec(ctx, `delete from journal where tenant=$1`, tenant)
 	}
 	tn.Secrets = func(name string) ([]byte, bool) { return []byte("Basic c2FwOnNlY3JldA=="), name == "sap-writer" }
 	var calls []string
@@ -57,6 +134,22 @@ func TestWritebackQueuesAndReplaysOnce(t *testing.T) {
 		"mapping":[{"from":"sku","to":"Material"},{"from":"qty","to":"QuantityInEntryUnit","convert":"string"},{"from":"id","to":"ReferenceDocument"}],
 		"result":[{"from":"MaterialDocument","to":"docno"}]}`)
 	submit("wb-publish", build.WritebackType+".publish", build.WritebackType, "W1", `{}`)
+	submit("native-wb", build.WritebackType+".create", build.WritebackType, "native", `{"name":"nativewriteback","title":"Native writeback","connection":"sap","object":"stock.item","on":"create"}`)
+	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "native-publish",
+		Target: &pb.EntityRef{Type: build.WritebackType, Id: "native"}, Schema: &pb.SchemaRef{Name: build.WritebackType + ".publish", Version: 1}, Payload: []byte(`{}`)}, at); err == nil || !strings.Contains(err.Message, "owner callback") {
+		t.Fatalf("published a writeback whose native owner cannot receive its answer: %v", err)
+	}
+	submit("unchecked-conn", build.ConnectionType+".create", build.ConnectionType, "unchecked", `{"name":"unchecked","title":"Unchecked","kind":"http","address":"https://unchecked.example.com/"}`)
+	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "invalid-active-writeback",
+		Target: &pb.EntityRef{Type: build.WritebackType, Id: "W1"}, Schema: &pb.SchemaRef{Name: build.WritebackType + ".edit", Version: 1}, Payload: []byte(`{"connection":"unchecked"}`)}, at); err == nil {
+		t.Fatal("edited a published writeback past its connection validation")
+	}
+	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "forged-answer",
+		Target: &pb.EntityRef{Type: build.WritebackType, Id: "W1"}, Schema: &pb.SchemaRef{Name: build.SchemaWritebackAnswered, Version: 1},
+		Payload: []byte(`{"answer":{"result":"delivered"}}`)}, at); err == nil {
+		t.Fatal("builder forged a writeback delivery answer")
+	}
+
 	submit("gr-1", "build.goodsreceipt.create", "build.goodsreceipt", "GR1", `{"sku":"A100","qty":12}`)
 	effects := tn.Effects(at)
 	if len(effects) != 1 || effects[0].Endpoint != "connection:sap" || effects[0].State != "pending" {
@@ -88,4 +181,16 @@ func TestWritebackQueuesAndReplaysOnce(t *testing.T) {
 	if verr != nil || !strings.Contains(string(raw), `"docno":"5000001"`) {
 		t.Fatalf("record %v %s", verr, raw)
 	}
+	if tn.quarantined() {
+		t.Fatalf("writeback callback quarantined the tenant: %+v", tn.fault.Load())
+	}
+	if journal != nil {
+		var err error
+		entries, err = journal.Entries(context.Background(), tenant, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	CheckReplay(t, tn, entries, compose)
+
 }
