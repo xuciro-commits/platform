@@ -14,10 +14,12 @@ export function Members() {
   const { decide } = useAdmin();
   const { open } = useWorkspace();
   const [adding, setAdding] = useState(false);
+  const [inviting, setInviting] = useState(false);
   const columns: ColumnDef<Member, any>[] = [
     { accessorKey: "id", header: t("Member"), meta: { width: 130 } },
     { id: "name", header: t("Name"), meta: { width: 160 }, accessorFn: (m) => m.profile.displayName ?? "", cell: ({ row: { original: m } }) => <span>{m.profile.displayName || <span className="text-muted">—</span>}{m.profile.title ? <span className="ml-1 text-xs text-muted">{m.profile.title}</span> : null}</span> },
     { id: "kind", header: t("Kind"), meta: { width: 140 }, accessorFn: kind, cell: (c) => <Tag label={t(c.getValue())} tone={c.getValue() === "person" ? "neutral" : "info"} /> },
+    { id: "status", header: t("Standing"), meta: { width: 110 }, accessorFn: (m) => m.status ?? "active", cell: (c) => <Standing status={c.getValue()} /> },
     { id: "subjects", header: t("Signs in as"), accessorFn: (m) => m.subjects.join(", "), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "roles", header: t("Roles"), accessorFn: (m) => (m.grants ?? []).map((g) => `${g.app}: ${g.role}`).join(" "),
       cell: ({ row: { original: m } }) => <span className="flex gap-1 overflow-hidden">{(m.grants ?? []).map((g) => <Tag key={g.app + g.role + (g.unit ?? "")} label={`${g.app}: ${g.role}${g.unit ? " @" + g.unit : ""}`} />)}</span> },
@@ -25,7 +27,10 @@ export function Members() {
   return (
     <>
       <PageHeader title={t("Members and access")} description={t("People, services and AI agents of this tenant, with their role in each app. Changes apply on the next request.")}
-        actions={can("platform.member.add") && <Button variant="primary" onClick={() => setAdding(true)}>{t("Add member")}</Button>} />
+        actions={<span className="flex gap-2">
+          {can("platform.member.invite") && <Button onClick={() => setInviting(true)}>{t("Invite member")}</Button>}
+          {can("platform.member.add") && <Button variant="primary" onClick={() => setAdding(true)}>{t("Add member")}</Button>}
+        </span>} />
       {members.error ? <p className="text-sm text-[var(--tone-danger)]">{String(members.error)} {t("— administrators only.")}</p> :
         <DataTable data={members.data ?? []} columns={columns} getRowId={(m) => m.id} height="calc(100dvh - 190px)"
           onRowClick={(m) => open({ view: "member", params: { id: m.id } }, { window: "beside" })} />}
@@ -36,8 +41,21 @@ export function Members() {
             { name: "agent", label: t("AI agent (what it causes that cannot be recalled waits for a person's approval)"), kind: "checkbox" }]}
           onSubmit={async (v) => { if (await decide("platform.member.add", v.id, { subject: v.subject, agent: v.agent })) setAdding(false); }} />
       </Dialog>}
+      {can("platform.member.invite") && <Dialog open={inviting} onOpenChange={setInviting} title={t("Invite member")}>
+        <p className="mb-2 text-xs text-muted">{t("Add a member who has not signed in yet: they stand invited until they first do, and may be granted roles meanwhile.")}</p>
+        <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, t("Lower case, digits, dashes")), subject: z.string().regex(/^user:.+/, t("user:<email>")) })}
+          defaultValues={{ id: "", subject: "" }} submitLabel={t("Invite")} onCancel={() => setInviting(false)}
+          fields={[{ name: "id", label: t("Member ID") }, { name: "subject", label: t("Signs in as (user:<email>)") }]}
+          onSubmit={async (v) => { if (await decide("platform.member.invite", v.id, { subject: v.subject })) setInviting(false); }} />
+      </Dialog>}
     </>
   );
+}
+
+/** A member's standing (ADR-0079 §4): active, invited, suspended or left. */
+export function Standing({ status }: { status?: string }) {
+  const s = status || "active";
+  return <Tag label={t(s)} tone={s === "active" ? "success" : s === "invited" ? "info" : s === "suspended" ? "warning" : "neutral"} />;
 }
 
 export function MemberDetail({ id }: { id: string }) {
@@ -52,11 +70,22 @@ export function MemberDetail({ id }: { id: string }) {
     dateFormat: member.profile.dateFormat || settings.dateFormat || "ymd", numberFormat: member.profile.numberFormat || settings.numberFormat || "1,234.56", weekStart: member.profile.weekStart || settings.weekStart || "monday",
     email: member.profile.email || member.subjects.find((s) => s.startsWith("user:"))?.slice(5) || "", digest: member.profile.digest || settings.digest || "instant" } };
   const grants = member.grants ?? [];
+  const self = member.id === me.principalId;
+  const standing = member.status || "active";
   return (
     <div className="grid max-w-3xl gap-4">
-      <EntityCard title={member.profile.displayName || member.id} subtitle={member.subjects.join(", ")} status={<Tag label={kind(member)} />}
+      <EntityCard title={member.profile.displayName || member.id} subtitle={member.subjects.join(", ")} status={<span className="flex gap-1"><Tag label={t(kind(member))} /><Standing status={member.status} /></span>}
         properties={[[t("Member ID"), member.id], [t("Apps with a role"), Object.keys(member.roles).join(", ") || t("none")],
           [t("Timezone"), account.effective.timezone], [t("Last seen"), member.profile.lastSeen ? new Date(member.profile.lastSeen).toLocaleString() : t("never")]]} />
+      {!self && standing !== "left" && (can("platform.member.suspend") || can("platform.member.offboard")) && <Panel title={t("Standing")}>
+        <p className="text-xs text-muted">{standing === "suspended" ? t("The member keeps their roles on record but holds nothing and cannot act until resumed; their sessions end.")
+          : t("Suspend to pause a member without losing their roles; offboard when they leave for good.")}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {standing === "suspended" ? can("platform.member.resume") && <Button size="sm" onClick={() => void decide("platform.member.resume", member.id, {})}>{t("Resume member")}</Button>
+            : can("platform.member.suspend") && <Button size="sm" onClick={() => { const reason = window.prompt(t("Reason (optional)")) ?? ""; void decide("platform.member.suspend", member.id, { reason }); }}>{t("Suspend member")}</Button>}
+          {can("platform.member.offboard") && <Button size="sm" variant="danger" onClick={() => { if (window.confirm(t("The member leaves: their subjects and tokens go, their grants end, their record and history stay. Not reversible; add them again if they return."))) void decide("platform.member.offboard", member.id, { reason: "" }); }}>{t("Offboard member")}</Button>}
+        </div>
+      </Panel>}
       <Panel title={t("Roles")} actions={can("platform.member.grant") && <Button size="sm" onClick={() => setGranting(true)}>{t("Add role")}</Button>}>
         {grants.length === 0 && <p className="text-xs text-muted">{t("Holds no role.")}</p>}
         <div className="grid gap-1.5 text-sm">

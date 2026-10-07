@@ -12,6 +12,8 @@ import type { Member } from "./shared";
 export type Account = Api.Account;
 export type Profile = Api.Profile;
 export type TenantRecord = Api.TenantRecord;
+type TokenView = Api.TokenView;
+type Session = Api.Session;
 
 const DATE_FORMATS = ["ymd", "dmy", "mdy"];
 const NUMBER_FORMATS = ["1,234.56", "1.234,56", "1 234,56"];
@@ -145,6 +147,8 @@ export function MyAccount() {
         actions={<span className="flex gap-1"><Tag label={me.principalId} /><Tag label={me.tenantId} tone="info" /></span>} />
       {account.data && <ProfileForm member={me.principalId} account={account.data} languages={me.languages} tenant={tenant.data} self />}
       <Delegate />
+      <Tokens />
+      <Sessions />
     </>
   );
 }
@@ -173,6 +177,85 @@ function Delegate() {
         <Button type="submit" variant="primary" disabled={!to || !until}>{t("Delegate")}</Button>
       </form>
       {done && <p className="mt-2 text-xs text-muted">{done}</p>}
+    </Panel>
+  );
+}
+
+// Personal tokens (ADR-0079 §5): a credential for scripts that acts as me,
+// within the permissions I name. The secret is collected once, right after
+// the decision; the host never shows it again.
+function Tokens() {
+  const { client, decide, can } = useHost();
+  const tokens = useRead<TokenView[]>("/v1/tokens");
+  const [label, setLabel] = useState("");
+  const [scopes, setScopes] = useState("");
+  const [until, setUntil] = useState("");
+  const [secret, setSecret] = useState<{ id: string; secret: string } | null>(null);
+  if (!can("platform.token.issue")) return null;
+  const issue = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = "t" + Date.now().toString(36);
+    const payload = { label, scopes: scopes.split(/[\s,]+/).filter(Boolean), until };
+    if (!(await decide("platform.token.issue", { type: "platform.token", id }, payload))) return;
+    try {
+      const got = await client.get<{ secret: string }>(`/v1/tokens/${encodeURIComponent(id)}/secret`, true);
+      setSecret({ id, secret: got.secret });
+    } catch { notify.error(t("The secret could not be collected")); }
+    setLabel(""); setScopes(""); setUntil("");
+    void tokens.refetch();
+  };
+  return (
+    <Panel title={t("Personal tokens")} description={t("A credential for scripts and integrations that acts as you, within the permissions you name, until a day. The secret is shown once.")} className="mt-4 max-w-3xl">
+      {secret && <div className="mb-3 rounded border border-[var(--tone-warning)] p-2 text-sm">
+        <p className="text-xs text-muted">{t("Copy the secret now; it is not shown again.")}</p>
+        <code className="block select-all break-all font-mono text-xs">{secret.secret}</code>
+        <Button size="sm" className="mt-1" onClick={() => { void navigator.clipboard?.writeText(secret.secret); setSecret(null); }}>{t("Copied, hide it")}</Button>
+      </div>}
+      <form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={issue}>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("Label")}</span><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t("CI, a notebook, …")} /></label>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("Scopes")}</span><Input value={scopes} onChange={(e) => setScopes(e.target.value)} placeholder={t("Permission patterns, such as mes.order.* ; empty: everything you may do")} className="w-80" /></label>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("Until")}</span><Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} /></label>
+        <Button type="submit" variant="primary" disabled={!label}>{t("Issue personal token")}</Button>
+      </form>
+      <div className="mt-3 grid gap-1 text-sm">
+        {(tokens.data ?? []).length === 0 && <p className="text-xs text-muted">{t("No personal tokens.")}</p>}
+        {(tokens.data ?? []).map((x) => (
+          <p key={x.id} className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{x.label}</span><span className="font-mono text-xs text-muted">{x.id}</span>
+            {x.scopes.map((s) => <Tag key={s} label={s} />)}
+            {x.until && <span className="text-xs text-muted">{t("until {day}", { day: x.until })}</span>}
+            {x.expired && <Tag label={t("expired")} tone="warning" />}
+            <span className="text-xs text-muted">{x.lastUsed ? t("last used {at}", { at: new Date(x.lastUsed).toLocaleString() }) : t("never used")}</span>
+            {can("platform.token.revoke") && <Button size="sm" variant="ghost" onClick={async () => { if (await decide("platform.token.revoke", { type: "platform.token", id: x.id }, {})) void tokens.refetch(); }}>{t("Revoke")}</Button>}
+          </p>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+// Sessions (ADR-0079 §5): the credentials this host has seen act as me.
+function Sessions() {
+  const { client } = useHost();
+  const sessions = useRead<Session[]>("/v1/sessions");
+  const [ended, setEnded] = useState<number | null>(null);
+  const list = sessions.data ?? [];
+  return (
+    <Panel title={t("Sessions")} description={t("Where you are signed in, as this host has seen it since it started. Ending the other sessions makes the host refuse their credentials; a personal token stays until revoked.")} className="mt-4 max-w-3xl"
+      actions={list.length > 1 && <Button size="sm" onClick={async () => { const r = await client.get<{ ended: number }>("/v1/sessions/end-others\n{}", true); setEnded(r.ended); void sessions.refetch(); }}>{t("Sign out other sessions")}</Button>}>
+      <div className="grid gap-1 text-sm">
+        {list.length === 0 && <p className="text-xs text-muted">{t("No sessions seen yet.")}</p>}
+        {list.map((s) => (
+          <p key={s.id} className="flex flex-wrap items-center gap-2">
+            <Tag label={t(s.kind)} tone={s.kind === "token" ? "info" : "neutral"} />
+            <span>{s.agent || t("unknown client")}</span>
+            {s.token && <span className="font-mono text-xs text-muted">{s.token}</span>}
+            <span className="text-xs text-muted">{t("since {at}", { at: new Date(s.first).toLocaleString() })} · {t("last {at}", { at: new Date(s.last).toLocaleString() })}</span>
+            {s.current && <Tag label={t("this session")} tone="success" />}
+          </p>
+        ))}
+      </div>
+      {ended !== null && <p className="mt-2 text-xs text-muted">{t("{n} other sessions ended.", { n: String(ended) })}</p>}
     </Panel>
   );
 }

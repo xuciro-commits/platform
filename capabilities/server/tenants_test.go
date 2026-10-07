@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -303,4 +304,135 @@ func TestAccessConfiguration(t *testing.T) {
 	if access := consoleOf(restored).Access(); len(access.Roles) != 1 || !restored.app("a").Manifest().Actions.PermitsAny([]string{"scribe"}, "a.note") {
 		t.Fatalf("custom role not restored: %+v", access)
 	}
+}
+
+// ADR-0079 C/D: standing (invite, suspend, resume, offboard), personal
+// tokens with scopes, sessions; all of it replays.
+func TestLifecycleTokensAndSessions(t *testing.T) {
+	seats := []Seat{
+		{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin, "a": "writer"}}},
+		{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"a": "writer"}}},
+	}
+	compose := func() *Tenant {
+		tn, err := NewTenant("l", NewConsole("l", seats...), newNotes("l", "a"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	seq := 0
+	submitAs := func(who platform.Member, app, schema, typ, id, payload string) string {
+		seq++
+		_, err := tn.Submit(who, &pb.Submission{TenantId: "l", PrincipalId: who.ID, Authority: app, IdempotencyKey: fmt.Sprint("k", seq),
+			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: json.RawMessage(payload)}, now)
+		if err != nil {
+			return err.Error()
+		}
+		return "ok"
+	}
+	decide := func(who, app, schema, typ, id, payload string) string {
+		m, _ := tn.member(who)
+		return submitAs(m, app, schema, typ, id, payload)
+	}
+	d := consoleOf(tn)
+	// Invite: stands invited, may be granted, becomes active on first sign-in.
+	if got := decide("admin", PlatformApp, SchemaInvite, MemberType, "cy", `{"subject":"user:cy@example.test"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := decide("admin", PlatformApp, SchemaGrant, MemberType, "cy", `{"app":"a","role":"writer"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if cy, _ := tn.member("cy"); cy.Status != platform.MemberInvited || !cy.Holds("a", "writer") {
+		t.Fatalf("invited: %+v", cy)
+	}
+	d.seen("cy", now)
+	if cy, _ := tn.member("cy"); cy.Status != "" {
+		t.Fatal("first sign-in did not accept the invitation")
+	}
+	// Suspend: holds nothing, cannot act; resume: back.
+	if got := decide("admin", PlatformApp, SchemaMemberSuspend, MemberType, "bo", `{"reason":"audit"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if bo, _ := tn.member("bo"); bo.Active() || len(bo.RolesIn("a")) != 0 || decide("bo", "a", "a.note", "a.topic", "t", `{}`) == "ok" {
+		t.Fatalf("suspended member still acts: %+v", bo)
+	}
+	if got := decide("admin", PlatformApp, SchemaMemberResume, MemberType, "bo", `{}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := decide("bo", "a", "a.note", "a.topic", "t", `{}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := decide("admin", PlatformApp, SchemaMemberSuspend, MemberType, "admin", `{}`); !strings.Contains(got, "POLICY_DENIED") {
+		t.Fatalf("suspended self: %s", got)
+	}
+	// Tokens: issued by bo, scoped, secret once; a token cannot mint tokens.
+	if got := decide("bo", PlatformApp, SchemaTokenIssue, TokenType, "ci", `{"label":"CI","scopes":["a.note"],"until":"2027-01-01"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	secret, ok := d.Minted("ci", "bo", now)
+	if !ok || !strings.HasPrefix(secret, tokenPrefix) {
+		t.Fatalf("no secret: %q %v", secret, ok)
+	}
+	if _, again := d.Minted("ci", "bo", now); again {
+		t.Fatal("secret handed out twice")
+	}
+	if _, wrong := d.Minted("ci", "admin", now); wrong {
+		t.Fatal("secret handed to another member")
+	}
+	if raw, _ := json.Marshal(entries); strings.Contains(string(raw), secret) || strings.Contains(string(raw), secret[len(tokenPrefix):]) {
+		t.Fatal("the journal keeps the secret")
+	}
+	viaToken, ok := d.MemberByToken(secret, now)
+	if !ok || viaToken.ID != "bo" || !slices.Equal(viaToken.Scopes, []string{"a.note"}) {
+		t.Fatalf("token sign-in: %+v %v", viaToken, ok)
+	}
+	if got := submitAs(viaToken, "a", "a.note", "a.topic", "t2", `{}`); got != "ok" {
+		t.Fatalf("in-scope action refused: %s", got)
+	}
+	if got := submitAs(viaToken, PlatformApp, SchemaProfileUpdate, ProfileType, "bo", `{"title":"x"}`); !strings.Contains(got, "POLICY_DENIED") {
+		t.Fatalf("out-of-scope action allowed: %s", got)
+	}
+	if got := submitAs(viaToken, PlatformApp, SchemaTokenIssue, TokenType, "ci2", `{"label":"more"}`); !strings.Contains(got, "POLICY_DENIED") {
+		t.Fatalf("token minted a token: %s", got)
+	}
+	if _, ok := d.MemberByToken(secret, time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)); ok {
+		t.Fatal("expired token accepted")
+	}
+	if views := d.Tokens("bo", now); len(views) != 1 || views[0].Label != "CI" || views[0].LastUsed.IsZero() {
+		t.Fatalf("token views: %+v", views)
+	}
+	// Sessions: two credentials seen, end the other, it is refused.
+	d.noticed("bo", "cred-1", "Mozilla/5.0 Chrome/130.0", "sign-in", now)
+	d.noticed("bo", "cred-2", "curl/8.0", "sign-in", now.Add(time.Minute))
+	if ss := d.Sessions("bo", "cred-1"); len(ss) != 2 || ss[0].Agent != "curl 8" || ss[1].Current != true {
+		t.Fatalf("sessions: %+v", ss)
+	}
+	if n := d.EndOtherSessions("bo", "cred-1"); n != 1 || d.noticed("bo", "cred-2", "", "sign-in", now) || !d.noticed("bo", "cred-1", "", "sign-in", now) {
+		t.Fatal("ending other sessions")
+	}
+	// Admin revokes the token; offboard removes subjects and grants.
+	if got := decide("admin", PlatformApp, SchemaTokenRevoke, TokenType, "ci", `{}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if _, ok := d.MemberByToken(secret, now); ok {
+		t.Fatal("revoked token accepted")
+	}
+	if got := decide("admin", PlatformApp, SchemaOffboard, MemberType, "bo", `{"reason":"left"}`); got != "ok" {
+		t.Fatal(got)
+	}
+	if _, ok := d.Member("bo"); ok {
+		t.Fatal("one who left still signs in")
+	}
+	if bo, ok := tn.member("bo"); !ok || bo.Status != platform.MemberLeft || len(bo.Grants) != 0 {
+		t.Fatalf("offboarded: %+v", bo)
+	}
+	if got := decide("admin", PlatformApp, SchemaMemberResume, MemberType, "bo", `{}`); !strings.Contains(got, "POLICY_DENIED") {
+		t.Fatalf("resumed one who left: %s", got)
+	}
+	CheckReplay(t, tn, entries, compose)
 }

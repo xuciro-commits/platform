@@ -1577,5 +1577,19 @@
   "Until this day, exclusive (YYYY-MM-DD)": "至此日止，不含当日（YYYY-MM-DD）",
   "allow": "允许",
   "deny": "拒绝",
-  "No member {member}": "没有成员 {member}"
+  "No member {member}": "没有成员 {member}",
+  "A credential for scripts and integrations that acts as you, within the permissions you name, until a day. The secret is shown once.": "供脚本与集成使用的凭证，以你的身份、在你指定的权限范围内行事，可设到期日。密钥只显示一次。",
+  "A suspended member holds their roles again.": "被停用的成员重新持有其角色。",
+  "Add a member who has not signed in yet: they stand invited until they first do, and may be granted roles meanwhile.": "添加尚未登录过的成员：在首次登录前处于“已邀请”状态，期间即可授予角色。",
+  "An AI agent": "AI 代理",
+  "Invite member": "邀请成员",
+  "Issue personal token": "签发个人令牌",
+  "Offboard member": "成员离职",
+  "Permission patterns, such as mes.order.* ; empty: everything you may do": "权限模式，如 mes.order.*；留空表示你能做的一切",
+  "Resume member": "恢复成员",
+  "Revoke personal token": "撤销个人令牌",
+  "Suspend member": "停用成员",
+  "The member keeps their roles on record but holds nothing and cannot act until resumed; their sessions end.": "成员的角色仍留在记录中，但在恢复前不持有任何权限、不能操作；其会话全部结束。",
+  "The member leaves: their subjects and tokens go, their grants end, their record and history stay. Not reversible; add them again if they return.": "成员离开：其登录身份与令牌被移除，授权终止，记录与历史保留。不可撤销；若其回归请重新添加。",
+  "The token stops working at once. Administrators revoke anyone's.": "令牌立即失效。管理员可撤销任何人的令牌。"
 }

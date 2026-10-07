@@ -244,6 +244,9 @@ func (c *Catalog) DecideOn(caller Caller, schema, target string) authz.Verdict {
 	if policies != nil {
 		rules = policies()
 	}
+	if !caller.InScope(schema) { // a personal token reaches only what it was issued for (ADR-0079 §5)
+		rules = append([]authz.Policy{{ID: "token-scope", Effect: "deny", Permission: schema}}, rules...)
+	}
 	return authz.Decide(authz.Request{Subject: authz.Subject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent},
 		Permission: schema, Resource: target, Allowed: allowed, Attributes: attrs}, rules...)
 }

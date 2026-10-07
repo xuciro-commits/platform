@@ -1156,6 +1156,8 @@ export type Member = {
   tenant: string;
   roles: Record<string, string>;
   grants?: Grant[];
+  status?: string;
+  scopes?: string[];
   agent?: boolean;
   language?: string;
   timezone?: string;
@@ -1166,6 +1168,8 @@ export type MemberView = {
   tenant: string;
   roles: Record<string, string>;
   grants?: Grant[];
+  status?: string;
+  scopes?: string[];
   agent?: boolean;
   language?: string;
   timezone?: string;
@@ -2541,6 +2545,16 @@ export type SelectionVariable = {
   object: AssetRef;
 };
 
+export type Session = {
+  id: string;
+  kind: string;
+  token?: string;
+  agent?: string;
+  first: string;
+  last: string;
+  current: boolean;
+};
+
 export type SettingValue = {
   name: string;
   title: string;
@@ -2836,6 +2850,16 @@ export type Token = {
   operation?: string;
   loop?: LoopFrame;
   results?: Record<string, unknown>;
+};
+
+export type TokenView = {
+  id: string;
+  label: string;
+  scopes: string[];
+  until?: string;
+  issued: string;
+  lastUsed?: string;
+  expired: boolean;
 };
 
 export type Tool = {

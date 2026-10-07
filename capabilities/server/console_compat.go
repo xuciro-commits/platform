@@ -37,6 +37,13 @@ func (d *Console) currentMember(m *platform.Member) platform.Member {
 		}
 	}
 	today := out.Today(time.Now())
+	if out.Status == platform.MemberInvited && !d.lastSeen[out.ID].IsZero() {
+		out.Status = "" // signing in accepts the invitation
+	}
+	if !out.Active() { // suspended or left: holds nothing (ADR-0079 §4)
+		out.Grants, out.Roles = nil, map[string]string{}
+		return out
+	}
 	d.migrateGrants(&out)
 	out.Grants = append(slices.Clone(out.Grants), d.teamGrants(out.ID)...) // teams' grants are held as long as one belongs (ADR-0078 §3.3)
 	d.deriveRoles(&out, today)

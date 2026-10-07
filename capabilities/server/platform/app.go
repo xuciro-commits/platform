@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -29,6 +30,13 @@ type Member struct {
 	Tenant string            `json:"tenant"`
 	Roles  map[string]string `json:"roles"`
 	Grants []Grant           `json:"grants,omitempty"`
+	// Status is the member's standing (ADR-0079 §4): "" active, invited
+	// (added, not yet signed in), suspended (holds nothing until resumed),
+	// left (offboarded: no subjects, no grants; the record stays for history).
+	Status string `json:"status,omitempty"`
+	// Scopes bound a caller signed in with a personal token (ADR-0079 §5):
+	// permission patterns (exact, or a prefix ending in *); nil is unbounded.
+	Scopes []string `json:"scopes,omitempty"`
 	// Agent marks an AI agent: an irreversible effect it causes waits for a
 	// person's approval, and it cannot give one (ADR-0014 D6).
 	Agent bool `json:"agent,omitempty"`
@@ -85,6 +93,23 @@ func (m Member) Holds(app, role string) bool { return slices.Contains(m.RolesIn(
 func (m Member) May(app, permission string, roles []string) authz.Verdict {
 	return authz.Decide(authz.Request{Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: roles})
 }
+
+// Active reports whether the member may act at all: not suspended, not left.
+func (m Member) Active() bool { return m.Status != MemberSuspended && m.Status != MemberLeft }
+
+// InScope reports whether the caller's token scopes, if any, cover permission.
+func (m Member) InScope(permission string) bool {
+	return m.Scopes == nil || slices.ContainsFunc(m.Scopes, func(p string) bool {
+		return p == permission || strings.HasSuffix(p, "*") && strings.HasPrefix(permission, strings.TrimSuffix(p, "*"))
+	})
+}
+
+// Member standings (ADR-0079 §4).
+const (
+	MemberInvited   = "invited"
+	MemberSuspended = "suspended"
+	MemberLeft      = "left"
+)
 
 // Location is the member's timezone, UTC when unknown.
 func (m Member) Location() *time.Location {

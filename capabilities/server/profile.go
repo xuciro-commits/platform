@@ -47,7 +47,8 @@ type Profile struct {
 	HomePage string `json:"homePage,omitempty"` // an app ID or app/view the workspace opens on
 	Theme    string `json:"theme,omitempty"`    // system | light | dark
 	Density  string `json:"density,omitempty"`  // comfortable | compact
-	// Read-only, maintained by the host.
+	// Read-only, the host's memory (not part of the decided state): when the
+	// member last acted on this host since it started.
 	LastSeen time.Time `json:"lastSeen,omitzero"`
 }
 
@@ -188,6 +189,7 @@ func (d *Console) account(member string, def defaults) Account {
 	if p := d.profiles[member]; p != nil {
 		out.Profile = *p
 	}
+	out.LastSeen = d.lastSeen[member]
 	or := func(own, setting string) string {
 		if own != "" {
 			return own
@@ -323,13 +325,8 @@ func (d *Console) seen(member string, now time.Time) {
 	if d.members[member] == nil {
 		return
 	}
-	cur := d.profiles[member]
-	if cur == nil {
-		cur = &Profile{Member: member}
-		d.profiles[member] = cur
-	}
-	if now.Sub(cur.LastSeen) >= time.Minute {
-		cur.LastSeen = now
+	if now.Sub(d.lastSeen[member]) >= time.Minute {
+		d.lastSeen[member] = now
 	}
 }
 
