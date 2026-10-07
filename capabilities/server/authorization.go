@@ -72,12 +72,6 @@ type BuildProject struct {
 	Assets  []ProjectAsset  `json:"assets,omitempty" title:"Assets"`
 }
 
-func projectEntity() platform.Entity {
-	return platform.Entity{Type: ProjectType, Title: "Project", Plural: "Projects", Model: BuildProject{}, Display: "title",
-		Description: "A named association of members that carries edit delegation for the assets it names.",
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true}}
-}
-
 // ProjectActions are the decisions an administrator makes about projects.
 func ProjectActions() []platform.Action {
 	admin := []string{Admin}

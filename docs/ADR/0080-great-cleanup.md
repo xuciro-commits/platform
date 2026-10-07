@@ -134,5 +134,6 @@ capabilities/server/
 | 包级无说明，Tenant 组件只能靠读 host.go 字段注释 | `capabilities/server/doc.go` 组件地图；AGENTS.md 导航行指向它 | wave 5 |
 | `@platform/build/src/shared/`（3 个文件，"工具箱目录"） | 解散：`workbench.tsx` → `editor/workbench.tsx`（所有构建者编辑器共用的外壳，§2 那句"只被项目工作台用"是错的，被 12 个编辑器引用）；`release-profile.tsx` → `releases/`；`record-paths.ts` → `ontology/`。18 个导入改路径，catalog 重生成只变 source 路径 | wave 5 |
 | `docs/Testing.md` 没有结构整理的检查行 | 加一行：零行为变更的检查组合 | wave 5 |
+| 全仓引用计数（含 apps/solutions）只出现一次的函数：`projectEntity`（authorization.go）、`equalJSON`（narrow.go）、`candidateTestTenant`（simulate_candidate.go） | 删除；`BuildProject` 类型保留（console/api 用） | wave 4 |
 
 （继续追加）
