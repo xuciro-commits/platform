@@ -46,6 +46,7 @@ func (d *Console) currentMember(m *platform.Member) platform.Member {
 	}
 	d.migrateGrants(&out)
 	out.Grants = append(slices.Clone(out.Grants), d.teamGrants(out.ID)...) // teams' grants are held as long as one belongs (ADR-0078 §3.3)
+	out.Grants = append(out.Grants, d.projectGrantsLocked(out.ID)...)      // a project's editors build within it (#141)
 	d.deriveRoles(&out, today)
 	out.Grants = slices.DeleteFunc(slices.Clone(out.Grants), func(g platform.Grant) bool { return !g.Active(today) })
 	return out

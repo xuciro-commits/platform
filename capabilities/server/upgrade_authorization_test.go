@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -177,23 +178,33 @@ func TestProjectDelegationIsTargetScoped(t *testing.T) {
 	if got := submit("dana", SchemaProjectSave, ProjectType, "opening", project); got != "ok" {
 		t.Fatalf("project save: %s", got)
 	}
-	// The delegation is computed from the submission's target under the lock.
-	delegated := tn.delegatedElevation(member("mo"), &pb.Submission{PrincipalId: "mo",
-		Target: &pb.EntityRef{Type: build.ObjectType, Id: "visit"}, Schema: &pb.SchemaRef{Name: "build.object.edit", Version: 1}})
-	if delegated.Roles[build.ID] != build.Builder {
-		t.Fatalf("delegation did not raise the edit role: %+v", delegated.Roles)
+	// The project hands mo the builder role (By project:<id>): the Studio loads for them.
+	mo := member("mo")
+	if mo.Roles[build.ID] != build.Builder || !slices.ContainsFunc(mo.Grants, func(g platform.Grant) bool { return g.By == "project:opening" }) {
+		t.Fatalf("project did not grant builder: %+v", mo.Grants)
 	}
-	other := tn.delegatedElevation(member("mo"), &pb.Submission{PrincipalId: "mo",
-		Target: &pb.EntityRef{Type: build.ObjectType, Id: "invoice"}, Schema: &pb.SchemaRef{Name: "build.object.edit", Version: 1}})
-	if other.Roles[build.ID] == build.Builder {
+	// Its writes are bounded to the assets the project names, on the submission path.
+	if got := submit("mo", "build.object.edit", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit (mo)", "fields": object["fields"]}); got != "ok" {
+		t.Fatalf("delegated edit: %s", got)
+	}
+	if got := submit("mo", "build.object.edit", build.ObjectType, "invoice", map[string]any{"name": "invoice", "title": "Invoice", "fields": second["fields"]}); got == "ok" {
 		t.Fatal("delegation leaked to an asset the project does not name")
 	}
-	publish := tn.delegatedElevation(member("mo"), &pb.Submission{PrincipalId: "mo",
-		Target: &pb.EntityRef{Type: build.ObjectType, Id: "visit"}, Schema: &pb.SchemaRef{Name: build.SchemaPublish, Version: 1}})
-	if publish.Roles[build.ID] == build.Builder {
+	if got := submit("mo", build.SchemaPublish, build.ObjectType, "visit", map[string]any{}); got == "ok" {
 		t.Fatal("delegation covered publishing")
 	}
+	// Archiving the project takes the role and the edit right away together.
+	if got := submit("dana", SchemaProjectArchive, ProjectType, "opening", map[string]any{}); got != "ok" {
+		t.Fatalf("project archive: %s", got)
+	}
+	if member("mo").Roles[build.ID] != "" {
+		t.Fatal("an archived project still grants")
+	}
+	if got := submit("mo", "build.object.edit", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit", "fields": object["fields"]}); got == "ok" {
+		t.Fatal("an archived project still delegates")
+	}
 	_ = now
+	_ = tn
 }
 
 func TestMultiApprovalPolicyNeedsDistinctApprovers(t *testing.T) {

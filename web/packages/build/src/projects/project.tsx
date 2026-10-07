@@ -22,9 +22,12 @@ export const kindIcon: Record<string, ReactNode> = {
 
 /** Every project the builder may open, with what each holds. */
 export function ProjectsList() {
-  const { role } = useHost();
+  const { role, me } = useHost();
   const { open } = useWorkspace();
   const projects = useRecordInventory<Project>("build.app");
+  // A builder role held only through projects (#141): the Studio opens, edits stay within the assets they name.
+  const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build");
+  const delegated = buildGrants.length > 0 && buildGrants.every((g) => g.by?.startsWith("project:")) ? buildGrants.map((g) => g.reason || g.by!.slice(8)) : [];
   const [search, setSearch] = useState("");
   const create = useNewRecord("build.app", (target) => open({ view: "project", params: { id: target.id } }));
   const builder = role("build") === "builder";
@@ -37,6 +40,7 @@ export function ProjectsList() {
         {builder && create.available && <Button variant="primary" onClick={() => create.take()}><Plus />{t("New project")}</Button>}
       </div>
     </div>
+    {delegated.length > 0 && <p className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted">{t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })}</p>}
     {projects.isLoading && <p className="text-sm text-muted">{t("Loading…")}</p>}
     {!projects.isLoading && !rows.length && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">{search ? t("No project matches.") : t("No projects yet. Create one to start building.")}</div>}
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

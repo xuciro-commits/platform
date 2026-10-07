@@ -649,4 +649,13 @@ register("zh-CN", {
   "Last migration": "最近一次迁移",
   "{written} of {rows} written": "写入 {written} / {rows}",
   "Run again, the same rows answer as they did the first time; nothing is written twice.": "再次执行时同一批行按首次结果应答，不会重复写入。",
+  "Projects": "项目",
+  "A project's editors hold the builder role within it: they open the Studio and may draft the assets it names, nothing else. Archiving it takes both away.": "项目的编辑者在项目内持有构建者角色：可以打开 Studio，只能起草项目列出的资产；归档项目则两者一并收回。",
+  "editors": "位编辑者",
+  "Edit project": "编辑项目",
+  "Save project": "保存项目",
+  "Project ID": "项目 ID",
+  "Editors": "编辑者",
+  "Assets, one per line as kind name": "资产，每行一条：种类 名称",
+  "A line names an unknown asset kind or no name. Kinds: {kinds}": "某一行的资产种类未知或缺少名称。可用种类：{kinds}",
 });

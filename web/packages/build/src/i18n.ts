@@ -3633,4 +3633,5 @@ register("zh-CN", {
   "Draft an object from this schema": "从此架构起草对象",
   "Journal entry": "记账凭证",
   "Waiting for an open fiscal period": "等待开放的会计期间",
+  "You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.": "你在项目 {projects} 内构建：只有项目列出的资产接受你的编辑；发布仍由构建者负责。",
 });

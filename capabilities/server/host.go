@@ -336,9 +336,11 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 	if t.quarantined() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	// A project's asset edit delegation is computed from this submission's
-	// target under the tenant lock, before any app decides it.
-	m = t.delegatedElevation(m, s)
+	// A builder role held only through projects is bounded to their assets,
+	// from this submission's target under the tenant lock, before any app decides it.
+	if err = t.delegatedBound(m, s); err != nil {
+		return nil, err
+	}
 	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()

@@ -53,6 +53,7 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/notifications", Summary: "The caller's notifications, newest first, in their language", Answer: []platform.Notification{}},
 	{Pattern: "GET /v1/members", Summary: "The tenant's members with their roles and profiles (administrators)", Answer: []MemberView{}},
 	{Pattern: "GET /v1/permissions", Summary: "The permission catalog: every app's roles and what each may do, derived from the manifests (administrators, auditors; ADR-0078)", Answer: []AppPermissions{}},
+	{Pattern: "GET /v1/projects", Summary: "The tenant's projects: the members and assets each covers; editors of a live project build within it (administrators, auditors; #141)", Answer: []BuildProject{}},
 	{Pattern: "GET /v1/access", Summary: "The tenant's own access configuration: custom roles, policies and teams (administrators, auditors; ADR-0078)", Answer: AccessConfig{}},
 	{Pattern: "GET /v1/tenant", Summary: "The tenant's record: its settings, apps and standing (every member; ADR-0078)", Answer: TenantRecord{}},
 	{Pattern: "GET /v1/account", Summary: "The caller's profile over the tenant's defaults (ADR-0079)", Answer: Account{}},

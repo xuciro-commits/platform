@@ -365,6 +365,18 @@ export type Budget = {
   Cost: number;
 };
 
+export type BuildProject = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  name: string;
+  title: string;
+  members?: ProjectMember[];
+  assets?: ProjectAsset[];
+};
+
 export type Calendar = {
   id: string;
   name: string;
@@ -2137,6 +2149,17 @@ export type ProfileEntry = {
   kinds?: string[];
   scales?: string[];
   icon?: string;
+};
+
+export type ProjectAsset = {
+  app?: string;
+  kind: string;
+  name: string;
+};
+
+export type ProjectMember = {
+  member: string;
+  role?: string;
 };
 
 export type PromotionResult = {
