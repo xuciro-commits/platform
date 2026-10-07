@@ -125,5 +125,9 @@ capabilities/server/
 | `Host.Handler` 875 行，一条 mux 注册 70 条路由 | `routes` 注册器（`routes.go`）+ 六个按领域的 `routes_{core,discovery,records,build,ai,integration}.go`；`server.go` 1134→308 行 | `356edc7` |
 | `Tenant.Replay` 195 行藏在 host.go，accepted-result 的 9 个 kind 在一个 for 里 | `replay.go`：`Replay` + `replayAcceptedResult` | `b6ad27c` |
 | `Tenant.Restore` 193 行 | `restoreDefinitions` / `verifyCommitted` / `restoreOperations` 三个阶段 | `b6ad27c` |
+| `queues/failed/jobs` 三件套散在 operations/accepted_work/health/snapshot 六处，查找循环重复四次 | `workBoard` 组件（`work_board.go`）：queue/job/delivery/anyDelivery/settled/retry/all/snapshot/restore；Tenant 字段 80→56 | `cf0e…` wave 2 |
+| `definitionsFrom` 634 行：页面可见性 380 行、应用可见性 115 行内联在一个 switch 里 | `visiblePage` / `visibleApplication` 两个函数，主体 130 行 | wave 4 |
+| `checkSections` 613 行：每节校验 + 50 个 widget 的 switch 在一个循环体里 | `checkSection` / `checkWidget`，主体 45 行 | wave 4 |
+| `platform/pageui` 分包（第 4 波复查） | **放弃**：`page_*` 用 `Definition`（16 处）而 `Definition.Page` 又指回 `*Page`，分包必然成环；唯一出路是先抽 `AssetRef/EntityInfo/Field/Action/LinkType/NamedQuery` 为更低的声明包并改 46 个调用文件 + `apps/*/server`（沙箱编不了）。收益小于风险，`page_` 前缀族保留为 `platform` 内的一组文件 | 决定 |
 
 （继续追加）
