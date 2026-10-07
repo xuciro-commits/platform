@@ -3,7 +3,7 @@ import type {Api} from "@platform/kernel";
 import {loopOwner,overlayOwner} from "../page-layout";
 import type {AuthoringSection} from "./draft";
 
-export const collaborationWidgets=["record-comments","record-uploader","media-preview","pdf-viewer","image-annotation","scene-3d"] as const;
+const collaborationWidgets=["record-comments","record-uploader","media-preview","pdf-viewer","image-annotation","scene-3d"] as const;
 export const isCollaborationWidget=(widget:string)=>collaborationWidgets.some(value=>value===widget);
 export const requiresOriginalRecord=(section:AuthoringSection)=>isCollaborationWidget(section.widget)||["breadcrumb","record-card","graph-explorer","vertex-graph"].includes(section.widget)||section.widget==="timeline"&&(section.historyLimit??0)>0;
 

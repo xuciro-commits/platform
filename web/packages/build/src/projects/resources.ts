@@ -29,7 +29,6 @@ export const resourceGroups: { id: ResourceKindInfo["group"]; label: string }[] 
 ];
 
 export const kindOfType = (type: string) => resourceKinds.find((kind) => kind.type === type);
-export const kindOfRef = (ref: string) => resourceKinds.find((kind) => kind.ref === ref);
 
 /** Object and Flow identities include their authority prefix; the other Build names are local to their owner. */
 export function resourceRef(kind: ResourceKindInfo, name: string): Api.AssetRef {

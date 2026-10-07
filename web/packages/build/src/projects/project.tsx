@@ -4,7 +4,7 @@
 // existing` brings one in, and its pages, navigation and header are its interface.
 import { pageUIProfile, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ActionMenu, Button, Input, Panel, PanelSection, Select, ProblemList, StructureRow, Textarea, Workbench, notify, t, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ActionMenu, Button, Input, Notice, PanelSection, Select, ProblemList, StructureRow, Textarea, Workbench, notify, t, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { Boxes, Braces, FolderKanban, Layers, LayoutTemplate, Link2, Plus, Search, Sparkles, Tags, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApplicationImport";
@@ -40,7 +40,7 @@ export function ProjectsList() {
         {builder && create.available && <Button variant="primary" onClick={() => create.take()}><Plus />{t("New project")}</Button>}
       </div>
     </div>
-    {delegated.length > 0 && <Panel className="text-sm text-muted">{t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })}</Panel>}
+    {delegated.length > 0 && <Notice tone="info" role="note" message={t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })} />}
     {projects.isLoading && <p className="text-sm text-muted">{t("Loading…")}</p>}
     {!projects.isLoading && !rows.length && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">{search ? t("No project matches.") : t("No projects yet. Create one to start building.")}</div>}
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -60,7 +60,7 @@ export type OwnedResource = { kind: ResourceKindInfo; record?: ResourceRecord; r
 
 /** Inventories of every resource type, keyed by kind, resolved to the records a project names — and to
  * what the host has installed, so a published resource without a tenant draft is never called missing. */
-export function useProjectResources(project?: Project) {
+function useProjectResources(project?: Project) {
   const { definitions } = useHost();
   const inventories = Object.fromEntries(resourceKinds.map((kind) => [kind.kind, useRecordInventory<ResourceRecord>(kind.type)])) as Record<string, ReturnType<typeof useRecordInventory<ResourceRecord>>>;
   const owned = useMemo(() => {
@@ -103,7 +103,7 @@ export function useProjectResources(project?: Project) {
 }
 
 /** `+ New ▾`: create a resource and add it to the project in one step. */
-export function NewResourceMenu({ onCreated, children, disabled }: { onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
+function NewResourceMenu({ onCreated, children, disabled }: { onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
   const { role } = useHost();
   const creators = Object.fromEntries(resourceKinds.map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target))])) as Record<string, ReturnType<typeof useNewRecord>>;
   if (role("build") !== "builder") return null;

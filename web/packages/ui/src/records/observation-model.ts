@@ -10,7 +10,7 @@ export function observationFields(info:EntityInfo,signals:readonly ObservationSi
  if(!metadata.time||info.fields.find(f=>f.name===metadata.time)?.type!=="datetime"||signals.length<1||signals.length>100||new Set(signals.map(s=>s.field)).size!==signals.length||new Set(fields).size!==fields.length||signals.some(s=>fields.includes(s.field)||s.unit.length>64||(s.group?.length??0)>128||!info.fields.some(f=>f.name===s.field&&["integer","decimal"].includes(f.type)))||fields.some(name=>name!==metadata.time&&!info.fields.some(f=>f.name===name&&["text","longtext","choice","reference"].includes(f.type))))return;
  return {fields,signals};
 }
-export function observationIdentities(records:readonly EntityRecord[],maxRecords:number) {
+function observationIdentities(records:readonly EntityRecord[],maxRecords:number) {
  return records.length<=maxRecords&&records.every(r=>typeof r.id==="string"&&r.id.length>0&&r.id.length<=1024&&Number.isSafeInteger(r.revision)&&r.revision>=0)&&new Set(records.map(r=>r.id)).size===records.length;
 }
 export function observationTableRecords(records:readonly EntityRecord[],info:EntityInfo,signals:readonly ObservationSignal[],metadata:ObservationMetadata){

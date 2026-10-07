@@ -2,7 +2,7 @@ import {Input,Select,t,type EntityInfo} from "@platform/ui";
 import type {Api} from "@platform/kernel";
 import type {AuthoringSection} from "../draft";
 import {TableInspector,type TableInspectorPorts} from "./TableInspector";
-export function RecordCalendarFields({info,value,onChange}:{info?:EntityInfo;value?:Api.PageRecordCalendar;onChange:(value:Api.PageRecordCalendar)=>void}) {
+function RecordCalendarFields({info,value,onChange}:{info?:EntityInfo;value?:Api.PageRecordCalendar;onChange:(value:Api.PageRecordCalendar)=>void}) {
  const config=value??{dateField:"",labelField:"id",initialMonth:"2026-10"},update=(patch:Partial<typeof config>)=>onChange({...config,...patch});
  return <><label className="grid gap-1 text-xs">{t("Business calendar date field")}<Select value={config.dateField} onChange={e=>update({dateField:e.target.value})}><option value="">{t("Choose a field")}</option>{info?.fields.filter(f=>["date","datetime"].includes(f.type)).map(f=><option key={f.name} value={f.name}>{f.title}</option>)}</Select></label><label className="grid gap-1 text-xs">{t("Calendar record title field")}<Select value={config.labelField} onChange={e=>update({labelField:e.target.value})}><option value="id">{t("Record ID")}</option>{info?.fields.filter(f=>["text","longtext","choice","reference"].includes(f.type)).map(f=><option key={f.name} value={f.name}>{f.title}</option>)}</Select></label><label className="grid gap-1 text-xs">{t("Initial calendar month")}<Input type="month" value={config.initialMonth} onChange={e=>update({initialMonth:e.target.value})}/></label><p className="text-xs text-muted">{t("Civil dates keep their original day; business datetimes use UTC days. Calendar counts cover the current authorized window.")}</p></>;
 }

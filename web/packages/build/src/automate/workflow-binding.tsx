@@ -6,7 +6,7 @@ import { createContext, useContext, useEffect, useId, useState } from "react";
 import { commonSchemaProperties, type Binding, type Predicate, type ValueSchema, type WorkflowStep } from "./workflow-model";
 
 export const WorkflowFormProblems = createContext<(id: string, problem: string) => void>(() => {});
-export const bindingMime = "application/platform-binding";
+const bindingMime = "application/platform-binding";
 
 /** Buffer invalid edits visibly, and make the owning form's Save unavailable until corrected. */
 export function JSONEditor({ value, onChange, label, rows = 4, schema }: { value: unknown; onChange: (value: unknown) => void; label: string; rows?: number; schema?: ValueSchema }) {

@@ -41,7 +41,7 @@ export const tones = ["info", "success", "warning", "danger", "neutral"];
 export const inputTypes = ["text", "longtext", "integer", "decimal", "date", "boolean", "choice", "reference"];
 export const fieldTypes = ["text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference"];
 export const operators = ["=", "!=", "<", "<=", ">", ">=", "empty", "not empty"];
-export const valueFits = (kind: string, raw: string) => {
+const valueFits = (kind: string, raw: string) => {
   switch (kind) {
     case "integer": return /^-?\d+$/.test(raw);
     case "decimal": return raw.trim() !== "" && Number.isFinite(Number(raw));

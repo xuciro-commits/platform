@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:117eb172e7e4a8a0",
+  "revision": "sha256:133ee3029cb4429a",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5015,7 +5015,6 @@
       "web/packages/build/src/ontology/property-type.tsx",
       "web/packages/build/src/ontology/query.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
-      "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/editor.tsx",
@@ -5305,7 +5304,8 @@
     ],
     "ui/notice": [
       "web/packages/app/src/widgets/Alert.tsx",
-      "web/packages/app/src/widgets/Notice.tsx"
+      "web/packages/app/src/widgets/Notice.tsx",
+      "web/packages/build/src/projects/project.tsx"
     ],
     "ui/switch": [
       "web/packages/app/src/widgets/BooleanInput.tsx"

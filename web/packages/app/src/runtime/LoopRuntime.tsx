@@ -6,7 +6,7 @@ import {usePageQueries} from "./PageQueries";
 import { PageSessionStore, type RecordReference, type PageSessionSnapshot } from "./Session";
 import { evaluateVariables, type VariableResult } from "./variables";
 
-export const loopItemKey = (owner: string, reference: RecordReference) => JSON.stringify([owner, reference.object, reference.id]);
+const loopItemKey = (owner: string, reference: RecordReference) => JSON.stringify([owner, reference.object, reference.id]);
 export type LoopContext = { owner: string; key: string; signature: string; queryKey: string; reference: RecordReference; record: EntityRecord; source: RecordSource;
   session:PageSessionStore; queries?:ReturnType<typeof usePageQueries>; querySession?:PageSessionStore; values: Record<string, VariableResult>; set: (id: string, value: ScalarValue) => void };
 

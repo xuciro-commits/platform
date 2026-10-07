@@ -7,8 +7,6 @@
 // a builder without a platform role must still know which entry it may offer.
 import { useRead } from "@platform/app";
 
-export const releaseProfileSetting = "releaseProfile";
-
 /** Whether this tenant still offers the direct install. */
 export function useDirectInstall(): boolean {
   const profile = useRead<{ profile: string; directInstall: boolean }>("/v1/release-profile");

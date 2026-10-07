@@ -4,7 +4,7 @@ const patterns = ["212222","222122","222221","121223","121322","131222","122213"
 const startB = 104, stop = 106;
 
 /** The bar widths of a Code 128 B symbol encoding text, or nothing for text it cannot encode. */
-export function code128(text: string): number[] | undefined {
+function code128(text: string): number[] | undefined {
   if (!text || [...text].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) > 126)) return undefined;
   const codes = [startB, ...[...text].map((c) => c.charCodeAt(0) - 32)];
   const check = codes.reduce((sum, code, i) => sum + code * Math.max(i, 1), 0) % 103;

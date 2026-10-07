@@ -20,11 +20,8 @@ export const MODEL = "enterprise.model";
 export const PLACEMENT = "ActualResourceRelationship";
 export const MEMBERSHIP = "ActualOrganizationRole";
 export const FILLS_POST = "FillsPost";
-export const PERFORMS = "IsCapableToPerform";
-export const OWNS = "OwnsProcess";
 export const ORGANIZATION = "ActualOrganization";
 export const POST = "ActualPost";
-export const PERSON = "ActualPerson";
 
 export const today = () => new Date().toISOString().slice(0, 10);
 export const live = (x: { from?: string; until?: string }, day: string) => (x.from ?? "") <= day && (!x.until || day < x.until);

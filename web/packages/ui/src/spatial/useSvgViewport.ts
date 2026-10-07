@@ -2,8 +2,8 @@ import {useEffect,useRef,useState} from "react";
 import type {PointerEvent as ReactPointerEvent} from "react";
 
 export type SvgView={k:number;x:number;y:number};
-export function clampSvgView(v:SvgView,width:number,height:number,maxZoom=40):SvgView {const k=Math.min(maxZoom,Math.max(1,v.k));return {k,x:Math.min(0,Math.max(width-width*k,v.x)),y:Math.min(0,Math.max(height-height*k,v.y))};}
-export function revealSvgPoint(view:SvgView,point:{x:number;y:number},width:number,height:number,inset=40,minZoom=4):SvgView {
+function clampSvgView(v:SvgView,width:number,height:number,maxZoom=40):SvgView {const k=Math.min(maxZoom,Math.max(1,v.k));return {k,x:Math.min(0,Math.max(width-width*k,v.x)),y:Math.min(0,Math.max(height-height*k,v.y))};}
+function revealSvgPoint(view:SvgView,point:{x:number;y:number},width:number,height:number,inset=40,minZoom=4):SvgView {
  const x=point.x*view.k+view.x,y=point.y*view.k+view.y;if(x>=inset&&x<=width-inset&&y>=inset&&y<=height-inset)return view;const k=Math.max(view.k,minZoom);return clampSvgView({k,x:width/2-point.x*k,y:height/2-point.y*k},width,height);
 }
 /** Local camera state is shared by maps and annotation; it never changes data coordinates. */
