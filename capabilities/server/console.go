@@ -373,7 +373,7 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
 		Subject, App, Role, Unit, Structure, From, Until, Reason string
-		Agent                                                   bool
+		Agent                                                    bool
 	}
 	if json.Unmarshal(s.GetPayload(), &p) != nil {
 		return nil, invalid

@@ -58,7 +58,9 @@ type Grant struct {
 }
 
 // Active reports whether the grant holds on day (YYYY-MM-DD).
-func (g Grant) Active(day string) bool { return (g.From == "" || g.From <= day) && (g.Until == "" || day < g.Until) }
+func (g Grant) Active(day string) bool {
+	return (g.From == "" || g.From <= day) && (g.Until == "" || day < g.Until)
+}
 
 // RolesIn are every role the member holds in app, the primary first.
 func (m Member) RolesIn(app string) []string {
