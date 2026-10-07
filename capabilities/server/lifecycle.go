@@ -365,7 +365,8 @@ func (d *Console) noticed(member, credential, agent string, kind string, now tim
 	}
 	s := d.sessions.seen[member][id]
 	if s != nil && kind == "sign-in" && hours > 0 && now.Sub(s.First) > time.Duration(hours)*time.Hour {
-		delete(d.sessions.seen[member], id) // the session's hours are up: the provider is asked again
+		delete(d.sessions.seen[member], id) // the session's hours are up: this credential is spent,
+		d.sessions.revoked[id] = true       // the member comes back with a fresh one from the provider
 		return false
 	}
 	if s == nil {

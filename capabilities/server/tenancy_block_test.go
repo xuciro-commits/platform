@@ -90,17 +90,21 @@ func TestTenancyBlock(t *testing.T) {
 	if _, ok := whoIs("bo-token"); ok {
 		t.Fatal("a sign-in past its hours was kept")
 	}
-	if _, ok := whoIs("bo-token"); !ok { // the same credential presented afresh starts a new session
-		t.Fatal("a fresh presentation was refused")
+	if _, ok := whoIs("bo-token"); ok { // the spent credential stays refused; only a fresh one from the provider signs in
+		t.Fatal("a spent credential was admitted again")
+	}
+	h.authenticate = Tokens(map[string]string{"ana-token": "ana", "bo-token-2": "bo"})
+	if _, ok := whoIs("bo-token-2"); !ok {
+		t.Fatal("a fresh credential was refused")
 	}
 
 	// Second factor: without the provider's word nobody signs in; with it, those attested.
 	set(SettingMFA, "true")
-	if _, ok := whoIs("bo-token"); ok {
+	if _, ok := whoIs("bo-token-2"); ok {
 		t.Fatal("a sign-in without a second factor was admitted")
 	}
-	h.SecondFactor = func(credential string) bool { return credential == "bo-token" }
-	if _, ok := whoIs("bo-token"); !ok {
+	h.SecondFactor = func(credential string) bool { return credential == "bo-token-2" }
+	if _, ok := whoIs("bo-token-2"); !ok {
 		t.Fatal("an attested sign-in was refused")
 	}
 	if _, ok := whoIs("ana-token"); ok {
