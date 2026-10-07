@@ -123,7 +123,7 @@ func (t *Tenant) deliver(subscriber string, e caused, now time.Time) {
 	s := e.Record.GetSubmission()
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	t.queues[subscriber] = append(t.queues[subscriber], &Task{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
+	t.work.queue(subscriber, &Task{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
 		Title: s.GetSchema().GetName() + " " + target(s), State: "queued", Due: now, event: &e})
 }
 
@@ -185,7 +185,7 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 				continue
 			}
 			t.opsMu.Lock()
-			next := ready(t.queues[a], now)
+			next := ready(t.work.queued(a), now)
 			t.opsMu.Unlock()
 			if next == nil {
 				continue
@@ -196,7 +196,7 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 		}
 	}
 	t.quota.next(n)
-	for _, j := range t.jobs {
+	for _, j := range t.work.jobs {
 		if !j.Due.After(now) && took < budget && !t.overQuota(j.App, now) {
 			t.run(j, now, false)
 			t.spend(j.App, now)
@@ -225,12 +225,12 @@ func ready(q []*Task, now time.Time) *Task {
 func (t *Tenant) pending(now time.Time) bool {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	for app, q := range t.queues {
+	for app, q := range t.work.queues {
 		if ready(q, now) != nil && !t.overQuota(app, now) {
 			return true
 		}
 	}
-	return slices.ContainsFunc(t.jobs, func(j *Task) bool { return !j.Due.After(now) && !t.overQuota(j.App, now) })
+	return slices.ContainsFunc(t.work.jobs, func(j *Task) bool { return !j.Due.After(now) && !t.overQuota(j.App, now) })
 }
 
 // overQuota reports whether app has used its attempts of the minute (Tenant.Quota).
@@ -247,7 +247,7 @@ func (t *Tenant) Deferred(now time.Time) []string {
 	var out []string
 	for _, a := range t.apps {
 		id := a.Manifest().ID
-		if t.overQuota(id, now) && (ready(t.queues[id], now) != nil || slices.ContainsFunc(t.jobs, func(j *Task) bool { return j.App == id && !j.Due.After(now) })) {
+		if t.overQuota(id, now) && (ready(t.work.queued(id), now) != nil || slices.ContainsFunc(t.work.jobs, func(j *Task) bool { return j.App == id && !j.Due.After(now) })) {
 			out = append(out, id)
 		}
 	}
@@ -292,17 +292,16 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 	task.Attempts, task.Last = int(generation), now
 	retry := t.retryOf(task.App)
 	done := outcome == "ok" || task.Attempts-task.since >= retry.Attempts
-	if done {
-		t.queues[task.App] = slices.DeleteFunc(t.queues[task.App], func(x *Task) bool { return x == task })
-	}
 	switch {
 	case outcome == "ok":
 		task.State, task.Error = "done", ""
 	case done:
 		task.State, task.Error = "failed", outcome
-		t.failed = append(t.failed, task)
 	default:
 		task.State, task.Error, task.Due = "retrying", outcome, now.Add(retry.After(task.Attempts-task.since))
+	}
+	if done {
+		t.work.settled(task)
 	}
 	t.opsMu.Unlock()
 	if task.State == "failed" {
@@ -350,15 +349,9 @@ func (t *Tenant) replayWork(kind string, raw []byte, at time.Time) error {
 	var task *Task
 	t.opsMu.Lock()
 	if kind == "job" {
-		if i := slices.IndexFunc(t.jobs, func(x *Task) bool { return x.ID == b.Work }); i >= 0 {
-			task = t.jobs[i]
-		}
+		task = t.work.job(b.Work)
 	} else {
-		for _, q := range t.queues {
-			if i := slices.IndexFunc(q, func(x *Task) bool { return x.ID == b.Work }); i >= 0 {
-				task = q[i]
-			}
-		}
+		task = t.work.anyDelivery(b.Work)
 	}
 	t.opsMu.Unlock()
 	if task == nil {
@@ -385,37 +378,14 @@ func (t *Tenant) failedWork(title, why, id string, now time.Time, replaying bool
 func (t *Tenant) Tasks() []Task {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	out := []Task{}
-	for _, j := range t.jobs {
-		out = append(out, *j)
-	}
-	for _, a := range t.apps {
-		for _, q := range t.queues[a.Manifest().ID] {
-			out = append(out, *q)
-		}
-	}
-	for _, f := range t.failed {
-		out = append(out, *f)
-	}
-	return out
+	return t.work.all(t.apps)
 }
 
 // retry queues a failed delivery again at the head of its queue, or makes a job due.
 func (t *Tenant) retry(id string, now time.Time) bool {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	if i := slices.IndexFunc(t.failed, func(x *Task) bool { return x.ID == id }); i >= 0 {
-		task := t.failed[i]
-		t.failed = slices.Delete(t.failed, i, i+1)
-		task.State, task.Due, task.since = "queued", now, task.Attempts
-		t.queues[task.App] = append([]*Task{task}, t.queues[task.App]...)
-		return true
-	}
-	if i := slices.IndexFunc(t.jobs, func(x *Task) bool { return x.ID == id }); i >= 0 {
-		t.jobs[i].Due = now
-		return true
-	}
-	return false
+	return t.work.retry(id, now)
 }
 
 // Connectors (K8): the deployment connects descriptors; the connector is the
@@ -688,7 +658,7 @@ func (t *Tenant) decideBinding(_ platform.Caller, s *pb.Submission, _ time.Time)
 func (t *Tenant) decideWork(_ platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	t.opsMu.Lock()
-	known := slices.ContainsFunc(t.failed, func(x *Task) bool { return x.ID == id }) || slices.ContainsFunc(t.jobs, func(x *Task) bool { return x.ID == id })
+	known := t.work.knows(id)
 	t.opsMu.Unlock()
 	if !known {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}

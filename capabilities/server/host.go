@@ -78,9 +78,7 @@ type Tenant struct {
 	// opsMu guards what reads and the runner share: queues, connectors,
 	// notifications and settings (operations.go). It is never held while t.mu is taken.
 	opsMu  sync.Mutex
-	queues map[string][]*Task // subscriber → its deliveries, head first
-	failed []*Task
-	jobs   []*Task
+	work   workBoard // queues, failed deliveries and jobs (work_board.go)
 	// Quota is the attempts of owned work each app may make in a minute (ADR-0027 D3); 0: no limit.
 	Quota      int
 	quota      quota           // attempts per app per minute and the round-robin turn (quota.go)
@@ -132,7 +130,7 @@ func (t *Tenant) Audit() []AuditEntry { return t.audit.all() }
 // NewTenant enables apps for a tenant; it refuses duplicate names, consumed
 // protocols no earlier app provides, and manifests the host could not honour.
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
-	t := &Tenant{ID: id, apps: apps, committed: committed{refusals: map[string]refusedResult{}}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
+	t := &Tenant{ID: id, apps: apps, committed: committed{refusals: map[string]refusedResult{}}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), work: newWorkBoard(),
 		connectors: newConnectorRoster(), records: newRecordStore()}
 	t.staged = stagedChannel{tenant: id, files: t.files}
 	t.i18n = translator{apps: func() []platform.App { return t.apps }}
@@ -204,7 +202,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			return nil, fmt.Errorf("tenant %s: %s: %v", id, m.ID, err)
 		}
 		for _, j := range m.Jobs {
-			t.jobs = append(t.jobs, &Task{ID: "job:" + m.ID + "/" + j.Name, Kind: "job", App: m.ID, Title: j.Title, State: "scheduled", job: j})
+			t.work.addJob(&Task{ID: "job:" + m.ID + "/" + j.Name, Kind: "job", App: m.ID, Title: j.Title, State: "scheduled", job: j})
 		}
 		var names []string
 		for _, r := range m.Reads {

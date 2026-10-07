@@ -147,29 +147,8 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	if s.Works, err = platform.Protos(t.works.All()); err != nil {
 		return tenantState{}, nil, 0, err
 	}
-	tasks := map[string]*Task{}
-	for app, queue := range t.queues {
-		for _, x := range queue {
-			s.Queues[app], tasks[x.ID] = append(s.Queues[app], x.ID), x
-		}
-	}
-	for _, x := range t.failed {
-		s.Failed, tasks[x.ID] = append(s.Failed, x.ID), x
-	}
-	for _, id := range slices.Sorted(maps.Keys(tasks)) {
-		x := tasks[id]
-		state := taskState{Task: *x, Since: x.since}
-		if x.event != nil {
-			state.EventApp, state.Hops, state.Changed = x.event.App, x.event.hops, x.event.Changed
-			state.Plan = x.event.plan
-			if state.Event, err = platform.Protos([]*pb.ChangeRecord{x.event.Record}); err != nil {
-				return tenantState{}, nil, 0, err
-			}
-		}
-		s.Tasks = append(s.Tasks, state)
-	}
-	for _, x := range t.jobs {
-		s.Jobs = append(s.Jobs, *x)
+	if err := t.work.snapshot(&s); err != nil {
+		return tenantState{}, nil, 0, err
 	}
 	descriptors, marks := t.connectors.kernel.State()
 	if s.Connectors, err = platform.Protos(descriptors); err != nil {
@@ -397,34 +376,8 @@ func (t *Tenant) restoreOperations(s *tenantState) error {
 	defer t.opsMu.Unlock()
 	t.acted = s.Acted
 	t.works.Restore(works)
-	tasks := map[string]*Task{}
-	for _, x := range s.Tasks {
-		task := x.Task
-		task.since = x.Since
-		if x.Event != nil {
-			records, err := platform.Unprotos[*pb.ChangeRecord](x.Event)
-			if err != nil || len(records) != 1 {
-				return fmt.Errorf("tenant %s: task %s: bad event", t.ID, x.ID)
-			}
-			task.event = &caused{Event: platform.Event{App: x.EventApp, Record: records[0], Changed: x.Changed}, hops: x.Hops, plan: x.Plan}
-		}
-		tasks[x.ID] = &task
-	}
-	t.queues, t.failed = map[string][]*Task{}, nil
-	for app, ids := range s.Queues {
-		for _, id := range ids {
-			t.queues[app] = append(t.queues[app], tasks[id])
-		}
-	}
-	for _, id := range s.Failed {
-		t.failed = append(t.failed, tasks[id])
-	}
-	for _, saved := range s.Jobs { // the jobs come from the manifests; their runs from the snapshot
-		if i := slices.IndexFunc(t.jobs, func(x *Task) bool { return x.ID == saved.ID }); i >= 0 {
-			job := t.jobs[i].job
-			*t.jobs[i] = saved
-			t.jobs[i].job = job
-		}
+	if err := t.work.restore(t.ID, s); err != nil {
+		return err
 	}
 	t.connectors.restore(t.ID, descriptors, s)
 	t.notices.restore(s.Notices, s.NoticeSeq)

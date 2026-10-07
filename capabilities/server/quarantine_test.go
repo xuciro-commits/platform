@@ -239,7 +239,7 @@ func TestOwnedWorkPanicIsTenantLocal(t *testing.T) {
 	bad := isolatedStock(t, "t-1")
 	good := isolatedStock(t, "t-2")
 	at := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
-	bad.queues["stock"] = []*Task{{ID: "broken", Kind: "delivery", App: "stock", State: "queued", Due: at}}
+	bad.work.queues["stock"] = []*Task{{ID: "broken", Kind: "delivery", App: "stock", State: "queued", Due: at}}
 	if bad.Round(at, 1) || !bad.quarantined() {
 		t.Fatal("malformed owned work did not isolate its tenant")
 	}
