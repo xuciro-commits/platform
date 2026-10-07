@@ -361,7 +361,7 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 	}
 	sub, _ := batchSubmission(result, receipt)
 	key := result.App + "/" + sub.GetIdempotencyKey()
-	if saved := t.acceptedAnswers[key]; len(saved) > 0 {
+	if saved := t.committed.answers[key]; len(saved) > 0 {
 		prior, answer, err := decodeAcceptedBatch(saved)
 		if err != nil || prior.RequestHash != result.RequestHash || !proto.Equal(answer, receipt) {
 			return false, fmt.Errorf("record batch key belongs to another answer")
@@ -395,7 +395,7 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 		if err := protojson.Unmarshal(decision.Receipt, r); err != nil {
 			return false, err
 		}
-		if _, refused := t.refusals[decision.Event.App+"/"+r.GetSubmission().GetIdempotencyKey()]; refused {
+		if _, refused := t.committed.refusals[decision.Event.App+"/"+r.GetSubmission().GetIdempotencyKey()]; refused {
 			return false, fmt.Errorf("record batch reused a refused child key")
 		}
 		changes[decision.Event.App+"/"+r.GetChangeId()] = r
@@ -594,10 +594,7 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 	}
 	t.sequences.set(result.Sequences)
 	if len(result.Submission) > 0 {
-		if t.acceptedAnswers == nil {
-			t.acceptedAnswers = map[string]json.RawMessage{}
-		}
-		t.acceptedAnswers[key] = slices.Clone(raw)
+		t.committed.saveAnswer(key, raw)
 	}
 	return true, nil
 }

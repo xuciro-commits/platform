@@ -195,7 +195,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 		return result, err
 	}
 	for _, t := range []*Tenant{from, to} {
-		t.remember(AuditEntry{At: now.UTC(), Member: member.ID, App: PlatformApp, Action: "host.promotion",
+		t.audit.remember(AuditEntry{At: now.UTC(), Member: member.ID, App: PlatformApp, Action: "host.promotion",
 			Target: from.ID + "→" + to.ID + ":" + candidate.ID})
 	}
 	return result, nil
@@ -246,7 +246,7 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 		result.Types = append(result.Types, part)
 	}
 	for _, t := range []*Tenant{from, to} {
-		t.remember(AuditEntry{At: now.UTC(), Member: target.ID, App: PlatformApp, Action: "host.migration",
+		t.audit.remember(AuditEntry{At: now.UTC(), Member: target.ID, App: PlatformApp, Action: "host.migration",
 			Target: from.ID + "→" + to.ID + ":" + key})
 	}
 	return result, nil

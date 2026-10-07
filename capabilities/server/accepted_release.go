@@ -141,10 +141,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 		return saved, err
 	}
 	if saved.Version == 3 {
-		if t.acceptedAnswers == nil {
-			t.acceptedAnswers = map[string]json.RawMessage{}
-		}
-		t.acceptedAnswers["release:"+saved.Key] = slices.Clone(raw)
+		t.committed.saveAnswer("release:"+saved.Key, raw)
 	}
 	return saved, nil
 }
@@ -228,7 +225,7 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	if t.quarantined() {
 		return "", fmt.Errorf("tenant is quarantined")
 	}
-	if prior := t.acceptedAnswers["release:activate:"+key]; prior != nil {
+	if prior := t.committed.answers["release:activate:"+key]; prior != nil {
 		saved, err := decodeAcceptedRelease(prior)
 		hash, hashErr := releaseRequestHash(t.ID, m.ID, "activate:"+key, candidateID, true, upgradeID)
 		if err != nil || hashErr != nil || hash != saved.RequestHash {

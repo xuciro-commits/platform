@@ -1361,8 +1361,6 @@ type PersonalRead struct {
 	Fields []string  `json:"fields"`
 }
 
-const personalKept = 5000
-
 // readPersonal notes that m read the personal fields view shows of records ids.
 func (t *Tenant) readPersonal(m platform.Member, view *entityType, ids []string, now time.Time) {
 	var fields []string
@@ -1374,22 +1372,11 @@ func (t *Tenant) readPersonal(m platform.Member, view *entityType, ids []string,
 	if len(fields) == 0 || len(ids) == 0 || strings.HasPrefix(m.ID, "app:") {
 		return
 	}
-	t.auditMu.Lock()
-	defer t.auditMu.Unlock()
-	t.personal = append(t.personal, PersonalRead{At: now, Member: m.ID, Type: view.info.Type, IDs: ids, Fields: fields})
-	if len(t.personal) > personalKept {
-		t.personal = t.personal[len(t.personal)-personalKept:]
-	}
+	t.audit.readPersonal(PersonalRead{At: now, Member: m.ID, Type: view.info.Type, IDs: ids, Fields: fields})
 }
 
 // PersonalReads are the latest reads of personal data, newest first.
-func (t *Tenant) PersonalReads() []PersonalRead {
-	t.auditMu.Lock()
-	defer t.auditMu.Unlock()
-	out := slices.Clone(t.personal)
-	slices.Reverse(out)
-	return out
-}
+func (t *Tenant) PersonalReads() []PersonalRead { return t.audit.personalReads() }
 
 // liveTouched is ephemeral query invalidation metadata, protected by mu.
 func (s *recordStore) liveTouched(typ string) {

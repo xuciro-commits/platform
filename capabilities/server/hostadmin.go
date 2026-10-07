@@ -424,7 +424,7 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time)
 	case "resume", "open":
 		t.console.setState("")
 	}
-	t.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
+	t.audit.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
 		Action: "host.lifecycle." + action, Target: t.ID + ":" + reason})
 	return nil
 }
@@ -443,7 +443,7 @@ func (t *Tenant) openSupport(member, reason, subject string, minutes int, now ti
 	grant := SupportGrant{ID: id, Tenant: t.ID, Member: member, Reason: reason, Opened: subject,
 		Expires: now.UTC().Add(time.Duration(minutes) * time.Minute)}
 	t.console.addSupport(grant)
-	t.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
+	t.audit.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
 		Action: "host.support.open", Target: member + ":" + reason})
 	return grant, nil
 }
@@ -462,7 +462,7 @@ func (t *Tenant) useSupport(id, subject string, now time.Time) (SupportRead, err
 	if err != nil {
 		return SupportRead{}, err
 	}
-	t.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
+	t.audit.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
 		Action: "host.support.use", Target: grant.ID})
 	audit := tailAudit(t.Audit(), 20)
 	// Health takes its own locks and is read outside the tenant's.

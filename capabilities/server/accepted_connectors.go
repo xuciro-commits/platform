@@ -34,7 +34,7 @@ func (t *Tenant) validateAcceptedDeliveries(deliveries []acceptedConnectorDelive
 	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	descriptors, marks := t.connectors.State()
+	descriptors, marks := t.connectors.kernel.State()
 	private := kernel.NewConnectors()
 	private.Restore(descriptors, marks)
 	for _, delivery := range deliveries {
@@ -61,12 +61,12 @@ func (t *Tenant) applyAcceptedDeliveries(deliveries []acceptedConnectorDelivery)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	for _, delivery := range deliveries {
-		_, marks := t.connectors.State()
+		_, marks := t.connectors.kernel.State()
 		before, err := canonicalDigest(markFor(marks, t.ID, delivery.Connector))
 		if err != nil || before != delivery.Before {
 			return fmt.Errorf("accepted connector %s predecessor changed during application", delivery.Connector)
 		}
-		if err := t.connectors.Deliver(t.ID, delivery.Connector, delivery.DataClass,
+		if err := t.connectors.kernel.Deliver(t.ID, delivery.Connector, delivery.DataClass,
 			delivery.From, delivery.To, delivery.At); err != nil {
 			return fmt.Errorf("accepted connector %s changed during application: %w", delivery.Connector, err)
 		}

@@ -129,14 +129,7 @@ func (t *Tenant) deliver(subscriber string, e caused, now time.Time) {
 
 func target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.GetTarget().GetId() }
 
-func (t *Tenant) delivered(d Delivery) {
-	t.auditMu.Lock()
-	defer t.auditMu.Unlock()
-	t.deliveries = append(t.deliveries, d)
-	if len(t.deliveries) > auditKept {
-		t.deliveries = t.deliveries[len(t.deliveries)-auditKept:]
-	}
-}
+func (t *Tenant) delivered(d Delivery) { t.audit.delivered(d) }
 
 func (t *Tenant) automation(app string, replaying bool) platform.Caller {
 	return platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{}}, app, replaying, true)
@@ -476,10 +469,9 @@ func (t *Tenant) Connect(descriptors ...*pb.ConnectorDescriptor) error {
 	for _, d := range descriptors {
 		d = proto.Clone(d).(*pb.ConnectorDescriptor)
 		d.TenantId = t.ID
-		if err := t.connectors.Register(d); err != nil {
+		if err := t.connectors.register(d); err != nil {
 			return fmt.Errorf("tenant %s: connector %s: %v", t.ID, d.GetConnectorId(), err)
 		}
-		t.descriptors[d.GetConnectorId()] = d
 	}
 	return nil
 }
@@ -487,17 +479,15 @@ func (t *Tenant) Connect(descriptors ...*pb.ConnectorDescriptor) error {
 func (t *Tenant) refused(member, input string, err *kernel.Error, now time.Time) {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	if t.descriptors[member] != nil {
-		t.lastError[member] = ConnectorError{At: now, Input: input, Error: err.Error()}
-	}
+	t.connectors.refused(member, input, err, now)
 }
 
 func (t *Tenant) Connectors(now time.Time) []ConnectorView {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	out := []ConnectorView{}
-	for _, d := range t.connectors.Descriptors(t.ID) {
-		s, _ := t.connectors.Status(t.ID, d.GetConnectorId(), now)
+	for _, d := range t.connectors.kernel.Descriptors(t.ID) {
+		s, _ := t.connectors.kernel.Status(t.ID, d.GetConnectorId(), now)
 		v := ConnectorView{ID: d.GetConnectorId(), Direction: strings.ToLower(strings.TrimPrefix(d.GetDirection().String(), "CONNECTOR_DIRECTION_")),
 			DataClasses: d.GetDataClasses(), Heartbeat: d.GetHeartbeat().AsDuration().String(), Cursor: s.GetCursor(), Disabled: d.GetDisabled(),
 			Health: strings.ToLower(strings.TrimPrefix(s.GetHealth().String(), "CONNECTOR_HEALTH_"))}
@@ -505,7 +495,7 @@ func (t *Tenant) Connectors(now time.Time) []ConnectorView {
 			seen := s.GetLastSeen().AsTime()
 			v.LastSeen = &seen
 		}
-		if e, ok := t.lastError[d.GetConnectorId()]; ok {
+		if e, ok := t.connectors.lastError[d.GetConnectorId()]; ok {
 			v.LastError = &e
 		}
 		out = append(out, v)
@@ -678,7 +668,7 @@ func operationsActions() []platform.Action {
 
 func (t *Tenant) decideConnector(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	t.opsMu.Lock()
-	d := t.descriptors[s.GetTarget().GetId()]
+	d := t.connectors.byID[s.GetTarget().GetId()]
 	t.opsMu.Unlock()
 	if d == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}

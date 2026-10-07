@@ -134,16 +134,12 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 		rows[typ] = slices.Collect(maps.Values(et.rows))
 	}
 	t.records.mu.Unlock()
-	t.auditMu.Lock()
-	s.Audit = slices.Clone(t.audit)
-	t.auditMu.Unlock()
-	s.Refusals = maps.Clone(t.refusals)
-	s.AcceptedAnswers = maps.Clone(t.acceptedAnswers)
-	s.AcceptedInputs = maps.Clone(t.acceptedInputs)
+	t.audit.snapshot(&s)
+	t.committed.snapshot(&s)
 	t.releases.snapshot(&s)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	s.Deliveries, s.Acted, s.Failed = slices.Clone(t.deliveries), t.acted, []string{}
+	s.Acted, s.Failed = t.acted, []string{}
 	for protocol, b := range t.bindings {
 		s.Bindings[protocol] = b.provider.Manifest().ID
 	}
@@ -175,11 +171,12 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	for _, x := range t.jobs {
 		s.Jobs = append(s.Jobs, *x)
 	}
-	descriptors, marks := t.connectors.State()
+	descriptors, marks := t.connectors.kernel.State()
 	if s.Connectors, err = platform.Protos(descriptors); err != nil {
 		return tenantState{}, nil, 0, err
 	}
-	s.Marks, s.LastError = marks, maps.Clone(t.lastError)
+	s.Marks = marks
+	t.connectors.snapshot(&s)
 	s.Notices, s.NoticeSeq = t.notices.state()
 	s.Settings, s.Endpoints = t.settings.clone(), t.endpoints
 	s.Sequences = t.sequences.clone()
@@ -187,7 +184,6 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 		s.Outbound = append(s.Outbound, effectState{Effect: x.Effect, Since: x.since})
 	}
 	t.console.snapshot(&s)
-	s.Composites = maps.Clone(t.compositeApplied)
 	s.Staged = t.staged.snapshot()
 	return s, rows, position(), nil
 }
@@ -304,13 +300,8 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if err := t.records.validateLinkConstraints(); err != nil {
 		return err
 	}
-	t.auditMu.Lock()
-	t.audit = s.Audit
-	t.auditMu.Unlock()
+	t.audit.restore(&s)
 	t.console.restore(&s)
-	if s.Composites != nil {
-		t.compositeApplied = s.Composites
-	}
 	if s.Staged != nil {
 		t.staged.restore(s.Staged)
 	}
@@ -324,10 +315,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 			return fmt.Errorf("tenant %s: refusal snapshot %s is incompatible: %v", t.ID, key, err)
 		}
 	}
-	t.refusals = maps.Clone(s.Refusals)
-	if t.refusals == nil {
-		t.refusals = map[string]refusedResult{}
-	}
+	t.committed.restore(&s)
 	for key, raw := range s.AcceptedAnswers {
 		if strings.HasPrefix(key, "release:") {
 			result, err := decodeAcceptedRelease(raw)
@@ -346,11 +334,10 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		if !ok || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s has no receipt", t.ID, key)
 		}
-		if _, refused := t.refusals[key]; refused {
+		if _, refused := t.committed.refusals[key]; refused {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s reuses a refused key", t.ID, key)
 		}
 	}
-	t.acceptedAnswers = maps.Clone(s.AcceptedAnswers)
 	for key, raw := range s.AcceptedInputs {
 		result, err := decodeAcceptedInput(raw)
 		owner, ok := t.app(result.App).(platform.AcceptedInputApp)
@@ -359,7 +346,6 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 			return fmt.Errorf("tenant %s: accepted input snapshot %s is incompatible: %v", t.ID, key, err)
 		}
 	}
-	t.acceptedInputs = maps.Clone(s.AcceptedInputs)
 	for id, raw := range s.ReleaseCandidates {
 		if _, err := platform.ReadCandidate(id, raw); err != nil {
 			return fmt.Errorf("tenant %s: release snapshot %s is incompatible: %w", t.ID, id, err)
@@ -384,7 +370,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	t.deliveries, t.acted = s.Deliveries, s.Acted
+	t.acted = s.Acted
 	t.works.Restore(works)
 	tasks := map[string]*Task{}
 	for _, x := range s.Tasks {
@@ -415,17 +401,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 			t.jobs[i].job = job
 		}
 	}
-	t.connectors.Restore(descriptors, s.Marks)
-	t.descriptors = map[string]*pb.ConnectorDescriptor{}
-	for _, d := range descriptors {
-		if d.GetTenantId() == t.ID {
-			t.descriptors[d.GetConnectorId()] = d
-		}
-	}
-	t.lastError = s.LastError
-	if t.lastError == nil {
-		t.lastError = map[string]ConnectorError{}
-	}
+	t.connectors.restore(t.ID, descriptors, &s)
 	t.notices.restore(s.Notices, s.NoticeSeq)
 	t.settings.restore(s.Settings)
 	t.endpoints = s.Endpoints

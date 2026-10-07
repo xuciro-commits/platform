@@ -60,7 +60,7 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 	sequences := t.sequences.clone()
 	notices, noticeSeq := t.notices.state()
 	t.opsMu.Lock()
-	descriptors, marks := t.connectors.State()
+	descriptors, marks := t.connectors.kernel.State()
 	t.opsMu.Unlock()
 	connectors := kernel.NewConnectors()
 	connectors.Restore(descriptors, marks)

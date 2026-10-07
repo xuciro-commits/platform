@@ -206,7 +206,7 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedComposite, error) {
 	if saved.Tenant != t.ID {
 		return saved, fmt.Errorf("composite result belongs to another tenant")
 	}
-	if prior, ok := t.compositeApplied[saved.Key]; ok {
+	if prior, ok := t.committed.composites[saved.Key]; ok {
 		if prior != saved.Digest {
 			return saved, fmt.Errorf("composite idempotency key changed")
 		}
@@ -220,11 +220,8 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedComposite, error) {
 		return saved, err
 	}
 	t.definitions = draft.definitions
-	if t.compositeApplied == nil {
-		t.compositeApplied = map[string]string{}
-	}
-	t.compositeApplied[saved.Key] = saved.Digest
-	t.remember(AuditEntry{At: saved.At, Member: saved.Member, App: build.ID, Action: "composite", Target: saved.Key})
+	t.committed.saveComposite(saved.Key, saved.Digest)
+	t.audit.remember(AuditEntry{At: saved.At, Member: saved.Member, App: build.ID, Action: "composite", Target: saved.Key})
 	return saved, nil
 }
 

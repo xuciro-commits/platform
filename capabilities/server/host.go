@@ -49,39 +49,33 @@ type Tenant struct {
 	AcceptResult func(Entry, string, string) ([]byte, error)
 	// Store keeps what is derived outside the journal: vectors and transcripts
 	// (ADR-0022); without one they stay in memory.
-	Store           Store
-	memStore        journal.Memory // the Store without one
-	knowledge       glossary       // the knowledge app: documents are searched, terms read (ADR-0022)
-	index           index          // passages cut from documents and knowledge fields
-	i18n            translator     // says declarations and messages in a language (ADR-0023)
-	agentRun        string         // the run whose agent is submitting, under mu: its effects name it
-	mu              sync.Mutex
-	fault           atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
-	apps            []platform.App
-	refusals        map[string]refusedResult   // "<app>/<key>" → committed effect-free answer
-	acceptedAnswers map[string]json.RawMessage // original input → approval answer, not the held action's later receipt
-	acceptedInputs  map[string]json.RawMessage // connector input identity → saved answer and owned effects
-	releases        releaseStore               // release_store.go
-	console         hostControl                // the host console's lifecycle, support sessions, migrations (host_control.go)
-	// compositeApplied are the composite commands this tenant committed, by key.
-	compositeApplied map[string]string
-	staged           stagedChannel           // the per-call result channel (compute_channel.go)
-	definitions      []platform.Definition   // installed code assets; member views are derived on read
-	owner            map[string]platform.App // "action:", "read:" and "input:" names → app
+	Store       Store
+	memStore    journal.Memory // the Store without one
+	knowledge   glossary       // the knowledge app: documents are searched, terms read (ADR-0022)
+	index       index          // passages cut from documents and knowledge fields
+	i18n        translator     // says declarations and messages in a language (ADR-0023)
+	agentRun    string         // the run whose agent is submitting, under mu: its effects name it
+	mu          sync.Mutex
+	fault       atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
+	apps        []platform.App
+	committed   committed               // answers by idempotency key (committed.go)
+	releases    releaseStore            // release_store.go
+	console     hostControl             // the host console's lifecycle, support sessions, migrations (host_control.go)
+	staged      stagedChannel           // the per-call result channel (compute_channel.go)
+	definitions []platform.Definition   // installed code assets; member views are derived on read
+	owner       map[string]platform.App // "action:", "read:" and "input:" names → app
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
-	auditMu    sync.Mutex
-	audit      []AuditEntry
-	deliveries []Delivery
-	events     []caused // published during the current input, queued after it
-	bindings   map[string]binding
-	observers  []host.Observer // the platform's views derived from events, inside the input
-	change     changes         // what clients follow to refetch (F-32)
-	linker     host.Linker     // serves Caller.Link and Caller.Links
-	directory  host.Directory  // the organisation, when composed
-	hops       int             // of the event being handled, for the events it causes
-	acted      int             // decisions published and notifications given, ever
-	works      *kernel.Works
+	audit     auditLog // recent inputs, deliveries, personal reads (audit_log.go)
+	events    []caused // published during the current input, queued after it
+	bindings  map[string]binding
+	observers []host.Observer // the platform's views derived from events, inside the input
+	change    changes         // what clients follow to refetch (F-32)
+	linker    host.Linker     // serves Caller.Link and Caller.Links
+	directory host.Directory  // the organisation, when composed
+	hops      int             // of the event being handled, for the events it causes
+	acted     int             // decisions published and notifications given, ever
+	works     *kernel.Works
 	// opsMu guards what reads and the runner share: queues, connectors,
 	// notifications and settings (operations.go). It is never held while t.mu is taken.
 	opsMu  sync.Mutex
@@ -89,18 +83,16 @@ type Tenant struct {
 	failed []*Task
 	jobs   []*Task
 	// Quota is the attempts of owned work each app may make in a minute (ADR-0027 D3); 0: no limit.
-	Quota       int
-	used        map[string]usedMinute // attempts per app in the current minute (volatile)
-	turn        int                   // the app the next round starts at
-	breakers    breakers              // per endpoint and AI provider (volatile)
-	connectors  *kernel.Connectors
-	descriptors map[string]*pb.ConnectorDescriptor
-	lastError   map[string]ConnectorError
-	notices     noticeBoard   // notifications (notices.go)
-	settings    settingValues // "<app>/<name>" → value (settings.go)
-	sequences   sequences     // number counters (ADR-0024)
-	endpoints   []*Endpoint
-	outbound    []*effect
+	Quota      int
+	used       map[string]usedMinute // attempts per app in the current minute (volatile)
+	turn       int                   // the app the next round starts at
+	breakers   breakers              // per endpoint and AI provider (volatile)
+	connectors connectorRoster       // registry, descriptor index, last refusals (connector_roster.go)
+	notices    noticeBoard           // notifications (notices.go)
+	settings   settingValues         // "<app>/<name>" → value (settings.go)
+	sequences  sequences             // number counters (ADR-0024)
+	endpoints  []*Endpoint
+	outbound   []*effect
 	// Secrets resolves a secret's name (default: PLATFORM_SECRETS_DIR, then
 	// PLATFORM_SECRET_<NAME>); Outbound sends an effect's request (default: a
 	// client refusing private addresses). Tests replace both (ADR-0014).
@@ -122,10 +114,9 @@ type Tenant struct {
 	Compiler      CodeCompiler
 	cancels       cancels // running operations' cancel handles
 	memFiles      memoryFiles
-	uploads       uploads        // hashes uploaded and not yet attached (uploads.go)
-	personal      []PersonalRead // reads of personal data (ADR-0028 D4), volatile
-	probing       bool           // a submission for approval is being checked, not applied
-	requests      []request      // accepted decisions' requests of other apps, run with their events (ADR-0026)
+	uploads       uploads   // hashes uploaded and not yet attached (uploads.go)
+	probing       bool      // a submission for approval is being checked, not applied
+	requests      []request // accepted decisions' requests of other apps, run with their events (ADR-0026)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -137,29 +128,14 @@ type AuditEntry struct {
 	Target string    `json:"target,omitempty"`
 }
 
-const auditKept = 1000
-
 // Audit is the tenant's recent accepted inputs, oldest first.
-func (t *Tenant) Audit() []AuditEntry {
-	t.auditMu.Lock()
-	defer t.auditMu.Unlock()
-	return slices.Clone(t.audit)
-}
-
-func (t *Tenant) remember(e AuditEntry) {
-	t.auditMu.Lock()
-	defer t.auditMu.Unlock()
-	t.audit = append(t.audit, e)
-	if len(t.audit) > auditKept {
-		t.audit = t.audit[len(t.audit)-auditKept:]
-	}
-}
+func (t *Tenant) Audit() []AuditEntry { return t.audit.all() }
 
 // NewTenant enables apps for a tenant; it refuses duplicate names, consumed
 // protocols no earlier app provides, and manifests the host could not honour.
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
-	t := &Tenant{ID: id, apps: apps, refusals: map[string]refusedResult{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
-		connectors: kernel.NewConnectors(), records: newRecordStore(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}}
+	t := &Tenant{ID: id, apps: apps, committed: committed{refusals: map[string]refusedResult{}}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
+		connectors: newConnectorRoster(), records: newRecordStore()}
 	t.staged = stagedChannel{tenant: id, files: t.files}
 	t.i18n = translator{apps: func() []platform.App { return t.apps }}
 	claim := func(name string, a platform.App) error {
@@ -424,7 +400,7 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission has an invalid identity")
 	}
 	ledger := a.AcceptedLedger()
-	if saved := t.acceptedAnswers[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; len(saved) > 0 {
+	if saved := t.committed.answers[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; len(saved) > 0 {
 		result, receipt, err := decodeAcceptedBatch(saved)
 		hash, hashErr := submissionHash(s)
 		if err != nil || hashErr != nil || result.RequestHash != hash {
@@ -442,7 +418,7 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission cannot be encoded")
 	}
-	if prior, ok := t.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok {
+	if prior, ok := t.committed.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok {
 		if prior.RequestHash != hash {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -520,7 +496,7 @@ func (t *Tenant) finishCommittedResult(a platform.ResultApp, m platform.Member, 
 			t.quarantine(fmt.Errorf("committed refusal differs from the accepted request: %v", err))
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
-		t.refusals[saved.App+"/"+sub.GetIdempotencyKey()] = saved
+		t.committed.refusals[saved.App+"/"+sub.GetIdempotencyKey()] = saved
 		answer := saved.Error
 		return nil, &answer
 	}
@@ -538,7 +514,7 @@ func (t *Tenant) finishCommittedResult(a platform.ResultApp, m platform.Member, 
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		if applied {
-			t.remember(submitted(m.ID, a, sub, saved.At))
+			t.audit.remember(submitted(m.ID, a, sub, saved.At))
 			t.publishAcceptedBatch(saved)
 			t.changedOwner(saved.App)
 		}
@@ -566,7 +542,7 @@ func (t *Tenant) finishCommittedResult(a platform.ResultApp, m platform.Member, 
 		saved.At = receipt.GetRecordedTime().AsTime()
 	}
 	if applied {
-		t.remember(submitted(m.ID, a, receipt.GetSubmission(), saved.At))
+		t.audit.remember(submitted(m.ID, a, receipt.GetSubmission(), saved.At))
 		t.publishAccepted(platform.Event{App: a.Manifest().ID, Record: receipt, Changed: saved.Event.Changed}, saved.Event, saved.Version)
 		t.changedOwner(saved.App)
 	}
@@ -643,7 +619,7 @@ func outcomeOf(err *kernel.Error) string {
 
 // journal records an accepted submission as the member's, for the audit and the journal.
 func (t *Tenant) journal(a platform.App, m platform.Member, s *pb.Submission, now time.Time) {
-	t.remember(submitted(m.ID, a, s, now))
+	t.audit.remember(submitted(m.ID, a, s, now))
 	body, _ := protojson.Marshal(s)
 	t.record(a, "submission", m, body, now)
 }
@@ -707,7 +683,7 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 		t.refused(m.ID, name, err, now)
 	}
 	if err == nil && a.Manifest().Inputs[name] {
-		t.remember(AuditEntry{At: now, Member: m.ID, App: a.Manifest().ID, Action: "input:" + name})
+		t.audit.remember(AuditEntry{At: now, Member: m.ID, App: a.Manifest().ID, Action: "input:" + name})
 		t.record(a, name, m, body, now)
 	}
 	return out, err
@@ -783,11 +759,7 @@ func (t *Tenant) publishAccepted(e platform.Event, plan acceptedEvent, version i
 }
 
 // Deliveries is the tenant's recent event deliveries, oldest first.
-func (t *Tenant) Deliveries() []Delivery {
-	t.auditMu.Lock()
-	defer t.auditMu.Unlock()
-	return slices.Clone(t.deliveries)
-}
+func (t *Tenant) Deliveries() []Delivery { return t.audit.recentDeliveries() }
 
 func (t *Tenant) record(a platform.App, kind string, m platform.Member, body []byte, now time.Time) {
 	t.changedOwner(a.Manifest().ID)
@@ -879,7 +851,7 @@ func (t *Tenant) Replay(entries []Entry) error {
 					return fmt.Errorf("entry %d: connector result: %v (applied=%t)", i+1, err, applied)
 				}
 				if saved.Refusal == nil {
-					t.remember(AuditEntry{At: e.At, Member: m.ID, App: e.App, Action: "input:" + saved.Name})
+					t.audit.remember(AuditEntry{At: e.At, Member: m.ID, App: e.App, Action: "input:" + saved.Name})
 					t.enqueue(e.At)
 				}
 				continue
@@ -929,10 +901,10 @@ func (t *Tenant) Replay(entries []Entry) error {
 					return fmt.Errorf("entry %d: invalid refused result: %v", i+1, decodeErr)
 				}
 				key := e.App + "/" + sub.GetIdempotencyKey()
-				if _, duplicate := t.refusals[key]; duplicate || ra.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
+				if _, duplicate := t.committed.refusals[key]; duplicate || ra.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
 					return fmt.Errorf("entry %d: duplicate refused result key", i+1)
 				}
-				t.refusals[key] = saved
+				t.committed.refusals[key] = saved
 				continue
 			}
 			if envelope.Kind == "record-batch" {
@@ -948,14 +920,14 @@ func (t *Tenant) Replay(entries []Entry) error {
 					return fmt.Errorf("entry %d: record batch journal identity differs (app=%q/%q tenant=%q/%q principal=%q/%q time=%s/%s)",
 						i+1, saved.App, e.App, saved.Tenant, t.ID, sub.GetPrincipalId(), m.ID, saved.At, e.At)
 				}
-				if _, refused := t.refusals[e.App+"/"+sub.GetIdempotencyKey()]; refused {
+				if _, refused := t.committed.refusals[e.App+"/"+sub.GetIdempotencyKey()]; refused {
 					return fmt.Errorf("entry %d: record batch reused a refused key", i+1)
 				}
 				applied, applyErr := t.applyAcceptedBatch(ra.AcceptedLedger(), e.Body)
 				if applyErr != nil || !applied {
 					return fmt.Errorf("entry %d: record batch: %v (applied=%t)", i+1, applyErr, applied)
 				}
-				t.remember(submitted(m.ID, a, sub, saved.At))
+				t.audit.remember(submitted(m.ID, a, sub, saved.At))
 				t.publishAcceptedBatch(saved)
 				t.enqueue(e.At)
 				continue
@@ -968,14 +940,14 @@ func (t *Tenant) Replay(entries []Entry) error {
 				saved.Version >= 2 && !journal.SameTime(saved.At, e.At) {
 				return fmt.Errorf("entry %d: accepted result app or input clock differs from journal entry", i+1)
 			}
-			if _, refused := t.refusals[e.App+"/"+receipt.GetSubmission().GetIdempotencyKey()]; refused {
+			if _, refused := t.committed.refusals[e.App+"/"+receipt.GetSubmission().GetIdempotencyKey()]; refused {
 				return fmt.Errorf("entry %d: accepted result reused a refused key", i+1)
 			}
 			applied, applyErr := t.applyAcceptedResult(ra.AcceptedLedger(), e.Body)
 			if applyErr != nil || !applied {
 				return fmt.Errorf("entry %d: accepted result: %v (applied=%t)", i+1, applyErr, applied)
 			}
-			t.remember(submitted(m.ID, a, receipt.GetSubmission(), e.At))
+			t.audit.remember(submitted(m.ID, a, receipt.GetSubmission(), e.At))
 			t.publishAccepted(platform.Event{App: e.App, Record: receipt, Changed: saved.Event.Changed}, saved.Event, saved.Version)
 			t.enqueue(e.At)
 			continue
@@ -986,11 +958,11 @@ func (t *Tenant) Replay(entries []Entry) error {
 				return fmt.Errorf("entry %d: bad submission", i+1)
 			}
 			_, err = a.Submit(t.caller(m, a, true), s, e.At)
-			t.remember(submitted(m.ID, a, s, e.At))
+			t.audit.remember(submitted(m.ID, a, s, e.At))
 			t.enqueue(e.At)
 		} else {
 			_, err = a.Input(t.caller(m, a, true), e.Kind, e.Body, e.At)
-			t.remember(AuditEntry{At: e.At, Member: m.ID, App: e.App, Action: "input:" + e.Kind})
+			t.audit.remember(AuditEntry{At: e.At, Member: m.ID, App: e.App, Action: "input:" + e.Kind})
 			t.enqueue(e.At)
 		}
 		if err != nil {
