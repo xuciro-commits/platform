@@ -1,14 +1,15 @@
-// Package authz is the platform's one authorization engine (ADR-0078 §3.4):
-// every check — an action submitted, a read, a field shown, a page offered,
-// an agent acting for someone — asks Decide and gets a Verdict that says yes
-// or no and why. Nothing else in the platform compares roles by hand.
+// Package authz decides whether a member may perform an action (ADR-0078
+// §3.3, as built). Every action the platform executes — a decision submitted
+// by a person, an API token, an agent or an automation — asks Decide through
+// Catalog.DecideOn / Member.May and gets a Verdict that says yes or no and
+// why. Row visibility (Scope) and field narrowing are decided elsewhere, by
+// the record store; this package does not see them.
 //
-// The order is fixed: a bypass the host grants (replay, automation), then
-// what the roles allow (RBAC), then what a relation to the record allows
-// (ReBAC: owner, participant, belongs-to), then the tenant's policies
-// (ABAC, deny first). The engine knows no manifests and no records: callers
-// hand it the roles the permission names and whether the relation holds, so
-// it stays a few dozen lines any reader can verify.
+// The order is fixed: a bypass the host grants (replay, automation), then the
+// tenant's deny policies, then what the roles allow (RBAC), then the tenant's
+// allow policies (ABAC on member/app/agent/target, exact match). The engine
+// knows no manifests and no records: callers hand it the roles the permission
+// names, so it stays a few dozen lines any reader can verify.
 package authz
 
 import (
@@ -36,7 +37,6 @@ type Request struct {
 	Permission string   // e.g. "mes.order.release", "mes.order.read", "mes.order.cost.write"
 	Resource   string   // "<type>/<id>" when about a record; "" otherwise
 	Allowed    []string // the roles the permission names (AnyMember for every member)
-	Related    bool     // the subject stands in a relation to the resource that reads it
 	Attributes map[string]string
 }
 
@@ -44,7 +44,7 @@ type Request struct {
 // audit trail and the explain endpoint.
 type Verdict struct {
 	Allow  bool   `json:"allow"`
-	Rule   string `json:"rule"`   // bypass, role, relation, policy, none
+	Rule   string `json:"rule"`   // bypass, role, policy, none
 	Reason string `json:"reason"` // one sentence a person can read
 	Role   string `json:"role,omitempty"`
 	Policy string `json:"policy,omitempty"`
@@ -91,9 +91,6 @@ func Decide(r Request, policies ...Policy) Verdict {
 		if role != "" && slices.Contains(r.Allowed, role) {
 			return Verdict{Allow: true, Rule: "role", Role: role, Reason: "the role " + role + " in " + r.Subject.App + " may " + r.Permission}
 		}
-	}
-	if r.Related {
-		return Verdict{Allow: true, Rule: "relation", Reason: r.Subject.ID + " is related to " + r.Resource}
 	}
 	for _, p := range policies {
 		if p.Effect == "allow" && p.Matches(r) {

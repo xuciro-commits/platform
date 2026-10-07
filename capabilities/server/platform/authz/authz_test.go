@@ -10,9 +10,6 @@ func TestDecideOrder(t *testing.T) {
 	if v := Decide(Request{Subject: s, Permission: "mes.order.release", Allowed: []string{"admin"}}); v.Allow || v.Rule != "none" || v.Reason == "" {
 		t.Fatalf("%+v", v)
 	}
-	if v := Decide(Request{Subject: s, Permission: "mes.order.read", Resource: "mes.order/1", Allowed: []string{"admin"}, Related: true}); !v.Allow || v.Rule != "relation" {
-		t.Fatalf("%+v", v)
-	}
 	deny := Policy{ID: "freeze", Effect: "deny", Permission: "mes.order.*", When: func(r Request) bool { return r.Attributes["status"] == "closed" }}
 	closed := Request{Subject: s, Permission: "mes.order.release", Allowed: []string{"planner"}, Attributes: map[string]string{"status": "closed"}}
 	if v := Decide(closed, deny); v.Allow || v.Policy != "freeze" {
