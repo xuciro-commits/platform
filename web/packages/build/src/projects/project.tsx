@@ -4,7 +4,7 @@
 // existing` brings one in, and its pages, navigation and header are its interface.
 import { pageUIProfile, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ActionMenu, Button, Input, PanelSection, Select, ProblemList, StructureRow, Textarea, Workbench, notify, t, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ActionMenu, Button, Input, Notice, PanelSection, Select, ProblemList, StructureRow, Textarea, Workbench, notify, t, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { Boxes, Braces, FolderKanban, Layers, LayoutTemplate, Link2, Plus, Search, Sparkles, Tags, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApplicationImport";
@@ -40,7 +40,7 @@ export function ProjectsList() {
         {builder && create.available && <Button variant="primary" onClick={() => create.take()}><Plus />{t("New project")}</Button>}
       </div>
     </div>
-    {delegated.length > 0 && <p className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted">{t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })}</p>}
+    {delegated.length > 0 && <Notice tone="info" role="note" message={t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })} />}
     {projects.isLoading && <p className="text-sm text-muted">{t("Loading…")}</p>}
     {!projects.isLoading && !rows.length && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">{search ? t("No project matches.") : t("No projects yet. Create one to start building.")}</div>}
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
