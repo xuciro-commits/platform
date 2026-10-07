@@ -187,16 +187,15 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 		}
 	}
 	saved := acceptedRelease{Version: 2, Kind: "release-result", Tenant: to.ID, App: build.ID, Member: member.ID,
-		Key: "promotion:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: slices.Clone(raw), Active: activate, Installations: installations}
+		Key: "promotion:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: slices.Clone(raw), Active: activate, Installations: installations, From: from.ID}
 	if saved.RequestHash, err = releaseRequestHash(to.ID, member.ID, saved.Key, candidate.ID, activate); err != nil {
 		return result, err
 	}
+	// The target's audit of the promotion is written where the result is
+	// applied, so a replayed journal carries it; the source changes nothing
+	// and keeps the sealed artifact as its record.
 	if _, err := to.commitReleaseLocked(member, saved); err != nil {
 		return result, err
-	}
-	for _, t := range []*Tenant{from, to} {
-		t.audit.remember(AuditEntry{At: now.UTC(), Member: member.ID, App: PlatformApp, Action: "host.promotion",
-			Target: from.ID + "→" + to.ID + ":" + candidate.ID})
 	}
 	return result, nil
 }
@@ -245,10 +244,10 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 		}
 		result.Types = append(result.Types, part)
 	}
-	for _, t := range []*Tenant{from, to} {
-		t.audit.remember(AuditEntry{At: now.UTC(), Member: target.ID, App: PlatformApp, Action: "host.migration",
-			Target: from.ID + "→" + to.ID + ":" + key})
-	}
+	// Each row entered the target as an audited submission; the run itself is
+	// the console's migration manifest (rememberMigration), kept with the
+	// snapshot like the rest of the console's state. An audit line here
+	// would not survive a replay from the journal alone.
 	return result, nil
 }
 

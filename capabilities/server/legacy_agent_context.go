@@ -5,6 +5,9 @@ import (
 	"reflect"
 )
 
+// Replay-only branch, gathered per ADR-0080 §1.6: delete when no hosted
+// journal still holds an agent start written before ADR-0050.
+//
 // Legacy agent starts reconstructed their context with host-visible flow
 // summaries. ADR-0050 narrowed live reads. A later accepted batch contains the
 // original history and predecessor digest: recover only that omitted summary,

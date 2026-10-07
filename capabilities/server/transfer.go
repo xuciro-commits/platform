@@ -69,11 +69,14 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 				continue
 			}
 			f, ok := view.info.Field(name)
-			if !ok || f.ReadOnly {
+			if !ok {
 				r.Outcome = "ERROR_CODE_INVALID_ARGUMENT: " + name
 				break
 			}
-			if value == "" {
+			// An export writes read-only columns (state, computed values) for
+			// the reader; they are not inputs, so a file that comes back
+			// round-trips instead of failing on its own header.
+			if value == "" || f.ReadOnly {
 				continue
 			}
 			v, err := fromCSV(f, value, currency)
