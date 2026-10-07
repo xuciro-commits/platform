@@ -233,6 +233,14 @@ func (h *Host) routesBuild(rt *routes) {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
+		// A saved candidate is sealed at once: its exact bytes become an
+		// addressable artifact in the file store, which promotion to another
+		// environment reads (ADR-0047 §11). The save stands if sealing fails;
+		// the next save or promotion seals the same bytes again.
+		if _, err := t.SealCandidate(id, h.Now()); err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]string{"error": "saved, but not sealed: " + err.Error()})
+			return
+		}
 		WriteJSON(w, http.StatusOK, ReleaseSaved{ID: id})
 	})
 	rt.handle(Route{Pattern: "POST /v1/releases/evaluations", Summary: "Run real measured model calls against synthetic cases for one saved function candidate (ADR-0043 24c)", Body: ReleaseEvaluationRequest{}, Answer: ReleaseEvaluationStarted{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

@@ -156,7 +156,33 @@ async function receive() {
     approvedBy: (await api("/v1/me", approver)).principalId }, null, 2));
 }
 
+// Development → another environment: the host console moves the activated
+// application candidate's sealed bytes into the target tenant and copies the
+// shared master data the receipt refers to (ADR-0047 §11; host routes under
+// /v1/host). The host administrator token and the target are named by
+// PLATFORM_HOST_TOKEN, PLATFORM_TARGET_TENANT and PLATFORM_TARGET_MEMBER (a
+// release-holding member of the target the console acts as).
+async function promote() {
+  const hostToken = process.env.PLATFORM_HOST_TOKEN;
+  const target = process.env.PLATFORM_TARGET_TENANT;
+  const member = process.env.PLATFORM_TARGET_MEMBER;
+  if (!hostToken || !target || !member) throw new Error("Set PLATFORM_HOST_TOKEN, PLATFORM_TARGET_TENANT and PLATFORM_TARGET_MEMBER");
+  const me = await api("/v1/me", builder);
+  const active = await api("/v1/releases/active", builder);
+  if (!active.id) throw new Error("The development tenant has no active release; run assemble first");
+  const session = (reason, tenant = target, who = member) => api(`/v1/host/tenants/${tenant}/support`, hostToken, { member: who, reason, minutes: 30 });
+  const targetGrant = await session(`promote ${active.id}`);
+  const promotion = await api(`/v1/host/tenants/${target}/promotions`, hostToken,
+    { from: me.tenantId, candidate: active.id, key: `wms:promote:${active.id}`, activate: true, targetGrant: targetGrant.id });
+  console.log(`Promoted ${promotion.candidate} to ${promotion.to}: ${promotion.assets} assets, digest ${promotion.digest}`);
+  const sourceGrant = await session("migrate master data", me.tenantId, me.principalId);
+  const migration = await api(`/v1/host/tenants/${target}/migrations`, hostToken,
+    { from: me.tenantId, types: ["core.site", "core.material", "core.location"], sourceGrant: sourceGrant.id, targetGrant: targetGrant.id });
+  console.log(JSON.stringify({ migration: migration.key, types: migration.types }, null, 2));
+}
+
 const command = process.argv[2] ?? "assemble";
 if (command === "assemble") await assemble();
 else if (command === "receive") await receive();
-else throw new Error("Usage: node solutions/wms/assemble.mjs [assemble|receive]");
+else if (command === "promote") await promote();
+else throw new Error("Usage: node solutions/wms/assemble.mjs [assemble|receive|promote]");

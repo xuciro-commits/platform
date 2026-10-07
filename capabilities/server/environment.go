@@ -146,8 +146,21 @@ func (t *Tenant) sealedBytes(id string) ([]byte, SealedArtifact, error) {
 	return buf.Bytes(), artifact, nil
 }
 
+// sealedOrSeal answers a saved candidate's sealed bytes, sealing it first when
+// no artifact is on record: the artifact is derived from the committed bytes
+// and sealing is idempotent, so a save that never sealed, or a sealed map not
+// carried by a journal-only recovery, is repaired here rather than refused.
+func (t *Tenant) sealedOrSeal(id string, now time.Time) ([]byte, SealedArtifact, error) {
+	if _, ok := t.SealedArtifact(id); !ok {
+		if _, err := t.SealCandidate(id, now); err != nil {
+			return nil, SealedArtifact{}, err
+		}
+	}
+	return t.sealedBytes(id)
+}
+
 // PromoteCandidate moves one sealed candidate from one tenant to another. The
-// source must have it sealed; the target must host every app the candidate's
+// source must have it saved (it is sealed on the way if it was not); the target must host every app the candidate's
 // assets belong to; the member must hold the target's builder or publisher
 // role. The bytes enter the target as its own release result, so its journal,
 // installations and activation behave exactly as for a local save.
@@ -158,7 +171,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if !holdsIndependentBuildRole(member, build.Builder, build.Publisher) {
 		return PromotionResult{}, fmt.Errorf("promotion needs the builder or publisher role in %s", to.ID)
 	}
-	raw, artifact, err := from.sealedBytes(candidateID)
+	raw, artifact, err := from.sealedOrSeal(candidateID, now)
 	if err != nil {
 		return PromotionResult{}, err
 	}
