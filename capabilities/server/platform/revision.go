@@ -1075,6 +1075,22 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 				raw["choices"], _ = json.Marshal(options)
 			}
 		}
+		// The builder's "only when" is the tag form field=a,b; the field
+		// descriptor carries the parsed condition (UX-01).
+		if whenRaw, ok := raw["when"]; ok {
+			var source string
+			if json.Unmarshal(whenRaw, &source) == nil {
+				condition, err := parseWhen(source)
+				if err != nil {
+					return EntityInfo{}, err
+				}
+				if condition == nil {
+					delete(raw, "when")
+				} else {
+					raw["when"], _ = json.Marshal(condition)
+				}
+			}
+		}
 		encoded, err := json.Marshal(raw)
 		if err != nil {
 			return EntityInfo{}, err

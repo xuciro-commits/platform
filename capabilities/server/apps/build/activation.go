@@ -144,32 +144,11 @@ func (b *Build) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 			if previous, ok := wasPublished[Page](pages[i].Published); ok && !maps.Equal(pageFunctionBindings(pageDescriptor), pageFunctionBindings(descriptor(previous))) {
 				return nil, nil, fmt.Errorf("page %s changes AI function bindings; publish the binding through its owner before release activation", asset.Ref)
 			}
-			frozen := Page{Record: pages[i].Record, Name: pageDescriptor.Name, Title: pageDescriptor.Title, Description: pageDescriptor.Description,
-				Object: pageDescriptor.Object.Name, List: pageDescriptor.ListFields, Detail: pageDescriptor.DetailFields, Selections: slices.Clone(pageDescriptor.Selections), Document: pageDescriptor.Document}
-			for _, action := range pageDescriptor.Actions {
-				frozen.Actions = append(frozen.Actions, action.Name)
+			frozen, err := pageDraft(pageDescriptor)
+			if err != nil {
+				return nil, nil, fmt.Errorf("%w in page %s", err, asset.Ref)
 			}
-			for _, s := range pageDescriptor.Sections {
-				section := Section{ActionDefaults: slices.Clone(s.ActionDefaults), TablePresentation: s.TablePresentation, CollectionBuilder: s.CollectionBuilder, CollectionOutputVariable: s.CollectionOutputVariable, Map: s.Map, Scene: s.Scene, SceneSampleCollectionVariable: s.SceneSampleCollectionVariable, SceneSampleVariable: s.SceneSampleVariable, ScenePartVariable: s.ScenePartVariable, AI: s.AI, ExternalFrame: s.ExternalFrame, Embedding: s.Embedding, Observation: s.Observation, ObservationHistoryVariable: s.ObservationHistoryVariable, ObservationContextVariable: s.ObservationContextVariable, ObservationSignalVariable: s.ObservationSignalVariable, ObservationThresholdVariable: s.ObservationThresholdVariable, ObservationRowsVariable: s.ObservationRowsVariable, ObservationCountVariable: s.ObservationCountVariable, ObservationMeanVariable: s.ObservationMeanVariable, ActionTable: s.ActionTable, NotepadVariable: s.NotepadVariable, Analysis: s.Analysis, AnalysisXVariable: s.AnalysisXVariable, AnalysisYVariable: s.AnalysisYVariable, AnalysisCountVariable: s.AnalysisCountVariable, AnalysisMeanVariable: s.AnalysisMeanVariable, ResourceList: s.ResourceList, AssetDirectory: s.AssetDirectory, GraphExplorer: s.GraphExplorer, VertexGraph: s.VertexGraph, Breadcrumb: s.Breadcrumb, Avatar: s.Avatar, Image: s.Image, HistoryLimit: s.HistoryLimit, CommentDraftVariable: s.CommentDraftVariable, FileVariable: s.FileVariable, PdfPageVariable: s.PdfPageVariable, RecordComparison: s.RecordComparison, RecordSetVariable: s.RecordSetVariable, RecordCard: s.RecordCard, Sparkline: s.Sparkline, SparklineDecimalVariable: s.SparklineDecimalVariable, SparklineNumberVariable: s.SparklineNumberVariable, GroupValueVariable: s.GroupValueVariable, GroupSetVariable: s.GroupSetVariable, RowValueVariable: s.RowValueVariable, RowSetVariable: s.RowSetVariable, ColumnValueVariable: s.ColumnValueVariable, ColumnSetVariable: s.ColumnSetVariable, Scatter: s.Scatter, Histogram: s.Histogram, InputKind: s.InputKind, PickerValueVariable: s.PickerValueVariable, RecordPicker: s.RecordPicker, Spacer: s.Spacer, Separator: s.Separator, Notice: s.Notice, AlertValueVariable: s.AlertValueVariable, AlertBanner: s.AlertBanner, DateKind: s.DateKind, DateOffset: s.DateOffset, DateVariable: s.DateVariable, DateLabel: s.DateLabel, ChoiceSetVariable: s.ChoiceSetVariable, ChoiceVariable: s.ChoiceVariable, ChoiceInput: s.ChoiceInput, BooleanVariant: s.BooleanVariant, BooleanVariable: s.BooleanVariable, BooleanLabel: s.BooleanLabel, RangeInput: s.RangeInput, RangeMinVariable: s.RangeMinVariable, RangeMaxVariable: s.RangeMaxVariable, Leaderboard: s.Leaderboard, SummaryField: s.SummaryField, StatisticsVariable: s.StatisticsVariable, Gauge: s.Gauge, GaugeValueVariable: s.GaugeValueVariable, ProgressLabel: s.ProgressLabel, ProgressValueVariable: s.ProgressValueVariable, ProgressTotalVariable: s.ProgressTotalVariable, ProgressTotal: s.ProgressTotal, RecordGantt: s.RecordGantt, RecordCalendar: s.RecordCalendar, RecordEvents: s.RecordEvents, RecordChart: s.RecordChart, RecordList: s.RecordList, HeadingLevel: s.HeadingLevel, CountVariable: s.CountVariable, MetricPresentation: s.MetricPresentation, StatusTracker: s.StatusTracker, RecordLinks: slices.Clone(s.RecordLinks), Buttons: slices.Clone(s.Buttons), RecordView: s.RecordView, DetailPresentation: s.DetailPresentation, TableColumns: slices.Clone(s.TableColumns), ShowSearch: s.ShowSearch, Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Object: s.Object.Name, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, SelectionSetVariable: s.SelectionSetVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection,
-					Fields: s.Fields, Group: s.Group, Mark: s.Mark, ChartVariant: s.ChartVariant, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Operation: s.Operation, Inputs: s.Inputs}
-				if s.InlineEdit != nil {
-					section.InlineEdit = &InlineEdit{Action: s.InlineEdit.Action.Name, Fields: slices.Clone(s.InlineEdit.Fields)}
-				}
-				if s.Query.Name != "" {
-					section.Query = s.Query.App + "." + s.Query.Name
-				}
-				for _, action := range s.Actions {
-					section.Actions = append(section.Actions, action.Name)
-				}
-				if s.Function != nil {
-					var version int
-					if _, err := fmt.Sscanf(s.Function.SourceVersion, definitionVersion+".function-%d", &version); err != nil || version < 1 {
-						return nil, nil, fmt.Errorf("invalid saved function binding in page %s", asset.Ref)
-					}
-					section.Function = &platform.FunctionRef{Name: s.Function.Ref.Name, Version: version}
-				}
-				frozen.Sections = append(frozen.Sections, section)
-			}
+			frozen.Record = pages[i].Record
 			frozen.Versions = slices.Clone(pages[i].Versions)
 			frozen.Published = pages[i].Published
 			if err := retainPagePublication(&frozen); err != nil {
@@ -323,4 +302,117 @@ func PublicationRecord(p ReleasePublication) (string, string, error) {
 		return "", "", fmt.Errorf("invalid release publication row")
 	}
 	return typ, record.ID, nil
+}
+
+// pageDraft is the builder's page record a saved page descriptor denotes: what
+// activation writes onto the owning draft, and what an environment that never
+// authored the page creates before it can activate it.
+func pageDraft(pageDescriptor platform.Page) (Page, error) {
+	frozen := Page{Name: pageDescriptor.Name, Title: pageDescriptor.Title, Description: pageDescriptor.Description,
+		Object: pageDescriptor.Object.Name, List: pageDescriptor.ListFields, Detail: pageDescriptor.DetailFields, Selections: slices.Clone(pageDescriptor.Selections), Document: pageDescriptor.Document}
+	for _, action := range pageDescriptor.Actions {
+		frozen.Actions = append(frozen.Actions, action.Name)
+	}
+	for _, s := range pageDescriptor.Sections {
+		section := Section{ActionDefaults: slices.Clone(s.ActionDefaults), TablePresentation: s.TablePresentation, CollectionBuilder: s.CollectionBuilder, CollectionOutputVariable: s.CollectionOutputVariable, Map: s.Map, Scene: s.Scene, SceneSampleCollectionVariable: s.SceneSampleCollectionVariable, SceneSampleVariable: s.SceneSampleVariable, ScenePartVariable: s.ScenePartVariable, AI: s.AI, ExternalFrame: s.ExternalFrame, Embedding: s.Embedding, Observation: s.Observation, ObservationHistoryVariable: s.ObservationHistoryVariable, ObservationContextVariable: s.ObservationContextVariable, ObservationSignalVariable: s.ObservationSignalVariable, ObservationThresholdVariable: s.ObservationThresholdVariable, ObservationRowsVariable: s.ObservationRowsVariable, ObservationCountVariable: s.ObservationCountVariable, ObservationMeanVariable: s.ObservationMeanVariable, ActionTable: s.ActionTable, NotepadVariable: s.NotepadVariable, Analysis: s.Analysis, AnalysisXVariable: s.AnalysisXVariable, AnalysisYVariable: s.AnalysisYVariable, AnalysisCountVariable: s.AnalysisCountVariable, AnalysisMeanVariable: s.AnalysisMeanVariable, ResourceList: s.ResourceList, AssetDirectory: s.AssetDirectory, GraphExplorer: s.GraphExplorer, VertexGraph: s.VertexGraph, Breadcrumb: s.Breadcrumb, Avatar: s.Avatar, Image: s.Image, HistoryLimit: s.HistoryLimit, CommentDraftVariable: s.CommentDraftVariable, FileVariable: s.FileVariable, PdfPageVariable: s.PdfPageVariable, RecordComparison: s.RecordComparison, RecordSetVariable: s.RecordSetVariable, RecordCard: s.RecordCard, Sparkline: s.Sparkline, SparklineDecimalVariable: s.SparklineDecimalVariable, SparklineNumberVariable: s.SparklineNumberVariable, GroupValueVariable: s.GroupValueVariable, GroupSetVariable: s.GroupSetVariable, RowValueVariable: s.RowValueVariable, RowSetVariable: s.RowSetVariable, ColumnValueVariable: s.ColumnValueVariable, ColumnSetVariable: s.ColumnSetVariable, Scatter: s.Scatter, Histogram: s.Histogram, InputKind: s.InputKind, PickerValueVariable: s.PickerValueVariable, RecordPicker: s.RecordPicker, Spacer: s.Spacer, Separator: s.Separator, Notice: s.Notice, AlertValueVariable: s.AlertValueVariable, AlertBanner: s.AlertBanner, DateKind: s.DateKind, DateOffset: s.DateOffset, DateVariable: s.DateVariable, DateLabel: s.DateLabel, ChoiceSetVariable: s.ChoiceSetVariable, ChoiceVariable: s.ChoiceVariable, ChoiceInput: s.ChoiceInput, BooleanVariant: s.BooleanVariant, BooleanVariable: s.BooleanVariable, BooleanLabel: s.BooleanLabel, RangeInput: s.RangeInput, RangeMinVariable: s.RangeMinVariable, RangeMaxVariable: s.RangeMaxVariable, Leaderboard: s.Leaderboard, SummaryField: s.SummaryField, StatisticsVariable: s.StatisticsVariable, Gauge: s.Gauge, GaugeValueVariable: s.GaugeValueVariable, ProgressLabel: s.ProgressLabel, ProgressValueVariable: s.ProgressValueVariable, ProgressTotalVariable: s.ProgressTotalVariable, ProgressTotal: s.ProgressTotal, RecordGantt: s.RecordGantt, RecordCalendar: s.RecordCalendar, RecordEvents: s.RecordEvents, RecordChart: s.RecordChart, RecordList: s.RecordList, HeadingLevel: s.HeadingLevel, CountVariable: s.CountVariable, MetricPresentation: s.MetricPresentation, StatusTracker: s.StatusTracker, RecordLinks: slices.Clone(s.RecordLinks), Buttons: slices.Clone(s.Buttons), RecordView: s.RecordView, DetailPresentation: s.DetailPresentation, TableColumns: slices.Clone(s.TableColumns), ShowSearch: s.ShowSearch, Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Object: s.Object.Name, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, SelectionSetVariable: s.SelectionSetVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection,
+			Fields: s.Fields, Group: s.Group, Mark: s.Mark, ChartVariant: s.ChartVariant, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Operation: s.Operation, Inputs: s.Inputs}
+		if s.InlineEdit != nil {
+			section.InlineEdit = &InlineEdit{Action: s.InlineEdit.Action.Name, Fields: slices.Clone(s.InlineEdit.Fields)}
+		}
+		if s.Query.Name != "" {
+			section.Query = s.Query.App + "." + s.Query.Name
+		}
+		for _, action := range s.Actions {
+			section.Actions = append(section.Actions, action.Name)
+		}
+		if s.Function != nil {
+			var version int
+			if _, err := fmt.Sscanf(s.Function.SourceVersion, definitionVersion+".function-%d", &version); err != nil || version < 1 {
+				return Page{}, fmt.Errorf("invalid saved function binding")
+			}
+			section.Function = &platform.FunctionRef{Name: s.Function.Ref.Name, Version: version}
+		}
+		frozen.Sections = append(frozen.Sections, section)
+	}
+	return frozen, nil
+}
+
+// Draft is one builder draft a candidate's assets rest on: the record type,
+// the asset name and the draft image.
+type Draft struct {
+	Type  string
+	Name  string
+	Image json.RawMessage
+}
+
+// DraftsOf lists the builder drafts a candidate's assets are published onto:
+// objects, authored pages (an object's generated page has no draft), applications
+// and flows. Promotion into an environment that never authored them creates each
+// missing one through the builder's own create action (ADR-0047 §11).
+func DraftsOf(candidate platform.ReleaseCandidate) ([]Draft, error) {
+	generated := map[string]bool{}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetObject {
+			var o Object
+			if json.Unmarshal(asset.Body, &o) == nil {
+				generated[page(o).Name] = true
+			}
+		}
+	}
+	var out []Draft
+	add := func(typ, name string, record any) error {
+		raw, err := json.Marshal(record)
+		if err != nil {
+			return err
+		}
+		out = append(out, Draft{Type: typ, Name: name, Image: raw})
+		return nil
+	}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.App != ID {
+			continue
+		}
+		switch asset.Ref.Kind {
+		case platform.AssetObject:
+			var o Object
+			if err := json.Unmarshal(asset.Body, &o); err != nil || o.Name == "" {
+				continue // code-owned metadata is not a draft
+			}
+			if err := add(ObjectType, o.Name, o); err != nil {
+				return nil, err
+			}
+		case platform.AssetPage:
+			if generated[asset.Ref.Name] {
+				continue
+			}
+			var descriptor platform.Page
+			if err := json.Unmarshal(asset.Body, &descriptor); err != nil {
+				return nil, fmt.Errorf("invalid saved page %s", asset.Ref)
+			}
+			p, err := pageDraft(descriptor)
+			if err != nil {
+				return nil, fmt.Errorf("%w in page %s", err, asset.Ref)
+			}
+			if err := add(PageType, p.Name, p); err != nil {
+				return nil, err
+			}
+		case platform.AssetApp:
+			var a Application
+			if err := json.Unmarshal(asset.Body, &a); err != nil {
+				return nil, fmt.Errorf("invalid saved application %s", asset.Ref)
+			}
+			if err := add(AppType, a.Name, a); err != nil {
+				return nil, err
+			}
+		case platform.AssetFlow:
+			p, err := ProcessFromReleaseAsset(asset)
+			if err != nil {
+				return nil, err
+			}
+			if err := add(ProcessType, p.Name, p); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
 }

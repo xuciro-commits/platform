@@ -218,7 +218,7 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
   { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },
   { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /></StudioReference> },
-  { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} params={p} /> },
+  { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title || p.name || t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} params={p} /> },
   { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview params={p} /></StudioReference> },
   { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} /> },

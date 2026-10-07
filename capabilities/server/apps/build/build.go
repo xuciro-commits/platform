@@ -1259,7 +1259,11 @@ func page(o Object) platform.Page {
 	for _, a := range o.Actions {
 		actions = append(actions, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: typ + "." + a.Name})
 	}
-	return platform.Page{Name: o.Name, Title: o.Plural, Description: o.Description, Layout: "list-detail",
+	title := o.Plural
+	if title == "" { // a plural is optional; the page is never nameless (UX-10)
+		title = o.Title
+	}
+	return platform.Page{Name: o.Name, Title: title, Description: o.Description, Layout: "list-detail",
 		Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: typ}, ListFields: list, DetailFields: names, Actions: actions}
 }
 

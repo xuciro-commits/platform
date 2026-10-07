@@ -51,6 +51,8 @@ type Unsaved = {
   ask: (panels: string[], run: () => void) => void;
 };
 type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; closeAll: () => void; notify: typeof toast; unsaved?: Unsaved;
+  /** Names a panel's tab after what it shows ("Object type · Visit") once the view knows it; the view's static title stays the category. */
+  retitle?: (panel: string, title: string) => void;
   transfer?: (from: string, route: Route, input: unknown, result: (value: unknown) => void) => void;
   /** Opens the search and command palette (⌘K). */
   palette: () => void;
@@ -72,6 +74,14 @@ export function useWorkspace(): WorkspaceApi {
   const panel = useContext(PanelContext);
   if (!api) throw new Error("useWorkspace outside <Workspace>");
   return { ...api, transfer: api.transfer && panel ? (_from, route, input, result) => api.transfer!(panel, route, input, result) : undefined };
+}
+
+/** The tab of the current view shows "<category> · <name>" once the name is known (UX-03);
+ * several objects, modules or projects open at once stay distinguishable. */
+export function useViewTitle(name?: string) {
+  const api = useContext(WorkspaceContext);
+  const panel = useContext(PanelContext);
+  useEffect(() => { if (api?.retitle && panel && name) api.retitle(panel, name); }, [api, panel, name]);
 }
 
 /** Editors own their draft; the shell owns close/reload confirmation. */
@@ -296,8 +306,14 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       transfers.current.bind(id, routeKey(called)); open(called);
     },
     palette: () => setPaletteOpen(true),
+    retitle: (id, name) => {
+      const panel = dock.current?.getPanel(id);
+      const route = (panel?.params as { route?: Route } | undefined)?.route;
+      const category = route ? byId.get(route.view)?.title(route.params ?? {}) : undefined;
+      if (panel) panel.setTitle(category && category !== name ? `${category} · ${name}` : name);
+    },
     recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail, workspaces,
-  }), [open, closePanel, closeAll, unsaved, memory, toggleFavorite, applications, rail, workspaces]);
+  }), [open, closePanel, closeAll, unsaved, memory, toggleFavorite, applications, rail, workspaces, byId]);
 
   const tab = useCallback((props: IDockviewPanelHeaderProps) => {
     const id = props.api.id;

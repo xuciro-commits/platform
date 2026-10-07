@@ -152,12 +152,20 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 	}
 
 	// 3. Host console: a support session names the prod member the console
-	// acts as; promotion moves the sealed bytes and activates them.
-	define("prod")
+	// acts as; promotion moves the sealed bytes and activates them. prod never
+	// authored the application: the drafts activation publishes onto are
+	// created from the sealed image, under the source's IDs (UX-06).
 	if code, _ := call(http.MethodPost, "", "dana", "/v1/host/tenants/prod/support", map[string]any{"member": "pat", "reason": "release", "minutes": 30}); code != http.StatusUnauthorized {
 		t.Fatalf("a tenant member opened the host console: %d", code)
 	}
-	code, grant := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/support", map[string]any{"member": "pat", "reason": "promote v1", "minutes": 30})
+	code, pub := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/support", map[string]any{"member": "pat", "reason": "promote v1 as publisher", "minutes": 30})
+	if code != http.StatusOK {
+		t.Fatalf("publisher support session: %d %v", code, pub)
+	}
+	if code, out := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/promotions", map[string]any{"from": "dev", "candidate": v1, "key": "promote-v1-pub", "activate": true, "targetGrant": pub["id"]}); code != http.StatusConflict || !strings.Contains(fmt.Sprint(out["error"]), "builder role") {
+		t.Fatalf("a publisher materialised drafts in an empty environment: %d %v", code, out)
+	}
+	code, grant := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/support", map[string]any{"member": "dana", "reason": "promote v1", "minutes": 30})
 	if code != http.StatusOK || grant["id"] == nil {
 		t.Fatalf("support session: %d %v", code, grant)
 	}
@@ -168,6 +176,9 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 	}
 	if activeRelease("prod") != v1 {
 		t.Fatal("prod did not activate the promoted candidate")
+	}
+	if code, out := call(http.MethodGet, "prod", "pat", "/v1/records/build.object/visit", nil); code != http.StatusOK || !strings.Contains(fmt.Sprint(out["record"]), "published") {
+		t.Fatalf("prod has no published draft for the promoted object: %d %v", code, out)
 	}
 	if code, again := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/promotions", map[string]any{"from": "dev", "candidate": v1, "key": "promote-v1", "activate": true, "targetGrant": prodGrant}); code != http.StatusOK || again["digest"] != promoted["digest"] {
 		t.Fatalf("a repeated promotion is not idempotent: %d %v", code, again)
@@ -218,7 +229,8 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 	if code, out := activate("dev", "dana", v2, "activate-v2", plan["id"].(string)); code != http.StatusOK {
 		t.Fatalf("dev upgrade: %d %v", code, out)
 	}
-	if got := submit("prod", "dana", build.ObjectType, "O1", build.ObjectType+".edit", visitV2); got != "ok" {
+	// The materialised drafts are named after their assets.
+	if got := submit("prod", "dana", build.ObjectType, "visit", build.ObjectType+".edit", visitV2); got != "ok" {
 		t.Fatalf("prod v2 draft: %s", got)
 	}
 	if code, _ := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/promotions", map[string]any{"from": "dev", "candidate": v2, "key": "promote-v2", "activate": true, "targetGrant": prodGrant}); code != http.StatusConflict {

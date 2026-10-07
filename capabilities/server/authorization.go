@@ -229,10 +229,42 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 	}
 	d := consoleOf(t)
 	ref, ok := delegatedAsset(s)
+	if ok {
+		// Projects name assets the way candidates do, by the draft's name;
+		// the submission targets the draft's record ID (UX-11). Either form
+		// in the project covers the edit.
+		if name := t.draftName(s); name != "" && name != ref.Name && d != nil && d.edits(m.ID, ProjectAsset{App: ref.App, Kind: ref.Kind, Name: name}) {
+			ref.Name = name
+		}
+	}
 	if m.Agent || d == nil || !ok || !d.edits(m.ID, ref) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project delegation covers only the draft edits of the assets your projects name; {action} on {target} is outside it", s.GetSchema().GetName(), target(s))
 	}
 	return nil
+}
+
+// draftName is the name of the builder draft a submission edits: the payload's
+// on a create, the record's otherwise; empty when neither says.
+func (t *Tenant) draftName(s *pb.Submission) string {
+	var payload struct {
+		Name string `json:"name"`
+	}
+	_ = json.Unmarshal(s.GetPayload(), &payload)
+	if payload.Name != "" {
+		return payload.Name
+	}
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	et := t.records.types[s.GetTarget().GetType()]
+	if et == nil {
+		return ""
+	}
+	row := et.rows[s.GetTarget().GetId()]
+	field, ok := et.info.Field("name")
+	if row == nil || !ok || field.Index == nil {
+		return ""
+	}
+	return row.value.FieldByIndex(field.Index).String()
 }
 
 // delegatedAsset maps a draft-edit submission to the asset it edits. Only the

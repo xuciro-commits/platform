@@ -90,7 +90,7 @@ func (t *Tenant) Explain(member, permission string) (Explanation, *kernel.Error)
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "No app {app}", app)
 		}
 		mf := a.Manifest()
-		out.App, out.Roles = app, m.RolesIn(app)
+		out.App, out.Roles = app, nonNil(m.RolesIn(app))
 		switch {
 		case slices.Contains(mf.Everyone, name):
 			out.Allowed = []string{authz.AnyMember}
@@ -105,10 +105,19 @@ func (t *Tenant) Explain(member, permission string) (Explanation, *kernel.Error)
 	for _, a := range t.apps {
 		mf := a.Manifest()
 		if action, own := mf.Actions.Action(permission); own {
-			out.App, out.Roles, out.Allowed = mf.ID, m.RolesIn(mf.ID), action.Roles
+			out.App, out.Roles, out.Allowed = mf.ID, nonNil(m.RolesIn(mf.ID)), nonNil(action.Roles)
 			out.Verdict = mf.Actions.Decide(platform.Caller{Member: m, App: mf.ID}, permission)
 			return out, nil
 		}
 	}
 	return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "No action {action}", permission)
+}
+
+// nonNil keeps the contract's arrays arrays: a member with no role in the app
+// and an action every member may do both answer [] (UX-08).
+func nonNil(list []string) []string {
+	if list == nil {
+		return []string{}
+	}
+	return list
 }

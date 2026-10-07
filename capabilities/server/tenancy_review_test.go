@@ -75,6 +75,20 @@ func TestProjectDelegationWithIndependentReadRole(t *testing.T) {
 	if got := submit("mo", "build.object.create", build.ObjectType, "allowed", object); got != "ok" {
 		t.Fatalf("project asset refused: %s", got)
 	}
+	// The project names the asset; the editor's record ID differs (UX-11).
+	named := map[string]any{"name": "allowed", "title": "Allowed", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}
+	if got := submit("dana", "build.object.create", build.ObjectType, "UX-ITEM", map[string]any{"name": "uxitem", "title": "Item", "fields": named["fields"]}); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := submit("dana", SchemaProjectSave, ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "uxitem"}}}); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := submit("mo", "build.object.edit", build.ObjectType, "UX-ITEM", map[string]any{"title": "Item renamed"}); got != "ok" {
+		t.Fatalf("delegated edit of a draft whose ID differs from its name refused: %s", got)
+	}
+	if got := submit("mo", "build.object.edit", build.ObjectType, "allowed", map[string]any{"title": "No longer named"}); got != "ERROR_CODE_POLICY_DENIED" {
+		t.Fatalf("an asset the project no longer names was edited: %s", got)
+	}
 }
 
 func TestAcceptedInvitationIncludesMailIntent(t *testing.T) {
