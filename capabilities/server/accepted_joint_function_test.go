@@ -35,7 +35,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	}
 	defer journal.Close()
 	id := fmt.Sprintf("joint-function-crash-%d", time.Now().UnixNano())
-	defer journal.pool.Exec(ctx, `delete from journal where tenant=$1`, id)
+	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
 	if _, err := journal.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"platformserver/journal"
 	"testing"
 	"time"
 
@@ -34,14 +35,14 @@ func TestJournalAcceptedSavedReleaseInstallation(t *testing.T) {
 	}
 	defer journal.Close()
 	id := fmt.Sprintf("install-release-%d", time.Now().UnixNano())
-	defer journal.pool.Exec(context.Background(), `delete from journal where tenant=$1`, id)
+	defer journal.Pool().Exec(context.Background(), `delete from journal where tenant=$1`, id)
 	if _, err := journal.Entries(context.Background(), id, 0); err != nil {
 		t.Fatal(err)
 	}
 	checkSavedReleaseInstallation(t, journal, id, false)
 }
 
-func checkSavedReleaseInstallation(t *testing.T, journal *Journal, id string, v2 bool) {
+func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id string, v2 bool) {
 	compose := func() *Tenant {
 		tn, err := NewTenant(id, NewConsole(id, Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}},
 			Seat{Subjects: []string{"operator"}, Member: platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User}}}), build.New(id))

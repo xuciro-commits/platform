@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"platformserver/journal"
 	"strings"
 	"testing"
 	"time"
@@ -65,7 +66,7 @@ func TestJournalWritebackCallbackAndReplay(t *testing.T) {
 	testWritebackQueuesAndReplaysOnce(t, true, journal)
 }
 
-func testWritebackQueuesAndReplaysOnce(t *testing.T, durable bool, journal *Journal) {
+func testWritebackQueuesAndReplaysOnce(t *testing.T, durable bool, journal *journal.Postgres) {
 	tenant := "writebacks"
 	if journal != nil {
 		tenant = fmt.Sprintf("writebacks-%d", time.Now().UnixNano())
@@ -98,7 +99,7 @@ func testWritebackQueuesAndReplaysOnce(t *testing.T, durable bool, journal *Jour
 		tn.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
 			return journal.AppendAccepted(ctx, tenant, e, key, hash)
 		}
-		defer journal.pool.Exec(ctx, `delete from journal where tenant=$1`, tenant)
+		defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, tenant)
 	}
 	tn.Secrets = func(name string) ([]byte, bool) { return []byte("Basic c2FwOnNlY3JldA=="), name == "sap-writer" }
 	var calls []string

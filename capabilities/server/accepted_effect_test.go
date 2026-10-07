@@ -108,7 +108,7 @@ func TestJournalAcceptedEffectCrashBeforeApplication(t *testing.T) {
 	}
 	defer journal.Close()
 	id := fmt.Sprintf("effect-crash-%d", time.Now().UnixNano())
-	defer journal.pool.Exec(ctx, `delete from journal where tenant=$1`, id)
+	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
 	if _, err := journal.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +348,7 @@ func TestJournalAcceptedModelUsageCrashBeforeApplication(t *testing.T) {
 	}
 	defer journal.Close()
 	id := fmt.Sprintf("model-usage-crash-%d", time.Now().UnixNano())
-	defer journal.pool.Exec(ctx, `delete from journal where tenant=$1`, id)
+	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
 	if _, err := journal.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}

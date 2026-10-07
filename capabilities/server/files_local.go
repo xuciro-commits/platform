@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"platformserver/journal"
 	"strings"
 )
 
@@ -57,7 +58,7 @@ func (s *localFiles) Put(_ context.Context, key string, data []byte, _ string) e
 			return nil
 		}
 	}
-	return writeFileAtomic(path, data)
+	return journal.WriteFileAtomic(path, data)
 }
 
 func (s *localFiles) Get(_ context.Context, key string) (io.ReadCloser, int64, error) {

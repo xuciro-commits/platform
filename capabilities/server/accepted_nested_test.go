@@ -309,7 +309,7 @@ func TestJournalAcceptedNestedBatchCrashBeforeApplication(t *testing.T) {
 	}
 	defer j.Close()
 	id := fmt.Sprintf("nested-%d", time.Now().UnixNano())
-	defer func() { _, _ = j.pool.Exec(ctx, `delete from journal where tenant=$1`, id) }()
+	defer func() { _, _ = j.Pool().Exec(ctx, `delete from journal where tenant=$1`, id) }()
 	compose := func() *Tenant { return nestedTenantID(t, id) }
 	if _, err := j.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)

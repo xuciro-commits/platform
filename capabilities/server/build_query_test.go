@@ -9,6 +9,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/build"
+	"platformserver/journal"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -31,10 +32,10 @@ func TestReusableQueryVersionsFreezePagesAndRecover(t *testing.T) {
 		reusableQueryVersions(t, journal)
 	})
 }
-func reusableQueryVersions(t *testing.T, journal *Journal) {
+func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 	tenant := fmt.Sprintf("reusable-queries-%d", time.Now().UnixNano())
 	if journal != nil {
-		defer journal.pool.Exec(context.Background(), `delete from journal where tenant=$1`, tenant)
+		defer journal.Pool().Exec(context.Background(), `delete from journal where tenant=$1`, tenant)
 	}
 	compose := func() *Tenant {
 		tn, err := NewTenant(tenant, NewConsole(tenant,

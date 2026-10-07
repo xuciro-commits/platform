@@ -1,7 +1,6 @@
 package platformserver
 
 import (
-	"encoding/json"
 	"slices"
 	"strconv"
 	"time"
@@ -15,17 +14,6 @@ import (
 // Transcript is one model call in full: what was sent and what came back
 // (ADR-0022 D8, ADR-0021 D4). It may hold personal data, so it stays outside
 // the journal, for as many days as the agent app's setting keeps it.
-type Transcript struct {
-	Tenant  string          `json:"-"`
-	At      time.Time       `json:"at"`
-	Member  string          `json:"member"`
-	Model   string          `json:"model"`
-	Run     string          `json:"run,omitempty"` // the agent run or evaluation it was for
-	Request json.RawMessage `json:"request"`
-	Answer  json.RawMessage `json:"answer"`
-	Outcome string          `json:"outcome"`
-}
-
 const (
 	SettingTranscriptDays = "transcript-days"
 	transcriptsInMemory   = 500

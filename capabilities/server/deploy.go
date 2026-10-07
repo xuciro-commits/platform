@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"platformserver/idp"
 	"strings"
 	"sync"
 	"syscall"
@@ -120,12 +121,12 @@ func (d *Deployment) validate() error {
 // idp, on a lightweight host, is the provider it signs and verifies tokens
 // with. The seats served on /v1/sign-in are signed too, so no token of an
 // unsigned form is ever accepted (ADR-0049 D3).
-func (d *Deployment) lightweightIdP() (*LocalIdP, error) {
-	key, err := LoadIDPKey(d.idpKeyPath())
+func (d *Deployment) lightweightIdP() (*idp.Local, error) {
+	key, err := idp.LoadKey(d.idpKeyPath())
 	if err != nil {
 		return nil, err
 	}
-	return NewLocalIdP(key)
+	return idp.NewLocal(key)
 }
 
 // makeKey writes a fresh signing key, refusing to replace one that exists: a
@@ -134,16 +135,16 @@ func (d *Deployment) makeKey() error {
 	if _, err := os.Stat(d.idpKeyPath()); err == nil {
 		return fmt.Errorf("idp: %s already exists; it is not replaced", d.idpKeyPath())
 	}
-	key, err := NewIDPKey()
+	key, err := idp.NewKey()
 	if err != nil {
 		return err
 	}
-	return SaveIDPKey(d.idpKeyPath(), key)
+	return idp.SaveKey(d.idpKeyPath(), key)
 }
 
 // lightweightState opens what a lightweight host runs on: its journal, its
 // file bytes and its signing key, all inside -data (ADR-0049 D2-D4).
-func (d *Deployment) lightweightState() (Journals, FileStore, *LocalIdP, error) {
+func (d *Deployment) lightweightState() (Journals, FileStore, *idp.Local, error) {
 	journal, err := OpenFileJournal(filepath.Join(d.Data, "journal"))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("journal: %w", err)
@@ -153,12 +154,12 @@ func (d *Deployment) lightweightState() (Journals, FileStore, *LocalIdP, error) 
 		journal.Close()
 		return nil, nil, nil, err
 	}
-	idp, err := d.lightweightIdP()
+	signer, err := d.lightweightIdP()
 	if err != nil {
 		journal.Close()
 		return nil, nil, nil, err
 	}
-	return journal, files, idp, nil
+	return journal, files, signer, nil
 }
 
 // restoreTenants brings every tenant to the journal's state before the host
@@ -241,18 +242,18 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		log.Printf("made the signing key %s", d.idpKeyPath())
 		return nil
 	}
-	var idp *LocalIdP
+	var signer *idp.Local
 	if d.Profile == "lightweight" {
 		var err error
-		if idp, err = d.lightweightIdP(); err != nil {
+		if signer, err = d.lightweightIdP(); err != nil {
 			return err
 		}
 	}
 	if d.Mint != "" {
-		if idp == nil {
+		if signer == nil {
 			return fmt.Errorf("-mint-token is the lightweight profile's; a delivery host signs in at its OpenID provider")
 		}
-		token, err := idp.Mint(d.Mint, d.TokenTTL, Now())
+		token, err := signer.Mint(d.Mint, d.TokenTTL, Now())
 		if err != nil {
 			return err
 		}
@@ -286,7 +287,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	switch {
 	case d.Profile == "lightweight":
 		var err error
-		journal, lightweightFiles, idp, err = d.lightweightState()
+		journal, lightweightFiles, signer, err = d.lightweightState()
 		if err != nil {
 			return err
 		}
@@ -352,9 +353,9 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		if d.Keys == "" {
 			return fmt.Errorf("-oidc-keys is required with -oidc-issuer")
 		}
-		authenticate, attest = OIDCProvider(d.Issuer, d.Keys)
+		authenticate, attest = idp.OIDCProvider(d.Issuer, d.Keys)
 	}
-	if pgPool, pg := pool(journal); journal != nil && d.Project && pg {
+	if pgPool, pg := journalPool(journal); journal != nil && d.Project && pg {
 		for _, t := range tenants {
 			if t.quarantined() {
 				continue
@@ -450,10 +451,10 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		}
 	}
 	host.Web, host.Issuer, host.Client, host.Development = d.Web, d.Issuer, "platform-web", d.Issuer == ""
-	if idp != nil {
+	if signer != nil {
 		// The host serves its seats as signed tokens, and takes only those: the
 		// delivery path's development tokens are not accepted here (ADR-0049 D3).
-		host.SignWith(idp, d.TokenTTL)
+		host.SignWith(signer, d.TokenTTL)
 	}
 	server := &http.Server{Addr: d.Addr, Handler: host.Handler()}
 	stop, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)

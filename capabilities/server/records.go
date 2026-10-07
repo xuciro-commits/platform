@@ -853,7 +853,7 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 		return nil, fmt.Errorf("unknown field %s", name)
 	}
 	if value, ok := platform.DecimalLiteral(term[2]); ok {
-		return exactDecimalCondition(f, op, value, read)
+		return value.Condition(f, op, read)
 	}
 	var tagged map[string]json.RawMessage
 	if json.Unmarshal(term[2], &tagged) == nil && tagged != nil {

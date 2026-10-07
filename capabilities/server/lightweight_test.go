@@ -3,7 +3,6 @@ package platformserver
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"platformserver/idp"
 	"strings"
 	"testing"
 	"time"
@@ -80,126 +80,6 @@ func TestLocalFilesKeepsTheSameContract(t *testing.T) {
 	}
 }
 
-// TestLocalIdPSignsAndVerifies: the lightweight host takes only tokens it
-// signed, for itself and unexpired (ADR-0049 D3).
-func TestLocalIdPSignsAndVerifies(t *testing.T) {
-	key, err := NewIDPKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := NewLocalIdP([]byte("short key")); err == nil {
-		t.Fatal("a guessable key was accepted")
-	}
-	idp, err := NewLocalIdP(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	now := time.Now().UTC()
-	token, err := idp.Mint("user:ana@example.com", time.Hour, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if subject, ok := idp.Verify(token); !ok || subject != "user:ana@example.com" {
-		t.Fatalf("its own token reads as %q, %v", subject, ok)
-	}
-	if subject, ok := idp.Authenticate()(token); !ok || subject != "user:ana@example.com" {
-		t.Fatalf("the host's authenticate reads it as %q, %v", subject, ok)
-	}
-	if _, err := idp.Mint("", time.Hour, now); err == nil {
-		t.Fatal("a token without a subject was minted")
-	}
-	if _, err := idp.Mint("user:ana", 0, now); err == nil {
-		t.Fatal("a token that expires at once was minted")
-	}
-	// Another host's key is not this host's key.
-	otherKey, err := NewIDPKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	other, err := NewLocalIdP(otherKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := other.Verify(token); ok {
-		t.Fatal("another key verified the token")
-	}
-	if foreign, err := other.Mint("user:ana@example.com", time.Hour, now); err != nil {
-		t.Fatal(err)
-	} else if _, ok := idp.Verify(foreign); ok {
-		t.Fatal("a token of another host was accepted")
-	}
-	// A changed payload is not the token that was signed.
-	parts := strings.Split(token, ".")
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		t.Fatal(err)
-	}
-	changed := bytes.Replace(payload, []byte("user:ana"), []byte("user:bo!"), 1)
-	tampered := parts[0] + "." + base64.RawURLEncoding.EncodeToString(changed) + "." + parts[2]
-	if _, ok := idp.Verify(tampered); ok {
-		t.Fatal("a changed payload was accepted")
-	}
-	claim := func(claims map[string]any) string {
-		header, _ := json.Marshal(map[string]string{"alg": "HS256", "typ": "JWT"})
-		body, _ := json.Marshal(claims)
-		signing := idp.b64(header) + "." + idp.b64(body)
-		return signing + "." + idp.b64(idp.sign(signing))
-	}
-	if _, ok := idp.Verify(claim(map[string]any{"iss": idpIssuer, "sub": "user:ana",
-		"iat": now.Add(-2 * time.Hour).Unix(), "exp": now.Add(-time.Hour).Unix()})); ok {
-		t.Fatal("an expired token was accepted")
-	}
-	if _, ok := idp.Verify(claim(map[string]any{"iss": idpIssuer, "sub": "user:ana",
-		"iat": now.Add(5 * time.Minute).Unix(), "exp": now.Add(time.Hour).Unix()})); ok {
-		t.Fatal("a token from the future was accepted")
-	}
-	if _, ok := idp.Verify(claim(map[string]any{"iss": "somewhere-else", "sub": "user:ana",
-		"iat": now.Unix(), "exp": now.Add(time.Hour).Unix()})); ok {
-		t.Fatal("another issuer's token was accepted")
-	}
-	header, _ := json.Marshal(map[string]string{"alg": "none", "typ": "JWT"})
-	body, _ := json.Marshal(map[string]any{"iss": idpIssuer, "sub": "user:ana", "iat": now.Unix(), "exp": now.Add(time.Hour).Unix()})
-	if _, ok := idp.Verify(idp.b64(header) + "." + idp.b64(body) + "."); ok {
-		t.Fatal("an unsigned token was accepted")
-	}
-	if _, ok := idp.Verify("not a token"); ok {
-		t.Fatal("something that is not a token was accepted")
-	}
-	// The key file is what the host keeps, and its absence says how to make one.
-	path := filepath.Join(t.TempDir(), "idp.key")
-	if _, err := LoadIDPKey(path); err == nil || !strings.Contains(err.Error(), "-idp-new-key") {
-		t.Fatalf("a missing key file: %v", err)
-	}
-	if err := SaveIDPKey(path, key); err != nil {
-		t.Fatal(err)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm()&0o077 != 0 {
-		t.Fatalf("the key file is readable by others: %v", info.Mode())
-	}
-	loaded, err := LoadIDPKey(path)
-	if err != nil || !bytes.Equal(loaded, key) {
-		t.Fatalf("the key did not survive its file: %v", err)
-	}
-	reloaded, err := NewLocalIdP(loaded)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if subject, ok := reloaded.Verify(token); !ok || subject != "user:ana@example.com" {
-		t.Fatal("a token did not survive the key file")
-	}
-	notAKey := filepath.Join(t.TempDir(), "not-a-key")
-	if err := os.WriteFile(notAKey, []byte("not a key"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := LoadIDPKey(notAKey); err == nil {
-		t.Fatal("something that is not a key file was read as one")
-	}
-}
-
 // TestLightweightProfileIsDeclaredNotInferred: a host that names a profile gets
 // that profile's storage or a refusal, never the other's (ADR-0049 D1).
 func TestLightweightProfileIsDeclaredNotInferred(t *testing.T) {
@@ -253,7 +133,7 @@ func TestLightweightProfileServesSignedSeats(t *testing.T) {
 	if err := d.makeKey(); err == nil {
 		t.Fatal("a second start replaced the signing key")
 	}
-	journal, _, idp, err := d.lightweightState()
+	journal, _, signer, err := d.lightweightState()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +145,7 @@ func TestLightweightProfileServesSignedSeats(t *testing.T) {
 	}
 	host := NewHost(Tokens(map[string]string{"ana": "ana"}), tenant) // as a delivery development host starts
 	host.Development = true
-	host.SignWith(idp, time.Hour) // what the lightweight deployment does (ADR-0049 D3)
+	host.SignWith(signer, time.Hour) // what the lightweight deployment does (ADR-0049 D3)
 	call := func(path, token string) (int, string) {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		if token != "" {
@@ -295,17 +175,17 @@ func TestLightweightProfileServesSignedSeats(t *testing.T) {
 	if token == "ana" {
 		t.Fatal("the host served the unsigned development token")
 	}
-	if subject, ok := idp.Verify(token); !ok || subject != "ana" {
+	if subject, ok := signer.Verify(token); !ok || subject != "ana" {
 		t.Fatalf("the served token reads as %q, %v", subject, ok)
 	}
 	if code, body := call("/v1/me", token); code != http.StatusOK || !strings.Contains(body, `"principalId":"ana"`) {
 		t.Fatalf("a signed seat at /v1/me: %d %s", code, body)
 	}
-	foreignKey, err := NewIDPKey()
+	foreignKey, err := idp.NewKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := NewLocalIdP(foreignKey)
+	foreign, err := idp.NewLocal(foreignKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +213,7 @@ func TestLightweightProfileRestartsAndContinues(t *testing.T) {
 		}
 		return tenant
 	}
-	start := func() (Journals, FileStore, *LocalIdP, *Tenant, int64) {
+	start := func() (Journals, FileStore, *idp.Local, *Tenant, int64) {
 		d := &Deployment{Profile: "lightweight", Data: dir, SnapshotEvery: 10000, TokenTTL: time.Hour}
 		if err := d.validate(); err != nil {
 			t.Fatal(err)
@@ -343,7 +223,7 @@ func TestLightweightProfileRestartsAndContinues(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		journal, files, idp, err := d.lightweightState()
+		journal, files, signer, err := d.lightweightState()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -354,9 +234,9 @@ func TestLightweightProfileRestartsAndContinues(t *testing.T) {
 		if err := d.restoreTenants(ctx, journal, CodeOf(tenant), []*Tenant{tenant}, restored, fresh); err != nil {
 			t.Fatal(err)
 		}
-		return journal, files, idp, tenant, restored["t-lite"]
+		return journal, files, signer, tenant, restored["t-lite"]
 	}
-	journal, files, idp, live, restoredAt := start()
+	journal, files, signer, live, restoredAt := start()
 	if live.quarantined() {
 		t.Fatalf("the tenant did not start: %s", live.fault.Load().Reason)
 	}
@@ -390,7 +270,7 @@ func TestLightweightProfileRestartsAndContinues(t *testing.T) {
 	if restoredAt != 0 {
 		t.Fatalf("a fresh tenant restored from %d", restoredAt)
 	}
-	before, err := idp.Mint("admin", time.Hour, at)
+	before, err := signer.Mint("admin", time.Hour, at)
 	if err != nil {
 		t.Fatal(err)
 	}

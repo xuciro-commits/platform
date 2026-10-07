@@ -83,7 +83,7 @@ func journalsUnderTest(t *testing.T) []struct {
 // forgetJournal removes everything a contract test wrote for its tenant.
 func forgetJournal(t *testing.T, j Journals, tenant string) {
 	t.Helper()
-	if pg, ok := pool(j); ok {
+	if pg, ok := journalPool(j); ok {
 		for _, table := range []string{"journal", "snapshots", "embeddings", "transcripts"} {
 			if _, err := pg.Exec(context.Background(), "delete from "+table+" where tenant=$1", tenant); err != nil {
 				t.Logf("cleanup %s: %v", table, err)

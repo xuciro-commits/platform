@@ -189,7 +189,7 @@ func TestJournalAcceptedConnectorCrashAfterCommit(t *testing.T) {
 	}
 	defer j.Close()
 	id := fmt.Sprintf("accepted-cursor-%d", time.Now().UnixNano())
-	defer j.pool.Exec(ctx, `delete from journal where tenant=$1`, id)
+	defer j.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
 	if entries, err := j.Entries(ctx, id, 0); err != nil || len(entries) != 0 {
 		t.Fatalf("new journal is not empty: %v %v", entries, err)
 	}

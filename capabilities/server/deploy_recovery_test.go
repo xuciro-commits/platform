@@ -26,8 +26,8 @@ func TestJournalRetryRepairsOnlyTheQuarantinedTenant(t *testing.T) {
 	}
 	defer journal.Close()
 	id := fmt.Sprintf("retry-tenant-%d", time.Now().UnixNano())
-	defer journal.pool.Exec(ctx, `delete from journal where tenant=$1`, id)
-	defer journal.pool.Exec(ctx, `delete from snapshots where tenant=$1`, id)
+	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
+	defer journal.Pool().Exec(ctx, `delete from snapshots where tenant=$1`, id)
 	compose := func(id string) (*Tenant, error) {
 		return NewTenant(id, NewConsole(id,
 			Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{PlatformApp: Admin, "stock": "clerk"}}},
@@ -62,7 +62,7 @@ func TestJournalRetryRepairsOnlyTheQuarantinedTenant(t *testing.T) {
 	}
 	damaged["digest"] = "tampered"
 	invalid, _ := json.Marshal(damaged)
-	if _, err := journal.pool.Exec(ctx, `update journal set body=$2 where tenant=$1 and seq=1`, id, invalid); err != nil {
+	if _, err := journal.Pool().Exec(ctx, `update journal set body=$2 where tenant=$1 and seq=1`, id, invalid); err != nil {
 		t.Fatal(err)
 	}
 	old, _ := compose(id)
@@ -101,7 +101,7 @@ func TestJournalRetryRepairsOnlyTheQuarantinedTenant(t *testing.T) {
 	if code, _ := call("admin-token", "healthy-neighbor", "/v1/me", http.MethodGet); code != http.StatusOK {
 		t.Fatalf("healthy neighbor stopped while another tenant was being repaired: %d", code)
 	}
-	if _, err := journal.pool.Exec(ctx, `update journal set body=$2 where tenant=$1 and seq=1`, id, saved); err != nil {
+	if _, err := journal.Pool().Exec(ctx, `update journal set body=$2 where tenant=$1 and seq=1`, id, saved); err != nil {
 		t.Fatal(err)
 	}
 	if code, body := call("admin-token", id, "/v1/recovery/retry", http.MethodPost); code != http.StatusOK ||

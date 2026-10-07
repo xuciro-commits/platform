@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"platformserver/idp"
 	"slices"
 	"strconv"
 	"strings"
@@ -28,14 +29,11 @@ import (
 	"platformserver/platform"
 )
 
-// Authenticate turns a bearer credential into a subject ("user:<email>",
-// "client:<id>"); false rejects the request. See OIDC and Tokens.
-type Authenticate func(credential string) (subject string, ok bool)
-
-// Attest reports whether a credential was issued after a second factor: what a
-// tenant that requires one asks of the provider (ADR-0078 §2). A host without
-// one cannot attest, so such a tenant admits no sign-in.
-type Attest func(credential string) bool
+// Authenticate and Attest are the identity provider's two answers (package idp).
+type (
+	Authenticate = idp.Authenticate
+	Attest       = idp.Attest
+)
 
 // Tokens authenticates with a fixed token → subject table (development and tests).
 func Tokens(table map[string]string) Authenticate {
@@ -83,11 +81,11 @@ type Host struct {
 // replaced, so a development token — the subject itself — is not accepted
 // beside them. Both are set through one call so a host cannot end up signing
 // with a key it does not verify.
-func (h *Host) SignWith(idp *LocalIdP, ttl time.Duration) {
-	h.authenticate = idp.Authenticate()
-	UseTokenKey(idp.key)
+func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
+	h.authenticate = signer.Authenticate()
+	UseTokenKey(signer.Key())
 	h.Mint = func(subject string) string {
-		token, err := idp.Mint(subject, ttl, h.Now())
+		token, err := signer.Mint(subject, ttl, h.Now())
 		if err != nil {
 			log.Printf("mint token: %v", err)
 		}

@@ -177,10 +177,10 @@ func TestJournalAcceptedProtocolCrashBeforeApplication(t *testing.T) {
 	}
 	defer j.Close()
 	id := fmt.Sprintf("protocol-crash-%d", time.Now().UnixNano())
-	if _, err := j.pool.Exec(ctx, `DELETE FROM journal WHERE tenant=$1`, id); err != nil {
+	if _, err := j.Pool().Exec(ctx, `DELETE FROM journal WHERE tenant=$1`, id); err != nil {
 		t.Fatal(err)
 	}
-	defer j.pool.Exec(ctx, `DELETE FROM journal WHERE tenant=$1`, id)
+	defer j.Pool().Exec(ctx, `DELETE FROM journal WHERE tenant=$1`, id)
 	if _, err := j.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}
