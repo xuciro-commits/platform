@@ -216,7 +216,7 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 func (h *Host) tenantView(t *Tenant) HostTenantView {
 	now := h.Now()
 	t.mu.Lock()
-	view := HostTenantView{ID: t.ID, Lifecycle: t.lifecycle(), ActiveRelease: t.releases.active,
+	view := HostTenantView{ID: t.ID, Lifecycle: t.console.state(), ActiveRelease: t.releases.active,
 		Candidates: t.releases.count()}
 	t.mu.Unlock()
 	health := t.Health(now)
@@ -420,29 +420,14 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time)
 	}
 	switch action {
 	case "suspend", "decommission":
-		t.setLifecycle(action)
+		t.console.setState(action)
 	case "resume", "open":
-		t.setLifecycle("")
+		t.console.setState("")
 	}
 	t.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
 		Action: "host.lifecycle." + action, Target: t.ID + ":" + reason})
 	return nil
 }
-
-// hostSuspended reports whether the host console stopped this tenant.
-func (t *Tenant) hostSuspended() bool {
-	l := t.lifecycle()
-	return l != "" && l != "open"
-}
-
-func (t *Tenant) lifecycle() string {
-	if p := t.hostLifecycle.Load(); p != nil {
-		return *p
-	}
-	return ""
-}
-
-func (t *Tenant) setLifecycle(v string) { t.hostLifecycle.Store(&v) }
 
 // openSupport authorizes a support session for a member of this tenant. The
 // member must exist: the console looks at what that member may look at, so it
@@ -454,12 +439,10 @@ func (t *Tenant) openSupport(member, reason, subject string, minutes int, now ti
 	if _, ok := t.Member(member); !ok {
 		return SupportGrant{}, errSupport("no such member in this tenant")
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	id := "support:" + strconv.FormatInt(now.UTC().UnixNano(), 36)
 	grant := SupportGrant{ID: id, Tenant: t.ID, Member: member, Reason: reason, Opened: subject,
 		Expires: now.UTC().Add(time.Duration(minutes) * time.Minute)}
-	t.support = append(t.support, grant)
+	t.console.addSupport(grant)
 	t.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
 		Action: "host.support.open", Target: member + ":" + reason})
 	return grant, nil
@@ -467,34 +450,21 @@ func (t *Tenant) openSupport(member, reason, subject string, minutes int, now ti
 
 // supportGrants lists the tenant's sessions, newest first.
 func (t *Tenant) supportGrants(now time.Time) []SupportGrant {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	out := slices.Clone(t.support)
-	slices.Reverse(out)
 	_ = now
-	return out
+	return t.console.supportGrants()
 }
 
 // useSupport performs one authorized read of the tenant: health, the audit tail
 // and the reads the granted member may make. The use is recorded in the audit
 // with the operator and the grant, and the grant's count moves.
 func (t *Tenant) useSupport(id, subject string, now time.Time) (SupportRead, error) {
-	t.mu.Lock()
-	index := slices.IndexFunc(t.support, func(g SupportGrant) bool { return g.ID == id })
-	if index < 0 {
-		t.mu.Unlock()
-		return SupportRead{}, errUnknownGrant
+	grant, err := t.console.useSupport(id, now)
+	if err != nil {
+		return SupportRead{}, err
 	}
-	grant := &t.support[index]
-	if !grant.Expires.After(now) {
-		t.mu.Unlock()
-		return SupportRead{}, errSupport("the support session has ended")
-	}
-	grant.Uses++
 	t.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
 		Action: "host.support.use", Target: grant.ID})
 	audit := tailAudit(t.Audit(), 20)
-	t.mu.Unlock()
 	// Health takes its own locks and is read outside the tenant's.
 	return SupportRead{Tenant: t.ID, Grant: id, At: now.UTC(), Health: t.Health(now), Audit: audit}, nil
 }

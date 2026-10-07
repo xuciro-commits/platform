@@ -161,7 +161,7 @@ func (d *Console) tenantRecord() TenantRecord {
 	d.mu.Lock()
 	out.Members = len(d.members)
 	d.mu.Unlock()
-	if t.hostSuspended() {
+	if t.console.suspended() {
 		out.Status = "suspended"
 	}
 	return out

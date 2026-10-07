@@ -186,8 +186,7 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	for _, x := range t.outbound {
 		s.Outbound = append(s.Outbound, effectState{Effect: x.Effect, Since: x.since})
 	}
-	s.HostLifecycle, s.Support = t.lifecycle(), slices.Clone(t.support)
-	s.Migrations = slices.Clone(t.migrations)
+	t.console.snapshot(&s)
 	s.Composites = maps.Clone(t.compositeApplied)
 	s.Staged = t.staged.snapshot()
 	return s, rows, position(), nil
@@ -308,9 +307,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	t.auditMu.Lock()
 	t.audit = s.Audit
 	t.auditMu.Unlock()
-	t.setLifecycle(s.HostLifecycle)
-	t.support = slices.Clone(s.Support)
-	t.migrations = slices.Clone(s.Migrations)
+	t.console.restore(&s)
 	if s.Composites != nil {
 		t.compositeApplied = s.Composites
 	}

@@ -264,10 +264,10 @@ func TestHostConsoleLifecycleAndSupport(t *testing.T) {
 	if err := tn.setHostLifecycle("suspend", "maintenance window", "user:ops@example.test", now); err != nil {
 		t.Fatal(err)
 	}
-	if !tn.hostSuspended() {
+	if !tn.console.suspended() {
 		t.Fatal("a suspended tenant kept running")
 	}
-	if err := tn.setHostLifecycle("open", "window over", "user:ops@example.test", now); err != nil || tn.hostSuspended() {
+	if err := tn.setHostLifecycle("open", "window over", "user:ops@example.test", now); err != nil || tn.console.suspended() {
 		t.Fatalf("resume: %v", err)
 	}
 	grant, err := tn.openSupport("dana", "diagnose the failed job", "user:ops@example.test", 30, now)

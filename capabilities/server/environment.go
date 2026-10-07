@@ -273,31 +273,15 @@ type MigrationManifest struct {
 
 // rememberMigration keeps the console's own view of what moved.
 func (t *Tenant) rememberMigration(result MigrationResult, member string, now time.Time) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.migrations = append(t.migrations, MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
+	t.console.addMigration(MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
 }
 
 // Migrations lists what the console moved in or out of this tenant.
-func (t *Tenant) Migrations() []MigrationManifest {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return slices.Clone(t.migrations)
-}
+func (t *Tenant) Migrations() []MigrationManifest { return t.console.migrationList() }
 
 // grantUsable resolves an open support session of this tenant.
 func (t *Tenant) grantUsable(id string, now time.Time) (SupportGrant, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	index := slices.IndexFunc(t.support, func(g SupportGrant) bool { return g.ID == id })
-	if index < 0 {
-		return SupportGrant{}, fmt.Errorf("no support session %s in %s", id, t.ID)
-	}
-	grant := t.support[index]
-	if !grant.Expires.After(now) {
-		return SupportGrant{}, fmt.Errorf("support session %s has ended", id)
-	}
-	return grant, nil
+	return t.console.usableSupport(t.ID, id, now)
 }
 
 // jsonPayload is the console's helper for small JSON answers.
