@@ -129,8 +129,21 @@ export function ProjectHome({ id }: { id: string }) {
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [importing, setImporting] = useState(false);
   const [importedDependencies, setImportedDependencies] = useState<ApplicationImportDependency[]>([]);
-  useEffect(() => { if (project && !settings) setSettings({ title: project.title, name: project.name, description: project.description ?? "", icon: project.icon ?? "boxes" }); }, [project, settings]);
-  const dirty = !!project && !!settings && (settings.title !== project.title || settings.name !== project.name || settings.description !== (project.description ?? "") || settings.icon !== (project.icon ?? "boxes"));
+  // Settings follow the record until this editor types into them (`edited`);
+  // only typed changes are saved, and only the fields that differ. Comparing
+  // a stale local copy against a record that another editor moved on would
+  // otherwise "save" the old values back and the two would overwrite each
+  // other once a second.
+  const [edited, setEdited] = useState(false);
+  const fromRecord = (p: Project) => ({ title: p.title, name: p.name, description: p.description ?? "", icon: p.icon ?? "boxes" });
+  useEffect(() => { if (project && !edited) setSettings(fromRecord(project)); }, [project, edited]);
+  const changedSettings = useMemo(() => {
+    if (!project || !settings || !edited) return {} as Partial<Api.Application>;
+    const current = fromRecord(project), out: Partial<Api.Application> = {};
+    for (const key of ["title", "name", "description", "icon"] as const) if (settings[key] !== current[key]) out[key] = settings[key];
+    return out;
+  }, [project, settings, edited]);
+  const dirty = Object.keys(changedSettings).length > 0;
   const patch = async (changes: Partial<Api.Application>) => {
     if (!project) return false;
     setSaving(true); setError(undefined);
@@ -140,7 +153,8 @@ export function ProjectHome({ id }: { id: string }) {
       return ok;
     } catch { setError(t("The project could not be saved.")); return false; } finally { setSaving(false); }
   };
-  useAutoSave({ dirty, busy: saving, save: () => patch({ title: settings!.title, name: settings!.name, description: settings!.description, icon: settings!.icon }) });
+  const editSettings = (next: NonNullable<typeof settings>) => { setEdited(true); setSettings(next); };
+  useAutoSave({ dirty, busy: saving, save: async () => { if (await patch(changedSettings)) setEdited(false); } });
   const addCreated = async (kind: ResourceKindInfo, target: { type: string; id: string }) => {
     if (!project) return;
     const record = await fetchRecord(target);
@@ -255,11 +269,11 @@ export function ProjectHome({ id }: { id: string }) {
         {tab === "runs" && <ProjectRuns owned={owned} />}
         {tab === "roles" && <ProjectRoles owned={owned} />}
         {tab === "settings" && settings && <div className="grid max-w-xl gap-3 p-4">
-          <label className="grid gap-1 text-xs">{t("Title")}<Input value={settings.title} disabled={!builder} onChange={(event) => setSettings({ ...settings, title: event.target.value })} /></label>
-          <label className="grid gap-1 text-xs">{t("Name")}<Input value={settings.name} disabled={!builder} onChange={(event) => setSettings({ ...settings, name: event.target.value })} /></label>
-          <label className="grid gap-1 text-xs">{t("Icon")}<Select value={settings.icon} disabled={!builder} onChange={(event) => setSettings({ ...settings, icon: event.target.value })}>
+          <label className="grid gap-1 text-xs">{t("Title")}<Input value={settings.title} disabled={!builder} onChange={(event) => editSettings({ ...settings, title: event.target.value })} /></label>
+          <label className="grid gap-1 text-xs">{t("Name")}<Input value={settings.name} disabled={!builder} onChange={(event) => editSettings({ ...settings, name: event.target.value })} /></label>
+          <label className="grid gap-1 text-xs">{t("Icon")}<Select value={settings.icon} disabled={!builder} onChange={(event) => editSettings({ ...settings, icon: event.target.value })}>
             {["boxes", "clipboard", "people", "calendar", "wrench", "map", "chart", "sparkles"].map((icon) => <option key={icon} value={icon}>{t(icon)}</option>)}</Select></label>
-          <label className="grid gap-1 text-xs">{t("Description")}<Textarea rows={3} value={settings.description} disabled={!builder} onChange={(event) => setSettings({ ...settings, description: event.target.value })} /></label>
+          <label className="grid gap-1 text-xs">{t("Description")}<Textarea rows={3} value={settings.description} disabled={!builder} onChange={(event) => editSettings({ ...settings, description: event.target.value })} /></label>
           {error && <p role="alert" className="text-xs text-danger">{error}</p>}
           <p className="text-xs text-muted">{t("Changes save automatically.")}</p>
         </div>}

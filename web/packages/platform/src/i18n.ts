@@ -298,6 +298,8 @@ register("zh-CN", {
   "A decommissioned tenant no longer accepts sign-ins or work. Its history is kept.": "已停用的租户不再接受登录与工作，其历史被保留。",
   "AI agents, what they are allowed to do, their runs and evaluations.": "AI 代理、其权限、运行与评测。",
   "Activate after promotion": "晋升后激活",
+  "Repeating the same promotion answers as the first time. A candidate that changes storage cannot be activated here: promote it without activation, then a release holder in the target reviews the upgrade plan in its release workbench.": "重复同一次晋级会得到第一次的结果。改变存储结构的候选不能在这里激活：先不激活地晋级，再由目标租户持发布角色的成员在其发布工作台审阅升级计划。",
+  "Activate it in the target's release workbench.": "请在目标租户的发布工作台激活。",
   "All tenants": "全部租户",
   "As member": "以成员身份",
   "Audit trail": "审计记录",
