@@ -77,8 +77,8 @@ type Tenant struct {
 	works     *kernel.Works
 	// opsMu guards what reads and the runner share: queues, connectors,
 	// notifications and settings (operations.go). It is never held while t.mu is taken.
-	opsMu  sync.Mutex
-	work   workBoard // queues, failed deliveries and jobs (work_board.go)
+	opsMu sync.Mutex
+	work  workBoard // queues, failed deliveries and jobs (work_board.go)
 	// Quota is the attempts of owned work each app may make in a minute (ADR-0027 D3); 0: no limit.
 	Quota      int
 	quota      quota           // attempts per app per minute and the round-robin turn (quota.go)
