@@ -70,5 +70,8 @@ func (m *Memory) Transcripts(tenant, run string, limit int) []Transcript {
 func (m *Memory) PurgeTranscripts(tenant string, before time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if len(m.transcripts[tenant]) == 0 {
+		return
+	}
 	m.transcripts[tenant] = slices.DeleteFunc(m.transcripts[tenant], func(x Transcript) bool { return x.At.Before(before) })
 }
