@@ -3,10 +3,10 @@
 // cases they must pass. Publishing installs one as build.<name>; the host runs
 // it like any agent - every step journaled, drafts confirmed by a person.
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { DraftStatus } from "../editor/workbench";
+import { DraftStatus, WorkbenchMessage, savingState } from "../editor/workbench";
 import { installedObjects, type WorkflowObject } from "../automate/workflow-model";
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Checkbox, Input, PageHeader, Panel, RecordList, Select, Textarea, Toggles, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Checkbox, Input, PageHeader, Panel, RecordList, Select, Textarea, Toggles, Workbench, t, useUnsavedChanges } from "@platform/ui";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -69,19 +69,18 @@ export function AgentEditor({ id }: { id: string }) {
       const r = await query.refetch(); if (r.data?.record) load(r.data.record);
     }
   };
-  if (role("build") !== "builder") return <PageHeader title={t("Agents")} description={t("Only a builder can edit agents.")} />;
-  if (id !== "new" && !draft.id) return <PageHeader title={t("Agents")} description={query.isError ? t("The agent could not be loaded.") : t("Loading…")} />;
+  if (role("build") !== "builder") return <Workbench storageKey="agent" title={t("Agent")}><WorkbenchMessage>{t("Only a builder can edit agents.")}</WorkbenchMessage></Workbench>;
+  if (id !== "new" && !draft.id) return <Workbench storageKey="agent" title={t("Agent")}><WorkbenchMessage>{query.isError ? t("The agent could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const cases = draft.cases ?? [];
   const setCase = (i: number, patch: Partial<Case>) => change({ cases: cases.map((c, at) => at === i ? { ...c, ...patch } : c) });
-  return <div className="grid min-w-0 gap-3">
-    <PageHeader title={draft.title || t("New agent")} description={t("Save the declaration, then publish it: people ask it from any record it may read and flows give it steps. Evaluate its declared cases in Agents.")}
-      actions={<div className="flex flex-wrap gap-2">
-        <Button variant="ghost" onClick={() => open({ view: "agent" })}>{t("Agents")}</Button>
-        <DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />
-        <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
-        <Button disabled={busy || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save agent")}</Button>
-        <Button variant="primary" disabled={busy || issues.length > 0} onClick={() => void perform(publish)}>{t("Publish")}</Button>
-      </div>} />
+  return <Workbench storageKey="agent" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "agent" }) }, { label: t("Agents"), onClick: () => open({ view: "agent" }) }]} title={draft.title || t("New agent")}
+    status={<DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />} saving={savingState(dirty, busy, error || undefined)}
+    actions={<>
+      <Button size="sm" disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
+      <Button size="sm" disabled={busy || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save agent")}</Button>
+      <Button size="sm" variant="primary" disabled={busy || issues.length > 0} onClick={() => void perform(publish)}>{t("Publish")}</Button>
+    </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
+    <p className="text-xs text-muted">{t("Save the declaration, then publish it: people ask it from any record it may read and flows give it steps. Evaluate its declared cases in Agents.")}</p>
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed as build.{name}, version {version}. A changed definition stops existing runs.", { name: draft.name, version: draft.version })}</Panel> : null}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     <fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-2">
@@ -123,5 +122,5 @@ export function AgentEditor({ id }: { id: string }) {
         <Button size="sm" className="justify-self-start" onClick={() => change({ cases: [...cases, { name: t("Case {n}", { n: cases.length + 1 }), goal: "" }] })}><Plus className="size-3" />{t("Add a case")}</Button>
       </Panel>
     </fieldset>
-  </div>;
+  </div></Workbench>;
 }

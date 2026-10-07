@@ -1,8 +1,8 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { DraftStatus, PublishMenu } from "../editor/workbench";
+import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, RecordList, Select, Textarea, Workbench, t, useUnsavedChanges } from "@platform/ui";
 import { useCallback, useEffect, useState } from "react";
 import { JSONEditor, SchemaEditor, WorkflowFormProblems, schemaDefault } from "../automate/workflow-binding";
 import type { ValueSchema } from "../automate/workflow-model";
@@ -69,20 +69,19 @@ export function CodeEditor({ id }: { id: string }) {
     const answer = await invoke({ ref: { app: "build", kind: "compute", name: draft.name }, key: crypto.randomUUID(), version: draft.version, inputs: input });
     setCall(answer.call ?? "");
   };
-  if (role("build") !== "builder") return <PageHeader title={t("Code functions")} description={t("Only a builder can edit code functions.")} />;
-  if (id !== "new" && !draft.id) return <PageHeader title={t("Code functions")} description={query.isError ? t("The code function could not be loaded.") : t("Loading…")} />;
+  if (role("build") !== "builder") return <Workbench storageKey="code" title={t("Code function")}><WorkbenchMessage>{t("Only a builder can edit code functions.")}</WorkbenchMessage></Workbench>;
+  if (id !== "new" && !draft.id) return <Workbench storageKey="code" title={t("Code function")}><WorkbenchMessage>{query.isError ? t("The code function could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const invalid = Object.values(problems).some(Boolean);
   let published: CodeDraft | undefined;
   try { published = draft.published ? JSON.parse(draft.published) as CodeDraft : undefined; } catch { /* the owner rejects invalid publications */ }
-  return <WorkflowFormProblems.Provider value={report}><div className="grid min-w-0 gap-3">
-    <PageHeader title={draft.title || t("New code function")} description={t("Define its contract, compile an artifact, then review and activate its application candidate.")}
-      actions={<div className="flex flex-wrap gap-2">
-        <Button variant="ghost" onClick={() => open({ view: "code" })}>{t("Code functions")}</Button>
-        <DraftStatus state={draft.module ? "published" : "draft"} />
-        <Button disabled={busy || invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
-        <Button disabled={busy || invalid || !draft.id || draft.state === "compiling"} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
+  return <WorkflowFormProblems.Provider value={report}><Workbench storageKey="code" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "code" }) }, { label: t("Code functions"), onClick: () => open({ view: "code" }) }]} title={draft.title || t("New code function")}
+    status={<DraftStatus state={draft.module ? "published" : "draft"} />} saving={savingState(dirty, busy, error || undefined)}
+    actions={<>
+        <Button size="sm" disabled={busy || invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
+        <Button size="sm" disabled={busy || invalid || !draft.id || draft.state === "compiling"} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
         <PublishMenu type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || !draft.module || draft.state === "compiling"} onReview={() => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onDiscard={discardChanges} route={{ view: "code", params: { id } }} />
-      </div>} />
+    </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
+    <p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="grid min-w-0 content-start gap-3 p-4">
@@ -135,5 +134,5 @@ export function CodeEditor({ id }: { id: string }) {
         </div>
       </Panel>
     </div>
-  </div></WorkflowFormProblems.Provider>;
+  </div></Workbench></WorkflowFormProblems.Provider>;
 }

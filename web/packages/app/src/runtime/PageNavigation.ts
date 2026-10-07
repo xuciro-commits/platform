@@ -89,7 +89,8 @@ export function usePageEffects(page: Api.Page, live: boolean, values: Record<str
         if (!alive(context)) return;
         switch (effect.kind) {
           case "set": {
-            const value = effect.value;
+            const source = effect.from ? (context?.values ?? values)[effect.from] : undefined;
+            const value = effect.from ? (source?.status === "value" ? source.value : undefined) : effect.value;
             if (typeof value === "string" || typeof value === "boolean" || isDecimal(value) || isStringSet(value)) context ? context.set(effect.target ?? "", value) : set(effect.target ?? "", value);
             break;
           }
@@ -97,7 +98,7 @@ export function usePageEffects(page: Api.Page, live: boolean, values: Record<str
             if (!live) return;
             const variable = effect.action?.recordVariable, record = variable ? context?.record(variable) : undefined;
             if (variable && !record) throw new Error("The action has no record to act on.");
-            if (!await actions.take(effect.action?.ref.name ?? "", record)) return;
+            if (!await actions.take(effect.action?.ref.name ?? "", record, navigationValues(effect.action?.inputs ?? {}, context?.values ?? values))) return;
             break;
           }
           case "navigate": navigate(effect.navigate, context); return;

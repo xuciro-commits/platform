@@ -1409,6 +1409,7 @@ export type PageAI = {
 export type PageActionEffect = {
   ref: AssetRef;
   recordVariable?: string;
+  inputs?: Record<string, PageValue>;
 };
 
 export type PageActionParameter = {
@@ -1525,6 +1526,7 @@ export type PageEffect = {
   kind: string;
   target?: string;
   value?: unknown;
+  from?: string;
   action?: PageActionEffect;
   navigate?: PageNavigation;
 };
@@ -3041,7 +3043,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.107",
+  "uiProfile": "platform.page.v2.108",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -8245,7 +8247,8 @@ export const pageUIManifest = {
     "platform.page.v2.104",
     "platform.page.v2.105",
     "platform.page.v2.106",
-    "platform.page.v2.107"
+    "platform.page.v2.107",
+    "platform.page.v2.108"
   ],
   "runtime": {
     "telemetry": {

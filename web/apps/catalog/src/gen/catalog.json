@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:37824f039d52f1ab",
+  "revision": "sha256:462f21e298e48704",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5501,6 +5501,9 @@
     "ui/workbench": [
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/functions/agent.tsx",
+      "web/packages/build/src/functions/code.tsx",
+      "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/projects/project.tsx",

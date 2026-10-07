@@ -355,7 +355,7 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 | ADR 决策 | 代码 |
 | --- | --- |
 | D6 单一 `Workbench` 容器（标题栏 · 结构 · 主区 · 检查器 · 底栏，尺寸记忆） | `@platform/ui` `layout/Workbench.tsx`（`Workbench`、`StructureRow`、`PanelSection`、`ProblemList`、`WorkbenchProblem`） |
-| D6 自动保存、`● Draft`、Publish 菜单 | `build/shared/workbench.tsx`（`useAutoSave`、`savingState`、`DraftStatus`、`PublishMenu`、`WorkbenchMessage`、`ResourceControls`） |
+| D6 自动保存、`● Draft`、Publish 菜单 | `build/editor/workbench.tsx`（`useAutoSave`、`savingState`、`DraftStatus`、`PublishMenu`、`WorkbenchMessage`、`ResourceControls`） |
 | D1 Projects 取代 Application 编辑器 | `build/projects/project.tsx`（`ProjectsList`、`ProjectHome`：资源树 · 内容/设置 · 未发布变更底栏）、`projects/resources.ts`（资源种类与路由） |
 | D1 Workshop Module = 项目的页面 + 页头 + 导航 | `build/workshop/ModuleWorkbench.tsx`（模块树、页头编辑、分组、变量/查询汇总、模块预览）；`PageEditor` 作为模块内的页面视图（`module` 上下文） |
 | D4 页面编辑器：图层/组件库 · 画布 · 按选中对象切换的检查器 · 问题/变量底栏 · Preview 开关 | `build/workshop/editor.tsx`（`PageEditor({ id, module })`、`widgetInspectorTabs`）、`page-editor/WidgetLibrary.tsx` |
@@ -373,7 +373,9 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 
 **与 §6–§7 的仍存偏差**
 
-- 效果链里没有 `run-flow` 与表达式赋值；`action` 效果的输入只能来自动作表单（不接页面变量）。
-- AI 函数 / 代码函数仍用 `PageHeader` 页头，仅换上了 `DraftStatus` + `PublishMenu`，测试内嵌于编辑器（`CandidateTest embedded`）。
+- 效果链里没有 `run-flow`：`build.process.run` 是 Builder 角色的草稿试跑（目标是流程草稿记录而非 AssetRef），成员侧的手动启动还没有产品设计；等有了再接。
+- 表达式赋值只做到"复制变量"：`set` 效果多了 `from`（UI profile `v2.108`），把另一个同类型可读变量赋给目标；没有运算表达式。
+- `action` 效果可以从页面变量 / 字面量预填参数（`action.inputs`，`v2.108`；发布时校验参数名存在于动作 payload），表单仍会打开供成员修改；无表单动作直接以预填值提交。
+- AI 函数 / 代码函数 / 智能体编辑器已换成 `Workbench` 壳（面包屑 · DraftStatus · 保存状态 · 命令），测试仍内嵌于编辑器（`CandidateTest embedded`）。
 - 属性 / 权限矩阵和变量底栏用原生 `<table>`（`scripts/escapes.sh` 已登记）。
 

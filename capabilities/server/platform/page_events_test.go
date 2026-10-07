@@ -97,3 +97,53 @@ func TestPageClickCannotWriteUnknownTabIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPageSetFromVariableAndActionInputs(t *testing.T) {
+	assign := func() (*PageDocument, []Section) {
+		d, s := overlayDocument()
+		d.Variables["other"] = PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: json.RawMessage(`false`)}
+		d.Variables["name"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: json.RawMessage(`""`)}
+		d.Events[0].Effects[0] = PageEffect{Kind: "set", Target: "open", From: "other"}
+		return d, s
+	}
+	if d, s := assign(); d.Check(s) != nil {
+		t.Fatal(d.Check(s))
+	}
+	for _, test := range []struct {
+		name   string
+		change func(*PageDocument)
+		want   string
+	}{
+		{"old profile", func(d *PageDocument) { d.UIProfile = "platform.page.v2.107" }, "source variable"},
+		{"type mismatch", func(d *PageDocument) { d.Events[0].Effects[0].From = "name" }, "source variable"},
+		{"self copy", func(d *PageDocument) { d.Events[0].Effects[0].From = "open" }, "source variable"},
+		{"both value and from", func(d *PageDocument) { d.Events[0].Effects[0].Value = json.RawMessage(`true`) }, "source variable"},
+		{"unknown source", func(d *PageDocument) { d.Events[0].Effects[0].From = "missing" }, "source variable"},
+		{"bad input parameter", func(d *PageDocument) {
+			d.Events[0].Effects[0] = PageEffect{Kind: "action", Action: &PageActionEffect{Ref: AssetRef{App: "stock", Kind: "action", Name: "item.create"}, Inputs: map[string]PageValue{"bad name": {Variable: "name"}}}}
+		}, "input bad name"},
+		{"input both", func(d *PageDocument) {
+			d.Events[0].Effects[0] = PageEffect{Kind: "action", Action: &PageActionEffect{Ref: AssetRef{App: "stock", Kind: "action", Name: "item.create"}, Inputs: map[string]PageValue{"title": {Variable: "name", Literal: json.RawMessage(`"x"`)}}}}
+		}, "input title"},
+		{"input old profile", func(d *PageDocument) {
+			d.UIProfile = "platform.page.v2.107"
+			d.Events[0].Effects[0] = PageEffect{Kind: "action", Action: &PageActionEffect{Ref: AssetRef{App: "stock", Kind: "action", Name: "item.create"}, Inputs: map[string]PageValue{"title": {Variable: "name"}}}}
+		}, "v2.108"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			d, s := assign()
+			test.change(d)
+			if err := d.Check(s); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("want %q, got %v", test.want, err)
+			}
+		})
+	}
+	d, s := assign()
+	d.Events[0].Effects[0] = PageEffect{Kind: "action", Action: &PageActionEffect{Ref: AssetRef{App: "stock", Kind: "action", Name: "item.create"}, Inputs: map[string]PageValue{"title": {Variable: "name"}, "urgent": {Literal: json.RawMessage(`true`)}}}}
+	if err := d.Check(s); err != nil {
+		t.Fatal(err)
+	}
+	if reads := d.Events[0].Reads(); len(reads) != 1 || reads[0] != "name" {
+		t.Fatalf("action inputs not read: %v", reads)
+	}
+}

@@ -266,6 +266,11 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 								if !ok || err != nil || action.New == (effect.Action.RecordVariable != "") {
 									return fmt.Errorf("page action effect %s is unavailable", effect.Action.Ref)
 								}
+								for parameter := range effect.Action.Inputs {
+									if !slices.ContainsFunc(action.Payload, func(f Field) bool { return f.Name == parameter }) {
+										return fmt.Errorf("page action effect %s has no parameter %s", effect.Action.Ref, parameter)
+									}
+								}
 							}
 						}
 						if n := event.Navigation(); n != nil {
