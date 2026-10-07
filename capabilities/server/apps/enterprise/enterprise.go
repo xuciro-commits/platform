@@ -153,7 +153,7 @@ func (e *Enterprise) Listen(c platform.Caller, ev platform.Event, _ []string, _ 
 	e.mu.Lock()
 	var open []string
 	for _, r := range e.model.Relationships {
-		if r.Stereotype == Membership && r.Source == party && activeOn(r.From, r.Until, day) && r.From < day {
+		if r.Stereotype == Membership && r.Source == party && activeOn(r.From, r.Until, day) {
 			open = append(open, r.ID)
 		}
 	}
@@ -442,7 +442,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			if day == "" {
 				day = today
 			}
-			if day <= r.From {
+			if day < r.From || day == r.From && r.Stereotype != Membership {
 				return nil, invalid("the relationship would end before it starts")
 			}
 			return func(*pb.ChangeRecord) { r.Until = day }, nil
@@ -523,6 +523,13 @@ func (e *Enterprise) Units(party, kind string, day Date) []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.model.units(party, kind, day)
+}
+
+// Below expands units through active placements in one structure.
+func (e *Enterprise) Below(units []string, kind string, day Date) []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.model.descendants(units, kind, day)
 }
 
 // Holders are the members holding a membership (with role, when given) in

@@ -37,7 +37,11 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 		d.notices = append(d.notices, x)
 		d.noticeChanged = true
 		out = append(out, member)
-		if console, ok := d.tenant.app(PlatformApp).(*Console); ok {
+		console, _ := d.tenant.app(PlatformApp).(*Console)
+		if private, ok := d.states[PlatformApp].(*Console); ok {
+			console = private // invitation recipients exist in the accepted directory fork
+		}
+		if console != nil {
 			to := console.Reach(member)
 			if !to.InApp {
 				d.notices[len(d.notices)-1].Read = true

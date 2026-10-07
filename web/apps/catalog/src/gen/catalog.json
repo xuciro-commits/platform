@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:fc25c5cec0e50dcb",
+  "revision": "sha256:d9cab9e6850e3f49",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -18,7 +18,7 @@
         "goal",
         "human-review"
       ],
-      "source": "web/packages/app/src/agents.tsx",
+      "source": "web/packages/app/src/automation/agents.tsx",
       "exports": [
         "Assistant"
       ],
@@ -48,7 +48,7 @@
         "trace",
         "chain"
       ],
-      "source": "web/packages/app/src/agents.tsx",
+      "source": "web/packages/app/src/automation/agents.tsx",
       "exports": [
         "RunView",
         "ChainGraph"
@@ -84,7 +84,7 @@
         "binding",
         "host"
       ],
-      "source": "web/packages/app/src/application-runs.tsx",
+      "source": "web/packages/app/src/automation/application-runs.tsx",
       "exports": [
         "ApplicationRuns"
       ],
@@ -162,7 +162,7 @@
         "relation",
         "binding"
       ],
-      "source": "web/packages/app/src/sections.tsx",
+      "source": "web/packages/app/src/pages/sections.tsx",
       "exports": [
         "ComposedPage",
         "tableEditableFields",
@@ -215,7 +215,7 @@
         "compute",
         "binding"
       ],
-      "source": "web/packages/app/src/capability.tsx",
+      "source": "web/packages/app/src/automation/capability.tsx",
       "exports": [
         "ComputeCall"
       ],
@@ -319,7 +319,7 @@
         "version",
         "release"
       ],
-      "source": "web/packages/app/src/flows.tsx",
+      "source": "web/packages/app/src/automation/flows.tsx",
       "exports": [
         "FlowInstanceView"
       ],
@@ -396,7 +396,7 @@
         "knowledge",
         "records"
       ],
-      "source": "web/packages/app/src/agents.tsx",
+      "source": "web/packages/app/src/automation/agents.tsx",
       "exports": [
         "Search"
       ],
@@ -465,7 +465,7 @@
         "binding",
         "host"
       ],
-      "source": "web/packages/app/src/application-runs.tsx",
+      "source": "web/packages/app/src/automation/application-runs.tsx",
       "exports": [
         "OperationRunView"
       ],
@@ -502,7 +502,7 @@
         "binding",
         "host"
       ],
-      "source": "web/packages/app/src/pages.tsx",
+      "source": "web/packages/app/src/pages/pages.tsx",
       "exports": [
         "PageWorkspace",
         "PagePreview"
@@ -535,7 +535,7 @@
         "binding",
         "host"
       ],
-      "source": "web/packages/app/src/actions.tsx",
+      "source": "web/packages/app/src/actions/actions.tsx",
       "exports": [
         "NewActions",
         "useNewRecord",
@@ -694,7 +694,7 @@
         "binding",
         "host"
       ],
-      "source": "web/packages/app/src/record-actions.ts",
+      "source": "web/packages/app/src/actions/record-actions.ts",
       "exports": [
         "createRecordActionSubmitter"
       ],
@@ -891,7 +891,7 @@
         "inspector",
         "record"
       ],
-      "source": "web/packages/app/src/pages.tsx",
+      "source": "web/packages/app/src/pages/pages.tsx",
       "example": "MasterDetailExample",
       "dependencies": [
         "ui/record-workspace",
@@ -4640,7 +4640,7 @@
   },
   "consumers": {
     "ui/command-menu": [
-      "web/packages/app/src/OpenIn.tsx",
+      "web/packages/app/src/actions/OpenIn.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow.tsx",
       "web/packages/build/src/projects/project.tsx",
@@ -4649,15 +4649,15 @@
       "web/packages/build/src/workshop/page-editor/LayoutTree.tsx"
     ],
     "ui/button": [
-      "web/packages/app/src/actions.tsx",
-      "web/packages/app/src/agents.tsx",
-      "web/packages/app/src/application-runs.tsx",
-      "web/packages/app/src/capability.tsx",
-      "web/packages/app/src/flows.tsx",
+      "web/packages/app/src/actions/actions.tsx",
+      "web/packages/app/src/automation/agents.tsx",
+      "web/packages/app/src/automation/application-runs.tsx",
+      "web/packages/app/src/automation/capability.tsx",
+      "web/packages/app/src/automation/flows.tsx",
       "web/packages/app/src/index.tsx",
-      "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/pages/pages.tsx",
+      "web/packages/app/src/pages/sections.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
-      "web/packages/app/src/sections.tsx",
       "web/packages/app/src/widgets/Button.tsx",
       "web/packages/app/src/widgets/CollectionBuilder.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
@@ -4728,6 +4728,7 @@
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/apps.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/index.tsx",
@@ -4750,9 +4751,9 @@
       "web/apps/workspace/src/shell/Home.tsx"
     ],
     "ui/input": [
-      "web/packages/app/src/actions.tsx",
-      "web/packages/app/src/agents.tsx",
-      "web/packages/app/src/capability.tsx",
+      "web/packages/app/src/actions/actions.tsx",
+      "web/packages/app/src/automation/agents.tsx",
+      "web/packages/app/src/automation/capability.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/semantic/Selector.tsx",
@@ -4887,7 +4888,7 @@
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "ui/checkbox": [
-      "web/packages/app/src/actions.tsx",
+      "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/widgets/BooleanInput.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
@@ -4937,18 +4938,18 @@
       "web/packages/platform/src/processes.tsx"
     ],
     "ui/panels": [
-      "web/packages/app/src/actions.tsx",
-      "web/packages/app/src/agents.tsx",
-      "web/packages/app/src/application-runs.tsx",
-      "web/packages/app/src/capability.tsx",
+      "web/packages/app/src/actions/actions.tsx",
+      "web/packages/app/src/automation/agents.tsx",
+      "web/packages/app/src/automation/application-runs.tsx",
+      "web/packages/app/src/automation/capability.tsx",
       "web/packages/app/src/catalog.examples.tsx",
       "web/packages/app/src/catalog.fixtures.tsx",
       "web/packages/app/src/index.tsx",
-      "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/pages/pages.tsx",
+      "web/packages/app/src/pages/sections.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/runtime/LoopRuntime.tsx",
       "web/packages/app/src/runtime/NestedLoopRuntime.tsx",
-      "web/packages/app/src/sections.tsx",
       "web/packages/app/src/widgets/AIWidget.tsx",
       "web/packages/app/src/widgets/Alert.tsx",
       "web/packages/app/src/widgets/BooleanInput.tsx",
@@ -5046,10 +5047,10 @@
       "web/apps/workspace/src/shell/Home.tsx"
     ],
     "ui/dialog": [
-      "web/packages/app/src/actions.tsx",
+      "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/index.tsx",
-      "web/packages/app/src/pages.tsx",
-      "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/pages/pages.tsx",
+      "web/packages/app/src/pages/sections.tsx",
       "web/packages/build/src/workshop/module-import/FlowImportDialog.tsx",
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
@@ -5067,12 +5068,12 @@
       "web/apps/workspace/src/session/ReleaseInformation.tsx"
     ],
     "ui/record-lookup": [
-      "web/packages/app/src/actions.tsx",
+      "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/RecordPicker.tsx"
     ],
     "ui/form": [
-      "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
@@ -5087,7 +5088,7 @@
       "web/apps/pms-desk/src/App.tsx"
     ],
     "ui/disclosure": [
-      "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/automation/agents.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
@@ -5099,8 +5100,8 @@
       "web/packages/platform/src/enterprise/index.tsx"
     ],
     "ui/status": [
-      "web/packages/app/src/agents.tsx",
-      "web/packages/app/src/application-runs.tsx",
+      "web/packages/app/src/automation/agents.tsx",
+      "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
@@ -5135,10 +5136,10 @@
       "web/apps/workspace/src/chrome.tsx"
     ],
     "ui/page-header": [
-      "web/packages/app/src/agents.tsx",
-      "web/packages/app/src/application-runs.tsx",
+      "web/packages/app/src/automation/agents.tsx",
+      "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/index.tsx",
-      "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/pages/pages.tsx",
       "web/packages/app/src/widgets/Content.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow.tsx",
@@ -5183,12 +5184,12 @@
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "ui/graph": [
-      "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/automation/agents.tsx",
       "web/packages/mes/src/index.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "ui/data-table": [
-      "web/packages/app/src/application-runs.tsx",
+      "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
@@ -5209,6 +5210,12 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
+    "ui/flow": [
+      "web/packages/app/src/automation/flows.tsx",
+      "web/packages/build/src/automate/workflow-runs.tsx",
+      "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/platform/src/processes.tsx"
+    ],
     "ui/observation-statistics": [
       "web/packages/app/src/catalog.examples.tsx",
       "web/packages/app/src/widgets/Observation.tsx"
@@ -5217,12 +5224,6 @@
       "web/packages/app/src/exploration/observation-reader.ts",
       "web/packages/app/src/widgets/DateInput.tsx",
       "web/packages/build/src/workshop/editor.tsx"
-    ],
-    "ui/flow": [
-      "web/packages/app/src/flows.tsx",
-      "web/packages/build/src/automate/workflow-runs.tsx",
-      "web/packages/build/src/releases/simulate.tsx",
-      "web/packages/platform/src/processes.tsx"
     ],
     "ui/file-picker": [
       "web/packages/app/src/index.tsx"
@@ -5267,7 +5268,7 @@
     ],
     "ui/record-page": [
       "web/packages/app/src/index.tsx",
-      "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/pages/pages.tsx",
       "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/RecordDetails.tsx"
     ],
@@ -5276,7 +5277,20 @@
       "web/packages/app/src/widgets/Chart.tsx"
     ],
     "ui/record-workspace": [
-      "web/packages/app/src/pages.tsx"
+      "web/packages/app/src/pages/pages.tsx"
+    ],
+    "ui/layout-region": [
+      "web/packages/app/src/pages/sections.tsx"
+    ],
+    "ui/flow-layout": [
+      "web/packages/app/src/pages/sections.tsx"
+    ],
+    "ui/content-tabs": [
+      "web/packages/app/src/pages/sections.tsx"
+    ],
+    "ui/sheet": [
+      "web/packages/app/src/pages/sections.tsx",
+      "web/apps/pms-desk/src/App.tsx"
     ],
     "ui/application-header": [
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
@@ -5285,25 +5299,13 @@
     "ui/virtual-stack": [
       "web/packages/app/src/runtime/LoopRuntime.tsx"
     ],
-    "ui/layout-region": [
-      "web/packages/app/src/sections.tsx"
-    ],
-    "ui/flow-layout": [
-      "web/packages/app/src/sections.tsx"
-    ],
-    "ui/content-tabs": [
-      "web/packages/app/src/sections.tsx"
-    ],
-    "ui/sheet": [
-      "web/packages/app/src/sections.tsx",
-      "web/apps/pms-desk/src/App.tsx"
-    ],
     "ui/ai-result": [
       "web/packages/app/src/widgets/AIWidget.tsx"
     ],
     "ui/notice": [
       "web/packages/app/src/widgets/Alert.tsx",
-      "web/packages/app/src/widgets/Notice.tsx"
+      "web/packages/app/src/widgets/Notice.tsx",
+      "web/packages/build/src/projects/project.tsx"
     ],
     "ui/switch": [
       "web/packages/app/src/widgets/BooleanInput.tsx"

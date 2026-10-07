@@ -102,6 +102,7 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	}
 	other := member
 	other.Roles = map[string]string{}
+	other.Grants = nil
 	for _, bad := range []platform.Member{other, foreign} {
 		if _, err := live.SaveReleaseCandidate(bad, platform.AssetObject, "O1", savedID, "unauthorized", at); err == nil || len(entries) != 2 {
 			t.Fatal("unauthorized member saved or retrieved a candidate")

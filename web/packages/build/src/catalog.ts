@@ -18,7 +18,7 @@ export const entries: CatalogEntry[] = [
   {
     id: "pattern/master-detail", owner: "@pkg/build", name: "Master-detail interaction", layer: 4, authority: "recommendation", maturity: "recommended", scope: "platform",
     summary: "Keep selection and detail together using the existing record workspace or controlled table/detail sections.",
-    uses: ["code", "widget", "reference"], widgets: ["table", "detail"], tags: ["list", "selection", "inspector", "record"], source: "web/packages/app/src/pages.tsx", example: "MasterDetailExample",
+    uses: ["code", "widget", "reference"], widgets: ["table", "detail"], tags: ["list", "selection", "inspector", "record"], source: "web/packages/app/src/pages/pages.tsx", example: "MasterDetailExample",
     dependencies: ["ui/record-workspace", "app/page-workspace", "app/composed-page"],
     constraints: ["List selection is shared by details and actions. The object contract and current member’s read scope remain authoritative.", "This pattern recommends a composition; it does not grant widget eligibility or permissions."],
     snippet: 'import { PageWorkspace } from "@platform/app";\n<PageWorkspace definition={installedListDetailPage} />',

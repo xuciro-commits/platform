@@ -32,7 +32,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
-	if m.Roles[build.ID] != build.Builder || request.CandidateID == "" || request.PlanID == "" ||
+	if !holdsIndependentBuildRole(m, build.Builder) || request.CandidateID == "" || request.PlanID == "" ||
 		request.Key == "" || len(request.Key) > 200 || now.IsZero() {
 		return "", fmt.Errorf("a builder, saved candidate, test plan and idempotency key are required")
 	}

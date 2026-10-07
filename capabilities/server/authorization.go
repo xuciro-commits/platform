@@ -191,6 +191,9 @@ func (p BuildProject) covers(ref ProjectAsset) bool {
 // assets the projects name. Call with d.mu held.
 func (d *Console) projectGrantsLocked(member string) []platform.Grant {
 	var out []platform.Grant
+	if m := d.members[member]; m != nil && m.Agent {
+		return out
+	}
 	for _, id := range slices.Sorted(maps.Keys(d.projects)) {
 		p := d.projects[id]
 		if p.Archived {
@@ -216,17 +219,18 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 	if owner == nil || owner.Manifest().ID != build.ID {
 		return nil
 	}
-	own, viaProject := false, false
+	viaProject := false
+	var independent []string
 	for _, g := range m.Grants {
 		if g.App == build.ID {
 			if strings.HasPrefix(g.By, "project:") {
 				viaProject = true
 			} else {
-				own = true
+				independent = append(independent, g.Role)
 			}
 		}
 	}
-	if own || !viaProject { // a replayed member carries roles without grants: never bounded
+	if !viaProject || slices.Contains(independent, build.Builder) || owner.Manifest().Actions.PermitsAny(independent, s.GetSchema().GetName()) { // preserve only actions held independently
 		return nil
 	}
 	d := consoleOf(t)
@@ -273,4 +277,21 @@ func auditorMayRead(name string) bool {
 		}
 	}
 	return false
+}
+
+// holdsIndependentBuildRole excludes the builder derived from a project when
+// authorizing app-wide release work. Old recorded seats without grants keep
+// their explicit Roles value.
+func holdsIndependentBuildRole(m platform.Member, roles ...string) bool {
+	held := false
+	for _, g := range m.Grants {
+		if g.App != build.ID {
+			continue
+		}
+		held = true
+		if !strings.HasPrefix(g.By, "project:") && slices.Contains(roles, g.Role) {
+			return true
+		}
+	}
+	return !held && slices.Contains(roles, m.Roles[build.ID])
 }

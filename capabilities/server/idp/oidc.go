@@ -20,7 +20,8 @@ func OIDC(issuer, keys string) Authenticate {
 }
 
 // OIDCProvider is OIDC with the provider's word on the second factor: the
-// token's amr (RFC 8176) names mfa, otp, hwk, sms or a passkey (ADR-0078 §2).
+// verified amr asserts mfa or methods from two distinct factor categories
+// (RFC 8176). User presence and a single possession method are not MFA.
 func OIDCProvider(issuer, keys string) (Authenticate, Attest) {
 	verifier := oidc.NewVerifier(issuer, oidc.NewRemoteKeySet(context.Background(), keys),
 		&oidc.Config{SkipClientIDCheck: true, SupportedSigningAlgs: []string{oidc.EdDSA, oidc.RS256, oidc.ES256}})
@@ -55,7 +56,27 @@ func OIDCProvider(issuer, keys string) (Authenticate, Attest) {
 	}
 	attest := func(credential string) bool {
 		c, ok := verify(credential)
-		return ok && slices.ContainsFunc(c.Methods, func(m string) bool { return slices.Contains([]string{"mfa", "otp", "hwk", "sms", "swk", "user"}, m) })
+		return ok && multipleFactors(c.Methods)
 	}
 	return authenticate, attest
+}
+
+// RFC 8176 distinguishes knowledge, possession and biometric methods. Unknown
+// methods and user presence do not prove another factor.
+func multipleFactors(methods []string) bool {
+	if slices.Contains(methods, "mfa") {
+		return true
+	}
+	knowledge, possession, biometric := false, false, false
+	for _, method := range methods {
+		switch method {
+		case "pwd", "pin":
+			knowledge = true
+		case "otp", "hwk", "swk", "sms", "tel", "sc":
+			possession = true
+		case "fpt", "face", "iris", "retina", "vbm":
+			biometric = true
+		}
+	}
+	return knowledge && possession || knowledge && biometric || possession && biometric
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"platformserver/apps/enterprise"
 	"reflect"
 	"slices"
 	"strconv"
@@ -1055,6 +1054,24 @@ func (t *Tenant) visibleIn(store *recordStore, m platform.Member, et *entityType
 
 // scoped is the widest scope m's roles give over a type's records (nil: all of them).
 func (t *Tenant) scoped(m platform.Member, et *entityType, roles []string, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
+	// Each role contributes its own predicate; a wider level in one unit must
+	// not discard a narrower role's independent unit.
+	if len(roles) > 1 {
+		var predicates []func(reflect.Value) bool
+		for _, role := range roles {
+			predicate, err := t.scoped(m, et, []string{role}, now)
+			if err != nil {
+				return nil, err
+			}
+			if predicate == nil {
+				return nil, nil
+			}
+			predicates = append(predicates, predicate)
+		}
+		return func(v reflect.Value) bool {
+			return slices.ContainsFunc(predicates, func(p func(reflect.Value) bool) bool { return p(v) })
+		}, nil
+	}
 	scope := et.info.Scope
 	level := scope.LevelFor(roles)
 	field := func(name string) func(reflect.Value) string {
@@ -1077,63 +1094,30 @@ func (t *Tenant) scoped(m platform.Member, et *entityType, roles []string, now t
 			if level == platform.ScopeUnit {
 				structure = ""
 			}
-			if bound := boundUnits(m, et.info.App, scope, level); bound != nil { // a grant bound to a unit (ADR-0078 §3.2)
-				units = t.unitsBelow(bound, structure, m.Today(now))
-			} else {
-				units = t.directory.Units("member:"+m.ID, structure, m.Today(now))
+			// Combine membership-based grants and explicit unit grants of this role.
+			held, unbound := false, false
+			for _, g := range m.Grants {
+				if g.App != et.info.App || !slices.Contains(roles, g.Role) {
+					continue
+				}
+				held = true
+				if g.Unit == "" {
+					unbound = true
+					continue
+				}
+				if level == platform.ScopeBelow && g.Structure != "" && g.Structure != scope.Structure {
+					continue
+				}
+				units = append(units, t.directory.Below([]string{g.Unit}, structure, m.Today(now))...)
+			}
+			if !held || unbound {
+				units = append(units, t.directory.Units("member:"+m.ID, structure, m.Today(now))...)
 			}
 		}
 		unit := field(scope.Unit)
 		return func(v reflect.Value) bool { return slices.Contains(units, unit(v)) }, nil
 	}
 	return nil, nil
-}
-
-// boundUnits are the units m's grants bind the roles reaching level to, when
-// every such role is held through a unit-bound grant; nil when any of them is
-// held outright (a grant without a unit, or a role on record without grants),
-// which is the whole of what the member belongs to.
-func boundUnits(m platform.Member, app string, scope platform.Scope, level string) []string {
-	var units []string
-	for _, r := range m.RolesIn(app) {
-		if scope.Level(r) != level {
-			continue
-		}
-		held := false
-		for _, g := range m.Grants {
-			if g.App != app || g.Role != r {
-				continue
-			}
-			if g.Unit == "" {
-				return nil
-			}
-			held = true
-			if !slices.Contains(units, g.Unit) {
-				units = append(units, g.Unit)
-			}
-		}
-		if !held {
-			return nil
-		}
-	}
-	return units
-}
-
-// unitsBelow are units and, in structure (none when ""), every unit placed
-// under them on day.
-func (t *Tenant) unitsBelow(units []string, structure string, day platform.Date) []string {
-	out := slices.Clone(units)
-	if structure == "" {
-		return out
-	}
-	for i := 0; i < len(out); i++ {
-		for _, u := range t.directory.Related(out[i], enterprise.Placement, false, day) {
-			if !slices.Contains(out, u) {
-				out = append(out, u)
-			}
-		}
-	}
-	return out
 }
 
 // RecordPage is a page of records and how many match in all.

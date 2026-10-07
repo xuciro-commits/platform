@@ -291,3 +291,58 @@ func TestEnterpriseAppliedPatternReplays(t *testing.T) {
 	}
 	CheckReplay(t, live, entries, compose)
 }
+
+func TestGovernanceHTTPAndLiveReads(t *testing.T) {
+	tn, _, _ := upgradeTenant(t, "governance-live")
+	host := NewHost(Tokens(map[string]string{"dana": "user:dana@example.test", "aud": "user:aud@example.test", "mo": "user:mo@example.test"}), tn)
+	server := httptest.NewServer(host.Handler())
+	defer server.Close()
+	paths := []string{"/v1/access", "/v1/permissions", "/v1/projects", "/v1/authz/explain?member=mo&permission=build.object.edit", "/v1/tokens", "/v1/sessions"}
+	watch, _ := json.Marshal(paths)
+	client := &http.Client{Timeout: 3 * time.Second}
+	for _, token := range []string{"dana", "aud", "mo"} {
+		t.Run(token, func(t *testing.T) {
+			req, _ := http.NewRequest("GET", server.URL+"/v1/changes?"+url.Values{"watch": {string(watch)}}.Encode(), nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			response, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode != 200 {
+				t.Fatalf("governance subscription rejected: HTTP %d", response.StatusCode)
+			}
+			reader := bufio.NewReader(response.Body)
+			for {
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.HasPrefix(line, "data: ") {
+					continue
+				}
+				var frame LiveQueryFrame
+				if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &frame); err != nil {
+					t.Fatal(err)
+				}
+				if len(frame.Results) != len(paths) {
+					t.Fatal("missing governance reads")
+				}
+				want := 200
+				if token == "mo" {
+					want = 403
+				}
+				for _, result := range frame.Results {
+					status := want
+					if result.Path == "/v1/tokens" || result.Path == "/v1/sessions" {
+						status = 200
+					}
+					if result.Status != status {
+						t.Fatalf("%s: status %d, want %d", result.Path, result.Status, status)
+					}
+				}
+				break
+			}
+		})
+	}
+}

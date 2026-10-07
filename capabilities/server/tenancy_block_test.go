@@ -25,13 +25,13 @@ func TestTenancyBlock(t *testing.T) {
 	org := enterprise.New("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Site", Kind: "site"}},
 		Units:       []platform.Unit{{ID: "plant", Kind: "plant"}, {ID: "L1", Kind: "line"}, {ID: "L2", Kind: "line"}},
 		Edges:       []platform.Edge{{Structure: "site", Unit: "L1", Parent: "plant"}, {Structure: "site", Unit: "L2", Parent: "plant"}},
-		Memberships: []platform.Membership{{Party: "member:lead", Unit: "plant", Role: "lead"}, {Party: "member:boss", Unit: "plant", Role: "lead"}}})
+		Memberships: []platform.Membership{{Party: "member:lead", Unit: "plant", Role: "lead", From: "2026-10-07"}, {Party: "member:lead", Unit: "L2", Role: "other", From: "2026-10-06"}, {Party: "member:boss", Unit: "plant", Role: "lead"}}})
 	tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{PlatformApp: Admin, "stock": "clerk"}), seat("bo", map[string]string{"stock": "clerk"}),
 		seat("lead", map[string]string{"stock": "lead"}), seat("boss", map[string]string{"stock": "lead"})), org, newStock("t-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewHost(Tokens(map[string]string{"ana-token": "ana", "bo-token": "bo", "new-token": "user:new@acme.test", "out-token": "user:x@other.test"}), tn)
+	h := NewHost(Tokens(map[string]string{"ana-token": "ana", "bo-token": "bo", "bo-fresh": "bo", "new-token": "user:new@acme.test", "out-token": "user:x@other.test"}), tn)
 	now := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
 	h.Now = func() time.Time { return now }
 	d := consoleOf(tn)
@@ -90,21 +90,20 @@ func TestTenancyBlock(t *testing.T) {
 	if _, ok := whoIs("bo-token"); ok {
 		t.Fatal("a sign-in past its hours was kept")
 	}
-	if _, ok := whoIs("bo-token"); ok { // the spent credential stays refused; only a fresh one from the provider signs in
-		t.Fatal("a spent credential was admitted again")
+	if _, ok := whoIs("bo-token"); ok {
+		t.Fatal("an expired credential was accepted on retry")
 	}
-	h.authenticate = Tokens(map[string]string{"ana-token": "ana", "bo-token-2": "bo"})
-	if _, ok := whoIs("bo-token-2"); !ok {
-		t.Fatal("a fresh credential was refused")
+	if _, ok := whoIs("bo-fresh"); !ok {
+		t.Fatal("a newly authenticated credential was refused")
 	}
 
 	// Second factor: without the provider's word nobody signs in; with it, those attested.
 	set(SettingMFA, "true")
-	if _, ok := whoIs("bo-token-2"); ok {
+	if _, ok := whoIs("bo-token"); ok {
 		t.Fatal("a sign-in without a second factor was admitted")
 	}
-	h.SecondFactor = func(credential string) bool { return credential == "bo-token-2" }
-	if _, ok := whoIs("bo-token-2"); !ok {
+	h.SecondFactor = func(credential string) bool { return credential == "bo-fresh" }
+	if _, ok := whoIs("bo-fresh"); !ok {
 		t.Fatal("an attested sign-in was refused")
 	}
 	if _, ok := whoIs("ana-token"); ok {

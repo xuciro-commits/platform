@@ -151,7 +151,7 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 		}
 	}
 	for _, t := range h.currentTenants() { // nobody's member: a tenant's sign-in domain may seat them (ADR-0079 §4)
-		if d := consoleOf(t); d != nil && (want == "" || t.ID == want) && d.joins(subject) && h.join(t, d, subject, now) {
+		if d := consoleOf(t); d != nil && (want == "" || t.ID == want) && (!d.SecondFactorRequired() || h.SecondFactor != nil && h.SecondFactor(credential)) && d.joins(subject) && h.join(t, d, subject, now) {
 			return h.member(r)
 		}
 	}
@@ -161,13 +161,19 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 // join seats subject in t by its sign-in domain: the host records the
 // decision as the platform's automation; the newcomer holds nothing until granted.
 func (h *Host) join(t *Tenant, d *Console, subject string, now time.Time) bool {
-	id := d.JoinID(subject)
-	payload, _ := json.Marshal(map[string]string{"subject": subject})
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
 		return false
 	}
+	if _, ok := d.Member(subject); ok {
+		return true
+	}
+	if !d.joinable(subject) || !d.joins(subject) {
+		return false
+	}
+	id := d.JoinID(subject)
+	payload, _ := json.Marshal(map[string]string{"subject": subject})
 	err := t.submitAutomated(d, t.automation(PlatformApp, false), &pb.Submission{TenantId: t.ID, Authority: PlatformApp, IdempotencyKey: "join:" + subject,
 		Target: &pb.EntityRef{Type: MemberType, Id: id}, Schema: &pb.SchemaRef{Name: SchemaJoin, Version: 1}, Payload: payload}, now)
 	if err != nil {

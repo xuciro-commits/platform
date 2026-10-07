@@ -145,7 +145,7 @@ func (d *Console) Identities() []Identity {
 	defer d.mu.Unlock()
 	out := []Identity{}
 	for subject, id := range d.subjects {
-		if m := d.members[id]; m != nil {
+		if m := d.members[id]; m != nil && m.Status != platform.MemberLeft {
 			out = append(out, Identity{Token: subject, Tenant: d.tenant, Member: id, Roles: d.currentMember(m).Roles})
 		}
 	}
@@ -201,12 +201,6 @@ func (d *Console) Restore(raw json.RawMessage) error {
 	if d.profiles == nil {
 		d.profiles = map[string]*Profile{}
 	}
-	if s.Projects != nil {
-		d.projects = s.Projects
-	}
-	if s.Packages != nil {
-		d.packages = s.Packages
-	}
 	d.restoreAccess(s)
 	return nil
 }
@@ -214,6 +208,13 @@ func (d *Console) Restore(raw json.RawMessage) error {
 // restoreAccess takes the access configuration (ADR-0078 D) and tokens
 // (ADR-0079 D) of a decided state.
 func (d *Console) restoreAccess(s consoleState) {
+	d.projects, d.packages = s.Projects, s.Packages
+	if d.projects == nil {
+		d.projects = map[string]*BuildProject{}
+	}
+	if d.packages == nil {
+		d.packages = map[string]*InstalledPackage{}
+	}
 	if d.t != nil {
 		for id, role := range d.roles {
 			next := s.Roles[id]
@@ -267,6 +268,9 @@ func (d *Console) holding(app, role string) []string {
 
 // addressLocked is the email a member signs in with ("" for services and agents). Call with d.mu held.
 func (d *Console) addressLocked(member string) string {
+	if m := d.members[member]; m != nil && m.Status == platform.MemberLeft {
+		return ""
+	}
 	var out []string
 	for subject, id := range d.subjects {
 		if email, ok := strings.CutPrefix(subject, "user:"); ok && id == member {
@@ -497,7 +501,8 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		if !strings.HasPrefix(p.Subject, "user:") && !strings.HasPrefix(p.Subject, "client:") {
 			return nil, invalid
 		}
-		if m != nil || d.subjects[p.Subject] != "" {
+		bound := d.members[d.subjects[p.Subject]]
+		if m != nil || bound != nil && bound.Status != platform.MemberLeft {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		return func(*pb.ChangeRecord) {

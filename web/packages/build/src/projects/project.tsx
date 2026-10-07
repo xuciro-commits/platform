@@ -26,7 +26,7 @@ export function ProjectsList() {
   const { open } = useWorkspace();
   const projects = useRecordInventory<Project>("build.app");
   // A builder role held only through projects (#141): the Studio opens, edits stay within the assets they name.
-  const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build");
+  const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build" && g.role === "builder");
   const delegated = buildGrants.length > 0 && buildGrants.every((g) => g.by?.startsWith("project:")) ? buildGrants.map((g) => g.reason || g.by!.slice(8)) : [];
   const [search, setSearch] = useState("");
   const create = useNewRecord("build.app", (target) => open({ view: "project", params: { id: target.id } }));

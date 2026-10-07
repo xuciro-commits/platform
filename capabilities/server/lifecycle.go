@@ -126,7 +126,8 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 		if !strings.HasPrefix(p.Subject, "user:") && !strings.HasPrefix(p.Subject, "client:") {
 			return nil, invalid
 		}
-		if m != nil || d.subjects[p.Subject] != "" {
+		bound := d.members[d.subjects[p.Subject]]
+		if m != nil || bound != nil && (s.GetSchema().GetName() == SchemaJoin || bound.Status != platform.MemberLeft) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		if s.GetSchema().GetName() == SchemaJoin {
@@ -171,7 +172,9 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 		return func(r *pb.ChangeRecord) {
 			m.Status = platform.MemberLeft
 			m.Grants, m.Roles = nil, map[string]string{}
-			maps.DeleteFunc(d.subjects, func(_, member string) bool { return member == id })
+			if !c.Staging() { // legacy input replay retains its original subject-removal semantics
+				maps.DeleteFunc(d.subjects, func(_, member string) bool { return member == id })
+			} // accepted results retain a denial binding; only explicit add/invite may replace it
 			maps.DeleteFunc(d.tokens, func(_ string, t *Token) bool { return t.Member == id })
 			d.endSessions(id, "")
 			// What they held through others' delegation ends; what others held through theirs passes on.
@@ -364,9 +367,9 @@ func (d *Console) noticed(member, credential, agent string, kind string, now tim
 		d.sessions.seen[member] = map[string]*Session{}
 	}
 	s := d.sessions.seen[member][id]
-	if s != nil && kind == "sign-in" && hours > 0 && now.Sub(s.First) > time.Duration(hours)*time.Hour {
-		delete(d.sessions.seen[member], id) // the session's hours are up: this credential is spent,
-		d.sessions.revoked[id] = true       // the member comes back with a fresh one from the provider
+	if s != nil && kind == "sign-in" && hours > 0 && now.Sub(s.First) >= time.Duration(hours)*time.Hour {
+		d.sessions.revoked[id] = true // only a newly authenticated credential may start another session
+		delete(d.sessions.seen[member], id)
 		return false
 	}
 	if s == nil {
@@ -500,4 +503,12 @@ func (d *Console) handOver(c platform.Caller, left, successor, reason string, no
 	c.Notify(platform.Notification{Title: "You take over from " + left, Key: "handover:" + left, Ref: MemberType + "/" + left,
 		Body: strings.TrimSpace("Delegations " + left + " gave now stand in your name; reassign their open work and approvals to yourself from each app. " + reason)},
 		now, platform.Recipient{Member: successor})
+}
+
+// joinable excludes existing identities, including denial bindings to members
+// who left. It is checked again under the tenant lock before recording a join.
+func (d *Console) joinable(subject string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.subjects[subject] == ""
 }
