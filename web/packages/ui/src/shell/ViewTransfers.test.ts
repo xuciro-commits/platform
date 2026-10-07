@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { ViewTransfers } from "./shell/ViewTransfers";
+import { ViewTransfers } from "./ViewTransfers";
 
 test("ephemeral view payloads are bound to one callee and return once", () => {
   const calls = new ViewTransfers(), results: unknown[] = [], input = { record: { object: "sample.record", id: "A" } };

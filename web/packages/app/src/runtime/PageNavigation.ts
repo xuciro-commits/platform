@@ -2,7 +2,7 @@ import {isDecimal,isStringSet,type ScalarValue} from "./decimal";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useViewCall, useWorkspace, type EntityRecord } from "@platform/ui";
 import { findDefinition, useHost } from "../index";
-import { useActionEffect } from "../actions";
+import { useActionEffect } from "../actions/actions";
 import type { Api } from "@platform/kernel";
 import type { PageSessionStore, PageSessionSnapshot } from "./Session";
 import type { VariableResult } from "./variables";

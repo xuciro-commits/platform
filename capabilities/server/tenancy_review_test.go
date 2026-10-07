@@ -19,6 +19,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
 	"platformserver/apps/enterprise"
+	"platformserver/idp"
 	"platformserver/platform"
 )
 
@@ -29,7 +30,7 @@ func TestOIDCRequiresMultipleFactors(t *testing.T) {
 	}))
 	defer keys.Close()
 	const issuer = "http://review.test/"
-	auth, attest := OIDCProvider(issuer, keys.URL)
+	auth, attest := idp.OIDCProvider(issuer, keys.URL)
 	signer, _ := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: private}, (&jose.SignerOptions{}).WithHeader("kid", "review"))
 	for _, tc := range []struct {
 		methods []string
@@ -239,7 +240,7 @@ func TestJournalAcceptedInvitationCrashAfterCommit(t *testing.T) {
 	}
 	defer j.Close()
 	id := fmt.Sprintf("invite-crash-%d", time.Now().UnixNano())
-	defer j.pool.Exec(ctx, `delete from journal where tenant=$1`, id)
+	defer j.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
 	if _, err := j.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}

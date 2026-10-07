@@ -1,5 +1,5 @@
 import {Panel,RecordKanban,entityFrom,valueOf,t,type EntityInfo,type EntityRecord,type KanbanMove,type Tone} from "@platform/ui";
-import {useTransition} from "../actions";
+import {useTransition} from "../actions/actions";
 import {QueryWindowFrame,type QueryWindow} from "./QueryWindowFrame";
 export type KanbanPorts={object:string;info?:EntityInfo;window?:QueryWindow;cardLabel:string;fields?:string[];moves:KanbanMove[];selected?:EntityRecord;onSelect:(record?:EntityRecord)=>void;live:boolean;title:string};
 export function KanbanRenderer({object,info,window,cardLabel,fields=[],moves,selected,onSelect,live,title}:KanbanPorts) {

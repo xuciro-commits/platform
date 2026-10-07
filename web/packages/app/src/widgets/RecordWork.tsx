@@ -1,4 +1,4 @@
-import {createRecordActionSubmitter} from "../record-actions";
+import {createRecordActionSubmitter} from "../actions/record-actions";
 import {useEffect,useMemo,useRef} from "react";
 import {Panel,RecordActionGrid,RecordCards,Textarea,t,type RecordSource} from "@platform/ui";
 import {useHost} from "../index";

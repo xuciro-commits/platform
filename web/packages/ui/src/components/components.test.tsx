@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod";
-import { DataTable, EntityForm, Markdown, MarkdownEditor, NotificationList, RecordLookup, RecordPage, StatusTag, humanizeKernelError, setLanguage, submissionStatuses, type ColumnDef, type RecordSource } from "./index";
+import { DataTable, EntityForm, Markdown, MarkdownEditor, NotificationList, RecordLookup, RecordPage, StatusTag, humanizeKernelError, setLanguage, submissionStatuses, type ColumnDef, type RecordSource } from "../index";
 
 afterEach(cleanup);
 
@@ -189,7 +189,7 @@ test("EntityForm disables buttons and indicates saving while submitting", async 
 });
 
 test("routes round-trip through the URL and name one tab per entity", async () => {
-  const { routeFromHash, routeKey, routeToHash } = await import("./shell/route");
+  const { routeFromHash, routeKey, routeToHash } = await import("../shell/route");
   const route = { view: "workOrder", params: { tenant: "plant-1", id: "WO 7/2" } };
   expect(routeFromHash(routeToHash(route))).toEqual(route);
   expect(routeKey({ view: "workOrder", params: { id: "WO 7/2", tenant: "plant-1" } })).toBe(routeKey(route));

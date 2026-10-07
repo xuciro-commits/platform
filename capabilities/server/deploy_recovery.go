@@ -71,7 +71,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 		}
 	}
 	var projection *Projection
-	if pgPool, pg := pool(journal); d.Project && pg {
+	if pgPool, pg := journalPool(journal); d.Project && pg {
 		projection, err = Project(ctx, pgPool, fresh)
 		if err != nil {
 			return fmt.Errorf("rebuild tenant %s projection: %w", id, err)

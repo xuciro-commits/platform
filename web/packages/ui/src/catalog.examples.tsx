@@ -1,7 +1,7 @@
 import { Workbench, ProblemList, StructureRow, PanelSection } from "./layout/Workbench";
 import {CanvasEditor,CanvasRegion,useCanvasGesture,type CanvasModel} from "./layout/CanvasEditor";
 import {ApplicationHeader} from "./layout/ApplicationHeader";
-import {useTheme} from "./theme";
+import {useTheme} from "./themes/theme";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Building2, Plus, Users } from "lucide-react";
 import {AlignLeft,AlignCenter,AlignRight} from "lucide-react";

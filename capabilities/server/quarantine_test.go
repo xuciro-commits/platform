@@ -174,15 +174,15 @@ func TestJournalCorruptionIsTenantLocal(t *testing.T) {
 	defer j.Close()
 	bad, good := fmt.Sprintf("quarantine-bad-%d", time.Now().UnixNano()), fmt.Sprintf("quarantine-good-%d", time.Now().UnixNano())
 	defer func() {
-		j.pool.Exec(ctx, `delete from journal where tenant = any($1)`, []string{bad, good})
-		j.pool.Exec(ctx, `delete from snapshots where tenant = $1`, bad)
+		j.Pool().Exec(ctx, `delete from journal where tenant = any($1)`, []string{bad, good})
+		j.Pool().Exec(ctx, `delete from snapshots where tenant = $1`, bad)
 	}()
 	now := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
 	for _, row := range []struct {
 		tenant string
 		seq    int
 	}{{bad, 2}, {good, 1}} {
-		if _, err := j.pool.Exec(ctx, `insert into journal (tenant,seq,app,kind,principal,body,at) values ($1,$2,'stock','input','{}','{}',$3)`,
+		if _, err := j.Pool().Exec(ctx, `insert into journal (tenant,seq,app,kind,principal,body,at) values ($1,$2,'stock','input','{}','{}',$3)`,
 			row.tenant, row.seq, now); err != nil {
 			t.Fatal(err)
 		}
@@ -193,7 +193,7 @@ func TestJournalCorruptionIsTenantLocal(t *testing.T) {
 	if entries, err := j.Entries(ctx, good, 0); err != nil || len(entries) != 1 {
 		t.Fatalf("neighbor journal failed: %v %v", entries, err)
 	}
-	if _, err := j.pool.Exec(ctx, `insert into snapshots (tenant,seq,code,state) values ($1,2,'bad-code',$2)`,
+	if _, err := j.Pool().Exec(ctx, `insert into snapshots (tenant,seq,code,state) values ($1,2,'bad-code',$2)`,
 		bad, []byte("not gzip")); err != nil {
 		t.Fatal(err)
 	}

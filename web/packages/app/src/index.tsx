@@ -1,4 +1,4 @@
-export { ApplicationRuns, OperationRunView } from "./application-runs";
+export { ApplicationRuns, OperationRunView } from "./automation/application-runs";
 export {createRecordExploration,type RecordExplorationReader} from "./exploration/reader";
 import {createRecordCollaboration} from "./collaboration/service";
 export {createRecordCollaboration} from "./collaboration/service";
@@ -17,13 +17,13 @@ import {
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-import { NewActions, RecordActions, useTransition, useRecordArchive } from "./actions";
+import { NewActions, RecordActions, useTransition, useRecordArchive } from "./actions/actions";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-export { ComputeCall } from "./capability";
-export { FlowInstanceView } from "./flows";
-export { OpenIn, type OpenInPlace } from "./OpenIn";
-import { OpenIn as OpenInMenu } from "./OpenIn";
-export { pageDocumentFromSections } from "./pageDocument";
+export { ComputeCall } from "./automation/capability";
+export { FlowInstanceView } from "./automation/flows";
+export { OpenIn, type OpenInPlace } from "./actions/OpenIn";
+import { OpenIn as OpenInMenu } from "./actions/OpenIn";
+export { pageDocumentFromSections } from "./pages/pageDocument";
 export { semanticModelView, semanticPropertyTypes, assetBindingKey, propertyKey, relationKey, type SemanticPropertyType, type PropertyRef, type ReferenceRelationRef, type SemanticRelation, type SemanticModelView } from "./semantic/model";
 export { SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect } from "./semantic/Selector";
 
@@ -382,11 +382,11 @@ function RecordAdvice({ type, record, action, fields }: { type: string; record: 
 
 export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 
-export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./agents";
+export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./automation/agents";
 
-export { NewActions, PayloadFields, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions";
-export { PageWorkspace, PagePreview, isPageDefinition } from "./pages";
-export { ComposedPage, SectionView, isComposed } from "./sections";
+export { NewActions, PayloadFields, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions/actions";
+export { PageWorkspace, PagePreview, isPageDefinition } from "./pages/pages";
+export { ComposedPage, SectionView, isComposed } from "./pages/sections";
 export { createWidgetDefinitions, createWidgetRegistry, widgetContracts, widgetContract, pageUIProfile, supportsPageUIProfile, type WidgetRegistry, type WidgetImplementation, type WidgetContract, type WidgetID } from "./widgets/registry";
 export { pageVariableContract, pageVariableValues, pageVariableDiagnostics } from "./runtime/PageRuntime";
 export type { VariableResult as PageVariableValue } from "./runtime/variables";
@@ -396,10 +396,10 @@ export { ApplicationPage, ApplicationSessionsProvider } from "./runtime/Applicat
 export {parseDecimal as parsePageDecimal,isDecimal as isPageDecimal,decimalDraft as isPageDecimalDraft} from "./runtime/decimal";
 export type {DecimalValue as PageDecimalValue} from "./runtime/decimal";
 
-export {pageLayoutDiagnostics} from "./layout";
+export {pageLayoutDiagnostics} from "./pages/layout";
 
 export {tableEditableFields} from "./widgets/table-edit";
 
-export {createRecordActionSubmitter} from "./record-actions";
+export {createRecordActionSubmitter} from "./actions/record-actions";
 export {createObservationStatisticsReader} from "./exploration/observation-reader";
 export type {ObservationStatisticsRequest,ObservationStatisticsRead} from "./exploration/observation-reader";

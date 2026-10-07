@@ -3,7 +3,6 @@ package platformserver
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -49,16 +48,6 @@ type chunk struct {
 }
 
 // Store keeps what is derived from the journal outside it: passages' vectors
-// and model calls' transcripts (ADR-0022 D2, D8). The PostgreSQL journal
-// implements it; without one the host keeps both in memory.
-type Store interface {
-	Vectors(tenant, model string, hashes []string) map[string][]float32
-	SaveVectors(tenant, model string, vectors map[string][]float32)
-	SaveTranscript(x Transcript)
-	Transcripts(tenant, run string, limit int) []Transcript
-	PurgeTranscripts(tenant string, before time.Time)
-}
-
 const (
 	passageChars = 3200 // about 800 tokens
 	embedBatch   = 32
@@ -710,22 +699,6 @@ func (t *Tenant) saveVectors(model string, vs map[string][]float32) {
 }
 
 // encodeVector and decodeVector keep a vector as little-endian float32s.
-func encodeVector(v []float32) []byte {
-	out := make([]byte, 4*len(v))
-	for i, x := range v {
-		binary.LittleEndian.PutUint32(out[4*i:], math.Float32bits(x))
-	}
-	return out
-}
-
-func decodeVector(b []byte) []float32 {
-	out := make([]float32, len(b)/4)
-	for i := range out {
-		out[i] = math.Float32frombits(binary.LittleEndian.Uint32(b[4*i:]))
-	}
-	return out
-}
-
 // fileSources are the text files attached to knowledge documents, and to
 // records of types whose files are knowledge (ADR-0028 D3), read from the
 // store once per content.

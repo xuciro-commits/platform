@@ -21,7 +21,7 @@ func TestJournalConcurrentOpen(t *testing.T) {
 			<-start
 			journal, err := OpenJournal(ctx, dsn)
 			if err == nil {
-				err = journal.pool.Ping(ctx)
+				err = journal.Pool().Ping(ctx)
 				journal.Close()
 			}
 			results <- err

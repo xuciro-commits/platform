@@ -6,9 +6,9 @@ import {
   type RecordPageData, type RecordSource, type RecordView, t,
 } from "@platform/ui";
 import { useMemo, useState } from "react";
-import { NewActions, PayloadFields } from "./actions";
+import { NewActions, PayloadFields } from "../actions/actions";
 import { ComposedPage, isComposed } from "./sections";
-import { RecordDetail, assetKey, useHost, useOpenRecord, type Definition } from "./index";
+import { RecordDetail, assetKey, useHost, useOpenRecord, type Definition } from "../index";
 
 type PageDefinition = Definition & { page: NonNullable<Definition["page"]> };
 

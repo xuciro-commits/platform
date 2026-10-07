@@ -1,6 +1,6 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
-import { LinesChange, type FieldInfo } from "./records/Records";
+import { LinesChange, type FieldInfo } from "./Records";
 
 afterEach(cleanup);
 

@@ -71,14 +71,12 @@ func end(span trace.Span, outcome string) {
 // meters are the host's instruments; with no provider set they cost nothing.
 var meters = struct {
 	attempts, failures metric.Int64Counter
-	append             metric.Float64Histogram
 }{}
 
 func init() {
 	m := otel.Meter("platformserver")
 	meters.attempts, _ = m.Int64Counter("platform.work.attempts", metric.WithDescription("Attempts of owned work: deliveries, jobs, effects"))
 	meters.failures, _ = m.Int64Counter("platform.work.failures", metric.WithDescription("Attempts of owned work that did not succeed"))
-	meters.append, _ = m.Float64Histogram("platform.journal.append", metric.WithUnit("ms"), metric.WithDescription("Time to append a journal entry"))
 }
 
 // counted records an attempt of kind in app and whether it failed.

@@ -4,7 +4,7 @@
 // routes to views this member's applications contribute are offered; the
 // workspace reports a missing view, never a forbidden one.
 import { ActionMenu, t, useWorkspace, type ContextCommand } from "@platform/ui";
-import { assetKey, useHost } from "./index";
+import { assetKey, useHost } from "../index";
 
 export type OpenInPlace = "explorer" | "ontology" | "pages" | "lineage";
 

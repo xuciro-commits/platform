@@ -2,12 +2,12 @@
 // rationale the model gave, what people made of it, and the draft that waits
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
-import "./i18n";
+import "../i18n";
 import { Button, Card, Disclosure, useWorkspace, Form, Graph, Input, PageHeader, Panel, Select, StatusTag, Tag, Textarea, defineStatuses, t, language, type GraphEdge, type GraphNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
-import { PayloadFields } from "./actions";
-import { newId, useHost, useOpenRecord, useRead, useReadQuery } from "./index";
+import { PayloadFields } from "../actions/actions";
+import { newId, useHost, useOpenRecord, useRead, useReadQuery } from "../index";
 
 // Generated from the host's Go types (ADR-0023 D7).
 export type RunStep = Api.RunStep;

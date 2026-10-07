@@ -128,10 +128,6 @@ func resultRequestHash(raw []byte) (string, error) {
 	return identity.Hash, err
 }
 
-type resultIdentity struct {
-	Tenant, App, Scope, Key, Hash string
-}
-
 func acceptedIdentity(raw []byte) (resultIdentity, error) {
 	var identity resultIdentity
 	var envelope struct{ Kind string }

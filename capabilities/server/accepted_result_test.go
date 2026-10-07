@@ -38,7 +38,7 @@ func TestJournalAcceptedResultAtomicRetryAndRecovery(t *testing.T) {
 	}
 	id := fmt.Sprintf("accepted-%d", time.Now().UnixNano())
 	defer func() {
-		j.pool.Exec(ctx, `delete from journal where tenant=$1`, id)
+		j.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
 		j.Close()
 	}()
 	build := func() *Tenant {

@@ -1,4 +1,4 @@
-import {originalActionDefaults,validActionDefaults} from "./widgets/action-defaults";
+import {originalActionDefaults,validActionDefaults} from "../widgets/action-defaults";
 import type {Api} from "@platform/kernel";
 // Every declared action has an entry in the generated views (F-33): an action
 // that makes a new record of a type is offered on the type's list; every other
@@ -9,7 +9,7 @@ import type { ActionDeclaration } from "@platform/kernel";
 import { Button, Checkbox, Dialog, Input, RecordLookup, Select, Textarea, Panel, t, type EntityInfo, type EntityRecord } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useRef, useState } from "react";
-import { GeneratedForm, newId, useHost } from "./index";
+import { GeneratedForm, newId, useHost } from "../index";
 
 type Field = ActionDeclaration["payload"][number];
 

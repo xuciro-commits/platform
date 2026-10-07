@@ -1,5 +1,5 @@
-import type {Host} from "./index";
-import {confirmedDecision} from "./collaboration/decision";
+import type {Host} from "../index";
+import {confirmedDecision} from "../collaboration/decision";
 type OriginalActionHost=Pick<Host,"client"|"decide"|"resend"|"can">;
 const locks=new WeakMap<object,Set<string>>();
 const waiting=(state:string)=>["SUBMISSION_STATE_PENDING","SUBMISSION_STATE_SENDING","SUBMISSION_STATE_UNKNOWN"].includes(state);

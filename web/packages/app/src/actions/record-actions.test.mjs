@@ -2,7 +2,7 @@ import {registerHooks} from "node:module";
 registerHooks({resolve(s,c,next){try{return next(s,c)}catch(e){if(s.startsWith(".")&&!s.endsWith(".ts"))return next(`${s}.ts`,c);throw e;}}});
 import assert from "node:assert/strict";
 import test from "node:test";
-const {createRecordActionSubmitter}=await import("../record-actions.ts");
+const {createRecordActionSubmitter}=await import("./record-actions.ts");
 const target={type:"sample.item",id:"A"};
 function fixture(){let active=true;const calls=[],host={client:{connection:{tenant:"T",principal:"member"},authorities:{outbox:[]}},can:()=>true,decide:async(...args)=>{calls.push(args);return true},resend:async()=>{calls.push("resend");host.client.authorities.outbox[0].state="SUBMISSION_STATE_CONFIRMED";}};return{host,calls,submit:createRecordActionSubmitter(host,()=>active),retire:()=>active=false};}
 test("each row retains the original target, full typed payload and opened revision",async()=>{const f=fixture();assert.equal((await f.submit("sample.item.adjust",target,7,{next:3,reason:"original"})).accepted,true);assert.deepEqual(f.calls[0].slice(0,3),["sample.item.adjust",target,{next:3,reason:"original"}]);assert.equal(f.calls[0][3].expectedRevision,7);f.retire();await assert.rejects(()=>f.submit("sample.item.adjust",target,7,{next:3}),/ended/);assert.equal(f.calls.length,1);});

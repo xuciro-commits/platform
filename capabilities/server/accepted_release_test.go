@@ -267,7 +267,7 @@ func TestJournalAcceptedReleaseCandidateCrashBeforeApplication(t *testing.T) {
 	}
 	defer journal.Close()
 	id := fmt.Sprintf("release-candidate-%d", time.Now().UnixNano())
-	defer journal.pool.Exec(ctx, `delete from journal where tenant=$1`, id)
+	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
 	compose := func() *Tenant {
 		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
 			Roles: map[string]string{build.ID: build.Builder}}}

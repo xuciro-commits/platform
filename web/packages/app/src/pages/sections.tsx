@@ -1,11 +1,11 @@
-import {pageWidgetRegistry as widgets} from "./widgets/plugins";
-import {confirmObservationRow} from "./widgets/observation-selection";
-import {usePageComputations} from "./runtime/PageComputations";
-import {aiRecordSlot} from "./widgets/ai-context";
-import {PageEmbeddingBoundary} from "./widgets/EmbeddedPage";
-import {avatarCollectionVariable,confirmedContext,originalContextSlot,currentContextRead} from "./widgets/context-views";
-import {searchInputObjects} from "./widgets/search-input";
-import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime/decimal";
+import {pageWidgetRegistry as widgets} from "../widgets/plugins";
+import {confirmObservationRow} from "../widgets/observation-selection";
+import {usePageComputations} from "../runtime/PageComputations";
+import {aiRecordSlot} from "../widgets/ai-context";
+import {PageEmbeddingBoundary} from "../widgets/EmbeddedPage";
+import {avatarCollectionVariable,confirmedContext,originalContextSlot,currentContextRead} from "../widgets/context-views";
+import {searchInputObjects} from "../widgets/search-input";
+import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "../runtime/decimal";
 // A composed page (ADR-0035): sections laid out in order, each holding one
 // widget bound to what this tenant has. A table says which record is selected;
 // a detail and the actions read it. Every widget renders through the owner that
@@ -16,25 +16,25 @@ import {
   Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, cn, t, useViewVisible, type EntityRecord,
 } from "@platform/ui";
 import { Component, Suspense, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { HostContext, useHost,useOpenRecord, type Definition } from "./index";
+import { HostContext, useHost,useOpenRecord, type Definition } from "../index";
 import type { Api } from "@platform/kernel";
-import { supportsPageUIProfile } from "./widgets/registry";
-import { useApplicationContext, useApplicationVariables } from "./runtime/ApplicationRuntime";
-import { usePageQueries } from "./runtime/PageQueries";
-import { planKey, variablePlan } from "./runtime/query-plans";
-import { inputSlot, usePageInputs, usePageEffects } from "./runtime/PageNavigation";
-import { NestedLoopRuntime } from "./runtime/NestedLoopRuntime";
-import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
-import {recordReadReference, type PageSessionStore} from "./runtime/Session";
-import { recordSlot, filterOwner, filtersForOwner, filterSessionBindings, selectionSetSlot,selectionSlot,recordOutputSlot,recordOutputObject,recordResourceSlot, overlaySessionScopes, resourceVariables } from "./runtime/resources";
-import { evaluateVariables, type VariableResult } from "./runtime/variables";
-import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
+import { supportsPageUIProfile } from "../widgets/registry";
+import { useApplicationContext, useApplicationVariables } from "../runtime/ApplicationRuntime";
+import { usePageQueries } from "../runtime/PageQueries";
+import { planKey, variablePlan } from "../runtime/query-plans";
+import { inputSlot, usePageInputs, usePageEffects } from "../runtime/PageNavigation";
+import { NestedLoopRuntime } from "../runtime/NestedLoopRuntime";
+import { LoopRuntime, type LoopContext } from "../runtime/LoopRuntime";
+import {recordReadReference, type PageSessionStore} from "../runtime/Session";
+import { recordSlot, filterOwner, filtersForOwner, filterSessionBindings, selectionSetSlot,selectionSlot,recordOutputSlot,recordOutputObject,recordResourceSlot, overlaySessionScopes, resourceVariables } from "../runtime/resources";
+import { evaluateVariables, type VariableResult } from "../runtime/variables";
+import { pageVariableContract, usePageVariables, usePageSession } from "../runtime/PageRuntime";
 
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
-type Bound = import("./widgets/bindings").WidgetBindingContext;
+type Bound = import("../widgets/bindings").WidgetBindingContext;
 
 /** Composing: the section in hand, and choosing another by clicking it. */
 type Composing = { slotViews?:Readonly<Record<string,ReactNode>>; chosen?: number; onChoose?: (at: number) => void; at?: number; nested?: boolean;
@@ -91,7 +91,7 @@ export function SectionView(bound: Bound & Composing) {
  * same records, with nothing that writes.
  */
 type ComposedPageProps = {
-  page: Page; live?: boolean; notice?: ReactNode; definitionKey?: string;pageCall?:import("./runtime/PageNavigation").PageCall;
+  page: Page; live?: boolean; notice?: ReactNode; definitionKey?: string;pageCall?:import("../runtime/PageNavigation").PageCall;
   editingRoot?: string;
   onVariableValues?: (values: Record<string, VariableResult>) => void;
 } & Composing;

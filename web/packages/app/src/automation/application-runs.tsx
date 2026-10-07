@@ -3,7 +3,7 @@ import { Button, DataTable, PageHeader, Panel, Tag, t, useWorkspace, type Column
 import { useState } from "react";
 import { FlowInstanceView } from "./flows";
 import { RunView } from "./agents";
-import { ChainGraph, useHost, useReadQuery, useRecordInventory } from "./index";
+import { ChainGraph, useHost, useReadQuery, useRecordInventory } from "../index";
 
 type Run = Api.ApplicationRun;
 const kindName = (kind: string) => t(({ flow: "Workflow", agent: "Agent", compute: "Calculation" } as Record<string, string>)[kind] ?? kind);

@@ -106,7 +106,7 @@ func TestJournalAcceptedRefusalAfterCrashAndRestart(t *testing.T) {
 	}
 	defer j.Close()
 	id := fmt.Sprintf("refused-%d", time.Now().UnixNano())
-	defer func() { _, _ = j.pool.Exec(ctx, `delete from journal where tenant=$1`, id) }()
+	defer func() { _, _ = j.Pool().Exec(ctx, `delete from journal where tenant=$1`, id) }()
 	compose := func() *Tenant {
 		seat := Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}
 		tn, err := NewTenant(id, NewConsole(id, seat), newStock(id))

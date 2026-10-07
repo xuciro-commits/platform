@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
-import { Button, Dialog, Sheet, FlowLayout, Input, setLanguage } from "./index";
+import { Button, Dialog, Sheet, FlowLayout, Input, setLanguage } from "../index";
 
 afterEach(cleanup);
 

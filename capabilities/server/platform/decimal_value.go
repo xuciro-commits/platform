@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"reflect"
 	"regexp"
 	"strings"
 )
@@ -48,3 +49,41 @@ func DecimalLiteral(raw json.RawMessage) (DecimalValue, bool) {
 	return value, true
 }
 func (v DecimalValue) Rat() *big.Rat { value, _ := new(big.Rat).SetString(v.Value); return value }
+
+// Condition is the exact comparison of a numeric field against this value,
+// evaluated on a record read by read (ADR-0045).
+func (value DecimalValue) Condition(field FieldInfo, op string, read func(reflect.Value) any) (func(reflect.Value) bool, error) {
+	if field.Type != "integer" && field.Type != "decimal" {
+		return nil, fmt.Errorf("decimal condition needs a numeric field")
+	}
+	if op != "=" && op != "!=" && op != "<" && op != "<=" && op != ">" && op != ">=" {
+		return nil, fmt.Errorf("unsupported decimal condition")
+	}
+	right := value.Rat()
+	return func(record reflect.Value) bool {
+		raw, err := json.Marshal(read(record))
+		if err != nil {
+			return false
+		}
+		left, ok := new(big.Rat).SetString(string(raw))
+		if !ok {
+			return false
+		}
+		cmp := left.Cmp(right)
+		switch op {
+		case "=":
+			return cmp == 0
+		case "!=":
+			return cmp != 0
+		case "<":
+			return cmp < 0
+		case "<=":
+			return cmp <= 0
+		case ">":
+			return cmp > 0
+		case ">=":
+			return cmp >= 0
+		}
+		return false
+	}, nil
+}

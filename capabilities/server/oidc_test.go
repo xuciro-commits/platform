@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"platformserver/idp"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ func TestOIDC(t *testing.T) {
 		token, _ := jws.CompactSerialize()
 		return token
 	}
-	auth := OIDC(issuer, keys.URL)
+	auth := idp.OIDC(issuer, keys.URL)
 	_, stranger, _ := ed25519.GenerateKey(rand.Reader)
 	for _, c := range []struct {
 		name  string
@@ -71,8 +72,8 @@ func TestJournal(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer j.Close()
-	j.pool.Exec(ctx, `delete from journal where tenant = 't-journal'`)
-	j.pool.Exec(ctx, `delete from snapshots where tenant = 't-journal'`)
+	j.Pool().Exec(ctx, `delete from journal where tenant = 't-journal'`)
+	j.Pool().Exec(ctx, `delete from snapshots where tenant = 't-journal'`)
 	entry := Entry{Kind: "submission", Principal: json.RawMessage(`{"id":"p1"}`), Body: json.RawMessage(`{"a":1}`), At: Now()}
 	if j.Append(ctx, "t-journal", entry) == nil {
 		t.Fatal("append before reading must fail")
@@ -80,15 +81,15 @@ func TestJournal(t *testing.T) {
 	if got, _ := j.Entries(ctx, "t-journal", 0); len(got) != 0 {
 		t.Fatalf("fresh tenant has %d entries", len(got))
 	}
+	// A second writer that read before the appends cannot interleave.
+	other, _ := OpenJournal(ctx, url)
+	defer other.Close()
+	other.Entries(ctx, "t-journal", 0)
 	for range 2 {
 		if err := j.Append(ctx, "t-journal", entry); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// A second writer that read before the appends cannot interleave.
-	other, _ := OpenJournal(ctx, url)
-	defer other.Close()
-	other.next["t-journal"] = 2
 	if other.Append(ctx, "t-journal", entry) == nil {
 		t.Fatal("stale writer appended")
 	}
@@ -109,7 +110,7 @@ func TestJournal(t *testing.T) {
 		t.Fatal("a snapshot of other code was offered")
 	}
 	var kept int
-	j.pool.QueryRow(ctx, `select count(*) from snapshots where tenant = 't-journal'`).Scan(&kept)
+	j.Pool().QueryRow(ctx, `select count(*) from snapshots where tenant = 't-journal'`).Scan(&kept)
 	if after, _ := j.Entries(ctx, "t-journal", 1); len(after) != 1 || kept != 2 || j.Position("t-journal") != 2 {
 		t.Fatalf("after 1: %d entries, %d snapshots kept, position %d", len(after), kept, j.Position("t-journal"))
 	}
