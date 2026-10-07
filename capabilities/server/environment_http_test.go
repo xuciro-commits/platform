@@ -23,7 +23,9 @@ import (
 // for support sessions, promotion and migration. It is the contract the web
 // release workbench and the host console are written against.
 func TestApplicationLifecycleOverHTTP(t *testing.T) {
-	seats := append(upgradeSeats(), Seat{Subjects: []string{"user:ops@example.test"}, Member: platform.Member{ID: "ops", Roles: map[string]string{build.ID: build.User}}})
+	seats := append(upgradeSeats(),
+		Seat{Subjects: []string{"user:ops@example.test"}, Member: platform.Member{ID: "ops", Roles: map[string]string{build.ID: build.User}}},
+		Seat{Subjects: []string{"user:pub-only@example.test"}, Member: platform.Member{ID: "pub-only", Roles: map[string]string{build.ID: build.Publisher}}})
 	compose := func(id string) *Tenant {
 		tn, err := NewTenant(id, NewConsole(id, seats...), work.New(id), build.New(id))
 		if err != nil {
@@ -32,9 +34,6 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 		return tn
 	}
 	dev, prod := compose("dev"), compose("prod")
-	// A publisher-only target seat has no unrelated role to mask a refused
-	// draft input. A later builder must use its own derived command key.
-	consoleOf(prod).members["pub-only"] = &platform.Member{ID: "pub-only", Roles: map[string]string{build.ID: build.Publisher}}
 	host := NewHost(Tokens(map[string]string{
 		"dana": "user:dana@example.test", "pat": "user:pat@example.test", "ops": "user:ops@example.test", "mo": "user:mo@example.test",
 		"host": "user:host@example.test",
