@@ -74,7 +74,7 @@ export function AgentEditor({ id }: { id: string }) {
   const cases = draft.cases ?? [];
   const setCase = (i: number, patch: Partial<Case>) => change({ cases: cases.map((c, at) => at === i ? { ...c, ...patch } : c) });
   return <div className="grid min-w-0 gap-3">
-    <PageHeader title={draft.title || t("New agent")} description={t("Save the declaration, then publish it: people ask it from any record it may read, flows give it steps, and its cases run against the model before it meets people.")}
+    <PageHeader title={draft.title || t("New agent")} description={t("Save the declaration, then publish it: people ask it from any record it may read and flows give it steps. Evaluate its declared cases in Agents.")}
       actions={<div className="flex flex-wrap gap-2">
         <Button variant="ghost" onClick={() => open({ view: "agent" })}>{t("Agents")}</Button>
         <DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />

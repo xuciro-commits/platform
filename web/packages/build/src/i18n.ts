@@ -3579,7 +3579,7 @@ register("zh-CN", {
   "Give it at least one action or query.": "至少给它一个动作或查询。",
   "The agent could not be saved. Your draft is still here.": "智能体未能保存。你的草稿还在。",
   "The agent could not be loaded.": "智能体无法加载。",
-  "Save the declaration, then publish it: people ask it from any record it may read, flows give it steps, and its cases run against the model before it meets people.": "保存声明后发布：人们可从它能读的任何记录向它提问，流程可交给它步骤，用例会在它面对人之前先对模型跑一遍。",
+  "Save the declaration, then publish it: people ask it from any record it may read and flows give it steps. Evaluate its declared cases in Agents.": "保存声明后发布：人们可从它能读的任何记录向它提问，流程可交给它步骤。在智能体中评测声明的用例。",
   "Save agent": "保存智能体",
   "Installed as build.{name}, version {version}. A changed definition stops existing runs.": "已安装为 build.{name}，版本 {version}。定义变更时，已有运行会停止。",
   "Agent": "智能体",
