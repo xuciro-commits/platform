@@ -114,5 +114,16 @@ capabilities/server/
 | `Store==nil` 时 Tenant 自带第二套向量/转录实现（derivedMu/vectorMemory/transcripts） | `journal.Memory` 实现 `Store`，Tenant 只剩 `store()`；~50 行删除 | wave 2 |
 | `seqMu/sequences`、`computeCancels`（借用 opsMu） | `sequences`、`cancels` 组件，自有锁 | `d9e8709` |
 | `languages.go` 把翻译与 AI 术语表混在一起，`dictionaries/patternCache` 挂在 Tenant | `translator` 组件（只依赖 apps 列表），`languages.go` 只剩请求语言/Texts/术语表 | `787cb1c` |
+| `notices/noticeSeq` 直接被 7 个文件读写（借用 opsMu） | `noticeBoard` 组件（`notices.go`，自有锁）：post/forMember/markRead/markKeysRead/state/restore | `4de28fd` |
+| `settings map`、`uploads map` 挂在 Tenant，nil 检查散落 | `settingValues`（`settings.go`）、`uploads`（`uploads.go`）组件 | `4de28fd` |
+| `hostLifecycle/support/migrations` 三个字段 + `hostSuspended/lifecycle/setLifecycle` 三个 Tenant 方法 | `hostControl` 组件（`host_control.go`），字段名 `console`；snapshot/restore 自带 | `3496f93` |
+| `refusals/acceptedAnswers/acceptedInputs/compositeApplied` 四张幂等表分散在 7 个文件，三处重复 nil-init | `committed` 组件（`committed.go`）：saveAnswer/saveInput/saveComposite/snapshot/restore | `fbe5d54` |
+| `auditMu` 保护的 `audit/deliveries/personal` 三条有界历史，三套 keepLast 手写 | `auditLog` 组件（`audit_log.go`，自有锁），`keepLast` 泛型 | `fbe5d54` |
+| `connectors *kernel.Connectors` + `descriptors` + `lastError` 三件套 | `connectorRoster` 组件（`connector_roster.go`），kernel 注册表作为字段 `kernel` | `fbe5d54` |
+| `used/turn` 配额状态与 `overQuota/spend` | `quota` 组件（`quota.go`） | `e898cbc` |
+| Tenant 直接摸 `agents.defs`/`agents.busy` 两张 map | 只经 `def/idle/each` 三个方法 | `e898cbc` |
+| `Host.Handler` 875 行，一条 mux 注册 70 条路由 | `routes` 注册器（`routes.go`）+ 六个按领域的 `routes_{core,discovery,records,build,ai,integration}.go`；`server.go` 1134→308 行 | `356edc7` |
+| `Tenant.Replay` 195 行藏在 host.go，accepted-result 的 9 个 kind 在一个 for 里 | `replay.go`：`Replay` + `replayAcceptedResult` | `b6ad27c` |
+| `Tenant.Restore` 193 行 | `restoreDefinitions` / `verifyCommitted` / `restoreOperations` 三个阶段 | `b6ad27c` |
 
 （继续追加）
