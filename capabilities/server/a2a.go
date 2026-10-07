@@ -75,7 +75,7 @@ func (m a2aMessage) text() string {
 
 // published says whether an administrator published the agent over A2A.
 func (t *Tenant) published(agent string) bool {
-	if t.agents == nil || t.agents.defs[agent] == nil {
+	if t.agents == nil || t.agents.def(agent) == nil {
 		return false
 	}
 	list := strings.Split(t.setting(t.automation(AgentApp, false), SettingPublished), ",")
@@ -84,7 +84,7 @@ func (t *Tenant) published(agent string) bool {
 
 // agentCard is the agent's A2A card.
 func (h *Host) agentCard(r *http.Request, t *Tenant, agent string) map[string]any {
-	d := t.agents.defs[agent]
+	d := t.agents.def(agent)
 	scheme := "http"
 	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 		scheme = "https"

@@ -180,7 +180,7 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 			if took >= budget {
 				break
 			}
-			a := t.apps[(t.turn+i)%n].Manifest().ID
+			a := t.apps[(t.quota.turn+i)%n].Manifest().ID
 			if t.overQuota(a, now) {
 				continue
 			}
@@ -195,7 +195,7 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 			took, progressed = took+1, true
 		}
 	}
-	t.turn = (t.turn + 1) % max(n, 1)
+	t.quota.next(n)
 	for _, j := range t.jobs {
 		if !j.Due.After(now) && took < budget && !t.overQuota(j.App, now) {
 			t.run(j, now, false)
@@ -234,30 +234,9 @@ func (t *Tenant) pending(now time.Time) bool {
 }
 
 // overQuota reports whether app has used its attempts of the minute (Tenant.Quota).
-func (t *Tenant) overQuota(app string, now time.Time) bool {
-	if t.Quota <= 0 {
-		return false
-	}
-	u := t.used[app]
-	return u.minute.Equal(now.Truncate(time.Minute)) && u.n >= t.Quota
-}
+func (t *Tenant) overQuota(app string, now time.Time) bool { return t.quota.over(app, t.Quota, now) }
 
-func (t *Tenant) spend(app string, now time.Time) {
-	if t.used == nil {
-		t.used = map[string]usedMinute{}
-	}
-	u, minute := t.used[app], now.Truncate(time.Minute)
-	if !u.minute.Equal(minute) {
-		u = usedMinute{minute: minute}
-	}
-	u.n++
-	t.used[app] = u
-}
-
-type usedMinute struct {
-	minute time.Time
-	n      int
-}
+func (t *Tenant) spend(app string, now time.Time) { t.quota.spend(app, now) }
 
 // Deferred are the apps past their quota at now, with their ready work waiting.
 func (t *Tenant) Deferred(now time.Time) []string {

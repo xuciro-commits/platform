@@ -84,13 +84,12 @@ type Tenant struct {
 	jobs   []*Task
 	// Quota is the attempts of owned work each app may make in a minute (ADR-0027 D3); 0: no limit.
 	Quota      int
-	used       map[string]usedMinute // attempts per app in the current minute (volatile)
-	turn       int                   // the app the next round starts at
-	breakers   breakers              // per endpoint and AI provider (volatile)
-	connectors connectorRoster       // registry, descriptor index, last refusals (connector_roster.go)
-	notices    noticeBoard           // notifications (notices.go)
-	settings   settingValues         // "<app>/<name>" → value (settings.go)
-	sequences  sequences             // number counters (ADR-0024)
+	quota      quota           // attempts per app per minute and the round-robin turn (quota.go)
+	breakers   breakers        // per endpoint and AI provider (volatile)
+	connectors connectorRoster // registry, descriptor index, last refusals (connector_roster.go)
+	notices    noticeBoard     // notifications (notices.go)
+	settings   settingValues   // "<app>/<name>" → value (settings.go)
+	sequences  sequences       // number counters (ADR-0024)
 	endpoints  []*Endpoint
 	outbound   []*effect
 	// Secrets resolves a secret's name (default: PLATFORM_SECRETS_DIR, then
