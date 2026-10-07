@@ -6,6 +6,7 @@ import (
 	"maps"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -478,9 +479,37 @@ func (s *recordStore) check(c platform.Caller, entity any) *kernel.Error {
 		return invalid
 	}
 	v := reflect.ValueOf(entity)
+	// A conditional field (FieldInfo.When) follows its condition's value.
+	stringOf := func(name string) string {
+		i := slices.IndexFunc(et.info.Fields, func(x platform.FieldInfo) bool { return x.Name == name })
+		if i < 0 {
+			return ""
+		}
+		cv := v.FieldByIndex(et.info.Fields[i].Index)
+		if cv.Kind() == reflect.Pointer {
+			if cv.IsNil() {
+				return ""
+			}
+			cv = cv.Elem()
+		}
+		if cv.Kind() == reflect.Bool {
+			return strconv.FormatBool(cv.Bool())
+		}
+		return cv.String()
+	}
 	for _, f := range et.info.Fields {
 		fv := v.FieldByIndex(f.Index)
-		if f.Required && fv.IsZero() {
+		if f.When != nil {
+			on, _ := et.info.Field(f.When.Field)
+			switch active := f.Active(stringOf); {
+			case active && f.Required && fv.IsZero():
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} is required when {condition} is {values}", f.Title, on.Title, strings.Join(f.When.In, ", "))
+			case !active && !fv.IsZero():
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} applies only when {condition} is {values}", f.Title, on.Title, strings.Join(f.When.In, ", "))
+			case !active:
+				continue
+			}
+		} else if f.Required && fv.IsZero() {
 			return invalid
 		}
 		if fv.Kind() == reflect.Pointer {

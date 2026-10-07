@@ -79,6 +79,11 @@ type Field struct {
 	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
 	Required bool   `json:"required,omitempty"`
 	Search   bool   `json:"search,omitempty" title:"Searchable"`
+	// When bounds the field to another field's value (WorkQueue #138/#132):
+	// "kind=refund,return" or "urgent=true". The field is asked for, and
+	// required if marked so, only while the condition holds; otherwise it
+	// stays empty. One level: the condition's field is unconditional.
+	When string `json:"when,omitempty" title:"Only when" help:"field=value,value — another choice or boolean field of this object and the values that make this field apply" example:"kind=refund,return"`
 	// Formula computes an integer or decimal field from the record's other
 	// number fields at every decision; such a field is read-only (ADR-0064).
 	Formula string `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
@@ -825,6 +830,40 @@ func checkFields(fields []Field, known func(string) bool) error {
 		}
 		seen[f.Name] = true
 	}
+	return checkConditions(fields)
+}
+
+// checkConditions reads every "Only when" as the kit will (field=value,value)
+// and refuses one that names no other unconditional choice or boolean field,
+// or a value it never takes.
+func checkConditions(fields []Field) error {
+	for _, f := range fields {
+		if f.When == "" {
+			continue
+		}
+		name, values, ok := strings.Cut(f.When, "=")
+		if !ok || name == "" || values == "" {
+			return fmt.Errorf("the field %q applies \"only when\" %q, which is not field=value,value", f.Name, f.When)
+		}
+		i := slices.IndexFunc(fields, func(x Field) bool { return x.Name == name })
+		switch {
+		case i < 0 || name == f.Name:
+			return fmt.Errorf("the field %q applies only when %q is set, which is not another field of this object", f.Name, name)
+		case fields[i].When != "":
+			return fmt.Errorf("the field %q depends on %q, which is conditional itself", f.Name, name)
+		case fields[i].Type != "choice" && fields[i].Type != "boolean":
+			return fmt.Errorf("the field %q depends on %q, which is neither a choice nor a boolean", f.Name, name)
+		}
+		allowed := []string{"true", "false"}
+		if fields[i].Type == "choice" {
+			allowed = choices(fields[i].Choices)
+		}
+		for _, v := range strings.Split(values, ",") {
+			if !slices.Contains(allowed, v) {
+				return fmt.Errorf("the field %q depends on %q being %q, which it never is", f.Name, name, v)
+			}
+		}
+	}
 	return nil
 }
 
@@ -1129,6 +1168,9 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		}
 		if len(marks) > 0 {
 			tag += fmt.Sprintf(` field:"%s"`, strings.Join(marks, ","))
+		}
+		if f.When != "" {
+			tag += fmt.Sprintf(` when:"%s"`, f.When)
 		}
 		if len(f.Read) > 0 { // the builder always reads and sets what it builds
 			tag += fmt.Sprintf(` read:"%s"`, strings.Join(append([]string{Builder}, f.Read...), ","))
