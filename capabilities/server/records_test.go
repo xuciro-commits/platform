@@ -33,6 +33,7 @@ type Item struct {
 	Line   string            `json:"line"`
 	Owner  string            `json:"owner" field:"readonly"`
 	Kind   string            `json:"kind" choices:"part,tool"`
+	Serial string            `json:"serial,omitempty" field:"required" when:"kind=tool"` // #138: tools carry a serial, parts never do
 	Bin    platform.Ref[Bin] `json:"bin"`
 	Tags   []string          `json:"tags"`
 	Due    string            `json:"due" type:"date"`
@@ -199,7 +200,12 @@ func TestRecords(t *testing.T) {
 		{do("ana", "stock.bin.create", "stock.bin", "B1", map[string]any{"code": "A-01"}), "ok"},
 		{do("ana", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 5, "line": "L1", "kind": "part", "bin": "B1",
 			"price": map[string]any{"amount": 150, "currency": "EUR"}, "tags": []string{"m6", "steel"}, "due": "2026-10-01"}), "ok"},
-		{do("bo", "stock.item.create", "stock.item", "I2", map[string]any{"name": "Wrench", "qty": 2, "line": "L2", "kind": "tool"}), "ok"},
+		{do("bo", "stock.item.create", "stock.item", "I2", map[string]any{"name": "Wrench", "qty": 2, "line": "L2", "kind": "tool"}), "ERROR_CODE_INVALID_ARGUMENT"}, // a tool needs its serial
+		{do("bo", "stock.item.create", "stock.item", "I2", map[string]any{"name": "Wrench", "qty": 2, "line": "L2", "kind": "tool", "serial": "W-7"}), "ok"},
+		{do("ana", "stock.item.create", "stock.item", "I9", map[string]any{"name": "Washer", "kind": "part", "serial": "no"}), "ERROR_CODE_INVALID_ARGUMENT"}, // a part has none
+		{do("bo", "stock.item.edit", "stock.item", "I2", map[string]any{"kind": "part"}), "ERROR_CODE_INVALID_ARGUMENT"},                                      // the serial would be left behind
+		{do("bo", "stock.item.edit", "stock.item", "I2", map[string]any{"kind": "part", "serial": ""}), "ok"},
+		{do("bo", "stock.item.edit", "stock.item", "I2", map[string]any{"kind": "tool", "serial": "W-7"}), "ok"},
 		{do("ana", "stock.item.create", "stock.item", "I3", map[string]any{"name": "Nut", "qty": 40, "line": "L1", "kind": "part", "bin": "B1"}), "ok"},
 		{do("ana", "stock.item.create", "stock.item", "I4", map[string]any{"name": "x", "kind": "gadget"}), "ERROR_CODE_INVALID_ARGUMENT"}, // not a choice
 		{do("ana", "stock.item.create", "stock.item", "I4", map[string]any{"name": "x", "bin": "B9"}), "ERROR_CODE_INVALID_REFERENCE"},     // no such bin

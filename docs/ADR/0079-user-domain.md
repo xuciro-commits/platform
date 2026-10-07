@@ -2,6 +2,25 @@
 
 状态：接受，已实现有界用户域；离职移交等退出判据尚未满足 · 2026-10-06 · 承接 ADR-0023（语言）、ADR-0067（企业模型中的人）、ADR-0078（租户与授权）
 
+
+## 实际边界（As-built，2026-10-07）
+
+正文是设计稿；下表按代码逐项核过。**正文与本表冲突时以本表为准。**
+
+| 正文的说法 | 代码里的事实 |
+|---|---|
+| 四层：`platform.identity` / `platform.member` / `platform.profile` / Person | **只有 `platform.profile` 是实体**（`profile.go`，`platform.profile.update`，随 Console 账本快照/回放）。**没有 `platform.identity`**：身份是 Console 已决状态里 `subject → member` 的字符串映射，没有 `issuer/verified/label/lastSignIn`，没有"多身份、看/解绑"。**没有 `platform.member` 实体**：成员是 Console 的已决状态（`platform.member.add/grant/revoke/invite/suspend/resume/offboard/delegate` 这些决定的结果），没有 `kind` person/service/agent（只有 `Agent bool`）、没有 `invitedBy/joined`。 |
+| Profile 字段清单（§2） | 实有：`displayName givenName familyName title pronouns email phone language timezone dateFormat numberFormat weekStart inApp mail digest quietFrom quietTo homePage theme density`，只读 `lastSeen`。**没有** `avatar measurement contactVisibility mute[] landingApp recentLimit reduceMotion highContrast fontScale lastSignIn`。 |
+| 偏好生效（§3） | 真生效：`timezone`（`Member.Location`，记账日期/"今天"）、`language`、`inApp`/`mail` 通道、`email` 收件、`homePage`/`theme`/`density`（工作台启动读 `/v1/me`）。`digest`/`quietFrom/quietTo` 只作用于**邮件**的发出时刻（`Reach.Due`：hourly 推到下一整点、daily 推到次日 08:00、静默窗内推到窗尾），**不合并**成一封汇总邮件；站内通知不延后。 |
+| 邀请发邮件、`signInDomains` 自助加入 | `platform.member.invite{subject}` 只把人写进目录（可先授予），**不发邮件、没有签名链接**；首次登录转 active 由 `lastSeen` 派生。**没有自助加入**。 |
+| 离职转继任、Person 写 `Until` | `offboard{reason}` 收回授予、移除身份与令牌、保留记录；**不转待办/审批、不写企业模型 Person 的 `Until`**（无 `successor` 参数）。 |
+| 服务账号必须有 `Until` | 没有服务账号这一类；`client:<id>` 身份就是普通成员，不强制到期。 |
+| MFA：`mfaRequired` 作为 ACR 传给 IdP 并校验 `amr/acr` | **未做**，设置只存。 |
+| 会话与令牌（§5） | 已做：`GET /v1/sessions`、`POST /v1/sessions/end-others`（宿主内存撤销）、`suspend` 结束全部会话；`platform.token.issue/revoke`、`GET /v1/tokens`、`/v1/tokens/{id}/secret` 一次性取密钥、`Member.Scopes` 越界被引擎以 `token-scope` 拒绝。宿主重启后内存会话/撤销表清空（令牌本身仍按状态校验）。 |
+| "我的账户"页 | 有：称呼/本地化/通知/工作偏好、我的授予与委托、我的会话、我的令牌。**没有**：我的身份（看/解绑）、下载我的数据。 |
+
+退出判据（§7）据此修正：第 1 条只达成"时区→记账日期"，邀请邮件**未达成**、quietHours 只延后不"合并投递"；第 2 条只达成"授予全部收回、审计仍显示其姓名"，转继任与 Person `Until` **未达成**；第 3 条达成前两句，"服务账号到期"不存在；第 4 条达成。
+
 ## 0. 为什么现在
 
 今天的"用户"只是 `platform.Member{ID, Tenant, Roles, Agent, Language}` 加一张 `subject → member` 表：没有姓名、邮箱、头像、时区、通知偏好，没有邀请/停用/离职，没有"我的账户"。时区尤其要紧——ADR-0076 的记账日期、`core.period` 的归属、"今天"的默认值，现在都按 UTC 或浏览器算。本 ADR 把用户拆成四层并给每层一个归宿，不引入外部用户目录。
@@ -62,8 +81,8 @@ Identity  ──signs in as──▶  Member  ──has one──▶  Profile
 
 | 块 | 内容 | 规模 |
 |---|---|---|
-| **A 成员实体化 + Profile** | `platform.member`/`platform.identity`/`platform.profile` 成为 Console 账本实体（快照/回放沿账本）；`Member.Language` 迁到 profile；My account 页（称呼/本地化/通知）；Members 页读新实体 | L |
-| **B 偏好生效** | `Caller.Location` 与所有"今天/现在"；通知 channels/digest/quietHours；主页/密度落盘 | M |
+| **A 成员实体化 + Profile** | `platform.member`/`platform.identity`/`platform.profile` 成为 Console 账本实体（快照/回放沿账本）；`Member.Language` 迁到 profile；My account 页（称呼/本地化/通知）；Members 页读新实体。**部分交付 2026-10-06**：只有 `platform.profile` 成为实体；成员与身份仍是 Console 已决状态（见 E 行与顶部「实际边界」），`platform.identity` 未建 | L |
+| **B 偏好生效** | `Caller.Location` 与所有"今天/现在"；通知 channels/digest/quietHours；主页/密度落盘。**部分交付 2026-10-06**：`Member.Location`、inApp/mail 通道、主页/主题/密度已生效；digest/quietHours 只推迟邮件发出时刻，不合并 | M |
 | **C 生命周期** | invite/suspend/resume/offboard、撤销表、自助加入、服务账号。**已交付 2026-10-06**：`Member.Status` ∈ {active(空), invited, suspended, left}；`platform.member.invite{subject}`（尚未登录者先入目录、可先授予；首次登录即转 active——由宿主的 `lastSeen` 内存派生，不是决定，宿主重启后 invited 的活动显示需再次登录）、`.suspend{reason}`（角色留在记录上但一无所持、不能操作，会话全部结束）、`.resume`、`.offboard{reason}`（登录身份与令牌移除、授予清空、记录与历史保留，不可逆；`Member(subject)` 不再认得）；不能改自己的状态；离职尚不自动移交 work/flow 待办，也不写企业模型任职 Until，§7 的该项仍未满足。Members 页「Standing」列与成员页「Standing」面板。「撤销表」即宿主的 `sessionTable.revoked`；「自助加入」不做（邀请即席位，SaaS 外部注册不属本期）；服务账号仍是 `platform.member.add` 的 `client:` 主体 | M |
 | **D 会话与令牌** | sessions 视图、退出其它会话、`platform.token`。**已交付 2026-10-06**：`platform.token.issue{label,scopes[],until}`（任何成员，target=`platform.token/<id>`；密钥 `pat_…` = HMAC(宿主签名密钥, 租户/令牌/决定 change id)，账本与状态都不存密钥或哈希，`GET /v1/tokens/{id}/secret` 仅签发进程内、签发后十分钟内对签发人给一次，重启关闭已有令牌的密钥展示窗口但令牌仍可使用；持令牌者得 `Member.Scopes`，越界动作被引擎以 `token-scope` 拒绝；令牌不能再签令牌）、`platform.token.revoke`（本人或管理员）、`GET /v1/tokens`；`Host.member` 接受 `Bearer pat_…`。会话：宿主内存按凭证哈希记 sign-in/token、UA 摘要、首末时间，`GET /v1/sessions`，`POST /v1/sessions/end-others` 让宿主此后拒绝其它凭证；停用/离职/撤销令牌在接受结果提交后结束正式会话；令牌会话绑定其令牌 ID，撤销不留下会话条目。OIDC delivery 必须配置独立、持久化的 `PLATFORM_PERSONAL_TOKEN_KEY`（至少 32 字节），不使用开发默认密钥；lightweight 使用已有私有签名密钥。撤销表与活动时间仍为进程内存，重启不保留已结束的登录会话；同一凭证在两浏览器不是两条会话。My account 新增「Personal tokens」「Sessions」两栏 | S |
 | **E 减法** | 删 `Console.members` 内存 map 与 `subjects` 表、`SchemaLanguage`、`MemberView`、`Identities()` 开发令牌清单改从实体派生；`directory.json` 的 seats 变成首次导入。**已结 2026-10-06**：`platform.member.language` 不再进入线上目录，新提交被拒；历史 schema 仅在账本恢复注册，保留原提交/成员语言字节，并投影为账户偏好，后续档案编辑可显式回到租户默认。`directory.json` 已删除；`Console.members`/`subjects` 就是 Console 的已决状态（随账本快照/回放），`MemberView` 是生成到 `host.ts` 的应答类型，`Identities()` 已从该状态派生——三者是模型本身而非残留，保留；`Profile.LastSeen`、令牌 `LastUsed` 与会话改为宿主内存，不再污染已决状态 | S |

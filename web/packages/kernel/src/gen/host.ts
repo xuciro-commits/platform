@@ -789,6 +789,11 @@ export type FieldChange = {
   after?: unknown;
 };
 
+export type FieldCondition = {
+  field: string;
+  in: string[];
+};
+
 export type FieldInfo = {
   property?: AssetBinding;
   name: string;
@@ -810,6 +815,7 @@ export type FieldInfo = {
   help?: string;
   synonyms?: string;
   example?: string;
+  when?: FieldCondition;
   fields?: FieldInfo[];
 };
 

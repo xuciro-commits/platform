@@ -23,6 +23,8 @@ export type FieldType<V = any, R = any> = {
   help?: string;
   required?: boolean;
   readOnly?: boolean;
+  /** The field applies only while another field holds one of these values (#138): forms hide it otherwise and send nothing for it. */
+  when?: FieldCondition;
   align?: "left" | "right";
   width?: number;
   /** Computed fields (formula, created time) read their value from the row. */
@@ -36,7 +38,11 @@ export type FieldType<V = any, R = any> = {
   text: (value: V | undefined) => string;
 };
 
-type Common = { label: string; help?: string; required?: boolean; readOnly?: boolean; width?: number };
+export type FieldCondition = { field: string; in: string[] };
+/** Whether a conditional field applies to a record's current values ("true"/"false" for booleans). */
+export const applies = (f: { when?: FieldCondition }, values: Record<string, unknown>) =>
+  !f.when || f.when.in.includes(values[f.when.field] === true ? "true" : values[f.when.field] === false ? "false" : String(values[f.when.field] ?? ""));
+type Common = { label: string; help?: string; required?: boolean; readOnly?: boolean; when?: FieldCondition; width?: number };
 const empty = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
 const muted = <span className="text-muted">—</span>;
 const byString = (a: unknown, b: unknown) => String(a).localeCompare(String(b));

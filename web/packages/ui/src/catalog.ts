@@ -133,7 +133,7 @@ export const entries: CatalogEntry[] = [
   asset("ui/page-header", "Page header", "Give a task its title, description and visible actions.", 2,
     "components/PageHeader.tsx", ["PageHeader"], "Headers", { dependencies: ["ui/button"] }),
   asset("ui/field-types", "Typed field vocabulary", "One field type owns display, editing, validation, sorting and filtering.", 3,
-    "fields/types.tsx", ["field.text", "field.json", "field.longText", "field.markdown", "field.number", "field.currency", "field.percent", "field.checkbox", "field.date", "field.datetime", "field.duration", "field.singleSelect", "field.multiSelect", "field.tags", "field.email", "field.url", "field.phone", "field.barcode", "field.rating", "field.attachment", "field.link", "field.formula", "field.timestamp"], "Fields", { type: "FieldType", tags: ["text", "json", "longText", "markdown", "number", "currency", "percent", "checkbox", "date", "datetime", "duration", "singleSelect", "multiSelect", "tags", "email", "url", "phone", "barcode", "rating", "attachment", "link", "formula", "timestamp"],
+    "fields/types.tsx", ["field.text", "field.json", "field.longText", "field.markdown", "field.number", "field.currency", "field.percent", "field.checkbox", "field.date", "field.datetime", "field.duration", "field.singleSelect", "field.multiSelect", "field.tags", "field.email", "field.url", "field.phone", "field.barcode", "field.rating", "field.attachment", "field.link", "field.formula", "field.timestamp", "field.applies"], "Fields", { type: "FieldType", tags: ["text", "json", "longText", "markdown", "number", "currency", "percent", "checkbox", "date", "datetime", "duration", "singleSelect", "multiSelect", "tags", "email", "url", "phone", "barcode", "rating", "attachment", "link", "formula", "timestamp"],
       constraints: ["Reference links need a Workspace; attachment upload needs an explicit caller implementation."] }),
   asset("ui/entity-form", "Schema form", "Render labelled editors and validate an ad hoc schema before submission.", 3,
     "components/EntityForm.tsx", ["EntityForm"], "SchemaForms", { tags: ["form", "schema"], states: ["Invalid", "Submitting"], dependencies: ["ui/field-types", "ui/button"] }),
@@ -190,7 +190,7 @@ export const entries: CatalogEntry[] = [
 /** Public nonvisual API, classified explicitly rather than pretending to be UI. */
 export const api = [
   "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
-  "defineEntity", "columnsFor", "recordSchema", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useUnsavedChanges", "notify",
+  "defineEntity", "columnsFor", "recordSchema", "activeValues", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useUnsavedChanges", "notify",
   "routeKey", "routeToHash", "routeFromHash", "layout", "diagramLayout", "diagramLayouts", "neighborhoodPositions", "canvasNodeHeight", "canvasNodeWidth", "canvasPlacement", "validateCanvasConnection",
   "flowStates", "useChartData", "groupDomain", "aggregateQuery", "aggregateValues", "columnOf",
   "groupable", "measurable", "entityFrom", "setCurrency", "humanizeKernelError",

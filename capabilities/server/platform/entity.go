@@ -299,9 +299,73 @@ type FieldInfo struct {
 	Help     string `json:"help,omitempty"`
 	Synonyms string `json:"synonyms,omitempty"`
 	Example  string `json:"example,omitempty"`
+	// When bounds the field to a condition on another field of the record
+	// (WorkQueue #138/#132): tag when:"kind=refund,return" or when:"urgent=true".
+	// While the condition holds, the field is asked for and, if required,
+	// must be given; while it does not, it must stay empty. Pages hide it the
+	// same way. One level only: the condition's field is unconditional.
+	When *FieldCondition `json:"when,omitempty"`
 	// Fields are a lines field's columns (ADR-0024): each line is a struct of them.
 	Fields []FieldInfo `json:"fields,omitempty"`
 	Index  []int       `json:"-"`
+}
+
+// FieldCondition is "field In one of these values": a choice's values or a
+// boolean's "true"/"false".
+type FieldCondition struct {
+	Field string   `json:"field"`
+	In    []string `json:"in"`
+}
+
+// Holds reports whether the condition holds for a record's value of its field.
+func (c *FieldCondition) Holds(value string) bool { return c == nil || slices.Contains(c.In, value) }
+
+// parseWhen reads when:"field=a,b".
+func parseWhen(tag string) (*FieldCondition, error) {
+	if tag == "" {
+		return nil, nil
+	}
+	field, values, ok := strings.Cut(tag, "=")
+	if !ok || field == "" || values == "" {
+		return nil, fmt.Errorf("a condition is field=value,value, not %q", tag)
+	}
+	return &FieldCondition{Field: field, In: strings.Split(values, ",")}, nil
+}
+
+// checkConditions makes sure every condition names an unconditional choice or
+// boolean field of the same struct and only its values.
+func checkConditions(entity string, fields []FieldInfo) error {
+	for _, f := range fields {
+		if f.When == nil {
+			continue
+		}
+		i := slices.IndexFunc(fields, func(x FieldInfo) bool { return x.Name == f.When.Field })
+		if i < 0 || i == slices.IndexFunc(fields, func(x FieldInfo) bool { return x.Name == f.Name }) {
+			return fmt.Errorf("entity %s: field %s depends on %s, which is not another field", entity, f.Name, f.When.Field)
+		}
+		on := fields[i]
+		if on.When != nil {
+			return fmt.Errorf("entity %s: field %s depends on %s, which is conditional itself", entity, f.Name, on.Name)
+		}
+		allowed := on.Choices
+		if on.Type == "boolean" {
+			allowed = []string{"true", "false"}
+		} else if on.Type != "choice" {
+			return fmt.Errorf("entity %s: field %s depends on %s, which is neither a choice nor a boolean", entity, f.Name, on.Name)
+		}
+		for _, v := range f.When.In {
+			if !slices.Contains(allowed, v) {
+				return fmt.Errorf("entity %s: field %s depends on %s being %q, which it never is", entity, f.Name, on.Name, v)
+			}
+		}
+	}
+	return nil
+}
+
+// Active reports whether the field applies to a record given its condition
+// field's value, as a string ("true"/"false" for booleans).
+func (f FieldInfo) Active(valueOf func(field string) string) bool {
+	return f.When == nil || f.When.Holds(valueOf(f.When.Field))
 }
 
 // EntityInfo is an entity type as the host and the UI see it.
@@ -704,7 +768,15 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		if f.Inverse = sf.Tag.Get("inverse"); f.Inverse != "" && f.Type != "reference" {
 			return nil, fmt.Errorf("entity %s: field %s names an inverse but is not a reference", e.Type, name)
 		}
+		when, err := parseWhen(sf.Tag.Get("when"))
+		if err != nil {
+			return nil, fmt.Errorf("entity %s: field %s: %w", e.Type, name, err)
+		}
+		f.When = when
 		out = append(out, f)
+	}
+	if err := checkConditions(e.Type, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

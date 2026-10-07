@@ -71,6 +71,7 @@ TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mi
 
 - `-data` 就是**全部**持久状态：`journal/journal.jsonl`（条目）、`journal/snapshots/`（本代码最新的两份快照）、`journal/derived/`（向量与转写）、`files/<tenant>/<hash>`（文件字节，内容寻址）、`idp.key`（签名密钥，0600）。备份和迁移就是复制这一个目录。
 - 身份：轻量宿主只接受自己用 `idp.key` 签发的 token；交付宿主的开发 token（把 subject 原文当凭据）在这里是 401。租户与席位来自 `-tenants`（宿主控制台新建的租户会追加进该文件）或内置的演示租户。
+- 宿主控制台：`-host-admins user:ops@example.test,client:ci`（逗号分隔）列出可以打开 Host Console 的主体；他们不需要任何租户席位——`/v1/me` 对其 401，工作区改从 `/v1/host/me` 装载只有控制台的壳。不给这个参数时控制台对所有人 401。
 - 与轻量 profile 互斥的开关会被拒绝：`-database`、`-files`、`-oidc-issuer`、`-oidc-keys`、`-project`；交付 profile 则拒绝 `-data`、`-idp-key`。
 - 重启语义与 PostgreSQL 日志一致：启动时读本代码的最新快照、重放其余条目、损坏日志则隔离该租户；`/v1/sign-in`、`/v1/me`、权限拒绝与审计不因 profile 而变。
 
