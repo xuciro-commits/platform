@@ -64,8 +64,8 @@ export function EventEffects({ document, section, control, eventName, owner, ove
         {kind === "overlay" && <Select aria-label={t("Overlay action")} value={`${effect.target}:${effect.value === true ? "open" : "close"}`} onChange={(e) => { const i = e.target.value.lastIndexOf(":"); replace(at, { kind: "set", target: e.target.value.slice(0, i), value: e.target.value.slice(i + 1) === "open" }); }}>
           {overlays.flatMap((o) => [true, false].map((open) => <option key={`${o.openVariable}:${open}`} value={`${o.openVariable}:${open ? "open" : "close"}`}>{t(open ? "Open {title}" : "Close {title}", { title: o.title })}</option>))}
         </Select>}
-        {kind === "set" && <SetEffect document={document} effect={effect} writable={writable} onChange={(next) => replace(at, next)} />}
-        {kind === "action" && <ActionEffect effect={effect} records={records} document={document} onChange={(next) => replace(at, next)} />}
+        {kind === "set" && <SetEffect document={document} effect={effect} writable={writable} variables={variables} onChange={(next) => replace(at, next)} />}
+        {kind === "action" && <ActionEffect effect={effect} records={records} variables={variables} document={document} onChange={(next) => replace(at, next)} />}
         {kind === "navigate" && effect.navigate && <NavigateEffect navigation={effect.navigate} variables={variables} onChange={(navigate) => replace(at, { kind: "navigate", navigate })} />}
         {kind === "return" && <p className="text-xs text-muted">{t("Returns this page's interface outputs to the page that opened it.")}</p>}
       </li>;
@@ -83,19 +83,22 @@ export function EventEffects({ document, section, control, eventName, owner, ove
 
 const swap = (list: Api.PageEffect[], a: number, b: number) => { const next = [...list]; [next[a], next[b]] = [next[b]!, next[a]!]; return next; };
 
-function SetEffect({ document, effect, writable, onChange }: { document: Api.PageDocument; effect: Api.PageEffect; writable: [string, Api.PageVariable][]; onChange: (next: Api.PageEffect) => void }) {
+function SetEffect({ document, effect, writable, variables, onChange }: { document: Api.PageDocument; effect: Api.PageEffect; writable: [string, Api.PageVariable][]; variables: [string, Api.PageVariable][]; onChange: (next: Api.PageEffect) => void }) {
   const variable = document.variables?.[effect.target ?? ""];
   const tabs = Object.values(document.nodes).filter((node) => node.kind === "tabs" && node.activeVariable === effect.target).flatMap((node) => node.children ?? []);
+  const sources = variables.filter(([id, v]) => id !== effect.target && v.type === variable?.type);
   return <>
     <label className="grid gap-1 text-xs">{t("Target state variable")}<Select value={effect.target ?? ""} onChange={(e) => { const v = document.variables?.[e.target.value]; if (v) onChange({ kind: "set", target: e.target.value, value: v.type === "boolean" ? false : "" }); }}>
       <option value="">{t("Choose a state variable")}</option>{writable.map(([id, v]) => <option key={id} value={id}>{v.title || id}</option>)}</Select></label>
-    {variable && (variable.type === "boolean" ? <Checkbox checked={effect.value === true} onChange={(value) => onChange({ ...effect, value })}>{t("Event value")}</Checkbox>
+    {variable && sources.length > 0 && <label className="grid gap-1 text-xs">{t("Copy from variable")}<Select value={effect.from ?? ""} onChange={(e) => onChange(e.target.value ? { kind: "set", target: effect.target, from: e.target.value } : { kind: "set", target: effect.target, value: variable.type === "boolean" ? false : "" })}>
+      <option value="">{t("Literal")}</option>{sources.map(([id, v]) => <option key={id} value={id}>{v.title || id}</option>)}</Select></label>}
+    {variable && !effect.from && (variable.type === "boolean" ? <Checkbox checked={effect.value === true} onChange={(value) => onChange({ ...effect, value })}>{t("Event value")}</Checkbox>
       : tabs.length ? <label className="grid gap-1 text-xs">{t("Event value")}<Select value={String(effect.value ?? "")} onChange={(e) => onChange({ ...effect, value: e.target.value })}><option value="">{t("Choose a tab")}</option>{tabs.map((id) => <option key={id} value={id}>{document.nodes[id]?.title || id}</option>)}</Select></label>
       : <label className="grid gap-1 text-xs">{t("Event value")}<Input value={String(effect.value ?? "")} onChange={(e) => onChange({ ...effect, value: e.target.value })} /></label>)}
   </>;
 }
 
-function ActionEffect({ effect, records, document, onChange }: { effect: Api.PageEffect; records: [string, Api.PageVariable][]; document: Api.PageDocument; onChange: (next: Api.PageEffect) => void }) {
+function ActionEffect({ effect, records, variables, document, onChange }: { effect: Api.PageEffect; records: [string, Api.PageVariable][]; variables: [string, Api.PageVariable][]; document: Api.PageDocument; onChange: (next: Api.PageEffect) => void }) {
   const { catalog } = useHost();
   const action = effect.action ?? { ref: { app: "", kind: "action", name: "" } };
   const variable = document.variables?.[action.recordVariable ?? ""], object = variable?.source?.object?.name;
@@ -107,6 +110,17 @@ function ActionEffect({ effect, records, document, onChange }: { effect: Api.Pag
     <label className="grid gap-1 text-xs">{t("Action")}<Select value={action.ref.name} onChange={(e) => onChange({ kind: "action", action: { ...action, ref: { app: e.target.value.split(".")[0] ?? "build", kind: "action", name: e.target.value } } })}>
       <option value="">{t("Choose an action")}</option>{offered.map((a) => <option key={a.schema} value={a.schema}>{a.title} · {a.schema}</option>)}</Select></label>
     {declared && <p className="text-xs text-muted">{declared.payload.length ? t("Opens the action's form; the chain continues after it commits.") : t("Taken at once, without a form.")}</p>}
+    {declared?.payload.filter((field) => ["string", "boolean", "decimal"].includes(field.type)).map((field) => {
+      const binding = action.inputs?.[field.name];
+      const set = (next?: Api.PageValue) => { const inputs = { ...action.inputs }; if (next) inputs[field.name] = next; else delete inputs[field.name]; onChange({ kind: "action", action: { ...action, inputs: Object.keys(inputs).length ? inputs : undefined } }); };
+      return <div key={field.name} className="grid gap-1">
+        <label className="grid gap-1 text-xs">{t("Prefill {name}", { name: field.name })}<Select value={binding ? binding.variable ?? "literal" : ""} onChange={(e) => set(e.target.value === "" ? undefined : e.target.value === "literal" ? { literal: field.type === "boolean" ? false : "" } : { variable: e.target.value })}>
+          <option value="">{t("Ask in the form")}</option>{field.type !== "decimal" && <option value="literal">{t("Literal")}</option>}{variables.filter(([, v]) => v.type === field.type).map(([key, v]) => <option key={key} value={key}>{v.title || key}</option>)}</Select></label>
+        {binding && !binding.variable && (field.type === "boolean" ? <Checkbox checked={binding.literal === true} onChange={(value) => set({ literal: value })}>{t("Input value")}</Checkbox>
+          : field.choices?.length ? <Select aria-label={t("Input value")} value={String(binding.literal ?? "")} onChange={(e) => set({ literal: e.target.value })}><option value="">{t("Choose a value")}</option>{field.choices.map((c) => <option key={c} value={c}>{c}</option>)}</Select>
+          : <Input aria-label={t("Input value")} value={String(binding.literal ?? "")} onChange={(e) => set({ literal: e.target.value })} />)}
+      </div>;
+    })}
     {!declared && action.ref.name && <p className="text-xs text-danger">{t("This action is not offered to you.")}</p>}
   </>;
 }

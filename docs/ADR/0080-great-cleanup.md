@@ -1,6 +1,6 @@
 # ADR-0080 大扫除：代码结构与边界重整（The Great Cleanup）
 
-状态：接受，第 0/1/2/4/5 波已落地，第 3 波待评估 · 2026-10-07 · 承接 AGENTS.md 规则（单一归属、无重复路径、做减法）、ADR-0052–0079 的全部交付；不改变任何对外契约（API、`host.ts`、动作/读名、账本 schema、页面/包描述符）。
+状态：**已落地**（第 0/1/2/4/5 波；第 3 波以证据关闭，见 §3）· 2026-10-07 · 承接 AGENTS.md 规则（单一归属、无重复路径、做减法）、ADR-0052–0079 的全部交付；不改变任何对外契约（API、`host.ts`、动作/读名、账本 schema、页面/包描述符）。
 
 ## 0. 为什么现在做
 
@@ -87,7 +87,7 @@ capabilities/server/
 
 每波都可独立停下；停在任何一波，仓库都是绿的、结构都比之前清楚。
 
-**落地状态（2026-10-07，`ca2eb4c`）**：第 0/1/2 波完成（Tenant 字段 80 → 56，16 个组件文件，各自持锁或注明受 `t.mu`/`opsMu` 保护）；第 4 波完成到"再拆只是搬行数"的程度（>150 行函数 33 → 15，剩余登记为例外：`routesBuild`/`routesRecords` 是路由表，`checkWidget` 是 50 个 widget 的校验表，`visiblePage`/`registerDefinitions`/`ApplicationRuns`/`candidateWithBindings` 是逐字段过滤，其余 ≤ 230 行）；三个零引用函数删除；第 5 波 `doc.go`/AGENTS.md/Testing.md/`shared/` 解散完成。**第 3 波（accepted/console/integration 分包）未做**：它需要先看 GPT 组合编译（`apps/*/server` 可见类型）的结果，且 `pageui` 的经验表明分包收益要重新评估——留给下一轮，以本表为准。
+**落地状态（2026-10-07，`ca2eb4c`）**：第 0/1/2 波完成（Tenant 字段 80 → 56，16 个组件文件，各自持锁或注明受 `t.mu`/`opsMu` 保护）；第 4 波完成到"再拆只是搬行数"的程度（>150 行函数 33 → 15，剩余登记为例外：`routesBuild`/`routesRecords` 是路由表，`checkWidget` 是 50 个 widget 的校验表，`visiblePage`/`registerDefinitions`/`ApplicationRuns`/`candidateWithBindings` 是逐字段过滤，其余 ≤ 230 行）；三个零引用函数删除；第 5 波 `doc.go`/AGENTS.md/Testing.md/`shared/` 解散完成。**第 3 波（accepted/console/integration 分包）以证据关闭**：`accepted_*` 的结果类型依赖根包的 `taskState/effectState/row/Task/stagedDecision`，`console` 与 `Tenant` 互指，`pageui` 的尝试已证明"分包必成环"；收益只剩目录好看，违反 §1.5，不做。`legacy_*.go` 归集已完成（`legacy_console.go`、`legacy_agent_context.go`，每个文件头写明可删除条件）；全仓死符号扫描再次归零。本 ADR 关闭；§3.1 的第一件事已以 `environment_lifecycle_test.go` 开始（见 §5 末行）。
 
 ## 3.1 大扫除之后的第一件事（负责人已定，记在这里免得丢）
 
@@ -138,4 +138,7 @@ capabilities/server/
 | `docs/Testing.md` 没有结构整理的检查行 | 加一行：零行为变更的检查组合 | wave 5 |
 | 全仓引用计数（含 apps/solutions）只出现一次的函数：`projectEntity`（authorization.go）、`equalJSON`（narrow.go）、`candidateTestTenant`（simulate_candidate.go） | 删除；`BuildProject` 类型保留（console/api 用） | wave 4 |
 
+| `console_compat.go` 把活的成员投影（`currentMember/migrateGrants/deriveRoles/primaryRole`）和仅为重放保留的分支（`org`→`enterprise` 前驱、`platform.member.language`）混在一起；`accepted_agent_context.go` 名字看不出它只服务旧日志 | `console_member.go`（活）+ `legacy_console.go`（重放，文件头写明可删除条件）；`legacy_agent_context.go` | wave 4 收尾 |
+| 全仓（含 apps/solutions）引用计数再扫：0 个死符号 | 无需处置 | — |
+| §3.1 第一件事：一个应用跨两个环境走完 定义 → 联合候选 → 封存 → 激活 → 业务操作 → 晋级 → 数据迁移 → v2 升级（两环境各自审阅计划）→ 快照+日志尾恢复 | `environment_lifecycle_test.go`；串起来后暴露并修了三处接缝：导入拒绝导出自己写出的只读列（`state`），带生命周期的对象无法迁移；联合候选的预览试装不带升级口径，多资产候选永远带不动 v2；晋级/迁移的审计只在内存，重放后消失（晋级审计改由结果 `from` 字段重建，迁移以控制台清单为记录） | 本提交 |
 （继续追加）

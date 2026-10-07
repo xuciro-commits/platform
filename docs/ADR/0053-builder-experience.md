@@ -373,7 +373,9 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 
 **与 §6–§7 的仍存偏差**
 
-- 效果链里没有 `run-flow` 与表达式赋值；`action` 效果的输入只能来自动作表单（不接页面变量）。
-- AI 函数 / 代码函数仍用 `PageHeader` 页头，仅换上了 `DraftStatus` + `PublishMenu`，测试内嵌于编辑器（`CandidateTest embedded`）。
+- 效果链里没有 `run-flow`：`build.process.run` 是 Builder 角色的草稿试跑（目标是流程草稿记录而非 AssetRef），成员侧的手动启动还没有产品设计；等有了再接。
+- 表达式赋值只做到"复制变量"：`set` 效果多了 `from`（UI profile `v2.108`），把另一个同类型可读变量赋给目标；没有运算表达式。
+- `action` 效果可以从页面变量 / 字面量预填参数（`action.inputs`，`v2.108`；发布时校验参数名存在于动作 payload），表单仍会打开供成员修改；无表单动作直接以预填值提交。
+- AI 函数 / 代码函数 / 智能体编辑器已换成 `Workbench` 壳（面包屑 · DraftStatus · 保存状态 · 命令），测试仍内嵌于编辑器（`CandidateTest embedded`）。
 - 属性 / 权限矩阵和变量底栏用原生 `<table>`（`scripts/escapes.sh` 已登记）。
 

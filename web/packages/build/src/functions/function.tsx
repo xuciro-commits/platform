@@ -1,11 +1,11 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { DraftStatus, PublishMenu } from "../editor/workbench";
+import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 import { CandidateTest } from "../releases/simulate";
 // This editor writes build.function's native declaration. The three stages
 // visualize that declaration; execution belongs to the host model effect path.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Textarea, t, useUnsavedChanges,
+import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Textarea, Workbench, t, useUnsavedChanges,
   type CanvasNode, type NodeCatalog } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { installedObjects, type WorkflowObject } from "../automate/workflow-model";
@@ -104,19 +104,18 @@ export function FunctionEditor({ id }: { id: string }) {
     if (refreshed.data?.record && !refreshed.isError) { setDraft(loaded(refreshed.data.record)); markSaved(); setDirty(false); }
     else setError(t("The function could not be saved or loaded. Your draft is still here."));
   };
-  if (role("build") !== "builder") return <PageHeader title={t("AI functions")} description={t("Only a builder can edit AI functions.")} />;
-  if (id !== "new" && !draft.id) return <PageHeader title={t("AI functions")} description={query.isError ? t("The function could not be loaded.") : t("Loading…")} />;
+  if (role("build") !== "builder") return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{t("Only a builder can edit AI functions.")}</WorkbenchMessage></Workbench>;
+  if (id !== "new" && !draft.id) return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{query.isError ? t("The function could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const stages: { id: Stage; title: string }[] = [{ id: "settings", title: t("Function settings") }, { id: "source", title: t("Record inputs") }, { id: "model", title: t("Model inference") }, { id: "output", title: t("Strict output") }];
-  return <div className="grid min-w-0 gap-3">
-    <PageHeader title={draft.title || t("New AI function")} description={t("Save the declaration, test fixed cases, then review its release candidate.")}
-      actions={<div className="flex flex-wrap gap-2">
-        <Button variant="ghost" onClick={() => open({ view: "function" })}>{t("AI functions")}</Button>
-        <DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />
-        <Button disabled={busy || !draft.id} variant="ghost" onClick={() => confirmDiscard(() => void perform(reload))}>{t("Reload saved function")}</Button>
-        <Button disabled={busy || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
-        <Button variant={testing ? "primary" : "ghost"} aria-pressed={testing} disabled={busy || !draft.id || dirty} onClick={() => setTesting(!testing)}>{t("Test")}</Button>
+  return <Workbench storageKey="function" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "function" }) }, { label: t("AI functions"), onClick: () => open({ view: "function" }) }]} title={draft.title || t("New AI function")}
+    status={<DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />} saving={savingState(dirty, busy, error || undefined)}
+    actions={<>
+        <Button size="sm" disabled={busy || !draft.id} variant="ghost" onClick={() => confirmDiscard(() => void perform(reload))}>{t("Reload saved function")}</Button>
+        <Button size="sm" disabled={busy || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
+        <Button size="sm" variant={testing ? "primary" : "ghost"} aria-pressed={testing} disabled={busy || !draft.id || dirty} onClick={() => setTesting(!testing)}>{t("Test")}</Button>
         <PublishMenu type="build.function" record={draft} dirty={dirty} busy={busy} invalid={issues.length > 0 || !draft.id} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "function", params: { id } }} />
-      </div>} />
+    </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
+    <p className="text-xs text-muted">{t("Save the declaration, test fixed cases, then review its release candidate.")}</p>
     {testing && draft.id && !dirty && <Card className="p-3"><CandidateTest functionId={draft.id} embedded /></Card>}
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed function version {version}. Accepted calls keep their saved inputs and definition.", { version: draft.version })}</Panel> : null}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
@@ -169,7 +168,7 @@ export function FunctionEditor({ id }: { id: string }) {
         </>}
       </Panel>
     </fieldset>
-  </div>;
+  </div></Workbench>;
 }
 
 function FunctionMap({ draft, source, chosen, onChoose }: { draft: FunctionDraft; source?: string; chosen: Stage; onChoose: (stage: Stage) => void }) {

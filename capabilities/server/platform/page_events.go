@@ -36,9 +36,12 @@ type PageEventBinding struct {
 }
 
 type PageEffect struct {
-	Kind     string            `json:"kind"`
-	Target   string            `json:"target,omitempty"`
-	Value    json.RawMessage   `json:"value,omitempty"`
+	Kind   string          `json:"kind"`
+	Target string          `json:"target,omitempty"`
+	Value  json.RawMessage `json:"value,omitempty"`
+	// From names the variable a set effect copies instead of a literal Value
+	// (ADR-0053 §7 assignment; v2.108): same type, readable where the event is.
+	From     string            `json:"from,omitempty"`
 	Action   *PageActionEffect `json:"action,omitempty"`
 	Navigate *PageNavigation   `json:"navigate,omitempty"`
 }
@@ -46,6 +49,10 @@ type PageEffect struct {
 type PageActionEffect struct {
 	Ref            AssetRef `json:"ref"`
 	RecordVariable string   `json:"recordVariable,omitempty"`
+	// Inputs prefill the action's parameters from page variables or literals
+	// (ADR-0053 §7; v2.108). The form still opens when the action has one; a
+	// member may change what was prefilled before it commits.
+	Inputs map[string]PageValue `json:"inputs,omitempty"`
 }
 
 const maxPageEffects = 8
@@ -93,9 +100,20 @@ func (b PageEventBinding) Reads() []string {
 	var ids []string
 	for _, effect := range b.Effects {
 		switch effect.Kind {
+		case "set":
+			if effect.From != "" {
+				ids = append(ids, effect.From)
+			}
 		case "action":
 			if effect.Action != nil && effect.Action.RecordVariable != "" {
 				ids = append(ids, effect.Action.RecordVariable)
+			}
+			if effect.Action != nil {
+				for _, arg := range effect.Action.Inputs {
+					if arg.Variable != "" {
+						ids = append(ids, arg.Variable)
+					}
+				}
 			}
 		case "navigate":
 			if effect.Navigate != nil {
@@ -178,7 +196,12 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 				if event.Event == "select" && (!(variable.Mode == "state" && slices.Contains([]string{"page", "overlay"}, variable.Scope) || PageUIProfileSupports(d.UIProfile, "platform.page.v2.89") && variable.Mode == "shared" && variable.Scope == "application" && variable.Writable && d.rootPresentationSource(event.Source)) || !slices.Contains([]string{"string", "boolean"}, variable.Type) || open[effect.Target]) {
 					return fmt.Errorf("selection event needs writable presentation scalar state without navigation or overlay control")
 				}
-				if !variable.IsWritable() || pageLiteralType(effect.Value) != variable.Type {
+				if effect.From != "" {
+					source := d.Variables[effect.From]
+					if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.108") || len(effect.Value) != 0 || effect.From == effect.Target || source.Type == "" || source.Type != variable.Type || !variable.IsWritable() {
+						return fmt.Errorf("page event %s needs a readable source variable of the target's type", event.Source)
+					}
+				} else if !variable.IsWritable() || pageLiteralType(effect.Value) != variable.Type {
 					return fmt.Errorf("page event %s needs a matching state value", event.Source)
 				}
 				for id, node := range d.Nodes {
@@ -196,6 +219,14 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 				}
 				if v := d.Variables[a.RecordVariable]; a.RecordVariable != "" && v.Type != "record" {
 					return fmt.Errorf("page action effect %s needs a record variable", event.Source)
+				}
+				if len(a.Inputs) > 0 && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.108") || len(a.Inputs) > pageWidgets.Runtime.Interface.MaxPorts {
+					return fmt.Errorf("page action effect %s inputs need UI profile v2.108 and a bounded count", event.Source)
+				}
+				for parameter, arg := range a.Inputs {
+					if !pageNodeID.MatchString(parameter) || (arg.Variable != "") == (len(arg.Literal) != 0) || arg.Variable != "" && d.Variables[arg.Variable].Type == "" || arg.Variable == "" && pageLiteralType(arg.Literal) == "" {
+						return fmt.Errorf("page action effect %s input %s is invalid", event.Source, parameter)
+					}
 				}
 			case "navigate", "return":
 				if event.Event == "select" || group || !last {

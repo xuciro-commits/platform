@@ -28,8 +28,11 @@ type acceptedRelease struct {
 	Bytes       []byte    `json:"bytes"`
 	// Active marks an activation: the tenant's single release pointer moves to
 	// this saved candidate (ADR-0039 D2). A save leaves the pointer alone.
-	Active        bool                  `json:"active,omitempty"`
-	UpgradeID     string                `json:"upgradeId,omitempty"`
+	Active    bool   `json:"active,omitempty"`
+	UpgradeID string `json:"upgradeId,omitempty"`
+	// From names the environment a promoted candidate's sealed bytes came
+	// from; the target's audit of the promotion is rebuilt from it on replay.
+	From          string                `json:"from,omitempty"`
 	Installations []releaseInstallation `json:"installations,omitempty"`
 	RequestHash   string                `json:"requestHash"`
 	Digest        string                `json:"digest"`
@@ -142,6 +145,10 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 	}
 	if saved.Version == 3 {
 		t.committed.saveAnswer("release:"+saved.Key, raw)
+	}
+	if saved.From != "" {
+		t.audit.remember(AuditEntry{At: saved.At, Member: saved.Member, App: PlatformApp, Action: "host.promotion",
+			Target: saved.From + "→" + t.ID + ":" + saved.CandidateID})
 	}
 	return saved, nil
 }
