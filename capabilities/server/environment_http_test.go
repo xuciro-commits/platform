@@ -32,6 +32,9 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 		return tn
 	}
 	dev, prod := compose("dev"), compose("prod")
+	// A publisher-only target seat has no unrelated role to mask a refused
+	// draft input. A later builder must use its own derived command key.
+	consoleOf(prod).members["pub-only"] = &platform.Member{ID: "pub-only", Roles: map[string]string{build.ID: build.Publisher}}
 	host := NewHost(Tokens(map[string]string{
 		"dana": "user:dana@example.test", "pat": "user:pat@example.test", "ops": "user:ops@example.test", "mo": "user:mo@example.test",
 		"host": "user:host@example.test",
@@ -158,7 +161,7 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 	if code, _ := call(http.MethodPost, "", "dana", "/v1/host/tenants/prod/support", map[string]any{"member": "pat", "reason": "release", "minutes": 30}); code != http.StatusUnauthorized {
 		t.Fatalf("a tenant member opened the host console: %d", code)
 	}
-	code, pub := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/support", map[string]any{"member": "pat", "reason": "promote v1 as publisher", "minutes": 30})
+	code, pub := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/support", map[string]any{"member": "pub-only", "reason": "promote v1 as publisher", "minutes": 30})
 	if code != http.StatusOK {
 		t.Fatalf("publisher support session: %d %v", code, pub)
 	}
