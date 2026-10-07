@@ -50,14 +50,12 @@ type Tenant struct {
 	// Store keeps what is derived outside the journal: vectors and transcripts
 	// (ADR-0022); without one they stay in memory.
 	Store           Store
-	derivedMu       sync.Mutex
-	vectorMemory    map[string][]float32
-	transcripts     []Transcript
-	knowledge       glossary // the knowledge app: documents are searched, terms read (ADR-0022)
-	index           index    // passages cut from documents and knowledge fields
-	dictionaries    sync.Map // language → map[string]string, merged from the platform's and the apps' (ADR-0023)
-	patternCache    sync.Map // language → []pattern
-	agentRun        string   // the run whose agent is submitting, under mu: its effects name it
+	memStore        journal.Memory // the Store without one
+	knowledge       glossary       // the knowledge app: documents are searched, terms read (ADR-0022)
+	index           index          // passages cut from documents and knowledge fields
+	dictionaries    sync.Map       // language → map[string]string, merged from the platform's and the apps' (ADR-0023)
+	patternCache    sync.Map       // language → []pattern
+	agentRun        string         // the run whose agent is submitting, under mu: its effects name it
 	mu              sync.Mutex
 	fault           atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
 	apps            []platform.App
