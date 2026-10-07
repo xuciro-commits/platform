@@ -4,7 +4,7 @@
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 
-const base = process.env.PLATFORM_URL ?? "http://127.0.0.1:18505";
+const base = process.env.PLATFORM_URL ?? "http://localhost:8495";
 const builder = process.env.PLATFORM_BUILDER_TOKEN;
 const operator = process.env.PLATFORM_OPERATOR_TOKEN;
 const approver = process.env.PLATFORM_APPROVER_TOKEN;
