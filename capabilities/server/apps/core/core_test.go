@@ -12,8 +12,8 @@ import (
 // for the steward, references only other core types, and is translated.
 func TestCoreDeclarations(t *testing.T) {
 	entities := Entities()
-	if len(entities) != 7 {
-		t.Fatalf("expected 7 shared types, got %d", len(entities))
+	if len(entities) != 10 {
+		t.Fatalf("expected 10 shared types, got %d", len(entities))
 	}
 	typeOf := func(rt reflect.Type) string {
 		for _, e := range entities {
@@ -29,7 +29,7 @@ func TestCoreDeclarations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", e.Type, err)
 		}
-		if !strings.HasPrefix(e.Type, ID+".") || len(info.Standard) != 3 {
+		if !strings.HasPrefix(e.Type, ID+".") || len(info.Standard) != 3 && e.Type != JournalType { // books are append-only: a journal entry is created and reversed, never edited
 			t.Fatalf("%s: expected core.* with create/edit/archive, got %v", e.Type, info.Standard)
 		}
 		if zh[e.Title] == "" || zh[e.Description] == "" {
@@ -60,8 +60,8 @@ func TestCoreDeclarations(t *testing.T) {
 	}
 	app := New("t")
 	for _, a := range app.Manifest().Actions.All() {
-		if a.Title == "" || a.Description == "" || len(a.Roles) != 1 || a.Roles[0] != Steward {
-			t.Errorf("action %s: incomplete or not the steward's", a.Schema)
+		if a.Title == "" || a.Description == "" || len(a.Roles) != 1 || a.Roles[0] != Steward && a.Roles[0] != Accountant {
+			t.Errorf("action %s: incomplete or not the steward's or accountant's", a.Schema)
 		}
 	}
 }

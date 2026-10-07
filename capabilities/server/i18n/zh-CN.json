@@ -1418,5 +1418,16 @@
   "Land what an external system holds about the enterprise - organisational units, posts, locations, equipment - as elements and relationships owned on its behalf. Repeated syncs diff: new ids start today, missing ids close today, history stays.": "把外部系统对企业的认识——组织单元、岗位、位置、设备——作为它名下的元素与关系落入模型。重复同步做差异：新 id 从今天开始，缺席的 id 今天关闭，历史保留。",
   "Relationships between them, or to the tenant's own elements": "它们之间、或与租户自有元素之间的关系",
   "Sync a system's slice": "同步一个系统的切片",
-  "The system's name, e.g. sap-hr": "系统名，如 sap-hr"
+  "The system's name, e.g. sap-hr": "系统名，如 sap-hr",
+  "Document numbering": "单据编号",
+  "Reverses action": "冲销的动作",
+  "Journal": "记账",
+  "Lines": "分录",
+  "Account": "科目",
+  "Debit": "借方",
+  "Credit": "贷方",
+  "Partner": "往来方",
+  "Prefix": "前缀",
+  "Yearly": "按年",
+  "Date": "日期"
 }

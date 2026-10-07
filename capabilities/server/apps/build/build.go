@@ -58,8 +58,10 @@ type Object struct {
 	// record through its `base` reference (ADR-0058 A2, A3).
 	Implements []string `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
 	Extends    string   `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
-	State      string   `json:"state" field:"readonly" choices:"draft,published"`
-	Installed  string   `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
+	// Numbering (ADR-0076) gives every new record a document number in a text field: <prefix>[<year>-]<n>, gapless in order of creation.
+	Numbering *Numbering `json:"numbering,omitempty" field:"aside" type:"json" title:"Document numbering"`
+	State     string     `json:"state" field:"readonly" choices:"draft,published"`
+	Installed string     `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
 	// Published is the definition as it was last published, which is what is
 	// installed and what a restore installs again — not the draft beside it.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
@@ -695,6 +697,9 @@ func (b *Build) check(o Object, id string) error {
 	if err := b.checkCreates(o); err != nil {
 		return err
 	}
+	if err := b.checkJournal(o); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
 	if err := b.checkPosts(o); err != nil {
 		return err
 	}
@@ -1144,7 +1149,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Compute: computeOf(o), Validate: validateOf(o, model)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Compute: computeOf(o), Validate: validateAll(validateOf(o, model), numberingOf(o, model))}
 }
 
 // page is the list and detail page a defined object comes with: the same

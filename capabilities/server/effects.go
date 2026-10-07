@@ -106,7 +106,7 @@ func (t *Tenant) emit(e platform.Event, names []string) {
 // them. A staged result saves these bytes before the journal commit.
 func (t *Tenant) eventEffects(e platform.Event, names []string) []platform.Effect {
 	s := e.Record.GetSubmission()
-	planned := t.writebackEffects(e)
+	planned := append(t.writebackEffects(e), t.journalEffects(e)...)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	for _, ep := range t.endpoints {
@@ -288,7 +288,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	t.opsMu.Lock()
 	// Apps' model requests go to the built-in model destination (ADR-0029 D3);
 	// the model door keeps each provider's own breaker.
-	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), &Endpoint{ID: modelEndpoint, Kind: modelEndpoint}) {
+	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), booksEndpoint(), &Endpoint{ID: modelEndpoint, Kind: modelEndpoint}) {
 		if ep.Kind != modelEndpoint && !t.breakers.allow("endpoint:"+ep.ID, now) {
 			continue
 		}
@@ -346,6 +346,9 @@ func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Ou
 	}
 	if ep.Kind == "connection" {
 		return t.sendWriteback(x)
+	}
+	if ep.Kind == "books" {
+		return t.sendBooks(x, now)
 	}
 	sum := sha256.Sum256([]byte(x.Body))
 	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}

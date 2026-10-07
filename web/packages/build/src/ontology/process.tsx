@@ -1,6 +1,6 @@
 import { ObjectLineage } from "./lineage";
 import {actionDestinations,actionResultEdges} from "./process-rules";
-import { fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type ObjectScope, type Process, type State } from "./object-model";
+import { fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type Numbering_, type ObjectScope, type Process, type State } from "./object-model";
 import { ShapeEditor } from "./shape";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../shared/workbench";
 // The object's process editor (ADR-0037): its states and the actions people
@@ -105,6 +105,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
           <td className="px-2 py-1.5">{f.title || f.name}</td><td className="px-2 py-1.5 font-mono text-xs">{f.name}</td><td className="px-2 py-1.5">{t(f.type)}{f.type === "reference" && f.ref ? ` → ${f.ref}` : ""}</td><td className="px-2 py-1.5">{f.required ? "✓" : ""}</td><td className="px-2 py-1.5 text-xs text-muted">{f.property ? assetBindingKey(f.property) : ""}</td>
         </tr>)}</tbody></table>
       {!process.fields.length && <p className="text-sm text-muted">{t("No properties yet. Add one to describe the record.")}</p>}
+      {process.fields.some((f) => f.type === "text") && <NumberingFields process={process} onChange={(numbering) => change({ ...process, numbering })} />}
     </div>,
     links: <div className="grid content-start gap-4 p-4">
       <div className="grid gap-2"><h2 className="text-sm font-semibold">{t("References from this object")}</h2>
@@ -307,6 +308,24 @@ function StateProperties({ state, onChange }: { state: State; onChange: (patch: 
 
 const reads = { all: () => t("Every record"), below: () => t("Those of their units and the units below"), unit: () => t("Those of their own units"), own: () => t("Only their own"), none: () => t("Not at all") };
 const readLevels = ["all", "below", "unit", "own", "none"] as const;
+
+/** Gapless document numbers (ADR-0076): a text field the platform fills on create, counted per object and optionally per year. */
+function NumberingFields({ process, onChange }: { process: Process; onChange: (numbering: Numbering_ | undefined) => void }) {
+  const n = process.numbering;
+  const texts = process.fields.filter((f) => f.type === "text");
+  const sample = n ? `${n.prefix ?? ""}${n.yearly ? `${new Date().getFullYear()}-` : ""}${"1".padStart(n.width || 6, "0")}` : "";
+  return <Card className="grid gap-3 p-3">
+    <div><h3 className="text-sm font-semibold">{t("Document numbering")}</h3><p className="text-xs text-muted">{t("Each new record takes the next number, without gaps: a prefix, the year if yearly, and a zero-padded count. The field is then read-only.")}</p></div>
+    <Checkbox checked={!!n} onChange={(on) => onChange(on ? { field: texts[0]!.name, prefix: "", width: 6 } : undefined)}>{t("Number records automatically")}</Checkbox>
+    {n && <div className="grid gap-3 sm:grid-cols-4">
+      <Label text={t("Number field")}><Select value={n.field} onChange={(e) => onChange({ ...n, field: e.target.value })}>{texts.map((f) => <option key={f.name} value={f.name}>{f.title || f.name}</option>)}</Select></Label>
+      <Label text={t("Prefix")}><Input placeholder="GR" value={n.prefix ?? ""} onChange={(e) => onChange({ ...n, prefix: e.target.value || undefined })} /></Label>
+      <Label text={t("Digits")}><Input type="number" min={1} max={12} value={n.width ?? 6} onChange={(e) => onChange({ ...n, width: Number(e.target.value) || 6 })} /></Label>
+      <Label text={t("Yearly")}><Checkbox checked={!!n.yearly} onChange={(yearly) => onChange({ ...n, yearly: yearly || undefined })}>{t("Restart every year")}</Checkbox></Label>
+      <p className="text-xs text-muted sm:col-span-4">{t("First number: {sample}", { sample })}</p>
+    </div>}
+  </Card>;
+}
 
 /** Which fields place a record for the row scopes above (ADR-0066): owner for "own", unit + structure for "unit" and "below". */
 function ScopeFields({ process, onChange }: { process: Process; onChange: (scope: ObjectScope) => void }) {
