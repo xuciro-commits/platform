@@ -1,0 +1,382 @@
+{
+  "revision": "a6c775fee0e3595890474d963f90e5f0a30915eb",
+  "tasks": [
+    {
+      "task": "构建与交付",
+      "route": "构建者在工坊选择对象、编辑字段/状态/权限：新增字段/状态不自动提交，未保存时可新增起始状态及动作；点击 Save 后保存。字段尚未有效时保存被拒，只提示一次且保留输入，修正后可再保存；离开时提示未保存。组合页面和流程，保存固定计划，测试后审查并保存候选；沿当前支持的发布/激活路径交付，操作员完成记录动作或收件箱任务",
+      "status": "reviewed-with-finding",
+      "screenshots": [
+        "03-object-unsaved.jpg",
+        "09-release-active.jpg",
+        "19-generated-object-page.jpg"
+      ],
+      "observed": "UI 创建对象/状态/动作/页面/整应用，手动保存，封存并激活；业务记录创建成功。条件字段阻断联合候选；空目标晋级失败；自动对象页标题为空。"
+    },
+    {
+      "task": "项目设置同步",
+      "route": "同一项目在两个浏览器页签打开 Settings；空闲时不提交。第一页改 Description 后第二页跟随，第二页改 Title 后第一页跟随，原 Description 保留。自动：`web/e2e/tests/project-settings-sync.spec.ts`。",
+      "status": "reviewed",
+      "screenshots": [
+        "74-project-settings-first-tab.png",
+        "75-project-settings-second-tab.png"
+      ],
+      "observed": "两浏览器页签：说明跨页同步、标题反向同步，说明保留；两次输入仅2次build.app.edit，后续空闲没有新增保存。"
+    },
+    {
+      "task": "酒店销售",
+      "route": "建客户/商机，预留住宿或团队房间，确认与拒绝原因可理解；无外部提供方时走人工答复",
+      "status": "reviewed-with-finding",
+      "screenshots": [
+        "53-hotel-group-plan-form.png",
+        "54-hotel-plan-refusal.png",
+        "55-hotel-team-request.png",
+        "56-hotel-won-room-confirmed.png"
+      ],
+      "observed": "客户/商机新建、错误房型明确拒绝、2间团队预留及赢单确认已完成，关联预订可见。人工答复表单要求协议字段，不够业务化；记录实时更新导致文件区块重复堆积。"
+    },
+    {
+      "task": "制造与 ERP",
+      "route": "生产订单下达、SFC 流转/不合格处置、跨应用确认；ERP 凭证平衡/连续编号、采购审批及收货记账",
+      "status": "blocked",
+      "screenshots": [
+        "61-mes-live-query-refusal.png",
+        "62-mes-unknown-entity-after-refresh.png",
+        "63-erp-unbalanced-refusal.png",
+        "64-erp-balanced-posted.png"
+      ],
+      "observed": "MES订阅 /v1/master 与 /v1/planned-orders 被unsupported live query拒绝，错误污染读取，订单表HTTP400，刷新后变未知实体mes.order。已尝试下达UX-SO，无法从界面确认结果；生产/SFC后续未完成。继续单独核对ERP。 ERP另行完成借100/贷90过账拒绝（明确差额）→改贷100→成功过账编号GJ/2026/00001；采购及连续第二编号未完成。"
+    },
+    {
+      "task": "人工协同",
+      "route": "请假提交、审批、驳回/再提交和代办，申请人与审批人看到正确状态；私有字段只对授权角色可见",
+      "status": "reviewed-with-finding",
+      "screenshots": [
+        "58-leave-submit-refusal.png",
+        "59-leave-rejected.png",
+        "60-leave-approved.png"
+      ],
+      "observed": "前台员工起草→提交→经理驳回→员工重新提交→经理批准，两身份状态同步已观察。经理本人无可用审批人时仅给泛化POLICY_DENIED；文件面板随状态更新重复堆积。代办与病假私有字段仍待核对。"
+    },
+    {
+      "task": "AI 与知识",
+      "route": "配置启用模型，运行建议/智能体，查看依据、回答、拒绝、用量与待人工确认事项；检索与引文遵守当前来源权限",
+      "status": "reviewed",
+      "screenshots": [
+        "65-knowledge-search.png",
+        "66-local-model-enabled.png",
+        "67-ai-model-answer.png",
+        "69-agent-run.png"
+      ],
+      "observed": "本地测试供应商/model启用→试验场调用得到回答；销售智能体个人运行完成1轮30 token、0动作，启动定义/发布/结果可见。知识文档创建及关键词检索已操作。真实模型质量、引用权限和人工确认分支未完成。"
+    },
+    {
+      "task": "工作区与辅助操作",
+      "route": "导航/返回上下文、未保存提醒、搜索、文件、评论、导入导出和异常提示；一般布局、窄屏、中文、键盘及画布手感由人判断",
+      "status": "pending",
+      "screenshots": []
+    },
+    {
+      "task": "企业模型（ADR-0067）",
+      "route": "控制面板 → Enterprise：空租户先走向导（名称、人数、站点、法人、行业）得到模板；画布拖入 Palette 元素、Link 连两元素只给相容关系、保存视图；树/表切换、截至日期回看；检查器改名/关闭/添加成员/共享开关；成员详情页\"Organisation\"面板与 `/v1/organization` 投影一致；业务动作里 `ref:\"enterprise.element\"` 字段出现元素下拉；Patterns 页签选中组织后 Add a Plant/Hotel/Department（改旋钮、看预览大纲）→ 树中出现子树；空模型页\"从一个单元开始\"也能建模型；画布滚轮缩放/拖动平移/适应、\"排布\"切换四种布局、Link 模式从元素拖到元素、每类元素有图标",
+      "status": "reviewed-with-finding",
+      "screenshots": [
+        "45-hotel-pattern-grafted.png",
+        "46-enterprise-left-right.png",
+        "47-enterprise-radial.png",
+        "49-enterprise-elements-table.png",
+        "50-enterprise-link-compatible-dialog.png"
+      ],
+      "observed": "Hotel模式2层×2房真实嫁接在集团下，新增28元素；树/表/画布切换、四布局、缩放和Link拖拽已操作，只有相容关系。未提交Link。多次跨工具调用时面板/弹窗重置，需进一步检查读取世代造成的卸载；默认画布无视图不展示已有模型。"
+    },
+    {
+      "task": "集成织物 Ⅰ-A/B（ADR-0070）",
+      "route": "构建器 → Ontology → Connections：新建 http/OData/postgres 连接（地址不含密码、密钥名）→ Check 数秒内出\"可达/失败\"与详情；Data source 选就绪连接后 Profile 随种类收窄（OData 实体集/过滤/增量列、数据库表/WHERE 片段、CSV）；Publish/Pull now 后 Last pull 计数，增量列有值时显示游标，Reset cursor 重拉；对未就绪连接或 `1=1; drop` 式过滤发布被拒",
+      "status": "in-progress",
+      "screenshots": [
+        "14-source-applied.jpg",
+        "83-odata-connection-check.png",
+        "84-odata-source-cursor.png"
+      ],
+      "observed": "HTTP JSON源实际拉3行；OData连接就绪，Products源3行applied且游标3，Reset cursor已操作。CSV/PostgreSQL和恶意过滤仍未走。"
+    },
+    {
+      "task": "集成织物 Ⅰ-C/D（ADR-0071）",
+      "route": "构建器 → Ontology → Datasets：新建数据集；Data source 选 \"Rows go to: A dataset\" 指向它并 Publish/Pull now → 数据集出现 v1、Schema 推断、Rows 预览；再建 Pipeline：输入该数据集，加 filter/cast/compute/aggregate 等步骤与 notnull/range 期望，输出另一数据集或对象 → Publish 后数秒内 Last run 显示行数/写入/隔离（隔离行带原因）；再次 Pull 数据源出 v2 时管道自动再跑，同版本不重跑；输出对象时记录在对象页可见且重复运行不重复建",
+      "status": "reviewed-with-finding",
+      "screenshots": [
+        "13-dataset-load-json-refusal.jpg",
+        "15-pipeline-result.jpg"
+      ],
+      "observed": "真实源加载3行、清洗管道写入1行并隔离2行；手动粘贴合法JSON行数组被当作字符串拒绝。输出对象与更广步骤未完成。"
+    },
+    {
+      "task": "集成织物 Ⅰ-E（ADR-0072）",
+      "route": "构建器 → Ontology → Writebacks：新建回写（构建者声明的对象 + create/动作名、就绪的 http/OData 连接、路径 `A_MaterialDocumentHeader`、请求体映射、应答映射 `d.MaterialDocument → docno`）→ Publish；在对象页新建一条记录 → 设置 → 集成 里出现 `connection:<id>` 端点的效果并送达，回写页 Deliveries 计数 +1、最近应答可见，记录的 docno 被填上；把目标地址改成不可达再建一条 → 效果 retrying、回写页显示排队数，恢复后保持同一键重试并回填；外部系统按该键去重；对象类型 → Data 页能从字段点到管道、数据集、数据源、连接",
+      "status": "reviewed-with-finding",
+      "screenshots": [
+        "76-writeback-published.png",
+        "78-writeback-delivery-result.png",
+        "79-writeback-outage-queue-two.png",
+        "81-writeback-recovered-three.png",
+        "82-writeback-reply-filled.png",
+        "92-reply-mapping-without-d-prefix.png"
+      ],
+      "observed": "回写创建/发布→业务create真实送达201；替身503时排队2，恢复后总计3 delivered、同键重试且每单只有一次成功201。但按界面提示d.MaterialDocument→why配置后3条记录why均未回填。血缘深链仍待核对。 后续确认：改填MaterialDocument后第四单回填UXDOC-4，问题是示例带d前缀与自动展开规则不一致。"
+    },
+    {
+      "task": "集成织物 Ⅰ-H（ADR-0073）",
+      "route": "构建器 → Ontology → Datasets：建数据集 `sapom`，粘贴/加载几行 `{objid, stext, parent, costcenter}`；Pipelines：新建管道，输入 `sapom`，Write to = The enterprise model，Source system `sap-om`、Stereotype ActualOrganization、Id 列 objid、Name 列 stext、Kind `=department`、Parent 列 parent、Root = 公司元素 id、Placed in kind = 组织树的关系类别（如 management）→ Publish → Run now；企业模型组织树里出现 `sap-om:*` 单元挂在公司之下，元素属性中有 `source:sap-om.costcenter`；去掉一行再加载并运行 → 该单元在\"今天\"关闭（Until），其余不动；没有企业模型 admin 角色的发布者运行时，管道 Last run 报错说明需要该角色",
+      "status": "pending",
+      "screenshots": []
+    },
+    {
+      "task": "集成织物 Ⅰ-G（ADR-0074）",
+      "route": "构建器 → Ontology → Matching rules：新建规则，对象 = 物料类对象，键 `partno` 归一化 digits，优先来源 `description → sapmaterials` → Publish；两条管道（SAP、MES）都把对象写为输出；先运行 SAP 管道落 `000000123`，再运行 MES 管道落 `M-123`（带 weight）→ 对象列表仍是一条 `000000123`，描述是 SAP 的、重量是 MES 的，MES 管道最近一次运行显示\"1 行由匹配规则合并\"；Pause 规则后再落 `M-123` → 变成第二条记录",
+      "status": "reviewed",
+      "screenshots": [
+        "80-matching-rule-published.png",
+        "87-matching-single-record.png",
+        "89-matching-paused-same-source-idempotent.png",
+        "91-matching-paused-two-records.png"
+      ],
+      "observed": "启用digits时两个HTTP源分别写000000123和M-123，只有原ID一条且qty更新为9。暂停后同源同字节重拉保持幂等；再用独立新导入命令落M-123，列表变两条。字段优先来源与管道合并计数尚未完成。"
+    },
+    {
+      "task": "集成织物 Ⅰ-I（ADR-0075）",
+      "route": "构建器 → Datasets：把 HR 数据集标记为 confidential；Pipelines：建一条写入 Employee 对象的管道 → Publish 被拒并列出未指明读者的字段；对象类型里给这些字段设 Read by = hr 并发布 → 管道可发布、运行；输出到另一数据集的管道运行后该数据集自动变为 confidential，管道标题旁出现标记；把数据集改为 restricted → 列表的 CSV 导出被拒；机密连接直写对象、机密管道写企业模型均被拒，编辑已发布管道也不能绕过；给一名成员 build 角色 `integrator` → 左栏只有 Integration 分组，能建连接/数据源/管道，看不到对象类型与页面",
+      "status": "pending",
+      "screenshots": []
+    },
+    {
+      "task": "业务核 Ⅱ（ADR-0076）",
+      "route": "走查身份需具备 build.builder 与 core.accountant（租户管理员在 Control Panel 授予角色）；构建器 → 对象类型「Goods receipt」：Properties 底部勾选 Number records automatically（字段 number，前缀 GR，按年，4 位）；动作 Post → Side effects 面底部「Books」勾选 Book a journal entry：借 =1403 / 贷 =2290 金额取 record.amount；动作 Cancel 的 Reverses action = Post；发布 → 新建两张收货得到 GR2026-0001/0002 → Master data（core）里把上个月期间 Close → 对上个月日期的收货 Post：Journal entries 列表出现凭证且 Posted to a later period 勾上；Cancel 第一张 → 出现 `-rev` 凭证，原凭证 Reversed；手工新建一张借贷不等的凭证被拒；把所有期间关掉再 Post → Integration health 的效果里 `core:books` 一条 pending/retrying 且提示等待开放期间，Reopen 一个期间后几分钟内落账",
+      "status": "pending",
+      "screenshots": []
+    },
+    {
+      "task": "AI 运营 Ⅲ（ADR-0077）",
+      "route": "构建器 → Functions → Agents → New agent：名称 expediter，工具勾选 Order · Expedite，检查点同一动作，移交给 desk，加一条用例（目标\"Expedite order o-1\"，必须询问人）→ Publish → Agents 列表（/agents 或 Ask an agent）出现 build.expediter；Alert rules → New：Order.qty > 100，通知 desk，保存 → 把一张订单 qty 改到 150 → desk 成员的通知铃出现「Big order」并能打开记录；再改 160 不再通知；Datasets → 打开有 schema 的数据集 → Draft an object from this schema → 对象类型编辑器打开，属性与列一一对应；可选本地脚本模型验证：启动个人运行先提问且不改订单，显式运行声明用例集每例三次；重新发布后旧运行停止、旧草稿确认被拒；普通成员目录看不到私有指令",
+      "status": "pending",
+      "screenshots": []
+    },
+    {
+      "task": "基座补课 A（ADR-0078 A · ADR-0079 A）",
+      "route": "宿主控制台 → Create tenant：ID `acme`、名称、模板 `manufacturing`、首位管理员邮箱 → 列表出现新租户，`tenants.json` 追加一条；以该邮箱登录新租户 → Control Panel → Organisation：时区/货币已是模板值，改「Organisation name」后标题随之变化；右上会话菜单 → My account：改显示名、时区 Asia/Shanghai、语言 zh-CN、免打扰 22:00–08:00 → 保存后会话菜单显示新名字、界面变中文、时区预览显示本地时刻；Members 列表多出「Name」列，成员页底部管理员可改他人档案；App settings 不再列出 platform 的设置。自动：`TestCreateTenantFromTemplate`、`TestLanguages`、`TestHostHTTPAndConsole`、ui i18n。",
+      "status": "pending",
+      "screenshots": []
+    },
+    {
+      "task": "基座补课 0078-B（权限目录与多授予）",
+      "route": "Members → 某成员 → Roles 面板：「Add role」选 app `build` 角色 `builder`、再加 `platform` 角色 `auditor` 并填截止日期为昨天 → 列表只显示仍生效的角色（过期的不出现），同一 app 多个角色时主角色带「primary」标记；点 × 撤销其一，另一角色仍在；Members 列表「Roles」列显示该成员全部角色。Control Panel → Roles and permissions：每个 app 一张矩阵（行=动作 id，列=角色，列头数字=当前持有人数）。持 `build:builder` + `notes:writer` 两角色的成员可同时调用两个 app 的动作。自动：`TestGrantsAddUpAndExpire`、`TestHostHTTPAndConsole`、`TestAPIContract`。",
+      "status": "reviewed",
+      "screenshots": [
+        "25-member-suspended-chrome.png"
+      ],
+      "observed": "Chrome 实际授予 build:user @front-office；撤销原 auditor，再授予昨天到期的 auditor，UI 不再显示过期角色。"
+    },
+    {
+      "task": "基座补课 0078-C（授权引擎）",
+      "route": "Members → 给只持 `notes:viewer`（或任一只读角色）的成员再加一个可写角色 → 该成员刷新后工作台动作目录多出可写动作，表单中该角色可写的字段变为可编辑，记录列表可见范围取两个角色中更宽的；撤销后恢复。Roles and permissions 顶部「Why may — or may not — someone do something?」：选成员、输入 `platform.member.grant` → 显示 allowed/not allowed、理由、规则（role/none）、持有与需要的角色；输入 `platform:read:members` 同样可解释。被拒绝的动作其错误文案仍是「{member} holds no role in {app}…」/「The role … may not …」（多角色以逗号列出）。自动：`platform/authz` 包测试、`TestGrantsAddUpAndExpire`、`TestBuilderFunctionVersionsCallsAndRecovery`、`TestAgents`。",
+      "status": "blocked",
+      "screenshots": [],
+      "observed": "解释无对应角色成员的 platform.member.grant 时页面在空角色列表的 join 处崩溃；多角色字段/行范围完整路线未完成。"
+    },
+    {
+      "task": "基座补课 0078-D（自定义角色/策略/团队/委托）",
+      "route": "Roles and permissions → Custom roles「Define」：app `notes`、ID `scribe`、勾选 `notes.note` → 矩阵多出 `scribe` 列；Members 给某无角色成员加 `notes: scribe` → 其工作台出现该动作。Policies「Add」：deny、权限 `notes.*`、仅对该成员 → 该成员动作被拒，错误文案含策略名；解释器显示 rule=policy；删除策略后恢复。Teams「Add」：成员若干、授予 `notes: writer` → 成员页 Roles 面板出现 by `team:<id>` 的授予（不可单独 ×，随团队移除消失）。My account → Delegate my roles：选 app、同事、截止日 → 同事成员页出现 by 你的授予，截止日后自动失效；管理员可 × 撤销。自动：`TestAccessConfiguration`、`TestAcceptedConsoleAccessIsolation`（追加失败不改正式成员/档案/角色目录，不提前结束会话；重复授予/撤销与快照重放）、`TestTenantComposition`。",
+      "status": "pending",
+      "screenshots": []
+    },
+    {
+      "task": "基座补课 0079-B（偏好生效）",
+      "route": "My account：时区 Asia/Shanghai、邮件摘要 daily、免打扰 22:00–08:00、Opens on `mes`、外观 dark → 刷新后工作台直接进入 MES 且为深色；北京时间 00:30 用构建器动作过账一张单据 → 凭证日期是本地当天（UTC 仍是前一天）；此时触发一条通知 → Effects 里邮件效果的 Due 是当天 08:00；关掉「Notify in the workspace」后新通知到达即为已读。自动：`TestReachDueAndMemberToday`。",
+      "status": "reviewed-with-finding",
+      "screenshots": [
+        "70-profile-valid-input-refused.png",
+        "71-account-dark.png",
+        "72-timezone-shanghai-refusal.png",
+        "73-preferences-persisted.png"
+      ],
+      "observed": "显示名、深色、每日摘要及22:00–08:00免打扰保存后刷新保留。单独保存Asia/Shanghai仍400；UTC可保存。镜像无对应zoneinfo，跨时区日期及通知Due路径因此不能通过。"
+    },
+    {
+      "task": "基座补课 0079-C/D（生命周期、令牌、会话）",
+      "route": "Members → 「Invite member」：ID `cy`、`user:cy@example.test` → 列表 Standing=invited；给 cy 加角色；以 cy 登录一次 → Standing 变 active。成员页 → Standing 面板「Suspend member」 → 该成员刷新后动作目录为空、Members 列表 Standing=suspended；「Resume member」恢复；「Offboard member」确认后 Standing=left，其登录身份失效，角色清空，记录仍在。My account → Personal tokens：名称 `CI`、scopes `notes.*`、截止日 → 出现一次性密钥；用 `Authorization: Bearer pat_…` 调 `GET /v1/me` 成功，提交 `notes` 之外的动作被拒（错误含 token-scope）；再次打开页面密钥不再显示；「Revoke」后该 Bearer 立即 401。Sessions：两个浏览器分别获取不同登录凭证（复用同一 Bearer 只算一条）→ 列表两条，当前带「this session」；「Sign out other sessions」后另一浏览器下一次请求 401。OIDC delivery 先配置持久化的 `PLATFORM_PERSONAL_TOKEN_KEY`，重启后个人令牌仍可用，密钥不能再次获取，撤销后 401；会话撤销本身是进程内存。自动：`TestLifecycleTokensAndSessions`、`TestRetiredMemberLanguageReplaysWithoutReopeningAction`、`TestDeliveryPersonalTokensRequirePrivateKey`、`TestRecoveredPersonalTokenDoesNotReopenSecretWindow`、`TestTenantComposition`、`TestAPIContract`。",
+      "status": "reviewed-with-finding",
+      "screenshots": [
+        "27-member-left.png",
+        "29-token-metadata-no-secret.png",
+        "31-sessions-ended.png",
+        "32-ended-admin-session-host-shell.png"
+      ],
+      "observed": "邀请/暂停/恢复/离职已操作。令牌一次性展示关闭后不再出现，限定范围提交 403，等待撤销完成后旧令牌 401。另一浏览器结束后 /v1/me 401，但宿主管理员落入 HostOnly 壳；会话列表仍展示已结束条目而无 ended 标志。"
+    },
+    {
+      "task": "#138/#132 条件字段（「仅当」）",
+      "route": "应用设计台 → 某对象 → 字段：加选项字段 `kind`（refund,return,other）与文本字段 `why`，勾选 Required，「Only when」选 kind、勾 refund 与 return → 保存通过；把 why 的条件改到一个文本字段或填一个不存在的值 → 保存被拒并说明。发布后在业务入口新建记录：kind=other 时表单没有 why；切到 refund 后出现且带 *，空着提交被表单拦下；填好后再切回 other，why 隐藏、提交成功（宿主收到的 payload 不含 why）；用 API 直接提交 kind=other 且 why 有值 → 400，错误为「{field} applies only when {condition} is {values}」。自动：`TestFieldConditions`（platform）、`TestFieldOnlyWhen`（build）、`TestRecords`。",
+      "status": "blocked",
+      "screenshots": [],
+      "observed": "草稿保存后联合候选因FieldInfo.when字符串/对象格式不一致被拒；业务条件表单后续被阻断。"
+    },
+    {
+      "task": "#141 宿主控制台（纯宿主管理员、晋级/迁移结果）",
+      "route": "轻量宿主加 `-host-admins user:ops@example.test` 启动，`-mint-token user:ops@example.test`（该主体不在任何 `tenants.json` 席位里）→ 用它打开工作区：不出现「不是本宿主成员」，直接进入只有 Host Console 的壳（左侧只有 Tenants / Promote a release / Migrate records，会话菜单只有退出）；去掉 `-host-admins` 重启 → 同一 token 回到「不是本宿主成员」。Promote a release：选来源候选 → 候选下方显示资源数与 verified/unverified → 提交 → 「Last promotion」面板给出候选、摘要、幂等键；勾 Activate 再提交 → 标签变 Active。Migrate records：类型 `crm.account` → 面板「写入 n / n」；再提交一次 → 仍「写入 n / n」且目标记录数不变（幂等键按行）；提交一个目标没有的类型 → 顶部错误「… does not host …」；源中有一行目标校验不过（如必填缺失）→ 被拒绝行列表给出行号/动作/原因。自动：`TestPureHostAdministratorLoadsConsoleOnly`、`TestHostConsoleLifecycleAndSupport`、`TestAPIContract`。",
+      "status": "blocked",
+      "screenshots": [],
+      "observed": "整应用晋级到无来源草稿的hotel-test报 no matching draft；纯宿主身份及完整迁移结果路线未完成。"
+    },
+    {
+      "task": "#141 项目资产编辑委派",
+      "route": "管理员：Control Panel → Roles and permissions → Projects「Add」：ID `opening`、标题、勾选成员 mo（mo 在 build 无任何角色）、资产 `object visit` → 保存。mo 重新登录：启动器出现 Studio（Ontology/Workshop…），Projects 页顶部提示「你在项目 Hotel opening 内构建…」；Members → mo 的 Roles 面板显示 `build: builder · by project:opening`。mo 打开对象 visit 编辑标题保存 → 成功；打开另一个对象 invoice 保存 → 被拒，错误说明「Project delegation covers only…」；对 visit 点发布 → 同样被拒。管理员「Edit」把资产改成 `object invoice` → mo 对 visit 的保存立即被拒、invoice 可保存；归档项目 → mo 下次刷新后启动器里 Studio 消失，API 直接提交 build.object.edit → 拒绝。同时持有 build:user 仍不能越界；项目派生 builder 保存/激活候选必须被拒，独立 builder/publisher 可正常交付。自动：`TestGovernanceHTTPAndLiveReads`（权限/项目/账户共享订阅及拒绝边界）、`TestProjectDelegationIsTargetScoped`、`TestProjectDelegationWithIndependentReadRole`、`TestProjectBuilderCannotSaveOrActivateReleases`、`TestCompositeEditsAllOrNothing`、`TestAPIContract`。",
+      "status": "reviewed-with-finding",
+      "screenshots": [
+        "33-project-delegation-form.png",
+        "38-delegated-id-scope-success.png",
+        "40-id-scope-outside-refusal.png",
+        "39-delegated-release-refusal.png",
+        "41-delegation-revoked-no-builder.png"
+      ],
+      "observed": "按界面提示填写 kind name 会拒绝范围内合法编辑（实际按 ID 判断）；改填真实 ID 后范围内编辑 200，范围外编辑 403，保存候选被拒；归档项目后 Builder 入口消失。"
+    },
+    {
+      "task": "#141 包生命周期",
+      "route": "宿主以 `-packages deploy/packages`（或任一含两个描述符、其中一个 `requires` 另一个的索引目录）启动。Control Panel → Packages：依赖包的卡片预检失败、Install 禁用并显示「需先安装 …」；先安装被依赖的包 → 卡片变 active、出现封存制品，启动器/导航出现它的贡献；再安装依赖包 → 成功。把索引里的版本号改大重启 → 卡片出现「Upgrade to vX」→ 升级后「保留版本」列出旧版本。Drain → 状态 draining、提示在途工作照常完成、贡献不再出现在导航；Retire → retired、记录仍可读、卡片重新给出 Install。对 active 的包再点 Install（用 API 直接提交）→ 拒绝「already installed; upgrade it instead」。自动：`TestPackagePrecheckInstallDrainRetire`、`TestAcceptedProjectAndPackageState`（追加失败、安装、幂等与恢复）、`TestDeploymentPackageIndexSurvivesTenantRebuild`、`TestAPIContract`。",
+      "status": "blocked-environment",
+      "screenshots": [
+        "52-packages-no-index.png"
+      ],
+      "observed": "当前正式宿主未装载 package index；页面明确 No packages，无法实际点击 Install/Upgrade/Drain/Retire。不以代码回归代替UI通过。"
+    },
+    {
+      "task": "#141 租户与用户收口",
+      "route": "Organisation → 设置：`signInDomains` 填 `example.test`，用一个未登记的 `user:someone@example.test` 开发令牌请求 `/v1/me` → 进入，Members 页出现 `someone`（无角色）；`sessionHours` 设 1，把宿主时钟（或等待）推过 1 小时后同一令牌被 401，重试仍 401，新认证凭证才可开始新会话；`mfaRequired` 打开 → 开发令牌/lightweight 一律 401（预期：宿主无法证明第二因素），关闭后恢复。Members → 某主管 → Add role 带 `unit` → 以其身份查看该应用列表只见该单位（下级）记录。Members → 离职 → 对话框选继任者 → 该成员 Standing=left、继任者收到「You take over from …」通知、企业模型该人任职 `Until` 为今天、原委托 `by` 变为继任者。Invite 一位 `user:x@…`：配置了 email 端点时 Effects 出现一封「You are invited to …」。My account 出现「Identities」栏。自动：`TestTenancyBlock`（含当天任职离职）、`TestOIDCRequiresMultipleFactors`、`TestDomainJoinRequiresMFAAndDoesNotReadmitLeaver`、`TestBoundGrantReadsUnionWithinItsStructure`、`TestAcceptedInvitationIncludesMailIntent`（追加失败、幂等重试、回放）、`TestJournalAcceptedInvitationCrashAfterCommit`（独立 PostgreSQL 丢响应恢复及 SMTP 单次投递）、`TestDomainJoinConcurrentRequestsShareOneSeat`",
+      "status": "pending",
+      "screenshots": []
+    },
+    {
+      "task": "集成织物探针（ADR-0069 §1 五步）",
+      "route": "① Connections 建 SAP 替身（OData，`Marking` internal）、HR（http/csv）、MES（postgres）三条连接并 Check 到 ready；Data sources 各建一个，目标 = 数据集，Pull 后 Datasets 里出现版本与结构；② Pipelines：SAP 物料 → `core.material`（Matching rule 让 MES 零件并入）、HR 员工 → `hcm.employee`（HR 数据集 confidential → 字段先设读者）、SAP 工厂 → 企业模型（outputEnterprise，挂到公司下）；③ Writebacks：WMS 收货对象的 create 经 SAP 连接 POST `A_MaterialDocumentHeader`，应答 `d.MaterialDocument → docno`；在收货页收一张单，替身收到带 Idempotency-Key 的请求，docno 回填；④ 收货页任一字段 → 对象类型 Data 页 → 管道 → 数据集 → 数据源 → 连接，最近一次同步时间可见；⑤ 停掉替身再收两单 → Integration health 显示该连接排队 2、页面照常读；恢复后两单各送达一次，Deliveries 计数 +2、替身没有重复凭证",
+      "status": "pending",
+      "screenshots": []
+    }
+  ],
+  "findings": [
+    {
+      "id": "UX-01",
+      "priority": "P1",
+      "summary": "条件字段可保存，但整应用联合候选解析 FieldInfo.when 失败",
+      "repro": "kind=choice(refund,return,other); why=text required when kind in refund,return; 联合检查 UX-APP/UX-PAGE/UX-ITEM",
+      "screenshots": [
+        "06-conditional-field.jpg",
+        "08-release-condition-blocker.jpg"
+      ]
+    },
+    {
+      "id": "UX-02",
+      "priority": "P2",
+      "summary": "新空项目同时显示所有内容已发布和尚未发布",
+      "screenshots": [
+        "02-project-empty.jpg"
+      ]
+    },
+    {
+      "id": "UX-03",
+      "priority": "P2",
+      "summary": "同类页签只显示类别名，多个项目/模块无法辨认",
+      "screenshots": [
+        "05-action-desktop-full.jpg"
+      ]
+    },
+    {
+      "id": "UX-04",
+      "priority": "P2",
+      "summary": "未激活对象的页面预览显示未知实体类型，草稿空态像错误",
+      "screenshots": [
+        "07-page-draft-preview.jpg"
+      ]
+    },
+    {
+      "id": "UX-06",
+      "priority": "P1",
+      "summary": "真实空目标租户晋级应用失败：saved application build/app/uxwalk has no matching draft",
+      "repro": "hotel-a 从 UI 保存封存并激活 UX-APP 联合候选；hotel-test 只有初始管理员，没有 app 草稿；支持会话 manager-test；晋级并激活",
+      "screenshots": [
+        "11-promotion-empty-target-blocker.jpg"
+      ]
+    },
+    {
+      "id": "UX-07",
+      "priority": "P1",
+      "summary": "Dataset 的 Load a version 表单把合法 JSON 数组作为字符串提交，拒绝 A load carries an array of rows",
+      "screenshots": [
+        "13-dataset-load-json-refusal.jpg"
+      ]
+    },
+    {
+      "id": "UX-08",
+      "priority": "P1",
+      "summary": "权限解释器选择 desk-1 + platform.member.grant 后整页崩溃：Cannot read properties of null (reading join)",
+      "screenshots": [
+        "22-permission-explainer-crash.jpg"
+      ]
+    },
+    {
+      "id": "UX-09",
+      "priority": "P1",
+      "summary": "记录详情 Files 面板重复（实际看到 5 份）；Records.tsx 中 Files 与 Comments 使用相同 sibling key，需分开 key 前缀",
+      "screenshots": [
+        "20-record-detail-duplicate-files.jpg",
+        "21-record-files-growing.jpg"
+      ]
+    },
+    {
+      "id": "UX-10",
+      "priority": "P2",
+      "summary": "自动对象页标题为空，页签只剩 Close tab，Open in 菜单为 Page:",
+      "screenshots": [
+        "19-generated-object-page.jpg"
+      ]
+    },
+    {
+      "id": "UX-11",
+      "priority": "P1",
+      "summary": "项目委派表单要求 kind name，但后端按 draft ID 比较；配置 object uxitem 后合法 UX-ITEM 编辑被拒",
+      "repro": "desk-1 原 build:user + 项目 builder；资产 object uxitem；打开 UX-ITEM 编辑 note 标题保存被拒；delegatedAsset.Name 使用 Target.Id，测试 ID==name 掩盖差异。",
+      "screenshots": [
+        "33-project-delegation-form.png",
+        "37-delegated-outside-scope-refusal.png"
+      ]
+    },
+    {
+      "id": "UX-12",
+      "priority": "P1",
+      "summary": "MES 实时订阅遭拒，并使记录列表与实体元数据失效",
+      "repro": "打开制造执行→车间订单；/v1/changes 携带 /v1/master、/v1/planned-orders，返回400 unsupported live query；刷新后未知mes.order",
+      "screenshots": [
+        "61-mes-live-query-refusal.png",
+        "62-mes-unknown-entity-after-refresh.png"
+      ]
+    },
+    {
+      "id": "UX-13",
+      "priority": "P1",
+      "summary": "容器缺少时区数据库，正常的 Asia/Shanghai 偏好被拒",
+      "repro": "我的账户单独修改时区Asia/Shanghai保存400；UTC可保存。两台Dockerfile未安装tzdata，镜像未找到zoneinfo。",
+      "screenshots": [
+        "72-timezone-shanghai-refusal.png"
+      ]
+    },
+    {
+      "id": "UX-14",
+      "priority": "P2",
+      "summary": "应答映射示例带 d 前缀，但后端先自动展开 d 导致不回填",
+      "repro": "界面示例d.MaterialDocument映射到why：3单delivered但字段空。后端Writeback.Fields先自动展开d，再查路径；改填MaterialDocument后第4单成功回填UXDOC-4。",
+      "screenshots": [
+        "78-writeback-delivery-result.png",
+        "82-writeback-reply-filled.png",
+        "92-reply-mapping-without-d-prefix.png"
+      ]
+    }
+  ],
+  "scope": "阶段性走查总结；按负责人指令在匹配规则节点暂停。reviewed表示所列观察完成，不代表Testing整行全部通过或负责人验收。"
+}
