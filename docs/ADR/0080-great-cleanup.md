@@ -13,6 +13,7 @@
 | `platform` 包 | 107 文件、22 765 行，其中 **60 个 `page_*` 文件**是页面小部件契约，与 `actions/ledger/entity` 这些内核概念混在一个包 |
 | 最大文件 | `records.go` 1416、`host.go` 1191、`server.go` 1130、`definitions.go` 924、`installed.go` 917 |
 | Web | `@platform/build` 164 文件 14.8k 行（已按目录分）；`@platform/ui` 146 文件、src 顶层 29 项平铺；`@platform/app` 顶层 23 项 |
+| 超过 150 行的函数（`scripts/cleanup-inventory.sh`） | **33 个**；最长 `Host.Handler` 875 行、`Tenant.definitionsFrom` 633、`PageDocument.Check` 629、`Tenant.checkSections` 612、`SimulateCandidate` 325 |
 | 死代码 | 上一轮一次扫描即删 1 个重复模块 + 6 个死符号、去 22 个无人引用的 export；Go 侧未扫 |
 
 后果：读代码要 grep 一车；新能力不知道该长在哪，于是继续长在 `Tenant` 上；AI 代理每次都要重新建立整张地图；历史遗留（替代过的路径、只为旧日志保留的分支、注释里的"曾经"）无人敢删。
@@ -47,7 +48,7 @@ capabilities/server/
   pages/                      页面装配（page_* 6 文件 + definitions 的页面部分）
   integration/                sources*, pipelines, writebacks, protocol, effects, mail, breakers, queries（ADR-0070–0075 的织物）
   platform/                   只留内核概念：actions ledger entity app operations org binding invocation revision snapshot …
-  platform/pageui/            60 个 page_* 契约文件搬入（web 的 gen 不变：api-types 读结构体不读包名）
+  platform/pageui/            （第 1 波实测：page_* 与 Page/Section/Runtime/Scope 双向耦合，不是零依赖搬家；改列第 4 波，先拆 Page/Section 再搬）
   platform/authz/             已有
   apps/*                      已有，不动
   internal/host/              已有接口包，吸收各组件声明的小接口
@@ -57,7 +58,7 @@ capabilities/server/
 
 ### 2.2 `platform` 包
 
-- `page_*`（60 文件）→ `platform/pageui`，`pageui/widgets.json` 已在那里；`web/packages/kernel/src/gen/host.ts` 由 `api-types` 重生成，预期**零 diff**（它按类型名生成）。
+- `page_*`（60 文件）→ `platform/pageui`：第 1 波编译器给出的事实是 page_* 引用 `Section`(66 文件)/`Runtime`(58)/`Scope`(44)/`Field`/`EntityInfo`/`Query`/`Page`，而 `revision.go`/`app.go`/`definition.go` 反向引用 253 个 page 导出名；`apps/*/server` 也用 `platform.Page*` 且沙箱编不了。因此**不在搬家波做**，列入第 4 波：先把 `Page`/`Section`/`Runtime` 的定义与校验分开，再决定是否值得改 253 个名字。`host.ts` 的零 diff 条件不变。
 - 留下的内核文件按概念合并：`decimal_value`+`number_value` → `value.go`；`application_*` 三个 → `application.go`；`operation`+`operations` → 一个。
 
 ### 2.3 Web
@@ -99,5 +100,10 @@ capabilities/server/
 |---|---|---|
 | `build/projects/application-assets.ts` 与 `projects/resources.ts` 重复 | 删 | `382ff2a` |
 | 28 个无人引用的 web 导出 | 6 删、22 去 export | `382ff2a` |
+| `journal.go/journal_file.go/journals.go` 与宿主互相引用（`acceptedIdentity`、`meters`） | 独立 `journal/` 包；身份解码以 `journal.Identify` 注入；追加直方图归 journal 自己 | `896f73e` |
+| `oidc.go/idp.go` 与 `Authenticate/Attest` 分居两处 | 独立 `idp/` 包，两个函数类型随之搬家；根包仅留别名 | `896f73e` |
+| `decimal_condition.go` 一个函数单独成文件 | 变成 `platform.DecimalValue.Condition` | `896f73e` |
+| `@platform/ui` 9 个测试平铺在 src 根、`i18n.ts` 与 `i18n/` 目录分家、`theme.ts` 与 `themes/` 分家 | 测试搬到被测对象旁；`i18n/index.ts`；`themes/theme.ts` | `83c0fa2` |
+| `@platform/app` 11 个顶层文件 | `pages/ actions/ automation/`；`record-actions.test.mjs` 从 `collaboration/` 搬到 `actions/` | `83c0fa2` |
 
 （继续追加）
