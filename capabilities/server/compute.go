@@ -395,7 +395,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			// per-call channel seals the bytes and the result references them
 			// (ADR-0047 §13.3). A result over every budget is refused, never
 			// trimmed.
-			answer, staged, stageErr := t.operationOutput(op, x.ID, output)
+			answer, staged, stageErr := t.staged.output(op, x.ID, output)
 			err = stageErr
 			if stageErr == nil {
 				output, out.Staged = answer, staged

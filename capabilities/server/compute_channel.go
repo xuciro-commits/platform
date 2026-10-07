@@ -7,9 +7,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"slices"
+	"maps"
 	"strings"
-	"time"
+	"sync"
 
 	"platformserver/platform"
 )
@@ -46,11 +46,34 @@ func stagedKey(tenant, call, schema string) string {
 	return "calls/" + safe(tenant) + "/" + safe(call) + "/" + safe(schema) + ".json"
 }
 
-// StageResult writes one call's result bytes into the channel and answers the
+// stagedChannel is the component that owns the channel: the sealed handles by
+// call, under its own lock, in the tenant's file store. It needs nothing else
+// of the tenant than its id and its files.
+type stagedChannel struct {
+	tenant  string
+	files   func() FileStore
+	mu      sync.Mutex
+	handles map[string]platform.StagedResult
+}
+
+// snapshot and restore are what the tenant snapshot carries for the channel.
+func (c *stagedChannel) snapshot() map[string]platform.StagedResult {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return maps.Clone(c.handles)
+}
+
+func (c *stagedChannel) restore(handles map[string]platform.StagedResult) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.handles = handles
+}
+
+// Stage writes one call's result bytes into the channel and answers the
 // handle the accepted result references. Size and schema are checked before
 // anything is sealed; the digest proves the bytes afterwards.
-func (t *Tenant) StageResult(callID, schema string, raw []byte, budget int) (platform.StagedResult, error) {
-	handle := platform.StagedResult{Tenant: t.ID, Call: callID, Schema: schema, Key: stagedKey(t.ID, callID, schema), Size: len(raw)}
+func (c *stagedChannel) Stage(callID, schema string, raw []byte, budget int) (platform.StagedResult, error) {
+	handle := platform.StagedResult{Tenant: c.tenant, Call: callID, Schema: schema, Key: stagedKey(c.tenant, callID, schema), Size: len(raw)}
 	if callID == "" || schema == "" || len(raw) == 0 {
 		return handle, fmt.Errorf("a staged result needs a call, a schema and bytes")
 	}
@@ -68,22 +91,22 @@ func (t *Tenant) StageResult(callID, schema string, raw []byte, budget int) (pla
 	}
 	sum := sha256.Sum256(raw)
 	handle.Digest = "sha256:" + hex.EncodeToString(sum[:])
-	if err := t.files().Put(context.Background(), handle.Key, raw, "application/json"); err != nil {
+	if err := c.files().Put(context.Background(), handle.Key, raw, "application/json"); err != nil {
 		return handle, fmt.Errorf("stage result: %w", err)
 	}
-	t.mu.Lock()
-	if t.staged == nil {
-		t.staged = map[string]platform.StagedResult{}
+	c.mu.Lock()
+	if c.handles == nil {
+		c.handles = map[string]platform.StagedResult{}
 	}
-	t.staged[callID] = handle
-	t.mu.Unlock()
+	c.handles[callID] = handle
+	c.mu.Unlock()
 	return handle, nil
 }
 
-// ReadStagedResult reads a handle back and verifies its digest, so a result is
-// exactly what the call sealed.
-func (t *Tenant) ReadStagedResult(handle platform.StagedResult) ([]byte, error) {
-	reader, size, err := t.files().Get(context.Background(), handle.Key)
+// Read reads a handle back and verifies its digest, so a result is exactly
+// what the call sealed.
+func (c *stagedChannel) Read(handle platform.StagedResult) ([]byte, error) {
+	reader, size, err := c.files().Get(context.Background(), handle.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -103,23 +126,11 @@ func (t *Tenant) ReadStagedResult(handle platform.StagedResult) ([]byte, error) 
 	return raw, nil
 }
 
-// StagedResults lists the channel's entries, newest first, for the host console.
-func (t *Tenant) StagedResults() []platform.StagedResult {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	out := make([]platform.StagedResult, 0, len(t.staged))
-	for _, handle := range t.staged {
-		out = append(out, handle)
-	}
-	slices.SortFunc(out, func(a, b platform.StagedResult) int { return strings.Compare(a.Call, b.Call) })
-	return out
-}
-
-// operationOutput accepts an operation's result under the operation's declared
+// output accepts an operation's result under the operation's declared
 // budgets: inline while it fits, staged through the call channel when the
 // operation declares one, and refused — never trimmed — otherwise. The answer
 // carries a small reference when the bytes were staged.
-func (t *Tenant) operationOutput(op platform.Operation, callID string, raw []byte) (json.RawMessage, *platform.StagedResult, error) {
+func (c *stagedChannel) output(op platform.Operation, callID string, raw []byte) (json.RawMessage, *platform.StagedResult, error) {
 	if len(raw) <= op.Limits.MaxOutputBytes && len(raw) <= maxInlineOutputBytes {
 		if err := op.Output.Validate(raw, op.Limits.MaxOutputBytes); err != nil {
 			return nil, nil, err
@@ -132,29 +143,10 @@ func (t *Tenant) operationOutput(op platform.Operation, callID string, raw []byt
 	if err := op.Output.Validate(raw, op.Limits.StagedOutputBytes); err != nil {
 		return nil, nil, err
 	}
-	handle, err := t.StageResult(callID, op.Name, raw, op.Limits.StagedOutputBytes)
+	handle, err := c.Stage(callID, op.Name, raw, op.Limits.StagedOutputBytes)
 	if err != nil {
 		return nil, nil, err
 	}
 	reference, _ := json.Marshal(map[string]any{"staged": handle})
 	return reference, &handle, nil
-}
-
-// reclaimStaged drops a sealed result whose call was never accepted. The host
-// owns the store, so cleanup is here and not in any worker.
-func (t *Tenant) reclaimStaged(callID string, now time.Time) error {
-	t.mu.Lock()
-	handle, ok := t.staged[callID]
-	if ok {
-		delete(t.staged, callID)
-	}
-	t.mu.Unlock()
-	if !ok {
-		return nil
-	}
-	if err := t.files().Delete(context.Background(), handle.Key); err != nil {
-		return err
-	}
-	_ = now
-	return nil
 }

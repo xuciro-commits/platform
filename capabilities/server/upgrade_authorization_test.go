@@ -488,7 +488,7 @@ func TestStagedResultChannel(t *testing.T) {
 		// The schema above is intentionally lax; the check may pass or refuse.
 		t.Log("operation check accepted the report operation")
 	}
-	answer, handle, err := tn.operationOutput(op, "call-1", big)
+	answer, handle, err := tn.staged.output(op, "call-1", big)
 	if err != nil {
 		t.Fatalf("staged output: %v", err)
 	}
@@ -498,24 +498,24 @@ func TestStagedResultChannel(t *testing.T) {
 	if !strings.Contains(string(answer), "staged") {
 		t.Fatalf("the answer does not reference the handle: %s", answer)
 	}
-	back, err := tn.ReadStagedResult(*handle)
+	back, err := tn.staged.Read(*handle)
 	if err != nil || len(back) != len(big) {
 		t.Fatalf("read staged: %v", err)
 	}
 	// Inline results stay inline.
 	small := json.RawMessage(`{"note":"ok"}`)
-	_, inline, err := tn.operationOutput(op, "call-2", small)
+	_, inline, err := tn.staged.output(op, "call-2", small)
 	if err != nil || inline != nil {
 		t.Fatalf("an inline result was staged: %v %+v", err, inline)
 	}
-	if _, _, err := tn.operationOutput(op, "call-3", json.RawMessage(`{"note":"`+strings.Repeat("y", 2<<20)+`"}`)); err == nil {
+	if _, _, err := tn.staged.output(op, "call-3", json.RawMessage(`{"note":"`+strings.Repeat("y", 2<<20)+`"}`)); err == nil {
 		t.Fatal("an over-budget result was accepted")
 	}
 	// The channel's bytes are the sealed ones.
 	if err := tn.files().Put(t.Context(), handle.Key, []byte(`{"note":"tampered"}`), "application/json"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tn.ReadStagedResult(*handle); err == nil {
+	if _, err := tn.staged.Read(*handle); err == nil {
 		t.Fatal("a tampered staged result passed its digest")
 	}
 }

@@ -81,10 +81,9 @@ type Tenant struct {
 	migrations []MigrationManifest
 	// compositeApplied are the composite commands this tenant committed, by key.
 	compositeApplied map[string]string
-	// staged are the per-call result channel's sealed entries, by call.
-	staged      map[string]platform.StagedResult
-	definitions []platform.Definition   // installed code assets; member views are derived on read
-	owner       map[string]platform.App // "action:", "read:" and "input:" names → app
+	staged           stagedChannel           // the per-call result channel (compute_channel.go)
+	definitions      []platform.Definition   // installed code assets; member views are derived on read
+	owner            map[string]platform.App // "action:", "read:" and "input:" names → app
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
 	auditMu    sync.Mutex
@@ -179,6 +178,7 @@ func (t *Tenant) remember(e AuditEntry) {
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	t := &Tenant{ID: id, apps: apps, refusals: map[string]refusedResult{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
 		connectors: kernel.NewConnectors(), records: newRecordStore(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}, sequences: map[string]int{}}
+	t.staged = stagedChannel{tenant: id, files: t.files}
 	claim := func(name string, a platform.App) error {
 		if other := t.owner[name]; other != nil {
 			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other.Manifest().ID, a.Manifest().ID)

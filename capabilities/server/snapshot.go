@@ -192,7 +192,7 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	s.HostLifecycle, s.Support = t.lifecycle(), slices.Clone(t.support)
 	s.Sealed, s.Migrations = maps.Clone(t.sealed), slices.Clone(t.migrations)
 	s.Composites = maps.Clone(t.compositeApplied)
-	s.Staged = maps.Clone(t.staged)
+	s.Staged = t.staged.snapshot()
 	return s, rows, position(), nil
 }
 
@@ -321,7 +321,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		t.compositeApplied = s.Composites
 	}
 	if s.Staged != nil {
-		t.staged = s.Staged
+		t.staged.restore(s.Staged)
 	}
 	for key, result := range s.Refusals {
 		raw, err := json.Marshal(result)
