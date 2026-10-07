@@ -140,7 +140,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 | `buyer@plant.test` | ERP `plant-sz` | `buyer-1` | erp 采购员（buyer）；ai 用户 | 下采购订单、收货；超过审批限额的订单由 `sup@plant.test`（主管会计）审批 |
 | `accountant@plant.test` | ERP | `acc-1` | erp 会计（accountant）；ai 用户 | 起草、过账、冲销凭证，登记供应商发票 |
 
-制造主管的构建者角色通过控制面板的成员授权动作 `platform.member.grant`（app `build`、role `builder`）加入现有租户并记录在账本。新建演示租户也用此动作启用构建入口；已有接受结果的租户不要修改目录中成员的初始角色来代替授权，这会改变历史恢复的前置状态。
+新数据环境运行 `deploy/local/seed-manufacturing.sh` 给制造主管初始化构建权限；重复运行不会重复授予。制造主管的构建者角色通过控制面板的成员授权动作 `platform.member.grant`（app `build`、role `builder`）加入现有租户并记录在账本。新建演示租户也用此动作启用构建入口；已有接受结果的租户不要修改目录中成员的初始角色来代替授权，这会改变历史恢复的前置状态。
 
 - 本地 Rauthy 走 HTTP，所以 `rauthy/config.toml` 里设了 `[access] cookie_mode = 'danger-insecure'`：不设的话，Safari 会丢掉 Rauthy 的安全 cookie，浏览器登录会显示密码错误（密码其实是对的）。只用于本地。
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
@@ -207,7 +207,7 @@ WMS 是在应用工作台保存并发布的 `build.app` 与对象/页面/流程/
 
 需要从头走查时，停止当前 Compose（`docker compose -f deploy/local/compose.yaml down`，**不加 `-v`**），在 `deploy/local/.env` 设置一个新的 `PLATFORM_DATA_NAMESPACE`（如 `platform-review-20261007`）。四个数据卷会使用这个前缀；旧卷保留，`.env` 中的签名密钥和供应商密钥保留。默认未设置前缀时仍使用 Compose 项目名，独立排演项目的数据不会混用。
 
-先构建工作区，带 `PLATFORM_REVISION=$(git rev-parse HEAD)` 运行 `docker compose -f deploy/local/compose.yaml up -d --build`，再运行 `deploy/local/seed-hospitality.sh` 与 `deploy/local/update.sh`。Rauthy 按已提交的测试身份重新初始化，两个宿主从初始配置重新建租户，不恢复旧 WMS/APP-01 草稿。`tenants.json` 不在数据卷中，仍保留当前配置。
+先构建工作区，带 `PLATFORM_REVISION=$(git rev-parse HEAD)` 运行 `docker compose -f deploy/local/compose.yaml up -d --build`，再运行 `deploy/local/seed-hospitality.sh`、`deploy/local/seed-manufacturing.sh` 与 `deploy/local/update.sh`。Rauthy 按已提交的测试身份重新初始化，两个宿主从初始配置重新建租户，不恢复旧 WMS/APP-01 草稿。`tenants.json` 不在数据卷中，仍保留当前配置。
 
 酒店宿主内的 `hotel-test` 是晋级目标，与 `hotel-a` 共用 `8495` 入口；租户之间隔离记录与权限。用 `manager@hotel.test` 的 Host Console 开目标成员支持会话后晋级；更改存储的 v2 先不激活地晋级，再在目标租户发布工作台审阅其升级计划。`8490` 制造宿主是另一进程，不是这条同宿主晋级路线的目标。走查步骤归 [Testing](../../docs/Testing.md)。
 
