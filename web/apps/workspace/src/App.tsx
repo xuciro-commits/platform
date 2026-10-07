@@ -206,7 +206,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           ...(host.can("agent.run.start") ? { assist: { view: "assistant" } } : {}) }}
         applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
         workspaces={{ options: held.map((id) => ({ id, title: projections.find((p) => p.id === id)!.title(), icon: projectionIcon[id] })), current: projection, onSelect: chooseProjection }}
-        onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
+        onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}
         onActiveRoute={setActiveRoute}
         nav={[
           ...(surface === "studio" && host.role("build") === "builder" ? [{ label: t("Projects"), items: [
@@ -243,8 +243,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
               release.data?.id ? <>{t("Last activated release")}: <code>{release.data.id.split(":").at(-1)?.slice(0, 10)}</code></> : t("No activated release")}
           </Button>
         </div>}
-        session={{ tenant: me!.tenantId, principal: me!.principalId, detail: signedIn?.session.email, options: sessionOptions,
-          current: signedIn ? "" : `as:${token}`, onSwitch }} />
+        session={{ tenant: me!.tenant?.name || me!.tenantId, principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions,
+          current: signedIn ? "" : `as:${token}`, onSwitch,
+          onAccount: all.some((a) => a.id === "platform") ? () => { select("platform"); location.hash = routeToHash({ view: "account" }); } : undefined }} />
       <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} /></ApplicationSessionsProvider>
     </HostContext.Provider>
   );

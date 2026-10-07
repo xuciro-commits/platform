@@ -85,7 +85,9 @@ export function CatalogFixture({ children, reads = noReads, roles = readerRole, 
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } }));
   const host = useMemo<Host>(() => ({
     client: new FixtureClient(reads), me: { tenantId: "catalog-fixture", principalId: "catalog-fixture", profile: { id: "catalog-fixture", tenant: "catalog-fixture", roles },
-      apps: [{ id: "catalog", title: "Catalog fixtures", role: "reader" }], tenants: ["catalog-fixture"], language: "en", languages: ["en", "zh-CN"], currency: "CNY" },
+      apps: [{ id: "catalog", title: "Catalog fixtures", role: "reader" }], tenants: ["catalog-fixture"], language: "en", languages: ["en", "zh-CN"], currency: "CNY",
+      account: { member: "catalog-fixture", effective: { language: "en", timezone: "UTC", dateFormat: "ymd", numberFormat: "1,234.56", weekStart: "monday", email: "", digest: "instant" } },
+      tenant: { id: "catalog-fixture", name: "Catalog fixture", settings: {}, apps: ["catalog"], members: 1, status: "active" } },
     role: (app) => roles[app], can: (schema) => sampleActions.some((action) => action.schema === schema),
     action: (schema) => sampleActions.find((action) => action.schema === schema), catalog: sampleActions,
     decide: async (_schema, _target, _payload, options) => { const reason = t("Local example only. No action was sent to a host."); setMessage(reason); options?.onRefused?.(reason); return false; },

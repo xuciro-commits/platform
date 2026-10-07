@@ -4,6 +4,7 @@ import { Button, DataTable, Dialog, EntityCard, EntityForm, PageHeader, Panel, S
 import { useState } from "react";
 import { z } from "zod";
 import { active, kind, today, useAdmin, type Chart, type Member } from "./shared";
+import { ProfileForm, type Account, type TenantRecord } from "./account";
 
 export function Members() {
   const { can } = useHost();
@@ -13,6 +14,7 @@ export function Members() {
   const [adding, setAdding] = useState(false);
   const columns: ColumnDef<Member, any>[] = [
     { accessorKey: "id", header: t("Member"), meta: { width: 130 } },
+    { id: "name", header: t("Name"), meta: { width: 160 }, accessorFn: (m) => m.profile.displayName ?? "", cell: ({ row: { original: m } }) => <span>{m.profile.displayName || <span className="text-muted">—</span>}{m.profile.title ? <span className="ml-1 text-xs text-muted">{m.profile.title}</span> : null}</span> },
     { id: "kind", header: t("Kind"), meta: { width: 140 }, accessorFn: kind, cell: (c) => <Tag label={t(c.getValue())} tone={c.getValue() === "person" ? "neutral" : "info"} /> },
     { id: "subjects", header: t("Signs in as"), accessorFn: (m) => m.subjects.join(", "), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "roles", header: t("Roles"), accessorFn: (m) => Object.entries(m.roles).map(([a, r]) => `${a}: ${r}`).join(" "),
@@ -37,16 +39,22 @@ export function Members() {
 }
 
 export function MemberDetail({ id }: { id: string }) {
-  const { can, role } = useHost();
+  const { can, role, me } = useHost();
   const member = useRead<Member[]>("/v1/members").data?.find((m) => m.id === id);
+  const tenant = useRead<TenantRecord>("/v1/tenant").data;
   const { apps, decide } = useAdmin();
   if (!member) return <p className="text-sm text-muted">{t("No member")} {id}.</p>;
+  const settings = tenant?.settings ?? {};
+  const account: Account = { ...member.profile, effective: { language: member.profile.language || settings.language || "", timezone: member.profile.timezone || settings.timezone || "UTC",
+    dateFormat: member.profile.dateFormat || settings.dateFormat || "ymd", numberFormat: member.profile.numberFormat || settings.numberFormat || "1,234.56", weekStart: member.profile.weekStart || settings.weekStart || "monday",
+    email: member.profile.email || member.subjects.find((s) => s.startsWith("user:"))?.slice(5) || "", digest: member.profile.digest || settings.digest || "instant" } };
   const roleApps = can("platform.member.grant") || can("platform.member.revoke") ? apps.filter(app => app.roles.length)
     : Object.keys(member.roles).map(id => ({ id, roles: [] as string[], capabilities: [] as { name: string }[] }));
   return (
     <div className="grid max-w-3xl gap-4">
-      <EntityCard title={member.id} subtitle={member.subjects.join(", ")} status={<Tag label={kind(member)} />}
-        properties={[[t("Apps with a role"), Object.keys(member.roles).join(", ") || t("none")]]} />
+      <EntityCard title={member.profile.displayName || member.id} subtitle={member.subjects.join(", ")} status={<Tag label={kind(member)} />}
+        properties={[[t("Member ID"), member.id], [t("Apps with a role"), Object.keys(member.roles).join(", ") || t("none")],
+          [t("Timezone"), account.effective.timezone], [t("Last seen"), member.profile.lastSeen ? new Date(member.profile.lastSeen).toLocaleString() : t("never")]]} />
       <Panel title={t("Role in each app")}>
         <div className="grid grid-cols-[10rem_1fr_auto] items-center gap-2 text-sm">
           {roleApps.map((a) => (
@@ -65,6 +73,9 @@ export function MemberDetail({ id }: { id: string }) {
         </div>
       </Panel>
       {(role("enterprise") || role("platform") === "admin") && <MemberUnits member={member.id} />}
+      {role("platform") === "admin" && <Panel title={t("Profile")}>
+        <ProfileForm member={member.id} account={account} languages={me.languages} tenant={tenant} self={member.id === me.principalId} />
+      </Panel>}
     </div>
   );
 }

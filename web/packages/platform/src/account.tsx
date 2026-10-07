@@ -1,0 +1,148 @@
+// My account (ADR-0079 §4): a member's own profile — how the platform
+// addresses them, their language, timezone and formats, notifications and
+// where the workspace opens. Every value is a decision (platform.profile.update);
+// an empty value returns to the tenant's default. Administrators see the same
+// form on a member's page (people.tsx).
+import type { Api } from "@platform/kernel";
+import { useHost, useReadQuery as useRead } from "@platform/app";
+import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t } from "@platform/ui";
+import { useEffect, useMemo, useState } from "react";
+
+export type Account = Api.Account;
+export type Profile = Api.Profile;
+export type TenantRecord = Api.TenantRecord;
+
+const DATE_FORMATS = ["ymd", "dmy", "mdy"];
+const NUMBER_FORMATS = ["1,234.56", "1.234,56", "1 234,56"];
+const WEEK_STARTS = ["monday", "sunday", "saturday"];
+const DIGESTS = ["instant", "hourly", "daily"];
+const THEMES = ["system", "light", "dark"];
+const DENSITIES = ["comfortable", "compact"];
+
+/** The browser's list of IANA zones, when it has one; the common ones otherwise. */
+export function timezones(): string[] {
+  try {
+    const all = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.("timeZone");
+    if (all?.length) return all;
+  } catch { /* older browsers */ }
+  return ["UTC", "Asia/Shanghai", "Asia/Tokyo", "Asia/Singapore", "Asia/Kolkata", "Europe/Berlin", "Europe/London", "America/New_York", "America/Chicago", "America/Los_Angeles", "Australia/Sydney"];
+}
+
+/** Now, as the member sees it, for a preview next to the timezone choice. */
+function clock(zone: string, dateFormat: string) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
+    const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
+    const date = dateFormat === "dmy" ? `${p.day}.${p.month}.${p.year}` : dateFormat === "mdy" ? `${p.month}/${p.day}/${p.year}` : `${p.year}-${p.month}-${p.day}`;
+    return `${date} ${p.hour}:${p.minute}`;
+  } catch { return ""; }
+}
+
+type Draft = Partial<Record<keyof Profile, string | boolean>>;
+
+/** The profile form for one member: their own, or anyone's for an administrator. */
+export function ProfileForm({ member, account, languages, tenant, self }: { member: string; account: Account; languages: string[]; tenant?: TenantRecord; self: boolean }) {
+  const { decide } = useHost();
+  const { setScheme } = useTheme();
+  const [draft, setDraft] = useState<Draft>({});
+  useEffect(() => setDraft({}), [account]);
+  const value = (k: keyof Profile) => (draft[k] ?? (account[k] as string | boolean | undefined) ?? "") as string;
+  const flag = (k: "inApp" | "mail") => (draft[k] ?? account[k] ?? true) as boolean;
+  const dirty = Object.keys(draft).length > 0;
+  const zones = useMemo(timezones, []);
+  const defaults = tenant?.settings ?? {};
+  const inherit = (k: string, label: string) => `${t("Tenant default")}: ${defaults[k] || label}`;
+  const save = async () => {
+    const payload: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(draft)) payload[k] = v;
+    if (await decide("platform.profile.update", { type: "platform.profile", id: member }, payload)) {
+      if (self && typeof draft.language === "string") setLanguage(draft.language || (defaults.language ?? ""));
+      if (self && typeof draft.theme === "string" && draft.theme) setScheme(draft.theme as "system" | "light" | "dark");
+      notify.success(t("Profile saved."));
+      setDraft({});
+    }
+  };
+  const text = (k: keyof Profile, label: string, hint?: string, type = "text") => (
+    <label className="grid gap-1 text-sm">
+      <span className="text-xs text-muted">{label}</span>
+      <Input type={type} value={value(k)} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />
+      {hint && <span className="text-[11px] text-muted">{hint}</span>}
+    </label>
+  );
+  const choice = (k: keyof Profile, label: string, options: string[], render: (o: string) => string, hint?: string) => (
+    <label className="grid gap-1 text-sm">
+      <span className="text-xs text-muted">{label}</span>
+      <Select value={value(k)} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}>
+        <option value="">{t("— tenant default")}</option>
+        {options.map((o) => <option key={o} value={o}>{render(o)}</option>)}
+      </Select>
+      {hint && <span className="text-[11px] text-muted">{hint}</span>}
+    </label>
+  );
+  const zone = value("timezone") || account.effective.timezone || "UTC";
+  return (
+    <div className="grid max-w-3xl gap-4">
+      <Panel title={t("Name and contact")}>
+        <div className="grid gap-3 md:grid-cols-2">
+          {text("displayName", t("Display name"), t("How you appear in lists, approvals and the audit trail."))}
+          {text("title", t("Job title"))}
+          {text("givenName", t("Given name"))}
+          {text("familyName", t("Family name"))}
+          {text("email", t("Notification email"), account.effective.email ? `${t("Default")}: ${account.effective.email}` : undefined, "email")}
+          {text("phone", t("Phone"), undefined, "tel")}
+          {text("pronouns", t("Pronouns"))}
+        </div>
+      </Panel>
+      <Panel title={t("Language, time and formats")}>
+        <div className="grid gap-3 md:grid-cols-2">
+          {choice("language", t("Language"), ["en", ...languages.filter((l) => l !== "en")], (l) => l, inherit("language", t("browser")))}
+          <label className="grid gap-1 text-sm">
+            <span className="text-xs text-muted">{t("Timezone")}</span>
+            <Input list="platform-timezones" value={value("timezone")} placeholder={t("— tenant default")} onChange={(e) => setDraft({ ...draft, timezone: e.target.value })} />
+            <datalist id="platform-timezones">{zones.map((z) => <option key={z} value={z} />)}</datalist>
+            <span className="text-[11px] text-muted">{inherit("timezone", "UTC")} · {t("Now")}: {clock(zone, value("dateFormat") || account.effective.dateFormat)}</span>
+          </label>
+          {choice("dateFormat", t("Date format"), DATE_FORMATS, (o) => ({ ymd: "2026-10-06", dmy: "06.10.2026", mdy: "10/06/2026" })[o] ?? o, inherit("dateFormat", "ymd"))}
+          {choice("numberFormat", t("Number format"), NUMBER_FORMATS, (o) => o, inherit("numberFormat", "1,234.56"))}
+          {choice("weekStart", t("Week starts on"), WEEK_STARTS, (o) => t(o), inherit("weekStart", "monday"))}
+        </div>
+      </Panel>
+      <Panel title={t("Notifications")}>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Checkbox checked={flag("inApp")} onChange={(v) => setDraft({ ...draft, inApp: v })}><span className="text-sm">{t("Notify in the workspace")}</span></Checkbox>
+          <Checkbox checked={flag("mail")} onChange={(v) => setDraft({ ...draft, mail: v })}><span className="text-sm">{t("Notify by mail")}</span></Checkbox>
+          {choice("digest", t("Mail digest"), DIGESTS, (o) => t(o), inherit("digest", "instant"))}
+          <div className="grid grid-cols-2 gap-2">
+            {text("quietFrom", t("Quiet hours from"), undefined, "time")}
+            {text("quietTo", t("until"), undefined, "time")}
+          </div>
+        </div>
+      </Panel>
+      <Panel title={t("Workspace")}>
+        <div className="grid gap-3 md:grid-cols-2">
+          {text("homePage", t("Opens on"), t("An app ID the workspace opens on, such as mes; empty: the home page."))}
+          {choice("theme", t("Appearance"), THEMES, (o) => t(o))}
+          {choice("density", t("Density"), DENSITIES, (o) => t(o))}
+        </div>
+      </Panel>
+      <div className="flex items-center gap-3">
+        <Button variant="primary" disabled={!dirty} onClick={() => void save()}>{t("Save")}</Button>
+        {dirty && <Button onClick={() => setDraft({})}>{t("Discard")}</Button>}
+        {account.lastSeen && <span className="text-xs text-muted">{t("Last seen")} {new Date(account.lastSeen).toLocaleString()}</span>}
+      </div>
+    </div>
+  );
+}
+
+export function MyAccount() {
+  const { me } = useHost();
+  const account = useRead<Account>("/v1/account");
+  const tenant = useRead<TenantRecord>("/v1/tenant");
+  return (
+    <>
+      <PageHeader title={t("My account")} description={t("How the platform addresses you and behaves for you. What you leave empty follows {tenant}.", { tenant: tenant.data?.name ?? me.tenantId })}
+        actions={<span className="flex gap-1"><Tag label={me.principalId} /><Tag label={me.tenantId} tone="info" /></span>} />
+      {account.data && <ProfileForm member={me.principalId} account={account.data} languages={me.languages} tenant={tenant.data} self />}
+    </>
+  );
+}
