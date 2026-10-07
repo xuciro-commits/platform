@@ -38,12 +38,17 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 	}
 	out := []IntegrationEffect{}
 	for _, effect := range t.Effects(now) {
-		if effect.App != build.ID || !strings.HasPrefix(effect.Event, "writeback/") || !strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint) {
+		writeback := strings.HasPrefix(effect.Event, "writeback/") && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
+		books := strings.HasPrefix(effect.Event, "journal/") && effect.Endpoint == build.BooksEndpoint
+		if effect.App != build.ID || !writeback && !books {
 			continue
 		}
 		item := IntegrationEffect{ID: effect.ID, Endpoint: effect.Endpoint, Event: effect.Event, State: effect.State, Due: effect.Due, Last: effect.Last}
 		if effect.Error != "" {
 			item.Error = "The last delivery attempt failed"
+			if books && (strings.Contains(effect.Error, "closed") || strings.Contains(effect.Error, "fiscal period")) {
+				item.Error = "Waiting for an open fiscal period"
+			}
 		}
 		out = append(out, item)
 	}

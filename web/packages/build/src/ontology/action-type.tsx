@@ -13,7 +13,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { PublishMenu, WorkbenchMessage, savingState } from "../shared/workbench";
 import { assignmentInputFits } from "./process-rules";
 import { Label } from "./process";
-import { comparisonFits, conditionSubjects, inputTypes, nameOf, operators, type Action, type ApproverLevel, type Condition, type Create_, type Input_, type Post_, type Set_ } from "./object-model";
+import { comparisonFits, conditionSubjects, inputTypes, nameOf, operators, type Action, type ApproverLevel, type Condition, type Create_, type Input_, type JournalLine_, type Post_, type Set_ } from "./object-model";
 import { useObjectDraft } from "./object-draft";
 
 type Section = "overview" | "parameters" | "form" | "rules" | "criteria" | "effects" | "approval" | "permissions";
@@ -129,7 +129,8 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
       <p className="px-4 text-xs text-muted">{t("Related records commit with this action. The target object's create permissions still apply.")}</p>
       {list<Post_>(posts, "posting", (next) => patch({ posts: next }), { label: t("Post to a balance"), make: () => ({ object: balances[0]?.type ?? "", match: [], field: balances[0]?.fields.find((f) => ["integer", "decimal", "money"].includes(f.type))?.name ?? "", amount: inputs[0]?.name ?? "=1" }), disabled: !balances.length },
         (p) => <><span className="min-w-0 flex-1 truncate font-medium">{t("{sign} {amount} to {object}.{field}", { sign: p.subtract ? "−" : "+", amount: p.amount.startsWith("=") ? p.amount.slice(1) : postSources.find((x) => x.value === p.amount)?.label ?? p.amount, object: balances.find((x) => x.type === p.object)?.title ?? p.object, field: p.field })}</span><span className="text-xs text-muted">{p.match.map((m) => m.field).join(", ")}</span></>, balances.length ? t("No postings. Quantities and amounts can accumulate on a balance object when the action commits.") : t("Publish an object with an integer, decimal or money field to keep balances."))}
-      <p className="px-4 text-xs text-muted">{t("A balance is one record per distinct set of match values; it is created on the first posting. Reverse with a posting of the other sign.")}</p></>,
+      <p className="px-4 text-xs text-muted">{t("A balance is one record per distinct set of match values; it is created on the first posting. Reverse with a posting of the other sign.")}</p>
+      <BooksEditor action={action} actions={process.actions} sources={postSources} patch={patch} /></>,
     approval: <div className="grid max-w-xl content-start gap-3 p-4 text-sm">
       <Checkbox checked={!!action.approval} disabled={!!action.toInput && !action.approval} onChange={(enabled) => patch({ approval: enabled ? { pending: process.states.find((s) => s.name !== action.from[0] && s.name !== action.to)?.name ?? "", levels: [{ title: t("Approver"), role: approverRoles[0] ?? "builder" }] } : undefined })}>{t("Wait for approval")}</Checkbox>
       {action.approval && <>
@@ -293,6 +294,37 @@ function PostEditor({ post, sources, balances, onChange }: { post: Post_; source
     <Rows<Set_> title={t("Balance identified by")} add={t("Add a match field")} items={post.match} make={() => ({ field: keys[0]?.name ?? "", from: sources[0]?.value ?? "" })} onChange={(next) => onChange({ ...post, match: next })}
       row={(set, patch) => <AssignmentEditor fields={keys} sources={sources} set={set} onChange={patch} />} />
   </>;
+}
+
+/** What the action books (ADR-0076): a balanced journal entry the host lands in the books through core, or the reversal of another action's entry and postings. */
+function BooksEditor({ action, actions, sources, patch }: { action: Action; actions: Action[]; sources: { value: string; label: string }[]; patch: (next: Partial<Action>) => void }) {
+  const journal = action.journal, others = actions.filter((a) => a.name !== action.name && (a.journal || a.posts?.length));
+  const amountSources = sources.filter((s) => s.value !== "$me");
+  const pick = (value: string | undefined, onChange: (next: string | undefined) => void, fixed: string) => <div className="flex gap-1">
+    <Select value={value?.startsWith("=") ? "=" : value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
+      <option value="">{t("Nothing")}</option>{amountSources.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}<option value="=">{fixed}</option></Select>
+    {value?.startsWith("=") && <Input value={value.slice(1)} onChange={(e) => onChange(`=${e.target.value}`)} />}
+  </div>;
+  return <div className="grid gap-2 border-t border-border p-4 text-sm">
+    <h3 className="text-xs font-semibold text-muted">{t("Books")}</h3>
+    <Label text={t("Reverses action")}><Select value={action.reverses ?? ""} disabled={!!journal || !!action.posts?.length} onChange={(e) => patch({ reverses: e.target.value || undefined })}>
+      <option value="">{t("Nothing: this action books its own entry, if any")}</option>{others.map((a) => <option key={a.name} value={a.name}>{a.title}</option>)}</Select></Label>
+    {!action.reverses && <Checkbox checked={!!journal} onChange={(on) => patch({ journal: on ? { lines: [{ account: "=", debit: amountSources[0]?.value }, { account: "=", credit: amountSources[0]?.value }] } : undefined })}>{t("Book a journal entry when it commits")}</Checkbox>}
+    {journal && <>
+      <p className="text-xs text-muted">{t("Debits and credits must balance. The entry lands in the fiscal period of its date, or the next open one; it waits while none is open, and the accountant can only reverse it.")}</p>
+      <Label text={t("Posting date")}><Select value={journal.date ?? ""} onChange={(e) => patch({ journal: { ...journal, date: e.target.value || undefined } })}>
+        <option value="">{t("When the action is taken")}</option>{sources.filter((s) => s.value.startsWith("record.") || s.value.startsWith("$") === false).map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</Select></Label>
+      <Label text={t("Entry text")}><Input value={journal.text?.startsWith("=") ? journal.text.slice(1) : journal.text ?? ""} placeholder={action.title} onChange={(e) => patch({ journal: { ...journal, text: e.target.value ? `=${e.target.value}` : undefined } })} /></Label>
+      <Rows<JournalLine_> title={t("Lines")} add={t("Add a line")} items={journal.lines} make={() => ({ account: "=" })} onChange={(lines) => patch({ journal: { ...journal, lines } })}
+        row={(line, set) => <>
+          <Label text={t("Account")}>{pick(line.account, (account) => set({ account: account ?? "=" }), t("Account code"))}</Label>
+          <Label text={t("Debit")}>{pick(line.debit, (debit) => set({ debit, credit: debit ? undefined : line.credit }), t("A fixed amount"))}</Label>
+          <Label text={t("Credit")}>{pick(line.credit, (credit) => set({ credit, debit: credit ? undefined : line.debit }), t("A fixed amount"))}</Label>
+          <Label text={t("Partner")}>{pick(line.partner, (partner) => set({ partner }), t("A name"))}</Label>
+          <Label text={t("About")}>{pick(line.object, (object) => set({ object }), t("A reference"))}</Label>
+        </>} />
+    </>}
+  </div>;
 }
 
 /** A small list of rows to add to, change and remove, for the nested lists (approver levels, mapped fields). */

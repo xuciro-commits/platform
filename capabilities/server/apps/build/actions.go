@@ -49,6 +49,13 @@ type Action struct {
 	// Posts add to or subtract from balances kept on other objects, under the
 	// same decision (ADR-0063).
 	Posts []Post `json:"posts,omitempty" title:"What it posts"`
+	// Journal is the balanced accounting entry the decision causes in the
+	// books (core.journal, ADR-0076): landed by the host after acceptance,
+	// once per decision, into the open period of its date.
+	Journal *JournalPost `json:"journal,omitempty" title:"What it books"`
+	// Reverses names another action of this object whose postings and journal
+	// this one undoes with the opposite sign (ADR-0076): a reversal, not a delete.
+	Reverses string `json:"reverses,omitempty" title:"Reverses action"`
 }
 
 // Create is a record of another defined object made when an action is taken:
@@ -658,7 +665,7 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 			return err
 		}
 	}
-	for _, p := range a.Posts {
+	for _, p := range o.EffectivePosts(a) {
 		if creates == nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{action} cannot post balances here", a.Title)
 		}

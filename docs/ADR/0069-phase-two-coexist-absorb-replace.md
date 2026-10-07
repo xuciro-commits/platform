@@ -85,6 +85,8 @@ ADR-0057 的四个浪潮做完后，平台已经能让 FDE **不写代码**从�
 
 ## 3. Ⅱ 业务核（Business Core）— XL（边界，待 Ⅰ 后细分）
 
+> 进度（2026-10-06）：落地为 ADR-0076——`core.account/period/journal` + 试算表、动作的 `journal`/`reverses`、对象的 `numbering`、宿主 `core:books` 效果；没有建 `core.document` 接口（单据 = 对象类型），条件技术留给计算字段与决策表。退出判据中"关账后补收落到下一期"由测试 `TestBooksFromBuilderActions` 证明。
+
 把 SAP 的交易骨架做成**平台包 `core` 的配置**而不是 Go 代码，证明无代码主张：
 
 - **单据模型**：Header/Items 的 Interface（`core.document`）：单据类型、状态机（沿生命周期）、编号范围（`core.numbering`：按单据类型/公司/年度）、参照（referencing document：收货参照采购订单，发票参照收货）、冲销（reversal 而非删除）；
@@ -95,6 +97,8 @@ ADR-0057 的四个浪潮做完后，平台已经能让 FDE **不写代码**从�
 退出判据：WMS 探针的收货产生物料凭证与会计凭证，关账后补收被拒并落到下一期；全部由 `core` 的配置而非行业 Go 应用实现。届时 `apps/erp` 的采购链成为第一个被"做减法"的对象。
 
 ## 4. Ⅲ AI 运营（Operate）— XL（边界）
+
+> 进度（2026-10-06）：落地为 ADR-0077——构建器声明的 `build.agent`（工具/预算/检查点/移交/用例，发布即安装）、`build.alertrule`（对象条件 → 角色通知）、数据集→对象草稿按钮；智能体运行时、评测、用量计量沿用已有实现。模型版 Builder Assist 留待真实评测集。
 
 - **Builder Assist**：从描述生成对象/页面/动作/Pipeline 草稿，走原候选与发布；
 - **智能体做事**：智能体作为项目资源，绑定本体的查询与动作，**检查点**（不可逆效果需人批）、**评测**随版本归档（Platform.md §10.6 AI 门禁）；

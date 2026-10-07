@@ -10,7 +10,7 @@ import { useDraftSession } from "../session/DraftSession";
 import { useAutoSave } from "../shared/workbench";
 import { actionIssues, type ObjectRecord, type Process } from "./object-model";
 
-const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "" });
+const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", numbering: record.numbering });
 
 export function useObjectDraft(id: string, onReset?: () => void) {
   const { decide, entities, definitions } = useHost();

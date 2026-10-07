@@ -27,13 +27,15 @@ import { DecisionTableEditor, DecisionTables } from "./functions/decision-table"
 import { QueryEditor, Queries } from "./ontology/query";
 import { FunctionEditor, Functions } from "./functions/function";
 import { CodeEditor, CodeFunctions } from "./functions/code";
+import { AgentEditor, Agents } from "./functions/agent";
+import { AlertEditor, Alerts } from "./functions/alert";
 import { ReleaseReview, releaseDraftsParam, releaseKinds, type ReleaseKind } from "./releases/release";
 import { Changes } from "./releases/changes";
 import { ProjectHome, ProjectsList } from "./projects/project";
 import { StudioTemplates } from "./workshop/template-ui";
 import { t, type NavSection, type View } from "@platform/ui";
 import { ApplicationScope } from "./projects/application-scope";
-import { Activity, BookOpen, Boxes, Braces, Clock, Compass, Database, Fingerprint, GitBranch, GitMerge, Hammer, History, Layers, LayoutList, LayoutTemplate, Link2, PackageCheck, Plug, Search, Send, Sparkles, Table2, Tags, Workflow, Zap } from "lucide-react";
+import { Activity, Bell, BookOpen, Bot, Boxes, Braces, Clock, Compass, Database, Fingerprint, GitBranch, GitMerge, Hammer, History, Layers, LayoutList, LayoutTemplate, Link2, PackageCheck, Plug, Search, Send, Sparkles, Table2, Tags, Workflow, Zap } from "lucide-react";
 
 const scoped = (p: Record<string, string | undefined>, node: React.ReactNode) => <ApplicationScope application={p.application}>{node}</ApplicationScope>;
 const builder = (host: Host) => host.role("build") === "builder";
@@ -77,6 +79,8 @@ const views: View[] = [
   { id: "function", title: () => t("AI functions"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><FunctionEditor id={p.id} /></ApplicationScope> : <Functions /> },
   { id: "decision-table", title: (p) => p.id ? t("Decision table") : t("Decision tables"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><DecisionTableEditor id={p.id} /></ApplicationScope> : <DecisionTables /> },
   { id: "code", title: () => t("Code functions"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><CodeEditor id={p.id} /></ApplicationScope> : <CodeFunctions /> },
+  { id: "agent", title: () => t("Agents"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><AgentEditor id={p.id} /></ApplicationScope> : <Agents /> },
+  { id: "alert", title: () => t("Alert rules"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><AlertEditor id={p.id} /></ApplicationScope> : <Alerts /> },
   // Releases
   { id: "changes", title: () => t("Changes"), render: (p) => scoped(p, <Changes key={`${p.kind ?? ""}:${p.id ?? ""}`} initialKind={p.kind} initialID={p.id} />) },
   { id: "release-review", title: () => t("Release review"), render: (p) => <ApplicationScope application={p.application}><ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={releaseDraftsParam(p.drafts, releaseKinds)} /></ApplicationScope> },
@@ -93,7 +97,7 @@ export default defineApp({
   icon: <Hammer />,
   home: { view: "projects" },
   views,
-  opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code" },
+  opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.agent": "agent", "build.alertrule": "alert" },
   nav: (host): NavSection[] => builder(host) ? [
     { label: t("Ontology"), items: [
       { label: t("Object types"), icon: <Boxes />, route: { view: "object-type" } },
@@ -116,6 +120,8 @@ export default defineApp({
       { label: t("AI functions"), icon: <Sparkles />, route: { view: "function" } },
       { label: t("Code functions"), icon: <Braces />, route: { view: "code" } },
       { label: t("Decision tables"), icon: <Table2 />, route: { view: "decision-table" } },
+      { label: t("Agents"), icon: <Bot />, route: { view: "agent" } },
+      { label: t("Alert rules"), icon: <Bell />, route: { view: "alert" } },
     ] },
     { label: t("Releases"), items: [
       { label: t("Changes"), icon: <PackageCheck />, route: { view: "changes" } },

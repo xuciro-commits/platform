@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:96313e6c4bd352c0",
+  "revision": "sha256:39468ef7de3666b8",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4669,6 +4669,8 @@
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/functions/agent.tsx",
+      "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
@@ -4761,6 +4763,8 @@
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/functions/agent.tsx",
+      "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
@@ -4880,6 +4884,8 @@
       "web/packages/app/src/widgets/BooleanInput.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
+      "web/packages/build/src/functions/agent.tsx",
+      "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
@@ -4980,6 +4986,8 @@
       "web/packages/app/src/widgets/WorkViews.tsx",
       "web/packages/build/src/automate/workflow.tsx",
       "web/packages/build/src/catalog.examples.tsx",
+      "web/packages/build/src/functions/agent.tsx",
+      "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
@@ -5115,6 +5123,8 @@
       "web/packages/app/src/widgets/Content.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/functions/agent.tsx",
+      "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
@@ -5214,6 +5224,8 @@
       "web/packages/app/src/widgets/Table.tsx",
       "web/packages/app/src/widgets/bindings.ts",
       "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/functions/agent.tsx",
+      "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
@@ -5486,19 +5498,8 @@
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/TableInspector.tsx"
     ],
-    "app/record-actions": [
-      "web/packages/build/src/ontology/ModelWorkbench.tsx",
-      "web/packages/build/src/ontology/action-type.tsx",
-      "web/packages/build/src/ontology/dataset.tsx",
-      "web/packages/build/src/ontology/process.tsx",
-      "web/packages/build/src/projects/project.tsx",
-      "web/packages/build/src/releases/simulate.tsx",
-      "web/packages/build/src/workshop/ModuleWorkbench.tsx"
-    ],
-    "ui/editor-workbench": [
-      "web/packages/build/src/ontology/ModelWorkbench.tsx"
-    ],
     "ui/toggles": [
+      "web/packages/build/src/functions/agent.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/workshop/editor.tsx",
       "web/packages/build/src/workshop/module-import/BuilderImportFields.tsx",
@@ -5515,6 +5516,18 @@
       "web/packages/build/src/workshop/page-editor/widgets/RecordViewInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/StatusTrackerInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/TableInspector.tsx"
+    ],
+    "app/record-actions": [
+      "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/build/src/ontology/action-type.tsx",
+      "web/packages/build/src/ontology/dataset.tsx",
+      "web/packages/build/src/ontology/process.tsx",
+      "web/packages/build/src/projects/project.tsx",
+      "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/build/src/workshop/ModuleWorkbench.tsx"
+    ],
+    "ui/editor-workbench": [
+      "web/packages/build/src/ontology/ModelWorkbench.tsx"
     ],
     "app/semantic-selection": [
       "web/packages/build/src/ontology/link-type.tsx",
@@ -5547,6 +5560,7 @@
       "web/packages/erpadapter/src/index.tsx",
       "web/packages/hcm/src/index.tsx",
       "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/index.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/processes.tsx",
       "web/packages/pms/src/app.tsx",

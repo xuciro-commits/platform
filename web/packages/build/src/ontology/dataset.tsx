@@ -48,6 +48,24 @@ export function DatasetEditor({ id }: { id: string }) {
     if (!draft.id) { open({ view: "dataset", params: { id: target } }); close({ view: "dataset", params: { id } }); }
     else await query.refetch();
   };
+  // Builder Assist without a model (ADR-0077): the dataset's inferred schema
+  // becomes an object draft - one property per column, typed - that the
+  // builder then names, shapes and publishes as any other.
+  const draftObject = async () => {
+    const name = (draft.name || "imported").replace(/[^a-z0-9]/g, "").slice(0, 24) || "imported";
+    const typeOf: Record<string, string> = { string: "text", number: "decimal", boolean: "boolean", date: "date", json: "longtext" };
+    const seen = new Set<string>();
+    const fields = (draft.schema ?? []).map((f) => {
+      let n = f.name.toLowerCase().replace(/[^a-z0-9]/g, "") || "field";
+      while (seen.has(n)) n += "2";
+      seen.add(n);
+      return { name: n, title: f.name, type: typeOf[f.type] ?? "text" };
+    });
+    const target = crypto.randomUUID();
+    const payload = { name, title: draft.title || name, description: t("Drafted from the dataset {name}", { name: draft.name }), fields,
+      states: [{ name: "active", title: t("Active"), tone: "success" }], actions: [] };
+    if (await decide("build.object.create", { type: "build.object", id: target }, payload, { expectedRevision: 0, quiet: true, onRefused: setError })) open({ view: "object-type", params: { id: target } });
+  };
   if (!integrates(role("build"))) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Datasets")} description={query.isError ? t("The dataset could not be loaded.") : t("Loading…")} />;
   const last = draft.last, latest = draft.version ?? 0, keep = draft.keep || 3;
@@ -57,6 +75,7 @@ export function DatasetEditor({ id }: { id: string }) {
     <PageHeader title={draft.title || t("New dataset")} description={t("Name it, then point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "dataset" })}>{t("Datasets")}</Button>
+        {role("build") === "builder" && !!draft.schema?.length && <Button disabled={busy || dirty || !!error} onClick={() => void perform(draftObject)}>{t("Draft an object from this schema")}</Button>}
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
         <Button variant="primary" disabled={busy || !dirty && !!draft.id} onClick={() => void perform(save)}>{t("Save dataset")}</Button>
         {query.data?.record && !dirty && !busy && <RecordActions type="build.dataset" record={query.data.record} allowed={["build.dataset.load"]} />}

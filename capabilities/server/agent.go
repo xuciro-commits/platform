@@ -12,6 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -136,7 +137,9 @@ type Agents struct {
 	t      *Tenant
 	ledger *platform.Ledger
 	defs   map[string]*agentDef // "<app>.<name>"
-	busy   map[string]bool      // runs whose model is being called
+	// buildStamp is the builder's agent stamp the defs were last read at.
+	buildStamp string
+	busy       map[string]bool // runs whose model is being called
 }
 
 func NewAgents(tenant string) *Agents {
@@ -217,6 +220,33 @@ func agentToolName(s string) string {
 
 func rationale() map[string]any {
 	return map[string]any{"type": "string", "description": "Why you take this step, in one sentence"}
+}
+
+// def is an agent by ID. Builder-declared agents (ADR-0077) come and go with
+// publications, so the builder's are re-read whenever its stamp changes.
+func (a *Agents) def(id string) *agentDef {
+	a.refresh()
+	return a.defs[id]
+}
+
+func (a *Agents) refresh() {
+	app := a.t.app(build.ID)
+	if app == nil {
+		return
+	}
+	b, ok := app.(*build.Build)
+	if !ok || b.AgentStamp() == a.buildStamp {
+		return
+	}
+	for id, d := range a.defs {
+		if d.app == build.ID {
+			delete(a.defs, id)
+		}
+	}
+	a.buildStamp = b.AgentStamp()
+	// A builder agent that no longer compiles (an object unpublished under it)
+	// is simply absent until it is published again.
+	_ = a.declare(app)
 }
 
 // declare registers an app's agents and their tools (NewTenant).
@@ -367,7 +397,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 		Payload                                   json.RawMessage
 	}
 	json.Unmarshal(s.GetPayload(), &p)
-	d := a.defs[p.Agent]
+	d := a.def(p.Agent)
 	id := s.GetTarget().GetId()
 	run, known := platform.Get[AgentRunRecord](a.t.automated(c, AgentApp), id)
 	allowed := func() bool {
@@ -455,11 +485,14 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 
 // confirm does a drafted action as the person who confirmed it, correlated to the run.
 func (a *Agents) confirm(c platform.Caller, run AgentRunRecord, d Draft, payload string, now time.Time) (string, *kernel.Error) {
+	if a.changedDefinition(run, a.def(run.Agent)) {
+		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The agent definition changed; start a new run")
+	}
 	t := a.t
 	key := fmt.Sprintf("agent:%s:%d:confirm", run.ID, d.Step+1)
 	if d.Kind == "protocol" {
 		protocol, schema, _ := strings.Cut(d.Action, "#")
-		_, _, err := t.invoke(platform.NewCaller(runtime{t}, c.Member, a.defs[run.Agent].app, c.Replaying, false), protocol, schema, d.Target, []byte(payload), key, run.ID, now)
+		_, _, err := t.invoke(platform.NewCaller(runtime{t}, c.Member, a.def(run.Agent).app, c.Replaying, false), protocol, schema, d.Target, []byte(payload), key, run.ID, now)
 		if err != nil {
 			return "", err
 		}
@@ -503,13 +536,8 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 	if recorded {
 		run.Release = a.t.activeRelease
 	}
-	if d := a.defs[agent]; d != nil && recorded {
-		version := ""
-		if owner := a.t.app(d.app); owner != nil {
-			version = owner.Manifest().Version
-		}
-		digest, _ := canonicalDigest([]any{d.app, version, d.Name, d.Title, d.Instructions, d.Tools, d.Budget})
-		run.DefinitionVersion = "agent.sha256." + digest
+	if d := a.def(agent); d != nil && recorded {
+		run.DefinitionVersion = a.definitionVersion(d)
 	}
 	if flow != "" && recorded {
 		if row, ok := a.t.Held("flow.instance/" + flow); ok {
@@ -549,18 +577,19 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		mine, _ := json.Marshal([]any{[]any{"onBehalf", "=", c.ID}})
 		out, _, _ := platform.Find[AgentRunRecord](a.t.automated(c, AgentApp), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
 		out = slices.DeleteFunc(out, func(run AgentRunRecord) bool {
-			d := a.defs[run.Agent]
+			d := a.def(run.Agent)
 			return d == nil || c.Roles[d.app] == ""
 		})
 		return out, nil
 	}
 	out := []AgentInfo{}
+	a.refresh()
 	for _, id := range slices.Sorted(maps.Keys(a.defs)) {
 		d := a.defs[id]
 		if c.Roles[AgentApp] != AgentAdmin && c.Roles[d.app] == "" {
 			continue
 		}
-		out = append(out, AgentInfo{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
+		out = append(out, AgentInfo{ID: id, App: d.app, Title: d.Title, Instructions: visibleAgentInstructions(c, d), Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
 	}
 	return out, nil
 }
@@ -590,4 +619,27 @@ type AgentInfo struct {
 	Instructions string          `json:"instructions"`
 	Tools        []string        `json:"tools"`
 	Budget       platform.Budget `json:"budget"`
+}
+
+func (a *Agents) definitionVersion(d *agentDef) string {
+	version := ""
+	if owner := a.t.app(d.app); owner != nil {
+		version = owner.Manifest().Version
+	}
+	parts := []any{d.app, version, d.Name, d.Title, d.Instructions, d.Tools, d.Budget}
+	if b, ok := a.t.app(d.app).(*build.Build); ok {
+		parts = append(parts, b.AgentVersion(d.Name))
+	}
+	digest, _ := canonicalDigest(parts)
+	return "agent.sha256." + digest
+}
+func (a *Agents) changedDefinition(run AgentRunRecord, d *agentDef) bool {
+	return d != nil && d.app == build.ID && run.DefinitionVersion != "" && run.DefinitionVersion != a.definitionVersion(d)
+}
+
+func visibleAgentInstructions(c platform.Caller, d *agentDef) string {
+	if d.app == build.ID && c.Roles[AgentApp] != AgentAdmin && c.Roles[build.ID] != build.Builder {
+		return ""
+	}
+	return d.Instructions
 }

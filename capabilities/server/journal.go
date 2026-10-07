@@ -88,13 +88,31 @@ func OpenJournal(ctx context.Context, url string) (*Journal, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, stmt := range schema {
-		if _, err := pool.Exec(ctx, stmt); err != nil {
-			pool.Close()
-			return nil, err
-		}
+	if err := initializeJournal(ctx, pool); err != nil {
+		pool.Close()
+		return nil, err
 	}
 	return &Journal{pool: pool, next: map[string]int64{}, locks: map[string]*sync.Mutex{}}, nil
+}
+
+// Hosts sharing a database may start together. PostgreSQL's IF NOT EXISTS
+// does not serialize concurrent catalog changes, so the migration uses one
+// transaction-scoped database lock, released on commit or failed startup.
+func initializeJournal(ctx context.Context, pool *pgxpool.Pool) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(1347174740, 1)`); err != nil {
+		return err
+	}
+	for _, stmt := range schema {
+		if _, err := tx.Exec(ctx, stmt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 // Entries reads a tenant's entries after position after (0: all) in order;

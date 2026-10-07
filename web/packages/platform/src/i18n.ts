@@ -479,4 +479,6 @@ register("zh-CN", {
   "Teams (default 2)": "团队数（默认 2）",
   "Teams (default 0)": "团队数（默认 0）",
   "Stations (default 3)": "工位数（默认 3）",
+  "Master data": "主数据",
+  "Shared master data and accounting records.": "共享主数据与会计记录。",
 });

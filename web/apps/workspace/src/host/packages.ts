@@ -25,5 +25,5 @@ export const packages: Package[] = [
   { serves: ["mes"], load: () => import("@pkg/mes") },
   { serves: ["erp"], load: () => import("@pkg/erp") },
   { serves: ["erpadapter"], load: () => import("@pkg/erpadapter") },
-  { serves: ["platform", "enterprise", "ai", "flow", "agent", "knowledge"], load: () => import("@pkg/platform") },
+  { serves: ["platform", "enterprise", "core", "ai", "flow", "agent", "knowledge"], load: () => import("@pkg/platform") },
 ];

@@ -130,7 +130,7 @@ func (a *Agents) look(run AgentRunRecord, args json.RawMessage, now time.Time) j
 	var p struct{ Query string }
 	json.Unmarshal(args, &p)
 	app := ""
-	if d := a.defs[run.Agent]; d != nil {
+	if d := a.def(run.Agent); d != nil {
 		app = d.app
 	}
 	found := a.t.Knowledge(a.reader(run), app, p.Query, 4, now)
@@ -153,12 +153,14 @@ func (a *Agents) due(now time.Time) []turn {
 			continue
 		}
 		x := turn{run: run}
-		d := a.defs[run.Agent]
+		d := a.def(run.Agent)
 		reader := a.reader(run)
 		name := t.setting(c, SettingAgentModel)
 		switch {
 		case d == nil:
 			x.stop = "the agent is no longer declared"
+		case a.changedDefinition(run, d):
+			x.stop = "the agent definition changed; start a new run"
 		case run.OnBehalf != "" && (reader.Tenant != t.ID || reader.Roles[d.app] == ""):
 			x.stop = "the person no longer has access to this agent's app"
 		case name == "":
@@ -292,7 +294,7 @@ func (a *Agents) readsAs(run AgentRunRecord) *platform.Member {
 		return m
 	}
 	app := ""
-	if d := a.defs[run.Agent]; d != nil {
+	if d := a.def(run.Agent); d != nil {
 		app = d.app
 	}
 	if app == "" {
@@ -401,7 +403,7 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 			b.Observation = normalized
 		}
 	}
-	d := a.defs[run.Agent]
+	d := a.def(run.Agent)
 	step := RunStep{At: now, Tool: b.Tool, Arguments: string(b.Arguments), Tokens: b.Usage.Input + b.Usage.Output}
 	run.StepsUsed++
 	run.TokensUsed += step.Tokens
@@ -432,6 +434,9 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		}
 	case d == nil:
 		step.Outcome = "the agent is no longer declared"
+		stop(step.Outcome)
+	case a.changedDefinition(run, d):
+		step.Outcome = "the agent definition changed; start a new run"
 		stop(step.Outcome)
 	case run.StepsUsed > d.Budget.Steps || run.TokensUsed > d.Budget.Tokens || d.Budget.Cost > 0 && run.Cost > d.Budget.Cost:
 		// The reply that crossed the budget: what it cost is kept, and no
@@ -669,7 +674,7 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord
 		return
 	}
 	c.Assign(r, platform.Assignment{Title: "Take over from the agent: " + run.Title, Body: "The agent " + run.Agent + " stopped: " + why + ".",
-		Ref: RunType + "/" + run.ID, To: a.recipients(c, a.defs[run.Agent], *run), Key: "agent:" + run.ID + ":stopped"})
+		Ref: RunType + "/" + run.ID, To: a.recipients(c, a.def(run.Agent), *run), Key: "agent:" + run.ID + ":stopped"})
 }
 
 // ended hands a flow's run back to its flow.

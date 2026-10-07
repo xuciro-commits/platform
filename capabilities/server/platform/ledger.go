@@ -248,7 +248,7 @@ func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed fu
 		}
 		if verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive {
 			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
-				return standard(c, e, verb, s)
+				return standard(c, e, verb, s, now)
 			})
 			return record, err, true
 		}
@@ -334,6 +334,11 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 			return nil, err
 		}
 	}
+	if e.ValidateAt != nil {
+		if err := e.ValidateAt(c, v.Interface(), now); err != nil {
+			return nil, err
+		}
+	}
 	value := v.Elem().Interface()
 	if err := c.rt.Check(c, value); err != nil {
 		return nil, err
@@ -348,7 +353,7 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 	}, nil
 }
 
-func standard(c Caller, e Entity, verb string, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	if c.rt == nil {
 		return nil, notFound()
@@ -404,6 +409,11 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission) (func(*pb.Chang
 	}
 	if e.Validate != nil {
 		if err := e.Validate(c, v.Interface()); err != nil {
+			return nil, err
+		}
+	}
+	if e.ValidateAt != nil {
+		if err := e.ValidateAt(c, v.Interface(), now); err != nil {
 			return nil, err
 		}
 	}

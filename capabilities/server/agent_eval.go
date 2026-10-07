@@ -161,7 +161,7 @@ func (a *Agents) evaluate(ev Evaluation, now time.Time) Evaluation {
 	t := a.t
 	t.mu.Lock()
 	c := t.automation(AgentApp, false)
-	d := a.defs[ev.Agent]
+	d := a.def(ev.Agent)
 	domain, _ := json.Marshal([]any{[]any{"agent", "=", ev.Agent}, []any{"state", "=", "done"}})
 	past, _, _ := platform.Find[AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 200})
 	model, pv, err := t.ai.Model(ev.Model)
@@ -451,10 +451,10 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 	if _, known := platform.Get[Evaluation](c, id); known {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	if a.defs[p.Agent] == nil || p.Model == "" {
+	if a.def(p.Agent) == nil || p.Model == "" {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if p.Suite && len(a.defs[p.Agent].Cases) == 0 {
+	if p.Suite && len(a.def(p.Agent).Cases) == 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The agent {agent} declares no cases", p.Agent)
 	}
 	ev := Evaluation{Record: platform.Record{ID: id}, Agent: p.Agent, Model: p.Model, State: "queued", Cases: []EvalCase{}, Suite: p.Suite}

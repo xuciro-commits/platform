@@ -12,6 +12,7 @@ package core
 import (
 	"embed"
 	"encoding/json"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -153,7 +154,7 @@ func standard() platform.Standard {
 
 // Entities are the shared master data types.
 func Entities() []platform.Entity {
-	return []platform.Entity{
+	out := []platform.Entity{
 		{Type: PersonType, Title: "Person", Model: Person{}, Display: "name", Synonyms: "employee,staff,contact,worker",
 			Description: "A human the organisation works with: an employee, a contractor, a contact at a partner.", Standard: standard()},
 		{Type: PartnerType, Title: "Business partner", Model: Partner{}, Display: "name", Synonyms: "customer,supplier,vendor,carrier",
@@ -169,6 +170,18 @@ func Entities() []platform.Entity {
 		{Type: CurrencyType, Title: "Currency", Model: Currency{}, Display: "code",
 			Description: "A currency amounts are kept in.", Standard: standard(), Implements: []string{Coded}, Seed: DefaultCurrencies()},
 	}
+	entities := append(out, bookEntities()...)
+	for i := range entities {
+		if entities[i].Type == AccountType {
+			entities[i].Seed = DefaultAccounts()
+		}
+		if entities[i].Type == PeriodType {
+			// A seed is a replay baseline, so its year cannot follow the wall clock.
+			// Later fiscal periods are created by an accountant's journaled decisions.
+			entities[i].Seed = DefaultPeriods(2026)
+		}
+	}
+	return entities
 }
 
 // New is a tenant's core app; it starts with the common units and currencies
@@ -188,15 +201,22 @@ func New(tenant string) *Core {
 
 func (c *Core) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "Master data", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(),
-		Interfaces: Interfaces(), Roles: []string{Steward}}
+		Interfaces: Interfaces(), Roles: []string{Steward, Accountant}, Reads: []string{ReadTrialBalance}}
 }
 
+func (*Core) AcceptedActionSchemas() []string { return []string{JournalType + ".reverse"} }
+
+func (c *Core) AcceptedLedger() *platform.Ledger         { return c.ledger }
 func (c *Core) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
 func (c *Core) Snapshot() (json.RawMessage, error)       { return c.ledger.Snapshot() }
 func (c *Core) Restore(raw json.RawMessage) error        { return c.ledger.Restore(raw) }
-func (c *Core) Read(platform.Caller, string) (any, *kernel.Error) {
+func (c *Core) Read(caller platform.Caller, name string) (any, *kernel.Error) {
+	if period, ok := strings.CutPrefix(name, ReadTrialBalance); ok {
+		return trialBalance(caller, strings.TrimPrefix(period, "/")), nil
+	}
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }
+
 func (c *Core) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }

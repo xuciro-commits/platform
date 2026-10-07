@@ -58,8 +58,10 @@ type Object struct {
 	// record through its `base` reference (ADR-0058 A2, A3).
 	Implements []string `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
 	Extends    string   `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
-	State      string   `json:"state" field:"readonly" choices:"draft,published"`
-	Installed  string   `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
+	// Numbering (ADR-0076) gives every new record a document number in a text field: <prefix>[<year>-]<n>, gapless in order of creation.
+	Numbering *Numbering `json:"numbering,omitempty" field:"aside" type:"json" title:"Document numbering"`
+	State     string     `json:"state" field:"readonly" choices:"draft,published"`
+	Installed string     `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
 	// Published is the definition as it was last published, which is what is
 	// installed and what a restore installs again — not the draft beside it.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
@@ -104,6 +106,7 @@ type Build struct {
 	propertyTypes map[string]PropertyType
 	queries       map[string]Query
 	functions     map[string]Function
+	agents        map[string]Agent
 	codes         map[string]Code
 	tables        map[string]Table // published decision tables, by name (ADR-0062)
 }
@@ -113,7 +116,7 @@ func (b *Build) Attach(h host.Host) { b.host = h }
 
 // New is a tenant's builder app.
 func New(tenant string) *Build {
-	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, codes: map[string]Code{}, tables: map[string]Table{}}
+	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
@@ -136,10 +139,12 @@ func New(tenant string) *Build {
 	actions = append(actions, datasetActions()...)
 	actions = append(actions, pipelineActions()...)
 	actions = append(actions, platform.EntityActions(b.tableEntity())...)
+	actions = append(actions, platform.EntityActions(b.agentEntity())...)
+	actions = append(actions, platform.EntityActions(b.alertEntity())...)
 	actions = append(actions, sourceActions()...)
 	actions = append(actions, connectionActions()...)
 	actions = append(actions, codeActions()...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType)
 	return b
 }
 
@@ -183,7 +188,7 @@ func (b *Build) settings() []platform.Setting {
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -199,7 +204,7 @@ func (b *Build) Manifest() platform.Manifest {
 		}
 	}
 	slices.Sort(roles)
-	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Settings: b.settings(), Reads: []string{ReadReleaseProfile}, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Operations: b.operationDeclarations(),
+	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Settings: b.settings(), Reads: []string{ReadReleaseProfile}, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -269,13 +274,22 @@ func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Er
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
 func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish}
+	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish}
 }
 
 // publicationImage reads and verifies the already committed record image
 // without rerunning builder action rules or publishing a second decision.
 func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
 	switch schema {
+	case SchemaAgentPublish:
+		var record Agent
+		if err := json.Unmarshal(image, &record); err != nil {
+			return platform.Entity{}, nil, nil, nil, err
+		}
+		if _, ok := wasPublished[Agent](record.Published); !ok {
+			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted agent has no published definition")
+		}
+		return b.agentEntity(), nil, nil, nil, nil
 	case SchemaPublish:
 		var record Object
 		if err := json.Unmarshal(image, &record); err != nil {
@@ -317,6 +331,18 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaAgentPublish {
+		var record Agent
+		if err := json.Unmarshal(image, &record); err != nil {
+			return err
+		}
+		agent, ok := wasPublished[Agent](record.Published)
+		if !ok {
+			return fmt.Errorf("accepted agent has no published definition")
+		}
+		return b.checkAgent(agent)
+	}
+
 	if schema == SchemaPropertyType {
 		l, err := propertyTypeImage(image)
 		if err != nil {
@@ -388,6 +414,19 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 // Installation reconstructs the runtime registry from the saved published
 // image, not by running the publish transition or making another journal entry.
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaAgentPublish {
+		var record Agent
+		if err := json.Unmarshal(image, &record); err != nil {
+			return err
+		}
+		agent, ok := wasPublished[Agent](record.Published)
+		if !ok {
+			return fmt.Errorf("accepted agent has no published definition")
+		}
+		b.agents[agent.Name] = agent
+		return nil
+	}
+
 	if schema == SchemaPropertyType {
 		l, err := propertyTypeImage(image)
 		if err != nil {
@@ -650,7 +689,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -694,6 +733,9 @@ func (b *Build) check(o Object, id string) error {
 	}
 	if err := b.checkCreates(o); err != nil {
 		return err
+	}
+	if err := b.checkJournal(o); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	if err := b.checkPosts(o); err != nil {
 		return err
@@ -1018,6 +1060,15 @@ func (b *Build) Reinstall() error {
 			return err
 		}
 	}
+	agents, err := b.agentInventory()
+	if err != nil {
+		return err
+	}
+	for _, record := range agents {
+		if a, ok := wasPublished[Agent](record.Published); ok && !record.Archived {
+			b.agents[a.Name] = a
+		}
+	}
 	codes, err := b.codeInventory()
 	if err != nil {
 		return err
@@ -1144,7 +1195,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Compute: computeOf(o), Validate: validateOf(o, model)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Compute: computeOf(o), Validate: validateOf(o, model), ValidateAt: numberingOf(o, model)}
 }
 
 // page is the list and detail page a defined object comes with: the same
