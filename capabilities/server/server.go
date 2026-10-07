@@ -65,7 +65,11 @@ type Host struct {
 	// HostAdmins are the subjects that may open the host console (ADR-0047
 	// §6.5): an independent scope, not a tenant's administrators.
 	HostAdmins map[string]bool
-	routes     []Route // as Handler registered them: the API contract's source (api.go)
+	// Templates and CreateTenant are how the host console adds a tenant
+	// (ADR-0078 §2.2); a host without a Rebuild leaves CreateTenant nil.
+	Templates    func() []TenantTemplate
+	CreateTenant func(CreateTenantRequest, string) (*Tenant, error)
+	routes       []Route // as Handler registered them: the API contract's source (api.go)
 }
 
 // SignWith makes the host take the lightweight provider's tokens and sign the
@@ -260,8 +264,12 @@ func (h *Host) Handler() http.Handler {
 	})
 	metadata(Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: MeView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		lang := t.Language(m, r)
-		WriteJSON(w, http.StatusOK, t.Translate(MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
-			Language: lang, Languages: t.languages(), Preferred: m.Language, Currency: t.setting(t.automation(PlatformApp, false), SettingCurrency)}, lang))
+		view := MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
+			Language: lang, Languages: t.languages(), Preferred: m.Language, Currency: t.setting(t.automation(PlatformApp, false), SettingCurrency)}
+		if d, ok := t.app(PlatformApp).(*Console); ok {
+			view.Account, view.Tenant = d.Account(m.ID), d.tenantRecord()
+		}
+		WriteJSON(w, http.StatusOK, t.Translate(view, lang))
 	})
 	metadata(Route{Pattern: "GET /v1/declarations", Summary: "The data classes and their authorities the tenant's apps declare (K5)", Answer: []*pb.AuthorityDeclaration{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		out := []json.RawMessage{}

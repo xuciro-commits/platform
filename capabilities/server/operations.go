@@ -523,7 +523,7 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 	language := map[string]string{} // and read their mail in their language (ADR-0023 6b)
 	if d, ok := t.app(PlatformApp).(*Console); ok {
 		for _, m := range members {
-			address[m], language[m] = d.address(m), d.language(m)
+			address[m], language[m] = d.Account(m).Effective.Email, d.language(m) // the profile's address, else the sign-in's (ADR-0079)
 		}
 	}
 	return t.notice(c, n, now, members, address, language)

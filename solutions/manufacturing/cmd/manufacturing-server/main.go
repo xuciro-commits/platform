@@ -49,7 +49,7 @@ func main() {
 	}
 	assistant := manufacturing.Seat("assistant-l1", "agent-l1", seat(mes.Assistant), "L1")
 	assistant.Agent = true // what it causes that cannot be recalled waits for a person (ADR-0014 D6)
-	seats := deployment.Seats([]platformserver.Seat{
+	development := []platformserver.Seat{
 		manufacturing.Seat("supervisor", "sup-1", supervisor, "plant-sz"),
 		manufacturing.Seat("accountant", "acc-1", map[string]string{erp.ID: erp.Accountant}),
 		manufacturing.Seat("operator-l1", "op-l1", seat(mes.Operator), "L1"),
@@ -59,7 +59,7 @@ func main() {
 		manufacturing.Seat("gateway-l1", "gateway-l1", seat(mes.Gateway)),
 		assistant,
 		manufacturing.Seat("erp", "erp", map[string]string{erpadapter.ID: erpadapter.Connector}),
-	})
+	}
 	newBooks := func(id string) platform.App { return erp.New(id) }
 	switch *books {
 	case "app":
@@ -70,17 +70,14 @@ func main() {
 		log.Fatalf("-erp: %q is neither app nor external", *books)
 	}
 	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
+		seats := deployment.SeatsFor(id)
 		t, err := manufacturing.NewTenant(id, newBooks(id), seats...)
 		if err == nil && *books == "external" {
 			err = t.Connect(erpadapter.Poll("erp"))
 		}
 		return t, err
 	}
-	t, err := deployment.Rebuild(tenant)
-	if err == nil {
-		err = deployment.Serve(t)
-	}
-	if err != nil {
+	if err := deployment.Run(platformserver.TenantSpec{ID: tenant, Seats: development}); err != nil {
 		log.Fatal(err)
 	}
 }

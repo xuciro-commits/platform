@@ -25,6 +25,40 @@ export type AIUsage = {
   totals: Total[];
 };
 
+export type Account = {
+  member: string;
+  displayName?: string;
+  givenName?: string;
+  familyName?: string;
+  title?: string;
+  pronouns?: string;
+  email?: string;
+  phone?: string;
+  language?: string;
+  timezone?: string;
+  dateFormat?: string;
+  numberFormat?: string;
+  weekStart?: string;
+  inApp?: boolean;
+  mail?: boolean;
+  digest?: string;
+  quietFrom?: string;
+  quietTo?: string;
+  homePage?: string;
+  theme?: string;
+  density?: string;
+  lastSeen?: string;
+  effective: {
+    language: string;
+    timezone: string;
+    dateFormat: string;
+    numberFormat: string;
+    weekStart: string;
+    email: string;
+    digest: string;
+  };
+};
+
 export type Action = {
   schema: string;
   target: string;
@@ -542,6 +576,14 @@ export type Contribution = {
   app?: string;
   source: string;
   state: string;
+};
+
+export type CreateTenantRequest = {
+  id: string;
+  name: string;
+  template?: string;
+  admin: string;
+  settings?: Record<string, string>;
 };
 
 export type Definition = {
@@ -1063,6 +1105,8 @@ export type MeView = {
   languages: string[];
   preferred?: string;
   currency: string;
+  account: Account;
+  tenant: TenantRecord;
 };
 
 export type Member = {
@@ -1080,6 +1124,7 @@ export type MemberView = {
   agent?: boolean;
   language?: string;
   subjects: string[];
+  profile: Profile;
 };
 
 export type Membership = {
@@ -1988,6 +2033,31 @@ export type ProcessStep = {
   flowVersion?: number;
 };
 
+export type Profile = {
+  member: string;
+  displayName?: string;
+  givenName?: string;
+  familyName?: string;
+  title?: string;
+  pronouns?: string;
+  email?: string;
+  phone?: string;
+  language?: string;
+  timezone?: string;
+  dateFormat?: string;
+  numberFormat?: string;
+  weekStart?: string;
+  inApp?: boolean;
+  mail?: boolean;
+  digest?: string;
+  quietFrom?: string;
+  quietTo?: string;
+  homePage?: string;
+  theme?: string;
+  density?: string;
+  lastSeen?: string;
+};
+
 export type ProfileEntry = {
   stereotype: string;
   title: string;
@@ -2655,6 +2725,24 @@ export type TenantHealth = {
   openBreakers: number;
   connectorsFailing: number;
   endpointsFailing: number;
+};
+
+export type TenantRecord = {
+  id: string;
+  name: string;
+  settings: Record<string, string>;
+  apps: string[];
+  members: number;
+  status: string;
+  since?: string;
+};
+
+export type TenantTemplate = {
+  name: string;
+  title: string;
+  description?: string;
+  settings?: Record<string, string>;
+  adminRoles?: Record<string, string>;
 };
 
 export type Token = {

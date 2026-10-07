@@ -26,8 +26,9 @@ type Member struct {
 	// Agent marks an AI agent: an irreversible effect it causes waits for a
 	// person's approval, and it cannot give one (ADR-0014 D6).
 	Agent bool `json:"agent,omitempty"`
-	// Language is the member's own choice (ADR-0023 6b), such as "zh-CN";
-	// empty: the tenant's default, else what the browser asks for.
+	// Language is the member's own choice (ADR-0023 6b, ADR-0079), such as
+	// "zh-CN", derived from their profile when the host hands a member to an
+	// app; empty: the tenant's default, else what the browser asks for.
 	Language string `json:"language,omitempty"`
 }
 

@@ -74,7 +74,7 @@ func TestAPIContract(t *testing.T) {
 			ids[id] = true
 		}
 	}
-	for _, want := range []string{"MeView", "EntityInfo", "InboxTask", "entity:knowledge.term", "payload:knowledge.term.create", "payload:platform.member.language"} {
+	for _, want := range []string{"MeView", "EntityInfo", "InboxTask", "entity:knowledge.term", "payload:knowledge.term.create", "payload:platform.profile.update"} {
 		if _, ok := schemas[want]; !ok {
 			t.Errorf("the contract lacks %s", want)
 		}

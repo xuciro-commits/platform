@@ -403,19 +403,16 @@ func main() {
 	seat := func(token, id string, roles map[string]string) platformserver.Seat {
 		return platformserver.Seat{Subjects: []string{token}, Member: platform.Member{ID: id, Roles: roles}}
 	}
-	seats := deployment.Seats([]platformserver.Seat{
+	development := []platformserver.Seat{
 		seat("manager", "manager-1", map[string]string{[[.ID]].ID: [[.ID]].Manager, platformserver.PlatformApp: platformserver.Admin,
 			work.ID: work.Admin, flow.ID: flow.Admin}),
 		seat("member", "member-1", map[string]string{[[.ID]].ID: [[.ID]].Member}),
-	})
+	}
 	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
+		seats := deployment.SeatsFor(id)
 		return platformserver.NewTenant(id, platformserver.NewConsole(id, seats...), work.New(id), flow.New(id), [[.ID]].New(id))
 	}
-	t, err := deployment.Rebuild("dev")
-	if err == nil {
-		err = deployment.Serve(t)
-	}
-	if err != nil {
+	if err := deployment.Run(platformserver.TenantSpec{ID: "dev", Seats: development}); err != nil {
 		log.Fatal(err)
 	}
 }

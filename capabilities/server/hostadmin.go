@@ -128,6 +128,7 @@ func (h *Host) hostRoute(mux *http.ServeMux, route Route, f func(http.ResponseWr
 
 // hostConsoleRoutes registers the console's four areas.
 func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
+	h.tenantRoutes(mux)
 	h.hostRoute(mux, Route{Pattern: "GET /v1/host/me", Summary: "Whether the caller is a host administrator, and the tenants this console serves", Answer: map[string]any{}},
 		func(w http.ResponseWriter, _ *http.Request, subject string, _ *Tenant) {
 			tenants := []string{}
@@ -215,7 +216,7 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 func (h *Host) tenantView(t *Tenant) HostTenantView {
 	now := h.Now()
 	t.mu.Lock()
-	view := HostTenantView{ID: t.ID, Lifecycle: t.hostLifecycle, ActiveRelease: t.activeRelease,
+	view := HostTenantView{ID: t.ID, Lifecycle: t.lifecycle(), ActiveRelease: t.activeRelease,
 		Candidates: len(t.releaseCandidates)}
 	t.mu.Unlock()
 	health := t.Health(now)
@@ -427,9 +428,9 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time)
 	}
 	switch action {
 	case "suspend", "decommission":
-		t.hostLifecycle = action
+		t.setLifecycle(action)
 	case "resume", "open":
-		t.hostLifecycle = ""
+		t.setLifecycle("")
 	}
 	t.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
 		Action: "host.lifecycle." + action, Target: t.ID + ":" + reason})
@@ -438,10 +439,18 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time)
 
 // hostSuspended reports whether the host console stopped this tenant.
 func (t *Tenant) hostSuspended() bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.hostLifecycle != "" && t.hostLifecycle != "open"
+	l := t.lifecycle()
+	return l != "" && l != "open"
 }
+
+func (t *Tenant) lifecycle() string {
+	if p := t.hostLifecycle.Load(); p != nil {
+		return *p
+	}
+	return ""
+}
+
+func (t *Tenant) setLifecycle(v string) { t.hostLifecycle.Store(&v) }
 
 // openSupport authorizes a support session for a member of this tenant. The
 // member must exist: the console looks at what that member may look at, so it

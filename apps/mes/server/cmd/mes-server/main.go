@@ -57,8 +57,9 @@ func main() {
 	deployment := platformserver.Flags("127.0.0.1:8499")
 	disable := flag.String("disable", "", "comma-separated capabilities to deactivate (ADR-0008)")
 	flag.Parse()
-	seats := deployment.Seats(demo)
+	development := demo
 	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
+		seats := deployment.SeatsFor(id)
 		plant := mes.New(id, mes.DemoMaster())
 		for _, c := range strings.FieldsFunc(*disable, func(r rune) bool { return r == ',' }) {
 			if !plant.Disable(c) {
@@ -73,11 +74,7 @@ func main() {
 		}
 		return t, err
 	}
-	t, err := deployment.Rebuild(tenant)
-	if err == nil {
-		err = deployment.Serve(t)
-	}
-	if err != nil {
+	if err := deployment.Run(platformserver.TenantSpec{ID: tenant, Seats: development}); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -98,10 +98,10 @@ func TestTenantComposition(t *testing.T) {
 		}
 		return out
 	}
-	if got := schemas(bo); !slices.Equal(got, []string{SchemaLanguage, SchemaNotificationRead, SchemaOperationCall, "b.note"}) {
+	if got := schemas(bo); !slices.Equal(got, []string{SchemaProfileUpdate, SchemaNotificationRead, SchemaOperationCall, "b.note"}) {
 		t.Fatalf("bo is offered %v", got)
 	}
-	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaLanguage,
+	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaProfileUpdate,
 		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaProtocolBind, SchemaNotificationRead,
 		SchemaEndpointAdd, SchemaEndpointRemove, SchemaEffectRetry, SchemaEffectDiscard, SchemaEffectApprove, SchemaOperationCall,
 		SchemaProjectSave, SchemaProjectArchive, SchemaPackageInstall, SchemaPackageUpgrade, SchemaPackageDrain, SchemaPackageRetire, "a.note", "b.note"}) {

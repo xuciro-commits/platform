@@ -1,0 +1,11 @@
+{
+  "title": "Manufacturing plant",
+  "description": "A plant: MES, ERP books, enterprise model, workflows, agents and knowledge; the first administrator administers every app.",
+  "settings": {
+    "timezone": "Asia/Shanghai",
+    "language": "zh-CN",
+    "currency": "CNY",
+    "weekStart": "monday",
+    "dateFormat": "ymd"
+  }
+}

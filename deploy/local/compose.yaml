@@ -53,12 +53,13 @@ services:
       - -database=postgres://platform:platform-local-only@postgres:5432/platform
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
-      - -directory=/etc/manufacturing/directory.json
+      - -tenants=/etc/manufacturing/tenants.json
+      - -templates=/etc/templates
       - -web=/web
       - -project
       - -files=http://rustfs:9000/platform
     ports: ["127.0.0.1:${MANUFACTURING_PORT:-8490}:8490"]
-    volumes: [./manufacturing/directory.json:/etc/manufacturing/directory.json:ro, compute-sockets:/run/platform-compute]
+    volumes: [./manufacturing/tenants.json:/etc/manufacturing/tenants.json, ../templates:/etc/templates:ro, compute-sockets:/run/platform-compute]
     environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
       PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only,
       PLATFORM_WASM_WORKER_SOCKET: /run/platform-compute/worker.sock, PLATFORM_CODE_BUILDER_SOCKET: /run/platform-compute/builder.sock }
@@ -77,12 +78,13 @@ services:
       - -database=postgres://platform:platform-local-only@postgres:5432/platform
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
-      - -directory=/etc/hospitality/directory.json
+      - -tenants=/etc/hospitality/tenants.json
+      - -templates=/etc/templates
       - -web=/web
       - -project
       - -files=http://rustfs:9000/platform
     ports: ["127.0.0.1:${HOSPITALITY_PORT:-8495}:8495"]
-    volumes: [./hospitality/directory.json:/etc/hospitality/directory.json:ro, compute-sockets:/run/platform-compute]
+    volumes: [./hospitality/tenants.json:/etc/hospitality/tenants.json, ../templates:/etc/templates:ro, compute-sockets:/run/platform-compute]
     # Webhook signing secrets, referenced by name from endpoints (ADR-0014 D5); local-only.
     environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
       PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only,

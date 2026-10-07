@@ -22,13 +22,11 @@ import (
 // takes effect on the next request. Each area decides its own target type,
 // next to the state it changes (operations.go, effects.go).
 const (
-	PlatformApp  = "platform"
-	MemberType   = "platform.member"
-	SchemaAdd    = "platform.member.add"
-	SchemaGrant  = "platform.member.grant"
-	SchemaRevoke = "platform.member.revoke"
-	// SchemaLanguage sets a member's language: their own, or anyone's by an administrator (ADR-0023 6b).
-	SchemaLanguage  = "platform.member.language"
+	PlatformApp     = "platform"
+	MemberType      = "platform.member"
+	SchemaAdd       = "platform.member.add"
+	SchemaGrant     = "platform.member.grant"
+	SchemaRevoke    = "platform.member.revoke"
 	SettingLanguage = "language"
 	SettingCurrency = "currency"
 	Admin           = "admin"
@@ -57,7 +55,8 @@ type Console struct {
 	mu       sync.Mutex
 	tenant   string
 	members  map[string]*platform.Member
-	subjects map[string]string // subject → member ID
+	subjects map[string]string   // subject → member ID
+	profiles map[string]*Profile // member ID → profile (ADR-0079)
 	projects map[string]*BuildProject
 	packages map[string]*InstalledPackage
 	index    *PackageIndex
@@ -78,10 +77,8 @@ func ConsoleActions() *platform.Catalog {
 			Payload:     []platform.Field{app, {Name: "role", Type: "string", Required: true, Description: "A role the app defines"}}, Roles: admin},
 		{Schema: SchemaRevoke, Target: MemberType, Capability: "members", Title: "Revoke role",
 			Description: "Remove a member's role in an app.", Payload: []platform.Field{app}, Roles: admin},
-		{Schema: SchemaLanguage, Target: MemberType, Capability: "language", Title: "Choose language",
-			Description: "Choose the language a member reads the platform in: your own, or anyone's as an administrator.",
-			Payload:     []platform.Field{{Name: "language", Type: "string", Description: "A language the tenant speaks, such as zh-CN; empty: the tenant's default"}}, Roles: []string{platform.AnyMember}},
 	}
+	actions = append(actions, profileActions()...)
 	actions = append(actions, operationsActions()...)
 	actions = append(actions, effectActions()...)
 	actions = append(actions, operationActions()...)
@@ -92,11 +89,11 @@ func ConsoleActions() *platform.Catalog {
 
 // NewConsole seeds a tenant's directory of members; changes recorded later replay on top.
 func NewConsole(tenant string, seats ...Seat) *Console {
-	d := &Console{tenant: tenant, members: map[string]*platform.Member{}, subjects: map[string]string{},
+	d := &Console{tenant: tenant, members: map[string]*platform.Member{}, subjects: map[string]string{}, profiles: map[string]*Profile{},
 		projects: map[string]*BuildProject{},
 		packages: map[string]*InstalledPackage{},
 		index:    &PackageIndex{},
-		ledger:   platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ProjectType, PackageType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType)}
+		ledger:   platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ProfileType, ProjectType, PackageType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -138,6 +135,7 @@ func (d *Console) Identities() []Identity {
 type consoleState struct {
 	Members  map[string]*platform.Member  `json:"members"`
 	Subjects map[string]string            `json:"subjects"`
+	Profiles map[string]*Profile          `json:"profiles,omitempty"`
 	Projects map[string]*BuildProject     `json:"projects,omitempty"`
 	Packages map[string]*InstalledPackage `json:"packages,omitempty"`
 }
@@ -145,7 +143,7 @@ type consoleState struct {
 func (d *Console) Snapshot() (json.RawMessage, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.ledger.SnapshotWith(consoleState{Members: d.members, Subjects: d.subjects, Projects: d.projects, Packages: d.packages})
+	return d.ledger.SnapshotWith(consoleState{Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: d.projects, Packages: d.packages})
 }
 
 func (d *Console) Restore(raw json.RawMessage) error {
@@ -155,7 +153,10 @@ func (d *Console) Restore(raw json.RawMessage) error {
 	if err := d.ledger.RestoreWith(raw, &s); err != nil {
 		return err
 	}
-	d.members, d.subjects = s.Members, s.Subjects
+	d.members, d.subjects, d.profiles = s.Members, s.Subjects, s.Profiles
+	if d.profiles == nil {
+		d.profiles = map[string]*Profile{}
+	}
 	if s.Projects != nil {
 		d.projects = s.Projects
 	}
@@ -190,10 +191,8 @@ func (d *Console) holding(app, role string) []string {
 	return out
 }
 
-// address is the email a member signs in with ("" for services and agents).
-func (d *Console) address(member string) string {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+// addressLocked is the email a member signs in with ("" for services and agents). Call with d.mu held.
+func (d *Console) addressLocked(member string) string {
 	var out []string
 	for subject, id := range d.subjects {
 		if email, ok := strings.CutPrefix(subject, "user:"); ok && id == member {
@@ -215,12 +214,9 @@ func clone(m *platform.Member) platform.Member {
 
 func (d *Console) Manifest() platform.Manifest {
 	return platform.Manifest{ID: PlatformApp, Title: "Settings", Version: "1", Actions: d.ledger.Catalog, Roles: []string{Admin, Auditor},
-		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "projects", "packages", "contributions"},
-		Everyone: []string{"notifications"}, Inputs: map[string]bool{"heartbeat": false},
-		Settings: []platform.Setting{{Name: SettingLanguage, Title: "Default language", Type: "text", Default: "",
-			Description: "The language members read until they choose their own, such as zh-CN; empty: what each browser asks for, else English."},
-			{Name: SettingCurrency, Title: "Currency", Type: "text", Default: "EUR",
-				Description: "The tenant's currency (ISO 4217): the default of every amount people enter, and the currency the books are kept in."}}}
+		Reads:    []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "projects", "packages", "contributions"},
+		Everyone: []string{"notifications", "tenant", "account"}, Inputs: map[string]bool{"heartbeat": false},
+		Settings: tenantSettings()}
 }
 
 func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
@@ -229,7 +225,7 @@ func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.De
 // remain outside this path until their respective owners can be staged too.
 func (d *Console) AcceptedLedger() *platform.Ledger { return d.ledger }
 func (*Console) AcceptedActionSchemas() []string {
-	return []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaLanguage, SchemaOperationCall, SchemaProjectSave, SchemaProjectArchive,
+	return []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaProfileUpdate, SchemaOperationCall, SchemaProjectSave, SchemaProjectArchive,
 		SchemaPackageInstall, SchemaPackageUpgrade, SchemaPackageDrain, SchemaPackageRetire}
 }
 
@@ -251,14 +247,19 @@ func (d *Console) ForkAcceptedState() (platform.App, error) {
 		copy := *p
 		packages[id] = &copy
 	}
-	return &Console{tenant: d.tenant, members: members, subjects: maps.Clone(d.subjects), projects: projects,
+	profiles := make(map[string]*Profile, len(d.profiles))
+	for id, p := range d.profiles {
+		copy := *p
+		profiles[id] = &copy
+	}
+	return &Console{tenant: d.tenant, members: members, subjects: maps.Clone(d.subjects), profiles: profiles, projects: projects,
 		packages: packages, index: d.index, ledger: d.ledger, t: d.t}, nil
 }
 
 func (d *Console) AcceptedState() (json.RawMessage, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return json.Marshal(consoleState{Members: d.members, Subjects: d.subjects, Projects: d.projects, Packages: d.packages})
+	return json.Marshal(consoleState{Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: d.projects, Packages: d.packages})
 }
 
 func (d *Console) ValidateAcceptedState(raw json.RawMessage) error {
@@ -292,7 +293,10 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.members, d.subjects = state.Members, state.Subjects
+	d.members, d.subjects, d.profiles = state.Members, state.Subjects, state.Profiles
+	if d.profiles == nil {
+		d.profiles = map[string]*Profile{}
+	}
 	return nil
 }
 
@@ -305,9 +309,15 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 		if declared.Target == OperationType {
 			return d.decideOperation(c, s, now)
 		}
-		if declared.Target == MemberType {
+		if declared.Target == MemberType || declared.Target == ProfileType {
 			d.mu.Lock()
-			apply, err := d.decideMember(c, s)
+			var apply func(*pb.ChangeRecord)
+			var err *kernel.Error
+			if declared.Target == ProfileType {
+				apply, err = d.decideProfile(c, s)
+			} else {
+				apply, err = d.decideMember(c, s)
+			}
 			d.mu.Unlock()
 			if apply == nil {
 				return nil, err
@@ -355,8 +365,8 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
-		Subject, App, Role, Language string
-		Agent                        bool
+		Subject, App, Role string
+		Agent              bool
 	}
 	if json.Unmarshal(s.GetPayload(), &p) != nil {
 		return nil, invalid
@@ -377,15 +387,6 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 	}
 	if m == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	if s.GetSchema().GetName() == SchemaLanguage {
-		if c.ID != id && c.Role() != Admin && !c.Replaying {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
-		}
-		if p.Language != "" && p.Language != "en" && (d.t == nil || !slices.Contains(d.t.languages(), p.Language)) && !c.Replaying {
-			return nil, invalid
-		}
-		return func(*pb.ChangeRecord) { m.Language = p.Language }, nil
 	}
 	if s.GetSchema().GetName() == SchemaRevoke {
 		if p.App == "" {
@@ -413,10 +414,11 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 	}, nil
 }
 
-// MemberView is a member with the subjects that sign in as it.
+// MemberView is a member with the subjects that sign in as it and its profile.
 type MemberView struct {
 	platform.Member
 	Subjects []string `json:"subjects"`
+	Profile  Profile  `json:"profile"`
 }
 
 // Read "notifications": the caller's own. Every other read is for the tenant's
@@ -428,6 +430,12 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	}
 	if name == "contributions" {
 		return d.Contributions(), nil
+	}
+	if name == "tenant" {
+		return d.tenantRecord(), nil
+	}
+	if name == "account" {
+		return d.Account(c.ID), nil
 	}
 	if t == nil || c.Role() != Admin && (c.Role() != Auditor || !auditorMayRead(name)) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
@@ -456,11 +464,12 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	case "packages":
 		return d.PackageViews(), nil
 	}
+	def := d.defaults()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	out := []MemberView{}
 	for _, m := range d.members {
-		v := MemberView{Member: d.currentMember(m), Subjects: []string{}}
+		v := MemberView{Member: d.currentMember(m), Subjects: []string{}, Profile: d.account(m.ID, def).Profile}
 		for subject, id := range d.subjects {
 			if id == m.ID {
 				v.Subjects = append(v.Subjects, subject)
@@ -488,15 +497,12 @@ func (d *Console) Input(c platform.Caller, name string, _ []byte, now time.Time)
 // else the tenant's default; "" is English, or what the browser asks for.
 func (d *Console) language(member string) string {
 	d.mu.Lock()
-	m := d.members[member]
+	p := d.profiles[member]
 	d.mu.Unlock()
-	if m != nil && m.Language != "" {
-		return m.Language
+	if p != nil && p.Language != "" {
+		return p.Language
 	}
-	if d.t == nil {
-		return ""
-	}
-	return d.t.setting(d.t.automation(PlatformApp, false), SettingLanguage)
+	return d.tenantDefault(SettingLanguage)
 }
 
 // member is a member of the tenant by ID, with its current roles.

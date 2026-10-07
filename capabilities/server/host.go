@@ -72,7 +72,7 @@ type Tenant struct {
 	// hostLifecycle is the host console's lifecycle for this tenant (ADR-0047
 	// §6.5): "" or "open" runs, "suspended" and "decommissioned" block
 	// ordinary requests; support are its authorized support sessions.
-	hostLifecycle string
+	hostLifecycle atomic.Pointer[string] // read without the lock (health, the tenant record)
 	support       []SupportGrant
 	// sealed are the candidate artifacts written to the file store (item 5),
 	// and migrations what the host console moved in or out of this tenant.

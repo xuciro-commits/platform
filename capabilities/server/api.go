@@ -119,6 +119,8 @@ type MeView struct {
 	Languages   []string        `json:"languages"`           // the languages the tenant has dictionaries for
 	Preferred   string          `json:"preferred,omitempty"` // the member's own choice
 	Currency    string          `json:"currency"`            // the tenant's, the default of amounts people enter (ADR-0024)
+	Account     Account         `json:"account"`             // the member's profile over the tenant's defaults (ADR-0079)
+	Tenant      TenantRecord    `json:"tenant"`              // the tenant's record (ADR-0078)
 }
 
 // SignIn tells the workspace how to sign in: an OpenID issuer and client, or

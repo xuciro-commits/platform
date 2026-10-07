@@ -14,6 +14,9 @@ func (d *Console) enterpriseRoles() bool {
 
 func (d *Console) currentMember(m *platform.Member) platform.Member {
 	out := clone(m)
+	if p := d.profiles[m.ID]; p != nil { // the language is the profile's (ADR-0079); Member carries it for callers
+		out.Language = p.Language
+	}
 	if d.enterpriseRoles() {
 		if role := out.Roles["org"]; role != "" {
 			if _, explicit := out.Roles["enterprise"]; !explicit {

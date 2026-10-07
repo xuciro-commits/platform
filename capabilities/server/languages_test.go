@@ -118,11 +118,11 @@ func TestLanguages(t *testing.T) {
 		{"bo", "bo", "fr", "ERROR_CODE_INVALID_ARGUMENT"},  // a language the tenant speaks
 		{"ana", "cy", "en", "ok"},
 	} {
-		if got := decide(c.who, SchemaLanguage, MemberType, c.id, map[string]string{"language": c.language}); got != c.want {
+		if got := decide(c.who, SchemaProfileUpdate, ProfileType, c.id, map[string]string{"language": c.language}); got != c.want {
 			t.Errorf("%s sets %s's language %s: %s, want %s", c.who, c.id, c.language, got, c.want)
 		}
 	}
-	decide("ana", SchemaLanguage, MemberType, "cy", map[string]string{"language": ""})
+	decide("ana", SchemaProfileUpdate, ProfileType, "cy", map[string]string{"language": ""})
 	if got := callAs("bo-token", "/v1/me", "en"); !strings.Contains(got, `"language":"zh-CN"`) || !strings.Contains(got, `"preferred":"zh-CN"`) {
 		t.Errorf("bo's own language wins over the browser's: %s", got)
 	}
