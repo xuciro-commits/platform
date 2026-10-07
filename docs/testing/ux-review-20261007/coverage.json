@@ -301,7 +301,7 @@
       "summary": "真实空目标租户晋级应用失败：saved application build/app/uxwalk has no matching draft",
       "repro": "hotel-a 从 UI 保存封存并激活 UX-APP 联合候选；hotel-test 只有初始管理员，没有 app 草稿；支持会话 manager-test；晋级并激活",
       "screenshots": [
-        "11-promotion-empty-target-blocker.jpg"
+        "12-promotion-refusal.jpg"
       ]
     },
     {
