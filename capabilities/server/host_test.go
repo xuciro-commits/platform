@@ -184,7 +184,7 @@ func TestHostHTTPAndConsole(t *testing.T) {
 		}
 	}
 	if status, body := call("GET", "/v1/members", "ana-token", ""); status != 200 ||
-		!strings.Contains(body, `"id":"agent-1","tenant":"t-1","roles":{},"subjects":["client:agent"]`) {
+		!strings.Contains(body, `"id":"agent-1","tenant":"t-1","roles":{},"timezone":"UTC","subjects":["client:agent"],"profile":{"member":"agent-1"}`) {
 		t.Fatalf("members: %d %s", status, body)
 	}
 	if status, _ := call("GET", "/v1/members", "bo-token", ""); status != 403 {

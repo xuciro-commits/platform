@@ -48,7 +48,7 @@ type Profile struct {
 	Theme    string `json:"theme,omitempty"`    // system | light | dark
 	Density  string `json:"density,omitempty"`  // comfortable | compact
 	// Read-only, maintained by the host.
-	LastSeen time.Time `json:"lastSeen,omitempty"`
+	LastSeen time.Time `json:"lastSeen,omitzero"`
 }
 
 // Account is the effective profile a member works under: their own choices
@@ -331,4 +331,71 @@ func (d *Console) seen(member string, now time.Time) {
 	if now.Sub(cur.LastSeen) >= time.Minute {
 		cur.LastSeen = now
 	}
+}
+
+// Reach is how a member wants to be told (ADR-0079 §3): in the workspace,
+// by mail at which address and in which language, and when mail may go out.
+type Reach struct {
+	InApp, Mail bool
+	Address     string
+	Language    string
+	Digest      string // instant | hourly | daily
+	QuietFrom   string // HH:MM in Location; "" for none
+	QuietTo     string
+	Location    *time.Location
+}
+
+// Reach is member's notification preferences over the tenant's defaults.
+func (d *Console) Reach(member string) Reach {
+	a := d.Account(member)
+	out := Reach{InApp: true, Mail: true, Address: a.Effective.Email, Language: d.language(member), Digest: a.Effective.Digest,
+		QuietFrom: a.QuietFrom, QuietTo: a.QuietTo, Location: d.Location(member)}
+	if a.InApp != nil {
+		out.InApp = *a.InApp
+	}
+	if a.Mail != nil {
+		out.Mail = *a.Mail
+	}
+	return out
+}
+
+// Due is when a notice raised at now may be mailed: at once for an instant
+// digest outside quiet hours; else the next hour or the next morning, pushed
+// past the quiet window. The effect queue sends it then; nothing is lost.
+func (p Reach) Due(now time.Time) time.Time {
+	loc := p.Location
+	if loc == nil {
+		loc = time.UTC
+	}
+	local := now.In(loc)
+	due := local
+	switch p.Digest {
+	case "hourly":
+		due = local.Truncate(time.Hour).Add(time.Hour)
+	case "daily":
+		due = time.Date(local.Year(), local.Month(), local.Day(), 8, 0, 0, 0, loc)
+		if !due.After(local) {
+			due = due.AddDate(0, 0, 1)
+		}
+	}
+	if p.QuietFrom != "" && p.QuietTo != "" {
+		from, errFrom := time.Parse("15:04", p.QuietFrom)
+		to, errTo := time.Parse("15:04", p.QuietTo)
+		if errFrom == nil && errTo == nil {
+			at := func(t time.Time, h time.Time) time.Time {
+				return time.Date(t.Year(), t.Month(), t.Day(), h.Hour(), h.Minute(), 0, 0, loc)
+			}
+			start, end := at(due, from), at(due, to)
+			if !end.After(start) { // over midnight: 22:00–08:00
+				if due.Before(end) {
+					due = end
+				} else if !due.Before(start) {
+					due = end.AddDate(0, 0, 1)
+				}
+			} else if !due.Before(start) && due.Before(end) {
+				due = end
+			}
+		}
+	}
+	return due.UTC()
 }

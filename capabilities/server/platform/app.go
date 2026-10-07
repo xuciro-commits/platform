@@ -30,7 +30,25 @@ type Member struct {
 	// "zh-CN", derived from their profile when the host hands a member to an
 	// app; empty: the tenant's default, else what the browser asks for.
 	Language string `json:"language,omitempty"`
+	// Timezone is the IANA zone the member works in (ADR-0079 §3), derived
+	// from their profile over the tenant's default when the host hands a
+	// member to an app; empty: UTC. Every "today" a decision defaults for
+	// the member is this zone's day.
+	Timezone string `json:"timezone,omitempty"`
 }
+
+// Location is the member's timezone, UTC when unknown.
+func (m Member) Location() *time.Location {
+	if m.Timezone != "" {
+		if loc, err := time.LoadLocation(m.Timezone); err == nil {
+			return loc
+		}
+	}
+	return time.UTC
+}
+
+// Today is now's date where the member is, as a decision defaults it.
+func (m Member) Today(now time.Time) string { return now.In(m.Location()).Format(time.DateOnly) }
 
 // Caller is a member as one app sees it. Replaying marks the journal replay:
 // who could act was decided when the input was accepted (ADR-0008). Automation

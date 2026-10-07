@@ -38,9 +38,12 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 		d.noticeChanged = true
 		out = append(out, member)
 		if console, ok := d.tenant.app(PlatformApp).(*Console); ok {
-			address, language := console.Account(member).Effective.Email, console.language(member)
+			to := console.Reach(member)
+			if !to.InApp {
+				d.notices[len(d.notices)-1].Read = true
+			}
 			d.tenant.opsMu.Lock()
-			d.noticeEffects = append(d.noticeEffects, d.tenant.planMailNotice(x, address, language)...)
+			d.noticeEffects = append(d.noticeEffects, d.tenant.planMailNotice(x, to)...)
 			d.tenant.opsMu.Unlock()
 		}
 	}

@@ -1115,6 +1115,7 @@ export type Member = {
   roles: Record<string, string>;
   agent?: boolean;
   language?: string;
+  timezone?: string;
 };
 
 export type MemberView = {
@@ -1123,6 +1124,7 @@ export type MemberView = {
   roles: Record<string, string>;
   agent?: boolean;
   language?: string;
+  timezone?: string;
   subjects: string[];
   profile: Profile;
 };

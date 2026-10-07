@@ -7,7 +7,7 @@
 import "./i18n";
 import { ApplicationSessionsProvider, categoryOf, HostContext, type AppUI, type Me } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
-import { Button, Workspace, notify, routeToHash, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
+import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Bookmark, Gauge, Hammer, LayoutGrid, SlidersHorizontal, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -121,6 +121,20 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       if (selected) remember(`${selectionScope}:${selected.surface ?? "work"}`, selected.id);
     }
   }, [selectionScope]);
+  const { setScheme } = useTheme();
+  const homeOpened = useRef<string | undefined>(undefined);
+  useEffect(() => { // the member's own appearance and start page follow them to any browser (ADR-0079 §3)
+    if (!me || !ready) return;
+    const theme = me.account?.theme;
+    if (theme === "light" || theme === "dark" || theme === "system") setScheme(theme);
+    const home = me.account?.homePage;
+    const key = `${me.tenantId}:${me.principalId}`;
+    if (home && homeOpened.current !== key && (!location.hash || location.hash === "#/home" || location.hash === "#/")) {
+      homeOpened.current = key;
+      const target = all.find((a) => a.id === home);
+      if (target) { select(target.id); location.hash = routeToHash(target.home); }
+    }
+  }, [me?.account?.theme, me?.account?.homePage, ready, all.length]);
   useEffect(() => {
     if (!activeRoute) return;
     const retired = legacyRoute(activeRoute);

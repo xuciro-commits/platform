@@ -18,7 +18,7 @@ import (
 func TestCreateTenantFromTemplate(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "plant.json"), []byte(`{"title":"Plant","settings":{"timezone":"Asia/Shanghai","currency":"CNY"}}`), 0o644)
-	file := filepath.Join(dir, "tenants.json")
+	file := filepath.Join(t.TempDir(), "tenants.json")
 	os.WriteFile(file, []byte(`[]`), 0o644)
 	d := &Deployment{TenantsFile: file, TemplatesDir: dir}
 	d.Tenants(TenantSpec{ID: "dev"})
@@ -101,5 +101,38 @@ func TestCreateTenantFromTemplate(t *testing.T) {
 	}
 	if again.Account("jane-doe").DisplayName != "Jane Doe" {
 		t.Fatal("profile lost in the snapshot")
+	}
+}
+
+// ADR-0079 §3: mail waits for the digest hour and the end of quiet hours in
+// the member's own timezone; "today" is the member's day.
+func TestReachDueAndMemberToday(t *testing.T) {
+	sh, _ := time.LoadLocation("Asia/Shanghai")
+	at := func(h, m int) time.Time { return time.Date(2026, 10, 6, h, m, 0, 0, sh) }
+	for _, c := range []struct {
+		name string
+		r    Reach
+		now  time.Time
+		want time.Time
+	}{
+		{"instant", Reach{Location: sh}, at(14, 5), at(14, 5)},
+		{"hourly", Reach{Location: sh, Digest: "hourly"}, at(14, 5), at(15, 0)},
+		{"daily before 8", Reach{Location: sh, Digest: "daily"}, at(2, 0), at(8, 0)},
+		{"daily after 8", Reach{Location: sh, Digest: "daily"}, at(14, 5), time.Date(2026, 10, 7, 8, 0, 0, 0, sh)},
+		{"quiet over midnight, at night", Reach{Location: sh, QuietFrom: "22:00", QuietTo: "08:00"}, at(23, 30), time.Date(2026, 10, 7, 8, 0, 0, 0, sh)},
+		{"quiet over midnight, early", Reach{Location: sh, QuietFrom: "22:00", QuietTo: "08:00"}, at(3, 0), at(8, 0)},
+		{"quiet within day", Reach{Location: sh, QuietFrom: "12:00", QuietTo: "13:00"}, at(12, 30), at(13, 0)},
+		{"outside quiet", Reach{Location: sh, QuietFrom: "22:00", QuietTo: "08:00"}, at(9, 0), at(9, 0)},
+	} {
+		if got := c.r.Due(c.now); !got.Equal(c.want) {
+			t.Errorf("%s: due %s, want %s", c.name, got.In(sh), c.want)
+		}
+	}
+	m := platform.Member{ID: "x", Timezone: "Asia/Shanghai"}
+	if got := m.Today(time.Date(2026, 10, 6, 17, 0, 0, 0, time.UTC)); got != "2026-10-07" {
+		t.Errorf("today in Shanghai at 17:00 UTC: %s", got)
+	}
+	if got := (platform.Member{}).Today(time.Date(2026, 10, 6, 17, 0, 0, 0, time.UTC)); got != "2026-10-06" {
+		t.Errorf("today without a zone: %s", got)
 	}
 }

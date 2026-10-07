@@ -1046,7 +1046,7 @@ func (t *Tenant) scoped(m platform.Member, et *entityType, role string, now time
 			if scope.Level(role) == platform.ScopeUnit {
 				structure = ""
 			}
-			units = t.directory.Units("member:"+m.ID, structure, now.UTC().Format(time.DateOnly))
+			units = t.directory.Units("member:"+m.ID, structure, m.Today(now))
 		}
 		unit := field(scope.Unit)
 		return func(v reflect.Value) bool { return slices.Contains(units, unit(v)) }, nil

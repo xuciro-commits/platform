@@ -96,7 +96,7 @@ func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, pare
 		case set.From == "$me":
 			x = c.ID
 		case set.From == "$now" && f.Type == "date":
-			x = now.UTC().Format(time.DateOnly)
+			x = c.Today(now)
 		case set.From == "$now":
 			x = now.UTC()
 		case strings.HasPrefix(set.From, "="):
