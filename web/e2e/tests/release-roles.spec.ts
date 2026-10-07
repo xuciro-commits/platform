@@ -48,7 +48,7 @@ test("publisher reviews and activates sealed bytes while auditor can only inspec
   await expect(aud.getByText("publisher", { exact: true })).toBeVisible();
   await expect(aud.getByRole("combobox", { name: /Role in/ })).toHaveCount(0);
   await aud.goto("/#/apps?surface=tenant");
-  await expect(aud.getByRole("heading", { name: "Installed packages", exact: true })).toBeVisible();
+  await expect(aud.getByRole("heading", { name: "Packages", exact: true })).toBeVisible();
   await expect(aud.getByText("No controlled packages installed", { exact: true })).toBeVisible();
   await aud.goto("/#/audit?surface=tenant");
   await expect(aud.getByRole("heading", { name: "Audit", exact: true })).toBeVisible();
