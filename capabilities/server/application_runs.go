@@ -307,7 +307,7 @@ func (t *Tenant) applicationRunGraphsLocked(root platform.AssetRef) (map[platfor
 		current[a.Ref] = a
 	}
 	graphs := map[string]map[platform.AssetRef]bool{"": applicationRunGraph(root, current)}
-	for id, raw := range t.releaseCandidates {
+	for id, raw := range t.releases.candidates {
 		candidate, err := platform.ReadCandidate(id, raw)
 		if err != nil {
 			return nil, nil, err

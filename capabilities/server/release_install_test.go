@@ -212,7 +212,7 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 	if _, err := live.ActivateRelease(builder, app, "activate-app", at); err != nil {
 		t.Fatal(err)
 	}
-	if err := live.runningMatchesLocked(app, live.releaseCandidates[app]); err != nil {
+	if err := live.runningMatchesLocked(app, live.releases.candidates[app]); err != nil {
 		t.Fatal(err)
 	}
 	recovered := compose()
@@ -229,7 +229,7 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 		t.Fatal(err)
 	}
 	for _, tn := range []*Tenant{recovered, fromSnapshot} {
-		if err := tn.runningMatchesLocked(app, tn.releaseCandidates[app]); err != nil {
+		if err := tn.runningMatchesLocked(app, tn.releases.candidates[app]); err != nil {
 			t.Fatalf("recovered closure differs: %v", err)
 		}
 		if tn.ActiveRelease() != app {

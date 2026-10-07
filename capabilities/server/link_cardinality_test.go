@@ -73,7 +73,7 @@ func TestLinkCardinalityFrozenWritesAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	candidate, err := platform.ReadCandidate(id, tn.releaseCandidates[id])
+	candidate, err := platform.ReadCandidate(id, tn.releases.candidates[id])
 	if err != nil {
 		t.Fatal(err)
 	}

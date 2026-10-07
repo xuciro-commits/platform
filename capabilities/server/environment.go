@@ -81,7 +81,7 @@ type MigrationResult struct {
 // candidate seals to the same key and digest.
 func (t *Tenant) SealCandidate(id string, now time.Time) (SealedArtifact, error) {
 	t.mu.Lock()
-	raw := slices.Clone(t.releaseCandidates[id])
+	raw := slices.Clone(t.releases.raw(id))
 	t.mu.Unlock()
 	if raw == nil {
 		return SealedArtifact{}, fmt.Errorf("release candidate %s is not saved", id)
@@ -97,15 +97,10 @@ func (t *Tenant) SealCandidate(id string, now time.Time) (SealedArtifact, error)
 		return SealedArtifact{}, fmt.Errorf("seal %s: %w", id, err)
 	}
 	t.mu.Lock()
-	if t.sealed == nil {
-		t.sealed = map[string]SealedArtifact{}
-	}
-	if prior, ok := t.sealed[candidate.ID]; ok && prior.Digest != artifact.Digest {
-		t.mu.Unlock()
+	defer t.mu.Unlock()
+	if err := t.releases.seal(candidate.ID, artifact); err != nil {
 		return SealedArtifact{}, fmt.Errorf("sealed candidate %s changed", candidate.ID)
 	}
-	t.sealed[candidate.ID] = artifact
-	t.mu.Unlock()
 	return artifact, nil
 }
 
@@ -117,7 +112,7 @@ func sealedKey(tenant, candidate string) string {
 func (t *Tenant) SealedArtifact(id string) (SealedArtifact, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for _, a := range t.sealed {
+	for _, a := range t.releases.sealed {
 		if a.Candidate == id {
 			return a, true
 		}
@@ -182,13 +177,9 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if to.quarantined() {
 		return result, fmt.Errorf("tenant %s is quarantined", to.ID)
 	}
-	if prior := to.releaseCandidates[candidate.ID]; prior != nil && !bytes.Equal(prior, raw) {
+	if err := to.releases.put(candidate.ID, raw); err != nil {
 		return result, fmt.Errorf("candidate %s exists in %s with different bytes", candidate.ID, to.ID)
 	}
-	if to.releaseCandidates == nil {
-		to.releaseCandidates = map[string]json.RawMessage{}
-	}
-	to.releaseCandidates[candidate.ID] = slices.Clone(raw)
 	var installations []releaseInstallation
 	if activate {
 		if installations, err = to.prepareReleaseActivationLocked(candidate.ID, raw); err != nil {

@@ -534,7 +534,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 		State: "running", Steps: []RunStep{}}
 	recorded := captureBinding
 	if recorded {
-		run.Release = a.t.activeRelease
+		run.Release = a.t.releases.active
 	}
 	if d := a.def(agent); d != nil && recorded {
 		run.DefinitionVersion = a.definitionVersion(d)

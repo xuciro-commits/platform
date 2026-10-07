@@ -233,7 +233,7 @@ func (h hostView) Tasks() host.Tasks { return h.t.tasks }
 func (h hostView) Processes() host.Processes { return h.t.procs }
 
 // ActiveRelease is read inside a decision, which already holds the tenant lock.
-func (h hostView) ActiveRelease() string { return h.t.activeRelease }
+func (h hostView) ActiveRelease() string { return h.t.releases.active }
 
 func (h hostView) Runs() host.Runs {
 	if h.t.agents == nil {

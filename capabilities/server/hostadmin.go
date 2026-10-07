@@ -216,8 +216,8 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 func (h *Host) tenantView(t *Tenant) HostTenantView {
 	now := h.Now()
 	t.mu.Lock()
-	view := HostTenantView{ID: t.ID, Lifecycle: t.lifecycle(), ActiveRelease: t.activeRelease,
-		Candidates: len(t.releaseCandidates)}
+	view := HostTenantView{ID: t.ID, Lifecycle: t.lifecycle(), ActiveRelease: t.releases.active,
+		Candidates: t.releases.count()}
 	t.mu.Unlock()
 	health := t.Health(now)
 	view.Started, view.FailedWork, view.Connectors = health.Started, health.Failed, health.Connectors
@@ -368,15 +368,11 @@ type HostArtifactView struct {
 // hostArtifacts lists what the tenant could be running, newest first.
 func (t *Tenant) hostArtifacts() []HostArtifactView {
 	t.mu.Lock()
-	ids := make([]string, 0, len(t.releaseCandidates))
-	for id := range t.releaseCandidates {
-		ids = append(ids, id)
-	}
-	slices.Sort(ids)
+	ids := t.releases.ids()
 	out := []HostArtifactView{}
 	for _, id := range ids {
-		raw := t.releaseCandidates[id]
-		view := HostArtifactView{Candidate: id, Active: id == t.activeRelease, Size: len(raw)}
+		raw := t.releases.raw(id)
+		view := HostArtifactView{Candidate: id, Active: id == t.releases.active, Size: len(raw)}
 		if candidate, err := platform.ReadCandidate(id, raw); err == nil {
 			view.Digest, view.Assets, view.Verified = candidate.ID, len(candidate.Assets), true
 		} else {

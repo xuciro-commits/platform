@@ -323,7 +323,7 @@ func TestCandidateSealingAndPromotion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seal: %v", err)
 	}
-	if artifact.Digest == "" || artifact.Size != len(from.releaseCandidates[candidateID]) {
+	if artifact.Digest == "" || artifact.Size != len(from.releases.candidates[candidateID]) {
 		t.Fatalf("artifact: %+v", artifact)
 	}
 	raw, back, err := from.sealedBytes(candidateID)
@@ -337,7 +337,7 @@ func TestCandidateSealingAndPromotion(t *testing.T) {
 	if result.Digest != artifact.Digest || result.To != to.ID {
 		t.Fatalf("promotion: %+v", result)
 	}
-	if to.releaseCandidates[candidateID] == nil {
+	if to.releases.candidates[candidateID] == nil {
 		t.Fatal("the target does not hold the promoted candidate")
 	}
 	// A candidate for an app the target does not host is refused.

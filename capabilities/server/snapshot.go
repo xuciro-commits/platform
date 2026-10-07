@@ -140,9 +140,7 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	s.Refusals = maps.Clone(t.refusals)
 	s.AcceptedAnswers = maps.Clone(t.acceptedAnswers)
 	s.AcceptedInputs = maps.Clone(t.acceptedInputs)
-	s.ReleaseCandidates = maps.Clone(t.releaseCandidates)
-	s.ReleaseApplied = maps.Clone(t.releaseApplied)
-	s.ActiveRelease = t.activeRelease
+	t.releases.snapshot(&s)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	s.Deliveries, s.Acted, s.Failed = slices.Clone(t.deliveries), t.acted, []string{}
@@ -190,7 +188,7 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 		s.Outbound = append(s.Outbound, effectState{Effect: x.Effect, Since: x.since})
 	}
 	s.HostLifecycle, s.Support = t.lifecycle(), slices.Clone(t.support)
-	s.Sealed, s.Migrations = maps.Clone(t.sealed), slices.Clone(t.migrations)
+	s.Migrations = slices.Clone(t.migrations)
 	s.Composites = maps.Clone(t.compositeApplied)
 	s.Staged = t.staged.snapshot()
 	return s, rows, position(), nil
@@ -313,9 +311,6 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	t.auditMu.Unlock()
 	t.setLifecycle(s.HostLifecycle)
 	t.support = slices.Clone(s.Support)
-	if s.Sealed != nil {
-		t.sealed = s.Sealed
-	}
 	t.migrations = slices.Clone(s.Migrations)
 	if s.Composites != nil {
 		t.compositeApplied = s.Composites
@@ -377,9 +372,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if s.ActiveRelease != "" && s.ReleaseCandidates[s.ActiveRelease] == nil {
 		return fmt.Errorf("tenant %s: active release snapshot has no saved candidate", t.ID)
 	}
-	t.releaseCandidates = maps.Clone(s.ReleaseCandidates)
-	t.releaseApplied = maps.Clone(s.ReleaseApplied)
-	t.activeRelease = s.ActiveRelease
+	t.releases.restore(&s)
 	for protocol, provider := range s.Bindings {
 		if !t.rebind(protocol, provider) {
 			return fmt.Errorf("tenant %s: %s is not a provider of %s", t.ID, provider, protocol)

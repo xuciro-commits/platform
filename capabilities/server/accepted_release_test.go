@@ -86,7 +86,7 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	if _, err := live.SaveReleaseCandidate(member, platform.AssetObject, "O1", preview.CandidateID, "save-1", at); err == nil {
 		t.Fatal("append failure should be returned")
 	}
-	if len(live.releaseCandidates) != 0 || len(entries) != 1 {
+	if len(live.releases.candidates) != 0 || len(entries) != 1 {
 		t.Fatal("failed append exposed a candidate")
 	}
 	fail = false
@@ -94,7 +94,7 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	if err != nil || savedID != preview.CandidateID || len(entries) != 2 {
 		t.Fatalf("candidate was not committed once: %s, %v", savedID, err)
 	}
-	if _, err := platform.ReadCandidate(savedID, live.releaseCandidates[savedID]); err != nil {
+	if _, err := platform.ReadCandidate(savedID, live.releases.candidates[savedID]); err != nil {
 		t.Fatalf("saved bytes are not the exact candidate: %v", err)
 	}
 	if _, err := live.SaveReleaseCandidate(member, platform.AssetObject, "O1", savedID, "save-1", at.Add(time.Hour)); err != nil || len(entries) != 2 {
@@ -112,7 +112,7 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(recovered.releaseCandidates[savedID], live.releaseCandidates[savedID]) {
+	if !bytes.Equal(recovered.releases.candidates[savedID], live.releases.candidates[savedID]) {
 		t.Fatal("recovery did not use the committed candidate bytes")
 	}
 	page, err := recovered.SavedReleases(member, 0, 20)
@@ -127,12 +127,12 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	if err := fromSnapshot.Restore(raw); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(fromSnapshot.releaseCandidates[savedID], live.releaseCandidates[savedID]) {
+	if !bytes.Equal(fromSnapshot.releases.candidates[savedID], live.releases.candidates[savedID]) {
 		t.Fatal("snapshot lost the immutable candidate")
 	}
 	// A saved revision does not change the installed development definition or
 	// activate itself; those are separate, still-pending release operations.
-	if live.activeRelease != "" || recovered.activeRelease != "" {
+	if live.releases.active != "" || recovered.releases.active != "" {
 		t.Fatal("saving a candidate silently activated it")
 	}
 	CheckReplay(t, live, entries, compose)
@@ -176,7 +176,7 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 	if rec := post("reader", preview.CandidateID); rec.Code != http.StatusForbidden || rec.Body.Len() != 0 {
 		t.Fatalf("non-builder learned about a private candidate: %d %s", rec.Code, rec.Body.String())
 	}
-	if rec := post("builder", "sha256-v1:stale"); rec.Code != http.StatusConflict || len(tenant.releaseCandidates) != 0 {
+	if rec := post("builder", "sha256-v1:stale"); rec.Code != http.StatusConflict || len(tenant.releases.candidates) != 0 {
 		t.Fatalf("stale preview was saved: %d %s", rec.Code, rec.Body.String())
 	}
 	if rec := post("builder", preview.CandidateID); rec.Code != http.StatusOK ||
@@ -305,7 +305,7 @@ func TestJournalAcceptedReleaseCandidateCrashBeforeApplication(t *testing.T) {
 		return nil, errors.New("connection lost after append")
 	}
 	if _, err := live.SaveReleaseCandidate(member, platform.AssetObject, "O1", preview.CandidateID, "save", at); err == nil ||
-		len(live.releaseCandidates) != 0 {
+		len(live.releases.candidates) != 0 {
 		t.Fatal("lost acknowledgement exposed an unapplied candidate")
 	}
 	reopened, err := OpenJournal(ctx, url)
@@ -321,7 +321,7 @@ func TestJournalAcceptedReleaseCandidateCrashBeforeApplication(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := platform.ReadCandidate(preview.CandidateID, recovered.releaseCandidates[preview.CandidateID]); err != nil {
+	if _, err := platform.ReadCandidate(preview.CandidateID, recovered.releases.candidates[preview.CandidateID]); err != nil {
 		t.Fatal(err)
 	}
 	recovered.AcceptResult = func(entry Entry, key, hash string) ([]byte, error) {
@@ -403,7 +403,7 @@ func TestInMemoryReleaseCandidateSaveReplays(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(recovered.releaseCandidates[id], live.releaseCandidates[id]) || recovered.activeRelease != "" {
+	if !bytes.Equal(recovered.releases.candidates[id], live.releases.candidates[id]) || recovered.releases.active != "" {
 		t.Fatal("replay lost the saved candidate or activated it")
 	}
 }

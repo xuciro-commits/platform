@@ -56,7 +56,7 @@ func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate) (
 	if err != nil {
 		return nil, err
 	}
-	plan := &ReleaseUpgradePlan{CandidateID: candidate.ID, ActiveID: t.activeRelease}
+	plan := &ReleaseUpgradePlan{CandidateID: candidate.ID, ActiveID: t.releases.active}
 	for _, publication := range publications {
 		if publication.Schema != build.SchemaPublish {
 			continue
