@@ -60,13 +60,15 @@ export function Standing({ status }: { status?: string }) {
 
 export function MemberDetail({ id }: { id: string }) {
   const { can, role, me } = useHost();
-  const member = useRead<Member[]>("/v1/members").data?.find((m) => m.id === id);
+  const members = useRead<Member[]>("/v1/members").data ?? [];
+  const member = members.find((m) => m.id === id);
   const tenant = useRead<TenantRecord>("/v1/tenant").data;
   const { apps, decide } = useAdmin();
   const [granting, setGranting] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   if (!member) return <p className="text-sm text-muted">{t("No member")} {id}.</p>;
   const settings = tenant?.settings ?? {};
-  const account: Account = { ...member.profile, effective: { language: member.profile.language || settings.language || "", timezone: member.profile.timezone || settings.timezone || "UTC",
+  const account: Account = { ...member.profile, subjects: member.subjects, effective: { language: member.profile.language || settings.language || "", timezone: member.profile.timezone || settings.timezone || "UTC",
     dateFormat: member.profile.dateFormat || settings.dateFormat || "ymd", numberFormat: member.profile.numberFormat || settings.numberFormat || "1,234.56", weekStart: member.profile.weekStart || settings.weekStart || "monday",
     email: member.profile.email || member.subjects.find((s) => s.startsWith("user:"))?.slice(5) || "", digest: member.profile.digest || settings.digest || "instant" } };
   const grants = member.grants ?? [];
@@ -83,9 +85,17 @@ export function MemberDetail({ id }: { id: string }) {
         <div className="mt-2 flex flex-wrap gap-2">
           {standing === "suspended" ? can("platform.member.resume") && <Button size="sm" onClick={() => void decide("platform.member.resume", member.id, {})}>{t("Resume member")}</Button>
             : can("platform.member.suspend") && <Button size="sm" onClick={() => { const reason = window.prompt(t("Reason (optional)")) ?? ""; void decide("platform.member.suspend", member.id, { reason }); }}>{t("Suspend member")}</Button>}
-          {can("platform.member.offboard") && <Button size="sm" variant="danger" onClick={() => { if (window.confirm(t("The member leaves: their subjects and tokens go, their grants end, their record and history stay. Not reversible; add them again if they return."))) void decide("platform.member.offboard", member.id, { reason: "" }); }}>{t("Offboard member")}</Button>}
+          {can("platform.member.offboard") && <Button size="sm" variant="danger" onClick={() => setLeaving(true)}>{t("Offboard member")}</Button>}
         </div>
       </Panel>}
+      {can("platform.member.offboard") && <Dialog open={leaving} onOpenChange={setLeaving} title={t("Offboard member")}>
+        <p className="mb-2 text-xs text-muted">{t("The member leaves: their subjects and tokens go, their grants end, their record and history stay; their enterprise memberships end today and what they own passes to the successor, when named. Not reversible; add them again if they return.")}</p>
+        <EntityForm schema={z.object({ successor: z.string(), reason: z.string() })} defaultValues={{ successor: "", reason: "" }} submitLabel={t("Offboard member")} onCancel={() => setLeaving(false)}
+          fields={[{ name: "successor", label: t("Successor"), kind: "select", help: t("The member who takes over their delegations and open items"),
+            options: [{ value: "", label: t("none") }, ...members.filter((m) => m.id !== member.id && (m.status ?? "active") === "active").map((m) => ({ value: m.id, label: m.profile.displayName ? `${m.profile.displayName} (${m.id})` : m.id }))] },
+            { name: "reason", label: t("Reason (optional)") }]}
+          onSubmit={async (v) => { if (await decide("platform.member.offboard", member.id, { reason: v.reason, successor: v.successor })) setLeaving(false); }} />
+      </Dialog>}
       <Panel title={t("Roles")} actions={can("platform.member.grant") && <Button size="sm" onClick={() => setGranting(true)}>{t("Add role")}</Button>}>
         {grants.length === 0 && <p className="text-xs text-muted">{t("Holds no role.")}</p>}
         <div className="grid gap-1.5 text-sm">

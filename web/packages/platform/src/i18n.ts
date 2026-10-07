@@ -677,4 +677,9 @@ register("zh-CN", {
   "Drain": "排空",
   "Retire": "退役",
   "Draining: nothing new starts from its contributions; work in flight finishes. Retire when it is quiet.": "排空中：它的贡献不再启动新的工作，在途工作照常完成；安静后再退役。",
+  "The member leaves: their subjects and tokens go, their grants end, their record and history stay; their enterprise memberships end today and what they own passes to the successor, when named. Not reversible; add them again if they return.": "成员离开：其登录身份与令牌移除，授予终止，记录与历史保留；其企业任职于今日结束，所负责的事项移交给指定的继任者。不可逆；若回归则重新添加。",
+  "Successor": "继任者",
+  "The member who takes over their delegations and open items": "接手其委托与未结事项的成员",
+  "Identities": "登录身份",
+  "What signs in as you: a verified address from the identity provider, or a client id. An administrator binds them when adding or inviting you; a personal token is not an identity.": "以您身份登录的是什么：身份提供方验证过的邮箱地址，或客户端 ID。管理员在添加或邀请您时绑定；个人令牌不是登录身份。",
 });

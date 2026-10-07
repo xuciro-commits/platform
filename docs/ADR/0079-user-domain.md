@@ -1,6 +1,6 @@
 # ADR-0079 — 用户域：身份、成员、档案、偏好与生命周期（XL）
 
-状态：接受，已实现有界用户域；离职移交等退出判据尚未满足 · 2026-10-06 · 承接 ADR-0023（语言）、ADR-0067（企业模型中的人）、ADR-0078（租户与授权）
+状态：接受，已实现有界用户域；离职移交、按域自助加入、邀请邮件已交付 2026-10-07；多身份解绑、会话持久化不做 · 2026-10-07 · 承接 ADR-0023（语言）、ADR-0067（企业模型中的人）、ADR-0078（租户与授权）
 
 
 ## 实际边界（As-built，2026-10-07）
@@ -9,17 +9,17 @@
 
 | 正文的说法 | 代码里的事实 |
 |---|---|
-| 四层：`platform.identity` / `platform.member` / `platform.profile` / Person | **只有 `platform.profile` 是实体**（`profile.go`，`platform.profile.update`，随 Console 账本快照/回放）。**没有 `platform.identity`**：身份是 Console 已决状态里 `subject → member` 的字符串映射，没有 `issuer/verified/label/lastSignIn`，没有"多身份、看/解绑"。**没有 `platform.member` 实体**：成员是 Console 的已决状态（`platform.member.add/grant/revoke/invite/suspend/resume/offboard/delegate` 这些决定的结果），没有 `kind` person/service/agent（只有 `Agent bool`）、没有 `invitedBy/joined`。 |
+| 四层：`platform.identity` / `platform.member` / `platform.profile` / Person | **只有 `platform.profile` 是实体**（`profile.go`，`platform.profile.update`，随 Console 账本快照/回放）。**没有 `platform.identity`**：身份是 Console 已决状态里 `subject → member` 的字符串映射，没有 `issuer/verified/label/lastSignIn`；My account「Identities」栏（`Account.subjects`，2026-10-07）只看不解绑。**没有 `platform.member` 实体**：成员是 Console 的已决状态（`platform.member.add/grant/revoke/invite/suspend/resume/offboard/delegate` 这些决定的结果），没有 `kind` person/service/agent（只有 `Agent bool`）、没有 `invitedBy/joined`。 |
 | Profile 字段清单（§2） | 实有：`displayName givenName familyName title pronouns email phone language timezone dateFormat numberFormat weekStart inApp mail digest quietFrom quietTo homePage theme density`，只读 `lastSeen`。**没有** `avatar measurement contactVisibility mute[] landingApp recentLimit reduceMotion highContrast fontScale lastSignIn`。 |
 | 偏好生效（§3） | 真生效：`timezone`（`Member.Location`，记账日期/"今天"）、`language`、`inApp`/`mail` 通道、`email` 收件、`homePage`/`theme`/`density`（工作台启动读 `/v1/me`）。`digest`/`quietFrom/quietTo` 只作用于**邮件**的发出时刻（`Reach.Due`：hourly 推到下一整点、daily 推到次日 08:00、静默窗内推到窗尾），**不合并**成一封汇总邮件；站内通知不延后。 |
-| 邀请发邮件、`signInDomains` 自助加入 | `platform.member.invite{subject}` 只把人写进目录（可先授予），**不发邮件、没有签名链接**；首次登录转 active 由 `lastSeen` 派生。**没有自助加入**。 |
-| 离职转继任、Person 写 `Until` | `offboard{reason}` 收回授予、移除身份与令牌、保留记录；**不转待办/审批、不写企业模型 Person 的 `Until`**（无 `successor` 参数）。 |
+| 邀请发邮件、`signInDomains` 自助加入 | **2026-10-07**：`platform.member.invite{subject}` 写进目录（可先授予）后，以普通通知（`Key: invite`，收件人即新成员，地址从 `user:<email>` 派生）经租户已配置的 email 端点寄出「You are invited to <组织名>」；没有 email 端点就只是站内通知，**没有签名链接**（登录仍走 IdP）。首次登录转 active 由 `lastSeen` 派生。自助加入见 ADR-0078 对照表 `signInDomains` 行（`platform.member.join`，宿主自动化记录）。 |
+| 离职转继任、Person 写 `Until` | **已交付 2026-10-07**：`offboard{reason, successor?}`——继任者须是在职成员；离职者给出的委托改为以继任者名义（无继任者则随之终止），继任者收到通知（"You take over from …"，指向各应用自己的重新指派动作；work/flow 待办**不自动改派**）；企业模型作为 `host.Listener` 听 `platform.member.offboard`，以自动化身份对该 `member:<id>` 的每条在期 Membership 记 `enterprise.relationship.end{until: 当天}`（当天开始的除外），任职即写 `Until`、不删。 |
 | 服务账号必须有 `Until` | 没有服务账号这一类；`client:<id>` 身份就是普通成员，不强制到期。 |
 | MFA：`mfaRequired` 作为 ACR 传给 IdP 并校验 `amr/acr` | **未做**，设置只存。 |
 | 会话与令牌（§5） | 已做：`GET /v1/sessions`、`POST /v1/sessions/end-others`（宿主内存撤销）、`suspend` 结束全部会话；`platform.token.issue/revoke`、`GET /v1/tokens`、`/v1/tokens/{id}/secret` 一次性取密钥、`Member.Scopes` 越界被引擎以 `token-scope` 拒绝。宿主重启后内存会话/撤销表清空（令牌本身仍按状态校验）。 |
 | "我的账户"页 | 有：称呼/本地化/通知/工作偏好、我的授予与委托、我的会话、我的令牌。**没有**：我的身份（看/解绑）、下载我的数据。 |
 
-退出判据（§7）据此修正：第 1 条只达成"时区→记账日期"，邀请邮件**未达成**、quietHours 只延后不"合并投递"；第 2 条只达成"授予全部收回、审计仍显示其姓名"，转继任与 Person `Until` **未达成**；第 3 条达成前两句，"服务账号到期"不存在；第 4 条达成。
+退出判据（§7）据此修正（2026-10-07）：第 1 条达成"邀请邮件（无签名链接）、时区→记账日期"，quietHours 只延后不"合并投递"；第 2 条达成"委托转继任、授予全部收回、审计仍显示其姓名、企业任职写 `Until`"，work/flow 待办**不自动改派**（通知继任者去各应用改派）；第 3 条达成前两句，"服务账号到期"不存在（用授予的 `Until` 代替）；第 4 条达成。
 
 ## 0. 为什么现在
 

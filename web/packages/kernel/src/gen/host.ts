@@ -63,6 +63,7 @@ export type Account = {
     email: string;
     digest: string;
   };
+  subjects: string[];
 };
 
 export type Action = {

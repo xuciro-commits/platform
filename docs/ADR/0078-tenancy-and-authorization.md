@@ -1,6 +1,6 @@
 # ADR-0078 — 租户与授权：租户即边界、权限即一等概念、一个授权引擎（XXL）
 
-状态：接受，已实现有界基座；统一标记策略等退出判据尚未满足 · 2026-10-06 · 承接 ADR-0012（组织与单位）、ADR-0025 D4、ADR-0028 D3（字段读写角色）、ADR-0037 18b（角色与范围）、ADR-0066（范围设计器）、ADR-0067/0068/0073（企业模型）、ADR-0075（Markings）、ADR-0069 第二程
+状态：接受，已实现有界基座；租户设置生效、单位授予生效（2026-10-07）；统一标记策略、岗位推角色、策略表达式不做 · 2026-10-07 · 承接 ADR-0012（组织与单位）、ADR-0025 D4、ADR-0028 D3（字段读写角色）、ADR-0037 18b（角色与范围）、ADR-0066（范围设计器）、ADR-0067/0068/0073（企业模型）、ADR-0075（Markings）、ADR-0069 第二程
 
 
 ## 实际边界（As-built，2026-10-07）
@@ -12,8 +12,8 @@
 | "一个授权引擎，UI/API/智能体/自动化/导出全部经过 `authz.Decide`" | **只有动作授权**走引擎：`Catalog.DecideOn` / `Member.May` 在 `ledger.Submit`、动作目录、页面/函数的可调用判断里调用（约 30 个调用点，覆盖人、令牌、智能体、自动化）。**行可见性**仍由记录存储按 `Scope.Levels/Participants/Through` 自行计算，**字段遮蔽**仍是 `narrow.go` 的 `readsField`，导出沿记录可见性。它们已改为"按全部角色取并集"，但不经过 `authz.Decide`。 |
 | "RBAC + ReBAC + ABAC 三种判断一个顺序" | 引擎顺序是 bypass → deny 策略 → 角色 → allow 策略。**没有 ReBAC**：`related(link)` 谓词从未实现，`Request.Related` 字段无任何调用方设置，已于 2026-10-07 删除。"与记录的关系"（own/participant/through）只存在于记录存储的 Scope 里，而且只管可见性，不管动作。 |
 | "`platform.tenant` 一条记录" | **没有这个实体**。租户信息是 `platform.setting` 的若干键（名称、语言、时区、币种、`signInDomains`、`mfaRequired`、`sessionHours` …）在 `GET /v1/tenant` 里拼成的 `TenantRecord` 视图。 |
-| 租户设置 `signInDomains` / `mfaRequired` / `sessionHours` | **只存不管**：Organisation 页能改，宿主不按域名自助加入、不查 OIDC 的 acr/amr、不按小时数截断会话。 |
-| 授予带单位与时效 `Grant{Unit, Structure, From, Until}` | `From/Until` 真有效（派生角色按当前时间过滤）。`Unit/Structure` **只存储与显示**，不参与行范围——行范围仍由 Scope 设计器的规则决定。 |
+| 租户设置 `signInDomains` / `mfaRequired` / `sessionHours` | **已生效 2026-10-07**（`server.go member`、`lifecycle.go`）：`signInDomains` 命中的 `user:*@域` 陌生人首次请求即由宿主以自动化身份记 `platform.member.join{subject}`（成员 id = 邮箱本地部分的 slug，重名加 `-2`），一无所持直到授予；`sessionHours` 到时宿主忘掉该 sign-in 会话并拒绝（同一凭证再出示即新会话，OIDC 场景下即要求再向 IdP 取令牌），0 为不限；`mfaRequired` 要求 `Host.SecondFactor`（OIDC 的 `amr` 含 mfa/otp/hwk/sms/swk/user，`OIDCProvider` 给出）为真，宿主无法证明时该租户一个登录都不放行（开发令牌表、lightweight IdP 均不证明）。个人令牌不受三者约束。 |
+| 授予带单位与时效 `Grant{Unit, Structure, From, Until}` | `From/Until` 真有效（派生角色按当前时间过滤）。`Unit` **自 2026-10-07 参与行范围**（`records.go boundUnits/unitsBelow`）：当到达该范围层级的角色全部经带单位的授予持有时，unit 层级只看那些单位、below 层级看那些单位及其在 `Scope.Structure` 下的后代（用 `Directory.Related(Placement)` 展开，不区分 placement 的 kind）；任一同层角色不带单位地持有（含旧席位角色）则仍是成员所属单位。只约束记录可见性；`Caller.Units`（决策内）仍按所属单位。 |
 | 策略有"表达式变量"（§4、§5 D） | 策略是 deny/allow × 权限或前缀 × `where{member, app, agent, target}` **精确匹配** × 起止日。没有表达式语言、没有记录属性条件（`Policy.When` 只是 Go 内部钩子，租户无法写）。 |
 | 角色可由企业模型岗位推出（§3.4） | 未做。角色只来自授予（直接、团队、委托）。 |
 | 模板建租户 | 已做：`deploy/templates/{blank,hospitality,manufacturing}.json`、`GET /v1/host/templates`、`POST /v1/host/tenants`、宿主控制台入口。 |

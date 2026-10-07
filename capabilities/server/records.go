@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/apps/enterprise"
 	"reflect"
 	"slices"
 	"strconv"
@@ -1076,12 +1077,63 @@ func (t *Tenant) scoped(m platform.Member, et *entityType, roles []string, now t
 			if level == platform.ScopeUnit {
 				structure = ""
 			}
-			units = t.directory.Units("member:"+m.ID, structure, m.Today(now))
+			if bound := boundUnits(m, et.info.App, scope, level); bound != nil { // a grant bound to a unit (ADR-0078 §3.2)
+				units = t.unitsBelow(bound, structure, m.Today(now))
+			} else {
+				units = t.directory.Units("member:"+m.ID, structure, m.Today(now))
+			}
 		}
 		unit := field(scope.Unit)
 		return func(v reflect.Value) bool { return slices.Contains(units, unit(v)) }, nil
 	}
 	return nil, nil
+}
+
+// boundUnits are the units m's grants bind the roles reaching level to, when
+// every such role is held through a unit-bound grant; nil when any of them is
+// held outright (a grant without a unit, or a role on record without grants),
+// which is the whole of what the member belongs to.
+func boundUnits(m platform.Member, app string, scope platform.Scope, level string) []string {
+	var units []string
+	for _, r := range m.RolesIn(app) {
+		if scope.Level(r) != level {
+			continue
+		}
+		held := false
+		for _, g := range m.Grants {
+			if g.App != app || g.Role != r {
+				continue
+			}
+			if g.Unit == "" {
+				return nil
+			}
+			held = true
+			if !slices.Contains(units, g.Unit) {
+				units = append(units, g.Unit)
+			}
+		}
+		if !held {
+			return nil
+		}
+	}
+	return units
+}
+
+// unitsBelow are units and, in structure (none when ""), every unit placed
+// under them on day.
+func (t *Tenant) unitsBelow(units []string, structure string, day platform.Date) []string {
+	out := slices.Clone(units)
+	if structure == "" {
+		return out
+	}
+	for i := 0; i < len(out); i++ {
+		for _, u := range t.directory.Related(out[i], enterprise.Placement, false, day) {
+			if !slices.Contains(out, u) {
+				out = append(out, u)
+			}
+		}
+	}
+	return out
 }
 
 // RecordPage is a page of records and how many match in all.

@@ -32,6 +32,11 @@ import (
 // "client:<id>"); false rejects the request. See OIDC and Tokens.
 type Authenticate func(credential string) (subject string, ok bool)
 
+// Attest reports whether a credential was issued after a second factor: what a
+// tenant that requires one asks of the provider (ADR-0078 §2). A host without
+// one cannot attest, so such a tenant admits no sign-in.
+type Attest func(credential string) bool
+
 // Tokens authenticates with a fixed token → subject table (development and tests).
 func Tokens(table map[string]string) Authenticate {
 	return func(token string) (string, bool) { s, ok := table[token]; return s, ok }
@@ -70,6 +75,7 @@ type Host struct {
 	Templates    func() []TenantTemplate
 	CreateTenant func(CreateTenantRequest, string) (*Tenant, error)
 	routes       []Route // as Handler registered them: the API contract's source (api.go)
+	SecondFactor Attest  // nil: the provider does not say
 }
 
 // SignWith makes the host take the lightweight provider's tokens and sign the
@@ -136,14 +142,40 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 		if d := consoleOf(t); d == nil || want != "" && t.ID != want {
 			continue
 		} else if m, ok := d.Member(subject); ok {
+			if d.SecondFactorRequired() && (h.SecondFactor == nil || !h.SecondFactor(credential)) {
+				return platform.Member{}, nil, false // the tenant asks a second factor this credential does not show
+			}
 			if !d.noticed(m.ID, credential, r.UserAgent(), "sign-in", now) {
-				return platform.Member{}, nil, false // a session the member ended
+				return platform.Member{}, nil, false // a session the member ended, or whose hours are up
 			}
 			d.seen(m.ID, now)
 			return m, t, true
 		}
 	}
+	for _, t := range h.currentTenants() { // nobody's member: a tenant's sign-in domain may seat them (ADR-0079 §4)
+		if d := consoleOf(t); d != nil && (want == "" || t.ID == want) && d.joins(subject) && h.join(t, d, subject, now) {
+			return h.member(r)
+		}
+	}
 	return platform.Member{}, nil, false
+}
+
+// join seats subject in t by its sign-in domain: the host records the
+// decision as the platform's automation; the newcomer holds nothing until granted.
+func (h *Host) join(t *Tenant, d *Console, subject string, now time.Time) bool {
+	id := d.JoinID(subject)
+	payload, _ := json.Marshal(map[string]string{"subject": subject})
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.quarantined() {
+		return false
+	}
+	err := t.submitAutomated(d, t.automation(PlatformApp, false), &pb.Submission{TenantId: t.ID, Authority: PlatformApp, IdempotencyKey: "join:" + subject,
+		Target: &pb.EntityRef{Type: MemberType, Id: id}, Schema: &pb.SchemaRef{Name: SchemaJoin, Version: 1}, Payload: payload}, now)
+	if err != nil {
+		log.Printf("join %s to %s: %s", subject, t.ID, err.Error())
+	}
+	return err == nil
 }
 
 // tenantsOf are the tenants on this host where the request's subject is a member.

@@ -131,6 +131,43 @@ func (e *Enterprise) Manifest() platform.Manifest {
 		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished, ReadPatterns}, Everyone: []string{ReadModel, ReadMetamodel, ReadPatterns}}
 }
 
+// memberOffboard is the console's decision that a member left (ADR-0079 §4):
+// the model answers by ending their memberships that day, as its own
+// decisions, so the person's tenure reads Until and nothing is deleted.
+const memberOffboard = "platform.member.offboard"
+
+// Interested hears the console's offboarding (host.Listener: a platform app
+// given another app's events as owned work).
+func (e *Enterprise) Interested(names []string, _ platform.Event) bool {
+	return slices.Contains(names, memberOffboard)
+}
+
+// Listen ends the memberships of a member who left.
+func (e *Enterprise) Listen(c platform.Caller, ev platform.Event, _ []string, _ time.Time) *kernel.Error {
+	sub := ev.Record.GetSubmission()
+	if sub.GetSchema().GetName() != memberOffboard {
+		return nil
+	}
+	party, now := "member:"+sub.GetTarget().GetId(), ev.Record.GetRecordedTime().AsTime()
+	day := now.UTC().Format(time.DateOnly)
+	e.mu.Lock()
+	var open []string
+	for _, r := range e.model.Relationships {
+		if r.Stereotype == Membership && r.Source == party && activeOn(r.From, r.Until, day) && r.From < day {
+			open = append(open, r.ID)
+		}
+	}
+	e.mu.Unlock()
+	for _, id := range open {
+		payload, _ := json.Marshal(map[string]string{"until": day})
+		if _, err := e.Submit(c, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "offboard:" + party + ":" + id,
+			Target: &pb.EntityRef{Type: RelationshipType, Id: id}, Schema: &pb.SchemaRef{Name: SchemaRelationshipEnd, Version: 1}, Payload: payload}, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *Enterprise) Declarations() []*pb.AuthorityDeclaration { return e.ledger.Declarations() }
 
 func (e *Enterprise) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {

@@ -56,6 +56,7 @@ type Console struct {
 	tenant   string
 	members  map[string]*platform.Member
 	subjects map[string]string    // subject → member ID
+	then     func()               // what the decision being applied says once the lock is released
 	profiles map[string]*Profile  // member ID → profile (ADR-0079)
 	tokens   map[string]*Token    // ADR-0079 §5, hashed
 	minted   map[string]bool      // token secrets already handed out
@@ -300,7 +301,7 @@ func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.De
 // remain outside this path until their respective owners can be staged too.
 func (d *Console) AcceptedLedger() *platform.Ledger { return d.ledger }
 func (*Console) AcceptedActionSchemas() []string {
-	return []string{SchemaAdd, SchemaInvite, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard, SchemaGrant, SchemaRevoke, SchemaDelegate, SchemaTokenIssue, SchemaTokenRevoke, SchemaRoleSave, SchemaRoleRemove, SchemaPolicySave, SchemaPolicyDrop, SchemaTeamSave, SchemaTeamRemove, SchemaProfileUpdate, SchemaOperationCall, SchemaProjectSave, SchemaProjectArchive,
+	return []string{SchemaAdd, SchemaInvite, SchemaJoin, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard, SchemaGrant, SchemaRevoke, SchemaDelegate, SchemaTokenIssue, SchemaTokenRevoke, SchemaRoleSave, SchemaRoleRemove, SchemaPolicySave, SchemaPolicyDrop, SchemaTeamSave, SchemaTeamRemove, SchemaProfileUpdate, SchemaOperationCall, SchemaProjectSave, SchemaProjectArchive,
 		SchemaPackageInstall, SchemaPackageUpgrade, SchemaPackageDrain, SchemaPackageRetire}
 }
 
@@ -426,7 +427,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				apply, err = d.decideAccess(c, s)
 			case s.GetSchema().GetName() == SchemaDelegate:
 				apply, err = d.decideDelegate(c, s)
-			case slices.Contains([]string{SchemaInvite, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard}, s.GetSchema().GetName()):
+			case slices.Contains([]string{SchemaInvite, SchemaJoin, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard}, s.GetSchema().GetName()):
 				apply, err = d.decideLifecycle(c, s)
 			default:
 				apply, err = d.decideMember(c, s)
@@ -437,8 +438,13 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 			}
 			return func(r *pb.ChangeRecord) {
 				d.mu.Lock()
-				defer d.mu.Unlock()
 				apply(r)
+				then := d.then
+				d.then = nil
+				d.mu.Unlock()
+				if then != nil { // what the decision tells others, outside the console's lock
+					then()
+				}
 			}, err
 		}
 		if declared.Target == PackageType {

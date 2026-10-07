@@ -347,11 +347,12 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		}
 	}
 	authenticate := Authenticate(func(token string) (string, bool) { return token, token != "" })
+	var attest Attest
 	if d.Issuer != "" {
 		if d.Keys == "" {
 			return fmt.Errorf("-oidc-keys is required with -oidc-issuer")
 		}
-		authenticate = OIDC(d.Issuer, d.Keys)
+		authenticate, attest = OIDCProvider(d.Issuer, d.Keys)
 	}
 	if pgPool, pg := pool(journal); journal != nil && d.Project && pg {
 		for _, t := range tenants {
@@ -390,6 +391,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		}
 	}
 	host := NewHost(authenticate, tenants...)
+	host.SecondFactor = attest
 	host.HostAdmins = d.hostAdministrators()
 	host.tenantsFrom = registry.list
 	host.Templates = d.Templates
