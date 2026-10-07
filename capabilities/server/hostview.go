@@ -214,13 +214,7 @@ func (h hostView) Seen(c platform.Caller, keys ...string) {
 		platform.MarkSeen(c, keys...)
 		return
 	}
-	h.t.opsMu.Lock()
-	defer h.t.opsMu.Unlock()
-	for i, n := range h.t.notices {
-		if n.App == c.App && slices.Contains(keys, n.Key) {
-			h.t.notices[i].Read = true
-		}
-	}
+	h.t.notices.markKeysRead(c.App, keys)
 }
 
 func (h hostView) Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *kernel.Error) {
@@ -233,7 +227,7 @@ func (h hostView) Tasks() host.Tasks { return h.t.tasks }
 func (h hostView) Processes() host.Processes { return h.t.procs }
 
 // ActiveRelease is read inside a decision, which already holds the tenant lock.
-func (h hostView) ActiveRelease() string { return h.t.activeRelease }
+func (h hostView) ActiveRelease() string { return h.t.releases.active }
 
 func (h hostView) Runs() host.Runs {
 	if h.t.agents == nil {

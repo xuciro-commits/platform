@@ -47,7 +47,7 @@ func (t *Tenant) Health(now time.Time) TenantHealth {
 	}
 	t.opsMu.Lock()
 	for _, a := range t.apps {
-		q := t.queues[a.Manifest().ID]
+		q := t.work.queued(a.Manifest().ID)
 		if len(q) == 0 {
 			continue
 		}
@@ -60,7 +60,7 @@ func (t *Tenant) Health(now time.Time) TenantHealth {
 		qh.Age = qh.Oldest.Seconds()
 		h.Queues = append(h.Queues, qh)
 	}
-	h.Failed = len(t.failed)
+	h.Failed = t.work.failedCount()
 	t.opsMu.Unlock()
 	for _, b := range h.Breakers {
 		if b.State != "closed" {

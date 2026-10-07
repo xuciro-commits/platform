@@ -25,7 +25,7 @@
 3. **一个概念一个家**。目录即边界：一个包/目录只回答一个问题；跨边界只经导出的接口；禁止"工具箱包"（`util/`、`common/`、`shared/` 不许新建；现有 `shared/` 在波次里消化）。
 4. **Tenant 变薄，不变没**。`Tenant` 保留：身份（ID、apps、owner）、提交管线（`Submit` → 决定 → 账本 → 事件）、组件的持有。每个能力作为**组件结构体**挂在 `Tenant` 上（`t.journal`、`t.compute`、`t.releases`…），方法属于组件；组件对 Tenant 的需求写成**小接口**（它用到什么就声明什么），不传整个 `*Tenant`。
 5. **Go 的包边界服从编译器，不服从愿望**。只有当一簇文件对 Tenant 未导出状态的依赖能收口成一个小接口时才拆成独立包；收不口的留在根包，但按组件前缀命名并在 `doc.go` 画地图。不为了"目录好看"引入导出一大堆内部类型。
-6. **删除要有证据**：死代码靠编译器/`go vet`/扫描脚本；"替代过的路径"靠 ADR 里写明的替代关系；只为重放旧日志保留的分支（如 `platform.member.language`）**保留并集中到一个 `legacy_*.go`**，注明可以删除的条件（日志里不再出现）。
+6. **删除要有证据**（历史代码 ≠ 垃圾：真实日志的解码与恢复分支是契约，只能归集不能删）：死代码靠编译器/`go vet`/扫描脚本；"替代过的路径"靠 ADR 里写明的替代关系；只为重放旧日志保留的分支（如 `platform.member.language`）**保留并集中到一个 `legacy_*.go`**，注明可以删除的条件（日志里不再出现）。
 7. **与 GPT 的同步**：结构重整与按路径三方合成天然冲突（文件改名后 main 上的旧路径修复无处可落）。因此本 ADR 执行期间：每一波结束即交接；**GPT 在 main 上的修复一律以 patch 形式交回分支由我落到新路径**，main 不再独立修改被搬动的文件；基点 B 每波推进。AGENTS.md 第 6 条补充这一条。
 
 ## 2. 目标结构
@@ -80,12 +80,16 @@ capabilities/server/
 |---|---|---|---|
 | **0 盘点** | `scripts/cleanup-inventory.sh`：包/文件/函数长度、`Tenant` 方法数、死导出（Go 用 `go vet` + 自写符号扫描，Web 用上一轮脚本固化）；本 ADR §0 数字由它产出 | 无 | 脚本进 `scripts/`，`verify.sh` 可选步骤 |
 | **1 零依赖搬家** | `journal/`、`idp/`、`platform/pageui/`、`decimal_condition`→`platform` 值包；web `ui`/`app` 顶层目录化 | 低（纯移动，编译器把关） | 全绿；`host.ts` 零 diff |
-| **2 组件化 Tenant（上半）** | `compute/`、`agents/`、`release/`：先在根包内把 `func (t *Tenant)` 改成组件方法 + 小接口，再 `git mv` 进包 | 中 | `Tenant` 方法数 399 → < 250 |
+| **2 组件化 Tenant（上半）** | `compute/`、`agents/`、`release/`（含 `simulate_*`，它是 release 候选的测试封存）：先在根包内把 `func (t *Tenant)` 改成组件方法 + 小接口，再 `git mv` 进包。**`accepted/` 不在本波**（曾在回执里口误写入，以本表为准）。每个组件一个提交、一次交接：固定 HEAD + B + 路径/重命名映射 | 中 | **退出标准改为状态归属**（第 2 波实测：方法只换接收者是空转）：`Tenant` 结构体字段 80 → < 55，每个组件自有锁或明确"受 t.mu 保护"；方法数作为参考值记录 |
 | **3 组件化 Tenant（下半）** | `accepted/`、`console/`、`integration/`、`pages/` | 高（accepted 与提交管线纠缠） | `Tenant` 方法数 < 120；根包 < 12k 行 |
 | **4 面条与屎** | 长函数拆分；`legacy_*.go` 归集；删替代路径、死符号、"曾经"注释；`definitions.go`/`installed.go` 按组件拆 | 中 | 无 > 150 行函数（登记例外 ≤ 5 个）；§5 清单闭合 |
 | **5 收尾** | `doc.go` 地图、AGENTS.md 目录规则改写、ADR 本表落地状态 | 无 | 本 ADR 状态改为"已落地" |
 
 每波都可独立停下；停在任何一波，仓库都是绿的、结构都比之前清楚。
+
+## 3.1 大扫除之后的第一件事（负责人已定，记在这里免得丢）
+
+一个应用从定义到 Release、环境、升级**真正完整**：复用 WMS/既有验证应用，串起 定义/依赖 → 联合候选 → 测试封存 → 激活 → 另一环境晋级 → 业务操作 → v2 受支持升级（范围仍是"每个已有对象加一个可选标量字段"，其他改变默认不支持）→ 失败处理与重启恢复。复用现有候选/发布/环境/升级 owner，不另写引擎，不扩成行业 ERP。第 2 波把 `release/` 收成组件正是为它铺路。
 
 ## 4. 不做
 
@@ -105,5 +109,28 @@ capabilities/server/
 | `decimal_condition.go` 一个函数单独成文件 | 变成 `platform.DecimalValue.Condition` | `896f73e` |
 | `@platform/ui` 9 个测试平铺在 src 根、`i18n.ts` 与 `i18n/` 目录分家、`theme.ts` 与 `themes/` 分家 | 测试搬到被测对象旁；`i18n/index.ts`；`themes/theme.ts` | `83c0fa2` |
 | `@platform/app` 11 个顶层文件 | `pages/ actions/ automation/`；`record-actions.test.mjs` 从 `collaboration/` 搬到 `actions/` | `83c0fa2` |
+| 每调用结果通道 5 个 Tenant 方法 + `t.staged` 字段；`StagedResults`/`reclaimStaged` 无人调用 | `stagedChannel` 组件（自有锁，只要 tenant id 与 files）；两个死方法删除 | `0cbb…` wave 2 |
+| 发布状态 4 个字段（candidates/applied/active/sealed）被 9 个文件直接写，不变性检查重复三处 | `releaseStore` 组件：`put/commit/seal` 统一检查 | `4491b80` |
+| `Store==nil` 时 Tenant 自带第二套向量/转录实现（derivedMu/vectorMemory/transcripts） | `journal.Memory` 实现 `Store`，Tenant 只剩 `store()`；~50 行删除 | wave 2 |
+| `seqMu/sequences`、`computeCancels`（借用 opsMu） | `sequences`、`cancels` 组件，自有锁 | `d9e8709` |
+| `languages.go` 把翻译与 AI 术语表混在一起，`dictionaries/patternCache` 挂在 Tenant | `translator` 组件（只依赖 apps 列表），`languages.go` 只剩请求语言/Texts/术语表 | `787cb1c` |
+| `notices/noticeSeq` 直接被 7 个文件读写（借用 opsMu） | `noticeBoard` 组件（`notices.go`，自有锁）：post/forMember/markRead/markKeysRead/state/restore | `4de28fd` |
+| `settings map`、`uploads map` 挂在 Tenant，nil 检查散落 | `settingValues`（`settings.go`）、`uploads`（`uploads.go`）组件 | `4de28fd` |
+| `hostLifecycle/support/migrations` 三个字段 + `hostSuspended/lifecycle/setLifecycle` 三个 Tenant 方法 | `hostControl` 组件（`host_control.go`），字段名 `console`；snapshot/restore 自带 | `3496f93` |
+| `refusals/acceptedAnswers/acceptedInputs/compositeApplied` 四张幂等表分散在 7 个文件，三处重复 nil-init | `committed` 组件（`committed.go`）：saveAnswer/saveInput/saveComposite/snapshot/restore | `fbe5d54` |
+| `auditMu` 保护的 `audit/deliveries/personal` 三条有界历史，三套 keepLast 手写 | `auditLog` 组件（`audit_log.go`，自有锁），`keepLast` 泛型 | `fbe5d54` |
+| `connectors *kernel.Connectors` + `descriptors` + `lastError` 三件套 | `connectorRoster` 组件（`connector_roster.go`），kernel 注册表作为字段 `kernel` | `fbe5d54` |
+| `used/turn` 配额状态与 `overQuota/spend` | `quota` 组件（`quota.go`） | `e898cbc` |
+| Tenant 直接摸 `agents.defs`/`agents.busy` 两张 map | 只经 `def/idle/each` 三个方法 | `e898cbc` |
+| `Host.Handler` 875 行，一条 mux 注册 70 条路由 | `routes` 注册器（`routes.go`）+ 六个按领域的 `routes_{core,discovery,records,build,ai,integration}.go`；`server.go` 1134→308 行 | `356edc7` |
+| `Tenant.Replay` 195 行藏在 host.go，accepted-result 的 9 个 kind 在一个 for 里 | `replay.go`：`Replay` + `replayAcceptedResult` | `b6ad27c` |
+| `Tenant.Restore` 193 行 | `restoreDefinitions` / `verifyCommitted` / `restoreOperations` 三个阶段 | `b6ad27c` |
+| `queues/failed/jobs` 三件套散在 operations/accepted_work/health/snapshot 六处，查找循环重复四次 | `workBoard` 组件（`work_board.go`）：queue/job/delivery/anyDelivery/settled/retry/all/snapshot/restore；Tenant 字段 80→56 | `4134a33` |
+| `definitionsFrom` 634 行：页面可见性 380 行、应用可见性 115 行内联在一个 switch 里 | `visiblePage` / `visibleApplication` 两个函数，主体 130 行 | `9629d9b` |
+| `checkSections` 613 行：每节校验 + 50 个 widget 的 switch 在一个循环体里 | `checkSection` / `checkWidget`，主体 45 行 | `9629d9b` |
+| `platform/pageui` 分包（第 4 波复查） | **放弃**：`page_*` 用 `Definition`（16 处）而 `Definition.Page` 又指回 `*Page`，分包必然成环；唯一出路是先抽 `AssetRef/EntityInfo/Field/Action/LinkType/NamedQuery` 为更低的声明包并改 46 个调用文件 + `apps/*/server`（沙箱编不了）。收益小于风险，`page_` 前缀族保留为 `platform` 内的一组文件 | 决定 |
+| `SimulateCandidate` 326 行，步骤循环内联 | `candidateRun.step`，主体 150 行 | `9ffa436` |
+| `applyAcceptedBatch` 248 行；`Deployment.Serve` 250 行 | `applyBatchRows`；`Deployment.listen` / `createTenant` | `db00604` |
+| 包级无说明，Tenant 组件只能靠读 host.go 字段注释 | `capabilities/server/doc.go` 组件地图；AGENTS.md 导航行指向它 | wave 5 |
 
 （继续追加）

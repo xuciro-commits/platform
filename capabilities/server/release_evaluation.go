@@ -45,7 +45,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if t.quarantined() {
 		return "", fmt.Errorf("tenant is quarantined")
 	}
-	candidate, err := platform.ReadCandidate(request.CandidateID, t.releaseCandidates[request.CandidateID])
+	candidate, err := t.releases.candidate(request.CandidateID)
 	if err != nil {
 		return "", fmt.Errorf("release candidate is not saved: %w", err)
 	}

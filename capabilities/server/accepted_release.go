@@ -109,10 +109,10 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 	if saved.Tenant != t.ID || t.app(build.ID) == nil {
 		return saved, fmt.Errorf("release result belongs to another tenant or unavailable builder")
 	}
-	if prior, ok := t.releaseCandidates[saved.CandidateID]; ok && !bytes.Equal(prior, saved.Bytes) {
+	if prior := t.releases.raw(saved.CandidateID); prior != nil && !bytes.Equal(prior, saved.Bytes) {
 		return saved, fmt.Errorf("immutable release candidate %s changed", saved.CandidateID)
 	}
-	if prior, ok := t.releaseApplied[saved.Key]; ok {
+	if prior, ok := t.releases.appliedDigest(saved.Key); ok {
 		if prior != saved.Digest {
 			return saved, fmt.Errorf("release result idempotency key changed")
 		}
@@ -137,22 +137,11 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 			}
 		}
 	}
-	if t.releaseCandidates == nil {
-		t.releaseCandidates = make(map[string]json.RawMessage)
+	if err := t.releases.commit(saved.Key, saved.Digest, saved.CandidateID, saved.Bytes, saved.Active); err != nil {
+		return saved, err
 	}
-	t.releaseCandidates[saved.CandidateID] = slices.Clone(saved.Bytes)
-	if saved.Active {
-		t.activeRelease = saved.CandidateID
-	}
-	if t.releaseApplied == nil {
-		t.releaseApplied = map[string]string{}
-	}
-	t.releaseApplied[saved.Key] = saved.Digest
 	if saved.Version == 3 {
-		if t.acceptedAnswers == nil {
-			t.acceptedAnswers = map[string]json.RawMessage{}
-		}
-		t.acceptedAnswers["release:"+saved.Key] = slices.Clone(raw)
+		t.committed.saveAnswer("release:"+saved.Key, raw)
 	}
 	return saved, nil
 }
@@ -184,7 +173,7 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 		return "", fmt.Errorf("tenant is quarantined")
 	}
 	var candidateBytes []byte
-	if prior := t.releaseCandidates[candidateID]; prior != nil {
+	if prior := t.releases.raw(candidateID); prior != nil {
 		if t.AcceptResult == nil { // in memory: already saved, nothing new to record
 			return candidateID, nil
 		}
@@ -236,7 +225,7 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	if t.quarantined() {
 		return "", fmt.Errorf("tenant is quarantined")
 	}
-	if prior := t.acceptedAnswers["release:activate:"+key]; prior != nil {
+	if prior := t.committed.answers["release:activate:"+key]; prior != nil {
 		saved, err := decodeAcceptedRelease(prior)
 		hash, hashErr := releaseRequestHash(t.ID, m.ID, "activate:"+key, candidateID, true, upgradeID)
 		if err != nil || hashErr != nil || hash != saved.RequestHash {
@@ -244,7 +233,7 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 		}
 		return saved.CandidateID, nil
 	}
-	raw := t.releaseCandidates[candidateID]
+	raw := t.releases.raw(candidateID)
 	if raw == nil {
 		return "", fmt.Errorf("release candidate %s is not saved", candidateID)
 	}
@@ -352,7 +341,7 @@ func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
 		if next == nil || request.Release == candidateID {
 			continue
 		}
-		if saved := t.releaseCandidates[request.Release]; saved != nil {
+		if saved := t.releases.raw(request.Release); saved != nil {
 			started, err := platform.ReadCandidate(request.Release, saved)
 			if err == nil && bytes.Equal(actionIn(started, request.Action), next) {
 				continue
@@ -367,7 +356,7 @@ func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
 func (t *Tenant) ActiveRelease() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.activeRelease
+	return t.releases.active
 }
 
 // commitReleaseLocked appends one release result and applies only what the

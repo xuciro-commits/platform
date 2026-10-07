@@ -100,9 +100,7 @@ func snapshot(t *Tenant) string {
 	for _, e := range t.Endpoints() { // health depends on the secret store, not the journal
 		endpoints = append(endpoints, []any{e.Endpoint, e.Pending, e.Delivers})
 	}
-	t.opsMu.Lock()
-	notices := slices.Clone(t.notices)
-	t.opsMu.Unlock()
+	notices, _ := t.notices.state()
 	bindings := []any{}
 	for _, p := range t.Protocols() {
 		bindings = append(bindings, []string{p.ID, p.Bound})
@@ -119,7 +117,7 @@ func snapshot(t *Tenant) string {
 	t.records.mu.Unlock()
 	// Include the installed catalog: matching record bytes alone do not prove
 	// that a recovered publication offers the same pages and actions.
-	raw, err := json.Marshal([]any{records, t.definitions, t.Audit(), t.refusals, t.acceptedAnswers, t.releaseCandidates, t.activeRelease, t.releaseApplied, t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
+	raw, err := json.Marshal([]any{records, t.definitions, t.Audit(), t.committed.refusals, t.committed.answers, t.releases.candidates, t.releases.active, t.releases.applied, t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
 	if err != nil {
 		panic(err)
 	}

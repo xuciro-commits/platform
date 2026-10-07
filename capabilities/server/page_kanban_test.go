@@ -48,7 +48,7 @@ func TestKanbanReleaseRetainsMappingsAndMemberMoves(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	candidate, err := platform.ReadCandidate(saved, tn.releaseCandidates[saved])
+	candidate, err := platform.ReadCandidate(saved, tn.releases.candidates[saved])
 	if err != nil {
 		t.Fatal(err)
 	}

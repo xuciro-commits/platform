@@ -252,7 +252,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	if recovered.ActiveRelease() != preview.CandidateID ||
-		!bytes.Equal(recovered.releaseCandidates[preview.CandidateID], live.releaseCandidates[preview.CandidateID]) {
+		!bytes.Equal(recovered.releases.candidates[preview.CandidateID], live.releases.candidates[preview.CandidateID]) {
 		t.Fatal("recovery lost the committed joint release")
 	}
 	replayedReport, ok := platform.Get[build.Evaluation](recovered.automation(build.ID, false), reportID)

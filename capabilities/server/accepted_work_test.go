@@ -108,7 +108,7 @@ func TestAcceptedIdleWorkDoesNotInvalidateBusinessData(t *testing.T) {
 	live.app("worker").(*resultWorker).idle = true
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
 	seq, data, _ := live.changeState()
-	for _, task := range live.jobs {
+	for _, task := range live.work.jobs {
 		if task.App != "worker" {
 			continue
 		}
@@ -147,7 +147,7 @@ func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) 
 	if _, err := live.Submit(ana, sub, at); err != nil {
 		t.Fatal(err)
 	}
-	task := live.queues["worker"][0]
+	task := live.work.queues["worker"][0]
 	before, fail = snapshot(live), true
 	live.mu.Lock()
 	out := live.attempt(task, at, false)
@@ -159,8 +159,8 @@ func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) 
 	live.mu.Lock()
 	out = live.attempt(task, at, false)
 	live.mu.Unlock()
-	if out != "ok" || len(entries) != 2 || len(live.queues["worker"]) != 0 ||
-		len(live.notices) != 2 || live.sequences["worker/document/0"] != 1 {
+	if out != "ok" || len(entries) != 2 || len(live.work.queues["worker"]) != 0 ||
+		len(live.notices.all) != 2 || live.sequences.last["worker/document/0"] != 1 {
 		t.Fatalf("accepted work did not apply once: %s fault=%+v", out, live.fault.Load())
 	}
 	saved, err := decodeAcceptedWork(entries[1].Body)
@@ -187,13 +187,13 @@ func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) 
 	for _, when := range []time.Time{at.Add(time.Hour), at.Add(2 * time.Hour)} {
 		before = snapshot(live)
 		live.mu.Lock()
-		out = live.run(live.jobs[0], when, false)
+		out = live.run(live.work.jobs[0], when, false)
 		live.mu.Unlock()
 		if out != "ok" {
 			t.Fatalf("job result: %s fault=%+v", out, live.fault.Load())
 		}
 	}
-	if live.sequences["worker/document/0"] != 3 {
+	if live.sequences.last["worker/document/0"] != 3 {
 		t.Fatal("jobs did not allocate exactly the next numbers")
 	}
 	CheckReplay(t, live, entries, func() *Tenant { return resultWorkTenant(t, live.ID) })
@@ -212,17 +212,17 @@ func TestAcceptedWorkRefusalDiscardsBusinessChangesAndCommitsRetry(t *testing.T)
 	if refused != nil {
 		t.Fatal(refused)
 	}
-	task := live.queues["worker"][0]
+	task := live.work.queues["worker"][0]
 	for _, when := range []time.Time{at, at.Add(time.Second)} {
 		live.mu.Lock()
 		out := live.attempt(task, when, false)
 		live.mu.Unlock()
 		if out == "ok" || len(live.records.types["worker.document"].rows) != 0 ||
-			live.sequences["worker/document/0"] != 0 || len(live.notices) != 0 {
+			live.sequences.last["worker/document/0"] != 0 || len(live.notices.all) != 0 {
 			t.Fatalf("refused work exposed partial business changes: %s", out)
 		}
 	}
-	if task.State != "failed" || task.Attempts != 2 || len(live.failed) != 1 {
+	if task.State != "failed" || task.Attempts != 2 || len(live.work.failed) != 1 {
 		t.Fatalf("failed delivery did not retain its K9 generations: %+v", task)
 	}
 	CheckReplay(t, live, entries, func() *Tenant {
@@ -256,7 +256,7 @@ func TestJournalAcceptedWorkCrashBeforeApplication(t *testing.T) {
 	// User-selected keys cannot reserve the host's owned-work namespace.
 	ana, _ := live.Member("ana")
 	colliding := &pb.Submission{TenantId: id, PrincipalId: ana.ID, Authority: "worker",
-		IdempotencyKey: "work:" + live.jobs[0].ID + ":1", Target: &pb.EntityRef{Type: "worker.document", Id: "denied"},
+		IdempotencyKey: "work:" + live.work.jobs[0].ID + ":1", Target: &pb.EntityRef{Type: "worker.document", Id: "denied"},
 		Schema: &pb.SchemaRef{Name: "worker.document.write", Version: 1}, Payload: []byte(`{}`)}
 	if _, err := live.Submit(ana, colliding, at); err == nil || journal.Position(id) != 1 {
 		t.Fatalf("user refusal was not durable: %v", err)
@@ -270,7 +270,7 @@ func TestJournalAcceptedWorkCrashBeforeApplication(t *testing.T) {
 	}
 	before := snapshot(live)
 	live.mu.Lock()
-	out := live.run(live.jobs[0], at, false)
+	out := live.run(live.work.jobs[0], at, false)
 	live.mu.Unlock()
 	if out == "ok" || !live.quarantined() || snapshot(live) != before || journal.Position(id) != 2 {
 		t.Fatalf("work crash crossed the application boundary: %s", out)
@@ -289,7 +289,7 @@ func TestJournalAcceptedWorkCrashBeforeApplication(t *testing.T) {
 		t.Fatal(err)
 	}
 	if recovered.app("worker").(*resultWorker).calls != 0 ||
-		recovered.sequences["worker/document/0"] != 1 || len(recovered.notices) != 2 {
+		recovered.sequences.last["worker/document/0"] != 1 || len(recovered.notices.all) != 2 {
 		t.Fatal("durable work result was lost or re-executed")
 	}
 	CheckReplay(t, recovered, entries, func() *Tenant { return resultWorkTenant(t, id) })
@@ -318,14 +318,14 @@ func TestAcceptedWorkOutboundIntentCommitsWithoutDispatchOrReplanning(t *testing
 	}
 	before := snapshot(live)
 	live.mu.Lock()
-	out := live.run(live.jobs[0], at, false)
+	out := live.run(live.work.jobs[0], at, false)
 	live.mu.Unlock()
 	if out == "ok" || snapshot(live) != before {
 		t.Fatal("failed outbound-intent append changed state")
 	}
 	fail = false
 	live.mu.Lock()
-	out = live.run(live.jobs[0], at, false)
+	out = live.run(live.work.jobs[0], at, false)
 	live.mu.Unlock()
 	if out != "ok" || len(live.outbound) != 1 || live.outbound[0].State != "pending" {
 		t.Fatalf("accepted work omitted its effect: %s fault=%+v", out, live.fault.Load())

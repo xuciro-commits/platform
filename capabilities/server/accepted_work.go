@@ -301,17 +301,9 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	var task *Task
 	t.opsMu.Lock()
 	if result.Input.Kind == "job" {
-		for _, candidate := range t.jobs {
-			if candidate.ID == result.Input.ID {
-				task = candidate
-			}
-		}
+		task = t.work.job(result.Input.ID)
 	} else {
-		for _, candidate := range t.queues[result.App] {
-			if candidate.ID == result.Input.ID {
-				task = candidate
-			}
-		}
+		task = t.work.delivery(result.App, result.Input.ID)
 	}
 	t.opsMu.Unlock()
 	if task == nil {
@@ -361,10 +353,7 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	if task.Kind == "delivery" {
 		switch task.State {
 		case "done", "failed":
-			t.queues[task.App] = slices.DeleteFunc(t.queues[task.App], func(x *Task) bool { return x == task })
-			if task.State == "failed" {
-				t.failed = append(t.failed, task)
-			}
+			t.work.settled(task)
 		}
 	}
 	t.opsMu.Unlock()

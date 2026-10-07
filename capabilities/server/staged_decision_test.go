@@ -79,7 +79,7 @@ func TestStagedDecisionRefusesOtherEffects(t *testing.T) {
 		if recover() == nil {
 			t.Fatal("unsupported effect escaped instead of failing closed")
 		}
-		if len(tn.events) != 0 || len(tn.notices) != 0 {
+		if len(tn.events) != 0 || len(tn.notices.all) != 0 {
 			t.Fatal("unsupported effect changed the live tenant")
 		}
 	}()

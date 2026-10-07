@@ -32,7 +32,7 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 | 位置 | 内容 |
 |---|---|
 | `contract/` | K1–K9 规范、向量、生成类型、Go 参考实现；`lean/` 有界证明 |
-| `capabilities/server/` | 宿主运行时；`platform/` 是应用唯一可导入的应用 API；`internal/host` 宿主内接口；`apps/` 平台应用（build/flow/ai/work/enterprise/knowledge/files/relations/core） |
+| `capabilities/server/` | 宿主运行时（组件地图见 `doc.go`：Tenant = 身份 + 提交管线 + 各自持锁的组件；路由在 `routes_*.go`）；`platform/` 是应用唯一可导入的应用 API；`journal/` 持久化、`idp/` 身份提供方、`internal/host` 宿主内接口；`apps/` 平台应用（build/flow/ai/work/enterprise/knowledge/files/relations/core） |
 | `apps/<id>/server/` | 自治业务应用；`protocols/` 跨应用协议；`solutions/` 组合宿主 |
 | `web/packages/ui`、`web/packages/app` | 共享 UI Kit 与前端应用 API |
 | `web/packages/build` | 构建者应用：Ontology / Workshop / Automate / AI Functions / Code / Projects / Releases |

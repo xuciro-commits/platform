@@ -68,7 +68,7 @@ func TestLanguages(t *testing.T) {
 		}
 	}
 	// Records are what people wrote: never translated, whatever they say.
-	if got := tn.Translate(map[string]any{"record": map[string]any{"name": "Settings"}, "title": "Settings"}, "zh-CN").(map[string]any); got["title"] != "设置" || got["record"].(map[string]any)["name"] != "Settings" {
+	if got := tn.i18n.Translate(map[string]any{"record": map[string]any{"name": "Settings"}, "title": "Settings"}, "zh-CN").(map[string]any); got["title"] != "设置" || got["record"].(map[string]any)["name"] != "Settings" {
 		t.Errorf("translated %v", got)
 	}
 
@@ -88,14 +88,14 @@ func TestLanguages(t *testing.T) {
 		// A field whose help holds ": " is said through the split whose every value is known (F-25).
 		{"Settings: A language the tenant speaks, such as zh-CN; empty: the tenant's default", "设置：租户支持的语言，例如 zh-CN；留空：使用租户默认语言"},
 	} {
-		if got := tn.Say("zh-CN", c.in); got != c.want {
+		if got := tn.i18n.Say("zh-CN", c.in); got != c.want {
 			t.Errorf("Say(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
-	if !tn.says("zh-CN", "Archive a task: it leaves lists but stays referenced and in history.", 0) || tn.says("zh-CN", "Archive a gizmo: it leaves lists but stays referenced and in history.", 0) {
+	if !tn.i18n.says("zh-CN", "Archive a task: it leaves lists but stays referenced and in history.", 0) || tn.i18n.says("zh-CN", "Archive a gizmo: it leaves lists but stays referenced and in history.", 0) {
 		t.Errorf("a pattern counts only when the language says its every value")
 	}
-	if got := tn.Say("", "Overdue: x"); got != "Overdue: x" {
+	if got := tn.i18n.Say("", "Overdue: x"); got != "Overdue: x" {
 		t.Errorf("English is as written: %q", got)
 	}
 

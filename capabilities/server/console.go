@@ -635,7 +635,7 @@ func (d *Console) Input(c platform.Caller, name string, _ []byte, now time.Time)
 	}
 	d.t.opsMu.Lock()
 	defer d.t.opsMu.Unlock()
-	return nil, d.t.connectors.Heartbeat(c.Tenant, c.ID, now)
+	return nil, d.t.connectors.kernel.Heartbeat(c.Tenant, c.ID, now)
 }
 
 // language is the language a member reads (ADR-0023 6b): their own choice,

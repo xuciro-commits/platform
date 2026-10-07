@@ -505,7 +505,7 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 		for i, c := range all {
 			hashes[i] = c.hash
 		}
-		vectors := t.vectors(model, hashes)
+		vectors := t.store().Vectors(t.ID, model, hashes)
 		cos := map[*chunk]float64{}
 		for _, c := range all {
 			if v := vectors[c.hash]; v != nil {
@@ -580,7 +580,7 @@ func (t *Tenant) Embed(now time.Time) {
 	}
 	k.mu.Unlock()
 	slices.Sort(hashes)
-	have := t.vectors(model, hashes)
+	have := t.store().Vectors(t.ID, model, hashes)
 	var missing []string
 	for _, h := range hashes {
 		if have[h] == nil {
@@ -602,7 +602,7 @@ func (t *Tenant) Embed(now time.Time) {
 		for i, h := range batch {
 			saved[h] = vs[i]
 		}
-		t.saveVectors(model, saved)
+		t.store().SaveVectors(t.ID, model, saved)
 	}
 }
 
@@ -665,37 +665,6 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 		}
 	}
 	return vs, nil
-}
-
-// vectors and saveVectors use the Store, or the tenant's memory without one.
-func (t *Tenant) vectors(model string, hashes []string) map[string][]float32 {
-	if t.Store != nil {
-		return t.Store.Vectors(t.ID, model, hashes)
-	}
-	t.derivedMu.Lock()
-	defer t.derivedMu.Unlock()
-	out := map[string][]float32{}
-	for _, h := range hashes {
-		if v := t.vectorMemory[model+"/"+h]; v != nil {
-			out[h] = v
-		}
-	}
-	return out
-}
-
-func (t *Tenant) saveVectors(model string, vs map[string][]float32) {
-	if t.Store != nil {
-		t.Store.SaveVectors(t.ID, model, vs)
-		return
-	}
-	t.derivedMu.Lock()
-	defer t.derivedMu.Unlock()
-	if t.vectorMemory == nil {
-		t.vectorMemory = map[string][]float32{}
-	}
-	for h, v := range vs {
-		t.vectorMemory[model+"/"+h] = v
-	}
 }
 
 // encodeVector and decodeVector keep a vector as little-endian float32s.

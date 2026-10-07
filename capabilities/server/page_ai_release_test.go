@@ -70,7 +70,7 @@ func TestThreeAIViewsRetainFrozenConfigurationAndFunctionDependencies(t *testing
 	submit(build.PageType, "P", "edit", map[string]any{"sections": sections})
 	check := func(current *Tenant) {
 		t.Helper()
-		candidate, err := platform.ReadCandidate(saved, current.releaseCandidates[saved])
+		candidate, err := platform.ReadCandidate(saved, current.releases.candidates[saved])
 		if err != nil {
 			t.Fatal(err)
 		}

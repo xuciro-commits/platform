@@ -184,7 +184,7 @@ func TestAcceptedNestedDecisionsShareOneCommitAndRecovery(t *testing.T) {
 		if len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
 			len(live.app("nested").(*nestedIssuer).ledger.RecordsFor(live.ID)) != 0 ||
 			live.records.types["stock.item"].rows["D1-child"] != nil ||
-			live.sequences["nested/document/0"] != 0 {
+			live.sequences.last["nested/document/0"] != 0 {
 			t.Fatal("a nested decision escaped before the one journal append")
 		}
 		if fail {
@@ -206,7 +206,7 @@ func TestAcceptedNestedDecisionsShareOneCommitAndRecovery(t *testing.T) {
 	if err != nil || len(result.Decisions) != 3 || len(result.Rows) != 2 {
 		t.Fatalf("one batch omitted nested receipts or rows: %+v, %v", result, err)
 	}
-	if live.sequences["nested/document/0"] != 1 || result.SequenceBases["nested/document/0"] != 0 {
+	if live.sequences.last["nested/document/0"] != 1 || result.SequenceBases["nested/document/0"] != 0 {
 		t.Fatal("the number was not committed with its predecessor")
 	}
 	item := live.records.types["stock.item"].rows["D1-child"]
@@ -292,7 +292,7 @@ func TestAcceptedNestedBatchValidatesAllLedgersBeforeApplication(t *testing.T) {
 	}
 	if len(recovered.app("stock").(*stock).ledger.RecordsFor(recovered.ID)) != 0 ||
 		len(recovered.app("nested").(*nestedIssuer).ledger.RecordsFor(recovered.ID)) != 0 ||
-		len(recovered.records.types["stock.item"].rows) != 0 || recovered.sequences["nested/document/0"] != 0 {
+		len(recovered.records.types["stock.item"].rows) != 0 || recovered.sequences.last["nested/document/0"] != 0 {
 		t.Fatal("a late invalid receipt exposed an earlier child's state")
 	}
 }
@@ -334,7 +334,7 @@ func TestJournalAcceptedNestedBatchCrashBeforeApplication(t *testing.T) {
 	}()
 	if len(live.app("stock").(*stock).ledger.RecordsFor(id)) != 0 ||
 		len(live.app("nested").(*nestedIssuer).ledger.RecordsFor(id)) != 0 ||
-		len(live.records.types["stock.item"].rows) != 0 || live.sequences["nested/document/0"] != 0 {
+		len(live.records.types["stock.item"].rows) != 0 || live.sequences.last["nested/document/0"] != 0 {
 		t.Fatal("unapplied nested result leaked a record, receipt or number")
 	}
 	reopened, err := OpenJournal(ctx, url)

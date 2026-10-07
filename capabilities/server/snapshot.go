@@ -134,18 +134,12 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 		rows[typ] = slices.Collect(maps.Values(et.rows))
 	}
 	t.records.mu.Unlock()
-	t.auditMu.Lock()
-	s.Audit = slices.Clone(t.audit)
-	t.auditMu.Unlock()
-	s.Refusals = maps.Clone(t.refusals)
-	s.AcceptedAnswers = maps.Clone(t.acceptedAnswers)
-	s.AcceptedInputs = maps.Clone(t.acceptedInputs)
-	s.ReleaseCandidates = maps.Clone(t.releaseCandidates)
-	s.ReleaseApplied = maps.Clone(t.releaseApplied)
-	s.ActiveRelease = t.activeRelease
+	t.audit.snapshot(&s)
+	t.committed.snapshot(&s)
+	t.releases.snapshot(&s)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	s.Deliveries, s.Acted, s.Failed = slices.Clone(t.deliveries), t.acted, []string{}
+	s.Acted, s.Failed = t.acted, []string{}
 	for protocol, b := range t.bindings {
 		s.Bindings[protocol] = b.provider.Manifest().ID
 	}
@@ -153,46 +147,23 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	if s.Works, err = platform.Protos(t.works.All()); err != nil {
 		return tenantState{}, nil, 0, err
 	}
-	tasks := map[string]*Task{}
-	for app, queue := range t.queues {
-		for _, x := range queue {
-			s.Queues[app], tasks[x.ID] = append(s.Queues[app], x.ID), x
-		}
+	if err := t.work.snapshot(&s); err != nil {
+		return tenantState{}, nil, 0, err
 	}
-	for _, x := range t.failed {
-		s.Failed, tasks[x.ID] = append(s.Failed, x.ID), x
-	}
-	for _, id := range slices.Sorted(maps.Keys(tasks)) {
-		x := tasks[id]
-		state := taskState{Task: *x, Since: x.since}
-		if x.event != nil {
-			state.EventApp, state.Hops, state.Changed = x.event.App, x.event.hops, x.event.Changed
-			state.Plan = x.event.plan
-			if state.Event, err = platform.Protos([]*pb.ChangeRecord{x.event.Record}); err != nil {
-				return tenantState{}, nil, 0, err
-			}
-		}
-		s.Tasks = append(s.Tasks, state)
-	}
-	for _, x := range t.jobs {
-		s.Jobs = append(s.Jobs, *x)
-	}
-	descriptors, marks := t.connectors.State()
+	descriptors, marks := t.connectors.kernel.State()
 	if s.Connectors, err = platform.Protos(descriptors); err != nil {
 		return tenantState{}, nil, 0, err
 	}
-	s.Marks, s.LastError = marks, maps.Clone(t.lastError)
-	s.Notices, s.NoticeSeq, s.Settings, s.Endpoints = slices.Clone(t.notices), t.noticeSeq, maps.Clone(t.settings), t.endpoints
-	t.seqMu.Lock()
-	s.Sequences = maps.Clone(t.sequences)
-	t.seqMu.Unlock()
+	s.Marks = marks
+	t.connectors.snapshot(&s)
+	s.Notices, s.NoticeSeq = t.notices.state()
+	s.Settings, s.Endpoints = t.settings.clone(), t.endpoints
+	s.Sequences = t.sequences.clone()
 	for _, x := range t.outbound {
 		s.Outbound = append(s.Outbound, effectState{Effect: x.Effect, Since: x.since})
 	}
-	s.HostLifecycle, s.Support = t.lifecycle(), slices.Clone(t.support)
-	s.Sealed, s.Migrations = maps.Clone(t.sealed), slices.Clone(t.migrations)
-	s.Composites = maps.Clone(t.compositeApplied)
-	s.Staged = maps.Clone(t.staged)
+	t.console.snapshot(&s)
+	s.Staged = t.staged.snapshot()
 	return s, rows, position(), nil
 }
 
@@ -254,6 +225,33 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if err != nil {
 		return err
 	}
+	if err := t.restoreDefinitions(&s, held); err != nil {
+		return err
+	}
+	if err := t.records.validateLinkConstraints(); err != nil {
+		return err
+	}
+	t.audit.restore(&s)
+	t.console.restore(&s)
+	if s.Staged != nil {
+		t.staged.restore(s.Staged)
+	}
+	if err := t.verifyCommitted(&s); err != nil {
+		return err
+	}
+	t.releases.restore(&s)
+	for protocol, provider := range s.Bindings {
+		if !t.rebind(protocol, provider) {
+			return fmt.Errorf("tenant %s: %s is not a provider of %s", t.ID, provider, protocol)
+		}
+	}
+	return t.restoreOperations(&s)
+}
+
+// restoreDefinitions reinstalls the tenant-authored definitions when the
+// snapshot's published assets or held records need them, then restores the
+// records of the types they install (ADR-0034 D4).
+func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordState) error {
 	needsDefinitions := len(held) > 0
 	for typ, kind := range map[string]platform.AssetKind{build.PropertyTypeType: platform.AssetPropertyType, build.LinkTypeType: platform.AssetLinkType, build.QueryType: platform.AssetQuery, build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp, build.ProcessType: platform.AssetFlow, build.FunctionType: platform.AssetFunction, build.CodeType: platform.AssetCompute} {
 		for _, row := range s.Records[typ] {
@@ -305,24 +303,12 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 			return fmt.Errorf("tenant %s: no entity type %s", t.ID, slices.Sorted(maps.Keys(left))[0])
 		}
 	}
-	if err := t.records.validateLinkConstraints(); err != nil {
-		return err
-	}
-	t.auditMu.Lock()
-	t.audit = s.Audit
-	t.auditMu.Unlock()
-	t.setLifecycle(s.HostLifecycle)
-	t.support = slices.Clone(s.Support)
-	if s.Sealed != nil {
-		t.sealed = s.Sealed
-	}
-	t.migrations = slices.Clone(s.Migrations)
-	if s.Composites != nil {
-		t.compositeApplied = s.Composites
-	}
-	if s.Staged != nil {
-		t.staged = s.Staged
-	}
+	return nil
+}
+
+// verifyCommitted checks that every committed answer in the snapshot is one
+// this tenant and its apps still recognise, before it is restored.
+func (t *Tenant) verifyCommitted(s *tenantState) error {
 	for key, result := range s.Refusals {
 		raw, err := json.Marshal(result)
 		if err != nil {
@@ -333,10 +319,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 			return fmt.Errorf("tenant %s: refusal snapshot %s is incompatible: %v", t.ID, key, err)
 		}
 	}
-	t.refusals = maps.Clone(s.Refusals)
-	if t.refusals == nil {
-		t.refusals = map[string]refusedResult{}
-	}
+	t.committed.restore(s)
 	for key, raw := range s.AcceptedAnswers {
 		if strings.HasPrefix(key, "release:") {
 			result, err := decodeAcceptedRelease(raw)
@@ -355,11 +338,10 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		if !ok || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s has no receipt", t.ID, key)
 		}
-		if _, refused := t.refusals[key]; refused {
+		if _, refused := t.committed.refusals[key]; refused {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s reuses a refused key", t.ID, key)
 		}
 	}
-	t.acceptedAnswers = maps.Clone(s.AcceptedAnswers)
 	for key, raw := range s.AcceptedInputs {
 		result, err := decodeAcceptedInput(raw)
 		owner, ok := t.app(result.App).(platform.AcceptedInputApp)
@@ -368,7 +350,6 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 			return fmt.Errorf("tenant %s: accepted input snapshot %s is incompatible: %v", t.ID, key, err)
 		}
 	}
-	t.acceptedInputs = maps.Clone(s.AcceptedInputs)
 	for id, raw := range s.ReleaseCandidates {
 		if _, err := platform.ReadCandidate(id, raw); err != nil {
 			return fmt.Errorf("tenant %s: release snapshot %s is incompatible: %w", t.ID, id, err)
@@ -377,14 +358,12 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if s.ActiveRelease != "" && s.ReleaseCandidates[s.ActiveRelease] == nil {
 		return fmt.Errorf("tenant %s: active release snapshot has no saved candidate", t.ID)
 	}
-	t.releaseCandidates = maps.Clone(s.ReleaseCandidates)
-	t.releaseApplied = maps.Clone(s.ReleaseApplied)
-	t.activeRelease = s.ActiveRelease
-	for protocol, provider := range s.Bindings {
-		if !t.rebind(protocol, provider) {
-			return fmt.Errorf("tenant %s: %s is not a provider of %s", t.ID, provider, protocol)
-		}
-	}
+	return nil
+}
+
+// restoreOperations restores what the runner shares with reads: works, tasks,
+// queues, jobs, connectors, notices, settings, endpoints, sequences, outbound.
+func (t *Tenant) restoreOperations(s *tenantState) error {
 	works, err := platform.Unprotos[*pb.Work](s.Works)
 	if err != nil {
 		return err
@@ -395,58 +374,16 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	t.deliveries, t.acted = s.Deliveries, s.Acted
+	t.acted = s.Acted
 	t.works.Restore(works)
-	tasks := map[string]*Task{}
-	for _, x := range s.Tasks {
-		task := x.Task
-		task.since = x.Since
-		if x.Event != nil {
-			records, err := platform.Unprotos[*pb.ChangeRecord](x.Event)
-			if err != nil || len(records) != 1 {
-				return fmt.Errorf("tenant %s: task %s: bad event", t.ID, x.ID)
-			}
-			task.event = &caused{Event: platform.Event{App: x.EventApp, Record: records[0], Changed: x.Changed}, hops: x.Hops, plan: x.Plan}
-		}
-		tasks[x.ID] = &task
+	if err := t.work.restore(t.ID, s); err != nil {
+		return err
 	}
-	t.queues, t.failed = map[string][]*Task{}, nil
-	for app, ids := range s.Queues {
-		for _, id := range ids {
-			t.queues[app] = append(t.queues[app], tasks[id])
-		}
-	}
-	for _, id := range s.Failed {
-		t.failed = append(t.failed, tasks[id])
-	}
-	for _, saved := range s.Jobs { // the jobs come from the manifests; their runs from the snapshot
-		if i := slices.IndexFunc(t.jobs, func(x *Task) bool { return x.ID == saved.ID }); i >= 0 {
-			job := t.jobs[i].job
-			*t.jobs[i] = saved
-			t.jobs[i].job = job
-		}
-	}
-	t.connectors.Restore(descriptors, s.Marks)
-	t.descriptors = map[string]*pb.ConnectorDescriptor{}
-	for _, d := range descriptors {
-		if d.GetTenantId() == t.ID {
-			t.descriptors[d.GetConnectorId()] = d
-		}
-	}
-	t.lastError = s.LastError
-	if t.lastError == nil {
-		t.lastError = map[string]ConnectorError{}
-	}
-	t.notices, t.noticeSeq, t.settings, t.endpoints = s.Notices, s.NoticeSeq, s.Settings, s.Endpoints
-	if t.settings == nil {
-		t.settings = map[string]string{}
-	}
-	t.seqMu.Lock()
-	t.sequences = s.Sequences
-	if t.sequences == nil {
-		t.sequences = map[string]int{}
-	}
-	t.seqMu.Unlock()
+	t.connectors.restore(t.ID, descriptors, s)
+	t.notices.restore(s.Notices, s.NoticeSeq)
+	t.settings.restore(s.Settings)
+	t.endpoints = s.Endpoints
+	t.sequences.restore(s.Sequences)
 	t.outbound = nil
 	for _, x := range s.Outbound {
 		t.outbound = append(t.outbound, &effect{Effect: x.Effect, since: x.Since})

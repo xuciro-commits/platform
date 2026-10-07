@@ -122,7 +122,7 @@ func testFrozenContextViewsMemberProjectionReplayAndSnapshot(t *testing.T, overl
 	if err != nil {
 		t.Fatal(err)
 	}
-	candidate, err := platform.ReadCandidate(saved, tn.releaseCandidates[saved])
+	candidate, err := platform.ReadCandidate(saved, tn.releases.candidates[saved])
 	if err != nil {
 		t.Fatal(err)
 	}

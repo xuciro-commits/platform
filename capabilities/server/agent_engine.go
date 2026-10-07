@@ -78,7 +78,7 @@ func (t *Tenant) stillRunning(id string) bool {
 	defer t.mu.Unlock()
 	run, known := platform.Get[AgentRunRecord](t.automation(AgentApp, false), id)
 	if !known || run.State != "running" {
-		delete(t.agents.busy, id)
+		t.agents.idle(id)
 		return false
 	}
 	return true
@@ -93,7 +93,7 @@ func (t *Tenant) take(x turn, now time.Time) {
 		}
 		if x.run.OnBehalf != "" {
 			reader := t.agents.reader(x.run)
-			definition := t.agents.defs[x.run.Agent]
+			definition := t.agents.def(x.run.Agent)
 			if definition == nil || reader.Tenant != t.ID || reader.Roles[definition.app] == "" {
 				t.agentStep(stepBody{Run: x.run.ID, Stop: "the person no longer has access to this agent's app"}, now)
 				return
@@ -316,7 +316,7 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 	if t.Record != nil {
 		now = now.Truncate(time.Microsecond)
 	}
-	delete(t.agents.busy, b.Run)
+	t.agents.idle(b.Run)
 	run, known := platform.Get[AgentRunRecord](t.automation(AgentApp, false), b.Run)
 	if b.Evaluation != nil {
 		// A report is applied only while its evaluation still waits for one;
@@ -333,7 +333,7 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 		return
 	}
 	if b.Stop == "" && run.OnBehalf != "" {
-		reader, definition := t.agents.reader(run), t.agents.defs[run.Agent]
+		reader, definition := t.agents.reader(run), t.agents.def(run.Agent)
 		if definition == nil || reader.Tenant != t.ID || reader.Roles[definition.app] == "" {
 			b.Stop = "the person no longer has access to this agent's app"
 			b.Tool, b.Arguments, b.Observation = "", nil, nil

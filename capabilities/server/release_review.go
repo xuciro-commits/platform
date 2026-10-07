@@ -3,7 +3,6 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 
 	"platformserver/apps/build"
 	"platformserver/platform"
@@ -45,15 +44,11 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int) (ReleasePag
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	ids := make([]string, 0, len(t.releaseCandidates))
-	for id := range t.releaseCandidates {
-		ids = append(ids, id)
-	}
-	slices.Sort(ids)
-	reply := ReleasePage{Candidates: []ReleaseSummary{}, Total: len(ids), ActiveID: t.activeRelease}
+	ids := t.releases.ids()
+	reply := ReleasePage{Candidates: []ReleaseSummary{}, Total: len(ids), ActiveID: t.releases.active}
 	start := min(offset, len(ids))
 	for _, id := range ids[start : start+min(limit, len(ids)-start)] {
-		candidate, err := platform.ReadCandidate(id, t.releaseCandidates[id])
+		candidate, err := t.releases.candidate(id)
 		if err != nil {
 			return ReleasePage{}, err
 		}
@@ -94,7 +89,7 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	raw, exists := t.releaseCandidates[id]
+	raw, exists := t.releases.candidates[id]
 	if !exists {
 		return SavedReleaseReview{}, fmt.Errorf("saved release candidate not found")
 	}
@@ -102,7 +97,7 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	if err != nil {
 		return SavedReleaseReview{}, err
 	}
-	reply := SavedReleaseReview{Assets: saved.Assets, Active: t.activeRelease == id, Preview: ReleasePreview{
+	reply := SavedReleaseReview{Assets: saved.Assets, Active: t.releases.active == id, Preview: ReleasePreview{
 		CandidateID: id, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{},
 	}}
 	for _, asset := range saved.Assets {

@@ -135,11 +135,8 @@ func (t *Tenant) applyOperationCancellations(saved []acceptedOperationCancellati
 				x.Effect, x.sending = r.After, false
 			}
 		}
-		if cancel := t.computeCancels[r.Before.ID]; cancel != nil {
-			cancel()
-			delete(t.computeCancels, r.Before.ID)
-		}
 		t.opsMu.Unlock()
+		t.cancels.cancel(r.Before.ID)
 	}
 	return nil
 }

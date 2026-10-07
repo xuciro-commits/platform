@@ -97,12 +97,12 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	}
 	// Establish a saved release to test exact runtime binding. This is not a
 	// proof of the future function candidate evaluation/activation journey.
-	tn.releaseCandidates, tn.activeRelease = map[string]json.RawMessage{c1.ID: c1.Bytes}, c1.ID
+	tn.releases.candidates, tn.releases.active = map[string]json.RawMessage{c1.ID: c1.Bytes}, c1.ID
 	if closure, release, err := tn.functionClosure(build.ID, definition, 1, nil); err != nil || closure.ID != c1.ID || release != c1.ID {
 		t.Fatalf("published function did not bind its saved release: %s %s %v", closure.ID, release, err)
 	}
-	tn.activeRelease = ""
-	tn.releaseCandidates = nil
+	tn.releases.active = ""
+	tn.releases.candidates = nil
 	must("dana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": "http://localhost:1"})
 	must("dana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/probe", map[string]string{"access": "users"})
 	must("dana", PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": "local/probe"})
@@ -137,14 +137,14 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	if f, v, ok := owner.FunctionDefinition("advice", 1); !ok || v != 1 || f.Instructions != definition.Instructions {
 		t.Fatal("old publication lost")
 	}
-	tn.releaseCandidates, tn.activeRelease = map[string]json.RawMessage{c1.ID: c1.Bytes}, c1.ID
+	tn.releases.candidates, tn.releases.active = map[string]json.RawMessage{c1.ID: c1.Bytes}, c1.ID
 	if err := submit("eli", build.ID, build.SchemaFunctionCall, build.FunctionCallType, "wrong-release", call); err == nil {
 		t.Fatal("latest function silently escaped its activated version")
 	}
 	// The manually established release has no journal entry; remove it before
 	// comparing only journalled state.
-	tn.activeRelease = ""
-	tn.releaseCandidates = nil
+	tn.releases.active = ""
+	tn.releases.candidates = nil
 	CheckReplay(t, tn, entries, compose)
 	raw, _, err := tn.Snapshot(func() int64 { return int64(len(entries)) })
 	if err != nil {

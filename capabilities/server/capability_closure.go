@@ -28,14 +28,14 @@ func (t *Tenant) capabilityClosure(ref platform.AssetRef, body json.RawMessage, 
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}
-	release := t.activeRelease
+	release := t.releases.active
 	if retained != nil {
 		release = *retained
 	}
 	if release == "" {
 		return candidate, "", nil
 	}
-	saved, err := platform.ReadCandidate(release, t.releaseCandidates[release])
+	saved, err := t.releases.candidate(release)
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}
@@ -51,13 +51,9 @@ func (t *Tenant) capabilityClosure(ref platform.AssetRef, body json.RawMessage, 
 		// after a later compute-only activation. Resolve only an exact saved
 		// closure, never a caller-selected release or an arbitrary descriptor.
 		if retained == nil && sourceVersion != "" {
-			ids := make([]string, 0, len(t.releaseCandidates))
-			for id := range t.releaseCandidates {
-				ids = append(ids, id)
-			}
-			slices.Sort(ids)
+			ids := t.releases.ids()
 			for _, id := range ids {
-				prior, err := platform.ReadCandidate(id, t.releaseCandidates[id])
+				prior, err := t.releases.candidate(id)
 				if err != nil {
 					continue
 				}

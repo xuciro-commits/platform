@@ -29,7 +29,7 @@ func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding
 		binding.Assets = append(binding.Assets, dependency.Ref)
 	}
 	if prior.Dependencies != "" && prior.Dependencies != closure.ID {
-		if raw := h.t.releaseCandidates[prior.Release]; raw != nil {
+		if raw := h.t.releases.raw(prior.Release); raw != nil {
 			if saved, err := platform.ReadCandidate(prior.Release, raw); err == nil {
 				if original, err := platform.Candidate([]platform.AssetRef{root}, saved.Assets); err == nil && original.ID == prior.Dependencies && compatibleFlowStorageExpansion(original, closure) {
 					bound := prior
@@ -44,12 +44,12 @@ func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding
 		return binding, fmt.Errorf("flow %s version %d dependency release changed", root, version)
 	}
 	if prior.Dependencies == "" {
-		binding.Release = h.t.activeRelease
+		binding.Release = h.t.releases.active
 	}
 	if binding.Release == "" {
 		return binding, nil
 	}
-	saved, err := platform.ReadCandidate(binding.Release, h.t.releaseCandidates[binding.Release])
+	saved, err := h.t.releases.candidate(binding.Release)
 	if err != nil {
 		return binding, fmt.Errorf("flow release %s: %w", binding.Release, err)
 	}

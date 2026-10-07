@@ -33,7 +33,7 @@ func TestAcceptedRefusalIsDurableAndImmutableOnRetry(t *testing.T) {
 		return e.Body, nil
 	}
 	if _, err := live.Submit(member, submission, at); err == nil || len(entries) != 0 ||
-		len(live.refusals) != 0 {
+		len(live.committed.refusals) != 0 {
 		t.Fatalf("uncommitted refusal became visible: %v, %+v", err, entries)
 	}
 	fail = false
@@ -138,7 +138,7 @@ func TestJournalAcceptedRefusalAfterCrashAndRestart(t *testing.T) {
 		}()
 		live.Submit(m, bad, at)
 	}()
-	if len(live.refusals) != 0 {
+	if len(live.committed.refusals) != 0 {
 		t.Fatal("unapplied refusal entered the live cache")
 	}
 	reopened, err := OpenJournal(ctx, url)

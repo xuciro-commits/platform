@@ -184,7 +184,7 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	key := "input:" + hash
-	if saved := t.acceptedInputs[a.Manifest().ID+"/"+key]; len(saved) != 0 {
+	if saved := t.committed.inputs[a.Manifest().ID+"/"+key]; len(saved) != 0 {
 		return t.answerAcceptedInput(a, saved)
 	}
 	draft := t.newStagedDecision()
@@ -230,7 +230,7 @@ func (t *Tenant) finishCommittedInput(a platform.AcceptedInputApp, m platform.Me
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if applied && result.Refusal == nil {
-		t.remember(AuditEntry{At: result.At, Member: m.ID, App: result.App, Action: "input:" + name})
+		t.audit.remember(AuditEntry{At: result.At, Member: m.ID, App: result.App, Action: "input:" + name})
 		t.enqueue(result.At)
 		t.changedOwner(result.App)
 	}
@@ -333,10 +333,7 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedInput, bool, error) {
 			return result, false, fmt.Errorf("connector result has an invalid answer: %w", err)
 		}
 	}
-	if t.acceptedInputs == nil {
-		t.acceptedInputs = map[string]json.RawMessage{}
-	}
-	if prior := t.acceptedInputs[result.App+"/"+result.Key]; len(prior) > 0 {
+	if prior := t.committed.inputs[result.App+"/"+result.Key]; len(prior) > 0 {
 		saved, err := decodeAcceptedInput(prior)
 		if err != nil || saved.Digest != result.Digest {
 			return result, false, fmt.Errorf("connector input key belongs to another result")
@@ -354,7 +351,7 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedInput, bool, error) {
 		}
 		batch, _, _ := decodeAcceptedBatch(result.Changes)
 		t.publishAcceptedBatch(batch)
-		t.acceptedInputs[result.App+"/"+result.Key] = slices.Clone(raw)
+		t.committed.saveInput(result.App+"/"+result.Key, raw)
 		return result, true, nil
 	}
 	if err := t.validateAcceptedDeliveries(result.Deliveries); err != nil {
@@ -385,6 +382,6 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedInput, bool, error) {
 	if result.Refusal != nil {
 		t.refused(result.Member, result.Name, result.Refusal, result.At)
 	}
-	t.acceptedInputs[result.App+"/"+result.Key] = slices.Clone(raw)
+	t.committed.saveInput(result.App+"/"+result.Key, raw)
 	return result, true, nil
 }

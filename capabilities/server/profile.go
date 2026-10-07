@@ -161,7 +161,7 @@ func (d *Console) tenantRecord() TenantRecord {
 	d.mu.Lock()
 	out.Members = len(d.members)
 	d.mu.Unlock()
-	if t.hostSuspended() {
+	if t.console.suspended() {
 		out.Status = "suspended"
 	}
 	return out
@@ -264,7 +264,7 @@ func (d *Console) decideProfile(c platform.Caller, s *pb.Submission) (func(*pb.C
 	if !c.Replaying {
 		oneOf := func(v string, choices ...string) bool { return v == "" || slices.Contains(choices, v) }
 		switch {
-		case p.Language != "" && p.Language != "en" && (d.t == nil || !slices.Contains(d.t.languages(), p.Language)):
+		case p.Language != "" && p.Language != "en" && (d.t == nil || !slices.Contains(d.t.i18n.languages(), p.Language)):
 			return nil, invalid
 		case p.Timezone != "" && !validZone(p.Timezone):
 			return nil, invalid

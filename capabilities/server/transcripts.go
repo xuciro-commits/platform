@@ -1,7 +1,6 @@
 package platformserver
 
 import (
-	"slices"
 	"strconv"
 	"time"
 
@@ -16,9 +15,10 @@ import (
 // the journal, for as many days as the agent app's setting keeps it.
 const (
 	SettingTranscriptDays = "transcript-days"
-	transcriptsInMemory   = 500
 )
 
+// purgeAll is a moment after any transcript: forgetting every one is a purge
+// with this cutoff.
 var purgeAll = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 
 // transcriptDays is how many days transcripts are kept, and whether any are
@@ -40,32 +40,12 @@ func (t *Tenant) transcribe(x Transcript) {
 		return
 	}
 	x.Tenant = t.ID
-	if t.Store != nil {
-		t.Store.SaveTranscript(x)
-		return
-	}
-	t.derivedMu.Lock()
-	defer t.derivedMu.Unlock()
-	t.transcripts = append(t.transcripts, x)
-	if len(t.transcripts) > transcriptsInMemory {
-		t.transcripts = t.transcripts[len(t.transcripts)-transcriptsInMemory:]
-	}
+	t.store().SaveTranscript(x)
 }
 
 // Transcripts are a run's model calls, newest first (every call's, for no run).
 func (t *Tenant) Transcripts(run string, limit int) []Transcript {
-	if t.Store != nil {
-		return t.Store.Transcripts(t.ID, run, limit)
-	}
-	t.derivedMu.Lock()
-	defer t.derivedMu.Unlock()
-	out := []Transcript{}
-	for _, x := range slices.Backward(t.transcripts) {
-		if (run == "" || x.Run == run) && len(out) < limit {
-			out = append(out, x)
-		}
-	}
-	return out
+	return t.store().Transcripts(t.ID, run, limit)
 }
 
 // PurgeTranscripts forgets transcripts older than the setting keeps them, and
@@ -75,29 +55,22 @@ func (t *Tenant) PurgeTranscripts(now time.Time) {
 	if t.agents == nil {
 		return
 	}
-	days := t.transcriptDays()
-	if t.Store != nil {
-		// A store's purge is "everything before this moment"; keeping none
-		// means forgetting every one, so the moment is past every record.
-		if days <= 0 {
-			t.Store.PurgeTranscripts(t.ID, purgeAll)
-			return
-		}
-		t.Store.PurgeTranscripts(t.ID, now.AddDate(0, 0, -days))
-		return
+	// A store's purge is "everything before this moment"; keeping none means
+	// forgetting every one, so the moment is past every record.
+	if days := t.transcriptDays(); days <= 0 {
+		t.store().PurgeTranscripts(t.ID, purgeAll)
+	} else {
+		t.store().PurgeTranscripts(t.ID, now.AddDate(0, 0, -days))
 	}
-	t.derivedMu.Lock()
-	defer t.derivedMu.Unlock()
-	if days <= 0 {
-		t.transcripts = nil
-		return
-	}
-	before := now.AddDate(0, 0, -days)
-	t.transcripts = slices.DeleteFunc(t.transcripts, func(x Transcript) bool { return x.At.Before(before) })
 }
 
-// purgeAll is a moment after any transcript: forgetting every one is a purge
-// with this cutoff.
+// store is the derived store: the journal's, or the host's memory without one.
+func (t *Tenant) store() Store {
+	if t.Store != nil {
+		return t.Store
+	}
+	return &t.memStore
+}
 
 // TranscriptsFor are the model calls of run (every run's, for no run) as m may
 // read them: an administrator of the agent or AI app reads a call only where

@@ -84,9 +84,9 @@ type AgentOverview struct {
 func (t *Tenant) AgentsOverview() []AgentOverview {
 	c := t.automation(AgentApp, false)
 	rows := map[string]*AgentOverview{}
-	for id, d := range t.agents.defs {
+	t.agents.each(func(id string, d *agentDef) {
 		rows["agent:"+id] = &AgentOverview{Member: "agent:" + id, Title: d.Title, Judged: map[string]int{}}
-	}
+	})
 	if console, ok := t.app(PlatformApp).(*Console); ok {
 		for _, x := range console.Identities() {
 			if m, ok := console.Member(x.Token); ok && m.Agent && rows[m.ID] == nil {

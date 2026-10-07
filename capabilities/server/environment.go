@@ -81,7 +81,7 @@ type MigrationResult struct {
 // candidate seals to the same key and digest.
 func (t *Tenant) SealCandidate(id string, now time.Time) (SealedArtifact, error) {
 	t.mu.Lock()
-	raw := slices.Clone(t.releaseCandidates[id])
+	raw := slices.Clone(t.releases.raw(id))
 	t.mu.Unlock()
 	if raw == nil {
 		return SealedArtifact{}, fmt.Errorf("release candidate %s is not saved", id)
@@ -97,15 +97,10 @@ func (t *Tenant) SealCandidate(id string, now time.Time) (SealedArtifact, error)
 		return SealedArtifact{}, fmt.Errorf("seal %s: %w", id, err)
 	}
 	t.mu.Lock()
-	if t.sealed == nil {
-		t.sealed = map[string]SealedArtifact{}
-	}
-	if prior, ok := t.sealed[candidate.ID]; ok && prior.Digest != artifact.Digest {
-		t.mu.Unlock()
+	defer t.mu.Unlock()
+	if err := t.releases.seal(candidate.ID, artifact); err != nil {
 		return SealedArtifact{}, fmt.Errorf("sealed candidate %s changed", candidate.ID)
 	}
-	t.sealed[candidate.ID] = artifact
-	t.mu.Unlock()
 	return artifact, nil
 }
 
@@ -117,7 +112,7 @@ func sealedKey(tenant, candidate string) string {
 func (t *Tenant) SealedArtifact(id string) (SealedArtifact, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for _, a := range t.sealed {
+	for _, a := range t.releases.sealed {
 		if a.Candidate == id {
 			return a, true
 		}
@@ -182,13 +177,9 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if to.quarantined() {
 		return result, fmt.Errorf("tenant %s is quarantined", to.ID)
 	}
-	if prior := to.releaseCandidates[candidate.ID]; prior != nil && !bytes.Equal(prior, raw) {
+	if err := to.releases.put(candidate.ID, raw); err != nil {
 		return result, fmt.Errorf("candidate %s exists in %s with different bytes", candidate.ID, to.ID)
 	}
-	if to.releaseCandidates == nil {
-		to.releaseCandidates = map[string]json.RawMessage{}
-	}
-	to.releaseCandidates[candidate.ID] = slices.Clone(raw)
 	var installations []releaseInstallation
 	if activate {
 		if installations, err = to.prepareReleaseActivationLocked(candidate.ID, raw); err != nil {
@@ -204,7 +195,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 		return result, err
 	}
 	for _, t := range []*Tenant{from, to} {
-		t.remember(AuditEntry{At: now.UTC(), Member: member.ID, App: PlatformApp, Action: "host.promotion",
+		t.audit.remember(AuditEntry{At: now.UTC(), Member: member.ID, App: PlatformApp, Action: "host.promotion",
 			Target: from.ID + "→" + to.ID + ":" + candidate.ID})
 	}
 	return result, nil
@@ -255,7 +246,7 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 		result.Types = append(result.Types, part)
 	}
 	for _, t := range []*Tenant{from, to} {
-		t.remember(AuditEntry{At: now.UTC(), Member: target.ID, App: PlatformApp, Action: "host.migration",
+		t.audit.remember(AuditEntry{At: now.UTC(), Member: target.ID, App: PlatformApp, Action: "host.migration",
 			Target: from.ID + "→" + to.ID + ":" + key})
 	}
 	return result, nil
@@ -282,31 +273,15 @@ type MigrationManifest struct {
 
 // rememberMigration keeps the console's own view of what moved.
 func (t *Tenant) rememberMigration(result MigrationResult, member string, now time.Time) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.migrations = append(t.migrations, MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
+	t.console.addMigration(MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
 }
 
 // Migrations lists what the console moved in or out of this tenant.
-func (t *Tenant) Migrations() []MigrationManifest {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return slices.Clone(t.migrations)
-}
+func (t *Tenant) Migrations() []MigrationManifest { return t.console.migrationList() }
 
 // grantUsable resolves an open support session of this tenant.
 func (t *Tenant) grantUsable(id string, now time.Time) (SupportGrant, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	index := slices.IndexFunc(t.support, func(g SupportGrant) bool { return g.ID == id })
-	if index < 0 {
-		return SupportGrant{}, fmt.Errorf("no support session %s in %s", id, t.ID)
-	}
-	grant := t.support[index]
-	if !grant.Expires.After(now) {
-		return SupportGrant{}, fmt.Errorf("support session %s has ended", id)
-	}
-	return grant, nil
+	return t.console.usableSupport(t.ID, id, now)
 }
 
 // jsonPayload is the console's helper for small JSON answers.

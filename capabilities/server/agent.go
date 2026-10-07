@@ -229,6 +229,16 @@ func (a *Agents) def(id string) *agentDef {
 	return a.defs[id]
 }
 
+// idle forgets that run's model is being called.
+func (a *Agents) idle(run string) { delete(a.busy, run) }
+
+// each visits the declared agents, by ID.
+func (a *Agents) each(fn func(id string, d *agentDef)) {
+	for id, d := range a.defs {
+		fn(id, d)
+	}
+}
+
 func (a *Agents) refresh() {
 	app := a.t.app(build.ID)
 	if app == nil {
@@ -534,7 +544,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 		State: "running", Steps: []RunStep{}}
 	recorded := captureBinding
 	if recorded {
-		run.Release = a.t.activeRelease
+		run.Release = a.t.releases.active
 	}
 	if d := a.def(agent); d != nil && recorded {
 		run.DefinitionVersion = a.definitionVersion(d)

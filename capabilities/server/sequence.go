@@ -10,10 +10,6 @@ import (
 	"platformserver/platform"
 )
 
-// Number sequences (ADR-0024 D3): the counters are the host's, keyed by app,
-// sequence and year, taken only in accepted decisions and rebuilt by replay;
-// snapshots keep them.
-
 // Next is the next number of c's app's sequence for the accepted decision r.
 func (r runtime) Next(c platform.Caller, rec *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error) {
 	t := r.t
@@ -34,8 +30,5 @@ func (r runtime) Next(c platform.Caller, rec *pb.ChangeRecord, sequence string, 
 		year = date.Year()
 	}
 	key := fmt.Sprintf("%s/%s/%d", c.App, sequence, year)
-	t.seqMu.Lock()
-	defer t.seqMu.Unlock()
-	t.sequences[key]++
-	return s.Format(date.Year(), t.sequences[key]), nil
+	return s.Format(date.Year(), t.sequences.take(key)), nil
 }

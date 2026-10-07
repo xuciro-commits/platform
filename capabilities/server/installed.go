@@ -261,559 +261,8 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 	}
 	parentBindings := map[string]string{}
 	for i, s := range p.Sections {
-		where := fmt.Sprintf("page %s, section %d (%s)", p.Name, i+1, s.Widget)
-		if owner, read := s.WorkViewRead(); read != "" {
-			app := t.owner["read:"+read]
-			if app == nil || app.Manifest().ID != owner {
-				return fmt.Errorf("%s: caller work read %s is unavailable", where, read)
-			}
-		}
-		if err := s.CheckServices(func(ref platform.AssetRef) (platform.EntityInfo, bool) {
-			info, ok := t.entity(ref.Name)
-			return info, ok && info.App == ref.App
-		}, func(ref platform.AssetRef) (platform.Action, bool) {
-			owner := t.owner["action:"+ref.Name]
-			if owner == nil || owner.Manifest().ID != ref.App {
-				return platform.Action{}, false
-			}
-			return owner.Manifest().Actions.Action(ref.Name)
-		}); err != nil {
-			return fmt.Errorf("%s: %w", where, err)
-		}
-		if !slices.Contains(platform.Widgets, s.Widget) {
-			return fmt.Errorf("%s: no widget %q; there are %s", where, s.Widget, strings.Join(platform.Widgets, ", "))
-		}
-		if s.Width != "" && s.Width != "full" && s.Width != "half" {
-			return fmt.Errorf("%s: width %q is neither full nor half", where, s.Width)
-		}
-		if s.Widget == "ai-assistant" {
-			owner, ok := t.app(s.Function.Ref.App).(interface {
-				FunctionReleaseAsset(string, string) (platform.ReleaseAsset, error)
-			})
-			if !ok {
-				return fmt.Errorf("AI function owner is unavailable")
-			}
-			asset, err := owner.FunctionReleaseAsset(s.Function.Ref.Name, s.Function.SourceVersion)
-			if err != nil {
-				return err
-			}
-			var f platform.AIFunction
-			if json.Unmarshal(asset.Body, &f) != nil {
-				return fmt.Errorf("AI function is invalid")
-			}
-			if err := p.CheckAIBinding(s, f); err != nil {
-				return err
-			}
-		}
-		if s.Widget == "function" {
-			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-				return platform.WidgetWritesSelection(other.Widget) && (other.Object.Name == "" || other.Object == p.Object) && other.Selection == s.Selection
-			}) {
-				return fmt.Errorf("%s: add a table that selects a source record", where)
-			}
-			if s.Function == nil || s.Function.Ref.Kind != platform.AssetFunction || s.Function.Ref.App != p.Object.App ||
-				s.Object.Name != "" && s.Object != p.Object || len(s.Fields) != 0 || len(s.Actions) != 0 || s.Query.Name != "" || s.Relation != "" {
-				return fmt.Errorf("%s: a function must bind one retained version on this page's object", where)
-			}
-			owner, ok := t.app(s.Function.Ref.App).(interface {
-				FunctionReleaseAsset(string, string) (platform.ReleaseAsset, error)
-			})
-			if !ok {
-				return fmt.Errorf("%s: the function has no published call owner", where)
-			}
-			asset, err := owner.FunctionReleaseAsset(s.Function.Ref.Name, s.Function.SourceVersion)
-			if err != nil {
-				return fmt.Errorf("%s: %w", where, err)
-			}
-			var function platform.AIFunction
-			if asset.Ref != s.Function.Ref || json.Unmarshal(asset.Body, &function) != nil || function.Object != p.Object.Name {
-				return fmt.Errorf("%s: the function does not read this page's object", where)
-			}
-		} else if s.Function != nil && s.Widget != "ai-assistant" {
-			return fmt.Errorf("%s: only a function widget may bind a function", where)
-		}
-		if s.Widget == "compute" {
-			if s.Object.Name != "" || len(s.Fields) != 0 || len(s.Actions) != 0 || s.Query.Name != "" || s.Relation != "" {
-				return fmt.Errorf("%s: compute binds its typed inputs, not another widget's configuration", where)
-			}
-			if err := t.checkPageOperation(s, page); err != nil {
-				return fmt.Errorf("%s: %w", where, err)
-			}
-		} else if s.Operation != nil || s.Widget != "form" && len(s.Inputs) != 0 {
-			return fmt.Errorf("%s: only a compute or form widget may bind inputs", where)
-		}
-		info := page
-		if s.Object.Name != "" && s.Object.Name != p.Object.Name {
-			shown, known := t.entity(s.Object.Name)
-			if !known {
-				return fmt.Errorf("%s: no object %s", where, s.Object.Name)
-			}
-			info = shown
-		}
-		if len(s.CollaborationDependencies()) > 0 || s.HistoryLimit > 0 || s.Widget == "avatar-stack" || s.Widget == "collection-analysis" || s.Widget == "resource-list" || s.Widget == "graph-explorer" || s.Widget == "vertex-graph" || s.Widget == "breadcrumb" && s.RecordVariable != "" {
-			object := s.Object
-			if object.Name == "" {
-				object = p.Object
-			}
-			if object.Kind != platform.AssetObject || object.App != info.App || object.Name != info.Type {
-				return fmt.Errorf("%s: collaboration object does not match its actual entity owner", where)
-			}
-		}
-		if s.Avatar != nil && s.Avatar.ContextVariable != "" {
-			ref := p.RecordResourceObject(s.Avatar.ContextVariable)
-			actual, ok := t.entity(ref.Name)
-			if !ok || ref.Kind != platform.AssetObject || ref.App != actual.App || ref.Name != actual.Type {
-				return fmt.Errorf("%s: avatar original context owner is unavailable", where)
-			}
-		}
-		if s.Widget == "action-table" {
-			if len(s.Actions) != 1 {
-				return fmt.Errorf("action table requires one original action")
-			}
-			owner := t.owner["action:"+s.Actions[0].Name]
-			if owner == nil {
-				return fmt.Errorf("action table action is unavailable")
-			}
-			a, ok := owner.Manifest().Actions.Action(s.Actions[0].Name)
-			if !ok {
-				return fmt.Errorf("action table action is unavailable")
-			}
-			if err := s.CheckActionTable(info, a); err != nil {
-				return err
-			}
-		}
-		if err := p.CheckObservation(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
-			actual, ok := t.entity(ref.Name)
-			return actual, ok && actual.App == ref.App
-		}); err != nil {
+		if err := t.checkSection(p, page, i, s, selections, parentBindings); err != nil {
 			return err
-		}
-		if err := s.CheckCollectionAnalysis(info); err != nil {
-			return err
-		}
-		if err := s.CheckResourceList(info); err != nil {
-			return err
-		}
-		if err := p.CheckExplorationSchema(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
-			actual, ok := t.entity(ref.Name)
-			return actual, ok && actual.App == ref.App
-		}, func(b platform.AssetBinding) (platform.LinkType, bool) {
-			for _, d := range t.definitions {
-				if d.Ref == b.Ref {
-					if selected := d.LinkVersion(b.SourceVersion); selected != nil && selected.LinkType != nil {
-						return *selected.LinkType, true
-					}
-				}
-			}
-			return platform.LinkType{}, false
-		}); err != nil {
-			return fmt.Errorf("%s: %w", where, err)
-		}
-		if s.AssetDirectory != nil {
-			for _, item := range s.AssetDirectory.Items {
-				if !explorationAssetAvailable(t.definitions, item.Asset) {
-					return fmt.Errorf("%s: directory published asset is unavailable", where)
-				}
-			}
-		}
-		if err := s.CheckContextViews(info); err != nil {
-			return fmt.Errorf("%s: %w", where, err)
-		}
-		if p.Document != nil {
-			v := p.Document.Variables[s.RecordVariable]
-			if v.Source != nil && v.Source.Port != "" {
-				ref := p.RecordResourceObject(s.RecordVariable)
-				expected := info
-				if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "statistics" && s.Observation.AssetObject != nil {
-					actual, ok := t.entity(s.Observation.AssetObject.Name)
-					if !ok {
-						return fmt.Errorf("%s: observation asset is unavailable", where)
-					}
-					expected = actual
-				}
-				if ref.App != expected.App || ref.Name != expected.Type {
-					return fmt.Errorf("%s: graph output consumer does not match its actual entity owner", where)
-				}
-			}
-		}
-		if s.RecordVariable != "" {
-			expectedType := info.Type
-			if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "statistics" && s.Observation.AssetObject != nil {
-				expectedType = s.Observation.AssetObject.Name
-			}
-			producer := p.Document.LoopRecordSource(s.RecordVariable)
-			sourceType := p.RecordVariableObject(s.RecordVariable)
-			for _, candidate := range p.Sections {
-				if candidate.ID == producer {
-					sourceType = candidate.Object.Name
-					if sourceType == "" {
-						sourceType = p.Object.Name
-					}
-				}
-			}
-			if sourceType != expectedType {
-				return fmt.Errorf("%s: item record type does not match the widget object", where)
-			}
-		}
-
-		if err := s.CheckMetricPresentation(info); err != nil {
-			return err
-		}
-		if s.DetailPresentation != nil && p.Document == nil {
-			return fmt.Errorf("detail presentation requires a document")
-		}
-		if s.Widget == "button-group" && p.Document == nil {
-			return fmt.Errorf("button group requires a document")
-		}
-		if len(s.TableColumns) > 0 || s.ShowSearch != nil {
-			if p.Document == nil {
-				return fmt.Errorf("table presentation requires a document")
-			}
-			if err := s.CheckTablePresentation(info); err != nil {
-				return err
-			}
-		}
-		if s.InlineEdit != nil {
-			if p.Document == nil {
-				return fmt.Errorf("table editing requires a document")
-			}
-			owner := t.owner["action:"+s.InlineEdit.Action.Name]
-			if owner == nil {
-				return fmt.Errorf("table edit action is unavailable")
-			}
-			action, _ := owner.Manifest().Actions.Action(s.InlineEdit.Action.Name)
-			if err := s.CheckTableEdit(info, action); err != nil {
-				return err
-			}
-		}
-		parentType := p.Object.Name
-		if s.ParentSelection != "" {
-			parentType = selections[s.ParentSelection]
-			if parentType == "" {
-				return fmt.Errorf("%s: parent selection %q is not declared", where, s.ParentSelection)
-			}
-		}
-		if s.Selection != "" {
-			if selections[s.Selection] != info.Type {
-				return fmt.Errorf("%s: selection %q does not hold %s records", where, s.Selection, info.Type)
-			}
-			if !platform.WidgetReadsSelection(s.Widget) {
-				return fmt.Errorf("%s: this widget does not use a record selection", where)
-			}
-			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-				return platform.WidgetWritesSelection(other.Widget) && other.Selection == s.Selection
-			}) {
-				return fmt.Errorf("%s: add a table that supplies selection %q", where, s.Selection)
-			}
-		}
-		if s.ParentSelection != "" {
-			if !slices.Contains([]string{"table", "chart", "metric", "form"}, s.Widget) ||
-				!slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == parentType }) || s.Widget == "form" && s.Relation == "" {
-				return fmt.Errorf("%s: parent selection needs a related table, chart, metric or bound form", where)
-			}
-			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-				return other.Widget == "table" && other.Selection == s.ParentSelection && (other.Object.Name == parentType || other.Object.Name == "" && parentType == p.Object.Name)
-			}) {
-				return fmt.Errorf("%s: add a table that supplies parent selection %q", where, s.ParentSelection)
-			}
-		}
-		if s.Widget == "table" && (info.Type != p.Object.Name || s.ParentSelection != "") && slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == parentType }) {
-			key := "object:" + info.Type
-			if s.Selection != "" {
-				key = "selection:" + s.Selection
-			}
-			parent := "object:" + parentType
-			if s.ParentSelection != "" {
-				parent = "selection:" + s.ParentSelection
-			}
-			if previous := parentBindings[key]; previous != "" && previous != parent {
-				return fmt.Errorf("%s: record selection has conflicting parent bindings", where)
-			}
-			parentBindings[key] = parent
-		}
-		boundParent := ""
-		if s.Relation != "" {
-			if s.Widget != "table" && s.Widget != "chart" && s.Widget != "metric" && s.Widget != "form" {
-				return fmt.Errorf("%s: only a table, chart, metric or form follows a relation", where)
-			}
-			at := slices.IndexFunc(info.Fields, func(f platform.FieldInfo) bool {
-				return f.Type == "reference" && f.Ref == parentType && f.Inverse == s.Relation
-			})
-			if at < 0 {
-				return fmt.Errorf("%s: %s declares no relation %q from %s", where, info.Type, s.Relation, parentType)
-			}
-			if s.Widget == "form" {
-				if info.Fields[at].ReadOnly {
-					return fmt.Errorf("%s: parent reference %s is read only", where, info.Fields[at].Name)
-				}
-				if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-					return other.Widget == "table" && (other.Object.Name == parentType || other.Object.Name == "" && parentType == p.Object.Name) && other.Selection == s.ParentSelection
-				}) {
-					return fmt.Errorf("%s: add a table that selects a parent record", where)
-				}
-				boundParent = info.Fields[at].Name
-			}
-		}
-		if s.Query.Name != "" {
-			q, ok := t.namedQuery(s.Query.App, s.Query.Name)
-			switch {
-			case s.Widget != "table":
-				return fmt.Errorf("%s: only a table lists a query", where)
-			case !ok:
-				return fmt.Errorf("%s: no query %s", where, s.Query)
-			case q.Object != info.Type:
-				return fmt.Errorf("%s: query %s reads %s, not %s", where, s.Query, q.Object, info.Type)
-			case q.By != "" && (!slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool {
-				return f.Name == q.By && f.Ref == parentType
-			})):
-				return fmt.Errorf("%s: query %s is run for a %s record, not this page's %s", where, s.Query, q.By, parentType)
-			}
-		}
-		field := func(name string) error {
-			if _, ok := info.Field(strings.Split(name, ":")[0]); !ok {
-				return fmt.Errorf("%s: %s has no field %s", where, info.Type, name)
-			}
-			return nil
-		}
-		switch s.Widget {
-		case "inline-action":
-			if p.Document == nil || len(s.Actions) != 1 {
-				return fmt.Errorf("inline action needs a V2 page and one action")
-			}
-			owner := t.owner["action:"+s.Actions[0].Name]
-			if owner == nil {
-				return fmt.Errorf("inline action is unavailable")
-			}
-			action, _ := owner.Manifest().Actions.Action(s.Actions[0].Name)
-			if err := s.CheckInlineAction(info, action); err != nil {
-				return err
-			}
-		case "kanban":
-			if p.Document == nil {
-				return fmt.Errorf("kanban needs a V2 document")
-			}
-			if err := p.CheckKanban(s, info); err != nil {
-				return err
-			}
-			for _, ref := range s.Actions {
-				if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
-					return err
-				}
-			}
-		case "record-leaderboard":
-			if err := s.CheckLeaderboard(info); err != nil {
-				return err
-			}
-		case "histogram":
-			if err := s.CheckHistogram(info); err != nil {
-				return err
-			}
-		case "breadcrumb", "avatar-stack", "static-image", "resource-list", "asset-directory", "graph-explorer", "vertex-graph":
-			// Their finite bindings and original field schema were checked above.
-		case "record-comparison":
-			if err := s.CheckRecordComparison(info); err != nil {
-				return err
-			}
-		case "record-card":
-			if err := s.CheckRecordCard(info); err != nil {
-				return err
-			}
-		case "sparkline-kpi":
-			if err := s.CheckSparkline(info); err != nil {
-				return err
-			}
-		case "term-counts", "treemap", "tag-counts":
-			if err := s.CheckTerms(info); err != nil {
-				return err
-			}
-		case "summary-stats":
-			if err := s.CheckSummary(info); err != nil {
-				return err
-			}
-		case "record-gantt":
-			if err := s.CheckRecordGantt(info); err != nil {
-				return err
-			}
-		case "record-calendar":
-			if err := s.CheckRecordCalendar(info); err != nil {
-				return err
-			}
-		case "record-events":
-			if err := s.CheckRecordEvents(info); err != nil {
-				return err
-			}
-		case "collection-builder":
-			if err := s.CheckCollectionBuilderFields(info); err != nil {
-				return err
-			}
-		case "record-map":
-			if err := s.CheckMap(info); err != nil {
-				return err
-			}
-		case "scene-3d":
-			if err := p.CheckSceneBinding(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
-				actual, ok := t.entity(ref.Name)
-				return actual, ok && actual.App == ref.App
-			}); err != nil {
-				return err
-			}
-		case "record-scatter":
-			if err := s.CheckScatter(info); err != nil {
-				return err
-			}
-		case "record-chart":
-			if err := s.CheckRecordChart(info); err != nil {
-				return err
-			}
-		case "record-list":
-			if err := s.CheckRecordPicker(info); err != nil {
-				return err
-			}
-			if err := s.CheckRecordList(info); err != nil {
-				return err
-			}
-		case "record-timeline":
-			if p.Document == nil {
-				return fmt.Errorf("record timeline needs a V2 document")
-			}
-			if err := s.CheckTimeline(info); err != nil {
-				return err
-			}
-		case "status-tracker":
-			if err := s.CheckStatusTracker(info); err != nil {
-				return err
-			}
-		case "record-links":
-			if p.Document == nil {
-				return fmt.Errorf("record links require a document")
-			}
-			if err := s.CheckRecordLinks(info, t.entity); err != nil {
-				return err
-			}
-		case "record-view":
-			if p.Document == nil {
-				return fmt.Errorf("record view requires a document")
-			}
-			for _, name := range s.Fields {
-				if err := field(name); err != nil {
-					return err
-				}
-			}
-			for _, ref := range s.Actions {
-				if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
-					return err
-				}
-				owner := t.owner["action:"+ref.Name]
-				if owner == nil {
-					return fmt.Errorf("record view action owner is unavailable")
-				}
-				action, _ := owner.Manifest().Actions.Action(ref.Name)
-				if action.New {
-					return fmt.Errorf("record view only offers existing-record actions")
-				}
-			}
-		case "table", "detail":
-			if len(s.Fields) == 0 {
-				return fmt.Errorf("%s: no fields to show", where)
-			}
-			for _, name := range s.Fields {
-				if err := field(name); err != nil {
-					return err
-				}
-			}
-			if err := s.CheckDetailBarcode(info); err != nil {
-				return fmt.Errorf("%s: %w", where, err)
-			}
-		case "actions":
-			if len(s.Actions) == 0 {
-				return fmt.Errorf("%s: no actions to offer", where)
-			}
-			for _, ref := range s.Actions {
-				if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
-					return err
-				}
-			}
-		case "chart", "metric", "pivot", "heatmap":
-			if s.Mark != "" && (p.Document == nil || !platform.PageUIProfileSupports(p.Document.UIProfile, "platform.page.v2.24")) {
-				return fmt.Errorf("%s: chart mark requires v2.24", where)
-			}
-			if (s.Widget == "pivot" || s.Widget == "heatmap") && p.Document == nil {
-				return fmt.Errorf("%s: pivot needs a V2 document", where)
-			}
-			if s.Measure == "" {
-				return fmt.Errorf("%s: nothing measured; count, sum:<field>, avg:<field>, min:<field> or max:<field>", where)
-			}
-			kind, name, some := strings.Cut(s.Measure, ":")
-			if !slices.Contains([]string{"count", "sum", "avg", "min", "max"}, kind) || (kind != "count") != some {
-				return fmt.Errorf("%s: %q is not count, sum:<field>, avg:<field>, min:<field> or max:<field>", where, s.Measure)
-			}
-			if some {
-				if err := field(name); err != nil {
-					return err
-				}
-			}
-			if s.Widget == "chart" || (s.Widget == "pivot" || s.Widget == "heatmap") {
-				if s.Group == "" {
-					return fmt.Errorf("%s: nothing to group by", where)
-				}
-				if err := field(s.Group); err != nil {
-					return err
-				}
-			}
-			if ((s.Widget == "pivot" || s.Widget == "heatmap") || s.Mark != "") && !checkAggregateSection(s, info) {
-				return fmt.Errorf("%s: invalid pivot group or measure", where)
-			}
-		case "button", "input":
-			if p.Document == nil || s.Object.Name != "" || s.Query.Name != "" || s.Selection != "" || s.ParentSelection != "" || s.Relation != "" || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Text != "" || s.Function != nil || s.Operation != nil || len(s.Inputs) > 0 {
-				return fmt.Errorf("%s: an interactive presentation widget requires a document and no business binding", where)
-			}
-		case "text":
-			if strings.TrimSpace(s.Text) == "" {
-				return fmt.Errorf("%s: no words to show", where)
-			}
-		case "filter":
-			if len(s.Facets) > 0 || s.FilterSearchVariable != "" {
-				if err := s.CheckFacetSchema(info); err != nil {
-					return err
-				}
-				break
-			}
-			if len(s.Fields) == 0 {
-				return fmt.Errorf("%s: no fields to filter by", where)
-			}
-			for _, name := range s.Fields {
-				f, ok := info.Field(name)
-				if !ok {
-					return fmt.Errorf("%s: %s has no field %s", where, info.Type, name)
-				}
-				if !slices.Contains(platform.Filterable, f.Type) {
-					return fmt.Errorf("%s: %s is a %s field; a filter takes %s fields", where, name, f.Type, strings.Join(platform.Filterable, ", "))
-				}
-			}
-		case "form":
-			// A form makes a new record through the object's own create action,
-			// so it asks for everything that action needs, except a parent
-			// reference supplied by its explicitly declared relation.
-			if err := t.checkAction(p.Name, info.Type+".create", info.Type); err != nil {
-				return fmt.Errorf("%s: %s cannot be created here", where, info.Type)
-			}
-			if len(s.Fields) == 0 && boundParent == "" && len(s.Inputs) == 0 {
-				return fmt.Errorf("%s: no fields to fill in", where)
-			}
-			for _, name := range s.Fields {
-				if err := field(name); err != nil {
-					return err
-				}
-			}
-			if err := t.checkFormInputs(s, info, parentType, boundParent); err != nil {
-				return fmt.Errorf("%s: %w", where, err)
-			}
-			for _, f := range info.Fields {
-				_, bound := s.Inputs[f.Name]
-				if f.Required && !f.ReadOnly && f.Name != boundParent && !bound && !slices.Contains(s.Fields, f.Name) {
-					return fmt.Errorf("%s: %s needs %s, which the form does not ask for", where, info.Type, f.Name)
-				}
-			}
 		}
 	}
 	for key := range parentBindings {
@@ -823,6 +272,571 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return fmt.Errorf("page %s: record selections have a parent cycle", p.Name)
 			}
 			seen[at] = true
+		}
+	}
+	return nil
+}
+
+// checkSection checks one section of a page against the entity it shows, the
+// page's selections, and the parent selections bound so far.
+func (t *Tenant) checkSection(p platform.Page, page platform.EntityInfo, i int, s platform.Section, selections, parentBindings map[string]string) error {
+	where := fmt.Sprintf("page %s, section %d (%s)", p.Name, i+1, s.Widget)
+	if owner, read := s.WorkViewRead(); read != "" {
+		app := t.owner["read:"+read]
+		if app == nil || app.Manifest().ID != owner {
+			return fmt.Errorf("%s: caller work read %s is unavailable", where, read)
+		}
+	}
+	if err := s.CheckServices(func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+		info, ok := t.entity(ref.Name)
+		return info, ok && info.App == ref.App
+	}, func(ref platform.AssetRef) (platform.Action, bool) {
+		owner := t.owner["action:"+ref.Name]
+		if owner == nil || owner.Manifest().ID != ref.App {
+			return platform.Action{}, false
+		}
+		return owner.Manifest().Actions.Action(ref.Name)
+	}); err != nil {
+		return fmt.Errorf("%s: %w", where, err)
+	}
+	if !slices.Contains(platform.Widgets, s.Widget) {
+		return fmt.Errorf("%s: no widget %q; there are %s", where, s.Widget, strings.Join(platform.Widgets, ", "))
+	}
+	if s.Width != "" && s.Width != "full" && s.Width != "half" {
+		return fmt.Errorf("%s: width %q is neither full nor half", where, s.Width)
+	}
+	if s.Widget == "ai-assistant" {
+		owner, ok := t.app(s.Function.Ref.App).(interface {
+			FunctionReleaseAsset(string, string) (platform.ReleaseAsset, error)
+		})
+		if !ok {
+			return fmt.Errorf("AI function owner is unavailable")
+		}
+		asset, err := owner.FunctionReleaseAsset(s.Function.Ref.Name, s.Function.SourceVersion)
+		if err != nil {
+			return err
+		}
+		var f platform.AIFunction
+		if json.Unmarshal(asset.Body, &f) != nil {
+			return fmt.Errorf("AI function is invalid")
+		}
+		if err := p.CheckAIBinding(s, f); err != nil {
+			return err
+		}
+	}
+	if s.Widget == "function" {
+		if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
+			return platform.WidgetWritesSelection(other.Widget) && (other.Object.Name == "" || other.Object == p.Object) && other.Selection == s.Selection
+		}) {
+			return fmt.Errorf("%s: add a table that selects a source record", where)
+		}
+		if s.Function == nil || s.Function.Ref.Kind != platform.AssetFunction || s.Function.Ref.App != p.Object.App ||
+			s.Object.Name != "" && s.Object != p.Object || len(s.Fields) != 0 || len(s.Actions) != 0 || s.Query.Name != "" || s.Relation != "" {
+			return fmt.Errorf("%s: a function must bind one retained version on this page's object", where)
+		}
+		owner, ok := t.app(s.Function.Ref.App).(interface {
+			FunctionReleaseAsset(string, string) (platform.ReleaseAsset, error)
+		})
+		if !ok {
+			return fmt.Errorf("%s: the function has no published call owner", where)
+		}
+		asset, err := owner.FunctionReleaseAsset(s.Function.Ref.Name, s.Function.SourceVersion)
+		if err != nil {
+			return fmt.Errorf("%s: %w", where, err)
+		}
+		var function platform.AIFunction
+		if asset.Ref != s.Function.Ref || json.Unmarshal(asset.Body, &function) != nil || function.Object != p.Object.Name {
+			return fmt.Errorf("%s: the function does not read this page's object", where)
+		}
+	} else if s.Function != nil && s.Widget != "ai-assistant" {
+		return fmt.Errorf("%s: only a function widget may bind a function", where)
+	}
+	if s.Widget == "compute" {
+		if s.Object.Name != "" || len(s.Fields) != 0 || len(s.Actions) != 0 || s.Query.Name != "" || s.Relation != "" {
+			return fmt.Errorf("%s: compute binds its typed inputs, not another widget's configuration", where)
+		}
+		if err := t.checkPageOperation(s, page); err != nil {
+			return fmt.Errorf("%s: %w", where, err)
+		}
+	} else if s.Operation != nil || s.Widget != "form" && len(s.Inputs) != 0 {
+		return fmt.Errorf("%s: only a compute or form widget may bind inputs", where)
+	}
+	info := page
+	if s.Object.Name != "" && s.Object.Name != p.Object.Name {
+		shown, known := t.entity(s.Object.Name)
+		if !known {
+			return fmt.Errorf("%s: no object %s", where, s.Object.Name)
+		}
+		info = shown
+	}
+	if len(s.CollaborationDependencies()) > 0 || s.HistoryLimit > 0 || s.Widget == "avatar-stack" || s.Widget == "collection-analysis" || s.Widget == "resource-list" || s.Widget == "graph-explorer" || s.Widget == "vertex-graph" || s.Widget == "breadcrumb" && s.RecordVariable != "" {
+		object := s.Object
+		if object.Name == "" {
+			object = p.Object
+		}
+		if object.Kind != platform.AssetObject || object.App != info.App || object.Name != info.Type {
+			return fmt.Errorf("%s: collaboration object does not match its actual entity owner", where)
+		}
+	}
+	if s.Avatar != nil && s.Avatar.ContextVariable != "" {
+		ref := p.RecordResourceObject(s.Avatar.ContextVariable)
+		actual, ok := t.entity(ref.Name)
+		if !ok || ref.Kind != platform.AssetObject || ref.App != actual.App || ref.Name != actual.Type {
+			return fmt.Errorf("%s: avatar original context owner is unavailable", where)
+		}
+	}
+	if s.Widget == "action-table" {
+		if len(s.Actions) != 1 {
+			return fmt.Errorf("action table requires one original action")
+		}
+		owner := t.owner["action:"+s.Actions[0].Name]
+		if owner == nil {
+			return fmt.Errorf("action table action is unavailable")
+		}
+		a, ok := owner.Manifest().Actions.Action(s.Actions[0].Name)
+		if !ok {
+			return fmt.Errorf("action table action is unavailable")
+		}
+		if err := s.CheckActionTable(info, a); err != nil {
+			return err
+		}
+	}
+	if err := p.CheckObservation(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+		actual, ok := t.entity(ref.Name)
+		return actual, ok && actual.App == ref.App
+	}); err != nil {
+		return err
+	}
+	if err := s.CheckCollectionAnalysis(info); err != nil {
+		return err
+	}
+	if err := s.CheckResourceList(info); err != nil {
+		return err
+	}
+	if err := p.CheckExplorationSchema(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+		actual, ok := t.entity(ref.Name)
+		return actual, ok && actual.App == ref.App
+	}, func(b platform.AssetBinding) (platform.LinkType, bool) {
+		for _, d := range t.definitions {
+			if d.Ref == b.Ref {
+				if selected := d.LinkVersion(b.SourceVersion); selected != nil && selected.LinkType != nil {
+					return *selected.LinkType, true
+				}
+			}
+		}
+		return platform.LinkType{}, false
+	}); err != nil {
+		return fmt.Errorf("%s: %w", where, err)
+	}
+	if s.AssetDirectory != nil {
+		for _, item := range s.AssetDirectory.Items {
+			if !explorationAssetAvailable(t.definitions, item.Asset) {
+				return fmt.Errorf("%s: directory published asset is unavailable", where)
+			}
+		}
+	}
+	if err := s.CheckContextViews(info); err != nil {
+		return fmt.Errorf("%s: %w", where, err)
+	}
+	if p.Document != nil {
+		v := p.Document.Variables[s.RecordVariable]
+		if v.Source != nil && v.Source.Port != "" {
+			ref := p.RecordResourceObject(s.RecordVariable)
+			expected := info
+			if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "statistics" && s.Observation.AssetObject != nil {
+				actual, ok := t.entity(s.Observation.AssetObject.Name)
+				if !ok {
+					return fmt.Errorf("%s: observation asset is unavailable", where)
+				}
+				expected = actual
+			}
+			if ref.App != expected.App || ref.Name != expected.Type {
+				return fmt.Errorf("%s: graph output consumer does not match its actual entity owner", where)
+			}
+		}
+	}
+	if s.RecordVariable != "" {
+		expectedType := info.Type
+		if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "statistics" && s.Observation.AssetObject != nil {
+			expectedType = s.Observation.AssetObject.Name
+		}
+		producer := p.Document.LoopRecordSource(s.RecordVariable)
+		sourceType := p.RecordVariableObject(s.RecordVariable)
+		for _, candidate := range p.Sections {
+			if candidate.ID == producer {
+				sourceType = candidate.Object.Name
+				if sourceType == "" {
+					sourceType = p.Object.Name
+				}
+			}
+		}
+		if sourceType != expectedType {
+			return fmt.Errorf("%s: item record type does not match the widget object", where)
+		}
+	}
+
+	if err := s.CheckMetricPresentation(info); err != nil {
+		return err
+	}
+	if s.DetailPresentation != nil && p.Document == nil {
+		return fmt.Errorf("detail presentation requires a document")
+	}
+	if s.Widget == "button-group" && p.Document == nil {
+		return fmt.Errorf("button group requires a document")
+	}
+	if len(s.TableColumns) > 0 || s.ShowSearch != nil {
+		if p.Document == nil {
+			return fmt.Errorf("table presentation requires a document")
+		}
+		if err := s.CheckTablePresentation(info); err != nil {
+			return err
+		}
+	}
+	if s.InlineEdit != nil {
+		if p.Document == nil {
+			return fmt.Errorf("table editing requires a document")
+		}
+		owner := t.owner["action:"+s.InlineEdit.Action.Name]
+		if owner == nil {
+			return fmt.Errorf("table edit action is unavailable")
+		}
+		action, _ := owner.Manifest().Actions.Action(s.InlineEdit.Action.Name)
+		if err := s.CheckTableEdit(info, action); err != nil {
+			return err
+		}
+	}
+	parentType := p.Object.Name
+	if s.ParentSelection != "" {
+		parentType = selections[s.ParentSelection]
+		if parentType == "" {
+			return fmt.Errorf("%s: parent selection %q is not declared", where, s.ParentSelection)
+		}
+	}
+	if s.Selection != "" {
+		if selections[s.Selection] != info.Type {
+			return fmt.Errorf("%s: selection %q does not hold %s records", where, s.Selection, info.Type)
+		}
+		if !platform.WidgetReadsSelection(s.Widget) {
+			return fmt.Errorf("%s: this widget does not use a record selection", where)
+		}
+		if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
+			return platform.WidgetWritesSelection(other.Widget) && other.Selection == s.Selection
+		}) {
+			return fmt.Errorf("%s: add a table that supplies selection %q", where, s.Selection)
+		}
+	}
+	if s.ParentSelection != "" {
+		if !slices.Contains([]string{"table", "chart", "metric", "form"}, s.Widget) ||
+			!slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == parentType }) || s.Widget == "form" && s.Relation == "" {
+			return fmt.Errorf("%s: parent selection needs a related table, chart, metric or bound form", where)
+		}
+		if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
+			return other.Widget == "table" && other.Selection == s.ParentSelection && (other.Object.Name == parentType || other.Object.Name == "" && parentType == p.Object.Name)
+		}) {
+			return fmt.Errorf("%s: add a table that supplies parent selection %q", where, s.ParentSelection)
+		}
+	}
+	if s.Widget == "table" && (info.Type != p.Object.Name || s.ParentSelection != "") && slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == parentType }) {
+		key := "object:" + info.Type
+		if s.Selection != "" {
+			key = "selection:" + s.Selection
+		}
+		parent := "object:" + parentType
+		if s.ParentSelection != "" {
+			parent = "selection:" + s.ParentSelection
+		}
+		if previous := parentBindings[key]; previous != "" && previous != parent {
+			return fmt.Errorf("%s: record selection has conflicting parent bindings", where)
+		}
+		parentBindings[key] = parent
+	}
+	boundParent := ""
+	if s.Relation != "" {
+		if s.Widget != "table" && s.Widget != "chart" && s.Widget != "metric" && s.Widget != "form" {
+			return fmt.Errorf("%s: only a table, chart, metric or form follows a relation", where)
+		}
+		at := slices.IndexFunc(info.Fields, func(f platform.FieldInfo) bool {
+			return f.Type == "reference" && f.Ref == parentType && f.Inverse == s.Relation
+		})
+		if at < 0 {
+			return fmt.Errorf("%s: %s declares no relation %q from %s", where, info.Type, s.Relation, parentType)
+		}
+		if s.Widget == "form" {
+			if info.Fields[at].ReadOnly {
+				return fmt.Errorf("%s: parent reference %s is read only", where, info.Fields[at].Name)
+			}
+			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
+				return other.Widget == "table" && (other.Object.Name == parentType || other.Object.Name == "" && parentType == p.Object.Name) && other.Selection == s.ParentSelection
+			}) {
+				return fmt.Errorf("%s: add a table that selects a parent record", where)
+			}
+			boundParent = info.Fields[at].Name
+		}
+	}
+	if s.Query.Name != "" {
+		q, ok := t.namedQuery(s.Query.App, s.Query.Name)
+		switch {
+		case s.Widget != "table":
+			return fmt.Errorf("%s: only a table lists a query", where)
+		case !ok:
+			return fmt.Errorf("%s: no query %s", where, s.Query)
+		case q.Object != info.Type:
+			return fmt.Errorf("%s: query %s reads %s, not %s", where, s.Query, q.Object, info.Type)
+		case q.By != "" && (!slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool {
+			return f.Name == q.By && f.Ref == parentType
+		})):
+			return fmt.Errorf("%s: query %s is run for a %s record, not this page's %s", where, s.Query, q.By, parentType)
+		}
+	}
+	field := func(name string) error {
+		if _, ok := info.Field(strings.Split(name, ":")[0]); !ok {
+			return fmt.Errorf("%s: %s has no field %s", where, info.Type, name)
+		}
+		return nil
+	}
+	return t.checkWidget(p, s, info, where, parentType, boundParent, field)
+}
+
+// checkWidget checks what a section's widget needs of its fields and settings.
+func (t *Tenant) checkWidget(p platform.Page, s platform.Section, info platform.EntityInfo, where, parentType, boundParent string, field func(string) error) error {
+	switch s.Widget {
+	case "inline-action":
+		if p.Document == nil || len(s.Actions) != 1 {
+			return fmt.Errorf("inline action needs a V2 page and one action")
+		}
+		owner := t.owner["action:"+s.Actions[0].Name]
+		if owner == nil {
+			return fmt.Errorf("inline action is unavailable")
+		}
+		action, _ := owner.Manifest().Actions.Action(s.Actions[0].Name)
+		if err := s.CheckInlineAction(info, action); err != nil {
+			return err
+		}
+	case "kanban":
+		if p.Document == nil {
+			return fmt.Errorf("kanban needs a V2 document")
+		}
+		if err := p.CheckKanban(s, info); err != nil {
+			return err
+		}
+		for _, ref := range s.Actions {
+			if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
+				return err
+			}
+		}
+	case "record-leaderboard":
+		if err := s.CheckLeaderboard(info); err != nil {
+			return err
+		}
+	case "histogram":
+		if err := s.CheckHistogram(info); err != nil {
+			return err
+		}
+	case "breadcrumb", "avatar-stack", "static-image", "resource-list", "asset-directory", "graph-explorer", "vertex-graph":
+		// Their finite bindings and original field schema were checked above.
+	case "record-comparison":
+		if err := s.CheckRecordComparison(info); err != nil {
+			return err
+		}
+	case "record-card":
+		if err := s.CheckRecordCard(info); err != nil {
+			return err
+		}
+	case "sparkline-kpi":
+		if err := s.CheckSparkline(info); err != nil {
+			return err
+		}
+	case "term-counts", "treemap", "tag-counts":
+		if err := s.CheckTerms(info); err != nil {
+			return err
+		}
+	case "summary-stats":
+		if err := s.CheckSummary(info); err != nil {
+			return err
+		}
+	case "record-gantt":
+		if err := s.CheckRecordGantt(info); err != nil {
+			return err
+		}
+	case "record-calendar":
+		if err := s.CheckRecordCalendar(info); err != nil {
+			return err
+		}
+	case "record-events":
+		if err := s.CheckRecordEvents(info); err != nil {
+			return err
+		}
+	case "collection-builder":
+		if err := s.CheckCollectionBuilderFields(info); err != nil {
+			return err
+		}
+	case "record-map":
+		if err := s.CheckMap(info); err != nil {
+			return err
+		}
+	case "scene-3d":
+		if err := p.CheckSceneBinding(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+			actual, ok := t.entity(ref.Name)
+			return actual, ok && actual.App == ref.App
+		}); err != nil {
+			return err
+		}
+	case "record-scatter":
+		if err := s.CheckScatter(info); err != nil {
+			return err
+		}
+	case "record-chart":
+		if err := s.CheckRecordChart(info); err != nil {
+			return err
+		}
+	case "record-list":
+		if err := s.CheckRecordPicker(info); err != nil {
+			return err
+		}
+		if err := s.CheckRecordList(info); err != nil {
+			return err
+		}
+	case "record-timeline":
+		if p.Document == nil {
+			return fmt.Errorf("record timeline needs a V2 document")
+		}
+		if err := s.CheckTimeline(info); err != nil {
+			return err
+		}
+	case "status-tracker":
+		if err := s.CheckStatusTracker(info); err != nil {
+			return err
+		}
+	case "record-links":
+		if p.Document == nil {
+			return fmt.Errorf("record links require a document")
+		}
+		if err := s.CheckRecordLinks(info, t.entity); err != nil {
+			return err
+		}
+	case "record-view":
+		if p.Document == nil {
+			return fmt.Errorf("record view requires a document")
+		}
+		for _, name := range s.Fields {
+			if err := field(name); err != nil {
+				return err
+			}
+		}
+		for _, ref := range s.Actions {
+			if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
+				return err
+			}
+			owner := t.owner["action:"+ref.Name]
+			if owner == nil {
+				return fmt.Errorf("record view action owner is unavailable")
+			}
+			action, _ := owner.Manifest().Actions.Action(ref.Name)
+			if action.New {
+				return fmt.Errorf("record view only offers existing-record actions")
+			}
+		}
+	case "table", "detail":
+		if len(s.Fields) == 0 {
+			return fmt.Errorf("%s: no fields to show", where)
+		}
+		for _, name := range s.Fields {
+			if err := field(name); err != nil {
+				return err
+			}
+		}
+		if err := s.CheckDetailBarcode(info); err != nil {
+			return fmt.Errorf("%s: %w", where, err)
+		}
+	case "actions":
+		if len(s.Actions) == 0 {
+			return fmt.Errorf("%s: no actions to offer", where)
+		}
+		for _, ref := range s.Actions {
+			if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
+				return err
+			}
+		}
+	case "chart", "metric", "pivot", "heatmap":
+		if s.Mark != "" && (p.Document == nil || !platform.PageUIProfileSupports(p.Document.UIProfile, "platform.page.v2.24")) {
+			return fmt.Errorf("%s: chart mark requires v2.24", where)
+		}
+		if (s.Widget == "pivot" || s.Widget == "heatmap") && p.Document == nil {
+			return fmt.Errorf("%s: pivot needs a V2 document", where)
+		}
+		if s.Measure == "" {
+			return fmt.Errorf("%s: nothing measured; count, sum:<field>, avg:<field>, min:<field> or max:<field>", where)
+		}
+		kind, name, some := strings.Cut(s.Measure, ":")
+		if !slices.Contains([]string{"count", "sum", "avg", "min", "max"}, kind) || (kind != "count") != some {
+			return fmt.Errorf("%s: %q is not count, sum:<field>, avg:<field>, min:<field> or max:<field>", where, s.Measure)
+		}
+		if some {
+			if err := field(name); err != nil {
+				return err
+			}
+		}
+		if s.Widget == "chart" || (s.Widget == "pivot" || s.Widget == "heatmap") {
+			if s.Group == "" {
+				return fmt.Errorf("%s: nothing to group by", where)
+			}
+			if err := field(s.Group); err != nil {
+				return err
+			}
+		}
+		if ((s.Widget == "pivot" || s.Widget == "heatmap") || s.Mark != "") && !checkAggregateSection(s, info) {
+			return fmt.Errorf("%s: invalid pivot group or measure", where)
+		}
+	case "button", "input":
+		if p.Document == nil || s.Object.Name != "" || s.Query.Name != "" || s.Selection != "" || s.ParentSelection != "" || s.Relation != "" || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Text != "" || s.Function != nil || s.Operation != nil || len(s.Inputs) > 0 {
+			return fmt.Errorf("%s: an interactive presentation widget requires a document and no business binding", where)
+		}
+	case "text":
+		if strings.TrimSpace(s.Text) == "" {
+			return fmt.Errorf("%s: no words to show", where)
+		}
+	case "filter":
+		if len(s.Facets) > 0 || s.FilterSearchVariable != "" {
+			if err := s.CheckFacetSchema(info); err != nil {
+				return err
+			}
+			break
+		}
+		if len(s.Fields) == 0 {
+			return fmt.Errorf("%s: no fields to filter by", where)
+		}
+		for _, name := range s.Fields {
+			f, ok := info.Field(name)
+			if !ok {
+				return fmt.Errorf("%s: %s has no field %s", where, info.Type, name)
+			}
+			if !slices.Contains(platform.Filterable, f.Type) {
+				return fmt.Errorf("%s: %s is a %s field; a filter takes %s fields", where, name, f.Type, strings.Join(platform.Filterable, ", "))
+			}
+		}
+	case "form":
+		// A form makes a new record through the object's own create action,
+		// so it asks for everything that action needs, except a parent
+		// reference supplied by its explicitly declared relation.
+		if err := t.checkAction(p.Name, info.Type+".create", info.Type); err != nil {
+			return fmt.Errorf("%s: %s cannot be created here", where, info.Type)
+		}
+		if len(s.Fields) == 0 && boundParent == "" && len(s.Inputs) == 0 {
+			return fmt.Errorf("%s: no fields to fill in", where)
+		}
+		for _, name := range s.Fields {
+			if err := field(name); err != nil {
+				return err
+			}
+		}
+		if err := t.checkFormInputs(s, info, parentType, boundParent); err != nil {
+			return fmt.Errorf("%s: %w", where, err)
+		}
+		for _, f := range info.Fields {
+			_, bound := s.Inputs[f.Name]
+			if f.Required && !f.ReadOnly && f.Name != boundParent && !bound && !slices.Contains(s.Fields, f.Name) {
+				return fmt.Errorf("%s: %s needs %s, which the form does not ask for", where, info.Type, f.Name)
+			}
 		}
 	}
 	return nil

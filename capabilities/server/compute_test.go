@@ -174,10 +174,7 @@ func TestCodeBuildUsesArtifactOwnerAndCandidate(t *testing.T) {
 	if !ok || version != 1 || op.Binding.Module != saved.Module {
 		t.Fatal("activated compute did not use the frozen module")
 	}
-	if tn.uploads == nil {
-		tn.uploads = map[string]time.Time{}
-	}
-	tn.uploads[saved.Module] = now.Add(-48 * time.Hour)
+	tn.uploads.add(saved.Module, now.Add(-48*time.Hour))
 	tn.SweepUploads(now)
 	if !tn.files().Exists(context.Background(), artifactKey(tn.ID, saved.Module)) {
 		t.Fatal("ordinary upload sweeping removed the compute artifact")

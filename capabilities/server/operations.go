@@ -123,20 +123,13 @@ func (t *Tenant) deliver(subscriber string, e caused, now time.Time) {
 	s := e.Record.GetSubmission()
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	t.queues[subscriber] = append(t.queues[subscriber], &Task{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
+	t.work.queue(subscriber, &Task{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
 		Title: s.GetSchema().GetName() + " " + target(s), State: "queued", Due: now, event: &e})
 }
 
 func target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.GetTarget().GetId() }
 
-func (t *Tenant) delivered(d Delivery) {
-	t.auditMu.Lock()
-	defer t.auditMu.Unlock()
-	t.deliveries = append(t.deliveries, d)
-	if len(t.deliveries) > auditKept {
-		t.deliveries = t.deliveries[len(t.deliveries)-auditKept:]
-	}
-}
+func (t *Tenant) delivered(d Delivery) { t.audit.delivered(d) }
 
 func (t *Tenant) automation(app string, replaying bool) platform.Caller {
 	return platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{}}, app, replaying, true)
@@ -187,12 +180,12 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 			if took >= budget {
 				break
 			}
-			a := t.apps[(t.turn+i)%n].Manifest().ID
+			a := t.apps[(t.quota.turn+i)%n].Manifest().ID
 			if t.overQuota(a, now) {
 				continue
 			}
 			t.opsMu.Lock()
-			next := ready(t.queues[a], now)
+			next := ready(t.work.queued(a), now)
 			t.opsMu.Unlock()
 			if next == nil {
 				continue
@@ -202,8 +195,8 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 			took, progressed = took+1, true
 		}
 	}
-	t.turn = (t.turn + 1) % max(n, 1)
-	for _, j := range t.jobs {
+	t.quota.next(n)
+	for _, j := range t.work.jobs {
 		if !j.Due.After(now) && took < budget && !t.overQuota(j.App, now) {
 			t.run(j, now, false)
 			t.spend(j.App, now)
@@ -232,39 +225,18 @@ func ready(q []*Task, now time.Time) *Task {
 func (t *Tenant) pending(now time.Time) bool {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	for app, q := range t.queues {
+	for app, q := range t.work.queues {
 		if ready(q, now) != nil && !t.overQuota(app, now) {
 			return true
 		}
 	}
-	return slices.ContainsFunc(t.jobs, func(j *Task) bool { return !j.Due.After(now) && !t.overQuota(j.App, now) })
+	return slices.ContainsFunc(t.work.jobs, func(j *Task) bool { return !j.Due.After(now) && !t.overQuota(j.App, now) })
 }
 
 // overQuota reports whether app has used its attempts of the minute (Tenant.Quota).
-func (t *Tenant) overQuota(app string, now time.Time) bool {
-	if t.Quota <= 0 {
-		return false
-	}
-	u := t.used[app]
-	return u.minute.Equal(now.Truncate(time.Minute)) && u.n >= t.Quota
-}
+func (t *Tenant) overQuota(app string, now time.Time) bool { return t.quota.over(app, t.Quota, now) }
 
-func (t *Tenant) spend(app string, now time.Time) {
-	if t.used == nil {
-		t.used = map[string]usedMinute{}
-	}
-	u, minute := t.used[app], now.Truncate(time.Minute)
-	if !u.minute.Equal(minute) {
-		u = usedMinute{minute: minute}
-	}
-	u.n++
-	t.used[app] = u
-}
-
-type usedMinute struct {
-	minute time.Time
-	n      int
-}
+func (t *Tenant) spend(app string, now time.Time) { t.quota.spend(app, now) }
 
 // Deferred are the apps past their quota at now, with their ready work waiting.
 func (t *Tenant) Deferred(now time.Time) []string {
@@ -275,7 +247,7 @@ func (t *Tenant) Deferred(now time.Time) []string {
 	var out []string
 	for _, a := range t.apps {
 		id := a.Manifest().ID
-		if t.overQuota(id, now) && (ready(t.queues[id], now) != nil || slices.ContainsFunc(t.jobs, func(j *Task) bool { return j.App == id && !j.Due.After(now) })) {
+		if t.overQuota(id, now) && (ready(t.work.queued(id), now) != nil || slices.ContainsFunc(t.work.jobs, func(j *Task) bool { return j.App == id && !j.Due.After(now) })) {
 			out = append(out, id)
 		}
 	}
@@ -320,17 +292,16 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 	task.Attempts, task.Last = int(generation), now
 	retry := t.retryOf(task.App)
 	done := outcome == "ok" || task.Attempts-task.since >= retry.Attempts
-	if done {
-		t.queues[task.App] = slices.DeleteFunc(t.queues[task.App], func(x *Task) bool { return x == task })
-	}
 	switch {
 	case outcome == "ok":
 		task.State, task.Error = "done", ""
 	case done:
 		task.State, task.Error = "failed", outcome
-		t.failed = append(t.failed, task)
 	default:
 		task.State, task.Error, task.Due = "retrying", outcome, now.Add(retry.After(task.Attempts-task.since))
+	}
+	if done {
+		t.work.settled(task)
 	}
 	t.opsMu.Unlock()
 	if task.State == "failed" {
@@ -378,15 +349,9 @@ func (t *Tenant) replayWork(kind string, raw []byte, at time.Time) error {
 	var task *Task
 	t.opsMu.Lock()
 	if kind == "job" {
-		if i := slices.IndexFunc(t.jobs, func(x *Task) bool { return x.ID == b.Work }); i >= 0 {
-			task = t.jobs[i]
-		}
+		task = t.work.job(b.Work)
 	} else {
-		for _, q := range t.queues {
-			if i := slices.IndexFunc(q, func(x *Task) bool { return x.ID == b.Work }); i >= 0 {
-				task = q[i]
-			}
-		}
+		task = t.work.anyDelivery(b.Work)
 	}
 	t.opsMu.Unlock()
 	if task == nil {
@@ -413,37 +378,14 @@ func (t *Tenant) failedWork(title, why, id string, now time.Time, replaying bool
 func (t *Tenant) Tasks() []Task {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	out := []Task{}
-	for _, j := range t.jobs {
-		out = append(out, *j)
-	}
-	for _, a := range t.apps {
-		for _, q := range t.queues[a.Manifest().ID] {
-			out = append(out, *q)
-		}
-	}
-	for _, f := range t.failed {
-		out = append(out, *f)
-	}
-	return out
+	return t.work.all(t.apps)
 }
 
 // retry queues a failed delivery again at the head of its queue, or makes a job due.
 func (t *Tenant) retry(id string, now time.Time) bool {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	if i := slices.IndexFunc(t.failed, func(x *Task) bool { return x.ID == id }); i >= 0 {
-		task := t.failed[i]
-		t.failed = slices.Delete(t.failed, i, i+1)
-		task.State, task.Due, task.since = "queued", now, task.Attempts
-		t.queues[task.App] = append([]*Task{task}, t.queues[task.App]...)
-		return true
-	}
-	if i := slices.IndexFunc(t.jobs, func(x *Task) bool { return x.ID == id }); i >= 0 {
-		t.jobs[i].Due = now
-		return true
-	}
-	return false
+	return t.work.retry(id, now)
 }
 
 // Connectors (K8): the deployment connects descriptors; the connector is the
@@ -476,10 +418,9 @@ func (t *Tenant) Connect(descriptors ...*pb.ConnectorDescriptor) error {
 	for _, d := range descriptors {
 		d = proto.Clone(d).(*pb.ConnectorDescriptor)
 		d.TenantId = t.ID
-		if err := t.connectors.Register(d); err != nil {
+		if err := t.connectors.register(d); err != nil {
 			return fmt.Errorf("tenant %s: connector %s: %v", t.ID, d.GetConnectorId(), err)
 		}
-		t.descriptors[d.GetConnectorId()] = d
 	}
 	return nil
 }
@@ -487,17 +428,15 @@ func (t *Tenant) Connect(descriptors ...*pb.ConnectorDescriptor) error {
 func (t *Tenant) refused(member, input string, err *kernel.Error, now time.Time) {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	if t.descriptors[member] != nil {
-		t.lastError[member] = ConnectorError{At: now, Input: input, Error: err.Error()}
-	}
+	t.connectors.refused(member, input, err, now)
 }
 
 func (t *Tenant) Connectors(now time.Time) []ConnectorView {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	out := []ConnectorView{}
-	for _, d := range t.connectors.Descriptors(t.ID) {
-		s, _ := t.connectors.Status(t.ID, d.GetConnectorId(), now)
+	for _, d := range t.connectors.kernel.Descriptors(t.ID) {
+		s, _ := t.connectors.kernel.Status(t.ID, d.GetConnectorId(), now)
 		v := ConnectorView{ID: d.GetConnectorId(), Direction: strings.ToLower(strings.TrimPrefix(d.GetDirection().String(), "CONNECTOR_DIRECTION_")),
 			DataClasses: d.GetDataClasses(), Heartbeat: d.GetHeartbeat().AsDuration().String(), Cursor: s.GetCursor(), Disabled: d.GetDisabled(),
 			Health: strings.ToLower(strings.TrimPrefix(s.GetHealth().String(), "CONNECTOR_HEALTH_"))}
@@ -505,7 +444,7 @@ func (t *Tenant) Connectors(now time.Time) []ConnectorView {
 			seen := s.GetLastSeen().AsTime()
 			v.LastSeen = &seen
 		}
-		if e, ok := t.lastError[d.GetConnectorId()]; ok {
+		if e, ok := t.connectors.lastError[d.GetConnectorId()]; ok {
 			v.LastError = &e
 		}
 		out = append(out, v)
@@ -560,22 +499,18 @@ func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Tim
 	defer t.opsMu.Unlock()
 	var out []string
 	for _, m := range members {
-		if n.Key != "" && slices.ContainsFunc(t.notices, func(x platform.Notification) bool { return x.Member == m && x.App == c.App && x.Key == n.Key }) {
-			continue
-		}
 		to, known := delivery[m]
 		if !known {
 			to = Reach{InApp: true}
 		}
-		t.noticeSeq++
 		x := n
-		x.ID, x.Member, x.App, x.At, x.Read = fmt.Sprintf("n-%d", t.noticeSeq), m, c.App, now, !to.InApp // what the member muted in the workspace is kept read
-		t.notices = append(t.notices, x)
+		x.App, x.At, x.Read = c.App, now, !to.InApp // what the member muted in the workspace is kept read
+		x, posted := t.notices.post(x, m)
+		if !posted {
+			continue
+		}
 		t.mailNotice(x, to)
 		out = append(out, m)
-	}
-	if len(t.notices) > noticesKept {
-		t.notices = t.notices[len(t.notices)-noticesKept:]
 	}
 	t.trimEffects()
 	t.acted += len(out)
@@ -584,15 +519,7 @@ func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Tim
 
 // notificationsFor is member's notifications, newest first.
 func (t *Tenant) notificationsFor(member string) []platform.Notification {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	out := []platform.Notification{}
-	for i := len(t.notices) - 1; i >= 0; i-- {
-		if t.notices[i].Member == member {
-			out = append(out, t.notices[i])
-		}
-	}
-	return out
+	return t.notices.forMember(member)
 }
 
 // App settings.
@@ -612,7 +539,7 @@ func (t *Tenant) setting(c platform.Caller, name string) string {
 	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	if v, ok := t.settings[app+"/"+name]; ok {
+	if v, ok := t.settings.get(app + "/" + name); ok {
 		return v
 	}
 	return a.Manifest().Settings[i].Default
@@ -640,7 +567,7 @@ func (t *Tenant) Settings() []AppSettings {
 		}
 		s := AppSettings{App: m.ID}
 		for _, x := range m.Settings {
-			v, ok := t.settings[m.ID+"/"+x.Name]
+			v, ok := t.settings.get(m.ID + "/" + x.Name)
 			if !ok {
 				v = x.Default
 			}
@@ -690,7 +617,7 @@ func operationsActions() []platform.Action {
 
 func (t *Tenant) decideConnector(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	t.opsMu.Lock()
-	d := t.descriptors[s.GetTarget().GetId()]
+	d := t.connectors.byID[s.GetTarget().GetId()]
 	t.opsMu.Unlock()
 	if d == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -715,7 +642,7 @@ func (t *Tenant) decideSetting(_ platform.Caller, s *pb.Submission, _ time.Time)
 	if !a.Manifest().Settings[i].Accepts(p.Value) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.settings[id] = p.Value; t.opsMu.Unlock() }, nil
+	return func(*pb.ChangeRecord) { t.settings.set(id, p.Value) }, nil
 }
 
 func (t *Tenant) decideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
@@ -731,7 +658,7 @@ func (t *Tenant) decideBinding(_ platform.Caller, s *pb.Submission, _ time.Time)
 func (t *Tenant) decideWork(_ platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	t.opsMu.Lock()
-	known := slices.ContainsFunc(t.failed, func(x *Task) bool { return x.ID == id }) || slices.ContainsFunc(t.jobs, func(x *Task) bool { return x.ID == id })
+	known := t.work.knows(id)
 	t.opsMu.Unlock()
 	if !known {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -741,21 +668,12 @@ func (t *Tenant) decideWork(_ platform.Caller, s *pb.Submission, now time.Time) 
 
 func (t *Tenant) decideNotification(c platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
-	t.opsMu.Lock()
-	i := slices.IndexFunc(t.notices, func(x platform.Notification) bool { return x.ID == id })
-	mine := i >= 0 && t.notices[i].Member == c.ID
-	t.opsMu.Unlock()
-	if i < 0 {
+	owner, found := t.notices.owner(id)
+	if !found {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if !mine {
+	if owner != c.ID {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	return func(*pb.ChangeRecord) {
-		t.opsMu.Lock()
-		defer t.opsMu.Unlock()
-		if i := slices.IndexFunc(t.notices, func(x platform.Notification) bool { return x.ID == id }); i >= 0 {
-			t.notices[i].Read = true
-		}
-	}, nil
+	return func(*pb.ChangeRecord) { t.notices.markRead(id) }, nil
 }

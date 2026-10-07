@@ -64,8 +64,8 @@ func TestApplicationRunsPreserveBindingsAndOriginalReadPermissions(t *testing.T)
 		t.Fatal(err)
 	}
 	raw := candidate.Bytes
-	tn.releaseCandidates = map[string]json.RawMessage{candidate.ID: raw}
-	tn.activeRelease = candidate.ID
+	tn.releases.candidates = map[string]json.RawMessage{candidate.ID: raw}
+	tn.releases.active = candidate.ID
 	submit(build.ID, build.ProcessType, "hold", "run", map[string]string{"key": "order"})
 	tn.Work(now.Add(time.Second))
 	call, refusal := tn.InvokeOperation(builder, platform.OperationRequest{App: "stock", Name: "double", Key: "compute-original", Inputs: json.RawMessage(`{"value":4}`)}, now)

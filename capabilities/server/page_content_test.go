@@ -70,7 +70,7 @@ func TestPublishedPageContentIdentityPermissionsReplayAndSnapshot(t *testing.T) 
 	if err2 != nil {
 		t.Fatal(err2)
 	}
-	rawCandidate, err2 := platform.ReadCandidate(candidate, tn.releaseCandidates[candidate])
+	rawCandidate, err2 := platform.ReadCandidate(candidate, tn.releases.candidates[candidate])
 	if err2 != nil {
 		t.Fatal(err2)
 	}

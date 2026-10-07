@@ -294,11 +294,11 @@ func TestAcceptedResultPreservesWorkAndEffectIntents(t *testing.T) {
 	if err := restarted.Replay([]Entry{saved}); err != nil {
 		t.Fatal(err)
 	}
-	if len(restarted.queues["listener"]) != 1 || len(restarted.outbound) != 1 ||
+	if len(restarted.work.queues["listener"]) != 1 || len(restarted.outbound) != 1 ||
 		restarted.outbound[0].ID != source.outbound[0].ID ||
 		restarted.outbound[0].Event != "stock.bin.create" {
 		t.Fatalf("saved intents were rediscovered rather than restored: queues=%+v effects=%+v",
-			restarted.queues["listener"], restarted.outbound)
+			restarted.work.queues["listener"], restarted.outbound)
 	}
 	snapshot, _, snapErr := restarted.Snapshot(func() int64 { return 1 })
 	if snapErr != nil {
@@ -308,8 +308,8 @@ func TestAcceptedResultPreservesWorkAndEffectIntents(t *testing.T) {
 	if err := restored.Restore(snapshot); err != nil {
 		t.Fatal(err)
 	}
-	if len(restored.queues["listener"]) != 1 || restored.queues["listener"][0].event.plan == nil ||
-		restored.queues["listener"][0].event.plan.Names[0] != "stock.bin.create" {
+	if len(restored.work.queues["listener"]) != 1 || restored.work.queues["listener"][0].event.plan == nil ||
+		restored.work.queues["listener"][0].event.plan.Names[0] != "stock.bin.create" {
 		t.Fatal("snapshot lost the committed delivery's original routing")
 	}
 }

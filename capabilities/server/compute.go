@@ -321,14 +321,9 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 		out.Detail = "Operation was cancelled"
 		return out
 	}
-	t.opsMu.Lock()
-	if t.computeCancels == nil {
-		t.computeCancels = map[string]context.CancelFunc{}
-	}
-	t.computeCancels[x.ID] = cancel
-	t.opsMu.Unlock()
+	t.cancels.add(x.ID, cancel)
 	t.mu.Unlock()
-	defer func() { t.opsMu.Lock(); delete(t.computeCancels, x.ID); t.opsMu.Unlock() }()
+	defer t.cancels.remove(x.ID)
 	var output json.RawMessage
 	var err error
 	if b.Build != nil {
@@ -395,7 +390,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			// per-call channel seals the bytes and the result references them
 			// (ADR-0047 §13.3). A result over every budget is refused, never
 			// trimmed.
-			answer, staged, stageErr := t.operationOutput(op, x.ID, output)
+			answer, staged, stageErr := t.staged.output(op, x.ID, output)
 			err = stageErr
 			if stageErr == nil {
 				output, out.Staged = answer, staged

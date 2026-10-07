@@ -313,7 +313,7 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 	if err != nil || jointID != joint.CandidateID {
 		t.Fatalf("save shared candidate: %s %v", jointID, err)
 	}
-	closed, err := platform.ReadCandidate(jointID, tn.releaseCandidates[jointID])
+	closed, err := platform.ReadCandidate(jointID, tn.releases.candidates[jointID])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +377,7 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 	answer("JOINT-FLOW", "approve")
 	CheckReplay(t, tn, entries, compose)
 	// Pure candidate reading must reject a mismatched pinned dependency.
-	saved, err := platform.ReadCandidate(first, tn.releaseCandidates[first])
+	saved, err := platform.ReadCandidate(first, tn.releases.candidates[first])
 	if err != nil {
 		t.Fatal(err)
 	}

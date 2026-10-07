@@ -79,7 +79,7 @@ func TestAcceptedObservationsArePrivateAndRecoveredWithoutReplanning(t *testing.
 	var entries []Entry
 	fail := true
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
-		if len(live.app("projection").(*resultProjection).notes) != 0 || len(live.notices) != 0 {
+		if len(live.app("projection").(*resultProjection).notes) != 0 || len(live.notices.all) != 0 {
 			t.Fatal("an observer projection or notice escaped before append")
 		}
 		if fail {
@@ -101,7 +101,7 @@ func TestAcceptedObservationsArePrivateAndRecoveredWithoutReplanning(t *testing.
 	}
 	batch, _, err := decodeAcceptedBatch(entries[0].Body)
 	if err != nil || len(batch.Observations) != 1 || !batch.Decisions[0].Event.Observed ||
-		len(live.notices) != 1 || len(live.app("projection").(*resultProjection).notes) != 1 {
+		len(live.notices.all) != 1 || len(live.app("projection").(*resultProjection).notes) != 1 {
 		t.Fatalf("observer result missing: %+v %v", batch, err)
 	}
 	CheckReplay(t, live, entries, compose)

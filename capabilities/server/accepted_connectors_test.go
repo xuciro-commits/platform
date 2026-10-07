@@ -95,7 +95,7 @@ func TestAcceptedConnectorCursorAndDecisionShareOneResult(t *testing.T) {
 	var entries []Entry
 	fail := true
 	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
-		status, _ := tn.connectors.Status(tn.ID, member.ID, now)
+		status, _ := tn.connectors.kernel.Status(tn.ID, member.ID, now)
 		if status.GetCursor() != "" || tn.records.types["connector.order"].rows["O1"] != nil {
 			t.Fatal("connector cursor or order escaped before the durable result")
 		}
@@ -113,7 +113,7 @@ func TestAcceptedConnectorCursorAndDecisionShareOneResult(t *testing.T) {
 	if refusal != nil || receipt == nil || len(entries) != 1 {
 		t.Fatalf("connector order was not accepted: %v", refusal)
 	}
-	status, _ := tn.connectors.Status(tn.ID, member.ID, now)
+	status, _ := tn.connectors.kernel.Status(tn.ID, member.ID, now)
 	if status.GetCursor() != "cursor-1" || tn.records.types["connector.order"].rows["O1"] == nil {
 		t.Fatal("committed cursor and order were not installed together")
 	}
@@ -129,7 +129,7 @@ func TestAcceptedConnectorCursorAndDecisionShareOneResult(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := recovered.connectors.Status(recovered.ID, member.ID, now)
+	got, _ := recovered.connectors.kernel.Status(recovered.ID, member.ID, now)
 	if got.GetCursor() != "cursor-1" {
 		t.Fatal("recovery did not apply the saved cursor")
 	}
@@ -143,7 +143,7 @@ func TestAcceptedConnectorCursorAndDecisionShareOneResult(t *testing.T) {
 	if err := isolated.recoverEntries([]Entry{damaged}); err == nil || !isolated.quarantined() {
 		t.Fatal("corrupt connector predecessor did not quarantine its tenant")
 	}
-	unchanged, _ := isolated.connectors.Status(isolated.ID, member.ID, now)
+	unchanged, _ := isolated.connectors.kernel.Status(isolated.ID, member.ID, now)
 	if unchanged.GetCursor() != "" || isolated.records.types["connector.order"].rows["O1"] != nil {
 		t.Fatal("corrupt cursor transition changed a record or connector")
 	}
@@ -172,7 +172,7 @@ func TestAcceptedConnectorSavepointDiscardsRejectedDelivery(t *testing.T) {
 	if err := draft.Deliver(c, "stock.item", "", "page-two", now); err != nil {
 		t.Fatalf("refused attempt reserved the cursor: %v", err)
 	}
-	if mark, _ := tn.connectors.Status(tn.ID, member.ID, now); mark.GetCursor() != "" {
+	if mark, _ := tn.connectors.kernel.Status(tn.ID, member.ID, now); mark.GetCursor() != "" {
 		t.Fatal("savepoint changed the live connector")
 	}
 }
@@ -206,7 +206,7 @@ func TestJournalAcceptedConnectorCrashAfterCommit(t *testing.T) {
 	if _, refusal := live.Submit(member, sub, now); refusal == nil {
 		t.Fatal("interrupted reply was accepted")
 	}
-	if mark, _ := live.connectors.Status(id, member.ID, now); mark.GetCursor() != "" ||
+	if mark, _ := live.connectors.kernel.Status(id, member.ID, now); mark.GetCursor() != "" ||
 		live.records.types["connector.order"].rows["O1"] != nil {
 		t.Fatal("crash applied cursor or record without a recovered result")
 	}
@@ -226,7 +226,7 @@ func TestJournalAcceptedConnectorCrashAfterCommit(t *testing.T) {
 	if recovered.app("connector-order").(*connectorOrderApp).calls != 0 {
 		t.Fatal("recovery reran the application decision")
 	}
-	if mark, _ := recovered.connectors.Status(id, member.ID, now); mark.GetCursor() != "cursor-1" ||
+	if mark, _ := recovered.connectors.kernel.Status(id, member.ID, now); mark.GetCursor() != "cursor-1" ||
 		recovered.records.types["connector.order"].rows["O1"] == nil {
 		t.Fatal("recovery did not apply both cursor and record")
 	}
