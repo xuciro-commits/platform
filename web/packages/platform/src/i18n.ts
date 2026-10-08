@@ -638,6 +638,7 @@ register("zh-CN", {
   "since {at}": "自 {at}",
   "last {at}": "最近 {at}",
   "this session": "当前会话",
+  "ended {at}": "已于 {at} 结束",
   "{n} other sessions ended.": "已结束 {n} 个其他会话。",
   "{n} assets": "{n} 个资源",
   "verified": "已校验",

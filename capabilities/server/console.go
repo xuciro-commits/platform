@@ -388,14 +388,15 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	// Session revocations are exposed only after the standing/token decision commits.
+	now := time.Now()
 	for id, member := range state.Members {
 		if old := d.members[id]; old != nil && old.Status != member.Status && !member.Active() {
-			d.endSessions(id, "")
+			d.endSessions(id, "", now)
 		}
 	}
 	for id, token := range d.tokens {
 		if state.Tokens[id] == nil {
-			d.endSessions(token.Member, id)
+			d.endSessions(token.Member, id, now)
 		}
 	}
 	d.members, d.subjects, d.profiles = state.Members, state.Subjects, state.Profiles

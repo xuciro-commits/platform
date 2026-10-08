@@ -2598,6 +2598,7 @@ export type Session = {
   first: string;
   last: string;
   current: boolean;
+  ended?: string;
 };
 
 export type SettingValue = {

@@ -7,7 +7,17 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export PLATFORM_PERSONAL_TOKEN_KEY="$(openssl rand -hex 32)"
 export PG_PORT=55433 IDP_PORT=58480 MANUFACTURING_PORT=58490 HOSPITALITY_PORT=58495 SINK_PORT=58497 FILES_PORT=59000 FILES_CONSOLE_PORT=59001
+# The rehearsal owns its volumes: compose.yaml names them after
+# PLATFORM_DATA_NAMESPACE when it is set (deploy/local/.env, README "重新走查"),
+# and this project ends with `down -v`. Inheriting the owner's namespace
+# would mount, and then delete, the running review database. The namespace is
+# therefore pinned here; whatever .env says is ignored for this project.
+export PLATFORM_DATA_NAMESPACE=platform-rehearsal
 compose() { docker compose -p platform-rehearsal -f compose.yaml "$@"; }
+if docker volume ls -q 2>/dev/null | grep -qx 'platform-rehearsal_pgdata' && docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^platform-rehearsal-'; then
+  echo "FAIL: a platform-rehearsal project is already running; stop it first (docker compose -p platform-rehearsal down -v)" >&2
+  exit 1
+fi
 IDP=http://localhost:$IDP_PORT/auth/v1 MANUFACTURING=http://localhost:$MANUFACTURING_PORT HOSPITALITY=http://localhost:$HOSPITALITY_PORT SINK=http://localhost:$SINK_PORT
 backup=$(mktemp -d)
 cleanup() {

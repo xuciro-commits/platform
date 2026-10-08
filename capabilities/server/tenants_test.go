@@ -409,11 +409,18 @@ func TestLifecycleTokensAndSessions(t *testing.T) {
 	// Sessions: two credentials seen, end the other, it is refused.
 	d.noticed("bo", "cred-1", "Mozilla/5.0 Chrome/130.0", "sign-in", now)
 	d.noticed("bo", "cred-2", "curl/8.0", "sign-in", now.Add(time.Minute))
-	if ss := d.Sessions("bo", "cred-1"); len(ss) != 2 || ss[0].Agent != "curl 8" || ss[1].Current != true {
+	if ss := d.Sessions("bo", "cred-1", now); len(ss) != 2 || ss[0].Agent != "curl 8" || ss[1].Current != true {
 		t.Fatalf("sessions: %+v", ss)
 	}
-	if n := d.EndOtherSessions("bo", "cred-1"); n != 1 || d.noticed("bo", "cred-2", "", "sign-in", now) || !d.noticed("bo", "cred-1", "", "sign-in", now) {
+	if n := d.EndOtherSessions("bo", "cred-1", now); n != 1 || d.noticed("bo", "cred-2", "", "sign-in", now) || !d.noticed("bo", "cred-1", "", "sign-in", now) {
 		t.Fatal("ending other sessions")
+	}
+	// The ended session stays listed, marked, for a day; then it is gone.
+	if ss := d.Sessions("bo", "cred-1", now); len(ss) != 2 || !ss[0].Current || ss[1].Ended.IsZero() || ss[1].Agent != "curl 8" {
+		t.Fatalf("ended session not shown as ended: %+v", ss)
+	}
+	if ss := d.Sessions("bo", "cred-1", now.Add(endedSessionsShown+time.Minute)); len(ss) != 1 || !ss[0].Current {
+		t.Fatalf("ended session did not age out: %+v", ss)
 	}
 	// Admin revokes the token; offboard removes subjects and grants.
 	if got := decide("admin", PlatformApp, SchemaTokenRevoke, TokenType, "ci", `{}`); got != "ok" {

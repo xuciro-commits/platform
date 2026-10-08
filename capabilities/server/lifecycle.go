@@ -74,12 +74,28 @@ type Session struct {
 	First   time.Time `json:"first"`
 	Last    time.Time `json:"last"`
 	Current bool      `json:"current"`
+	// Ended is when the host stopped honouring the credential: ended by the
+	// member, by suspension, or by the tenant's session hours. An ended
+	// session stays listed for a day so the list shows what just happened
+	// rather than silently shrinking.
+	Ended time.Time `json:"ended,omitzero"`
 }
+
+// endedSessionsShown is how long an ended session stays in the list.
+const endedSessionsShown = 24 * time.Hour
 
 type sessionTable struct {
 	mu      sync.Mutex
 	seen    map[string]map[string]*Session // member → session id → session
 	revoked map[string]bool                // session ids a member ended
+}
+
+// end marks a session ended now; the host refuses its credential from here.
+func (st *sessionTable) end(member, id string, now time.Time) {
+	st.revoked[id] = true
+	if s := st.seen[member][id]; s != nil && s.Ended.IsZero() {
+		s.Ended = now
+	}
 }
 
 func lifecycleActions() []platform.Action {
@@ -158,7 +174,10 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 	}
 	switch s.GetSchema().GetName() {
 	case SchemaMemberSuspend:
-		return func(*pb.ChangeRecord) { m.Status = platform.MemberSuspended; d.endSessions(id, "") }, nil
+		return func(r *pb.ChangeRecord) {
+			m.Status = platform.MemberSuspended
+			d.endSessions(id, "", r.GetRecordedTime().AsTime())
+		}, nil
 	case SchemaMemberResume:
 		if m.Status != platform.MemberSuspended {
 			return nil, invalid
@@ -176,7 +195,7 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 				maps.DeleteFunc(d.subjects, func(_, member string) bool { return member == id })
 			} // accepted results retain a denial binding; only explicit add/invite may replace it
 			maps.DeleteFunc(d.tokens, func(_ string, t *Token) bool { return t.Member == id })
-			d.endSessions(id, "")
+			d.endSessions(id, "", r.GetRecordedTime().AsTime())
 			// What they held through others' delegation ends; what others held through theirs passes on.
 			for _, other := range d.members {
 				if other.ID == id {
@@ -212,7 +231,10 @@ func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.Cha
 		if t.Member != c.ID && !c.Holds(PlatformApp, Admin) && !c.Replaying {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
-		return func(*pb.ChangeRecord) { delete(d.tokens, id); d.endSessions(t.Member, id) }, nil
+		return func(r *pb.ChangeRecord) {
+			delete(d.tokens, id)
+			d.endSessions(t.Member, id, r.GetRecordedTime().AsTime())
+		}, nil
 	}
 	var p struct {
 		Label  string
@@ -368,8 +390,7 @@ func (d *Console) noticed(member, credential, agent string, kind string, now tim
 	}
 	s := d.sessions.seen[member][id]
 	if s != nil && kind == "sign-in" && hours > 0 && now.Sub(s.First) >= time.Duration(hours)*time.Hour {
-		d.sessions.revoked[id] = true // only a newly authenticated credential may start another session
-		delete(d.sessions.seen[member], id)
+		d.sessions.end(member, id, now) // only a newly authenticated credential may start another session
 		return false
 	}
 	if s == nil {
@@ -382,45 +403,56 @@ func (d *Console) noticed(member, credential, agent string, kind string, now tim
 
 // endSessions forgets a member's sessions and refuses their credentials: all
 // of them, or those of one token.
-func (d *Console) endSessions(member, token string) {
+func (d *Console) endSessions(member, token string, now time.Time) {
 	d.sessions.mu.Lock()
 	defer d.sessions.mu.Unlock()
 	for id, s := range d.sessions.seen[member] {
-		if token == "" || s.Token == token {
-			d.sessions.revoked[id] = true
-			delete(d.sessions.seen[member], id)
+		if (token == "" || s.Token == token) && s.Ended.IsZero() {
+			d.sessions.end(member, id, now)
 		}
 	}
 }
 
 // EndOtherSessions keeps only the session asking.
-func (d *Console) EndOtherSessions(member, credential string) int {
+func (d *Console) EndOtherSessions(member, credential string, now time.Time) int {
 	keep := sessionID(credential)
 	d.sessions.mu.Lock()
 	defer d.sessions.mu.Unlock()
 	n := 0
-	for id := range d.sessions.seen[member] {
-		if id != keep {
-			d.sessions.revoked[id] = true
-			delete(d.sessions.seen[member], id)
+	for id, s := range d.sessions.seen[member] {
+		if id != keep && s.Ended.IsZero() {
+			d.sessions.end(member, id, now)
 			n++
 		}
 	}
 	return n
 }
 
-// Sessions are a member's, newest last seen first, the current one marked.
-func (d *Console) Sessions(member, credential string) []Session {
+// Sessions are a member's, newest last seen first, the current one marked;
+// sessions ended within the last day stay listed, marked ended, then go.
+func (d *Console) Sessions(member, credential string, now time.Time) []Session {
 	cur := sessionID(credential)
 	d.sessions.mu.Lock()
 	defer d.sessions.mu.Unlock()
 	out := []Session{}
-	for _, s := range d.sessions.seen[member] {
+	for id, s := range d.sessions.seen[member] {
+		if !s.Ended.IsZero() && now.Sub(s.Ended) > endedSessionsShown {
+			delete(d.sessions.seen[member], id)
+			continue
+		}
 		v := *s
 		v.Current = v.ID == cur
 		out = append(out, v)
 	}
-	slices.SortFunc(out, func(a, b Session) int { return b.Last.Compare(a.Last) })
+	slices.SortFunc(out, func(a, b Session) int {
+		if (a.Ended.IsZero()) != (b.Ended.IsZero()) {
+			if a.Ended.IsZero() {
+				return -1
+			}
+			return 1
+		}
+		return b.Last.Compare(a.Last)
+	})
 	return out
 }
 

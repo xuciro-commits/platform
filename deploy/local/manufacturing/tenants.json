@@ -17,6 +17,7 @@
         ],
         "id": "sup-1",
         "roles": {
+          "core": "steward",
           "mes": "supervisor",
           "erp": "controller",
           "platform": "admin",

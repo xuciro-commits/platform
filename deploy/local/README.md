@@ -211,6 +211,8 @@ WMS 是在应用工作台保存并发布的 `build.app` 与对象/页面/流程/
 
 酒店宿主内的 `hotel-test` 是晋级目标，与 `hotel-a` 共用 `8495` 入口；租户之间隔离记录与权限。用 `manager@hotel.test` 的 Host Console 开目标成员支持会话后晋级；更改存储的 v2 先不激活地晋级，再在目标租户发布工作台审阅其升级计划。`8490` 制造宿主是另一进程，不是这条同宿主晋级路线的目标。走查步骤归 [Testing](../../docs/Testing.md)。
 
+`deploy/local/rehearse.sh` 不受这个前缀影响：它把 `PLATFORM_DATA_NAMESPACE` 固定为 `platform-rehearsal`，用自己的卷并在结束时删除，不会碰走查数据卷；`scripts/verify.sh` 不带参数时也不再包含 `deploy` 步骤，排演需显式 `scripts/verify.sh deploy`。
+
 回退时先停 Compose，再把 `PLATFORM_DATA_NAMESPACE` 改回旧前缀（原始环境删除这条变量），重新启动；不要把两个命名空间的数据卷混配。删除旧卷由负责人单独决定。
 
 
