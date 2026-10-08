@@ -235,15 +235,15 @@ const isModuleFocus = (value?: string): value is ModuleFocus => !!value && (modu
 /** What the host's CheckGroups would refuse, as problems the builder can go to. */
 function groupProblems(groups: Api.AppGroup[], pages: string[], locate: () => void): WorkbenchProblem[] {
   const problems: WorkbenchProblem[] = [];
-  const under: Record<string, string> = {};
+  const under = new Map<string, string>();
   groups.forEach((group, at) => {
     const title = group.title.trim() || t("group {n}", { n: String(at + 1) });
     if (!group.title.trim()) problems.push({ id: `group-title:${at}`, severity: "warning", text: t("A group has no title."), locate });
     if (!group.pages.length) problems.push({ id: `group-empty:${at}`, severity: "warning", text: t("The group “{group}” holds no page. Put a page under it or remove the group.", { group: title }), locate });
     for (const page of group.pages) {
       if (!pages.includes(page)) problems.push({ id: `group-page:${at}:${page}`, severity: "warning", text: t("The group “{group}” lists the page “{page}”, which this module does not hold.", { group: title, page }), locate });
-      if (under[page] && under[page] !== title) problems.push({ id: `group-twice:${page}`, severity: "warning", text: t("The page “{page}” is under two groups: “{a}” and “{b}”.", { page, a: under[page]!, b: title }), locate });
-      under[page] ??= title;
+      if (under.has(page)) problems.push({ id: `group-twice:${page}`, severity: "warning", text: t("The page “{page}” is under two groups: “{a}” and “{b}”.", { page, a: under.get(page)!, b: title }), locate });
+      if (!under.has(page)) under.set(page, title);
     }
   });
   return problems;

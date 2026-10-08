@@ -34,6 +34,19 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await header.getByRole("checkbox", { name: "Show application header", exact: true }).uncheck();
   await expect.poll(savedHeader).toBeUndefined();
 
+  // A rejected release keeps the host check and returns to the existing module's navigation.
+  await decide(request, "manager", "build", "build.app.edit", { type: "build.app", id: appID }, { groups: [{ title: "Empty receiving group", pages: [] }, { title: "Receiving", pages: [pageName] }, { title: "Receiving", pages: [pageName] }] });
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "holds no page" })).toBeVisible();
+  await page.getByRole("button", { name: "Open the module's navigation", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Navigation", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("button", { name: "Toggle dock", exact: true }).click();
+  await expect(page.getByRole("button", { name: "The group “Empty receiving group” holds no page. Put a page under it or remove the group.", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: `The page “${pageName}” is under two groups: “Receiving” and “Receiving”.`, exact: true })).toBeVisible();
+  for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Remove group", exact: true }).first().click();
+  await expect.poll(async () => (await (await request.get(`/v1/records/build.app/${appID}`, { headers: { Authorization: "Bearer manager" } })).json()).record.groups ?? []).toEqual([]);
+
   await open(page, "manager", "/home");
   await expect(page.getByRole("button", { name: /^PMS\b/ }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Platform Catalog", exact: true })).toHaveCount(0);
