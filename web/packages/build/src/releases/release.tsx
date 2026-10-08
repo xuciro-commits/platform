@@ -69,6 +69,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [canActivate, setCanActivate] = useState(false);
   const [activationDiagnostic, setActivationDiagnostic] = useState("");
   const [upgradePlan, setUpgradePlan] = useState<Api.ReleaseUpgradePlan>();
+  const [origin, setOrigin] = useState<{ from: string; at?: string }>();
   const [confirmedUpgrade, setConfirmedUpgrade] = useState("");
   const [planID, setPlanID] = useState("");
   const [reportID, setReportID] = useState("");
@@ -79,6 +80,9 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20`, undefined, mayRelease);
   const hostAdmin = useReadQuery<{ subject: string; tenants: string[] }>("/v1/host/me", undefined, mayRelease).isSuccess; // the host console answers only host administrators
   const activeID = inventory.data?.activeId ?? "";
+  // What another environment promoted here and nobody activated yet: the
+  // release holder's inbox, ahead of the full saved inventory.
+  const promoted = (inventory.data?.candidates ?? []).filter((candidate) => candidate.from && candidate.id !== activeID);
   const selected = kinds.find((item) => item.kind === kind)!;
   const query = useRecordInventory<Record>(selected.type, 1000, builder);
   const functions = useRecordInventory<Record>("build.function", 1000, builder);
@@ -109,6 +113,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         setRunningMatches(result.body.runningMatches); setRunningDiagnostic(result.body.runningDiagnostic ?? "");
         setCanActivate(result.body.canActivate); setActivationDiagnostic(result.body.activationDiagnostic ?? "");
         setUpgradePlan(result.body.upgradePlan);
+        setOrigin(result.body.from ? { from: result.body.from, at: result.body.promotedAt } : undefined);
         setConfirmedUpgrade(current => current === result.body.upgradePlan?.id ? current : "");
         await reports.refetch();
       }
@@ -120,7 +125,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     setError("");
     setReview(undefined);
     setSavedID("");
-    setSavedReview(false); setRunningMatches(undefined); setRunningDiagnostic("");
+    setSavedReview(false); setRunningMatches(undefined); setRunningDiagnostic(""); setOrigin(undefined);
     setPlanID(""); setReportID("");
     try {
       const result = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview",
@@ -223,6 +228,18 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
           {savedReview && !inventory.data?.candidates.some((candidate) => candidate.id === savedID) && <option value={savedID}>{savedID}</option>}
         </Select>
       </label>}
+      {promoted.length > 0 && <div className="grid gap-2 rounded border border-border p-3" role="region" aria-label={t("Promoted into this environment")}>
+        <div>
+          <h3 className="text-sm font-semibold">{t("Promoted into this environment")} · {promoted.length}</h3>
+          <p className="text-xs text-muted">{t("Candidates another environment promoted here and that still wait for review. Open one to check its upgrade plan and activate it.")}</p>
+        </div>
+        <ul className="grid gap-1">
+          {promoted.map((candidate) => <li key={candidate.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="break-all">{candidate.title} · {t("from {tenant}", { tenant: candidate.from! })}{candidate.promotedAt ? ` · ${new Date(candidate.promotedAt).toLocaleString()}` : ""} · <code>{candidate.id.slice(-8)}</code></span>
+            <Button size="sm" disabled={busy} onClick={() => void loadSaved(candidate.id)}>{t("Review and activate")}</Button>
+          </li>)}
+        </ul>
+      </div>}
       {inventory.data && <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         <span>{t("Showing {shown} of {total} candidates", { shown: inventory.data.candidates.length, total: inventory.data.total })}</span>
         <Button size="sm" disabled={busy || offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>{t("Previous")}</Button>
@@ -270,7 +287,9 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     {review && <Card className="grid gap-3 p-3" aria-live="polite">
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold">{savedReview ? t("Saved candidate review") : review.diagnostic ? t("Candidate rejected") : (review.drafts?.length ?? 0) > 1 ? t("Joint candidate ready for review") : t("Candidate ready for review")}</span>
         {savedReview && <StatusTag status={activeID === savedID ? "active" : "saved"} registry={{ active: { label: t("Active"), tone: "success" }, saved: { label: t("Saved"), tone: "info" } }} />}
+        {savedReview && origin && <StatusTag status="promoted" registry={{ promoted: { label: t("Promoted from {tenant}", { tenant: origin.from }), tone: "info" } }} />}
       </div>
+      {savedReview && origin && activeID !== savedID && <p className="text-xs text-muted" role="status">{t("This candidate was promoted from {tenant}{when}. It is not active here: review the differences and the storage upgrade plan below, then activate it.", { tenant: origin.from, when: origin.at ? ` · ${new Date(origin.at).toLocaleString()}` : "" })}</p>}
       {review.currentId && <p className="break-all text-xs">{t("Installed candidate")}: <code>{review.currentId}</code></p>}
       {review.candidateId && <p className="break-all text-xs">{savedReview ? t("Saved candidate") : t("Draft candidate")}: <code>{review.candidateId}</code></p>}
       {savedReview && hostAdmin && <div className="flex flex-wrap items-center gap-2"><Button size="sm" onClick={() => open({ view: "host-promotions", params: { from: client.connection.tenant, candidate: savedID } })}>{t("Promote to another environment…")}</Button><span className="text-xs text-muted">{t("Development → test → production: the sealed bytes of this candidate move into another tenant through the host console.")}</span></div>}

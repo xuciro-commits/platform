@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"platformserver/apps/build"
 	"platformserver/platform"
@@ -13,6 +14,11 @@ type ReleaseSummary struct {
 	ID     string `json:"id"`
 	Title  string `json:"title"`
 	Assets int    `json:"assets"`
+	// From and PromotedAt are set when the candidate arrived from another
+	// environment: the release holder here sees what was promoted in and
+	// still waits for review, not an anonymous saved candidate.
+	From       string    `json:"from,omitempty"`
+	PromotedAt time.Time `json:"promotedAt,omitzero"`
 }
 
 type ReleasePage struct {
@@ -30,6 +36,8 @@ type SavedReleaseReview struct {
 	CanActivate          bool                    `json:"canActivate"`
 	ActivationDiagnostic string                  `json:"activationDiagnostic,omitempty"`
 	UpgradePlan          *ReleaseUpgradePlan     `json:"upgradePlan,omitempty"`
+	From                 string                  `json:"from,omitempty"`
+	PromotedAt           time.Time               `json:"promotedAt,omitzero"`
 }
 
 func (t *Tenant) SavedReleases(m platform.Member, offset, limit int) (ReleasePage, error) {
@@ -75,7 +83,11 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int) (ReleasePag
 				break
 			}
 		}
-		reply.Candidates = append(reply.Candidates, ReleaseSummary{ID: id, Title: title, Assets: len(candidate.Assets)})
+		summary := ReleaseSummary{ID: id, Title: title, Assets: len(candidate.Assets)}
+		if origin, ok := t.releases.origin(id); ok {
+			summary.From, summary.PromotedAt = origin.From, origin.At
+		}
+		reply.Candidates = append(reply.Candidates, summary)
 	}
 	return reply, nil
 }
@@ -102,6 +114,9 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	}}
 	for _, asset := range saved.Assets {
 		reply.Preview.Included = append(reply.Preview.Included, asset.Ref)
+	}
+	if origin, ok := t.releases.origin(id); ok {
+		reply.From, reply.PromotedAt = origin.From, origin.At
 	}
 	running, err := t.runningReleaseLocked(saved)
 	if err != nil {

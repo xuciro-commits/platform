@@ -52,13 +52,14 @@ type tenantState struct {
 	Outbound          []effectState              `json:"outbound"`
 	// The host console's lifecycle and support sessions (ADR-0047 §6.5) travel
 	// with the tenant: a restart keeps a suspension and its authorized sessions.
-	HostLifecycle string                           `json:"hostLifecycle,omitempty"`
-	Support       []SupportGrant                   `json:"support,omitempty"`
-	Sealed        map[string]SealedArtifact        `json:"sealed,omitempty"`
-	Migrations    []MigrationManifest              `json:"migrations,omitempty"`
-	Composites    map[string]string                `json:"composites,omitempty"`
-	Staged        map[string]platform.StagedResult `json:"staged,omitempty"`
-	Sequences     map[string]int                   `json:"sequences,omitempty"`
+	HostLifecycle  string                           `json:"hostLifecycle,omitempty"`
+	Support        []SupportGrant                   `json:"support,omitempty"`
+	Sealed         map[string]SealedArtifact        `json:"sealed,omitempty"`
+	ReleaseOrigins map[string]ReleaseOrigin         `json:"releaseOrigins,omitempty"`
+	Migrations     []MigrationManifest              `json:"migrations,omitempty"`
+	Composites     map[string]string                `json:"composites,omitempty"`
+	Staged         map[string]platform.StagedResult `json:"staged,omitempty"`
+	Sequences      map[string]int                   `json:"sequences,omitempty"`
 }
 
 type recordState struct {
