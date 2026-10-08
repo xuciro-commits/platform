@@ -1,8 +1,9 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
+import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
-import { Button, Input, PageHeader, Panel, RecordList, Select, Tag, Textarea, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Input, PageHeader, Panel, Select, Tag, Textarea, t, useUnsavedChanges } from "@platform/ui";
 
 // Decision tables (ADR-0062): condition columns → result columns, first match
 // wins. The grid is the editor; publishing installs the table as a native
@@ -19,7 +20,7 @@ export function DecisionTables() {
   return <div className="grid gap-3">
     <PageHeader title={t("Decision tables")} description={t("Condition columns to result columns; the first matching row decides. A published table is an operation any process step, page or caller can use.")}
       actions={<Button onClick={() => open({ view: "decision-table", params: { id: "new" } })}>{t("New decision table")}</Button>} />
-    <RecordList source={source} type="build.table" fields={["title", "name", "version", "state"]} onOpen={(record) => open({ view: "decision-table", params: { id: record.id } })} />
+    <ResourceList source={source} type="build.table" fields={["title", "name", "version", "state"]} onOpen={(record) => open({ view: "decision-table", params: { id: record.id } })} />
   </div>;
 }
 

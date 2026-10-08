@@ -1,8 +1,9 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
+import { ResourceList } from "../editor/ResourceList";
 import {useEffect,useRef,useState} from "react";
 import type {Api} from "@platform/kernel";
 import {useHost,useReadQuery,semanticPropertyTypes} from "@platform/app";
-import {Button,Input,PageHeader,Panel,RecordList,Select,Textarea,t,useUnsavedChanges} from "@platform/ui";
+import {Button,Input,PageHeader,Panel,Select,Textarea,t,useUnsavedChanges} from "@platform/ui";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { useDirectInstall } from "../releases/release-profile";
 
@@ -14,7 +15,7 @@ const types = ["text","longtext","integer","decimal","date","datetime","boolean"
 export function PropertyTypes() {
  const {source,role}=useHost(),{open}=useApplicationWorkspace();
  if(role("build")!=="builder")return <PageHeader title={t("Shared properties")} description={t("Only a builder can edit shared properties.")}/>;
- return <div className="grid gap-3"><PageHeader title={t("Shared properties")} description={t("Publish shared scalar meaning and bind object fields to an exact version.")} actions={<Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button>}/><RecordList source={source} type="build.propertytype" fields={["title","name","type","version"]} onOpen={record=>open({view:"property-type",params:{id:record.id}})}/></div>;
+ return <div className="grid gap-3"><PageHeader title={t("Shared properties")} description={t("Publish shared scalar meaning and bind object fields to an exact version.")} actions={<Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button>}/><ResourceList source={source} type="build.propertytype" fields={["title","name","type","version"]} onOpen={record=>open({view:"property-type",params:{id:record.id}})}/></div>;
 }
 
 export function PropertyTypeEditor({id}:{id:string}) {

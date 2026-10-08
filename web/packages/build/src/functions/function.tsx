@@ -1,11 +1,12 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
+import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 import { CandidateTest } from "../releases/simulate";
 // This editor writes build.function's native declaration. The three stages
 // visualize that declaration; execution belongs to the host model effect path.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Textarea, Workbench, t, useUnsavedChanges,
+import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, Select, Textarea, Workbench, t, useUnsavedChanges,
   type CanvasNode, type NodeCatalog } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { installedObjects, type WorkflowObject } from "../automate/workflow-model";
@@ -28,7 +29,7 @@ export function Functions() {
   return <div className="grid gap-3">
     <PageHeader title={t("AI functions")} description={t("Turn readable record fields into typed suggestions for human review.")}
       actions={<Button onClick={() => open({ view: "function", params: { id: "new" } })}>{t("New AI function")}</Button>} />
-    <RecordList source={source} type="build.function" fields={["title", "name", "object", "version"]} onOpen={(record) => open({ view: "function", params: { id: record.id } })} />
+    <ResourceList source={source} type="build.function" fields={["title", "name", "object", "version"]} onOpen={(record) => open({ view: "function", params: { id: record.id } })} />
   </div>;
 }
 

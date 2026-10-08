@@ -1,9 +1,10 @@
 import { integrates } from "./marking";
+import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
 
 // Writebacks (ADR-0072): an accepted action on an object sent to an external
 // system through a connection. The sending is an outbound effect - queued in
@@ -23,7 +24,7 @@ export function Writebacks() {
   return <div className="grid gap-3">
     <PageHeader title={t("Writebacks")} description={t("Send an object's accepted actions to an external system. Each decision becomes one request, queued in the connection's order and retried with the same key so the receiver can deduplicate retries.")}
       actions={<Button onClick={() => open({ view: "writeback", params: { id: "new" } })}>{t("New writeback")}</Button>} />
-    <RecordList source={source} type="build.writeback" fields={["title", "object", "on", "connection", "sent", "failed", "state"]} onOpen={(record) => open({ view: "writeback", params: { id: record.id } })} />
+    <ResourceList source={source} type="build.writeback" fields={["title", "object", "on", "connection", "sent", "failed", "state"]} onOpen={(record) => open({ view: "writeback", params: { id: record.id } })} />
   </div>;
 }
 

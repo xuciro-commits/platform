@@ -4,8 +4,10 @@
 // object's actions and this action's sections. Main: the section as a table or
 // preview. Right: the row in hand. Dock: this action's problems. The action
 // still lives in its object's record: the object draft session is shared.
-import { PayloadFields, useHost, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, DataTable, Input, PageHeader, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Toggles, Workbench, cn, t, type EntityInfo, type WorkbenchProblem } from "@platform/ui";
+import { PayloadFields, useHost, useRecordInventory, type Definition } from "@platform/app";
+import type { Api } from "@platform/kernel";
+import { projectGroup, useProjectIndex } from "../projects/membership";
+import { Button, Card, Checkbox, GroupedList, Input, PageHeader, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Toggles, Workbench, cn, t, type EntityInfo, type WorkbenchProblem } from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { DraftStatus } from "../editor/workbench";
 import { Boxes, CheckSquare, FileInput, ListChecks, Plus, Shield, Sparkles, Trash2, Wand2, Zap } from "lucide-react";
@@ -33,25 +35,55 @@ type ObjectDraft = { id: string; name: string; title: string; state: string; arc
 type ActionRow = { key: string; object: ObjectDraft; action: Action };
 
 /** Every action type of every object type this tenant drafts (Ontology Manager's Action types list): one row per action, opening its workbench. */
+type BuiltInRow = { key: string; definition: Definition; object?: Definition };
+
+/** Action types in a tree (ADR-0083 D5/D6): the tenant's own under their object
+ * types, and — folded, read-only — the actions the host and its modules ship,
+ * so a builder sees what already exists before declaring another. */
 export function ActionTypes() {
-  const { role } = useHost(), { open } = useApplicationWorkspace();
+  const { role, definitions, me } = useHost(), { open } = useApplicationWorkspace();
   const inventory = useRecordInventory<ObjectDraft>("build.object");
+  const projects = useProjectIndex();
+  const [shipped, setShipped] = useState(false);
   if (role("build") !== "builder") return <PageHeader title={t("Action types")} description={t("Only a builder can edit action types.")} />;
-  const rows: ActionRow[] = (inventory.data?.records ?? []).filter((object) => !object.archived).flatMap((object) => (object.actions ?? []).map((action) => ({ key: `${object.id}:${action.name}`, object, action })));
+  const drafts = (inventory.data?.records ?? []).filter((object) => !object.archived);
+  const rows: ActionRow[] = drafts.flatMap((object) => (object.actions ?? []).map((action) => ({ key: `${object.id}:${action.name}`, object, action })));
   const stateTitle = (object: ObjectDraft, name?: string) => object.states?.find((s) => s.name === name)?.title ?? name ?? "";
+  const transition = (row: ActionRow) => `${row.action.from.map((f) => stateTitle(row.object, f)).join(", ")} → ${row.action.to ? stateTitle(row.object, row.action.to) : row.action.toInput ? t("From input") : t("Where it was")}`;
+  const own = new Set(rows.map((row) => `build.${row.object.name}.${row.action.name}`));
+  const objects = new Map(definitions.filter((d) => d.ref.kind === "object").map((d) => [d.ref.name, d]));
+  const builtIn: BuiltInRow[] = definitions.filter((d) => d.ref.kind === "action" && d.action && !own.has(d.ref.name)).map((d) => ({ key: d.ref.name, definition: d, object: objects.get(d.action!.target) }));
+  const appTitle = (id: string) => me.apps.find((a) => a.id === id)?.title ?? id;
+  const objectRef = (object: ObjectDraft): Api.AssetRef => ({ app: "build", kind: "object", name: `build.${object.name}` });
   return <div className="grid min-w-0 gap-3">
-    <PageHeader title={t("Action types")} description={t("An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one.")} />
-    <DataTable<ActionRow> data={rows} getRowId={(row) => row.key} height={520} loading={inventory.isLoading} empty={t("No action types yet. Add a lifecycle state and an action to an object type.")}
-      onRowClick={(row) => open({ view: "action-type", params: { id: row.object.id, action: row.action.name } })}
-      columns={[
-        { id: "title", header: t("Action type"), accessorFn: (row) => row.action.title || row.action.name, meta: { width: 220, pin: "left" } },
-        { id: "object", header: t("Object type"), accessorFn: (row) => row.object.title || row.object.name, meta: { width: 180 } },
-        { id: "identity", header: t("Identity"), accessorFn: (row) => `build.${row.object.name}.${row.action.name}`, meta: { width: 260 } },
-        { id: "transition", header: t("Transition"), accessorFn: (row) => `${row.action.from.map((f) => stateTitle(row.object, f)).join(", ")} → ${row.action.to ? stateTitle(row.object, row.action.to) : row.action.toInput ? t("From input") : t("Where it was")}`, meta: { width: 240 } },
-        { id: "parameters", header: t("Parameters"), accessorFn: (row) => row.action.inputs?.length ?? 0, meta: { width: 100 } },
-        { id: "approval", header: t("Approval"), accessorFn: (row) => row.action.approval ? t("Yes") : "", meta: { width: 90 } },
-        { id: "state", header: t("Status"), accessorFn: (row) => row.object.state, cell: ({ row }) => <DraftStatus state={row.original.object.state} />, meta: { width: 110 } },
-      ]} />
+    <PageHeader title={t("Action types")} description={t("An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one. The host already ships create, edit and archive for every object type and each module its own actions — they are listed below so you declare only what is missing.")} />
+    <Panel title={t("Declared in this organisation")} description={t("{n} action types on {objects} object types", { n: rows.length, objects: drafts.filter((o) => o.actions?.length).length })}>
+      <GroupedList<ActionRow> items={rows} id={(row) => row.key} text={(row) => `${row.action.title} ${row.action.name} ${row.object.title} ${row.object.name}`}
+        onSelect={(row) => open({ view: "action-type", params: { id: row.object.id, action: row.action.name } })}
+        groupings={[
+          { id: "object", label: t("Object type"), of: (row) => ({ id: row.object.id, label: row.object.title || row.object.name, hint: `build.${row.object.name}` }) },
+          { id: "project", label: t("Project"), of: (row) => projectGroup(projects, objectRef(row.object)) },
+          { id: "status", label: t("Status"), of: (row) => ({ id: row.object.state, label: t(row.object.state === "published" ? "Published" : "Draft") }) },
+        ]}
+        row={(row) => <><Zap className="size-3 shrink-0 text-muted" /><span className="min-w-0 flex-1 truncate">{row.action.title || row.action.name}</span>
+          <span className="hidden min-w-0 truncate text-muted md:inline">{transition(row)}</span>
+          {!!row.action.inputs?.length && <span className="shrink-0 text-muted">{t("{n} parameters", { n: row.action.inputs.length })}</span>}
+          {row.action.approval && <span className="shrink-0 text-muted">{t("Approval")}</span>}
+          <DraftStatus state={row.object.state} /></>}
+        empty={inventory.isLoading ? t("Loading…") : t("No action types yet. Add a lifecycle state and an action to an object type.")} />
+    </Panel>
+    <Panel title={t("Shipped with the host and its modules")} description={t("Read-only: the generated create, edit and archive of every object type, and the actions each module declares. Grouped by object type; open the object type to read its fields.")}
+      actions={<Button size="sm" variant="ghost" onClick={() => setShipped((x) => !x)}>{shipped ? t("Hide") : t("Show {n}", { n: builtIn.length })}</Button>}>
+      {shipped && <GroupedList<BuiltInRow> items={builtIn} id={(row) => row.key} text={(row) => `${row.definition.action!.title} ${row.key} ${row.object?.entity?.title ?? ""}`}
+        onSelect={(row) => { if (row.object) open({ view: "object-type", params: { object: row.object.ref.name } }); }}
+        groupings={[
+          { id: "object", label: t("Object type"), of: (row) => ({ id: row.definition.action!.target || "_", label: row.object?.entity?.title ?? row.definition.action!.target ?? t("No object"), hint: row.definition.action!.target }) },
+          { id: "module", label: t("Module"), of: (row) => ({ id: row.definition.ref.app, label: appTitle(row.definition.ref.app) }) },
+        ]}
+        row={(row) => <><Zap className="size-3 shrink-0 text-muted" /><span className="min-w-0 flex-1 truncate">{row.definition.action!.title}</span>
+          <span className="hidden min-w-0 truncate font-mono text-[10px] text-muted md:inline">{row.key}</span>
+          {!!row.definition.action!.payload?.length && <span className="shrink-0 text-muted">{t("{n} parameters", { n: row.definition.action!.payload.length })}</span>}</>} />}
+    </Panel>
   </div>;
 }
 

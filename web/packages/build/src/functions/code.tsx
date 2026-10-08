@@ -1,8 +1,9 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
+import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, RecordList, Select, Textarea, Workbench, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, Select, Textarea, Workbench, t, useUnsavedChanges } from "@platform/ui";
 import { useCallback, useEffect, useState } from "react";
 import { JSONEditor, SchemaEditor, WorkflowFormProblems, schemaDefault } from "../automate/workflow-binding";
 import type { ValueSchema } from "../automate/workflow-model";
@@ -25,7 +26,7 @@ export function CodeFunctions() {
   if (role("build") !== "builder") return <PageHeader title={t("Code functions")} description={t("Only a builder can edit code functions.")} />;
   return <div className="grid gap-3"><PageHeader title={t("Code functions")} description={t("Package a typed Go or TinyGo algorithm for pages and workflows.")}
     actions={<Button onClick={() => open({ view: "code", params: { id: "new" } })}>{t("New code function")}</Button>} />
-    <RecordList source={source} type="build.code" fields={["title", "name", "language", "state", "version"]} onOpen={(record) => open({ view: "code", params: { id: record.id } })} />
+    <ResourceList source={source} type="build.code" fields={["title", "name", "language", "state", "version"]} onOpen={(record) => open({ view: "code", params: { id: record.id } })} />
   </div>;
 }
 

@@ -1276,4 +1276,6 @@ export default {
   "Explore and arrange entity relationships with zoom, pan, layouts and caller-owned linking.": "通过缩放、平移、排布与调用方管理的连线探索实体关系。",
   "The caller supplies semantic icons, hierarchy edges, permissions and persistence.": "调用方提供语义图标、层级关系、权限与持久化。",
   "My account": "我的账户",
+  "Nothing matches.": "没有匹配项。",
+  "Nothing here yet.": "这里还没有内容。",
 } as Record<string, string>;

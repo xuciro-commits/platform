@@ -43,6 +43,7 @@ export { PageHeader } from "./components/PageHeader";
 export { NotificationList, type NotificationItem, type NotificationListProps } from "./components/NotificationList";
 export {BreadcrumbTrail,type BreadcrumbTrailItem,type BreadcrumbTrailProps} from "./components/BreadcrumbTrail";
 export {AssetDirectory,type AssetDirectoryItem,type AssetDirectoryProps} from "./components/AssetDirectory";
+export { GroupedList, type GroupBy } from "./components/GroupedList";
 export {AIResult,type AIResultProps,type AIResultTurn} from "./components/AIResult";
 export {ExternalFrame,validExternalFrame,type ExternalFrameProps,type ExternalFrameConfig} from "./components/ExternalFrame";
 export {StaticImage,validStaticImage,validStaticImageURL,type StaticImageProps,type StaticImageConfig} from "./components/StaticImage";

@@ -2,11 +2,12 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { NewActions, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
   type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
-import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, Input, NodeCanvas, PageHeader, Panel, PropertyList, RecordList, Select, Tag,
+import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, NodeCanvas, PageHeader, Panel, PropertyList, RecordList, Select, Tag,
   canvasNodeWidth, layout, t, type CanvasEdge, type CanvasNode, type ColumnDef, type NodeCatalog } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { Boxes, Database, GitBranch, Layers, Link2 } from "lucide-react";
 import { useInterfaces } from "./shape";
+import { projectGroup, useProjectIndex } from "../projects/membership";
 import { useEffect, useMemo, useState } from "react";
 
 type DraftProperty = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
@@ -49,6 +50,8 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   }, [model, inventory.data]);
   const resource = resources.find((item) => item.ref.name === current);
   const visible = useMemo(() => resources.filter((item) => (origin === "all" || item.source === origin) && `${item.title} ${item.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())), [resources, origin, search]);
+  const projects = useProjectIndex();
+  const appTitle = (id: string) => host.me.apps.find((a) => a.id === id)?.title ?? id;
   const choose = (item: Resource) => { setCurrent(item.ref.name); setView("detail"); select(undefined); setTab("overview"); };
   useEffect(() => { setSeed(undefined); }, [current]);
   const edit = (item: Resource, parameters: Record<string, string> = {}) => {
@@ -89,18 +92,24 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
       <Button variant={view === "graph" ? "primary" : "ghost"} onClick={() => setView("graph")}><GitBranch />{t("Relationship graph")}</Button>
       <Button variant={view === "shared" ? "primary" : "ghost"} onClick={() => setView("shared")}><Boxes />{t("Shared property catalog")}</Button>
       <Button variant={view === "interfaces" ? "primary" : "ghost"} onClick={() => setView("interfaces")}><Layers />{t("Interfaces")}</Button>
-      <label className="ml-auto flex min-w-0 items-center gap-2 text-xs">{t("Source")}<Select value={origin} onChange={(event) => setOrigin(event.target.value)}>
+      <Input aria-label={t("Search model resources")} placeholder={t("Search model resources")} value={search} onChange={(event) => setSearch(event.target.value)} className="ml-auto h-8 w-56 text-xs" />
+      <label className="flex min-w-0 items-center gap-2 text-xs">{t("Source")}<Select value={origin} onChange={(event) => setOrigin(event.target.value)}>
         <option value="all">{t("All sources")}</option><option value="code">{t("Native code")}</option><option value="tenant">{t("Tenant definitions")}</option>
       </Select></label>
     </Card>
     {inventory.isError && <Panel role="alert">{t("Object drafts could not be loaded. Installed definitions are still available.")}</Panel>}
     <EditorWorkbench leftLabel={t("Model resources")} centerLabel={t("Model workspace")} rightLabel={t("Semantic inspector")}
-      left={<div className="grid content-start gap-3 p-3"><Input aria-label={t("Search model resources")} placeholder={t("Search model resources")} value={search} onChange={(event) => setSearch(event.target.value)} />
-        <div className="flex items-center justify-between text-xs font-semibold text-muted"><span>{t("Object types")}</span><span>{visible.length}</span></div>
-        {visible.map((item) => <Button variant="row" size="sm" key={item.ref.name} aria-pressed={item.ref.name === current} className={item.ref.name === current ? "bg-row-selected" : ""} onClick={() => choose(item)}>
-          <Database className="shrink-0" /><span className="min-w-0 flex-1 truncate text-xs">{item.title}</span><span className="text-[10px] text-muted">{t(item.source === "code" ? "Native" : "Tenant")}</span>
-        </Button>)}
-        {!visible.length && <p className="text-xs text-muted">{t("No matching objects.")}</p>}
+      left={<div className="grid content-start gap-3 p-3">
+        <GroupedList<Resource> items={resources.filter((item) => origin === "all" || item.source === origin)} id={(item) => item.ref.name} selected={current} onSelect={choose}
+          text={(item) => `${item.title} ${item.ref.name}`} dense
+          groupings={[
+            { id: "project", label: t("Project"), of: (item) => item.source === "code" ? { id: `app:${item.installed?.ref.app ?? item.ref.app}`, label: appTitle(item.installed?.ref.app ?? item.ref.app), hint: t("shipped"), order: 5 } : projectGroup(projects, item.ref) },
+            { id: "owner", label: t("Owner"), of: (item) => ({ id: item.installed?.ref.app ?? item.ref.app, label: appTitle(item.installed?.ref.app ?? item.ref.app) }) },
+            { id: "status", label: t("Status"), of: (item) => item.installed ? { id: "published", label: t("Published") } : { id: "draft", label: t("Draft"), order: 1 } },
+          ]}
+          row={(item) => <><Database className="size-3 shrink-0 text-muted" /><span className="min-w-0 flex-1 truncate">{item.title}</span>
+            {!item.installed && <span className="shrink-0 text-[10px] text-muted">{t("Draft")}</span>}</>}
+          empty={t("No matching objects.")} />
       </div>}
       right={<div className="grid content-start gap-3 p-3">
         <h3 className="text-xs font-semibold text-muted">{t("Semantic inspector")}</h3>
