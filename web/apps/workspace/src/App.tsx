@@ -12,7 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Bookmark, Gauge, Hammer, LayoutGrid, SlidersHorizontal, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chromeViews } from "./chrome";
-import { packages } from "./host/packages";
+import { availablePackages, packages, type Package } from "./host/packages";
 import { usePlatformHost } from "./host/usePlatformHost";
 import { IDENTITY_KEY, TENANT_KEY, forget, preferred, remember, remembered, type Identity } from "./session/identity";
 import { HostOnly, type HostAdmin } from "./HostOnly";
@@ -56,7 +56,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const meRefetch = useRef(meQuery.refetch); meRefetch.current = meQuery.refetch;
   useEffect(() => client.subscribeRead("/v1/me", () => { void meRefetch.current(); }), [client]);
   const identityScope = me ? JSON.stringify([me.tenantId, me.principalId]) : undefined;
-  const packageScope = me ? JSON.stringify([me.tenantId, me.principalId, me.apps.map((app) => app.id), me.profile.roles]) : undefined;
+  const selectedPackages = me ? availablePackages(me.apps.map((app) => app.id), me.profile.roles) : [];
+  const packageScope = me ? JSON.stringify([identityScope, selectedPackages.map((p) => packages.indexOf(p))]) : undefined;
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!me) return;
@@ -70,15 +71,18 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [client, identityScope, me?.preferred]);
 
   // --- Packages: the code applications this member's roles unlock.
-  const [apps, setApps] = useState<(AppUI & { serves?: string[] })[]>();
+  const [loadedPackages, setLoadedPackages] = useState<{ scope: string; groups: { source: Package; apps: (AppUI & { serves?: string[] })[] }[] }>();
+  // Keep still-authorized packages mounted while new ones load. Filtering is
+  // synchronous, so withdrawn packages or another identity never linger.
+  const apps = useMemo(() => loadedPackages && loadedPackages.scope === identityScope
+    ? loadedPackages.groups.filter((group) => selectedPackages.includes(group.source)).flatMap((group) => group.apps)
+    : undefined, [loadedPackages, packageScope]);
   useEffect(() => {
     if (!me) return;
     let live = true;
-    setApps(undefined);
-    const held = new Set(me.apps.map((a) => a.id));
-    void Promise.all(packages.filter((p) => p.public || p.serves.some((id) => held.has(id) && (!p.role || me.profile.roles[id] === p.role)))
-      .map((p) => p.load().then((m) => [m.default, ...(m.contributions ?? [])].map((app) => ({ ...app, serves: app.serves ?? p.serves })))))
-      .then((loaded) => { if (live) setApps(loaded.flat()); });
+    void Promise.all(selectedPackages.map((p) => p.load().then((m) => ({ source: p,
+      apps: [m.default, ...(m.contributions ?? [])].map((app) => ({ ...app, serves: app.serves ?? p.serves })) }))))
+      .then((groups) => { if (live) setLoadedPackages({ scope: identityScope!, groups }); });
     return () => { live = false; };
   }, [packageScope]);
 
@@ -208,7 +212,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       setActiveRoute(undefined);
       setCurrent(undefined);
       setReady(false);
-      setApps(undefined);
+      setLoadedPackages(undefined);
     }
     if (id.startsWith("tenant:")) { setTenant(id.slice(7)); remember(TENANT_KEY, id.slice(7)); }
     if (id.startsWith("as:")) { setToken(id.slice(3)); remember(IDENTITY_KEY, id.slice(3)); }
