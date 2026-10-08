@@ -4,7 +4,25 @@
 
 本页的密码和密钥都只用于本地环境，而且早已写在仓库的其他文件里（Rauthy 的初始数据、`rehearse.sh`）。**唯一不进仓库的是真实供应商的 API Key**，比如 OpenRouter：它放在 `deploy/local/.env`，该文件已被 git 忽略。
 
-## 启动与停止
+## 日常开发（不打镜像）
+
+容器只跑基础设施，宿主和工作台在本机热重载（ADR-0081）：
+
+```bash
+make setup                          # 一次：web 依赖、air、Playwright 浏览器
+make infra                          # postgres / rauthy / rustfs / webhook-sink，数据卷与下文的 Compose 栈相同
+make dev SOLUTION=hospitality       # 宿主 8495，改 Go 保存即重启（manufacturing → 8490）
+make web                            # 另一终端：Vite 5176，/v1 代理到宿主
+make infra-compute                  # 需要代码函数编译时：worker/builder socket 落在 .build/dev/compute
+make dev-light                      # 完全不要容器：内存日志 + 开发令牌（manager / desk / sales…）
+```
+
+从验收模式切换开发模式时，先 `docker compose -f deploy/local/compose.yaml stop hospitality-server`（制造则 `manufacturing-server`）；同一租户不能同时运行两个宿主。停止 air 后用 `make local-update` 恢复验收模式。`make infra-compute` 使用独立的 `platform-dev-compute` 项目，不替换验收宿主的计算服务。
+
+宿主的启动参数在 `deploy/dev/run.sh`，与下面 Compose 里的宿主一致（同一 PostgreSQL、同一 Rauthy、同一 tenants.json）；`deploy/local/.env` 的密钥同样被读取。
+
+## 验收栈与发布（Compose 镜像）
+
 
 需要先有 Docker（OrbStack：`orb start`）。
 
@@ -42,7 +60,7 @@ cd deploy/local && docker compose ps
 - **在 8495/8490 验收本次代码时**：先运行 `pnpm --dir web/apps/workspace build`，再在 `deploy/local` 运行 `docker compose up -d --no-deps --build hospitality-server`（或对应的 `manufacturing-server`），最后刷新浏览器。`scripts/verify.sh web` 的浏览器路线使用一次性的内存酒店主机 `18496`；它通过也不会自动更新你正在看的 8495 容器。两者的测试数据和登录方式也不同，视觉验收应以你实际使用的容器地址为准。
 - **直接运行开发宿主的编译配置**：单独 `go run` 不会继承 Compose 的环境。需要使用 `cmd/code-builder` 与 `cmd/wasm-worker` 的私有 Unix socket，并将宿主的 `PLATFORM_CODE_BUILDER_SOCKET` / `PLATFORM_WASM_WORKER_SOCKET` 指向它们；构建 driver 的 `PLATFORM_GO_WASM_IMAGE` / `PLATFORM_TINYGO_WASM_IMAGE` 使用本文件上面的固定摘要。出现 “owner-configured toolchain image pinned by sha256” 表示宿主未配置对应工具链，不是租户源码错误。已有内存宿主保存着编辑内容时，不为补配置直接重启；另起已配置实例，保留原实例中的数据。
 - 灌酒店业演示数据：`./seed-hospitality.sh`。可以重复执行，结果不变。
-- 完整演练：在仓库根目录运行 `scripts/verify.sh deploy`。它用另一组端口和一套全新的数据，不会动你的本地数据；需 Docker、Node/pnpm 与 Google Chrome（或在 `CI=1` 下已安装的 Playwright Chromium）。两行业 OIDC 浏览器会在发布前及 PostgreSQL 恢复后执行共同函数/页面/Flow 路线，自动截图保存在 `web/e2e/test-results/deploy-*`；脚本结束后移除一次性容器。
+- 完整演练：在仓库根目录运行 `make rehearse`（即 `scripts/verify.sh deploy`）。它用另一组端口和一套全新的数据，不会动你的本地数据；需 Docker、Node/pnpm 与 Google Chrome（或在 `CI=1` 下已安装的 Playwright Chromium）。两行业 OIDC 浏览器会在发布前及 PostgreSQL 恢复后执行共同函数/页面/Flow 路线，自动截图保存在 `web/e2e/test-results/deploy-*`；脚本结束后移除一次性容器。
 
 真实供应商的密钥放在 `deploy/local/.env`，compose 启动时自动读取。一行一个：
 

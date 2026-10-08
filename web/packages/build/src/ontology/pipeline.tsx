@@ -1,6 +1,7 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
+import type { Api } from "@platform/kernel";
 import { MarkingTag, integrates } from "./marking";
 import { Button, Checkbox, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
 import { PERIODS, periodLabel } from "../automate/workflow-model";
@@ -48,6 +49,9 @@ export function PipelineEditor({ id }: { id: string }) {
   const { decide, role, entities } = useHost(), { open, close } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.pipeline/${encodeURIComponent(id)}`, 5000);
   const datasets = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200").data?.records ?? [];
+  // The enterprise model's own kinds and elements, so a pipeline writing into
+  // it chooses them rather than spelling their ids.
+  const enterprise = useReadQuery<Api.EnterpriseModel>("/v1/enterprise").data ?? { kinds: [], elements: [] };
   const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const load = (record: Draft) => { setDraft({ ...empty(), ...record, steps: record.steps ?? [], expectations: record.expectations ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
@@ -118,8 +122,16 @@ export function PipelineEditor({ id }: { id: string }) {
           {column(t("Short name column"), "shortName", "short")}
           {column(t("Kind column"), "kind", "=department")}
           {column(t("Parent id column"), "parent", "parent", t("The parent's id in the same system; top units sit under the root."))}
-          <label className={fieldClass}>{t("Root element")}<Input value={ent.root ?? ""} placeholder="org-root" onChange={(e) => patchEnterprise({ root: e.target.value })} /></label>
-          <label className={fieldClass}>{t("Placed in kind")}<Input value={ent.in ?? ""} placeholder="management" onChange={(e) => patchEnterprise({ in: e.target.value })} /><span className="text-[11px] text-muted">{t("A relationship kind of the enterprise model, e.g. management or legal.")}</span></label>
+          <label className={fieldClass}>{t("Root element")}<Select value={ent.root ?? ""} onChange={(e) => patchEnterprise({ root: e.target.value })}>
+            <option value="">{t("Choose an element of the enterprise model")}</option>
+            {ent.root && !enterprise.elements.some((el) => el.id === ent.root) && <option value={ent.root}>{ent.root}</option>}
+            {enterprise.elements.filter((el) => !el.until).map((el) => <option key={el.id} value={el.id}>{el.name} · {el.id}</option>)}
+          </Select></label>
+          <label className={fieldClass}>{t("Placed in kind")}<Select value={ent.in ?? ""} onChange={(e) => patchEnterprise({ in: e.target.value })}>
+            <option value="">{t("Choose a relationship kind")}</option>
+            {ent.in && !enterprise.kinds.some((k) => k.id === ent.in) && <option value={ent.in}>{ent.in}</option>}
+            {enterprise.kinds.map((k) => <option key={k.id} value={k.id}>{k.name} · {k.id}</option>)}
+          </Select><span className="text-[11px] text-muted">{t("A relationship kind of the enterprise model, e.g. management or legal.")}</span></label>
           <label className={fieldClass}>{t("Relation word")}<Input value={ent.relation ?? ""} placeholder="part of" onChange={(e) => patchEnterprise({ relation: e.target.value })} /></label>
           {column(t("At column"), "at", "plant", t("Places the element at another: the owner of a resource, the post a person fills."))}
           <label className={fieldClass}>{t("At relationship")}<Select value={ent.atKind ?? ""} onChange={(e) => patchEnterprise({ atKind: e.target.value })}><option value="">ResponsibleFor</option>{AT_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}</Select></label>

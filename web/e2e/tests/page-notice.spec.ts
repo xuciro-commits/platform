@@ -1,14 +1,115 @@
-import {expect,test} from "@playwright/test";
-import {readFileSync} from "node:fs";
-import {decide,fresh,open,pageUIProfile,stableReadRevision} from "./host";
+import { expect, runtime, sampleModule, shots, slug, test } from "./kit";
 
-test("source callouts freeze literal operator instructions and optional titles while original display states and overlay owners remain independent",async({page,request},info)=>{
- test.setTimeout(90_000);const name=fresh("notes").replace(/[^a-z0-9]/gi,"").toLowerCase(),type=`build.${name}`,object=fresh("OBJ"),id=fresh("PAGE");await decide(request,"manager","build","build.object.create",{type:"build.object",id:object},{name,title:"Instruction records",fields:[{name:"name",title:"Name",type:"text"}]});await decide(request,"manager","build","build.object.publish",{type:"build.object",id:object},{});
- const m=JSON.parse(readFileSync(new URL("../../packages/build/src/workshop/module-import/sample.workshop.json",import.meta.url),"utf8")),note=(id:string,name:string,title:string|undefined,text:string,intent:string)=>({id,name,type:"Callout",config:{...(title===undefined?{}:{title}),text,intent}}),toggle=(id:string,name:string,variableId:string)=>({id,name,type:"ToggleSwitch",config:{variableId,label:name}});
- m.variables=[{id:"show",name:"Show instructions",type:"boolean",definitionKind:"static",staticValue:true},{id:"localShow",name:"Show local instructions",type:"boolean",definitionKind:"static",staticValue:true}];m.widgets={main:note("main","Operator instructions","Before starting","Review <img src=x> and {value} literally.\n**Markdown stays text.**","primary"),success:note("success","Completion note",undefined,"Completed safely.","success"),warning:note("warning","Warning note","","Review the current record.","warning"),danger:note("danger","Danger note","Stop","Wait for authorization.","danger"),gate:toggle("gate","Show instructions","show"),local:note("local","Local instructions","Local note","Use the original drawer workflow.","primary"),localGate:toggle("localGate","Show local instructions","localShow"),trigger:{id:"trigger",name:"Open instructions",type:"SingleButton",config:{label:"Open instructions",eventActions:[{kind:"openOverlay",overlayId:"panel"}]}},close:{id:"close",name:"Close instructions",type:"SingleButton",config:{label:"Close instructions",eventActions:[{kind:"closeOverlay",overlayId:"panel"}]}}};m.sections={root:{id:"root",name:"Root",layout:"rows",children:["gate","main","success","warning","danger","trigger"].map(id=>({kind:"widget",id}))},panel:{id:"panel",name:"Panel",layout:"rows",children:["localGate","local","close"].map(id=>({kind:"widget",id}))}};m.sections.mainWrapper={id:"mainWrapper",name:"Conditional instructions",layout:"rows",visibleVariableId:"show",children:[{kind:"widget",id:"main"}]};m.sections.localWrapper={id:"localWrapper",name:"Conditional local instructions",layout:"rows",visibleVariableId:"localShow",children:[{kind:"widget",id:"local"}]};m.sections.root.children=m.sections.root.children.map((c:any)=>c.id==="main"?{kind:"section",id:"mainWrapper"}:c);m.sections.panel.children=m.sections.panel.children.map((c:any)=>c.id==="local"?{kind:"section",id:"localWrapper"}:c);m.overlays=[{id:"panel",name:"Instruction panel",kind:"drawer",rootSectionId:"panel"}];
- await decide(request,"manager","build","build.page.create",{type:"build.page",id},{name,title:"Imported instructions",object:type,sections:[{id:"initial",widget:"text",configVersion:1,text:"Initial"}],document:{formatVersion:2,uiProfile:pageUIProfile,root:"root",nodes:{root:{kind:"rows",children:["initial"]},initial:{kind:"widget",section:"initial"}}}});await open(page,"manager",`/compose?id=${id}`);await page.getByRole("button",{name:"Import Workshop module",exact:true}).click();const dialog=page.getByRole("dialog",{name:"Import Workshop module",exact:true});await dialog.getByRole("textbox",{name:"Source module JSON",exact:true}).fill(JSON.stringify(m));await dialog.getByRole("checkbox").check();await dialog.getByRole("button",{name:"Apply imported page draft",exact:true}).click();
- const tree=page.getByRole("region",{name:"Widgets and layout",exact:true}),inspector=page.getByRole("region",{name:"The widget in hand",exact:true});await tree.getByRole("button",{name:"Operator instructions",exact:true}).click();await expect(inspector.getByRole("textbox",{name:"Notice title",exact:true})).toHaveValue("Before starting");await expect(inspector.getByRole("combobox",{name:"Notice tone",exact:true})).toHaveValue("info");const text=inspector.getByRole("textbox",{name:"Notice text",exact:true});await text.fill("中".repeat(1366));await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();await text.fill("Review <img src=x> and {value} literally.\n**Markdown stays text.**");await tree.getByRole("button",{name:"Completion note",exact:true}).click();await expect(inspector.getByRole("checkbox",{name:"Show notice title",exact:true})).not.toBeChecked();await tree.getByRole("button",{name:"Warning note",exact:true}).click();await expect(inspector.getByRole("checkbox",{name:"Show notice title",exact:true})).toBeChecked();await expect(inspector.getByRole("textbox",{name:"Notice title",exact:true})).toHaveValue("");await page.getByRole("button",{name:"Save",exact:true}).click();let saved:any;await expect.poll(async()=>{saved=(await(await request.get(`/v1/records/build.page/${id}`,{headers:{Authorization:"Bearer manager"}})).json()).record;return saved.sections?.filter((s:any)=>s.widget==="notice").length;}).toBe(5);const main=saved.sections.find((s:any)=>s.title==="Operator instructions");expect(main.notice).toEqual({title:"Before starting",message:"Review <img src=x> and {value} literally.\n**Markdown stays text.**",tone:"info"});await page.reload();await tree.getByRole("button",{name:"Operator instructions",exact:true}).click();await expect(inspector.getByRole("textbox",{name:"Notice title",exact:true})).toHaveValue("Before starting");await page.getByRole("button",{name:"Review release",exact:true}).click();await page.getByRole("button",{name:"Check draft and dependencies",exact:true}).click();await page.getByRole("button",{name:"Save immutable candidate",exact:true}).click();main.notice={tone:"danger",title:"Later title",message:"Later instructions"};const visible=Object.values(saved.document.nodes).find((n:any)=>n.title==="Conditional instructions") as any;saved.document.variables[visible.visibleWhen].initial=false;await decide(request,"manager","build","build.page.edit",{type:"build.page",id},{sections:saved.sections,document:saved.document});await page.getByRole("button",{name:"Activate release",exact:true}).click();
- const runtime=await page.context().newPage();await stableReadRevision(runtime);await open(runtime,"desk",`/page?app=build&kind=page&name=${name}`);const mainNote=runtime.getByRole("note",{name:"Operator instructions",exact:true}),success=runtime.getByRole("note",{name:"Completion note",exact:true}),warning=runtime.getByRole("note",{name:"Warning note",exact:true}),danger=runtime.getByRole("note",{name:"Danger note",exact:true});await expect(mainNote).toContainText("Before starting");await expect(mainNote).toContainText("Review <img src=x> and {value} literally.");await expect(mainNote).toContainText("**Markdown stays text.**");await expect(mainNote.locator("img")).toHaveCount(0);await expect(success.locator("strong")).toHaveCount(0);await expect(warning.locator("strong")).toHaveCount(0);await expect(danger).toContainText("Stop");await expect(runtime.getByRole("alert",{name:"Warning note",exact:true})).toHaveCount(0);
- if(process.env.PLATFORM_SCREENSHOTS){await mainNote.screenshot({path:info.outputPath("notice.png")});await runtime.setViewportSize({width:390,height:844});await mainNote.screenshot({path:info.outputPath("notice-narrow.png")});await runtime.setViewportSize({width:1280,height:720});}
- const gate=runtime.getByRole("switch",{name:"Show instructions",exact:true});await gate.click();await expect(mainNote).toHaveCount(0);await expect(success).toBeVisible();await runtime.getByRole("button",{name:"Open instructions",exact:true}).click();const panel=runtime.getByRole("dialog",{name:"Instruction panel",exact:true}),local=panel.getByRole("note",{name:"Local instructions",exact:true}),localGate=panel.getByRole("switch",{name:"Show local instructions",exact:true});await expect(local).toContainText("Local note");await localGate.click();await expect(local).toHaveCount(0);await panel.getByRole("button",{name:"Close instructions",exact:true}).click();await expect(mainNote).toHaveCount(0);await runtime.getByRole("button",{name:"Open instructions",exact:true}).click();await expect(localGate).toBeChecked();await expect(local).toBeVisible();await panel.getByRole("button",{name:"Close instructions",exact:true}).click();await gate.click();await expect(mainNote).toContainText("Before starting");await runtime.reload();await expect(mainNote).toContainText("Before starting");await expect(mainNote).not.toContainText("Later instructions");
+// A Callout imported from Workshop becomes a notice: its text is literal (no
+// markup, no templating), its title is optional, and a released page keeps
+// the frozen copy while the draft moves on. Overlay notices gate independently.
+test("notices freeze literal text and optional titles; page and overlay gates stay independent", async ({ page, builder, operator, editor }, info) => {
+  test.setTimeout(90_000);
+  const { type } = await builder.object({ name: slug("notes"), title: "Instruction records", fields: [{ name: "name", title: "Name", type: "text" }] });
+  const literal = "Review <img src=x> and {value} literally.\n**Markdown stays text.**";
+
+  const m = sampleModule();
+  const note = (id: string, name: string, title: string | undefined, text: string, intent: string) => ({ id, name, type: "Callout", config: { ...(title === undefined ? {} : { title }), text, intent } });
+  const toggle = (id: string, name: string, variableId: string) => ({ id, name, type: "ToggleSwitch", config: { variableId, label: name } });
+  const button = (id: string, label: string, kind: string) => ({ id, name: label, type: "SingleButton", config: { label, eventActions: [{ kind, overlayId: "panel" }] } });
+  m.variables = [
+    { id: "show", name: "Show instructions", type: "boolean", definitionKind: "static", staticValue: true },
+    { id: "localShow", name: "Show local instructions", type: "boolean", definitionKind: "static", staticValue: true },
+  ];
+  m.widgets = {
+    main: note("main", "Operator instructions", "Before starting", literal, "primary"),
+    success: note("success", "Completion note", undefined, "Completed safely.", "success"),
+    warning: note("warning", "Warning note", "", "Review the current record.", "warning"),
+    danger: note("danger", "Danger note", "Stop", "Wait for authorization.", "danger"),
+    gate: toggle("gate", "Show instructions", "show"),
+    local: note("local", "Local instructions", "Local note", "Use the original drawer workflow.", "primary"),
+    localGate: toggle("localGate", "Show local instructions", "localShow"),
+    trigger: button("trigger", "Open instructions", "openOverlay"),
+    close: button("close", "Close instructions", "closeOverlay"),
+  };
+  const widgets = (ids: string[]) => ids.map((id) => ({ kind: "widget", id }));
+  m.sections = {
+    root: { id: "root", name: "Root", layout: "rows", children: [...widgets(["gate"]), { kind: "section", id: "mainWrapper" }, ...widgets(["success", "warning", "danger", "trigger"])] },
+    mainWrapper: { id: "mainWrapper", name: "Conditional instructions", layout: "rows", visibleVariableId: "show", children: widgets(["main"]) },
+    panel: { id: "panel", name: "Panel", layout: "rows", children: [...widgets(["localGate"]), { kind: "section", id: "localWrapper" }, ...widgets(["close"])] },
+    localWrapper: { id: "localWrapper", name: "Conditional local instructions", layout: "rows", visibleVariableId: "localShow", children: widgets(["local"]) },
+  };
+  m.overlays = [{ id: "panel", name: "Instruction panel", kind: "drawer", rootSectionId: "panel" }];
+
+  const { id, name } = await builder.page({ title: "Imported instructions", object: type });
+  await editor.open(builder, id);
+  await editor.importModule(m);
+
+  // The inspector shows the imported notice; an over-long text blocks saving.
+  await editor.select("Operator instructions");
+  await expect(editor.inspector.getByRole("textbox", { name: "Notice title", exact: true })).toHaveValue("Before starting");
+  await expect(editor.inspector.getByRole("combobox", { name: "Notice tone", exact: true })).toHaveValue("info");
+  const text = editor.inspector.getByRole("textbox", { name: "Notice text", exact: true });
+  const oversized = "中".repeat(1366);
+  await text.fill(oversized);
+  await expect(editor.publish).toBeDisabled();
+  await editor.save();
+  const refusedDraft = await builder.record("build.page", id);
+  expect(refusedDraft.sections.some((s: any) => s.notice?.message === oversized)).toBe(false);
+  await text.fill(literal);
+  await editor.select("Completion note");
+  await expect(editor.inspector.getByRole("checkbox", { name: "Show notice title", exact: true })).not.toBeChecked();
+  await editor.select("Warning note");
+  await expect(editor.inspector.getByRole("checkbox", { name: "Show notice title", exact: true })).toBeChecked();
+  await expect(editor.inspector.getByRole("textbox", { name: "Notice title", exact: true })).toHaveValue("");
+
+  const saved = await editor.saveUntil(builder, id, "notice", 5);
+  const main = saved.sections.find((s: any) => s.title === "Operator instructions");
+  expect(main.notice).toEqual({ title: "Before starting", message: literal, tone: "info" });
+  await page.reload();
+  await editor.select("Operator instructions");
+  await expect(editor.inspector.getByRole("textbox", { name: "Notice title", exact: true })).toHaveValue("Before starting");
+
+  // Release; the draft then changes, which the release must not show.
+  await editor.release(async () => {
+    main.notice = { tone: "danger", title: "Later title", message: "Later instructions" };
+    const wrapper = Object.values(saved.document.nodes).find((n: any) => n.title === "Conditional instructions") as any;
+    saved.document.variables[wrapper.visibleWhen].initial = false;
+    await builder.edit(id, { sections: saved.sections, document: saved.document });
+  });
+
+  const tab = await runtime(page, operator, name);
+  const mainNote = tab.getByRole("note", { name: "Operator instructions", exact: true });
+  const success = tab.getByRole("note", { name: "Completion note", exact: true });
+  const warning = tab.getByRole("note", { name: "Warning note", exact: true });
+  const danger = tab.getByRole("note", { name: "Danger note", exact: true });
+  await expect(mainNote).toContainText("Before starting");
+  await expect(mainNote).toContainText("Review <img src=x> and {value} literally.");
+  await expect(mainNote).toContainText("**Markdown stays text.**");
+  await expect(mainNote.locator("img")).toHaveCount(0);
+  await expect(success.locator("strong")).toHaveCount(0);
+  await expect(warning.locator("strong")).toHaveCount(0);
+  await expect(danger).toContainText("Stop");
+  await expect(tab.getByRole("alert", { name: "Warning note", exact: true })).toHaveCount(0);
+  await shots(tab, mainNote, "notice", info);
+
+  // The page gate and the overlay gate are independent and survive reopening.
+  const gate = tab.getByRole("switch", { name: "Show instructions", exact: true });
+  await gate.click();
+  await expect(mainNote).toHaveCount(0);
+  await expect(success).toBeVisible();
+  const openPanel = () => tab.getByRole("button", { name: "Open instructions", exact: true }).click();
+  const panel = tab.getByRole("dialog", { name: "Instruction panel", exact: true });
+  const local = panel.getByRole("note", { name: "Local instructions", exact: true });
+  const localGate = panel.getByRole("switch", { name: "Show local instructions", exact: true });
+  await openPanel();
+  await expect(local).toContainText("Local note");
+  await localGate.click();
+  await expect(local).toHaveCount(0);
+  await panel.getByRole("button", { name: "Close instructions", exact: true }).click();
+  await expect(mainNote).toHaveCount(0);
+  await openPanel();
+  await expect(localGate).toBeChecked();
+  await expect(local).toBeVisible();
+  await panel.getByRole("button", { name: "Close instructions", exact: true }).click();
+  await gate.click();
+  await expect(mainNote).toContainText("Before starting");
+  await tab.reload();
+  await expect(mainNote).toContainText("Before starting");
+  await expect(mainNote).not.toContainText("Later instructions");
 });

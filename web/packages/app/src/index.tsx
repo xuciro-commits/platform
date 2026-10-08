@@ -27,6 +27,7 @@ import { OpenIn as OpenInMenu } from "./actions/OpenIn";
 export { pageDocumentFromSections } from "./pages/pageDocument";
 export { semanticModelView, semanticPropertyTypes, assetBindingKey, propertyKey, relationKey, type SemanticPropertyType, type PropertyRef, type ReferenceRelationRef, type SemanticRelation, type SemanticModelView } from "./semantic/model";
 export { SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect } from "./semantic/Selector";
+export { AppSelect, RoleSelect, ProtocolSelect, MemberSelect, useTenantApps } from "./semantic/References";
 
 /** An app the member may open: the tenant runs it and they hold a role in it (ADR-0018 D4). */
 export type AppEntry = Api.AppEntry;

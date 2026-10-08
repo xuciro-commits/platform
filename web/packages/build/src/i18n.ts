@@ -3654,4 +3654,9 @@ register("zh-CN", {
   "Journal entry": "记账凭证",
   "Waiting for an open fiscal period": "等待开放的会计期间",
   "You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.": "你在项目 {projects} 内构建：只有项目列出的资产接受你的编辑；发布仍由构建者负责。",
+  "None: the action's own app": "无：动作所属应用",
+  "Choose an element of the enterprise model": "选择企业模型中的元素",
+  "Choose a relationship kind": "选择关系类型",
+  "Record id": "记录 ID",
+  "record id": "记录 ID",
 });

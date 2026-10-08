@@ -23,6 +23,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "app/record-row-actions": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.RecordDetailExample })),
   "app/records": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.RecordsExample })),
   "app/semantic-selection": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.SemanticSelectionExample })),
+  "app/tenant-references": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.TenantReferencesExample })),
   "app/work-views": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.RecordDetailExample })),
   "foundation/semantic-tokens": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Tokens })),
   "layout/spacer": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SpacerExample })),

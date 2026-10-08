@@ -45,9 +45,18 @@ type Draft = Partial<Record<keyof Profile, string | boolean>>;
 
 /** The profile form for one member: their own, or anyone's for an administrator. */
 export function ProfileForm({ member, account, languages, tenant, self }: { member: string; account: Account; languages: string[]; tenant?: TenantRecord; self: boolean }) {
-  const { decide } = useHost();
+  const { decide, me } = useHost();
   const { setScheme } = useTheme();
   const [draft, setDraft] = useState<Draft>({});
+  // The apps this member may open: mine from /v1/me; another member's from the
+  // roles the member list shows (administrators only, who are the ones
+  // editing others), titled by the apps I know.
+  const members = useRead<Member[]>("/v1/members", undefined, !self).data ?? [];
+  const openable = useMemo(() => {
+    if (self) return me.apps.map((a) => ({ id: a.id, title: a.title }));
+    const roles = members.find((m) => m.id === member)?.roles ?? {};
+    return Object.keys(roles).sort().map((id) => ({ id, title: me.apps.find((a) => a.id === id)?.title ?? id }));
+  }, [self, me.apps, members, member]);
   useEffect(() => setDraft({}), [account]);
   const value = (k: keyof Profile) => (draft[k] ?? (account[k] as string | boolean | undefined) ?? "") as string;
   const flag = (k: "inApp" | "mail") => (draft[k] ?? account[k] ?? true) as boolean;
@@ -65,15 +74,18 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
       setDraft({});
     }
   };
+  // Fields in a two-column grid: a cell with a hint is taller than its
+  // neighbour; content-start keeps every control on the same line as the
+  // control beside it instead of letting the grid spread the rows.
   const text = (k: keyof Profile, label: string, hint?: string, type = "text") => (
-    <label className="grid gap-1 text-sm">
+    <label className="grid content-start gap-1 text-sm">
       <span className="text-xs text-muted">{label}</span>
       <Input type={type} value={value(k)} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />
       {hint && <span className="text-[11px] text-muted">{hint}</span>}
     </label>
   );
   const choice = (k: keyof Profile, label: string, options: string[], render: (o: string) => string, hint?: string) => (
-    <label className="grid gap-1 text-sm">
+    <label className="grid content-start gap-1 text-sm">
       <span className="text-xs text-muted">{label}</span>
       <Select value={value(k)} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}>
         <option value="">{t("— tenant default")}</option>
@@ -99,7 +111,7 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
       <Panel title={t("Language, time and formats")}>
         <div className="grid gap-3 md:grid-cols-2">
           {choice("language", t("Language"), ["en", ...languages.filter((l) => l !== "en")], (l) => l, inherit("language", t("browser")))}
-          <label className="grid gap-1 text-sm">
+          <label className="grid content-start gap-1 text-sm">
             <span className="text-xs text-muted">{t("Timezone")}</span>
             <Input list="platform-timezones" value={value("timezone")} placeholder={t("— tenant default")} onChange={(e) => setDraft({ ...draft, timezone: e.target.value })} />
             <datalist id="platform-timezones">{zones.map((z) => <option key={z} value={z} />)}</datalist>
@@ -112,10 +124,10 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
       </Panel>
       <Panel title={t("Notifications")}>
         <div className="grid gap-3 md:grid-cols-2">
-          <Checkbox checked={flag("inApp")} onChange={(v) => setDraft({ ...draft, inApp: v })}><span className="text-sm">{t("Notify in the workspace")}</span></Checkbox>
-          <Checkbox checked={flag("mail")} onChange={(v) => setDraft({ ...draft, mail: v })}><span className="text-sm">{t("Notify by mail")}</span></Checkbox>
+          <div className="self-start"><Checkbox checked={flag("inApp")} onChange={(v) => setDraft({ ...draft, inApp: v })}><span className="text-sm">{t("Notify in the workspace")}</span></Checkbox></div>
+          <div className="self-start"><Checkbox checked={flag("mail")} onChange={(v) => setDraft({ ...draft, mail: v })}><span className="text-sm">{t("Notify by mail")}</span></Checkbox></div>
           {choice("digest", t("Mail digest"), DIGESTS, (o) => t(o), inherit("digest", "instant"))}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 content-start gap-2">
             {text("quietFrom", t("Quiet hours from"), undefined, "time")}
             {text("quietTo", t("until"), undefined, "time")}
           </div>
@@ -123,7 +135,15 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
       </Panel>
       <Panel title={t("Workspace")}>
         <div className="grid gap-3 md:grid-cols-2">
-          {text("homePage", t("Opens on"), t("An app ID the workspace opens on, such as mes; empty: the home page."))}
+          <label className="grid content-start gap-1 text-sm">
+            <span className="text-xs text-muted">{t("Opens on")}</span>
+            <Select value={value("homePage")} onChange={(e) => setDraft({ ...draft, homePage: e.target.value })}>
+              <option value="">{t("— home page")}</option>
+              {openable.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
+              {value("homePage") && !openable.some((a) => a.id === value("homePage")) && <option value={value("homePage")}>{value("homePage")}</option>}
+            </Select>
+            <span className="text-[11px] text-muted">{t("The app the workspace opens on; only apps this member holds a role in are offered.")}</span>
+          </label>
           {choice("theme", t("Appearance"), THEMES, (o) => t(o))}
           {choice("density", t("Density"), DENSITIES, (o) => t(o))}
         </div>

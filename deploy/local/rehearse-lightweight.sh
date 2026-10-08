@@ -12,7 +12,7 @@
 #           show it serves the same state with the token it mints there
 #
 # The delivery profile's route (drafts, candidate, activation, the business
-# task) is rehearse-lite.sh on a real PostgreSQL journal; this script is the
+# task) is rehearse.sh on the compose project; this script is the
 # lightweight side of the same guarantee: the semantics are the platform's, only
 # the storage, the file bytes and the identity provider are local.
 #

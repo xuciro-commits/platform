@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:013e70d6b277097c",
+  "revision": "sha256:b70f76032918962b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -774,6 +774,38 @@
       "example": "SemanticSelectionExample",
       "constraints": [
         "The selector returns typed references. Host validation and original permissions remain authoritative."
+      ],
+      "dependencies": [
+        "ui/input"
+      ]
+    },
+    {
+      "id": "app/tenant-references",
+      "owner": "@platform/app",
+      "name": "Tenant reference selection",
+      "summary": "Choose an application, role, protocol or member from the tenant's existing directory.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "reference",
+        "directory",
+        "role"
+      ],
+      "source": "web/packages/app/src/semantic/References.tsx",
+      "exports": [
+        "AppSelect",
+        "RoleSelect",
+        "ProtocolSelect",
+        "MemberSelect"
+      ],
+      "example": "TenantReferencesExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
       ],
       "dependencies": [
         "ui/input"
@@ -4257,6 +4289,7 @@
       "Chart": "图表",
       "Checkbox": "复选框",
       "Checked": "已选中",
+      "Choose an application, role, protocol or member from the tenant's existing directory.": "从租户现有目录选择应用、角色、协议或成员。",
       "Choose an authorized object or property from the existing registry without writing internal identifiers.": "从现有注册表选择受权对象或属性，无需填写内部标识。",
       "Choose several authorized options with complete source counts and an optional histogram.": "从授权选项中多选，显示完整来源计数及可选直方图。",
       "Civil date input": "业务日期输入",
@@ -4514,6 +4547,7 @@
       "Tactile metallic and liquid glass styled buttons for prominent actions.": "用于重点操作的拟物金属与流体玻璃质感按钮。",
       "Tasks and inbox": "任务与收件箱",
       "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
+      "Tenant reference selection": "租户引用选择",
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
       "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.": "92 类型迁移清单不授予运行资格。八种源组件已有有限配置方案，未支持配置阻止应用。",
       "The bounded path and original traversal reader grant no extra record access. Counts retain original totals; typed output ports keep heterogeneous records separate.": "有界路径和原遍历读取器不授予额外记录访问权限；计数保留原总数，带类型输出端口保持异构记录独立。",
@@ -4756,6 +4790,7 @@
       "web/packages/app/src/automation/capability.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
+      "web/packages/app/src/semantic/References.tsx",
       "web/packages/app/src/semantic/Selector.tsx",
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
@@ -5513,6 +5548,12 @@
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Sandbox.tsx"
     ],
+    "app/tenant-references": [
+      "web/packages/build/src/automate/workflow-inspector.tsx",
+      "web/packages/build/src/ontology/process.tsx",
+      "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/platform/src/ai.tsx"
+    ],
     "ui/block-canvas": [
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/automate/workflow.tsx",
@@ -5880,6 +5921,7 @@
         "useReadQuery",
         "useRecordArchive",
         "useRecordInventory",
+        "useTenantApps",
         "widgetContract",
         "widgetContracts"
       ],

@@ -2,9 +2,13 @@
   "name": "platform-web",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.18.0" },
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
-    "check": "node ../scripts/catalog.mjs check && pnpm -r run typecheck && pnpm -r run test && pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "build": "pnpm -r run build",
     "catalog:generate": "node ../scripts/catalog.mjs generate",
     "catalog:check": "node ../scripts/catalog.mjs check"
   },

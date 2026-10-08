@@ -685,4 +685,7 @@ register("zh-CN", {
   "The member who takes over their delegations and open items": "接手其委托与未结事项的成员",
   "Identities": "登录身份",
   "What signs in as you: a verified address from the identity provider, or a client id. An administrator binds them when adding or inviting you; a personal token is not an identity.": "以您身份登录的是什么：身份提供方验证过的邮箱地址，或客户端 ID。管理员在添加或邀请您时绑定；个人令牌不是登录身份。",
+  "— home page": "— 首页",
+  "The app the workspace opens on; only apps this member holds a role in are offered.": "工作区打开时进入的应用；仅可选该成员持有角色的应用。",
+  "Choose a member or agent": "选择成员或代理",
 });

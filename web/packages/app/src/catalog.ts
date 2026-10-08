@@ -84,9 +84,12 @@ export const entries: CatalogEntry[] = [
     tags: ["semantic", "object", "property", "binding"], source: "web/packages/app/src/semantic/Selector.tsx", dependencies: ["ui/input"],
     constraints: ["The selector returns typed references. Host validation and original permissions remain authoritative."],
   }),
+  asset("tenant-references", "Tenant reference selection", "Choose an application, role, protocol or member from the tenant's existing directory.", ["AppSelect", "RoleSelect", "ProtocolSelect", "MemberSelect"], "TenantReferencesExample", {
+    source: "web/packages/app/src/semantic/References.tsx", tags: ["reference", "directory", "role"], dependencies: ["ui/input"],
+  }),
 ];
 
 /** Nonvisual public API, attached to the existing public owner rather than visual cards. */
-export const api = ["AppEntry", "AssetRef", "Definition", "Me", "Decision", "Host", "HostContext", "useHost", "useRecordArchive", "useReadQuery", "useRead", "useRecordInventory",
+export const api = ["useTenantApps", "AppEntry", "AssetRef", "Definition", "Me", "Decision", "Host", "HostContext", "useHost", "useRecordArchive", "useReadQuery", "useRead", "useRecordInventory",
   "useDefinitions", "useCapabilities", "useInvokeCapability", "assetKey", "findDefinition", "useOpenRecord", "Dashboard", "AppUI", "defineApp", "PlatformAppCategory", "categoryOf", "SavedView", "newId",
   "runStates", "AgentInfo", "AgentRun", "Citation", "Memory", "Passage", "RunDraft", "RunSignal", "RunStep", "isPageDefinition", "isComposed", "pageDocumentFromSections", "createWidgetRegistry", "createWidgetDefinitions", "WidgetRegistry", "widgetContracts", "widgetContract", "pageUIProfile", "supportsPageUIProfile", "searchInputObjects", "parsePageDecimal", "isPageDecimal", "isPageDecimalDraft", "PageDecimalValue", "pageVariableContract", "pageVariableValues", "pageVariableDiagnostics", "pageLayoutDiagnostics", "PageVariableValue", "WidgetImplementation", "WidgetContract", "WidgetID", "semanticModelView", "semanticPropertyTypes", "assetBindingKey", "SemanticPropertyType", "propertyKey", "relationKey", "PropertyRef", "ReferenceRelationRef", "SemanticRelation", "SemanticModelView"];
