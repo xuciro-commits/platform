@@ -5,16 +5,10 @@
 import type { AppUI } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { t, type NavSection, type Route } from "@platform/ui";
-import { BarChart3, Boxes, CalendarDays, ClipboardList, Map as MapPin, Sparkles, Users, Wrench } from "lucide-react";
-import type { ReactNode } from "react";
+import { BarChart3 } from "lucide-react";
+import { IconGlyph } from "@platform/ui";
 
 type Definition = Api.Definition;
-
-/** The icons a tenant may choose (ADR-0036 D3), drawn by the kit's set. */
-const icons: Record<string, ReactNode> = {
-  boxes: <Boxes />, clipboard: <ClipboardList />, people: <Users />, calendar: <CalendarDays />,
-  wrench: <Wrench />, map: <MapPin />, chart: <BarChart3 />, sparkles: <Sparkles />,
-};
 
 /**
  * The applications this member may open, as the workspace's own app entries.
@@ -28,7 +22,7 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
     const pages = new Map(definitions.filter((d) => d.ref.kind === "page" && d.ref.app === definition.ref.app).map((d) => [d.ref.name, d.page]));
     const held = application.pages.filter((name) => pages.has(name));
     if (held.length === 0) return [];
-    const icon = icons[application.icon ?? ""] ?? <Boxes />;
+    const icon = <IconGlyph name={application.icon} />; // the kit's vocabulary (ADR-0084 D1)
     const id = `${definition.ref.app}:${application.name}`;
     const route = (name: string): Route => ({ view: "page", params: { app: definition.ref.app, kind: "page", name, application: id, ...(context?.application === id && context.instance ? { instance: context.instance } : {}) } });
     const item = (name: string) => ({ label: pages.get(name)?.title ?? name, icon, route: route(name) });

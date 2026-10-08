@@ -4,7 +4,7 @@
 // module itself — header and navigation as people will see them.
 import { pageUIProfile, pageVariableValues, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ApplicationHeader, Button, Checkbox, Input, PanelSection, Select, ProblemList, StructureRow, Textarea, Workbench, t, useWorkspace, type WorkbenchProblem } from "@platform/ui";
+import {ApplicationHeader, Button, Checkbox, IconPicker, Input, PanelSection, ProblemList, StructureRow, Textarea, Workbench, t, useWorkspace, type WorkbenchProblem} from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, LayoutTemplate, Layers, PanelTop, Plus, Settings2, Trash2, Variable } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDraftSession } from "../session/DraftSession";
@@ -146,8 +146,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     settings: <div className="grid gap-3 p-3 text-xs">
       <label className="grid gap-1">{t("Title")}<Input value={draft.title ?? ""} disabled={!canEdit} onChange={(event) => edit({ title: event.target.value })} /></label>
       <label className="grid gap-1">{t("Description")}<Textarea rows={3} value={draft.description ?? ""} disabled={!canEdit} onChange={(event) => edit({ description: event.target.value })} /></label>
-      <label className="grid gap-1">{t("Icon")}<Select value={draft.icon ?? "boxes"} disabled={!canEdit} onChange={(event) => edit({ icon: event.target.value })}>
-        {["boxes", "clipboard", "people", "calendar", "wrench", "map", "chart", "sparkles"].map((icon) => <option key={icon} value={icon}>{t(icon)}</option>)}</Select></label>
+      <label className="grid gap-1">{t("Icon")}<IconPicker value={draft.icon} disabled={!canEdit} onChange={(icon) => edit({ icon })} /></label>
       <p className="text-muted">{t("The module's name ({name}) is its identity in releases and links.", { name: project.name })}</p>
     </div>,
   };

@@ -46,11 +46,15 @@ type Account struct {
 }
 
 // Line is one line of a journal entry: an amount on the debit or the credit side of an account.
+// CostCentre names the enterprise model's organisation the amount is charged
+// to (ADR-0084 D4): the dimension that lets the books be read by unit without
+// a second chart of cost centres.
 type Line struct {
-	Account platform.Ref[Account] `json:"account" field:"required"`
-	Debit   platform.Money        `json:"debit"`
-	Credit  platform.Money        `json:"credit"`
-	Text    string                `json:"text,omitempty"`
+	Account    platform.Ref[Account] `json:"account" field:"required"`
+	Debit      platform.Money        `json:"debit"`
+	Credit     platform.Money        `json:"credit"`
+	CostCentre string                `json:"costCentre,omitempty" ref:"enterprise.element" stereo:"ActualOrganization" title:"Cost centre" help:"The unit in the enterprise model the amount is charged to" example:"open-plant-1"`
+	Text       string                `json:"text,omitempty"`
 }
 
 // Entry is a journal entry: drafted, then posted, which is final; a posted
@@ -75,10 +79,11 @@ type Posting struct {
 	Number  string                `json:"number" field:"readonly,search"`
 	Journal string                `json:"journal" field:"readonly" choices:"general,purchases,production"`
 	Date    string                `json:"date" field:"readonly" type:"date"`
-	Account platform.Ref[Account] `json:"account" field:"readonly"`
-	Debit   platform.Money        `json:"debit" field:"readonly"`
-	Credit  platform.Money        `json:"credit" field:"readonly"`
-	Text    string                `json:"text,omitempty" field:"readonly"`
+	Account    platform.Ref[Account] `json:"account" field:"readonly"`
+	Debit      platform.Money        `json:"debit" field:"readonly"`
+	Credit     platform.Money        `json:"credit" field:"readonly"`
+	CostCentre string                `json:"costCentre,omitempty" field:"readonly"`
+	Text       string                `json:"text,omitempty" field:"readonly"`
 }
 
 // Period is an accounting month ("2026-10"): postings dated in it need it open (D4).
@@ -294,7 +299,7 @@ func book(c platform.Caller, r *pb.ChangeRecord, e Entry) {
 	c.Put(r, e)
 	for i, l := range e.Lines {
 		c.Put(r, Posting{Record: platform.Record{ID: fmt.Sprintf("%s.%d", e.ID, i+1)}, Entry: platform.Ref[Entry](e.ID), Number: e.Number,
-			Journal: e.Journal, Date: e.Date, Account: l.Account, Debit: l.Debit, Credit: l.Credit, Text: l.Text})
+			Journal: e.Journal, Date: e.Date, Account: l.Account, Debit: l.Debit, Credit: l.Credit, CostCentre: l.CostCentre, Text: l.Text})
 	}
 }
 

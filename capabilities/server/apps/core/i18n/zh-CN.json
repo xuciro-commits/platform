@@ -101,5 +101,7 @@
   "Equity": "权益",
   "Revenue": "收入",
   "Expense": "费用",
-  "Trial balance": "试算平衡表"
+  "Trial balance": "试算平衡表",
+  "Place in the model": "模型中的场所",
+  "The enterprise model's location for this place; the model is where its position in the enterprise lives": "该场所在企业模型中对应的位置元素；它在企业里的位置由模型决定"
 }
