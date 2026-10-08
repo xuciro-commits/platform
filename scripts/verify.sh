@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Platform verification. Usage: scripts/verify.sh [contract|formal|capabilities|web-check|web|pms|mes|composition|deploy|format|ci]...   (default: everything; several steps run in turn)
+# Platform verification. Usage: scripts/verify.sh [contract|formal|capabilities|web-check|web|pms|mes|composition|deploy|format|ci]...   (default: everything except deploy; several steps run in turn)
 # The web step needs node and pnpm (brew install node pnpm); deploy also needs a running Docker (orb start), curl, jq and Chrome or Playwright Chromium.
 # Needs go, buf and protoc-gen-go (brew install go bufbuild/buf/buf; go install google.golang.org/protobuf/cmd/protoc-gen-go@latest).
 set -uo pipefail
@@ -117,7 +117,9 @@ case "$target" in
   mes) mes ;;
   composition) composition ;;
   deploy) deploy ;;
-  all) contract; formal; format; capabilities; web; pms; mes; composition; deploy ;;
+  # The rehearsal (deploy) rebuilds images and runs a disposable compose
+  # project: it is never implied. Ask for it by name.
+  all) contract; formal; format; capabilities; web; pms; mes; composition ;;
   # What CI runs on Linux: the rehearsal needs Docker, so it stays on the owner's Mac.
   ci) contract; formal; format; capabilities; mes; composition ;;
   *) echo "usage: $0 [contract|formal|capabilities|web-check|web|pms|mes|composition|deploy|format|ci]..."; exit 2 ;;
