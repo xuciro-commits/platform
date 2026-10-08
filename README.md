@@ -10,7 +10,8 @@
 - 本地运行：[deploy/local/README.md](deploy/local/README.md)；内核契约：[contract/spec/](contract/spec/)
 
 ```sh
-scripts/verify.sh ci          # 持续集成组合
-scripts/verify.sh web-check   # Web 类型、单元测试与构建
-scripts/verify.sh composition # 应用边界检查
+make help                     # 全部目标；三层：dev / check / release（ADR-0081）
+make infra && make dev        # 基础设施容器 + 宿主热重启（另一终端 make web）
+make check                    # 提交前：编译、vet、边界、生成类型、Catalog、tsc
+make verify                   # 发布前完整证据；CI 在 v* 标签上跑同一条
 ```

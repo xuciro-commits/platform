@@ -2,13 +2,11 @@ package platformserver
 
 import (
 	"encoding/json"
-	"fmt"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
 	"platformserver/platform"
 )
@@ -20,32 +18,13 @@ import (
 func TestTenantDefinedAccess(t *testing.T) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	var journal []Entry
-	compose := func() *Tenant {
-		seat := func(id, role string) Seat {
-			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{build.ID: role}}}
-		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("dana", build.Builder), seat("ann", "desk"), seat("bea", "desk"),
-			seat("sam", "supervisor"), seat("cy", "cleaner")), build.New("t-1"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return tn
-	}
+	seats := []Seat{seatOf("dana", "build:"+build.Builder), seatOf("ann", "build:desk"), seatOf("bea", "build:desk"), seatOf("sam", "build:supervisor"), seatOf("cy", "build:cleaner")}
+	compose := func() *Tenant { return composeTenant(t, "t-1", seats, build.New("t-1")) }
 	tn := compose()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member {
-		m, _ := tn.app(PlatformApp).(*Console).Member(id)
-		return m
-	}
-	keys := 0
+	member := func(id string) platform.Member { return memberOf(t, tn, id) }
 	do := func(who, schema, typ, id string, payload any) string {
-		keys++
-		raw, _ := json.Marshal(payload)
-		if _, err := tn.Submit(member(who), &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: build.ID, IdempotencyKey: fmt.Sprint("x", keys),
-			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); err != nil {
-			return fmt.Sprintf("%s: %s", err.Code, err.Message)
-		}
-		return "ok"
+		return refuse(t, tn, who, build.ID, schema, typ, id, payload, now)
 	}
 	object := map[string]any{"name": "lost", "title": "Lost item", "plural": "Lost property",
 		"fields": []map[string]any{
@@ -74,7 +53,12 @@ func TestTenantDefinedAccess(t *testing.T) {
 		{"the builder's own role", map[string]any{"access": []map[string]any{{"role": "builder", "read": "own"}}}, "always does everything"},
 	} {
 		draft := "O-" + strings.ReplaceAll(x.why, " ", "-")
-		if got := do("dana", build.ObjectType+".create", build.ObjectType, draft, merge(object, merge(x.with, map[string]any{"name": "bad" + fmt.Sprint(keys)}))); got != "ok" {
+		if got := do("dana", build.ObjectType+".create", build.ObjectType, draft, merge(object, merge(x.with, map[string]any{"name": "bad" + strings.Map(func(r rune) rune {
+			if r >= 'a' && r <= 'z' {
+				return r
+			}
+			return -1
+		}, x.why)}))); got != "ok" {
 			t.Fatalf("%s: draft: %s", x.why, got)
 		}
 		if got := do("dana", build.SchemaPublish, build.ObjectType, draft, map[string]any{}); !strings.Contains(got, x.want) {

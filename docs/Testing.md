@@ -9,19 +9,27 @@
 | 变更 | 适用检查 |
 |---|---|
 | 文档、队列、AI 规则 | 链接/引用、语义一致性、`git diff --check` |
-| 内核规范/向量/实现 | `scripts/verify.sh contract`；受影响的 Rust/TypeScript 边缘检查 |
-| Lean 模型/工具链 | `scripts/verify.sh formal`；映射与可信前提见 [Lean README](../contract/lean/README.md) |
-| Go 宿主 | `scripts/verify.sh capabilities format`；改变应用 API/组合时加 `composition` |
-| 应用/协议 | `scripts/verify.sh composition format`；MES 规则加 `mes`，PMS 桌面/离线链加 `pms` |
-| Web 日常编码与同类组件批次 | `scripts/verify.sh web-check`：生成一致性、Catalog、`pnpm check` 的类型、单元测试与构建；开发中按问题选择原 owner 的 `go test` 和单元测试 |
-| 成组交付、重要集成或发布节点 | 按影响面选择一条联合浏览器路线；需要全量验收时 `scripts/verify.sh web` 共用一次完整 Playwright，不按每个组件重复 |
+| 内核规范/向量/实现 | `make verify`（含 `scripts/verify.sh contract`）；受影响的 Rust/TypeScript 边缘检查 |
+| Lean 模型/工具链 | `scripts/verify.sh formal`（`make verify` 包含）；映射与可信前提见 [Lean README](../contract/lean/README.md) |
+| Go 宿主 | `make check` + `make test-go PKG=<改动包> RUN=<owner 测试>`；改变应用 API/组合时加 `scripts/verify.sh composition` |
+| 应用/协议 | `scripts/verify.sh composition format`（`make verify` 包含）；MES 规则加 `mes`，PMS 桌面/离线链加 `pms` |
+| Web 日常编码与同类组件批次 | `make check-web`：生成一致性、Catalog、全部包 tsc；`make test` 加单元测试；开发中按问题选择原 owner 的 `go test` 和单元测试 |
+| 成组交付、重要集成或发布节点 | 按影响面选择一条联合浏览器路线；按影响面 `make e2e SPEC=<spec>`；需要全量验收时 `make e2e` 共用一次完整 Playwright，不按每个组件重复 |
 | 纯样式/布局/文案 | `pnpm --dir web check`，启动查看并截所改页面；不要求重跑浏览器业务路线 |
 | 结构整理（搬文件、拆函数、Tenant 组件化，ADR-0080） | 零行为变更：`go build ./... && go vet .` 加全量 `go test .`（基线仅 `TestRecordsAtScale`）；web 侧对应包 `tsc --noEmit` 与 `node scripts/catalog.mjs generate` 零语义差异；`scripts/cleanup-inventory.sh` 看规模数字；不加新测试 |
 | 环境生命周期（定义→候选→封存→激活→晋级→迁移→升级，ADR-0047 §11 / ADR-0080 §3.1） | `go test -run 'TestApplicationLifecycle' .`：`environment_lifecycle_test.go` 走租户方法，`environment_http_test.go` 走 `Host.Handler()` 的真实路由（含宿主控制台）；本地两租户 Compose 宿主上用 `node solutions/wms/assemble.mjs promote`（`PLATFORM_HOST_TOKEN`/`PLATFORM_TARGET_TENANT`/`PLATFORM_TARGET_MEMBER`）把 WMS 的激活候选晋级到另一个租户并迁移主数据 |
 | 应用全生命周期跨环境（发布、晋级、迁移、升级、恢复） | `go test -run TestApplicationLifecycleAcrossEnvironments .`：一个对象+页面+应用的联合候选在 dev 封存激活，业务写入后晋级到 prod，`MigrateRecords` 迁数据（二次运行零写入），v2 加一个可选标量经两环境各自审阅的计划激活，最后 prod 从快照+日志尾恢复并通过 `CheckReplay`；改动候选/发布/环境/迁移任一 owner 时先跑它 |
-| 提交/恢复/激活语义或部署 | 对应持久化/故障检查及 `scripts/verify.sh deploy`；纯发布导航不自动触发 |
+| 提交/恢复/激活语义或部署 | 对应持久化/故障检查及 `make rehearse`；纯发布导航不自动触发 |
 
 通过后只有新代码、失败修复或环境变化才重跑；文档更新不是重跑理由。新增测试先确认它能发现哪种实际回归、哪一层是规范主人；已由服务端/契约证明的规则不在浏览器逐项重测。
+
+## 测试规范
+
+分层与入口是 `Makefile`（ADR-0081）。写测试时：
+
+- **浏览器 spec**（`web/e2e/tests/*.spec.ts`）只从 `./kit` 导入 `test`/`expect`：`builder`（`manager` 席位）造对象 `builder.object()`、记录 `builder.records()`、页面 `builder.page()`、后台改稿 `builder.edit()`；`editor` 走编辑器（`importModule`、`select`、`saveUntil`、`release`）；`runtime(page, operator, name)` 以 `desk` 开运行时页；截图用 `shots()`。spec 里不再出现 `/v1/submissions`、`Authorization`、"Import Workshop module" 对话框步骤或 Review→Check→Candidate→Activate 四连点。一个 spec 一条路线、格式化、分段注释写明每段证明什么；样板 `page-notice.spec.ts`。旧的单行压缩 spec 在触碰时按样板改写，不另立迁移任务。
+- **宿主测试**（`capabilities/server/*_test.go`）用 `testkit_test.go`：`composeTenant(t, id, seats, apps...)` / `builderTenant(t, id, apps...)` 组租户，`seatOf("ann", "build:desk")` 写席位，`decide(...)` 提交并在拒绝时 fail，`refuse(...)` 返回 `code: message` 做权限表，`publishObject(...)` 一步建并发布对象。不手拼 `pb.Submission`、不自维护幂等计数；文件内已有的 `submit := func` 闭包在触碰时改到 kit 上；样板 `build_access_test.go`。
+- **不写**：像素/布局断言、为每种设备或语言复制的路线、服务端已证明规则的浏览器重测、只为"覆盖率"存在的用例。新增测试先说清它会抓住哪种真实回归。
 
 ## 自动检查的归属
 
@@ -101,4 +109,4 @@ PLATFORM_SCREENSHOTS=1 pnpm --dir web/e2e exec playwright test --grep 'compose a
 
 设置 `PLATFORM_TEST_DATABASE` 指向专用测试 PostgreSQL 后，根包 `TestPostgresTableProfilePullAndReplay` 检查真实只读表接入、数字增量游标和重放；`TestJournalWritebackCallbackAndReplay` 检查真实接受结果落盘及快照恢复；`TestJournalBooksFromBuilderActions` 检查账簿待过账恢复及冲销落盘后丢应答的重试；`TestJournalConcurrentOpen` 检查四个宿主同时初始化同一个测试库。测试地址不含密码，凭据仍通过受控密钥提供。
 
-当前全量 `scripts/verify.sh web` 路线尚未通过：旧 application/Main 导航、function/release 按钮、Process 步骤和页面事件 fixtures 需要对齐现行 ADR-0052/0053/0054 的入口与声明。不得以本节的两条增量路线冒充全量浏览器或部署恢复演练通过；遗留路线维护归 WorkQueue。
+当前全量 `make e2e` 路线尚未通过：旧 application/Main 导航、function/release 按钮、Process 步骤和页面事件 fixtures 需要对齐现行 ADR-0052/0053/0054 的入口与声明。不得以本节的两条增量路线冒充全量浏览器或部署恢复演练通过；遗留路线维护归 WorkQueue。

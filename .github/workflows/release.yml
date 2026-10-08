@@ -1,0 +1,100 @@
+# Runs only when a version is fixed: pushing a v* tag (make tag VERSION=vX.Y.Z)
+# or by hand. Day-to-day pushes run nothing here; `make check` and `make verify`
+# are the developer's layers (ADR-0081). The job is the same `make verify`, then
+# the artifacts: the workspace build and the two solution hosts for linux
+# amd64/arm64, attached to the GitHub Release of the tag, and the solution
+# images pushed to GHCR under the tag.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  PLATFORM_TIMING: "0" # shared runners are slower; timing bounds are off
+
+jobs:
+  verify:
+    name: verify (contract, proofs, host, apps, web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: capabilities/server/go.mod
+          cache-dependency-path: "**/go.sum"
+      - uses: bufbuild/buf-action@v1
+        with: { setup_only: true }
+      - run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+      - run: sudo apt-get update && sudo apt-get install -y zstd ripgrep
+      - uses: actions/cache@v4
+        with:
+          path: .build/formal-tools/*.tar.zst
+          key: lean-archive-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('contract/lean/lean-toolchain', 'scripts/formal.sh') }}
+      - uses: pnpm/action-setup@v4
+        with: { package_json_file: web/package.json }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: cd web && pnpm install --frozen-lockfile
+      - run: make verify
+      - if: failure()
+        run: for f in .build/verify/*.log; do echo "== $f"; tail -n 80 "$f"; done
+
+  artifacts:
+    name: workspace, hosts, images
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: capabilities/server/go.mod
+          cache-dependency-path: "**/go.sum"
+      - uses: pnpm/action-setup@v4
+        with: { package_json_file: web/package.json }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: cd web && pnpm install --frozen-lockfile
+      - name: Workspace and hosts
+        env: { VERSION: "${{ github.ref_name }}" }
+        run: |
+          set -euo pipefail
+          mkdir -p .build/release
+          pnpm --dir web/apps/workspace build
+          tar -C web/apps/workspace -czf ".build/release/workspace-$VERSION.tar.gz" dist
+          for s in hospitality manufacturing; do for arch in amd64 arm64; do
+            (cd "solutions/$s" && CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w" -o "$GITHUB_WORKSPACE/.build/release/$s-server-$VERSION-linux-$arch" "./cmd/$s-server")
+          done; done
+          (cd .build/release && sha256sum * > SHA256SUMS)
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Images
+        env: { VERSION: "${{ github.ref_name }}", OWNER: "${{ github.repository_owner }}" }
+        run: |
+          set -euo pipefail
+          for s in hospitality manufacturing; do
+            docker buildx build --platform linux/amd64,linux/arm64 --push \
+              --build-arg PLATFORM_REVISION="$GITHUB_SHA" \
+              -t "ghcr.io/${OWNER,,}/$s-server:$VERSION" -t "ghcr.io/${OWNER,,}/$s-server:latest" \
+              -f "solutions/$s/Dockerfile" .
+          done
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: .build/release/*
+          generate_release_notes: true

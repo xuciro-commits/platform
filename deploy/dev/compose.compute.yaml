@@ -1,0 +1,6 @@
+# Overlay for `make infra-compute`: the compute sockets land in .build/dev/compute
+# on this machine, where a host started by `make dev` can reach them.
+volumes:
+  compute-sockets:
+    name: platform-dev_compute-sockets
+    driver_opts: { type: none, o: bind, device: "${PWD}/.build/dev/compute" }

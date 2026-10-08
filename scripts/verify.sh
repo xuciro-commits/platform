@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Platform verification. Usage: scripts/verify.sh [contract|formal|capabilities|web-check|web|pms|mes|composition|deploy|format|ci]...   (default: everything except deploy; several steps run in turn)
-# The web step needs node and pnpm (brew install node pnpm); deploy also needs a running Docker (orb start), curl, jq and Chrome or Playwright Chromium.
-# Needs go, buf and protoc-gen-go (brew install go bufbuild/buf/buf; go install google.golang.org/protobuf/cmd/protoc-gen-go@latest).
+# The named verification steps the Makefile composes (ADR-0081): each writes
+# its log to .build/verify/<step>.log and prints one line. Run steps by name:
+#   scripts/verify.sh contract formal format capabilities composition web-check mes
+# `make check`, `make verify`, `make rehearse` choose the layer; this script is
+# the step bodies, not a second entry point.
+# Needs go, buf and protoc-gen-go; the web steps node and pnpm; deploy a running
+# Docker, curl, jq and Chrome or Playwright's Chromium.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p .build/verify
@@ -39,8 +43,14 @@ formal() {
   fi
 }
 
+# The TypeScript contract types match the proto contract.
+web_types() {
+  step web-types bash -c 'cd web && gen() { find packages/kernel/src/gen -type f -exec shasum {} + | sort; } && before=$(gen) && pnpm --dir packages/kernel generate && { [ "$before" = "$(gen)" ] || { echo "TypeScript contract types were stale; regenerated"; exit 1; }; }'
+}
+
 web_check() {
-  step web bash -c 'cd web && pnpm install --frozen-lockfile && gen() { find packages/kernel/src/gen -type f -exec shasum {} + | sort; } && before=$(gen) && pnpm --dir packages/kernel generate && { [ "$before" = "$(gen)" ] || { echo "TypeScript contract types were stale; regenerated"; exit 1; }; } && pnpm check'
+  web_types
+  step web bash -c 'cd web && pnpm install --frozen-lockfile && pnpm catalog:check && pnpm -r run typecheck && pnpm -r run test && pnpm -r run build'
 }
 
 web() {
@@ -77,11 +87,16 @@ mes() {
   step mes-server bash -c 'cd apps/mes/server && go vet ./... && go test -count=1 ./...'
 }
 
-composition() {
-  # Apps know no other app; they meet through protocols (ADR-0011).
-  local dir
+# Apps know no other app; they meet through protocols (ADR-0011); and no
+# escape hatch appears without being listed.
+composition_static() {
   step app-boundaries scripts/boundaries.sh
   step escapes scripts/escapes.sh
+}
+
+composition() {
+  local dir
+  composition_static
   for dir in protocols/*; do
     [[ -f $dir/go.mod ]] && step "$(basename "$dir")-protocol" bash -c "cd $dir && go vet ./... && go test -count=1 ./..."
   done
@@ -105,10 +120,12 @@ pms() {
   step pms-flows apps/pms/flows.sh
 }
 
-for target in "${@:-all}"; do
+(($#)) || { echo "usage: $0 step...   steps: contract formal format capabilities composition composition-static web-types web-check web pms mes deploy"; exit 2; }
+for target in "$@"; do
 case "$target" in
   contract) contract ;;
   formal) formal ;;
+  web-types) web_types ;;
   web-check) web_check ;;
   web) web ;;
   pms) web; pms ;;
@@ -116,13 +133,9 @@ case "$target" in
   format) format ;;
   mes) mes ;;
   composition) composition ;;
+  composition-static) composition_static ;;
   deploy) deploy ;;
-  # The rehearsal (deploy) rebuilds images and runs a disposable compose
-  # project: it is never implied. Ask for it by name.
-  all) contract; formal; format; capabilities; web; pms; mes; composition ;;
-  # What CI runs on Linux: the rehearsal needs Docker, so it stays on the owner's Mac.
-  ci) contract; formal; format; capabilities; mes; composition ;;
-  *) echo "usage: $0 [contract|formal|capabilities|web-check|web|pms|mes|composition|deploy|format|ci]..."; exit 2 ;;
+  *) echo "unknown step $target"; exit 2 ;;
 esac
 done
 
