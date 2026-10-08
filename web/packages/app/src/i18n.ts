@@ -643,4 +643,9 @@ register("zh-CN", {
   "Scan or type a code": "扫描或输入编码",
   "The camera is not available.": "摄像头不可用。",
   "Camera": "摄像头",
+  "App": "应用",
+  "Role": "角色",
+  "Protocol": "协议",
+  "Member": "成员",
+  "agent": "代理",
 });

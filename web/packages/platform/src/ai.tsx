@@ -1,5 +1,5 @@
 // Settings: AI providers, the playground and usage (ADR-0015).
-import { useReadQuery as useRead } from "@platform/app";
+import { MemberSelect, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -224,7 +224,7 @@ function AILimits() {
       <Form className="mb-2 flex flex-wrap items-center gap-2" onSubmit={() => {
         void decideOn("ai.limit.set", { type: "ai.limit", id: who.trim() }, { dailyTokens: Number(daily) || 0, perMinute: Number(minute) || 0 }).then(() => { setWho(""); setDaily(""); setMinute(""); });
       }}>
-        <Input aria-label={t("Member ID")} placeholder={t("Member ID, e.g. sales-1 or agent:csm.triage")} value={who} onChange={(e) => setWho(e.target.value)} className="w-72" />
+        <MemberSelect label={t("Member ID")} empty={t("Choose a member or agent")} agents value={who} onChange={setWho} className="w-72" />
         <Input aria-label={t("Tokens a day")} type="number" min={0} placeholder={t("Tokens a day")} value={daily} onChange={(e) => setDaily(e.target.value)} className="w-36" />
         <Input aria-label={t("Calls a minute")} type="number" min={0} placeholder={t("Calls a minute")} value={minute} onChange={(e) => setMinute(e.target.value)} className="w-36" />
         <Button type="submit" disabled={!who.trim()}>{t("Set limit")}</Button>

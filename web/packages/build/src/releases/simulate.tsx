@@ -1,6 +1,6 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceControls as AssetControls } from "../editor/workbench";
-import { PayloadFields, useHost, useRecordInventory } from "@platform/app";
+import { AppSelect, PayloadFields, useHost, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, Disclosure, FlowView, Input, PageHeader, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api, type ActionDeclaration } from "@platform/kernel";
 import { installedObjects, type WorkflowDraft, type WorkflowObject } from "../automate/workflow-model";
@@ -324,7 +324,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
             update(index, { compute: enabled ? { app: computation?.app, name: computation?.name ?? "", output: "{}", expectState: "completed" } : undefined });
           }}>{t("Supply a fixed computation result")}</Checkbox>}
           {step.compute && <fieldset className="grid gap-2 rounded border border-border p-2"><legend className="px-1 text-xs">{t("Fixed computation result")}</legend>
-            <div className="grid gap-2 sm:grid-cols-2"><label className="grid gap-1 text-xs">{t("Capability owner")}<Input value={step.compute.app ?? "build"} onChange={(event) => update(index, { compute: { ...step.compute!, app: event.target.value } })} /></label>
+            <div className="grid gap-2 sm:grid-cols-2"><label className="grid gap-1 text-xs">{t("Capability owner")}<AppSelect value={step.compute.app ?? "build"} onChange={(app) => update(index, { compute: { ...step.compute!, app } })} /></label>
               <label className="grid gap-1 text-xs">{t("Computation name")}<Input value={step.compute.name} onChange={(event) => update(index, { compute: { ...step.compute!, name: event.target.value } })} /></label></div>
             <label className="grid gap-1 text-xs">{t("Expected computation state")}<Select value={step.compute.expectState} onChange={(event) => update(index, { compute: { ...step.compute!, expectState: event.target.value as Api.ComputeFixture["expectState"] } })}><option value="completed">{t("Completed")}</option><option value="failed">{t("Failed")}</option></Select></label>
             {step.compute.expectState === "completed" ? <label className="grid gap-1 text-xs">{t("Fixed output (JSON)")}<Textarea rows={3} className="font-mono" value={step.compute.output ?? "{}"} onChange={(event) => update(index, { compute: { ...step.compute!, output: event.target.value } })} /></label>

@@ -4,7 +4,7 @@ import { ArrowDownToLine, Braces, Plus, X } from "lucide-react";
 import { useContext, useEffect, useId, useState, type ReactNode } from "react";
 import { BindingEditor, JSONEditor, PredicateEditor, SchemaEditor, WorkflowFormProblems } from "./workflow-binding";
 import { PERIODS, parameterSchema, periodLabel, sourceCapability, type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
-import {useHost} from "@platform/app";
+import { ProtocolSelect, RoleSelect, useHost } from "@platform/app";
 
 const textSchema: ValueSchema = { type: "string" };
 const emptyPredicate = () => ({ op: "eq" as const, left: { source: "input" as const }, right: { source: "literal" as const, value: true } });
@@ -99,7 +99,7 @@ export function WorkflowInspector({ step, steps, capabilities, onChange, onRenam
           {step.kind === "compute" && (step.value || capability?.input?.type !== "object" || capability?.input?.nullable)
             ? binding("Complete input value", "value", capability?.input)
             : <NamedInputs inputs={step.inputs} schema={capability?.input} parameters={capability?.parameters} steps={others} onChange={(inputs) => onChange({ inputs })} />}
-          {step.kind === "action" && <>{binding("Target record ID", "target", textSchema)}{field("Protocol (if cross-app)", <Input value={step.protocol ?? ""} onChange={(event) => onChange({ protocol: event.target.value || undefined })} />)}</>}
+          {step.kind === "action" && <>{binding("Target record ID", "target", textSchema)}{field("Protocol (if cross-app)", <ProtocolSelect empty={t("None: the action's own app")} value={step.protocol ?? ""} onChange={(protocol) => onChange({ protocol: protocol || undefined })} />)}</>}
           {step.kind === "compute" && step.operation && field("Retained code version", <Input type="number" min={step.operation.app === "build" ? 1 : 0} disabled={step.operation.app !== "build"} value={step.operation.version} onChange={(event) => onChange({ operation: { ...step.operation!, version: Number(event.target.value) } })} />)}
         </>}
         {step.kind === "ai" && <>{binding("Source record ID", "target", textSchema)}{step.function && field("Retained AI version", <Input type="number" min={step.function.app === "build" ? 1 : 0} disabled={step.function.app !== "build"} value={step.function.version} onChange={(event) => onChange({ function: { ...step.function!, version: Number(event.target.value) } })} />)}<p className="text-xs text-muted">{t("AI calls keep the existing source permissions, model budget and evaluation gate.")}</p></>}
@@ -119,7 +119,7 @@ export function WorkflowInspector({ step, steps, capabilities, onChange, onRenam
         {step.kind === "fork" && <>{field("Join mode", <Select value={step.mode ?? "all"} onChange={(event) => onChange({ mode: event.target.value as "all" | "any" })}><option value="all">{t("All paths")}</option><option value="any">{t("First successful path")}</option></Select>)}
           <div className="grid gap-2">{(step.branches ?? []).map((target, i) => <Select key={i} aria-label={t("Parallel path {n}", { n: i + 1 })} value={target} onChange={(event) => onChange({ branches: step.branches!.map((old, index) => index === i ? event.target.value : old) })}><option value="">{t("Connect on canvas")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>)}
             <Button onClick={() => onChange({ branches: [...(step.branches ?? []), ""] })}>{t("Add parallel path")}</Button></div></>}
-        {step.kind === "ask" && <>{field("Recipient role", <Input value={step.ask ?? "user"} onChange={(event) => onChange({ ask: event.target.value })} />)}
+        {step.kind === "ask" && <>{field("Recipient role", <RoleSelect app="build" value={step.ask ?? "user"} onChange={(ask) => onChange({ ask })} />)}
           {field("Answers, one per line", <Textarea rows={3} value={(step.answers ?? []).join("\n")} onChange={(event) => {
             const answers = event.target.value.split("\n"); onChange({ answers, cases: Object.fromEntries(answers.map((answer) => [answer, step.cases?.[answer] ?? ""])) });
           }} />)}{paths}<p className="text-[11px] text-muted">{t("People answer in the existing inbox; this block suspends without occupying a worker.")}</p></>}

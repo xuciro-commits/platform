@@ -8,7 +8,7 @@ import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../edit
 // left, what a person will see in the middle, the piece in hand on the right.
 // It writes the object's own record through its own action; the host checks
 // everything again when the object is published.
-import { PayloadFields, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost } from "@platform/app";
+import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost } from "@platform/app";
 import {
   Button, Card, Checkbox, Input, NodeCanvas, Panel, PanelSection, ProblemList, Select, StatusBar, StructureRow, Textarea, Workbench, canvasNodeHeight, canvasNodeWidth, cn, layout, notify, t, type WorkbenchProblem,
   type CanvasEdge, type CanvasNode, type NodeCatalog,
@@ -376,7 +376,7 @@ function AccessProperties({ access, fields, onChange, onFields }: {
   return (
     <Card className="grid content-start gap-3 p-3">
       <div className="text-xs font-semibold text-muted">{t("Role")}</div>
-      <Label text={t("Role in the builder app")}><Input className="font-mono" value={access.role} onChange={(e) => onChange({ role: e.target.value })} /></Label>
+      <Label text={t("Role in the builder app")}><RoleSelect app="build" value={access.role} onChange={(role) => onChange({ role })} /></Label>
       <Label text={t("Which records it reads")}>
         <Select value={access.read} onChange={(e) => {
           const read = e.target.value as Access["read"];

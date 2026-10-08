@@ -112,7 +112,14 @@ export function AgentEditor({ id }: { id: string }) {
         {cases.map((c, i) => <div key={i} className="grid gap-2 rounded-md border border-border p-2 sm:grid-cols-[1fr_2fr_1fr_1fr_auto]">
           <label className={fieldClass}>{t("Case")}<Input value={c.name} onChange={(e) => setCase(i, { name: e.target.value })} /></label>
           <label className={fieldClass}>{t("Goal")}<Input value={c.goal} onChange={(e) => setCase(i, { goal: e.target.value })} /></label>
-          <label className={fieldClass}>{t("About record")}<Input value={c.ref ?? ""} placeholder="build.order/o-1" onChange={(e) => setCase(i, { ref: e.target.value || undefined })} /></label>
+          <label className={fieldClass}>{t("About record")}<div className="grid grid-cols-[1fr_1fr] gap-1">
+            <Select aria-label={t("Object")} value={refType(c.ref)} onChange={(e) => setCase(i, { ref: joinRef(e.target.value, refId(c.ref)) })}>
+              <option value="">{t("Object")}</option>
+              {refType(c.ref) && !objects.some((o) => `build.${o.name}` === refType(c.ref)) && <option value={refType(c.ref)}>{refType(c.ref)}</option>}
+              {objects.map((o) => <option key={o.name} value={`build.${o.name}`}>{o.title}</option>)}
+            </Select>
+            <Input aria-label={t("Record id")} placeholder={t("record id")} value={refId(c.ref)} onChange={(e) => setCase(i, { ref: joinRef(refType(c.ref), e.target.value) })} />
+          </div></label>
           <label className={fieldClass}>{t("Result must say")}<Input value={c.expect ?? ""} onChange={(e) => setCase(i, { expect: e.target.value || undefined })} /></label>
           <Button size="sm" variant="ghost" className="self-end" onClick={() => change({ cases: cases.filter((_, at) => at !== i) })}><Trash2 className="size-3" />{t("Remove")}</Button>
           <Checkbox checked={!!c.asks} onChange={(asks) => setCase(i, { asks: asks || undefined })}>{t("Must ask a person")}</Checkbox>
@@ -124,3 +131,9 @@ export function AgentEditor({ id }: { id: string }) {
     </fieldset>
   </div></Workbench>;
 }
+
+// An evaluation case's record reference is "type/id"; the editor offers the
+// type from the published objects and takes the id as text.
+const refType = (ref?: string) => ref?.includes("/") ? ref.slice(0, ref.indexOf("/")) : "";
+const refId = (ref?: string) => ref?.includes("/") ? ref.slice(ref.indexOf("/") + 1) : ref ?? "";
+const joinRef = (type: string, id: string) => (type || id ? `${type}/${id}` : undefined);

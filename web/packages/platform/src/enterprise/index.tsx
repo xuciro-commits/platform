@@ -285,7 +285,8 @@ function Inspector({ element: el, model: m, meta, day, admin, decide, title, rel
   return <div className="grid gap-3 p-3 text-sm">
     <div><p className="text-xs text-muted">{title(el.stereotype)} · <span className="font-mono">{el.stereotype}</span></p><p className="font-mono text-[10px] text-muted">{el.id}</p></div>
     {field(t("Name"), <Input value={e.name} disabled={!admin} onChange={(x) => setEdit({ ...e, name: x.target.value })} />)}
-    {field(t("Kind"), <Input value={e.kind} disabled={!admin} onChange={(x) => setEdit({ ...e, kind: x.target.value })} />)}
+    {field(t("Kind"), <><Input list={`kinds-${el.stereotype}`} value={e.kind} disabled={!admin} onChange={(x) => setEdit({ ...e, kind: x.target.value })} />
+      <datalist id={`kinds-${el.stereotype}`}>{(meta.profile.find((p) => p.stereotype === el.stereotype)?.kinds ?? []).map((k) => <option key={k} value={k} />)}</datalist></>)}
     {field(t("Short name"), <Input value={e.shortName} disabled={!admin} onChange={(x) => setEdit({ ...e, shortName: x.target.value })} />)}
     {edit && <div className="flex gap-2"><Button size="sm" onClick={async () => { if (await decide("enterprise.element.edit", { type: ELEMENT, id: el.id }, e)) setEdit(undefined); }}>{t("Save")}</Button><Button size="sm" variant="ghost" onClick={() => setEdit(undefined)}>{t("Cancel")}</Button></div>}
     <p className="flex flex-wrap gap-1">{el.legal && <Tag label={t("legal entity")} tone="info" />}{el.external && <Tag label="external" tone="warning" />}{el.owner && <Tag label={t("owned by {tenant}", { tenant: el.owner.replace(/^tenant:/, "") })} tone="warning" />}{el.from && <Tag label={`${t("from")} ${el.from}`} />}{el.until && <Tag label={`${t("until")} ${el.until}`} tone="warning" />}</p>
