@@ -252,6 +252,28 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 	if activeRelease("prod") != v2 {
 		t.Fatal("prod did not move to v2")
 	}
+	// The source sees where its candidate went and that it is live there;
+	// prod's review names where it came from.
+	if prodReview["from"] != "dev" {
+		t.Fatalf("prod review does not name its origin: %v", prodReview)
+	}
+	code, devReview := call(http.MethodGet, "dev", "dana", "/v1/releases/candidates/"+v2, nil)
+	targets, _ := devReview["promotedTo"].([]any)
+	if code != http.StatusOK || len(targets) != 1 || targets[0].(map[string]any)["tenant"] != "prod" || targets[0].(map[string]any)["active"] != true {
+		t.Fatalf("dev review does not show the promotion into prod: %d %v", code, devReview)
+	}
+	code, devPage := call(http.MethodGet, "dev", "dana", "/v1/releases/candidates?limit=50", nil)
+	found := false
+	for _, item := range devPage["candidates"].([]any) {
+		entry := item.(map[string]any)
+		if entry["id"] == v2 {
+			to, _ := entry["promotedTo"].([]any)
+			found = len(to) == 1
+		}
+	}
+	if code != http.StatusOK || !found {
+		t.Fatalf("dev inventory does not mark the promoted candidate: %d %v", code, devPage)
+	}
 	if got := submit("prod", "ops", "build.visit", "V3", "build.visit.edit", map[string]any{"priority": 9}); got != "ok" {
 		t.Fatalf("prod cannot write the new optional field: %s", got)
 	}
