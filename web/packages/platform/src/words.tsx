@@ -5,7 +5,7 @@
 // shipped text. Shipped translations may be overridden the same way.
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
+import { Button, Checkbox, Form, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { useAdmin } from "./shared";
 
@@ -42,10 +42,10 @@ export function Words() {
         <label className="grid gap-1">{t("Language")}<Select value={lang} onChange={(e) => setLang(e.target.value)} className="w-48">
           {languages.map((l) => <option key={l} value={l}>{languageName(l)}</option>)}
         </Select></label>
-        <form className="flex items-end gap-1" onSubmit={(e) => { e.preventDefault(); const tag = adding.trim(); if (!tag || /[\s/]/.test(tag)) return; setExtra((x) => x.includes(tag) ? x : [...x, tag]); setLang(tag); setAdding(""); }}>
+        <Form className="flex items-end gap-1" onSubmit={() => { const tag = adding.trim(); if (!tag || /[\s/]/.test(tag)) return; setExtra((x) => x.includes(tag) ? x : [...x, tag]); setLang(tag); setAdding(""); }}>
           <label className="grid gap-1">{t("Add a language")}<Input value={adding} onChange={(e) => setAdding(e.target.value)} placeholder="ja, de, zh-TW…" className="w-32" /></label>
           <Button type="submit" size="sm" disabled={!adding.trim()}>{t("Add")}</Button>
-        </form>
+        </Form>
         <label className="grid gap-1">{t("Find")}<Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Text or translation")} className="w-56" /></label>
         <Checkbox checked={onlyMissing} onChange={setOnlyMissing}>{t("Only untranslated")}</Checkbox>
         <span className="ml-auto text-muted">{t("{n} texts · {missing} without a translation in {lang}", { n: words.data?.words.length ?? 0, missing, lang: languageName(lang) })}</span>
