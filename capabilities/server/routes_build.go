@@ -123,7 +123,7 @@ func (h *Host) routesBuild(rt *routes) {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
-		WriteJSON(w, http.StatusOK, answer)
+		WriteJSON(w, http.StatusOK, h.withPromotions(t.ID, answer))
 	})
 	rt.handle(Route{Pattern: "GET /v1/releases/candidates/{id}", Summary: "Builder and publisher review of sealed definitions against actual running definitions", Answer: SavedReleaseReview{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
@@ -135,6 +135,7 @@ func (h *Host) routesBuild(rt *routes) {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
+		answer.PromotedTo = h.promotionsOf(t.ID, answer.Preview.CandidateID)
 		WriteJSON(w, http.StatusOK, answer)
 	})
 	rt.handle(Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved record drafts a chosen draft depends on and that are not installed yet (ADR-0048 D1)", Body: ReleaseDraftsRequest{}, Answer: ReleaseDraftClosure{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

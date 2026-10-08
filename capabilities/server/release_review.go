@@ -19,6 +19,46 @@ type ReleaseSummary struct {
 	// still waits for review, not an anonymous saved candidate.
 	From       string    `json:"from,omitempty"`
 	PromotedAt time.Time `json:"promotedAt,omitzero"`
+	// PromotedTo lists the environments of this host that received the
+	// candidate from here, so the source sees where its release went.
+	PromotedTo []PromotionTarget `json:"promotedTo,omitempty"`
+}
+
+// PromotionTarget is one environment a candidate was promoted into.
+type PromotionTarget struct {
+	Tenant string    `json:"tenant"`
+	Member string    `json:"member"`
+	At     time.Time `json:"at"`
+	Active bool      `json:"active"`
+}
+
+// promotionsOf finds, across this host's tenants, where a candidate saved in
+// the source went by promotion and whether it is active there. Each target
+// records the origin where the result is applied (accepted_release.go);
+// the source keeps nothing, so the answer is read from the targets.
+func (h *Host) promotionsOf(source, candidate string) []PromotionTarget {
+	var out []PromotionTarget
+	for _, other := range h.currentTenants() {
+		if other.ID == source {
+			continue
+		}
+		other.mu.Lock()
+		origin, ok := other.releases.origin(candidate)
+		active := other.releases.active == candidate
+		other.mu.Unlock()
+		if ok && origin.From == source {
+			out = append(out, PromotionTarget{Tenant: other.ID, Member: origin.Member, At: origin.At, Active: active})
+		}
+	}
+	return out
+}
+
+// withPromotions annotates an inventory with where each candidate went.
+func (h *Host) withPromotions(source string, page ReleasePage) ReleasePage {
+	for i := range page.Candidates {
+		page.Candidates[i].PromotedTo = h.promotionsOf(source, page.Candidates[i].ID)
+	}
+	return page
 }
 
 type ReleasePage struct {
@@ -38,6 +78,7 @@ type SavedReleaseReview struct {
 	UpgradePlan          *ReleaseUpgradePlan     `json:"upgradePlan,omitempty"`
 	From                 string                  `json:"from,omitempty"`
 	PromotedAt           time.Time               `json:"promotedAt,omitzero"`
+	PromotedTo           []PromotionTarget       `json:"promotedTo,omitempty"`
 }
 
 func (t *Tenant) SavedReleases(m platform.Member, offset, limit int) (ReleasePage, error) {

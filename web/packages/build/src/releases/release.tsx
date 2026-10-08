@@ -70,6 +70,8 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [activationDiagnostic, setActivationDiagnostic] = useState("");
   const [upgradePlan, setUpgradePlan] = useState<Api.ReleaseUpgradePlan>();
   const [origin, setOrigin] = useState<{ from: string; at?: string }>();
+  const [promotedTo, setPromotedTo] = useState<Api.PromotionTarget[]>([]);
+  const wentTo = (targets?: Api.PromotionTarget[]) => (targets ?? []).map((target) => `${target.tenant} (${target.active ? t("active") : t("awaiting review")})`).join(", ");
   const [confirmedUpgrade, setConfirmedUpgrade] = useState("");
   const [planID, setPlanID] = useState("");
   const [reportID, setReportID] = useState("");
@@ -114,6 +116,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         setCanActivate(result.body.canActivate); setActivationDiagnostic(result.body.activationDiagnostic ?? "");
         setUpgradePlan(result.body.upgradePlan);
         setOrigin(result.body.from ? { from: result.body.from, at: result.body.promotedAt } : undefined);
+        setPromotedTo(result.body.promotedTo ?? []);
         setConfirmedUpgrade(current => current === result.body.upgradePlan?.id ? current : "");
         await reports.refetch();
       }
@@ -125,7 +128,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     setError("");
     setReview(undefined);
     setSavedID("");
-    setSavedReview(false); setRunningMatches(undefined); setRunningDiagnostic(""); setOrigin(undefined);
+    setSavedReview(false); setRunningMatches(undefined); setRunningDiagnostic(""); setOrigin(undefined); setPromotedTo([]);
     setPlanID(""); setReportID("");
     try {
       const result = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview",
@@ -196,8 +199,14 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     try {
       const result = await client.call<Api.ReleaseActive>("POST", "/v1/releases/active",
         { candidateId: savedID, key: crypto.randomUUID(), ...(confirmedUpgrade && confirmedUpgrade === upgradePlan?.id ? { upgradeId: confirmedUpgrade } : {}) } satisfies Api.ReleaseActivateRequest);
-      if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Release could not be activated."));
-      else { await inventory.refetch(); await loadSaved(result.body.id); }
+      if (!result.ok) {
+        // A refused activation usually means the environment moved under the
+        // plan (rows added, running definitions changed): re-read the saved
+        // review so the fresh plan is on screen next to the refusal.
+        const message = apiErrorMessage(result.body) ?? t("Release could not be activated.");
+        if (savedReview) await loadSaved(savedID);
+        setError(message);
+      } else { await inventory.refetch(); await loadSaved(result.body.id); }
     } catch {
       setError(t("Release could not be activated."));
     } finally {
@@ -224,7 +233,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       {inventory.isError ? <p role="alert" className="text-sm text-danger">{t("Saved releases could not be loaded.")}</p> : <label className="grid gap-1 text-xs">{t("Saved candidate")}
         <Select aria-label={t("Saved candidate")} disabled={busy || inventory.isLoading} value={savedReview ? savedID : ""} onChange={(event) => void loadSaved(event.target.value)}>
           <option value="">{t("Choose a saved candidate")}</option>
-          {inventory.data?.candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title} · {candidate.assets} {t("assets")} · {candidate.id.slice(-8)}{candidate.id === activeID ? ` · ${t("Active")}` : ""}</option>)}
+          {inventory.data?.candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title} · {candidate.assets} {t("assets")} · {candidate.id.slice(-8)}{candidate.id === activeID ? ` · ${t("Active")}` : ""}{candidate.promotedTo?.length ? ` · ${t("promoted to {targets}", { targets: wentTo(candidate.promotedTo) })}` : ""}</option>)}
           {savedReview && !inventory.data?.candidates.some((candidate) => candidate.id === savedID) && <option value={savedID}>{savedID}</option>}
         </Select>
       </label>}
@@ -288,7 +297,11 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold">{savedReview ? t("Saved candidate review") : review.diagnostic ? t("Candidate rejected") : (review.drafts?.length ?? 0) > 1 ? t("Joint candidate ready for review") : t("Candidate ready for review")}</span>
         {savedReview && <StatusTag status={activeID === savedID ? "active" : "saved"} registry={{ active: { label: t("Active"), tone: "success" }, saved: { label: t("Saved"), tone: "info" } }} />}
         {savedReview && origin && <StatusTag status="promoted" registry={{ promoted: { label: t("Promoted from {tenant}", { tenant: origin.from }), tone: "info" } }} />}
+        {savedReview && promotedTo.map((target) => <StatusTag key={target.tenant} status={target.active ? "live" : "held"} registry={{ live: { label: t("Active in {tenant}", { tenant: target.tenant }), tone: "success" }, held: { label: t("Awaiting review in {tenant}", { tenant: target.tenant }), tone: "warning" } }} />)}
       </div>
+      {savedReview && promotedTo.length > 0 && <ul className="grid gap-1 text-xs text-muted" aria-label={t("Promotions of this candidate")}>
+        {promotedTo.map((target) => <li key={target.tenant}>{t("Promoted to {tenant} by {member} · {when} · {state}", { tenant: target.tenant, member: target.member, when: new Date(target.at).toLocaleString(), state: target.active ? t("active there") : t("not activated there yet; its release holder reviews the upgrade plan in that environment") })}</li>)}
+      </ul>}
       {savedReview && origin && activeID !== savedID && <p className="text-xs text-muted" role="status">{t("This candidate was promoted from {tenant}{when}. It is not active here: review the differences and the storage upgrade plan below, then activate it.", { tenant: origin.from, when: origin.at ? ` · ${new Date(origin.at).toLocaleString()}` : "" })}</p>}
       {review.currentId && <p className="break-all text-xs">{t("Installed candidate")}: <code>{review.currentId}</code></p>}
       {review.candidateId && <p className="break-all text-xs">{savedReview ? t("Saved candidate") : t("Draft candidate")}: <code>{review.candidateId}</code></p>}

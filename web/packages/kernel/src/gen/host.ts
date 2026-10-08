@@ -2175,6 +2175,13 @@ export type PromotionResult = {
   assets: number;
 };
 
+export type PromotionTarget = {
+  tenant: string;
+  member: string;
+  at: string;
+  active: boolean;
+};
+
 export type Property = {
   name: string;
   type: string;
@@ -2386,6 +2393,7 @@ export type ReleaseSummary = {
   assets: number;
   from?: string;
   promotedAt?: string;
+  promotedTo?: PromotionTarget[];
 };
 
 export type ReleaseUpgradePlan = {
@@ -2428,6 +2436,7 @@ export type SavedReleaseReview = {
   upgradePlan?: ReleaseUpgradePlan;
   from?: string;
   promotedAt?: string;
+  promotedTo?: PromotionTarget[];
 };
 
 export type SavedView = {
