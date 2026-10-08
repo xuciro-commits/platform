@@ -28,3 +28,9 @@ export const packages: Package[] = [
   // Every member has an account in the Control Panel (ADR-0079); each contribution still decides who sees it (`for`).
   { serves: ["platform", "enterprise", "core", "ai", "flow", "agent", "knowledge"], public: true, load: () => import("@pkg/platform") },
 ];
+
+/** Package availability, rather than every role value, determines loading. */
+export function availablePackages(apps: readonly string[], roles: Readonly<Record<string, string>>): Package[] {
+  const held = new Set(apps);
+  return packages.filter((p) => p.public || p.serves.some((id) => held.has(id) && (!p.role || roles[id] === p.role)));
+}

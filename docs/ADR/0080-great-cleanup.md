@@ -153,4 +153,5 @@ capabilities/server/
 | 企业画布/对话框"刷新时偶发重置"（GPT 回执，未复现）：`useReadQuery`/`useRecordInventory` 的查询键含成员元数据范围 `source.scope`（me/entities/actions/definitions 的 JSON）；任何发布激活、授权、定义变化都换键，新键在加载期间 `data` 为 `undefined`，`Enterprise` 返回 `null`，`Modeler` 连同草稿、对话框、当前视图一起卸载 | 两处在相同凭证、租户、查询及 inventory 上限的元数据 scope 变化时保留上一答案，画布不再卸载；跨身份/租户/资源不复用旧答案（`read-placeholder.test.mjs`）。这是机制层面的根因，不限于企业画布 | 本提交 |
 | 会话列表不标记已结束（GPT 回执）：结束的会话直接从表里删除，列表只是"变短"，看不出发生了什么 | `Session.ended`（只增字段）：结束（本人、停用、会话时长到期）后保留一天并标"已于…结束"，之后在读取时清理；活跃在前、已结束在后。账户页加标签 | 本提交 |
 | 已有制造租户重启后隔离：新增 `core:steward` 种子使第一个 platform 接受结果的前驱 hash 不符 | 仅允许移除无显式授予的 core 种子角色后与历史前驱精确匹配；历史状态仍权威，不自动授权。`TestAcceptedConsoleCoreSeedReplay` 验证重放、状态字节和无关漂移拒绝。已有租户的 core 权限用正式角色决定补授 | 本地集成 |
+| 授权变化仍会丢企业对话框：工作区按全部角色重载包，并先 `setApps(undefined)` 卸载整个工作区 | 装载键改为实际获准的包集合；同一身份保留仍获准的包，撤权同步过滤、跨身份不继承。`packages.test.mjs` 约束装载范围，真实双窗口复测 | 本地集成 |
 （继续追加）
