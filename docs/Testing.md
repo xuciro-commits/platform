@@ -42,7 +42,7 @@
 | 共享组件行为 | `web/packages/ui`；翻译完整性由 i18n 检查 |
 | Catalog 一致性与查询 | `scripts/catalog.mjs check` 已接入 Web：公共导出/示例/翻译/Widget 引用与私有导入；`@platform/catalog` 验证有界查询，Catalog 预览隔离和 Studio 草稿路线只保留核心行为 |
 | 代码编译与计算装配 | `compute`/`assembled_compute` 行为检查；真实 Go/TinyGo profile、私有 socket 与 worker 需要部署 README 的运行环境，显式启用后验证，不能用默认跳过当通过 |
-| 浏览器主路径 | `web/e2e/tests` 共 8 条长期路线：`routes`（规范入口：动作/刷新、审批、字段安全、只读预览、对象/页面/应用/状态动作）、`business-access`（拒绝保留输入与独立业务主管）、`release-roles`（发布者/审计者）、`workflow`（流程编写与应答）、`workspaces`（壳与任务工作区）、`host-sign-out`（会话）、`integration-fabric`（两宿主集成织物）、`page-notice`（编辑器→导入→发布→运行时的 kit 样板）。按部件/按功能的路线已删除（ADR-0082）：那层由 Go 的发布/重放测试与负责人走查证明 |
+| 浏览器主路径 | `web/e2e/tests` 保留 8 个 spec、13 个测试用例（含两行业参数化）：`routes`（规范入口：动作/刷新、审批、字段安全、只读预览）、`business-access`（拒绝保留输入与独立业务主管）、`release-roles`（发布者/审计者）、`workflow`（流程编写与应答）、`workspaces`（壳与任务工作区）、`host-sign-out`（会话）、`integration-fabric`（两宿主集成织物）、`page-notice`（编辑器→导入→发布→运行时的 kit 样板）。按部件/按功能的路线已删除（ADR-0082）：那层由 Go 的发布/重放测试与负责人走查证明 |
 | OIDC 与持久部署 | `deploy/local/rehearse.sh`、`web/e2e/deploy`；在部署边界改变或发布检查点运行 |
 
 共享读取的固定次数断言限定在同一成员/定义范围及数据修订。相关浏览器路线使用host.ts的stableReadRevision固定测试段的变更流，涉及后续动态发布时恢复真实流；真实租户变更允许重新读取，不能把它计成同一世代的重复请求。业务动作/刷新路线仍使用真实通知，会话用例验证revision变化后的失效与同步重入合并。
@@ -55,7 +55,7 @@ Playwright 默认仅失败时截图。需要当前主路径截图时，在已构
 
 ```sh
 pnpm --dir web/apps/workspace build
-PLATFORM_SCREENSHOTS=1 pnpm --dir web/e2e exec playwright test --grep 'compose a page'
+PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 ```
 
 工坊与流程导航截图选 `workflow.spec.ts`，运行时页面截图选 `page-notice.spec.ts`。截图在 `web/e2e/test-results`。这是供人看的图片，不做像素/尺寸断言，也不构成负责人认可。界面改动只检查受影响页面的普通及窄屏状态；不要求每次重复全部中文、键盘、设备组合。已完成的检查项由回归套件守住，不在本文追加日志；未走完路线保留在下表，待集中验收时核对。
