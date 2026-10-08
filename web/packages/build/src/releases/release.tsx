@@ -199,8 +199,14 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     try {
       const result = await client.call<Api.ReleaseActive>("POST", "/v1/releases/active",
         { candidateId: savedID, key: crypto.randomUUID(), ...(confirmedUpgrade && confirmedUpgrade === upgradePlan?.id ? { upgradeId: confirmedUpgrade } : {}) } satisfies Api.ReleaseActivateRequest);
-      if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Release could not be activated."));
-      else { await inventory.refetch(); await loadSaved(result.body.id); }
+      if (!result.ok) {
+        // A refused activation usually means the environment moved under the
+        // plan (rows added, running definitions changed): re-read the saved
+        // review so the fresh plan is on screen next to the refusal.
+        const message = apiErrorMessage(result.body) ?? t("Release could not be activated.");
+        if (savedReview) await loadSaved(savedID);
+        setError(message);
+      } else { await inventory.refetch(); await loadSaved(result.body.id); }
     } catch {
       setError(t("Release could not be activated."));
     } finally {
