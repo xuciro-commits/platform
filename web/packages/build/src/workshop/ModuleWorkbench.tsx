@@ -32,7 +32,7 @@ const hydrate = (project: Project): ModuleDraft => ({ header: project.header, ui
 const moduleChanges = (draft: ModuleDraft) => ({ ...draft, header: draft.header ?? null });
 
 /** Entry for the `module` view: a project's module, optionally with one page in hand. */
-export function ModuleWorkbench({ id, page }: { id?: string; page?: string }) {
+export function ModuleWorkbench({ id, page, focus }: { id?: string; page?: string; focus?: string }) {
   const { open } = useWorkspace();
   const pageQuery = useReadQuery<{ record?: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(page ?? "")}`, undefined, !!page && !id);
   const projects = useRecordInventory<Project>("build.app", 1000, !!page && !id);
@@ -45,7 +45,7 @@ export function ModuleWorkbench({ id, page }: { id?: string; page?: string }) {
     // A page that belongs to no project is still editable on its own.
     return <PageEditor id={page!} />;
   }
-  return <ProjectModule key={projectId} id={projectId} page={page} openPage={(next) => open({ view: "module", params: { id: projectId, application: projectId, page: next } })} />;
+  return <ProjectModule key={projectId} id={projectId} page={page} initialFocus={focus} openPage={(next) => open({ view: "module", params: { id: projectId, application: projectId, page: next } })} />;
 }
 
 function ModulesList() {
@@ -64,7 +64,7 @@ function ModulesList() {
   </div>;
 }
 
-function ProjectModule({ id, page, openPage }: { id: string; page?: string; openPage: (id: string) => void }) {
+function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?: string; openPage: (id: string) => void; initialFocus?: string }) {
   const { decide, role, client } = useHost();
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
@@ -74,7 +74,7 @@ function ProjectModule({ id, page, openPage }: { id: string; page?: string; open
   const { draft, dirty } = session;
   const loaded = useRef(""), lock = useRef(false);
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
-  const [focus, setFocus] = useState<ModuleFocus>("navigation");
+  const [focus, setFocus] = useState<ModuleFocus>(isModuleFocus(initialFocus) ? initialFocus : "navigation");
   const [templates, setTemplates] = useState(false);
   useEffect(() => { if (project && !dirty && !saving && loaded.current !== `${project.id}:${project.revision}`) { session.load(hydrate(project)); loaded.current = `${project.id}:${project.revision}`; } }, [project, dirty, saving, session.load]);
   const canEdit = role("build") === "builder";
@@ -108,6 +108,9 @@ function ProjectModule({ id, page, openPage }: { id: string; page?: string; open
     ...pages.filter((item) => !item.id && pageRecords.data).map((item) => ({ id: `missing:${item.name}`, severity: "warning" as const, text: t("Page {name} is listed but has no saved draft.", { name: item.name }), locate: () => edit({ pages: (draft.pages ?? []).filter((name) => name !== item.name) }) })),
     ...(!pages.length ? [{ id: "empty", severity: "info" as const, text: t("Add at least one page before publishing the module.") }] : []),
     ...(draft.header && !draft.header.title.trim() ? [{ id: "header-title", severity: "warning" as const, text: t("The header has no title."), locate: () => setFocus("header") }] : []),
+    // The host refuses these at publication (CheckGroups); say so here, where
+    // the group is edited, rather than in the release review.
+    ...groupProblems(draft.groups ?? [], draft.pages ?? [], () => setFocus("navigation")),
   ];
   const grouped = (draft.groups ?? []).flatMap((group) => group.pages);
   const ungrouped = pages.filter((item) => !grouped.includes(item.name));
@@ -224,4 +227,24 @@ export function ModuleTree({ context, focus, onFocus, compact = false }: { conte
       {!compact && <StructureRow depth={1} icon={<Settings2 />} label={t("Settings")} selected={!currentPage && focus === "settings"} onClick={() => go("settings")} />}
     </PanelSection>
   </div>;
+}
+
+const moduleFocuses = ["navigation", "header", "variables", "queries", "settings"] as const;
+const isModuleFocus = (value?: string): value is ModuleFocus => !!value && (moduleFocuses as readonly string[]).includes(value);
+
+/** What the host's CheckGroups would refuse, as problems the builder can go to. */
+function groupProblems(groups: Api.AppGroup[], pages: string[], locate: () => void): WorkbenchProblem[] {
+  const problems: WorkbenchProblem[] = [];
+  const under: Record<string, string> = {};
+  groups.forEach((group, at) => {
+    const title = group.title.trim() || t("group {n}", { n: String(at + 1) });
+    if (!group.title.trim()) problems.push({ id: `group-title:${at}`, severity: "warning", text: t("A group has no title."), locate });
+    if (!group.pages.length) problems.push({ id: `group-empty:${at}`, severity: "warning", text: t("The group “{group}” holds no page. Put a page under it or remove the group.", { group: title }), locate });
+    for (const page of group.pages) {
+      if (!pages.includes(page)) problems.push({ id: `group-page:${at}:${page}`, severity: "warning", text: t("The group “{group}” lists the page “{page}”, which this module does not hold.", { group: title, page }), locate });
+      if (under[page] && under[page] !== title) problems.push({ id: `group-twice:${page}`, severity: "warning", text: t("The page “{page}” is under two groups: “{a}” and “{b}”.", { page, a: under[page]!, b: title }), locate });
+      under[page] ??= title;
+    }
+  });
+  return problems;
 }
