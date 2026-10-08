@@ -19,13 +19,13 @@ import (
 // Nothing here is reached by a live submission.
 
 // ADR-0080 added core:steward to the local bootstrap seats. Existing journals
-// still start with the former seats. Only before the first console receipt,
-// remove this one implicit seed role from the comparison and require the
+// still start with the former seats. Remove this one implicit seed role
+// (never a decided grant) from the comparison and require the
 // entire resulting directory to match the exact saved predecessor digest.
 // The accepted image remains authoritative; this does not grant a new role.
 func (t *Tenant) legacyCoreSeedPredecessor(saved acceptedState, prior json.RawMessage) bool {
-	d, ok := t.app(saved.App).(*Console)
-	if !ok || t.app("core") == nil || len(d.ledger.RecordsFor(t.ID)) != 0 {
+	_, ok := t.app(saved.App).(*Console)
+	if !ok || t.app("core") == nil {
 		return false
 	}
 	var current consoleState

@@ -26,14 +26,25 @@ func TestAcceptedConsoleCoreSeedReplay(t *testing.T) {
 	live := compose(false)
 	var entries []Entry
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	live.Record = func(e Entry) {
+		if e.Kind != "accepted-result" {
+			entries = append(entries, e)
+		}
+	}
 	admin, _ := live.Member("admin")
+	// Old journals can contain platform settings before the first member image.
+	setting := &pb.Submission{TenantId: live.ID, PrincipalId: admin.ID, Authority: PlatformApp, IdempotencyKey: "set-name",
+		Target: &pb.EntityRef{Type: SettingType, Id: "platform/name"}, Schema: &pb.SchemaRef{Name: SchemaSettingSet, Version: 1}, Payload: []byte(`{"value":"Existing tenant"}`)}
+	if _, err := live.Submit(admin, setting, time.Now()); err != nil {
+		t.Fatal(err)
+	}
 	sub := &pb.Submission{TenantId: live.ID, PrincipalId: admin.ID, Authority: PlatformApp, IdempotencyKey: "add-member",
 		Target: &pb.EntityRef{Type: MemberType, Id: "other"}, Schema: &pb.SchemaRef{Name: SchemaAdd, Version: 1}, Payload: []byte(`{"subject":"user:other@example.test"}`)}
-	if _, err := live.Submit(admin, sub, time.Now()); err != nil || len(entries) != 1 {
+	if _, err := live.Submit(admin, sub, time.Now()); err != nil || len(entries) != 2 {
 		t.Fatalf("initial receipt: %v", err)
 	}
 	restored := compose(true)
-	batch, _, err := decodeAcceptedBatch(entries[0].Body)
+	batch, _, err := decodeAcceptedBatch(entries[1].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +72,7 @@ func TestAcceptedConsoleCoreSeedReplay(t *testing.T) {
 	if member.Roles["core"] != "" {
 		t.Fatal("a bootstrap change granted a role outside a decision")
 	}
-	if restored.legacyCoreSeedPredecessor(batch.States[0], prior) {
+	if restored.legacyCoreSeedPredecessor(batch.States[0], after) {
 		t.Fatal("seed projection accepted after the first console receipt")
 	}
 	CheckReplay(t, live, entries, func() *Tenant { return compose(true) })
