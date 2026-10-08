@@ -663,4 +663,5 @@ register("zh-CN", {
   "undone": "已撤销",
   "kept": "长期保留",
   "until {date}": "至 {date}",
+  "{name} · closed {until}": "{name} · 已于 {until} 关闭",
 });

@@ -207,5 +207,6 @@
   "Cost centre": "成本中心",
   "The unit in the enterprise model the amount is charged to": "这笔金额计入企业模型中的哪个组织单元",
   "Plant": "工厂",
-  "The plant of the enterprise model that makes it; the model says where that plant sits": "企业模型中生产它的工厂；该工厂在结构中的位置由模型决定"
+  "The plant of the enterprise model that makes it; the model says where that plant sits": "企业模型中生产它的工厂；该工厂在结构中的位置由模型决定",
+  "CostCentre": "成本中心"
 }

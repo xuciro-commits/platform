@@ -1,8 +1,9 @@
-// The enterprise modeler (ADR-0067 D7): one tenant's enterprise drawn over the
-// UAF grid. The palette comes from the metamodel's Enterprise Core profile,
-// links are checked against the stereotypes a cell allows, and every change is
-// a decision the host records. A fresh tenant starts from a scale template.
-import { useMemo, useState, type ReactNode } from "react";
+// The enterprise modeler (ADR-0067 D7, ADR-0084 D2): one tenant's enterprise
+// drawn over the UAF grid. What a view may hold comes from the metamodel's
+// Enterprise Core profile and the cell it draws; relationships are checked
+// against the stereotypes that cell allows, and every change is a decision the
+// host records. A fresh tenant starts from a scale template.
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
@@ -311,20 +312,21 @@ function UafPane({ meta, cell, onCell }: { meta: Metamodel; cell?: GridCell; onC
   return <div className="grid gap-2 p-2 text-xs">
     <p className="px-1 text-[11px] text-muted">{t("The UAF grid: domains across, aspects down. A view is one cell; clicking a cell switches this view to it.")}</p>
     <div className="overflow-auto">
-      <table className="w-full border-collapse text-[11px]">
-        <thead><tr><th /><th className="p-1 text-left font-semibold text-muted">{t("Domain")} ↓ / {t("Aspect")} →</th>
-          {aspects.map((a) => <th key={a} className="p-1 text-left font-semibold text-muted">{t(a)}</th>)}</tr></thead>
-        <tbody>{domains.map((d) => <tr key={d}>
-          <th className="p-1 text-left font-semibold text-muted">{t(d)}</th>
+      <div className="grid gap-0.5" style={{ gridTemplateColumns: `auto repeat(${aspects.length}, minmax(6rem, 1fr))` }}>
+        <span />
+        {aspects.map((a) => <span key={a} className="px-1 text-[10px] font-semibold text-muted">{t(a)}</span>)}
+        {domains.map((d) => <Fragment key={d}>
+          <span className="px-1 text-[10px] font-semibold text-muted">{t(d)}</span>
           {aspects.map((a) => {
             const g = meta.grid.find((x) => x.domain === d && x.aspect === a);
-            return <td key={a} className="p-0.5">{g
-              ? <button type="button" onClick={() => onCell(g.id)} aria-pressed={cell?.id === g.id} title={`${g.id} · ${t(g.title)}: ${g.elements.length} ${t("elements")}, ${g.relationships.length} ${t("relationships")}`}
-                  className={cell?.id === g.id ? "w-full rounded border border-primary bg-row-selected px-1 py-0.5 text-left" : "w-full rounded border border-border px-1 py-0.5 text-left hover:bg-row-hover"}>
-                  <span className="block font-medium">{t(g.title)}</span><span className="block font-mono text-[9px] text-muted">{g.id}</span></button>
-              : <span className="block px-1 py-0.5 text-muted" title={t("No view draws this cell yet.")}>·</span>}</td>;
-          })}</tr>)}</tbody>
-      </table>
+            return <span key={a}>{g
+              ? <Button size="sm" variant={cell?.id === g.id ? "default" : "ghost"} aria-pressed={cell?.id === g.id} onClick={() => onCell(g.id)}
+                  className="w-full justify-start" title={`${g.id} · ${t(g.title)}: ${g.elements.length} ${t("elements")}, ${g.relationships.length} ${t("relationships")}`}>
+                  <span className="grid text-left"><span className="truncate text-[11px]">{t(g.title)}</span><span className="font-mono text-[9px] text-muted">{g.id}</span></span></Button>
+              : <span className="block px-1 py-0.5 text-center text-muted" title={t("No view draws this cell yet.")}>·</span>}</span>;
+          })}
+        </Fragment>)}
+      </div>
     </div>
     <p className="px-1 text-[11px] text-muted">{t("{offered} of the release's {total} UAF 1.3 types are offered by this tenant's profile; the rest stay loadable and storable.", { offered: offered.size, total: registry.length })}</p>
     <Input placeholder={t("Find a UAF type…")} aria-label={t("Find a UAF type…")} value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -553,7 +555,7 @@ function Inspector({ element: el, model: m, meta, day, admin, decide, title, rel
   const [post, setPost] = useState<{ name: string; kind: string }>();
   const [holder, setHolder] = useState<{ person: string; post: string }>();
   const members = useRead<Api.MemberView[]>("/v1/members", undefined, el?.stereotype === ORGANIZATION && admin).data ?? [];
-  if (!el) return <p className="p-3 text-sm text-muted">{t("Select an element to see its details, or drag one from the palette.")}</p>;
+  if (!el) return <p className="p-3 text-sm text-muted">{t("Select an element to see its details, or add one from the element list.")}</p>;
   const st = meta.stereotypes[el.stereotype];
   const rels = m.relationships.filter((r) => (r.source === el.id || r.target === el.id) && live(r, day));
   const name = (id: string) => m.elements.find((e) => e.id === id)?.name ?? id.replace(/^member:/, "");

@@ -1,8 +1,44 @@
 // Settings: documents and the glossary (ADR-0022, ADR-0023).
-import { GeneratedForm, Records, newId, useHost, type Passage } from "@platform/app";
-import { Button, Card, Dialog, Form, Input, Markdown, t } from "@platform/ui";
+import { GeneratedForm, Records, newId, useDefinitions, useHost, useReadQuery, type Passage } from "@platform/app";
+import { Button, Card, Dialog, Form, Input, Markdown, Panel, Tag, t } from "@platform/ui";
 import { BookA, BookOpen } from "lucide-react";
 import { useState } from "react";
+
+// Where a term is actually felt (ADR-0084 D7): the host validates RefersTo when
+// the term is saved (knowledge.go, host.Declares), Search proposes entity names
+// whose title, plural, synonyms or glossary terms contain the word
+// (languages.go, names()), and an agent's prompt carries the glossary of the app
+// it runs in (glossary(app)). This panel shows that reach term by term instead
+// of leaving the reader to take it on faith.
+function GlossaryReach() {
+  const terms = useReadQuery<{ records?: { id: string; term: string; synonyms?: string; refersTo?: string; apps?: string[] }[] }>("/v1/records/knowledge.term?limit=200").data?.records ?? [];
+  const { data } = useDefinitions();
+  const definitions = data ?? [];
+  if (!terms.length) return null;
+  const names = definitions.flatMap((d) => {
+    const entity = d.entity, action = d.action, page = d.page, application = d.application;
+    const words = entity ? [entity.title, entity.plural, entity.synonyms] : action ? [action.title] : page ? [page.title] : application ? [application.title] : [];
+    return [{ ref: `${d.ref.app}/${d.ref.kind}/${d.ref.name}`, title: entity?.title ?? action?.title ?? page?.title ?? application?.title ?? d.ref.name, text: words.filter(Boolean).join(" ").toLowerCase() }];
+  });
+  const reached = terms.map((t) => {
+    const words = [t.term, ...(t.synonyms ?? "").split(",")].map((w) => w.trim().toLowerCase()).filter(Boolean);
+    const matched = names.filter((n) => words.some((w) => n.text.includes(w)));
+    return { term: t, matched, names: new Set(matched.map((m) => m.ref)).size };
+  });
+  const byRef = reached.filter((r) => r.term.refersTo).length;
+  const byName = reached.filter((r) => r.names > 0).length;
+  return <Panel className="grid gap-1" title={t("Where these words work")}
+    description={t("{byRef} of {total} name a declaration the host checked when it was saved; {byName} are words a declared name or synonym also uses, so Search proposes them. A term with neither is documentation: it teaches people, and no query reads it.", { byRef, byName, total: reached.length })}>
+    {reached.map(({ term, matched, names: n }) => <p key={term.id} className="flex flex-wrap items-baseline gap-2 text-xs">
+      <span className="font-medium">{term.term}</span>
+      {term.refersTo && <Tag label={t("names {ref}", { ref: term.refersTo })} tone="info" />}
+      {n > 0 && <Tag label={t("{n} declared names match", { n })} tone="success" />}
+      {!term.refersTo && n === 0 && <Tag label={t("documentation only")} />}
+      {!!term.apps?.length && <span className="text-muted">{t("read by members of {apps}", { apps: term.apps.join(", ") })}</span>}
+      {n > 0 && <span className="text-muted">{matched.slice(0, 4).map((m) => m.title).join(" · ")}</span>}
+    </p>)}
+  </Panel>;
+}
 
 // The tenant's glossary (ADR-0023 D1): its own words, layered on the model.
 export function Glossary() {
@@ -10,6 +46,7 @@ export function Glossary() {
   const [writing, setWriting] = useState(false);
   return (
     <>
+      <GlossaryReach />
       <Records type="knowledge.term" description={t("Jargon of this organisation and what it refers to (an object type, a field or an action). Three things read it: Search, which finds records by the term; agents, whose prompts carry it; and anyone asking what a word means here. It does not rename anything — to change how a name reads in a language, use Control Panel → Languages and words.")}
         actions={can("knowledge.term.create") && <Button variant="primary" onClick={() => setWriting(true)}><BookA />{t("New term")}</Button>} />
       <Dialog open={writing} onOpenChange={setWriting} title={t("New term")}>

@@ -49,7 +49,7 @@ export function Lineage({ ref: requested }: { ref?: string }) {
   if (error) return <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>;
   if (isPending) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   return <>
-    <PageHeader title={t("Lineage")} description={t("What each installed asset is built from: applications over pages, pages over object types, functions and queries over the types they read. Click a node to open it.")}
+    <PageHeader title={t("Lineage")} description={t("What each installed asset is built from, declared in its own definition: applications over pages, pages over object types, functions and queries over the types they read. It proves impact — what a change to an asset reaches — not history: no record moved here. Runtime data flow is on the object's Data lineage panel. Click a node to open it.")}
       actions={<>
         <Select aria-label={t("App")} value={scopeApp} className="w-40" onChange={(e) => { setApp(e.target.value); setPicked(""); }}>{apps.map((id) => <option key={id} value={id}>{id}</option>)}</Select>
         <Select aria-label={t("Asset")} value={focus} className="w-72" onChange={(e) => setPicked(e.target.value)}>
