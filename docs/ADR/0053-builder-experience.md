@@ -357,7 +357,7 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 | D6 单一 `Workbench` 容器（标题栏 · 结构 · 主区 · 检查器 · 底栏，尺寸记忆） | `@platform/ui` `layout/Workbench.tsx`（`Workbench`、`StructureRow`、`PanelSection`、`ProblemList`、`WorkbenchProblem`） |
 | D6 草稿保存、`● Draft`、Publish 菜单 | `build/editor/workbench.tsx`（对象/动作的 Save、其他编辑器的 `useAutoSave`、`savingState`、`DraftStatus`、`PublishMenu`、`WorkbenchMessage`、`ResourceControls`） |
 | D1 Projects 取代 Application 编辑器 | `build/projects/project.tsx`（`ProjectsList`、`ProjectHome`：资源树 · 内容/设置 · 未发布变更底栏）、`projects/resources.ts`（资源种类与路由） |
-| D1 Workshop Module = 项目的页面 + 页头 + 导航 | `build/workshop/ModuleWorkbench.tsx`（模块树、页头编辑、分组、变量/查询汇总、模块预览；移除最后一个 Logo 项同时清 URL，关闭页头以显式 `null` 清除保存值）；`PageEditor` 作为模块内的页面视图（`module` 上下文） |
+| D1 Workshop Module = 项目的页面 + 页头 + 导航 | `build/workshop/ModuleWorkbench.tsx`（模块树、页头编辑、分组、变量/查询汇总、模块预览；移除最后一个 Logo 项同时清 URL，关闭页头以显式 `null` 清除保存值）；`PageEditor` 作为模块内的页面视图（`module` 上下文）。Problems 镜像宿主分组拒绝，发布审查按宿主 Go `%q` 的实际引号识别原因，以成员语言显示并返回 Navigation/Header；特定页头规则优先于通用规则，未知拒绝保留原文 |
 | D4 页面编辑器：图层/组件库 · 画布 · 按选中对象切换的检查器 · 问题/变量底栏 · Preview 开关 | `build/workshop/editor.tsx`（`PageEditor({ id, module })`、`widgetInspectorTabs`）、`page-editor/WidgetLibrary.tsx` |
 | D2 对象类型工作台：Overview · Properties · Links · Actions · Lifecycle · Permissions · Preview | `build/ontology/process.tsx` `ObjectTypeEditor`（草稿会话抽到 `object-draft.ts` `useObjectDraft`，类型与检查抽到 `object-model.ts`）；Actions 分区的检查器只给 `ActionSummary`（计数、问题、"Open action type"） |
 | §6 动作类型是一等资源：Overview · Parameters · Form · Rules · Submission criteria · Side effects · Approval · Permissions | `build/ontology/action-type.tsx` `ActionTypeEditor({id, action})`：左栏 = 对象的动作列表 + 分区；主区 = 分区的表格 / 表单预览；检查器编辑选中的行；底栏 Problems 只列本动作的问题。动作仍存于对象记录的 `actions[]`，与对象工作台共用同一草稿会话 |
@@ -378,4 +378,3 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 - `action` 效果可以从页面变量 / 字面量预填参数（`action.inputs`，`v2.108`；发布时校验参数名存在于动作 payload），表单仍会打开供成员修改；无表单动作直接以预填值提交。
 - AI 函数 / 代码函数 / 智能体编辑器已换成 `Workbench` 壳（面包屑 · DraftStatus · 保存状态 · 命令），测试仍内嵌于编辑器（`CandidateTest embedded`）。
 - 属性 / 权限矩阵和变量底栏用原生 `<table>`（`scripts/escapes.sh` 已登记）。
-

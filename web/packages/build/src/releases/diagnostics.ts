@@ -10,11 +10,17 @@ type Rule = { match: RegExp; text: (m: RegExpMatchArray) => string; fix?: (m: Re
 
 const navigation = (ids: { application?: string }) => ids.application ? { label: t("Open the module's navigation"), view: "module", params: { id: ids.application, application: ids.application, focus: "navigation" } } : undefined;
 
+// CheckGroups uses Go %q, not typography quotes. Decode the quoted value so
+// titles containing quotes or escaped characters still name the right group.
+const quoted = (value: string) => {
+  try { return JSON.parse(`"${value}"`) as string; } catch { return value; }
+};
+
 const rules: Rule[] = [
-  { match: /the group “(.+?)” holds no page/, text: (m) => t("The group “{group}” holds no page. Put a page under it or remove the group.", { group: m[1]! }), fix: (_, ids) => navigation(ids) },
+  { match: /the group "((?:[^"\\]|\\.)*)" holds no page/, text: (m) => t("The group “{group}” holds no page. Put a page under it or remove the group.", { group: quoted(m[1]!) }), fix: (_, ids) => navigation(ids) },
   { match: /a group needs a title/, text: () => t("A navigation group has no title."), fix: (_, ids) => navigation(ids) },
-  { match: /the group “(.+?)” names the page “(.+?)”, which the application does not hold/, text: (m) => t("The group “{group}” lists the page “{page}”, which this module does not hold.", { group: m[1]!, page: m[2]! }), fix: (_, ids) => navigation(ids) },
-  { match: /the page “(.+?)” is under “(.+?)” and “(.+?)”/, text: (m) => t("The page “{page}” is under two groups: “{a}” and “{b}”.", { page: m[1]!, a: m[2]!, b: m[3]! }), fix: (_, ids) => navigation(ids) },
+  { match: /the group "((?:[^"\\]|\\.)*)" names the page "((?:[^"\\]|\\.)*)", which the application does not hold/, text: (m) => t("The group “{group}” lists the page “{page}”, which this module does not hold.", { group: quoted(m[1]!), page: quoted(m[2]!) }), fix: (_, ids) => navigation(ids) },
+  { match: /the page "((?:[^"\\]|\\.)*)" is under "((?:[^"\\]|\\.)*)" and "((?:[^"\\]|\\.)*)"/, text: (m) => t("The page “{page}” is under two groups: “{a}” and “{b}”.", { page: quoted(m[1]!), a: quoted(m[2]!), b: quoted(m[3]!) }), fix: (_, ids) => navigation(ids) },
   { match: /application (\S+): it holds no page/, text: (m) => t("The module {name} holds no page yet.", { name: m[1]! }), fix: (_, ids) => navigation(ids) },
   { match: /application (\S+): no published resource (\S+)/, text: (m) => t("The module {name} depends on {resource}, which is not published. Add that draft to the joint candidate or publish it first.", { name: m[1]!, resource: m[2]! }) },
   { match: /application (\S+): no page (\S+)/, text: (m) => t("The module {name} references page {page}, which does not exist.", { name: m[1]!, page: m[2]! }), fix: (_, ids) => navigation(ids) },

@@ -40,17 +40,17 @@
 
 本稿只扩展**候选集合及其封存/激活输入**，不改变 ADR-0026/0038/0039/0044 的执行、接受结果、恢复、发布与编译主人；ADR-0047 的入口、组织与其他批次的边界不变。
 
-## 6. 实际落地（2026-10-05）
+## 6. As built
 
 - **D1/D2 联合草稿图**：`Build.DraftReleaseAssetsMulti` 用一份共享 inventory 代换多份对象/页面/应用/流程草稿（`jointEntities` 让未安装的对象在页面与流程里可命名），简单类型仍走各自 owner 的单草稿路径；缺依赖在预览阶段**列名阻塞**（`ReleasePreview.Diagnostic`），引用校验接受“已安装、已保存草稿、或他应用已声明”的对象，其余如实拒绝。
 - **D1/D3 候选输入与服务端重算**：`POST /v1/releases/preview`、`POST /v1/releases/candidates` 接受 1–32 份显式勾选（单一 kind/id 与 drafts 互斥）；`POST /v1/releases/drafts/referenced` 由服务端给出所选记录草稿尚未安装的依赖草稿，供交付台勾选。保存时在同一租户锁下按同一集合重算候选 ID，陈旧/外来 ID 被拒绝；预览回显 `drafts` 作为联合候选的草稿来源，差异仍为 added/changed/removed。
 - **D2 先证明可安装**：多草稿预览先重建“当前已安装”映像（含全部 prior 与改名/删除闭包），再走**与激活同一套私有安装**的干跑（`releaseInstallationsLocked`，不提交任何状态）；不可安装即 Diagnostic，绝不封存。
 - **D4 封存与激活**：沿用原封存与原激活主人及激活指针，不新增应用私有指针；失败保留旧定义、草稿与在途版本。
 - **D5b 直接安装退场**：构建者声明 `build/releaseProfile`（`production`/`development`，默认 `development` = 开发/导入/探针）。`production` 时 owner 在 `Submit` 拒绝九类直接安装 schema（`ERROR_CODE_POLICY_DENIED`，消息点名候选路径），回放/恢复与历史 Published 一律不受影响；`GET /v1/release-profile` 让编辑面在 production 不再提供 Direct install，改为指向发布评审。编辑器与资源库按钮仅在 development 显示。
-- **D7 权限**：预览/封存/激活仍要求 Builder，未新增角色。
+- **D7 权限**：角色边界已按 ADR-0047 / ADR-0078 扩展；Builder 编辑和预览草稿，Publisher 复用候选交付面，不获得定义编辑权。所有发布入口仍由宿主按动作重校验，不以按钮是否可见代替授权。
 - **D8**：未改 Worker/编译契约。
 - **D6 第二批（2026-10-05，本批）**：Module 导入的预发布依赖改为候选输入。导入对话框可把页面绑定到**已保存未安装**的对象草稿（`SemanticObjectSelect` 的 `drafts` 选项、`ModuleImportDialog` 的合并实体集），导入完成后把所用对象草稿作为依赖报给应用编辑器（`importDependencies` 纯函数），`Review application release` 以 `drafts=object:<id>,…` 打开交付台并**预选**这些草稿，页面与对象作为一个候选交付；开发/导入 profile 的逐页发布保持不变。
-- **证据**：Go 测试 `TestJointDraftsDeliverNewObjectPageAndApplication`（新对象＋新页面＋应用的联合交付、来源、陈旧 ID 拒绝、激活后可见）、`TestProductionProfileRefusesDirectInstallAndKeepsDelivery`（development 直装仍在、production 拒绝且草稿未变、联合候选在 production 仍交付、回放一致）；e2e `joint-draft-release.spec.ts`（两个行业，UI 走联合交付，并证明单独页面被拒）。
+- **Flow 联合试装**：候选试装使用 Flow owner 的隔离声明注册表，先在该注册表安装选中 Flow，再检查应用的资源引用。预览与封存不会把新 Flow 发布到实时运行时；遗漏 Flow 仍拒绝，原激活才登记真实版本。不能以提前单项发布 Flow 代替联合交付。
+- **证据**：Go 测试 `TestJointDraftsDeliverNewObjectPageAndApplication`（新对象＋新页面＋新 Flow＋应用的联合交付、来源、陈旧 ID/遗漏 Flow 拒绝、试装不泄漏声明、激活后可见及回放）、`TestProductionProfileRefusesDirectInstallAndKeepsDelivery`（development 直装仍在、production 拒绝且草稿未变、联合候选在 production 仍交付、回放一致）；现行 e2e `integration-fabric.spec.ts` 在两个行业宿主维护页面/Flow/应用联合交付与普通成员操作，`workspaces.spec.ts` 维护发布拒绝定位及原生任务入口。旧 `joint-draft-release.spec.ts` 已按 ADR-0082 删除。
 - **D6 完成**：完整 Module 导入改生成联合草稿（第一批）与 `WorkshopApplicationImport` 预发布依赖改候选输入（第二批）均已落地，见上。
-- **M4 固定持久环境证据（2026-10-05，本批）**：本沙箱用 `pgserver`（PyPI 包，PostgreSQL 16.2，Unix socket）建立真实日志；`hospitality-server -database …` 在真实 PostgreSQL 上写入对象/记录后停止（快照落库）并重启（`restored hotel-a from the snapshot at N, then replayed 0 entries`），定义与记录原样可读、可继续写入；`capabilities/server` 全套测试带 `PLATFORM_TEST_DATABASE` 在真实 PostgreSQL 上全绿（含联合草稿、production 拒绝、回放恢复）。为此修正两处测试侧问题：追加前必须先读日志（与部署一致），测试决策时间取日志精度（微秒）。
-- **M4 收口（2026-10-05）**：运维界面走查由负责人明确免掉。无 Docker 时的 delivery 断言由新脚本 [deploy/local/rehearse-lite.sh](../../deploy/local/rehearse-lite.sh) 承担并在本沙箱实跑通过——在生产 profile 的持久环境上读 profile（production 拒绝直接安装并点名候选路径）、草稿 → 服务端依赖 → 预览/封存/激活、在交付出的对象上写入并读回、读健康与宿主自有工作、以管理员身份重跑一个宿主任务（attempts 前进，即获权恢复）、重启后 `verify` 核对记录与激活候选未变、`pg_dump`/`pg_restore` 还原日志并核对行数（1757 entries / 1 snapshot）。Docker 专属部分（Rauthy OIDC、RustFS、worker、整项目备份还原与末尾的 delivery profile 断言）仍由 [deploy/local/rehearse.sh](../../deploy/local/rehearse.sh) 在交付部署上执行，本沙箱无 Docker 未跑。
+- **持久部署边界**：内存日志的联合交付/恢复测试不能代替 PostgreSQL、Rauthy、文件字节或 worker 验证。影响这些边界时使用 [deploy/local/rehearse.sh](../../deploy/local/rehearse.sh)；旧 `rehearse-lite.sh` 已按 ADR-0081 删除，不再作为现行检查入口。运维界面免走查的既有决定不扩大机制或生产验收范围。

@@ -148,16 +148,40 @@ test("loop item states follow identity through reorder and clear on removal, que
   assert.deepEqual(store.snapshot().items, {});
 });
 
-test("loop record readers share an authorized read and reject old-scope completion", async () => {
-  const first=deferred(), second=deferred();let count=0;
-  const source={scope:"one",entity:()=>({fields:[]}),list:async()=>({records:[],total:0}),get:()=>++count===1?first.promise:second.promise};
-  const store=new PageSessionStore(source,plan()), reader=store.readSource();
-  const old=reader.get("sample.parent","A");assert.equal(old,reader.get("sample.parent","A"));await tick();assert.equal(count,1);
-  source.scope="two";store.updateSource(source);
-  const current=reader.get("sample.parent","A");await tick();assert.equal(count,2);
-  first.resolve({record:record("A")});await assert.rejects(old,/Obsolete/);
-  second.resolve({record:record("A")});assert.equal((await current).record.id,"A");
-  store.dispose();await assert.rejects(reader.get("sample.parent","B"),/ended/);
+test("loop record readers share authorized reads and retire live or old-scope completions", async () => {
+  const first = deferred(), second = deferred(), third = deferred();
+  let count = 0, changed = 0, live;
+  const source = {
+    scope: "one", entity: () => ({ fields: [] }), list: async () => ({ records: [], total: 0 }),
+    get: () => [first, second, third][count++].promise,
+    watchRecord: (_type, _id, callback) => { live = callback; return () => {}; },
+  };
+  const store = new PageSessionStore(source, plan()), reader = store.readSource();
+  const old = reader.get("sample.parent", "A");
+  assert.equal(old, reader.get("sample.parent", "A"));
+  await tick();
+  const stop = reader.watchRecord("sample.parent", "A", () => { changed++; });
+  live();
+  const refreshed = reader.get("sample.parent", "A");
+  await tick();
+  assert.equal(count, 2);
+  second.resolve({ record: { ...record("A"), note: "refreshed" } });
+  assert.equal((await refreshed).record.note, "refreshed");
+  first.resolve({ record: { ...record("A"), note: "obsolete" } });
+  await assert.rejects(old, /Obsolete/);
+  assert.equal((await reader.get("sample.parent", "A")).record.note, "refreshed");
+  source.scope = "two";
+  store.updateSource(source);
+  live();
+  assert.equal(changed, 1);
+  const current = reader.get("sample.parent", "A");
+  await tick();
+  assert.equal(count, 3);
+  third.resolve({ record: record("A") });
+  assert.equal((await current).record.id, "A");
+  stop();
+  store.dispose();
+  await assert.rejects(reader.get("sample.parent", "B"), /ended/);
 });
 
 test("ending an overlay clears only its states atomically and invalidates the old opening", () => {
@@ -200,12 +224,39 @@ test("a synchronous window subscriber joins the installed query before pending i
  assert.equal(reads,1);assert.equal(original,alias);assert.equal(store.snapshot().queries.window.value.total,1);
 });
 
-test("recreating a scoped source wrapper preserves one read until its revision changes",async()=>{
- let reads=0;
- const source={scope:"member-and-definitions:1",revision:0,entity:()=>({fields:[]}),get:async()=>({record:record("one")}),list:async()=>{reads++;return {records:[record("one")],total:1};}};
- const store=new PageSessionStore(source,plan()),reader=store.querySource("window"),query={limit:1};
- await reader.list("sample.parent",query);store.updateSource({...source});await reader.list("sample.parent",query);assert.equal(reads,1);
- store.updateSource({...source,revision:1});await reader.list("sample.parent",query);assert.equal(reads,2);
+test("scoped query readers reuse answers and refresh only their live window until the scope retires", async () => {
+  let reads = 0, changed = 0, stopped = 0, live;
+  const source = {
+    scope: "member-and-definitions:1", revision: 0, entity: () => ({ fields: [] }),
+    get: async () => ({ record: record("one") }),
+    list: async () => { reads++; return { records: [record("one")], total: 1 }; },
+    watchList: (_type, _query, callback) => { live = callback; return () => { stopped++; }; },
+  };
+  const store = new PageSessionStore(source, plan()), reader = store.querySource("window"), query = { limit: 1 };
+  await reader.list("sample.parent", query);
+  store.updateSource({ ...source });
+  await reader.list("sample.parent", query);
+  assert.equal(reads, 1);
+  const other = store.querySource("other");
+  await other.list("sample.parent", query);
+  const stop = reader.watchList("sample.parent", query, () => { changed++; });
+  live();
+  await reader.list("sample.parent", query);
+  await other.list("sample.parent", query);
+  assert.equal(reads, 3);
+  assert.equal(changed, 1);
+  stop();
+  live();
+  assert.equal(changed, 1);
+  assert.equal(stopped, 1);
+  const retired = reader.watchList("sample.parent", query, () => { changed++; });
+  store.updateSource({ ...source, scope: "member-and-definitions:2", revision: 1 });
+  live();
+  assert.equal(changed, 1);
+  await reader.list("sample.parent", query);
+  assert.equal(reads, 4);
+  retired();
+  store.dispose();
 });
 
 test("paired range Clear publishes one original snapshot and member replacement retires both drafts",()=>{

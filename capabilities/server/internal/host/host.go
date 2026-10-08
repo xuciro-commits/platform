@@ -133,6 +133,8 @@ type Processes interface {
 	Install(a platform.App, fl platform.Flow) error
 	// HasPublishedFlow checks published membership against the original flow owner.
 	HasPublishedFlow(id string) bool
+	// InstallationDraft isolates declarations for a release trial, without running instances.
+	InstallationDraft() Processes
 	Validate(a platform.App, fl platform.Flow) error
 	// HasRunningDependency protects a composed flow's source and transitive
 	// object dependencies while its instances are running, waiting, compensating or stuck.

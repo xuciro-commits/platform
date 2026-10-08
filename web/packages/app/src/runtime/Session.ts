@@ -165,11 +165,25 @@ export class PageSessionStore {
       this.readAdapter = {
         entity: (type) => session.source.entity(type), list: (type, query) => session.source.list(type, query),
         get: (type, id) => session.readReference(type, id),
+        watchList: (type, query, changed) => session.source.watchList?.(type, query, changed) ?? (() => {}),
+        watchRecord: (type, id, changed) => session.watchReference(type, id, changed),
+        watchAggregate: (type, query, changed) => session.source.watchAggregate?.(type, query, changed) ?? (() => {}),
         get aggregate(){return session.source.aggregate;},
         get scope() { return session.source.scope; }, get revision() { return session.version; },
       };
     }
     return this.readAdapter;
+  }
+  private watchReference(type: string, id: string, changed: () => void) {
+    const source = this.source, scope = source.scope;
+    let active = true;
+    const stop = source.watchRecord?.(type, id, () => {
+      if (!active || this.disposed || this.source !== source || source.scope !== scope) return;
+      const key = JSON.stringify([type, id]);
+      this.reads.delete(key); this.viewCache.delete(key);
+      changed();
+    });
+    return () => { active = false; stop?.(); };
   }
   private readReference(type: string, id: string): Promise<RecordView> {
     const key = JSON.stringify([type, id]), existing = this.reads.get(key);
@@ -178,7 +192,7 @@ export class PageSessionStore {
     if (this.disposed) return Promise.reject(new Error("Page session ended"));
     if (this.reads.size >= 256) this.reads.delete(this.reads.keys().next().value!);
     const promise = Promise.resolve().then(() => source.get(type, id)).then((view) => {
-      if (this.disposed || source !== this.source || source.scope !== scope || version !== this.version) throw new Error("Obsolete record read");
+      if (this.disposed || this.reads.get(key) !== promise || source !== this.source || source.scope !== scope || version !== this.version) throw new Error("Obsolete record read");
       if (view.record.id !== id) throw new Error("Record identity mismatch");
       this.cacheView(key,view);return view;
     });
@@ -333,6 +347,9 @@ export class PageSessionStore {
       source = {
         entity: (object) => session.source.entity(object), get: (object, id) => session.source.get(object, id),
         list: (object, query) => session.query(key, object, query),
+        watchList: (object, query, changed) => session.watchQuery(key, object, query, changed),
+        watchRecord: (object, id, changed) => session.watchReference(object, id, changed),
+        watchAggregate: (object, query, changed) => session.source.watchAggregate?.(object, query, changed) ?? (() => {}),
         get aggregate() { return session.source.aggregate; },
         get revision() { return session.version; },
         get scope() { return session.source.scope; },
@@ -340,6 +357,22 @@ export class PageSessionStore {
       this.sources.set(key, source);
     }
     return source;
+  }
+  private watchQuery(key: string, object: string, query: RecordQuery, changed: () => void) {
+    const source = this.source, scope = source.scope, shape = JSON.stringify([object, query]);
+    let active = true;
+    const stop = source.watchList?.(object, query, () => {
+      if (!active || this.disposed || this.source !== source || source.scope !== scope || this.querySignatures.get(key) !== shape) return;
+      // The host snapshot changed: discard this window's memoized answer,
+      // while preserving its query shape and the user's other page state.
+      this.queries.delete(key); this.queryData.delete(key);
+      for (const slot of this.selectionKeys(key)) {
+        const reference = recordReadReference(this.state.records[slot]);
+        if (reference?.object === object) void this.read(slot, reference, true);
+      }
+      changed();
+    });
+    return () => { active = false; stop?.(); };
   }
   clearQuery(key: string) { if (this.queries.has(key) || this.state.queries[key]) this.resetQueries([key]); }
   private query(key: string, object: string, input: RecordQuery): Promise<RecordPageData> {

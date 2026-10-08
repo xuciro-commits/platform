@@ -102,9 +102,10 @@ export class Editor {
     return saved;
   }
   /** The release route: review, check, immutable candidate. `between` runs before activation. */
-  async release(between?: () => Promise<void>) {
+  async release(between?: () => Promise<void>, joint = false) {
     await this.page.getByRole("button", { name: "Publish", exact: true }).click();
-    await this.page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
+    if (joint) await this.page.getByRole("button", { name: "Add the drafts it depends on", exact: true }).click();
+    await this.page.getByRole("button", { name: joint ? "Check joint candidate" : "Check draft and dependencies", exact: true }).click();
     await this.page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
     await between?.();
     await this.page.getByRole("button", { name: "Activate release", exact: true }).click();

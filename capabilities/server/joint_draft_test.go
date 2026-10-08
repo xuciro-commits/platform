@@ -1,11 +1,11 @@
 package platformserver
 
 import (
-	"fmt"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
@@ -20,41 +20,28 @@ import (
 func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	at := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	compose := func() *Tenant {
-		tn, err := NewTenant("joint-drafts", NewConsole("joint-drafts",
-			Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}},
-			Seat{Subjects: []string{"operator"}, Member: platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User, flow.ID: "member"}}}),
+		return composeTenant(t, "joint-drafts", []Seat{seatOf("builder", "build:builder"), seatOf("operator", "build:user", "flow:member")},
 			work.New("joint-drafts"), flow.New("joint-drafts"), build.New("joint-drafts"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return tn
 	}
 	tn := compose()
 	var entries []Entry
 	tn.Record = func(e Entry) { entries = append(entries, e) }
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
-	member, _ := tn.Member("builder")
-	keys := 0
-	must := func(schema, typ, id string, payload any) {
-		t.Helper()
-		keys++
-		if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID,
-			IdempotencyKey: fmt.Sprint(keys), Schema: &pb.SchemaRef{Name: schema, Version: 1},
-			Target: &pb.EntityRef{Type: typ, Id: id}, Payload: platform.Raw(payload)}, at); err != nil {
-			t.Fatalf("%s: %v: %s", schema, err, err.Message)
-		}
-	}
+	member := memberOf(t, tn, "builder")
 
-	// Three drafts, none of them published: the page names an object that is
-	// only a draft, and the application holds that page.
-	must(build.ObjectType+".create", build.ObjectType, "O", map[string]any{
+	// Four drafts, none published: the application holds both a page over the
+	// draft object and a new native flow. Preview/save must not publish the flow.
+	decide(t, tn, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "O", map[string]any{
 		"name": "jointvisit", "title": "Joint visit", "plural": "Joint visits",
-		"fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}})
-	must(build.PageType+".create", build.PageType, "PAGE", map[string]any{
+		"fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	decide(t, tn, "builder", build.ID, build.PageType+".create", build.PageType, "PAGE", map[string]any{
 		"name": "jointvisits", "title": "Joint visits", "object": "build.jointvisit",
-		"sections": []build.Section{{Widget: "table", Fields: []string{"note"}}}})
-	must(build.AppType+".create", build.AppType, "APP", map[string]any{
-		"name": "jointdesk", "title": "Joint desk", "pages": []string{"jointvisits"}})
+		"sections": []build.Section{{Widget: "table", Fields: []string{"note"}}}}, at)
+	decide(t, tn, "builder", build.ID, build.ProcessType+".create", build.ProcessType, "FLOW", map[string]any{
+		"name": "jointarrival", "title": "Joint arrival", "manual": true, "steps": []build.ProcessStep{{Name: "done", Kind: "end"}}}, at)
+	decide(t, tn, "builder", build.ID, build.AppType+".create", build.AppType, "APP", map[string]any{
+		"name": "jointdesk", "title": "Joint desk", "pages": []string{"jointvisits"},
+		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetFlow, Name: "build.jointarrival"}}}, at)
 
 	// The page alone still cannot be delivered: its object was never published,
 	// so the review must say what is missing rather than save a candidate that
@@ -68,31 +55,33 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	// the application draft needs, deepest last, and never repeats an installed
 	// dependency.
 	closure, err := tn.ReferencedDrafts(member, platform.AssetApp, "APP")
-	if err != nil || len(closure.Drafts) != 2 {
+	if err != nil || len(closure.Drafts) != 3 {
 		t.Fatalf("application closure: %+v %v", closure, err)
 	}
-	if closure.Drafts[0] != (build.JointDraftRef{Kind: platform.AssetPage, ID: "PAGE"}) ||
-		closure.Drafts[1] != (build.JointDraftRef{Kind: platform.AssetObject, ID: "O"}) {
-		t.Fatalf("application closure order: %+v", closure.Drafts)
+	for _, ref := range []build.JointDraftRef{{Kind: platform.AssetPage, ID: "PAGE"}, {Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetFlow, ID: "FLOW"}} {
+		if !slices.Contains(closure.Drafts, ref) {
+			t.Fatalf("application closure omitted %v: %+v", ref, closure.Drafts)
+		}
 	}
 
 	selection := []build.JointDraftRef{
 		{Kind: platform.AssetObject, ID: "O"},
 		{Kind: platform.AssetPage, ID: "PAGE"},
+		{Kind: platform.AssetFlow, ID: "FLOW"},
 		{Kind: platform.AssetApp, ID: "APP"},
 	}
 	preview, err := tn.PreviewReleaseDrafts(member, selection)
 	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
 		t.Fatalf("joint preview: %+v %v", preview, err)
 	}
-	if len(preview.Drafts) != 3 || preview.Drafts[0] != (build.JointDraftRef{Kind: platform.AssetObject, ID: "O"}) {
+	if len(preview.Drafts) != 4 || preview.Drafts[0] != (build.JointDraftRef{Kind: platform.AssetObject, ID: "O"}) {
 		t.Fatalf("joint review concealed its draft provenance: %+v", preview.Drafts)
 	}
 	kinds := map[platform.AssetKind]int{}
 	for _, ref := range preview.Included {
 		kinds[ref.Kind]++
 	}
-	if kinds[platform.AssetObject] == 0 || kinds[platform.AssetPage] == 0 || kinds[platform.AssetApp] == 0 {
+	if kinds[platform.AssetObject] == 0 || kinds[platform.AssetPage] == 0 || kinds[platform.AssetApp] == 0 || kinds[platform.AssetFlow] == 0 {
 		t.Fatalf("joint candidate omitted a selected draft: %+v", preview.Included)
 	}
 	// Saving recomputes the same bytes; a selection whose dependency set shrinks
@@ -105,18 +94,32 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	if _, err := tn.SaveReleaseCandidates(member, selection, preview.CandidateID, "stale", at); err == nil {
 		t.Fatal("a stale joint selection was saved under the previewed candidate ID")
 	}
-	keys++
+	missingFlow, err := tn.PreviewReleaseDrafts(member, []build.JointDraftRef{
+		{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetPage, ID: "PAGE"}, {Kind: platform.AssetApp, ID: "APP"},
+	})
+	if err == nil && !strings.Contains(missingFlow.Diagnostic, "build.jointarrival") {
+		t.Fatalf("an omitted flow did not prevent delivery: %+v", missingFlow)
+	}
+	if tn.procs.HasPublishedFlow("build.jointarrival") {
+		t.Fatal("candidate validation published the new flow in the live runtime")
+	}
 	saved, err := tn.SaveReleaseCandidates(member, []build.JointDraftRef{
 		{Kind: platform.AssetObject, ID: "O"},
 		{Kind: platform.AssetPage, ID: "PAGE"},
+		{Kind: platform.AssetFlow, ID: "FLOW"},
 		{Kind: platform.AssetApp, ID: "APP"},
-	}, preview.CandidateID, fmt.Sprint(keys), at)
+	}, preview.CandidateID, "save-joint", at)
 	if err != nil || saved != preview.CandidateID {
 		t.Fatalf("save joint candidate: %s %v", saved, err)
 	}
-	keys++
-	if active, err := tn.ActivateRelease(member, saved, fmt.Sprint(keys), at); err != nil || active != saved {
+	if tn.procs.HasPublishedFlow("build.jointarrival") {
+		t.Fatal("saving the candidate published the new flow")
+	}
+	if active, err := tn.ActivateRelease(member, saved, "activate-joint", at); err != nil || active != saved {
 		t.Fatalf("activate joint candidate: %s %v", active, err)
+	}
+	if !tn.procs.HasPublishedFlow("build.jointarrival") {
+		t.Fatal("activation did not publish the selected flow")
 	}
 	// The delivered drafts are what the operator now reads: the object is in
 	// their definitions and the page is served under its application.

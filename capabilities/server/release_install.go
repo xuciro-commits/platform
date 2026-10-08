@@ -111,6 +111,9 @@ func (t *Tenant) releaseInstallationsLocked(saved platform.ReleaseCandidate, upg
 func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallation, validate bool, upgrade ...bool) (*Tenant, error) {
 	owner := t.app(build.ID).(*build.Build)
 	draft := (hostView{t: t, app: owner}).installationDraft()
+	if t.procs != nil {
+		draft.procs = t.procs.InstallationDraft()
+	}
 	ledger := platform.NewLedger(t.ID, build.ID, platform.NewCatalog())
 	for _, installation := range installations {
 		typ, id, err := build.PublicationRecord(installation.ReleasePublication)
@@ -234,10 +237,10 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 				return nil, err
 			}
 		case build.SchemaProcess:
-			if t.procs == nil {
+			if draft.procs == nil {
 				return nil, fmt.Errorf("flow runtime is unavailable")
 			}
-			if err := t.procs.Validate(owner, *decl.Flow); err != nil {
+			if err := draft.procs.Install(owner, *decl.Flow); err != nil {
 				return nil, err
 			}
 		}

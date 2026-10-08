@@ -241,6 +241,17 @@ func (f *Flows) Validate(a platform.App, fl platform.Flow) error {
 	return err
 }
 
+// InstallationDraft holds an isolated declaration registry for candidate
+// validation. It has no instances or host; installing a flow here cannot
+// publish it in the live runtime. Callers hold the tenant submission lock.
+func (f *Flows) InstallationDraft() host.Processes {
+	draft := &Flows{defs: maps.Clone(f.defs)}
+	for id, versions := range draft.defs {
+		draft.defs[id] = slices.Clone(versions)
+	}
+	return draft
+}
+
 func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 	id := m.ID + "." + fl.Name
 	d := &flowDef{app: m.ID, Flow: fl, steps: map[string]*platform.Step{}}
