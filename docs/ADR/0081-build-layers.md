@@ -24,3 +24,10 @@
 - 日常：改 Go 保存即重启、改 Web 即热更新；提交前 `make check`，改到的 owner 测试按名跑。
 - 镜像只在 `make images`/发布时构建；本地两台验收宿主仍由 `make local-update`（`deploy/local/update.sh`）更新。
 - `make verify` 在发布前跑一次完整证据；CI 只是它在 Linux 上的复跑。
+
+## As built 与本地核对
+
+- 开发使用已验证的 air `v1.67.4`；Makefile 可从 GOPATH/bin 找到安装结果，配置用 `entrypoint`。启动前拒绝已占用的端口；切换模式先停止同端口的验收宿主，保留所有数据卷。计算服务在独立 `platform-dev-compute` 项目，socket 绑定到 `.build/dev/compute`。
+- 新引用选择器已登记到 Catalog（含本地示例、双语元数据）；`make help` 包含 e2e。浏览器 kit 使用 `/module`、Page structure/Inspector、菜单导入、现行保存与发布入口；notice 的非法文案不落盘、冻结及门控断言保留。
+- 手动发布需指定已有版本标签；验证和制品步骤固定到同一提交，镜像 revision 与被验证提交一致。`make build` 在任一宿主构建失败时退出。
+- 2026-10-08 本地验证：setup、infra、infra-compute、check、test、verify、build、page-notice e2e 通过；内存开发模式、酒店/制造数据库开发模式、Rauthy 登录、三目录 air 重启及 Vite HMR 已观察。本机与 Linux amd64/arm64 二进制构建、工作流 actionlint 通过。GitHub 发布/GHCR 推送与 Docker 多架构镜像发布未执行；不将本地检查等同于发布实跑。

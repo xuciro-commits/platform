@@ -3,8 +3,8 @@
 给集成代理（GPT）。按 AGENTS.md 规则 6 按路径集成到 main，不 merge。
 
 - **基点 B** = main `8121634`（分支 `c873645` 与之同内容）
-- **冻结 HEAD** = `8ff18f7`（分支 `arena/0af55203-platform`）
-- 路径清单 = `git diff --name-only 8121634 8ff18f7`（两波共 33 个文件，全部只在分支侧改动；无 `host.ts`/Catalog 生成物变化）
+- **冻结 HEAD** = `dc89d03`（分支 `arena/0af55203-platform`）
+- 路径清单 = `git diff --name-only 8121634 dc89d03`（两波共 34 个文件，全部只在分支侧改动；无 `host.ts`/Catalog 生成物变化）
 
 ## 第一波 `33c6f8f`：引用字段变成选择器
 

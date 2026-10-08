@@ -1,6 +1,22 @@
 import "./i18n";
+import { AppSelect, RoleSelect, ProtocolSelect, MemberSelect } from "./semantic/References";
 import { useEffect,useMemo,useRef,useState } from "react";
 import { Panel, t } from "@platform/ui";
+
+export function TenantReferencesExample() {
+  const [app, setApp] = useState("catalog"), [role, setRole] = useState("builder");
+  const [protocol, setProtocol] = useState("catalog.records/1"), [member, setMember] = useState("sample-member");
+  return <CatalogFixture reads={{
+    "/v1/apps": [{ id: "catalog", roles: ["builder", "user"] }],
+    "/v1/protocols": [{ id: "catalog.records/1", bound: "catalog" }],
+    "/v1/members": [{ id: "sample-member" }],
+  }}><div className="grid gap-3">
+    <AppSelect value={app} onChange={setApp} />
+    <RoleSelect app={app} value={role} onChange={setRole} />
+    <ProtocolSelect value={protocol} onChange={setProtocol} />
+    <MemberSelect value={member} onChange={setMember} />
+  </div></CatalogFixture>;
+}
 import { ApplicationRuns, OperationRunView, ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
 import type {Api} from "@platform/kernel";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";

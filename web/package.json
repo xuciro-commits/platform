@@ -9,7 +9,6 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "build": "pnpm -r run build",
-    "check": "node ../scripts/catalog.mjs check && pnpm -r run typecheck && pnpm -r run test && pnpm -r run build",
     "catalog:generate": "node ../scripts/catalog.mjs generate",
     "catalog:check": "node ../scripts/catalog.mjs check"
   },

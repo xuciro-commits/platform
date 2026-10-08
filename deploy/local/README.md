@@ -17,6 +17,8 @@ make infra-compute                  # 需要代码函数编译时：worker/build
 make dev-light                      # 完全不要容器：内存日志 + 开发令牌（manager / desk / sales…）
 ```
 
+从验收模式切换开发模式时，先 `docker compose -f deploy/local/compose.yaml stop hospitality-server`（制造则 `manufacturing-server`）；同一租户不能同时运行两个宿主。停止 air 后用 `make local-update` 恢复验收模式。`make infra-compute` 使用独立的 `platform-dev-compute` 项目，不替换验收宿主的计算服务。
+
 宿主的启动参数在 `deploy/dev/run.sh`，与下面 Compose 里的宿主一致（同一 PostgreSQL、同一 Rauthy、同一 tenants.json）；`deploy/local/.env` 的密钥同样被读取。
 
 ## 验收栈与发布（Compose 镜像）

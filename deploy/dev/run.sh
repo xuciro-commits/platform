@@ -12,7 +12,12 @@ bin=".build/dev/$solution-server"
 case "$solution" in
   hospitality) admin=user:manager@hotel.test ;;
   manufacturing) admin=user:sup@plant.test ;;
+  *) echo "Unknown solution: $solution" >&2; exit 2 ;;
 esac
+if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "Port $port is in use; stop the $solution host before starting development (docker compose -f deploy/local/compose.yaml stop $solution-server)." >&2
+  exit 1
+fi
 if [[ -n ${PLATFORM_DEV_LIGHT:-} ]]; then
   exec "$bin" -addr "127.0.0.1:$port" -templates deploy/templates
 fi

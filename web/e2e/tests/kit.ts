@@ -72,16 +72,18 @@ export class Builder extends Member {
   }
 }
 
-/** The page editor (`/compose`) as a person uses it. */
+/** The page editor within the current Workshop module workbench. */
 export class Editor {
   readonly tree; readonly inspector;
   constructor(readonly page: Page) {
-    this.tree = page.getByRole("region", { name: "Widgets and layout", exact: true });
-    this.inspector = page.getByRole("region", { name: "The widget in hand", exact: true });
+    this.tree = page.getByRole("region", { name: "Page structure", exact: true });
+    this.inspector = page.getByRole("region", { name: "Inspector", exact: true });
   }
+  open(builder: Builder, pageID: string) { return builder.open(this.page, `/module?page=${pageID}&surface=studio`); }
   /** Imports a Workshop module through the dialog; `map` chooses object/field/metric targets. */
   async importModule(module: unknown, map?: (dialog: ReturnType<Page["getByRole"]>) => Promise<void>) {
-    await this.page.getByRole("button", { name: "Import Workshop module", exact: true }).click();
+    await this.page.getByRole("button", { name: "More page commands", exact: true }).click();
+    await this.page.getByRole("menuitem", { name: "Import Workshop module…", exact: true }).click();
     const dialog = this.page.getByRole("dialog", { name: "Import Workshop module", exact: true });
     await dialog.getByRole("textbox", { name: "Source module JSON", exact: true }).fill(JSON.stringify(module));
     await map?.(dialog);
@@ -89,17 +91,19 @@ export class Editor {
     await dialog.getByRole("button", { name: "Apply imported page draft", exact: true }).click();
   }
   select(widgetTitle: string) { return this.tree.getByRole("button", { name: widgetTitle, exact: true }).click(); }
-  get save() { return this.page.getByRole("button", { name: "Save", exact: true }); }
-  /** Saves, then waits until the host holds `count` sections of `widget`. Resolves to the saved record. */
+  get publish() { return this.page.getByRole("button", { name: "Publish", exact: true }); }
+  /** The current canvas saves valid edits after a pause; Cmd/Ctrl-S requests it immediately. */
+  save() { return this.page.keyboard.press("ControlOrMeta+s"); }
+  /** Requests saving, then confirms the original host's saved section count. */
   async saveUntil(builder: Builder, pageID: string, widget: string, count: number): Promise<any> {
-    await this.save.click();
+    await this.save();
     let saved: any;
     await expect.poll(async () => { saved = await builder.record("build.page", pageID); return saved.sections?.filter((s: any) => s.widget === widget).length; }).toBe(count);
     return saved;
   }
   /** The release route: review, check, immutable candidate. `between` runs before activation. */
   async release(between?: () => Promise<void>) {
-    await this.page.getByRole("button", { name: "Review release", exact: true }).click();
+    await this.page.getByRole("button", { name: "Publish", exact: true }).click();
     await this.page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
     await this.page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
     await between?.();

@@ -10,6 +10,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: Existing version tag to verify and release (vX.Y.Z)
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -17,13 +22,25 @@ permissions:
 
 env:
   PLATFORM_TIMING: "0" # shared runners are slower; timing bounds are off
+  VERSION: ${{ inputs.version || github.ref_name }}
 
 jobs:
   verify:
     name: verify (contract, proofs, host, apps, web)
     runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.revision.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version || github.ref }}
+      - name: Resolve version tag
+        id: revision
+        run: |
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo 'Use an existing vX.Y.Z tag'; exit 1; }
+          commit=$(git rev-parse "refs/tags/$VERSION^{commit}")
+          test "$commit" = "$(git rev-parse HEAD)"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v5
         with:
           go-version-file: capabilities/server/go.mod
@@ -54,6 +71,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.commit }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: capabilities/server/go.mod
@@ -67,7 +86,6 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - run: cd web && pnpm install --frozen-lockfile
       - name: Workspace and hosts
-        env: { VERSION: "${{ github.ref_name }}" }
         run: |
           set -euo pipefail
           mkdir -p .build/release
@@ -84,17 +102,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Images
-        env: { VERSION: "${{ github.ref_name }}", OWNER: "${{ github.repository_owner }}" }
+        env: { OWNER: "${{ github.repository_owner }}" }
         run: |
           set -euo pipefail
           for s in hospitality manufacturing; do
             docker buildx build --platform linux/amd64,linux/arm64 --push \
-              --build-arg PLATFORM_REVISION="$GITHUB_SHA" \
+              --build-arg PLATFORM_REVISION="$(git rev-parse HEAD)" \
               -t "ghcr.io/${OWNER,,}/$s-server:$VERSION" -t "ghcr.io/${OWNER,,}/$s-server:latest" \
               -f "solutions/$s/Dockerfile" .
           done
       - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/v')
         with:
+          tag_name: ${{ env.VERSION }}
           files: .build/release/*
           generate_release_notes: true

@@ -648,4 +648,6 @@ register("zh-CN", {
   "Protocol": "协议",
   "Member": "成员",
   "agent": "代理",
+  "Tenant reference selection": "租户引用选择",
+  "Choose an application, role, protocol or member from the tenant's existing directory.": "从租户现有目录选择应用、角色、协议或成员。",
 });

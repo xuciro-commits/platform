@@ -15,9 +15,9 @@
 | 应用/协议 | `scripts/verify.sh composition format`（`make verify` 包含）；MES 规则加 `mes`，PMS 桌面/离线链加 `pms` |
 | Web 日常编码与同类组件批次 | `make check-web`：生成一致性、Catalog、全部包 tsc；`make test` 加单元测试；开发中按问题选择原 owner 的 `go test` 和单元测试 |
 | 成组交付、重要集成或发布节点 | 按影响面选择一条联合浏览器路线；按影响面 `make e2e SPEC=<spec>`；需要全量验收时 `make e2e` 共用一次完整 Playwright，不按每个组件重复 |
-| 纯样式/布局/文案 | `pnpm --dir web check`，启动查看并截所改页面；不要求重跑浏览器业务路线 |
+| 纯样式/布局/文案 | `make check-web`，启动查看并截所改页面；不要求重跑浏览器业务路线 |
 | 结构整理（搬文件、拆函数、Tenant 组件化，ADR-0080） | 零行为变更：`go build ./... && go vet .` 加全量 `go test .`（基线仅 `TestRecordsAtScale`）；web 侧对应包 `tsc --noEmit` 与 `node scripts/catalog.mjs generate` 零语义差异；`scripts/cleanup-inventory.sh` 看规模数字；不加新测试 |
-| 环境生命周期（定义→候选→封存→激活→晋级→迁移→升级，ADR-0047 §11 / ADR-0080 §3.1） | `go test -run 'TestApplicationLifecycle' .`：`environment_lifecycle_test.go` 走租户方法，`environment_http_test.go` 走 `Host.Handler()` 的真实路由（含宿主控制台）；本地两租户 Compose 宿主上用 `node solutions/wms/assemble.mjs promote`（`PLATFORM_HOST_TOKEN`/`PLATFORM_TARGET_TENANT`/`PLATFORM_TARGET_MEMBER`）把 WMS 的激活候选晋级到另一个租户并迁移主数据 |
+| 环境生命周期（定义→候选→封存→激活→晋级→迁移→升级，ADR-0047 §11 / ADR-0080 §3.1） | `go test -run 'TestApplicationLifecycle' .`：`environment_lifecycle_test.go` 走租户方法，`environment_http_test.go` 走 `Host.Handler()` 的真实路由（含宿主控制台）；本地两租户宿主上通过发布工作台/Host Console 将已封存候选晋级到目标租户，并在 Migrate records 迁移主数据；旧 WMS 装配脚本已清理 |
 | 应用全生命周期跨环境（发布、晋级、迁移、升级、恢复） | `go test -run TestApplicationLifecycleAcrossEnvironments .`：一个对象+页面+应用的联合候选在 dev 封存激活，业务写入后晋级到 prod，`MigrateRecords` 迁数据（二次运行零写入），v2 加一个可选标量经两环境各自审阅的计划激活，最后 prod 从快照+日志尾恢复并通过 `CheckReplay`；改动候选/发布/环境/迁移任一 owner 时先跑它 |
 | 提交/恢复/激活语义或部署 | 对应持久化/故障检查及 `make rehearse`；纯发布导航不自动触发 |
 
@@ -64,6 +64,7 @@ PLATFORM_SCREENSHOTS=1 pnpm --dir web/e2e exec playwright test --grep 'compose a
 
 | 任务 | 操作与结果 | 走查结果 |
 |---|---|---|
+| ADR-0081 构建分层与引用选择器 | `make setup/infra/infra-compute/check/test/verify/build`；`make e2e SPEC=page-notice`；air 内存/数据库模式与 Rauthy、Vite HMR；My account 启动应用、AI 限额成员、流程角色/协议选择；发布工作流语法与 Linux 两架构构建 | 2026-10-08 本地通过，三目录 air 重启及 Vite CSS 更新已观察；三个选择器已在真实登录界面观察，notice 原语义断言保留。工作流 actionlint 与二进制构建通过；GitHub/GHCR 发布未执行，全量旧 e2e 未重跑。 |
 | 元数据刷新保留企业画布草稿（ADR-0080） | Enterprise 打开含未保存输入的对话框；另一窗口对当前成员授予角色或激活发布，等待元数据刷新；对话框、输入与当前视图保持。读取在同一身份/租户/查询的 scope 变化时保留旧答案；切换凭证、租户、资源或 inventory 上限时不沿用旧答案。自动：`read-placeholder.test.mjs`。 | 2026-10-07，酒店 8495（main `e0c0a528`）：两个真实 OIDC 窗口，对当前 manager 临时授予并撤销 core.accountant；原画布的新建对话框及未保存名称保持，临时角色已撤回。读取/包装载边界的自动回归通过。 |
 | 已结束会话可见（ADR-0080） | 同一成员在两个独立浏览器上下文登录；My account → Sessions → Sign out other sessions；当前会话保留，其他条目标记已结束、排在活跃会话之后，另一凭证再请求被拒。超过一天的清理由 `TestLifecycleTokensAndSessions` 控制时钟验证。 | 2026-10-07，酒店 8495：desk 两个独立 OIDC 凭证；结束其他会话后保留 ended 时间标签、活跃在前，另一窗口 /v1/me 返回 401。一天老化由 Go 控制时钟回归验证；会话历史仍只在进程内。 |
 | 构建与交付 | 构建者在工坊选择对象、编辑字段/状态/权限：新增字段/状态不自动提交，未保存时可新增起始状态及动作；点击 Save 后保存。字段尚未有效时保存被拒，只提示一次且保留输入，修正后可再保存；离开时提示未保存。组合页面和流程，保存固定计划，测试后审查并保存候选；沿当前支持的发布/激活路径交付，操作员完成记录动作或收件箱任务 | 复测：条件对象/页面/应用联合封存激活与业务条件表单通过，空环境晋级成功。其余固定计划/流程未走完。 |

@@ -37,7 +37,7 @@ test("notices freeze literal text and optional titles; page and overlay gates st
   m.overlays = [{ id: "panel", name: "Instruction panel", kind: "drawer", rootSectionId: "panel" }];
 
   const { id, name } = await builder.page({ title: "Imported instructions", object: type });
-  await builder.open(page, `/compose?id=${id}`);
+  await editor.open(builder, id);
   await editor.importModule(m);
 
   // The inspector shows the imported notice; an over-long text blocks saving.
@@ -45,8 +45,12 @@ test("notices freeze literal text and optional titles; page and overlay gates st
   await expect(editor.inspector.getByRole("textbox", { name: "Notice title", exact: true })).toHaveValue("Before starting");
   await expect(editor.inspector.getByRole("combobox", { name: "Notice tone", exact: true })).toHaveValue("info");
   const text = editor.inspector.getByRole("textbox", { name: "Notice text", exact: true });
-  await text.fill("中".repeat(1366));
-  await expect(editor.save).toBeDisabled();
+  const oversized = "中".repeat(1366);
+  await text.fill(oversized);
+  await expect(editor.publish).toBeDisabled();
+  await editor.save();
+  const refusedDraft = await builder.record("build.page", id);
+  expect(refusedDraft.sections.some((s: any) => s.notice?.message === oversized)).toBe(false);
   await text.fill(literal);
   await editor.select("Completion note");
   await expect(editor.inspector.getByRole("checkbox", { name: "Show notice title", exact: true })).not.toBeChecked();
