@@ -22,6 +22,9 @@ export const MEMBERSHIP = "ActualOrganizationRole";
 export const FILLS_POST = "FillsPost";
 export const ORGANIZATION = "ActualOrganization";
 export const POST = "ActualPost";
+export const PERSON = "ActualPerson";
+/** «ResponsibleFor»: the organisation a post belongs to (and, on locations, the unit that owns a place). */
+export const RESPONSIBLE_FOR = "ResponsibleFor";
 
 export const today = () => new Date().toISOString().slice(0, 10);
 export const live = (x: { from?: string; until?: string }, day: string) => (x.from ?? "") <= day && (!x.until || day < x.until);

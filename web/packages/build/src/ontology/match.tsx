@@ -1,8 +1,9 @@
 import { integrates } from "./marking";
+import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
-import { Button, Input, PageHeader, Panel, RecordList, Select, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Input, PageHeader, Panel, Select, t, useUnsavedChanges } from "@platform/ui";
 
 // Matching rules (ADR-0074): when rows from different systems are one party,
 // material or site, and whose value wins per field. Applied wherever rows land
@@ -22,7 +23,7 @@ export function Matches() {
   return <div className="grid gap-3">
     <PageHeader title={t("Matching rules")} description={t("Say when rows from different systems are the same party, material or site, and whose value wins per field. One published rule per object; it applies to every source and pipeline writing it.")}
       actions={<Button onClick={() => open({ view: "match", params: { id: "new" } })}>{t("New matching rule")}</Button>} />
-    <RecordList source={source} type="build.match" fields={["title", "object", "state"]} onOpen={(record) => open({ view: "match", params: { id: record.id } })} />
+    <ResourceList source={source} type="build.match" fields={["title", "object", "state"]} onOpen={(record) => open({ view: "match", params: { id: record.id } })} />
   </div>;
 }
 

@@ -45,6 +45,7 @@ type Production struct {
 	Product   platform.Ref[Product] `json:"product" field:"required"`
 	Quantity  float64               `json:"quantity" field:"required"`
 	Due       string                `json:"due,omitempty" type:"date"`
+	Plant     string                `json:"plant,omitempty" ref:"enterprise.element" stereo:"ActualLocation" title:"Plant" help:"The plant of the enterprise model that makes it; the model says where that plant sits" example:"loc-plant-1"`
 	ShopOrder string                `json:"shopOrder,omitempty" field:"readonly,search" title:"Shop order" help:"The plant's order that executed it"`
 	Yield     float64               `json:"yield,omitempty" field:"readonly" help:"Good units the plant made"`
 	Scrap     float64               `json:"scrap,omitempty" field:"readonly" help:"Units the plant scrapped"`

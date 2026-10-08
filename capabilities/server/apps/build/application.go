@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -20,7 +19,6 @@ import (
 const (
 	AppType        = "build.app"
 	SchemaHandOver = AppType + ".publish"
-	iconChoices    = "boxes,clipboard,people,calendar,wrench,map,chart,sparkles"
 	pagesHelp      = "The pages it holds, by their name, in the order people see them"
 )
 
@@ -34,7 +32,7 @@ type Application struct {
 	Name        string                           `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"frontdesk"`
 	Title       string                           `json:"title" field:"required,search" title:"What people call it" example:"Front desk"`
 	Description string                           `json:"description,omitempty" type:"longtext" help:"What people do in it"`
-	Icon        string                           `json:"icon,omitempty" choices:"boxes,clipboard,people,calendar,wrench,map,chart,sparkles" help:"How it is drawn in the launcher"`
+	Icon        string                           `json:"icon,omitempty" help:"How it is drawn in the launcher"`
 	Pages       []string                         `json:"pages" title:"Pages" help:"The pages it holds, by their name, in the order people see them"`
 	// Groups are the headings of its navigation (17b); a page in none of them
 	// sits under the application's own name.
@@ -104,7 +102,7 @@ func applicationDescriptor(a Application) platform.Application {
 }
 
 // checkApplication refuses an application people could not open: a name that is
-// not a name, no pages, an icon the platform does not draw.
+// not a name, no pages, an icon name that is not one.
 func (b *Build) checkApplication(a Application) error {
 	if err := b.checkName(a.Name, a.ID); err != nil {
 		return err
@@ -112,8 +110,8 @@ func (b *Build) checkApplication(a Application) error {
 	if len(a.Pages) == 0 {
 		return fmt.Errorf("an application holds at least one page")
 	}
-	if a.Icon != "" && !slices.Contains(platform.Icons, a.Icon) {
-		return fmt.Errorf("there is no icon %q; there are %s", a.Icon, strings.Join(platform.Icons, ", "))
+	if a.Icon != "" && !platform.IconName(a.Icon) {
+		return fmt.Errorf("%q is not an icon name: lower-case letters, digits and dashes", a.Icon)
 	}
 	seen := map[string]bool{}
 	for _, name := range a.Pages {

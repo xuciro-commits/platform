@@ -1,8 +1,9 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
+import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
-import { Button, Card, Checkbox, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, Input, PageHeader, Panel, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { useDirectInstall } from "../releases/release-profile";
 
@@ -15,7 +16,7 @@ const supported = ["text","choice","reference","boolean","integer","decimal","da
 export function Queries() {
  const {source,role}=useHost(),{open}=useApplicationWorkspace();
  if(role("build")!=="builder")return <PageHeader title={t("Queries")} description={t("Only a builder can edit queries.")}/>;
- return <div className="grid gap-3"><PageHeader title={t("Queries")} description={t("Publish reusable record reads and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"query",params:{id:"new"}})}>{t("New query")}</Button>}/><RecordList source={source} type="build.query" fields={["title","name","object","version"]} onOpen={(record)=>open({view:"query",params:{id:record.id}})}/></div>;
+ return <div className="grid gap-3"><PageHeader title={t("Queries")} description={t("Publish reusable record reads and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"query",params:{id:"new"}})}>{t("New query")}</Button>}/><ResourceList source={source} type="build.query" fields={["title","name","object","version"]} onOpen={(record)=>open({view:"query",params:{id:record.id}})}/></div>;
 }
 export function QueryEditor({id}:{id:string}) {
  const {decide,role,definitions}=useHost(),{open,close}=useApplicationWorkspace();

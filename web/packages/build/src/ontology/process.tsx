@@ -1,3 +1,4 @@
+import { mixedNames } from "../editor/names";
 import { ObjectLineage } from "./lineage";
 import {actionDestinations,actionResultEdges} from "./process-rules";
 import { fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type Numbering_, type ObjectScope, type Process, type State } from "./object-model";
@@ -49,7 +50,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   const action = chosen?.kind === "action" ? process.actions[chosen.at] : undefined;
   const state = chosen?.kind === "state" ? process.states[chosen.at] : undefined;
   const field = chosen?.kind === "field" ? process.fields[chosen.at] : undefined;
-  const problems: WorkbenchProblem[] = issues.map((message, i) => ({ id: `issue:${i}`, text: message, locate: () => { const at = process.actions.findIndex((a) => message.startsWith(`${a.title || a.name}:`)); if (at >= 0) { setChosen({ kind: "action", at }); setTab("actions"); } } }));
+  const problems: WorkbenchProblem[] = [...mixedNames(process).map((name) => ({ id: `mixed:${name}`, severity: "warning" as const, text: t("\"{name}\" mixes two languages. Write it in one; the other languages are set in Control Panel → Languages and words.", { name }) })), ...issues.map((message, i) => ({ id: `issue:${i}`, text: message, locate: () => { const at = process.actions.findIndex((a) => message.startsWith(`${a.title || a.name}:`)); if (at >= 0) { setChosen({ kind: "action", at }); setTab("actions"); } } }))];
   const choose = (next: Chosen, section?: Tab) => { setChosen(next); if (section) setTab(section); };
   const addField = () => { change({ ...process, fields: [...process.fields, { name: nameOf("field", process.fields.map((f) => f.name)), title: t("Field"), type: "text" }] }); choose({ kind: "field", at: process.fields.length }, "properties"); };
   const addAccess = () => { change({ ...process, access: [...process.access, { role: nameOf("role", process.access.map((a) => a.role)), read: "own", create: true, edit: true }] }); choose({ kind: "access", at: process.access.length }, "permissions"); };

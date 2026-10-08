@@ -72,11 +72,17 @@ function ElementPicker({ id, stereotype, value, onChange }: { id: string; stereo
   const { client } = useHost();
   const model = useQuery({ queryKey: ["read", "enterprise"], queryFn: () => client.get<Api.EnterpriseModel>("/v1/enterprise") }).data;
   const today = new Date().toISOString().slice(0, 10);
-  const items = (model?.elements ?? []).filter((e) => (!stereotype || e.stereotype === stereotype) && (e.from ?? "") <= today && (!e.until || today < e.until));
+  const of = (model?.elements ?? []).filter((e) => !stereotype || e.stereotype === stereotype);
+  const live = (e: { from?: string; until?: string }) => (e.from ?? "") <= today && (!e.until || today < e.until);
+  const items = of.filter(live);
+  // A record keeps naming what it named: an element that has since been closed
+  // stays visible, marked, instead of the value silently reading as empty.
+  const kept = value ? of.find((e) => e.id === value) : undefined;
   return (
     <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">—</option>
       {items.map((e) => <option key={e.id} value={e.id}>{e.name}{e.kind ? ` · ${e.kind}` : ""}</option>)}
+      {kept && !live(kept) && <option value={kept.id}>{t("{name} · closed {until}", { name: kept.name, until: kept.until ?? "" })}</option>}
     </Select>
   );
 }

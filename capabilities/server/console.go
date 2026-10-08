@@ -97,6 +97,7 @@ func ConsoleActions() *platform.Catalog {
 	actions = append(actions, accessActions()...)
 	actions = append(actions, lifecycleActions()...)
 	actions = append(actions, operationsActions()...)
+	actions = append(actions, wordsActions()...)
 	actions = append(actions, effectActions()...)
 	actions = append(actions, operationActions()...)
 	actions = append(actions, ProjectActions()...)
@@ -112,7 +113,7 @@ func NewConsole(tenant string, seats ...Seat) *Console {
 		projects: map[string]*BuildProject{},
 		packages: map[string]*InstalledPackage{},
 		index:    &PackageIndex{},
-		ledger:   platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ProfileType, RoleType, PolicyType, TeamType, TokenType, ProjectType, PackageType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType)}
+		ledger:   platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ProfileType, RoleType, PolicyType, TeamType, TokenType, ProjectType, PackageType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType, TranslationType)}
 	if err := d.ledger.HistoricalSchemas(&pb.SchemaRef{Name: legacyMemberLanguage, Version: 1}); err != nil {
 		panic(err)
 	}
@@ -479,7 +480,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 		}
 		areas := map[string]func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error){
 			ConnectorType: d.t.decideConnector, SettingType: d.t.decideSetting, WorkType: d.t.decideWork, ProtocolType: d.t.decideBinding,
-			NotificationType: d.t.decideNotification, EndpointType: d.t.decideEndpoint, EffectType: d.t.decideEffect,
+			NotificationType: d.t.decideNotification, EndpointType: d.t.decideEndpoint, EffectType: d.t.decideEffect, TranslationType: d.t.decideTranslation,
 		}
 		return areas[declared.Target](c, s, now)
 	})

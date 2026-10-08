@@ -1,8 +1,9 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
+import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useRef, useState } from "react";
 import { RecordActions, useHost, useReadQuery } from "@platform/app";
 import { MarkingField, integrates } from "./marking";
-import { Button, DataTable, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsavedChanges, type ColumnDef, type EntityRecord } from "@platform/ui";
+import { Button, DataTable, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges, type ColumnDef, type EntityRecord } from "@platform/ui";
 import { DatasetLineage } from "./lineage";
 
 // Datasets (ADR-0071): rows as they came from a source or a pipeline, kept as
@@ -22,7 +23,7 @@ export function Datasets() {
   return <div className="grid gap-3">
     <PageHeader title={t("Datasets")} description={t("Rows as they came, in versions. A source loads a dataset instead of mapping straight to an object; a pipeline reads one and writes another or an object.")}
       actions={<Button onClick={() => open({ view: "dataset", params: { id: "new" } })}>{t("New dataset")}</Button>} />
-    <RecordList source={source} type="build.dataset" fields={["title", "name", "producer", "version", "marking"]} onOpen={(record) => open({ view: "dataset", params: { id: record.id } })} />
+    <ResourceList source={source} type="build.dataset" fields={["title", "name", "producer", "version", "marking"]} onOpen={(record) => open({ view: "dataset", params: { id: record.id } })} />
   </div>;
 }
 

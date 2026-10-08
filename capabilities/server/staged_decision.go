@@ -146,7 +146,11 @@ func (d *stagedDecision) Get(c platform.Caller, typ reflect.Type, id string) (an
 }
 
 func (d *stagedDecision) Check(c platform.Caller, entity any) *kernel.Error {
-	return d.records.check(c, entity)
+	at := d.at
+	if at.IsZero() {
+		at = time.Now()
+	}
+	return d.records.check(c, entity, at)
 }
 
 func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {

@@ -539,8 +539,13 @@ func EntityActions(e Entity) []Action {
 		if f.Example != "" {
 			description += ", e.g. " + f.Example
 		}
-		fields = append(fields, Field{Name: f.Name, Type: typ, Required: f.Required, Description: description})
-		editable = append(editable, Field{Name: f.Name, Type: typ, Description: description})
+		field := Field{Name: f.Name, Type: typ, Required: f.Required, Description: description}
+		if f.Ref == "enterprise.element" {
+			field.Ref, field.Stereotype = f.Ref, f.Stereotype
+		}
+		fields = append(fields, field)
+		field.Required = false
+		editable = append(editable, field)
 	}
 	var out []Action
 	capability := e.Standard.Capability

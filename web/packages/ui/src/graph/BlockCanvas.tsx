@@ -1,5 +1,5 @@
 import { ConnectionLineType, MarkerType, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, type Connection } from "@xyflow/react";
-import { AlignHorizontalJustifyStart, ArrowDown, ArrowRight, ChevronsDownUp, ChevronsUpDown, Copy, Maximize, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
+import { AlignHorizontalJustifyStart, ArrowDown, ArrowRight, ChevronsDownUp, ChevronsUpDown, CircleHelp, Copy, Maximize, Plus, Redo2, Scissors, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../i18n";
 import { BlockInteraction, BlockNode, type FlowBlockNode } from "./BlockNode";
@@ -51,6 +51,8 @@ function CanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onCo
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const allCollapsed = nodes.length > 0 && nodes.every((node) => collapsed[node.id] ?? node.collapsed ?? false);
   const [palette, setPalette] = useState<CanvasAddContext>();
+  const [pickedEdge, setPickedEdge] = useState<string>();
+  const [help, setHelp] = useState(false);
   const [connectionIssue, setConnectionIssue] = useState<string>();
   const [refit, setRefit] = useState(0);
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<FlowBlockNode>([]);
@@ -190,7 +192,7 @@ function CanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onCo
         } else if (command && key === "d" && editable && onDuplicate) { event.preventDefault(); duplicateSelection();
         } else if ((event.key === "Delete" || event.key === "Backspace") && editable) { event.preventDefault(); deleteSelection();
         } else if ((key === "n" || event.key === "Tab") && editable && onAdd && event.target === container.current) { event.preventDefault(); setPalette(addContext());
-        } else if (event.key === "Escape") { setPalette(undefined); setConnectionIssue(undefined); setFlowNodes((current) => current.map((node) => ({ ...node, selected: false })));
+        } else if (event.key === "Escape") { setPalette(undefined); setPickedEdge(undefined); setConnectionIssue(undefined); setFlowNodes((current) => current.map((node) => ({ ...node, selected: false })));
         } else if (event.key === "Enter") { const picked = selectedNodes(); if (picked.length === 1) onOpen?.(picked[0]!.id); }
       }}
       onDragOver={(event) => { if (editable && onAdd && event.dataTransfer.types.includes("application/platform-block")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }}
@@ -223,8 +225,9 @@ function CanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onCo
               const issue = validateCanvasConnection({ source: source.nodeId, sourceHandle: source.id ?? null, target: target.nodeId, targetHandle: target.id ?? null }, nodes, edges, catalog);
               setConnectionIssue(t(issue ? issueMessages[issue] : "This connection is not allowed."));
             }}
-            onNodeClick={(_, node) => { container.current?.focus(); onSelect?.(node.id); }} onNodeDoubleClick={(_, node) => onOpen?.(node.id)}
-            onPaneClick={() => { container.current?.focus(); setPalette(undefined); setConnectionIssue(undefined); }}
+            onNodeClick={(_, node) => { container.current?.focus(); setPickedEdge(undefined); onSelect?.(node.id); }} onNodeDoubleClick={(_, node) => onOpen?.(node.id)}
+            onEdgeClick={(_, edge) => { container.current?.focus(); setPickedEdge(edge.id); setFlowNodes((current) => current.map((node) => ({ ...node, selected: false }))); }}
+            onPaneClick={() => { container.current?.focus(); setPalette(undefined); setPickedEdge(undefined); setConnectionIssue(undefined); }}
             onPaneContextMenu={(event) => { if (editable && onAdd) { event.preventDefault(); setPalette({ position: screenToFlowPosition({ x: event.clientX, y: event.clientY }) }); } }}
             onNodeDragStart={() => { dragStarted.current = Object.fromEntries(flowNodes.map((node) => [node.id, node.position])); }} onNodeDragStop={commitPositions}>
             <CanvasRefit signature={editable ? String(refit) : flowNodes.map((node) => `${node.id}:${node.position.x}:${node.position.y}`).join("|")} />
@@ -244,8 +247,28 @@ function CanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onCo
         {editable && removeCount > 0 && <><span className="mx-0.5 h-4 w-px bg-border" />
           {onDuplicate && <button type="button" className="platform-block-tool" onClick={duplicateSelection} title={t("Duplicate selection")} aria-label={t("Duplicate selection")}><Copy /></button>}
           {onDelete && <button type="button" className="platform-block-tool" onClick={deleteSelection} title={t("Delete selection")} aria-label={t("Delete selection")}><Trash2 /></button>}</>}
+        <button type="button" className="platform-block-tool" onClick={() => setHelp(!help)} aria-expanded={help} title={t("How to work on this canvas")} aria-label={t("How to work on this canvas")}><CircleHelp /></button>
       </div>
-      {palette && <BlockPalette catalog={catalog} nodes={nodes} context={palette} onChoose={choose} onClose={() => { setPalette(undefined); container.current?.focus(); }} />}
+      {help && <div role="dialog" aria-label={t("How to work on this canvas")} className="absolute right-3 top-14 z-20 w-72 rounded-md border border-border bg-surface p-3 text-xs shadow-lg">
+        <p className="mb-1 font-semibold">{t("On the canvas")}</p>
+        <ul className="grid gap-1 text-muted">
+          <li>{t("Click a block to select it; double-click or Enter to open it.")}</li>
+          {editable && onConnect && <li>{t("Drag from an output port to a compatible input port to connect them.")}</li>}
+          {editable && onInsert && <li>{t("Click the plus on a connection to insert a block into it.")}</li>}
+          {editable && onDisconnect && <li>{t("Click a connection, then remove it: the block it came from stays.")}</li>}
+          {editable && <li>{t("Delete removes the selected blocks and their connections; drag a port's end onto another port to re-route.")}</li>}
+          <li>{t("The chevron on a block shows or hides its ports and details.")}</li>
+        </ul>
+        <button type="button" className="mt-2 rounded px-2 py-1 text-muted hover:bg-row-hover" onClick={() => setHelp(false)}>{t("Close")}</button>
+      </div>}
+      {pickedEdge && editable && <div className="nodrag nopan absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border bg-surface p-1 shadow-lg" role="toolbar" aria-label={t("Connection operations")}>
+        {onInsert && flowEdges.find((e) => e.id === pickedEdge)?.data && <button type="button" className="platform-block-tool" onClick={() => { const edge = edges.find((e) => e.id === pickedEdge); if (edge) setPalette({ edge, position: { x: 0, y: 0 } }); }}>
+          <Plus /><span>{t("Insert block")}</span></button>}
+        {onDisconnect && <button type="button" className="platform-block-tool" onClick={() => { const edge = edges.find((e) => e.id === pickedEdge); if (edge) { onDisconnect([edge]); setPickedEdge(undefined); } }}>
+          <Scissors /><span>{t("Remove connection")}</span></button>}
+        <button type="button" className="platform-block-tool" onClick={() => setPickedEdge(undefined)} aria-label={t("Close")} title={t("Close")}>×</button>
+      </div>}
+      {palette && <BlockPalette catalog={catalog} nodes={nodes} context={palette} onChoose={choose} onClose={() => { setPalette(undefined); setPickedEdge(undefined); container.current?.focus(); }} />}
       {!nodes.length && <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted"><span className="text-sm font-medium">{t("Start with a block")}</span><span className="text-xs">{t("Add a capability, then connect its typed ports.")}</span></div>}
       {connectionIssue && <div role="alert" className="absolute bottom-3 left-3 z-20 flex max-w-[70%] items-center gap-2 rounded border border-border bg-surface px-3 py-2 text-xs text-foreground shadow-sm"><span>{connectionIssue}</span><button type="button" onClick={() => setConnectionIssue(undefined)} aria-label={t("Dismiss")} className="px-1 text-muted">×</button></div>}
       {children}

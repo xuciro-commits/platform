@@ -58,9 +58,9 @@ export function ObjectLineage({ object, fields }: { object: string; fields: { na
     ...direct.filter((s) => s.mapping?.some((m) => m.to === field)).map((s) => `${t("Source")} ${s.title} (${s.mapping!.find((m) => m.to === field)!.from})`),
     ...pipes.map((p) => `${t("Pipeline")} ${p.title} ${producedBy(p, field)}`.trim()),
   ];
-  if (!direct.length && !pipes.length && !wbs.length) return <Panel title={t("Data lineage")}><p className="text-xs text-muted">{t("Nothing feeds or follows this object yet. A data source or a pipeline writes its records; a writeback sends its actions to an external system.")}</p></Panel>;
+  if (!direct.length && !pipes.length && !wbs.length) return <Panel title={t("Data lineage")} description={t("Read from the integration definitions themselves: what is configured to feed this object's records and where its actions are configured to go. It is not a record-by-record history.")}><p className="text-xs text-muted">{t("Nothing feeds or follows this object yet. A data source or a pipeline writes its records; a writeback sends its actions to an external system.")}</p></Panel>;
   return <div className="grid gap-3">
-    <Panel title={t("Comes from")} className="grid gap-3">
+    <Panel title={t("Comes from")} className="grid gap-3" description={t("Declared, not observed: these are the sources and pipelines configured to write this object's records. A dataset's version and a writeback's delivered count are the run evidence kept beside the declaration.")}>
       {direct.map((s) => { const c = l.connections.find((c) => c.id === s.connection); return <Chain key={s.id} items={[{ label: `${t("Source")} ${s.title} · ${s.profile || "json"} ${s.entity || s.url || ""} · ${t("id")} ${s.key}`, route: { view: "data-source", params: { id: s.id } }, state: s.state },
         ...(c ? [{ label: `${t("Connection")} ${c.title} · ${c.kind}`, route: { view: "connection", params: { id: c.id } }, state: c.state }] : [])]} />; })}
       {pipes.map((p) => <Chain key={p.id} items={[{ label: `${t("Pipeline")} ${p.title} · ${t("id")} ${p.key}`, route: { view: "pipeline", params: { id: p.id } }, state: p.state }, ...upstream(p.input, l), ...(p.steps ?? []).flatMap((s) => s.dataset ? upstream(s.dataset, l) : [])]} />)}

@@ -9,6 +9,8 @@ const asset = (id: string, name: string, summary: string, layer: CatalogEntry["l
 });
 
 export const entries: CatalogEntry[] = [
+ asset("ui/icon-picker","Icon picker","Choose a shared icon by group or translated name.",2,"components/IconPicker.tsx",["IconPicker","IconGlyph"],"IconPickerExample",{tags:["icons","search","selection"]}),
+ asset("ui/grouped-list","Grouped resource list","Search and fold resource groups while preserving caller-owned selection.",2,"components/GroupedList.tsx",["GroupedList"],"GroupedListExample",{tags:["tree","resources","search","groups"]}),
  asset("ui/inspector-controls","Compact property inspector","Group dimensions, icon choices and advanced properties in compact accessible sections.",2,"components/InspectorControls.tsx",["InspectorField","InspectorSection","SegmentedChoice"],"InspectorControlsExample",{tags:["inspector","properties","layout","segments"],constraints:["The caller owns property semantics and validation. Short visual prefixes and icons retain full accessible names."]}),
  asset("ui/canvas-editor","Layout canvas editor","Move, order and resize controlled layout regions with pointer previews and atomic caller-owned edits.",3,"layout/CanvasEditor.tsx",["CanvasEditor","CanvasRegion","useCanvasGesture"],"CanvasEditorExample",{tags:["editor","layout","drag","resize"],constraints:["The caller owns the layout document, accepted edits and scope validation. Pointer previews never publish or mutate business data."]}),
  asset("ui/application-header","Application header","Render authorized application navigation and read or appearance controls in a shared horizontal or vertical header.",2,"layout/ApplicationHeader.tsx",["ApplicationHeader"],"ApplicationHeaderExample"),
@@ -189,6 +191,7 @@ export const entries: CatalogEntry[] = [
 
 /** Public nonvisual API, classified explicitly rather than pretending to be UI. */
 export const api = [
+  "iconGlyphs", "iconGroups",
   "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
   "defineEntity", "columnsFor", "recordSchema", "activeValues", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useViewTitle", "useUnsavedChanges", "notify",
   "routeKey", "routeToHash", "routeFromHash", "layout", "diagramLayout", "diagramLayouts", "neighborhoodPositions", "canvasNodeHeight", "canvasNodeWidth", "canvasPlacement", "validateCanvasConnection",

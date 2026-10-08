@@ -3,10 +3,11 @@
 // cases they must pass. Publishing installs one as build.<name>; the host runs
 // it like any agent - every step journaled, drafts confirmed by a person.
 import { useApplicationWorkspace } from "../projects/application-scope";
+import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, WorkbenchMessage, savingState } from "../editor/workbench";
 import { installedObjects, type WorkflowObject } from "../automate/workflow-model";
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Checkbox, Input, PageHeader, Panel, RecordList, Select, Textarea, Toggles, Workbench, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, Workbench, t, useUnsavedChanges } from "@platform/ui";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -23,7 +24,7 @@ export function Agents() {
   return <div className="grid gap-3">
     <PageHeader title={t("Agents")} description={t("An agent works on the ontology with the actions and queries you give it, within a budget. What it cannot take back waits for a person; every step is kept.")}
       actions={<Button onClick={() => open({ view: "agent", params: { id: "new" } })}>{t("New agent")}</Button>} />
-    <RecordList source={source} type="build.agent" fields={["title", "name", "state", "version"]} onOpen={(record) => open({ view: "agent", params: { id: record.id } })} />
+    <ResourceList source={source} type="build.agent" fields={["title", "name", "state", "version"]} onOpen={(record) => open({ view: "agent", params: { id: record.id } })} />
   </div>;
 }
 

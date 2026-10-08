@@ -86,6 +86,7 @@ type Tenant struct {
 	connectors connectorRoster // registry, descriptor index, last refusals (connector_roster.go)
 	notices    noticeBoard     // notifications (notices.go)
 	settings   settingValues   // "<app>/<name>" → value (settings.go)
+	words      tenantWords     // the tenant's own translations (words.go, ADR-0083)
 	sequences  sequences       // number counters (ADR-0024)
 	endpoints  []*Endpoint
 	outbound   []*effect
@@ -133,7 +134,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	t := &Tenant{ID: id, apps: apps, committed: committed{refusals: map[string]refusedResult{}}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), work: newWorkBoard(),
 		connectors: newConnectorRoster(), records: newRecordStore()}
 	t.staged = stagedChannel{tenant: id, files: t.files}
-	t.i18n = translator{apps: func() []platform.App { return t.apps }}
+	t.i18n = translator{apps: func() []platform.App { return t.apps }, tenant: t.words.clone}
 	claim := func(name string, a platform.App) error {
 		if other := t.owner[name]; other != nil {
 			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other.Manifest().ID, a.Manifest().ID)
@@ -819,7 +820,7 @@ func (t *Tenant) Apps() []AppInfo {
 	out := []AppInfo{}
 	for _, a := range t.apps {
 		m := a.Manifest()
-		info := AppInfo{ID: m.ID, Version: m.Version, Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
+		info := AppInfo{ID: m.ID, Title: m.Title, Version: m.Version, Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
 			Roles: m.AllRoles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]platform.EffectKind{}, m.Emits...), Interfaces: append([]platform.Interface{}, m.Interfaces...)}
 		for input, journaled := range m.Inputs {
 			info.Inputs = append(info.Inputs, input+map[bool]string{true: "", false: " (not journaled)"}[journaled])
@@ -863,6 +864,7 @@ func (t *Tenant) AppsOf(m platform.Member) []AppEntry {
 
 type AppInfo struct {
 	ID           string                    `json:"id"`
+	Title        string                    `json:"title"` // the manifest's, in the caller's language
 	Version      string                    `json:"version"`
 	Reads        []string                  `json:"reads"`
 	Roles        []string                  `json:"roles"`

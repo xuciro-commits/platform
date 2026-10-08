@@ -7,13 +7,14 @@
 import "./i18n";
 import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/app";
 import { Button, Card, PageHeader, useWorkspace, type NavSection, type View, t } from "@platform/ui";
-import { ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, CircleUser, Database, FlaskConical, Grid3x3, History, KeyRound, MessageSquare, Network, PlugZap, Route, Server, SlidersHorizontal, Upload, Users, Workflow } from "lucide-react";
+import { ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, CircleUser, Database, FlaskConical, Grid3x3, History, KeyRound, Languages, MessageSquare, Network, PlugZap, Route, Server, SlidersHorizontal, Upload, Users, Workflow } from "lucide-react";
 import { Members, MemberDetail } from "./people";
 import { Permissions } from "./permissions";
 import { MyAccount } from "./account";
 import { Organisation } from "./organisation";
 import { Enterprise } from "./enterprise";
 import { Apps, Matrix, Protocols } from "./apps";
+import { Words } from "./words";
 import { Automation, Integrations, AppSettingsView, Audit } from "./operations";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
 import { Flows, Agents, Evaluations } from "./processes";
@@ -37,6 +38,7 @@ function controlPanelNavigation(host: Host): NavSection[] {
       ...(admin(host) || auditor(host) ? [item(t("Packages"), <Blocks />, "apps")] : []),
       ...(admin(host) ? [item(t("Capability matrix"), <Grid3x3 />, "matrix"), item(t("Protocols"), <Cable />, "protocols"), item(t("App settings"), <SlidersHorizontal />, "app-settings")] : []),
     ] },
+    { label: t("Language"), items: [...(admin(host) ? [item(t("Languages and words"), <Languages />, "words")] : [])] },
     { label: t("Models"), items: [...(host.role("ai") === "admin" ? [item(t("Providers and models"), <Bot />, "ai-providers")] : [])] },
     { label: t("Audit"), items: [...(admin(host) || auditor(host) ? [item(t("Audit trail"), <History />, "audit")] : [])] },
   ];
@@ -69,6 +71,7 @@ const controlPanelViews: View[] = [
   { id: "matrix", title: () => t("Capability matrix"), render: () => <Matrix /> },
   { id: "protocols", title: () => t("Protocols"), render: () => <Protocols /> },
   { id: "app-settings", title: () => t("App settings"), render: () => <AppSettingsView /> },
+  { id: "words", title: () => t("Languages and words"), render: () => <Words /> },
   { id: "audit", title: () => t("Audit"), render: () => <Audit /> },
   { id: "ai-providers", title: () => t("AI providers"), render: () => <AIProviders /> },
 ];

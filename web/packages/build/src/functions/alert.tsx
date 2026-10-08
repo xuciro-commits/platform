@@ -2,9 +2,10 @@
 // condition, a role is told - once per record or every time. The operations
 // face's "situation": nobody has to keep a page open to see it.
 import { useApplicationWorkspace } from "../projects/application-scope";
+import { ResourceList } from "../editor/ResourceList";
 import { installedObjects, type WorkflowObject } from "../automate/workflow-model";
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Checkbox, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { operators } from "../ontology/object-model";
 
@@ -19,7 +20,7 @@ export function Alerts() {
   return <div className="grid gap-3">
     <PageHeader title={t("Alert rules")} description={t("Tell a role when a record comes to match a condition: a late order, a stock below its minimum, a receipt without a supplier.")}
       actions={<Button onClick={() => open({ view: "alert", params: { id: "new" } })}>{t("New alert rule")}</Button>} />
-    <RecordList source={source} type="build.alertrule" fields={["title", "object", "field", "operator", "value", "role", "active"]} onOpen={(record) => open({ view: "alert", params: { id: record.id } })} />
+    <ResourceList source={source} type="build.alertrule" fields={["title", "object", "field", "operator", "value", "role", "active"]} onOpen={(record) => open({ view: "alert", params: { id: record.id } })} />
   </div>;
 }
 

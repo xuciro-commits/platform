@@ -203,6 +203,7 @@ export type AppGroup = {
 
 export type AppInfo = {
   id: string;
+  title: string;
   version: string;
   reads: string[];
   roles: string[];
@@ -3034,6 +3035,19 @@ export type View = {
   elements: string[];
   layout?: Record<string, number[]>;
   asOf?: string;
+};
+
+export type Word = {
+  text: string;
+  translations: Record<string, string>;
+  own: Record<string, string>;
+};
+
+export type WordsView = {
+  app: string;
+  apps: string[];
+  languages: string[];
+  words: Word[];
 };
 
 export type WorkTask = {

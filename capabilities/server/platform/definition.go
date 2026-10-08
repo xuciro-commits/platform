@@ -343,8 +343,22 @@ func (a Application) CheckGroups() error {
 	return nil
 }
 
-// Icons are the icons a tenant's application may take (ADR-0036 D3).
-var Icons = []string{"boxes", "clipboard", "people", "calendar", "wrench", "map", "chart", "sparkles"}
+// IconName reports whether a name is one the kit may draw (ADR-0036 D3,
+// ADR-0084 D1). The vocabulary belongs to the kit, which owns the glyphs and
+// their words; the host only keeps names shaped like names, so the set can grow
+// without every host having to learn it first. A client that does not know a
+// name yet draws its default glyph.
+func IconName(s string) bool {
+	if s == "" || len(s) > 32 || s[0] == '-' || s[len(s)-1] == '-' {
+		return false
+	}
+	for _, r := range s {
+		if r != '-' && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return !strings.Contains(s, "--")
+}
 
 // Definition is one installed code asset as the reader may discover it.
 // Entity and Action reuse the same descriptions as the existing record/action

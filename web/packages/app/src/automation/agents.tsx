@@ -123,7 +123,7 @@ export function RunView({ id, compact, application }: { id: string; compact?: bo
           <div className="text-xs text-muted">{t("What people made of it")}</div>
           {run.signals.map((s, i) => (
             <div key={i} className="flex items-center gap-2 text-sm">
-              <Tag label={s.kind} tone={signalTones[s.kind as keyof typeof signalTones] ?? "neutral"} />
+              <Tag label={t(s.kind)} tone={signalTones[s.kind as keyof typeof signalTones] ?? "neutral"} />
               <span>{s.by}</span><span className="text-muted">{s.detail ?? s.value ?? ""}</span>
             </div>
           ))}
@@ -257,9 +257,9 @@ function Remembered() {
       <div className="text-xs text-muted">{t("What agents remember about you")}</div>
       {memories.map((m) => (
         <Card key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-          <Tag label={m.state === "proposed" ? "proposed" : "remembered"} tone={m.state === "proposed" ? "warning" : "success"} />
+          <Tag label={m.state === "proposed" ? t("proposed") : t("remembered")} tone={m.state === "proposed" ? "warning" : "success"} />
           <span className="flex-1">{m.withheld ? <em className="text-muted">{t("It came from records you may no longer read.")}</em> : m.fact}
-            {" "}<span className="text-xs text-muted">{m.agent}{m.expires ? ` · until ${m.expires.slice(0, 10)}` : " · kept"}</span></span>
+            {" "}<span className="text-xs text-muted">{m.agent}{m.expires ? ` · ${t("until {date}", { date: m.expires.slice(0, 10) })}` : ` · ${t("kept")}`}</span></span>
           {(m.state === "proposed" || m.expires) && <Button size="sm" onClick={() => act(m, "keep")}>{t("Keep")}</Button>}
           <Button size="sm" variant="ghost" onClick={() => act(m, "forget")}>{t("Forget")}</Button>
         </Card>

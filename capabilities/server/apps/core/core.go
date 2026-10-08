@@ -79,7 +79,8 @@ type Site struct {
 	Name     string `json:"name" field:"required,search"`
 	Code     string `json:"code" field:"required,search" help:"Short unique code, e.g. SH01"`
 	Kind     string `json:"kind" field:"required" choices:"plant,warehouse,office,store,yard,other"`
-	Unit     string `json:"unit,omitempty" title:"Owned by unit" help:"The organisation in the enterprise model responsible for it"`
+	Place    string `json:"place,omitempty" ref:"enterprise.element" stereo:"ActualLocation" title:"Place in the model" help:"The enterprise model's location for this place; the model is where its position in the enterprise lives" example:"loc-plant-1"`
+	Unit     string `json:"unit,omitempty" ref:"enterprise.element" stereo:"ActualOrganization" title:"Owned by unit" help:"The organisation in the enterprise model responsible for it" example:"open-plant-1"`
 	Address  string `json:"address,omitempty" type:"longtext"`
 	Timezone string `json:"timezone,omitempty" help:"IANA name, e.g. Asia/Shanghai"`
 	Active   bool   `json:"active" title:"Active"`

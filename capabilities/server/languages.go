@@ -60,6 +60,9 @@ func (t *Tenant) asked(r *http.Request) (string, bool) {
 			continue
 		}
 		if strings.HasPrefix(tag, "en") {
+			if slices.Contains(known, "en") {
+				return "en", true
+			}
 			return "", true
 		}
 		for _, lang := range known {

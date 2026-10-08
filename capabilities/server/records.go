@@ -299,7 +299,7 @@ func (s *recordStore) declare(a platform.App) error {
 			if reflect.TypeOf(v) != reflect.TypeOf(e.Model) {
 				return fmt.Errorf("entity %s: a seed record is not a %s", e.Type, reflect.TypeOf(e.Model))
 			}
-			if err := s.check(seeder, v); err != nil {
+			if err := s.check(seeder, v, time.Now()); err != nil {
 				return fmt.Errorf("entity %s: a seed record does not hold: %v", e.Type, err)
 			}
 			if err := s.put(seeder, seed, v); err != nil {
@@ -470,7 +470,7 @@ func (s *recordStore) get(c platform.Caller, t reflect.Type, id string) (any, bo
 }
 
 // check validates an entity against its declaration (Caller.Check).
-func (s *recordStore) check(c platform.Caller, entity any) *kernel.Error {
+func (s *recordStore) check(c platform.Caller, entity any, now time.Time) *kernel.Error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -479,6 +479,9 @@ func (s *recordStore) check(c platform.Caller, entity any) *kernel.Error {
 		return invalid
 	}
 	v := reflect.ValueOf(entity)
+	if err := checkEnterpriseReferences(c, et.info.Fields, v, now); err != nil {
+		return err
+	}
 	// A conditional field (FieldInfo.When) follows its condition's value.
 	stringOf := func(name string) string {
 		i := slices.IndexFunc(et.info.Fields, func(x platform.FieldInfo) bool { return x.Name == name })
@@ -550,6 +553,9 @@ func (s *recordStore) check(c platform.Caller, entity any) *kernel.Error {
 				return invalid
 			}
 		case "reference", "references":
+			if f.Ref == "enterprise.element" {
+				continue // checked through the directory, including nested lines
+			}
 			ids := []string{fv.String()}
 			if f.Type == "references" {
 				ids = ids[:0]
@@ -558,13 +564,45 @@ func (s *recordStore) check(c platform.Caller, entity any) *kernel.Error {
 				}
 			}
 			for _, id := range ids {
-				if id != "" && s.types[f.Ref].rows[id] == nil {
+				if id != "" && (s.types[f.Ref] == nil || s.types[f.Ref].rows[id] == nil) {
 					return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE}
 				}
 			}
 		}
 	}
 	return s.checkLinkWriteLocked(et, v)
+}
+
+// Enterprise references resolve through the model rather than the record store.
+// Lines carry the same declaration and must not bypass its validity/type check.
+func checkEnterpriseReferences(c platform.Caller, fields []platform.FieldInfo, value reflect.Value, now time.Time) *kernel.Error {
+	for _, f := range fields {
+		v := value.FieldByIndex(f.Index)
+		if v.Kind() == reflect.Pointer {
+			if v.IsNil() {
+				continue
+			}
+			v = v.Elem()
+		}
+		if f.Type == "lines" {
+			for i := 0; i < v.Len(); i++ {
+				if err := checkEnterpriseReferences(c, f.Fields, v.Index(i), now); err != nil {
+					return err
+				}
+			}
+		}
+		if f.Ref != "enterprise.element" || v.IsZero() {
+			continue
+		}
+		el, ok := c.Enterprise().Element(v.String(), now)
+		if !ok {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE, "{field} names an enterprise element that is not active: {element}", f.Title, v.String())
+		}
+		if f.Stereotype != "" && el.Stereotype != f.Stereotype {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} names {element}, which is not a {stereotype}", f.Title, v.String(), f.Stereotype)
+		}
+	}
+	return nil
 }
 
 // find selects records of a type; visible, when set, is the caller's scope.
@@ -962,7 +1000,7 @@ func (r runtime) Find(c platform.Caller, t reflect.Type, q platform.Query) ([]an
 }
 
 func (r runtime) Check(c platform.Caller, entity any) *kernel.Error {
-	return r.t.records.check(c, entity)
+	return r.t.records.check(c, entity, time.Now())
 }
 
 // Members' reads (the HTTP contract).

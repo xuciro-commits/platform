@@ -1,14 +1,16 @@
-// The enterprise modeler (ADR-0067 D7): one tenant's enterprise drawn over the
-// UAF grid. The palette comes from the metamodel's Enterprise Core profile,
-// links are checked against the stereotypes a cell allows, and every change is
-// a decision the host records. A fresh tenant starts from a scale template.
-import { useMemo, useState, type ReactNode } from "react";
+// The enterprise modeler (ADR-0067 D7, ADR-0084 D2): one tenant's enterprise
+// drawn over the UAF grid. What a view may hold comes from the metamodel's
+// Enterprise Core profile and the cell it draws; relationships are checked
+// against the stereotypes that cell allows, and every change is a decision the
+// host records. A fresh tenant starts from a scale template.
+import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, Input, Panel, Select, Tag, Tree, Workbench, t, type ColumnDef, type WorkbenchTab } from "@platform/ui";
+import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, IconGlyph, Input, Panel, Select, Tag, Tree, Workbench, t, type ColumnDef, type DiagramAction, type WorkbenchTab } from "@platform/ui";
 import { Link2, Network, Plus, Puzzle, Save, Table2, Workflow } from "lucide-react";
 import { Canvas, STEREOTYPE_DROP, elementIcon, type Positions } from "./canvas";
-import { autoLayout, childrenOf, live, rootsOf, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PLACEMENT, RELATIONSHIP, VIEW, type Element, type GridCell, type Metamodel, type Model, type PatternInfo, type Relationship } from "./model";
+import { autoLayout, childrenOf, live, rootsOf, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PERSON, PLACEMENT, POST, RELATIONSHIP, RESPONSIBLE_FOR, VIEW, type Element, type GridCell, type Metamodel, type Model, type PatternInfo, type Relationship } from "./model";
 
 type Decide = (schema: string, target: { type: string; id: string }, payload: unknown) => Promise<boolean>;
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
@@ -67,9 +69,15 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   const [selected, setSelected] = useState<string>();
   const [linking, setLinking] = useState(false);
   const [draft, setDraft] = useState<{ elements: string[]; layout: Positions; name: string; grid: string; dirty: boolean }>();
-  const [dialog, setDialog] = useState<{ kind: "element"; stereotype: string; at?: [number, number] } | { kind: "link"; source: string; target: string } | { kind: "view" }>();
+  const [dialog, setDialog] = useState<{ kind: "element"; stereotype: string; at?: [number, number] }
+    | { kind: "link"; source: string; target: string }
+    | { kind: "relink"; id: string; source: string; target: string }
+    | { kind: "edit"; id: string }
+    | { kind: "close"; id: string }
+    | { kind: "end"; id: string }
+    | { kind: "view" }>();
   const [filter, setFilter] = useState("");
-  const [left, setLeft] = useState("palette");
+  const [left, setLeft] = useState("add");
   const patterns = useRead<PatternInfo[]>("/v1/enterprise-patterns").data ?? [];
   const [pattern, setPattern] = useState<PatternInfo>();
 
@@ -97,8 +105,6 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     && (r.stereotype !== PLACEMENT || !placementKind || r.kind === placementKind));
   const title = (st: string) => meta.profile.find((p) => p.stereotype === st)?.title ?? st.replace(/^Actual/, "");
   const relLabel = (r: Relationship) => r.stereotype === PLACEMENT ? (r.relation || t("part of")) : r.stereotype === MEMBERSHIP ? (r.role || t("member")) : r.stereotype === FILLS_POST ? t("fills") : title(r.stereotype);
-  const palette = meta.profile.filter((p) => (!cell || cell.elements.includes(p.stereotype)) && (!p.scales?.length || !m.scale || p.scales.includes(m.scale)));
-
   const addElement = async (stereotype: string, values: { name: string; kind: string; parent?: string; legal?: boolean }, at?: [number, number]) => {
     const id = fresh(slug(title(stereotype)).slice(0, 4), values.name);
     if (!await decide("enterprise.element.add", { type: ELEMENT, id }, { stereotype, name: values.name, kind: values.kind || undefined, legal: values.legal || undefined })) return false;
@@ -113,16 +119,44 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     if (await decide("enterprise.view.save", { type: VIEW, id }, { name, grid, elements: working.elements, layout: working.layout, asOf: day })) { setDraft(undefined); setViewId(id); }
   };
 
+  // The selected element's operations, on the canvas (ADR-0084 D3). Hiding is a
+  // view decision; closing and ending are model decisions with a date.
+  const nodeActions = (id: string): DiagramAction[] => {
+    const el = byId(id);
+    if (!el || !admin) return [];
+    return [
+      { id: "edit", label: t("Edit"), run: () => setDialog({ kind: "edit", id }) },
+      { id: "relate", label: t("Relate"), hint: t("Then drag from this element to the one it relates to."), run: () => { setSelected(id); setLinking(true); } },
+      { id: "hide", label: t("Hide in this view"), hint: t("Only this view changes. The element and its relationships stay in the model."), run: () => { setWorking({ elements: working.elements.filter((x) => x !== id) }); setSelected(undefined); } },
+      { id: "close", label: t("Close…"), tone: "danger", hint: t("Ends its validity from a date: no view shows it as live; history keeps it."), run: () => setDialog({ kind: "close", id }), disabled: !!el.until },
+    ];
+  };
+  const edgeActions = (id: string): DiagramAction[] => {
+    const r = m.relationships.find((x) => x.id === id);
+    if (!r || !admin || r.until) return [];
+    return [
+      { id: "change", label: t("Change…"), hint: t("Ends this relationship on {day} and adds the one you choose.", { day }), run: () => setDialog({ kind: "relink", id, source: r.source, target: r.target }) },
+      { id: "end", label: t("End…"), tone: "danger", hint: t("Ends the relationship on a date: the elements themselves stay."), run: () => setDialog({ kind: "end", id }) },
+    ];
+  };
+  const factsFor = (el: Element) => {
+    const parent = m.relationships.find((r) => r.stereotype === PLACEMENT && r.source === el.id && live(r, day));
+    const holders = m.relationships.filter((r) => r.stereotype === FILLS_POST && r.target === el.id && live(r, day)).map((r) => byId(r.source)?.name ?? r.source);
+    return [
+      { label: t("UAF type"), value: `${title(el.stereotype)} · ${el.stereotype}` },
+      ...(el.kind ? [{ label: t("Kind"), value: t(el.kind) }] : []),
+      ...(parent ? [{ label: t("Part of"), value: `${byId(parent.target)?.name ?? parent.target} (${t(parent.kind || "part of")})` }] : []),
+      ...(holders.length ? [{ label: t("Held by"), value: holders.join(", ") }] : []),
+      ...(el.legal ? [{ label: t("Legal entity"), value: t("yes") }] : []),
+      ...(el.from ? [{ label: t("From"), value: el.from }] : []),
+      ...(el.until ? [{ label: t("Until"), value: el.until }] : []),
+    ];
+  };
   const sel = selected ? byId(selected) : undefined;
   const tabs: WorkbenchTab[] = [
-    { id: "palette", title: t("Palette"), content: <div className="grid gap-1 p-2">
-      <p className="px-1 text-xs text-muted">{cell ? `${cell.id} · ${cell.title}` : ""}</p>
-      {palette.map((p) => <Button key={p.stereotype} variant="row" draggable={admin} onDragStart={(e) => e.dataTransfer.setData(STEREOTYPE_DROP, p.stereotype)}
-        onClick={() => admin && setDialog({ kind: "element", stereotype: p.stereotype })} className="justify-between border border-border" title={meta.stereotypes[p.stereotype]?.description}>
-        <span className="flex items-center gap-2 [&_svg]:size-4 [&_svg]:text-muted">{elementIcon({ stereotype: p.stereotype, kind: p.kinds?.[0] })}{p.title}</span><span className="font-mono text-[10px] text-muted">{p.stereotype}</span>
-      </Button>)}
-      <p className="px-1 pt-2 text-[11px] text-muted">{t("Drag onto the canvas or click to add. UAF {version}.", { version: meta.version })}</p>
-    </div> },
+    { id: "add", title: t("Add elements"), content: <AddPane meta={meta} cell={cell} scale={m.scale} admin={admin}
+      onAdd={(stereotype) => setDialog({ kind: "element", stereotype })} /> },
+    { id: "uaf", title: t("UAF grid"), content: <UafPane meta={meta} cell={cell} onCell={(grid) => setWorking({ grid })} /> },
     { id: "patterns", title: t("Patterns"), content: <div className="grid gap-1 p-2">
       <p className="px-1 text-xs text-muted">{sel?.stereotype === ORGANIZATION ? t("Added under {name}.", { name: sel.name }) : t("Added at the top; select an organisation to add under it.")}</p>
       {[1, 2, 3, 4].map((level) => {
@@ -136,7 +170,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
       })}
       <p className="px-1 pt-2 text-[11px] text-muted">{t("A pattern grafts a ready-made piece — rename, move or close anything afterwards.")}</p>
     </div> },
-    { id: "elements", title: t("Elements"), badge: m.elements.length, content: <div className="grid gap-1 p-2">
+    { id: "elements", title: t("Model"), badge: m.elements.length, content: <div className="grid gap-1 p-2">
       <Input placeholder={t("Find…")} value={filter} onChange={(e) => setFilter(e.target.value)} />
       {m.elements.filter((e) => live(e, day) && (!filter || e.name.toLowerCase().includes(filter.toLowerCase()) || e.id.includes(filter))).slice(0, 200).map((e) => {
         const shown = working.elements.includes(e.id);
@@ -167,17 +201,21 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
         <Input aria-label={t("As of")} type="date" value={day} onChange={(e) => setDay(e.target.value || today())} className="w-36" />
       </span>}
       actions={<>
+        <Select aria-label={t("UAF view")} title={t("UAF view")} value={cell?.id ?? ""} onChange={(e) => setWorking({ grid: e.target.value })} className="w-44">
+          {meta.grid.filter((g) => !g.scales?.length || !m.scale || g.scales.includes(m.scale)).map((g) => <option key={g.id} value={g.id}>{g.id} · {t(g.title)}</option>)}
+        </Select>
         <Button size="sm" variant={mode === "canvas" ? "default" : "ghost"} onClick={() => setMode("canvas")} title={t("Canvas")}><Workflow /></Button>
         <Button size="sm" variant={mode === "tree" ? "default" : "ghost"} onClick={() => setMode("tree")} title={t("Tree")}><Network /></Button>
         <Button size="sm" variant={mode === "table" ? "default" : "ghost"} onClick={() => setMode("table")} title={t("Table")}><Table2 /></Button>
-        {admin && <Button size="sm" variant={linking ? "default" : "ghost"} aria-pressed={linking} onClick={() => setLinking(!linking)}><Link2 />{t("Link")}</Button>}
+        {admin && <Button size="sm" variant={linking ? "default" : "ghost"} aria-pressed={linking} onClick={() => setLinking(!linking)} title={t("Then drag from one element to the other.")}><Link2 />{t("Relate")}</Button>}
         {admin && <Button size="sm" disabled={!working.dirty} onClick={() => void saveView()}><Save />{t("Save view")}</Button>}
       </>}
       left={{ label: t("Model"), tabs, value: left, onChange: setLeft }}
       right={{ label: t("Inspector"), content: <Inspector element={sel} model={m} meta={meta} day={day} admin={admin} decide={decide} title={title} relLabel={relLabel}
         onRemove={() => { if (!sel) return; setWorking({ elements: working.elements.filter((id) => id !== sel.id) }); setSelected(undefined); }} /> }}>
       {mode === "canvas" && <div className="h-full min-h-[480px]"><Canvas elements={shownElements} relationships={shownRels} positions={working.layout} selected={selected} linking={linking && admin} admin={admin}
-        label={relLabel} title={title} onPositions={(layout) => setWorking({ layout })} onSelect={setSelected}
+        label={relLabel} title={title} onPositions={(layout) => setWorking({ layout })} onSelect={setSelected} facts={factsFor} nodeActions={nodeActions} edgeActions={edgeActions}
+        onReconnect={(id, source, target) => setDialog({ kind: "relink", id, source, target })}
         onDrop={(stereotype, at) => setDialog({ kind: "element", stereotype, at })} onLink={(source, target) => setDialog({ kind: "link", source, target })} /></div>}
       {mode === "tree" && <div className="p-2">
         <Tree roots={rootsOf(m, placementKind, day).map(byId).filter((e): e is Element => !!e)} children={(e) => childrenOf(m, e.id, placementKind, day).map(byId).filter((x): x is Element => !!x && live(x, day))}
@@ -193,6 +231,23 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     {dialog?.kind === "link" && <LinkDialog source={byId(dialog.source)!} target={byId(dialog.target)!} cell={cell} meta={meta} kinds={m.kinds} defaultKind={placementKind} title={title}
       onClose={() => { setDialog(undefined); setLinking(false); }}
       onSubmit={async (v) => { if (await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("rel", dialog.source) }, { ...v, source: dialog.source, target: dialog.target })) { setDialog(undefined); setLinking(false); } }} />}
+    {dialog?.kind === "relink" && byId(dialog.source) && byId(dialog.target) && <LinkDialog source={byId(dialog.source)!} target={byId(dialog.target)!} cell={cell} meta={meta} kinds={m.kinds} defaultKind={placementKind} title={title}
+      existing={m.relationships.find((r) => r.id === dialog.id)}
+      onClose={() => setDialog(undefined)}
+      onSubmit={async (v) => {
+        if (!await decide("enterprise.relationship.end", { type: RELATIONSHIP, id: dialog.id }, { until: day })) return;
+        if (await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("rel", dialog.source) }, { ...v, source: dialog.source, target: dialog.target })) setDialog(undefined);
+      }} />}
+    {dialog?.kind === "edit" && byId(dialog.id) && <EditElementDialog element={byId(dialog.id)!} meta={meta} onClose={() => setDialog(undefined)}
+      onSubmit={async (v) => { if (await decide("enterprise.element.edit", { type: ELEMENT, id: dialog.id }, v)) setDialog(undefined); }} />}
+    {dialog?.kind === "close" && byId(dialog.id) && <DateDialog title={t("Close {name}", { name: byId(dialog.id)!.name })} defaultDay={day}
+      note={t("Closing ends its validity from a date: no view or query treats it as live after that day, and everything before stays as it was. Records that point at it keep their history; new decisions naming it are refused after that day.")}
+      confirm={t("Close")} onClose={() => setDialog(undefined)}
+      onSubmit={async (until) => { if (await decide("enterprise.element.close", { type: ELEMENT, id: dialog.id }, { until })) setDialog(undefined); }} />}
+    {dialog?.kind === "end" && <DateDialog title={t("End relationship")} defaultDay={day}
+      note={t("Ending is the model's version of deletion: the relationship stops being live from that date, both elements stay, and every earlier view still shows it joined.")}
+      confirm={t("End")} onClose={() => setDialog(undefined)}
+      onSubmit={async (until) => { if (await decide("enterprise.relationship.end", { type: RELATIONSHIP, id: dialog.id }, { until })) setDialog(undefined); }} />}
     {pattern && <PatternDialog pattern={pattern} organisations={m.elements.filter((e) => e.stereotype === ORGANIZATION && live(e, day))} under={sel?.stereotype === ORGANIZATION ? sel.id : undefined} decide={decide} onClose={() => setPattern(undefined)} />}
     {dialog?.kind === "view" && <ViewDialog grid={meta.grid.filter((g) => !g.scales?.length || !m.scale || g.scales.includes(m.scale))} onClose={() => setDialog(undefined)}
       onSubmit={async (name, grid) => {
@@ -202,6 +257,217 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
         await saveView(name, grid);
       }} />}
   </>;
+}
+
+// --- The construction catalogue (ADR-0084 D2): what the UAF offers as
+// elements, grouped by the domain it belongs to, with the reason anything the
+// current view does not draw is not offered — never a silent filtering.
+function AddPane({ meta, cell, scale, admin, onAdd }: {
+  meta: Metamodel; cell?: GridCell; scale?: string; admin: boolean; onAdd: (stereotype: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const rows = meta.profile.map((p) => {
+    const st = meta.stereotypes[p.stereotype];
+    const shown = !cell || cell.elements.includes(p.stereotype);
+    const scaled = !p.scales?.length || !scale || p.scales.includes(scale);
+    const reason = !shown ? t("Not drawn in {cell}: it belongs to another UAF view.", { cell: cell?.id ?? "" })
+      : !scaled ? t("Available from scale {scale} on.", { scale: p.scales![0]! }) : undefined;
+    return { p, st, reason };
+  }).filter(({ p, st }) => !needle || `${p.title} ${p.plural} ${p.stereotype} ${(p.kinds ?? []).join(" ")} ${st?.description ?? ""}`.toLowerCase().includes(needle));
+  const groups = meta.domains.concat("Enterprise").map((domain) => ({ domain, rows: rows.filter(({ st }) => (st?.domain ?? "Enterprise") === domain) })).filter((g) => g.rows.length);
+  return <div className="grid gap-2 p-2">
+    <p className="px-1 text-[11px] text-muted">{t("Elements the model can hold, from the UAF metamodel. Drag one onto the canvas, or click to add it.")}</p>
+    <Input placeholder={t("Find an element type…")} aria-label={t("Find an element type…")} value={query} onChange={(e) => setQuery(e.target.value)} />
+    <p className="px-1 text-[11px] text-muted">{cell ? <>{cell.id} · {t(cell.title)}</> : null} · {t("UAF {version}, {n} types offered here.", { version: meta.version, n: rows.filter((r) => !r.reason).length })}</p>
+    {groups.map(({ domain, rows }) => <div key={domain} className="grid gap-1">
+      <p className="px-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted">{t(domain)}</p>
+      {rows.map(({ p, st, reason }) => <Button key={p.stereotype} variant="row" draggable={admin && !reason} disabled={!admin || !!reason}
+        onDragStart={(e) => e.dataTransfer.setData(STEREOTYPE_DROP, p.stereotype)} onClick={() => onAdd(p.stereotype)}
+        className="justify-between border border-border" title={reason ?? st?.description}>
+        <span className="flex min-w-0 items-center gap-2 [&_svg]:size-4 [&_svg]:text-muted">
+          <IconGlyph name={p.icon} />
+          <span className="min-w-0"><span className="block truncate">{t(p.title)}</span>
+            {reason ? <span className="block truncate text-[10px] text-muted">{reason}</span>
+              : p.kinds?.length ? <span className="block truncate text-[10px] text-muted">{p.kinds.map((k) => t(k)).join(" · ")}</span> : null}</span>
+        </span>
+        <span className="font-mono text-[10px] text-muted">{p.stereotype}</span>
+      </Button>)}
+    </div>)}
+    {!groups.length && <p className="p-2 text-xs text-muted">{t("Nothing matches.")}</p>}
+  </div>;
+}
+
+// --- The framework itself (ADR-0084 D2): the UAF grid as a matrix of what the
+// tenant's views can draw, over the release's whole stereotype registry, so a
+// reader can tell what is offered, what is merely loadable, and why.
+function UafPane({ meta, cell, onCell }: { meta: Metamodel; cell?: GridCell; onCell: (grid: string) => void }) {
+  const [query, setQuery] = useState("");
+  const domains = meta.domains;
+  const aspects = Array.from(new Set(meta.grid.map((g) => g.aspect)));
+  const registry = Object.values(meta.stereotypes).sort((a, b) => a.name.localeCompare(b.name));
+  const offered = new Set(meta.profile.map((p) => p.stereotype));
+  const needle = query.trim().toLowerCase();
+  const shown = registry.filter((st) => !needle || `${st.name} ${st.domain} ${st.aspect} ${st.description ?? ""}`.toLowerCase().includes(needle)).slice(0, 80);
+  return <div className="grid gap-2 p-2 text-xs">
+    <p className="px-1 text-[11px] text-muted">{t("The UAF grid: domains across, aspects down. A view is one cell; clicking a cell switches this view to it.")}</p>
+    <div className="overflow-auto">
+      <div className="grid gap-0.5" style={{ gridTemplateColumns: `auto repeat(${aspects.length}, minmax(6rem, 1fr))` }}>
+        <span />
+        {aspects.map((a) => <span key={a} className="px-1 text-[10px] font-semibold text-muted">{t(a)}</span>)}
+        {domains.map((d) => <Fragment key={d}>
+          <span className="px-1 text-[10px] font-semibold text-muted">{t(d)}</span>
+          {aspects.map((a) => {
+            const g = meta.grid.find((x) => x.domain === d && x.aspect === a);
+            return <span key={a}>{g
+              ? <Button size="sm" variant={cell?.id === g.id ? "default" : "ghost"} aria-pressed={cell?.id === g.id} onClick={() => onCell(g.id)}
+                  className="w-full justify-start" title={`${g.id} · ${t(g.title)}: ${g.elements.length} ${t("elements")}, ${g.relationships.length} ${t("relationships")}`}>
+                  <span className="grid text-left"><span className="truncate text-[11px]">{t(g.title)}</span><span className="font-mono text-[9px] text-muted">{g.id}</span></span></Button>
+              : <span className="block px-1 py-0.5 text-center text-muted" title={t("No view draws this cell yet.")}>·</span>}</span>;
+          })}
+        </Fragment>)}
+      </div>
+    </div>
+    <p className="px-1 text-[11px] text-muted">{t("{offered} of the release's {total} UAF 1.3 types are offered by this tenant's profile; the rest stay loadable and storable.", { offered: offered.size, total: registry.length })}</p>
+    <Input placeholder={t("Find a UAF type…")} aria-label={t("Find a UAF type…")} value={query} onChange={(e) => setQuery(e.target.value)} />
+    <div className="grid gap-0.5">
+      {shown.map((st) => <div key={st.name} className="flex items-baseline gap-2 rounded px-1 py-0.5">
+        <span className="min-w-0 flex-1 truncate" title={st.description}>{st.name}</span>
+        <span className="text-[10px] text-muted">{t(st.domain)}{st.aspect ? ` · ${t(st.aspect)}` : ""}</span>
+        <Tag label={offered.has(st.name) ? t("offered") : t("loadable")} tone={offered.has(st.name) ? "info" : "neutral"} />
+      </div>)}
+      {!shown.length && <p className="p-1 text-muted">{t("Nothing matches.")}</p>}
+    </div>
+  </div>;
+}
+
+// --- People, posts and the connection to accounts (ADR-0084 D4).
+// An account is how someone signs in; a person is who they are in the model; a
+// post is the job; filling a post joins the two, and the placement joins the
+// post to its organisation. The panel says all four out loud so nobody has to
+// guess which one they are editing.
+function People({ element: el, model: m, day, admin, decide, post, setPost, holder, setHolder }: {
+  element: Element; model: Model; day: string; admin: boolean; decide: Decide;
+  post?: { name: string; kind: string }; setPost: (v?: { name: string; kind: string }) => void;
+  holder?: { person: string; post: string }; setHolder: (v?: { person: string; post: string }) => void;
+}) {
+  const name = (id: string) => m.elements.find((e) => e.id === id)?.name ?? id;
+  const posts = m.relationships.filter((r) => r.stereotype === RESPONSIBLE_FOR && r.source === el.id && live(r, day))
+    .map((r) => m.elements.find((e) => e.id === r.target)).filter((e): e is Element => !!e && e.stereotype === POST && live(e, day));
+  const heldBy = (post: string) => m.relationships.filter((r) => r.stereotype === FILLS_POST && r.target === post && live(r, day)).map((r) => name(r.source));
+  const people = m.elements.filter((e) => e.stereotype === PERSON && live(e, day));
+  const openPosts = el.stereotype === POST ? [el] : posts.filter((p) => heldBy(p.id).length === 0);
+  return <div className="grid gap-2">
+    <p className="text-xs font-semibold text-muted">{el.stereotype === POST ? t("Post") : t("Posts and people")}</p>
+    {el.stereotype === POST && <p className="text-xs text-muted">{t("Held by: {names}", { names: heldBy(el.id).join(", ") || t("nobody yet") })}</p>}
+    {el.stereotype === ORGANIZATION && posts.map((p) => <p key={p.id} className="flex items-center gap-2 text-xs">
+      <span className="truncate">{p.name}</span><span className="text-muted">{t(p.kind || "post")}</span>
+      <span className="ml-auto text-muted">{heldBy(p.id).join(", ") || t("vacant")}</span></p>)}
+    {admin && el.stereotype === ORGANIZATION && (post
+      ? <Form className="grid gap-1" onSubmit={async () => {
+          const id = fresh("post", post.name);
+          if (!await decide("enterprise.element.add", { type: ELEMENT, id }, { stereotype: POST, name: post.name, kind: post.kind || undefined })) return;
+          if (await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("rel", id) }, { stereotype: RESPONSIBLE_FOR, source: el.id, target: id })) setPost(undefined);
+        }}>
+          <Input aria-label={t("Post title (Warehouse manager, Operator …)")} placeholder={t("Post title (Warehouse manager, Operator …)")} value={post.name} onChange={(x) => setPost({ ...post, name: x.target.value })} />
+          <Input aria-label={t("Kind")} list="post-kinds" placeholder={t("kind (manager, operator …)")} value={post.kind} onChange={(x) => setPost({ ...post, kind: x.target.value })} />
+          <div className="flex gap-1"><Button size="sm" type="submit" disabled={!post.name}>{t("Add post")}</Button><Button size="sm" variant="ghost" onClick={() => setPost(undefined)}>{t("Cancel")}</Button></div>
+        </Form>
+      : <Button size="sm" variant="ghost" onClick={() => setPost({ name: "", kind: "" })}><Plus />{t("Add post")}</Button>)}
+    {admin && (holder
+      ? <Form className="grid gap-1" onSubmit={async () => {
+          let person = holder.person;
+          if (person.startsWith("new:")) {
+            const created = fresh("person", person.slice(4));
+            if (!await decide("enterprise.element.add", { type: ELEMENT, id: created }, { stereotype: PERSON, name: person.slice(4) })) return;
+            person = created;
+          }
+          if (await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("fill", person) }, { stereotype: FILLS_POST, source: person, target: holder.post })) setHolder(undefined);
+        }}>
+          <Select aria-label={t("Person")} value={holder.person} onChange={(x) => setHolder({ ...holder, person: x.target.value })}>
+            <option value="">{t("— person")}</option>
+            {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {holder.person.startsWith("new:") && <option value={holder.person}>{holder.person.slice(4)}</option>}
+          </Select>
+          <Input aria-label={t("Or a new person's name")} placeholder={t("Or a new person's name")} onChange={(x) => setHolder({ ...holder, person: x.target.value ? `new:${x.target.value}` : "" })} />
+          <Select aria-label={t("Post")} value={holder.post} onChange={(x) => setHolder({ ...holder, post: x.target.value })}>
+            <option value="">{t("— post")}</option>
+            {openPosts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+          <div className="flex gap-1"><Button size="sm" type="submit" disabled={!holder.person || !holder.post}>{t("Fill the post")}</Button><Button size="sm" variant="ghost" onClick={() => setHolder(undefined)}>{t("Cancel")}</Button></div>
+        </Form>
+      : <Button size="sm" variant="ghost" disabled={!openPosts.length} title={openPosts.length ? undefined : t("Add a post first.")}
+          onClick={() => setHolder({ person: "", post: openPosts[0]?.id ?? "" })}><Plus />{t("Fill a post")}</Button>)}
+    <p className="text-[11px] text-muted">{t("An account signs someone in; a person is who they are in this model. Accounts join an organisation under Members; people join posts here.")}</p>
+  </div>;
+}
+
+// --- Who points at an element (ADR-0084 D4). Records that name it follow the
+// model: their reference reads the element's current name, and closing it stops
+// new decisions from naming it while history still resolves. The list is built
+// by asking the entity types that declare such a reference, so nothing else has
+// to keep a second index of who refers to whom.
+function UsedBy({ element: el, day }: { element: Element; day: string }) {
+  const { client } = useHost();
+  const entities = useRead<Api.EntityInfo[]>("/v1/entities").data ?? [];
+  const refs = useMemo(() => entities.flatMap((e) => (e.fields ?? [])
+    .filter((f) => f.ref === "enterprise.element" && (!f.stereotype || f.stereotype === el.stereotype))
+    .map((f) => ({ type: e.type, title: e.title, field: f.name, fieldTitle: f.title }))), [entities, el.stereotype]);
+  const key = refs.map((r) => `${r.type}.${r.field}`).join(",");
+  const used = useQuery({
+    queryKey: ["enterprise-used-by", el.id, key, day], enabled: refs.length > 0, staleTime: 15000,
+    queryFn: async () => {
+      const out: { type: string; title: string; field: string; id: string }[] = [];
+      for (const r of refs) {
+        const domain = encodeURIComponent(JSON.stringify([[r.field, "=", el.id]]));
+        const page = await client.get<{ records: { id: string }[] }>(`/v1/records/${r.type}?limit=50&domain=${domain}`).catch(() => undefined);
+        for (const record of page?.records ?? []) out.push({ type: r.type, title: r.title, field: r.fieldTitle, id: record.id });
+      }
+      return out;
+    },
+  });
+  const rows = used.data ?? [];
+  return <div className="grid gap-1">
+    <p className="text-xs font-semibold text-muted">{t("Used by")} {used.isFetching ? "" : `(${rows.length})`}</p>
+    {rows.map((r) => <p key={`${r.type}:${r.id}`} className="flex items-baseline gap-2 text-xs">
+      <span className="truncate">{r.title}</span><span className="font-mono text-[10px] text-muted">{r.id}</span>
+      <span className="ml-auto text-[10px] text-muted">{r.field}</span></p>)}
+    {!rows.length && <p className="text-[11px] text-muted">{t("No record in the apps points here yet. A site, an order or a posting that names this element appears here, and its reference reads the element's name.")}</p>}
+  </div>;
+}
+
+// --- Editing an element's own facts, from the canvas or the tree.
+function EditElementDialog({ element: el, meta, onClose, onSubmit }: {
+  element: Element; meta: Metamodel; onClose: () => void;
+  onSubmit: (v: { name: string; kind: string; shortName: string }) => Promise<void>;
+}) {
+  const entry = meta.profile.find((p) => p.stereotype === el.stereotype);
+  const [v, setV] = useState({ name: el.name, kind: el.kind ?? "", shortName: el.shortName ?? "" });
+  return <Dialog open onOpenChange={(o) => !o && onClose()} title={t("Edit {name}", { name: el.name })}>
+    <Form className="grid gap-3" onSubmit={() => void onSubmit(v)}>
+      {field(t("Name"), <Input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />)}
+      {field(t("Kind"), <><Input list={`kinds-${el.stereotype}`} value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })} />
+        <datalist id={`kinds-${el.stereotype}`}>{(entry?.kinds ?? []).map((k) => <option key={k} value={k} />)}</datalist></>)}
+      {field(t("Short name"), <Input value={v.shortName} onChange={(e) => setV({ ...v, shortName: e.target.value })} />)}
+      <p className="text-xs text-muted">{t("Editing changes the model, not just this view: every view and every record that refers to it reads the new name.")}</p>
+      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" disabled={!v.name}>{t("Save")}</Button></div>
+    </Form>
+  </Dialog>;
+}
+
+// --- One date, one consequence, told plainly: closing an element and ending a
+// relationship are the model's way of deleting without losing history.
+function DateDialog({ title, note, confirm, defaultDay, onClose, onSubmit }: {
+  title: string; note: string; confirm: string; defaultDay: string; onClose: () => void; onSubmit: (day: string) => Promise<void>;
+}) {
+  const [day, setDay] = useState(defaultDay);
+  return <Dialog open onOpenChange={(o) => !o && onClose()} title={title}>
+    <Form className="grid gap-3" onSubmit={() => void onSubmit(day)}>
+      <p className="text-xs text-muted">{note}</p>
+      {field(t("On"), <Input type="date" value={day} onChange={(e) => setDay(e.target.value)} />)}
+      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" variant="danger" disabled={!day}>{confirm}</Button></div>
+    </Form>
+  </Dialog>;
 }
 
 function ElementDialog({ stereotype, meta, organisations, parent, onClose, onSubmit }: {
@@ -223,8 +489,9 @@ function ElementDialog({ stereotype, meta, organisations, parent, onClose, onSub
   </Dialog>;
 }
 
-function LinkDialog({ source, target, cell, meta, kinds, defaultKind, title, onClose, onSubmit }: {
-  source: Element; target: Element; cell?: GridCell; meta: Metamodel; kinds: Model["kinds"]; defaultKind: string; title: (st: string) => string; onClose: () => void;
+function LinkDialog({ source, target, cell, meta, kinds, defaultKind, title, existing, onClose, onSubmit }: {
+  source: Element; target: Element; cell?: GridCell; meta: Metamodel; kinds: Model["kinds"]; defaultKind: string; title: (st: string) => string;
+  existing?: Relationship; onClose: () => void;
   onSubmit: (v: { stereotype: string; kind?: string; role?: string; relation?: string; share?: number }) => Promise<void>;
 }) {
   // What the cell draws, narrowed to what the ends allow (ADR-0067 D7: validated links).
@@ -234,8 +501,11 @@ function LinkDialog({ source, target, cell, meta, kinds, defaultKind, title, onC
     if (st === FILLS_POST) return source.stereotype === "ActualPerson" && target.stereotype === "ActualPost";
     return !!meta.stereotypes[st];
   });
-  const [v, setV] = useState({ stereotype: allowed[0] ?? "", kind: defaultKind, role: "", relation: "part of", share: "" });
-  return <Dialog open onOpenChange={(o) => !o && onClose()} title={t("Relate {source} to {target}", { source: source.name, target: target.name })}>
+  const [v, setV] = useState({ stereotype: existing && allowed.includes(existing.stereotype) ? existing.stereotype : allowed[0] ?? "",
+    kind: existing?.kind || defaultKind, role: existing?.role ?? "", relation: existing?.relation || "part of", share: existing?.share ? String(existing.share) : "" });
+  return <Dialog open onOpenChange={(o) => !o && onClose()} title={existing ? t("Change the relationship between {source} and {target}", { source: source.name, target: target.name })
+    : t("Relate {source} to {target}", { source: source.name, target: target.name })}>
+    {existing && <p className="mb-2 text-xs text-muted">{t("The current {kind} relationship ends on the day you save, and the one you choose here starts; both decisions are recorded.", { kind: title(existing.stereotype) })}</p>}
     {allowed.length === 0 ? <p className="text-sm text-muted">{t("This view draws no relationship between a {a} and a {b}.", { a: title(source.stereotype), b: title(target.stereotype) })}</p> :
     <Form className="grid gap-3" onSubmit={() => void onSubmit({ stereotype: v.stereotype, kind: v.stereotype === PLACEMENT ? v.kind : undefined, role: v.role || undefined, relation: v.stereotype === PLACEMENT ? v.relation : undefined, share: v.share ? +v.share : undefined })}>
       {field(t("Relationship"), <Select value={v.stereotype} onChange={(e) => setV({ ...v, stereotype: e.target.value })}>{allowed.map((st) => <option key={st} value={st}>{title(st)} · {st}</option>)}</Select>)}
@@ -243,7 +513,7 @@ function LinkDialog({ source, target, cell, meta, kinds, defaultKind, title, onC
       {v.stereotype === PLACEMENT && field(t("Relation"), <Input value={v.relation} onChange={(e) => setV({ ...v, relation: e.target.value })} />)}
       {v.stereotype === PLACEMENT && field(t("Ownership share (0–1, optional)"), <Input type="number" step="0.01" min="0" max="1" value={v.share} onChange={(e) => setV({ ...v, share: e.target.value })} />)}
       {v.stereotype === MEMBERSHIP && field(t("Role"), <Input value={v.role} onChange={(e) => setV({ ...v, role: e.target.value })} />)}
-      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit">{t("Relate")}</Button></div>
+      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit">{existing ? t("Change") : t("Relate")}</Button></div>
     </Form>}
   </Dialog>;
 }
@@ -281,16 +551,19 @@ function Inspector({ element: el, model: m, meta, day, admin, decide, title, rel
   element?: Element; model: Model; meta: Metamodel; day: string; admin: boolean; decide: Decide; title: (st: string) => string; relLabel: (r: Relationship) => string; onRemove: () => void;
 }) {
   const [edit, setEdit] = useState<{ name: string; kind: string; shortName: string }>();
-  const [closing, setClosing] = useState<string>();
   const [member, setMember] = useState<{ id: string; role: string }>();
+  const [post, setPost] = useState<{ name: string; kind: string }>();
+  const [holder, setHolder] = useState<{ person: string; post: string }>();
   const members = useRead<Api.MemberView[]>("/v1/members", undefined, el?.stereotype === ORGANIZATION && admin).data ?? [];
-  if (!el) return <p className="p-3 text-sm text-muted">{t("Select an element to see its details, or drag one from the palette.")}</p>;
+  if (!el) return <p className="p-3 text-sm text-muted">{t("Select an element to see its details, or add one from the element list.")}</p>;
   const st = meta.stereotypes[el.stereotype];
   const rels = m.relationships.filter((r) => (r.source === el.id || r.target === el.id) && live(r, day));
   const name = (id: string) => m.elements.find((e) => e.id === id)?.name ?? id.replace(/^member:/, "");
   const e = edit ?? { name: el.name, kind: el.kind ?? "", shortName: el.shortName ?? "" };
   return <div className="grid gap-3 p-3 text-sm">
-    <div><p className="text-xs text-muted">{title(el.stereotype)} · <span className="font-mono">{el.stereotype}</span></p><p className="font-mono text-[10px] text-muted">{el.id}</p></div>
+    <div><p className="text-xs text-muted">{title(el.stereotype)} · <span className="font-mono">{el.stereotype}</span></p>
+      <p className="text-[11px] text-muted">{t(st?.domain ?? "Enterprise")}{st?.aspect ? ` · ${t(st.aspect)}` : ""}</p>
+      <p className="font-mono text-[10px] text-muted">{el.id}</p></div>
     {field(t("Name"), <Input value={e.name} disabled={!admin} onChange={(x) => setEdit({ ...e, name: x.target.value })} />)}
     {field(t("Kind"), <><Input list={`kinds-${el.stereotype}`} value={e.kind} disabled={!admin} onChange={(x) => setEdit({ ...e, kind: x.target.value })} />
       <datalist id={`kinds-${el.stereotype}`}>{(meta.profile.find((p) => p.stereotype === el.stereotype)?.kinds ?? []).map((k) => <option key={k} value={k} />)}</datalist></>)}
@@ -304,7 +577,7 @@ function Inspector({ element: el, model: m, meta, day, admin, decide, title, rel
       <p className="mb-1 text-xs font-semibold text-muted">{t("Relationships")} ({rels.length})</p>
       <div className="grid gap-1">{rels.map((r) => <p key={r.id} className="flex items-center gap-1 text-xs">
         <span className="text-muted">{r.source === el.id ? "→" : "←"}</span><span className="truncate">{name(r.source === el.id ? r.target : r.source)}</span><span className="text-muted">{relLabel(r)}{r.kind ? ` · ${r.kind}` : ""}</span>
-        {admin && <Button size="sm" variant="ghost" className="ml-auto" onClick={() => void decide("enterprise.relationship.end", { type: RELATIONSHIP, id: r.id }, { until: day })}>{t("End")}</Button>}
+        {admin && <Button size="sm" variant="ghost" className="ml-auto" title={t("Ending is the model's version of deletion: it stops being live on a date; both elements stay.")} onClick={() => void decide("enterprise.relationship.end", { type: RELATIONSHIP, id: r.id }, { until: day })}>{t("End…")}</Button>}
       </p>)}</div>
     </div>
     {el.stereotype === ORGANIZATION && <div>
@@ -320,12 +593,14 @@ function Inspector({ element: el, model: m, meta, day, admin, decide, title, rel
         </Form>
         : <Button size="sm" variant="ghost" className="mt-1" onClick={() => setMember({ id: "", role: "" })}><Plus />{t("Add member")}</Button>)}
     </div>}
+    <UsedBy element={el} day={day} />
+    {(el.stereotype === ORGANIZATION || el.stereotype === POST) && <People element={el} model={m} day={day} admin={admin} decide={decide} post={post} setPost={setPost} holder={holder} setHolder={setHolder} />}
     <p className="text-xs text-muted">{st?.description}</p>
-    <div className="flex flex-wrap gap-2">
-      <Button size="sm" variant="ghost" onClick={onRemove}>{t("Hide from view")}</Button>
-      {admin && !el.until && (closing === undefined ? <Button size="sm" variant="danger" onClick={() => setClosing(day)}>{t("Close")}</Button>
-        : <span className="flex items-center gap-1"><Input type="date" value={closing} onChange={(x) => setClosing(x.target.value)} className="w-36" />
-          <Button size="sm" variant="danger" onClick={async () => { if (await decide("enterprise.element.close", { type: ELEMENT, id: el.id }, { until: closing })) setClosing(undefined); }}>{t("Confirm")}</Button></span>)}
+    <div className="grid gap-1">
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="ghost" title={t("Only this view changes. The element and its relationships stay in the model.")} onClick={onRemove}>{t("Hide in this view")}</Button>
+      </div>
+      <p className="text-[11px] text-muted">{t("Hiding is a view decision. Closing is a model decision: use the canvas or the element's operations to close it with a date.")}</p>
     </div>
   </div>;
 }

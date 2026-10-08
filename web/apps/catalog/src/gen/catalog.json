@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:a53e3273b07ad5d0",
+  "revision": "sha256:7a35f9810650cf45",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2303,6 +2303,30 @@
       ]
     },
     {
+      "id": "ui/grouped-list",
+      "owner": "@platform/ui",
+      "name": "Grouped resource list",
+      "summary": "Search and fold resource groups while preserving caller-owned selection.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/GroupedList.tsx",
+      "exports": [
+        "GroupedList"
+      ],
+      "example": "GroupedListExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "tree",
+        "resources",
+        "search",
+        "groups"
+      ]
+    },
+    {
       "id": "ui/histogram",
       "owner": "@platform/ui",
       "name": "Numeric distribution",
@@ -2327,6 +2351,30 @@
       ],
       "constraints": [
         "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records."
+      ]
+    },
+    {
+      "id": "ui/icon-picker",
+      "owner": "@platform/ui",
+      "name": "Icon picker",
+      "summary": "Choose a shared icon by group or translated name.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/IconPicker.tsx",
+      "exports": [
+        "IconPicker",
+        "IconGlyph"
+      ],
+      "example": "IconPickerExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "icons",
+        "search",
+        "selection"
       ]
     },
     {
@@ -4289,6 +4337,7 @@
       "Chart": "图表",
       "Checkbox": "复选框",
       "Checked": "已选中",
+      "Choose a shared icon by group or translated name.": "按分组或翻译后的名称选择共享图标。",
       "Choose an application, role, protocol or member from the tenant's existing directory.": "从租户现有目录选择应用、角色、协议或成员。",
       "Choose an authorized object or property from the existing registry without writing internal identifiers.": "从现有注册表选择受权对象或属性，无需填写内部标识。",
       "Choose several authorized options with complete source counts and an optional histogram.": "从授权选项中多选，显示完整来源计数及可选直方图。",
@@ -4361,8 +4410,10 @@
       "Give an installed agent a goal; review its proposed actions before confirming them.": "为已安装智能体设置目标，在确认前审核它提出的动作。",
       "Group dimensions, icon choices and advanced properties in compact accessible sections.": "用紧凑且可访问的分区组织尺寸、图标选项和高级属性。",
       "Group related content with a shared heading, description and action area.": "通过统一的标题、说明和动作区域组织相关内容。",
+      "Grouped resource list": "分组资源列表",
       "Hierarchy selection": "层级选择",
       "Hover": "悬停",
+      "Icon picker": "图标选择器",
       "Image annotation": "图片标注",
       "Input controls": "输入控件",
       "Inspect a native flow's graph, waiting steps and decision trace.": "检查原生流程的关系图、等待步骤与决策轨迹。",
@@ -4509,6 +4560,7 @@
       "Schema form": "模式表单",
       "Scoped search input": "有范围的搜索输入",
       "Search a caller's scoped source to choose a reference by record ID.": "搜索调用方的限定范围数据源，按记录 ID 选择引用。",
+      "Search and fold resource groups while preserving caller-owned selection.": "搜索和折叠资源分组，保留调用方控制的选择。",
       "Search records and knowledge through the current member’s original read endpoints.": "通过当前成员的原读取入口搜索记录与知识。",
       "Select a real local file and explicitly upload it through the caller's confirmed-record attachment path.": "选择真实本地文件，并通过调用方的已确认记录附件路径显式上传。",
       "Select a record, inspect its details and use the original object actions.": "选择记录、查看详情，并使用原对象动作。",
@@ -4704,6 +4756,7 @@
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/editor/ResourceList.tsx",
       "web/packages/build/src/editor/workbench.tsx",
       "web/packages/build/src/functions/agent.tsx",
       "web/packages/build/src/functions/alert.tsx",
@@ -4772,6 +4825,7 @@
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/permissions.tsx",
       "web/packages/platform/src/processes.tsx",
+      "web/packages/platform/src/words.tsx",
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Preview.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
@@ -4914,6 +4968,7 @@
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/permissions.tsx",
       "web/packages/platform/src/processes.tsx",
+      "web/packages/platform/src/words.tsx",
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
@@ -4970,7 +5025,8 @@
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/permissions.tsx",
-      "web/packages/platform/src/processes.tsx"
+      "web/packages/platform/src/processes.tsx",
+      "web/packages/platform/src/words.tsx"
     ],
     "ui/panels": [
       "web/packages/app/src/actions/actions.tsx",
@@ -5077,6 +5133,7 @@
       "web/packages/platform/src/organisation.tsx",
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/permissions.tsx",
+      "web/packages/platform/src/words.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/session/Problems.tsx",
       "web/apps/workspace/src/shell/Home.tsx"
@@ -5120,6 +5177,7 @@
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/permissions.tsx",
       "web/packages/platform/src/processes.tsx",
+      "web/packages/platform/src/words.tsx",
       "web/apps/pms-desk/src/App.tsx"
     ],
     "ui/disclosure": [
@@ -5140,6 +5198,7 @@
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
+      "web/packages/build/src/editor/ResourceList.tsx",
       "web/packages/build/src/editor/workbench.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
@@ -5160,11 +5219,13 @@
       "web/packages/platform/src/apps.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
+      "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/organisation.tsx",
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/permissions.tsx",
       "web/packages/platform/src/processes.tsx",
+      "web/packages/platform/src/words.tsx",
       "web/packages/pms/src/index.tsx",
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/pms-desk/src/App.tsx",
@@ -5211,6 +5272,7 @@
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/permissions.tsx",
       "web/packages/platform/src/processes.tsx",
+      "web/packages/platform/src/words.tsx",
       "web/packages/pms/src/app.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx",
@@ -5227,14 +5289,12 @@
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
-      "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/dataset.tsx",
       "web/packages/build/src/ontology/integration-health.tsx",
       "web/packages/build/src/ontology/lineage.tsx",
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
-      "web/packages/platform/src/apps.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
@@ -5282,22 +5342,8 @@
       "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/Table.tsx",
       "web/packages/app/src/widgets/bindings.ts",
-      "web/packages/build/src/automate/workflow.tsx",
-      "web/packages/build/src/functions/agent.tsx",
-      "web/packages/build/src/functions/alert.tsx",
-      "web/packages/build/src/functions/code.tsx",
-      "web/packages/build/src/functions/decision-table.tsx",
-      "web/packages/build/src/functions/function.tsx",
+      "web/packages/build/src/editor/ResourceList.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
-      "web/packages/build/src/ontology/connection.tsx",
-      "web/packages/build/src/ontology/data-source.tsx",
-      "web/packages/build/src/ontology/dataset.tsx",
-      "web/packages/build/src/ontology/link-type.tsx",
-      "web/packages/build/src/ontology/match.tsx",
-      "web/packages/build/src/ontology/pipeline.tsx",
-      "web/packages/build/src/ontology/property-type.tsx",
-      "web/packages/build/src/ontology/query.tsx",
-      "web/packages/build/src/ontology/writeback.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx"
     ],
@@ -5567,6 +5613,11 @@
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/TableInspector.tsx"
     ],
+    "ui/grouped-list": [
+      "web/packages/build/src/editor/ResourceList.tsx",
+      "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/build/src/ontology/action-type.tsx"
+    ],
     "ui/toggles": [
       "web/packages/build/src/functions/agent.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
@@ -5608,6 +5659,12 @@
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx"
+    ],
+    "ui/icon-picker": [
+      "web/packages/build/src/projects/project.tsx",
+      "web/packages/build/src/workshop/ModuleWorkbench.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
+      "web/apps/workspace/src/tenantApps.tsx"
     ],
     "app/application-sessions": [
       "web/packages/build/src/workshop/editor.tsx",
@@ -5707,6 +5764,8 @@
         "groupDomain",
         "groupable",
         "humanizeKernelError",
+        "iconGlyphs",
+        "iconGroups",
         "language",
         "languages",
         "layout",
@@ -5772,6 +5831,7 @@
         "ColumnDef",
         "ContextCommand",
         "DataTableProps",
+        "DiagramAction",
         "DiagramCanvasProps",
         "DiagramEdge",
         "DiagramLayout",
@@ -5795,6 +5855,8 @@
         "FlowTrace",
         "GraphEdge",
         "GraphNode",
+        "GroupBy",
+        "IconName",
         "ImageAnnotationProps",
         "InboxTask",
         "KanbanLane",

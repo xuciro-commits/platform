@@ -151,7 +151,6 @@ register("zh-CN", {
   "Back to your apps": "回到你的应用",
   "Every asset of {app}": "{app} 的全部资源",
   "Filter object types": "筛选对象类型",
-  "What each installed asset is built from: applications over pages, pages over object types, functions and queries over the types they read. Click a node to open it.": "每个已安装资源由什么构成：应用建于页面之上，页面建于对象类型之上，函数与查询建于其读取的类型之上。点击节点即可打开。",
   "Back to project": "返回项目",
   "Run and diagnose": "运行与诊断",
   "Application runs": "应用运行",
@@ -159,4 +158,5 @@ register("zh-CN", {
   "Sign out": "退出登录",
   "{n} tenants": "{n} 个租户",
   "A host administrator takes no tenant decisions.": "宿主管理员不做租户内的决定。",
+  "What each installed asset is built from, declared in its own definition: applications over pages, pages over object types, functions and queries over the types they read. It proves impact — what a change to an asset reaches — not history: no record moved here. Runtime data flow is on the object's Data lineage panel. Click a node to open it.": "每个已安装资产由什么构成，取自它自己的定义：应用建立在页面上，页面建立在对象类型上，函数和查询建立在它们读取的类型上。它证明的是影响面——改动一个资产会波及什么——不是历史：这里没有任何记录流动。运行时的数据流向在对象的“数据血缘”面板上。点击节点即可打开。",
 });

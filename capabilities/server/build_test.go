@@ -306,6 +306,7 @@ func TestTenantDefinedObject(t *testing.T) {
 		{"missing resource", map[string]any{"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetCompute, Name: "missing"}}}, "no published resource"},
 		{"duplicate resource", map[string]any{"resources": []platform.AssetRef{shared, shared}}, "declared twice"},
 		{"page duplicated as a resource", map[string]any{"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "visits"}}}, "non-navigation"},
+		{"malformed icon name", map[string]any{"icon": "../rocket"}, "not an icon name"},
 	} {
 		if got := do("dana", build.AppType+".edit", build.AppType, "A-1", merge(map[string]any{"pages": []string{"visits"}, "groups": daily, "resources": []platform.AssetRef{}}, x.fields)); got != "ok" {
 			t.Fatalf("%s: edit: %s", x.why, got)
@@ -317,10 +318,15 @@ func TestTenantDefinedObject(t *testing.T) {
 	if still := handed("eli"); still == nil || len(still.Pages) != 1 {
 		t.Errorf("a refused hand-over changed the application people have: %+v", still)
 	}
-	// An icon the platform does not draw is refused where it is written, by the
-	// field's own choices — the application never reaches publication with one.
-	if got := do("dana", build.AppType+".edit", build.AppType, "A-1", map[string]any{"icon": "rocket"}); got == "ok" {
-		t.Error("an icon outside the platform's set was stored")
+	// The kit owns the growing vocabulary; optional icons and new shaped names
+	// may publish, while malformed names are refused at publication above.
+	for _, icon := range []string{"rocket", ""} {
+		if got := do("dana", build.AppType+".edit", build.AppType, "A-1", map[string]any{"icon": icon, "pages": []string{"visits"}, "groups": daily, "resources": []platform.AssetRef{}}); got != "ok" {
+			t.Fatalf("icon %q draft: %s", icon, got)
+		}
+		if got := do("dana", build.SchemaHandOver, build.AppType, "A-1", map[string]any{}); got != "ok" {
+			t.Fatalf("icon %q publication: %s", icon, got)
+		}
 	}
 	if !slices.ContainsFunc(journal, func(e Entry) bool {
 		return e.Kind == "accepted-result" && e.App == build.ID

@@ -1,9 +1,10 @@
 import { integrates } from "./marking";
+import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
-import { Button, Checkbox, Input, PageHeader, Panel, RecordList, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
 import { PERIODS, periodLabel } from "../automate/workflow-model";
 
 // Data sources (ADR-0061): an external JSON endpoint whose rows become records
@@ -23,7 +24,7 @@ export function DataSources() {
   return <div className="grid gap-3">
     <PageHeader title={t("Data sources")} description={t("Pull rows from a JSON or CSV endpoint, an OData entity set or a database table into one object, on a period or on request. Each row is the object's own create or edit, decided once per content.")}
       actions={<Button onClick={() => open({ view: "data-source", params: { id: "new" } })}>{t("New data source")}</Button>} />
-    <RecordList source={source} type="build.source" fields={["title", "name", "object", "dataset", "every", "state"]} onOpen={(record) => open({ view: "data-source", params: { id: record.id } })} />
+    <ResourceList source={source} type="build.source" fields={["title", "name", "object", "dataset", "every", "state"]} onOpen={(record) => open({ view: "data-source", params: { id: record.id } })} />
   </div>;
 }
 
