@@ -10,7 +10,7 @@ export function Glossary() {
   const [writing, setWriting] = useState(false);
   return (
     <>
-      <Records type="knowledge.term" description={t("This organisation's own words: what each means here and what it refers to. Agents read them and Search understands them; they never change what an entity, field or action is.")}
+      <Records type="knowledge.term" description={t("Jargon of this organisation and what it refers to (an object type, a field or an action). Three things read it: Search, which finds records by the term; agents, whose prompts carry it; and anyone asking what a word means here. It does not rename anything — to change how a name reads in a language, use Control Panel → Languages and words.")}
         actions={can("knowledge.term.create") && <Button variant="primary" onClick={() => setWriting(true)}><BookA />{t("New term")}</Button>} />
       <Dialog open={writing} onOpenChange={setWriting} title={t("New term")}>
         <GeneratedForm type="knowledge.term" submitLabel={t("Save")} onCancel={() => setWriting(false)}

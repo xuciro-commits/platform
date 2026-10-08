@@ -75,7 +75,6 @@ register("zh-CN", {
   "Healthy": "正常",
   "Glossary": "术语表",
   "New term": "新建术语",
-  "This organisation's own words: what each means here and what it refers to. Agents read them and Search understands them; they never change what an entity, field or action is.": "本组织自己的用词：每个词在这里的意思和所指。智能体会读取它们，搜索能理解它们；它们不会改变任何实体、字段或动作本身。",
   "AI agent": "AI 代理",
   "person": "个人",
   "service": "服务",
@@ -750,4 +749,5 @@ register("zh-CN", {
   "Own": "自定义",
   "Shipped": "内置",
   "Missing": "缺失",
+  "Jargon of this organisation and what it refers to (an object type, a field or an action). Three things read it: Search, which finds records by the term; agents, whose prompts carry it; and anyone asking what a word means here. It does not rename anything — to change how a name reads in a language, use Control Panel → Languages and words.": "本组织的行话及其所指（某个对象类型、字段或动作）。有三处会读它：搜索——按术语找到记录；代理——提示词中带有术语；以及任何想知道某个词在这里是什么意思的人。它不会改名——要改变名称在某种语言中的读法，请用“控制面板 → 语言与用词”。",
 });

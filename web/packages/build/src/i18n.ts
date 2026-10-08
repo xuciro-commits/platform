@@ -3685,4 +3685,5 @@ register("zh-CN", {
   "Tree": "树形",
   "Object type": "对象类型",
   "An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one. The host already ships create, edit and archive for every object type and each module its own actions — they are listed below so you declare only what is missing.": "动作类型定义人们如何改变一个对象：参数、规则、条件与副作用。每个动作属于一个对象类型；打开对象类型即可添加。宿主已为每个对象类型自带新建、编辑、归档，各模块也自带动作——下方列出它们，以便只声明缺少的部分。",
+  "\"{name}\" mixes two languages. Write it in one; the other languages are set in Control Panel → Languages and words.": "“{name}”混用了两种语言。请只用一种语言书写；其他语言在“控制面板 → 语言与用词”中设置。",
 });

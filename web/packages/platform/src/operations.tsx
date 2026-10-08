@@ -1,6 +1,6 @@
 // Settings: owned work, integrations, app settings and the audit trail (ADR-0013, ADR-0014).
 import type { Api } from "@platform/kernel";
-import { useReadQuery as useRead } from "@platform/app";
+import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, Dialog, Input, PageHeader, Panel, Select, Tag, type ColumnDef, t } from "@platform/ui";
 import { useState } from "react";
 import { useAdmin, when, type AppSettings, type AuditEntry, type Connector, type Delivery, type Effect, type EndpointView, type ProtocolInfo, type SettingValue, type Task } from "./shared";
@@ -263,6 +263,9 @@ export function AppSettingsView() {
 
 export function Audit() {
   const audit = useRead<AuditEntry[]>("/v1/audit");
+  const { catalog, me } = useHost();
+  const titles = new Map<string, string>(catalog.map((a) => [a.schema, a.title])); // the member's catalog, in their language (ADR-0023)
+  const appTitle = (id: string) => me.apps.find((a) => a.id === id)?.title ?? id;
   const personal = useRead<Api.PersonalRead[]>("/v1/personal-reads").data ?? [];
   const personalColumns: ColumnDef<Api.PersonalRead, any>[] = [
     { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => new Date(c.getValue()).toLocaleString() },
@@ -274,8 +277,8 @@ export function Audit() {
   const columns: ColumnDef<AuditEntry, any>[] = [
     { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => new Date(c.getValue()).toLocaleString() },
     { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
-    { accessorKey: "app", header: t("App"), meta: { width: 100 } },
-    { accessorKey: "action", header: t("Action"), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "app", header: t("App"), meta: { width: 120 }, cell: (c) => appTitle(c.getValue() as string) },
+    { accessorKey: "action", header: t("Action"), cell: (c) => { const schema = c.getValue() as string, title = titles.get(schema); return <span className="flex min-w-0 items-baseline gap-2"><span className="truncate">{title ?? schema}</span>{title && <span className="truncate font-mono text-[10px] text-muted">{schema}</span>}</span>; } },
     { accessorKey: "target", header: t("Target"), cell: (c) => <span className="font-mono text-xs">{c.getValue() ?? ""}</span> },
   ];
   return (
