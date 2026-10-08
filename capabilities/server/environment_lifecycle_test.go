@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -219,6 +220,17 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	if err != nil || prodReview.UpgradePlan == nil || prodReview.UpgradePlan.Additions[0].Records != 3 {
 		t.Fatalf("prod v2 plan: %+v %v", prodReview, err)
 	}
+	// The target's release workbench names where the candidate came from, so
+	// its release holder finds "promoted from dev, waiting for review" rather
+	// than an anonymous saved candidate.
+	if prodReview.From != "dev" || prodReview.PromotedAt.IsZero() {
+		t.Fatalf("prod review lost the promotion origin: %+v", prodReview)
+	}
+	if page, err := prod.SavedReleases(member(prod, "pat"), 0, 20); err != nil {
+		t.Fatalf("prod inventory: %v", err)
+	} else if i := slices.IndexFunc(page.Candidates, func(c ReleaseSummary) bool { return c.ID == v2 }); i < 0 || page.Candidates[i].From != "dev" {
+		t.Fatalf("prod inventory does not mark the promoted candidate: %+v", page.Candidates)
+	}
 	// The plan is a receipt over content (candidate, active release, rows,
 	// shape), not over an environment: two environments in the same state
 	// derive the same plan, and each verifies it against its own rows.
@@ -267,6 +279,9 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	}
 	if err := restored.Replay(prod.entries[cut:]); err != nil {
 		t.Fatalf("replay of the tail: %v", err)
+	}
+	if origin, ok := restored.releases.origin(v2); !ok || origin.From != "dev" {
+		t.Fatalf("the snapshot dropped the promotion origin: %+v %v", origin, ok)
 	}
 	if restored.ActiveRelease() != v2 || restored.releases.candidates[v1] == nil {
 		t.Fatal("recovery lost a release")

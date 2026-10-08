@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"time"
 
 	"platformserver/platform"
 )
@@ -21,6 +22,10 @@ type releaseStore struct {
 	applied    map[string]string
 	active     string
 	sealed     map[string]SealedArtifact
+	// origins remembers, for a candidate that arrived by promotion, which
+	// environment it came from; the target's release workbench shows it as
+	// "promoted from" instead of an anonymous saved candidate.
+	origins map[string]ReleaseOrigin
 	// requests remembers the request hash behind each applied key, so the
 	// in-memory host answers a retried command without a journal to ask;
 	// it is not part of the snapshot (the journal is the durable record).
@@ -104,13 +109,38 @@ func (r *releaseStore) seal(id string, artifact SealedArtifact) error {
 	return nil
 }
 
+// ReleaseOrigin is where a promoted candidate came from and who brought it.
+type ReleaseOrigin struct {
+	From   string    `json:"from"`
+	Member string    `json:"member"`
+	At     time.Time `json:"at"`
+}
+
+// rememberOrigin keeps the first promotion that brought a candidate in; a
+// repeated promotion of the same bytes does not rewrite its provenance.
+func (r *releaseStore) rememberOrigin(id string, origin ReleaseOrigin) {
+	if _, ok := r.origins[id]; ok {
+		return
+	}
+	if r.origins == nil {
+		r.origins = map[string]ReleaseOrigin{}
+	}
+	r.origins[id] = origin
+}
+
+// origin is a candidate's promotion provenance, zero when it was saved here.
+func (r *releaseStore) origin(id string) (ReleaseOrigin, bool) {
+	o, ok := r.origins[id]
+	return o, ok
+}
+
 // snapshot and restore carry the store through the tenant snapshot.
 func (r *releaseStore) snapshot(s *tenantState) {
-	s.ReleaseCandidates, s.ReleaseApplied, s.ActiveRelease, s.Sealed = maps.Clone(r.candidates), maps.Clone(r.applied), r.active, maps.Clone(r.sealed)
+	s.ReleaseCandidates, s.ReleaseApplied, s.ActiveRelease, s.Sealed, s.ReleaseOrigins = maps.Clone(r.candidates), maps.Clone(r.applied), r.active, maps.Clone(r.sealed), maps.Clone(r.origins)
 }
 
 func (r *releaseStore) restore(s *tenantState) {
-	r.candidates, r.applied, r.active = maps.Clone(s.ReleaseCandidates), maps.Clone(s.ReleaseApplied), s.ActiveRelease
+	r.candidates, r.applied, r.active, r.origins = maps.Clone(s.ReleaseCandidates), maps.Clone(s.ReleaseApplied), s.ActiveRelease, maps.Clone(s.ReleaseOrigins)
 	if s.Sealed != nil {
 		r.sealed = s.Sealed
 	}

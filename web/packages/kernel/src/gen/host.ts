@@ -2384,6 +2384,8 @@ export type ReleaseSummary = {
   id: string;
   title: string;
   assets: number;
+  from?: string;
+  promotedAt?: string;
 };
 
 export type ReleaseUpgradePlan = {
@@ -2424,6 +2426,8 @@ export type SavedReleaseReview = {
   canActivate: boolean;
   activationDiagnostic?: string;
   upgradePlan?: ReleaseUpgradePlan;
+  from?: string;
+  promotedAt?: string;
 };
 
 export type SavedView = {

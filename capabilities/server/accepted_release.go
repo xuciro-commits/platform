@@ -148,6 +148,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 		t.committed.saveAnswer("release:"+saved.Key, raw)
 	}
 	if saved.From != "" {
+		t.releases.rememberOrigin(saved.CandidateID, ReleaseOrigin{From: saved.From, Member: saved.Member, At: saved.At})
 		t.audit.remember(AuditEntry{At: saved.At, Member: saved.Member, App: PlatformApp, Action: "host.promotion",
 			Target: saved.From + "→" + t.ID + ":" + saved.CandidateID})
 	}
