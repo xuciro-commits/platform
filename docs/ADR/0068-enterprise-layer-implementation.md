@@ -1,6 +1,6 @@
 # ADR-0068 — 企业建模层的落地（W4-A…E）：记录与偏离
 
-**状态：** 已实施（2026-10-06）
+**状态：** 已实施（2026-10-06）；建模器交互、关系规则和业务引用由 ADR-0084/0085 修订。
 **实现：** [ADR-0067](0067-enterprise-modeling-layer.md)
 **代码：** `capabilities/server/apps/enterprise/`（`uaf/`、`model.go`、`enterprise.go`、`seeds.go`、`profile.go`），`web/packages/platform/src/enterprise/`，`platform/org.go`（`Caller.Enterprise()`），`internal/host/host.go`（`Directory.Element/Related`）
 
@@ -14,7 +14,7 @@
 | W4-A 存储 | `Model{Kinds, Elements, Relationships, Views}`；决策 `enterprise.element.add/edit/close`、`enterprise.relationship.add/end`、`enterprise.kind.add`、`enterprise.view.save`、`enterprise.model.seed`；提交时校验构造型存在、非抽象、非关系；标记值按构造型属性与枚举字面量校验；关系两端按构造型校验。 | `enterprise.go` |
 | W4-A 收编 org | `apps/org` 删除。`GET /v1/organization` 保留，由模型投影（`Model.OrgSeed()`）；`New(tenant, platform.OrgSeed)` 仍接受旧种子（`FromOrgSeed`）；宿主 `Directory`（Units/Holders/Calendar）由模型回答；企业模型、元模型与发布切片的可见读取沿原获权 SSE 订阅，变化由 enterprise owner 失效；当前角色投影 `org` → `enterprise`；历史目录/接受结果保留原字节与哈希。升级启动目录触发前置不符时，仅把当前 `enterprise` 角色还原为 `org` 后完整哈希精确匹配历史前置才允许恢复；其他目录漂移仍隔离。授权读取映射旧角色，新的 `enterprise` 授权/撤权同时清除旧键。 | `model.go` |
 | W4-B 模板 | `Template(SeedParams)` 按人数定规模 S/M/L/XL，由 §5 的模式组合：公司/集团、场地、职能、团队及岗位；行业选择酒店、仓库、办公点或工厂场地模式，酒店不带制造车间。向导 3–5 问。 | `seeds.go` |
-| W4-C 建模器 | 控制面板 → Enterprise：`Workbench` 左侧 Palette（按当前网格单元与规模过滤的 Enterprise Core Profile）/ Patterns / Elements / Views；中间共享 `DiagramCanvas`（缩放、平移、四种排布、连线模式，见 §6）/ 树 / 表；右侧检查器（改名、类型、标记值、关系、关闭、共享开关）。连线对话框只提供该网格单元允许且两端构造型相容的关系。 | `web/packages/platform/src/enterprise/` |
+| W4-C 建模器 | 控制面板 → Enterprise：`Workbench` 左侧 添加元素 / UAF 网格 / 模式 / 模型 / 视图（现行范围与交互见 ADR-0085）；中间共享 `DiagramCanvas`（缩放、平移、四种排布、连线模式，见 §6）/ 树 / 表；右侧检查器（改名、类型、标记值、关系、关闭、共享开关）。关系按元模型端点契约判断，视角限定默认范围并允许显式跨域上下文，不按人数禁用元素。 | `web/packages/platform/src/enterprise/` |
 | W4-D 联邦 | 元素 `published` 标志；读 `enterprise-published` 给出切片（元素 `owner=tenant:<id>` + 其间关系）；决策 `enterprise.slice.import` 在另一租户里镜像为只读（编辑被拒），本租户可把自己的元素与之关联（集团 `legal` 类别下挂子公司、持股）；重复导入按来源租户整体替换，保留本租户自己的边。切片由连接器投递（C1 HTTP 数据源或后续专用连接器）。 | `model.go: Slice/Published/Import` |
 | W4-E 绑定 | `Caller.Enterprise()`：`Units/Element/Related/Capable/Located/Of`；`host.Directory` 增 `Element/Related`；字段标签 `ref:"enterprise.element" stereo:"ActualLocation"`：宿主 `Readable` 对模型元素放行（人人可读），账本在规则前校验构造型。`Caller.Units` 保留为别名。 | `platform/org.go`、`platform/ledger.go` |
 
@@ -24,9 +24,9 @@
 2. **建模器放在 `platform` 包（控制面板），不是 `build` 包。** 企业模型是租户治理的对象（和成员、角色同级），不是应用构建产物；单一归属原则下由 Control Panel 拥有。`build` 的本体工作台通过 `ref:"enterprise.element"` 引用它。
 3. **Profile 与网格单元先以 Go 常量给出**（`profile.go`），不是 ADR 中的 `enterprise/profile.json`：目前只有一个 profile，少一层文件；多 profile 时再外置。
 4. **种子包是代码模板，不是 JSON**（`seeds.go`）：模板按参数生成（站点数、法人数、行业），JSON 表达不了；决策 `enterprise.model.seed` 只在空模型上执行。
-5. **`core` 的 person/site/location 投影、Seats `Units→Holds`、`Scope.Structure→Scope.Relationship` 改名未做**：接口可用、改名只是噪音，留到结构清理阶段（见 §4）。
+5. **业务引用与命名边界**：core.site.place/unit 和 ERP plant/costCentre 已引用企业元素（ADR-0084）；core.person 与 ActualPerson 仍是不同语义对象，没有自动双向同步。Caller.Units 和 Scope.Structure 保留兼容接口，不为清理状态而改名。
 
-一致性补遗（同日）：动作表单对 `ref:"enterprise.element"` 字段渲染元素下拉（按 `stereotype` 过滤，读 `/v1/enterprise`）；`core.site.unit` 当前只保存组织元素 ID，统一对象引用边界见 §4；建模器检查器提供组织成员（`member:<id>` 的 `ActualOrganizationRole`）的添加与结束，覆盖原 org 视图的全部操作；建模器只组合 `@platform/ui`（`scripts/escapes.sh` 无新增）。
+一致性补遗（同日）：动作表单对 `ref:"enterprise.element"` 字段渲染元素下拉（按 `stereotype` 过滤，读 `/v1/enterprise`）；`core.site.unit` 按企业组织元素引用处理，提交校验与历史显示归 ADR-0084/0085；建模器检查器提供组织成员（`member:<id>` 的 `ActualOrganizationRole`）的添加与结束，覆盖原 org 视图的全部操作；建模器只组合 `@platform/ui`（`scripts/escapes.sh` 无新增）。
 
 ## 3. 验证
 
@@ -37,8 +37,8 @@
 - UAF 1.4 到来时：`uaf/spec/` 加文件、`enterprise/migrations/1.3-1.4.json`、决策 `enterprise.model.upgrade`（ADR-0067 D2）。
 - XMI 导入/导出当前模型（D7 末项）。
 - 2D/3D 运营视图读取 `ActualLocation` 层级与 `ActualResource` 位置。
-- `core.site.unit` 目前存储企业组织元素 ID（文本）；企业模型是 Directory 私有状态，不是 host record store 中的对象。统一对象引用尚未接通，不能用 `ref:"enterprise.element"` 声明虚假的对象依赖，否则组合启动失败；`Caller.Enterprise()` 的模型读取仍可用。
-- 结构清理阶段：`Caller.Units` 删除、`Scope.Structure` 改名、`core` 的 site/location 投影到模型。
+- 企业元素仍归 Directory 模型而不是第二份业务记录；`ref:"enterprise.element"` 已作为宿主识别的专用引用接通（含 stereo、生效期与 Used by），不要求复制进 record store。
+- core.person 与模型人员的自动同步尚未提供；Caller.Units/Scope.Structure 的纯改名不是当前待执行功能。
 
 ## 5. 模式库：四层骨架上的可复用片段（补充决定）
 

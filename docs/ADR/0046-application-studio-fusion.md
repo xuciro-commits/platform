@@ -24,7 +24,7 @@
 | 对象 | 审查时事实 | 融合含义 |
 |---|---|---|
 | 平台定义 | [Page/Section/Application](../../capabilities/server/platform/definition.go) 具有具名选择、关系、查询、动作和固定计算引用；页面仍为平铺部件 | 保留资产与绑定语义，扩展页面文档结构 |
-| 平台编辑/运行 | [PageEditor](../../web/packages/build/src/workshop/editor.tsx) 使用原动作与 revision；[ComposedPage](../../web/packages/app/src/sections.tsx) 使用调用者数据源和共享组件 | 复用保存、授权与运行基础，更新编辑体验和共同渲染路径 |
+| 平台编辑/运行 | [PageEditor](../../web/packages/build/src/workshop/editor.tsx) 使用原动作与 revision；[ComposedPage](../../web/packages/app/src/pages/sections.tsx) 使用调用者数据源和共享组件 | 复用保存、授权与运行基础，更新编辑体验和共同渲染路径 |
 | 对象与动作 | [build.Object/Field](../../capabilities/server/apps/build/build.go)、[Action](../../capabilities/server/apps/build/actions.go) 已有字段、状态、权限、引用及动作 | 本体编辑器面向这些语义资产，原生代码对象和租户对象都要可发现 |
 | 能力与计算 | [CapabilityDescriptor](../../capabilities/server/platform/block.go)、[ValueSchema](../../capabilities/server/platform/operation.go)、[能力调用](../../web/packages/app/src/index.tsx) 已有共同入口 | Query/Action/AI/Compute/Flow 复用原 owner，不导入浏览器业务执行器 |
 | 外包页面 | `types.ts`、`moduleOps.ts`、`layoutOps.ts`、`SectionRenderer.tsx` 有递归布局、编辑命令和共用渲染 | 是文档与呈现机制的移植来源 |
@@ -1367,6 +1367,6 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 ### 14.2 验证事实与未完成条件
 
-当前 Go 全量与 `scripts/verify.sh web-check` 已通过；轻检查包括类型、单元、生成一致性、Catalog 与构建。此前七页联合路线证明过当时的导入/保存/候选/跨页操作；其后插件、slots、页头与检查器发生了变化，因此不能把旧路线结果当成当前全部实现的运行证据。现有集中路线是 `web/e2e/tests/page-default-operations.spec.ts`，待所需编译/计算环境可用后验证当前版本，不新增组件级浏览器路线。
+此前 Go 全量与 Web 检查通过；轻检查包括类型、单元、生成一致性、Catalog 与构建。此前七页联合路线证明过当时的导入/保存/候选/跨页操作；其后插件、slots、页头与检查器发生了变化，因此不能把旧路线结果当成当前全部实现的运行证据。旧 `page-default-operations.spec.ts` 已按 ADR-0082 删除；现行 `workspaces.spec.ts`、`page-notice.spec.ts` 和 `workflow.spec.ts` 守各自的整页、发布与运行不变量，完整七页体验仍按 Testing 集中走查。不新建逐组件路线，不以已删除的 spec 作为待执行证据。
 
 候选冻结、激活、CheckReplay 和内存快照用例证明各自覆盖的语义；它们不等于全部页面/Flow 的 PostgreSQL 重启恢复或正式生产交付。默认持续 Flow 的完整输入、窗口、迟到/overflow、聚合/滞回、动作/输出/死信、停止与同版本续接仍未完成。固定硬件下交互耗时、读取次数、内存和 Worker/GPU 回收，以及负责人对同任务编辑体验的认可仍缺集中证据。满足这些条件前，本 ADR 的完整 F1–F6 目标保持未完成；活动顺序只由 WorkQueue 维护。

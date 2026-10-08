@@ -1,6 +1,6 @@
 # ADR-0070 — Connections 与四个 Source profile（ADR-0069 Ⅰ-A + Ⅰ-B）
 
-状态：接受并实施中 · 2026-10-06 · 承接 ADR-0061（HTTP JSON 数据源）、ADR-0069（第二程 Ⅰ 集成织物）
+状态：有界首版已实施；更广接入边界见“不做” · 2026-10-06 · 承接 ADR-0061（HTTP JSON 数据源）、ADR-0069（第二程 Ⅰ 集成织物）
 
 ## 决定
 
@@ -14,7 +14,7 @@
 - `allowPrivate`：允许 http 与私网地址（本地系统）；
 - 生命周期 `draft → ready`：`check` 让宿主在外循环上实际连一次（http/odata：GET 服务根或 `$metadata`；postgres：`select 1`），结果记在 `last`（`build.connection.checked`），不是裁决。
 
-Connection 随候选与环境晋级一起走（它只是名字与地址）；目标环境用同名密钥即可，这就是"凭据与制品解耦"（Platform.md §10.1 Microsoft 行）。
+Connection 的凭据引用与记录分离，但 Connection/Source/Dataset/Pipeline 当前不在封存候选中，不能随环境晋级自动复制（ADR-0071）。目标环境须独立配置连接与同名密钥。
 
 ### 2. Source 的四个 profile
 

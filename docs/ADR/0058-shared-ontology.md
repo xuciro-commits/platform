@@ -1,6 +1,6 @@
 # ADR-0058 — 共享本体：core 主数据包、Interface、扩展与归属（ADR-0057 A 块）
 
-状态：接受，分批落地 · 2026-10-06 · 承接 ADR-0055（项目 = Application）、ADR-0057 §2 A
+状态：主数据、接口声明与扩展记录已落地；面向接口的查询/选择器未实现 · 2026-10-06 · 承接 ADR-0055（项目 = Application）、ADR-0057 §2 A
 
 ## 1. 立场
 
@@ -47,7 +47,7 @@ Entity.Implements []string                                                      
 - build 对象草稿 `implements[]`：`checkShape` 在保存/发布前按宿主接口校验（接口必须有应用声明、字段齐全且类型一致），编译出的 `Entity.Implements` 随对象安装；
 - 对象类型编辑器"概述"页签的 **Shape** 区块：勾选接口、一键补齐缺少字段；对象模型工作台新增 **Interfaces** 视图（接口 → 实现者）。
 
-待做：具名查询与记录选择器可面向接口（"所有实现 core.coded 的对象"），留给 B 块的查询工作台。`host.ts` 中 `AppInfo.interfaces`/`Interface`/`EntityInfo.implements` 为手工镜像，`go run ./cmd/api-types` 重新生成后应无差异。
+待做：具名查询与记录选择器可面向接口（"所有实现 core.coded 的对象"），留给 B 块的查询工作台。`host.ts` 中 `AppInfo.interfaces`/`Interface`/`EntityInfo.implements` 由 `go run ./cmd/api-types` 生成，不保留手工镜像。
 
 ## 4. A3 扩展字段（已落地）
 

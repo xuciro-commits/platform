@@ -1,6 +1,6 @@
 # ADR-0072 — Writeback 与血缘（ADR-0069 Ⅰ-E + Ⅰ-F 的第一刀）
 
-状态：接受并实施中 · 2026-10-06 · 承接 ADR-0014（出站效果/发件箱）、ADR-0070（Connection）、ADR-0071（Dataset/Pipeline）、ADR-0069（第二程 Ⅰ 集成织物）
+状态：有界首版已实施；原生应用回写桥接与运行冻结血缘未提供 · 2026-10-06 · 承接 ADR-0014（出站效果/发件箱）、ADR-0070（Connection）、ADR-0071（Dataset/Pipeline）、ADR-0069（第二程 Ⅰ 集成织物）
 
 ## 决定
 
@@ -31,7 +31,7 @@ Source/Dataset/Pipeline/Writeback 已经把"谁喂谁、谁送谁"声明清楚�
 - 对象类型编辑器新增 **Data** 页：Comes from（直写数据源与连接；写它的管道 → 输入数据集 → 装载它的数据源/管道 → 连接，递归），Field by field（每个字段由哪个数据源哪一列、哪个管道哪一步（rename/compute/aggregate）产生，否则"在此录入"），Goes to（回写：动作 → 连接/路径、应答写回哪些字段、已送达数）；
 - Dataset 页新增 Lineage（Loaded by / Read by）。
 
-页面字段 → 对象字段 → 管道/数据源 → 连接，这条链在构建器里已经可以点着走完；Pipeline 运行与 Source 拉取仍把计数记在各自的 `last` 上，效果级别的尝试在 设置 → 集成 可见。集成员通过 `/v1/integration-effects` 读取 build 回写的投递元数据（状态、时间、通用失败提示）；该视图不返回请求/应答正文、业务目标或其他应用效果，也不授予 `/v1/effects` 的管理权限。
+当前可见链到对象字段 → 管道/数据源 → 连接；页面字段未接入这条集成血缘，不将资产 requires 依赖图当作字段流向；Pipeline 运行与 Source 拉取仍把计数记在各自的 `last` 上，效果级别的尝试在 设置 → 集成 可见。集成员通过 `/v1/integration-effects` 读取 build 回写的投递元数据（状态、时间、通用失败提示）；该视图不返回请求/应答正文、业务目标或其他应用效果，也不授予 `/v1/effects` 的管理权限。
 
 ### 3. 构建器
 
@@ -41,7 +41,7 @@ Ontology › **Writebacks**：列表 + 编辑器（对象与动作、连接/方�
 
 - 不新建"回写队列"实体、调度器或重试策略：全部沿用 ADR-0014 的 outbound/Dispatch/settle/replay；
 - 不新建血缘存储或 read：血缘由四类定义即时推导；
-- `apps/erpadapter` 自配凭据的 ERP 轮询与 `erpadapter/confirmation` 效果路径由 Connection + Source + Writeback 取代。它是独立 Go 模块且被 `solutions/manufacturing` 引用，本地 manufacturing 组合编译与测试已通过；当前仍引用该模块，删除必须等探针完整替代该路径并经负责人确认后同批进行。
+- `apps/erpadapter` 自配凭据的 ERP 轮询与 `erpadapter/confirmation` 效果路径由 Connection + Source + Writeback 取代。该模块已按负责人授权删除；manufacturing 的 go.mod 与组合代码不再引用它，当前接入归 Source/Connection/Writeback。
 
 ## 验证
 
