@@ -135,3 +135,32 @@ func TestLanguages(t *testing.T) {
 		}
 	}
 }
+
+// The tenant's own words (ADR-0083) are the last dictionary layer: they say
+// what no shipped dictionary does, override what one does, and go when removed.
+func TestTenantWords(t *testing.T) {
+	tn, err := NewTenant("t-w", NewConsole("t-w"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tn.i18n.Say("zh-CN", "Pallet"); got != "Pallet" {
+		t.Fatalf("before: %q", got)
+	}
+	tn.words.set("zh-CN", "Pallet", "托盘")
+	tn.words.set("zh-CN", "Change app setting", "改设置")
+	tn.i18n.reset()
+	if got := tn.i18n.Say("zh-CN", "Pallet"); got != "托盘" {
+		t.Fatalf("own word: %q", got)
+	}
+	if got := tn.i18n.Say("zh-CN", "Change app setting"); got != "改设置" {
+		t.Fatalf("override: %q", got)
+	}
+	if got := tn.i18n.Say("zh-CN", "Create pallet"); got != "新建托盘" {
+		t.Fatalf("pattern over own word: %q", got)
+	}
+	tn.words.set("zh-CN", "Pallet", "")
+	tn.i18n.reset()
+	if got := tn.i18n.Say("zh-CN", "Pallet"); got != "Pallet" {
+		t.Fatalf("removed: %q", got)
+	}
+}

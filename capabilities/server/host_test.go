@@ -102,7 +102,7 @@ func TestTenantComposition(t *testing.T) {
 		t.Fatalf("bo is offered %v", got)
 	}
 	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaProfileUpdate, SchemaRoleSave, SchemaRoleRemove, SchemaPolicySave, SchemaPolicyDrop, SchemaTeamSave, SchemaTeamRemove, SchemaDelegate, SchemaInvite, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard, SchemaTokenIssue, SchemaTokenRevoke,
-		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaProtocolBind, SchemaNotificationRead,
+		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaProtocolBind, SchemaNotificationRead, SchemaTranslationSet,
 		SchemaEndpointAdd, SchemaEndpointRemove, SchemaEffectRetry, SchemaEffectDiscard, SchemaEffectApprove, SchemaOperationCall,
 		SchemaProjectSave, SchemaProjectArchive, SchemaPackageInstall, SchemaPackageUpgrade, SchemaPackageDrain, SchemaPackageRetire, "a.note", "b.note"}) {
 		t.Fatalf("ana's catalog %v", got)
@@ -150,7 +150,7 @@ func TestHostHTTPAndConsole(t *testing.T) {
 		{"GET", "/v1/me", "stranger", 401, ``},
 		{"GET", "/v1/a-notes", "ana-token", 200, `{}`},
 		{"GET", "/v1/nothing", "ana-token", 404, ``},
-		{"GET", "/v1/apps", "ana-token", 200, `"id":"b","version":"1","reads":["b-notes"]`},
+		{"GET", "/v1/apps", "ana-token", 200, `"id":"b","title":"","version":"1","reads":["b-notes"]`},
 		{"GET", "/v1/declarations", "ana-token", 200, `"dataClass":"a.topic"`},
 		{"OPTIONS", "/v1/submissions", "", http.StatusNoContent, ``},
 	} {

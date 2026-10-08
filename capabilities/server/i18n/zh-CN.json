@@ -1604,5 +1604,9 @@
   "You take over from {0}": "您接替 {0}",
   "Comma-separated mail domains whose people become members on first sign-in, holding nothing until granted; empty: invitation only.": "逗号分隔的邮箱域名：这些域名的人首次登录即成为成员，在获得授予前一无所持；留空则仅限邀请。",
   "Every sign-in must carry the identity provider's word that a second factor was used (amr); a host whose provider does not say admits none.": "每次登录都必须带有身份提供方关于已使用第二因素的声明（amr）；提供方不作声明的宿主将不放行任何登录。",
-  "How long a sign-in lasts on this host before the identity provider is asked again; 0: as long as the credential.": "一次登录在本宿主上持续多久后需再次询问身份提供方；0 表示与凭证同寿。"
+  "How long a sign-in lasts on this host before the identity provider is asked again; 0: as long as the credential.": "一次登录在本宿主上持续多久后需再次询问身份提供方；0 表示与凭证同寿。",
+  "Translate a text": "翻译一段文字",
+  "Say a declaration text (an object type, field, state, action or application name the tenant defined, or any shipped one) in a language (target: the language tag, such as zh-CN). An empty translation removes the tenant's entry.": "用某种语言说出一段声明文字（租户自定义的对象类型、字段、状态、动作或应用名称，或任何内置文字；目标为语言标签，如 zh-CN）。译文为空则删除租户的词条。",
+  "The text as declared, in its source language": "声明时所写的原文",
+  "What it reads as in the target language; empty removes": "在目标语言中的读法；留空则删除"
 }

@@ -25,31 +25,32 @@ import (
 // CheckReplay holds every composition to that. A snapshot is only a shortcut:
 // the journal stays the truth, and a snapshot of other code is never used.
 type tenantState struct {
-	Apps              map[string]json.RawMessage `json:"apps"`
-	Records           map[string][]recordState   `json:"records"`
-	Audit             []AuditEntry               `json:"audit"`
-	Refusals          map[string]refusedResult   `json:"refusals,omitempty"`
-	AcceptedAnswers   map[string]json.RawMessage `json:"acceptedAnswers,omitempty"`
-	AcceptedInputs    map[string]json.RawMessage `json:"acceptedInputs,omitempty"`
-	ReleaseCandidates map[string]json.RawMessage `json:"releaseCandidates,omitempty"`
-	ReleaseApplied    map[string]string          `json:"releaseApplied,omitempty"`
-	ActiveRelease     string                     `json:"activeRelease,omitempty"`
-	Deliveries        []Delivery                 `json:"deliveries"`
-	Acted             int                        `json:"acted"`
-	Bindings          map[string]string          `json:"bindings"` // protocol → provider app
-	Works             json.RawMessage            `json:"works"`
-	Queues            map[string][]string        `json:"queues"` // subscriber → task IDs, head first
-	Failed            []string                   `json:"failed"`
-	Tasks             []taskState                `json:"tasks"` // every delivery task, by ID
-	Jobs              []Task                     `json:"jobs"`
-	Connectors        json.RawMessage            `json:"connectors"`
-	Marks             []kernel.ConnectorMark     `json:"marks"`
-	LastError         map[string]ConnectorError  `json:"lastError"`
-	Notices           []platform.Notification    `json:"notices"`
-	NoticeSeq         int                        `json:"noticeSeq"`
-	Settings          map[string]string          `json:"settings"`
-	Endpoints         []*Endpoint                `json:"endpoints"`
-	Outbound          []effectState              `json:"outbound"`
+	Apps              map[string]json.RawMessage   `json:"apps"`
+	Records           map[string][]recordState     `json:"records"`
+	Audit             []AuditEntry                 `json:"audit"`
+	Refusals          map[string]refusedResult     `json:"refusals,omitempty"`
+	AcceptedAnswers   map[string]json.RawMessage   `json:"acceptedAnswers,omitempty"`
+	AcceptedInputs    map[string]json.RawMessage   `json:"acceptedInputs,omitempty"`
+	ReleaseCandidates map[string]json.RawMessage   `json:"releaseCandidates,omitempty"`
+	ReleaseApplied    map[string]string            `json:"releaseApplied,omitempty"`
+	ActiveRelease     string                       `json:"activeRelease,omitempty"`
+	Deliveries        []Delivery                   `json:"deliveries"`
+	Acted             int                          `json:"acted"`
+	Bindings          map[string]string            `json:"bindings"` // protocol → provider app
+	Works             json.RawMessage              `json:"works"`
+	Queues            map[string][]string          `json:"queues"` // subscriber → task IDs, head first
+	Failed            []string                     `json:"failed"`
+	Tasks             []taskState                  `json:"tasks"` // every delivery task, by ID
+	Jobs              []Task                       `json:"jobs"`
+	Connectors        json.RawMessage              `json:"connectors"`
+	Marks             []kernel.ConnectorMark       `json:"marks"`
+	LastError         map[string]ConnectorError    `json:"lastError"`
+	Notices           []platform.Notification      `json:"notices"`
+	NoticeSeq         int                          `json:"noticeSeq"`
+	Settings          map[string]string            `json:"settings"`
+	Words             map[string]map[string]string `json:"words,omitempty"` // the tenant's translations (ADR-0083)
+	Endpoints         []*Endpoint                  `json:"endpoints"`
+	Outbound          []effectState                `json:"outbound"`
 	// The host console's lifecycle and support sessions (ADR-0047 §6.5) travel
 	// with the tenant: a restart keeps a suspension and its authorized sessions.
 	HostLifecycle  string                           `json:"hostLifecycle,omitempty"`
@@ -158,7 +159,7 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	s.Marks = marks
 	t.connectors.snapshot(&s)
 	s.Notices, s.NoticeSeq = t.notices.state()
-	s.Settings, s.Endpoints = t.settings.clone(), t.endpoints
+	s.Settings, s.Endpoints, s.Words = t.settings.clone(), t.endpoints, t.words.clone()
 	s.Sequences = t.sequences.clone()
 	for _, x := range t.outbound {
 		s.Outbound = append(s.Outbound, effectState{Effect: x.Effect, Since: x.since})
@@ -383,6 +384,8 @@ func (t *Tenant) restoreOperations(s *tenantState) error {
 	t.connectors.restore(t.ID, descriptors, s)
 	t.notices.restore(s.Notices, s.NoticeSeq)
 	t.settings.restore(s.Settings)
+	t.words.restore(s.Words)
+	t.i18n.reset()
 	t.endpoints = s.Endpoints
 	t.sequences.restore(s.Sequences)
 	t.outbound = nil

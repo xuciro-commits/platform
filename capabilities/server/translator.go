@@ -18,8 +18,9 @@ import (
 // both built once per language. It needs nothing of the tenant but its apps.
 type translator struct {
 	apps         func() []platform.App
-	dictionaries sync.Map // language → map[string]string
-	patternCache sync.Map // language → []pattern
+	tenant       func() map[string]map[string]string // the tenant's own words (ADR-0083), last
+	dictionaries sync.Map                            // language → map[string]string
+	patternCache sync.Map                            // language → []pattern
 }
 
 // A pattern is a dictionary key with {placeholders}, such as "Downtime on
@@ -53,6 +54,13 @@ func (x *translator) languages() []string {
 	for _, a := range x.apps() {
 		add(a.Manifest().Languages)
 	}
+	if x.tenant != nil {
+		for lang := range x.tenant() {
+			if !slices.Contains(out, lang) {
+				out = append(out, lang)
+			}
+		}
+	}
 	slices.Sort(out)
 	return out
 }
@@ -75,8 +83,19 @@ func (x *translator) Dictionary(lang string) map[string]string {
 			d[k] = v
 		}
 	}
+	if x.tenant != nil {
+		for k, v := range x.tenant()[lang] {
+			d[k] = v
+		}
+	}
 	x.dictionaries.Store(lang, d)
 	return d
+}
+
+// reset forgets the built dictionaries and patterns: the tenant's words changed.
+func (x *translator) reset() {
+	x.dictionaries.Clear()
+	x.patternCache.Clear()
 }
 
 // Translate returns v, as JSON, with every declaration text said in a
