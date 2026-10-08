@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
+	"platformserver/apps/core"
+	"platformserver/apps/enterprise"
 	"platformserver/platform"
 )
 
@@ -103,6 +106,41 @@ func TestDefinitionValidation(t *testing.T) {
 		tn.definitions = nil
 		if err := tn.registerDefinitions(); err == nil || !strings.Contains(err.Error(), "incompatible type") {
 			t.Fatalf("incompatible reference accepted: %v", err)
+		}
+	})
+	t.Run("directory reference", func(t *testing.T) {
+		tn := stockTenant(t)
+		field := &tn.records.types["stock.item"].info.Fields[0]
+		field.Type, field.Ref = "reference", "enterprise.element"
+		for i, app := range tn.apps {
+			if app.Manifest().ID != "stock" {
+				continue
+			}
+			manifest := app.Manifest()
+			actions := manifest.Actions.All()
+			actions = append(actions, platform.Action{Schema: "stock.item.assign", Target: "stock.item", Payload: []platform.Field{{Name: "unit", Type: "string", Ref: "enterprise.element"}}})
+			manifest.Actions = platform.NewCatalog(actions...)
+			tn.apps[i] = definitionStock{stock: app.(*stock), manifest: manifest}
+		}
+		tn.definitions = nil
+		if err := tn.registerDefinitions(); err != nil {
+			t.Fatalf("directory reference rejected as a record dependency: %v", err)
+		}
+		if tn.readableLocked(platform.Member{}, "enterprise.element/missing", time.Now()) {
+			t.Fatal("a missing directory must not resolve references")
+		}
+	})
+	t.Run("directory reference submission", func(t *testing.T) {
+		at := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+		tn := composeTenant(t, "directory-records", []Seat{seatOf("admin", "core:steward", "enterprise:admin")}, core.New("directory-records"), enterprise.New("directory-records", platform.OrgSeed{}))
+		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, "plant", map[string]any{"name": "Plant", "stereotype": enterprise.Location}, at)
+		decide(t, tn, "admin", core.ID, "core.site.create", core.SiteType, "warehouse", map[string]any{"name": "Warehouse", "code": "W1", "kind": "warehouse", "place": "plant"}, at)
+		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementClose, enterprise.ElementType, "plant", map[string]any{"until": "2026-10-09"}, at)
+		if el, ok := tn.directory.Element("plant", "2026-10-09"); ok {
+			t.Fatalf("closed element still active: %+v", el)
+		}
+		if got := refuse(t, tn, "admin", core.ID, "core.site.create", core.SiteType, "late", map[string]any{"name": "Late", "code": "W2", "kind": "warehouse", "place": "plant"}, at.Add(24*time.Hour)); got == "ok" {
+			t.Fatal("an ended model element was accepted")
 		}
 	})
 }

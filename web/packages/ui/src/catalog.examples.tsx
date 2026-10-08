@@ -7,6 +7,8 @@ import { Building2, Plus, Users } from "lucide-react";
 import {AlignLeft,AlignCenter,AlignRight} from "lucide-react";
 import {InspectorField,InspectorSection} from "./components/InspectorControls";
 import {SegmentedChoice} from "./components/SegmentedChoice";
+import { IconPicker, IconGlyph } from "./components/IconPicker";
+import { GroupedList } from "./components/GroupedList";
 import { z } from "zod";
 import {
   AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
@@ -19,6 +21,18 @@ import {
   type FlowDefinition, type FlowInstanceData, type ChartSpec, type Route,
 } from "./index";
 import { WorkspaceContext, useWorkspace } from "./shell/Workspace";
+
+export function IconPickerExample() {
+  const [value, setValue] = useState("warehouse");
+  return <div className="grid max-w-sm gap-3"><IconPicker value={value} onChange={setValue} label={t("Icon")} /><IconGlyph name={value} /></div>;
+}
+
+export function GroupedListExample() {
+  const [selected, setSelected] = useState<string>();
+  const items = [{ id: "plant", name: "Plant", group: "Structure" }, { id: "warehouse", name: "Warehouse", group: "Structure" }, { id: "person", name: "Person", group: "People" }];
+  return <GroupedList items={items} groupings={[{ id: "kind", label: t("Kind"), of: (item) => ({ id: item.group, label: t(item.group) }) }]}
+    id={(item) => item.id} text={(item) => t(item.name)} row={(item) => t(item.name)} selected={selected} onSelect={(item) => setSelected(item.id)} />;
+}
 import {RecordActionGrid} from "./records/RecordActionGrid";
 import {ObservationTable} from "./records/ObservationTable";
 import {ObservationStatistics} from "./records/ObservationStatistics";

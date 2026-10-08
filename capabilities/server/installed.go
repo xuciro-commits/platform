@@ -878,7 +878,7 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	if len(a.Pages) == 0 {
 		return fmt.Errorf("application %s: it holds no page", a.Name)
 	}
-	if !platform.IconName(a.Icon) {
+	if a.Icon != "" && !platform.IconName(a.Icon) {
 		return fmt.Errorf("application %s: %q is not an icon name", a.Name, a.Icon)
 	}
 	for _, page := range a.Pages {

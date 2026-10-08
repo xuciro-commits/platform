@@ -1,4 +1,5 @@
 {
+  "Plant: The plant of the enterprise model that makes it; the model says where that plant sits, e.g. loc-plant-1": "工厂：企业模型中负责生产的工厂；其位置由模型定义，例如 loc-plant-1",
   "An entry needs at least two lines: one debited, one credited": "凭证至少要有两行：一行借方，一行贷方",
   "The date {date} is not in an open period": "日期 {date} 不在已开启的会计期间内",
   "Line {line} needs an account that exists and is active": "第 {line} 行需要一个存在且未停用的科目",

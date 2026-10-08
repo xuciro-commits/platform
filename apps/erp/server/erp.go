@@ -75,10 +75,10 @@ type Entry struct {
 // postings (D2); nobody edits one.
 type Posting struct {
 	platform.Record
-	Entry   platform.Ref[Entry]   `json:"entry" field:"readonly"`
-	Number  string                `json:"number" field:"readonly,search"`
-	Journal string                `json:"journal" field:"readonly" choices:"general,purchases,production"`
-	Date    string                `json:"date" field:"readonly" type:"date"`
+	Entry      platform.Ref[Entry]   `json:"entry" field:"readonly"`
+	Number     string                `json:"number" field:"readonly,search"`
+	Journal    string                `json:"journal" field:"readonly" choices:"general,purchases,production"`
+	Date       string                `json:"date" field:"readonly" type:"date"`
 	Account    platform.Ref[Account] `json:"account" field:"readonly"`
 	Debit      platform.Money        `json:"debit" field:"readonly"`
 	Credit     platform.Money        `json:"credit" field:"readonly"`

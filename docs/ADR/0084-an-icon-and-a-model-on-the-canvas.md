@@ -8,10 +8,10 @@
 
 核对现状后的结论（这才是本 ADR 的起点）：
 
-- UAF 本身是真的：`capabilities/server/apps/enterprise/uaf/uaf.go` 内嵌 OMG 1.3 元模型（Domain/Aspect/Bases、关系分类），`profile.go` 的 `Grid()` 是 8 格（域 × 方面），非法连线被拒绝并给出约束文字。**弱的是呈现与命名**：元素来源叫\"调色板\"，格子被静默过滤，人看不到\"为什么这个元素在这里不可用\"。
+- UAF 本身是真的：`capabilities/server/apps/enterprise/uaf/uaf.go` 内嵌 OMG 1.3 元模型（Domain/Aspect/Bases、关系分类），`profile.go` 的 `Grid()` 是 8 格（域 × 方面），宿主实施了部分关系校验，并给出拒绝原因；加载元模型不等于完整实现 UAF 端点、基数和约束。**弱的是呈现与命名**：元素来源叫\"调色板\"，格子被静默过滤，人看不到\"为什么这个元素在这里不可用\"。
 - 画布缺的是**边**：Flow（`ui/src/graph/BlockCanvas.tsx`）早就有节点/连线操作，企业画布（`DiagramCanvas`）只有节点拖动。企业关系只能在右侧检查器的列表里改——图上点不中。
 - 业务侧引用机制存在且是真的：载荷字段标 `ref:"enterprise.element" stereo:"…"`，宿主在提交时校验**当天有效且 stereotype 相符**（`platform/ledger.go` `checked`），选择器只列当天有效的元素（`app/src/actions/actions.tsx` `ElementPicker`）。缺的是反向：企业元素上看不到\"谁引用我\"，且被关闭的元素在记录上显示成空。
-- 工厂/仓库/WMS：`core.site`（kind = plant/warehouse/office）有 `place` → ActualLocation、`unit` → ActualOrganization，`core.location` 在站点内嵌套（库区/货位/工位），`erp.production` 的 `plant` → ActualLocation。**没有 WMS 应用**，所以\"WMS 建仓\"这条路上没有任何已实现的代码可连。
+- 工厂/仓库/WMS：`core.site`（kind = plant/warehouse/office）有 `place` → ActualLocation、`unit` → ActualOrganization，`core.location` 在站点内嵌套（库区/货位/工位），`erp.production` 的 `plant` → ActualLocation。没有独立的 WMS 参考代码模块；工作台仍可创建受控 WMS 应用，本轮未验证这类应用的建仓关联路线。
 - 术语与血缘的机器都连着真东西（术语被搜索/代理读、`RefersTo` 保存时经 `host.Declares` 校验；血缘读集成定义自身），**缺的是每面板一句话说清它证明了什么**。
 
 ## 决定
@@ -23,7 +23,7 @@
 ### D2 企业建模就是 UAF 建模，不用\"调色板\"这种词
 
 - 左栏不再是\"调色板/Elements\"这种含糊名称，而是 **Add elements**（加元素）与 **UAF grid**（UAF 网格）两页；元素清单按 `Domain` 分组、可搜索，每一项**在不可用时给出理由**：\"不画在这个格子里\"、\"从 scale N 起才可用\"——不再静默过滤。
-- **UAF grid** 页画域 × 方面的 8 格：点一格就把视图切到该格，下面列出该格允许的 stereotype；同一页列出整份 UAF 1.3 类型的 `offered`（本租户 profile 启用）与 `loadable`（可存可用但不在网格上），说明\"offered 多少 / 共多少\"，并给搜索。格子决定允许的 stereotype，非法连线的拒绝文字直接来自元模型约束（原有行为，不改）。
+- **UAF grid** 页画域 × 方面的 8 格：点一格就把视图切到该格，下面列出该格允许的 stereotype；同一页列出整份 UAF 1.3 类型的 `offered`（本租户 profile 启用）与 `loadable`（可存可用但不在网格上），说明\"offered 多少 / 共多少\"，并给搜索。格子决定允许的 stereotype，关系拒绝仍由宿主现有校验给出；当前不是完整的元模型约束执行器。
 - 元素与关系分开说：元素是 `stereotype`（ActualOrganization、ActualPerson、ActualPost、ActualLocation…），关系是 `ActualOrganizationRole`/`FillsPost`/`ResponsibleFor`/`IsCapableToPerform`/`ActualResourceRelationship` 等；检查器把所选元素所属域的**属性与合法关系**摊开（属性来自元模型，不是表单里手写的）。
 - 同一模型的三种投影在同一个工作台里切换：**画布 / 树 / 表格**（`mode`）；视图（View）是保存下来的"哪些元素 + 哪个格子 + 布局"，画布只是它的一种读法。
 
@@ -47,20 +47,20 @@
 - **权威**：元素的名字、类型、Kind、生效期只存在模型里；业务记录只存元素 id。字段声明 `ref:"enterprise.element"` + `stereo:"…"`。
 - **写入一致性**：提交时宿主校验元素当天有效且 stereotype 相符，不符即拒绝并说明（\"{field} names {element}, which is not a {stereotype}\"）。因此不会出现\"手工打的字\"和\"模型里没有的部门\"。
 - **改了之后**：模型里改名，引用按 id 一起读到新名字；关闭（带日期）是**模型里的事件**，历史记录仍然解析到它——选择器现在把已关闭的当前值**显示出来并标注**（\"{name} · closed {until}\"），不再显示成空。
-- **反向**：企业元素的检查器有 **Used by**：从 `/v1/entities` 里找出声明了该类引用且 stereotype 匹配的字段，再按字段查询记录。没有第二套索引：谁引用谁由声明导出。
+- **反向**：企业元素的检查器有 **Used by**：从 `/v1/entities` 里找出声明了该类引用且 stereotype 匹配的字段，再按字段查询记录。当前只遍历顶层字段，每个字段最多读取 50 条，读取失败也没有独立提示；嵌套凭证行不在这份反查中，不能据此声称完整引用清单。没有第二套索引。
 - 业务侧仍只用自己的对象（site、成本中心、生产订单…），**不允许各应用自带一套组织/地点**：要组织就引用模型，要地点就先有 `core.site`/`core.location`。
 
 ### D6 工厂 → 仓库 → WMS：现在能走的路，以及没有的那一头
 
 - 今天可走：企业模型里建 `ActualLocation`（kind = plant/warehouse）与 `ActualOrganization`（Plant 1、Plant 2、Plant 3、其下的单位/成本中心）；`core.site` 的 `place`/`unit` 指过去；`core.location` 在站点内嵌套（库区/货位/工位/产线）；`erp.production` 的 `plant` 指到工厂的 `ActualLocation`。
-- **没有 WMS 应用**（`apps/` 下只有 crm/csm/erp/hcm/mes/pms）。所以\"WMS 建的仓库 ↔ 企业模型\"这一半没有已实现的代码；本 ADR 定死口径：将来的 WMS **不建自己的仓库表**，它建 `core.site`（kind=warehouse）与 `core.location`，用同样的 `ref` 指到企业元素。这是边界，不是已完成项。
+- `apps/` 中没有独立的 WMS 参考模块，不代表工作台里不存在租户创建的 WMS 应用。本轮未验证受控 WMS 建仓路线；复用 `core.site` / `core.location` 是当前建议关联路径，不能把未来所有仓库模型限制为已完成的产品决定。
 - 三个工厂 → 其下仓库：模型侧用地点层级（仓库 `ActualResourceRelationship` 落在工厂）与 site 的 `place` 表达；`Location` 的 `site`/`parent` 管到货位一级。
 
 ### D7 术语与血缘：每块写清它证明了什么
 
 - **术语表**（`knowledge.term`）：一个词有三种\"生效方式\"——`RefersTo` 指向声明（保存时经 `host.Declares` 校验）、被搜索当作实体名/同义词候选（`names()`）、进入代理提示词（`glossary(app)`）；此外还有\"谁读我\"（`/v1/records/knowledge.term` 的 Apps）。新增 **Where these words work** 面板逐条显示：\"names {ref}\"、\"{n} declared names match\"、\"documentation only\"，以及\"read by members of {apps}\"；页头说明按数据统计（多少条指向声明、多少条只是文档）。纯文档的术语**明说是文档**，不假装有查询读它。
 - **对象血缘**（`build/src/ontology/lineage.tsx`）：\"Comes from / Field by field / Goes to / Data lineage\" 读的是**集成定义本身**——声明，不是观测。面板说明写死这一点；运行证据（数据集版本、回写的已送达/失败）**并排放在声明旁边**，不混为一谈。
-- **资产血缘**（`workspace/src/shell/Lineage.tsx`）：证明的是**已安装资产之间的声明依赖**（应用→页面→对象类型→字段，函数/查询→读取的类型，来自 `Definition.requires`），用途是影响面：改一个资产会波及什么。它**不是**记录级的流向；记录级流向在对象的数据血缘面板。页头把这句写出来，两处不再互相冒充。
+- **资产血缘**（`workspace/src/shell/Lineage.tsx`）：证明的是**已安装资产之间的声明依赖**（应用→页面→对象类型→字段，函数/查询→读取的类型，来自 `Definition.requires`），用途是影响面：改一个资产会波及什么。它**不是**记录级的流向；对象的数据血缘面板同样基于集成声明，不证明记录级流向。页头把这句写出来，两处不再互相冒充。
 
 ## 后果
 

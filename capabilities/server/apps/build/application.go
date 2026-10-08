@@ -110,7 +110,7 @@ func (b *Build) checkApplication(a Application) error {
 	if len(a.Pages) == 0 {
 		return fmt.Errorf("an application holds at least one page")
 	}
-	if !platform.IconName(a.Icon) {
+	if a.Icon != "" && !platform.IconName(a.Icon) {
 		return fmt.Errorf("%q is not an icon name: lower-case letters, digits and dashes", a.Icon)
 	}
 	seen := map[string]bool{}

@@ -22,8 +22,8 @@ export function Words() {
   const [q, setQ] = useState("");
   const [onlyMissing, setOnlyMissing] = useState(false);
   const words = useRead<Api.WordsView>(`/v1/words?app=${encodeURIComponent(app)}`);
-  const languages = Array.from(new Set([...(words.data?.languages ?? []), ...extra])).filter((l) => l !== "en");
-  useEffect(() => { if (languages.length && !languages.includes(lang)) setLang(languages[0]!); }, [languages.join(" ")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const languages = Array.from(new Set(["en", ...(words.data?.languages ?? []), ...extra]));
+  useEffect(() => { if (words.data && languages.length && !languages.includes(lang)) setLang(languages[0]!); }, [words.data, languages.join(" ")]); // eslint-disable-line react-hooks/exhaustive-deps
   const needle = q.trim().toLocaleLowerCase();
   const list = (words.data?.words ?? []).filter((w) => (!onlyMissing || !w.translations[lang]) && (!needle || w.text.toLocaleLowerCase().includes(needle) || (w.translations[lang] ?? "").toLocaleLowerCase().includes(needle)));
   const missing = (words.data?.words ?? []).filter((w) => !w.translations[lang]).length;

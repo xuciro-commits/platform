@@ -163,4 +163,12 @@ func TestTenantWords(t *testing.T) {
 	if got := tn.i18n.Say("zh-CN", "Pallet"); got != "Pallet" {
 		t.Fatalf("removed: %q", got)
 	}
+	tn.words.set("en", "托盘", "Pallet")
+	tn.i18n.reset()
+	req := httptest.NewRequest("GET", "/v1/entities", nil)
+	req.Header.Set("Accept-Language", "en-US,zh-CN;q=0.5")
+	lang, asked := tn.asked(req)
+	if !asked || tn.i18n.Say(lang, "托盘") != "Pallet" {
+		t.Fatalf("English tenant translation not selected: language %q, asked %v", lang, asked)
+	}
 }

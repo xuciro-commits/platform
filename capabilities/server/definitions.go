@@ -56,6 +56,12 @@ func (t *Tenant) registerDefinitions() error {
 			if field.Type != "reference" && field.Type != "references" {
 				return fmt.Errorf("asset %s field %s has reference %s with incompatible type %s", objects[info.Type], field.Name, field.Ref, field.Type)
 			}
+			// Enterprise elements belong to the host directory, not the record
+			// store. The submission path checks availability and stereotype;
+			// an optional reference may be declared without that directory loaded.
+			if field.Ref == "enterprise.element" {
+				continue
+			}
 			dep, ok := objects[field.Ref]
 			if !ok {
 				return fmt.Errorf("asset %s field %s requires missing object %s", objects[info.Type], field.Name, field.Ref)
@@ -84,6 +90,9 @@ func (t *Tenant) registerDefinitions() error {
 				}
 				if field.Type != "string" {
 					return fmt.Errorf("asset %s payload %s has reference %s with incompatible type %s", ref, field.Name, field.Ref, field.Type)
+				}
+				if field.Ref == "enterprise.element" {
+					continue
 				}
 				dep, ok := objects[field.Ref]
 				if !ok {

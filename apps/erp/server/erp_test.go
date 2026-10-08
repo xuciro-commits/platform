@@ -108,6 +108,10 @@ func TestBooks(t *testing.T) {
 		b.expect("draft "+id, b.do("ada", EntryType+".create", EntryType, id, map[string]any{"journal": "general", "date": date, "reference": "capital", "lines": lines}), "ok")
 	}
 	post := func(id string) string { return b.do("ada", EntryType+".post", EntryType, id, map[string]any{}) }
+	charged := line("1002", 100000, 0)
+	charged["costCentre"] = "missing-unit"
+	b.expect("a nested cost centre must resolve in the enterprise model", b.do("ada", EntryType+".create", EntryType, "E-MISSING-UNIT",
+		map[string]any{"journal": "general", "date": "2026-10-01", "lines": []any{charged, line("4001", 0, 100000)}}), "ERROR_CODE_INVALID_REFERENCE")
 
 	draft("E-1", "2026-10-01", line("1002", 100000, 0), line("4001", 0, 90000))
 	b.expect("unbalanced", post("E-1"), "ERROR_CODE_INVALID_ARGUMENT")

@@ -46,7 +46,7 @@
 
 ## 明确的边界（未做）
 
-- **WMS 应用不存在**（`apps/` 只有 crm/csm/erp/hcm/mes/pms）：\"WMS 建仓 ↔ 企业模型\"没有可连的代码。口径已定（ADR-0084 D6）：将来 WMS 不建自己的仓库表，建 `core.site`(kind=warehouse)/`core.location` 并引用企业元素。
+- 没有独立 WMS 参考代码模块，不代表没有工作台创建的 WMS 应用。受控 WMS 的建仓关联路线尚未核对；当前建议复用 `core.site`(kind=warehouse)/`core.location`。
 - 没有为业务应用开自建组织结构的口子（组织/地点一律引用模型）。
 - Flow 与企业画布没有合并组件；共享的只是 `DiagramAction` 这一层。
 - e2e、`make verify`、Catalog check 未跑（ADR-0082：本块只跑适用项一次）。

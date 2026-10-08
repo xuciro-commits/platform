@@ -1,5 +1,9 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Icon picker": "图标选择器",
+ "Choose a shared icon by group or translated name.": "按分组或翻译后的名称选择共享图标。",
+ "Grouped resource list": "分组资源列表",
+ "Search and fold resource groups while preserving caller-owned selection.": "搜索和折叠资源分组，保留调用方控制的选择。",
  "Sample records": "示例记录",
  "Business applications": "业务应用",
  "Build": "构建",

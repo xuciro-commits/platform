@@ -1,4 +1,5 @@
 {
+  "{field} names an enterprise element that is not active: {element}": "{field} 引用了当前无效的企业元素：{element}",
   "State from input": "状态取自输入",
   "Reference object": "引用对象",
   "Minimum length": "最小长度",
