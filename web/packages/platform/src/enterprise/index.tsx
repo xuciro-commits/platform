@@ -252,7 +252,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   const dated = shownElements.filter((e) => e.stereotype === "ActualProject" || e.stereotype === "ActualProjectMilestone");
   const timeline = dated.map((e) => {
     const properties = e.properties ?? {};
-    const project = m.elements.find((p) => p.stereotype === "ActualProject" && ((Array.isArray(properties.actualResource) ? properties.actualResource : [properties.actualResource]).includes(p.id) || (Array.isArray(p.properties?.milestone) ? p.properties.milestone : [p.properties?.milestone]).includes(e.id)));
+    const project = e.stereotype === "ActualProject" ? e : m.elements.find((p) => p.stereotype === "ActualProject" && ((Array.isArray(properties.actualResource) ? properties.actualResource : [properties.actualResource]).includes(p.id) || (Array.isArray(p.properties?.milestone) ? p.properties.milestone : [p.properties?.milestone]).includes(e.id)));
     const start = properties.startDate || properties.endDate;
     return { id: e.id, name: e.name, start: typeof start === "string" ? start.slice(0, 10) : "", end: String(properties.endDate || start || "").slice(0, 10), group: project?.name || title(e.stereotype) };
   });
