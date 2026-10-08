@@ -510,7 +510,7 @@ function UsedBy({ element: el, day, onPin }: { element: Element; day: string; on
     {used.error && <p className="text-[11px] text-[var(--tone-danger)]">{t("The records that name it could not be read: {why}", { why: String(used.error) })}
       <Button size="sm" variant="ghost" onClick={() => void used.refetch()}>{t("Try again")}</Button></p>}
     {groups.map((g) => <div key={`${g.type}.${g.field}`} className="grid gap-0.5">
-      <p className="text-[11px] text-muted">{t(g.title)} · <span className="font-mono">{g.field}</span> · {g.fieldTitle}</p>
+      <p className="text-[11px] text-muted">{t(g.title)} · <span className="font-mono">{g.field}</span> · {t(g.fieldTitle)}</p>
       {g.records.map((r) => <p key={`${g.type}:${r.id}`} className="flex items-baseline gap-2 text-xs">
         <span className="truncate">{r.name}</span><span className="font-mono text-[10px] text-muted">{r.id}</span>
         {onPin && <Button size="sm" variant="ghost" className="ml-auto" title={t("Draw this record on the current view, beside {element}", { element: el.name })}
