@@ -1,8 +1,8 @@
 // Settings: the apps a tenant runs, their capability matrix and protocols (ADR-0010, ADR-0011).
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, DataTable, PageHeader, Panel, Select, Tag, type ColumnDef, t } from "@platform/ui";
-import { useState } from "react";
+import { Button, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
+import { Fragment, useState } from "react";
 import { useAdmin, when, type AppInfo, type ProtocolInfo } from "./shared";
 
 // Tiers of the protocol graph: an app sits one column right of the providers of
@@ -26,18 +26,15 @@ export function Apps() {
     <>
       <PageHeader title={t("Packages")} description={t("The package index beside what this tenant has installed. Install, upgrade, drain and retire are decisions: a package that fails its precheck changes nothing, and what it brought stays readable after it leaves.")} />
       {packages.isError ? <p role="alert">{t("Package inventory could not be loaded.")}</p> : <PackageList items={packages.data ?? []} />}
-      {role("platform") === "admin" && <><h2 className="my-3 text-sm font-semibold">{t("Built-in application modules")}</h2><div className="flex gap-6 overflow-x-auto">
+      {role("platform") === "admin" && <><h2 className="mb-1 mt-4 text-sm font-semibold">{t("Built-in application modules")}</h2><p className="mb-3 text-xs text-muted">{t("Modules the host ships; they are not installed or retired here. What each provides and uses is on the Capability matrix.")}</p><div className="flex gap-6 overflow-x-auto">
         {tiers(apps).map((tier, i) => (
           <div key={i} className="grid content-start gap-3">
-            <h2 className="text-xs uppercase text-muted">{["Platform and business apps", "Consumers of their protocols"][i] ?? `Tier ${i + 1}`}</h2>
+            <h2 className="text-xs uppercase text-muted">{i === 0 ? t("Platform and business modules") : i === 1 ? t("Consumers of their protocols") : t("Tier {n}", { n: i + 1 })}</h2>
             {tier.map((a) => (
               <Panel key={a.id} className="w-64">
-                <div className="flex items-center gap-2"><span className="font-semibold">{a.id}</span><span className="text-xs text-muted">v{a.version}</span></div>
-                {a.consumes.length > 0 && <p className="mt-1 text-xs text-muted">consumes {a.consumes.join(", ")}</p>}
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {a.capabilities.map((c) => <Tag key={c.name} label={c.name} tone={c.enabled ? "success" : "neutral"} />)}
-                </div>
-                {a.uses.map((u) => <p key={u} className="mt-1 font-mono text-[11px] text-muted">{u}</p>)}
+                <div className="flex flex-wrap items-baseline gap-2"><span className="font-semibold">{a.title || a.id}</span><span className="font-mono text-xs text-muted">{a.id} · v{a.version}</span></div>
+                {a.consumes.length > 0 && <p className="mt-1 text-xs text-muted">{t("Consumes")} {a.consumes.join(", ")}</p>}
+                <p className="mt-2 text-xs text-muted">{a.capabilities.map((c) => capabilityTitle(c.name)).join(" · ")}</p>
               </Panel>
             ))}
           </div>
@@ -103,26 +100,70 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
   );
 }
 
+// Capability names are tags apps put on their actions (platform/actions.go
+// Capabilities()); they have no title of their own, so the workspace names
+// them (ADR-0083 D4). An unknown tag reads as written, capitalised.
+const capabilityTitles: Record<string, string> = {
+  account: "Account", applications: "Applications", approvals: "Approvals", apps: "Apps and protocols", automation: "Automation",
+  comments: "Comments", compute: "Compute", delegation: "Delegation", documents: "Documents", elements: "Enterprise elements",
+  evaluations: "Evaluations", federation: "Federation", files: "Files", flows: "Flows", functions: "Functions", glossary: "Glossary",
+  integrations: "Integrations", kinds: "Relationship kinds", limits: "AI limits", links: "Links", linktypes: "Link types",
+  members: "Members", memory: "Agent memory", models: "Models", notifications: "Notifications", objects: "Objects", packages: "Packages",
+  pages: "Pages", processes: "Processes", projects: "Projects", propertytypes: "Property types", providers: "AI providers",
+  queries: "Queries", relationships: "Relationships", runs: "Runs", seed: "Seeding", settings: "Settings", switch: "Agent switch",
+  tasks: "Tasks", views: "Views", tickets: "Tickets", orders: "Orders", notes: "Notes",
+};
+export const capabilityTitle = (name: string) => t(capabilityTitles[name] ?? (name.charAt(0).toUpperCase() + name.slice(1)));
+
+/** A list of short facts; nothing in it has a fixed height, so long lists wrap and never overlap. */
+function Facts({ items }: { items: [label: string, value: React.ReactNode][] }) {
+  const shown = items.filter(([, v]) => v !== null && v !== undefined && v !== false);
+  if (!shown.length) return <p className="text-xs text-muted">{t("Nothing")}</p>;
+  return <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1 text-xs">{shown.map(([k, v]) => <Fragment key={k}><dt className="text-muted">{k}</dt><dd className="min-w-0 break-words">{v}</dd></Fragment>)}</dl>;
+}
+const Mono = ({ items }: { items: string[] }) => items.length ? <span className="font-mono text-[11px] leading-5">{items.join(", ")}</span> : null;
+const Chips = ({ items }: { items: string[] }) => items.length ? <span className="flex flex-wrap gap-1">{items.map((x) => <Tag key={x} label={x} />)}</span> : null;
+
+/** One module of the matrix: what it provides on the left, what it uses on the right (ADR-0083 D4). */
+function ModuleCard({ app: a }: { app: AppInfo }) {
+  return <Panel title={<span className="flex flex-wrap items-baseline gap-2">{a.title || a.id}<span className="font-mono text-xs font-normal text-muted">{a.id} · v{a.version}</span></span>}>
+    <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid content-start gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Provides")}</h3>
+        {a.capabilities.length > 0 && <ul className="grid gap-1">
+          {a.capabilities.map((c) => <li key={c.name} className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-medium">{capabilityTitle(c.name)}</span>
+            <span className="text-muted">{t("{n} actions", { n: c.actions.length })}</span>
+            {!c.enabled && <Tag label={t("disabled")} tone="warning" />}
+          </li>)}
+        </ul>}
+        <Facts items={[[t("Roles"), <Chips items={a.roles} />], [t("Reads"), <Mono items={a.reads} />], [t("Protocols"), <Mono items={a.provides} />],
+          [t("Emits"), a.emits.length ? a.emits.map((e) => e.title).join(", ") : null], [t("Interfaces"), a.interfaces.length ? a.interfaces.map((i) => i.title).join(", ") : null]]} />
+      </div>
+      <div className="grid content-start gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Uses")}</h3>
+        <Facts items={[[t("Consumes"), <Mono items={a.consumes} />], [t("Protocol actions"), a.uses.length ? <ul className="grid gap-0.5 font-mono text-[11px]">{a.uses.map((u) => <li key={u}>{u}</li>)}</ul> : null],
+          [t("Subscribes to"), <Mono items={a.subscribes} />], [t("Connector inputs"), <Mono items={a.inputs} />]]} />
+      </div>
+    </div>
+  </Panel>;
+}
+
 export function Matrix() {
   const { apps } = useAdmin();
-  const list = (xs: string[]) => xs.join(", ") || "—";
-  const columns: ColumnDef<AppInfo, any>[] = [
-    { accessorKey: "id", header: t("App"), meta: { width: 110 } },
-    { id: "capabilities", header: t("Capabilities (actions)"), meta: { width: 260 }, accessorFn: (a) => a.capabilities.map((c) => c.name).join(" "),
-      cell: ({ row: { original: a } }) => <span className="flex flex-wrap gap-1">{a.capabilities.map((c) =>
-        <Tag key={c.name} label={`${c.name} (${c.actions.length})`} tone={c.enabled ? "success" : "neutral"} />)}</span> },
-    { id: "roles", header: t("Roles"), meta: { width: 170 }, accessorFn: (a) => list(a.roles) },
-    { id: "reads", header: t("Reads"), meta: { width: 200 }, accessorFn: (a) => list(a.reads) },
-    { id: "inputs", header: t("Connector inputs"), meta: { width: 200 }, accessorFn: (a) => list(a.inputs) },
-    { id: "provides", header: t("Provides"), meta: { width: 160 }, accessorFn: (a) => list(a.provides) },
-    { id: "consumes", header: t("Consumes"), meta: { width: 200 }, accessorFn: (a) => list(a.consumes) },
-    { id: "uses", header: t("Uses protocol actions"), meta: { width: 300 }, accessorFn: (a) => list(a.uses) },
-    { id: "subscribes", header: t("Subscribes to"), meta: { width: 260 }, accessorFn: (a) => list(a.subscribes) },
-  ];
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLocaleLowerCase();
+  const shown = apps.filter((a) => !needle || [a.id, a.title, ...a.capabilities.map((c) => c.name + " " + capabilityTitle(c.name)), ...a.provides, ...a.consumes, ...a.roles].join(" ").toLocaleLowerCase().includes(needle));
+  const capabilities = apps.reduce((n, a) => n + a.capabilities.length, 0);
   return (
     <>
-      <PageHeader title={t("Capability matrix")} description={t("What each app provides and what it uses, read live from the host's registry.")} />
-      <DataTable data={apps} columns={columns} getRowId={(a) => a.id} height="calc(100dvh - 190px)" />
+      <PageHeader title={t("Capability matrix")} description={t("What each module provides (capabilities and their actions, roles, reads, protocols) and what it uses (protocols, actions, events, connector inputs), read live from the host's registry. Packages are installed on the Packages page; this page explains what they bring.")}
+        actions={<Input aria-label={t("Filter modules")} placeholder={t("Filter by module, capability, protocol or role")} value={q} onChange={(e) => setQ(e.target.value)} className="w-72" />} />
+      <p className="mb-3 text-xs text-muted">{t("{apps} modules · {capabilities} capabilities", { apps: apps.length, capabilities })}</p>
+      <div className="grid max-w-6xl gap-3">
+        {shown.map((a) => <ModuleCard key={a.id} app={a} />)}
+        {!shown.length && <p className="text-sm text-muted">{t("No module matches.")}</p>}
+      </div>
     </>
   );
 }
