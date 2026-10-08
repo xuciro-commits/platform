@@ -711,7 +711,7 @@ compose exec -T postgres createdb -U platform journal_test
 (cd ../../capabilities/server && PLATFORM_TEST_DATABASE=postgres://platform:platform-local-only@localhost:$PG_PORT/journal_test \
   go test -count=1 -run 'TestJournal|TestJournalAcceptedResult' . 2>&1) >"$backup/journal-test.log" || { cat "$backup/journal-test.log" >&2; fail "journal test"; }
 echo "ok   journal numbering and accepted result retry/recovery (capabilities/server)"
-for app in erpadapter mes pms; do
+for app in mes pms; do
   (cd "../../apps/$app/server" && PLATFORM_TEST_DATABASE=postgres://platform:platform-local-only@localhost:$PG_PORT/journal_test \
     go test -count=1 -run 'TestJournalAccepted' . 2>&1) >"$backup/$app-accepted-test.log" ||
     { cat "$backup/$app-accepted-test.log" >&2; fail "$app accepted input recovery"; }

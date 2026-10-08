@@ -1,10 +1,10 @@
 # 做减法清单（由人执行）
 
-ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback / Matching rule。下面列出可迁移的旧路径；现有制造方案仍引用 `erpadapter`，完整探针与负责人走查通过前保留它。沙箱不能编译独立 Go 模块（`apps/*`、`solutions/*`），本地删除须与调用方迁移一起验证。每项完成后按影响面运行 `scripts/verify.sh capabilities composition web`；这里是迁移范围参考，执行顺序仍以 WorkQueue 为准。
+ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback / Matching rule。下面列出旧路径的处置；制造方案的 `erpadapter` 与调用方已一起删除，现有外部摄取与回写沿集成织物。沙箱不能编译独立 Go 模块（`apps/*`、`solutions/*`），本地删除须与调用方迁移一起验证。每项完成后按影响面运行 `scripts/verify.sh capabilities composition web`；这里是迁移范围参考，执行顺序仍以 WorkQueue 为准。
 
-## 1. `apps/erpadapter` + `web/packages/erpadapter`（ADR-0070 §减法、ADR-0072 §减法）
+## 1. `apps/erpadapter` + `web/packages/erpadapter`（已完成 2026-10-08）
 
-被取代：自配凭据的 ERP 轮询 → `build.connection` + `build.source`(odata/json)；`erpadapter/confirmation` 效果 → `build.writeback`（连接即端点、裁决 change id 即幂等键）。
+被取代：自配凭据的 ERP 轮询 → `build.connection` + `build.source`(odata/json)；`erpadapter/confirmation` 效果 → `build.writeback`（连接即端点、裁决 change id 即幂等键）。相关模块、席位与引用已全量清理。
 
 删除：
 - `apps/erpadapter/`（整个模块）、`web/packages/erpadapter/`；

@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronRight, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Redo2, Undo2 } from "lucide-react";
 import { t } from "../i18n";
 import { cn } from "../lib/cn";
@@ -28,6 +28,12 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
 }) {
   useViewTitle(typeof title === "string" ? title : undefined);
   const [layout, setLayout] = useState<Layout>(() => read(storageKey));
+  const previousDock = useRef(dock?.value);
+  useEffect(() => {
+    if (previousDock.current === dock?.value) return;
+    previousDock.current = dock?.value;
+    if (dock?.value) setLayout((old) => ({ ...old, dockOpen: true, dockTab: dock.value }));
+  }, [dock?.value]);
   const [drag, setDrag] = useState<{ side: "left" | "right" | "dock"; at: number; size: number }>();
   useEffect(() => { try { localStorage.setItem(`workbench:${storageKey}`, JSON.stringify(layout)); } catch { /* private mode */ } }, [layout, storageKey]);
   const patch = (next: Partial<Layout>) => setLayout((old) => ({ ...old, ...next }));
@@ -77,8 +83,8 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
       {showLeft && <><aside role="region" aria-label={left.label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border"><PanelBody panel={left} /></aside>{splitter("left")}</>}
       <div role="region" aria-label={mainLabel ?? t("Editor")} className="flex min-h-0 min-w-0 flex-col overflow-hidden">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
-        {dock && <DockBar dock={dock} open={layout.dockOpen} height={layout.dock} tab={layout.dockTab} splitter={showDock ? splitter("dock") : null}
-          onOpen={(id) => patch({ dockOpen: layout.dockOpen && layout.dockTab === id ? false : true, dockTab: id })} />}
+        {dock && <DockBar dock={dock} open={layout.dockOpen} height={layout.dock} tab={dock.value ?? layout.dockTab} splitter={showDock ? splitter("dock") : null}
+          onOpen={(id) => { dock.onChange?.(id); patch({ dockOpen: !(layout.dockOpen && (dock.value ?? layout.dockTab) === id), dockTab: id }); }} />}
       </div>
       {showRight && <>{splitter("right")}<aside role="region" aria-label={right.label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-l border-border"><PanelBody panel={right} /></aside></>}
     </div>

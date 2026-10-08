@@ -28,7 +28,7 @@ import (
 )
 
 // NewTenant composes the plant for one tenant with its books, the provider of
-// production.orders/1 (erp.New or erpadapter.New); seats belong to the plant's units.
+// production.orders/1 (erp.New); seats belong to the plant's units.
 func NewTenant(id string, books platform.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
 	t, err := platformserver.NewTenant(id, platformserver.NewConsole(id, seats...),
 		enterprise.New(id, mes.DemoOrganization(platformserver.Memberships(seats))), ai.New(id),

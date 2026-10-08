@@ -24,7 +24,6 @@ export const packages: Package[] = [
   { serves: ["csm"], load: () => import("@pkg/csm") },
   { serves: ["mes"], load: () => import("@pkg/mes") },
   { serves: ["erp"], load: () => import("@pkg/erp") },
-  { serves: ["erpadapter"], load: () => import("@pkg/erpadapter") },
   // Every member has an account in the Control Panel (ADR-0079); each contribution still decides who sees it (`for`).
   { serves: ["platform", "enterprise", "core", "ai", "flow", "agent", "knowledge"], public: true, load: () => import("@pkg/platform") },
 ];

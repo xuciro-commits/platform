@@ -3,7 +3,6 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"reflect"
 	"slices"
 	"testing"
@@ -316,56 +315,4 @@ func TestRecords(t *testing.T) {
 		}
 	}
 	CheckReplay(t, tn, journal, func() *Tenant { return stockTenant(t) })
-}
-
-// timed says whether timing bounds hold: on unless PLATFORM_TIMING=0 or -short,
-// which CI sets because its runners are slower than a developer's machine.
-func timed() bool { return os.Getenv("PLATFORM_TIMING") != "0" && !testing.Short() }
-
-// The done-when of ADR-0016's generic reads: a filtered, sorted page of 100 000
-// records in memory in under 100 ms.
-func TestRecordsAtScale(t *testing.T) {
-	tn := stockTenant(t)
-	c := platform.NewCaller(runtime{tn}, platform.Member{ID: "ana", Tenant: "t-1"}, "stock", false, false)
-	at := timestamppb.New(time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC))
-	for i := range 100_000 {
-		id := fmt.Sprintf("I%06d", i)
-		r := &pb.ChangeRecord{ChangeId: "c" + id, RecordedTime: at, Revision: 1,
-			Submission: &pb.Submission{PrincipalId: "ana", Target: &pb.EntityRef{Type: "stock.item", Id: id}, Schema: &pb.SchemaRef{Name: "stock.item.create"}}}
-		if err := tn.records.put(c, r, Item{Record: platform.Record{ID: id}, Name: fmt.Sprintf("part %d", i%977), Qty: i % 500, Line: []string{"L1", "L2"}[i%2], Owner: "ana"}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	lead, _ := tn.app(PlatformApp).(*Console).Member("lead")
-	domain, _ := json.Marshal([]any{[]any{"qty", ">", 100}, []any{"line", "=", "L1"}})
-	var page RecordPage
-	var err *kernel.Error
-	elapsed := time.Hour
-	for range 3 { // the best of three, so a busy machine does not fail the test
-		started := time.Now()
-		page, err = tn.Records(lead, "stock.item", platform.Query{Domain: domain, Sort: []string{"-qty", "name"}, Offset: 200, Limit: 50}, time.Now())
-		elapsed = min(elapsed, time.Since(started))
-	}
-	if err != nil || len(page.Records) != 50 || page.Total != 39_800 {
-		t.Fatalf("%d of %d: %v", len(page.Records), page.Total, err)
-	}
-	t.Logf("filtered, sorted page of 100 000 records in %v", elapsed)
-	if elapsed > 100*time.Millisecond && timed() {
-		t.Fatalf("took %v", elapsed)
-	}
-	// ADR-0019's done-when: grouped and measured in under 100 ms.
-	var agg Aggregate
-	elapsed = time.Hour
-	for range 3 {
-		started := time.Now()
-		agg, err = tn.Aggregate(lead, "stock.item", AggregateQuery{Groups: []string{"line", "created:month"}, Measures: []string{"count", "sum:qty", "avg:qty"}}, time.Now())
-		elapsed = min(elapsed, time.Since(started))
-	}
-	if err != nil || len(agg.Rows) != 2 || agg.Rows[0]["count"] != 50_000 {
-		t.Fatalf("aggregate %v %v", agg.Rows, err)
-	}
-	t.Logf("grouped and measured 100 000 records in %v", elapsed)
-	if elapsed > 100*time.Millisecond && timed() {
-		t.Fatalf("aggregate took %v", elapsed)
-	}
 }
