@@ -18,6 +18,31 @@ import (
 //
 // Nothing here is reached by a live submission.
 
+// ADR-0080 added core:steward to the local bootstrap seats. Existing journals
+// still start with the former seats. Only before the first console receipt,
+// remove this one implicit seed role from the comparison and require the
+// entire resulting directory to match the exact saved predecessor digest.
+// The accepted image remains authoritative; this does not grant a new role.
+func (t *Tenant) legacyCoreSeedPredecessor(saved acceptedState, prior json.RawMessage) bool {
+	d, ok := t.app(saved.App).(*Console)
+	if !ok || t.app("core") == nil || len(d.ledger.RecordsFor(t.ID)) != 0 {
+		return false
+	}
+	var current consoleState
+	if json.Unmarshal(prior, &current) != nil {
+		return false
+	}
+	changed := false
+	for _, m := range current.Members {
+		if len(m.Grants) == 0 && m.Roles["core"] == "steward" {
+			delete(m.Roles, "core")
+			changed = true
+		}
+	}
+	hash, err := canonicalDigest(current)
+	return changed && err == nil && hash == saved.Before
+}
+
 // ADR-0068 renamed the org owner. Keep accepted directory bytes unchanged:
 // historical hashes describe the stored roles, not their current projection.
 func (d *Console) enterpriseRoles() bool {

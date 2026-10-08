@@ -152,4 +152,5 @@ capabilities/server/
 | §3.1 最后一段：晋级并激活后，目标环境里一个从未参与构建的普通成员第一次打开工作台能否直接找到应用 | 以证据关闭，无需改码：`/v1/me` 列出 build、`/v1/definitions` 带应用/页面/对象及标题、空桌面可读；`commitReleaseLocked` 走 `changed()` 抬 global 版本，`/v1/definitions`、`/v1/me` 均在订阅之列，已打开的会话随激活即时刷新。`environment_http_test.go` 加操作者首次落地断言 | 本提交 |
 | 企业画布/对话框"刷新时偶发重置"（GPT 回执，未复现）：`useReadQuery`/`useRecordInventory` 的查询键含成员元数据范围 `source.scope`（me/entities/actions/definitions 的 JSON）；任何发布激活、授权、定义变化都换键，新键在加载期间 `data` 为 `undefined`，`Enterprise` 返回 `null`，`Modeler` 连同草稿、对话框、当前视图一起卸载 | 两处在相同凭证、租户、查询及 inventory 上限的元数据 scope 变化时保留上一答案，画布不再卸载；跨身份/租户/资源不复用旧答案（`read-placeholder.test.mjs`）。这是机制层面的根因，不限于企业画布 | 本提交 |
 | 会话列表不标记已结束（GPT 回执）：结束的会话直接从表里删除，列表只是"变短"，看不出发生了什么 | `Session.ended`（只增字段）：结束（本人、停用、会话时长到期）后保留一天并标"已于…结束"，之后在读取时清理；活跃在前、已结束在后。账户页加标签 | 本提交 |
+| 已有制造租户重启后隔离：新增 `core:steward` 种子使第一个 platform 接受结果的前驱 hash 不符 | 首条控制台收据前，仅允许移除隐式 core 种子角色后与历史前驱精确匹配；历史状态仍权威，不自动授权。`TestAcceptedConsoleCoreSeedReplay` 验证重放、状态字节和无关漂移拒绝。已有租户的 core 权限用正式角色决定补授 | 本地集成 |
 （继续追加）

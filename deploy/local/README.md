@@ -265,3 +265,5 @@ sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://
 新建租户需要写回挂载的 `tenants.json`。宿主仍以 `nobody` 运行，Compose 用 `TENANTS_GID` 加入文件所属组（macOS 的默认 staff 为 20）；启动前运行 `chmod g+w deploy/local/{hospitality,manufacturing}/tenants.json`，其他系统以 `TENANTS_GID=$(id -g) docker compose -f deploy/local/compose.yaml up -d --build` 启动。文件只含租户配置与身份引用，不含登录密钥。
 
 OIDC delivery 使用 `PLATFORM_PERSONAL_TOKEN_KEY`（至少 32 字节）签发个人令牌，未配置时拒绝启动；该密钥独立于 OIDC 公钥，重启时必须保留，轮换会使已签发的个人令牌失效。开发令牌宿主只用于开发；lightweight 使用其已有的私有签名密钥。
+
+种子席位的角色只用于新租户。已有日志的租户以已接受的成员状态为准；若管理员尚无 `core:steward`，在 Control Panel → Members 正式授予该角色，重启不会替代授权决定。
