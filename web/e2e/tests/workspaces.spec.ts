@@ -1,4 +1,4 @@
-import { expect, test } from "./kit";
+import { expect, pageUIProfile, test } from "./kit";
 import { decide, fresh, open, switchWorkspace } from "./host";
 
 test("task workspaces preserve native PMS and hand off a controlled receiving application", async ({ browser, page, request }, testInfo) => {
@@ -20,8 +20,19 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   });
   await decide(request, "manager", "build", "build.process.publish", { type: "build.process", id: flowID }, {});
   await decide(request, "manager", "build", "build.app.create", { type: "build.app", id: appID }, {
+    uiProfile: pageUIProfile, header: { variant: "horizontal", title: "WMS", logo: "wms", items: [{ kind: "logo" }, { kind: "title" }] },
     name: appName, title: "WMS entry probe", icon: "clipboard", pages: [pageName], resources: [{ app: "build", kind: "flow", name: `build.${flowName}` }],
   });
+
+  // Removing the logo clears its saved URL; disabling the header sends an explicit null.
+  await open(page, "manager", `/module?id=${appID}`);
+  await page.getByRole("tab", { name: "Header", exact: true }).click();
+  const header = page.getByRole("group", { name: "Application header", exact: true });
+  await header.locator("div").filter({ has: page.locator("strong").filter({ hasText: /^logo$/ }) }).first().getByRole("button", { name: "Remove", exact: true }).click();
+  const savedHeader = async () => (await (await request.get(`/v1/records/build.app/${appID}`, { headers: { Authorization: "Bearer manager" } })).json()).record.header;
+  await expect.poll(async () => (await savedHeader())?.logo ?? "").toBe("");
+  await header.getByRole("checkbox", { name: "Show application header", exact: true }).uncheck();
+  await expect.poll(savedHeader).toBeUndefined();
 
   await open(page, "manager", "/home");
   await expect(page.getByRole("button", { name: /^PMS\b/ }).first()).toBeVisible();

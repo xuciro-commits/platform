@@ -28,6 +28,9 @@ type ModuleFocus = "navigation" | "header" | "variables" | "queries" | "settings
 
 const hydrate = (project: Project): ModuleDraft => ({ header: project.header, uiProfile: project.uiProfile, variables: project.variables, queries: project.queries, pages: project.pages ?? [], groups: project.groups ?? [], title: project.title, description: project.description, icon: project.icon });
 
+// Omitted fields keep their saved value on edit; null explicitly removes the header.
+const moduleChanges = (draft: ModuleDraft) => ({ ...draft, header: draft.header ?? null });
+
 /** Entry for the `module` view: a project's module, optionally with one page in hand. */
 export function ModuleWorkbench({ id, page }: { id?: string; page?: string }) {
   const { open } = useWorkspace();
@@ -80,7 +83,7 @@ function ProjectModule({ id, page, openPage }: { id: string; page?: string; open
     if (!project || lock.current) return false;
     lock.current = true; setSaving(true); setError(undefined);
     try {
-      const ok = await decide("build.app.edit", { type: "build.app", id: project.id }, draft, { expectedRevision: project.revision, quiet: true, onRefused: setError });
+      const ok = await decide("build.app.edit", { type: "build.app", id: project.id }, moduleChanges(draft), { expectedRevision: project.revision, quiet: true, onRefused: setError });
       if (ok) { const result = await query.refetch(); const next = result.data?.record; session.saved(draft, next ? hydrate(next) : undefined); if (next) loaded.current = `${next.id}:${next.revision}`; }
       return ok;
     } catch { setError(t("The module could not be saved.")); return false; } finally { lock.current = false; setSaving(false); }
@@ -92,7 +95,7 @@ function ProjectModule({ id, page, openPage }: { id: string; page?: string; open
       const { record } = await client.get<{ record: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(target.id)}`);
       const next = { ...draft, pages: [...new Set([...(draft.pages ?? []), record.name])] };
       session.edit(next);
-      if (project) await decide("build.app.edit", { type: "build.app", id: project.id }, next, { expectedRevision: project.revision, quiet: true, onRefused: setError });
+      if (project) await decide("build.app.edit", { type: "build.app", id: project.id }, moduleChanges(next), { expectedRevision: project.revision, quiet: true, onRefused: setError });
       await query.refetch();
       openPage(record.id);
     } catch { setError(t("The page was created but could not be added to this module. Add it from the project's resources.")); }
