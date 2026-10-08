@@ -254,6 +254,7 @@ function Sessions() {
             {s.token && <span className="font-mono text-xs text-muted">{s.token}</span>}
             <span className="text-xs text-muted">{t("since {at}", { at: new Date(s.first).toLocaleString() })} · {t("last {at}", { at: new Date(s.last).toLocaleString() })}</span>
             {s.current && <Tag label={t("this session")} tone="success" />}
+            {s.ended && <Tag label={t("ended {at}", { at: new Date(s.ended).toLocaleString() })} tone="warning" />}
           </p>
         ))}
       </div>

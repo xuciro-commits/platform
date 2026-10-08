@@ -16,7 +16,7 @@ import {
   Button, Chart, Dialog, FilePicker, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { NewActions, RecordActions, useTransition, useRecordArchive } from "./actions/actions";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 export { ComputeCall } from "./automation/capability";
@@ -83,7 +83,12 @@ export function useReadQuery<T>(path: string, refetchInterval?: number, enabled 
   const visible = useViewVisible();
   const diagnostic = path === "/v1/health" || path === "/v1/connectors";
   const hostScope = path.startsWith("/v1/host/");
-  const query = useQuery({ queryKey: [client.connection.token, client.connection.tenant, path, source.scope], queryFn: () => client.get<T>(path, diagnostic), refetchInterval: diagnostic && visible ? refetchInterval : false, enabled: enabled && visible, ...(hostScope ? { retry: false } : {}) });
+  // The key carries the member's metadata scope (roles, entities, definitions):
+  // when that moves — a release activated, a role granted — the read is asked
+  // again under the new key. The previous answer stays on screen meanwhile;
+  // otherwise every workbench over such a read (the enterprise canvas, a
+  // dialog over it) unmounts for a moment and loses its local state.
+  const query = useQuery({ queryKey: [client.connection.token, client.connection.tenant, path, source.scope], queryFn: () => client.get<T>(path, diagnostic), refetchInterval: diagnostic && visible ? refetchInterval : false, enabled: enabled && visible, placeholderData: keepPreviousData, ...(hostScope ? { retry: false } : {}) });
   const refetch = useRef(query.refetch); refetch.current = query.refetch;
   useEffect(() => enabled && visible && !hostScope ? client.subscribeRead(path, () => { void refetch.current(); }) : undefined, [client, path, enabled, visible, hostScope]);
   return { ...query, data: query.isError ? undefined : query.data } as UseQueryResult<T>;
@@ -99,7 +104,7 @@ export function useRecordInventory<T>(type: string, limit = 1000, enabled = true
   const { client, source } = useHost();
   const path = `/v1/records/${encodeURIComponent(type)}`;
   const visible = useViewVisible();
-  const query = useQuery({ queryKey: [client.connection.token, client.connection.tenant, path, "inventory", limit, source.scope], queryFn: () => client.inventory<T>(type, limit), enabled: enabled && visible });
+  const query = useQuery({ queryKey: [client.connection.token, client.connection.tenant, path, "inventory", limit, source.scope], queryFn: () => client.inventory<T>(type, limit), enabled: enabled && visible, placeholderData: keepPreviousData });
   const refetch = useRef(query.refetch); refetch.current = query.refetch;
   useEffect(() => enabled && visible ? client.subscribeInventory(type, limit, () => { void refetch.current(); }) : undefined, [client, type, limit, enabled, visible]);
   return { ...query, data: query.isError ? undefined : query.data } as UseQueryResult<{ records: T[] }>;

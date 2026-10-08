@@ -221,11 +221,11 @@ func TestAcceptedConsoleAccessIsolation(t *testing.T) {
 	if !d.noticed("admin", secret, "", "token", now) {
 		t.Fatal("token session refused")
 	}
-	if sessions := d.Sessions("admin", secret); len(sessions) != 1 || sessions[0].Token != "ci" {
+	if sessions := d.Sessions("admin", secret, now); len(sessions) != 1 || sessions[0].Token != "ci" {
 		t.Fatal("token session lacks owning token")
 	}
 	decide(SchemaTokenRevoke, TokenType, "ci", `{}`)
-	if len(d.Sessions("admin", secret)) != 0 || d.noticed("admin", secret, "", "token", now) {
+	if ss := d.Sessions("admin", secret, now); len(ss) != 1 || ss[0].Ended.IsZero() || d.noticed("admin", secret, "", "token", now) {
 		t.Fatal("revoked token session survived")
 	}
 	decide(SchemaMemberSuspend, MemberType, "bo", `{}`)
