@@ -69,7 +69,7 @@ const views: View[] = [
   { id: "match", title: (p) => p.id ? t("Matching rule") : t("Matching rules"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><MatchEditor id={p.id} /></ApplicationScope> : <Matches /> },
   { id: "query", title: () => t("Queries"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><QueryEditor id={p.id} /></ApplicationScope> : <Queries /> },
   // Interface
-  { id: "module", title: (p) => p.page ? t("Page") : p.id ? t("Module") : t("Modules"), render: (p) => <ApplicationScope key={`${p.id ?? ""}:${p.page ?? ""}`} application={p.application ?? p.id}><ModuleWorkbench id={p.id} page={p.page} /></ApplicationScope> },
+  { id: "module", title: (p) => p.page ? t("Page") : p.id ? t("Module") : t("Modules"), render: (p) => <ApplicationScope key={`${p.id ?? ""}:${p.page ?? ""}`} application={p.application ?? p.id}><ModuleWorkbench id={p.id} page={p.page} focus={p.focus} /></ApplicationScope> },
   { id: "studio-templates", title: () => t("Templates"), render: (p) => <StudioTemplates key={p.template ?? "templates"} initial={p.template} /> },
   // Automation
   { id: "automation", title: (p) => p.id ? t("Automation") : t("Automations"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><AutomationEditor id={p.id} /></ApplicationScope> : scoped(p, <Automations />) },

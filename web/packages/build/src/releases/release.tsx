@@ -4,6 +4,7 @@ import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, Disclosure, PageHeader, Select, StatusTag, t, useWorkspace } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope } from "../projects/application-scope";
+import { diagnose } from "./diagnostics";
 import { useState } from "react";
 
 // One selected saved draft in a joint candidate (ADR-0048 D1). The selection is
@@ -320,7 +321,11 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         <Checkbox checked={confirmedUpgrade === upgradePlan.id} onChange={checked => setConfirmedUpgrade(checked ? upgradePlan.id : "")}>{t("Confirm this optional field upgrade plan")}</Checkbox>
       </Card>}
       {savedReview && runningDiagnostic && <p className="break-words text-xs text-warning">{runningDiagnostic}</p>}
-      {review.diagnostic && <p role="alert" className="text-sm text-danger">{review.diagnostic}</p>}
+      {review.diagnostic && (() => { const d = diagnose(review.diagnostic, { application: scope || (kind === "app" ? id : undefined) }); return <div className="grid gap-2">
+        <p role="alert" className="text-sm text-danger">{d.text}</p>
+        {d.text !== review.diagnostic && <p className="text-xs text-muted"><code>{review.diagnostic}</code></p>}
+        {d.fix && <div><Button size="sm" onClick={() => open({ view: d.fix!.view, params: d.fix!.params })}>{d.fix.label}</Button></div>}
+      </div>; })()}
       {!review.diagnostic && !(savedReview && runningDiagnostic) && <div className="grid gap-3 sm:grid-cols-3">
         {changed("Added", review.added)}
         {changed("Changed", review.changed)}
