@@ -99,12 +99,21 @@ function Content({ nodes, edges, positions, selected, editable = false, linking 
     });
   }, [edges, flowNodes, editable, onReconnect, pickedEdge]);
   const fitKey = viewportKey ?? "diagram";
+  const synchronized = flowNodes.length > 0 && flowNodes.length === nodes.length && flowNodes.every((node) => {
+    const expected = positions[node.id];
+    return nodes.some((n) => n.id === node.id) && !!node.measured?.width && !!node.measured?.height
+      && (!expected || node.position.x === expected.x && node.position.y === expected.y);
+  });
   useEffect(() => {
-    if (!flowNodes.length || fitted.current === fitKey) return;
-    fitted.current = fitKey;
-    const h = setTimeout(() => void fitView(fitting), 60);
-    return () => clearTimeout(h);
-  }, [flowNodes.length, fitKey, fitView]);
+    if (!synchronized || fitted.current === fitKey) return;
+    // A view change renders once with the previous nodes. Only finish the fit
+    // after the new positions and measurements have reached the canvas.
+    let cancelled = false;
+    const h = setTimeout(() => void fitView(fitting).then((fittedView) => {
+      if (fittedView && !cancelled) fitted.current = fitKey;
+    }), 60);
+    return () => { cancelled = true; clearTimeout(h); };
+  }, [synchronized, fitKey, fitView]);
 
   const arrange = (kind: DiagramLayout) => {
     setLayout(kind); setMenu(false);
@@ -121,11 +130,12 @@ function Content({ nodes, edges, positions, selected, editable = false, linking 
       <ReactFlow<FlowNode, FlowEdge> nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange}
         colorMode="system" minZoom={0.1} maxZoom={2.5} fitView fitViewOptions={fitting} zoomOnScroll panOnScroll={false} zoomOnPinch panOnDrag preventScrolling
         nodesDraggable={editable && !linking} nodesConnectable={linking} connectionMode={ConnectionMode.Loose} deleteKeyCode={null} connectionRadius={40}
+        isValidConnection={(c) => c.source !== c.target && nodes.some((n) => n.id === c.source && n.linkable !== false) && nodes.some((n) => n.id === c.target && n.linkable !== false)}
         onConnect={(c) => { if (c.source && c.target && c.source !== c.target) onLink?.(c.source, c.target); }}
         onNodeClick={(_, n) => { setPickedEdge(undefined); onSelect?.(n.id); }} onNodeDoubleClick={(_, n) => onOpen?.(n.id)} onPaneClick={() => { onSelect?.(undefined); setPickedEdge(undefined); setExpanded(undefined); }}
         onEdgeClick={(_, e) => { setPickedEdge(e.id); setExpanded(undefined); onSelect?.(undefined); }}
         edgesFocusable={editable && !!edgeActions}
-        onReconnect={onReconnect ? (old, c) => { if (c.source && c.target && (c.source !== old.source || c.target !== old.target)) onReconnect(old.id, c.source, c.target); } : undefined}
+        onReconnect={onReconnect ? (old, c) => { if (c.source && c.target && c.source !== c.target && (c.source !== old.source || c.target !== old.target)) onReconnect(old.id, c.source, c.target); } : undefined}
         onNodeDragStop={(_, __, dragged) => onPositionsChange?.(Object.fromEntries(dragged.map((n) => [n.id, { x: Math.round(n.position.x), y: Math.round(n.position.y) }])))}>
         <CanvasFurniture />
         {nodes.length > 12 && <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor="var(--border)" maskColor="color-mix(in oklch, var(--background), transparent 40%)" style={{ width: 140, height: 90 }} />}

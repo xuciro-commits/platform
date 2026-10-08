@@ -77,6 +77,7 @@
 .platform-diagram-node-linking .platform-diagram-handle { opacity: 1; }
 .platform-diagram-handle-active { width: 10px; height: 10px; background: var(--primary); border-color: var(--surface); opacity: 1; }
 .platform-diagram .react-flow__node { border-radius: 10px; }
+.platform-diagram .react-flow__edge.selected .react-flow__edgeupdater { fill: var(--surface); stroke: var(--primary); stroke-width: 1.5px; cursor: grab; }
 .platform-block-edge-label { position: absolute; padding: 2px 5px; border-radius: 4px; background: var(--surface); color: var(--muted); font-size: 10px; pointer-events: none; }
 .platform-block-edge-add { position: absolute; display: flex; align-items: center; justify-content: center; pointer-events: all; width: 20px; height: 20px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--muted); opacity: 0.7; transition: opacity 120ms, border-color 120ms; }
 .platform-block-edge-add:hover { opacity: 1; color: var(--primary); border-color: var(--primary); }

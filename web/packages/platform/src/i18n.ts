@@ -982,4 +982,9 @@ register("zh-CN", {
   "Management": "管理结构",
   "Committees": "治理结构",
   "Sites": "场所结构",
+  "Open view": "打开视图",
+  "Placement": "隶属关系",
+  "Membership": "成员关系",
+  "Fills post": "任职",
+  "Typed by": "类型归属",
 });

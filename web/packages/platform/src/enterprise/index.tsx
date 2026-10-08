@@ -24,6 +24,7 @@ type Draft = { view: string; elements: string[]; layout: Positions; name: string
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
 const fresh = (prefix: string, name: string) => `${prefix}-${slug(name)}-${Math.random().toString(36).slice(2, 6)}`;
 const relationshipTitles: Record<string, string> = {
+  ActualResourceRelationship: "Placement", ActualOrganizationRole: "Membership", FillsPost: "Fills post", typedBy: "Typed by",
   ResponsibleFor: "Responsible for", Exhibits: "Has capability", IsCapableToPerform: "Can perform", OwnsProcess: "Owns process",
   Enables: "Enables", MotivatedBy: "Motivated by", MilestoneDependency: "Milestone dependency", ProjectSequence: "Project sequence", MapsToGoal: "Maps to goal",
 };
@@ -291,7 +292,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
           {drafts[v.id]?.dirty && <Tag label={t("unsaved")} tone="warning" />}
           <span className="ml-auto font-mono text-[10px] text-muted">{v.grid}</span></Button>
         {admin && <div className="flex flex-wrap gap-1 pl-1">
-          <Button size="sm" variant="ghost" title={t("Open this view")} onClick={() => openView(v.id)}>{t("Open")}</Button>
+            <Button size="sm" variant="ghost" title={t("Open this view")} onClick={() => openView(v.id)}>{t("Open view")}</Button>
           <Button size="sm" variant="ghost" title={t("Change the name; the drawing stays")} onClick={() => setDialog({ kind: "rename", id: v.id, name: v.name })}><Pencil />{t("Rename…")}</Button>
           <Button size="sm" variant="ghost" title={t("A new view from what is drawn now")} disabled={v.id !== activeId} onClick={() => setDialog({ kind: "view", mode: "saveAs" })}><Copy />{t("Save as…")}</Button>
           <Button size="sm" variant="ghost" className="text-[var(--tone-danger)]" title={t("Discard this drawing; the model stays")} onClick={() => setDialog({ kind: "deleteView", id: v.id, name: v.name })}><Trash2 />{t("Delete")}</Button>
