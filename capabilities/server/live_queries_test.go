@@ -11,6 +11,7 @@ import (
 	"platformserver/apps/enterprise"
 	"platformserver/apps/work"
 	"platformserver/platform"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -291,6 +292,80 @@ func TestEnterpriseAppliedPatternReplays(t *testing.T) {
 		t.Fatalf("expected one durable input, got %d", len(entries))
 	}
 	CheckReplay(t, live, entries, compose)
+}
+
+// View identity and relationship replacement must preserve unrelated state,
+// survive refusals and replay identically through the real submission pipeline.
+func TestEnterpriseViewIdentityAndAtomicRelationships(t *testing.T) {
+	compose := func() *Tenant {
+		return composeTenant(t, "model-decisions", []Seat{seatOf("admin", "enterprise:admin", "build:builder"), seatOf("viewer", "enterprise:admin")},
+			enterprise.New("model-decisions", platform.OrgSeed{Structures: []platform.Structure{{ID: "management", Name: "Management", Kind: "management"}}}), build.New("model-decisions"))
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	at := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
+	for _, id := range []string{"a", "b", "c"} {
+		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, id, map[string]any{"name": id, "stereotype": enterprise.Organization}, at)
+	}
+	model := func(who string) enterprise.Model {
+		t.Helper()
+		value, err := tn.Read(memberOf(t, tn, who), enterprise.ReadModel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return value.(enterprise.Model)
+	}
+	for _, id := range []string{"first", "second"} {
+		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, id,
+			map[string]any{"name": id, "grid": "Pr-Sr", "kind": "management", "asOf": "2026-10-08", "elements": []string{"a", "b"}}, at)
+	}
+	second := model("admin").Views[1]
+	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "first",
+		map[string]any{"name": "Renamed", "grid": "Rs-Sr", "elements": []string{}, "asOf": "2026-10-07"}, at)
+	m := model("admin")
+	if m.Views[0].ID != "first" || m.Views[0].Kind != "management" || len(m.Views[0].Elements) != 0 || !reflect.DeepEqual(m.Views[1], second) {
+		t.Fatalf("view state crossed identities: %+v", m.Views)
+	}
+	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "first", map[string]any{"name": "bad", "grid": "made-up"}, at); got == "ok" {
+		t.Fatal("unknown viewpoint accepted")
+	}
+	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, "bad-project",
+		map[string]any{"name": "Bad project", "stereotype": enterprise.Project, "properties": map[string]any{"startDate": "2026-10-10T00:00:00Z", "endDate": "2026-10-08T00:00:00Z"}}, at); got == "ok" {
+		t.Fatal("a backwards project interval entered the model")
+	}
+	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaRelationshipAdd, enterprise.RelationshipType, "old", map[string]any{"stereotype": enterprise.Placement, "source": "a", "target": "b", "kind": "management"}, at)
+	before := model("admin")
+	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaRelationshipChange, enterprise.RelationshipType, "old",
+		map[string]any{"replacement": "bad", "stereotype": enterprise.Placement, "source": "a", "target": "missing", "kind": "management"}, at); got == "ok" {
+		t.Fatal("invalid replacement accepted")
+	}
+	if !reflect.DeepEqual(before.Relationships, model("admin").Relationships) {
+		t.Fatal("refused replacement ended the old relationship")
+	}
+	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaRelationshipChange, enterprise.RelationshipType, "old",
+		map[string]any{"replacement": "new", "stereotype": enterprise.Placement, "source": "a", "target": "c", "kind": "management"}, at)
+	m = model("admin")
+	if len(m.Relationships) != 2 || m.Relationships[0].Until != "2026-10-08" || m.Relationships[1].Target != "c" {
+		t.Fatalf("same-day change: %+v", m.Relationships)
+	}
+	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewDelete, enterprise.ViewType, "first", map[string]any{"id": "first"}, at)
+	if len(model("admin").Views) != 1 || len(model("admin").Elements) != 3 {
+		t.Fatal("deleting a drawing changed the model")
+	}
+	decide(t, tn, "admin", build.ID, "build.object.create", build.ObjectType, "OBJ", map[string]any{"name": "privateobject", "title": "Private object"}, at)
+	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second",
+		map[string]any{"name": "Pinned", "grid": "Pr-Sr", "elements": []string{"a"}, "pins": []map[string]any{{"ref": "record:build.object/OBJ", "anchor": "a", "label": "Cached private text", "at": []int{10, 20}}}}, at)
+	if len(model("viewer").Views[0].Pins) != 0 {
+		t.Fatal("private record pin leaked into shared model")
+	}
+	if pins := model("admin").Views[0].Pins; len(pins) != 1 || pins[0].Label == "Cached private text" {
+		t.Fatal("pin label bypassed the current scoped record")
+	}
+	if got := refuse(t, tn, "viewer", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second", map[string]any{"name": "overwrite", "grid": "Pr-Sr", "elements": []string{"a"}}, at); got == "ok" {
+		t.Fatal("a partially visible view silently lost another member's pins")
+	}
+	CheckReplay(t, tn, entries, compose)
 }
 
 func TestGovernanceHTTPAndLiveReads(t *testing.T) {

@@ -27,14 +27,16 @@ const (
 	ViewType         = "enterprise.view"
 	ModelType        = "enterprise.model"
 
-	SchemaElementAdd      = "enterprise.element.add"
-	SchemaElementEdit     = "enterprise.element.edit"
-	SchemaElementClose    = "enterprise.element.close"
-	SchemaRelationshipAdd = "enterprise.relationship.add"
-	SchemaRelationshipEnd = "enterprise.relationship.end"
-	SchemaKindAdd         = "enterprise.kind.add"
-	SchemaViewSave        = "enterprise.view.save"
-	SchemaSeed            = "enterprise.model.seed"
+	SchemaElementAdd         = "enterprise.element.add"
+	SchemaElementEdit        = "enterprise.element.edit"
+	SchemaElementClose       = "enterprise.element.close"
+	SchemaRelationshipAdd    = "enterprise.relationship.add"
+	SchemaRelationshipEnd    = "enterprise.relationship.end"
+	SchemaRelationshipChange = "enterprise.relationship.change"
+	SchemaKindAdd            = "enterprise.kind.add"
+	SchemaViewSave           = "enterprise.view.save"
+	SchemaViewDelete         = "enterprise.view.delete"
+	SchemaSeed               = "enterprise.model.seed"
 
 	ReadOrganization   = "organization"
 	ReadModel          = "enterprise"
@@ -91,9 +93,14 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 			Description: "End a relationship on a day; it stays in history.",
 			Payload:     []platform.Field{until}},
 		platform.Action{Schema: SchemaViewSave, Target: ViewType, Capability: "views", Title: "Save view", Roles: admin,
-			Description: "Save a drawing over the model: the elements it shows, where, in which UAF grid cell.",
+			Description: "Write a drawing over the model under its own id: the name, the elements it shows, where, the records pinned beside them, and the day it shows. Saving an id writes that view; it never writes another one.",
 			Payload: []platform.Field{f("name", "string", "Name", true), f("grid", "string", "UAF grid cell, e.g. Pr-Sr, St-Tx, Rs-Sr, Pj-Rm", true),
-				f("elements", "json", "Element ids shown", false), f("layout", "json", "Positions by element id", false), f("asOf", "date", "The day the view shows", false)}},
+				f("kind", "string", "Relationship kind shown by the view", false), f("context", "json", "Elements explicitly added from other viewpoints", false),
+				f("elements", "json", "Element ids shown", false), f("layout", "json", "Positions by element id", false),
+				f("pins", "json", "Records pinned on the drawing: {ref, anchor, at}", false), f("asOf", "date", "The day the view shows", false)}},
+		platform.Action{Schema: SchemaViewDelete, Target: ViewType, Capability: "views", Title: "Delete view", Roles: admin,
+			Description: "Discard a drawing. The model, its elements, their relationships and the records that name them are untouched: a view is a picture, not a fact.",
+			Payload:     []platform.Field{f("id", "string", "The view's id", true)}},
 		platform.Action{Schema: SchemaSliceImport, Target: ModelType, Capability: "federation", Title: "Import a published slice", Roles: admin,
 			Description: "Mirror what another tenant publishes — its organisations, capabilities, sites — read-only, owned there; relate your own elements to them. A connector delivers the slice.",
 			Payload:     []platform.Field{f("slice", "json", "The other tenant's enterprise-published answer", true)}},
@@ -109,6 +116,10 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 			Payload: []platform.Field{f("scale", "string", "S, M, L or XL; empty: from headcount", false), f("name", "string", "The enterprise's name", true), f("headcount", "number", "People, roughly", false),
 				f("sites", "number", "Sites or plants", false), f("legalEntities", "number", "Legal entities", false), f("industry", "string", "manufacturing, hospitality, services …", false)}},
 	)
+	change, _ := catalog.Action(SchemaRelationshipAdd)
+	change.Schema, change.Title, change.Description = SchemaRelationshipChange, "Change relationship", "Replace a relationship atomically; a refusal leaves the existing relationship unchanged."
+	change.Payload = append(slices.Clone(change.Payload), f("replacement", "string", "New relationship id", true))
+	catalog.Add(change)
 	return &Enterprise{tenant: tenant, model: FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType)}
 }
 
@@ -197,14 +208,33 @@ type payload struct {
 	Properties                                                                                       map[string]any
 	Elements                                                                                         []string
 	Layout                                                                                           map[string][2]float64
+	Pins                                                                                             []Pin
 	Calendar                                                                                         string
 	Published                                                                                        *bool
 	Slice                                                                                            *Slice
 	Pattern, Under                                                                                   string
+	Replacement                                                                                      string
+	Context                                                                                          []string
 	Params                                                                                           Params
 }
 
 func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if !c.Replaying && s.GetSchema().GetName() == SchemaViewSave {
+		var v payload
+		if err := json.Unmarshal(s.GetPayload(), &v); err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid view")
+		}
+		m := e.Model()
+		pins := v.Pins
+		if old := m.view(s.GetTarget().GetId()); old != nil {
+			pins = append(slices.Clone(pins), old.Pins...)
+		}
+		for _, p := range pins {
+			if _, err := pinRecord(c, p.Ref, now); err != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This view contains a record pin you may not read")
+			}
+		}
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
@@ -247,7 +277,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			case m.element(id) != nil:
 				return nil, conflict
 			}
-			if err := checkProperties(mm, p.Stereotype, p.Properties); err != nil {
+			if err := checkProperties(mm, p.Stereotype, p.Properties, !c.Replaying); err != nil {
 				return nil, err
 			}
 			return func(*pb.ChangeRecord) {
@@ -296,6 +326,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, invalid("a sync carries elements")
 			}
 			owner, ids := "source:"+p.Source, map[string]bool{}
+			stereotypes := map[string]string{}
 			for i := range sync.Elements {
 				el := &sync.Elements[i]
 				switch {
@@ -309,10 +340,11 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				if own := m.element(el.ID); own != nil && own.Owner != owner {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{element} is not {source}'s to change", el.ID, p.Source)
 				}
-				if err := checkProperties(mm, el.Stereotype, el.Properties); err != nil {
+				if err := checkProperties(mm, el.Stereotype, el.Properties, !c.Replaying); err != nil {
 					return nil, err
 				}
 				ids[el.ID] = true
+				stereotypes[el.ID] = el.Stereotype
 			}
 			for i := range sync.Relationships {
 				r := &sync.Relationships[i]
@@ -328,6 +360,20 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				case r.Stereotype == Placement && r.Kind != "" && m.kind(r.Kind) == nil:
 					return nil, invalid("{kind} is not a relationship kind of this model", r.Kind)
 				}
+				// The same contract as Relate (ADR-0085 D2): a slice or a sync
+				// cannot write a pair the profile refuses.
+				src, dst := m.element(r.Source), m.element(r.Target)
+				if st, ok := stereotypes[r.Source]; ok {
+					src = &Element{Stereotype: st}
+				}
+				if st, ok := stereotypes[r.Target]; ok {
+					dst = &Element{Stereotype: st}
+				}
+				if src != nil && dst != nil {
+					if ok, why := Allowed(Contracts(mm), mm, r.Stereotype, src.Stereotype, dst.Stereotype); !ok {
+						return nil, invalid(why)
+					}
+				}
 			}
 			source := p.Source
 			return func(*pb.ChangeRecord) { m.Sync(source, sync.Elements, sync.Relationships, today) }, nil
@@ -336,6 +382,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, invalid("a slice names the tenant it comes from")
 			}
 			owner := "tenant:" + p.Slice.Tenant
+			stereotypes := map[string]string{}
 			for i := range p.Slice.Elements {
 				el := &p.Slice.Elements[i]
 				if mm.Stereotypes[el.Stereotype] == nil {
@@ -344,7 +391,23 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				if own := m.element(el.ID); own != nil && own.Owner != owner {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{element} is this tenant's own; the slice may not replace it", el.ID)
 				}
+				stereotypes[el.ID] = el.Stereotype
 				el.Owner, el.Published = owner, false
+			}
+			for _, r := range p.Slice.Relationships {
+				src, dst := m.element(r.Source), m.element(r.Target)
+				if st, ok := stereotypes[r.Source]; ok {
+					src = &Element{Stereotype: st}
+				}
+				if st, ok := stereotypes[r.Target]; ok {
+					dst = &Element{Stereotype: st}
+				}
+				if src == nil || dst == nil {
+					return nil, invalid("{element} is not in the model nor in the slice", r.Source)
+				}
+				if ok, why := Allowed(Contracts(mm), mm, r.Stereotype, src.Stereotype, dst.Stereotype); !ok {
+					return nil, invalid(why)
+				}
 			}
 			slice := *p.Slice
 			return func(*pb.ChangeRecord) { m.Import(slice) }, nil
@@ -352,13 +415,43 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			if p.Name == "" || p.Grid == "" {
 				return nil, invalid("a view needs a name and a grid cell")
 			}
+			if !slices.ContainsFunc(Grid(mm), func(g GridCell) bool { return g.ID == p.Grid }) {
+				return nil, invalid("{grid} is not a UAF view cell", p.Grid)
+			}
 			for _, el := range p.Elements {
 				if m.element(el) == nil {
 					return nil, invalid("the view shows {element}, which is not in the model", el)
 				}
 			}
+			for _, pin := range p.Pins {
+				if m.element(pin.Anchor) == nil {
+					return nil, invalid("a pinned record sits beside {element}, which is not in the model", pin.Anchor)
+				}
+				if !strings.HasPrefix(pin.Ref, "record:") || refType(pin.Ref) == "" || refID(pin.Ref) == "" {
+					return nil, invalid("a pin is a record reference: record:<entity type>/<id>, not {pin}", pin.Ref)
+				}
+			}
+			kind := p.Kind
+			if kind == "" {
+				if prev := m.view(id); prev != nil {
+					kind = prev.Kind
+				}
+			}
+			if kind != "" && m.kind(kind) == nil {
+				return nil, invalid("{kind} is not a relationship kind of this model", kind)
+			}
+			if p.AsOf != "" {
+				if _, err := time.Parse(time.DateOnly, p.AsOf); err != nil {
+					return nil, invalid("Invalid date {day}", p.AsOf)
+				}
+			}
+			for _, context := range p.Context {
+				if !slices.Contains(p.Elements, context) {
+					return nil, invalid("A context element must be on the view")
+				}
+			}
 			return func(*pb.ChangeRecord) {
-				v := View{ID: id, Name: p.Name, Grid: p.Grid, Elements: p.Elements, Layout: p.Layout, AsOf: p.AsOf}
+				v := View{ID: id, Name: p.Name, Grid: p.Grid, Kind: kind, Context: p.Context, Elements: p.Elements, Layout: p.Layout, Pins: p.Pins, AsOf: p.AsOf}
 				if v.Elements == nil {
 					v.Elements = []string{}
 				}
@@ -368,71 +461,34 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 					m.Views = append(m.Views, v)
 				}
 			}, nil
-		case SchemaRelationshipAdd:
-			st := mm.Stereotypes[p.Stereotype]
-			switch {
-			case st == nil || !mm.Relationship(p.Stereotype) && p.Stereotype != Typed && p.Stereotype != Membership: // a role is a slot in UAF, not a UML relationship; it still joins two elements here
-				return nil, invalid("{stereotype} is not a UAF relationship stereotype", p.Stereotype)
-			case m.relationship(id) != nil:
-				return nil, conflict
-			case p.Source == "" || p.Target == "":
-				return nil, invalid("a relationship needs a source and a target")
-			case p.Until != "" && p.Until <= p.From:
-				return nil, invalid("the relationship would end before it starts")
-			}
-			target := m.element(p.Target)
-			if target == nil {
+		case SchemaViewDelete:
+			if m.view(id) == nil {
 				return nil, notFound
-			}
-			source := m.element(p.Source)
-			if source == nil && !(p.Stereotype == Membership && strings.HasPrefix(p.Source, "member:")) {
-				return nil, notFound
-			}
-			if source != nil && p.Source == p.Target {
-				return nil, invalid("an element cannot relate to itself")
-			}
-			var ends func()
-			switch p.Stereotype {
-			case Placement:
-				k := m.kind(p.Kind)
-				if k == nil {
-					return nil, invalid("a placement needs a relationship kind")
-				}
-				if !(source.Stereotype == target.Stereotype && (source.Stereotype == Organization || source.Stereotype == Location) || source.Stereotype == Resource && target.Stereotype == Location) {
-					return nil, invalid("a placement sits an organisation under an organisation, a location inside a location, or a resource at a location")
-				}
-				if m.below(p.Kind, p.Source, p.Target, p.From) {
-					return nil, invalid("{target} already sits under {source}; an organisation cannot sit under itself", target.Name, source.Name)
-				}
-				ends = func() { // a tree keeps one current parent
-					for i, r := range m.Relationships {
-						if r.Stereotype == Placement && r.Kind == p.Kind && r.Source == p.Source && (!k.Matrix || r.Target == p.Target) && activeOn(r.From, r.Until, p.From) {
-							m.Relationships[i].Until = p.From
-						}
-					}
-				}
-			case Membership:
-				if p.Role == "" {
-					return nil, invalid("a membership needs a role")
-				}
-				if target.Stereotype != Organization {
-					return nil, invalid("a membership is of an organisation")
-				}
-			case FillsPost:
-				if source.Stereotype != Person || target.Stereotype != Post {
-					return nil, invalid("FillsPost joins an ActualPerson to an ActualPost")
-				}
-			case Performs:
-				if !mm.Is(target.Stereotype, Capability) {
-					return nil, invalid("IsCapableToPerform points at a Capability")
-				}
 			}
 			return func(*pb.ChangeRecord) {
-				if ends != nil {
-					ends()
-				}
-				m.Relationships = append(m.Relationships, Relationship{ID: id, Stereotype: p.Stereotype, Kind: p.Kind, Source: p.Source, Target: p.Target, Role: p.Role, Relation: p.Relation, Share: p.Share, Primary: p.Primary, From: p.From, Until: p.Until})
+				m.Views = slices.DeleteFunc(m.Views, func(x View) bool { return x.ID == id })
 			}, nil
+		case SchemaRelationshipAdd:
+			return decideRelationship(m, mm, id, p)
+		case SchemaRelationshipChange:
+			previous := m.relationship(id)
+			if previous == nil {
+				return nil, notFound
+			}
+			if p.From < previous.From || !activeOn(previous.From, previous.Until, p.From) {
+				return nil, invalid("The relationship is not active on {day}", p.From)
+			}
+			if p.Replacement == "" || p.Replacement == id {
+				return nil, invalid("A relationship change needs a new relationship id")
+			}
+			candidate := copyModel(*m)
+			candidate.relationship(id).Until = p.From
+			apply, err := decideRelationship(&candidate, mm, p.Replacement, p)
+			if err != nil {
+				return nil, err
+			}
+			apply(nil)
+			return func(*pb.ChangeRecord) { *m = candidate }, nil
 		case SchemaRelationshipEnd:
 			r := m.relationship(id)
 			if r == nil {
@@ -442,7 +498,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			if day == "" {
 				day = today
 			}
-			if day < r.From || day == r.From && r.Stereotype != Membership {
+			if day < r.From {
 				return nil, invalid("the relationship would end before it starts")
 			}
 			return func(*pb.ChangeRecord) { r.Until = day }, nil
@@ -457,7 +513,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 		switch s.GetSchema().GetName() {
 		case SchemaElementEdit:
 			if p.Properties != nil {
-				if err := checkProperties(mm, el.Stereotype, p.Properties); err != nil {
+				if err := checkProperties(mm, el.Stereotype, p.Properties, !c.Replaying); err != nil {
 					return nil, err
 				}
 			}
@@ -493,7 +549,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 
 // checkProperties: tagged values name properties of the stereotype, and an
 // enumeration-typed one holds one of its literals.
-func checkProperties(mm *uaf.Metamodel, stereotype string, values map[string]any) *kernel.Error {
+func checkProperties(mm *uaf.Metamodel, stereotype string, values map[string]any, strictDates bool) *kernel.Error {
 	if len(values) == 0 {
 		return nil
 	}
@@ -510,6 +566,21 @@ func checkProperties(mm *uaf.Metamodel, stereotype string, values map[string]any
 			if s, _ := v.(string); s != "" && !slices.Contains(en.Literals, s) {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{name} takes one of {literals}", name, strings.Join(en.Literals, ", "))
 			}
+		}
+		if strictDates && props[i].Type == "ISO8601DateTime" {
+			text, ok := v.(string)
+			if _, err := time.Parse(time.RFC3339Nano, text); !ok || err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{name} needs a date and time with a timezone", name)
+			}
+		}
+	}
+	start, startOK := values["startDate"].(string)
+	end, endOK := values["endDate"].(string)
+	if strictDates && startOK && endOK {
+		a, _ := time.Parse(time.RFC3339Nano, start)
+		b, _ := time.Parse(time.RFC3339Nano, end)
+		if b.Before(a) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The end date cannot be before the start date")
 		}
 	}
 	return nil
@@ -617,6 +688,10 @@ type Metamodel struct {
 	Stereotypes  map[string]*uaf.Stereotype  `json:"stereotypes"`
 	Enumerations map[string]*uaf.Enumeration `json:"enumerations"`
 	Grid         []GridCell                  `json:"grid"`
+	// Contracts are the relationship stereotypes as the host checks them
+	// (ADR-0085 D2): what each end accepts, the standard's text it comes from,
+	// and what this profile adds. The modeler offers exactly these.
+	Contracts []Contract `json:"contracts"`
 }
 
 // Element and Related serve host.Directory for the apps (ADR-0067 D3).
@@ -636,14 +711,15 @@ func (e *Enterprise) Related(element, stereotype string, outgoing bool, day Date
 	return e.model.Of(element, stereotype, outgoing, day)
 }
 
-func (e *Enterprise) Read(_ platform.Caller, name string) (any, *kernel.Error) {
+func (e *Enterprise) Read(c platform.Caller, name string) (any, *kernel.Error) {
+	if name == ReadModel {
+		return readableModel(c, e.Model(), time.Now()), nil
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	switch name {
 	case ReadOrganization:
 		return e.model.OrgSeed(), nil
-	case ReadModel:
-		return copyModel(e.model), nil
 	case ReadPublished:
 		return e.model.Published(e.tenant), nil
 	case ReadPatterns:
@@ -655,7 +731,8 @@ func (e *Enterprise) Read(_ platform.Caller, name string) (any, *kernel.Error) {
 		return out, nil
 	case ReadMetamodel:
 		mm := uaf.Current()
-		return Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations, Grid: Grid()}, nil
+		return Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations,
+			Grid: Grid(mm), Contracts: Contracts(mm)}, nil
 	}
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }

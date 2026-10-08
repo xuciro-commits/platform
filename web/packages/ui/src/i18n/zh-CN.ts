@@ -1066,6 +1066,8 @@ export default {
   "Ready": "就绪",
   "Record": "记录",
   "Name": "名称",
+  "Icon": "图标",
+  "Kind": "类别",
   "Quantity": "数量",
   "Status": "状态",
   "Small": "小型",

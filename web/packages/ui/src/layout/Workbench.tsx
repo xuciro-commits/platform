@@ -99,9 +99,9 @@ function PanelBody({ panel }: { panel: WorkbenchPanel }) {
   if (!panel.tabs?.length) return <div className="min-h-0 flex-1 overflow-auto">{panel.content}</div>;
   const current = panel.tabs.find((tab) => tab.id === active) ?? panel.tabs[0]!;
   return <>
-    <div role="tablist" aria-label={panel.label} className="flex shrink-0 gap-0.5 border-b border-border px-1 pt-1">
+    <div role="tablist" aria-label={panel.label} className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border px-1 pt-1">
       {panel.tabs.map((tab) => <button key={tab.id} type="button" role="tab" id={`${prefix}-${tab.id}`} aria-selected={tab.id === current.id}
-        className={cn("flex items-center gap-1 rounded-t border-b-2 px-2 py-1 text-xs", tab.id === current.id ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}
+        className={cn("flex shrink-0 items-center gap-1 whitespace-nowrap rounded-t border-b-2 px-2 py-1 text-xs", tab.id === current.id ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}
         onClick={() => choose(tab.id)}>{tab.title}{tab.badge !== undefined && tab.badge !== 0 && <span className="rounded-full bg-row-selected px-1.5 text-[10px]">{tab.badge}</span>}</button>)}
     </div>
     <div role="tabpanel" aria-labelledby={`${prefix}-${current.id}`} className="min-h-0 flex-1 overflow-auto">{current.content}</div>

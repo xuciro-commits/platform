@@ -241,13 +241,21 @@ func (t *Tenant) liveVersion(query string) string {
 			return fmt.Sprintf("%d/%d/%d", global, meta, version)
 		}
 	}
+	// Reverse references and pin labels also depend on business records, not
+	// only decisions whose owner is enterprise.
+	if p == "/v1/enterprise" || p == "/v1/enterprise-references" {
+		t.records.mu.Lock()
+		generation := t.records.generation
+		t.records.mu.Unlock()
+		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["enterprise"], generation)
+	}
 	owner := "platform"
 	switch p {
 	case "/v1/releases/active", "/v1/releases/candidates", "/v1/release-profile", "/v1/capabilities":
 		owner = "build"
 	case "/v1/ai-limits", "/v1/ai-models", "/v1/ai-providers", "/v1/ai/vendors":
 		owner = "ai"
-	case "/v1/organization", "/v1/enterprise", "/v1/enterprise-metamodel", "/v1/enterprise-patterns", "/v1/enterprise-published":
+	case "/v1/organization", "/v1/enterprise", "/v1/enterprise-metamodel", "/v1/enterprise-patterns", "/v1/enterprise-published", "/v1/enterprise-references":
 		owner = "enterprise"
 	case "/v1/flows":
 		owner = "flow"

@@ -310,7 +310,8 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       const panel = dock.current?.getPanel(id);
       const route = (panel?.params as { route?: Route } | undefined)?.route;
       const category = route ? byId.get(route.view)?.title(route.params ?? {}) : undefined;
-      if (panel) panel.setTitle(category && category !== name ? `${category} · ${name}` : name);
+      const title = category && category !== name ? `${category} · ${name}` : name;
+      if (panel && panel.api.title !== title) panel.setTitle(title);
     },
     recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail, workspaces,
   }), [open, closePanel, closeAll, unsaved, memory, toggleFavorite, applications, rail, workspaces, byId]);

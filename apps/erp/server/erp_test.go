@@ -8,6 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/enterprise"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -40,7 +41,7 @@ func buildTenant(t *testing.T, tenant string) *platformserver.Tenant {
 	controller := seat("cy", Controller)
 	controller.Roles[platformserver.PlatformApp] = platformserver.Admin // sets the tenant's currency
 	tn, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, seat("ada", Accountant), controller, seat("bo", Buyer), seat("pi", Planner)),
-		work.New(tenant), flow.New(tenant), New(tenant))
+		work.New(tenant), flow.New(tenant), New(tenant), enterprise.New(tenant, platform.OrgSeed{Units: []platform.Unit{{ID: "finance-unit", Name: "Finance"}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,10 +119,31 @@ func TestBooks(t *testing.T) {
 	// A refusal says why, in the reader's language (F-23).
 	b.expect("why", b.why+" / "+b.tn.Say("zh-CN", b.why), "Debits 1000.00 do not equal credits 900.00 / 借方合计 1000.00 与贷方合计 900.00 不相等")
 	b.expect("no number for a refusal", b.entry("E-1").Number, "")
-	b.expect("fix the draft", b.do("ada", EntryType+".edit", EntryType, "E-1", map[string]any{"lines": []any{line("1002", 100000, 0), line("4001", 0, 100000)}}), "ok")
+	chargedDebit, chargedCredit := line("1002", 100000, 0), line("4001", 0, 100000)
+	chargedDebit["costCentre"], chargedCredit["costCentre"] = "finance-unit", "finance-unit"
+	b.expect("fix the draft", b.do("ada", EntryType+".edit", EntryType, "E-1", map[string]any{"lines": []any{chargedDebit, chargedCredit}}), "ok")
 	b.expect("post", post("E-1"), "ok")
 	e1 := b.entry("E-1")
 	b.expect("posted", fmt.Sprint(e1.State, " ", e1.Number, " ", e1.Lines[0].Debit.Currency), "posted GJ/2026/00001 CNY")
+	// A business line's plain string reference is discoverable through the host,
+	// once per record even when both lines name the same unit.
+	controller, _ := b.tn.Member("cy")
+	refs, err := b.tn.EnterpriseReferences(controller, "finance-unit", 0, 1, b.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, g := range refs {
+		if g.Type == EntryType && g.Field == "lines.costCentre" {
+			if g.Total != 1 || len(g.Records) != 1 || g.Records[0].ID != "E-1" {
+				t.Fatalf("nested enterprise references: %+v", g)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("journal lines missing from enterprise Used by")
+	}
 	b.expect("a posted entry is final", b.do("ada", EntryType+".edit", EntryType, "E-1", map[string]any{"reference": "changed"}), "ERROR_CODE_POLICY_DENIED")
 
 	draft("E-2", "2026-10-02", line("1403", 30000, 0), line("1002", 0, 30000))

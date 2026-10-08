@@ -2,25 +2,25 @@
 // graphs, lineage. The owner supplies nodes with icons and edges with meaning;
 // the canvas owns zoom, pan, fit, minimap, layouts, dragging, linking and
 // dropping, so no view draws its own boxes again (ADR-0068 §6).
-import { BaseEdge, ConnectionMode, EdgeLabelRenderer, Handle, MarkerType, MiniMap, Position, ReactFlow, ReactFlowProvider, getSmoothStepPath, useEdgesState, useNodesState, useReactFlow, type Edge, type EdgeProps, type Node, type NodeProps } from "@xyflow/react";
+import { BaseEdge, ConnectionMode, EdgeLabelRenderer, Handle, MarkerType, MiniMap, Position, ReactFlow, ReactFlowProvider, getSmoothStepPath, useNodesState, useReactFlow, type Edge, type EdgeProps, type Node, type NodeProps } from "@xyflow/react";
 import { ArrowDownFromLine, ArrowRightFromLine, Box, ChevronDown, ChevronUp, CircleHelp, Grid3x3, Maximize, Orbit } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
 import { CanvasFrame, CanvasFurniture, fitting } from "./CanvasFrame";
 import { diagramLayout, diagramLayouts, diagramSize, type DiagramLayout } from "./diagramLayouts";
 import type { CanvasPosition } from "./model";
 
-export type DiagramNode = { id: string; label: string; caption?: string; icon?: ReactNode; tone?: string; dim?: boolean; flag?: string; detail?: string; facts?: { label: string; value: string }[] };
+export type DiagramNode = { id: string; label: string; caption?: string; icon?: ReactNode; tone?: string; dim?: boolean; flag?: string; detail?: string; linkable?: boolean; facts?: { label: string; value: string }[] };
 /** One thing a person may do to the selected node or edge; the owner supplies
  * meaning and the run, the canvas supplies the place and the wording (ADR-0084 D3). */
 export type DiagramAction = { id: string; label: string; hint?: string; tone?: "default" | "danger"; disabled?: boolean; run: () => void };
-export type DiagramEdge = { id: string; source: string; target: string; label?: string; tree?: boolean; dashed?: boolean; directed?: boolean; tone?: string };
+export type DiagramEdge = { id: string; source: string; target: string; label?: string; tree?: boolean; dashed?: boolean; directed?: boolean; tone?: string; reconnectable?: boolean };
 export type DiagramCanvasProps = {
   nodes: DiagramNode[]; edges: DiagramEdge[]; positions: Readonly<Record<string, CanvasPosition>>;
   selected?: string; editable?: boolean; linking?: boolean; label?: string; height?: number | string; layout?: DiagramLayout;
   /** The dataTransfer type the owner's palette sets; its payload arrives in onDrop with the drop point. */
-  dropType?: string; children?: ReactNode;
+  dropType?: string; children?: ReactNode; viewportKey?: string;
   onSelect?: (id?: string) => void; onOpen?: (id: string) => void;
   /** The selected node's operations, shown on the canvas beside it. */
   nodeActions?: (id: string) => DiagramAction[];
@@ -32,7 +32,7 @@ export type DiagramCanvasProps = {
   onDrop?: (payload: string, at: CanvasPosition) => void;
 };
 
-type Data = DiagramNode & { linking: boolean; dropped?: boolean };
+type Data = DiagramNode & { linking: boolean; acceptsConnections: boolean; dropped?: boolean };
 type FlowNode = Node<Data>;
 type FlowEdge = Edge<DiagramEdge & Record<string, unknown>>;
 const layoutMeta: Record<DiagramLayout, { icon: ReactNode; title: string }> = {
@@ -50,8 +50,9 @@ function DiagramNodeView({ data, selected }: NodeProps<FlowNode>) {
       <span className="platform-block-title block">{data.label}</span>
     </span>
     {data.flag && <span className="platform-diagram-flag" title={data.flag} />}
-    <Handle type="target" position={Position.Top} className="platform-diagram-handle" isConnectable={data.linking} />
-    <Handle type="source" position={Position.Bottom} className={cn("platform-diagram-handle", data.linking && "platform-diagram-handle-active")} isConnectable={data.linking} />
+    {[Position.Top, Position.Right, Position.Bottom, Position.Left].map((side) => <Handle key={side} id={side} type="source" position={side}
+      className={cn("platform-diagram-handle", data.linking && data.linkable !== false && "platform-diagram-handle-active")}
+      isConnectable={data.acceptsConnections && data.linkable !== false} isConnectableStart={data.linking} />)}
   </div>;
 }
 
@@ -65,33 +66,45 @@ function DiagramEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePositio
 }
 const nodeTypes = { entity: DiagramNodeView }, edgeTypes = { relation: DiagramEdgeView };
 
-function Content({ nodes, edges, positions, selected, editable = false, linking = false, label, height = 480, layout: initial = "tree-down", dropType, children, onSelect, onOpen, onPositionsChange, onLink, onDrop, nodeActions, edgeActions, onReconnect }: DiagramCanvasProps) {
+function Content({ nodes, edges, positions, selected, editable = false, linking = false, label, height = 480, layout: initial = "tree-down", dropType, children, onSelect, onOpen, onPositionsChange, onLink, onDrop, nodeActions, edgeActions, onReconnect, viewportKey }: DiagramCanvasProps) {
   const { screenToFlowPosition, fitView } = useReactFlow<FlowNode, FlowEdge>();
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<FlowNode>([]);
-  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);
   const [layout, setLayout] = useState<DiagramLayout>(initial);
   const [menu, setMenu] = useState(false);
   const [help, setHelp] = useState(false);
   const [pickedEdge, setPickedEdge] = useState<string>();
   const [expanded, setExpanded] = useState<string>();
-  const fitted = useRef(0);
+  const fitted = useRef<string | undefined>(undefined);
+  const canReconnect = editable && !!onReconnect;
 
   useEffect(() => {
     setFlowNodes((previous) => nodes.map((n) => {
       const old = previous.find((p) => p.id === n.id);
       return { id: n.id, type: "entity", position: positions[n.id] ?? old?.position ?? { x: 0, y: 0 }, selected: n.id === selected, draggable: editable && !linking, measured: old?.measured,
-        connectable: linking, data: { ...n, linking } };
+        connectable: editable && (linking || canReconnect) && n.linkable !== false, data: { ...n, linking, acceptsConnections: editable && (linking || canReconnect) } };
     }));
-  }, [nodes, positions, selected, editable, linking, setFlowNodes]);
+  }, [nodes, positions, selected, editable, linking, setFlowNodes, canReconnect]);
+  const flowEdges = useMemo<FlowEdge[]>(() => {
+    const byId = new Map(flowNodes.map((n) => [n.id, n]));
+    return edges.map((e) => {
+      const a = byId.get(e.source), b = byId.get(e.target);
+      const dx = (b?.position.x ?? 0) - (a?.position.x ?? 0), dy = (b?.position.y ?? 0) - (a?.position.y ?? 0);
+      // Attach to facing sides without changing the owner's source/target meaning.
+      const horizontal = Math.abs(dx) > Math.abs(dy);
+      const sourceHandle = horizontal ? dx >= 0 ? Position.Right : Position.Left : dy >= 0 ? Position.Bottom : Position.Top;
+      const targetHandle = horizontal ? dx >= 0 ? Position.Left : Position.Right : dy >= 0 ? Position.Top : Position.Bottom;
+      return { id: e.id, source: e.source, target: e.target, sourceHandle, targetHandle, type: "relation", data: { ...e }, deletable: false,
+        selected: e.id === pickedEdge, reconnectable: editable && !!onReconnect && e.reconnectable !== false,
+        markerEnd: e.directed === false ? undefined : { type: MarkerType.ArrowClosed, color: e.tone ? `var(--tone-${e.tone})` : "var(--muted)", width: 14, height: 14 } };
+    });
+  }, [edges, flowNodes, editable, onReconnect, pickedEdge]);
+  const fitKey = viewportKey ?? "diagram";
   useEffect(() => {
-    setFlowEdges((previous) => edges.map((e) => ({ id: e.id, source: e.source, target: e.target, type: "relation", data: { ...e }, deletable: false,
-      selected: previous.find((old) => old.id === e.id)?.selected ?? e.id === pickedEdge,
-      reconnectable: editable && !!onReconnect,
-      markerEnd: e.directed === false ? undefined : { type: MarkerType.ArrowClosed, color: e.tone ? `var(--tone-${e.tone})` : "var(--muted)", width: 14, height: 14 } })));
-  }, [edges, setFlowEdges, editable, onReconnect, pickedEdge]);
-  // Fit once per set of shown nodes, never while the reader drags.
-  const shown = nodes.map((n) => n.id).join("|");
-  useEffect(() => { const h = setTimeout(() => void fitView(fitting), 60); fitted.current++; return () => clearTimeout(h); }, [shown, fitView]);
+    if (!flowNodes.length || fitted.current === fitKey) return;
+    fitted.current = fitKey;
+    const h = setTimeout(() => void fitView(fitting), 60);
+    return () => clearTimeout(h);
+  }, [flowNodes.length, fitKey, fitView]);
 
   const arrange = (kind: DiagramLayout) => {
     setLayout(kind); setMenu(false);
@@ -105,7 +118,7 @@ function Content({ nodes, edges, positions, selected, editable = false, linking 
       onDragOver={(e) => { if (editable && dropType && e.dataTransfer.types.includes(dropType)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
       onDrop={(e) => { if (!editable || !dropType || !onDrop) return; const payload = e.dataTransfer.getData(dropType); if (!payload) return; e.preventDefault();
         const at = screenToFlowPosition({ x: e.clientX, y: e.clientY }); onDrop(payload, { x: at.x - diagramSize.width / 2, y: at.y - diagramSize.height / 2 }); }}>
-      <ReactFlow<FlowNode, FlowEdge> nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+      <ReactFlow<FlowNode, FlowEdge> nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange}
         colorMode="system" minZoom={0.1} maxZoom={2.5} fitView fitViewOptions={fitting} zoomOnScroll panOnScroll={false} zoomOnPinch panOnDrag preventScrolling
         nodesDraggable={editable && !linking} nodesConnectable={linking} connectionMode={ConnectionMode.Loose} deleteKeyCode={null} connectionRadius={40}
         onConnect={(c) => { if (c.source && c.target && c.source !== c.target) onLink?.(c.source, c.target); }}
@@ -140,11 +153,11 @@ function Content({ nodes, edges, positions, selected, editable = false, linking 
         </ul>
         <button type="button" className="mt-2 rounded px-2 py-1 text-muted hover:bg-row-hover" onClick={() => setHelp(false)}>{t("Close")}</button>
       </div>}
-      {pickedEdge && edgeActions && <div className="nodrag nopan absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border bg-surface p-1 shadow-lg" role="toolbar" aria-label={t("Connection operations")}>
+      {pickedEdge && edgeActions && <div className="nodrag nopan absolute bottom-3 left-1/2 z-20 flex w-max max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-md border border-border bg-surface p-1 shadow-lg" role="toolbar" aria-label={t("Connection operations")}>
         {edgeActions(pickedEdge).map((a) => <button key={a.id} type="button" disabled={a.disabled} title={a.hint} onClick={a.run}
           className={cn("platform-block-tool", a.tone === "danger" && "text-[var(--tone-danger)]")}>{a.label}</button>)}
       </div>}
-      {selected && (nodeActions || nodes.find((n) => n.id === selected)?.facts?.length) && <div className="nodrag nopan absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border bg-surface p-1 shadow-lg" role="toolbar" aria-label={t("Element operations")}>
+      {selected && (nodeActions || nodes.find((n) => n.id === selected)?.facts?.length) && <div className="nodrag nopan absolute bottom-3 left-1/2 z-20 flex w-max max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-md border border-border bg-surface p-1 shadow-lg" role="toolbar" aria-label={t("Element operations")}>
         {!!nodes.find((n) => n.id === selected)?.facts?.length && <button type="button" className={cn("platform-block-tool", expanded === selected && "bg-row-selected")} aria-expanded={expanded === selected}
           onClick={() => setExpanded(expanded === selected ? undefined : selected)} title={t("Details")} aria-label={t("Details")}>{expanded === selected ? <ChevronDown /> : <ChevronUp />}</button>}
         {(nodeActions?.(selected) ?? []).map((a) => <button key={a.id} type="button" disabled={a.disabled} title={a.hint} onClick={a.run}

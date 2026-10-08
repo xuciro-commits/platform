@@ -1,6 +1,7 @@
 import {Button} from "../primitives/button";
 import {t} from "../i18n";
-import type {EntityRecord} from "./Records";
+
+type TimelineRecord = {id:string} & Record<string,unknown>;
 
 export type TimelineFields={start:string;end?:string;label:string;group?:string;kind:"date"|"datetime"};
 const day=86_400_000;
@@ -20,7 +21,7 @@ export function timelineTime(value:unknown,kind:TimelineFields["kind"]):number|u
  if(m[5]!=="Z"&&(Number(m[5]!.slice(1,3))>23||Number(m[5]!.slice(4))>59))return;
  const stamp=Date.parse(value);return Number.isFinite(stamp)?stamp:undefined;
 }
-export function timelineRows(records:EntityRecord[],fields:TimelineFields) {
+export function timelineRows<T extends TimelineRecord>(records:T[],fields:TimelineFields) {
  const rows=records.flatMap(record=>{
   const start=timelineTime(record[fields.start],fields.kind),end=fields.end?timelineTime(record[fields.end],fields.kind):start;
   if(start===undefined||end===undefined||end<start)return [];
@@ -33,8 +34,8 @@ export function timelineRows(records:EntityRecord[],fields:TimelineFields) {
 
 /** Authorized bounded records in, original selection out. This presentation
  * owns neither record reads nor scheduling/interval mutation. */
-export function RecordTimeline({records,fields,selected,onSelect,label}: {
- records:EntityRecord[];fields:TimelineFields;selected?:string;onSelect:(record?:EntityRecord)=>void;label:string;
+export function RecordTimeline<T extends TimelineRecord>({records,fields,selected,onSelect,label}: {
+ records:T[];fields:TimelineFields;selected?:string;onSelect:(record?:T)=>void;label:string;
 }) {
  if(records.length>200)return <p role="alert">{t("Timeline records exceed their display bound.")}</p>;
  const model=timelineRows(records,fields),span=model.max-model.min;

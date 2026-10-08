@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:7a35f9810650cf45",
+  "revision": "sha256:2ad9fcf554739d01",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4961,6 +4961,7 @@
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
+      "web/packages/platform/src/enterprise/properties.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
@@ -5022,6 +5023,7 @@
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
+      "web/packages/platform/src/enterprise/properties.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/permissions.tsx",
@@ -5190,7 +5192,8 @@
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
       "web/packages/build/src/workshop/page-editor/WidgetLibrary.tsx",
-      "web/packages/platform/src/enterprise/index.tsx"
+      "web/packages/platform/src/enterprise/index.tsx",
+      "web/packages/platform/src/enterprise/properties.tsx"
     ],
     "ui/status": [
       "web/packages/app/src/automation/agents.tsx",
@@ -5540,7 +5543,8 @@
       "web/packages/app/src/widgets/RecordMap.tsx"
     ],
     "ui/record-timeline": [
-      "web/packages/app/src/widgets/RecordTimeline.tsx"
+      "web/packages/app/src/widgets/RecordTimeline.tsx",
+      "web/packages/platform/src/enterprise/index.tsx"
     ],
     "ui/record-action-grid": [
       "web/packages/app/src/widgets/RecordWork.tsx"

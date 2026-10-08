@@ -122,6 +122,19 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, page)
 	})
+	rt.handle(Route{Pattern: "GET /v1/enterprise-references", Summary: "Records that name an enterprise element, at any nesting depth, by entity type and page (ADR-0085 D4)", Answer: []EnterpriseReferenceGroup{}, Query: []Param{{"element", "The element's id"}, {"offset", "Records to skip, by column"}, {"limit", "Records per column (default 50, at most 200)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		offset, limit := pageBounds(r, 0, 50)
+		if offset < 0 || limit < 0 {
+			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "offset and limit are numbers"))
+			return
+		}
+		groups, err := t.EnterpriseReferences(m, r.URL.Query().Get("element"), offset, limit, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, groups)
+	})
 	rt.handle(Route{Pattern: "GET /v1/context/{type}/{id}", Summary: "A record with its history, references, links, flows and tasks: the context graph (ADR-0021)", Answer: ContextView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		view, err := t.Context(&m, r.PathValue("type"), r.PathValue("id"), h.Now())
 		if err != nil {
