@@ -87,7 +87,7 @@ capabilities/server/
 
 每波都可独立停下；停在任何一波，仓库都是绿的、结构都比之前清楚。
 
-**落地状态（2026-10-07，`ca2eb4c`）**：第 0/1/2 波完成（Tenant 字段 80 → 56，16 个组件文件，各自持锁或注明受 `t.mu`/`opsMu` 保护）；第 4 波完成到"再拆只是搬行数"的程度（>150 行函数 33 → 15，剩余登记为例外：`routesBuild`/`routesRecords` 是路由表，`checkWidget` 是 50 个 widget 的校验表，`visiblePage`/`registerDefinitions`/`ApplicationRuns`/`candidateWithBindings` 是逐字段过滤，其余 ≤ 230 行）；三个零引用函数删除；第 5 波 `doc.go`/AGENTS.md/Testing.md/`shared/` 解散完成。**第 3 波（accepted/console/integration 分包）以证据关闭**：`accepted_*` 的结果类型依赖根包的 `taskState/effectState/row/Task/stagedDecision`，`console` 与 `Tenant` 互指，`pageui` 的尝试已证明"分包必成环"；收益只剩目录好看，违反 §1.5，不做。`legacy_*.go` 归集已完成（`legacy_console.go`、`legacy_agent_context.go`，每个文件头写明可删除条件）；全仓死符号扫描再次归零。本 ADR 关闭；§3.1 的第一件事已以 `environment_lifecycle_test.go` 开始（见 §5 末行）。
+**落地状态（2026-10-07，`ca2eb4c`）**：第 0/1/2 波完成（Tenant 字段 80 → 56，16 个组件文件，各自持锁或注明受 `t.mu`/`opsMu` 保护）；第 4 波完成到"再拆只是搬行数"的程度（>150 行函数 33 → 15，剩余登记为例外：`routesBuild`/`routesRecords` 是路由表，`checkWidget` 是 50 个 widget 的校验表，`visiblePage`/`registerDefinitions`/`ApplicationRuns`/`candidateWithBindings` 是逐字段过滤，其余 ≤ 230 行）；三个零引用函数删除；第 5 波 `doc.go`/AGENTS.md/Testing.md/`shared/` 解散完成。**第 3 波（accepted/console/integration 分包）以证据关闭**：`accepted_*` 的结果类型依赖根包的 `taskState/effectState/row/Task/stagedDecision`，`console` 与 `Tenant` 互指，`pageui` 的尝试已证明"分包必成环"；收益只剩目录好看，违反 §1.5，不做。`legacy_*.go` 归集已完成（`legacy_console.go`、`legacy_agent_context.go`，每个文件头写明可删除条件）；全仓死符号扫描再次归零。本 ADR 关闭；§3.1 已全部走完（定义 → 联合候选 → 封存 → 激活 → 业务操作 → 晋级（目标收件箱、源去向）→ v2 升级（各审计划、被拒即刷新）→ 快照+日志尾恢复 → 操作者首次落地），由 `environment_lifecycle_test.go` 与 `environment_http_test.go` 守着，逐项见 §5。
 
 ## 3.1 大扫除之后的第一件事（负责人已定，记在这里免得丢）
 
@@ -149,4 +149,5 @@ capabilities/server/
 | `deploy/local/rehearse.sh` 继承 `.env` 的 `PLATFORM_DATA_NAMESPACE`，排演项目挂上并在 `down -v` 时删掉走查数据卷（2026-10-08 事故：评审 Postgres 无法定位检查点，两宿主反复重启） | 排演固定 `PLATFORM_DATA_NAMESPACE=platform-rehearsal`、检测已在运行的排演项目即拒绝；`verify.sh` 无参数不再隐含 `deploy`；README 注明 | 本提交 |
 | 走查种子里 `manager-1`/`manager-test`/`sup-1` 没有 `core` 角色：新库里模型目录看不到 core（人员/伙伴/物料等），旧库里能看到只是因为负责人曾在控制台手工授过 | 种子加 `core: steward`（重建宿主生效）；代码未改——core 与别的应用一样按角色可见 | 本提交 |
 | 35 条 e2e 页面夹具仍用 `d70cfb5` 之前的事件形状（`target/navigate`、`target/value`、`return`），`build.page.publish` 一律 INVALID_ARGUMENT（Sonnet 在基线 `0fe21d0` 复现，非本块引入） | 机械改写为效果链 `effects:[{kind:navigate|set|return}]`，20 个 spec | 本提交 |
+| §3.1 最后一段：晋级并激活后，目标环境里一个从未参与构建的普通成员第一次打开工作台能否直接找到应用 | 以证据关闭，无需改码：`/v1/me` 列出 build、`/v1/definitions` 带应用/页面/对象及标题、空桌面可读；`commitReleaseLocked` 走 `changed()` 抬 global 版本，`/v1/definitions`、`/v1/me` 均在订阅之列，已打开的会话随激活即时刷新。`environment_http_test.go` 加操作者首次落地断言 | 本提交 |
 （继续追加）

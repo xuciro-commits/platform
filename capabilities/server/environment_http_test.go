@@ -182,6 +182,41 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 	if code, out := call(http.MethodGet, "prod", "pat", "/v1/records/build.object/visit", nil); code != http.StatusOK || !strings.Contains(fmt.Sprint(out["record"]), "published") {
 		t.Fatalf("prod has no published draft for the promoted object: %d %v", code, out)
 	}
+	// The operator's first landing in prod: an ordinary member who never saw
+	// the application being built opens the workspace and finds it — the app
+	// in /v1/me, the application with its page and titles in /v1/definitions,
+	// and the page itself, before any record exists.
+	code, me := call(http.MethodGet, "prod", "ops", "/v1/me", nil)
+	if code != http.StatusOK || !strings.Contains(fmt.Sprint(me["apps"]), build.ID) {
+		t.Fatalf("prod operator does not see the build app: %d %v", code, me)
+	}
+	request, _ := http.NewRequest(http.MethodGet, srv.URL+"/v1/definitions", nil)
+	request.Header.Set("Authorization", "Bearer ops")
+	request.Header.Set(TenantHeader, "prod")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var definitions []map[string]any
+	_ = json.NewDecoder(response.Body).Decode(&definitions)
+	response.Body.Close()
+	seen := map[string]string{}
+	for _, def := range definitions {
+		ref, _ := def["ref"].(map[string]any)
+		title := ""
+		for _, part := range []string{"application", "page", "entity"} {
+			if body, ok := def[part].(map[string]any); ok {
+				title = fmt.Sprint(body["title"])
+			}
+		}
+		seen[fmt.Sprint(ref["app"], "/", ref["kind"], "/", ref["name"])] = title
+	}
+	if seen["build/app/frontdesk"] != "Front desk" || seen["build/page/desk"] != "Visit desk" || seen["build/object/build.visit"] != "Visit" {
+		t.Fatalf("prod operator's definitions lack the promoted application: %v", seen)
+	}
+	if code, out := call(http.MethodGet, "prod", "ops", "/v1/records/build.visit", nil); code != http.StatusOK {
+		t.Fatalf("prod operator cannot open the empty desk: %d %v", code, out)
+	}
 	if code, again := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/promotions", map[string]any{"from": "dev", "candidate": v1, "key": "promote-v1", "activate": true, "targetGrant": prodGrant}); code != http.StatusOK || again["digest"] != promoted["digest"] {
 		t.Fatalf("a repeated promotion is not idempotent: %d %v", code, again)
 	}
