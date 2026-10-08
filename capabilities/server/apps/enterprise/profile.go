@@ -1,5 +1,7 @@
 package enterprise
 
+import "platformserver/apps/enterprise/uaf"
+
 // The Enterprise Core Profile (ADR-0067 D1): the UAF stereotypes a tenant
 // meets first, with the words people use for them and the grid cells they are
 // drawn in. Everything else in the metamodel stays loadable and storable; it
@@ -48,15 +50,64 @@ func Profile() []ProfileEntry {
 	}
 }
 
-func Grid() []GridCell {
-	return []GridCell{
-		{ID: "Pr-Sr", Title: "Personnel structure", Domain: "Personnel", Aspect: "Structure", Elements: []string{Organization, Post, Person}, Relationships: []string{Placement, Membership, FillsPost}},
-		{ID: "Pr-Cn", Title: "Posts and responsibilities", Domain: "Personnel", Aspect: "Connectivity", Elements: []string{Post, "Responsibility", Person}, Relationships: []string{FillsPost, Owns}, Scales: []string{"M", "L", "XL"}},
-		{ID: "St-Tx", Title: "Capabilities", Domain: "Strategic", Aspect: "Taxonomy", Elements: []string{Capability}, Relationships: []string{Performs}},
-		{ID: "St-Sr", Title: "Goals and capabilities", Domain: "Strategic", Aspect: "Structure", Elements: []string{Goal, "EnterpriseObjective", "Opportunity", Capability}, Relationships: []string{"MapsToGoal", "MapsToCapability", Performs}, Scales: []string{"L", "XL"}},
-		{ID: "Rs-Sr", Title: "Sites and resources", Domain: "Resources", Aspect: "Structure", Elements: []string{Location, Resource, "System", Organization}, Relationships: []string{Placement, Owns, Performs}},
-		{ID: "Sv-Tx", Title: "Services", Domain: "Services", Aspect: "Taxonomy", Elements: []string{"Service", Organization}, Relationships: []string{Owns}, Scales: []string{"L", "XL"}},
-		{ID: "Op-Pr", Title: "Processes", Domain: "Operational", Aspect: "Processes", Elements: []string{"OperationalActivity", Organization, Capability}, Relationships: []string{Performs, Owns}, Scales: []string{"M", "L", "XL"}},
-		{ID: "Pj-Rm", Title: "Projects", Domain: "Projects", Aspect: "Roadmap", Elements: []string{Project, "ActualProjectMilestone", Organization}, Relationships: []string{Owns, "MilestoneDependency"}},
+// vocabulary are the relationships the Enterprise Core Profile draws: what a
+// modeller of an organisation, its places, resources, capabilities, goals,
+// processes and projects actually joins. Every other UAF relationship stays
+// available through the contracts, and a model may hold one; it is just not
+// offered by a cell.
+var vocabulary = map[string]bool{
+	Placement: true, Membership: true, FillsPost: true, Performs: true, Exhibits: true,
+	Owns: true, "OwnsProcess": true, "Enables": true, "MotivatedBy": true,
+	"MilestoneDependency": true, "ProjectSequence": true,
+}
+
+// Grid are the UAF view cells: each draws a set of elements, and the
+// relationships between them are derived — a relation appears in a cell only
+// when the contracts admit some pair of the cell's own elements (ADR-0085 D2).
+// A cell can therefore never offer a relation its elements cannot use.
+func Grid(mm *uaf.Metamodel) []GridCell {
+	contracts := Contracts(mm)
+	drawable := func(elements []string) []string {
+		var out []string
+		for _, c := range contracts {
+			if !vocabulary[c.Stereotype] {
+				continue
+			}
+			for _, pair := range EndsFor(c) {
+				if holds(mm, pair.Source, elements) && holds(mm, pair.Target, elements) {
+					out = append(out, c.Stereotype)
+					break
+				}
+			}
+		}
+		return out
 	}
+	cells := []GridCell{
+		{ID: "Pr-Sr", Title: "Personnel structure", Domain: "Personnel", Aspect: "Structure", Elements: []string{Organization, Post, Person}},
+		{ID: "Pr-Cn", Title: "Posts and responsibilities", Domain: "Personnel", Aspect: "Connectivity", Elements: []string{Post, "Responsibility", Person}, Scales: []string{"M", "L", "XL"}},
+		{ID: "St-Tx", Title: "Capabilities", Domain: "Strategic", Aspect: "Taxonomy", Elements: []string{Capability}},
+		{ID: "St-Sr", Title: "Goals and capabilities", Domain: "Strategic", Aspect: "Structure", Elements: []string{Goal, "EnterpriseObjective", "Opportunity", Capability, Organization}, Scales: []string{"L", "XL"}},
+		{ID: "Rs-Sr", Title: "Sites and resources", Domain: "Resources", Aspect: "Structure", Elements: []string{Location, Resource, "System", Organization}},
+		{ID: "Sv-Tx", Title: "Services", Domain: "Services", Aspect: "Taxonomy", Elements: []string{"Service", Organization}, Scales: []string{"L", "XL"}},
+		{ID: "Op-Pr", Title: "Processes", Domain: "Operational", Aspect: "Processes", Elements: []string{"OperationalActivity", Organization, Capability}, Scales: []string{"M", "L", "XL"}},
+		{ID: "Pj-Rm", Title: "Projects", Domain: "Projects", Aspect: "Roadmap", Elements: []string{Project, "ActualProjectMilestone", Organization}},
+	}
+	for i := range cells {
+		cells[i].Relationships = drawable(cells[i].Elements)
+	}
+	return cells
+}
+
+// holds reports whether any of the cell's element stereotypes is the named end
+// or a specialisation of it.
+func holds(mm *uaf.Metamodel, end string, elements []string) bool {
+	if end == "*" {
+		return len(elements) > 0
+	}
+	for _, e := range elements {
+		if mm.Is(e, end) {
+			return true
+		}
+	}
+	return false
 }

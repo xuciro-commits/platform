@@ -35,6 +35,12 @@ type Stereotype struct {
 	Bases       []string   `json:"bases,omitempty"`
 	Properties  []Property `json:"properties,omitempty"`
 	Constraints []string   `json:"constraints,omitempty"`
+	// Client and Supplier are the ends a plain "must be stereotyped" rule
+	// states: "Value for the client metaproperty must be stereotyped «A»,
+	// «B»". A compound rule (IsCapableToPerform's conditional pairs) is left in
+	// Constraints as text and read by nobody but a person.
+	Client   []string `json:"client,omitempty"`
+	Supplier []string `json:"supplier,omitempty"`
 }
 
 // Property is a tagged value of a stereotype.
@@ -110,7 +116,10 @@ func (m *Metamodel) Relationship(s string) bool {
 			return false
 		}
 		seen[n] = true
-		if st.Relationship() {
+		// The ends are the proof: a stereotype whose rules name a client and a
+		// supplier joins two elements, whatever metaclass it extends (UAF
+		// models MapsToGoal on Element, with the ends as properties).
+		if st.Relationship() || len(st.Client) > 0 || len(st.Supplier) > 0 {
 			return true
 		}
 		for _, g := range st.Generals {
@@ -121,6 +130,42 @@ func (m *Metamodel) Relationship(s string) bool {
 		return false
 	}
 	return walk(s)
+}
+
+// ends reads a plain endpoint rule: which end it constrains, and the
+// stereotypes that end accepts. Only a body that names one end is read; a
+// compound rule names both and stays text. Names keep their first-seen order
+// and are deduplicated.
+func ends(body string) (string, []string) {
+	lower := strings.ToLower(body)
+	client, supplier := strings.Contains(lower, "client metaproperty"), strings.Contains(lower, "supplier metaproperty")
+	if client == supplier {
+		return "", nil
+	}
+	end := "supplier"
+	if client {
+		end = "client"
+	}
+	var names []string
+	seen := map[string]bool{}
+	for rest := body; ; {
+		i := strings.Index(rest, "\u00ab")
+		if i < 0 {
+			break
+		}
+		rest = rest[i+len("\u00ab"):]
+		j := strings.Index(rest, "\u00bb")
+		if j < 0 {
+			break
+		}
+		name := strings.TrimSpace(rest[:j])
+		rest = rest[j+len("\u00bb"):]
+		if name != "" && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	return end, names
 }
 
 // Properties are the stereotype's own and inherited tagged values.
@@ -314,7 +359,14 @@ func Parse(raw []byte) (*Metamodel, error) {
 					for _, sp := range c.Children {
 						for _, b := range sp.Children {
 							if b.XMLName.Local == "body" && strings.TrimSpace(b.Text) != "" {
-								s.Constraints = append(s.Constraints, strings.TrimSpace(b.Text))
+								body := strings.TrimSpace(b.Text)
+								s.Constraints = append(s.Constraints, body)
+								switch end, names := ends(body); {
+								case end == "client":
+									s.Client = append(s.Client, names...)
+								case end == "supplier":
+									s.Supplier = append(s.Supplier, names...)
+								}
 							}
 						}
 					}

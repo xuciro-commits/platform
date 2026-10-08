@@ -595,6 +595,16 @@ export type ContextView = {
   tasks: TaskSummary[];
 };
 
+export type Contract = {
+  stereotype: string;
+  client?: string[];
+  supplier?: string[];
+  basis?: string[];
+  extension?: Pair[];
+  platform?: boolean;
+  note?: string;
+};
+
 export type Contribution = {
   key: string;
   view: string;
@@ -743,6 +753,25 @@ export type EnterpriseModel = {
   relationships: Relationship[];
   views: View[];
   calendars?: Calendar[];
+};
+
+export type EnterpriseReference = {
+  type: string;
+  field: string;
+  fieldTitle: string;
+  stereotype?: string;
+  id: string;
+  name: string;
+};
+
+export type EnterpriseReferenceGroup = {
+  type: string;
+  title: string;
+  field: string;
+  fieldTitle: string;
+  stereotype?: string;
+  total: number;
+  records: EnterpriseReference[];
 };
 
 export type EntityInfo = {
@@ -1237,6 +1266,7 @@ export type Metamodel = {
   stereotypes: Record<string, Stereotype>;
   enumerations: Record<string, Enumeration>;
   grid: GridCell[];
+  contracts: Contract[];
 };
 
 export type MigrationManifest = {
@@ -1986,6 +2016,11 @@ export type PageVertexGraph = {
   groups: PageNeighborhoodGroup[];
 };
 
+export type Pair = {
+  source: string;
+  target: string;
+};
+
 export type Passage = {
   document: string;
   title: string;
@@ -2017,6 +2052,13 @@ export type PersonalRead = {
   type: string;
   ids: string[];
   fields: string[];
+};
+
+export type Pin = {
+  ref: string;
+  label?: string;
+  anchor: string;
+  at: number[];
 };
 
 export type PolicyRecord = {
@@ -2751,6 +2793,8 @@ export type Stereotype = {
   bases?: string[];
   properties?: Property[];
   constraints?: string[];
+  client?: string[];
+  supplier?: string[];
 };
 
 export type Structure = {
@@ -3034,6 +3078,7 @@ export type View = {
   kind?: string;
   elements: string[];
   layout?: Record<string, number[]>;
+  pins?: Pin[];
   asOf?: string;
 };
 

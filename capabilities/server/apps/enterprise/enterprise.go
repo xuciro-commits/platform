@@ -34,6 +34,7 @@ const (
 	SchemaRelationshipEnd = "enterprise.relationship.end"
 	SchemaKindAdd         = "enterprise.kind.add"
 	SchemaViewSave        = "enterprise.view.save"
+	SchemaViewDelete      = "enterprise.view.delete"
 	SchemaSeed            = "enterprise.model.seed"
 
 	ReadOrganization   = "organization"
@@ -91,9 +92,13 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 			Description: "End a relationship on a day; it stays in history.",
 			Payload:     []platform.Field{until}},
 		platform.Action{Schema: SchemaViewSave, Target: ViewType, Capability: "views", Title: "Save view", Roles: admin,
-			Description: "Save a drawing over the model: the elements it shows, where, in which UAF grid cell.",
+			Description: "Write a drawing over the model under its own id: the name, the elements it shows, where, the records pinned beside them, and the day it shows. Saving an id writes that view; it never writes another one.",
 			Payload: []platform.Field{f("name", "string", "Name", true), f("grid", "string", "UAF grid cell, e.g. Pr-Sr, St-Tx, Rs-Sr, Pj-Rm", true),
-				f("elements", "json", "Element ids shown", false), f("layout", "json", "Positions by element id", false), f("asOf", "date", "The day the view shows", false)}},
+				f("elements", "json", "Element ids shown", false), f("layout", "json", "Positions by element id", false),
+				f("pins", "json", "Records pinned on the drawing: {ref, anchor, at}", false), f("asOf", "date", "The day the view shows", false)}},
+		platform.Action{Schema: SchemaViewDelete, Target: ViewType, Capability: "views", Title: "Delete view", Roles: admin,
+			Description: "Discard a drawing. The model, its elements, their relationships and the records that name them are untouched: a view is a picture, not a fact.",
+			Payload:     []platform.Field{f("id", "string", "The view's id", true)}},
 		platform.Action{Schema: SchemaSliceImport, Target: ModelType, Capability: "federation", Title: "Import a published slice", Roles: admin,
 			Description: "Mirror what another tenant publishes — its organisations, capabilities, sites — read-only, owned there; relate your own elements to them. A connector delivers the slice.",
 			Payload:     []platform.Field{f("slice", "json", "The other tenant's enterprise-published answer", true)}},
@@ -197,6 +202,7 @@ type payload struct {
 	Properties                                                                                       map[string]any
 	Elements                                                                                         []string
 	Layout                                                                                           map[string][2]float64
+	Pins                                                                                             []Pin
 	Calendar                                                                                         string
 	Published                                                                                        *bool
 	Slice                                                                                            *Slice
@@ -296,6 +302,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, invalid("a sync carries elements")
 			}
 			owner, ids := "source:"+p.Source, map[string]bool{}
+			stereotypes := map[string]string{}
 			for i := range sync.Elements {
 				el := &sync.Elements[i]
 				switch {
@@ -313,6 +320,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 					return nil, err
 				}
 				ids[el.ID] = true
+				stereotypes[el.ID] = el.Stereotype
 			}
 			for i := range sync.Relationships {
 				r := &sync.Relationships[i]
@@ -328,6 +336,20 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				case r.Stereotype == Placement && r.Kind != "" && m.kind(r.Kind) == nil:
 					return nil, invalid("{kind} is not a relationship kind of this model", r.Kind)
 				}
+				// The same contract as Relate (ADR-0085 D2): a slice or a sync
+				// cannot write a pair the profile refuses.
+				src, dst := m.element(r.Source), m.element(r.Target)
+				if st, ok := stereotypes[r.Source]; ok {
+					src = &Element{Stereotype: st}
+				}
+				if st, ok := stereotypes[r.Target]; ok {
+					dst = &Element{Stereotype: st}
+				}
+				if src != nil && dst != nil {
+					if ok, why := Allowed(Contracts(mm), mm, r.Stereotype, src.Stereotype, dst.Stereotype); !ok {
+						return nil, invalid(why)
+					}
+				}
 			}
 			source := p.Source
 			return func(*pb.ChangeRecord) { m.Sync(source, sync.Elements, sync.Relationships, today) }, nil
@@ -336,6 +358,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, invalid("a slice names the tenant it comes from")
 			}
 			owner := "tenant:" + p.Slice.Tenant
+			stereotypes := map[string]string{}
 			for i := range p.Slice.Elements {
 				el := &p.Slice.Elements[i]
 				if mm.Stereotypes[el.Stereotype] == nil {
@@ -344,7 +367,23 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				if own := m.element(el.ID); own != nil && own.Owner != owner {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{element} is this tenant's own; the slice may not replace it", el.ID)
 				}
+				stereotypes[el.ID] = el.Stereotype
 				el.Owner, el.Published = owner, false
+			}
+			for _, r := range p.Slice.Relationships {
+				src, dst := m.element(r.Source), m.element(r.Target)
+				if st, ok := stereotypes[r.Source]; ok {
+					src = &Element{Stereotype: st}
+				}
+				if st, ok := stereotypes[r.Target]; ok {
+					dst = &Element{Stereotype: st}
+				}
+				if src == nil || dst == nil {
+					return nil, invalid("{element} is not in the model nor in the slice", r.Source)
+				}
+				if ok, why := Allowed(Contracts(mm), mm, r.Stereotype, src.Stereotype, dst.Stereotype); !ok {
+					return nil, invalid(why)
+				}
 			}
 			slice := *p.Slice
 			return func(*pb.ChangeRecord) { m.Import(slice) }, nil
@@ -352,13 +391,28 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			if p.Name == "" || p.Grid == "" {
 				return nil, invalid("a view needs a name and a grid cell")
 			}
+			if !slices.ContainsFunc(Grid(mm), func(g GridCell) bool { return g.ID == p.Grid }) {
+				return nil, invalid("{grid} is not a UAF view cell", p.Grid)
+			}
 			for _, el := range p.Elements {
 				if m.element(el) == nil {
 					return nil, invalid("the view shows {element}, which is not in the model", el)
 				}
 			}
+			for _, pin := range p.Pins {
+				if m.element(pin.Anchor) == nil {
+					return nil, invalid("a pinned record sits beside {element}, which is not in the model", pin.Anchor)
+				}
+				if !strings.HasPrefix(pin.Ref, "record:") || refType(pin.Ref) == "" || refID(pin.Ref) == "" {
+					return nil, invalid("a pin is a record reference: record:<entity type>/<id>, not {pin}", pin.Ref)
+				}
+			}
+			kind := ""
+			if prev := m.view(id); prev != nil {
+				kind = prev.Kind // a save keeps the view's own kind; only a create sets it
+			}
 			return func(*pb.ChangeRecord) {
-				v := View{ID: id, Name: p.Name, Grid: p.Grid, Elements: p.Elements, Layout: p.Layout, AsOf: p.AsOf}
+				v := View{ID: id, Name: p.Name, Grid: p.Grid, Kind: kind, Elements: p.Elements, Layout: p.Layout, Pins: p.Pins, AsOf: p.AsOf}
 				if v.Elements == nil {
 					v.Elements = []string{}
 				}
@@ -367,6 +421,13 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				} else {
 					m.Views = append(m.Views, v)
 				}
+			}, nil
+		case SchemaViewDelete:
+			if m.view(id) == nil {
+				return nil, notFound
+			}
+			return func(*pb.ChangeRecord) {
+				m.Views = slices.DeleteFunc(m.Views, func(x View) bool { return x.ID == id })
 			}, nil
 		case SchemaRelationshipAdd:
 			st := mm.Stereotypes[p.Stereotype]
@@ -391,15 +452,24 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			if source != nil && p.Source == p.Target {
 				return nil, invalid("an element cannot relate to itself")
 			}
+			// The ends the standard names, and the profile's own rules, in one
+			// place (ADR-0085 D2): a pair the contract refuses never enters the
+			// model, and the refusal names the rule it breaks.
+			sourceEnd := source
+			if sourceEnd == nil && strings.HasPrefix(p.Source, "member:") {
+				sourceEnd = &Element{Stereotype: Person} // an account stands where a person stands
+			}
+			if sourceEnd != nil {
+				if ok, why := Allowed(Contracts(mm), mm, p.Stereotype, sourceEnd.Stereotype, target.Stereotype); !ok {
+					return nil, invalid(why)
+				}
+			}
 			var ends func()
 			switch p.Stereotype {
 			case Placement:
 				k := m.kind(p.Kind)
 				if k == nil {
 					return nil, invalid("a placement needs a relationship kind")
-				}
-				if !(source.Stereotype == target.Stereotype && (source.Stereotype == Organization || source.Stereotype == Location) || source.Stereotype == Resource && target.Stereotype == Location) {
-					return nil, invalid("a placement sits an organisation under an organisation, a location inside a location, or a resource at a location")
 				}
 				if m.below(p.Kind, p.Source, p.Target, p.From) {
 					return nil, invalid("{target} already sits under {source}; an organisation cannot sit under itself", target.Name, source.Name)
@@ -414,17 +484,6 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			case Membership:
 				if p.Role == "" {
 					return nil, invalid("a membership needs a role")
-				}
-				if target.Stereotype != Organization {
-					return nil, invalid("a membership is of an organisation")
-				}
-			case FillsPost:
-				if source.Stereotype != Person || target.Stereotype != Post {
-					return nil, invalid("FillsPost joins an ActualPerson to an ActualPost")
-				}
-			case Performs:
-				if !mm.Is(target.Stereotype, Capability) {
-					return nil, invalid("IsCapableToPerform points at a Capability")
 				}
 			}
 			return func(*pb.ChangeRecord) {
@@ -617,6 +676,10 @@ type Metamodel struct {
 	Stereotypes  map[string]*uaf.Stereotype  `json:"stereotypes"`
 	Enumerations map[string]*uaf.Enumeration `json:"enumerations"`
 	Grid         []GridCell                  `json:"grid"`
+	// Contracts are the relationship stereotypes as the host checks them
+	// (ADR-0085 D2): what each end accepts, the standard's text it comes from,
+	// and what this profile adds. The modeler offers exactly these.
+	Contracts []Contract `json:"contracts"`
 }
 
 // Element and Related serve host.Directory for the apps (ADR-0067 D3).
@@ -655,7 +718,8 @@ func (e *Enterprise) Read(_ platform.Caller, name string) (any, *kernel.Error) {
 		return out, nil
 	case ReadMetamodel:
 		mm := uaf.Current()
-		return Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations, Grid: Grid()}, nil
+		return Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations,
+			Grid: Grid(mm), Contracts: Contracts(mm)}, nil
 	}
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }

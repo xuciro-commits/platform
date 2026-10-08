@@ -445,7 +445,7 @@ func (b *builder) post(org, name, kind string) string {
 
 func (b *builder) capability(org, name, kind string) string {
 	c := b.element(Capability, name, kind)
-	b.relate(Performs, "", org, c)
+	b.relate(Exhibits, "", org, c)
 	return c
 }
 

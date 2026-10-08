@@ -28,7 +28,9 @@ const (
 	Placement  = "ActualResourceRelationship" // unit under parent, in a kind
 	Membership = "ActualOrganizationRole"     // party (member:<id> or element id) in an organisation, with a role
 	FillsPost  = "FillsPost"                  // person holds post
-	Performs   = "IsCapableToPerform"         // organisation/resource has capability
+	Performs   = "IsCapableToPerform"         // the older pair for "has a capability"; UAF's own spelling is Exhibits (ADR-0085 D2)
+	Exhibits   = "Exhibits"                   // organisation/resource exhibits a Capability (UAF 1.3)
+	System     = "System"                     // a system the organisation runs (ERP, MES, WMS, PLM, CRM)
 	Owns       = "ResponsibleFor"             // organisation answers for resource/location/project
 	Typed      = "typedBy"                    // instance → its type element (platform, not UAF)
 )
@@ -86,7 +88,20 @@ type View struct {
 	Kind     string                `json:"kind,omitempty"`
 	Elements []string              `json:"elements"`
 	Layout   map[string][2]float64 `json:"layout,omitempty"`
+	Pins     []Pin                 `json:"pins,omitempty"`
 	AsOf     Date                  `json:"asOf,omitempty"`
+}
+
+// Pin is a record drawn on a view beside the element it names (ADR-0085 D3):
+// the picture then holds the modules that work with the model, not only the
+// model. The ref is "record:<entity type>/<id>"; the anchor is the element it
+// points at. A pin is a mark on a drawing, not a fact about the model: nothing
+// else reads it, and a record it names may be deleted without touching the view.
+type Pin struct {
+	Ref    string     `json:"ref"`
+	Label  string     `json:"label,omitempty"` // how the record was named when it was pinned
+	Anchor string     `json:"anchor"`
+	At     [2]float64 `json:"at"`
 }
 
 // Model is the whole of it.
@@ -107,6 +122,24 @@ func (m *Model) element(id string) *Element {
 		return &m.Elements[i]
 	}
 	return nil
+}
+
+func (m *Model) view(id string) *View {
+	if i := slices.IndexFunc(m.Views, func(v View) bool { return v.ID == id }); i >= 0 {
+		return &m.Views[i]
+	}
+	return nil
+}
+
+// refType and refID split a pinned record reference, "record:<type>/<id>".
+func refType(ref string) string {
+	typ, _, _ := strings.Cut(strings.TrimPrefix(ref, "record:"), "/")
+	return typ
+}
+
+func refID(ref string) string {
+	_, id, _ := strings.Cut(strings.TrimPrefix(ref, "record:"), "/")
+	return id
 }
 
 func (m *Model) kind(id string) *Kind {
