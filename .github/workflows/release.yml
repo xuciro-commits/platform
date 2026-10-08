@@ -21,7 +21,6 @@ permissions:
   packages: write
 
 env:
-  PLATFORM_TIMING: "0" # shared runners are slower; timing bounds are off
   VERSION: ${{ inputs.version || github.ref_name }}
 
 jobs:

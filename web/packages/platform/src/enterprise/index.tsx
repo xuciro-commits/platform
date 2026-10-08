@@ -83,7 +83,9 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   const working = useMemo(() => {
     if (draft && draft.name === (view?.name ?? "") && !draft.dirty && draft.elements === view?.elements) return draft;
     if (draft?.dirty) return draft;
-    const elements = (view?.elements ?? []).filter((id) => m.elements.some((e) => e.id === id));
+    const defaultElements = m.elements.filter((e) => live(e, day)).map((e) => e.id);
+    const sourceElements = view?.elements && view.elements.length > 0 ? view.elements : defaultElements;
+    const elements = sourceElements.filter((id) => m.elements.some((e) => e.id === id));
     return { elements, layout: autoLayout(m, elements, placementKind, day, view?.layout), name: view?.name ?? t("Untitled view"), grid: view?.grid ?? cell?.id ?? "Pr-Sr", dirty: false };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, m, draft, placementKind, day]);
@@ -193,7 +195,12 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
       onSubmit={async (v) => { if (await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("rel", dialog.source) }, { ...v, source: dialog.source, target: dialog.target })) { setDialog(undefined); setLinking(false); } }} />}
     {pattern && <PatternDialog pattern={pattern} organisations={m.elements.filter((e) => e.stereotype === ORGANIZATION && live(e, day))} under={sel?.stereotype === ORGANIZATION ? sel.id : undefined} decide={decide} onClose={() => setPattern(undefined)} />}
     {dialog?.kind === "view" && <ViewDialog grid={meta.grid.filter((g) => !g.scales?.length || !m.scale || g.scales.includes(m.scale))} onClose={() => setDialog(undefined)}
-      onSubmit={async (name, grid) => { setDraft({ elements: [], layout: {}, name, grid, dirty: true }); setDialog(undefined); await saveView(name, grid); }} />}
+      onSubmit={async (name, grid) => {
+        const liveIds = m.elements.filter((e) => live(e, day)).map((e) => e.id);
+        setDraft({ elements: liveIds, layout: autoLayout(m, liveIds, placementKind, day), name, grid, dirty: true });
+        setDialog(undefined);
+        await saveView(name, grid);
+      }} />}
   </>;
 }
 

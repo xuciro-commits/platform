@@ -4,7 +4,6 @@ go 1.27.1
 
 require (
 	erp v0.0.0
-	erpadapter v0.0.0
 	google.golang.org/protobuf v1.36.12
 	mes v0.0.0
 	platformkernel v0.0.0
@@ -80,5 +79,3 @@ replace platformkernel => ../../contract/go
 replace platformserver => ../../capabilities/server
 
 replace production => ../../protocols/production
-
-replace erpadapter => ../../apps/erpadapter/server

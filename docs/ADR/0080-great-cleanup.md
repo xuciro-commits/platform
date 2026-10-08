@@ -20,7 +20,7 @@
 
 ## 1. 原则（做的时候照这个判断，不逐项请示）
 
-1. **行为零变化**。每一波提交后：`go build ./... && go vet . && go test .`（根包全量，仅 `TestRecordsAtScale` 计时抖动可忽略）、`go run ./cmd/api-types` 输出不变、`TestAPIContract`/`TestLanguages` 通过、各 web 包 tsc、`scripts/escapes.sh`。任何一项红就不提交。
+1. **行为零变化**。每一波提交后：`go build ./... && go vet . && go test .`（根包长期不变量测试，范围见 ADR-0082）、`go run ./cmd/api-types` 输出不变、`TestAPIContract`/`TestLanguages` 通过、各 web 包 tsc、`scripts/escapes.sh`。任何一项红就不提交。
 2. **先搬家，再拆墙，最后清屎**。同一波里不同时做"移动"和"改逻辑"——移动用 `git mv`，让 diff 可核；拆墙（把 `Tenant` 的方法变成组件的方法）单独一波；删历史垃圾单独一波，并在本 ADR §5 登记删了什么、为什么现在可以删。
 3. **一个概念一个家**。目录即边界：一个包/目录只回答一个问题；跨边界只经导出的接口；禁止"工具箱包"（`util/`、`common/`、`shared/` 不许新建；现有 `shared/` 在波次里消化）。
 4. **Tenant 变薄，不变没**。`Tenant` 保留：身份（ID、apps、owner）、提交管线（`Submit` → 决定 → 账本 → 事件）、组件的持有。每个能力作为**组件结构体**挂在 `Tenant` 上（`t.journal`、`t.compute`、`t.releases`…），方法属于组件；组件对 Tenant 的需求写成**小接口**（它用到什么就声明什么），不传整个 `*Tenant`。

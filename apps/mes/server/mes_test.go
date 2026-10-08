@@ -336,8 +336,7 @@ func TestDowntimeTellsSupervisors(t *testing.T) {
 	expect(t, fmt.Sprint(len(inbox(sup))), "3")
 }
 
-// F-9 confirmed and resolved by K8: a push connector reports its health; the
-// adapter's poll connector shares the descriptor (apps/erpadapter).
+// F-9 confirmed and resolved by K8: a push connector reports its health.
 func TestConnectors(t *testing.T) {
 	p := newPlant(t)
 	if _, err := p.DeliverStates(gw, StateBatch{BatchID: "b-1", Resource: "CNC-11", Samples: states(t0, "r")}, t0); err != nil {

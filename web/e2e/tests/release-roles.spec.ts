@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./kit";
 import { decide, fresh, open } from "./host";
 
 test("publisher reviews and activates sealed bytes while auditor can only inspect governance", async ({ page, request }) => {
@@ -27,7 +27,7 @@ test("publisher reviews and activates sealed bytes while auditor can only inspec
   await open(pub, pubToken, "/release-review?surface=tenant");
   await expect(pub.getByRole("heading", { name: "Release review", exact: true })).toBeVisible();
   await expect(pub.getByRole("button", { name: "Check draft and dependencies", exact: true })).toHaveCount(0);
-  await expect(pub.getByRole("button", { name: "Applications", exact: true })).toHaveCount(0);
+  await expect(pub.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Applications", exact: true })).toHaveCount(0);
   await pub.getByLabel("Saved candidate", { exact: true }).selectOption(id);
   await expect(pub.getByText("Saved candidate review", { exact: true })).toBeVisible();
   await pub.getByText("Sealed definitions", { exact: false }).click();
@@ -49,7 +49,7 @@ test("publisher reviews and activates sealed bytes while auditor can only inspec
   await expect(aud.getByRole("combobox", { name: /Role in/ })).toHaveCount(0);
   await aud.goto("/#/apps?surface=tenant");
   await expect(aud.getByRole("heading", { name: "Packages", exact: true })).toBeVisible();
-  await expect(aud.getByText("No controlled packages installed", { exact: true })).toBeVisible();
+  await expect(aud.getByText("No packages: the host offers no index and nothing is installed.", { exact: true })).toBeVisible();
   await aud.goto("/#/audit?surface=tenant");
   await expect(aud.getByRole("heading", { name: "Audit", exact: true })).toBeVisible();
   await expect(decide(request, audToken, "platform", "platform.member.grant", { type: "platform.member", id: publisher }, { app: "build", role: "builder" })).rejects.toThrow(/POLICY_DENIED/);

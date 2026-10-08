@@ -4,7 +4,6 @@
     "@pkg/build": "workspace:*",
     "@pkg/crm": "workspace:*",
     "@pkg/erp": "workspace:*",
-    "@pkg/erpadapter": "workspace:*",
     "@pkg/csm": "workspace:*",
     "@pkg/pms": "workspace:*",
     "@pkg/hcm": "workspace:*",

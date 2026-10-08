@@ -9,6 +9,7 @@
 ## 决定
 
 1. **一个入口，三层。** 仓库根 `Makefile` 是唯一入口（`make help`）；`scripts/verify.sh` 只保留具名步骤体，不再有 `all`/`ci`。
+   - **一键切换**：`make local` 自动停容器宿主并在后台启动两套 Air/Vite 与基础设施，`make docker` 自动停本地进程并重建校验容器宿主。两个模式的浏览器入口都为 `8495/8490`，保留数据卷；本地模式的 Go API 为内部 `18495/18490`。
    - **dev**：`make infra`（PostgreSQL、Rauthy、RustFS、webhook-sink 容器，复用 `deploy/local/compose.yaml` 与 `platform_*` 数据卷）→ `make dev SOLUTION=hospitality`（宿主在本机，`air` 热重启，配置 `deploy/dev/`）→ `make web`（Vite HMR，`/v1` 代理到宿主）。不需要容器时 `make dev-light`（内存日志 + 开发令牌）。需要代码函数编译时 `make infra-compute`，socket 落在 `.build/dev/compute`。
    - **check**：`make check`（宿主 build/vet/gofmt、应用边界、逃逸清单、生成类型、Catalog、全部 Web 包 tsc，分钟级，无浏览器无容器）、`make test`（宿主与 Web 单元测试）、`make test-go PKG= RUN=`、`make e2e SPEC=`。
    - **release**：`make verify`（契约、证明、宿主、应用、Web 构建——CI 跑的同一条）、`make build`（工作台 + 两个方案宿主二进制）、`make images`、`make rehearse`、`make tag VERSION=vX.Y.Z`。

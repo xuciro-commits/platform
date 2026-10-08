@@ -8,7 +8,6 @@ COPY contract/go contract/go
 COPY capabilities/server capabilities/server
 COPY apps/mes/server apps/mes/server
 COPY apps/erp/server apps/erp/server
-COPY apps/erpadapter/server apps/erpadapter/server
 COPY protocols/production protocols/production
 COPY solutions/manufacturing solutions/manufacturing
 WORKDIR /src/solutions/manufacturing

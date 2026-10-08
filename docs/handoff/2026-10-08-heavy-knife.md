@@ -1,14 +1,14 @@
 # 交接：测试与脚本的重刀（ADR-0082）
 
 - **基点 B** = main `55c05a82`（分支 `c883fd7` 与之同树）
-- **冻结 HEAD** = `1233d66`
-- 路径清单 = `git diff --name-only 55c05a82 1233d66`（326 个文件：322 删除、4 文档/测试修改、1 新 ADR）。全部只在分支侧，按路径取即可；没有生成物变化。
+- **冻结 HEAD** = `79ec01f`
+- 路径清单 = `git diff --name-only 55c05a82 79ec01f`（327 个文件：319 删除、6 修改、2 新文档）。全部只在分支侧，按路径取即可；没有生成物变化。
 
 ## 删了什么（原则：删掉它会不会让一个长期不变量失去证据？不会就删）
 
 | 处 | 前 → 后 |
 |---|---|
-| `web/e2e/tests` | 136 → 8 spec（`routes` `business-access` `release-roles` `workflow` `workspaces` `host-sign-out` `integration-fabric` `page-notice`）+ `host.ts` `kit.ts` `workflow-helpers.ts`；`fixtures/`、`workshop-compile.mjs`、`nested-loop-fixture.ts` 删除 |
+| `web/e2e/tests` | 136 → 8 spec（`routes` `business-access` `release-roles` `workflow` `workspaces` `host-sign-out` `integration-fabric` `page-notice`）+ `host.ts` `kit.ts`（主线对齐后不再使用的 `workflow-helpers.ts` 已删除）；`fixtures/`、`workshop-compile.mjs`、`nested-loop-fixture.ts` 删除 |
 | `capabilities/server/*_test.go` | 158 → 86 文件；`TestRecordsAtScale`/`TestKnowledgeAtScale` 计时用例删除（`PLATFORM_TIMING` 随之从 release.yml 去掉）；`querySampleRow` 类型搬到 `capability_invocation_test.go` |
 | Web 单元测试 | 150 → 37（45 行以下的组件冒烟/导入片段；kernel 与 i18n 全留） |
 | 脚本 | `scripts/cleanup-inventory.sh`、`deploy/local/rehearse-lightweight.sh` 删除；README/ADR-0080/Testing.md 引用已改 |

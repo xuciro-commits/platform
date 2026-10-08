@@ -19,6 +19,10 @@
 
 保留的宿主测试族：`accepted_*`（原子提交/崩溃）、`quarantine`/`deploy_recovery`/`journal_*`/`lightweight`/`oidc`/`deploy_admin`（持久与身份）、`tenancy_*`/`tenants`/`upgrade_authorization`/`submit_tenant`/`build_access`（隔离与授权）、`environment_*`/`release_install`/`direct_install`/`joint_draft`（生命周期）、`api`/`languages`/`definitions`/`host`（契约）、`console_compat`/`core_seed_replay`/`legacy_agent_context`（重放兼容）、`build`/`build_actions`/`build_approval`/`build_function`/`build_query`/`process`/`flow`/`function`/`agent*`/`ai`/`review_ai`（租户定义能力的核心行为）、外部契约与织物（`effects`/`writebacks`/`requests`/`sources_profiles`/`mcp`/`a2a`/`mail`/`io`/`files`）。
 
+独立模块保留协议契约、授权/只读预览、发布隔离与 `CheckReplay`；酒店删除查询/关系页面装配/代码页面候选三份重复测试，制造删除查询测试及代码页面候选用例。ERP 的五份测试均保留，其证据涉及平衡记账、连续编号、原子接受与协议恢复。
+
+浏览器 `routes` 中四条旧逐功能流程（29/30/31/34）随本轮删除：对象表单权限与状态由 `business-access`、页面编辑和冻结由 `page-notice`、整应用交付由 `workspaces`、原生流程版本绑定由 `workflow` 守住。现行路线不再断言已退场的 Studio 或 Direct install 控件。保留流程路线发现并修复了共享 Workbench 的真实断路：dock 页签变化须通知 owner，owner 主动切换 Test/Release 时须同步打开对应面板；隔离样本不进入生产、候选绑定及普通成员答复仍由这条路线验证。
+
 ## 规则（并入 docs/Testing.md）
 
 - 新功能不自带新测试，除非它改变了上面某个不变量；改了不变量，改那条已有测试。
@@ -27,4 +31,4 @@
 
 ## 后果
 
-`make test` 宿主根包约 60 秒（2 核沙箱），`make e2e` 8 条；`make verify` 不再是半小时。删掉的测试在 Git 历史里，需要重现某个旧场景时按文件名找回，而不是常驻。
+宿主根包沙箱实测 76 秒 → 22 秒；`make e2e` 保留 8 个 spec（13 个测试用例（含两行业参数化路线））。完整发布验证的耗时仍取决于契约、形式化证明与部署演练，不由本轮删除推断。删掉的测试在 Git 历史里，需要重现某个旧场景时按文件名找回，而不是常驻。

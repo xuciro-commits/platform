@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, pageUIProfile, test } from "./kit";
 import { decide, fresh, open, switchWorkspace } from "./host";
 
 test("task workspaces preserve native PMS and hand off a controlled receiving application", async ({ browser, page, request }, testInfo) => {
@@ -20,23 +20,33 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   });
   await decide(request, "manager", "build", "build.process.publish", { type: "build.process", id: flowID }, {});
   await decide(request, "manager", "build", "build.app.create", { type: "build.app", id: appID }, {
+    uiProfile: pageUIProfile, header: { variant: "horizontal", title: "WMS", logo: "wms", items: [{ kind: "logo" }, { kind: "title" }] },
     name: appName, title: "WMS entry probe", icon: "clipboard", pages: [pageName], resources: [{ app: "build", kind: "flow", name: `build.${flowName}` }],
   });
+
+  // Removing the logo clears its saved URL; disabling the header sends an explicit null.
+  await open(page, "manager", `/module?id=${appID}`);
+  await page.getByRole("tab", { name: "Header", exact: true }).click();
+  const header = page.getByRole("group", { name: "Application header", exact: true });
+  await header.locator("div").filter({ has: page.locator("strong").filter({ hasText: /^logo$/ }) }).first().getByRole("button", { name: "Remove", exact: true }).click();
+  const savedHeader = async () => (await (await request.get(`/v1/records/build.app/${appID}`, { headers: { Authorization: "Bearer manager" } })).json()).record.header;
+  await expect.poll(async () => (await savedHeader())?.logo ?? "").toBe("");
+  await header.getByRole("checkbox", { name: "Show application header", exact: true }).uncheck();
+  await expect.poll(savedHeader).toBeUndefined();
 
   await open(page, "manager", "/home");
   await expect(page.getByRole("button", { name: /^PMS\b/ }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Platform Catalog", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: /^PMS\b/ }).first().click();
-  await expect(page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Reservations", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Reservations", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Switch application", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "Knowledge", exact: true }).click();
-  await expect(page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Documents", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Documents", exact: true })).toBeVisible();
 
-  await switchWorkspace(page, "Projects");
-  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Shared resources", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Shared resources", exact: true })).toBeVisible();
-  await page.goto(`/#/application?id=${appID}`); // an existing deep link
-  await page.getByRole("button", { name: "Review application release", exact: true }).click();
+  await switchWorkspace(page, "Builder");
+  await expect(page.getByRole("button", { name: "Switch application", exact: true })).toContainText("Builder");
+  await page.goto(`/#/project?id=${appID}`); // an existing deep link
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
   await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
   await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
   await page.getByRole("button", { name: "Activate release", exact: true }).click();
@@ -45,14 +55,15 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   // Operations are their own applications now (ADR-0052 P3): Control Panel governs,
   // Runs operates, Releases delivers. None of them carries business navigation.
   await switchWorkspace(page, "Control Panel");
+  await page.getByRole("button", { name: "Toggle navigation", exact: true }).click();
   const nav = page.getByRole("navigation", { name: "Main", exact: true });
   await expect(nav.getByRole("button", { name: "Members", exact: true })).toBeVisible();
   await expect(nav.getByRole("button", { name: "Documents", exact: true })).toHaveCount(0);
   await switchWorkspace(page, "Runs");
   await expect(nav.getByRole("button", { name: "Workflow runs", exact: true })).toBeVisible();
-  await switchWorkspace(page, "Releases");
-  await nav.getByRole("button", { name: "Release review", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Switch application", exact: true })).toContainText("Releases");
+  await switchWorkspace(page, "Builder");
+  await nav.getByRole("button", { name: "Release history", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Release review", exact: true })).toBeVisible();
   if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("tenant-operations.png"), fullPage: true });
 
   const operatorContext = await browser.newContext({ baseURL: "http://127.0.0.1:18496", locale: "en-US" });
@@ -66,7 +77,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
     await decide(request, "desk", "build", `build.${objectName}.create`, { type: `build.${objectName}`, id: recordID }, { number: "IN-M1" });
     await expect(operator.getByRole("row").filter({ hasText: "IN-M1" })).toBeVisible();
     await operator.reload();
-    await expect(operator.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Receiving workspace", exact: true })).toBeVisible();
+    await expect(operator.getByRole("heading", { name: "Receiving workspace", exact: true })).toBeVisible();
     await expect(decide(request, "desk", "build", "build.object.edit", { type: "build.object", id: objectID }, { title: "Unauthorized" })).rejects.toThrow(/POLICY_DENIED/);
     if (process.env.PLATFORM_SCREENSHOTS) {
       await operator.screenshot({ path: testInfo.outputPath("business-receiving.png"), fullPage: true });

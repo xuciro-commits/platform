@@ -31,8 +31,7 @@
 3. **S3 内置轻量 IdP（已实施）**：`LocalIdP` 签发/校验（常量时间比较、拒绝非 HS256、校验 `iss`/`exp`/未来 `iat`），`Host.SignWith(idp, ttl)` 一次替换认证函数并签 `/v1/sign-in` 的服务席位，`Deployment.lightweightState()` 把日志、文件字节与密钥都开在 `-data` 里。
    验收：`TestLocalIdPSignsAndVerifies`、`TestLightweightProfileServesSignedSeats`、`TestLightweightProfileIsDeclaredNotInferred`（三种身份来源下 `/v1/me`、拒绝与席位一致：轻量宿主只收自己签的 token，交付宿主的开发 token 在这里 401，另一台宿主的 token 也 401）。
 4. **S4 SQLite 后端（暂缓）**：D2 的推荐是“先落地不引入依赖即可运行的轻量后端；SQLite 作为后继（同一接口）”。本批没有网络/模块缓存可取回驱动，故不引入；接口已就绪，接入时跑同一套契约测试即可。
-5. **每个切片一次重启走查（已做）**：`deploy/local/rehearse-lightweight.sh` 用真实 host 二进制在无 Docker 环境重复：生成密钥 → 自签 token 登录 → 一条决策写入文件日志 → 停止 → 同一目录再启动 → 日志重放/快照恢复、同一幂等键仍是同一答案、新工作被接受；`backup` 把**唯一**的数据目录整体复制后另起宿主，读到的状态与密钥一致。
-   验收命令：`PLATFORM_REHEARSE_BIN=<host> bash deploy/local/rehearse-lightweight.sh walk|verify|backup`。
+5. **轻量重启与身份契约**：文件日志、快照恢复、幂等和自签登录由 `lightweight_test.go` 与日志契约测试守住；重复演练脚本按 ADR-0082 删除。检查入口：`make test-go RUN=Lightweight`。
 
 ## 4. 证据与检查（2026-10-05，本沙箱）
 
@@ -50,7 +49,7 @@
 ## 5. 实施中发现并修掉的问题（供后续 profile 边界参考）
 
 - **恢复路径曾被 profile 分叉**：`Serve` 最初只在 `-database` 分支里做快照恢复与重放，轻量分支只打开日志就继续——重启会得到空租户。现已抽成 `restoreTenants`，两种 profile 共用（D6）。
-- **认证函数曾在 `NewHost` 之后才替换**：轻量宿主因此仍收开发 token（subject 原样当凭据），却拒绝自己签发的 token。现由 `Host.SignWith(idp, ttl)` 同时设置认证与签发，二者不可能再错位；`rehearse-lightweight.sh` 的 walk 断言“未签名 token 必须 401”。
+- **认证函数曾在 `NewHost` 之后才替换**：轻量宿主因此仍收开发 token（subject 原样当凭据），却拒绝自己签发的 token。现由 `Host.SignWith(idp, ttl)` 同时设置认证与签发，二者不可能再错位；`TestLightweightProfileServesSignedSeats` 断言未签名 token 必须返回 401。
 - **短命 CLI 的退出码**：`-idp-new-key`/`-mint-token` 走的是 host 的 `main`，原先 `log.Fatal(err)` 会把成功当失败（打印 `<nil>` 并退出 1）。已改为主程序只在 `err != nil` 时 `log.Fatal`（9 个 `cmd/*-server` 同改），并把 token 打给 stdout、日志给 stderr，便于脚本取用。
 
 ## 6. 关系

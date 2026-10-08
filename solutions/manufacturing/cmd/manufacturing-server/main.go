@@ -15,7 +15,6 @@ import (
 	_ "time/tzdata" // members' time zones resolve without a zoneinfo on the image (UX-13)
 
 	"erp"
-	"erpadapter"
 	"manufacturing"
 	"mes"
 	"platformserver"
@@ -33,7 +32,7 @@ const tenant = "plant-sz"
 
 func main() {
 	deployment := platformserver.Flags("127.0.0.1:8491")
-	books := flag.String("erp", "app", "the plant's books: app (the ERP app) or external (the adapter to an ERP outside)")
+	books := flag.String("erp", "app", "the plant's books: app (the ERP app)")
 	flag.Parse()
 	seat := func(role mes.Role) map[string]string {
 		roles := map[string]string{"mes": string(role)}
@@ -43,7 +42,7 @@ func main() {
 		return roles
 	}
 	supervisor := seat(mes.Supervisor)
-	for app, role := range map[string]string{erp.ID: erp.Controller, erpadapter.ID: erpadapter.Planner, platformserver.PlatformApp: platformserver.Admin,
+	for app, role := range map[string]string{erp.ID: erp.Controller, platformserver.PlatformApp: platformserver.Admin,
 		enterprise.ID: enterprise.Admin, ai.ID: ai.Admin, flow.ID: flow.Admin,
 		platformserver.AgentApp: platformserver.AgentAdmin, knowledge.ID: knowledge.Editor, work.ID: work.Admin, build.ID: build.Builder, core.ID: core.Steward} {
 		supervisor[app] = role
@@ -59,24 +58,17 @@ func main() {
 		manufacturing.Seat("quality-2", "qa-2", seat(mes.Quality)),
 		manufacturing.Seat("gateway-l1", "gateway-l1", seat(mes.Gateway)),
 		assistant,
-		manufacturing.Seat("erp", "erp", map[string]string{erpadapter.ID: erpadapter.Connector}),
 	}
 	newBooks := func(id string) platform.App { return erp.New(id) }
 	switch *books {
 	case "app":
 		deployment.Seed = func(t *platformserver.Tenant, now time.Time) error { return manufacturing.Seed(t, "sup-1", now) }
-	case "external":
-		newBooks = func(id string) platform.App { return erpadapter.New(id) }
 	default:
-		log.Fatalf("-erp: %q is neither app nor external", *books)
+		log.Fatalf("-erp: %q is not app", *books)
 	}
 	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
 		seats := deployment.SeatsFor(id)
-		t, err := manufacturing.NewTenant(id, newBooks(id), seats...)
-		if err == nil && *books == "external" {
-			err = t.Connect(erpadapter.Poll("erp"))
-		}
-		return t, err
+		return manufacturing.NewTenant(id, newBooks(id), seats...)
 	}
 	if err := deployment.Run(platformserver.TenantSpec{ID: tenant, Seats: development}); err != nil {
 		log.Fatal(err)

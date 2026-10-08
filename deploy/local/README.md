@@ -6,18 +6,17 @@
 
 ## 日常开发（不打镜像）
 
-容器只跑基础设施，宿主和工作台在本机热重载（ADR-0081）：
+一键切换（ADR-0081），两种模式都使用酒店 `http://localhost:8495`、制造 `http://localhost:8490`：
 
 ```bash
-make setup                          # 一次：web 依赖、air、Playwright 浏览器
-make infra                          # postgres / rauthy / rustfs / webhook-sink，数据卷与下文的 Compose 栈相同
-make dev SOLUTION=hospitality       # 宿主 8495，改 Go 保存即重启（manufacturing → 8490）
-make web                            # 另一终端：Vite 5176，/v1 代理到宿主
-make infra-compute                  # 需要代码函数编译时：worker/builder socket 落在 .build/dev/compute
-make dev-light                      # 完全不要容器：内存日志 + 开发令牌（manager / desk / sales…）
+make local   # 停 Docker 宿主；启动基础设施/计算容器，两台 Go 宿主由 Air 重启，Vite 提供前端 HMR
+make docker  # 停本地 Air/Vite；重建并校验 Docker 两台宿主，保留数据卷
+make help    # 中文命令说明
 ```
 
-从验收模式切换开发模式时，先 `docker compose -f deploy/local/compose.yaml stop hospitality-server`（制造则 `manufacturing-server`）；同一租户不能同时运行两个宿主。停止 air 后用 `make local-update` 恢复验收模式。`make infra-compute` 使用独立的 `platform-dev-compute` 项目，不替换验收宿主的计算服务。
+`make local` 启动后台进程，终端退出后继续运行；重复执行不会重复启动。日志在 `.build/dev/`。本地 Go API 使用内部 `18495/18490`，Vite 占用对外 `8495/8490` 并代理 API；容器模式由 Go 宿主直接提供同样的入口。同一租户不同时运行两个宿主。`make docker` 要求源码已提交，镜像版本和页面资源仍由 `update.sh` 核对。
+
+底层命令仍可单独使用：`make infra`、`make dev SOLUTION=hospitality`、`make web SOLUTION=hospitality`（前端 5176；制造 5175）、`make infra-compute`。无 Docker 的内存探针用 `make dev-light`。首次缺依赖时运行 `make setup`。`make local` 复用数据卷和登录配置，不重建宿主镜像；计算容器使用独立的 `platform-dev-compute` 项目。
 
 宿主的启动参数在 `deploy/dev/run.sh`，与下面 Compose 里的宿主一致（同一 PostgreSQL、同一 Rauthy、同一 tenants.json）；`deploy/local/.env` 的密钥同样被读取。
 
@@ -186,7 +185,7 @@ cd apps/mes/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantL
 | 方案 | 启动（在该目录下） | 端口 | 启动配置 | 开发令牌 |
 |---|---|---|---|---|
 | 酒店业：CRM、PMS、HCM、CSM | `solutions/hospitality`：`go run ./cmd/hospitality-server` | 8496 | `workspace-hospitality` | `manager`、`sales`、`sales-only`、`desk` |
-| 制造业：MES、ERP | `solutions/manufacturing`：`go run ./cmd/manufacturing-server`（加 `-erp external` 换成 ERP 适配器） | 8491 | `workspace-manufacturing` | `supervisor`（也是 ERP 主管会计）、`accountant`、`operator-l1`、`operator-l2`、`quality-1`、`quality-2`、`gateway-l1`、`assistant-l1`（AI 代理）、`erp` |
+| 制造业：MES、ERP | `solutions/manufacturing`：`go run ./cmd/manufacturing-server` | 8491 | `workspace-manufacturing` | `supervisor`（也是 ERP 主管会计）、`accountant`、`operator-l1`、`operator-l2`、`quality-1`、`quality-2`、`gateway-l1`、`assistant-l1`（AI 代理） |
 
 **每个应用单独运行**（ADR-0025：每个应用先能自己干，不依赖别的应用和外部系统）：在 `apps/<应用>/server` 下运行 `go run ./cmd/<应用>-server -web ../../../web/apps/workspace/dist`，端口都是 8499（一次起一个），启动配置 `workspace-app`：
 
@@ -198,7 +197,6 @@ cd apps/mes/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantL
 | `pms` | 见 `apps/pms/server/cmd/pms-server`（两个租户，Tauri 桌面端连它） |
 | `hcm` | `employee`、`manager`、`head`、`hr` |
 | `csm` | `desk`、`lead` |
-| `erpadapter` | `planner`、`erp` |
 
 右上角的身份菜单可以切换开发身份。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。
 

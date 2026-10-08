@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:b70f76032918962b",
+  "revision": "sha256:b66c6709ba4ac4bc",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5626,7 +5626,6 @@
       "web/packages/crm/src/index.tsx",
       "web/packages/csm/src/index.tsx",
       "web/packages/erp/src/index.tsx",
-      "web/packages/erpadapter/src/index.tsx",
       "web/packages/hcm/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/index.tsx",

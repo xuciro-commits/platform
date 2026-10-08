@@ -3,32 +3,29 @@
     "id": "hotel-a",
     "name": "Hotel A",
     "template": "hospitality",
-    "settings": {
-      "name": "Hotel A",
-      "timezone": "Europe/Berlin",
-      "currency": "EUR",
-      "country": "DE"
-    },
     "seats": [
       {
         "subjects": [
           "user:sales@hotel.test"
         ],
         "id": "sales-1",
+        "tenant": "",
         "roles": {
-          "crm": "sales",
-          "pms": "front-desk",
-          "memstay": "keeper",
           "ai": "user",
-          "hcm": "employee"
+          "crm": "sales",
+          "hcm": "employee",
+          "memstay": "keeper",
+          "pms": "front-desk"
         },
         "units": [
           {
+            "party": "",
             "unit": "sales-team",
             "role": "account executive",
             "primary": true
           },
           {
+            "party": "",
             "unit": "offsite-2026",
             "role": "project lead"
           }
@@ -39,41 +36,47 @@
           "user:manager@hotel.test"
         ],
         "id": "manager-1",
+        "tenant": "",
         "roles": {
+          "agent": "admin",
+          "ai": "admin",
+          "build": "builder",
           "core": "steward",
           "crm": "sales-manager",
-          "pms": "manager",
-          "platform": "admin",
-          "enterprise": "admin",
-          "memstay": "keeper",
-          "ai": "admin",
-          "hcm": "employee",
-          "work": "admin",
-          "flow": "admin",
-          "agent": "admin",
           "csm": "lead",
+          "enterprise": "admin",
+          "flow": "admin",
+          "hcm": "employee",
           "knowledge": "editor",
-          "build": "builder"
+          "memstay": "keeper",
+          "platform": "admin",
+          "pms": "manager",
+          "work": "admin"
         },
         "units": [
           {
+            "party": "",
             "unit": "hotel-a",
             "role": "general manager",
             "primary": true
           },
           {
+            "party": "",
             "unit": "hotel-a-co",
             "role": "director"
           },
           {
+            "party": "",
             "unit": "guest-committee",
             "role": "chair"
           },
           {
+            "party": "",
             "unit": "hotel-a",
             "role": "manager"
           },
           {
+            "party": "",
             "unit": "hospitality",
             "role": "head"
           }
@@ -84,12 +87,14 @@
           "user:hr@hotel.test"
         ],
         "id": "hr-1",
+        "tenant": "",
         "roles": {
-          "hcm": "hr",
-          "ai": "user"
+          "ai": "user",
+          "hcm": "hr"
         },
         "units": [
           {
+            "party": "",
             "unit": "hotel-a",
             "role": "hr officer",
             "primary": true
@@ -101,15 +106,17 @@
           "user:desk@hotel.test"
         ],
         "id": "desk-1",
+        "tenant": "",
         "roles": {
-          "csm": "desk",
-          "pms": "front-desk",
-          "hcm": "employee",
           "ai": "user",
-          "build": "user"
+          "build": "user",
+          "csm": "desk",
+          "hcm": "employee",
+          "pms": "front-desk"
         },
         "units": [
           {
+            "party": "",
             "unit": "front-office",
             "role": "receptionist",
             "primary": true
@@ -121,49 +128,87 @@
           "user:deputy@hotel.test"
         ],
         "id": "deputy-1",
+        "tenant": "",
         "roles": {
+          "ai": "user",
           "crm": "sales-manager",
-          "hcm": "employee",
           "csm": "lead",
-          "ai": "user"
+          "hcm": "employee"
         },
         "units": [
           {
+            "party": "",
             "unit": "hotel-a",
             "role": "deputy manager",
             "primary": true
           }
         ]
       }
-    ]
+    ],
+    "settings": {
+      "country": "DE",
+      "currency": "EUR",
+      "name": "Hotel A",
+      "timezone": "Europe/Berlin"
+    },
+    "created": "0001-01-01T00:00:00Z"
   },
   {
     "id": "hotel-test",
     "name": "Hotel Test",
     "template": "hospitality",
-    "settings": {
-      "name": "Hotel Test",
-      "timezone": "Europe/Berlin",
-      "currency": "EUR",
-      "country": "DE"
-    },
     "seats": [
       {
         "subjects": [
           "user:manager@hotel.test"
         ],
         "id": "manager-test",
+        "tenant": "",
         "roles": {
-          "core": "steward",
-          "platform": "admin",
-          "enterprise": "admin",
-          "ai": "admin",
-          "work": "admin",
-          "flow": "admin",
           "agent": "admin",
-          "build": "builder"
+          "ai": "admin",
+          "build": "builder",
+          "core": "steward",
+          "enterprise": "admin",
+          "flow": "admin",
+          "platform": "admin",
+          "work": "admin"
         }
       }
-    ]
+    ],
+    "settings": {
+      "country": "DE",
+      "currency": "EUR",
+      "name": "Hotel Test",
+      "timezone": "Europe/Berlin"
+    },
+    "created": "0001-01-01T00:00:00Z"
+  },
+  {
+    "id": "acme",
+    "name": "Acme Corp",
+    "template": "manufacturing",
+    "seats": [
+      {
+        "subjects": [
+          "user:buyer@plant.test"
+        ],
+        "id": "buyer",
+        "tenant": "",
+        "roles": {
+          "platform": "admin"
+        }
+      }
+    ],
+    "settings": {
+      "currency": "CNY",
+      "dateFormat": "ymd",
+      "language": "zh-CN",
+      "name": "Acme Corp",
+      "timezone": "Asia/Shanghai",
+      "weekStart": "monday"
+    },
+    "created": "2026-10-08T10:16:41.004222Z",
+    "by": "user:manager@hotel.test"
   }
 ]
