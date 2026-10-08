@@ -16,7 +16,7 @@
 | Web 日常编码与同类组件批次 | `make check-web`：生成一致性、Catalog、全部包 tsc；`make test` 加单元测试；开发中按问题选择原 owner 的 `go test` 和单元测试 |
 | 成组交付、重要集成或发布节点 | 按影响面选择一条联合浏览器路线；按影响面 `make e2e SPEC=<spec>`；需要全量验收时 `make e2e` 共用一次完整 Playwright，不按每个组件重复 |
 | 纯样式/布局/文案 | `make check-web`，启动查看并截所改页面；不要求重跑浏览器业务路线 |
-| 结构整理（搬文件、拆函数、Tenant 组件化，ADR-0080） | 零行为变更：`go build ./... && go vet .` 加全量 `go test .`（基线仅 `TestRecordsAtScale`）；web 侧对应包 `tsc --noEmit` 与 `node scripts/catalog.mjs generate` 零语义差异；`scripts/cleanup-inventory.sh` 看规模数字；不加新测试 |
+| 结构整理（搬文件、拆函数、Tenant 组件化，ADR-0080） | 零行为变更：`go build ./... && go vet .` 加全量 `go test .`（基线仅 `TestRecordsAtScale`）；web 侧对应包 `tsc --noEmit` 与 `node scripts/catalog.mjs generate` 零语义差异；不加新测试 |
 | 环境生命周期（定义→候选→封存→激活→晋级→迁移→升级，ADR-0047 §11 / ADR-0080 §3.1） | `go test -run 'TestApplicationLifecycle' .`：`environment_lifecycle_test.go` 走租户方法，`environment_http_test.go` 走 `Host.Handler()` 的真实路由（含宿主控制台）；本地两租户宿主上通过发布工作台/Host Console 将已封存候选晋级到目标租户，并在 Migrate records 迁移主数据；旧 WMS 装配脚本已清理 |
 | 应用全生命周期跨环境（发布、晋级、迁移、升级、恢复） | `go test -run TestApplicationLifecycleAcrossEnvironments .`：一个对象+页面+应用的联合候选在 dev 封存激活，业务写入后晋级到 prod，`MigrateRecords` 迁数据（二次运行零写入），v2 加一个可选标量经两环境各自审阅的计划激活，最后 prod 从快照+日志尾恢复并通过 `CheckReplay`；改动候选/发布/环境/迁移任一 owner 时先跑它 |
 | 提交/恢复/激活语义或部署 | 对应持久化/故障检查及 `make rehearse`；纯发布导航不自动触发 |
@@ -29,7 +29,7 @@
 
 - **浏览器 spec**（`web/e2e/tests/*.spec.ts`）只从 `./kit` 导入 `test`/`expect`：`builder`（`manager` 席位）造对象 `builder.object()`、记录 `builder.records()`、页面 `builder.page()`、后台改稿 `builder.edit()`；`editor` 走编辑器（`importModule`、`select`、`saveUntil`、`release`）；`runtime(page, operator, name)` 以 `desk` 开运行时页；截图用 `shots()`。spec 里不再出现 `/v1/submissions`、`Authorization`、"Import Workshop module" 对话框步骤或 Review→Check→Candidate→Activate 四连点。一个 spec 一条路线、格式化、分段注释写明每段证明什么；样板 `page-notice.spec.ts`。旧的单行压缩 spec 在触碰时按样板改写，不另立迁移任务。
 - **宿主测试**（`capabilities/server/*_test.go`）用 `testkit_test.go`：`composeTenant(t, id, seats, apps...)` / `builderTenant(t, id, apps...)` 组租户，`seatOf("ann", "build:desk")` 写席位，`decide(...)` 提交并在拒绝时 fail，`refuse(...)` 返回 `code: message` 做权限表，`publishObject(...)` 一步建并发布对象。不手拼 `pb.Submission`、不自维护幂等计数；文件内已有的 `submit := func` 闭包在触碰时改到 kit 上；样板 `build_access_test.go`。
-- **不写**：像素/布局断言、为每种设备或语言复制的路线、服务端已证明规则的浏览器重测、只为"覆盖率"存在的用例。新增测试先说清它会抓住哪种真实回归。
+- **不写**：像素/布局断言、为每种设备或语言复制的路线、服务端已证明规则的浏览器重测、只为"覆盖率"存在的用例。新功能不自带新测试，除非它改变了某个长期不变量（契约、原子提交/恢复、重放兼容、隔离与授权、发布生命周期、身份）——那就改那条已有测试。浏览器路线封顶 8 条，加一删一。过程探针留在本地不提交（ADR-0082）。
 
 ## 自动检查的归属
 
@@ -42,7 +42,7 @@
 | 共享组件行为 | `web/packages/ui`；翻译完整性由 i18n 检查 |
 | Catalog 一致性与查询 | `scripts/catalog.mjs check` 已接入 Web：公共导出/示例/翻译/Widget 引用与私有导入；`@platform/catalog` 验证有界查询，Catalog 预览隔离和 Studio 草稿路线只保留核心行为 |
 | 代码编译与计算装配 | `compute`/`assembled_compute` 行为检查；真实 Go/TinyGo profile、私有 socket 与 worker 需要部署 README 的运行环境，显式启用后验证，不能用默认跳过当通过 |
-| 浏览器主路径 | `web/e2e/tests`：动作/刷新、审批、字段安全、拒绝保留输入与独立业务主管、只读预览、对象/页面/应用编写、编辑器未保存保护、租户动作、流程/函数编写及共同候选保存后刷新续接/激活/操作、两行业原生记录建议与收件箱返回 |
+| 浏览器主路径 | `web/e2e/tests` 共 8 条长期路线：`routes`（规范入口：动作/刷新、审批、字段安全、只读预览、对象/页面/应用/状态动作）、`business-access`（拒绝保留输入与独立业务主管）、`release-roles`（发布者/审计者）、`workflow`（流程编写与应答）、`workspaces`（壳与任务工作区）、`host-sign-out`（会话）、`integration-fabric`（两宿主集成织物）、`page-notice`（编辑器→导入→发布→运行时的 kit 样板）。按部件/按功能的路线已删除（ADR-0082）：那层由 Go 的发布/重放测试与负责人走查证明 |
 | OIDC 与持久部署 | `deploy/local/rehearse.sh`、`web/e2e/deploy`；在部署边界改变或发布检查点运行 |
 
 共享读取的固定次数断言限定在同一成员/定义范围及数据修订。相关浏览器路线使用host.ts的stableReadRevision固定测试段的变更流，涉及后续动态发布时恢复真实流；真实租户变更允许重新读取，不能把它计成同一世代的重复请求。业务动作/刷新路线仍使用真实通知，会话用例验证revision变化后的失效与同步重入合并。
@@ -58,7 +58,7 @@ pnpm --dir web/apps/workspace build
 PLATFORM_SCREENSHOTS=1 pnpm --dir web/e2e exec playwright test --grep 'compose a page'
 ```
 
-工坊与流程导航截图选 `workflow.spec.ts`，原生记录建议的普通/窄屏截图选 `record-work.spec.ts`。截图在 `web/e2e/test-results`。这是供人看的图片，不做像素/尺寸断言，也不构成负责人认可。界面改动只检查受影响页面的普通及窄屏状态；不要求每次重复全部中文、键盘、设备组合。集中验收时负责人实际完成以下任务，反馈形成简短待办，修复后仅复核相关问题。
+工坊与流程导航截图选 `workflow.spec.ts`，运行时页面截图选 `page-notice.spec.ts`。截图在 `web/e2e/test-results`。这是供人看的图片，不做像素/尺寸断言，也不构成负责人认可。界面改动只检查受影响页面的普通及窄屏状态；不要求每次重复全部中文、键盘、设备组合。集中验收时负责人实际完成以下任务，反馈形成简短待办，修复后仅复核相关问题。
 
 2026-10-07 阶段记录：在 main `a6c775fe`、酒店 `8495` 与制造 `8490` 上进行真实浏览器操作；28 条路线中 19 条已有观察（含子路径与阻断），9 条未开始。下列“走查结果”区分操作证据、剩余范围与负责人确认，不把部分完成记为整条通过。原发现 13/13 已复测通过，完整任务和负责人认可仍按本列范围保留。旧 HTML/截图已按负责人要求清理，历史证据可从 Git 历史查看；本表保留执行结果。系统/模型替身只证明流程与协议，不证明真实模型质量。修复后只复核相关路径，未执行项继续保留。
 
@@ -110,4 +110,4 @@ PLATFORM_SCREENSHOTS=1 pnpm --dir web/e2e exec playwright test --grep 'compose a
 
 设置 `PLATFORM_TEST_DATABASE` 指向专用测试 PostgreSQL 后，根包 `TestPostgresTableProfilePullAndReplay` 检查真实只读表接入、数字增量游标和重放；`TestJournalWritebackCallbackAndReplay` 检查真实接受结果落盘及快照恢复；`TestJournalBooksFromBuilderActions` 检查账簿待过账恢复及冲销落盘后丢应答的重试；`TestJournalConcurrentOpen` 检查四个宿主同时初始化同一个测试库。测试地址不含密码，凭据仍通过受控密钥提供。
 
-当前全量 `make e2e` 路线尚未通过：旧 application/Main 导航、function/release 按钮、Process 步骤和页面事件 fixtures 需要对齐现行 ADR-0052/0053/0054 的入口与声明。不得以本节的两条增量路线冒充全量浏览器或部署恢复演练通过；遗留路线维护归 WorkQueue。
+全量 `make e2e` 现在就是上面 8 条路线；哪条过时就修哪条，不再有"遗留路线"。

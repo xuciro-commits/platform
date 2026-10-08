@@ -91,3 +91,8 @@ func TestNativeAIFunctionUsesOwnerGrantsWithoutBuildRole(t *testing.T) {
 		t.Fatal("gateway bypassed the native function owner grant")
 	}
 }
+
+type querySampleRow struct {
+	platform.Record
+	Label string `json:"label"`
+}

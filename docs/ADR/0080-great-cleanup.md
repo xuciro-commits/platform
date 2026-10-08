@@ -13,7 +13,7 @@
 | `platform` 包 | 107 文件、22 765 行，其中 **60 个 `page_*` 文件**是页面小部件契约，与 `actions/ledger/entity` 这些内核概念混在一个包 |
 | 最大文件 | `records.go` 1416、`host.go` 1191、`server.go` 1130、`definitions.go` 924、`installed.go` 917 |
 | Web | `@platform/build` 164 文件 14.8k 行（已按目录分）；`@platform/ui` 146 文件、src 顶层 29 项平铺；`@platform/app` 顶层 23 项 |
-| 超过 150 行的函数（`scripts/cleanup-inventory.sh`） | **33 个**；最长 `Host.Handler` 875 行、`Tenant.definitionsFrom` 633、`PageDocument.Check` 629、`Tenant.checkSections` 612、`SimulateCandidate` 325 |
+| 超过 150 行的函数（`gofmt`/`wc` 一行盘点） | **33 个**；最长 `Host.Handler` 875 行、`Tenant.definitionsFrom` 633、`PageDocument.Check` 629、`Tenant.checkSections` 612、`SimulateCandidate` 325 |
 | 死代码 | 上一轮一次扫描即删 1 个重复模块 + 6 个死符号、去 22 个无人引用的 export；Go 侧未扫 |
 
 后果：读代码要 grep 一车；新能力不知道该长在哪，于是继续长在 `Tenant` 上；AI 代理每次都要重新建立整张地图；历史遗留（替代过的路径、只为旧日志保留的分支、注释里的"曾经"）无人敢删。
@@ -71,14 +71,14 @@ capabilities/server/
 
 ### 2.4 面条代码的拆法（第 4 波）
 
-- 超过 150 行的函数登记（`scripts/cleanup-inventory.sh` 输出），每个拆成"决定 / 应用 / 叙述"三段或按分支抽函数；不改语义，用既有测试守。
+- 超过 150 行的函数登记（`gofmt`/`wc` 一行盘点 输出），每个拆成"决定 / 应用 / 叙述"三段或按分支抽函数；不改语义，用既有测试守。
 - `server.go` 的路由注册表 → 每个组件自注册（`Routes()`），`api.go` 只拼。
 
 ## 3. 波次（每波一个或数个提交，波末交接 GPT）
 
 | 波 | 内容 | 风险 | 完成标志 |
 |---|---|---|---|
-| **0 盘点** | `scripts/cleanup-inventory.sh`：包/文件/函数长度、`Tenant` 方法数、死导出（Go 用 `go vet` + 自写符号扫描，Web 用上一轮脚本固化）；本 ADR §0 数字由它产出 | 无 | 脚本进 `scripts/`，`verify.sh` 可选步骤 |
+| **0 盘点** | `gofmt`/`wc` 一行盘点：包/文件/函数长度、`Tenant` 方法数、死导出（Go 用 `go vet` + 自写符号扫描，Web 用上一轮脚本固化）；本 ADR §0 数字由它产出 | 无 | 脚本进 `scripts/`，`verify.sh` 可选步骤 |
 | **1 零依赖搬家** | `journal/`、`idp/`、`platform/pageui/`、`decimal_condition`→`platform` 值包；web `ui`/`app` 顶层目录化 | 低（纯移动，编译器把关） | 全绿；`host.ts` 零 diff |
 | **2 组件化 Tenant（上半）** | `compute/`、`agents/`、`release/`（含 `simulate_*`，它是 release 候选的测试封存）：先在根包内把 `func (t *Tenant)` 改成组件方法 + 小接口，再 `git mv` 进包。**`accepted/` 不在本波**（曾在回执里口误写入，以本表为准）。每个组件一个提交、一次交接：固定 HEAD + B + 路径/重命名映射 | 中 | **退出标准改为状态归属**（第 2 波实测：方法只换接收者是空转）：`Tenant` 结构体字段 80 → < 55，每个组件自有锁或明确"受 t.mu 保护"；方法数作为参考值记录 |
 | **3 组件化 Tenant（下半）** | `accepted/`、`console/`、`integration/`、`pages/` | 高（accepted 与提交管线纠缠） | `Tenant` 方法数 < 120；根包 < 12k 行 |

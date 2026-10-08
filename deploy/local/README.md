@@ -94,14 +94,7 @@ TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mi
 - 与轻量 profile 互斥的开关会被拒绝：`-database`、`-files`、`-oidc-issuer`、`-oidc-keys`、`-project`；交付 profile 则拒绝 `-data`、`-idp-key`。
 - 重启语义与 PostgreSQL 日志一致：启动时读本代码的最新快照、重放其余条目、损坏日志则隔离该租户；`/v1/sign-in`、`/v1/me`、权限拒绝与审计不因 profile 而变。
 
-无 Docker 的走查（ADR-0049 §3.5）：
-
-```bash
-rm -rf /tmp/platform-lightweight-rehearse
-PLATFORM_REHEARSE_BIN=/tmp/hospitality-server bash deploy/local/rehearse-lightweight.sh walk    # 建密钥、自签登录、写决策、停止、再启动、读回
-HOST=http://127.0.0.1:18499 TOKEN=$TOKEN bash deploy/local/rehearse-lightweight.sh verify        # 对运行中的宿主核对同一状态与同一决策
-PLATFORM_REHEARSE_BIN=/tmp/hospitality-server bash deploy/local/rehearse-lightweight.sh backup   # 复制唯一的数据目录并在副本上再起一个宿主
-```
+轻量 profile 的重启、备份与自签登录由 `capabilities/server/lightweight_test.go` 证明（`make test-go RUN=Lightweight`），不再有单独的演练脚本。
 
 ## 地址
 
