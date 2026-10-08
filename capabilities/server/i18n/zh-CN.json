@@ -1608,5 +1608,6 @@
   "Translate a text": "翻译一段文字",
   "Say a declaration text (an object type, field, state, action or application name the tenant defined, or any shipped one) in a language (target: the language tag, such as zh-CN). An empty translation removes the tenant's entry.": "用某种语言说出一段声明文字（租户自定义的对象类型、字段、状态、动作或应用名称，或任何内置文字；目标为语言标签，如 zh-CN）。译文为空则删除租户的词条。",
   "The text as declared, in its source language": "声明时所写的原文",
-  "What it reads as in the target language; empty removes": "在目标语言中的读法；留空则删除"
+  "What it reads as in the target language; empty removes": "在目标语言中的读法；留空则删除",
+  "Image regions": "图像区域"
 }

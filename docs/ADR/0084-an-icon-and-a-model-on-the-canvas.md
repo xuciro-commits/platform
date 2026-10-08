@@ -25,13 +25,13 @@
 - 左栏不再是\"调色板/Elements\"这种含糊名称，而是 **Add elements**（加元素）与 **UAF grid**（UAF 网格）两页；元素清单按 `Domain` 分组、可搜索，每一项**在不可用时给出理由**：\"不画在这个格子里\"、\"从 scale N 起才可用\"——不再静默过滤。
 - **UAF grid** 页画域 × 方面的 8 格：点一格就把视图切到该格，下面列出该格允许的 stereotype；同一页列出整份 UAF 1.3 类型的 `offered`（本租户 profile 启用）与 `loadable`（可存可用但不在网格上），说明\"offered 多少 / 共多少\"，并给搜索。格子决定允许的 stereotype，非法连线的拒绝文字直接来自元模型约束（原有行为，不改）。
 - 元素与关系分开说：元素是 `stereotype`（ActualOrganization、ActualPerson、ActualPost、ActualLocation…），关系是 `ActualOrganizationRole`/`FillsPost`/`ResponsibleFor`/`IsCapableToPerform`/`ActualResourceRelationship` 等；检查器把所选元素所属域的**属性与合法关系**摊开（属性来自元模型，不是表单里手写的）。
-- 视图（Graph/Tree/Table/Timeline）是同一模型的不同投影，画布只是其中一种。
+- 同一模型的三种投影在同一个工作台里切换：**画布 / 树 / 表格**（`mode`）；视图（View）是保存下来的"哪些元素 + 哪个格子 + 布局"，画布只是它的一种读法。
 
 ### D3 图上操作为核心：节点与连线都要点得中
 
 `@platform/ui` 的 `DiagramCanvas` 新增（`DiagramAction` 由 `ui/src/index.ts` 导出）：
 
-- `nodeActions(id)`：选中节点后在其上方出现操作条；`edgeActions(id)`：选中连线后在其下方出现操作条；`facts(el)` 把节点事实（类型、Kind、Part of、Held by、生效期）放进 Details；`onReconnect(id, source, target)`：允许时拖端点改接，拖到空处即拒绝。
+- `nodeActions(id)` / `edgeActions(id)`：选中节点或连线后，画布底部出现该元素的操作条（按钮的 `hint` 说明后果，危险操作用 danger 色）；`facts(el)` 把节点事实（类型、Kind、Part of、Held by、生效期）放进 Details；`onReconnect(id, source, target)`：允许时拖端点改接，拖到空处即拒绝。
 - 企业画布接上这四个口子：节点 = **Edit… / Relate / Hide in this view / Close…**，连线 = **Change… / End…**。\"隐藏\"只改这一个视图（视图是投影，不是模型），\"关闭/结束\"给日期、进历史、所有视图都不再显示为在效——两个对话框各自说明后果，按钮文案分别是\"Hide in this view\"与\"Close…/End…\"，不复用同一个\"删除\"。
 - 画布内的帮助（`?`）逐条说明：点选、拖动、从端口连线、拖端点重连、以及隐藏与结束的差别。
 - Flow 画布（`BlockCanvas`）：连线可点选，选中后出现 **Insert block / Remove connection**（插入即在该边中间加块并重连，删除即断开两侧），加上同一个帮助。已有能力（撤销/复制粘贴/折叠展开/拖动排序）不动。

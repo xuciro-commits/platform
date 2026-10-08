@@ -134,8 +134,8 @@ function Content({ nodes, edges, positions, selected, editable = false, linking 
           <li>{t("Click an element to select it; double-click to open it.")}</li>
           {editable && <li>{t("Drag an element to move it; the position is saved with the view.")}</li>}
           {editable && linking && <li>{t("Drag from one element to another to relate them.")}</li>}
-          {editable && !!nodeActions && <li>{t("The selected element shows its operations above it.")}</li>}
-          {editable && !!edgeActions && <li>{t("Click a connection to select it, then use its operations — hiding it here, or ending the relationship in the model, are different things.")}</li>}
+          {editable && !!nodeActions && <li>{t("The selected element's operations appear in the bar at the bottom of the canvas.")}</li>}
+          {editable && !!edgeActions && <li>{t("Click a connection to select it; its operations appear in the same bar. Some only change this view, others change the model — the button's hint says which.")}</li>}
           {editable && !!onReconnect && <li>{t("Drag a connection's end onto another element to relate those instead.")}</li>}
         </ul>
         <button type="button" className="mt-2 rounded px-2 py-1 text-muted hover:bg-row-hover" onClick={() => setHelp(false)}>{t("Close")}</button>

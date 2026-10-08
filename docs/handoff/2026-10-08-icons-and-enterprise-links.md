@@ -3,13 +3,13 @@
 - **基点 B** = main `8d230387`
 - **上一份交接** = `docs/handoff/2026-10-08-words-and-trees.md`（ADR-0083，提交 `e3154e9`，**尚未交给 GPT**）；本块把它之后的所有提交一并交（`e3154e9..冻结 HEAD`）。
 - **冻结 HEAD** = 见本文件所在提交（`git log --oneline -1`）。
-- 路径：`git diff --name-only e3154e9 HEAD` → 29 个文件（含 `docs/ADR/0084-an-icon-and-a-model-on-the-canvas.md` 与本文）。按目录：
+- 路径：`git diff --name-only e3154e9 HEAD` → 30 个文件（含 `docs/ADR/0084-an-icon-and-a-model-on-the-canvas.md` 与本文）。按目录：
   - `web/packages/ui/src/`：`components/IconPicker.tsx`（新）、`graph/DiagramCanvas.tsx`、`graph/BlockCanvas.tsx`、`i18n/zh-CN.ts`、`index.ts`
   - `web/packages/platform/src/`：`enterprise/index.tsx`（UAF 网格改卡片式 + Add/YAF/Model 三页 + People/UsedBy/闭元素可见）、`enterprise/canvas.tsx`、`enterprise/model.ts`、`knowledge.tsx`（GlossaryReach）、`i18n.ts`
   - `web/packages/app/src/`：`actions/actions.tsx`（ElementPicker 显示已关闭的引用值）、`i18n.ts`
   - `web/packages/build/src/`：`workshop/ModuleWorkbench.tsx`、`projects/project.tsx`、`ontology/lineage.tsx`、`i18n.ts`
   - `web/apps/workspace/src/`：`tenantApps.tsx`、`shell/Lineage.tsx`、`i18n.ts`
-  - 宿主：`capabilities/server/platform/definition.go`（`IconName`）、`apps/build/application.go`、`installed.go`、`apps/core/core.go`（`Site.Place`/`Site.Unit` 引用）、`apps/erp/server/{erp.go,production.go,i18n/zh-CN.json}`
+  - 宿主：`capabilities/server/platform/definition.go`（`IconName`）、`apps/build/application.go`、`installed.go`、`apps/core/core.go`（`Site.Place`/`Site.Unit` 引用）、`apps/core/i18n/zh-CN.json`（记账字段 7 条 help）、`i18n/zh-CN.json`（files 的 1 条字段标题）、`apps/erp/server/{erp.go,production.go,i18n/zh-CN.json}`
   - 生成文件：`web/packages/kernel/src/gen/host.ts` **未改**（本块没有契约变化）
 
 ## 七条对应（设计见 ADR-0084）
@@ -28,8 +28,9 @@
 
 - `tsc --noEmit` 逐包：`ui` / `app` / `build` / `platform` / `workspace` 全 0 错。
 - `bash scripts/escapes.sh`：`escapes ok: 7 known in 6 files, none new`。
-- 字面 `t()` 缺口扫描（去掉 `node_modules`/测试文件）：**0**。
-- 宿主：`go test -run 'TestLanguages|TestAPIContract|TestApplications|TestBuild' .` 通过；`go test ./apps/core/... ./apps/enterprise/...` 通过。
+- 字面 `t()` 缺口扫描（去掉 `node_modules`/测试文件）：**0**；宿主声明文字按 (应用字典 ∪ 平台字典) 提取核对：core/files 由 7+1 条缺口修到 **0**（build 的 Go 结构体标签文字只作草稿校验，不在服务端声明文字里，前端口径已有词条）。
+- 宿主：`go build ./...` 通过；`go test -run 'TestLanguages|TestAPIContract|TestApplications|TestBuild' .` 通过；`go test ./apps/core/... ./apps/enterprise/...` 通过。
+- 本块另修两处：`ElementPicker` 把已关闭的引用值显示为 `{name} · closed {until}`（不再显示成空）；`DiagramCanvas` 的帮助文案改成"操作在画布底部操作条"，与实现一致（原来是"在上方"）。
 - **格式文件的锁定实测结果**：Go 契约测试里 `core` 的 zh 完整性用 `TestLanguages` 断言，ERP 用 `apps/erp/server/erp_test.go:161` 断言 `Untranslated(ID,"zh-CN")` 为空 —— 我无法在沙箱编译 ERP 测试（见下），因此 `CostCentre` 的 zh 词条是按同一约定手写的，**需要本地跑一次 `go test ./...` 复核**。
 
 ## 请本地核对（需要浏览器）

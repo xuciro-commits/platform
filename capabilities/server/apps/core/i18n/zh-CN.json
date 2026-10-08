@@ -103,5 +103,12 @@
   "Expense": "费用",
   "Trial balance": "试算平衡表",
   "Place in the model": "模型中的场所",
-  "The enterprise model's location for this place; the model is where its position in the enterprise lives": "该场所在企业模型中对应的位置元素；它在企业里的位置由模型决定"
+  "The enterprise model's location for this place; the model is where its position in the enterprise lives": "该场所在企业模型中对应的位置元素；它在企业里的位置由模型决定",
+  "Unique, sorts the chart, e.g. 1403": "唯一，决定科目表排序，例如 1403",
+  "The summary account's code": "上级汇总科目的编码",
+  "e.g. 2026-10": "例如 2026-10",
+  "YYYY-MM-DD": "YYYY-MM-DD",
+  "YYYY-MM-DD, inclusive": "YYYY-MM-DD，含当日",
+  "ISO 4217; default the tenant's first currency": "ISO 4217；默认取租户的第一种货币",
+  "The decision that posted it, set by the platform": "过账它的那条决定，由平台填写"
 }
