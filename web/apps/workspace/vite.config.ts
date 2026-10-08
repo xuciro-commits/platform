@@ -8,6 +8,6 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   clearScreen: false,
-  server: { port: 5176, strictPort: true, proxy: { "/v1": process.env.PLATFORM_HOST ?? "http://127.0.0.1:8495" } },
+  server: { port: 5176, strictPort: true, proxy: Object.fromEntries(["/v1", "/healthz", "/mcp", "/a2a"].map((path) => [path, process.env.PLATFORM_HOST ?? "http://127.0.0.1:8495"])) },
   build: { target: "safari17", outDir: "dist" },
 });

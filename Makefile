@@ -21,6 +21,9 @@ INFRA := postgres rauthy rustfs webhook-sink
 SOLUTION ?= hospitality
 PORT.hospitality := 8495
 PORT.manufacturing := 8490
+WEB_PORT.hospitality := 5176
+WEB_PORT.manufacturing := 5175
+WEB_PORT ?= $(WEB_PORT.$(SOLUTION))
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 DIST := .build/release
 
@@ -29,6 +32,13 @@ help: ## 显示命令帮助列表
 	@awk 'BEGIN{FS=":.*## "} /^## /{printf "\n%s\n", substr($$0,4)} /^[a-zA-Z0-9_.-]+:.*## /{printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 ## dev - 本地开发（无需构建镜像；Docker 仅用于 PostgreSQL、Rauthy、RustFS 与 Webhook Sink）
+
+.PHONY: local docker
+local: ## 一键切到本地热更新：自动停 Docker 宿主，启动基础设施及两套 Air/Vite；入口仍为 8495/8490
+	AIR="$(AIR)" python3 deploy/dev/environment.py local
+
+docker: ## 一键切回 Docker：自动停本地 Air/Vite，重建并校验两台宿主；保留全部数据卷
+	python3 deploy/dev/environment.py docker
 
 .PHONY: infra
 infra: ## 启动基础服务容器（数据持久化保留在 platform_* 数据卷中）
@@ -57,7 +67,7 @@ dev-light: ## 轻量内存模式运行宿主（使用开发令牌，完全不依
 
 .PHONY: web
 web: ## 在 Vite 下热重载运行工作区（HMR），将 /v1 反向代理到对应解决方案宿主
-	PLATFORM_HOST=http://127.0.0.1:$(PORT.$(SOLUTION)) $(PNPM) --dir web/apps/workspace dev --host
+	PLATFORM_HOST=http://127.0.0.1:$(PORT.$(SOLUTION)) $(PNPM) --dir web/apps/workspace dev --host 127.0.0.1 --port $(WEB_PORT)
 
 .PHONY: setup
 setup: ## 首次环境初始化：安装 Web 依赖、air 工具及 Playwright 浏览器内核
