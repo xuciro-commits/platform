@@ -48,6 +48,21 @@ export function WorkflowSettings({ draft, onChange, objects, onClose }: { draft:
         <option value="">{t("No source record")}</option>{objects.map((item) => <option key={item.type} value={item.type}>{item.title}</option>)}
       </Select></label>
       {!draft.manual && !draft.every && <label className={fieldClass}>{t("Start state")}<Select value={draft.when} onChange={(event) => onChange({ when: event.target.value })}><option value="">{t("Choose a state")}</option>{object?.states.map((state) => <option key={state.name} value={state.name}>{state.title}</option>)}</Select></label>}
+      <Disclosure summary={<span className="text-xs font-medium">{t("Lanes")}</span>}>
+        <div className="mt-2 grid gap-2">
+          {(draft.lanes ?? []).map((lane, at) => <div key={lane.name} className="grid gap-1 rounded border border-border p-2">
+            <IdentifierInput label={t("Lane name")} value={lane.name}
+              invalid={(name) => !/^[a-z][a-z0-9]*$/.test(name) || (draft.lanes ?? []).some((other, index) => index !== at && other.name === name)}
+              onCommit={(name) => onChange({ lanes: (draft.lanes ?? []).map((item, index) => index === at ? { ...item, name } : item), steps: draft.steps.map((step) => step.lane === lane.name ? { ...step, lane: name } : step) })} />
+            <Input aria-label={t("Lane title")} value={lane.title ?? ""} placeholder={lane.name}
+              onChange={(event) => onChange({ lanes: (draft.lanes ?? []).map((item, index) => index === at ? { ...item, title: event.target.value } : item) })} />
+            <Button variant="ghost" size="sm" type="button"
+              onClick={() => onChange({ lanes: (draft.lanes ?? []).filter((_, index) => index !== at), steps: draft.steps.map((step) => step.lane === lane.name ? { ...step, lane: undefined } : step) })}>{t("Remove lane")}</Button>
+          </div>)}
+          <Button size="sm" type="button" onClick={() => { let name = "lane"; while ((draft.lanes ?? []).some((lane) => lane.name === name)) name += "2"; onChange({ lanes: [...(draft.lanes ?? []), { name }] }); }}>{t("Add lane")}</Button>
+          <p className="text-[11px] leading-5 text-muted">{t("A lane says who does a step; it never changes the order steps run in.")}</p>
+        </div>
+      </Disclosure>
       <Disclosure defaultOpen summary={<span className="text-xs font-medium">{t("Workflow input schema")}</span>}>
         <SchemaEditor schema={draft.inputSchema ?? { type: "object", properties: {} }} onChange={(inputSchema) => onChange({ inputSchema })} /></Disclosure>
       <JSONEditor label={t("Default workflow input")} value={draft.input ?? {}} schema={draft.inputSchema} onChange={(input) => onChange({ input })} />
@@ -56,8 +71,8 @@ export function WorkflowSettings({ draft, onChange, objects, onClose }: { draft:
   </div>;
 }
 
-export function WorkflowInspector({ step, steps, capabilities, onChange, onRename, onMakeEntry, onClose, flows, output }: {
-  step: WorkflowStep; steps: WorkflowStep[]; capabilities: Capability[]; onChange: (patch: Partial<WorkflowStep>) => void; onRename: (name: string) => void;
+export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, onRename, onMakeEntry, onClose, flows, output }: {
+  step: WorkflowStep; steps: WorkflowStep[]; lanes: Api.ProcessLane[]; capabilities: Capability[]; onChange: (patch: Partial<WorkflowStep>) => void; onRename: (name: string) => void;
   onMakeEntry: () => void; onClose: () => void; flows: { id: string; title: string; version: number }[]; output?: unknown;
 }) {
   const [tab, setTab] = useState<"settings" | "input" | "output">("input");
@@ -86,6 +101,8 @@ export function WorkflowInspector({ step, steps, capabilities, onChange, onRenam
       {tab === "settings" && <>
         {field("Step title", <Input value={step.title ?? ""} onChange={(event) => onChange({ title: event.target.value })} />)}
         {field("Step name", <IdentifierInput label={t("Step name")} value={step.name} onCommit={onRename} invalid={(name) => !/^[a-z][a-z0-9]*$/.test(name) || others.some((item) => item.name === name)} />)}
+        {lanes.length > 0 && field("Lane", <Select value={step.lane ?? ""} onChange={(event) => onChange({ lane: event.target.value || undefined })}>
+          <option value="">{t("No lane")}</option>{lanes.map((lane) => <option key={lane.name} value={lane.name}>{lane.title || lane.name}</option>)}</Select>)}
         <div className="flex items-center gap-1"><Tag label={t(capability?.group ?? step.kind)} /><Tag label={capability?.source ?? "platform"} /></div>
         {capability && <><p className="text-[11px] leading-5 text-muted">{t(capability.description)}</p><code className="break-all text-[10px] text-muted">{capability.ref.app}/{capability.ref.kind}/{capability.ref.name}@{capability.version}</code></>}
         {steps[0]?.name !== step.name && <Button onClick={onMakeEntry}><ArrowDownToLine className="mr-1 size-3" />{t("Make entry")}</Button>}

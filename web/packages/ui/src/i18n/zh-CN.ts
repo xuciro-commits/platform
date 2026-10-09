@@ -1403,4 +1403,7 @@ export default {
   "Repeats": "循环执行",
   "A gateway is a diamond, an event a circle, and a repeated step carries a loop mark.": "网关画成菱形，事件画成圆形，重复的步骤带循环标记。",
   "Follow the relationships": "按关系方向排布",
+  // BPMN lanes (ADR-0087 D1): the responsibility a set of steps sits inside.
+  "Lane: {name}": "泳道：{name}",
+  "A lane is who does the step; drag a step into another lane to hand it over.": "泳道说明这一步由谁负责；把步骤拖进另一条泳道就是交接。",
 } as Record<string, string>;

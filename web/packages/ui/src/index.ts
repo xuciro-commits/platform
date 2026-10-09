@@ -55,12 +55,12 @@ export type { ColumnDef } from "@tanstack/react-table";
 // One drawing surface, two families (ADR-0086): a process joins activities through
 // typed ports and reads as BPMN; a relationship joins things and does not.
 export { type CanvasAction, type CanvasBox, type CanvasDirection, type CanvasPosition } from "./graph/core/types";
-export { layeredLayout, type GraphSize } from "./graph/core/layered";
-export { FlowCanvas, type FlowCanvasProps } from "./graph/flow/FlowCanvas";
+export { laneBands, layeredLayout, type GraphSize, type LaneAssignment, type LaneBand } from "./graph/core/layered";
+export { FlowCanvas, type FlowCanvasNode, type FlowCanvasProps } from "./graph/flow/FlowCanvas";
 export { FlowSteps, type FlowStepNode, type FlowStepEdge } from "./graph/flow/FlowSteps";
 export { FlowGraph, FlowRun, FlowReleaseBinding, flowStates, type FlowDefinition, type FlowInstanceData, type FlowToken, type FlowTrace } from "./graph/flow/FlowProcess";
 export { FLOW_NODE_DROP, flowBlockHeight, flowNodeBox, flowNodeHeight, flowNodeWidth, flowPlacement, flowShapeBox, validateFlowConnection,
-  type FlowAddContext, type FlowCatalog, type FlowConnectionIssue, type FlowDiagnostic, type FlowEdge, type FlowHistory, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort } from "./graph/flow/model";
+  type FlowAddContext, type FlowCatalog, type FlowConnectionIssue, type FlowDiagnostic, type FlowEdge, type FlowHistory, type FlowLane, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort } from "./graph/flow/model";
 export { flowShape, loops, notationOf, notationTitle, type FlowBoundary, type FlowNotation, type FlowShape } from "./graph/flow/notation";
 export { RelationCanvas, type RelationCanvasProps } from "./graph/relation/RelationCanvas";
 export { relationNodeSize, relationLayouts, type RelationBadge, type RelationEdge, type RelationFact, type RelationLayout, type RelationNode } from "./graph/relation/model";

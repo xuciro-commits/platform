@@ -7,7 +7,7 @@ import { flowBlockHeight, flowNodeWidth, flowShapeBox, type FlowNode, type FlowN
 import { eventRing, flowShape, loops, notationGlyph, notationOf, notationTitle, type FlowNotation, type FlowShape } from "./notation";
 
 export type FlowNodeData = FlowNode & { definition: FlowNodeKind; direction: "right" | "down"; editable: boolean; collapsedView: boolean };
-export type FlowShapeNode = Node<FlowNodeData>;
+export type FlowShapeNode = Node<FlowNodeData, "block">;
 export const FlowInteraction = createContext<{ onCollapse: (id: string) => void }>({ onCollapse: () => {} });
 
 const icons: Record<string, ReactNode> = {

@@ -40,15 +40,25 @@ type Process struct {
 	// process has no source record; its steps act as the member who published it.
 	Every string `json:"every,omitempty" title:"Repeat every" help:"A period such as 15m, 1h or 24h; empty: not scheduled"`
 	// Scheduler is the member who published the schedule: scheduled runs act as them.
-	Scheduler   string                  `json:"scheduler,omitempty" field:"readonly" title:"Runs as"`
-	Input       json.RawMessage         `json:"input,omitempty" type:"json" title:"Default input"`
-	InputSchema *platform.ValueSchema   `json:"inputSchema,omitempty" type:"json" title:"Input schema"`
-	Steps       []ProcessStep           `json:"steps" field:"aside"`
-	Layout      map[string]NodePosition `json:"layout,omitempty" type:"json" title:"Canvas layout"`
-	State       string                  `json:"state" field:"readonly" choices:"draft,published"`
-	Version     int                     `json:"version,omitempty" field:"readonly"`
-	Published   string                  `json:"published,omitempty" field:"readonly" type:"longtext"`
-	Versions    []string                `json:"versions,omitempty" field:"readonly"`
+	Scheduler   string                `json:"scheduler,omitempty" field:"readonly" title:"Runs as"`
+	Input       json.RawMessage       `json:"input,omitempty" type:"json" title:"Default input"`
+	InputSchema *platform.ValueSchema `json:"inputSchema,omitempty" type:"json" title:"Input schema"`
+	Steps       []ProcessStep         `json:"steps" field:"aside"`
+	// Lanes are the responsibilities the process is drawn across (ADR-0087 D2): a
+	// step names the lane that does it. A lane carries no execution semantics, so
+	// the compiler ignores it and the canvas draws it as a band behind its steps.
+	Lanes     []ProcessLane           `json:"lanes,omitempty" field:"aside" title:"Lanes"`
+	Layout    map[string]NodePosition `json:"layout,omitempty" type:"json" title:"Canvas layout"`
+	State     string                  `json:"state" field:"readonly" choices:"draft,published"`
+	Version   int                     `json:"version,omitempty" field:"readonly"`
+	Published string                  `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Versions  []string                `json:"versions,omitempty" field:"readonly"`
+}
+
+// ProcessLane is one BPMN lane: a named responsibility, titled for the reader.
+type ProcessLane struct {
+	Name  string `json:"name"`
+	Title string `json:"title,omitempty"`
 }
 
 type NodePosition struct {
@@ -68,6 +78,7 @@ type ProcessStep struct {
 	Name           string                      `json:"name"`
 	Title          string                      `json:"title,omitempty"`
 	Kind           string                      `json:"kind" enum:"payload,query,action,transform,branch,switch,foreach,while,fork,join,ask,wait,subflow,ai,compute,end,fail,break,continue"`
+	Lane           string                      `json:"lane,omitempty" title:"Lane" help:"The lane responsible for this step"`
 	Inputs         map[string]platform.Binding `json:"inputs,omitempty" type:"json"`
 	Value          *platform.Binding           `json:"value,omitempty" type:"json"`
 	Target         *platform.Binding           `json:"target,omitempty" type:"json"`
@@ -254,6 +265,16 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 			}
 		}
 	}
+	if len(p.Lanes) > 32 {
+		return refuse("A process is drawn across at most 32 lanes")
+	}
+	lanes := map[string]bool{}
+	for _, lane := range p.Lanes {
+		if !named(lane.Name) || lanes[lane.Name] {
+			return refuse("The lane {lane} needs a unique lower-case name", lane.Name)
+		}
+		lanes[lane.Name] = true
+	}
 	if len(p.Steps) < 1 || len(p.Steps) > 128 {
 		return refuse("A process needs 1–128 typed steps")
 	}
@@ -269,6 +290,9 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 		problem := func(message string) *kernel.Error { return refuse("Node " + step.Name + ": " + message) }
 		if !slices.Contains([]string{"payload", "query", "action", "transform", "branch", "switch", "foreach", "while", "fork", "join", "ask", "wait", "subflow", "ai", "compute", "end", "fail", "break", "continue"}, step.Kind) {
 			return problem("choose one typed block kind")
+		}
+		if step.Lane != "" && !lanes[step.Lane] {
+			return refuse("Node "+step.Name+": names the lane {lane}, which this process does not declare", step.Lane)
 		}
 		if len(step.Inputs) > 64 {
 			return problem("a block accepts at most 64 input bindings")

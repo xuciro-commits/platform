@@ -8,13 +8,14 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { CanvasActionBar, CanvasActionButton, CanvasEmpty, CanvasHelp, CanvasHelpTool, CanvasTool, CanvasToolbar, CanvasToolDivider } from "../core/chrome";
 import { CanvasFurniture, CanvasFrame, CanvasRefit, fitting } from "../core/frame";
-import { layeredLayout } from "../core/layered";
+import { laneBands, layeredLayout, type LaneAssignment } from "../core/layered";
 import type { CanvasBox, CanvasDirection, CanvasPosition } from "../core/types";
 import { FlowEdgeView, FlowEdgeInteraction, type FlowLineEdge } from "./FlowEdgeView";
 import { FlowInteraction, FlowNodeView, type FlowShapeNode } from "./FlowNodeView";
+import { FlowLaneView, type FlowLaneShapeNode } from "./FlowLaneView";
 import { FlowPalette } from "./FlowPalette";
 import { FLOW_NODE_DROP, flowBlockHeight, flowNodeBox, flowNodeHeight, flowNodeWidth, flowPlacement, validateFlowConnection,
-  type FlowAddContext, type FlowCatalog, type FlowConnectionIssue, type FlowEdge, type FlowHistory, type FlowNode, type FlowNodeKind } from "./model";
+  type FlowAddContext, type FlowCatalog, type FlowConnectionIssue, type FlowEdge, type FlowHistory, type FlowLane, type FlowNode, type FlowNodeKind } from "./model";
 
 export type FlowCanvasProps = {
   catalog: FlowCatalog; nodes: FlowNode[]; edges: FlowEdge[]; selected?: string;
@@ -29,10 +30,18 @@ export type FlowCanvasProps = {
   onLayout?: (positions: Record<string, CanvasPosition>) => void;
   onDelete?: (nodes: FlowNode[], edges: FlowEdge[]) => void;
   onDuplicate?: (nodes: FlowNode[], edges: FlowEdge[]) => void;
+  /** BPMN lanes: the responsibilities this process is drawn across (ADR-0087 D1).
+   * The owner declares them and says which step sits in which; the canvas draws the
+   * bands, arranges inside them, and reports a step dropped into another one. */
+  lanes?: FlowLane[];
+  onLaneChange?: (id: string, lane: string) => void;
   history?: FlowHistory;
 };
 
-const nodeTypes = { block: FlowNodeView }, edgeTypes = { block: FlowEdgeView };
+/** A step node, or the lane band behind it. */
+export type FlowCanvasNode = FlowShapeNode | FlowLaneShapeNode;
+
+const nodeTypes = { block: FlowNodeView, lane: FlowLaneView }, edgeTypes = { block: FlowEdgeView };
 const missingKind = (id: string): FlowNodeKind => ({ id, title: id, category: "unknown", inputs: [], outputs: [] });
 const issueMessages: Record<FlowConnectionIssue, string> = {
   endpoint: "Choose two different nodes.", port: "These ports have different types.", duplicate: "This connection already exists.",
@@ -44,13 +53,13 @@ const center = (element: HTMLElement | null) => {
 };
 const editableTarget = (target: EventTarget | null) => target instanceof HTMLElement && !!target.closest("input,textarea,select,[contenteditable=true]");
 
-function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onConnect, onDisconnect, onAdd, onInsert, onPositionsChange, onLayout, onDelete, onDuplicate, canConnect, history, label, height = 320, mode, direction: initialDirection = "right", children }: FlowCanvasProps) {
+function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onConnect, onDisconnect, onAdd, onInsert, onPositionsChange, onLayout, onDelete, onDuplicate, canConnect, lanes, onLaneChange, history, label, height = 320, mode, direction: initialDirection = "right", children }: FlowCanvasProps) {
   // The reader may re-flow the same graph the other way; the owner's direction is the starting point.
   const [direction, setDirection] = useState<CanvasDirection>(initialDirection);
   useEffect(() => { setDirection(initialDirection); }, [initialDirection]);
   const editable = mode === "edit" || mode !== "view" && !!(onConnect || onDisconnect || onAdd || onDelete || onPositionsChange);
   const container = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition, fitView, getViewport, setCenter } = useReactFlow<FlowShapeNode, FlowLineEdge>();
+  const { screenToFlowPosition, fitView, getViewport, setCenter } = useReactFlow<FlowCanvasNode, FlowLineEdge>();
   const localPositions = useRef<Record<string, CanvasPosition>>({});
   const externalPositions = useRef<Record<string, CanvasPosition>>({});
   const externalSelection = useRef<string | undefined>(undefined);
@@ -63,7 +72,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   const [help, setHelp] = useState(false);
   const [connectionIssue, setConnectionIssue] = useState<string>();
   const [refit, setRefit] = useState(0);
-  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<FlowShapeNode>([]);
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<FlowCanvasNode>([]);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<FlowLineEdge>([]);
   const dragStarted = useRef<Record<string, CanvasPosition>>({});
 
@@ -71,6 +80,29 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   const boxOf = (id: string): CanvasBox => {
     const node = nodes.find((item) => item.id === id);
     return node ? flowNodeBox({ ...node, collapsed: folded(node) }, catalog.find((kind) => kind.id === node.kind)) : { width: flowNodeWidth, height: 96 };
+  };
+
+  /** Which lane a step belongs to; a step its owner left unlaned has none. */
+  const laneOf = (id: string) => nodes.find((item) => item.id === id)?.lane;
+  // Declared lanes first, then any lane a step names that was never declared, so a
+  // step is never drawn outside a band its owner can see.
+  const declared = lanes ?? [];
+  const laneList: FlowLane[] = [...declared, ...[...new Set(nodes.map((node) => node.lane).filter((lane): lane is string => !!lane && !declared.some((item) => item.id === lane)))].map((id) => ({ id }))];
+  const assignment = (): LaneAssignment | undefined => laneList.length ? { ids: laneList.map((lane) => lane.id), of: laneOf } : undefined;
+
+  /** Lane bands are scenery recomputed from where the steps actually sit, so they
+   * follow an owner-supplied drawing and an arranged one alike. */
+  const withLanes = (steps: FlowCanvasNode[]): FlowCanvasNode[] => {
+    const drawn = steps.filter((node) => node.type !== "lane");
+    if (!laneList.length) return drawn;
+    const at = new Map(drawn.map((node) => [node.id, node.position]));
+    return [...laneBands(laneList, at, direction, boxOf, laneOf).map((band) => ({
+      id: `lane:${band.id}`, type: "lane" as const, position: band.position, zIndex: -1,
+      draggable: false, selectable: false, deletable: false, focusable: false,
+      ariaLabel: t("Lane: {name}", { name: laneList.find((lane) => lane.id === band.id)?.title ?? band.id }),
+      style: { width: band.box.width, height: band.box.height, pointerEvents: "none" as const },
+      data: { lane: laneList.find((lane) => lane.id === band.id)!, vertical: direction === "down" },
+    })), ...drawn];
   };
 
   useEffect(() => {
@@ -86,7 +118,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
       const selectionChanged = selected !== externalSelection.current;
       externalSelection.current = selected;
       const multiple = previous.filter((node) => node.selected).length > 1;
-      return nodes.map((node) => ({
+      const steps: FlowCanvasNode[] = nodes.map((node) => ({
         id: node.id, type: "block", position: localPositions.current[node.id] ?? node.position,
         ariaRole: onSelect || onOpen ? "button" as const : "group" as const,
         ariaLabel: node.label,
@@ -95,6 +127,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
         data: { ...node, definition: catalog.find((kind) => kind.id === node.kind) ?? missingKind(node.kind), direction, editable,
           collapsedView: folded(node) },
       }));
+      return withLanes(steps);
     });
   }, [catalog, nodes, selected, editable, collapsed, direction, setFlowNodes, onSelect, onOpen]);
 
@@ -138,9 +171,9 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   const arrange = (flow: CanvasDirection = direction) => {
     const compact = nodes.length > 0 && nodes.every((node) => node.compact);
     const positions = Object.fromEntries(layeredLayout(nodes, edges.map((edge) => ({ from: edge.source, to: edge.target })), flow,
-      { width: compact ? 160 : flowNodeWidth, height: compact ? 58 : Math.max(58, ...catalog.map((kind) => flowNodeHeight(kind))), gapX: 80, gapY: 36 }, boxOf));
+      { width: compact ? 160 : flowNodeWidth, height: compact ? 58 : Math.max(58, ...catalog.map((kind) => flowNodeHeight(kind))), gapX: 80, gapY: 36 }, boxOf, assignment()));
     localPositions.current = positions;
-    setFlowNodes((current) => current.map((node) => ({ ...node, position: positions[node.id]! })));
+    setFlowNodes((current) => withLanes(current.map((node) => node.type === "lane" ? node : { ...node, position: positions[node.id]! })));
     if (editable) (onLayout ?? onPositionsChange)?.(positions);
     setRefit((value) => value + 1);
   };
@@ -181,12 +214,24 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
     setPalette(undefined); container.current?.focus();
   };
   const valid = (connection: Connection) => !validateFlowConnection(connection, nodes, edges, catalog) && (!canConnect || canConnect(connection));
+  /** The lane a dropped step landed in, read off the band its centre falls inside. */
+  const laneUnder = (id: string, at: CanvasPosition): string | undefined => {
+    if (!laneList.length) return undefined;
+    const size = flowNodes.find((node) => node.id === id)?.measured ?? boxOf(id);
+    const middle = { x: at.x + (size.width ?? 0) / 2, y: at.y + (size.height ?? 0) / 2 };
+    const moved = new Map(nodes.map((node) => [node.id, node.id === id ? middle : localPositions.current[node.id] ?? node.position]));
+    return laneBands(laneList, moved, direction, boxOf, laneOf)
+      .find((band) => middle.x >= band.position.x && middle.x <= band.position.x + band.box.width && middle.y >= band.position.y && middle.y <= band.position.y + band.box.height)?.id;
+  };
   const commitPositions = () => {
-    const positions = Object.fromEntries(flowNodes.filter((node) => node.position.x !== dragStarted.current[node.id]?.x || node.position.y !== dragStarted.current[node.id]?.y).map((node) => [node.id, node.position]));
+    const moved = flowNodes.filter((node) => node.type !== "lane" &&
+      (node.position.x !== dragStarted.current[node.id]?.x || node.position.y !== dragStarted.current[node.id]?.y));
+    const positions = Object.fromEntries(moved.map((node) => [node.id, node.position]));
     if (Object.keys(positions).length) { Object.assign(localPositions.current, positions); onPositionsChange?.(positions); }
+    for (const node of moved) { const lane = laneUnder(node.id, node.position); if (lane && lane !== laneOf(node.id)) onLaneChange?.(node.id, lane); }
   };
   const removeCount = selectedNodes().length;
-  const measuredBoxes = () => flowNodes.map((node) => ({ position: node.position, width: node.measured?.width ?? flowNodeWidth, height: node.measured?.height ?? 120 }));
+  const measuredBoxes = () => flowNodes.filter((node) => node.type !== "lane").map((node) => ({ position: node.position, width: node.measured?.width ?? flowNodeWidth, height: node.measured?.height ?? 120 }));
 
   return <CanvasFrame label={label} height={height} role={editable ? "region" : "figure"}>
     <div ref={container} tabIndex={0} className="platform-canvas platform-flow h-full outline-none" aria-label={label}
@@ -203,13 +248,13 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
           event.preventDefault(); if (event.shiftKey) history.onRedo(); else history.onUndo();
         } else if (command && key === "y" && editable && history) { event.preventDefault(); history.onRedo();
         } else if (command && key === "a") {
-          event.preventDefault(); setFlowNodes((current) => current.map((node) => ({ ...node, selected: true })));
+          event.preventDefault(); setFlowNodes((current) => current.map((node) => node.type === "lane" ? node : { ...node, selected: true }));
         } else if (command && key === "c" && editable) { event.preventDefault(); copySelection();
         } else if (command && key === "v" && editable && onDuplicate && copied.current) { event.preventDefault(); onDuplicate(copied.current.nodes, copied.current.edges);
         } else if (command && key === "d" && editable && onDuplicate) { event.preventDefault(); duplicateSelection();
         } else if ((event.key === "Delete" || event.key === "Backspace") && editable) { event.preventDefault(); deleteSelection();
         } else if ((key === "n" || event.key === "Tab") && editable && onAdd && event.target === container.current) { event.preventDefault(); setPalette(addContext());
-        } else if (event.key === "Escape") { setPalette(undefined); setPickedEdge(undefined); setConnectionIssue(undefined); setFlowNodes((current) => current.map((node) => ({ ...node, selected: false })));
+        } else if (event.key === "Escape") { setPalette(undefined); setPickedEdge(undefined); setConnectionIssue(undefined); setFlowNodes((current) => current.map((node) => node.type === "lane" ? node : { ...node, selected: false }));
         } else if (event.key === "Enter") { const picked = selectedNodes(); if (picked.length === 1) onOpen?.(picked[0]!.id); }
       }}
       onDragOver={(event) => { if (editable && onAdd && event.dataTransfer.types.includes(FLOW_NODE_DROP)) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }}
@@ -223,7 +268,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
       }}>
       <FlowInteraction.Provider value={{ onCollapse: (id) => setCollapsed((current) => ({ ...current, [id]: !folded(nodes.find((node) => node.id === id) ?? { id, kind: "", label: "", position: { x: 0, y: 0 } }) })) }}>
         <FlowEdgeInteraction.Provider value={{ onInsert: (edge, position) => setPalette({ edge, position }) }}>
-          <ReactFlow<FlowShapeNode, FlowLineEdge> nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
+          <ReactFlow<FlowCanvasNode, FlowLineEdge> nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} fitView fitViewOptions={fitting}
             colorMode="system" minZoom={0.15} maxZoom={2} zoomOnScroll={false} zoomOnPinch zoomOnDoubleClick={!onOpen} panOnScroll={editable} preventScrolling={editable}
             panOnDrag={editable ? [1, 2] : true} selectionOnDrag={editable} selectionMode={SelectionMode.Partial} multiSelectionKeyCode={["Meta", "Control", "Shift"]}
@@ -245,7 +290,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
               setConnectionIssue(t(issue ? issueMessages[issue] : "This connection is not allowed."));
             }}
             onNodeClick={(_, node) => { container.current?.focus(); setPickedEdge(undefined); onSelect?.(node.id); }} onNodeDoubleClick={(_, node) => onOpen?.(node.id)}
-            onEdgeClick={(_, edge) => { container.current?.focus(); setPickedEdge(edge.id); setFlowNodes((current) => current.map((node) => ({ ...node, selected: false }))); }}
+            onEdgeClick={(_, edge) => { container.current?.focus(); setPickedEdge(edge.id); setFlowNodes((current) => current.map((node) => node.type === "lane" ? node : { ...node, selected: false })); }}
             onPaneClick={() => { container.current?.focus(); setPalette(undefined); setPickedEdge(undefined); setConnectionIssue(undefined); }}
             onPaneContextMenu={(event) => { if (editable && onAdd) { event.preventDefault(); setPalette({ position: screenToFlowPosition({ x: event.clientX, y: event.clientY }) }); } }}
             onNodeDragStart={() => { dragStarted.current = Object.fromEntries(flowNodes.map((node) => [node.id, node.position])); }} onNodeDragStop={commitPositions}>
@@ -285,6 +330,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
         editable && t("Delete removes the selected blocks and their connections; drag a port's end onto another port to re-route."),
         t("The chevron on a block shows or hides its ports and details."),
         t("A gateway is a diamond, an event a circle, and a repeated step carries a loop mark."),
+        !!laneList.length && t("A lane is who does the step; drag a step into another lane to hand it over."),
       ]} />
 
       {pickedEdge && editable && <CanvasActionBar label={t("Connection operations")}>

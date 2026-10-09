@@ -2128,6 +2128,7 @@ export type Process = {
   input?: unknown;
   inputSchema?: ValueSchema;
   steps: ProcessStep[];
+  lanes?: ProcessLane[];
   layout?: Record<string, NodePosition>;
   state: "draft" | "published";
   version?: number;
@@ -2146,10 +2147,16 @@ export type ProcessDiagnostics = {
   issues: ProcessDiagnostic[];
 };
 
+export type ProcessLane = {
+  name: string;
+  title?: string;
+};
+
 export type ProcessStep = {
   name: string;
   title?: string;
   kind: "payload" | "query" | "action" | "transform" | "branch" | "switch" | "foreach" | "while" | "fork" | "join" | "ask" | "wait" | "subflow" | "ai" | "compute" | "end" | "fail" | "break" | "continue";
+  lane?: string;
   inputs?: Record<string, Binding>;
   value?: Binding;
   target?: Binding;

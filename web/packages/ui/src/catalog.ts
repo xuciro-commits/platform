@@ -194,7 +194,7 @@ export const api = [
   "iconGlyphs", "iconGroups",
   "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
   "defineEntity", "columnsFor", "recordSchema", "activeValues", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useViewTitle", "useUnsavedChanges", "notify",
-  "routeKey", "routeToHash", "routeFromHash", "layeredLayout", "relationLayout", "relationLayouts", "neighborhoodPositions", "relationNodeSize",
+  "routeKey", "routeToHash", "routeFromHash", "layeredLayout", "laneBands", "relationLayout", "relationLayouts", "neighborhoodPositions", "relationNodeSize",
   "flowNodeWidth", "flowNodeHeight", "flowBlockHeight", "flowNodeBox", "flowShapeBox", "flowPlacement", "validateFlowConnection",
   "flowShape", "notationOf", "notationTitle", "loops",
   "flowStates", "useChartData", "groupDomain", "aggregateQuery", "aggregateValues", "columnOf",

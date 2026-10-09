@@ -45,6 +45,15 @@
 /* Processes: a block with typed ports, or, in a reader's compact view, the BPMN
    shape its kind asks for — a diamond gateway, a ringed event, a doubled sub-process. */
 .platform-flow .react-flow__node { border-radius: 12px; }
+/* A lane band: the responsibility a set of steps sits inside (ADR-0087 D1). It is
+   scenery, so it never takes a pointer event and always sits behind its steps. */
+.platform-flow-lane { display: flex; width: 100%; height: 100%; border: 1px solid var(--border); border-radius: 12px;
+  background: color-mix(in oklch, var(--lane-color, var(--muted)), transparent 96%); }
+.platform-flow-lane-title { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 26px; padding: 6px 2px;
+  border-right: 1px solid var(--border); writing-mode: vertical-rl; text-orientation: mixed; overflow: hidden;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); }
+.platform-flow-lane-vertical { flex-direction: column; }
+.platform-flow-lane-vertical .platform-flow-lane-title { width: auto; height: 26px; padding: 2px 6px; border-right: 0; border-bottom: 1px solid var(--border); writing-mode: horizontal-tb; }
 .platform-flow-node {
   position: relative; border: 1px solid var(--border); border-radius: 12px;
   background: var(--surface); text-align: left; color: var(--foreground);

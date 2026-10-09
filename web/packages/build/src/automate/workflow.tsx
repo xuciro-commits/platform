@@ -348,7 +348,7 @@ export function FlowEditor({ id }: { id: string }) {
         { id: "blocks", title: t("Blocks"), content: library },
         { id: "data", title: t("Data"), content: data },
       ] }}
-      right={{ label: t("Flow inspector"), content: <div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
+      right={{ label: t("Flow inspector"), content: <div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
         onChange={(patch) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === chosen ? { ...step, ...patch } : step) }))} onRename={rename}
         onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} onClose={() => setChosen("")} />
         : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} onClose={() => setChosen("")} />}</div> }}
@@ -369,6 +369,8 @@ export function FlowEditor({ id }: { id: string }) {
       <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col border-0 p-0"><FlowCanvas label={t("Flow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
         onSelect={(name) => setChosen(name)} onOpen={(name) => setChosen(name)} onAdd={add} onInsert={insert} onConnect={connect} onDisconnect={disconnect}
         onPositionsChange={(positions) => change((current) => ({ ...current, layout: { ...current.layout, ...positions } }))} onLayout={(positions) => change({ layout: positions })}
+        lanes={(draft.lanes ?? []).map((lane) => ({ id: lane.name, title: lane.title || lane.name }))}
+        onLaneChange={(id, lane) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === id ? { ...step, lane } : step) }))}
         onDelete={deleteNodes} onDuplicate={duplicate} history={{ canUndo: session.canUndo, canRedo: session.canRedo, onUndo: () => { session.undo(); setValidation(undefined); }, onRedo: () => { session.redo(); setValidation(undefined); } }}
         canConnect={(connection) => {
           if (connection.sourceHandle?.startsWith("data:")) return true;

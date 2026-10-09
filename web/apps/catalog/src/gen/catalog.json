@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:a1afb7eca991a22e",
+  "revision": "sha256:fa8e50ff11a5f75f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5787,6 +5787,7 @@
         "humanizeKernelError",
         "iconGlyphs",
         "iconGroups",
+        "laneBands",
         "language",
         "languages",
         "layeredLayout",
@@ -5868,6 +5869,7 @@
         "Filter",
         "FlowAddContext",
         "FlowBoundary",
+        "FlowCanvasNode",
         "FlowCanvasProps",
         "FlowCatalog",
         "FlowConnectionIssue",
@@ -5876,6 +5878,7 @@
         "FlowEdge",
         "FlowHistory",
         "FlowInstanceData",
+        "FlowLane",
         "FlowNode",
         "FlowNodeKind",
         "FlowNodeStatus",
@@ -5896,6 +5899,8 @@
         "InterfaceRecordPageData",
         "KanbanLane",
         "KanbanMove",
+        "LaneAssignment",
+        "LaneBand",
         "LayoutSize",
         "Lifecycle",
         "ListState",

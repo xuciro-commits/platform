@@ -39,7 +39,15 @@ export type FlowNode = {
   /** Events attached to the activity: the timeout it may hit, the error it may
    * escape through. They are markers on the border, not steps of their own. */
   boundary?: FlowBoundary[];
+  /** The lane responsible for this step: who or what does it (ADR-0087 D1). */
+  lane?: string;
 };
+
+/** A BPMN lane: one responsibility drawn as a band across the process, with the
+ * steps it owns inside it. The owner declares the lanes and says which step sits
+ * in which; the canvas draws the bands and keeps a step in the lane it is dropped
+ * into. A lane is scenery — it is never selected, dragged or connected. */
+export type FlowLane = { id: string; title?: string; tone?: Tone };
 
 export type FlowEdge = {
   id: string; source: string; sourcePort: string; target: string; targetPort: string;
