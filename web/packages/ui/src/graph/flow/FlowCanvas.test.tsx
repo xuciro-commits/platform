@@ -18,7 +18,7 @@ import { FlowCanvas } from "./FlowCanvas";
 import type { FlowCatalog } from "./model";
 
 const catalog = (): FlowCatalog => [{
-  id: "step", title: "Step", category: "flow",
+  id: "step", title: "Step", class: "flow",
   inputs: [{ id: "in", label: "In", type: "rows", limit: 1, channel: "data" }],
   outputs: [{ id: "out", label: "Out", type: "rows", limit: 1, channel: "data" }],
 }];

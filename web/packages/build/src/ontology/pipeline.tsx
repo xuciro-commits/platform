@@ -37,10 +37,10 @@ const fieldClass = "grid min-w-0 gap-1 text-xs";
  * never execute. */
 const rows = (label: string, limit = 1) => ({ id: "rows", label, type: "rows", limit, channel: "data" as const });
 const stepCatalog = (): FlowCatalog => [
-  ...KINDS.map((kind) => ({ id: kind, title: t(kind), description: kindHelp(kind), category: t("Transform"),
+  ...KINDS.map((kind) => ({ id: kind, title: t(kind), description: kindHelp(kind), class: "transform" as const,
     inputs: [rows(t("Rows in"))], outputs: [rows(t("Rows out"))] })),
-  { id: "dataset", title: t("Dataset"), category: t("Ends"), addable: false, notation: "event-start", inputs: [], outputs: [rows(t("Rows out"))] },
-  { id: "output", title: t("Output"), category: t("Ends"), addable: false, notation: "event-end", inputs: [rows(t("Rows in"))], outputs: [] },
+  { id: "dataset", title: t("Dataset"), class: "document" as const, addable: false, notation: "event-start", inputs: [], outputs: [rows(t("Rows out"))] },
+  { id: "output", title: t("Output"), class: "document" as const, addable: false, notation: "event-end", inputs: [rows(t("Rows in"))], outputs: [] },
 ];
 
 /** What a step does, in the one line the canvas has for it; its fields stay in the

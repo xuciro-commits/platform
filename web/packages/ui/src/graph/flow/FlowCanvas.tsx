@@ -42,7 +42,7 @@ export type FlowCanvasProps = {
 export type FlowCanvasNode = FlowShapeNode | FlowLaneShapeNode;
 
 const nodeTypes = { block: FlowNodeView, lane: FlowLaneView }, edgeTypes = { block: FlowEdgeView };
-const missingKind = (id: string): FlowNodeKind => ({ id, title: id, category: "unknown", inputs: [], outputs: [] });
+const missingKind = (id: string): FlowNodeKind => ({ id, title: id, inputs: [], outputs: [] });
 const issueMessages: Record<FlowConnectionIssue, string> = {
   endpoint: "Choose two different nodes.", port: "These ports have different types.", duplicate: "This connection already exists.",
   "source-capacity": "This output already has its allowed connection.", "target-capacity": "This input already has its allowed connections.",

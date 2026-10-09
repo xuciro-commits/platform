@@ -9,14 +9,14 @@ import {workflowInputs,workflowRunMatches} from "./workflow-session";
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
 import { ActionMenu, Button, FLOW_NODE_DROP, FlowCanvas, Input, PageHeader, Panel, ProblemList, StructureRow, Workbench,
-  flowBlockHeight, flowNodeWidth, flowPlacement, layeredLayout, loops, notationOf, t, useUnsavedChanges,
+  flowBlockHeight, flowNodeIcon, flowNodeWidth, flowPlacement, flowPortFits, layeredLayout, loops, notationOf, t, useUnsavedChanges,
   type FlowAddContext, type FlowBoundary, type FlowCatalog, type FlowEdge, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort, type WorkbenchProblem } from "@platform/ui";
-import { Blocks, Braces, Brain, Database, GitBranch, MoreHorizontal, Play, Plus, Search, Settings2, Workflow, Zap } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { MoreHorizontal, Play, Plus, Search, Settings2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {useQueries} from "@tanstack/react-query";
 import { DataField, JSONEditor, WorkflowFormProblems, schemaIssue } from "./workflow-binding";
 import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
-import { capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, replaceReferences, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle,
+import { capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, replaceReferences, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle, workflowStepClass,
   type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview } from "../releases/release";
@@ -24,7 +24,6 @@ import { WorkflowRuns, type WorkflowRun } from "./workflow-runs";
 
 const empty = (): WorkflowDraft => ({ id: "", revision: 0, name: "", title: "", object: "", when: "", manual: true, input: {}, inputSchema: { type: "object", properties: {} }, steps: [], layout: {} });
 type Edit = Partial<WorkflowDraft> | ((draft: WorkflowDraft) => WorkflowDraft);
-const icons: Record<string, ReactNode> = { action: <Zap />, query: <Database />, compute: <Braces />, ai: <Brain />, branch: <GitBranch />, switch: <GitBranch />, foreach: <Workflow />, while: <Workflow />, fork: <GitBranch />, payload: <Play /> };
 /** BPMN boundary events (ADR-0086 D4): the host already declares a step's timeout and
  * its error path, so the canvas draws them attached to the step instead of as a note. */
 const stepBoundary = (step: WorkflowStep): FlowBoundary[] => [
@@ -45,7 +44,7 @@ const definitionKind = (capability: Capability): FlowNodeKind => {
     outputs.push({ id: dataPort([]), label: t("Result"), type: capability.output.type, channel: "data" });
     for (const [name, schema] of Object.entries(commonSchemaProperties(capability.output))) outputs.push({ id: dataPort([name]), label: name, type: schema.type, channel: "data" });
   }
-  return { id: capabilityKey(capability), title: t(capability.title), description: t(capability.description), category: t(capability.group), tone: capability.tone, icon: icons[capability.kind] ?? <Blocks />, inputs, outputs };
+  return { id: capabilityKey(capability), title: t(capability.title), description: t(capability.description), class: workflowStepClass(capability.kind), group: t(capability.group), tone: capability.tone, inputs, outputs };
 };
 function pathSchema(schema: ValueSchema | undefined, path: string[] = []): ValueSchema | undefined {
   for (const name of path) schema = commonSchemaProperties(schema)[name];
@@ -76,7 +75,7 @@ function outputSchema(step: WorkflowStep, draft: WorkflowDraft, capabilities: Ca
 }
 function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capability[]): FlowNodeKind {
   const capability = sourceCapability(step, capabilities);
-  const root = capability ? definitionKind(capability) : { id: step.kind, title: workflowKindTitle(step.kind), category: t("Flow"), inputs: [] as FlowPort[], outputs: [] as FlowPort[] };
+  const root = capability ? definitionKind(capability) : { id: step.kind, title: workflowKindTitle(step.kind), class: workflowStepClass(step.kind), group: t("Flow"), inputs: [] as FlowPort[], outputs: [] as FlowPort[] };
   const outputs: FlowPort[] = [];
   if (!["end", "join", "break", "continue", "fail", "branch"].includes(step.kind)) outputs.push({ id: "next", label: t(step.kind === "switch" ? "Default" : step.kind === "foreach" || step.kind === "while" ? "Done" : "Continue"), type: "flow", channel: "control", limit: 1 });
   if (step.kind === "branch") outputs.push(...["true", "false"].map((key) => ({ id: `case:${key}`, label: t(key === "true" ? "True" : "False"), type: "flow", channel: "control" as const, limit: 1 })));
@@ -189,7 +188,7 @@ export function FlowEditor({ id }: { id: string }) {
         if (path) {
           const from = current.steps.find((item) => item.name === context.source!.node);
           const type = from ? pathSchema(outputSchema(from, current, capabilities), path)?.type : undefined;
-          const into = definitionKind(capability).inputs.find((port) => port.channel === "data" && (port.type === type || port.type === "json"));
+          const into = definitionKind(capability).inputs.find((port) => port.channel === "data" && flowPortFits({ type: type ?? "", channel: "data" }, port));
           const binding: Binding = { source: "step", step: context.source.node, path };
           if (into?.id === "binding:value") { step.value = binding; step.inputs = undefined; }
           else if (into?.id === "binding:target") step.target = binding;
@@ -201,7 +200,7 @@ export function FlowEditor({ id }: { id: string }) {
         else {
           const target = current.steps.find((item) => item.name === context.target!.node);
           const inputPort = target ? nodeKind(target, current, capabilities).inputs.find((port) => port.id === context.target!.port) : undefined;
-          const out = definitionKind(capability).outputs.find((port) => port.channel === "data" && (port.type === inputPort?.type || inputPort?.type === "json"));
+          const out = inputPort && definitionKind(capability).outputs.find((port) => port.channel === "data" && flowPortFits(port, inputPort));
           const path = out ? portPath(out.id) : undefined;
           if (path) steps = steps.map((item) => {
             if (item.name !== context.target!.node) return item;
@@ -317,7 +316,7 @@ export function FlowEditor({ id }: { id: string }) {
     </div>
     <div className="min-h-0 flex-1 overflow-auto pb-2">{groups.map((group) => <div key={group}><h4 className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted">{t(group)}</h4>{filtered.filter((capability) => capability.group === group).map((capability) => <Button variant="row" key={capabilityKey(capability)} type="button" draggable className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-row-selected"
       onClick={() => add(capabilityKey(capability))} title={capability.description} onDragStart={(event) => { event.dataTransfer.setData(FLOW_NODE_DROP, capabilityKey(capability)); event.dataTransfer.effectAllowed = "copy"; }}>
-      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded border border-border text-primary">{icons[capability.kind] ?? <Blocks className="size-3.5" />}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{t(capability.title)}</span><span className="block truncate text-[10px] text-muted">{capability.ref.app} · {t(capability.source)}</span></span><Plus className="mt-1 size-3 shrink-0 text-muted" />
+      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded border border-border text-primary">{flowNodeIcon({ class: workflowStepClass(capability.kind) })}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{t(capability.title)}</span><span className="block truncate text-[10px] text-muted">{capability.ref.app} · {t(capability.source)}</span></span><Plus className="mt-1 size-3 shrink-0 text-muted" />
     </Button>)}</div>)}</div>
   </div>;
   const data = <div className="grid content-start gap-1 p-2"><DataField title={t("Flow input")} schema={draft.inputSchema} binding={{ source: "input" }} />
@@ -326,7 +325,7 @@ export function FlowEditor({ id }: { id: string }) {
   </div>;
   const steps = <div className="grid content-start">
     <StructureRow icon={<Settings2 />} label={draft.title || t("Flow settings")} selected={!chosen} onClick={() => setChosen("")} />
-    {draft.steps.map((step, at) => <StructureRow key={step.name} depth={1} icon={icons[step.kind] ?? <Blocks />} label={step.title || step.name} meta={at === 0 ? t("Entry") : undefined} selected={chosen === step.name} onClick={() => setChosen(step.name)} />)}
+    {draft.steps.map((step, at) => <StructureRow key={step.name} depth={1} icon={flowNodeIcon({ class: workflowStepClass(step.kind) })} label={step.title || step.name} meta={at === 0 ? t("Entry") : undefined} selected={chosen === step.name} onClick={() => setChosen(step.name)} />)}
     {!draft.steps.length && <p className="px-2 py-1 text-[11px] text-muted">{t("Drag a block onto the map, or pick one from the library.")}</p>}
   </div>;
   return <WorkflowFormProblems.Provider value={reportProblem}>

@@ -18,7 +18,7 @@ export type FlowStepNode = {
 };
 export type FlowStepEdge = { id?: string; from: string; to: string; label?: string; dashed?: boolean; tone?: Tone; directed?: boolean };
 
-const stepKind = { id: "step", title: "Step", category: "flow", inputs: [{ id: "in", label: "", type: "flow" }], outputs: [{ id: "out", label: "", type: "flow" }] };
+const stepKind = { id: "step", title: "Step", class: "flow" as const, inputs: [{ id: "in", label: "", type: "flow" }], outputs: [{ id: "out", label: "", type: "flow" }] };
 const catalog: FlowCatalog = [stepKind];
 
 /** Read-only process adapter: one step kind, the BPMN shapes the steps ask for. */

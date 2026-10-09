@@ -195,8 +195,8 @@ export const api = [
   "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
   "defineEntity", "columnsFor", "recordSchema", "activeValues", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useViewTitle", "useUnsavedChanges", "notify",
   "routeKey", "routeToHash", "routeFromHash", "layeredLayout", "laneBands", "relationLayout", "relationLayouts", "neighborhoodPositions", "relationNodeSize",
-  "flowNodeWidth", "flowNodeHeight", "flowBlockHeight", "flowNodeBox", "flowShapeBox", "flowPlacement", "validateFlowConnection",
-  "flowShape", "notationOf", "notationTitle", "loops",
+  "flowNodeWidth", "flowNodeHeight", "flowBlockHeight", "flowNodeBox", "flowShapeBox", "flowPlacement", "validateFlowConnection", "checkFlowEdges", "flowPortFits", "flowPortAccepts",
+  "flowShape", "notationOf", "notationTitle", "loops", "flowNodeClasses", "flowNodeClassOf", "flowNodeIcon", "flowNodeGroup",
   "flowStates", "useChartData", "groupDomain", "aggregateQuery", "aggregateValues", "columnOf",
   "groupable", "measurable", "entityFrom", "setCurrency", "humanizeKernelError",
 ];

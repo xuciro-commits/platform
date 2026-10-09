@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:74ea84432d62672c",
+  "revision": "sha256:329cc0f391424650",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5768,6 +5768,7 @@
         "aggregateQuery",
         "aggregateValues",
         "applyFilters",
+        "checkFlowEdges",
         "cn",
         "columnOf",
         "columnsFor",
@@ -5776,9 +5777,15 @@
         "entityFrom",
         "flowBlockHeight",
         "flowNodeBox",
+        "flowNodeClassOf",
+        "flowNodeClasses",
+        "flowNodeGroup",
         "flowNodeHeight",
+        "flowNodeIcon",
         "flowNodeWidth",
         "flowPlacement",
+        "flowPortAccepts",
+        "flowPortFits",
         "flowShape",
         "flowShapeBox",
         "flowStates",
@@ -5880,6 +5887,7 @@
         "FlowInstanceData",
         "FlowLane",
         "FlowNode",
+        "FlowNodeClass",
         "FlowNodeKind",
         "FlowNodeStatus",
         "FlowNotation",

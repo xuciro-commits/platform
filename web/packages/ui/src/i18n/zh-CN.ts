@@ -1406,4 +1406,13 @@ export default {
   // BPMN lanes (ADR-0087 D1): the responsibility a set of steps sits inside.
   "Lane: {name}": "泳道：{name}",
   "A lane is who does the step; drag a step into another lane to hand it over.": "泳道说明这一步由谁负责；把步骤拖进另一条泳道就是交接。",
+  // Node classes (ADR-0089): what a node is, which decides its glyph and group.
+  "Code": "代码",
+  "Document": "文档",
+  "AI": "AI",
+  "Human task": "人工任务",
+  "Trigger": "触发器",
+  "Branch": "分支",
+  "Flow": "流程",
+  "Lifecycle": "生命周期",
 } as Record<string, string>;

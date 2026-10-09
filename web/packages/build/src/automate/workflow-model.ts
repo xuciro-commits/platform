@@ -1,5 +1,5 @@
 import type { Api } from "@platform/kernel";
-import { t, type FlowEdge, type FlowDiagnostic, type Tone } from "@platform/ui";
+import { t, type FlowEdge, type FlowDiagnostic, type FlowNodeClass, type Tone } from "@platform/ui";
 
 export type ValueSchema = Api.ValueSchema;
 export type Binding = Api.Binding;
@@ -26,6 +26,17 @@ export function commonSchemaProperties(schema?: ValueSchema): Record<string, Val
     branches.every((branch) => branch.required?.includes(name) && branch.properties?.[name]?.type === property.type && !!branch.properties?.[name]?.nullable === !!property.nullable))) : {};
 }
 export const workflowKindTitle = (kind: string) => t(({ payload: "Input", query: "Query", action: "Action", act: "Action", transform: "Transform", branch: "Branch", switch: "Switch", foreach: "For each", while: "While", fork: "Parallel paths", all: "Parallel paths", any: "Parallel paths", join: "Join", ask: "Human task", wait: "Wait", subflow: "Run workflow", call: "Run workflow", ai: "AI function", compute: "Code function", end: "Return", break: "Break", continue: "Continue iteration", fail: "Fail" } as Record<string, string>)[kind] ?? kind);
+
+/** What each native step kind *is*, for the canvas's node classes (ADR-0089). A
+ * capability's kind is the same vocabulary, so a host capability and a native
+ * block of the same kind draw with one glyph and one default notation — the
+ * class table decides, nothing else names a drawing. */
+export const workflowStepClass = (kind: string): FlowNodeClass => (({
+  payload: "trigger", query: "query", action: "action", act: "action", transform: "transform",
+  branch: "control", switch: "control", foreach: "control", while: "control", fork: "control",
+  all: "control", any: "control", join: "control", ask: "human", wait: "trigger",
+  subflow: "flow", call: "flow", ai: "ai", compute: "code", end: "end", break: "control", continue: "control", fail: "end",
+} as Record<string, FlowNodeClass>)[kind] ?? "task");
 
 /** Source pickers use the installed definition while its draft changes. */
 export function installedObjects<T extends WorkflowObject>(records: T[]): T[] {

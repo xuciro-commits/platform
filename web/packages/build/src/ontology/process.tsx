@@ -165,10 +165,10 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
   onAddState: () => void; onAddAction: () => void;
 }) {
   const catalog: FlowCatalog = [
-    { id: "state", title: t("State"), category: "lifecycle", description: t("A record's named status"),
+    { id: "state", title: t("State"), class: "lifecycle", description: t("A record's named status"),
       inputs: [{ id: "result", label: t("Arrives here"), type: "action-result" }],
       outputs: [{ id: "take", label: t("May take"), type: "action-start" }] },
-    { id: "action", title: t("Action"), category: "lifecycle", description: t("A governed step on one record"),
+    { id: "action", title: t("Action"), class: "action", description: t("A governed step on one record"),
       inputs: [{ id: "from", label: t("Taken from"), type: "action-start" }],
       outputs: [{ id: "to", label: t("Leaves it in"), type: "action-result", limit: 1 }] },
   ];

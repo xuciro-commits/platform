@@ -174,9 +174,9 @@ export function FunctionEditor({ id }: { id: string }) {
 
 function FunctionMap({ draft, source, chosen, onChoose }: { draft: FunctionDraft; source?: string; chosen: Stage; onChoose: (stage: Stage) => void }) {
   const catalog: FlowCatalog = [
-    { id: "source", title: t("Record inputs"), category: "function", inputs: [], outputs: [{ id: "record", label: t("Authorised fields"), type: "record" }] },
-    { id: "model", title: t("Model inference"), category: "function", inputs: [{ id: "record", label: t("Record inputs"), type: "record" }], outputs: [{ id: "answer", label: t("Typed answer"), type: "answer" }] },
-    { id: "output", title: t("Strict output"), category: "function", inputs: [{ id: "answer", label: t("Typed answer"), type: "answer" }], outputs: [] },
+    { id: "source", title: t("Record inputs"), class: "trigger", group: t("Function"), inputs: [], outputs: [{ id: "record", label: t("Authorised fields"), type: "record" }] },
+    { id: "model", title: t("Model inference"), class: "function", group: t("Function"), inputs: [{ id: "record", label: t("Record inputs"), type: "record" }], outputs: [{ id: "answer", label: t("Typed answer"), type: "answer" }] },
+    { id: "output", title: t("Strict output"), class: "document", group: t("Function"), inputs: [{ id: "answer", label: t("Typed answer"), type: "answer" }], outputs: [] },
   ];
   const nodes: FlowNode[] = [
     { id: "source", kind: "source", label: source || t("Choose a published object"), detail: draft.fields.join(", ") || t("Choose input fields"), position: { x: 0, y: 0 } },

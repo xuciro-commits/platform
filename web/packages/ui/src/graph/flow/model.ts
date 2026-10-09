@@ -2,7 +2,7 @@ import type { Connection } from "@xyflow/react";
 import type { ReactNode } from "react";
 import type { Tone } from "../../components/StatusTag";
 import type { CanvasBox, CanvasPosition } from "../core/types";
-import { flowShape, notationOf, type FlowBoundary, type FlowNotation, type FlowShape } from "./notation";
+import { flowShape, notationOf, type FlowBoundary, type FlowNodeClass, type FlowNotation, type FlowShape } from "./notation";
 
 /** A flow canvas draws one process: ordered activities joined through typed ports.
  * The owner says what a step means and whether connecting two of them is allowed;
@@ -16,10 +16,16 @@ export type FlowPort = {
 };
 
 export type FlowNodeKind = {
-  id: string; title: string; description?: string; category: string;
+  id: string; title: string; description?: string;
+  /** What this kind of node is: the class decides its glyph, its default BPMN
+   * notation and the palette group it falls into (ADR-0089). An id outside the
+   * class table still works — it draws as a plain task. */
+  class?: FlowNodeClass;
+  /** Where this kind sits in the palette, when the owner groups finer than its class. */
+  group?: string;
   inputs: FlowPort[]; outputs: FlowPort[];
   icon?: ReactNode; tone?: Tone;
-  /** BPMN reading of this kind of step; without it the kind's own name decides. */
+  /** BPMN reading of this kind of step; without it the class, then the kind's own name, decides. */
   notation?: FlowNotation;
   /** Instance projections can customize ports without appearing as palette entries. */
   addable?: boolean;
@@ -69,6 +75,28 @@ export type FlowAddContext = {
 export type FlowHistory = { canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void };
 export type FlowConnectionIssue = "endpoint" | "port" | "duplicate" | "source-capacity" | "target-capacity";
 
+/** What each receiving port type may also take, beyond its own type. "*" takes
+ * every type on the same channel. Control and data never cross — that is decided
+ * once, in flowPortFits — so a row here never smuggles one channel into the other.
+ *
+ * This table is the only place an edge's compatibility is written down. An owner
+ * whose domain needs a new rule adds a row; no view re-implements the rule. */
+export const flowPortAccepts: Record<string, readonly string[]> = {
+  /** The carry-all: a json input receives any data output, which is how a node
+   * that hands out one document still joins the steps that read parts of it. */
+  json: ["*"],
+};
+
+/** May an output be joined to this input? Type, channel and the accepts table —
+ * the one rule every caller (the canvas, an owner's palette, an owner's own
+ * binding picker) shares, so a connection that is legal in one place cannot be
+ * refused in another. */
+export function flowPortFits(from: Pick<FlowPort, "type" | "channel">, into: Pick<FlowPort, "type" | "channel">): boolean {
+  if ((from.channel ?? "control") !== (into.channel ?? "control")) return false;
+  if (into.type === from.type) return true;
+  return (flowPortAccepts[into.type] ?? []).some((accepted) => accepted === "*" || accepted === from.type);
+}
+
 /** The semantic owner may add stricter rules, such as acyclicity or branch scope. */
 export function validateFlowConnection(connection: Connection, nodes: readonly FlowNode[], edges: readonly FlowEdge[], catalog: FlowCatalog): FlowConnectionIssue | undefined {
   const source = nodes.find((n) => n.id === connection.source);
@@ -76,11 +104,28 @@ export function validateFlowConnection(connection: Connection, nodes: readonly F
   if (!source || !target || source.id === target.id) return "endpoint";
   const out = catalog.find((k) => k.id === source.kind)?.outputs.find((p) => p.id === connection.sourceHandle);
   const into = catalog.find((k) => k.id === target.kind)?.inputs.find((p) => p.id === connection.targetHandle);
-  if (!out || !into || out.type !== into.type && !(into.channel === "data" && into.type === "json") || (out.channel ?? "control") !== (into.channel ?? "control")) return "port";
+  if (!out || !into) return "port";
+  if ((out.channel ?? "control") !== (into.channel ?? "control")) return "port";
+  if (!flowPortFits(out, into)) return "port";
   if (edges.some((e) => e.source === source.id && e.sourcePort === out.id && e.target === target.id && e.targetPort === into.id)) return "duplicate";
   if (out.limit !== undefined && edges.filter((e) => e.source === source.id && e.sourcePort === out.id).length >= out.limit) return "source-capacity";
   if (into.limit !== undefined && edges.filter((e) => e.target === target.id && e.targetPort === into.id).length >= into.limit) return "target-capacity";
   return undefined;
+}
+
+/** Every edge of a graph, read back through the same rule that decides whether a
+ * drag may create it. An authoring canvas refuses a bad edge as it is drawn; this
+ * is what a host calls to report what a stored graph already violates — a binding
+ * whose type changed under it, a port a renamed step left behind.
+ *
+ * The edge under test is excluded from the capacity count, so each edge is judged
+ * as a connection into the graph it sits in, not against itself. */
+export function checkFlowEdges(nodes: readonly FlowNode[], edges: readonly FlowEdge[], catalog: FlowCatalog): { edge: FlowEdge; issue: FlowConnectionIssue }[] {
+  return edges.flatMap((edge) => {
+    const issue = validateFlowConnection({ source: edge.source, sourceHandle: edge.sourcePort, target: edge.target, targetHandle: edge.targetPort },
+      nodes, edges.filter((item) => item !== edge), catalog);
+    return issue ? [{ edge, issue }] : [];
+  });
 }
 
 /** The dataTransfer type an owner's own library sets to drop a block onto the canvas. */
@@ -102,7 +147,7 @@ export const flowNodeHeight = (kind: FlowNodeKind) => flowBlockHeight(kind);
  * view measure the same thing, so a drawing that mixes shapes still lines up. */
 export function flowNodeBox(node: Pick<FlowNode, "compact" | "collapsed" | "notation" | "kind">, kind: FlowNodeKind | undefined): CanvasBox {
   if (node.compact) return flowShapeBox(flowShape(node.notation ?? notationOf(node.kind), node.kind));
-  return { width: flowNodeWidth, height: flowBlockHeight(kind ?? { id: node.kind, title: node.kind, category: "", inputs: [], outputs: [] }, node.collapsed ?? false) };
+  return { width: flowNodeWidth, height: flowBlockHeight(kind ?? { id: node.kind, title: node.kind, inputs: [], outputs: [] }, node.collapsed ?? false) };
 }
 
 /** Find a free tile for a newly added block without moving the builder's existing layout. */

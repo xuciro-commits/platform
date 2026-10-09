@@ -1,19 +1,15 @@
 import { Handle, Position, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react";
-import { AlertTriangle, ArrowRightLeft, Blocks, Brain, Check, ChevronDown, ChevronUp, Clock, Code2, GitBranch, Loader2, Play, Repeat, Workflow } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronUp, Clock, Loader2, Repeat } from "lucide-react";
 import { createContext, useContext, useEffect, type CSSProperties, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { flowBlockHeight, flowNodeWidth, flowShapeBox, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort } from "./model";
-import { eventRing, flowShape, loops, notationGlyph, notationOf, notationTitle, type FlowNotation, type FlowShape } from "./notation";
+import { eventRing, flowNodeIcon, flowShape, loops, notationGlyph, notationOf, notationTitle, type FlowNotation, type FlowShape } from "./notation";
 
 export type FlowNodeData = FlowNode & { definition: FlowNodeKind; direction: "right" | "down"; editable: boolean; collapsedView: boolean };
 export type FlowShapeNode = Node<FlowNodeData, "block">;
 export const FlowInteraction = createContext<{ onCollapse: (id: string) => void }>({ onCollapse: () => {} });
 
-const icons: Record<string, ReactNode> = {
-  trigger: <Play />, control: <GitBranch />, flow: <Workflow />, workflow: <Workflow />, lifecycle: <Workflow />,
-  compute: <Code2 />, transform: <ArrowRightLeft />, ai: <Brain />, function: <Brain />, action: <Play />, query: <ArrowRightLeft />,
-};
 const statusMeta: Record<FlowNodeStatus, { label: string; tone: string; icon?: ReactNode }> = {
   idle: { label: "Not run", tone: "neutral" }, running: { label: "Running", tone: "info", icon: <Loader2 className="animate-spin" /> },
   waiting: { label: "Waiting", tone: "warning", icon: <Clock /> }, success: { label: "Succeeded", tone: "success", icon: <Check /> },
@@ -94,7 +90,7 @@ export function FlowNodeView({ id, data, selected }: NodeProps<FlowShapeNode>) {
     aria-label={compact ? data.label : `${notationTitle(notation)}: ${data.label}`}>
     {!compact && <span className="platform-flow-accent" />}
     <div className="platform-flow-heading">
-      {!compact && <span className="platform-canvas-node-icon" aria-hidden="true" title={notationTitle(notation)}>{kind.icon ?? icons[kind.category] ?? <Blocks />}</span>}
+      {!compact && <span className="platform-canvas-node-icon" aria-hidden="true" title={notationTitle(notation)}>{flowNodeIcon(kind)}</span>}
       <div className="min-w-0 flex-1">
         {!compact && <div className="platform-canvas-node-caption">{kind.title}{data.version && <span title={data.version}>{data.version}</span>}</div>}
         <div className="platform-canvas-node-title" title={data.label}>{data.label}</div>

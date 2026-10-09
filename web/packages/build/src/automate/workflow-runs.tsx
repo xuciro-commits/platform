@@ -1,7 +1,7 @@
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, DataTable, Disclosure, FlowReleaseBinding, FlowCanvas, StatusTag, flowBlockHeight, flowNodeWidth, flowStates, layeredLayout, loops, notationOf, t, type FlowNodeStatus, type FlowNode, type ColumnDef, type FlowDefinition, type FlowInstanceData, type FlowCatalog } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
-import { controlEdges, workflowKindTitle, type WorkflowDraft } from "./workflow-model";
+import { controlEdges, workflowKindTitle, workflowStepClass, type WorkflowDraft } from "./workflow-model";
 
 export type WorkflowRun = FlowInstanceData & { data?: string; outputs?: Record<string, unknown>; withheld?: boolean; sources?: string[] };
 
@@ -27,7 +27,7 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
   const definition = definitions.data?.find((item) => item.id === shown?.flow && item.version === shown?.version);
   const nativeSteps = definition?.steps ?? [];
   const sourceSteps = snapshot?.steps ?? nativeSteps.map((item) => ({ name: item.name, title: item.title, kind: item.kind, next: item.next[0] }));
-  const catalog: FlowCatalog = sourceSteps.map((item) => ({ id: item.name, title: workflowKindTitle(item.kind), category: t("Flow"), inputs: [{ id: "in", label: t("In"), type: "flow" }],
+  const catalog: FlowCatalog = sourceSteps.map((item) => ({ id: item.name, title: workflowKindTitle(item.kind), class: workflowStepClass(item.kind), inputs: [{ id: "in", label: t("In"), type: "flow" }],
     outputs: snapshot ? controlEdges(snapshot).filter((edge) => edge.source === item.name).map((edge) => ({ id: edge.sourcePort, label: edge.label ?? t("Next"), type: "flow" })) : [{ id: "next", label: t("Next"), type: "flow" }] }));
   const edges = snapshot ? controlEdges(snapshot) : nativeSteps.flatMap((item) => item.next.map((next, i) => ({ id: `${item.name}:${i}`, source: item.name, sourcePort: "next", target: next, targetPort: "in" })));
   const positions = layeredLayout(sourceSteps.map((step) => ({ id: step.name })), edges.map((edge) => ({ from: edge.source, to: edge.target })), "right", { width: flowNodeWidth, height: Math.max(120, ...catalog.map((kind) => flowBlockHeight(kind))), gapX: 70, gapY: 32 });

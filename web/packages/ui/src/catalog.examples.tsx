@@ -269,7 +269,7 @@ export function Relations() {
     edges={[{ id: "b-a", source: "b", target: "a", tree: true }]} positions={positions} height={300} editable selected={selected} onSelect={setSelected}
     onPositionsChange={(next) => setPositions((current) => ({ ...current, ...next }))} />;
 }
-const flowCatalog: FlowCatalog = [{ id: "value", title: t("Value"), category: "data", inputs: [], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }, { id: "transform", title: t("Transform"), category: "logic", inputs: [{ id: "in", label: t("Quantity"), type: "number" }], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }];
+const flowCatalog: FlowCatalog = [{ id: "value", title: t("Value"), class: "trigger", inputs: [], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }, { id: "transform", title: t("Transform"), class: "transform", inputs: [{ id: "in", label: t("Quantity"), type: "number" }], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }];
 export function Flows() {
   const counter = useRef(3);
   const [nodes, setNodes] = useState<FlowNode[]>([{ id: "n1", kind: "value", label: t("Value"), position: { x: 30, y: 60 } },

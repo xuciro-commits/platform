@@ -59,9 +59,9 @@ export { laneBands, layeredLayout, type GraphSize, type LaneAssignment, type Lan
 export { FlowCanvas, type FlowCanvasNode, type FlowCanvasProps } from "./graph/flow/FlowCanvas";
 export { FlowSteps, type FlowStepNode, type FlowStepEdge } from "./graph/flow/FlowSteps";
 export { FlowGraph, FlowRun, FlowReleaseBinding, flowStates, type FlowDefinition, type FlowInstanceData, type FlowToken, type FlowTrace } from "./graph/flow/FlowProcess";
-export { FLOW_NODE_DROP, flowBlockHeight, flowNodeBox, flowNodeHeight, flowNodeWidth, flowPlacement, flowShapeBox, validateFlowConnection,
+export { FLOW_NODE_DROP, checkFlowEdges, flowBlockHeight, flowNodeBox, flowNodeHeight, flowNodeWidth, flowPlacement, flowPortAccepts, flowPortFits, flowShapeBox, validateFlowConnection,
   type FlowAddContext, type FlowCatalog, type FlowConnectionIssue, type FlowDiagnostic, type FlowEdge, type FlowHistory, type FlowLane, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort } from "./graph/flow/model";
-export { flowShape, loops, notationOf, notationTitle, type FlowBoundary, type FlowNotation, type FlowShape } from "./graph/flow/notation";
+export { flowNodeClassOf, flowNodeClasses, flowNodeGroup, flowNodeIcon, flowShape, loops, notationOf, notationTitle, type FlowBoundary, type FlowNodeClass, type FlowNotation, type FlowShape } from "./graph/flow/notation";
 export { RelationCanvas, type RelationCanvasProps } from "./graph/relation/RelationCanvas";
 export { relationNodeSize, relationLayouts, type RelationBadge, type RelationEdge, type RelationFact, type RelationLayout, type RelationNode } from "./graph/relation/model";
 export { neighborhoodPositions, relationLayout, type NeighborhoodLayoutGroup, type RelationLayoutSize } from "./graph/relation/layouts";
