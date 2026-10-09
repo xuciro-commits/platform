@@ -33,14 +33,19 @@ const (
 // the record it is run for through a reference field (By). It runs through
 // the reader's own read of Object, so it never widens what anyone sees.
 type NamedQuery struct {
-	Name        string          `json:"name"`
-	Title       string          `json:"title"`
-	Description string          `json:"description"`
-	Object      string          `json:"object"`
-	By          string          `json:"by,omitempty"`
-	Domain      json.RawMessage `json:"domain,omitempty"`
-	Sort        []string        `json:"sort,omitempty"`
-	Limit       int             `json:"limit,omitempty"`
+	Name        string `json:"name"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Object      string `json:"object"`
+	Interface   string `json:"interface,omitempty"`
+	// InterfaceShape and Implementations are frozen at publication. They are
+	// query metadata, never a fabricated entity or a grant to read its members.
+	InterfaceShape  *Interface      `json:"interfaceShape,omitempty"`
+	Implementations []string        `json:"implementations,omitempty"`
+	By              string          `json:"by,omitempty"`
+	Domain          json.RawMessage `json:"domain,omitempty"`
+	Sort            []string        `json:"sort,omitempty"`
+	Limit           int             `json:"limit,omitempty"`
 }
 
 // AssetRef is the stable identity shared by code and construction surfaces.

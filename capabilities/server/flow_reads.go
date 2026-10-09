@@ -59,6 +59,14 @@ func (t *Tenant) readDeclaredQueryFrom(store *recordStore, c platform.Caller, q 
 	et := store.types[q.Object]
 	store.mu.Unlock()
 	for _, value := range page.Records {
+		if row, ok := value.(InterfaceRecord); ok {
+			ref := row.Type + "/" + row.ID
+			sources = append(sources, ref)
+			for _, field := range q.InterfaceShape.Fields {
+				sources = append(sources, ref+"#"+field.Name)
+			}
+			continue
+		}
 		row, _ := json.Marshal(value)
 		var fields map[string]json.RawMessage
 		_ = json.Unmarshal(row, &fields)

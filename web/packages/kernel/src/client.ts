@@ -44,6 +44,9 @@ export class EdgeClient {
     if (q.set || q.traversal) return `/v1/records/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
     return `/v1/records/${encodeURIComponent(type)}?${this.readParams(q)}`;
   }
+  interfaceRecordsPath(name:string,q:Omit<Query,"domain"> & {domain?:unknown[]}={}) {
+    return `/v1/interfaces/${encodeURIComponent(name)}/records?${this.readParams(q)}`;
+  }
   aggregatePath(type: string, q: Omit<AggregateQuery,"domain"> & {domain?:unknown[]} = {}) {
     if (q.window || q.histogram || q.set || q.traversal || q.maxRows) return `/v1/aggregates/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
     const p = this.readParams(q);

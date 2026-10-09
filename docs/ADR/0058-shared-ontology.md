@@ -1,6 +1,6 @@
 # ADR-0058 — 共享本体：core 主数据包、Interface、扩展与归属（ADR-0057 A 块）
 
-状态：主数据、接口声明与扩展记录已落地；面向接口的查询/选择器未实现 · 2026-10-06 · 承接 ADR-0055（项目 = Application）、ADR-0057 §2 A
+状态：主数据、接口声明与扩展记录已落地；接口具名查询和共享选择器已实施，通用页面接口窗口/记录变量绑定尚未接通 · 2026-10-06 · 承接 ADR-0055（项目 = Application）、ADR-0057 §2 A
 
 ## 1. 立场
 
@@ -14,13 +14,13 @@
 
 ## 2. A1 `core` 主数据包（已落地）
 
-`capabilities/server/apps/core`：平台应用，与 `org`/`files`/`knowledge` 同级，标准 create/edit/archive 动作，角色 `steward` 维护，任何成员可读。组织本身（单元、架构、成员归属、日历）仍在 `org`（ADR-0012），`core.person.member` 指向平台成员，`core.site.unit` 指向 `org.unit`。
+`capabilities/server/apps/core`：平台应用，与 `enterprise`/`files`/`knowledge` 同级，标准 create/edit/archive 动作，角色 `steward` 维护，任何成员可读。组织与地点模型归 `enterprise`（ADR-0067/0068，已取代 ADR-0012）；`core.person.member` 指向平台成员，`core.site.place/unit` 分别引用模型的 ActualLocation/ActualOrganization。人员记录与 ActualPerson 的同步尚未实现。
 
 | 类型 | 是什么 | 关键字段 |
 |---|---|---|
 | `core.person` | 组织打交道的人：员工、承包商、伙伴联系人 | name, code(工号), kind, email, phone, member, partner→, site→, active |
 | `core.partner` | 业务伙伴（SAP BP）：客户/供应商/承运商/制造商，可多角色 | code, name, roles[], taxId, country, address, currency→, active |
-| `core.site` | 物理场所：工厂/仓库/办公室/门店/堆场 | code, name, kind, unit(org.unit), address, timezone |
+| `core.site` | 物理场所：工厂/仓库/办公室/门店/堆场 | code, name, kind, place(ActualLocation), unit(ActualOrganization), address, timezone |
 | `core.location` | 站点内位置，可嵌套：区域/巷道/货架/货位/月台/暂存/产线/工作中心 | code, name, kind, site→, parent→ |
 | `core.material` | 物料/SKU/零件/产品/耗材/服务 | code, name, kind, baseUom→, barcode, group, weight, shelfLifeDays, batches, serials |
 | `core.uom` | 计量单位（UN/ECE 代码），随宿主预置 8 个 | code, name, dimension, decimals |
@@ -47,7 +47,17 @@ Entity.Implements []string                                                      
 - build 对象草稿 `implements[]`：`checkShape` 在保存/发布前按宿主接口校验（接口必须有应用声明、字段齐全且类型一致），编译出的 `Entity.Implements` 随对象安装；
 - 对象类型编辑器"概述"页签的 **Shape** 区块：勾选接口、一键补齐缺少字段；对象模型工作台新增 **Interfaces** 视图（接口 → 实现者）。
 
-待做：具名查询与记录选择器可面向接口（"所有实现 core.coded 的对象"），留给 B 块的查询工作台。`host.ts` 中 `AppInfo.interfaces`/`Interface`/`EntityInfo.implements` 由 `go run ./cmd/api-types` 生成，不保留手工镜像。
+### 3.1 接口查询与选择器 As built
+
+- `NamedQuery` 的 `object` 与 `interface` 互斥。接口查询发布时保存 `interfaceShape` 与 `implementations`，候选冻结字段签名及真实对象依赖；同一联合候选中新对象可参与绑定。后来新增的实现者不改变旧版本，重新发布才纳入。接口没有记录表，也不被注册成一个虚拟 Entity。
+- `GET /v1/interfaces/{name}/records` 读取当前实现者；`GET /v1/queries/{app}/{name}` 可带固定 `version`、`search/offset/limit`，查询条件和排序仍属于发布版本。接口结果为 `{type, id, record}`，`record` 只提供共同字段与原记录标识/修订/时间戳。不同类型相同 ID 保持独立，打开或操作始终使用真实类型。
+- 类型、行范围和字段权限复用原记录读取。读者不能读取接口完整共同形状的实现者，在结果、总数与查询元数据中都不出现；子类型私有字段不能成为接口条件或结果字段。接口来源没有无类型的 `By` 输入，不提供跨类型关系遍历/集合运算；单对象查询继续原语义。
+- 查询工作台可选接口、共同字段条件和排序，并在“Try published query / 试用已发布查询”中搜索固定版本、打开真实记录。`@platform/ui` 的 `InterfaceRecordLookup` 输出 `{type,id}`，与原 `RecordLookup` 复用同一键盘/搜索/分页/错误控制器；单对象引用仍保留原 ID 字符串，不把组合身份塞进普通引用字段。
+- 封存读取原生对象时解析其 `entity` 字段描述；声明的父级自引用是数据关系，不作为执行循环拒绝。没有声明的自依赖、结构/执行循环仍拒绝。
+- 证据：`TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers` 覆盖身份、权限/数量、旧版本、新实现者、联合未发布对象及重放；现有 `integration-fabric.spec.ts` 在两行业核对发布接口查询、同 ID 不同类型选择和打开真实记录。生成类型仍由 `go run ./cmd/api-types` 维护。
+
+**剩余：** 通用 PageQuery/页面集合窗口和记录变量仍是具体对象约束；页面 `record-picker` 尚不能绑定多对象接口窗口。此处的共享选择器与查询工作台不代替该页面运行契约，也不提供持久多态引用字段或接口统一动作。A2 的完整页面目标继续在 WorkQueue 第一项，不因本批通过而标为全部完成。
+
 
 ## 4. A3 扩展字段（已落地）
 
@@ -57,5 +67,5 @@ Entity.Implements []string                                                      
 
 ## 5. 做减法
 
-- 行业应用自造的主数据类型在接入 core 后删除：WMS 探针已删 `wmsitem`/`wmslocation`，收货明细引用 `core.material`、作业引用 `core.location`，"每托数量"归收货明细，主数据页面直接面向 `core.material`/`core.location`（装配脚本用 steward 身份种 `core.site/material/location`，制造组合的 supervisor 座席持 `core.steward`）；下一步是 MES 的 DemoMaster 中与 core 重叠的部分；
+- 行业应用自造的主数据类型在接入 core 后删除：WMS 探针已删 `wmsitem`/`wmslocation`，收货明细引用 `core.material`、作业引用 `core.location`，"每托数量"归收货明细，主数据页面直接面向 `core.material`/`core.location`（该旧装配脚本已清理；主数据现在沿 Core 的 steward 决策维护，制造组合的 supervisor 座席持 `core.steward`）；下一步是 MES 的 DemoMaster 中与 core 重叠的部分；
 - 不做"共享本体项目"这一额外容器；不做跨租户共享。

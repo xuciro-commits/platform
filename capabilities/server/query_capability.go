@@ -15,6 +15,25 @@ func queryInputSchema(q platform.NamedQuery) platform.ValueSchema {
 }
 func queryCapabilitySchemas(q platform.NamedQuery, info platform.EntityInfo) (*platform.ValueSchema, *platform.ValueSchema) {
 	input := queryInputSchema(q)
+	if q.InterfaceShape != nil {
+		common := platform.EntityInfo{}
+		for _, f := range q.InterfaceShape.Fields {
+			common.Fields = append(common.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type})
+		}
+		record, known := entityValueSchema(common)
+		for _, f := range q.InterfaceShape.Fields {
+			field := record.Properties[f.Name]
+			field.Nullable = true
+			record.Properties[f.Name] = field
+		}
+		row := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"type": {Type: "string", Enum: q.Implementations}, "id": {Type: "string"}, "record": record}, Required: []string{"type", "id", "record"}}
+		text := platform.ValueSchema{Type: "string"}
+		result := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"records": {Type: "array", Items: &row, MaxItems: 200}, "total": {Type: "integer"}, "sources": {Type: "array", Items: &text}}, Required: []string{"records", "total", "sources"}}
+		if !known || result.Check() != nil {
+			return &input, nil
+		}
+		return &input, &result
+	}
 	if info.Type == "" {
 		return &input, nil
 	}

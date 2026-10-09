@@ -1,5 +1,7 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Interface record": "接口记录",
+ "Object references keep their ID; interface references keep the actual type and ID. Scoped reads own permissions and paging; this selector never creates a synthetic object type.": "对象引用保留 ID；接口引用保留真实对象类型和 ID。权限和分页由作用域读取负责，选择器不会创建虚拟对象类型。",
  "Icon picker": "图标选择器",
  "Choose a shared icon by group or translated name.": "按分组或翻译后的名称选择共享图标。",
  "Grouped resource list": "分组资源列表",

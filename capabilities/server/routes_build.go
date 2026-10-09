@@ -289,8 +289,13 @@ func (h *Host) routesBuild(rt *routes) {
 		WriteJSON(w, http.StatusOK, ReleaseActive{ID: id})
 	})
 	rt.handle(Route{Pattern: "GET /v1/queries/{app}/{name}", Summary: "Run a declared query as the caller: its conditions, and the record it is run for (ADR-0040 21c)",
-		Query: []Param{{"for", "the ID of the record it is run for, when it takes one"}}, Answer: RecordPage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		page, err := t.RunQuery(m, r.PathValue("app"), r.PathValue("name"), r.URL.Query().Get("for"), h.Now())
+		Query: []Param{{"for", "the ID of the record it is run for, when it takes one"}, {"version", "An exact published source version"}, {"search", "Words to find within the declared conditions"}, {"offset", "Records to skip"}, {"limit", "Records in this bounded window"}}, Answer: RecordPage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		offset, limit := pageBounds(r, 0, 0)
+		if offset < 0 || limit < 0 {
+			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "offset and limit are non-negative"))
+			return
+		}
+		page, err := t.RunQueryWindow(m, r.PathValue("app"), r.PathValue("name"), r.URL.Query().Get("for"), r.URL.Query().Get("version"), platform.Query{Search: r.URL.Query().Get("search"), Offset: offset, Limit: limit}, h.Now())
 		if err != nil {
 			Reply(w, nil, err)
 			return

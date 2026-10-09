@@ -4,7 +4,7 @@
 // `opens` map from record types to the view that shows them.
 import { confirmedDecision, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
 import type { EdgeClient, ActionDeclaration, Entry, Api } from "@platform/kernel";
-import { humanizeKernelError, notify, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, t } from "@platform/ui";
+import { humanizeKernelError, notify, type AggregateData, type EntityInfo, type RecordPageData, type InterfaceRecordPageData, type RecordSource, type RecordView, t } from "@platform/ui";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -83,6 +83,8 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       scope: JSON.stringify([me, entities, actions, definitions]),
       entity: (type) => entities.find((e) => e.type === type),
       list: (type, q) => client.records<RecordPageData>(type, q),
+      interfaceList: (name,q) => client.get<InterfaceRecordPageData>(client.interfaceRecordsPath(name,q)),
+      watchInterfaceList: (name,q,changed) => client.subscribeRead(client.interfaceRecordsPath(name,q),changed),
       get: (type, id) => client.record<RecordView>(type, id),
       aggregate: (type, q) => client.aggregate<AggregateData>(type, q),
       watchList: (type, q, changed) => client.subscribeRead(client.recordsPath(type, q), changed),

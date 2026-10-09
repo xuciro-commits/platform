@@ -168,6 +168,8 @@ export class PageSessionStore {
         watchList: (type, query, changed) => session.source.watchList?.(type, query, changed) ?? (() => {}),
         watchRecord: (type, id, changed) => session.watchReference(type, id, changed),
         watchAggregate: (type, query, changed) => session.source.watchAggregate?.(type, query, changed) ?? (() => {}),
+        interfaceList: (name, query) => session.source.interfaceList ? session.source.interfaceList(name, query) : Promise.reject(Error("Interface record read is unavailable")),
+        watchInterfaceList: (name, query, changed) => session.source.watchInterfaceList?.(name, query, changed) ?? (() => {}),
         get aggregate(){return session.source.aggregate;},
         get scope() { return session.source.scope; }, get revision() { return session.version; },
       };
@@ -350,6 +352,8 @@ export class PageSessionStore {
         watchList: (object, query, changed) => session.watchQuery(key, object, query, changed),
         watchRecord: (object, id, changed) => session.watchReference(object, id, changed),
         watchAggregate: (object, query, changed) => session.source.watchAggregate?.(object, query, changed) ?? (() => {}),
+        interfaceList: (name, query) => session.source.interfaceList ? session.source.interfaceList(name, query) : Promise.reject(Error("Interface record read is unavailable")),
+        watchInterfaceList: (name, query, changed) => session.source.watchInterfaceList?.(name, query, changed) ?? (() => {}),
         get aggregate() { return session.source.aggregate; },
         get revision() { return session.version; },
         get scope() { return session.source.scope; },

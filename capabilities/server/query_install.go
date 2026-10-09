@@ -17,6 +17,10 @@ func checkNamedQuery(q platform.NamedQuery, info platform.EntityInfo) error {
 	if q.Object != info.Type {
 		return fmt.Errorf("query source object is unavailable")
 	}
+	return checkQueryFields(q, info)
+}
+
+func checkQueryFields(q platform.NamedQuery, info platform.EntityInfo) error {
 	if _, err := compileDomain(info, q.Domain); err != nil {
 		return err
 	}
@@ -39,6 +43,10 @@ func checkNamedQuery(q platform.NamedQuery, info platform.EntityInfo) error {
 }
 
 func (h hostView) ValidateInstallQuery(q platform.NamedQuery) error {
+	if q.Interface != "" {
+		_, err := h.t.bindInterfaceQuery(q)
+		return err
+	}
 	info, ok := h.t.entity(q.Object)
 	if !ok || info.App != h.app.Manifest().ID {
 		return fmt.Errorf("query needs its owner's published object")
@@ -53,11 +61,18 @@ func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version
 	if version < 1 || version > 64 {
 		return fmt.Errorf("query needs a retained published version")
 	}
+	if q.Interface != "" {
+		bound, err := h.t.bindInterfaceQuery(q)
+		if err != nil {
+			return err
+		}
+		q = bound
+	}
 	if err := h.ValidateInstallQuery(q); err != nil {
 		return err
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetQuery, Name: q.Name}
-	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".query-" + strconv.Itoa(version), ContractVersion: 1, Requires: []platform.AssetRef{{App: ref.App, Kind: platform.AssetObject, Name: q.Object}}, Query: &q}
+	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".query-" + strconv.Itoa(version), ContractVersion: 1, Requires: q.Dependencies(), Query: &q}
 	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
 	if i >= 0 {
 		old := h.t.definitions[i]

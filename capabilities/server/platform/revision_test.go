@@ -81,6 +81,16 @@ func TestReleaseCandidateRefusesUnclosedAndAmbiguousAssets(t *testing.T) {
 }
 
 func TestReleaseCandidateClosesReciprocalObjectReferences(t *testing.T) {
+	location := AssetRef{App: "core", Kind: AssetObject, Name: "core.location"}
+	for _, body := range []json.RawMessage{json.RawMessage(`{"type":"core.location","fields":[{"name":"parent","type":"reference","ref":"core.location"}]}`), json.RawMessage(`{"type":"core.location","entity":{"type":"core.location","fields":[{"name":"parent","type":"reference","ref":"core.location"}]}}`)} {
+		candidate, err := Candidate([]AssetRef{location}, []ReleaseAsset{{Ref: location, ContractVersion: 1, SourceVersion: "1", Requires: []AssetRef{location}, Body: body}})
+		if err != nil {
+			t.Fatalf("declared parent reference was refused: %v", err)
+		}
+		if _, err := ReadCandidate(candidate.ID, candidate.Bytes); err != nil {
+			t.Fatal(err)
+		}
+	}
 	order := AssetRef{App: "mes", Kind: AssetObject, Name: "mes.order"}
 	sfc := AssetRef{App: "mes", Kind: AssetObject, Name: "mes.sfc"}
 	assets := []ReleaseAsset{

@@ -91,6 +91,8 @@ type Host interface {
 	Declares(name string) bool
 	// Interfaces are the shapes declared across the tenant's apps (ADR-0058 A2).
 	Interfaces() []platform.Interface
+	// BindInterfaceQuery freezes the owner's interface and installed implementers.
+	BindInterfaceQuery(platform.NamedQuery, ...platform.EntityInfo) (platform.NamedQuery, error)
 	// Seen marks an app's notifications with any of keys read for everyone.
 	Seen(c platform.Caller, keys ...string)
 	// Invoke submits a protocol action to the tenant's provider for c's app,

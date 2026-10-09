@@ -1629,5 +1629,12 @@
   "{name} needs a date and time with a timezone": "{name} 需要带时区的日期时间",
   "The end date cannot be before the start date": "结束日期不能早于开始日期",
   "The relationship is not active on that day": "该关系在所选日期不生效",
-  "A replacement needs a different relationship id": "替换后的关系需要新的标识"
+  "A replacement needs a different relationship id": "替换后的关系需要新的标识",
+  "Source interface": "来源接口",
+  "Published interface shape": "已发布接口字段签名",
+  "Published implementations": "已发布实现对象类型",
+  "A reusable record query over a published object or interface; draft edits do not change published bindings.": "对已发布对象或接口的可复用记录查询；草稿编辑不会改变发布绑定。",
+  "Interface reads use common-field conditions, search and sorting": "接口读取使用共同字段条件、搜索和排序",
+  "offset and limit are non-negative": "offset 和 limit 必须为非负数",
+  "A published query implementation is unavailable": "已发布查询的某个实现对象不可用"
 }

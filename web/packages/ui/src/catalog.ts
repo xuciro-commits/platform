@@ -159,7 +159,7 @@ export const entries: CatalogEntry[] = [
     "records/Records.tsx", ["RecordPage", "RecordLinks"], "RecordDetails", { type: "RecordView", states: ["Loading", "Error", "Ready"],
       dependencies: ["ui/entity-card", "ui/lifecycle", "ui/tasks", "ui/record-history"], constraints: ["Visibility and allowed actions come from the scoped source and caller."] }),
   asset("ui/record-lookup", "Record lookup", "Search a caller's scoped source to choose a reference by record ID.", 3,
-    "records/RecordLookup.tsx", ["RecordLookup"], "RecordLookups", { type: "RecordSource", states: ["Loading", "Empty", "Error", "Selected"], dependencies: ["ui/input"] }),
+    "records/RecordLookup.tsx", ["RecordLookup", "InterfaceRecordLookup"], "RecordLookups", { type: "RecordSource", states: ["Loading", "Empty", "Error", "Selected"], dependencies: ["ui/input"], constraints:["Object references keep their ID; interface references keep the actual type and ID. Scoped reads own permissions and paging; this selector never creates a synthetic object type."] }),
   asset("ui/tasks", "Tasks and inbox", "Present assigned work with the answers and actions supplied by its owner.", 3,
     "records/Records.tsx", ["Tasks", "Inbox"], "TaskInbox", { type: "InboxTask", tags: ["approval", "work"], states: ["Empty", "Pending"],
       dependencies: ["ui/button", "ui/status"], constraints: ["An inbox preview is not an approval or permission engine."] }),

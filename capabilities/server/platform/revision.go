@@ -165,9 +165,18 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 			// Objects can reference one another (for example an order's SFCs
 			// and an SFC's order). They form one closed semantic graph, not a
 			// recursive publication step. Keep both edges in the exact bytes.
-			// A self-dependency or a structural page/action cycle is invalid.
+			// Undeclared self-dependencies and structural page/action cycles
+			// are invalid; declared recursive data references remain data.
 			if from.Kind == AssetObject && ref.Kind == AssetObject && from != ref {
 				return nil
+			}
+			if from == ref && ref.Kind == AssetObject {
+				info, err := queryObjectDescriptor(lookup[ref].Body)
+				if err == nil && slices.ContainsFunc(info.Fields, func(field FieldInfo) bool {
+					return field.Ref == ref.Name && (field.Type == "reference" || field.Type == "references")
+				}) {
+					return nil // declared parent/child data references, not an execution cycle
+				}
 			}
 			if pageNavigationEdge(lookup[from], ref) {
 				start := slices.Index(path, ref)
@@ -454,11 +463,7 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		if err := q.Check(); err != nil {
 			return err
 		}
-		owner, _, ok := strings.Cut(q.Object, ".")
-		if !ok {
-			return fmt.Errorf("query object has no owner")
-		}
-		required = append(required, AssetRef{App: owner, Kind: AssetObject, Name: q.Object})
+		required = append(required, q.Dependencies()...)
 	case AssetFunction:
 		var function AIFunction
 		if err := json.Unmarshal(body, &function); err != nil {
@@ -1041,6 +1046,7 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 	var shape struct {
 		Type      string                       `json:"type"`
+		Entity    *EntityInfo                  `json:"entity"`
 		Fields    []map[string]json.RawMessage `json:"fields"`
 		Lifecycle *LifecycleInfo               `json:"lifecycle"`
 		States    []State                      `json:"states"`
@@ -1060,6 +1066,12 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 	}
 	if err := json.Unmarshal(body, &shape); err != nil {
 		return EntityInfo{}, err
+	}
+	if shape.Entity != nil {
+		if shape.Entity.Type != shape.Type {
+			return EntityInfo{}, fmt.Errorf("frozen native object identity differs")
+		}
+		return *shape.Entity, nil
 	}
 	var fields []FieldInfo
 	for _, raw := range shape.Fields {

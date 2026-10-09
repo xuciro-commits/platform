@@ -14,7 +14,7 @@ import {
   AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
-  RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
+  RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, InterfaceRecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
   Chart, Pivot, Graph, BlockCanvas, DiagramCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView, type AttachedFile,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
@@ -232,7 +232,12 @@ export function RecordDetails() {
 }
 export function RecordLookups() {
   const [value, setValue] = useState<string>();
-  return <div className="max-w-lg"><label className="mb-1 block text-sm" htmlFor="catalog-record-lookup">{t("Record")}</label><RecordLookup id="catalog-record-lookup" source={demoSource} type={demoInfo.type} value={value} onChange={setValue} /></div>;
+  const [reference,setReference]=useState<import("./records/Records").InterfaceRecordIdentity>();
+  const source=useMemo<RecordSource>(()=>({...demoSource,scope:"catalog-interface-example",interfaceList:async(_name,query)=>{
+    const page=await demoSource.list(demoInfo.type,query);
+    return {total:page.total,records:page.records.map(record=>({type:demoInfo.type,id:record.id,record}))};
+  }}),[]);
+  return <div className="grid max-w-lg gap-3"><div><label className="mb-1 block text-sm" htmlFor="catalog-record-lookup">{t("Record")}</label><RecordLookup id="catalog-record-lookup" source={demoSource} type={demoInfo.type} value={value} onChange={setValue} /></div><div><label className="mb-1 block text-sm" htmlFor="catalog-interface-lookup">{t("Interface record")}</label><InterfaceRecordLookup id="catalog-interface-lookup" source={source} name="demo.named" value={reference} onChange={setReference}/></div></div>;
 }
 const task: InboxTask = { id: "demo-task", revision: 1, created: stamp, changed: stamp, title: "Review Sample Alpha", body: "Synthetic task for preview only", app: "demo", candidates: ["demo"], state: "open", answers: ["approve", "reject"], answerTitles: [t("Approved"), t("Rejected")] };
 export function TaskInbox() {

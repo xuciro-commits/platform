@@ -81,7 +81,9 @@ for (const fixture of [
 
         // Deliver a page and its native flow together; the object is also the pipeline's target.
         const { id: object, type } = await builder.object({ name: `${name}receipt`, title: "Integration receipt", plural: "Integration receipts",
-          fields: [{ name: "item", title: "Item", type: "text", search: true }, { name: "qty", title: "Quantity", type: "integer" }, { name: "docno", title: "Document", type: "text" }],
+          fields: [{ name: "item", title: "Item", type: "text", search: true }, { name: "qty", title: "Quantity", type: "integer" }, { name: "docno", title: "Document", type: "text" },
+            { name: "code", title: "Code", type: "text", search: true }, { name: "name", title: "Name", type: "text", search: true }],
+          implements: ["core.coded"],
           states: [{ name: "open", title: "Open" }, { name: "received", title: "Received" }],
           actions: [{ name: "receive", title: "Receive", from: ["open"], to: "received", roles: ["user"],
             inputs: [{ name: "item", title: "Received item", type: "text", required: true }] }],
@@ -165,6 +167,29 @@ for (const fixture of [
           await builder.open(page, "/integration-health");
           await expect(page.getByRole("button", { name: /Writeback · Receipt delivery/ })).toBeVisible();
           if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: info.outputPath("integration-health.png"), fullPage: true });
+
+          // The interface selector must distinguish equal IDs and open the actual object.
+          const reference = await builder.object({ name: `${name}reference`, title: "Reference receipt", implements: ["core.coded"],
+            fields: [{ name: "code", title: "Code", type: "text", search: true }, { name: "name", title: "Name", type: "text", search: true }],
+          });
+          await builder.decide(`${reference.type}.create`, { type: reference.type, id: receipt }, { code: "REF", name: "Duplicate identity" });
+          await builder.open(page, "/query?id=new");
+          await page.getByRole("textbox", { name: "Query name", exact: true }).fill(`${name}lookup`);
+          await page.getByRole("textbox", { name: "Query title", exact: true }).fill("Receiving lookup");
+          await page.getByRole("textbox", { name: "Query description", exact: true }).fill("Typed interface selection");
+          await page.getByRole("combobox", { name: "Query source kind", exact: true }).selectOption("interface");
+          await page.getByRole("combobox", { name: "Source interface", exact: true }).selectOption("core.coded");
+          await page.getByRole("button", { name: "Save query", exact: true }).click();
+          await expect.poll(() => page.url().includes("id=new")).toBe(false);
+          const queryID = new URLSearchParams(new URL(page.url()).hash.split("?")[1]).get("id")!;
+          await editor.release(undefined,false,"Review release");
+          await builder.open(page, `/query?id=${queryID}`);
+          await page.getByRole("combobox", { name: "Query result record", exact: true }).fill(receipt);
+          await expect(page.getByRole("option").filter({ hasText: `Integration receipt · ${receipt}` })).toBeVisible();
+          await page.getByRole("option").filter({ hasText: `Reference receipt · ${receipt}` }).click();
+          await page.getByRole("button", { name: "Open selected record", exact: true }).click();
+          await expect(page.getByText("Duplicate identity", { exact: true })).toBeVisible();
+          if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: info.outputPath("interface-record.png"), fullPage: true });
 
           // Grant only the integration role; its delivery view must still redact host effect payloads.
           await builder.decide("platform.member.grant", { type: "platform.member", id: member.principalId }, { app: "build", role: "integrator" }, "platform");

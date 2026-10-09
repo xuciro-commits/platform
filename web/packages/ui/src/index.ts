@@ -61,9 +61,9 @@ export { FlowView, FlowGraph, FlowReleaseBinding, flowStates, type FlowDefinitio
 export { Chart, useChartData, type ChartSource } from "./charts/Chart";
 export { Pivot, groupDomain } from "./charts/Pivot";
 export { aggregateQuery, aggregateValues, columnOf, type ChartSpec, type ChartData, type Channels, type Encoding, type Mark, type MeasureType, type AggregateOp, type TimeUnit, type AggregateData, type AggregateColumn, type AggregateQuery } from "./charts/spec";
-export { Inbox, RecordList, groupable, measurable, type ListState, RecordPage, RecordLinks, RecordStatus, RecordHistory, Tasks, StatusBar, entityFrom, setCurrency, type Options, type InboxTask, type Lifecycle, type State, type EntityInfo, type FieldInfo, type EntityRecord, type RecordQuery, type RecordPageData, type RecordView, type RecordChange, type RecordSource, type Money } from "./records/Records";
+export { Inbox, RecordList, groupable, measurable, type ListState, RecordPage, RecordLinks, RecordStatus, RecordHistory, Tasks, StatusBar, entityFrom, setCurrency, type Options, type InboxTask, type Lifecycle, type State, type EntityInfo, type FieldInfo, type EntityRecord, type RecordQuery, type RecordPageData, type InterfaceRecordIdentity, type InterfaceRecordData, type InterfaceRecordPageData, type RecordView, type RecordChange, type RecordSource, type Money } from "./records/Records";
 export { RecordWorkspace } from "./records/RecordWorkspace";
-export { RecordLookup } from "./records/RecordLookup";
+export { RecordLookup, InterfaceRecordLookup } from "./records/RecordLookup";
 export {RecordTimeline,type TimelineFields} from "./records/RecordTimeline";
 export {RecordKanban,type KanbanLane,type KanbanMove} from "./records/RecordKanban";
 export { humanizeKernelError } from "./lib/errors";

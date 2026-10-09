@@ -274,6 +274,15 @@ func (h hostView) Interfaces() []platform.Interface {
 	return platform.Interfaces(manifests)
 }
 
+func (h hostView) BindInterfaceQuery(q platform.NamedQuery, drafts ...platform.EntityInfo) (platform.NamedQuery, error) {
+	for _, info := range drafts {
+		if info.App != h.app.Manifest().ID {
+			return q, fmt.Errorf("interface query draft belongs to another owner")
+		}
+	}
+	return h.t.bindInterfaceQuery(q, drafts...)
+}
+
 func (h hostView) Readable(m platform.Member, ref string, now time.Time) bool {
 	return h.t.Readable(m, ref, now)
 }

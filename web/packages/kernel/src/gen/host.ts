@@ -1108,6 +1108,17 @@ export type InterfaceField = {
   title: string;
 };
 
+export type InterfaceRecord = {
+  type: string;
+  id: string;
+  record: Record<string, unknown>;
+};
+
+export type InterfaceRecordPage = {
+  records: InterfaceRecord[];
+  total: number;
+};
+
 export type JointDraftRef = {
   kind: string;
   id: string;
@@ -1304,6 +1315,9 @@ export type NamedQuery = {
   title: string;
   description: string;
   object: string;
+  interface?: string;
+  interfaceShape?: Interface;
+  implementations?: string[];
   by?: string;
   domain?: unknown;
   sort?: string[];

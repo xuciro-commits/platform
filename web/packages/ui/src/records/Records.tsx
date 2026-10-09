@@ -40,6 +40,9 @@ export type Stamp = Api.Stamp;
 export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;
 export type RecordQuery = Omit<Api.Query,"domain"> & {domain?:unknown[]};
 export type RecordPageData = Omit<Api.RecordPage, "records"> & { records: EntityRecord[] };
+export type InterfaceRecordIdentity = Pick<Api.InterfaceRecord, "type" | "id">;
+export type InterfaceRecordData = Omit<Api.InterfaceRecord, "record"> & { record: EntityRecord };
+export type InterfaceRecordPageData = Omit<Api.InterfaceRecordPage, "records"> & { records: InterfaceRecordData[] };
 export type RecordChange = Api.RecordChange;
 /** A file attached to a record (ADR-0028). */
 export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string; regions?:Api.ImageRegion[] };
@@ -73,6 +76,8 @@ export type RecordSource = {
   list: (type: string, query: RecordQuery) => Promise<RecordPageData>;
   get: (type: string, id: string) => Promise<RecordView>;
   aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;
+  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;
+  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;
   /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */
   revision?: number;
   watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;

@@ -39,7 +39,7 @@ export class Member {
   open(page: Page, route: string) { return open(page, this.token, route); }
 }
 
-export type ObjectSpec = { name?: string; title: string; fields: unknown[]; states?: unknown[]; actions?: unknown[]; access?: unknown[]; plural?: string };
+export type ObjectSpec = { name?: string; title: string; fields: unknown[]; states?: unknown[]; actions?: unknown[]; access?: unknown[]; plural?: string; implements?: string[] };
 
 /** The builder's hands: objects, records, pages, releases. */
 export class Builder extends Member {
@@ -102,8 +102,8 @@ export class Editor {
     return saved;
   }
   /** The release route: review, check, immutable candidate. `between` runs before activation. */
-  async release(between?: () => Promise<void>, joint = false) {
-    await this.page.getByRole("button", { name: "Publish", exact: true }).click();
+  async release(between?: () => Promise<void>, joint = false, command = "Publish") {
+    await this.page.getByRole("button", { name: command, exact: true }).click();
     if (joint) await this.page.getByRole("button", { name: "Add the drafts it depends on", exact: true }).click();
     await this.page.getByRole("button", { name: joint ? "Check joint candidate" : "Check draft and dependencies", exact: true }).click();
     await this.page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();

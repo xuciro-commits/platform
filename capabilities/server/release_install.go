@@ -226,7 +226,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 				if json.Unmarshal([]byte(raw), &q) != nil {
 					return nil, fmt.Errorf("invalid query family")
 				}
-				declaration := platform.NamedQuery{Name: q.Name, Title: q.Title, Description: q.Description, Object: q.Object, By: q.By, Domain: q.Domain, Sort: q.Sort, Limit: q.Limit}
+				declaration := platform.NamedQuery{Name: q.Name, Title: q.Title, Description: q.Description, Object: q.Object, Interface: q.Interface, InterfaceShape: q.InterfaceShape, Implementations: q.Implementations, By: q.By, Domain: q.Domain, Sort: q.Sort, Limit: q.Limit}
 				if err := view.InstallQuery(platform.Caller{Replaying: true}, declaration, i+1); err != nil {
 					return nil, err
 				}

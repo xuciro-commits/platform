@@ -205,6 +205,17 @@ func (t *Tenant) registerDefinitions() error {
 		for _, query := range manifest.Queries {
 			q := query
 			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetQuery, Name: q.Name}
+			if q.Interface != "" {
+				bound, err := t.bindInterfaceQuery(q)
+				if err != nil {
+					return fmt.Errorf("asset %s: %w", ref, err)
+				}
+				q = bound
+				if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: q.Dependencies(), Query: &q}); err != nil {
+					return err
+				}
+				continue
+			}
 			object, ok := objects[q.Object]
 			if !ok {
 				return fmt.Errorf("asset %s reads missing object %s", ref, q.Object)
@@ -375,6 +386,33 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		case platform.AssetQuery:
 			if def.Query == nil {
 				continue
+			}
+			if def.Query.Interface != "" {
+				def.QueryVersions = maps.Clone(def.QueryVersions)
+				for version, query := range def.QueryVersions {
+					if visible, ok := visibleInterfaceQuery(query, entities); ok {
+						def.QueryVersions[version] = visible
+					} else {
+						delete(def.QueryVersions, version)
+					}
+				}
+				if visible, ok := visibleInterfaceQuery(*def.Query, entities); ok {
+					def.Query = &visible
+				} else {
+					def.Query = nil
+				}
+				if def.Query == nil && len(def.QueryVersions) == 0 {
+					continue
+				}
+				def.Requires = nil
+				if def.Query != nil {
+					def.Requires = def.Query.Dependencies()
+				}
+				for _, retained := range def.QueryVersions {
+					def.Requires = append(def.Requires, retained.Dependencies()...)
+				}
+				def.Requires = uniqueRefs(def.Requires)
+				break
 			}
 			info, ok := entities[def.Query.Object]
 			if !ok {

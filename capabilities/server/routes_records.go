@@ -14,6 +14,19 @@ import (
 
 // routesRecords serves records, files, links, aggregates, search, knowledge and transcripts.
 func (h *Host) routesRecords(rt *routes) {
+	rt.handle(Route{Pattern: "GET /v1/interfaces/{name}/records", Summary: "Common-field records of actual interface implementers, with original type and id (ADR-0058)", Answer: InterfaceRecordPage{}, Query: []Param{{"search", "Words to find"}, {"sort", "Common fields, comma-separated"}, {"offset", "Records to skip"}, {"limit", "Records in this window (at most 200)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		offset, limit := pageBounds(r, 0, 25)
+		query := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Offset: offset, Limit: limit}
+		if raw := r.URL.Query().Get("sort"); raw != "" {
+			query.Sort = strings.Split(raw, ",")
+		}
+		out, err := t.InterfaceRecords(m, r.PathValue("name"), query, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
 	rt.handle(Route{Pattern: "POST /v1/files", Summary: "Upload a file's bytes (the body; query name; Content-Type); answers its SHA-256 to attach with files.file.attach (ADR-0028)",
 		Query: []Param{{"name", "The file's name"}}, Body: []byte{}, Answer: Upload{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		up, status, err := t.Upload(m, r.URL.Query().Get("name"), r.Header.Get("Content-Type"), r.Body, h.Now())

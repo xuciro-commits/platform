@@ -2,6 +2,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Query source kind": "查询来源类型",
+ "Source interface": "来源接口",
+ "Publication freezes the interface fields and implementation types. Publish a new version to include later implementations.": "发布会冻结接口字段和实现对象类型。要纳入后续新增的实现类型，请发布新版本。",
+ "Try published query": "试用已发布查询",
+ "This reads the published version with your current permissions. Unsaved conditions do not change it.": "按你的当前权限读取此发布版本。未保存的条件不会改变它。",
+ "Query result record": "查询结果记录",
+ "Published implementation types": "已发布的实现对象类型",
+ "Open selected record": "打开所选记录",
  "Review sealed candidates and activate a release.": "审查已封存候选并激活发布。",
  "Design objects, pages, workflows, functions and applications; test and seal candidates.": "设计对象、页面、流程、函数与应用；测试并封存候选。",
   "Release delivery": "应用交付",

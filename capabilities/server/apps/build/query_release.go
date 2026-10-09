@@ -14,7 +14,7 @@ import (
 func queryReleaseAsset(f Query, sourceVersion string) (platform.ReleaseAsset, error) {
 	body, err := json.Marshal(f.definition())
 	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: f.Name}, ContractVersion: 1,
-		SourceVersion: sourceVersion + ".query-" + strconv.Itoa(f.Version), Requires: []platform.AssetRef{{App: ID, Kind: platform.AssetObject, Name: f.Object}}, Body: body}, err
+		SourceVersion: sourceVersion + ".query-" + strconv.Itoa(f.Version), Requires: f.definition().Dependencies(), Body: body}, err
 }
 
 // QueryReleaseAsset resolves only a retained version from this owner.
@@ -30,7 +30,7 @@ func (b *Build) QueryReleaseAsset(name string, sourceVersion string) (platform.R
 	}
 	body, err := json.Marshal(f)
 	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: name}, ContractVersion: 1,
-		SourceVersion: b.Manifest().Version + ".query-" + strconv.Itoa(version), Requires: []platform.AssetRef{{App: ID, Kind: platform.AssetObject, Name: f.Object}}, Body: body}, err
+		SourceVersion: b.Manifest().Version + ".query-" + strconv.Itoa(version), Requires: f.Dependencies(), Body: body}, err
 }
 
 func (b *Build) queryAssets() ([]platform.ReleaseAsset, error) {
@@ -59,7 +59,7 @@ func (b *Build) InstallQueryAsset(asset platform.ReleaseAsset) error {
 	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal ||
 		asset.ContractVersion != 1 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetQuery ||
 		json.Unmarshal(asset.Body, &f) != nil || f.Name != asset.Ref.Name ||
-		f.definition().Check() != nil || len(asset.Requires) != 1 || asset.Requires[0] != (platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Object}) {
+		f.definition().Check() != nil || !slices.Equal(asset.Requires, f.definition().Dependencies()) {
 		return fmt.Errorf("invalid builder query asset %s", asset.Ref)
 	}
 	if _, exists := b.queries[f.Name]; exists {
@@ -90,7 +90,8 @@ func (b *Build) queryDraftAssets(id string) (before, after []platform.ReleaseAss
 		hadPrior = true
 	}
 	next = platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: f.Name}
-	if err = b.checkQuery(f); err != nil {
+	f, err = b.bindQuery(f)
+	if err != nil {
 		return
 	}
 	if f.Version >= 64 {
@@ -142,13 +143,32 @@ func (b *Build) prepareQueryReleasePublications(assets []platform.ReleaseAsset) 
 			continue
 		}
 		var q platform.NamedQuery
-		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Object != record.Object {
+		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Object != record.Object || q.Interface != record.Interface {
 			return nil, fmt.Errorf("invalid next query version")
 		}
-		if err := b.host.ValidateInstallQuery(q); err != nil {
+		if q.Interface != "" {
+			var overlays []platform.EntityInfo
+			for _, selected := range assets {
+				if selected.Ref.App != ID || selected.Ref.Kind != platform.AssetObject {
+					continue
+				}
+				var object Object
+				if json.Unmarshal(selected.Body, &object) != nil || TypeOf(object.Name) != selected.Ref.Name {
+					continue
+				}
+				info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+				if err != nil {
+					return nil, err
+				}
+				overlays = append(overlays, info)
+			}
+			if _, err := b.host.BindInterfaceQuery(q, overlays...); err != nil {
+				return nil, err
+			}
+		} else if err := b.host.ValidateInstallQuery(q); err != nil {
 			return nil, err
 		}
-		frozen := Query{Record: record.Record, Name: q.Name, Title: q.Title, Description: q.Description, Object: q.Object, By: q.By, Domain: q.Domain, Sort: q.Sort, Limit: q.Limit, State: "published", Version: version}
+		frozen := Query{Record: record.Record, Name: q.Name, Title: q.Title, Description: q.Description, Object: q.Object, Interface: q.Interface, InterfaceShape: q.InterfaceShape, Implementations: q.Implementations, By: q.By, Domain: q.Domain, Sort: q.Sort, Limit: q.Limit, State: "published", Version: version}
 		record.State, record.Version, record.Published = "published", version, published(frozen)
 		record.Versions = append(slices.Clone(record.Versions), record.Published)
 		raw, _ := json.Marshal(record)
