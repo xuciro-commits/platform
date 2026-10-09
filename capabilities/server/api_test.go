@@ -95,7 +95,8 @@ func TestAPIContract(t *testing.T) {
 		}
 	}
 	// The web edge's types are generated, never edited: stale types fail here
-	// (go run ./cmd/api-types writes them again).
+	// (go run ./cmd/api-types writes them again). Both files are one pipeline:
+	// the host's API types and the enterprise SDK over the same declarations.
 	const generated = "../../web/packages/kernel/src/gen/host.ts"
 	want, err := os.ReadFile(generated)
 	if err != nil {
@@ -105,6 +106,14 @@ func TestAPIContract(t *testing.T) {
 	static.Handler()
 	if got := TypeScript(static.OpenAPI(nil, nil), KernelModules("../../web/packages/kernel/src/gen")); got != string(want) {
 		t.Errorf("%s is stale: run go run ./cmd/api-types", generated)
+	}
+	const sdk = "../../web/packages/kernel/src/gen/enterprise-sdk.ts"
+	wantSDK, err := os.ReadFile(sdk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := enterprise.SDK(); got != string(wantSDK) {
+		t.Errorf("%s is stale: run go run ./cmd/api-types", sdk)
 	}
 }
 

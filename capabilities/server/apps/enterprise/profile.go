@@ -3,9 +3,9 @@ package enterprise
 import "platformserver/apps/enterprise/uaf"
 
 // The Enterprise Core Profile (ADR-0067 D1): the UAF stereotypes a tenant
-// meets first, with the words people use for them and the grid cells they are
-// drawn in. Everything else in the metamodel stays loadable and storable; it
-// just has no palette entry until a profile opens it.
+// meets first, with the words people use for them and the description views
+// they are drawn in. Everything else in the metamodel stays loadable and
+// storable; it just has no palette entry until a profile opens it.
 
 // ProfileEntry is one stereotype as the palette offers it.
 type ProfileEntry struct {
@@ -17,15 +17,20 @@ type ProfileEntry struct {
 	Icon       string   `json:"icon,omitempty"`
 }
 
-// GridCell is a UAF view: a domain × aspect cell with what it draws.
-type GridCell struct {
-	ID            string   `json:"id"` // "Pr-Sr"
+// Viewpoint is one ARIS description view (ADR-0093): the whole model seen from
+// one question — who is where, what it holds, what it can do, what it offers,
+// how it is run. Views are projections of the one model, never stores of their
+// own: Elements declares the slice, Context names the stereotypes drawn only
+// beside a slice element (the organisation is a fact of every view, not all of
+// it in every drawing), and Relationships derive from the contracts just as a
+// grid cell's did (ADR-0085 D2).
+type Viewpoint struct {
+	ID            string   `json:"id"` // "organization"
 	Title         string   `json:"title"`
-	Domain        string   `json:"domain"`
-	Aspect        string   `json:"aspect"`
-	Elements      []string `json:"elements"`      // stereotypes placed in it
-	Relationships []string `json:"relationships"` // relationship stereotypes drawn in it
-	Scales        []string `json:"scales,omitempty"`
+	Note          string   `json:"note"`              // the question the view answers
+	Elements      []string `json:"elements"`          // the stereotypes it draws as its own
+	Context       []string `json:"context,omitempty"` // drawn only beside an element of the slice
+	Relationships []string `json:"relationships"`     // derived: contracts among Elements+Context
 }
 
 func Profile() []ProfileEntry {
@@ -47,6 +52,7 @@ func Profile() []ProfileEntry {
 		{Stereotype: "ActualProjectMilestone", Title: "Milestone", Plural: "Milestones", Icon: "milestone", Scales: []string{"L", "XL"}},
 		{Stereotype: "Standard", Title: "Standard", Plural: "Standards", Icon: "book", Scales: []string{"L", "XL"}},
 		{Stereotype: "Risk", Title: "Risk", Plural: "Risks", Icon: "alert", Scales: []string{"L", "XL"}},
+		{Stereotype: "InformationElement", Title: "Information", Plural: "Information", Icon: "database", Scales: []string{"M", "L", "XL"}},
 	}
 }
 
@@ -54,18 +60,18 @@ func Profile() []ProfileEntry {
 // modeller of an organisation, its places, resources, capabilities, goals,
 // processes and projects actually joins. Every other UAF relationship stays
 // available through the contracts, and a model may hold one; it is just not
-// offered by a cell.
+// offered by a view.
 var vocabulary = map[string]bool{
 	Placement: true, Membership: true, FillsPost: true, Performs: true, Exhibits: true,
 	Owns: true, "OwnsProcess": true, "Enables": true, "MotivatedBy": true,
 	"MilestoneDependency": true, "ProjectSequence": true,
 }
 
-// Grid are the UAF view cells: each draws a set of elements, and the
-// relationships between them are derived — a relation appears in a cell only
-// when the contracts admit some pair of the cell's own elements (ADR-0085 D2).
-// A cell can therefore never offer a relation its elements cannot use.
-func Grid(mm *uaf.Metamodel) []GridCell {
+// Views are the five description views (ADR-0093): one model, five questions.
+// Each declares the stereotypes it draws as its own and the ones it draws only
+// as context; the relationships are derived — a view offers a relation only
+// when the contracts admit some pair of its own slice (ADR-0085 D2).
+func Views(mm *uaf.Metamodel) []Viewpoint {
 	contracts := Contracts(mm)
 	drawable := func(elements []string) []string {
 		var out []string
@@ -82,23 +88,25 @@ func Grid(mm *uaf.Metamodel) []GridCell {
 		}
 		return out
 	}
-	cells := []GridCell{
-		{ID: "Pr-Sr", Title: "Personnel structure", Domain: "Personnel", Aspect: "Structure", Elements: []string{Organization, Post, Person}},
-		{ID: "Pr-Cn", Title: "Posts and responsibilities", Domain: "Personnel", Aspect: "Connectivity", Elements: []string{Post, "Responsibility", Person}, Scales: []string{"M", "L", "XL"}},
-		{ID: "St-Tx", Title: "Capabilities", Domain: "Strategic", Aspect: "Taxonomy", Elements: []string{Capability}},
-		{ID: "St-Sr", Title: "Goals and capabilities", Domain: "Strategic", Aspect: "Structure", Elements: []string{Goal, "EnterpriseObjective", "Opportunity", Capability, Organization}, Scales: []string{"L", "XL"}},
-		{ID: "Rs-Sr", Title: "Sites and resources", Domain: "Resources", Aspect: "Structure", Elements: []string{Location, Resource, "System", Organization}},
-		{ID: "Sv-Tx", Title: "Services", Domain: "Services", Aspect: "Taxonomy", Elements: []string{"Service", Organization}, Scales: []string{"L", "XL"}},
-		{ID: "Op-Pr", Title: "Processes", Domain: "Operational", Aspect: "Processes", Elements: []string{"OperationalActivity", Organization, Capability}, Scales: []string{"M", "L", "XL"}},
-		{ID: "Pj-Rm", Title: "Projects", Domain: "Projects", Aspect: "Roadmap", Elements: []string{Project, "ActualProjectMilestone", Organization}},
+	views := []Viewpoint{
+		{ID: "organization", Title: "Organisation and places", Note: "Who is where: organisations, posts, people, responsibilities, sites and equipment.",
+			Elements: []string{Organization, Post, Person, "Responsibility", Location, Resource}},
+		{ID: "data", Title: "Information", Note: "What the enterprise holds: information elements and where they belong.",
+			Elements: []string{"InformationElement"}, Context: []string{Organization}},
+		{ID: "function", Title: "Capabilities and goals", Note: "What it aims to do and can do: goals, objectives, opportunities, capabilities and the systems that support them.",
+			Elements: []string{Capability, Goal, "EnterpriseObjective", "Opportunity", System}, Context: []string{Organization}},
+		{ID: "output", Title: "Services delivered", Note: "What it offers outside: services and who provides them.",
+			Elements: []string{"Service"}, Context: []string{Organization}},
+		{ID: "control", Title: "Processes, projects and rules", Note: "How it is run: processes, projects and milestones, standards and risks — the view that joins the others.",
+			Elements: []string{"OperationalActivity", Project, "ActualProjectMilestone", "Standard", "Risk"}, Context: []string{Organization}},
 	}
-	for i := range cells {
-		cells[i].Relationships = drawable(cells[i].Elements)
+	for i := range views {
+		views[i].Relationships = drawable(append(append([]string{}, views[i].Elements...), views[i].Context...))
 	}
-	return cells
+	return views
 }
 
-// holds reports whether any of the cell's element stereotypes is the named end
+// holds reports whether any of the view's element stereotypes is the named end
 // or a specialisation of it.
 func holds(mm *uaf.Metamodel, end string, elements []string) bool {
 	if end == "*" {

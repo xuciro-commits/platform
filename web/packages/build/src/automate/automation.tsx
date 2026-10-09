@@ -157,7 +157,7 @@ export function AutomationEditor({ id }: { id: string }) {
         {condition.condition?.op !== "exists" && <label className="grid gap-1 text-xs">{t("Value")}<Input value={String(condition.condition?.right?.value ?? "")} onChange={(event) => { const raw = event.target.value; const value = raw === "true" ? true : raw === "false" ? false : raw !== "" && !Number.isNaN(Number(raw)) ? Number(raw) : raw; setSteps({ ...condition, condition: { ...condition.condition!, right: { source: "literal", value } } }, effects); }} /></label>}
         <Button variant="ghost" size="sm" onClick={() => { setSteps(undefined, effects); setChosen("trigger"); }}><Trash2 />{t("Remove the condition")}</Button>
       </div>}
-      {chosenStep && <WorkflowInspector step={chosenStep} steps={draft.steps} capabilities={capabilities} flows={flowQuery.data ?? []}
+      {chosenStep && <WorkflowInspector step={chosenStep} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []}
         onChange={(patch) => setSteps(condition, effects.map((step) => step.name === chosen ? { ...step, ...patch } : step))}
         onRename={(name) => { if (/^[a-z][a-z0-9]*$/.test(name) && !draft.steps.some((step) => step.name === name)) { setSteps(condition, effects.map((step) => step.name === chosen ? { ...step, name } : step)); setChosen(name); } }}
         onMakeEntry={() => {}} onClose={() => setChosen("trigger")} />}

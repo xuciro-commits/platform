@@ -5,12 +5,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/enterprise"
 	"platformserver/platform"
 )
+
+// enterpriseApp is the tenant's enterprise modeling app, when one is mounted:
+// the typed query and resolve reads (ADR-0094) dispatch into it.
+func enterpriseApp(t *Tenant) *enterprise.Enterprise {
+	d, _ := t.app(enterprise.ID).(*enterprise.Enterprise)
+	return d
+}
 
 // routesRecords serves records, files, links, aggregates, search, knowledge and transcripts.
 func (h *Host) routesRecords(rt *routes) {
@@ -147,6 +156,50 @@ func (h *Host) routesRecords(rt *routes) {
 			return
 		}
 		WriteJSON(w, http.StatusOK, groups)
+	})
+	rt.handle(Route{Pattern: "GET /v1/enterprise-query", Summary: "Elements of the enterprise model by stereotype, kind, words and day: the typed read (ADR-0094 D1)", Answer: enterprise.EnterpriseQueryResult{}, Query: []Param{{"stereotype", "UAF stereotypes, comma-separated; empty: all"}, {"kind", "Exact kind within the stereotype, e.g. line, workshop"}, {"q", "Words to find in id, name, short name or kind"}, {"alive", "\"all\" takes closed and future elements too; a YYYY-MM-DD day reads that day; empty: today"}, {"limit", "Elements to return (default 200, at most 1000)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if err := t.admits(m); err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		limit := 200
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil || n < 1 || n > 1000 {
+				Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "limit is a number between 1 and 1000"))
+				return
+			}
+			limit = n
+		}
+		app := enterpriseApp(t)
+		if app == nil {
+			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This tenant has no enterprise model"))
+			return
+		}
+		out, err := app.Query(strings.Split(r.URL.Query().Get("stereotype"), ","), r.URL.Query().Get("kind"), r.URL.Query().Get("q"),
+			r.URL.Query().Get("alive"), limit, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
+	rt.handle(Route{Pattern: "GET /v1/enterprise-resolve", Summary: "Named elements by id: stored references read back, closed elements included and marked (ADR-0094 D2)", Answer: enterprise.EnterpriseQueryResult{}, Query: []Param{{"ids", "Element ids, comma-separated (at most 100)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if err := t.admits(m); err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		app := enterpriseApp(t)
+		if app == nil {
+			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This tenant has no enterprise model"))
+			return
+		}
+		out, err := app.Resolve(strings.Split(r.URL.Query().Get("ids"), ","), h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
 	})
 	rt.handle(Route{Pattern: "GET /v1/context/{type}/{id}", Summary: "A record with its history, references, links, flows and tasks: the context graph (ADR-0021)", Answer: ContextView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		view, err := t.Context(&m, r.PathValue("type"), r.PathValue("id"), h.Now())

@@ -755,6 +755,22 @@ export type EnterpriseModel = {
   calendars?: Calendar[];
 };
 
+export type EnterpriseQueryElement = {
+  id: string;
+  stereotype: string;
+  name: string;
+  kind?: string;
+  shortName?: string;
+  legal?: boolean;
+  from?: string;
+  until?: string;
+  closed?: boolean;
+};
+
+export type EnterpriseQueryResult = {
+  elements: EnterpriseQueryElement[];
+};
+
 export type EnterpriseReference = {
   type: string;
   field: string;
@@ -951,16 +967,6 @@ export type Grant = {
   by?: string;
   reason?: string;
   at?: string;
-};
-
-export type GridCell = {
-  id: string;
-  title: string;
-  domain: string;
-  aspect: string;
-  elements: string[];
-  relationships: string[];
-  scales?: string[];
 };
 
 export type HistogramBucket = {
@@ -1276,7 +1282,7 @@ export type Metamodel = {
   profile: ProfileEntry[];
   stereotypes: Record<string, Stereotype>;
   enumerations: Record<string, Enumeration>;
-  grid: GridCell[];
+  views: Viewpoint[];
   contracts: Contract[];
 };
 
@@ -2128,6 +2134,7 @@ export type Process = {
   input?: unknown;
   inputSchema?: ValueSchema;
   steps: ProcessStep[];
+  lanes?: ProcessLane[];
   layout?: Record<string, NodePosition>;
   state: "draft" | "published";
   version?: number;
@@ -2146,10 +2153,16 @@ export type ProcessDiagnostics = {
   issues: ProcessDiagnostic[];
 };
 
+export type ProcessLane = {
+  name: string;
+  title?: string;
+};
+
 export type ProcessStep = {
   name: string;
   title?: string;
   kind: "payload" | "query" | "action" | "transform" | "branch" | "switch" | "foreach" | "while" | "fork" | "join" | "ask" | "wait" | "subflow" | "ai" | "compute" | "end" | "fail" | "break" | "continue";
+  lane?: string;
   inputs?: Record<string, Binding>;
   value?: Binding;
   target?: Binding;
@@ -3089,13 +3102,22 @@ export type Verdict = {
 export type View = {
   id: string;
   name: string;
-  grid: string;
+  viewpoint: string;
   kind?: string;
   elements: string[];
   layout?: Record<string, number[]>;
   context?: string[];
   pins?: Pin[];
   asOf?: string;
+};
+
+export type Viewpoint = {
+  id: string;
+  title: string;
+  note: string;
+  elements: string[];
+  context?: string[];
+  relationships: string[];
 };
 
 export type Word = {

@@ -6,10 +6,10 @@
 // IconGlyph, so an unknown name is a default glyph rather than a blank.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  Activity, AlertTriangle, Award, BadgeCheck, BarChart3, Bell, BookOpen, Bookmark, Boxes, Briefcase, Building, Building2, CalendarDays, ClipboardList, Clock, Cog,
-  Database, FileSpreadsheet, FileText, Filter, Flag, Folder, FolderTree, Factory, Gauge, GitBranch, Globe2, Handshake, Home, Hotel, IdCard, Layers, LayoutGrid,
-  ListOrdered, Mail, MapPin, MessageSquare, Network, Package, QrCode, Rocket, Search, Server, Settings2, ShieldAlert, Smartphone, Sparkles, Store, Table2, Tag,
-  Target, TrendingUp, Truck, UserCheck, UserRound, Users, Warehouse, Workflow, Wrench,
+  Activity, AlertTriangle, Award, BadgeCheck, BarChart3, Bell, BookOpen, Bookmark, Boxes, Braces, Briefcase, Building, Building2, CalendarDays, ClipboardList, Clock, Cog,
+  Crown, Database, DoorOpen, FileSpreadsheet, FileText, Filter, Flag, Folder, FolderTree, Factory, Gauge, GitBranch, Globe2, Handshake, Home, Hotel, IdCard, Landmark, Layers, LayoutGrid,
+  ListOrdered, Mail, MapPin, MessageSquare, Network, Package, QrCode, Rocket, Scale, Search, Server, Settings2, ShieldAlert, Smartphone, Sparkles, Store, Table2, Tag,
+  Target, TrendingUp, Truck, UserCheck, UserRound, Users, Warehouse, Workflow, Wrench, Zap,
 } from "lucide-react";
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
@@ -29,6 +29,10 @@ export const iconGlyphs: Record<IconName, ReactNode> = {
   network: <Network />, server: <Server />, search: <Search />, filter: <Filter />, tag: <Tag />,
   "file-text": <FileText />, folder: <Folder />, "folder-tree": <FolderTree />, bookmark: <Bookmark />, "book-open": <BookOpen />, mail: <Mail />,
   "message-square": <MessageSquare />, bell: <Bell />, milestone: <Award />,
+  braces: <Braces />, zap: <Zap />,
+  // UAF's organization picture needs these (ADR-0090 D2): the profile's book
+  // and user, plus the kinds' landmark, crown, door and scale.
+  landmark: <Landmark />, crown: <Crown />, door: <DoorOpen />, scale: <Scale />, book: <BookOpen />, user: <UserRound />,
   // Names the kit used before the vocabulary grew (ADR-0036 D3): stored
   // applications keep their glyph, the picker offers the current set.
   clipboard: <ClipboardList />, people: <Users />, calendar: <CalendarDays />, map: <MapPin />,
@@ -37,13 +41,13 @@ export const iconGlyphs: Record<IconName, ReactNode> = {
 
 /** The groups the picker offers, in the order a person looks for things. */
 export const iconGroups: { id: string; title: string; names: IconName[] }[] = [
-  { id: "structure", title: "Structure and places", names: ["building-2", "building", "factory", "warehouse", "store", "hotel", "home", "map-pin", "truck", "globe", "grid", "layers"] },
-  { id: "people", title: "People and posts", names: ["users", "user-round", "user-check", "id-card", "badge", "briefcase", "handshake", "award"] },
-  { id: "work", title: "Work and time", names: ["workflow", "list-ordered", "clipboard-list", "calendar-days", "clock", "target", "trending-up", "flag"] },
+  { id: "structure", title: "Structure and places", names: ["building-2", "building", "factory", "warehouse", "store", "hotel", "home", "map-pin", "truck", "globe", "grid", "layers", "landmark", "door", "scale"] },
+  { id: "people", title: "People and posts", names: ["users", "user-round", "user-check", "id-card", "badge", "briefcase", "handshake", "award", "user", "crown"] },
+  { id: "work", title: "Work and time", names: ["workflow", "list-ordered", "clipboard-list", "calendar-days", "clock", "target", "trending-up", "flag", "braces", "zap"] },
   { id: "things", title: "Things", names: ["boxes", "package", "wrench", "cog", "qr-code", "smartphone"] },
   { id: "data", title: "Data and evidence", names: ["chart", "database", "table", "spreadsheet", "gauge", "activity", "network", "server"] },
   { id: "find", title: "Find and sign", names: ["search", "filter", "tag", "bookmark"] },
-  { id: "documents", title: "Documents and messages", names: ["file-text", "folder", "folder-tree", "book-open", "mail", "message-square", "bell"] },
+  { id: "documents", title: "Documents and messages", names: ["file-text", "folder", "folder-tree", "book-open", "book", "mail", "message-square", "bell"] },
   { id: "change", title: "Change", names: ["git-branch", "rocket", "sparkles", "settings-2"] },
   { id: "govern", title: "Risk and control", names: ["shield-alert", "alert"] },
 ];

@@ -52,12 +52,21 @@ export { Sheet } from "./primitives/sheet";
 export { Workspace, useWorkspace, useViewCall, useViewTitle, useUnsavedChanges, notify, type Applications, type PlatformApplication, type Workspaces, type Rail, type RecentEntry, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";
-export { Graph, layout, type GraphNode, type GraphEdge } from "./graph/Graph";
-export { NodeCanvas, canvasNodeHeight, canvasNodeWidth, canvasPlacement, validateCanvasConnection, type NodeCatalog, type NodeKind, type NodePort, type CanvasNode, type CanvasEdge, type CanvasPosition, type CanvasAddContext, type CanvasHistory, type BlockStatus, type BlockDiagnostic } from "./graph/NodeCanvas";
-export { BlockCanvas, type BlockCanvasProps } from "./graph/BlockCanvas";
-export { DiagramCanvas, type DiagramCanvasProps, type DiagramAction, type DiagramNode, type DiagramEdge } from "./graph/DiagramCanvas";
-export { diagramLayout, diagramLayouts, type DiagramLayout } from "./graph/diagramLayouts";
-export { FlowView, FlowGraph, FlowReleaseBinding, flowStates, type FlowDefinition, type FlowInstanceData, type FlowStep, type FlowToken, type FlowTrace } from "./flows/FlowView";
+// One drawing surface, two families (ADR-0086): a process joins activities through
+// typed ports and reads as BPMN; a relationship joins things and does not.
+export { type CanvasAction, type CanvasBox, type CanvasDirection, type CanvasPosition } from "./graph/core/types";
+export { useCanvasLayout } from "./graph/core/layout/use-layout";
+export { laneBands, layeredLayout, type GraphSize, type LaneAssignment, type LaneBand } from "./graph/core/layered";
+export { FlowCanvas, type FlowCanvasNode, type FlowCanvasProps } from "./graph/flow/FlowCanvas";
+export { arrangeFlow, useFlowArrangement, type ArrangeOptions } from "./graph/flow/arrange";
+export { FlowSteps, type FlowStepNode, type FlowStepEdge } from "./graph/flow/FlowSteps";
+export { FlowGraph, FlowRun, FlowReleaseBinding, flowStates, type FlowDefinition, type FlowInstanceData, type FlowToken, type FlowTrace } from "./graph/flow/FlowProcess";
+export { FLOW_NODE_DROP, checkFlowEdges, flowBlockHeight, flowNodeBox, flowNodeHeight, flowNodeWidth, flowPlacement, flowPortAccepts, flowPortFits, flowShapeBox, validateFlowConnection,
+  type FlowAddContext, type FlowCatalog, type FlowConnectionIssue, type FlowDiagnostic, type FlowEdge, type FlowHistory, type FlowLane, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort } from "./graph/flow/model";
+export { flowNodeClassOf, flowNodeClasses, flowNodeGroup, flowNodeIcon, flowShape, loops, notationOf, notationTitle, type FlowBoundary, type FlowNodeClass, type FlowNotation, type FlowShape } from "./graph/flow/notation";
+export { RelationCanvas, type RelationCanvasProps } from "./graph/relation/RelationCanvas";
+export { relationNodeSize, relationLayouts, relationNodeClasses, relationNodeClassOf, relationNodeCaption, type RelationBadge, type RelationEdge, type RelationFact, type RelationLayout, type RelationNode } from "./graph/relation/model";
+export { neighborhoodPositions, relationLayout, type NeighborhoodLayoutGroup, type RelationLayoutSize } from "./graph/relation/layouts";
 export { Chart, useChartData, type ChartSource } from "./charts/Chart";
 export { Pivot, groupDomain } from "./charts/Pivot";
 export { aggregateQuery, aggregateValues, columnOf, type ChartSpec, type ChartData, type Channels, type Encoding, type Mark, type MeasureType, type AggregateOp, type TimeUnit, type AggregateData, type AggregateColumn, type AggregateQuery } from "./charts/spec";
@@ -106,7 +115,6 @@ export {RecordAvatarStack,type RecordAvatarStackProps} from "./records/RecordAva
 export {RecordResourceList,type RecordResourceListProps,type ResourceStatusTone} from "./records/RecordResourceList";
 export {SearchAround,type SearchAroundProps,type SearchAroundPathEntry,type SearchAroundRelation,type SearchAroundWindow} from "./records/SearchAround";
 export {RecordNeighborhood,type RecordNeighborhoodProps,type RecordNeighborhoodGroup} from "./records/RecordNeighborhood";
-export {neighborhoodPositions,type NeighborhoodLayoutGroup} from "./graph/neighborhood";
 export {RecordComparison} from "./records/RecordComparison";
 export {ApprovalInbox,type ApprovalInboxProps,type ApprovalInboxRow} from "./records/ApprovalInbox";
 export type {RecordHistoryProps} from "./records/Records";

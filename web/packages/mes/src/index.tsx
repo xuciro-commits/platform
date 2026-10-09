@@ -4,22 +4,33 @@
 import "./i18n";
 import { RecordDetail, Records, defineApp, newId, useHost, useRead } from "@platform/app";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, Graph, PageHeader, Panel, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type GraphEdge, type GraphNode,
+  Button, DataTable, Dialog, EntityCard, EntityForm, FlowSteps, PageHeader, Panel, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type FlowStepEdge, type FlowStepNode,
  t } from "@platform/ui";
-import { Activity, ClipboardList, Factory, ListOrdered, Plus, ShieldAlert } from "lucide-react";
+import { Activity, ClipboardList, Factory, ListOrdered, Plus, Route, ShieldAlert } from "lucide-react";
+import { queryElements } from "@platform/kernel";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
-// The shapes of the MES's reads these views show (apps/mes/server).
-type Operation = { step: number; name: string; workCenter: string };
-type Product = { id: string; name: string; routing: string; operations: Operation[] };
-type WorkCenter = { id: string; name: string; line: string; resources: string[] };
-type Master = { products: Product[]; workCenters: WorkCenter[] };
-type Order = { id: string; product: string; quantity: number; sfcs: string[]; planned?: string;
+// The shapes of the MES's reads these views show (apps/mes/server, ADR-0088).
+/** One process setpoint an operation must hold: what to set, in what unit, and the
+ * window it stays inside. */
+type Parameter = { name: string; title?: string; type?: "setpoint" | "range" | "limit" | "note"; unit?: string; target?: number; min?: number; max?: number };
+/** One step of a routing. Its number is its identity and its order — 10, 20, 30 —
+ * so a lot says where it stands by number, never by counting array positions.
+ * `capable` is computed on the server: the resources that can run this operation. */
+type Operation = { number: number; name: string; workCenter: string; requires?: string[]; parameters?: Parameter[]; capable?: string[] };
+type Routing = { id: string; name: string; version: number; operations: Operation[] };
+type Product = { id: string; name: string; routing: string };
+type Resource = { id: string; name?: string; workCenter: string; capabilities?: string[] };
+type WorkCenter = { id: string; name: string; line: string };
+type Master = { products: Product[]; routings: Routing[]; workCenters: WorkCenter[]; resources: Resource[] };
+type Order = { id: string; product: string; quantity: number; sfcs: string[]; planned?: string; place?: string;
   erp?: "sent" | "confirmed" | "refused" | "failed"; confirmation?: string; erpDetail?: string; resent?: number };
 type SFC = {
-  id: string; order: string; product: string; quantity?: number; step: number; state: "queued" | "active" | "hold" | "done" | "scrapped";
-  resource?: string; revision: number; ncs: { step: number; code: string; by: string }[]; signatures: { action: string; meaning: string; by: string }[];
+  id: string; order: string; product: string; quantity?: number; state: "queued" | "active" | "hold" | "done" | "scrapped";
+  routing: string; routingVersion: number; operation: number;
+  resource?: string; revision: number; ncs: { operation: number; code: string; by: string }[]; signatures: { action: string; meaning: string; by: string }[];
 };
 type Planned = { erpId: string; number: string; product: string; quantity: number; due: string; state: string };
 type Downtime = { id: string; resource: string; start: string; end?: string; reason?: string; needsCheck?: boolean };
@@ -49,8 +60,30 @@ function usePlant() {
   return { ...useHost(), master: useRead<Master>("/v1/master") };
 }
 
-function routing(master: Master | undefined, productId: string) {
-  return master?.products.find((p) => p.id === productId);
+/** The routing a lot was released against: its version is fixed at release, so a
+ * later revision of the routing never moves a lot already on the floor. */
+function released(master: Master | undefined, sfc: Pick<SFC, "routing" | "routingVersion">) {
+  return master?.routings.find((r) => r.id === sfc.routing && r.version === sfc.routingVersion);
+}
+
+/** The newest version of a product's routing — the one a new release would take. */
+function routingOf(master: Master | undefined, productId: string) {
+  const product = master?.products.find((p) => p.id === productId);
+  return master?.routings.filter((r) => r.id === product?.routing).sort((a, b) => b.version - a.version)[0];
+}
+
+const operationAt = (routing: Routing | undefined, number: number) => routing?.operations.find((o) => o.number === number);
+const centerOf = (master: Master | undefined, id?: string) => master?.workCenters.find((w) => w.id === id);
+const resourceOf = (master: Master | undefined, id: string) => master?.resources.find((r) => r.id === id);
+
+/** One parameter as the operator reads it: the number to hold in its unit, and the
+ * window or ceiling that makes it a pass. */
+function parameterValue(p: Parameter) {
+  const unit = p.unit ? ` ${p.unit}` : "";
+  if (p.type === "note") return t("Read and confirm");
+  if (p.type === "range") return `${p.min}${unit} – ${p.max}${unit} · ${t("target")} ${p.target}${unit}`;
+  if (p.type === "limit") return `${t("at most")} ${p.max}${unit}`;
+  return `${p.target}${unit}`;
 }
 
 function PlannedOrders() {
@@ -66,7 +99,7 @@ function PlannedOrders() {
   const [releasing, setReleasing] = useState<Planned>();
   const columns: ColumnDef<Planned & { released: string; erp: string; confirmation: string }, any>[] = [
     { accessorKey: "number", header: t("ERP order"), meta: { width: 140 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { accessorKey: "product", header: t("Product"), cell: (c) => `${c.getValue()} · ${routing(master, c.getValue())?.name ?? ""}` },
+    { accessorKey: "product", header: t("Product"), cell: (c) => `${c.getValue()} · ${master?.products.find((p) => p.id === c.getValue())?.name ?? ""}` },
     { accessorKey: "quantity", header: t("Qty"), meta: { width: 70, align: "right" } },
     { accessorKey: "due", header: t("Due"), meta: { width: 110 } },
     { accessorKey: "released", header: t("Released as"), meta: { width: 120 } },
@@ -82,7 +115,12 @@ function PlannedOrders() {
       <PageHeader title={t("Planned orders")} description={t("Production orders the ERP released to the plant (production.orders/1); release a shop order against one.")} />
       <DataTable data={planned} columns={columns} getRowId={(p) => p.erpId} height="calc(100dvh - 190px)" loading={!plannedOrders} />
       <Dialog open={!!releasing} onOpenChange={(o) => !o && setReleasing(undefined)} title={t("Release {id}", { id: releasing?.number ?? "" })}>
-        {releasing && (
+        {releasing && (<>
+          {/* The version a release fixes its lots to is the one in force now. */}
+          {(() => { const takes = routingOf(master, releasing.product);
+            return <p className="mb-2 text-xs text-muted">{takes
+              ? t("Its lots are fixed to {routing} version {version}; a later revision will not move them.", { routing: takes.id, version: takes.version })
+              : t("This product has no routing.")}</p>; })()}
           <EntityForm schema={z.object({ order: z.string().regex(/^SO-\d+$/, t("Format SO-123")), sfcs: z.number().int().min(1).max(releasing.quantity) })}
             defaultValues={{ order: `SO-${releasing.erpId.replace(/\D/g, "")}`, sfcs: Math.min(4, releasing.quantity) }}
             fields={[{ name: "order", label: t("Shop order") }, { name: "sfcs", label: t("SFCs (lots)"), kind: "number" }]}
@@ -92,7 +130,7 @@ function PlannedOrders() {
                 { product: releasing.product, quantity: releasing.quantity, sfcs: v.sfcs, planned: releasing.erpId });
               setReleasing(undefined);
             }} />
-        )}
+        </>)}
       </Dialog>
     </>
   );
@@ -103,20 +141,27 @@ function PlannedOrders() {
 // named. The host checks the rest: the product's line is the supervisor's, and
 // a named planned order is open, for the product and enough quantity.
 function ShopOrders() {
-  const { can, decide, master } = usePlant();
+  const { can, decide, master, client } = usePlant();
   const orders = useRead<{ records: Order[] }>(ordersQuery)?.records ?? [];
   const open = (useRead<Planned[]>("/v1/planned-orders") ?? [])
     .filter((p) => p.state !== "sent" && p.state !== "confirmed" && !orders.some((o) => o.planned === p.erpId));
   const [releasing, setReleasing] = useState(false);
   const products = master?.products ?? [];
-  const schema = z.object({ order: z.string().min(1), product: z.string().min(1), quantity: z.number().int().min(1), sfcs: z.number().int().min(1), planned: z.string().optional() })
+  // The enterprise model as the form's place options: the typed query contract
+  // (ADR-0094) over the two place families — organisation units (the demo types
+  // its plant and lines there) and locations from a pattern.
+  const places = useQuery({
+    queryKey: ["enterprise", "query", "places"],
+    queryFn: () => queryElements(client.get, { stereotype: ["ActualLocation", "ActualOrganization"] }),
+  }).data?.elements ?? [];
+  const schema = z.object({ order: z.string().min(1), product: z.string().min(1), quantity: z.number().int().min(1), sfcs: z.number().int().min(1), planned: z.string().optional(), place: z.string().optional() })
     .refine((v) => v.sfcs <= v.quantity, { path: ["sfcs"], message: t("At most the quantity") });
   return (
     <>
       <Records type="mes.order" covers={["mes.order.release"]} actions={can("mes.order.release") && <Button variant="primary" onClick={() => setReleasing(true)}><Plus />{t("Release shop order")}</Button>} />
       <Dialog open={releasing} onOpenChange={setReleasing} title={t("Release shop order")}>
         {releasing && (
-          <EntityForm schema={schema} defaultValues={{ order: newId("SO"), product: products[0]?.id ?? "", quantity: 1, sfcs: 1, planned: "" }}
+          <EntityForm schema={schema} defaultValues={{ order: newId("SO"), product: products[0]?.id ?? "", quantity: 1, sfcs: 1, planned: "", place: "" }}
             fields={[
               { name: "order", label: t("Shop order") },
               { name: "product", label: t("Product"), kind: "select", options: products.map((p) => ({ value: p.id, label: `${p.id} · ${p.name}` })) },
@@ -124,11 +169,14 @@ function ShopOrders() {
               { name: "sfcs", label: t("SFCs (lots)"), kind: "number" },
               { name: "planned", label: t("Planned order"), kind: "select",
                 options: [{ value: "", label: t("None: the plant's own order") }, ...open.map((p) => ({ value: p.erpId, label: `${p.number} · ${p.product} × ${p.quantity}` }))] },
+              { name: "place", label: t("Place in the model"), kind: "select",
+                options: [{ value: "", label: t("None: not placed in the model") }, ...places.map((p) => ({ value: p.id, label: `${p.name}${p.kind ? ` · ${p.kind}` : ""}` }))] },
             ]}
             submitLabel={t("Release")} onCancel={() => setReleasing(false)}
             onSubmit={async (v) => {
-              const { order, planned, ...rest } = v;
-              if (await decide("mes.order.release", { type: "mes.order", id: order }, planned ? { ...rest, planned } : rest)) setReleasing(false);
+              const { order, planned, place, ...rest } = v;
+              if (await decide("mes.order.release", { type: "mes.order", id: order },
+                { ...rest, ...(planned ? { planned } : {}), ...(place ? { place } : {}) })) setReleasing(false);
             }} />
         )}
       </Dialog>
@@ -153,8 +201,8 @@ function SFCTable({ initial = "work", title, description }: { initial?: keyof ty
     { accessorKey: "order", header: t("Shop order"), meta: { width: 120 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "product", header: t("Product"), meta: { width: 90 } },
     { accessorKey: "quantity", header: t("Quantity"), meta: { width: 80, align: "right" } },
-    { id: "operation", header: t("Operation"), accessorFn: (s) => { const op = routing(master, s.product)?.operations[s.step]; return op ? `${op.step} ${op.name}` : ""; } },
-    { id: "workCenter", header: t("Work center"), meta: { width: 110 }, accessorFn: (s) => routing(master, s.product)?.operations[s.step]?.workCenter ?? "" },
+    { id: "operation", header: t("Operation"), accessorFn: (s) => { const op = operationAt(released(master, s), s.operation); return op ? `${op.number} ${op.name}` : ""; } },
+    { id: "workCenter", header: t("Work center"), meta: { width: 110 }, accessorFn: (s) => centerOf(master, operationAt(released(master, s), s.operation)?.workCenter)?.name ?? "" },
     { accessorKey: "resource", header: t("Resource"), meta: { width: 100 } },
     { accessorKey: "state", header: t("Status"), meta: { width: 100 }, cell: (c) => <StatusTag status={c.getValue()} registry={sfcStatus} /> },
   ];
@@ -171,23 +219,32 @@ function SFCTable({ initial = "work", title, description }: { initial?: keyof ty
   );
 }
 
-// The routing drawn as a graph (#122): the operations an SFC went through, the
-// one it is at and how it stands there, and the nonconformances logged on each.
-function RoutingGraph({ sfc, operations }: { sfc: SFC; operations: Operation[] }) {
-  const ended = sfc.state === "done" || sfc.state === "scrapped";
-  const nodes: GraphNode[] = operations.map((o, i) => {
-    const ncs = sfc.ncs.filter((n) => n.step === i).map((n) => n.code);
-    const here = i === sfc.step && !ended;
+// The routing drawn as a process (#122, ADR-0086 D4, ADR-0087 D4): one lane per
+// work center it touches, one step per operation. Without an SFC it is the routing
+// as designed; with one it also shows where the lot stands, how it stands there and
+// the nonconformances logged on each operation.
+function RoutingFlow({ routing, master, sfc, label }: { routing?: Routing; master?: Master; sfc?: SFC; label: string }) {
+  const operations = routing?.operations ?? [];
+  const lanes = [...new Set(operations.map((o) => o.workCenter))].map((id) => ({ id, title: centerOf(master, id)?.name ?? id }));
+  const ended = !sfc || sfc.state === "done" || sfc.state === "scrapped";
+  const position = (number: number) => operations.findIndex((o) => o.number === number);
+  const nodes: FlowStepNode[] = operations.map((o) => {
+    const ncs = sfc?.ncs.filter((n) => n.operation === o.number).map((n) => n.code) ?? [];
+    const here = !!sfc && o.number === sfc.operation && !ended;
+    const past = !!sfc && (position(sfc.operation) > position(o.number) || sfc.state === "done");
     return {
-      id: String(i), label: `${o.step} ${o.name}`, current: here,
-      detail: [o.workCenter, ...(here ? [sfcStatus[sfc.state]?.label ?? sfc.state] : []), ...(ncs.length ? [`NC ${ncs.join(", ")}`] : [])].join(" · "),
-      tone: here ? (sfc.state === "hold" ? "warning" : "info") : i < sfc.step || sfc.state === "done" ? "success" : i === sfc.step && sfc.state === "scrapped" ? "danger" : ncs.length ? "warning" : undefined,
+      id: String(o.number), lane: o.workCenter, label: `${o.number} ${o.name}`, current: here, notation: "service-task",
+      detail: [centerOf(master, o.workCenter)?.name ?? o.workCenter, ...(here ? [sfcStatus[sfc.state]?.label ?? sfc.state] : []),
+        ...(ncs.length ? [`NC ${ncs.join(", ")}`] : [])].join(" · "),
+      tone: here ? (sfc?.state === "hold" ? "warning" : "info") : past ? "success"
+        : sfc?.state === "scrapped" && o.number === sfc.operation ? "danger" : ncs.length ? "warning" : undefined,
     };
   });
-  nodes.push({ id: "end", label: sfc.state === "scrapped" ? t("Scrapped") : t("Done"), tone: sfc.state === "done" ? "success" : sfc.state === "scrapped" ? "danger" : undefined });
-  const edges: GraphEdge[] = operations.map((_, i) => ({ from: String(i), to: i + 1 < operations.length ? String(i + 1) : "end" }));
-  if (sfc.state === "scrapped") edges.push({ from: String(sfc.step), to: "end", tone: "danger", dashed: true });
-  return <Graph nodes={nodes} edges={edges} height={200} label={t("Routing")} />;
+  nodes.push({ id: "end", label: sfc?.state === "scrapped" ? t("Scrapped") : t("Done"), notation: sfc?.state === "scrapped" ? "event-terminate" : "event-end",
+    tone: sfc?.state === "done" ? "success" : sfc?.state === "scrapped" ? "danger" : undefined });
+  const edges: FlowStepEdge[] = operations.map((o, i) => ({ from: String(o.number), to: i + 1 < operations.length ? String(operations[i + 1]!.number) : "end" }));
+  if (sfc?.state === "scrapped") edges.push({ from: String(sfc.operation), to: "end", tone: "danger", dashed: true });
+  return <FlowSteps nodes={nodes} edges={edges} lanes={lanes} height={Math.max(220, lanes.length * 92)} label={label} storeKey={`mes-routing:${routing?.id ?? sfc?.id ?? "routing"}`} />;
 }
 
 function SFCDetail({ id }: { id: string }) {
@@ -197,20 +254,26 @@ function SFCDetail({ id }: { id: string }) {
   const [code, setCode] = useState(ncCodes[0]!);
   const [signing, setSigning] = useState(false);
   if (!sfc) return <p className="text-sm text-muted">{t("Loading")} {id}…</p>;
-  const product = routing(master, sfc.product);
-  const op = product?.operations[sfc.step];
-  const wc = master?.workCenters.find((w) => w.id === op?.workCenter);
+  const product = master?.products.find((p) => p.id === sfc.product);
+  const routing = released(master, sfc);
+  const op = operationAt(routing, sfc.operation);
+  const wc = centerOf(master, op?.workCenter);
+  // Rework goes back to an operation of this lot's own routing, at or before where
+  // it stands — a list to pick from, not an index to remember.
+  const upto = (routing?.operations ?? []).slice(0, (routing?.operations.findIndex((o) => o.number === sfc.operation) ?? -1) + 1);
   const target = { type: "mes.sfc", id: sfc.id };
   return (
     <div className="grid max-w-5xl gap-4 lg:grid-cols-[1fr_1fr]">
       <EntityCard title={sfc.id} subtitle={`${sfc.order} · ${product?.name ?? sfc.product}`}
         status={<StatusTag status={sfc.state} registry={sfcStatus} />}
-        properties={[[t("Operation"), op ? `${op.step} ${op.name}` : "—"], [t("Work center"), wc ? `${wc.id} · ${t("line")} ${wc.line}` : "—"],
-          ["Resource", sfc.resource ?? "—"], [t("Nonconformances"), sfc.ncs.map((n) => `${n.code} (${n.by})`).join(", ") || t("none")]]}
+        properties={[[t("Operation"), op ? `${op.number} ${op.name}` : "—"], [t("Work center"), wc ? `${wc.name} · ${t("line")} ${wc.line}` : "—"],
+          [t("Routing"), `${sfc.routing} v${sfc.routingVersion}`], [t("Resource"), resourceOf(master, sfc.resource ?? "")?.name ?? sfc.resource ?? "—"],
+          [t("Nonconformances"), sfc.ncs.map((n) => `${n.operation}: ${n.code} (${n.by})`).join(", ") || t("none")]]}
         actions={<>
           {sfc.state === "queued" && can("mes.sfc.start") && <>
-            <Select aria-label={t("Resource")} value={resource} onChange={(e) => setResource(e.target.value)} className="w-32">
-              <option value="">{t("Resource…")}</option>{wc?.resources.map((r) => <option key={r}>{r}</option>)}
+            <Select aria-label={t("Resource")} value={resource} onChange={(e) => setResource(e.target.value)} className="w-44">
+              <option value="">{t("Resource…")}</option>
+              {(op?.capable ?? []).map((id) => <option key={id} value={id}>{resourceOf(master, id)?.name ?? id}</option>)}
             </Select>
             <Button variant="primary" disabled={!resource} onClick={() => decide("mes.sfc.start", target, { resource }, { expectedRevision: sfc.revision })}>{t("Start")}</Button>
           </>}
@@ -230,21 +293,69 @@ function SFCDetail({ id }: { id: string }) {
           </Panel>
         )}
       </div>
-      <Panel className="lg:col-span-2" title={<>{t("Routing")} {product?.routing}</>}>
-        <RoutingGraph sfc={sfc} operations={product?.operations ?? []} />
+      {/* What the step it stands at asks for: the numbers to hold, and the equipment
+          that can hold them — the server computed the list, this only shows it. */}
+      <Panel title={t("Process parameters")} description={op ? t("What operation {number} must hold", { number: op.number }) : undefined}>
+        {op?.parameters?.length
+          ? <PropertyList items={op.parameters.map((p) => [p.title ?? p.name, parameterValue(p)])} />
+          : <p className="text-sm text-muted">{t("This operation holds no parameters")}</p>}
+      </Panel>
+      <Panel title={t("Equipment for this step")}
+        description={op?.requires?.length ? t("Requires {capabilities}", { capabilities: op.requires.join(", ") }) : t("Any resource of its work center")}>
+        {op?.capable?.length
+          ? <PropertyList items={op.capable.map((id) => { const r = resourceOf(master, id); return [r?.name ?? id, `${centerOf(master, r?.workCenter)?.name ?? r?.workCenter ?? ""} · ${(r?.capabilities ?? []).join(", ")}`]; })} />
+          : <p className="text-sm text-muted">{t("No resource can run this operation")}</p>}
+      </Panel>
+      <Panel className="lg:col-span-2" title={<>{t("Routing")} {sfc.routing} v{sfc.routingVersion}</>}>
+        <RoutingFlow routing={routing} master={master} sfc={sfc} label={t("Routing")} />
       </Panel>
       <Dialog open={signing} onOpenChange={setSigning} title={t("Disposition for {id}", { id: sfc.id })}>
-        <EntityForm schema={z.object({ action: z.enum(["rework", "scrap", "use-as-is"]), meaning: z.enum(["reviewed", "approved"]), reworkStep: z.number().int().min(0).max(sfc.step) })}
-          defaultValues={{ action: "rework", meaning: sfc.signatures.some((s) => s.meaning === "reviewed") ? "approved" : "reviewed", reworkStep: Math.max(0, sfc.step - 1) }}
+        <EntityForm schema={z.object({ action: z.enum(["rework", "scrap", "use-as-is"]), meaning: z.enum(["reviewed", "approved"]), reworkOperation: z.coerce.number().int() })}
+          defaultValues={{ action: "rework", meaning: sfc.signatures.some((s) => s.meaning === "reviewed") ? "approved" : "reviewed", reworkOperation: upto[0]?.number ?? sfc.operation }}
           fields={[
             { name: "action", label: t("Disposition"), kind: "select", options: ["rework", "scrap", "use-as-is"].map((v) => ({ value: v, label: v })) },
             { name: "meaning", label: t("Signature meaning"), kind: "select", options: ["reviewed", "approved"].map((v) => ({ value: v, label: v })) },
-            { name: "reworkStep", label: t("Rework from operation (index)"), kind: "number" },
+            { name: "reworkOperation", label: t("Rework from operation"), kind: "select", options: upto.map((o) => ({ value: String(o.number), label: `${o.number} ${o.name}` })) },
           ]}
           submitLabel={t("Sign")} onCancel={() => setSigning(false)}
           onSubmit={async (v) => { await decide("mes.sfc.sign", target, v, { expectedRevision: sfc.revision }); setSigning(false); }} />
       </Dialog>
     </div>
+  );
+}
+
+// The craft master data as designed (ADR-0088): pick a routing and read it the way
+// the floor will — drawn across its work centers, each operation with what it
+// requires, what it must hold and which equipment can run it.
+function Craft() {
+  const { master } = usePlant();
+  const [chosen, setChosen] = useState("");
+  const routings = master?.routings ?? [];
+  const key = chosen || (routings[0] ? `${routings[0].id}@${routings[0].version}` : "");
+  const [id, version] = key.split("@");
+  const routing = routings.find((r) => r.id === id && r.version === Number(version));
+  const madeBy = (master?.products ?? []).filter((p) => p.routing === id).map((p) => p.name);
+  const columns: ColumnDef<Operation, any>[] = [
+    { accessorKey: "number", header: t("Operation"), meta: { width: 90 } },
+    { accessorKey: "name", header: t("Name"), meta: { width: 130 } },
+    { id: "workCenter", header: t("Work center"), meta: { width: 150 }, accessorFn: (o) => centerOf(master, o.workCenter)?.name ?? o.workCenter },
+    { id: "requires", header: t("Requires"), meta: { width: 150 }, accessorFn: (o) => (o.requires ?? []).join(", ") || "—" },
+    { id: "parameters", header: t("Process parameters"), accessorFn: (o) => (o.parameters ?? []).map((p) => `${p.title ?? p.name} ${parameterValue(p)}`).join("; ") || "—" },
+    { id: "capable", header: t("Equipment"), meta: { width: 150 }, accessorFn: (o) => (o.capable ?? []).join(", ") || "—" },
+  ];
+  return (
+    <>
+      <PageHeader title={t("Craft")} description={t("Products, versioned routings, work centers and resources; which equipment can run an operation is computed from what it requires.")}
+        actions={<Select aria-label={t("Routing")} value={key} onChange={(e) => setChosen(e.target.value)} className="w-72">
+          {routings.map((r) => <option key={`${r.id}@${r.version}`} value={`${r.id}@${r.version}`}>{r.name} · {r.id} v{r.version}</option>)}
+        </Select>} />
+      {routing && <div className="grid gap-4">
+        <Panel title={<>{t("Routing")} {routing.id} v{routing.version}</>} description={madeBy.length ? t("Made by {products}", { products: madeBy.join(", ") }) : undefined}>
+          <RoutingFlow routing={routing} master={master} label={t("Routing")} />
+        </Panel>
+        <DataTable data={routing.operations} columns={columns} getRowId={(o) => String(o.number)} height={Math.max(160, routing.operations.length * 32 + 48)} empty={t("Nothing here")} />
+      </div>}
+    </>
   );
 }
 
@@ -305,12 +416,14 @@ export default defineApp({
     { id: "queue", title: () => t("SFCs"), render: () => <SFCTable title={t("SFCs")} description={t("The lots of every released order, each with its quantity; what waits or is in work first")} /> },
     { id: "holds", title: () => t("Quality holds"), render: () => <SFCTable initial="hold" title={t("Quality holds")} description={t("SFCs held by a nonconformance")} /> },
     { id: "sfc", title: (p) => p.id ?? t("SFC"), render: (p) => <SFCDetail id={p.id ?? ""} /> },
+    { id: "craft", title: () => t("Craft"), render: () => <Craft /> },
     { id: "equipment", title: () => t("Downtime"), render: () => <Equipment /> },
   ],
   nav: () => [
     { label: t("Planning"), items: [{ label: t("Shop orders"), icon: <ListOrdered />, route: { view: "orders" } },
       { label: t("Planned orders"), icon: <ClipboardList />, route: { view: "planned" } }] },
     { label: t("Execution"), items: [{ label: t("SFCs"), icon: <Factory />, route: { view: "queue" } }] },
+    { label: t("Craft"), items: [{ label: t("Routings"), icon: <Route />, route: { view: "craft" } }] },
     { label: t("Quality"), items: [{ label: t("Holds"), icon: <ShieldAlert />, route: { view: "holds" } }] },
     { label: t("Equipment"), items: [{ label: t("Downtime"), icon: <Activity />, route: { view: "equipment" } }] },
   ],

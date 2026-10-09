@@ -7,3 +7,5 @@ export { codeChallenge, currentSession, keepFresh, signIn, signOut, type OidcCon
 // The host API contract (ADR-0023 D7): types generated from the host's Go types.
 export type * as Api from "./gen/host";
 export { pageUIManifest, imageRegionLimits } from "./gen/host";
+// The typed enterprise SDK: query/ref/write contracts over the model's own declarations (ADR-0094).
+export * from "./gen/enterprise-sdk";

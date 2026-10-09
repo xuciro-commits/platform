@@ -1,5 +1,5 @@
 import type { Api } from "@platform/kernel";
-import { t, type CanvasEdge, type BlockDiagnostic, type Tone } from "@platform/ui";
+import { t, type FlowEdge, type FlowDiagnostic, type FlowNodeClass, type Tone } from "@platform/ui";
 
 export type ValueSchema = Api.ValueSchema;
 export type Binding = Api.Binding;
@@ -26,6 +26,17 @@ export function commonSchemaProperties(schema?: ValueSchema): Record<string, Val
     branches.every((branch) => branch.required?.includes(name) && branch.properties?.[name]?.type === property.type && !!branch.properties?.[name]?.nullable === !!property.nullable))) : {};
 }
 export const workflowKindTitle = (kind: string) => t(({ payload: "Input", query: "Query", action: "Action", act: "Action", transform: "Transform", branch: "Branch", switch: "Switch", foreach: "For each", while: "While", fork: "Parallel paths", all: "Parallel paths", any: "Parallel paths", join: "Join", ask: "Human task", wait: "Wait", subflow: "Run workflow", call: "Run workflow", ai: "AI function", compute: "Code function", end: "Return", break: "Break", continue: "Continue iteration", fail: "Fail" } as Record<string, string>)[kind] ?? kind);
+
+/** What each native step kind *is*, for the canvas's node classes (ADR-0089). A
+ * capability's kind is the same vocabulary, so a host capability and a native
+ * block of the same kind draw with one glyph and one default notation — the
+ * class table decides, nothing else names a drawing. */
+export const workflowStepClass = (kind: string): FlowNodeClass => (({
+  payload: "trigger", query: "query", action: "action", act: "action", transform: "transform",
+  branch: "control", switch: "control", foreach: "control", while: "control", fork: "control",
+  all: "control", any: "control", join: "control", ask: "human", wait: "trigger",
+  subflow: "flow", call: "flow", ai: "ai", compute: "code", end: "end", break: "control", continue: "control", fail: "end",
+} as Record<string, FlowNodeClass>)[kind] ?? "task");
 
 /** Source pickers use the installed definition while its draft changes. */
 export function installedObjects<T extends WorkflowObject>(records: T[]): T[] {
@@ -61,10 +72,10 @@ function stepPaths(step: WorkflowStep): { port: string; title: string; target: s
   ];
   return paths;
 }
-export function controlEdges(draft: WorkflowDraft): CanvasEdge[] {
+export function controlEdges(draft: WorkflowDraft): FlowEdge[] {
   return draft.steps.flatMap((step) => stepPaths(step).map((path) => ({ id: `${step.name}:${path.port}`, source: step.name, sourcePort: path.port, target: path.target, targetPort: "in", label: path.title, channel: "control" as const, tone: path.port === "error" ? "danger" as const : undefined })));
 }
-export function dataEdges(draft: WorkflowDraft): CanvasEdge[] {
+export function dataEdges(draft: WorkflowDraft): FlowEdge[] {
   return draft.steps.flatMap((step) => [...Object.entries(step.inputs ?? {}).map(([name, binding]) => ({ name: `input:${name}`, binding })),
     ...(["value", "target", "collection"] as const).flatMap((name) => step[name] ? [{ name: `binding:${name}`, binding: step[name]! }] : [])]
     .flatMap(({ name, binding }) => binding.source === "step" && binding.step
@@ -114,8 +125,8 @@ export function initialStep(capability: Capability, steps: WorkflowStep[]): Work
   if (step.kind === "end" || step.kind === "join") Object.assign(step, { value: { source: "input" } });
   return step;
 }
-export function workflowDiagnostics(draft: WorkflowDraft): Record<string, BlockDiagnostic[]> {
-  const issues: Record<string, BlockDiagnostic[]> = {};
+export function workflowDiagnostics(draft: WorkflowDraft): Record<string, FlowDiagnostic[]> {
+  const issues: Record<string, FlowDiagnostic[]> = {};
   const add = (step: string, message: string, severity: "error" | "warning" = "error") => (issues[step] ??= []).push({ message, severity });
   const names = new Set(draft.steps.map((step) => step.name));
   for (const step of draft.steps) {

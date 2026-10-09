@@ -1,26 +1,28 @@
-// The enterprise modeler (ADR-0067 D7, ADR-0084 D2, ADR-0085): one tenant's
-// enterprise drawn over the UAF grid. A view is a drawing over the whole model
-// — the grid cell says where to start, not what may be drawn — and the
-// relationships it offers are the ones the metamodel's contracts admit, the
-// same rules the host validates with. Views have ids and their own operations
-// (save, save as, rename, delete); records that name an element may be pinned
-// beside it, so one drawing holds several modules. Every change is a decision
-// the host records.
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+// The enterprise modeler (ADR-0067 D7, ADR-0084 D2, ADR-0085, ADR-0093): one
+// tenant's enterprise drawn through five description views — who and where,
+// what it holds, what it can do, what it offers, how it is run. A view of the
+// model is a drawing over the whole of it: the viewpoint says where to start,
+// not what may be drawn, and every view is a projection of the one store, never
+// a store of its own. The relationships it offers are the ones the metamodel's
+// contracts admit, the same rules the host validates with. Drawings have ids
+// and their own operations (save, save as, rename, delete); records that name
+// an element may be pinned beside it, so one drawing holds several modules.
+// Every change is a decision the host records.
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useHost, useOpenRecord, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, IconGlyph, Input, Panel, Select, Tag, Tree, Workbench, RecordTimeline, useUnsavedChanges, t, type ColumnDef, type DiagramAction, type WorkbenchTab } from "@platform/ui";
+import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, IconGlyph, Input, Panel, Select, Tag, Tree, Workbench, RecordTimeline, useUnsavedChanges, t, type ColumnDef, type CanvasAction, type WorkbenchTab } from "@platform/ui";
 import { Copy, Link2, Network, Pencil, Pin as PinIcon, PinOff, Plus, Puzzle, Save, Table2, Trash2, Workflow, CalendarDays } from "lucide-react";
-import { Canvas, STEREOTYPE_DROP, elementIcon, type CanvasPin, type Positions } from "./canvas";
+import { Canvas, STEREOTYPE_DROP, elementIconName, type CanvasPin, type Positions } from "./canvas";
 import { ElementProperties, type ElementEdit } from "./properties";
-import { allowedRelationships, autoLayout, childrenOf, contractNote, viewpointElements, viewpointTypes, live, nextTo, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PERSON, PLACEMENT, POST, RELATIONSHIP, RESPONSIBLE_FOR, VIEW, type Element, type GridCell, type Metamodel, type Model, type PatternInfo, type Pin, type Relationship } from "./model";
+import { allowedRelationships, autoLayout, childrenOf, contractNote, viewpointElements, live, nextTo, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PERSON, PLACEMENT, POST, RELATIONSHIP, RESPONSIBLE_FOR, VIEW, type Element, type Viewpoint, type Metamodel, type Model, type PatternInfo, type Pin, type Relationship } from "./model";
 
 type Decide = (schema: string, target: { type: string; id: string }, payload: unknown) => Promise<boolean>;
 
 /** One view being drawn: its id is its identity (ADR-0085 D1), its elements,
  * where they sit, and the records pinned on it (ADR-0085 D3). */
-type Draft = { view: string; elements: string[]; layout: Positions; name: string; grid: string; pins: Pin[]; context: string[]; kind: string; asOf: string; dirty: boolean };
+type Draft = { view: string; elements: string[]; layout: Positions; name: string; viewpoint: string; pins: Pin[]; context: string[]; kind: string; asOf: string; dirty: boolean };
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
 const fresh = (prefix: string, name: string) => `${prefix}-${slug(name)}-${Math.random().toString(36).slice(2, 6)}`;
 const relationshipTitles: Record<string, string> = {
@@ -82,6 +84,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   const [mode, setMode] = useState<"canvas" | "tree" | "table" | "timeline">("canvas");
   const [selected, setSelected] = useState<string>();
   const [linking, setLinking] = useState(false);
+  const [addPalette, setAddPalette] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [saving, setSaving] = useState<string>();
   const [dialog, setDialog] = useState<{ kind: "element"; stereotype: string; at?: [number, number] }
@@ -94,18 +97,18 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     | { kind: "rename"; id: string; name: string }
     | { kind: "deleteView"; id: string; name: string }>();
   const [filter, setFilter] = useState("");
-  const [left, setLeft] = useState("add");
+  const [left, setLeft] = useState("viewpoint");
   const patterns = useRead<PatternInfo[]>("/v1/enterprise-patterns").data ?? [];
   const [pattern, setPattern] = useState<PatternInfo>();
 
   const openRecord = useOpenRecord();
   const activeId = viewId && (m.views.some((v) => v.id === viewId) || drafts[viewId]) ? viewId : m.views[0]?.id ?? "";
   const view = m.views.find((v) => v.id === activeId);
-  const savedCell = meta.grid.find((g) => g.id === view?.grid) ?? meta.grid[0];
+  const savedView = meta.views.find((v) => v.id === view?.viewpoint) ?? meta.views[0];
   const open: Draft = drafts[activeId] ?? {
-    view: activeId, elements: view ? view.elements : [], context: view?.context ?? [],
+    view: activeId, elements: view ? view.elements : viewpointElements(m, savedView, today()), context: view?.context ?? [],
     layout: (view?.layout ?? {}) as Positions, pins: view?.pins ?? [], name: view?.name ?? t("Untitled view"),
-    grid: view?.grid ?? savedCell?.id ?? "Pr-Sr", kind: view?.kind || m.kinds.find((k) => k.kind === "management")?.id || m.kinds[0]?.id || "",
+    viewpoint: view?.viewpoint || savedView?.id || meta.views[0]?.id || "organization", kind: view?.kind || m.kinds.find((k) => k.kind === "management")?.id || m.kinds[0]?.id || "",
     asOf: view?.asOf || today(), dirty: false,
   };
   // Hold a successful local save only until its live model version arrives.
@@ -114,7 +117,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     const next = { ...all };
     for (const [id, draft] of Object.entries(all)) {
       const stored = m.views.find((v) => v.id === id);
-      if (!draft.dirty && stored && stored.name === draft.name && stored.grid === draft.grid && stored.kind === draft.kind && stored.asOf === draft.asOf) { delete next[id]; changed = true; }
+      if (!draft.dirty && stored && stored.name === draft.name && stored.viewpoint === draft.viewpoint && stored.kind === draft.kind && stored.asOf === draft.asOf) { delete next[id]; changed = true; }
     }
     return changed ? next : all;
   }), [m.views]);
@@ -134,7 +137,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     const name = [row.name, row.title, row.number, row.code, row.id].find((v) => typeof v === "string" && v);
     return [{ ...pin, label: typeof name === "string" ? name : pin.ref }];
   });
-  const cell = meta.grid.find((g) => g.id === working.grid) ?? meta.grid[0];
+  const viewpoint = meta.views.find((v) => v.id === working.viewpoint) ?? meta.views[0];
   const kinds = m.kinds;
   const day = working.asOf, placementKind = working.kind;
   const setWorking = (next: Partial<Draft>) => setDrafts((all) => ({ ...all, [activeId]: { ...(all[activeId] ?? working), ...next, dirty: admin } }));
@@ -144,13 +147,15 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   });
   useUnsavedChanges(Object.values(drafts).some((v) => v.dirty), () => setDrafts({}));
   const openView = (id: string) => { sessionStorage.setItem(viewKey, id); setViewId(id); setSelected(undefined); setDialog(undefined); setLinking(false); };
-  const matchingElements = (grid: string) => viewpointElements(m, meta.grid.find((g) => g.id === grid), day);
-  const changeViewpoint = (grid: string) => setWorking({ grid, elements: Array.from(new Set([...matchingElements(grid), ...working.context])) });
+  const matchingElements = (id: string) => viewpointElements(m, meta.views.find((v) => v.id === id), day);
+  const changeViewpoint = (id: string) => setWorking({ viewpoint: id, elements: Array.from(new Set([...matchingElements(id), ...working.context])) });
 
   const byId = (id: string) => m.elements.find((e) => e.id === id);
-  const scope = new Set(matchingElements(working.grid));
+  const scope = new Set(matchingElements(working.viewpoint));
   const shownElements = working.elements.map(byId).filter((e): e is Element => !!e && live(e, day) && (scope.has(e.id) || working.context.includes(e.id)));
-  const laidOut = autoLayout(m, shownElements.map((e) => e.id), placementKind, day, working.layout);
+  const preparedKey = [viewKey, activeId, working.viewpoint, placementKind, day].join(":");
+  const preparedPositions = useRef<{ key: string; positions: Positions }>({ key: "", positions: {} });
+  const laidOut = working.layout;
   const shownIds = new Set(shownElements.map((e) => e.id));
   // Every placement the view's elements have, whatever its kind: a diagram may
   // show a legal structure and a site structure together (ADR-0085 D2).
@@ -168,42 +173,45 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   };
   const unpinRecord = (ref: string) => setWorking({ pins: working.pins.filter((p) => p.ref !== ref) });
   const title = (st: string) => t(meta.profile.find((p) => p.stereotype === st)?.title ?? relationshipTitles[st] ?? st.replace(/^Actual/, ""));
+  /** The host profile's icon for a stereotype (ADR-0090 D2) — one lookup for
+   * every place the view draws an element's picture. */
+  const profileIcon = (st: string) => meta.profile.find((p) => p.stereotype === st)?.icon;
   const relLabel = (r: Relationship) => r.stereotype === PLACEMENT ? t(r.relation || "part of") : r.stereotype === MEMBERSHIP ? (r.role || t("member")) : r.stereotype === FILLS_POST ? t("fills") : title(r.stereotype);
   const addElement = async (stereotype: string, values: { name: string; kind: string; parent?: string; legal?: boolean; properties?: Record<string, unknown> }, at?: [number, number]) => {
     const id = fresh(slug(title(stereotype)).slice(0, 4), values.name);
     if (!await decide("enterprise.element.add", { type: ELEMENT, id }, { stereotype, name: values.name, kind: values.kind || undefined, legal: values.legal || undefined, from: day, properties: values.properties })) return false;
     if (values.parent && stereotype === ORGANIZATION) await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("rel", id) }, { stereotype: PLACEMENT, kind: placementKind, source: id, target: values.parent, relation: "part of", from: day });
     const layout = { ...working.layout, [id]: at ?? [40 + Math.random() * 300, 40 + Math.random() * 200] as [number, number] };
-    setWorking({ elements: [...working.elements, id], context: viewpointTypes(cell).includes(stereotype) ? working.context : [...working.context, id], layout });
+    setWorking({ elements: [...working.elements, id], context: (viewpoint?.elements ?? []).includes(stereotype) ? working.context : [...working.context, id], layout });
     setSelected(id);
     return true;
   };
   const writeView = async (id: string, v: Draft): Promise<boolean> => {
     setSaving(id);
     try { return await decide("enterprise.view.save", { type: VIEW, id },
-      { name: v.name, grid: v.grid, kind: v.kind, context: v.context, elements: v.elements, layout: v.layout, pins: v.pins, asOf: v.asOf }); }
+      { name: v.name, viewpoint: v.viewpoint, kind: v.kind, context: v.context, elements: v.elements, layout: v.layout, pins: v.pins, asOf: v.asOf }); }
     finally { setSaving((current) => current === id ? undefined : current); }
   };
   const openSaved = async (id: string, v: Draft) => {
     if (await writeView(id, v)) { setDialog(undefined); setDrafts((all) => ({ ...all, [id]: { ...v, view: id, dirty: false } })); openView(id); }
   };
-  const createView = async (name: string, grid: string, empty = false) => {
-    const id = fresh("view", name), elements = empty ? [] : matchingElements(grid);
-    await openSaved(id, { ...working, view: id, elements, layout: autoLayout(m, elements, "", day), name, grid, context: [], pins: [], dirty: false });
+  const createView = async (name: string, viewpoint: string, empty = false) => {
+    const id = fresh("view", name), elements = empty ? [] : matchingElements(viewpoint);
+    await openSaved(id, { ...working, view: id, elements, layout: {}, name, viewpoint, context: [], pins: [], dirty: false });
   };
-  const saveAs = async (name: string, grid: string) => {
-    await openSaved(fresh("view", name), { ...open, name, grid, context: Array.from(new Set([...open.context, ...open.elements.filter((id) => !matchingElements(grid).includes(id))])), pins: open.pins.map((p) => ({ ...p })) });
+  const saveAs = async (name: string, viewpoint: string) => {
+    await openSaved(fresh("view", name), { ...open, name, viewpoint, context: Array.from(new Set([...open.context, ...open.elements.filter((id) => !matchingElements(viewpoint).includes(id))])), pins: open.pins.map((p) => ({ ...p })) });
   };
   const renameView = async (id: string, name: string) => {
     const stored = m.views.find((v) => v.id === id); if (!stored) return;
     const captured = drafts[id];
-    const src: Draft = captured ?? { ...working, view: id, name: stored.name, grid: stored.grid, elements: stored.elements, context: stored.context ?? [],
+    const src: Draft = captured ?? { ...working, view: id, name: stored.name, viewpoint: stored.viewpoint, elements: stored.elements, context: stored.context ?? [],
       layout: (stored.layout ?? {}) as Positions, pins: stored.pins ?? [], kind: stored.kind ?? "", asOf: stored.asOf || today(), dirty: false };
     if (await writeView(id, { ...src, name })) { setDialog(undefined); setDrafts((all) => ({ ...all, [id]: all[id] && all[id] !== captured ? { ...all[id]!, name } : { ...src, name, dirty: false } })); }
   };
   const saveView = async () => {
     const captured = working;
-    const payload = { ...captured, layout: autoLayout(m, captured.elements, captured.kind, captured.asOf, captured.layout) };
+    const payload = { ...captured, layout: await autoLayout(m, captured.elements, captured.kind, captured.asOf, { ...(preparedPositions.current.key === preparedKey ? preparedPositions.current.positions : {}), ...captured.layout }) };
     if (captured.view) { if (await writeView(captured.view, payload)) clearDraft(captured.view, captured); return; }
     await openSaved(fresh("view", captured.name), payload);
   };
@@ -215,7 +223,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
 
   // The selected element's operations, on the canvas (ADR-0084 D3). Hiding is a
   // view decision; closing and ending are model decisions with a date.
-  const nodeActions = (id: string): DiagramAction[] => {
+  const nodeActions = (id: string): CanvasAction[] => {
     if (id.startsWith("record:")) return admin ? [{ id: "unpin", label: t("Unpin"), run: () => unpinRecord(id) }] : [];
     const el = byId(id);
     if (!el || !admin) return [];
@@ -226,7 +234,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
       { id: "close", label: t("Close…"), tone: "danger", hint: t("Ends its validity from a date: no view shows it as live; history keeps it."), run: () => setDialog({ kind: "close", id }), disabled: !!el.until },
     ];
   };
-  const edgeActions = (id: string): DiagramAction[] => {
+  const edgeActions = (id: string): CanvasAction[] => {
     const r = m.relationships.find((x) => x.id === id);
     if (!r || !admin || r.until) return [];
     return [
@@ -258,10 +266,32 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     return { id: e.id, name: e.name, start: typeof start === "string" ? start.slice(0, 10) : "", end: String(properties.endDate || start || "").slice(0, 10), group: project?.name || title(e.stereotype) };
   });
   const tabs: WorkbenchTab[] = [
-    { id: "add", title: t("Add elements"), content: <AddPane meta={meta} cell={cell} admin={admin}
-      onAdd={(stereotype) => setDialog({ kind: "element", stereotype })} /> },
-    { id: "uaf", title: t("UAF grid"), content: <UafPane meta={meta} cell={cell} onCell={changeViewpoint} /> },
-    { id: "patterns", title: t("Patterns"), content: <div className="grid gap-1 p-2">
+    { id: "viewpoint", title: t("Viewpoints"), badge: m.views.length, content: <div className="grid gap-1 p-2">
+      <p className="px-1 text-[11px] text-muted">{t("Five views over one model: who is where, what it holds, what it can do, what it offers, how it is run. Switching views changes where the drawing starts; the model itself never changes.")}</p>
+      {meta.views.map((v) => <Button key={v.id} variant="row" aria-pressed={working.viewpoint === v.id}
+        onClick={() => changeViewpoint(v.id)} className={working.viewpoint === v.id ? "bg-row-selected" : ""} title={t(v.note)}>
+        <span className="grid min-w-0 flex-1 text-left"><span className="truncate text-xs font-medium">{t(v.title)}</span>
+          <span className="truncate text-[10px] text-muted">{t(v.note)}</span></span>
+        <span className="text-[10px] text-muted">{viewpointElements(m, v, day).length}</span>
+      </Button>)}
+      <p className="px-1 pt-2 text-[11px] text-muted">{t("A view is a drawing over the whole model: which elements it shows, where, which records are pinned beside them, and which question it answers. Saving writes the open view; the other operations are on each row.")}</p>
+      {m.views.map((v) => <div key={v.id} className={activeId === v.id ? "grid gap-1 rounded bg-row-selected p-1" : "grid gap-1 p-1"}>
+        <Button variant="row" aria-pressed={activeId === v.id} onClick={() => openView(v.id)}>
+          <span className="truncate">{v.name}</span>
+          {drafts[v.id]?.dirty && <Tag label={t("unsaved")} tone="warning" />}
+          <span className="ml-auto text-[10px] text-muted">{t(meta.views.find((g) => g.id === v.viewpoint)?.title ?? v.viewpoint)}</span></Button>
+        {admin && <div className="flex flex-wrap gap-1 pl-1">
+            <Button size="sm" variant="ghost" title={t("Open this view")} onClick={() => openView(v.id)}>{t("Open view")}</Button>
+          <Button size="sm" variant="ghost" title={t("Change the name; the drawing stays")} onClick={() => setDialog({ kind: "rename", id: v.id, name: v.name })}><Pencil />{t("Rename…")}</Button>
+          <Button size="sm" variant="ghost" title={t("A new view from what is drawn now")} disabled={v.id !== activeId} onClick={() => setDialog({ kind: "view", mode: "saveAs" })}><Copy />{t("Save as…")}</Button>
+          <Button size="sm" variant="ghost" className="text-[var(--tone-danger)]" title={t("Discard this drawing; the model stays")} onClick={() => setDialog({ kind: "deleteView", id: v.id, name: v.name })}><Trash2 />{t("Delete")}</Button>
+        </div>}
+      </div>)}
+      {admin && <Button size="sm" variant="ghost" onClick={() => setDialog({ kind: "view", mode: "create" })}><Plus />{t("New view")}</Button>}
+      <p className="px-1 text-[11px] text-muted">{t("Deleting a view discards a picture, not a fact: the elements, their relationships and the records that name them stay as they are.")}</p>
+      <RegistryPane meta={meta} />
+    </div> },
+    { id: "patterns", title: t("Model patterns"), content: <div className="grid gap-1 p-2">
       <p className="px-1 text-xs text-muted">{sel?.stereotype === ORGANIZATION ? t("Added under {name}.", { name: sel.name }) : t("Added at the top; select an organisation to add under it.")}</p>
       {[1, 2, 3, 4].map((level) => {
         const list = patterns.filter((p) => p.level === level);
@@ -278,28 +308,11 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
       <Input placeholder={t("Find…")} value={filter} onChange={(e) => setFilter(e.target.value)} />
       {m.elements.filter((e) => live(e, day) && (!filter || e.name.toLowerCase().includes(filter.toLowerCase()) || e.id.includes(filter))).slice(0, 200).map((e) => {
         const shown = shownIds.has(e.id);
-        return <Button key={e.id} variant="row" aria-pressed={selected === e.id} onClick={() => { setSelected(e.id); if (!shown) setWorking({ elements: Array.from(new Set([...working.elements, e.id])), context: scope.has(e.id) ? working.context : Array.from(new Set([...working.context, e.id])), layout: autoLayout(m, [...working.elements, e.id], placementKind, day, working.layout) }); }}
+        return <Button key={e.id} variant="row" aria-pressed={selected === e.id} onClick={() => { setSelected(e.id); if (!shown) setWorking({ elements: Array.from(new Set([...working.elements, e.id])), context: scope.has(e.id) ? working.context : Array.from(new Set([...working.context, e.id])), layout: working.layout }); }}
           className={selected === e.id ? "bg-row-selected" : ""}>
           <span className="truncate">{e.name}</span><Tag label={e.kind ? t(e.kind) : title(e.stereotype)} />{working.context.includes(e.id) && <Tag label={t("Context")} tone="info" />}{shown && <span className="ml-auto text-[10px] text-muted">{t("shown")}</span>}
         </Button>;
       })}
-    </div> },
-    { id: "views", title: t("Views"), badge: m.views.length, content: <div className="grid gap-1 p-2">
-      <p className="px-1 text-[11px] text-muted">{t("A view is a drawing over the whole model: which elements it shows, where, which records are pinned beside them, and which UAF cell it started from. Saving writes the open view; the other operations are on each row.")}</p>
-      {m.views.map((v) => <div key={v.id} className={activeId === v.id ? "grid gap-1 rounded bg-row-selected p-1" : "grid gap-1 p-1"}>
-        <Button variant="row" aria-pressed={activeId === v.id} onClick={() => openView(v.id)}>
-          <span className="truncate">{v.name}</span>
-          {drafts[v.id]?.dirty && <Tag label={t("unsaved")} tone="warning" />}
-          <span className="ml-auto font-mono text-[10px] text-muted">{v.grid}</span></Button>
-        {admin && <div className="flex flex-wrap gap-1 pl-1">
-            <Button size="sm" variant="ghost" title={t("Open this view")} onClick={() => openView(v.id)}>{t("Open view")}</Button>
-          <Button size="sm" variant="ghost" title={t("Change the name; the drawing stays")} onClick={() => setDialog({ kind: "rename", id: v.id, name: v.name })}><Pencil />{t("Rename…")}</Button>
-          <Button size="sm" variant="ghost" title={t("A new view from what is drawn now")} disabled={v.id !== activeId} onClick={() => setDialog({ kind: "view", mode: "saveAs" })}><Copy />{t("Save as…")}</Button>
-          <Button size="sm" variant="ghost" className="text-[var(--tone-danger)]" title={t("Discard this drawing; the model stays")} onClick={() => setDialog({ kind: "deleteView", id: v.id, name: v.name })}><Trash2 />{t("Delete")}</Button>
-        </div>}
-      </div>)}
-      {admin && <Button size="sm" variant="ghost" onClick={() => setDialog({ kind: "view", mode: "create" })}><Plus />{t("New view")}</Button>}
-      <p className="px-1 text-[11px] text-muted">{t("Deleting a view discards a picture, not a fact: the elements, their relationships and the records that name them stay as they are.")}</p>
     </div> },
   ];
 
@@ -317,13 +330,14 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
         <Input aria-label={t("As of")} type="date" value={day} onChange={(e) => setWorking({ asOf: e.target.value || today() })} className="w-36" />
       </span>}
       actions={<>
-        <Select aria-label={t("UAF view")} title={t("UAF view")} value={cell?.id ?? ""} onChange={(e) => changeViewpoint(e.target.value)} className="w-44">
-          {meta.grid.map((g) => <option key={g.id} value={g.id}>{g.id} · {t(g.title)}</option>)}
+        <Select aria-label={t("Viewpoint")} title={t("Which question this drawing answers")} value={viewpoint?.id ?? ""} onChange={(e) => changeViewpoint(e.target.value)} className="w-44">
+          {meta.views.map((v) => <option key={v.id} value={v.id}>{t(v.title)}</option>)}
         </Select>
         <Button size="sm" variant={mode === "canvas" ? "default" : "ghost"} onClick={() => setMode("canvas")} title={t("Canvas")}><Workflow /></Button>
         <Button size="sm" variant={mode === "tree" ? "default" : "ghost"} onClick={() => setMode("tree")} title={t("Tree")}><Network /></Button>
         <Button size="sm" variant={mode === "table" ? "default" : "ghost"} onClick={() => setMode("table")} title={t("Table")}><Table2 /></Button>
         <Button size="sm" variant={mode === "timeline" ? "default" : "ghost"} onClick={() => setMode("timeline")} title={t("Roadmap")}><CalendarDays /></Button>
+        {admin && <Button size="sm" variant={addPalette ? "default" : "ghost"} aria-pressed={addPalette} onClick={() => setAddPalette(!addPalette)} title={t("Drag one onto the canvas, or click to add it.")}><Plus />{t("Add")}</Button>}
         {admin && <Button size="sm" variant={linking ? "default" : "ghost"} aria-pressed={linking} onClick={() => setLinking(!linking)} title={t("Then drag from one element to the other.")}><Link2 />{t("Relate")}</Button>}
         {admin && <Button size="sm" disabled={!working.dirty || !!saving} title={t("Writes this view under its own id; it never writes another view")} onClick={() => void saveView()}><Save />{t("Save view")}</Button>}
         {admin && <Button size="sm" variant="ghost" title={t("A new view from what is drawn now")} onClick={() => setDialog({ kind: "view", mode: "saveAs" })}><Copy />{t("Save as…")}</Button>}
@@ -337,9 +351,12 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
       </div> : null}<div className={selectedPin ? "hidden" : ""}><Inspector element={sel} model={m} view={{ pins: readablePins }} meta={meta} day={day} admin={admin} decide={decide} title={title} relLabel={relLabel}
         onPin={pinRecord} onUnpin={unpinRecord}
         onRemove={() => { if (!sel) return; setWorking({ elements: working.elements.filter((id) => id !== sel.id), context: working.context.filter((id) => id !== sel.id), pins: working.pins.filter((p) => p.anchor !== sel.id) }); setSelected(undefined); }} /></div></> }}>
-      <p className="px-3 py-1 text-xs text-muted">{t("{view}: {n} elements, {context} from other viewpoints", { view: t(cell?.title ?? "View"), n: shownElements.length, context: shownElements.filter((e) => working.context.includes(e.id)).length })}</p>
-      {mode === "canvas" && <div className="h-full min-h-[480px]"><Canvas viewId={activeId} elements={shownElements} relationships={shownRels} pins={pinNodes} positions={positions} selected={selected} linking={linking && admin} admin={admin}
-        label={relLabel} title={title} onPositions={movePositions} onSelect={setSelected} facts={factsFor} propertyLinks={shownElements.flatMap((e) => ["milestone", "actualResource"].flatMap((property) => {
+      <p className="px-3 py-1 text-xs text-muted">{t("{view}: {n} elements, {context} from other viewpoints", { view: t(viewpoint?.title ?? "View"), n: shownElements.length, context: shownElements.filter((e) => working.context.includes(e.id)).length })}</p>
+      {mode === "canvas" && <div className="relative h-full min-h-[480px]">
+        {addPalette && admin && <div className="absolute left-2 top-2 z-20 max-h-[calc(100%-1rem)] w-80 overflow-auto rounded border border-border bg-background shadow-lg">
+          <AddPane meta={meta} viewpoint={viewpoint} admin={admin} onAdd={(stereotype) => { setAddPalette(false); setDialog({ kind: "element", stereotype }); }} /></div>}
+        <Canvas viewId={[viewKey, activeId, working.viewpoint, placementKind, day].join(":")} elements={shownElements} relationships={shownRels} pins={pinNodes} positions={positions} onPrepared={(next) => { preparedPositions.current = { key: preparedKey, positions: next }; }} selected={selected} linking={linking && admin} admin={admin}
+        label={relLabel} title={title} icon={profileIcon} onPositions={movePositions} onSelect={setSelected} facts={factsFor} propertyLinks={shownElements.flatMap((e) => ["milestone", "actualResource"].flatMap((property) => {
           const value = e.properties?.[property], ids = Array.isArray(value) ? value : [value];
           return ids.filter((id): id is string => typeof id === "string" && shownIds.has(id)).map((id) => ({ id: `property:${e.id}:${property}:${id}`, source: e.id, target: id, label: t(property === "milestone" ? "Milestones" : "Related resource") }));
         }))} nodeActions={nodeActions} edgeActions={edgeActions}
@@ -349,7 +366,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
         <Tree roots={shownElements.filter((e) => !shownRels.some((r) => r.stereotype === PLACEMENT && r.kind === placementKind && r.source === e.id && shownIds.has(r.target)))}
           children={(e) => childrenOf(m, e.id, placementKind, day).map(byId).filter((x): x is Element => !!x && shownIds.has(x.id))}
           id={(e) => e.id} selected={selected} onSelect={(e) => setSelected(e.id)}
-          row={(e) => <><span className="[&_svg]:size-4 [&_svg]:text-muted">{elementIcon(e)}</span><span className="font-medium">{e.name}</span><Tag label={e.kind ? t(e.kind) : title(e.stereotype)} />{e.legal && <Tag label={t("legal entity")} tone="info" />}
+          row={(e) => <><span className="[&_svg]:size-4 [&_svg]:text-muted"><IconGlyph name={elementIconName(e, profileIcon)} /></span><span className="font-medium">{e.name}</span><Tag label={e.kind ? t(e.kind) : title(e.stereotype)} />{e.legal && <Tag label={t("legal entity")} tone="info" />}
             <span className="ml-auto text-xs text-muted">{m.relationships.filter((r) => r.stereotype === MEMBERSHIP && r.target === e.id && live(r, day)).length || ""}</span></>} />
       </div>}
       {mode === "timeline" && <div className="grid gap-3 p-3">
@@ -381,12 +398,12 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
       confirm={t("End")} onClose={() => setDialog(undefined)}
       onSubmit={async (until) => { if (await decide("enterprise.relationship.end", { type: RELATIONSHIP, id: dialog.id }, { until })) setDialog(undefined); }} />}
     {pattern && <PatternDialog pattern={pattern} organisations={m.elements.filter((e) => e.stereotype === ORGANIZATION && live(e, day))} under={sel?.stereotype === ORGANIZATION ? sel.id : undefined} decide={decide} onClose={() => setPattern(undefined)} />}
-    {dialog?.kind === "view" && <ViewDialog grid={meta.grid} allowEmpty={dialog.mode === "create"}
+    {dialog?.kind === "view" && <ViewDialog viewpoints={meta.views} allowEmpty={dialog.mode === "create"}
       title={dialog.mode === "create" ? t("New view") : t("Save this view as")}
       note={dialog.mode === "create" ? t("A new view, with a new id: nothing that is open now is written.") : t("A copy with a new id. The view you are drawing stays as it is.")}
-      initial={{ name: dialog.mode === "create" ? "" : t("{name} copy", { name: working.name }), grid: working.grid }}
+      initial={{ name: dialog.mode === "create" ? "" : t("{name} copy", { name: working.name }), viewpoint: working.viewpoint }}
       onClose={() => setDialog(undefined)}
-      onSubmit={async (name, grid, empty) => { if (dialog.mode === "create") await createView(name, grid, empty); else await saveAs(name, grid); }} />}
+      onSubmit={async (name, viewpoint, empty) => { if (dialog.mode === "create") await createView(name, viewpoint, empty); else await saveAs(name, viewpoint); }} />}
     {dialog?.kind === "rename" && <NameDialog title={t("Rename view")} note={t("The drawing and its id stay; only the name changes.")} initial={dialog.name}
       onClose={() => setDialog(undefined)} onSubmit={async (name) => void await renameView(dialog.id, name)} />}
     {dialog?.kind === "deleteView" && <ConfirmDialog title={t("Delete {name}", { name: dialog.name })}
@@ -395,11 +412,12 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   </>;
 }
 
-// --- The construction catalogue (ADR-0084 D2): what the UAF offers as
-// elements, grouped by the domain it belongs to, with the reason anything the
-// current view does not draw is not offered — never a silent filtering.
-function AddPane({ meta, cell, admin, onAdd }: {
-  meta: Metamodel; cell?: GridCell; admin: boolean; onAdd: (stereotype: string) => void;
+// --- The construction catalogue (ADR-0084 D2, ADR-0093): what the UAF offers
+// as elements, with the reason anything the current viewpoint does not draw is
+// not offered first — never a silent filtering. It lives on the canvas now,
+// dragged from or clicked in place.
+function AddPane({ meta, viewpoint, admin, onAdd }: {
+  meta: Metamodel; viewpoint?: Viewpoint; admin: boolean; onAdd: (stereotype: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
@@ -407,9 +425,9 @@ function AddPane({ meta, cell, admin, onAdd }: {
     const st = meta.stereotypes[p.stereotype];
     // A drawing may hold any of the profile's elements; the cell is where this
     // view starts, and says so instead of refusing (ADR-0085 D2).
-    const here = (cell?.elements ?? []).some((e) => e === p.stereotype);
-    const cells = meta.grid.filter((g) => g.elements.some((e) => e === p.stereotype)).map((g) => g.id).join(", ");
-    const hint = !here ? t("Usually drawn in {cells}; drawable here too.", { cells: cells || "—" })
+    const here = (viewpoint?.elements ?? []).some((e) => e === p.stereotype);
+    const views = meta.views.filter((v) => (v.elements ?? []).some((e) => e === p.stereotype)).map((v) => v.id).join(", ");
+    const hint = !here ? t("Usually drawn in {views}; drawable here too.", { views: views || "—" })
         : t("Drawn in this view.");
     return { p, st, hint, here };
   }).filter(({ p, st }) => !needle || `${p.title} ${p.plural} ${p.stereotype} ${(p.kinds ?? []).join(" ")} ${st?.description ?? ""}`.toLowerCase().includes(needle));
@@ -427,11 +445,11 @@ function AddPane({ meta, cell, admin, onAdd }: {
     <span className="font-mono text-[10px] text-muted">{r.p.stereotype}</span>
   </Button>;
   return <div className="grid gap-2 p-2">
-    <p className="px-1 text-[11px] text-muted">{t("Elements the model can hold, from the UAF metamodel. Drag one onto the canvas, or click to add it. One drawing may hold any of them: the UAF cell below is where this view starts, not a fence.")}</p>
+    <p className="px-1 text-[11px] text-muted">{t("Elements the model can hold, from the UAF metamodel. Drag one onto the canvas, or click to add it. One drawing may hold any of them: the viewpoint says where it starts, not a fence.")}</p>
     <Input placeholder={t("Find an element type…")} aria-label={t("Find an element type…")} value={query} onChange={(e) => setQuery(e.target.value)} />
-    <p className="px-1 text-[11px] text-muted">{cell ? <>{cell.id} · {t(cell.title)}</> : null} · {t("UAF {version}, {n} types here, {all} in the whole profile.", { version: meta.version, n: here.length, all: usable.length })}</p>
+    <p className="px-1 text-[11px] text-muted">{viewpoint ? <>{t(viewpoint.title)}</> : null} · {t("UAF {version}, {n} types here, {all} in the whole profile.", { version: meta.version, n: here.length, all: usable.length })}</p>
     <div className="grid gap-1">
-      <p className="px-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted">{t("In this view's cell")}</p>
+      <p className="px-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted">{t("In this viewpoint")}</p>
       {here.map(line)}
     </div>
     {!!elsewhere.length && <Disclosure summary={<span className="px-1 text-[11px] text-muted">{t("Also drawable here ({n})", { n: elsewhere.length })}</span>}>
@@ -441,47 +459,30 @@ function AddPane({ meta, cell, admin, onAdd }: {
   </div>;
 }
 
-// --- The framework itself (ADR-0084 D2): the UAF grid as a matrix of what the
-// tenant's views can draw, over the release's whole stereotype registry, so a
-// reader can tell what is offered, what is merely loadable, and why.
-function UafPane({ meta, cell, onCell }: { meta: Metamodel; cell?: GridCell; onCell: (grid: string) => void }) {
+// --- The framework itself (ADR-0084 D2, ADR-0093): what the build's whole
+// stereotype registry carries, so a reader can tell what the profile offers,
+// what is merely loadable, and why. The domain×aspect matrix gave way to the
+// five description views; the registry itself still explains the vocabulary.
+function RegistryPane({ meta }: { meta: Metamodel }) {
   const [query, setQuery] = useState("");
-  const domains = meta.domains;
-  const aspects = Array.from(new Set(meta.grid.map((g) => g.aspect)));
   const registry = Object.values(meta.stereotypes).sort((a, b) => a.name.localeCompare(b.name));
   const offered = new Set(meta.profile.map((p) => p.stereotype));
   const needle = query.trim().toLowerCase();
   const shown = registry.filter((st) => !needle || `${st.name} ${st.domain} ${st.aspect} ${st.description ?? ""}`.toLowerCase().includes(needle)).slice(0, 80);
-  return <div className="grid gap-2 p-2 text-xs">
-    <p className="px-1 text-[11px] text-muted">{t("The UAF grid: domains across, aspects down. Clicking a cell sets where this view starts; a drawing may hold elements and relationships from other cells too.")}</p>
-    <div className="overflow-auto">
-      <div className="grid gap-0.5" style={{ gridTemplateColumns: `auto repeat(${aspects.length}, minmax(6rem, 1fr))` }}>
-        <span />
-        {aspects.map((a) => <span key={a} className="px-1 text-[10px] font-semibold text-muted">{t(a)}</span>)}
-        {domains.map((d) => <Fragment key={d}>
-          <span className="px-1 text-[10px] font-semibold text-muted">{t(d)}</span>
-          {aspects.map((a) => {
-            const g = meta.grid.find((x) => x.domain === d && x.aspect === a);
-            return <span key={a}>{g
-              ? <Button size="sm" variant={cell?.id === g.id ? "default" : "ghost"} aria-pressed={cell?.id === g.id} onClick={() => onCell(g.id)}
-                  className="w-full justify-start" title={`${g.id} · ${t(g.title)}: ${g.elements.length} ${t("elements")}, ${g.relationships.length} ${t("relationships")}`}>
-                  <span className="grid text-left"><span className="truncate text-[11px]">{t(g.title)}</span><span className="font-mono text-[9px] text-muted">{g.id}</span></span></Button>
-              : <span className="block px-1 py-0.5 text-center text-muted" title={t("No view draws this cell yet.")}>·</span>}</span>;
-          })}
-        </Fragment>)}
+  return <Disclosure summary={t("Every UAF type this build carries")}>
+    <div className="grid gap-2 pt-1 text-xs">
+      <p className="text-[11px] text-muted">{t("{offered} of the release's {total} UAF 1.3 types are offered by this tenant's profile; the rest stay loadable and storable.", { offered: offered.size, total: registry.length })}</p>
+      <Input placeholder={t("Find a UAF type…")} aria-label={t("Find a UAF type…")} value={query} onChange={(e) => setQuery(e.target.value)} />
+      <div className="grid gap-0.5">
+        {shown.map((st) => <div key={st.name} className="flex items-baseline gap-2 rounded px-1 py-0.5">
+          <span className="min-w-0 flex-1 truncate" title={st.description}>{st.name}</span>
+          <span className="text-[10px] text-muted">{t(st.domain)}{st.aspect ? ` · ${t(st.aspect)}` : ""}</span>
+          <Tag label={offered.has(st.name) ? t("offered") : t("loadable")} tone={offered.has(st.name) ? "info" : "neutral"} />
+        </div>)}
+        {!shown.length && <p className="p-1 text-muted">{t("Nothing matches.")}</p>}
       </div>
     </div>
-    <p className="px-1 text-[11px] text-muted">{t("{offered} of the release's {total} UAF 1.3 types are offered by this tenant's profile; the rest stay loadable and storable.", { offered: offered.size, total: registry.length })}</p>
-    <Input placeholder={t("Find a UAF type…")} aria-label={t("Find a UAF type…")} value={query} onChange={(e) => setQuery(e.target.value)} />
-    <div className="grid gap-0.5">
-      {shown.map((st) => <div key={st.name} className="flex items-baseline gap-2 rounded px-1 py-0.5">
-        <span className="min-w-0 flex-1 truncate" title={st.description}>{st.name}</span>
-        <span className="text-[10px] text-muted">{t(st.domain)}{st.aspect ? ` · ${t(st.aspect)}` : ""}</span>
-        <Tag label={offered.has(st.name) ? t("offered") : t("loadable")} tone={offered.has(st.name) ? "info" : "neutral"} />
-      </div>)}
-      {!shown.length && <p className="p-1 text-muted">{t("Nothing matches.")}</p>}
-    </div>
-  </div>;
+  </Disclosure>;
 }
 
 // --- People, posts and the connection to accounts (ADR-0084 D4).
@@ -699,18 +700,18 @@ function PatternDialog({ pattern: p, organisations, under, decide, onClose }: { 
   </Dialog>;
 }
 
-function ViewDialog({ grid, title, note, initial, allowEmpty, onClose, onSubmit }: {
-  grid: GridCell[]; title: string; note: string; initial: { name: string; grid: string }; allowEmpty?: boolean; onClose: () => void;
-  onSubmit: (name: string, grid: string, empty: boolean) => Promise<void>;
+function ViewDialog({ viewpoints, title, note, initial, allowEmpty, onClose, onSubmit }: {
+  viewpoints: Viewpoint[]; title: string; note: string; initial: { name: string; viewpoint: string }; allowEmpty?: boolean; onClose: () => void;
+  onSubmit: (name: string, viewpoint: string, empty: boolean) => Promise<void>;
 }) {
-  const [v, setV] = useState({ name: initial.name, grid: initial.grid || grid[0]?.id || "Pr-Sr" });
+  const [v, setV] = useState({ name: initial.name, viewpoint: initial.viewpoint || viewpoints[0]?.id || "organization" });
   const [empty, setEmpty] = useState(false);
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={title}>
-    <Form className="grid gap-3" onSubmit={() => void onSubmit(v.name, v.grid, empty)}>
+    <Form className="grid gap-3" onSubmit={() => void onSubmit(v.name, v.viewpoint, empty)}>
       <p className="text-xs text-muted">{note}</p>
       {field(t("Name"), <Input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />)}
       {allowEmpty && <Checkbox checked={empty} onChange={setEmpty}>{t("Start with an empty view")}</Checkbox>}
-      {field(t("UAF grid cell"), <Select value={v.grid} onChange={(e) => setV({ ...v, grid: e.target.value })}>{grid.map((g) => <option key={g.id} value={g.id}>{g.id} · {t(g.title)}</option>)}</Select>)}
+      {field(t("Viewpoint"), <Select value={v.viewpoint} onChange={(e) => setV({ ...v, viewpoint: e.target.value })}>{viewpoints.map((g) => <option key={g.id} value={g.id}>{t(g.title)}</option>)}</Select>)}
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" disabled={!v.name}>{t("Save")}</Button></div>
     </Form>
   </Dialog>;

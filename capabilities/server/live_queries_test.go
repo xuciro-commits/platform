@@ -16,7 +16,56 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"google.golang.org/protobuf/encoding/protojson"
 )
+
+func TestEnterpriseLegacyViewRecovery(t *testing.T) {
+	compose := func() *Tenant {
+		return composeTenant(t, "legacy-views", []Seat{seatOf("admin", "enterprise:admin")}, enterprise.New("legacy-views", platform.OrgSeed{}))
+	}
+	tn := compose()
+	m := memberOf(t, tn, "admin")
+	at := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
+	grids := map[string]string{"Pr-Sr": "organization", "Pr-Cn": "organization", "Rs-Sr": "organization", "St-Tx": "function", "St-Sr": "function", "Sv-Tx": "output", "Op-Pr": "control", "Pj-Rm": "control"}
+	var entries []Entry
+	for grid := range grids {
+		sub := submission(tn, m, enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, grid,
+			map[string]any{"name": grid, "grid": grid, "elements": []string{}, "layout": map[string][2]float64{"historical": {123, 456}}, "asOf": "2026-10-07"})
+		raw, err := protojson.Marshal(sub)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries = append(entries, Entry{App: enterprise.ID, Kind: "submission", Principal: platform.Raw(m), Body: raw, At: at})
+	}
+	before := string(platform.Raw(entries))
+	if err := tn.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	if string(platform.Raw(entries)) != before {
+		t.Fatal("legacy recovery rewrote journal bytes")
+	}
+	value, err := tn.Read(m, enterprise.ReadModel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, view := range value.(enterprise.Model).Views {
+		if view.Viewpoint != grids[view.ID] || view.Layout["historical"] != [2]float64{123, 456} || view.AsOf != "2026-10-07" {
+			t.Fatalf("legacy view identity or drawing changed: %+v", view)
+		}
+	}
+	if why := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "live-grid", map[string]any{"name": "old write", "grid": "Pr-Sr"}, at); why == "ok" {
+		t.Fatal("the retired grid field returned to the live contract")
+	}
+	// The snapshot decoder has the same bounded mapping as historical input.
+	var saved enterprise.View
+	if err := json.Unmarshal([]byte(`{"id":"original","name":"Plan","grid":"Pj-Rm","elements":[],"layout":{"milestone":[12,34]}}`), &saved); err != nil || saved.Viewpoint != "control" || saved.ID != "original" || saved.Layout["milestone"] != [2]float64{12, 34} {
+		t.Fatalf("historical snapshot did not retain its drawing: %+v %v", saved, err)
+	}
+	if err := json.Unmarshal([]byte(`{"id":"modern","viewpoint":"data","grid":"Pr-Sr","elements":[]}`), &saved); err != nil || saved.Viewpoint != "data" {
+		t.Fatal("legacy metadata replaced a current viewpoint")
+	}
+}
 
 func TestApprovalRequestsJoinSharedLiveReads(t *testing.T) {
 	seat := Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{PlatformApp: Admin, work.ID: "member", build.ID: build.Builder}}}
@@ -318,16 +367,16 @@ func TestEnterpriseViewIdentityAndAtomicRelationships(t *testing.T) {
 	}
 	for _, id := range []string{"first", "second"} {
 		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, id,
-			map[string]any{"name": id, "grid": "Pr-Sr", "kind": "management", "asOf": "2026-10-08", "elements": []string{"a", "b"}}, at)
+			map[string]any{"name": id, "viewpoint": "organization", "kind": "management", "asOf": "2026-10-08", "elements": []string{"a", "b"}}, at)
 	}
 	second := model("admin").Views[1]
 	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "first",
-		map[string]any{"name": "Renamed", "grid": "Rs-Sr", "elements": []string{}, "asOf": "2026-10-07"}, at)
+		map[string]any{"name": "Renamed", "viewpoint": "data", "elements": []string{}, "asOf": "2026-10-07"}, at)
 	m := model("admin")
 	if m.Views[0].ID != "first" || m.Views[0].Kind != "management" || len(m.Views[0].Elements) != 0 || !reflect.DeepEqual(m.Views[1], second) {
 		t.Fatalf("view state crossed identities: %+v", m.Views)
 	}
-	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "first", map[string]any{"name": "bad", "grid": "made-up"}, at); got == "ok" {
+	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "first", map[string]any{"name": "bad", "viewpoint": "made-up"}, at); got == "ok" {
 		t.Fatal("unknown viewpoint accepted")
 	}
 	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, "bad-project",
@@ -355,14 +404,14 @@ func TestEnterpriseViewIdentityAndAtomicRelationships(t *testing.T) {
 	}
 	decide(t, tn, "admin", build.ID, "build.object.create", build.ObjectType, "OBJ", map[string]any{"name": "privateobject", "title": "Private object"}, at)
 	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second",
-		map[string]any{"name": "Pinned", "grid": "Pr-Sr", "elements": []string{"a"}, "pins": []map[string]any{{"ref": "record:build.object/OBJ", "anchor": "a", "label": "Cached private text", "at": []int{10, 20}}}}, at)
+		map[string]any{"name": "Pinned", "viewpoint": "organization", "elements": []string{"a"}, "pins": []map[string]any{{"ref": "record:build.object/OBJ", "anchor": "a", "label": "Cached private text", "at": []int{10, 20}}}}, at)
 	if len(model("viewer").Views[0].Pins) != 0 {
 		t.Fatal("private record pin leaked into shared model")
 	}
 	if pins := model("admin").Views[0].Pins; len(pins) != 1 || pins[0].Label == "Cached private text" {
 		t.Fatal("pin label bypassed the current scoped record")
 	}
-	if got := refuse(t, tn, "viewer", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second", map[string]any{"name": "overwrite", "grid": "Pr-Sr", "elements": []string{"a"}}, at); got == "ok" {
+	if got := refuse(t, tn, "viewer", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second", map[string]any{"name": "overwrite", "viewpoint": "organization", "elements": []string{"a"}}, at); got == "ok" {
 		t.Fatal("a partially visible view silently lost another member's pins")
 	}
 	CheckReplay(t, tn, entries, compose)

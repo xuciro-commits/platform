@@ -6,8 +6,8 @@ import { CandidateTest } from "../releases/simulate";
 // visualize that declaration; execution belongs to the host model effect path.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, Select, Textarea, Workbench, t, useUnsavedChanges,
-  type CanvasNode, type NodeCatalog } from "@platform/ui";
+import { Button, Card, Checkbox, Input, FlowCanvas, PageHeader, Panel, Select, Textarea, Workbench, t, useUnsavedChanges,
+  type FlowNode, type FlowCatalog } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { installedObjects, type WorkflowObject } from "../automate/workflow-model";
 
@@ -173,18 +173,19 @@ export function FunctionEditor({ id }: { id: string }) {
 }
 
 function FunctionMap({ draft, source, chosen, onChoose }: { draft: FunctionDraft; source?: string; chosen: Stage; onChoose: (stage: Stage) => void }) {
-  const catalog: NodeCatalog = [
-    { id: "source", title: t("Record inputs"), category: "function", inputs: [], outputs: [{ id: "record", label: t("Authorised fields"), type: "record" }] },
-    { id: "model", title: t("Model inference"), category: "function", inputs: [{ id: "record", label: t("Record inputs"), type: "record" }], outputs: [{ id: "answer", label: t("Typed answer"), type: "answer" }] },
-    { id: "output", title: t("Strict output"), category: "function", inputs: [{ id: "answer", label: t("Typed answer"), type: "answer" }], outputs: [] },
+  const catalog: FlowCatalog = [
+    { id: "source", title: t("Record inputs"), class: "trigger", group: t("Function"), inputs: [], outputs: [{ id: "record", label: t("Authorised fields"), type: "record" }] },
+    { id: "model", title: t("Model inference"), class: "function", group: t("Function"), inputs: [{ id: "record", label: t("Record inputs"), type: "record" }], outputs: [{ id: "answer", label: t("Typed answer"), type: "answer" }] },
+    { id: "output", title: t("Strict output"), class: "document", group: t("Function"), inputs: [{ id: "answer", label: t("Typed answer"), type: "answer" }], outputs: [] },
   ];
-  const nodes: CanvasNode[] = [
+  const nodes: FlowNode[] = [
     { id: "source", kind: "source", label: source || t("Choose a published object"), detail: draft.fields.join(", ") || t("Choose input fields"), position: { x: 0, y: 0 } },
     { id: "model", kind: "model", label: draft.model || t("Application default model"), detail: t("Up to {n} output tokens", { n: draft.maxTokens }), position: { x: 0, y: 150 } },
     { id: "output", kind: "output", label: t("Strict JSON object"), detail: draft.output.map((field) => `${field.name}: ${field.type}`).join(", "), position: { x: 0, y: 300 } },
   ];
   return <Card className="min-w-0 p-3">
-    <NodeCanvas label={t("Function map")} catalog={catalog} nodes={nodes} selected={chosen} onSelect={(id) => onChoose(id as Stage)} height={460}
+    <FlowCanvas label={t("Function map")} catalog={catalog} nodes={nodes} selected={chosen} onSelect={(id) => onChoose(id as Stage)} height={460}
+      storeKey={`function-map:${draft.id || "new"}`}
       edges={[{ id: "input", source: "source", sourcePort: "record", target: "model", targetPort: "record" }, { id: "answer", source: "model", sourcePort: "answer", target: "output", targetPort: "answer" }]} />
     <p className="mt-2 text-xs text-muted">{t("The function returns a suggestion. Human review and business actions remain separate.")}</p>
   </Card>;

@@ -32,7 +32,7 @@ export const entries: CatalogEntry[] = [
   {
     id: "scenario/object-studio", owner: "@pkg/build", name: "Object design workbench", summary: "Inspect and edit fields, lifecycle states, transitions and access through the existing object designer.",
     layer: 5, authority: "example", maturity: "recommended", scope: "platform", uses: ["reference"], tags: ["object", "lifecycle", "fields", "access", "studio"],
-    source: "web/packages/build/src/ontology/process.tsx", example: "ObjectStudioExample", dependencies: ["ui/block-canvas", "app/record-actions"],
+    source: "web/packages/build/src/ontology/process.tsx", example: "ObjectStudioExample", dependencies: ["ui/flow-canvas", "app/record-actions"],
     constraints: ["This is the object type workbench with synthetic local data. Save and publish are refused in Catalog.", "A tenant object must be created, tested and published in the connected Application Studio.", "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions."],
   },
   {
@@ -44,7 +44,7 @@ export const entries: CatalogEntry[] = [
   {
     id: "scenario/logic-studio", owner: "@pkg/build", name: "Logic design workbench", summary: "Compose typed platform blocks with the existing native workflow editor and shared canvas.",
     layer: 5, authority: "example", maturity: "recommended", scope: "platform", uses: ["reference"], tags: ["workflow", "logic", "block", "canvas", "studio"],
-    source: "web/packages/build/src/automate/workflow.tsx", example: "LogicStudioExample", dependencies: ["ui/block-canvas", "app/compute-call", "app/agent-run"],
+    source: "web/packages/build/src/automate/workflow.tsx", example: "LogicStudioExample", dependencies: ["ui/flow-canvas", "app/compute-call", "app/agent-run"],
     constraints: ["The local example demonstrates a payload and result flow in the flow workbench; it does not execute a process.", "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs."],
   },
 ];

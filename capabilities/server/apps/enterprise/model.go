@@ -80,17 +80,17 @@ type Relationship struct {
 	Until      Date    `json:"until,omitempty"`
 }
 
-// View is a drawing over the model: which elements, where, in which UAF grid cell.
+// View is a drawing over the model: which elements, where, from which viewpoint (ADR-0093).
 type View struct {
-	ID       string                `json:"id"`
-	Name     string                `json:"name"`
-	Grid     string                `json:"grid"` // "Pr-Sr", "St-Tx", "Rs-Sr", "Pj-Rm" …
-	Kind     string                `json:"kind,omitempty"`
-	Elements []string              `json:"elements"`
-	Layout   map[string][2]float64 `json:"layout,omitempty"`
-	Context  []string              `json:"context,omitempty"`
-	Pins     []Pin                 `json:"pins,omitempty"`
-	AsOf     Date                  `json:"asOf,omitempty"`
+	ID        string                `json:"id"`
+	Name      string                `json:"name"`
+	Viewpoint string                `json:"viewpoint"` // "organization", "data", "function", "output", "control" (ADR-0093)
+	Kind      string                `json:"kind,omitempty"`
+	Elements  []string              `json:"elements"`
+	Layout    map[string][2]float64 `json:"layout,omitempty"`
+	Context   []string              `json:"context,omitempty"`
+	Pins      []Pin                 `json:"pins,omitempty"`
+	AsOf      Date                  `json:"asOf,omitempty"`
 }
 
 // Pin is a record drawn on a view beside the element it names (ADR-0085 D3):

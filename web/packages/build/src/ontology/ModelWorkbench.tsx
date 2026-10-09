@@ -2,8 +2,8 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { NewActions, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
   type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
-import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, NodeCanvas, PageHeader, Panel, PropertyList, RecordList, Select, Tag,
-  canvasNodeWidth, layout, t, type CanvasEdge, type CanvasNode, type ColumnDef, type NodeCatalog } from "@platform/ui";
+import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, PropertyList, RecordList, RelationCanvas, Select, Tag,
+  t, type ColumnDef, type RelationEdge, type RelationNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { Boxes, Database, GitBranch, Layers, Link2 } from "lucide-react";
 import { useInterfaces } from "./shape";
@@ -15,7 +15,6 @@ type ObjectDraft = { id: string; revision: number; archived?: boolean; name: str
 type Resource = { ref: Api.AssetRef; title: string; source: string; installed?: Definition; draft?: ObjectDraft; fields: (Api.FieldInfo | DraftProperty)[] };
 type Selection = { kind: "property"; ref: PropertyRef } | { kind: "relation"; relation: SemanticRelation; inbound: boolean } | { kind: "action"; definition: Definition };
 type PageSeed = { object: Api.AssetRef; field?: string; relation?: SemanticRelation };
-const objectCatalog: NodeCatalog = [{ id: "object", title: t("Object"), category: "model", inputs: [{ id: "in", label: "", type: "reference" }], outputs: [{ id: "out", label: "", type: "reference" }] }];
 
 /** The original member-scoped definitions are the ontology. Builder drafts are
  * linked authoring resources; browsing never mutates or republishes them.
@@ -67,13 +66,13 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
     // The graph is a bounded view. Search and origin filters are reflected in
     // both the node set and edges; hidden objects never get placeholder nodes.
     const shown = visible.slice(0, 80), ids = new Set(shown.map((item) => item.ref.name));
-    const edges: CanvasEdge[] = model.relations.filter((relation) => ids.has(relation.ref.object.name) && ids.has(relation.target.name)).map((relation) => ({
-      id: relation.ref.kind==="link-type"?`${relation.ref.binding.ref.app}/${relation.ref.binding.ref.name}`:`${relation.ref.object.name}/${relation.ref.field}`, source: relation.ref.object.name, target: relation.target.name, sourcePort: "out", targetPort: "in", label: relation.title,
+    const edges: RelationEdge[] = model.relations.filter((relation) => ids.has(relation.ref.object.name) && ids.has(relation.target.name)).map((relation) => ({
+      id: relation.ref.kind==="link-type"?`${relation.ref.binding.ref.app}/${relation.ref.binding.ref.name}`:`${relation.ref.object.name}/${relation.ref.field}`,
+      source: relation.ref.object.name, target: relation.target.name, label: relation.title,
     }));
-    const positions = layout(shown.map((item) => ({ id: item.ref.name, label: item.title })), edges.map((edge) => ({ from: edge.source, to: edge.target })), "right",
-      { width: canvasNodeWidth, height: 74, gapX: 80, gapY: 32 });
-    // A relation graph is a map, not an editor: every object starts collapsed and the toolbar expands them all.
-    const nodes: CanvasNode[] = shown.map((item) => ({ id: item.ref.name, kind: "object", label: item.title, detail: item.ref.name, collapsed: true, position: positions.get(item.ref.name)! }));
+    // An object type is a thing, not a step (ADR-0086 D2): the relationship canvas
+    // arranges it, and the class supplies the glyph while the identity is the detail.
+    const nodes: RelationNode[] = shown.map((item) => ({ id: item.ref.name, label: item.title, detail: item.ref.name, class: "object" }));
     return { nodes, edges };
   }, [visible, model]);
   const related = resource ? model.relations.filter((relation) => relation.ref.object.name === current || relation.target.name === current) : [];
@@ -152,8 +151,8 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
         {view === "catalog" && <DataTable data={visible} columns={columns} getRowId={(item) => item.ref.name} height="100%" loading={inventory.isLoading} searchable={false}
           onRowClick={(item) => item.draft && !item.installed ? edit(item) : choose(item)} empty={t("No matching objects.")} />}
         {view === "graph" && <div className="flex h-full min-h-[25rem] flex-col"><p className="mb-2 text-xs text-muted" role="status">{t("Showing {shown} of {total} objects", { shown: graph.nodes.length, total: visible.length })}</p>
-          <NodeCanvas catalog={objectCatalog} nodes={graph.nodes} edges={graph.edges} selected={current} height="100%" label={t("Relationship graph")}
-            onSelect={(name) => { setCurrent(name); select(undefined); }} onOpen={(name) => { const item = resources.find((item) => item.ref.name === name); if (item) choose(item); }} /></div>}
+          <RelationCanvas layout="tree-right" nodes={graph.nodes} edges={graph.edges} selected={current} height="100%" label={t("Relationship graph")} storeKey="model-graph"
+            onSelect={(name) => { if (name) { setCurrent(name); select(undefined); } }} onOpen={(name) => { const item = resources.find((item) => item.ref.name === name); if (item) choose(item); }} /></div>}
         {view === "detail" && resource && <div className="grid gap-3">
           <div className="flex items-center gap-3"><Database className="size-6 text-primary" /><div className="min-w-0 flex-1"><h2 className="text-base font-semibold">{resource.title}</h2><p className="font-mono text-xs text-muted">{resource.ref.name}{resource.installed?.entity?.implements?.length ? <> · {t("implements")} {resource.installed.entity.implements.join(", ")}</> : null}{resource.draft?.extends ? <> · {t("extends")} {resource.draft.extends}</> : null}</p></div><Tag label={t(resource.installed ? "Published" : "Draft")} /></div>
           <div role="tablist" aria-label={t("Object resource views")} className="flex flex-wrap gap-1 border-b border-border pb-2">

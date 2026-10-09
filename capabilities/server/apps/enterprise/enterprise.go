@@ -59,15 +59,16 @@ type Enterprise struct {
 	ledger *platform.Ledger
 }
 
-// New is a tenant's enterprise app, starting from an ADR-0012 seed (which an
-// industry package or the development seats give) lifted into the model.
-func New(tenant string, seed platform.OrgSeed) *Enterprise {
+// declarations is the enterprise action catalog in full — the write contract
+// the host enforces and the generated SDK types (ADR-0094 D3): one source for
+// the ledger and for every consumer outside this package.
+func declarations() []platform.Action {
 	admin := []string{Admin}
 	f := func(name, typ, description string, required bool) platform.Field {
 		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
 	from, until := f("from", "date", "Valid from (YYYY-MM-DD; empty: today)", false), f("until", "date", "Valid until, exclusive (empty: open)", false)
-	catalog := platform.NewCatalog(
+	actions := []platform.Action{
 		platform.Action{Schema: SchemaElementAdd, Target: ElementType, Capability: "elements", Title: "Add element", Roles: admin,
 			Description: "Add an element of the enterprise: an organisation, post, person, capability, location, resource, project or goal, typed by a UAF stereotype.",
 			Payload: []platform.Field{f("stereotype", "string", "UAF stereotype, e.g. ActualOrganization, ActualPost, Capability, ActualLocation", true), f("name", "string", "Name", true),
@@ -94,7 +95,7 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 			Payload:     []platform.Field{until}},
 		platform.Action{Schema: SchemaViewSave, Target: ViewType, Capability: "views", Title: "Save view", Roles: admin,
 			Description: "Write a drawing over the model under its own id: the name, the elements it shows, where, the records pinned beside them, and the day it shows. Saving an id writes that view; it never writes another one.",
-			Payload: []platform.Field{f("name", "string", "Name", true), f("grid", "string", "UAF grid cell, e.g. Pr-Sr, St-Tx, Rs-Sr, Pj-Rm", true),
+			Payload: []platform.Field{f("name", "string", "Name", true), f("viewpoint", "string", "The viewpoint the drawing starts from: organization, data, function, output, control", true),
 				f("kind", "string", "Relationship kind shown by the view", false), f("context", "json", "Elements explicitly added from other viewpoints", false),
 				f("elements", "json", "Element ids shown", false), f("layout", "json", "Positions by element id", false),
 				f("pins", "json", "Records pinned on the drawing: {ref, anchor, at}", false), f("asOf", "date", "The day the view shows", false)}},
@@ -115,11 +116,27 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 			Description: "Give an empty model its first shape for the enterprise's scale: S (≤100 people), M (≤1,000: a plant), L (≤10,000: divisions), XL (≤100,000: a group).",
 			Payload: []platform.Field{f("scale", "string", "S, M, L or XL; empty: from headcount", false), f("name", "string", "The enterprise's name", true), f("headcount", "number", "People, roughly", false),
 				f("sites", "number", "Sites or plants", false), f("legalEntities", "number", "Legal entities", false), f("industry", "string", "manufacturing, hospitality, services …", false)}},
-	)
-	change, _ := catalog.Action(SchemaRelationshipAdd)
+	}
+	// relationship.change is relationship.add that replaces atomically: the
+	// same payload plus the new id, declared last as the catalog always did.
+	change := platform.Action{}
+	for _, a := range actions {
+		if a.Schema == SchemaRelationshipAdd {
+			change = a
+			break
+		}
+	}
 	change.Schema, change.Title, change.Description = SchemaRelationshipChange, "Change relationship", "Replace a relationship atomically; a refusal leaves the existing relationship unchanged."
 	change.Payload = append(slices.Clone(change.Payload), f("replacement", "string", "New relationship id", true))
-	catalog.Add(change)
+	return append(actions, change)
+}
+
+// New is a tenant's enterprise app, starting from an ADR-0012 seed (which an
+// industry package or the development seats give) lifted into the model. Its
+// ledger is declared from declarations(), the single source of the write
+// contract the generated SDK also reads (ADR-0094).
+func New(tenant string, seed platform.OrgSeed) *Enterprise {
+	catalog := platform.NewCatalog(declarations()...)
 	return &Enterprise{tenant: tenant, model: FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType)}
 }
 
@@ -200,22 +217,22 @@ func copyModel(m Model) Model {
 }
 
 type payload struct {
-	Stereotype, Name, Kind, ShortName, Reason, Source, Target, Role, Relation, Grid, Scale, Industry string
-	Legal, External, Matrix, Primary                                                                 bool
-	Share                                                                                            float64
-	Headcount, Sites, LegalEntities                                                                  int
-	From, Until, AsOf                                                                                Date
-	Properties                                                                                       map[string]any
-	Elements                                                                                         []string
-	Layout                                                                                           map[string][2]float64
-	Pins                                                                                             []Pin
-	Calendar                                                                                         string
-	Published                                                                                        *bool
-	Slice                                                                                            *Slice
-	Pattern, Under                                                                                   string
-	Replacement                                                                                      string
-	Context                                                                                          []string
-	Params                                                                                           Params
+	Stereotype, Name, Kind, ShortName, Reason, Source, Target, Role, Relation, Viewpoint, Scale, Industry string
+	Legal, External, Matrix, Primary                                                                      bool
+	Share                                                                                                 float64
+	Headcount, Sites, LegalEntities                                                                       int
+	From, Until, AsOf                                                                                     Date
+	Properties                                                                                            map[string]any
+	Elements                                                                                              []string
+	Layout                                                                                                map[string][2]float64
+	Pins                                                                                                  []Pin
+	Calendar                                                                                              string
+	Published                                                                                             *bool
+	Slice                                                                                                 *Slice
+	Pattern, Under                                                                                        string
+	Replacement                                                                                           string
+	Context                                                                                               []string
+	Params                                                                                                Params
 }
 
 func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -252,6 +269,11 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			p.Source = head.Source
 		} else if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid("the payload is not readable")
+		}
+		if c.Replaying && s.GetSchema().GetName() == SchemaViewSave && p.Viewpoint == "" {
+			var historical struct{ Grid string }
+			json.Unmarshal(s.GetPayload(), &historical)
+			p.Viewpoint = legacyViewpoint(historical.Grid)
 		}
 		today := now.UTC().Format(time.DateOnly)
 		if p.From == "" {
@@ -412,11 +434,11 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			slice := *p.Slice
 			return func(*pb.ChangeRecord) { m.Import(slice) }, nil
 		case SchemaViewSave:
-			if p.Name == "" || p.Grid == "" {
-				return nil, invalid("a view needs a name and a grid cell")
+			if p.Name == "" || p.Viewpoint == "" {
+				return nil, invalid("a view needs a name and a viewpoint")
 			}
-			if !slices.ContainsFunc(Grid(mm), func(g GridCell) bool { return g.ID == p.Grid }) {
-				return nil, invalid("{grid} is not a UAF view cell", p.Grid)
+			if !slices.ContainsFunc(Views(mm), func(v Viewpoint) bool { return v.ID == p.Viewpoint }) {
+				return nil, invalid("{viewpoint} is not a view of this model", p.Viewpoint)
 			}
 			for _, el := range p.Elements {
 				if m.element(el) == nil {
@@ -451,7 +473,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				}
 			}
 			return func(*pb.ChangeRecord) {
-				v := View{ID: id, Name: p.Name, Grid: p.Grid, Kind: kind, Context: p.Context, Elements: p.Elements, Layout: p.Layout, Pins: p.Pins, AsOf: p.AsOf}
+				v := View{ID: id, Name: p.Name, Viewpoint: p.Viewpoint, Kind: kind, Context: p.Context, Elements: p.Elements, Layout: p.Layout, Pins: p.Pins, AsOf: p.AsOf}
 				if v.Elements == nil {
 					v.Elements = []string{}
 				}
@@ -687,7 +709,7 @@ type Metamodel struct {
 	Profile      []ProfileEntry              `json:"profile"`
 	Stereotypes  map[string]*uaf.Stereotype  `json:"stereotypes"`
 	Enumerations map[string]*uaf.Enumeration `json:"enumerations"`
-	Grid         []GridCell                  `json:"grid"`
+	Views        []Viewpoint                 `json:"views"`
 	// Contracts are the relationship stereotypes as the host checks them
 	// (ADR-0085 D2): what each end accepts, the standard's text it comes from,
 	// and what this profile adds. The modeler offers exactly these.
@@ -732,7 +754,7 @@ func (e *Enterprise) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	case ReadMetamodel:
 		mm := uaf.Current()
 		return Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations,
-			Grid: Grid(mm), Contracts: Contracts(mm)}, nil
+			Views: Views(mm), Contracts: Contracts(mm)}, nil
 	}
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }

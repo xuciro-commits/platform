@@ -1,5 +1,5 @@
 import {originalActionDefaults,validActionDefaults} from "../widgets/action-defaults";
-import type {Api} from "@platform/kernel";
+import {queryElements,resolveElements,type Api,type EnterpriseStereotype} from "@platform/kernel";
 // Every declared action has an entry in the generated views (F-33): an action
 // that makes a new record of a type is offered on the type's list; every other
 // action on the type, and a lifecycle transition that takes input (F-27), on
@@ -67,22 +67,27 @@ function ReadPicker({ id, field, value, onChange }: { id: string; field: Field; 
 }
 
 /** The live elements of the enterprise model, narrowed to a UAF stereotype, for a payload
- * field tagged ref:"enterprise.element" (ADR-0067 D8). The model is every member's to read. */
+ * field tagged ref:"enterprise.element" (ADR-0067 D8) — read through the typed query and
+ * resolve contracts (ADR-0094), never the whole graph. The model is every member's to read. */
 function ElementPicker({ id, stereotype, value, onChange }: { id: string; stereotype?: string; value: string; onChange: (id: string) => void }) {
   const { client } = useHost();
-  const model = useQuery({ queryKey: ["read", "enterprise"], queryFn: () => client.get<Api.EnterpriseModel>("/v1/enterprise") }).data;
-  const today = new Date().toISOString().slice(0, 10);
-  const of = (model?.elements ?? []).filter((e) => !stereotype || e.stereotype === stereotype);
-  const live = (e: { from?: string; until?: string }) => (e.from ?? "") <= today && (!e.until || today < e.until);
-  const items = of.filter(live);
+  const items = useQuery({
+    queryKey: ["enterprise", "query", stereotype ?? ""],
+    queryFn: () => queryElements(client.get, stereotype ? { stereotype: stereotype as EnterpriseStereotype } : {}),
+  }).data?.elements ?? [];
   // A record keeps naming what it named: an element that has since been closed
-  // stays visible, marked, instead of the value silently reading as empty.
-  const kept = value ? of.find((e) => e.id === value) : undefined;
+  // (or sits beyond the read page) is resolved by id and stays visible, marked,
+  // instead of the value silently reading as empty.
+  const kept = useQuery({
+    queryKey: ["enterprise", "resolve", value],
+    enabled: !!value && !items.some((e) => e.id === value),
+    queryFn: () => resolveElements(client.get, [value]),
+  }).data?.elements[0];
   return (
     <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">—</option>
       {items.map((e) => <option key={e.id} value={e.id}>{e.name}{e.kind ? ` · ${e.kind}` : ""}</option>)}
-      {kept && !live(kept) && <option value={kept.id}>{t("{name} · closed {until}", { name: kept.name, until: kept.until ?? "" })}</option>}
+      {kept && <option value={kept.id}>{kept.closed ? t("{name} · closed {until}", { name: kept.name, until: kept.until ?? "" }) : `${kept.name}${kept.kind ? ` · ${kept.kind}` : ""}`}</option>}
     </Select>
   );
 }

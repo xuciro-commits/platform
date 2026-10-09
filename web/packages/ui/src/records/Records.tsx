@@ -23,7 +23,7 @@ import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
 import { RecordLookup } from "./RecordLookup";
 import { Chart } from "../charts/Chart";
-import { Graph, type GraphEdge, type GraphNode } from "../graph/Graph";
+import { FlowSteps, type FlowStepEdge, type FlowStepNode } from "../graph/flow/FlowSteps";
 import { Pivot } from "../charts/Pivot";
 import type { AggregateData, AggregateQuery, ChartSpec, Mark } from "../charts/spec";
 import { t } from "../i18n";
@@ -691,17 +691,18 @@ export function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer
   );
 }
 
-/** An approval chain drawn as a graph (#122): the requester, each level with its approvers and who decided, and how it ended. */
+/** An approval chain drawn as a process (#122): the requester, each level with its
+ * approvers and who decided, and how it ended — in BPMN shapes (ADR-0086 D4). */
 function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
-  const nodes: GraphNode[] = [{ id: "requester", label: a.requester, detail: t("asked"), tone: "success" }];
-  const edges: GraphEdge[] = [];
+  const nodes: FlowStepNode[] = [{ id: "requester", label: a.requester, detail: t("asked"), notation: "event-start", tone: "success" }];
+  const edges: FlowStepEdge[] = [];
   let previous = "requester";
   a.levels.forEach((l, i) => {
     const decided = l.approved.map((m) => l.decidedBy?.[m] ? t("{delegate} for {approver}", { delegate: l.decidedBy[m]!, approver: m }) : m);
     const rejectedHere = a.state === "rejected" && i === a.level;
     const here = a.state === "pending" && i === a.level;
     nodes.push({
-      id: `level-${i}`, label: l.title, current: here,
+      id: `level-${i}`, label: l.title, current: here, notation: "user-task",
       detail: rejectedHere ? t("rejected by {member}", { member: a.rejectedBy ?? "" }) : decided.length ? t("approved by {members}", { members: decided.join(", ") }) : l.approvers.join(", "),
       tone: rejectedHere ? "danger" : here ? "info" : i < a.level || a.state === "approved" || a.state === "refused" ? "success" : undefined,
     });
@@ -710,10 +711,10 @@ function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
   });
   const ended = a.state !== "pending";
   const outcomes: Record<string, string> = { approved: t("Approved"), rejected: t("Rejected"), refused: t("Refused when run"), withdrawn: t("Withdrawn") };
-  nodes.push({ id: "outcome", label: ended ? outcomes[a.state] ?? a.state : t("Outcome"), detail: a.outcome || undefined,
+  nodes.push({ id: "outcome", label: ended ? outcomes[a.state] ?? a.state : t("Outcome"), detail: a.outcome || undefined, notation: "event-end",
     tone: a.state === "approved" ? "success" : a.state === "rejected" || a.state === "refused" ? "danger" : a.state === "withdrawn" ? "neutral" : undefined });
   edges.push({ from: previous, to: "outcome", dashed: !ended });
-  return <Graph nodes={nodes} edges={edges} height={150} label={t("Approvals")} />;
+  return <FlowSteps nodes={nodes} edges={edges} height={150} label={t("Approvals")} storeKey={`approvals:${a.id}`} />;
 }
 
 /** The processes about a record: each flow, its state, and the steps it stands at. */

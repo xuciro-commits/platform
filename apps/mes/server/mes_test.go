@@ -234,13 +234,86 @@ func TestDispositionNeedsTwoSignatures(t *testing.T) {
 	expect(t, submit(p, op1, SchemaNC, SFCType, "SO-1-001", sfcPayload{Code: "POROSITY"}), "ok")
 	expect(t, sfc(p, "SO-1-001").State, "hold")
 	expect(t, submit(p, op1, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "reviewed"}), "ERROR_CODE_POLICY_DENIED")
-	expect(t, submit(p, qa1, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "reviewed", ReworkStep: 0}), "ok")
-	expect(t, submit(p, qa1, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "approved", ReworkStep: 0}), "ERROR_CODE_CONFLICT")
+	expect(t, submit(p, qa1, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "reviewed", ReworkOperation: 10}), "ok")
+	expect(t, submit(p, qa1, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "approved", ReworkOperation: 10}), "ERROR_CODE_CONFLICT")
 	expect(t, sfc(p, "SO-1-001").State, "hold")
-	expect(t, submit(p, qa2, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "approved", ReworkStep: 0}), "ok")
+	expect(t, submit(p, qa2, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "approved", ReworkOperation: 10}), "ok")
 	s := sfc(p, "SO-1-001")
-	if s.State != "queued" || s.Step != 0 {
+	if s.State != "queued" || s.Operation != 10 {
 		t.Fatalf("rework not applied: %+v", s)
+	}
+}
+
+// A lot reads the routing version it was released against, not the newest version
+// of its product's routing: that is the whole of what "released against" buys, and
+// why revising a routing cannot move a lot already on the floor (ADR-0088).
+func TestLotReadsItsOwnRoutingVersion(t *testing.T) {
+	p := New(tenant, DemoMaster())
+	at := func(version, number int) string {
+		s := SFC{Product: "P-200", Routing: "RT-200", RoutingVersion: version, Operation: number}
+		if op := p.released(&s).operation(s.Operation); op != nil {
+			return op.Name
+		}
+		return ""
+	}
+	if got := at(1, 20); got != "Assemble" {
+		t.Fatalf("version 1, operation 20 is %q", got)
+	}
+	if got := at(2, 20); got != "Deburr" { // version 2 inserted a deburr at 20
+		t.Fatalf("version 2, operation 20 is %q", got)
+	}
+	if got := p.routingFor("P-200").Version; got != 2 {
+		t.Fatalf("a new release takes version %d", got)
+	}
+	expect(t, submit(newPlant(t), sup, SchemaRelease, OrderType, "SO-9", releasePayload{Product: "P-200", Quantity: 1, SFCs: 1}), "ok")
+}
+
+// "Which equipment can process this step" is computed by matching what the
+// operation requires against what each resource can do — not by listing the work
+// center — and the plant refuses a start its own answer did not name.
+func TestCapableResourcesAreComputed(t *testing.T) {
+	p := newPlant(t)
+	served := p.Master()
+	operations := func(id string, version int) []Operation {
+		for _, r := range served.Routings {
+			if r.ID == id && r.Version == version {
+				return r.Operations
+			}
+		}
+		return nil
+	}
+	expect(t, fmt.Sprint(operations("RT-100", 1)[1].Capable), "[CNC-11 CNC-12]") // both lathes hold cnc-3axis
+	expect(t, fmt.Sprint(operations("RT-200", 2)[2].Capable), "[ASM-1]")         // ASM-2 sits in Assembly but cannot torque
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-1", releasePayload{Product: "P-200", Quantity: 1, SFCs: 1}), "ok")
+	for i := 0; i < 2; i++ { // machine and deburr, both on the L2 lathe
+		expect(t, submit(p, op2, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: "CNC-21"}), "ok")
+		expect(t, submit(p, op2, SchemaComplete, SFCType, "SO-1-001", sfcPayload{}), "ok")
+	}
+	if got := sfc(p, "SO-1-001").Operation; got != 30 {
+		t.Fatalf("the lot stands at operation %d, want the assemble at 30", got)
+	}
+	expect(t, submit(p, op2, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: "ASM-2"}), "ERROR_CODE_INVALID_ARGUMENT")
+	expect(t, submit(p, op2, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: "ASM-1"}), "ok")
+}
+
+// Rework names an operation of the routing the lot was released against, so the
+// disposition dialog is a list to pick from instead of an index to remember.
+func TestReworkNamesAnOperation(t *testing.T) {
+	p := newPlant(t)
+	submit(p, sup, SchemaRelease, OrderType, "SO-1", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1})
+	submit(p, op1, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: "FURNACE-1"})
+	submit(p, op1, SchemaComplete, SFCType, "SO-1-001", sfcPayload{})
+	submit(p, op1, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: "CNC-11"})
+	expect(t, submit(p, op1, SchemaNC, SFCType, "SO-1-001", sfcPayload{Code: "DIMENSION"}), "ok")
+	if got := sfc(p, "SO-1-001").NCs[0].Operation; got != 20 {
+		t.Fatalf("the nonconformance was logged at operation %d", got)
+	}
+	expect(t, submit(p, qa1, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "reviewed", ReworkOperation: 99}), "ERROR_CODE_INVALID_ARGUMENT") // no such operation
+	expect(t, submit(p, qa1, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "reviewed", ReworkOperation: 30}), "ERROR_CODE_INVALID_ARGUMENT") // ahead of the lot
+	expect(t, submit(p, qa1, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "reviewed", ReworkOperation: 10}), "ok")
+	expect(t, submit(p, qa2, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "approved", ReworkOperation: 10}), "ok")
+	if s := sfc(p, "SO-1-001"); s.State != "queued" || s.Operation != 10 {
+		t.Fatalf("rework to an operation: %+v", s)
 	}
 }
 

@@ -8,14 +8,15 @@ import {workflowInputs,workflowRunMatches} from "./workflow-session";
 // compiles, executes and accepts outcomes; React Flow remains presentation.
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
-import { ActionMenu, Button, Input, NodeCanvas, PageHeader, Panel, ProblemList, StructureRow, Workbench, canvasNodeHeight, canvasNodeWidth, canvasPlacement, layout, t, useUnsavedChanges,
-  type BlockStatus, type CanvasAddContext, type WorkbenchProblem, type CanvasEdge, type CanvasNode, type NodeCatalog, type NodeKind, type NodePort } from "@platform/ui";
-import { Blocks, Braces, Brain, Database, GitBranch, MoreHorizontal, Play, Plus, Search, Settings2, Workflow, Zap } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ActionMenu, Button, FLOW_NODE_DROP, FlowCanvas, Input, PageHeader, Panel, ProblemList, StructureRow, Workbench,
+  flowBlockHeight, flowNodeIcon, flowNodeWidth, flowPlacement, flowPortFits, useFlowArrangement, loops, notationOf, t, useUnsavedChanges,
+  type FlowAddContext, type FlowBoundary, type FlowCatalog, type FlowEdge, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort, type WorkbenchProblem } from "@platform/ui";
+import { MoreHorizontal, Play, Plus, Search, Settings2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {useQueries} from "@tanstack/react-query";
 import { DataField, JSONEditor, WorkflowFormProblems, schemaIssue } from "./workflow-binding";
 import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
-import { capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, replaceReferences, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle,
+import { capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, replaceReferences, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle, workflowStepClass,
   type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview } from "../releases/release";
@@ -23,22 +24,27 @@ import { WorkflowRuns, type WorkflowRun } from "./workflow-runs";
 
 const empty = (): WorkflowDraft => ({ id: "", revision: 0, name: "", title: "", object: "", when: "", manual: true, input: {}, inputSchema: { type: "object", properties: {} }, steps: [], layout: {} });
 type Edit = Partial<WorkflowDraft> | ((draft: WorkflowDraft) => WorkflowDraft);
-const icons: Record<string, ReactNode> = { action: <Zap />, query: <Database />, compute: <Braces />, ai: <Brain />, branch: <GitBranch />, switch: <GitBranch />, foreach: <Workflow />, while: <Workflow />, fork: <GitBranch />, payload: <Play /> };
+/** BPMN boundary events (ADR-0086 D4): the host already declares a step's timeout and
+ * its error path, so the canvas draws them attached to the step instead of as a note. */
+const stepBoundary = (step: WorkflowStep): FlowBoundary[] => [
+  ...(step.timeoutSeconds ? [{ id: "timeout", notation: "event-timer" as const, label: t("Timeout after {seconds} seconds", { seconds: step.timeoutSeconds }) }] : []),
+  ...(step.error ? [{ id: "error", notation: "event-error" as const, label: t("Error path") }] : []),
+];
 const translatedPort = (port: string) => t(({ in: "In", In: "In", next: "Continue", Next: "Continue", error: "Error", Error: "Error", body: "Loop", Loop: "Loop", true: "True", false: "False" } as Record<string, string>)[port] ?? port);
-const definitionKind = (capability: Capability): NodeKind => {
-  const inputs: NodePort[] = capability.ports.filter((port) => port.direction === "input").map((port) => ({ id: port.id, label: translatedPort(port.title), type: port.type, channel: port.channel }));
+const definitionKind = (capability: Capability): FlowNodeKind => {
+  const inputs: FlowPort[] = capability.ports.filter((port) => port.direction === "input").map((port) => ({ id: port.id, label: translatedPort(port.title), type: port.type, channel: port.channel }));
   if (capability.kind === "compute") inputs.push({ id: "binding:value", label: t("Input"), type: capability.input?.type ?? "json", channel: "data", limit: 1 });
   if (capability.kind === "ai" || capability.kind === "action") inputs.push({ id: "binding:target", label: t("Record ID"), type: "string", channel: "data", limit: 1 });
   if (capability.kind !== "ai") {
     for (const [name, schema] of Object.entries(commonSchemaProperties(capability.input))) inputs.push({ id: `input:${name}`, label: name, type: schema.type, channel: "data", limit: 1 });
     for (const field of capability.parameters ?? []) if (!inputs.some((port) => port.id === `input:${field.name}`)) inputs.push({ id: `input:${field.name}`, label: field.name, type: parameterSchema(field)?.type ?? "json", channel: "data", limit: 1 });
   }
-  const outputs: NodePort[] = capability.ports.filter((port) => port.direction === "output").map((port) => ({ id: port.id === "true" || port.id === "false" ? `case:${port.id}` : port.id, label: translatedPort(port.title), type: port.type, channel: port.channel, limit: 1 }));
+  const outputs: FlowPort[] = capability.ports.filter((port) => port.direction === "output").map((port) => ({ id: port.id === "true" || port.id === "false" ? `case:${port.id}` : port.id, label: translatedPort(port.title), type: port.type, channel: port.channel, limit: 1 }));
   if (capability.output) {
     outputs.push({ id: dataPort([]), label: t("Result"), type: capability.output.type, channel: "data" });
     for (const [name, schema] of Object.entries(commonSchemaProperties(capability.output))) outputs.push({ id: dataPort([name]), label: name, type: schema.type, channel: "data" });
   }
-  return { id: capabilityKey(capability), title: t(capability.title), description: t(capability.description), category: t(capability.group), tone: capability.tone, icon: icons[capability.kind] ?? <Blocks />, inputs, outputs };
+  return { id: capabilityKey(capability), title: t(capability.title), description: t(capability.description), class: workflowStepClass(capability.kind), group: t(capability.group), tone: capability.tone, inputs, outputs };
 };
 function pathSchema(schema: ValueSchema | undefined, path: string[] = []): ValueSchema | undefined {
   for (const name of path) schema = commonSchemaProperties(schema)[name];
@@ -67,10 +73,10 @@ function outputSchema(step: WorkflowStep, draft: WorkflowDraft, capabilities: Ca
   if (step.kind === "ask") return { type: "object", properties: { answer: { type: "string", enum: step.answers } } };
   return sourceCapability(step, capabilities)?.output;
 }
-function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capability[]): NodeKind {
+function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capability[]): FlowNodeKind {
   const capability = sourceCapability(step, capabilities);
-  const root = capability ? definitionKind(capability) : { id: step.kind, title: workflowKindTitle(step.kind), category: t("Flow"), inputs: [] as NodePort[], outputs: [] as NodePort[] };
-  const outputs: NodePort[] = [];
+  const root = capability ? definitionKind(capability) : { id: step.kind, title: workflowKindTitle(step.kind), class: workflowStepClass(step.kind), group: t("Flow"), inputs: [] as FlowPort[], outputs: [] as FlowPort[] };
+  const outputs: FlowPort[] = [];
   if (!["end", "join", "break", "continue", "fail", "branch"].includes(step.kind)) outputs.push({ id: "next", label: t(step.kind === "switch" ? "Default" : step.kind === "foreach" || step.kind === "while" ? "Done" : "Continue"), type: "flow", channel: "control", limit: 1 });
   if (step.kind === "branch") outputs.push(...["true", "false"].map((key) => ({ id: `case:${key}`, label: t(key === "true" ? "True" : "False"), type: "flow", channel: "control" as const, limit: 1 })));
   else if (step.kind === "ask" || step.kind === "switch") outputs.push(...Object.keys(step.cases ?? {}).map((key) => ({ id: `case:${encodeURIComponent(key)}`, label: key, type: "flow", channel: "control" as const, limit: 1 })));
@@ -90,7 +96,7 @@ function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capabi
     if (!outputs.some((port) => port.id === id)) outputs.push({ id, label: path.join(".") || t("Result"), type: pathSchema(schema, path)?.type ?? "object", channel: "data" });
   }
   const fields = step.kind === "ai" || step.kind === "compute" && step.value ? [] : [...new Set([...Object.keys(capability?.input?.properties ?? {}), ...(capability?.parameters ?? []).map((field) => field.name), ...Object.keys(step.inputs ?? {})])];
-  const inputs: NodePort[] = step.kind === "payload" ? [] : [{ id: "in", label: t("In"), type: "flow", channel: "control" }];
+  const inputs: FlowPort[] = step.kind === "payload" ? [] : [{ id: "in", label: t("In"), type: "flow", channel: "control" }];
   if (step.kind === "compute") inputs.push({ id: "binding:value", label: t("Input"), type: capability?.input?.type ?? "json", channel: "data", limit: 1 });
   if (step.kind === "ai" || step.kind === "action") inputs.push({ id: "binding:target", label: t("Record ID"), type: "string", channel: "data", limit: 1 });
   if (step.kind === "foreach") inputs.push({ id: "binding:collection", label: t("Collection"), type: "array", channel: "data", limit: 1 });
@@ -152,18 +158,17 @@ export function FlowEditor({ id }: { id: string }) {
     return result;
   }, [draft, validation]);
   const kinds = useMemo(() => draft.steps.map((step) => nodeKind(step, draft, capabilities)), [draft, capabilities]);
-  const catalog: NodeCatalog = [...(catalogQuery.data??[]).map(definitionKind), ...kinds];
+  const catalog: FlowCatalog = [...(catalogQuery.data??[]).map(definitionKind), ...kinds];
   const edges = [...controlEdges(draft), ...dataEdges(draft)];
-  const positioned = layout(draft.steps.map((step) => ({ id: step.name })), controlEdges(draft).map((edge) => ({ from: edge.source, to: edge.target })), "right",
-    { width: canvasNodeWidth, height: Math.max(120, ...kinds.map((kind) => canvasNodeHeight(kind))), gapX: 80, gapY: 40 });
-  const nodes: CanvasNode[] = draft.steps.map((step) => {
+  const positioned = useFlowArrangement(draft.steps.map((step) => ({ id: step.name, kind: `node:${step.name}`, label: step.title || step.name, position: { x: 0, y: 0 } })), edges, "right", catalog);
+  const nodes: FlowNode[] = draft.steps.map((step) => {
     const tokens = run?.tokens?.filter((token) => token.step === step.name) ?? [];
     const accepted = run?.outputs && Object.hasOwn(run.outputs, step.name);
     const visited = run?.trace?.some((trace) => trace.step === step.name);
-    const status: BlockStatus | undefined = matchingRun ? tokens.some((token) => token.error || token.waits === "stuck") ? "error" : tokens.length ? "waiting" : accepted || visited ? "success" : "idle" : undefined;
-    return { id: step.name, kind: `node:${step.name}`, label: step.title || step.name, detail: step.name === draft.steps[0]?.name ? t("Entry block") : sourceCapability(step, capabilities)?.ref.app ?? t("Platform control"),
+    const status: FlowNodeStatus | undefined = matchingRun ? tokens.some((token) => token.error || token.waits === "stuck") ? "error" : tokens.length ? "waiting" : accepted || visited ? "success" : "idle" : undefined;
+    return { id: step.name, kind: `node:${step.name}`, notation: notationOf(step.kind), loop: loops.has(step.kind), boundary: stepBoundary(step), label: step.title || step.name, detail: step.name === draft.steps[0]?.name ? t("Entry block") : sourceCapability(step, capabilities)?.ref.app ?? t("Platform control"),
       version: step.operation ? step.operation.version > 0 ? `v${step.operation.version}` : sourceCapability(step, capabilities)?.version : step.function ? step.function.version > 0 ? `v${step.function.version}` : sourceCapability(step, capabilities)?.version : step.queryVersion ? `v${step.queryVersion}` : undefined,
-      position: draft.layout?.[step.name] ?? positioned.get(step.name) ?? { x: 0, y: 0 }, status, diagnostics: diagnostics[step.name], current: matchingRun && tokens.length > 0 };
+      position: draft.layout?.[step.name] ?? positioned[step.name] ?? { x: 0, y: 0 }, status, diagnostics: diagnostics[step.name], current: matchingRun && tokens.length > 0 };
   });
   const node = draft.steps.find((step) => step.name === chosen);
   const saved = query.data?.record;
@@ -171,7 +176,7 @@ export function FlowEditor({ id }: { id: string }) {
   const runIssue = installed?.inputSchema ? schemaIssue(installed.inputSchema, runInput) : undefined;
   const brokenForm = Object.values(formProblems).filter(Boolean);
 
-  const add = (kind: string, context?: CanvasAddContext) => {
+  const add = (kind: string, context?: FlowAddContext) => {
     const capability = capabilities.find((item) => capabilityKey(item) === kind); if (!capability) return;
     const step = initialStep(capability, draft.steps);
     if ((step.kind === "action" || step.kind === "ai") && draft.object) step.target = { source: "subject", path: ["id"] };
@@ -182,7 +187,7 @@ export function FlowEditor({ id }: { id: string }) {
         if (path) {
           const from = current.steps.find((item) => item.name === context.source!.node);
           const type = from ? pathSchema(outputSchema(from, current, capabilities), path)?.type : undefined;
-          const into = definitionKind(capability).inputs.find((port) => port.channel === "data" && (port.type === type || port.type === "json"));
+          const into = definitionKind(capability).inputs.find((port) => port.channel === "data" && flowPortFits({ type: type ?? "", channel: "data" }, port));
           const binding: Binding = { source: "step", step: context.source.node, path };
           if (into?.id === "binding:value") { step.value = binding; step.inputs = undefined; }
           else if (into?.id === "binding:target") step.target = binding;
@@ -194,7 +199,7 @@ export function FlowEditor({ id }: { id: string }) {
         else {
           const target = current.steps.find((item) => item.name === context.target!.node);
           const inputPort = target ? nodeKind(target, current, capabilities).inputs.find((port) => port.id === context.target!.port) : undefined;
-          const out = definitionKind(capability).outputs.find((port) => port.channel === "data" && (port.type === inputPort?.type || inputPort?.type === "json"));
+          const out = inputPort && definitionKind(capability).outputs.find((port) => port.channel === "data" && flowPortFits(port, inputPort));
           const path = out ? portPath(out.id) : undefined;
           if (path) steps = steps.map((item) => {
             if (item.name !== context.target!.node) return item;
@@ -203,13 +208,13 @@ export function FlowEditor({ id }: { id: string }) {
           });
         }
       }
-      const position = canvasPlacement(context?.position ?? { x: 80 + current.steps.length * (canvasNodeWidth + 80), y: 140 }, canvasNodeHeight(definitionKind(capability)),
-        nodes.map((item) => ({ position: item.position, width: canvasNodeWidth, height: canvasNodeHeight(catalog.find((kind) => kind.id === item.kind)!) })));
+      const position = flowPlacement(context?.position ?? { x: 80 + current.steps.length * (flowNodeWidth + 80), y: 140 }, flowBlockHeight(definitionKind(capability)),
+        nodes.map((item) => ({ position: item.position, width: flowNodeWidth, height: flowBlockHeight(catalog.find((kind) => kind.id === item.kind)!) })));
       return { ...current, steps: [...steps, step], layout: { ...current.layout, [step.name]: position } };
     });
     setChosen(step.name);
   };
-  const insert = (edge: CanvasEdge, kind: string, context: CanvasAddContext) => {
+  const insert = (edge: FlowEdge, kind: string, context: FlowAddContext) => {
     const capability = capabilities.find((item) => capabilityKey(item) === kind); if (!capability) return;
     const step = initialStep(capability, draft.steps);
     if (["end", "join", "break", "continue", "fail", "branch"].includes(step.kind)) { setError(t("Choose a block with a next path for insertion.")); return; }
@@ -227,20 +232,20 @@ export function FlowEditor({ id }: { id: string }) {
         : { ...step, inputs: { ...step.inputs, [handle.slice(6)]: binding } }) }));
     } else if (connection.sourceHandle) change((current) => ({ ...current, steps: current.steps.map((step) => step.name === connection.source ? withPath(step, connection.sourceHandle!, connection.target) : step) }));
   };
-  const disconnect = (removed: CanvasEdge[]) => change((current) => ({ ...current, steps: current.steps.map((step) => removed.reduce((item, edge) => {
+  const disconnect = (removed: FlowEdge[]) => change((current) => ({ ...current, steps: current.steps.map((step) => removed.reduce((item, edge) => {
     if (edge.channel === "data" && edge.target === item.name) {
       if (edge.targetPort.startsWith("binding:")) return { ...item, [edge.targetPort.slice(8)]: undefined };
       const inputs = { ...item.inputs }; delete inputs[edge.targetPort.slice(6)]; return { ...item, inputs };
     }
     return edge.source === item.name ? withPath(item, edge.sourcePort, "") : item;
   }, step)) }));
-  const deleteNodes = (removed: CanvasNode[]) => {
+  const deleteNodes = (removed: FlowNode[]) => {
     const ids = new Set(removed.map((item) => item.id));
     change((current) => ({ ...current, steps: current.steps.filter((step) => !ids.has(step.name)).map((step) => [...ids].reduce((result, id) => replaceReferences(result, id, ""), step)),
       layout: Object.fromEntries(Object.entries(current.layout ?? {}).filter(([name]) => !ids.has(name))) }));
     if (ids.has(chosen)) setChosen("");
   };
-  const duplicate = (selected: CanvasNode[]) => {
+  const duplicate = (selected: FlowNode[]) => {
     const copies: WorkflowStep[] = [], renamed = new Map<string, string>();
     for (const item of selected) { const old = draft.steps.find((step) => step.name === item.id); if (!old) continue; const name = nextStepName([...draft.steps, ...copies], old.name); renamed.set(old.name, name); copies.push({ ...structuredClone(old), name, title: `${old.title || old.name} ${t("copy")}` }); }
     const steps = copies.map((step) => {
@@ -309,8 +314,8 @@ export function FlowEditor({ id }: { id: string }) {
       <div className="mt-2 flex gap-1">{["all", "native", "code", "control"].map((kind) => <Button variant="ghost" key={kind} type="button" className={`rounded px-2 py-1 text-[10px] ${filter === kind ? "bg-row-selected text-primary" : "text-muted hover:bg-row-hover"}`} onClick={() => setFilter(kind)}>{t(({ all: "All", native: "Native", code: "Code", control: "Logic" })[kind as "all"])}</Button>)}</div>
     </div>
     <div className="min-h-0 flex-1 overflow-auto pb-2">{groups.map((group) => <div key={group}><h4 className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted">{t(group)}</h4>{filtered.filter((capability) => capability.group === group).map((capability) => <Button variant="row" key={capabilityKey(capability)} type="button" draggable className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-row-selected"
-      onClick={() => add(capabilityKey(capability))} title={capability.description} onDragStart={(event) => { event.dataTransfer.setData("application/platform-block", capabilityKey(capability)); event.dataTransfer.effectAllowed = "copy"; }}>
-      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded border border-border text-primary">{icons[capability.kind] ?? <Blocks className="size-3.5" />}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{t(capability.title)}</span><span className="block truncate text-[10px] text-muted">{capability.ref.app} · {t(capability.source)}</span></span><Plus className="mt-1 size-3 shrink-0 text-muted" />
+      onClick={() => add(capabilityKey(capability))} title={capability.description} onDragStart={(event) => { event.dataTransfer.setData(FLOW_NODE_DROP, capabilityKey(capability)); event.dataTransfer.effectAllowed = "copy"; }}>
+      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded border border-border text-primary">{flowNodeIcon({ class: workflowStepClass(capability.kind) })}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{t(capability.title)}</span><span className="block truncate text-[10px] text-muted">{capability.ref.app} · {t(capability.source)}</span></span><Plus className="mt-1 size-3 shrink-0 text-muted" />
     </Button>)}</div>)}</div>
   </div>;
   const data = <div className="grid content-start gap-1 p-2"><DataField title={t("Flow input")} schema={draft.inputSchema} binding={{ source: "input" }} />
@@ -319,7 +324,7 @@ export function FlowEditor({ id }: { id: string }) {
   </div>;
   const steps = <div className="grid content-start">
     <StructureRow icon={<Settings2 />} label={draft.title || t("Flow settings")} selected={!chosen} onClick={() => setChosen("")} />
-    {draft.steps.map((step, at) => <StructureRow key={step.name} depth={1} icon={icons[step.kind] ?? <Blocks />} label={step.title || step.name} meta={at === 0 ? t("Entry") : undefined} selected={chosen === step.name} onClick={() => setChosen(step.name)} />)}
+    {draft.steps.map((step, at) => <StructureRow key={step.name} depth={1} icon={flowNodeIcon({ class: workflowStepClass(step.kind) })} label={step.title || step.name} meta={at === 0 ? t("Entry") : undefined} selected={chosen === step.name} onClick={() => setChosen(step.name)} />)}
     {!draft.steps.length && <p className="px-2 py-1 text-[11px] text-muted">{t("Drag a block onto the map, or pick one from the library.")}</p>}
   </div>;
   return <WorkflowFormProblems.Provider value={reportProblem}>
@@ -341,7 +346,7 @@ export function FlowEditor({ id }: { id: string }) {
         { id: "blocks", title: t("Blocks"), content: library },
         { id: "data", title: t("Data"), content: data },
       ] }}
-      right={{ label: t("Flow inspector"), content: <div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
+      right={{ label: t("Flow inspector"), content: <div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
         onChange={(patch) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === chosen ? { ...step, ...patch } : step) }))} onRename={rename}
         onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} onClose={() => setChosen("")} />
         : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} onClose={() => setChosen("")} />}</div> }}
@@ -359,9 +364,11 @@ export function FlowEditor({ id }: { id: string }) {
       ] }}>
       {importingFlow && <FlowImportDialog name={draft.name || "importedflow"} capabilities={capabilities} onClose={() => setImportingFlow(false)} onApply={(next) => { change(next); setChosen(""); setImportingFlow(false); setFormProblems({}); }} />}
       {run && !matchingRun && <Panel role="status" className="m-2 text-xs text-muted">{t("This run belongs to a different saved definition or the draft has changed. Inspect its recorded version in Executions.")}</Panel>}
-      <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col border-0 p-0"><NodeCanvas label={t("Flow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
+      <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col border-0 p-0"><FlowCanvas label={t("Flow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
         onSelect={(name) => setChosen(name)} onOpen={(name) => setChosen(name)} onAdd={add} onInsert={insert} onConnect={connect} onDisconnect={disconnect}
         onPositionsChange={(positions) => change((current) => ({ ...current, layout: { ...current.layout, ...positions } }))} onLayout={(positions) => change({ layout: positions })}
+        lanes={(draft.lanes ?? []).map((lane) => ({ id: lane.name, title: lane.title || lane.name }))}
+        onLaneChange={(id, lane) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === id ? { ...step, lane } : step) }))}
         onDelete={deleteNodes} onDuplicate={duplicate} history={{ canUndo: session.canUndo, canRedo: session.canRedo, onUndo: () => { session.undo(); setValidation(undefined); }, onRedo: () => { session.redo(); setValidation(undefined); } }}
         canConnect={(connection) => {
           if (connection.sourceHandle?.startsWith("data:")) return true;

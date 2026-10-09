@@ -1,7 +1,7 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { AppSelect, PayloadFields, useHost, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, Disclosure, FlowView, Input, PageHeader, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, FlowRun, Input, PageHeader, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api, type ActionDeclaration } from "@platform/kernel";
 import { installedObjects, type WorkflowDraft, type WorkflowObject } from "../automate/workflow-model";
 import { useEffect, useState } from "react";
@@ -370,7 +370,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
         </Card>)}
         {step.refusal && <p className="text-sm text-danger">{step.refusal}</p>}
         {step.flows?.map((flow) => <Card key={flow.id} className="min-w-0 overflow-x-auto p-2">
-          <FlowView instance={{ ...flow, title: process?.title ?? flow.flow, key: flow.id, undo: null }} onStepSelect={onStepSelect} />
+          <FlowRun instance={{ ...flow, title: process?.title ?? flow.flow, key: flow.id, undo: null }} onStepSelect={onStepSelect} />
           {flow.outputs && <Disclosure summary={<span className="text-xs font-medium">{t("Accepted block outputs")}</span>}><pre className="mt-2 overflow-auto rounded bg-background p-2 text-[11px]">{JSON.stringify(flow.outputs, null, 2)}</pre></Disclosure>}
         </Card>)}
         {step.tasks?.map((task) => <p key={task.id} className="text-xs">{t("Human task")}: {task.title}</p>)}
