@@ -65,6 +65,6 @@ export function Lineage({ ref: requested }: { ref?: string }) {
         </Select>
       </>} />
     {nodes.length === 0 ? <p className="text-sm text-muted">{t("No definitions available.")}</p>
-      : <RelationCanvas layout="tree-right" nodes={nodes} edges={edges} selected={focus || undefined} height={Math.max(360, (typeof window !== "undefined" ? window.innerHeight : 900) - 220)} label={t("Lineage")} storeKey={`lineage:${focus || `app:${scopeApp}`}`} onSelect={(id) => id && openAsset(id)} />}
+      : <RelationCanvas layout="right" nodes={nodes} edges={edges} selected={focus || undefined} height={Math.max(360, (typeof window !== "undefined" ? window.innerHeight : 900) - 220)} label={t("Lineage")} storeKey={`lineage:${focus || `app:${scopeApp}`}`} onSelect={(id) => id && openAsset(id)} />}
   </>;
 }

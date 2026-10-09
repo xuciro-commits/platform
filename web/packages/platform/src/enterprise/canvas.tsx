@@ -4,7 +4,7 @@
 // the positions and the decisions. Stereotype icons come from the host profile
 // (ADR-0090 D2); kinds stay here as icon names, drawn by the kit's one glyph.
 import { IconGlyph, RelationCanvas, t, type CanvasAction, type RelationEdge, type RelationNode } from "@platform/ui";
-import { FILLS_POST, MEMBERSHIP, PLACEMENT, type Element, type Relationship } from "./model";
+import { byHierarchy, FILLS_POST, hierarchyParent, MEMBERSHIP, type Element, type Relationship } from "./model";
 
 export type Positions = Record<string, [number, number]>;
 export const STEREOTYPE_DROP = "application/x-uaf-stereotype";
@@ -56,11 +56,14 @@ export function Canvas({ elements, relationships, pins = [], positions, onPrepar
     ...pins.map((p) => ({ id: p.id, label: p.label, caption: p.caption ?? t("record"), icon: <IconGlyph name="file-text" />, tone: "warning", linkable: false, detail: p.detail ?? p.id,
       facts: [{ label: t("Pinned record"), value: p.detail ?? p.id }, ...(p.anchorName ? [{ label: t("Names"), value: p.anchorName }] : [])] })),
   ];
+  // The hierarchy lines come first, so a node keeps the parent that matters most;
+  // they are the tree, so they carry no arrow. A pinned record hangs under the
+  // element it names.
   const edges: RelationEdge[] = [
+    ...byHierarchy(relationships).map((r) => ({ id: r.id, source: r.source, target: r.target, label: label(r), parent: hierarchyParent(r),
+      dashed: r.stereotype === MEMBERSHIP || r.stereotype === FILLS_POST, directed: !hierarchyParent(r) })),
+    ...pins.filter((p) => elements.some((e) => e.id === p.anchor)).map((p) => ({ id: `pin:${p.id}`, source: p.id, target: p.anchor, label: t("names"), parent: "target" as const, reconnectable: false, dashed: true, directed: true, tone: "warning" })),
     ...propertyLinks.map((p) => ({ ...p, dashed: true, reconnectable: false, directed: true })),
-    ...relationships.map((r) => ({ id: r.id, source: r.source, target: r.target, label: label(r), tree: r.stereotype === PLACEMENT,
-      dashed: r.stereotype === MEMBERSHIP || r.stereotype === FILLS_POST, directed: r.stereotype !== PLACEMENT })),
-    ...pins.filter((p) => elements.some((e) => e.id === p.anchor)).map((p) => ({ id: `pin:${p.id}`, source: p.id, target: p.anchor, label: t("names"), reconnectable: false, dashed: true, directed: true, tone: "warning" })),
   ];
   const pos = Object.fromEntries(Object.entries(positions).map(([id, [x, y]]) => [id, { x, y }]));
   return <RelationCanvas viewportKey={viewId} nodes={nodes} edges={edges} positions={pos} selected={selected} editable={admin} linking={linking} height="100%" dropType={STEREOTYPE_DROP}

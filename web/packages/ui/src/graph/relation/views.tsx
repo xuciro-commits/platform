@@ -1,17 +1,17 @@
-import { BaseEdge, Handle, Position, getSmoothStepPath, type Edge, type EdgeProps, type Node, type NodeProps } from "@xyflow/react";
+import { BaseEdge, Handle, Position, type Edge, type EdgeProps, type Node, type NodeProps } from "@xyflow/react";
 import { Box } from "lucide-react";
 import type { CSSProperties } from "react";
 import { cn } from "../../lib/cn";
 import { IconGlyph } from "../../components/IconPicker";
 import { t } from "../../i18n";
 import { CanvasEdgeLabel, canvasEdgeColor } from "../core/edge";
-import { routedPath } from "../core/layout/edge-routing";
-import type { LayoutRoute } from "../core/layout/types";
+import { routePath, type Route } from "../core/route";
 import { relationNodeCaption, relationNodeClasses, relationNodeSize, type RelationEdge, type RelationNode } from "./model";
 
 export type RelationNodeData = RelationNode & { linking: boolean; acceptsConnections: boolean };
 export type RelationShapeNode = Node<RelationNodeData>;
-export type RelationLineEdge = Edge<RelationEdge & { route?: LayoutRoute } & Record<string, unknown>>;
+/** `quiet` keeps a hierarchy line's name until the line or one of its ends is chosen. */
+export type RelationLineEdge = Edge<RelationEdge & { route?: Route; quiet?: boolean } & Record<string, unknown>>;
 
 /** The four sides an element can be joined from; the line picks the two that face
  * each other, so the owner's source/target meaning never changes (ADR-0085 D5). */
@@ -46,12 +46,12 @@ export function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode
   </div>;
 }
 
-export function RelationEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd, selected }: EdgeProps<RelationLineEdge>) {
-  const [path, x, y] = data?.route ? routedPath(data.route) : getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 14 });
+export function RelationEdgeView({ id, sourceX, sourceY, targetX, targetY, data, markerEnd, selected }: EdgeProps<RelationLineEdge>) {
+  const { path, label } = routePath(data?.route?.points ?? [{ x: sourceX, y: sourceY }, { x: targetX, y: targetY }]);
   const color = canvasEdgeColor(data?.tone, selected, "var(--muted)");
   return <g className={cn("platform-canvas-edge", selected && "platform-canvas-edge-selected")}>
     <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={20} style={{ stroke: color, strokeWidth: selected ? 2 : 1.4, strokeDasharray: data?.dashed ? "5 4" : undefined }} />
-    {data?.label && <CanvasEdgeLabel x={x} y={y}>{data.label}</CanvasEdgeLabel>}
+    {data?.label && (!data.quiet || selected) && <CanvasEdgeLabel x={label.x} y={label.y}>{data.label}</CanvasEdgeLabel>}
   </g>;
 }
 

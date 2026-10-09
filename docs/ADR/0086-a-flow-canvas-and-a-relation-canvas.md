@@ -42,7 +42,7 @@ ADR-0084「后果 → 不做」写过一条："把 Flow 与企业画布合成一
   - `FlowRun` 不叫 `FlowInstanceView`：`@platform/app` 的目录资产 `flow-instance` 已经占用了那个名字（`{id}` 的页面，负责取记录、鉴权与动作），套件里的是 `{definition, instance}` 的绘制。职责不同，名字不能只差一个后缀。
 - 关系族：`RelationCanvas`、`relationLayout`/`relationLayouts`/`neighborhoodPositions`。
 - 类型：`FlowNode`/`FlowEdge`/`FlowPort`/`FlowNodeKind`/`FlowCatalog`/`FlowNodeStatus`/`FlowDiagnostic`/`FlowAddContext`/`FlowHistory`/`FlowConnectionIssue`/`validateFlowConnection`；`RelationNode`/`RelationEdge`/`RelationFact`/`RelationBadge`/`RelationLayout`；core 的 `CanvasPosition`/`CanvasDirection`/`CanvasAction`/`CanvasBox`。
-- 排布五种：`tree-down`/`tree-right`/`layered`/`radial`/`grid`。`layered` 按连线声明的方向自左向右，`tree-*` 反转存储的 source/target 语义（ADR-0085 D5：组织树的布局不改写关系的方向）。**没有 `neighborhood` 菜单项**——邻域是调用方传进来的显式位置，不是一种通用排布。
+- 排布见 ADR-0095（四个方向、放射、距离平衡、紧凑排列；树形由连线声明的 `parent` 决定，不改写关系的方向）。**没有 `neighborhood` 菜单项**——邻域是调用方传进来的显式位置，不是一种通用排布。
 - `RelationCanvas.positions` 可以省略：不传就按 `layout` 自己排。重适配的签名默认取节点与连线的 id 序列，所以只读视图换一张图会重新适配，不必再手造 `viewportKey`。
 
 ### D4 BPMN 词汇：形状、标记、附着事件

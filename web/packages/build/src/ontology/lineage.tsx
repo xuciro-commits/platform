@@ -39,7 +39,7 @@ export function lineageGraph(l: ReturnType<typeof useLineage>, focus: { kind: "o
     nodes.set(id, { ...node, id, class: kind, detail: [node.caption, node.flag].filter(Boolean).join(" · ") });
     if (route) routes[id] = route;
   };
-  const feed = (from: string, to: string, label: string) => edges.push({ id: `${from}>${to}`, source: from, target: to, label, directed: true, tree: true });
+  const feed = (from: string, to: string, label: string) => edges.push({ id: `${from}>${to}`, source: from, target: to, label, directed: true });
 
   const addConnection = (id?: string) => {
     const c = l.connections.find((x) => x.id === id);
@@ -139,7 +139,7 @@ export function ObjectLineage({ object, fields }: { object: string; fields: { na
   if (!direct.length && !pipes.length && !wbs.length) return <Panel title={t("Data lineage")} description={t("Read from the integration definitions themselves: what is configured to feed this object's records and where its actions are configured to go. It is not a record-by-record history.")}><p className="text-xs text-muted">{t("Nothing feeds or follows this object yet. A data source or a pipeline writes its records; a writeback sends its actions to an external system.")}</p></Panel>;
   return <div className="grid gap-3">
     <Panel title={t("Data lineage")} className="grid gap-3" description={t("Declared, not observed: these are the sources and pipelines configured to write this object's records, and the writebacks configured to send its actions out. A dataset's version and a writeback's delivered count are the run evidence kept beside the declaration.")}>
-      <RelationCanvas layout="tree-right" nodes={graph.nodes} edges={graph.edges} selected={picked} onSelect={setPicked}
+      <RelationCanvas layout="right" nodes={graph.nodes} edges={graph.edges} selected={picked} onSelect={setPicked}
         onOpen={(id) => { const route = graph.routes[id]; if (route) open(route); }} height={360} label={t("Data lineage")} storeKey={`lineage:object:${object}`} />
     </Panel>
     <Panel title={t("Field by field")}>
@@ -159,7 +159,7 @@ export function DatasetLineage({ dataset }: { dataset: string }) {
   return <Panel title={t("Lineage")} className="grid gap-2 text-xs"
     description={t("Declared, not observed: what is configured to load this dataset and what is configured to read it.")}>
     {graph.nodes.length > 1
-      ? <RelationCanvas layout="tree-right" nodes={graph.nodes} edges={graph.edges} selected={picked} onSelect={setPicked}
+      ? <RelationCanvas layout="right" nodes={graph.nodes} edges={graph.edges} selected={picked} onSelect={setPicked}
           onOpen={(id) => { const route = graph.routes[id]; if (route) open(route); }} height={320} label={t("Lineage")} storeKey={`lineage:dataset:${dataset}`} />
       : <p className="text-muted">{t("Nothing yet.")}</p>}
   </Panel>;

@@ -116,19 +116,32 @@ export const rootsOf = (m: Model, kind: string, day: string) => {
   return [...new Set(edges.map((e) => e.target))].filter((p) => !children.has(p));
 };
 
-/** Positions for a view: saved ones kept, the rest arranged as an organisation
- * chart by the shared layout, below whatever is already placed. */
+/** Which end of a relationship is the parent in the drawing's hierarchy: what an
+ * element is part of, who answers for a post, place or system, the post a
+ * person fills, the organisation a party belongs to. Other relationships are
+ * drawn, but do not shape the tree. */
+export function hierarchyParent(r: Pick<Relationship, "stereotype">): "source" | "target" | undefined {
+  return r.stereotype === PLACEMENT || r.stereotype === FILLS_POST || r.stereotype === MEMBERSHIP ? "target" : r.stereotype === RESPONSIBLE_FOR ? "source" : undefined;
+}
+
+/** A node keeps the first parent it is given: placement before answering-for
+ * before filling a post before membership. */
+const rank = (r: Pick<Relationship, "stereotype">) => [PLACEMENT, RESPONSIBLE_FOR, FILLS_POST, MEMBERSHIP].indexOf(r.stereotype) >>> 0;
+export const byHierarchy = <R extends Pick<Relationship, "stereotype">>(rels: readonly R[]): R[] => [...rels].sort((a, b) => rank(a) - rank(b));
+
+/** Positions for a view: saved ones kept, the rest arranged top-down by the
+ * shared layout along the same hierarchy the canvas draws, below whatever is
+ * already placed. */
 export async function autoLayout(m: Model, shown: string[], kind: string, day: string, saved: Record<string, number[]> = {}): Promise<Record<string, [number, number]>> {
   const out: Record<string, [number, number]> = {};
   for (const [id, p] of Object.entries(saved)) if (p?.length === 2 && shown.includes(id)) out[id] = [p[0]!, p[1]!];
   const missing = shown.filter((id) => !out[id]);
   if (missing.length === 0) return out;
   const set = new Set(missing);
-  // Every placement of the drawing, whatever its kind: a view may hold a legal
-  // structure and a site structure at once (ADR-0085 D2).
-  const edges = m.relationships.filter((r) => r.stereotype === PLACEMENT && (!kind || r.kind === kind) && live(r, day) && set.has(r.source) && set.has(r.target)).map((r) => ({ from: r.source, to: r.target, tree: true }));
+  const edges = byHierarchy(m.relationships.filter((r) => live(r, day) && set.has(r.source) && set.has(r.target) && (r.stereotype !== PLACEMENT || !kind || r.kind === kind)))
+    .map((r) => ({ from: r.source, to: r.target, parent: hierarchyParent(r) }));
   const below = Object.values(out).reduce((y, p) => Math.max(y, p[1] + 120), 40);
-  for (const [id, p] of Object.entries(await relationLayout("tree-down", missing.map((id) => ({ id })), edges))) out[id] = [p.x + 40, p.y + below];
+  for (const [id, p] of Object.entries(await relationLayout("down", missing.map((id) => ({ id })), edges))) out[id] = [p.x + 40, p.y + below];
   return out;
 }
 

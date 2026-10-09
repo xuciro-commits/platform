@@ -4,18 +4,19 @@
 // fit, minimap, layouts, dragging, linking and dropping, so no view draws its own
 // boxes again (ADR-0068 §6, ADR-0084 D3, ADR-0086 D3).
 import { ConnectionMode, MarkerType, MiniMap, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow } from "@xyflow/react";
-import { ArrowDownFromLine, ArrowRightFromLine, ChevronDown, ChevronUp, GitBranch, Grid3x3, Maximize, Orbit, Waves } from "lucide-react";
+import { ArrowDownFromLine, ArrowLeftFromLine, ArrowRightFromLine, ArrowUpFromLine, ChevronDown, ChevronUp, Grid3x3, Maximize, Orbit, Waves } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { CanvasActionBar, CanvasActionButton, CanvasEmpty, CanvasHelp, CanvasHelpTool, CanvasTool, CanvasToolbar } from "../core/chrome";
 import { CanvasFurniture, CanvasFrame, CanvasRefit, fitting } from "../core/frame";
+import { routeEdges, type Rect, type RouteRequest } from "../core/route";
 import { readCanvasPositions, writeCanvasPositions } from "../core/store";
 import type { CanvasAction, CanvasPosition } from "../core/types";
-import { arrangeRelations } from "./layouts";
+import { relationLayout } from "./layouts";
 import { relationLayouts, relationNodeSize, type RelationEdge, type RelationLayout, type RelationNode } from "./model";
+import { relationHierarchy, stackedLeaf } from "./tree";
 import { useCanvasLayout } from "../core/layout/use-layout";
-import { samePositions } from "../core/layout/edge-routing";
 import { relationEdgeTypes, relationNodeTypes, type RelationLineEdge, type RelationShapeNode } from "./views";
 
 export type RelationCanvasProps = {
@@ -45,14 +46,14 @@ export type RelationCanvasProps = {
 const emptyPositions: Record<string, CanvasPosition> = {};
 
 const layoutMeta: Record<RelationLayout, { icon: ReactNode; title: string }> = {
-  "tree-down": { icon: <ArrowDownFromLine />, title: "Top to bottom" }, "tree-right": { icon: <ArrowRightFromLine />, title: "Tree, left to right" },
-  layered: { icon: <GitBranch />, title: "Left to right" }, radial: { icon: <Orbit />, title: "Radial" }, grid: { icon: <Grid3x3 />, title: "Compact arrangement" },
-  force: { icon: <Waves />, title: "Balance by distance" },
-  organization: { icon: <GitBranch />, title: "Organization tree" },
-  "layered-up": { icon: <ArrowDownFromLine />, title: "Bottom to top" }, "layered-left": { icon: <ArrowRightFromLine />, title: "Right to left" },
+  down: { icon: <ArrowDownFromLine />, title: "Top to bottom" }, up: { icon: <ArrowUpFromLine />, title: "Bottom to top" },
+  right: { icon: <ArrowRightFromLine />, title: "Left to right" }, left: { icon: <ArrowLeftFromLine />, title: "Right to left" },
+  radial: { icon: <Orbit />, title: "Radial" }, force: { icon: <Waves />, title: "Balance by distance" }, grid: { icon: <Grid3x3 />, title: "Compact arrangement" },
 };
 
-function RelationCanvasContent({ nodes, edges, positions, selected, editable = false, linking = false, label, height = 480, layout: initial = "tree-down", dropType, children, onSelect, onOpen, onPositionsChange, onLayoutReady, onLink, onDrop, nodeActions, edgeActions, onReconnect, viewportKey, storeKey }: RelationCanvasProps) {
+const sizeOf = (n: RelationNode) => n.badge ? { width: n.badge.size, height: n.badge.size } : n.size ?? relationNodeSize;
+
+function RelationCanvasContent({ nodes, edges, positions, selected, editable = false, linking = false, label, height = 480, layout: initial = "down", dropType, children, onSelect, onOpen, onPositionsChange, onLayoutReady, onLink, onDrop, nodeActions, edgeActions, onReconnect, viewportKey, storeKey }: RelationCanvasProps) {
   const { screenToFlowPosition, fitView } = useReactFlow<RelationShapeNode, RelationLineEdge>();
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<RelationShapeNode>([]);
   const [layout, setLayout] = useState<RelationLayout>(initial);
@@ -61,28 +62,39 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
   const [pickedEdge, setPickedEdge] = useState<string>();
   const [expanded, setExpanded] = useState<string>();
   const canReconnect = editable && !!onReconnect;
-  const relations = useMemo(() => edges.map((e) => ({ id: e.id, from: e.source, to: e.target, tree: e.tree, label: e.label })), [edges]);
+  const relations = useMemo(() => edges.map((e) => ({ id: e.id, from: e.source, to: e.target, parent: e.parent })), [edges]);
+  const hierarchy = useMemo(() => relationHierarchy(nodes.map((n) => n.id), relations), [nodes, relations]);
 
-  // A view that keeps no positions of its own is arranged here; the reader's own
-  // arranging stays local until the owner asks for it through onPositionsChange.
-  const graphSignature = JSON.stringify([nodes.map((n) => [n.id, n.size, n.badge?.size]), relations]);
-  const layoutJob = useCanvasLayout(() => arrangeRelations(layout, nodes, relations), JSON.stringify([layout, nodes.map((n) => [n.id, n.size, n.badge?.size]), relations]));
-  const arranged = layoutJob.data?.positions ?? emptyPositions;
-  const layoutVersion = useRef(0);
-  const [layoutError, setLayoutError] = useState<string>();
-  const [explicitLayout, setExplicitLayout] = useState<Awaited<ReturnType<typeof arrangeRelations>>>();
-  useEffect(() => { layoutVersion.current++; setExplicitLayout(undefined); }, [graphSignature]);
-  useEffect(() => () => { layoutVersion.current++; }, []);
-  // The reader's stored arrangement joins whatever the owner or the layout gives:
-  // it wins over both until the reader chooses a layout again (ADR-0092).
+  // The reader's stored arrangement joins whatever the owner gives and wins over
+  // it until the reader chooses a layout again (ADR-0092).
   const [stored, setStored] = useState<Record<string, CanvasPosition>>(() => (storeKey ? readCanvasPositions(storeKey) : undefined) ?? {});
   useEffect(() => { setStored((storeKey ? readCanvasPositions(storeKey) : undefined) ?? {}); }, [storeKey]);
-  const owned = useMemo(() => (storeKey ? { ...({ ...arranged, ...positions }), ...stored } : { ...arranged, ...positions }), [positions, arranged, stored, storeKey]);
+  const known = useMemo(() => (storeKey ? { ...positions, ...stored } : { ...positions }), [positions, stored, storeKey]);
   const persist = (next: Record<string, CanvasPosition>) => {
     if (!storeKey) return;
     setStored(next);
     writeCanvasPositions(storeKey, next);
   };
+
+  // Only what has no place yet is arranged: everything, when nothing is placed;
+  // otherwise just the newcomers, as their own arrangement below the drawing,
+  // so a placed element never moves because another arrived.
+  const missing = nodes.filter((n) => !known[n.id]);
+  const knownRef = useRef(known); knownRef.current = known;
+  const layoutJob = useCanvasLayout(async () => {
+    if (!missing.length) return emptyPositions;
+    const ids = new Set(missing.map((n) => n.id));
+    const placed = Object.entries(knownRef.current).filter(([id]) => nodes.some((n) => n.id === id)).map(([id, at]) => ({ at, box: sizeOf(nodes.find((n) => n.id === id)!) }));
+    const arranged = await relationLayout(layout, missing, relations.filter((r) => ids.has(r.from) && ids.has(r.to)));
+    if (!placed.length) return arranged;
+    const left = Math.min(...placed.map((p) => p.at.x)), below = Math.max(...placed.map((p) => p.at.y + p.box.height)) + 96;
+    return Object.fromEntries(Object.entries(arranged).map(([id, at]) => [id, { x: at.x + left, y: at.y + below }]));
+  }, JSON.stringify([layout, missing.map((n) => [n.id, n.size, n.badge?.size]), relations]));
+  const arranged = layoutJob.data ?? emptyPositions;
+  const owned = useMemo(() => ({ ...arranged, ...known }), [arranged, known]);
+  const layoutVersion = useRef(0);
+  const [layoutError, setLayoutError] = useState<string>();
+  useEffect(() => () => { layoutVersion.current++; }, []);
 
   useEffect(() => {
     setFlowNodes((previous) => nodes.map((n) => {
@@ -92,24 +104,34 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
     }));
   }, [nodes, owned, selected, editable, linking, setFlowNodes, canReconnect, storeKey]);
 
+  // Every line is routed from the boxes as they stand, on every move: a drag, a
+  // layout and a saved view all draw the same lines (ADR-0095).
   const flowEdges = useMemo<RelationLineEdge[]>(() => {
-    const byId = new Map(flowNodes.map((n) => [n.id, n]));
-    const result = explicitLayout ?? layoutJob.data;
-    const routes = result && samePositions(result.positions, flowNodes) ? result.routes : {};
-    return edges.map((e) => {
-      const a = byId.get(e.source), b = byId.get(e.target);
-      const dx = (b?.position.x ?? 0) - (a?.position.x ?? 0), dy = (b?.position.y ?? 0) - (a?.position.y ?? 0);
-      // Attach to facing sides without changing the owner's source/target meaning.
-      const horizontal = Math.abs(dx) > Math.abs(dy);
-      const sourceHandle = horizontal ? dx >= 0 ? Position.Right : Position.Left : dy >= 0 ? Position.Bottom : Position.Top;
-      const targetHandle = horizontal ? dx >= 0 ? Position.Left : Position.Right : dy >= 0 ? Position.Top : Position.Bottom;
-      const sides = { NORTH: Position.Top, SOUTH: Position.Bottom, EAST: Position.Right, WEST: Position.Left };
+    const boxes: Record<string, Rect> = {};
+    for (const n of flowNodes) { const size = n.measured?.width && n.measured.height ? n.measured as { width: number; height: number } : sizeOf(n.data); boxes[n.id] = { x: n.position.x, y: n.position.y, width: size.width, height: size.height }; }
+    // A parent's children share one bus: the way most of them lie from it decides which.
+    const axis = new Map<string, "vertical" | "horizontal">();
+    for (const [p, kids] of hierarchy.children) {
+      const a = boxes[p]; if (!a) continue;
+      let vertical = 0;
+      for (const c of kids) { const b = boxes[c]; if (b && !stackedLeaf(hierarchy, c)) vertical += Math.abs(b.y + b.height / 2 - a.y - a.height / 2) >= Math.abs(b.x + b.width / 2 - a.x - a.width / 2) ? 1 : -1; }
+      axis.set(p, vertical >= 0 ? "vertical" : "horizontal");
+    }
+    const declared = relations.some((r) => r.parent);
+    const requests = edges.map((e, i): RouteRequest => {
+      if (!hierarchy.links.has(i)) return { id: e.id, source: e.source, target: e.target };
+      const parentEnd = e.parent === "target" ? "target" : "source", child = parentEnd === "source" ? e.target : e.source;
+      return { id: e.id, source: e.source, target: e.target, hierarchy: { parent: parentEnd, axis: axis.get(parentEnd === "source" ? e.source : e.target), trunk: stackedLeaf(hierarchy, child) } };
+    });
+    const routes = routeEdges(boxes, requests);
+    return edges.map((e, i) => {
       const route = routes[e.id];
-      return { id: e.id, source: e.source, target: e.target, sourceHandle: route?.sourceSide ? sides[route.sourceSide] : sourceHandle, targetHandle: route?.targetSide ? sides[route.targetSide] : targetHandle, type: "relation", data: { ...e, route: routes[e.id] }, deletable: false,
+      const quiet = declared && hierarchy.links.has(i) && selected !== e.source && selected !== e.target;
+      return { id: e.id, source: e.source, target: e.target, sourceHandle: route?.sourceSide ?? Position.Bottom, targetHandle: route?.targetSide ?? Position.Top, type: "relation", data: { ...e, route, quiet }, deletable: false,
         selected: e.id === pickedEdge, reconnectable: editable && !!onReconnect && e.reconnectable !== false,
         markerEnd: e.directed === false ? undefined : { type: MarkerType.ArrowClosed, color: e.tone ? `var(--tone-${e.tone})` : "var(--muted)", width: 14, height: 14 } };
     });
-  }, [edges, flowNodes, editable, onReconnect, pickedEdge, explicitLayout, layoutJob.data]);
+  }, [edges, relations, hierarchy, flowNodes, editable, onReconnect, pickedEdge, selected]);
 
   // A new drawing is fitted to the window; working on the one already open is not.
   const drawing = useMemo(() => `${nodes.map((n) => n.id).join("|")}#${edges.map((e) => e.id).join("|")}`, [nodes, edges]);
@@ -129,14 +151,12 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
     const version = ++layoutVersion.current;
     setLayoutError(undefined);
     try {
-    const result = await arrangeRelations(kind, nodes.map((n) => ({ ...n, size: flowNodes.find((f) => f.id === n.id)?.measured?.width ? flowNodes.find((f) => f.id === n.id)!.measured as { width: number; height: number } : n.size })), relations);
-    if (version !== layoutVersion.current) return;
-    setExplicitLayout(result);
-    const next = result.positions;
-    persist(next); // choosing a layout is the reader resetting their own arrangement
-    setFlowNodes((current) => current.map((n) => ({ ...n, position: next[n.id] ?? n.position })));
-    onPositionsChange?.(next);
-    setTimeout(() => void fitView({ ...fitting, duration: 220 }), 30);
+      const next = await relationLayout(kind, nodes.map((n) => { const m = flowNodes.find((f) => f.id === n.id)?.measured; return m?.width && m.height ? { ...n, size: { width: m.width, height: m.height } } : n; }), relations);
+      if (version !== layoutVersion.current) return;
+      persist(next); // choosing a layout is the reader resetting their own arrangement
+      setFlowNodes((current) => current.map((n) => ({ ...n, position: next[n.id] ?? n.position })));
+      onPositionsChange?.(next);
+      setTimeout(() => void fitView({ ...fitting, duration: 220 }), 30);
     } catch (error) { if (version === layoutVersion.current) setLayoutError(String(error)); }
   };
   const chosen = nodes.find((n) => n.id === selected);

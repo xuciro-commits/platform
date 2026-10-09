@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:94f7e2120c2b2136",
+  "revision": "sha256:fdb7bcbb9ea01e6e",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5968,7 +5968,6 @@
         "RelationEdge",
         "RelationFact",
         "RelationLayout",
-        "RelationLayoutSize",
         "RelationNode",
         "ResourceStatusTone",
         "RetroButtonProps",

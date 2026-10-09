@@ -25,18 +25,21 @@ export type RelationNode = {
 
 export type RelationEdge = {
   id: string; source: string; target: string; label?: string;
-  /** Marks the edges that form the hierarchy a tree or radial layout arranges by. */
-  tree?: boolean;
+  /** Marks a line of the hierarchy the drawing is arranged by, and which end is
+   * the parent: `target` for "part of" (child → parent), `source` for "responsible
+   * for" (parent → child). Once any line declares it, only declared lines shape the
+   * tree; without any, every line reads parent → child from source to target. */
+  parent?: "source" | "target";
   dashed?: boolean; directed?: boolean; tone?: string; reconnectable?: boolean;
 };
 
-/** How the canvas may arrange what it is given. `tree-*` reads each relationship as
- * child → parent; `layered` reads it in the direction the owner declared. */
-export type RelationLayout = "tree-down" | "tree-right" | "layered" | "radial" | "grid" | "force" | "organization" | "layered-up" | "layered-left";
-export const relationLayouts: RelationLayout[] = ["tree-down", "layered", "layered-up", "layered-left", "organization", "radial", "force", "grid"];
+/** How the canvas may arrange what it is given. The four directions draw a tree
+ * when the drawing is one and a layered graph when it is not. */
+export type RelationLayout = "down" | "up" | "right" | "left" | "radial" | "force" | "grid";
+export const relationLayouts: RelationLayout[] = ["down", "up", "right", "left", "radial", "force", "grid"];
 
 /** The box one element occupies; every layout in this family measures it. */
-export const relationNodeSize = { width: 180, height: 56, gapX: 40, gapY: 48 };
+export const relationNodeSize = { width: 180, height: 56 };
 
 /** The standing relation classes (ADR-0090 D1): what a thing on a relationship
  * drawing *is*. The icon is a name from the kit's one icon vocabulary (ADR-0084

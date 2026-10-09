@@ -179,7 +179,7 @@ export function ChainGraph({ of, title = t("Chain") }: { of: string; title?: str
   return (
     <div className="grid gap-1">
       <h3 className="text-xs uppercase text-muted">{title}</h3>
-      <RelationCanvas layout="layered" nodes={nodes} edges={edges} selected={of} height={200} label={title}
+      <RelationCanvas layout="right" nodes={nodes} edges={edges} selected={of} height={200} label={title}
         storeKey={`chain:${of}`}
         onSelect={(id) => { if (id && !id.startsWith("platform.effect/")) openRecord(id); }} />
     </div>

@@ -266,7 +266,7 @@ export function Relations() {
   const [positions, setPositions] = useState({ a: { x: 0, y: 0 }, b: { x: 0, y: 140 } });
   const [selected, setSelected] = useState<string>();
   return <RelationCanvas nodes={[{ id: "a", label: "Sample Alpha", icon: <Building2 /> }, { id: "b", label: "Sample Beta", icon: <Users /> }]}
-    edges={[{ id: "b-a", source: "b", target: "a", tree: true }]} positions={positions} height={300} editable selected={selected} onSelect={setSelected}
+    edges={[{ id: "b-a", source: "b", target: "a", parent: "target" }]} positions={positions} height={300} editable selected={selected} onSelect={setSelected}
     onPositionsChange={(next) => setPositions((current) => ({ ...current, ...next }))} />;
 }
 const flowCatalog: FlowCatalog = [{ id: "value", title: t("Value"), class: "trigger", inputs: [], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }, { id: "transform", title: t("Transform"), class: "transform", inputs: [{ id: "in", label: t("Quantity"), type: "number" }], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }];
