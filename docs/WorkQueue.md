@@ -26,8 +26,8 @@
 | ADR-0090 | 关系类别、UAF profile 图标与 `size`/`collapsed` 声明已落地，六个站点统一。关系族的通用编写调色板（现仅企业画布有拖放建点）与 `RelationNode.size` 的 radial/grid 布局感知未做，在关系族需要新增站点或大节点需要进 radial/grid 时启动。图标词汇与类别表的像素观感待一次真实浏览器走查。 |
 | ADR-0091 | 分层排版补齐虚线链、交叉驱动排序与优先坐标，关系族新增 force。BK 最优坐标、network simplex 定层、sifting 全局降交叉与边的样条路由未做，在数据表明当前近似不够（交叉数或坐标质量成为投诉）时启动。`layered.test.ts` 已核对不变量；**「更好看」待人眼走查，未在浏览器观察**。 |
 | ADR-0092 | 读者排布（storeKey 本机持久化）、`arrangeFlow` 单一布局脑、FlowStepNode 类别与企业画布读者层已落地，15 站点接线。读者排布的跨设备同步（服务端档案）、按屏幕/视口的布局推荐、FlowStepNode 存量站点的显式 `class` 声明未做，前两者等 seal-API 定契约时一并考虑。种子→拖动→刷新→Tidy 的链路待浏览器走查。 |
-| ADR-0093（Round-3 ③） | ARIS 五视图、画布为干的三 Tab IA、InformationElement 入档案、Viewpoint 字段口径已落地（调研②→方案→实施）。未做：旧存档 grid→viewpoint 迁移、控制视图完整 EPC 链、MES 消费端（随④）。**状态：主体完成；④ 接口封存后接 MES 消费与示范闭环。** |
-| 标准接口封存（Round-3 ④） | 查询/引用/写入三类契约 + SDK 先封标准接口（seal_API），暂不接 MES；MES 按 `mes_reads` 方向随后以消费者身份接（主数据下拉选 enterprise 元素，模型为唯一真源）。**状态：依赖②研究与③方案**。 |
+| ADR-0093（Round-3 ③） | ARIS 五视图、画布为干的三 Tab IA、InformationElement 入档案、Viewpoint 字段口径已落地（调研②→方案→实施）。未做：旧存档 grid→viewpoint 迁移、控制视图完整 EPC 链。**状态：完成；MES 消费端已随 ADR-0094 落地。** |
+| ADR-0094（Round-3 ④） | query/ref/write 三类契约封存：`/v1/enterprise-query`、`/v1/enterprise-resolve`、`enterprise.*` 写目录单源 `declarations()`（内核 checked 校验引用与 stereotype）；生成式 SDK（`cmd/api-types` 第二产物 `enterprise-sdk.ts`，`TestAPIContract` 双文件 staleness）；ElementPicker 改走 query+resolve；MES 发布对话框场所下拉 = 首个 mes_reads 消费者（place 经内核校验落 `Order` 记录）。未做：大模型下的搜索式 picker、build 包全量模型消费点改写、MES 主数据自身 CRUD（见 ADR-0088 行，seed_ref 方向）；浏览器观感待走查。**状态：已落地（ADR-0094）** |
 | ADR-0087 | 泳道已可写、可校验、可在 Logic Studio 指派。池（跨参与方容器与消息流）、泳道级权限与交接语义（应接到 `work` 的角色与任务，而非在 `Process` 里再造分派）未做，在需要多参与方协作或按泳道分派时启动。泳道带子的竖排标题与拖拽交接待一次真实浏览器走查。 |
 | ADR-0069 / ADR-0070–0077 | 首版集成与业务核已实现；SFTP/文件游标、Pipeline 独立试跑（步骤画布已随 ADR-0086 落地）、运行冻结血缘、SLA/对账、原生应用回写桥接、集成记录制品化/晋级、模型版 Builder Assist 均未实现。已验证的两行业有界路线不代表这些顶层方向整体完成。 |
 | ADR-0081 | 本地模式与制品构建已实施；GitHub Release/GHCR 与多架构镜像实际发布须在负责人指定版本时验证，当前不创建标签或公开制品。 |

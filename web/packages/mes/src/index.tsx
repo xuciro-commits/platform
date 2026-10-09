@@ -7,6 +7,8 @@ import {
   Button, DataTable, Dialog, EntityCard, EntityForm, FlowSteps, PageHeader, Panel, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type FlowStepEdge, type FlowStepNode,
  t } from "@platform/ui";
 import { Activity, ClipboardList, Factory, ListOrdered, Plus, Route, ShieldAlert } from "lucide-react";
+import { queryElements } from "@platform/kernel";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -23,7 +25,7 @@ type Product = { id: string; name: string; routing: string };
 type Resource = { id: string; name?: string; workCenter: string; capabilities?: string[] };
 type WorkCenter = { id: string; name: string; line: string };
 type Master = { products: Product[]; routings: Routing[]; workCenters: WorkCenter[]; resources: Resource[] };
-type Order = { id: string; product: string; quantity: number; sfcs: string[]; planned?: string;
+type Order = { id: string; product: string; quantity: number; sfcs: string[]; planned?: string; place?: string;
   erp?: "sent" | "confirmed" | "refused" | "failed"; confirmation?: string; erpDetail?: string; resent?: number };
 type SFC = {
   id: string; order: string; product: string; quantity?: number; state: "queued" | "active" | "hold" | "done" | "scrapped";
@@ -139,20 +141,27 @@ function PlannedOrders() {
 // named. The host checks the rest: the product's line is the supervisor's, and
 // a named planned order is open, for the product and enough quantity.
 function ShopOrders() {
-  const { can, decide, master } = usePlant();
+  const { can, decide, master, client } = usePlant();
   const orders = useRead<{ records: Order[] }>(ordersQuery)?.records ?? [];
   const open = (useRead<Planned[]>("/v1/planned-orders") ?? [])
     .filter((p) => p.state !== "sent" && p.state !== "confirmed" && !orders.some((o) => o.planned === p.erpId));
   const [releasing, setReleasing] = useState(false);
   const products = master?.products ?? [];
-  const schema = z.object({ order: z.string().min(1), product: z.string().min(1), quantity: z.number().int().min(1), sfcs: z.number().int().min(1), planned: z.string().optional() })
+  // The enterprise model as the form's place options: the typed query contract
+  // (ADR-0094) over the two place families — organisation units (the demo types
+  // its plant and lines there) and locations from a pattern.
+  const places = useQuery({
+    queryKey: ["enterprise", "query", "places"],
+    queryFn: () => queryElements(client.get, { stereotype: ["ActualLocation", "ActualOrganization"] }),
+  }).data?.elements ?? [];
+  const schema = z.object({ order: z.string().min(1), product: z.string().min(1), quantity: z.number().int().min(1), sfcs: z.number().int().min(1), planned: z.string().optional(), place: z.string().optional() })
     .refine((v) => v.sfcs <= v.quantity, { path: ["sfcs"], message: t("At most the quantity") });
   return (
     <>
       <Records type="mes.order" covers={["mes.order.release"]} actions={can("mes.order.release") && <Button variant="primary" onClick={() => setReleasing(true)}><Plus />{t("Release shop order")}</Button>} />
       <Dialog open={releasing} onOpenChange={setReleasing} title={t("Release shop order")}>
         {releasing && (
-          <EntityForm schema={schema} defaultValues={{ order: newId("SO"), product: products[0]?.id ?? "", quantity: 1, sfcs: 1, planned: "" }}
+          <EntityForm schema={schema} defaultValues={{ order: newId("SO"), product: products[0]?.id ?? "", quantity: 1, sfcs: 1, planned: "", place: "" }}
             fields={[
               { name: "order", label: t("Shop order") },
               { name: "product", label: t("Product"), kind: "select", options: products.map((p) => ({ value: p.id, label: `${p.id} · ${p.name}` })) },
@@ -160,11 +169,14 @@ function ShopOrders() {
               { name: "sfcs", label: t("SFCs (lots)"), kind: "number" },
               { name: "planned", label: t("Planned order"), kind: "select",
                 options: [{ value: "", label: t("None: the plant's own order") }, ...open.map((p) => ({ value: p.erpId, label: `${p.number} · ${p.product} × ${p.quantity}` }))] },
+              { name: "place", label: t("Place in the model"), kind: "select",
+                options: [{ value: "", label: t("None: not placed in the model") }, ...places.map((p) => ({ value: p.id, label: `${p.name}${p.kind ? ` · ${p.kind}` : ""}` }))] },
             ]}
             submitLabel={t("Release")} onCancel={() => setReleasing(false)}
             onSubmit={async (v) => {
-              const { order, planned, ...rest } = v;
-              if (await decide("mes.order.release", { type: "mes.order", id: order }, planned ? { ...rest, planned } : rest)) setReleasing(false);
+              const { order, planned, place, ...rest } = v;
+              if (await decide("mes.order.release", { type: "mes.order", id: order },
+                { ...rest, ...(planned ? { planned } : {}), ...(place ? { place } : {}) })) setReleasing(false);
             }} />
         )}
       </Dialog>

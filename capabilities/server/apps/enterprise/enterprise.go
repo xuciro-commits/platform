@@ -59,15 +59,16 @@ type Enterprise struct {
 	ledger *platform.Ledger
 }
 
-// New is a tenant's enterprise app, starting from an ADR-0012 seed (which an
-// industry package or the development seats give) lifted into the model.
-func New(tenant string, seed platform.OrgSeed) *Enterprise {
+// declarations is the enterprise action catalog in full — the write contract
+// the host enforces and the generated SDK types (ADR-0094 D3): one source for
+// the ledger and for every consumer outside this package.
+func declarations() []platform.Action {
 	admin := []string{Admin}
 	f := func(name, typ, description string, required bool) platform.Field {
 		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
 	from, until := f("from", "date", "Valid from (YYYY-MM-DD; empty: today)", false), f("until", "date", "Valid until, exclusive (empty: open)", false)
-	catalog := platform.NewCatalog(
+	actions := []platform.Action{
 		platform.Action{Schema: SchemaElementAdd, Target: ElementType, Capability: "elements", Title: "Add element", Roles: admin,
 			Description: "Add an element of the enterprise: an organisation, post, person, capability, location, resource, project or goal, typed by a UAF stereotype.",
 			Payload: []platform.Field{f("stereotype", "string", "UAF stereotype, e.g. ActualOrganization, ActualPost, Capability, ActualLocation", true), f("name", "string", "Name", true),
@@ -115,11 +116,27 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 			Description: "Give an empty model its first shape for the enterprise's scale: S (≤100 people), M (≤1,000: a plant), L (≤10,000: divisions), XL (≤100,000: a group).",
 			Payload: []platform.Field{f("scale", "string", "S, M, L or XL; empty: from headcount", false), f("name", "string", "The enterprise's name", true), f("headcount", "number", "People, roughly", false),
 				f("sites", "number", "Sites or plants", false), f("legalEntities", "number", "Legal entities", false), f("industry", "string", "manufacturing, hospitality, services …", false)}},
-	)
-	change, _ := catalog.Action(SchemaRelationshipAdd)
+	}
+	// relationship.change is relationship.add that replaces atomically: the
+	// same payload plus the new id, declared last as the catalog always did.
+	change := platform.Action{}
+	for _, a := range actions {
+		if a.Schema == SchemaRelationshipAdd {
+			change = a
+			break
+		}
+	}
 	change.Schema, change.Title, change.Description = SchemaRelationshipChange, "Change relationship", "Replace a relationship atomically; a refusal leaves the existing relationship unchanged."
 	change.Payload = append(slices.Clone(change.Payload), f("replacement", "string", "New relationship id", true))
-	catalog.Add(change)
+	return append(actions, change)
+}
+
+// New is a tenant's enterprise app, starting from an ADR-0012 seed (which an
+// industry package or the development seats give) lifted into the model. Its
+// ledger is declared from declarations(), the single source of the write
+// contract the generated SDK also reads (ADR-0094).
+func New(tenant string, seed platform.OrgSeed) *Enterprise {
+	catalog := platform.NewCatalog(declarations()...)
 	return &Enterprise{tenant: tenant, model: FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType)}
 }
 
@@ -201,21 +218,21 @@ func copyModel(m Model) Model {
 
 type payload struct {
 	Stereotype, Name, Kind, ShortName, Reason, Source, Target, Role, Relation, Viewpoint, Scale, Industry string
-	Legal, External, Matrix, Primary                                                                 bool
-	Share                                                                                            float64
-	Headcount, Sites, LegalEntities                                                                  int
-	From, Until, AsOf                                                                                Date
-	Properties                                                                                       map[string]any
-	Elements                                                                                         []string
-	Layout                                                                                           map[string][2]float64
-	Pins                                                                                             []Pin
-	Calendar                                                                                         string
-	Published                                                                                        *bool
-	Slice                                                                                            *Slice
-	Pattern, Under                                                                                   string
-	Replacement                                                                                      string
-	Context                                                                                          []string
-	Params                                                                                           Params
+	Legal, External, Matrix, Primary                                                                      bool
+	Share                                                                                                 float64
+	Headcount, Sites, LegalEntities                                                                       int
+	From, Until, AsOf                                                                                     Date
+	Properties                                                                                            map[string]any
+	Elements                                                                                              []string
+	Layout                                                                                                map[string][2]float64
+	Pins                                                                                                  []Pin
+	Calendar                                                                                              string
+	Published                                                                                             *bool
+	Slice                                                                                                 *Slice
+	Pattern, Under                                                                                        string
+	Replacement                                                                                           string
+	Context                                                                                               []string
+	Params                                                                                                Params
 }
 
 func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {

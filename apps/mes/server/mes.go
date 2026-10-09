@@ -204,6 +204,7 @@ type Order struct {
 	Quantity int                 `json:"quantity" field:"readonly" help:"Units to make"`
 	SFCs     []platform.Ref[SFC] `json:"sfcs" field:"readonly" title:"SFCs"`
 	Planned  string              `json:"planned,omitempty" field:"readonly" title:"Planned order" help:"The ERP's planned order this order fulfils" synonyms:"PO"`
+	Place    string              `json:"place,omitempty" field:"readonly" title:"Place in the model" help:"The enterprise model's place this order runs at" ref:"enterprise.element"`
 	Status   string              `json:"status" field:"readonly" choices:"released,completed"`
 	// The confirmation to the ERP when the last SFC ends (production.orders/1):
 	// sent, confirmed (with the ERP's number), refused or failed.
@@ -424,6 +425,7 @@ type releasePayload struct {
 	Quantity int    `json:"quantity"`
 	SFCs     int    `json:"sfcs"`
 	Planned  string `json:"planned,omitempty"` // the ERP planned order it fulfils
+	Place    string `json:"place,omitempty"`   // the enterprise model's place this order runs at (ADR-0094)
 }
 
 // sfcPayload acts on the SFC's current operation; a stale screen is refused by
@@ -475,7 +477,7 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 		if _, known := platform.Get[Order](who, id); known {
 			return nil, conflict
 		}
-		o := Order{Record: platform.Record{ID: id}, Product: r.Product, Quantity: r.Quantity, Planned: r.Planned}
+		o := Order{Record: platform.Record{ID: id}, Product: r.Product, Quantity: r.Quantity, Planned: r.Planned, Place: r.Place}
 		if r.Planned != "" && !who.Replaying && p.fits(who, o, r.Planned) != "" {
 			return nil, invalid
 		}

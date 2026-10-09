@@ -27,10 +27,10 @@ type ProfileEntry struct {
 type Viewpoint struct {
 	ID            string   `json:"id"` // "organization"
 	Title         string   `json:"title"`
-	Note          string   `json:"note"`               // the question the view answers
-	Elements      []string `json:"elements"`           // the stereotypes it draws as its own
-	Context       []string `json:"context,omitempty"`  // drawn only beside an element of the slice
-	Relationships []string `json:"relationships"`      // derived: contracts among Elements+Context
+	Note          string   `json:"note"`              // the question the view answers
+	Elements      []string `json:"elements"`          // the stereotypes it draws as its own
+	Context       []string `json:"context,omitempty"` // drawn only beside an element of the slice
+	Relationships []string `json:"relationships"`     // derived: contracts among Elements+Context
 }
 
 func Profile() []ProfileEntry {

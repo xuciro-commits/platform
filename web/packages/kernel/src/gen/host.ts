@@ -755,6 +755,22 @@ export type EnterpriseModel = {
   calendars?: Calendar[];
 };
 
+export type EnterpriseQueryElement = {
+  id: string;
+  stereotype: string;
+  name: string;
+  kind?: string;
+  shortName?: string;
+  legal?: boolean;
+  from?: string;
+  until?: string;
+  closed?: boolean;
+};
+
+export type EnterpriseQueryResult = {
+  elements: EnterpriseQueryElement[];
+};
+
 export type EnterpriseReference = {
   type: string;
   field: string;

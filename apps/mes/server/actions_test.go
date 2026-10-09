@@ -64,6 +64,26 @@ func TestAssistantActsWithinItsGrant(t *testing.T) {
 	expect(t, submit(p, assistant, SchemaRelease, OrderType, "SO-9", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}), "ERROR_CODE_POLICY_DENIED")
 }
 
+// Releasing can place the order in the enterprise model: the ref payload field
+// is checked by the kernel — an element the model does not name never reaches
+// the plant — and the decision keeps the place on the record (ADR-0094).
+func TestReleasePlacesOrderInModel(t *testing.T) {
+	p := newPlant(t)
+	// DemoOrganization's units — the plant and its lines — are model elements.
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-70", releasePayload{Product: "P-100", Quantity: 2, SFCs: 1, Place: "L1"}), "ok")
+	found := false
+	for _, o := range p.Orders() {
+		if o.ID == "SO-70" {
+			found = true
+			expect(t, o.Place, "L1")
+		}
+	}
+	if !found {
+		t.Fatal("released order is not among the records")
+	}
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-71", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1, Place: "ghost"}), "ERROR_CODE_INVALID_ARGUMENT")
+}
+
 // Deactivating a capability removes its actions and refuses new ones; what it
 // recorded keeps replaying and resolving.
 func TestDeactivatedCapabilityKeepsItsHistory(t *testing.T) {

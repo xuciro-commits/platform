@@ -318,16 +318,16 @@ func TestEnterpriseViewIdentityAndAtomicRelationships(t *testing.T) {
 	}
 	for _, id := range []string{"first", "second"} {
 		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, id,
-			map[string]any{"name": id, "grid": "Pr-Sr", "kind": "management", "asOf": "2026-10-08", "elements": []string{"a", "b"}}, at)
+			map[string]any{"name": id, "viewpoint": "organization", "kind": "management", "asOf": "2026-10-08", "elements": []string{"a", "b"}}, at)
 	}
 	second := model("admin").Views[1]
 	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "first",
-		map[string]any{"name": "Renamed", "grid": "Rs-Sr", "elements": []string{}, "asOf": "2026-10-07"}, at)
+		map[string]any{"name": "Renamed", "viewpoint": "data", "elements": []string{}, "asOf": "2026-10-07"}, at)
 	m := model("admin")
 	if m.Views[0].ID != "first" || m.Views[0].Kind != "management" || len(m.Views[0].Elements) != 0 || !reflect.DeepEqual(m.Views[1], second) {
 		t.Fatalf("view state crossed identities: %+v", m.Views)
 	}
-	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "first", map[string]any{"name": "bad", "grid": "made-up"}, at); got == "ok" {
+	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "first", map[string]any{"name": "bad", "viewpoint": "made-up"}, at); got == "ok" {
 		t.Fatal("unknown viewpoint accepted")
 	}
 	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, "bad-project",
@@ -355,14 +355,14 @@ func TestEnterpriseViewIdentityAndAtomicRelationships(t *testing.T) {
 	}
 	decide(t, tn, "admin", build.ID, "build.object.create", build.ObjectType, "OBJ", map[string]any{"name": "privateobject", "title": "Private object"}, at)
 	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second",
-		map[string]any{"name": "Pinned", "grid": "Pr-Sr", "elements": []string{"a"}, "pins": []map[string]any{{"ref": "record:build.object/OBJ", "anchor": "a", "label": "Cached private text", "at": []int{10, 20}}}}, at)
+		map[string]any{"name": "Pinned", "viewpoint": "organization", "elements": []string{"a"}, "pins": []map[string]any{{"ref": "record:build.object/OBJ", "anchor": "a", "label": "Cached private text", "at": []int{10, 20}}}}, at)
 	if len(model("viewer").Views[0].Pins) != 0 {
 		t.Fatal("private record pin leaked into shared model")
 	}
 	if pins := model("admin").Views[0].Pins; len(pins) != 1 || pins[0].Label == "Cached private text" {
 		t.Fatal("pin label bypassed the current scoped record")
 	}
-	if got := refuse(t, tn, "viewer", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second", map[string]any{"name": "overwrite", "grid": "Pr-Sr", "elements": []string{"a"}}, at); got == "ok" {
+	if got := refuse(t, tn, "viewer", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second", map[string]any{"name": "overwrite", "viewpoint": "organization", "elements": []string{"a"}}, at); got == "ok" {
 		t.Fatal("a partially visible view silently lost another member's pins")
 	}
 	CheckReplay(t, tn, entries, compose)
