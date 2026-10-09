@@ -43,29 +43,107 @@ const (
 
 // Master data (Opcenter: product, workflow/spec, resource; SAP ME: material, router/operation, work center/resource).
 
-type Operation struct {
-	Step       int    `json:"step"`
-	Name       string `json:"name"`
-	WorkCenter string `json:"workCenter"`
+// Parameter is one process setpoint an operation must hold (SAP ME: an operation
+// parameter; Opcenter: a characteristic on the specification). Type says how the
+// numbers read: a setpoint to hold, a range to stay inside, a limit not to pass,
+// or a note the operator reads with no number at all.
+type Parameter struct {
+	Name   string  `json:"name"`
+	Title  string  `json:"title,omitempty"`
+	Type   string  `json:"type,omitempty"` // setpoint, range, limit, note
+	Unit   string  `json:"unit,omitempty"`
+	Target float64 `json:"target,omitempty"`
+	Min    float64 `json:"min,omitempty"`
+	Max    float64 `json:"max,omitempty"`
 }
 
-type Product struct {
+// Operation is one step of a routing (SAP ME: a router operation). Its number is
+// both its identity and its order — 10, 20, 30 — the way a paper router reads, so
+// a lot says which operation it stands at by number instead of by counting array
+// positions. Requires names the capabilities its equipment must have; Parameters
+// are what the machine or the operator must hold while it runs.
+type Operation struct {
+	Number     int         `json:"number"`
+	Name       string      `json:"name"`
+	WorkCenter string      `json:"workCenter"`
+	Requires   []string    `json:"requires,omitempty"`
+	Parameters []Parameter `json:"parameters,omitempty"`
+	// Capable is computed, never declared: the resources that can run this
+	// operation. Master() fills it in so a floor screen and the refusal in `start`
+	// read the same answer from the same rule (canDo).
+	Capable []string `json:"capable,omitempty"`
+}
+
+// Routing is a reusable, versioned sequence of operations (SAP ME: a router;
+// Opcenter: a workflow). Products point at one by ID; a lot is released against a
+// specific version, so editing a routing never moves a lot already on the floor.
+// MasterData holds one entry per version, keyed by ID and Version.
+type Routing struct {
 	ID         string      `json:"id"`
 	Name       string      `json:"name"`
-	Routing    string      `json:"routing"`
+	Version    int         `json:"version"`
 	Operations []Operation `json:"operations"`
 }
 
+// operation finds a step of this routing by its number.
+func (r *Routing) operation(number int) *Operation {
+	if r == nil {
+		return nil
+	}
+	i := slices.IndexFunc(r.Operations, func(op Operation) bool { return op.Number == number })
+	if i < 0 {
+		return nil
+	}
+	return &r.Operations[i]
+}
+
+// first is the operation a lot starts at, and next the one after `number` — nil at
+// the end of the routing, which is where a lot is done.
+func (r *Routing) first() *Operation {
+	if r == nil || len(r.Operations) == 0 {
+		return nil
+	}
+	return &r.Operations[0]
+}
+
+func (r *Routing) next(number int) *Operation {
+	if r == nil {
+		return nil
+	}
+	i := slices.IndexFunc(r.Operations, func(op Operation) bool { return op.Number == number })
+	if i < 0 || i+1 >= len(r.Operations) {
+		return nil
+	}
+	return &r.Operations[i+1]
+}
+
+type Product struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Routing string `json:"routing"` // the routing it is made by; which version, see MasterData.Routings
+}
+
+// Resource is one machine or station (SAP ME: a resource inside a work center).
+// Capabilities are what it can do; matching them against what an operation asks
+// for is how the plant answers "which equipment can process this step".
+type Resource struct {
+	ID           string   `json:"id"`
+	Name         string   `json:"name,omitempty"`
+	WorkCenter   string   `json:"workCenter"`
+	Capabilities []string `json:"capabilities,omitempty"`
+}
+
 type WorkCenter struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Line      string   `json:"line"`
-	Resources []string `json:"resources"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Line string `json:"line"`
 }
 
 type MasterData struct {
 	Products    []Product    `json:"products"`
+	Routings    []Routing    `json:"routings"`
 	WorkCenters []WorkCenter `json:"workCenters"`
+	Resources   []Resource   `json:"resources"`
 }
 
 // Organisation is domain data (K6); policy reads it as context.
@@ -90,9 +168,9 @@ const SiteStructure = "site"
 // Execution state.
 
 type NC struct {
-	Step int    `json:"step"`
-	Code string `json:"code"`
-	By   string `json:"by"`
+	Operation int    `json:"operation"` // the operation number it was logged at
+	Code      string `json:"code"`
+	By        string `json:"by"`
 }
 
 type Signature struct {
@@ -105,14 +183,18 @@ type Signature struct {
 // lifecycle is start, complete, nonconformance and signed disposition.
 type SFC struct {
 	platform.Record
-	Order      platform.Ref[Order] `json:"order" field:"readonly" inverse:"sfcs"`
-	Product    string              `json:"product" field:"readonly,search" help:"The product this lot becomes"`
-	Quantity   int                 `json:"quantity" field:"readonly" help:"Units in this lot: its order's quantity split over its SFCs"`
-	Step       int                 `json:"step" field:"readonly" help:"The index of its current operation in the product's routing"` // index into the product's operations
-	State      string              `json:"state" field:"readonly" choices:"queued,active,hold,done,scrapped"`
-	Resource   string              `json:"resource,omitempty" field:"readonly" help:"The machine or station working on it now"`
-	NCs        []NC                `json:"ncs" field:"readonly" title:"Nonconformances"`
-	Signatures []Signature         `json:"signatures" field:"readonly"`
+	Order    platform.Ref[Order] `json:"order" field:"readonly" inverse:"sfcs"`
+	Product  string              `json:"product" field:"readonly,search" help:"The product this lot becomes"`
+	Quantity int                 `json:"quantity" field:"readonly" help:"Units in this lot: its order's quantity split over its SFCs"`
+	// Released against one routing version, so a later edit of the routing does not
+	// move a lot already on the floor; standing at one operation, named by number.
+	Routing        string      `json:"routing" field:"readonly" title:"Routing" help:"The routing this lot was released against"`
+	RoutingVersion int         `json:"routingVersion" field:"readonly" title:"Routing version" help:"The routing version fixed at release"`
+	Operation      int         `json:"operation" field:"readonly" title:"Operation" help:"The number of the operation this lot stands at"`
+	State          string      `json:"state" field:"readonly" choices:"queued,active,hold,done,scrapped"`
+	Resource       string      `json:"resource,omitempty" field:"readonly" help:"The machine or station working on it now"`
+	NCs            []NC        `json:"ncs" field:"readonly" title:"Nonconformances"`
+	Signatures     []Signature `json:"signatures" field:"readonly"`
 }
 
 // Order is a released shop order; it completes when its last SFC ends.
@@ -191,19 +273,84 @@ func (p *Plant) workCenter(id string) *WorkCenter {
 	return &p.master.WorkCenters[i]
 }
 
+// routing finds one version of a routing; version 0 asks for its newest.
+func (p *Plant) routing(id string, version int) *Routing {
+	var newest *Routing
+	for i := range p.master.Routings {
+		r := &p.master.Routings[i]
+		if r.ID != id || version != 0 && r.Version != version {
+			continue
+		}
+		if newest == nil || r.Version > newest.Version {
+			newest = r
+		}
+	}
+	return newest
+}
+
+// released is the routing version a lot was fixed to at release.
+func (p *Plant) released(sfc *SFC) *Routing { return p.routing(sfc.Routing, sfc.RoutingVersion) }
+
+// routingFor is the newest version of the routing a product is made by.
+func (p *Plant) routingFor(product string) *Routing {
+	if prod := p.product(product); prod != nil {
+		return p.routing(prod.Routing, 0)
+	}
+	return nil
+}
+
+func (p *Plant) resource(id string) *Resource {
+	i := slices.IndexFunc(p.master.Resources, func(x Resource) bool { return x.ID == id })
+	if i < 0 {
+		return nil
+	}
+	return &p.master.Resources[i]
+}
+
+// canDo is the plant's one capability rule: a resource runs an operation when it
+// belongs to that operation's work center and holds every capability the operation
+// requires. Serving `capable` and refusing `start` both read it, so the answer a
+// floor screen shows and the answer the plant enforces cannot drift apart.
+func (p *Plant) canDo(resource string, op Operation) bool {
+	found := p.resource(resource)
+	if found == nil || found.WorkCenter != op.WorkCenter {
+		return false
+	}
+	for _, want := range op.Requires {
+		if !slices.Contains(found.Capabilities, want) {
+			return false
+		}
+	}
+	return true
+}
+
+// capable answers "which equipment can process this step": every resource that can
+// run the operation, in master-data order.
+func (p *Plant) capable(op Operation) []string {
+	var ids []string
+	for _, r := range p.master.Resources {
+		if p.canDo(r.ID, op) {
+			ids = append(ids, r.ID)
+		}
+	}
+	return ids
+}
+
 // line of the work center where an SFC's current operation runs.
 func (p *Plant) lineOf(sfc SFC) string {
-	if prod := p.product(sfc.Product); prod != nil && sfc.Step < len(prod.Operations) {
-		if wc := p.workCenter(prod.Operations[sfc.Step].WorkCenter); wc != nil {
-			return wc.Line
+	if r := p.released(&sfc); r != nil {
+		if op := r.operation(sfc.Operation); op != nil {
+			if wc := p.workCenter(op.WorkCenter); wc != nil {
+				return wc.Line
+			}
 		}
 	}
 	return ""
 }
 
 func (p *Plant) resourceLine(resource string) string {
-	for _, wc := range p.master.WorkCenters {
-		if slices.Contains(wc.Resources, resource) {
+	if found := p.resource(resource); found != nil {
+		if wc := p.workCenter(found.WorkCenter); wc != nil {
 			return wc.Line
 		}
 	}
@@ -221,8 +368,9 @@ func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bo
 	case SchemaRelease:
 		var r releasePayload
 		json.Unmarshal(s.GetPayload(), &r)
-		prod := p.product(r.Product)
-		return prod != nil && len(prod.Operations) > 0 && onLine(p.workCenter(prod.Operations[0].WorkCenter).Line)
+		routing := p.routingFor(r.Product)
+		first := routing.first()
+		return first != nil && onLine(p.workCenter(first.WorkCenter).Line)
 	case SchemaStart, SchemaComplete:
 		return known && onLine(p.lineOf(sfc))
 	case SchemaNC:
@@ -286,9 +434,22 @@ type sfcPayload struct {
 }
 
 type signPayload struct {
-	Action     string `json:"action"`  // rework, scrap, use-as-is
-	Meaning    string `json:"meaning"` // reviewed, approved (21 CFR Part 11 signature meaning)
-	ReworkStep int    `json:"reworkStep,omitempty"`
+	Action          string `json:"action"`  // rework, scrap, use-as-is
+	Meaning         string `json:"meaning"` // reviewed, approved (21 CFR Part 11 signature meaning)
+	ReworkOperation int    `json:"reworkOperation,omitempty"`
+}
+
+// reworkable is the rule behind the disposition dialog: a lot goes back to an
+// operation its own routing declares, at or before where it stands now. Naming an
+// operation number, not an array index, is what makes the dialog a list to pick
+// from instead of a number to remember.
+func reworkable(routing *Routing, at, to int) bool {
+	if routing == nil {
+		return false
+	}
+	back := slices.IndexFunc(routing.Operations, func(op Operation) bool { return op.Number == to })
+	now := slices.IndexFunc(routing.Operations, func(op Operation) bool { return op.Number == at })
+	return back >= 0 && now >= 0 && back <= now
 }
 
 type reasonPayload struct {
@@ -307,6 +468,10 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 		if json.Unmarshal(s.GetPayload(), &r) != nil || p.product(r.Product) == nil || r.Quantity < 1 || r.SFCs < 1 || r.SFCs > r.Quantity {
 			return nil, invalid
 		}
+		routing := p.routingFor(r.Product) // read after the payload: a lot is fixed to the newest version at release
+		if routing.first() == nil {
+			return nil, invalid
+		}
 		if _, known := platform.Get[Order](who, id); known {
 			return nil, conflict
 		}
@@ -320,7 +485,8 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 				if n <= r.Quantity%r.SFCs {
 					quantity++
 				}
-				sfc := SFC{Record: platform.Record{ID: fmt.Sprintf("%s-%03d", id, n)}, Order: platform.Ref[Order](id), Product: r.Product, Quantity: quantity, NCs: []NC{}, Signatures: []Signature{}}
+				sfc := SFC{Record: platform.Record{ID: fmt.Sprintf("%s-%03d", id, n)}, Order: platform.Ref[Order](id), Product: r.Product, Quantity: quantity,
+					Routing: routing.ID, RoutingVersion: routing.Version, Operation: routing.first().Number, NCs: []NC{}, Signatures: []Signature{}}
 				o.SFCs = append(o.SFCs, platform.Ref[SFC](sfc.ID))
 				p.identity.Create(&pb.EntityRef{Type: SFCType, Id: sfc.ID})
 				who.Put(record, sfc)
@@ -423,14 +589,15 @@ func Entities(p *Plant) []platform.Entity {
 					{Name: "hold", Title: "On hold", Tone: "danger", Description: "held by a nonconformance until two quality engineers sign one disposition"}, {Name: "done", Title: "Done", Tone: "success"}, {Name: "scrapped", Title: "Scrapped", Tone: "neutral"}},
 				Transitions: []platform.Transition{
 					{Name: "start", Title: "Start operation", Capability: "execution", From: []string{"queued"}, To: []string{"active"}, Roles: roles(Operator),
-						Description: "Start the SFC's current operation on a resource of its work center.",
-						Payload:     []platform.Field{{Name: "resource", Type: "string", Required: true, Description: "Resource of the operation's work center"}},
+						Description: "Start the SFC's current operation on a resource that can run it.",
+						Payload:     []platform.Field{{Name: "resource", Type: "string", Required: true, Description: "A resource the operation's capable list names"}},
 						Do: func(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
 							sfc := sfcOf(record)
 							var st sfcPayload
 							json.Unmarshal(payload, &st)
-							prod := p.product(sfc.Product)
-							if wc := p.workCenter(prod.Operations[sfc.Step].WorkCenter); wc == nil || !slices.Contains(wc.Resources, st.Resource) {
+							routing := p.released(sfc)
+							op := routing.operation(sfc.Operation)
+							if op == nil || !p.canDo(st.Resource, *op) {
 								return invalid
 							}
 							sfc.Resource = st.Resource
@@ -441,8 +608,8 @@ func Entities(p *Plant) []platform.Entity {
 						Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 							sfc := sfcOf(record)
 							sfc.Resource = ""
-							if sfc.Step+1 < len(p.product(sfc.Product).Operations) {
-								sfc.Step, sfc.State = sfc.Step+1, "queued"
+							if next := p.released(sfc).next(sfc.Operation); next != nil {
+								sfc.Operation, sfc.State = next.Number, "queued"
 							} else {
 								sfc.State = "done"
 							}
@@ -458,14 +625,14 @@ func Entities(p *Plant) []platform.Entity {
 								return invalid
 							}
 							sfc.Resource = ""
-							sfc.NCs = append(sfc.NCs, NC{Step: sfc.Step, Code: st.Code, By: c.ID})
+							sfc.NCs = append(sfc.NCs, NC{Operation: sfc.Operation, Code: st.Code, By: c.ID})
 							return nil
 						}},
 					{Name: "sign", Title: "Sign disposition", Capability: "quality", From: []string{"hold"}, To: []string{"hold", "queued", "scrapped"}, Roles: roles(Quality),
 						Description: "Sign the disposition of a held SFC (electronic signature with meaning); two people, reviewed and approved, on the same disposition release it.",
 						Payload: []platform.Field{{Name: "action", Type: "string", Required: true, Description: "rework, scrap or use-as-is"},
 							{Name: "meaning", Type: "string", Required: true, Description: "reviewed or approved"},
-							{Name: "reworkStep", Type: "integer", Description: "Operation step to rework from"}},
+							{Name: "reworkOperation", Type: "integer", Description: "Operation number to rework from: one this lot has already reached"}},
 						Do: func(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
 							sfc := sfcOf(record)
 							var sg signPayload
@@ -476,7 +643,7 @@ func Entities(p *Plant) []platform.Entity {
 							if slices.ContainsFunc(sfc.Signatures, func(x Signature) bool { return x.By == c.ID || x.Meaning == sg.Meaning && x.Action == sg.Action }) {
 								return conflict // one signature per person, one per meaning
 							}
-							if sg.Action == "rework" && (sg.ReworkStep < 0 || sg.ReworkStep > sfc.Step) {
+							if sg.Action == "rework" && !reworkable(p.released(sfc), sfc.Operation, sg.ReworkOperation) {
 								return invalid
 							}
 							sfc.Signatures = append(sfc.Signatures, Signature{Action: sg.Action, Meaning: sg.Meaning, By: c.ID})
@@ -491,7 +658,7 @@ func Entities(p *Plant) []platform.Entity {
 							}
 							switch sg.Action {
 							case "rework":
-								sfc.Step, sfc.State = sg.ReworkStep, "queued"
+								sfc.Operation, sfc.State = sg.ReworkOperation, "queued"
 							case "scrap":
 								sfc.State = "scrapped"
 							default:
@@ -506,7 +673,22 @@ func Entities(p *Plant) []platform.Entity {
 
 // Reads.
 
-func (p *Plant) Master() MasterData { return p.master }
+// Master serves the plant's master data with each operation's `capable` list
+// computed on the way out (ADR-0088): the floor screens read which equipment can
+// process a step instead of re-deriving it, and `start` refuses by the same rule.
+func (p *Plant) Master() MasterData {
+	served := p.master
+	served.Routings = slices.Clone(p.master.Routings)
+	for i := range served.Routings {
+		served.Routings[i].Operations = slices.Clone(served.Routings[i].Operations)
+		for j := range served.Routings[i].Operations {
+			op := &served.Routings[i].Operations[j]
+			op.Parameters = slices.Clone(op.Parameters)
+			op.Capable = p.capable(*op)
+		}
+	}
+	return served
+}
 
 func compare(a, b string) int {
 	switch {

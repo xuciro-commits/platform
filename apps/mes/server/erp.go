@@ -167,8 +167,8 @@ func (p *Plant) supervisorsOfOrder(o Order) platform.Recipient {
 
 // orderLine is the line where the order's routing starts.
 func (p *Plant) orderLine(o Order) string {
-	if prod := p.product(o.Product); prod != nil && len(prod.Operations) > 0 {
-		return p.workCenter(prod.Operations[0].WorkCenter).Line
+	if first := p.routingFor(o.Product).first(); first != nil {
+		return p.workCenter(first.WorkCenter).Line
 	}
 	return ""
 }
