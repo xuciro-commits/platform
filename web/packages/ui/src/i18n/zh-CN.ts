@@ -1415,4 +1415,16 @@ export default {
   "Branch": "分支",
   "Flow": "流程",
   "Lifecycle": "生命周期",
+  // Relation class titles (ADR-0090 D1): the caption word the kit's table holds,
+  // rendered through t() wherever a node names the class and nothing else.
+  "Connection": "连接",
+  "Source": "数据源",
+  "Dataset": "数据集",
+  "Pipeline": "管道",
+  "Writeback": "回写",
+  "Page": "页面",
+  "Agent run": "智能体运行",
+  "Effect": "副作用",
+  // The force layout's word in the arrange menu (ADR-0091).
+  "Balance by distance": "按距离平衡",
 } as Record<string, string>;

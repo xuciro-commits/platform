@@ -22,8 +22,6 @@ export function useLineage() {
 type Route = { view: string; params?: Record<string, string> };
 export type LineageGraph = { nodes: RelationNode[]; edges: RelationEdge[]; routes: Record<string, Route> };
 
-const tones: Record<string, RelationNode["tone"]> = { connection: "neutral", source: "info", dataset: "success", pipeline: "warning", object: "info", writeback: "danger" };
-
 /** The whole declared lineage around one dataset or one object, as a relation
  * graph rather than a chain of arrows: a connection feeds a source, a source loads
  * a dataset or writes an object, a pipeline reads datasets and writes a dataset or
@@ -34,9 +32,11 @@ export function lineageGraph(l: ReturnType<typeof useLineage>, focus: { kind: "o
   const nodes = new Map<string, RelationNode>();
   const edges: RelationEdge[] = [];
   const routes: Record<string, Route> = {};
-  const put = (id: string, kind: keyof typeof tones, node: Omit<RelationNode, "id" | "tone">, route?: Route) => {
+  const put = (id: string, kind: string, node: Omit<RelationNode, "id" | "class">, route?: Route) => {
     if (nodes.has(id)) return;
-    nodes.set(id, { ...node, id, tone: tones[kind], detail: [node.caption, node.flag].filter(Boolean).join(" · ") });
+    // The class decides the glyph, tone and caption word (ADR-0090 D1); a node's
+    // own caption and flag still override the class where they are present.
+    nodes.set(id, { ...node, id, class: kind, detail: [node.caption, node.flag].filter(Boolean).join(" · ") });
     if (route) routes[id] = route;
   };
   const feed = (from: string, to: string, label: string) => edges.push({ id: `${from}>${to}`, source: from, target: to, label, directed: true, tree: true });

@@ -1,4 +1,4 @@
-// The layouts every relationship drawing needs (ADR-0068 §6, ADR-0086 D3): the
+// The layouts every relationship drawing needs (ADR-0068 §6, ADR-0086 D3, ADR-0091): the
 // owner names which edges form the hierarchy; the canvas offers these to the reader.
 import { layeredLayout } from "../core/layered";
 import type { CanvasPosition } from "../core/types";
@@ -13,6 +13,10 @@ export function relationLayout(kind: RelationLayout, nodes: N[], edges: E[], siz
   const tree = edges.filter((e) => e.tree !== false);
   if (kind === "grid") return grid(nodes, size);
   if (kind === "radial") return radial(nodes, tree, size);
+  // A graph that is not a hierarchy — a lineage with cross links, a model with
+  // shared types — arranges by attraction along its edges and repulsion between
+  // its nodes (Fruchterman–Reingold), which no tree reading can do honestly.
+  if (kind === "force") return force(nodes, edges, size);
   // A lineage or an execution chain is already declared in the direction it reads.
   if (kind === "layered") return Object.fromEntries(layeredLayout(nodes, edges, "right", size));
   // The hierarchy flows parent → child; the layered layout wants edges in flow direction.
@@ -23,6 +27,50 @@ export function relationLayout(kind: RelationLayout, nodes: N[], edges: E[], siz
 function grid(nodes: N[], size: RelationLayoutSize) {
   const columns = Math.max(1, Math.ceil(Math.sqrt(nodes.length * 1.6)));
   return Object.fromEntries(nodes.map((n, i) => [n.id, { x: (i % columns) * (size.width + size.gapX), y: Math.floor(i / columns) * (size.height + size.gapY) }]));
+}
+
+/** Fruchterman–Reingold: nodes repel each other, edges attract their ends, and a
+ * cooling temperature settles the system. The start is a deterministic ring (no
+ * Math.random) so the same graph always arranges the same way; 200 iterations
+ * settle the graphs this canvas draws (tens to a few hundred nodes) in a frame. */
+function force(nodes: N[], edges: E[], size: RelationLayoutSize) {
+  const n = nodes.length;
+  if (!n) return {};
+  const width = Math.max(800, Math.ceil(Math.sqrt(n)) * (size.width + size.gapX));
+  const height = Math.max(480, Math.ceil(Math.sqrt(n)) * (size.height + size.gapY));
+  const k = Math.sqrt((width * height) / n);
+  const index = new Map(nodes.map((node, i) => [node.id, i]));
+  const pos: CanvasPosition[] = nodes.map((_, i) => {
+    const angle = (i / n) * Math.PI * 2, radius = k * 1.5;
+    return { x: width / 2 + Math.cos(angle) * radius, y: height / 2 + Math.sin(angle) * radius };
+  });
+  const pairs = edges.flatMap((e) => {
+    const a = index.get(e.from), b = index.get(e.to);
+    return a !== undefined && b !== undefined && a !== b ? [[a, b] as const] : [];
+  });
+  let temperature = width / 8;
+  for (let iteration = 0; iteration < 200; iteration++) {
+    const disp = pos.map(() => ({ x: 0, y: 0 }));
+    for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) {
+      const dx = pos[a]!.x - pos[b]!.x, dy = pos[a]!.y - pos[b]!.y;
+      const distance = Math.max(Math.hypot(dx, dy), 0.01), force = (k * k) / distance;
+      disp[a]!.x += (dx / distance) * force; disp[a]!.y += (dy / distance) * force;
+      disp[b]!.x -= (dx / distance) * force; disp[b]!.y -= (dy / distance) * force;
+    }
+    for (const [a, b] of pairs) {
+      const dx = pos[a]!.x - pos[b]!.x, dy = pos[a]!.y - pos[b]!.y;
+      const distance = Math.max(Math.hypot(dx, dy), 0.01), force = (distance * distance) / k;
+      disp[a]!.x -= (dx / distance) * force; disp[a]!.y -= (dy / distance) * force;
+      disp[b]!.x += (dx / distance) * force; disp[b]!.y += (dy / distance) * force;
+    }
+    for (let i = 0; i < n; i++) {
+      const distance = Math.max(Math.hypot(disp[i]!.x, disp[i]!.y), 0.01);
+      const limit = Math.min(distance, temperature);
+      pos[i]!.x += (disp[i]!.x / distance) * limit; pos[i]!.y += (disp[i]!.y / distance) * limit;
+    }
+    temperature *= 0.98;
+  }
+  return Object.fromEntries(nodes.map((node, i) => [node.id, { x: Math.round(pos[i]!.x), y: Math.round(pos[i]!.y) }]));
 }
 
 /** Roots at the centre, each generation on a wider ring, siblings sharing their parent's sector. */

@@ -71,8 +71,8 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
       source: relation.ref.object.name, target: relation.target.name, label: relation.title,
     }));
     // An object type is a thing, not a step (ADR-0086 D2): the relationship canvas
-    // arranges it, and the caller supplies the icon and the identity as its detail.
-    const nodes: RelationNode[] = shown.map((item) => ({ id: item.ref.name, label: item.title, detail: item.ref.name, icon: <Boxes /> }));
+    // arranges it, and the class supplies the glyph while the identity is the detail.
+    const nodes: RelationNode[] = shown.map((item) => ({ id: item.ref.name, label: item.title, detail: item.ref.name, class: "object" }));
     return { nodes, edges };
   }, [visible, model]);
   const related = resource ? model.relations.filter((relation) => relation.ref.object.name === current || relation.target.name === current) : [];

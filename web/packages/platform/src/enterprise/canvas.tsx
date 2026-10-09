@@ -1,10 +1,9 @@
 // The enterprise drawing surface: the shared relationship canvas with UAF meaning —
 // an icon per stereotype and kind (SAP/ArchiMate-style pictograms), placement
 // edges as the tree, the other relationships as plain links. The modeler owns
-// the positions and the decisions.
-import type { ReactNode } from "react";
-import { RelationCanvas, t, type CanvasAction, type RelationEdge, type RelationNode } from "@platform/ui";
-import { Award, Boxes, Briefcase, Building, Building2, Cog, Crown, DoorOpen, Factory, FileText, FolderKanban, Globe2, Handshake, Hotel, IdCard, Landmark, Layers, MapPin, Network, Scale, Store, Target, Truck, UserRound, Users, Warehouse, Workflow, Wrench } from "lucide-react";
+// the positions and the decisions. Stereotype icons come from the host profile
+// (ADR-0090 D2); kinds stay here as icon names, drawn by the kit's one glyph.
+import { IconGlyph, RelationCanvas, t, type CanvasAction, type RelationEdge, type RelationNode } from "@platform/ui";
 import { FILLS_POST, MEMBERSHIP, PLACEMENT, type Element, type Relationship } from "./model";
 
 export type Positions = Record<string, [number, number]>;
@@ -14,26 +13,33 @@ export const STEREOTYPE_DROP = "application/x-uaf-stereotype";
  * drawing then holds the apps that work with the model, not only the model. */
 export type CanvasPin = { id: string; label: string; caption?: string; detail?: string; anchor: string; anchorName?: string };
 
-// Kinds first (a plant is not a committee), stereotypes as the fallback.
-const kindIcons: Record<string, ReactNode> = {
-  group: <Landmark />, holding: <Landmark />, company: <Building2 />, subsidiary: <Building2 />, "business unit": <Layers />, "business group": <Layers />, division: <Layers />, region: <Globe2 />,
-  plant: <Factory />, factory: <Factory />, workshop: <Factory />, line: <Workflow />, station: <Wrench />, cell: <Wrench />,
-  hotel: <Hotel />, property: <Hotel />, warehouse: <Warehouse />, "distribution centre": <Warehouse />, store: <Store />, shop: <Store />, office: <Building />, branch: <Building />,
-  department: <Briefcase />, "shared services": <Network />, "cost centre": <Scale />, team: <Users />, crew: <Users />, shift: <Users />,
-  board: <Crown />, committee: <Users />, partner: <Handshake />, supplier: <Truck />, customer: <Handshake />,
-  machine: <Cog />, equipment: <Cog />, vehicle: <Truck />, tool: <Wrench />, room: <DoorOpen />, floor: <Layers />, site: <MapPin />, zone: <MapPin />, aisle: <MapPin />, bin: <Boxes />, dock: <Truck />,
+/** The glyph each kind takes — data, not elements (ADR-0090 D2). A plant is
+ * still not a committee; the lookup is just a table the kit can draw. */
+const kindIcons: Record<string, string> = {
+  group: "landmark", holding: "landmark", company: "building-2", subsidiary: "building-2", "business unit": "layers", "business group": "layers", division: "layers", region: "globe",
+  plant: "factory", factory: "factory", workshop: "factory", line: "workflow", station: "wrench", cell: "wrench",
+  hotel: "hotel", property: "hotel", warehouse: "warehouse", "distribution centre": "warehouse", store: "store", shop: "store", office: "building", branch: "building",
+  department: "briefcase", "shared services": "network", "cost centre": "scale", team: "users", crew: "users", shift: "users",
+  board: "crown", committee: "users", partner: "handshake", supplier: "truck", customer: "handshake",
+  machine: "cog", equipment: "cog", vehicle: "truck", tool: "wrench", room: "door", floor: "layers", site: "map-pin", zone: "map-pin", aisle: "map-pin", bin: "boxes", dock: "truck",
 };
-const stereotypeIcons: Record<string, ReactNode> = {
-  ActualOrganization: <Building2 />, ActualPost: <IdCard />, ActualPerson: <UserRound />, ActualLocation: <MapPin />, ActualResource: <Cog />,
-  ActualProject: <FolderKanban />, Capability: <Award />, EnterpriseGoal: <Target />, ActualResponsibility: <Briefcase />, OperationalActivity: <Workflow />, ServiceSpecification: <Boxes />,
-};
+/** The fallback when the host's profile names no icon: the plain box. */
+const DEFAULT_ICON = "boxes";
+/** What each stereotype shows when it has no icon of its own (ADR-0090 D2: the
+ * tone table is presentation vocabulary, so it stays with the view). */
 const tones: Record<string, string> = { ActualOrganization: "info", ActualPost: "neutral", ActualPerson: "success", ActualLocation: "warning", ActualResource: "neutral", ActualProject: "info", Capability: "success", EnterpriseGoal: "danger" };
-export const elementIcon = (el: Pick<Element, "stereotype" | "kind">): ReactNode => (el.kind && kindIcons[el.kind.toLowerCase()]) ?? stereotypeIcons[el.stereotype] ?? <Boxes />;
 
-export function Canvas({ elements, relationships, pins = [], positions, selected, linking, admin, label, title, onPositions, onSelect, onDrop, onLink, facts, nodeActions, edgeActions, onReconnect, viewId, propertyLinks = [] }: {
+/** The icon an element draws under: its kind, then the stereotype's icon as the
+ * host's profile declared it (ADR-0090 D2), then the plain box. */
+export const elementIconName = (el: Pick<Element, "stereotype" | "kind">, icon?: (stereotype: string) => string | undefined): string =>
+  (el.kind && kindIcons[el.kind.toLowerCase()]) ?? icon?.(el.stereotype) ?? DEFAULT_ICON;
+
+export function Canvas({ elements, relationships, pins = [], positions, selected, linking, admin, label, title, icon, onPositions, onSelect, onDrop, onLink, facts, nodeActions, edgeActions, onReconnect, viewId, propertyLinks = [] }: {
   propertyLinks?: { id: string; source: string; target: string; label: string }[];
   viewId: string; elements: Element[]; relationships: Relationship[]; pins?: CanvasPin[]; positions: Positions; selected?: string; linking: boolean; admin: boolean;
   label: (r: Relationship) => string; title: (stereotype: string) => string;
+  /** The host profile's icon for a stereotype (ADR-0090 D2); absent means none. */
+  icon?: (stereotype: string) => string | undefined;
   onPositions: (next: Positions) => void; onSelect: (id?: string) => void;
   onDrop: (stereotype: string, at: [number, number]) => void; onLink: (source: string, target: string) => void;
   /** What the details panel shows for an element: UAF type, kind, validity, where it sits. */
@@ -43,10 +49,10 @@ export function Canvas({ elements, relationships, pins = [], positions, selected
   onReconnect: (id: string, source: string, target: string) => void;
 }) {
   const nodes: RelationNode[] = [
-    ...elements.map((el) => ({ id: el.id, label: el.name, caption: el.kind ? t(el.kind) : title(el.stereotype), icon: elementIcon(el), tone: tones[el.stereotype],
+    ...elements.map((el) => ({ id: el.id, label: el.name, caption: el.kind ? t(el.kind) : title(el.stereotype), icon: <IconGlyph name={elementIconName(el, icon)} />, tone: tones[el.stereotype],
       dim: !!el.until, flag: el.published ? "shared" : el.owner ? el.owner : undefined, detail: `${title(el.stereotype)} · ${el.id}`, facts: facts(el) })),
     // A pinned record is drawn beside the element it names, and says which app it comes from.
-    ...pins.map((p) => ({ id: p.id, label: p.label, caption: p.caption ?? t("record"), icon: <FileText />, tone: "warning", linkable: false, detail: p.detail ?? p.id,
+    ...pins.map((p) => ({ id: p.id, label: p.label, caption: p.caption ?? t("record"), icon: <IconGlyph name="file-text" />, tone: "warning", linkable: false, detail: p.detail ?? p.id,
       facts: [{ label: t("Pinned record"), value: p.detail ?? p.id }, ...(p.anchorName ? [{ label: t("Names"), value: p.anchorName }] : [])] })),
   ];
   const edges: RelationEdge[] = [

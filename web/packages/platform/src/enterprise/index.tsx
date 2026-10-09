@@ -12,7 +12,7 @@ import { useHost, useOpenRecord, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, IconGlyph, Input, Panel, Select, Tag, Tree, Workbench, RecordTimeline, useUnsavedChanges, t, type ColumnDef, type CanvasAction, type WorkbenchTab } from "@platform/ui";
 import { Copy, Link2, Network, Pencil, Pin as PinIcon, PinOff, Plus, Puzzle, Save, Table2, Trash2, Workflow, CalendarDays } from "lucide-react";
-import { Canvas, STEREOTYPE_DROP, elementIcon, type CanvasPin, type Positions } from "./canvas";
+import { Canvas, STEREOTYPE_DROP, elementIconName, type CanvasPin, type Positions } from "./canvas";
 import { ElementProperties, type ElementEdit } from "./properties";
 import { allowedRelationships, autoLayout, childrenOf, contractNote, viewpointElements, viewpointTypes, live, nextTo, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PERSON, PLACEMENT, POST, RELATIONSHIP, RESPONSIBLE_FOR, VIEW, type Element, type GridCell, type Metamodel, type Model, type PatternInfo, type Pin, type Relationship } from "./model";
 
@@ -168,6 +168,9 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   };
   const unpinRecord = (ref: string) => setWorking({ pins: working.pins.filter((p) => p.ref !== ref) });
   const title = (st: string) => t(meta.profile.find((p) => p.stereotype === st)?.title ?? relationshipTitles[st] ?? st.replace(/^Actual/, ""));
+  /** The host profile's icon for a stereotype (ADR-0090 D2) — one lookup for
+   * every place the view draws an element's picture. */
+  const profileIcon = (st: string) => meta.profile.find((p) => p.stereotype === st)?.icon;
   const relLabel = (r: Relationship) => r.stereotype === PLACEMENT ? t(r.relation || "part of") : r.stereotype === MEMBERSHIP ? (r.role || t("member")) : r.stereotype === FILLS_POST ? t("fills") : title(r.stereotype);
   const addElement = async (stereotype: string, values: { name: string; kind: string; parent?: string; legal?: boolean; properties?: Record<string, unknown> }, at?: [number, number]) => {
     const id = fresh(slug(title(stereotype)).slice(0, 4), values.name);
@@ -339,7 +342,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
         onRemove={() => { if (!sel) return; setWorking({ elements: working.elements.filter((id) => id !== sel.id), context: working.context.filter((id) => id !== sel.id), pins: working.pins.filter((p) => p.anchor !== sel.id) }); setSelected(undefined); }} /></div></> }}>
       <p className="px-3 py-1 text-xs text-muted">{t("{view}: {n} elements, {context} from other viewpoints", { view: t(cell?.title ?? "View"), n: shownElements.length, context: shownElements.filter((e) => working.context.includes(e.id)).length })}</p>
       {mode === "canvas" && <div className="h-full min-h-[480px]"><Canvas viewId={activeId} elements={shownElements} relationships={shownRels} pins={pinNodes} positions={positions} selected={selected} linking={linking && admin} admin={admin}
-        label={relLabel} title={title} onPositions={movePositions} onSelect={setSelected} facts={factsFor} propertyLinks={shownElements.flatMap((e) => ["milestone", "actualResource"].flatMap((property) => {
+        label={relLabel} title={title} icon={profileIcon} onPositions={movePositions} onSelect={setSelected} facts={factsFor} propertyLinks={shownElements.flatMap((e) => ["milestone", "actualResource"].flatMap((property) => {
           const value = e.properties?.[property], ids = Array.isArray(value) ? value : [value];
           return ids.filter((id): id is string => typeof id === "string" && shownIds.has(id)).map((id) => ({ id: `property:${e.id}:${property}:${id}`, source: e.id, target: id, label: t(property === "milestone" ? "Milestones" : "Related resource") }));
         }))} nodeActions={nodeActions} edgeActions={edgeActions}
@@ -349,7 +352,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
         <Tree roots={shownElements.filter((e) => !shownRels.some((r) => r.stereotype === PLACEMENT && r.kind === placementKind && r.source === e.id && shownIds.has(r.target)))}
           children={(e) => childrenOf(m, e.id, placementKind, day).map(byId).filter((x): x is Element => !!x && shownIds.has(x.id))}
           id={(e) => e.id} selected={selected} onSelect={(e) => setSelected(e.id)}
-          row={(e) => <><span className="[&_svg]:size-4 [&_svg]:text-muted">{elementIcon(e)}</span><span className="font-medium">{e.name}</span><Tag label={e.kind ? t(e.kind) : title(e.stereotype)} />{e.legal && <Tag label={t("legal entity")} tone="info" />}
+          row={(e) => <><span className="[&_svg]:size-4 [&_svg]:text-muted"><IconGlyph name={elementIconName(e, profileIcon)} /></span><span className="font-medium">{e.name}</span><Tag label={e.kind ? t(e.kind) : title(e.stereotype)} />{e.legal && <Tag label={t("legal entity")} tone="info" />}
             <span className="ml-auto text-xs text-muted">{m.relationships.filter((r) => r.stereotype === MEMBERSHIP && r.target === e.id && live(r, day)).length || ""}</span></>} />
       </div>}
       {mode === "timeline" && <div className="grid gap-3 p-3">

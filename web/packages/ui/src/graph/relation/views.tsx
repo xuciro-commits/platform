@@ -2,8 +2,10 @@ import { BaseEdge, Handle, Position, getSmoothStepPath, type Edge, type EdgeProp
 import { Box } from "lucide-react";
 import type { CSSProperties } from "react";
 import { cn } from "../../lib/cn";
+import { IconGlyph } from "../../components/IconPicker";
+import { t } from "../../i18n";
 import { CanvasEdgeLabel, canvasEdgeColor } from "../core/edge";
-import { relationNodeSize, type RelationEdge, type RelationNode } from "./model";
+import { relationNodeCaption, relationNodeClasses, relationNodeSize, type RelationEdge, type RelationNode } from "./model";
 
 export type RelationNodeData = RelationNode & { linking: boolean; acceptsConnections: boolean };
 export type RelationShapeNode = Node<RelationNodeData>;
@@ -20,7 +22,8 @@ function Sides({ data }: { data: RelationNodeData }) {
 }
 
 export function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode>) {
-  const color = data.tone ? `var(--tone-${data.tone})` : "var(--primary)";
+  const classDecl = data.class ? relationNodeClasses[data.class] : undefined;
+  const color = (data.tone ?? classDecl?.tone) ? `var(--tone-${data.tone ?? classDecl?.tone})` : "var(--primary)";
   // A disc is what a reader needs when the only question is which neighbour is which.
   if (data.badge) return <div className={cn("platform-relation-badge", selected && "platform-relation-badge-selected", data.linking && "platform-relation-node-linking")}
     style={{ width: data.badge.size, height: data.badge.size, background: color, borderColor: color } as CSSProperties}
@@ -28,11 +31,12 @@ export function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode
     <span aria-hidden="true" className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-1" style={{ fontSize: data.badge.size > 24 ? 8 : 7 }}>{data.badge.label}</span>
     <Sides data={data} />
   </div>;
+  const caption = relationNodeCaption(data);
   return <div className={cn("platform-relation-node", selected && "platform-relation-node-selected", data.dim && "opacity-60", data.linking && "platform-relation-node-linking")}
-    style={{ width: relationNodeSize.width, minHeight: relationNodeSize.height, "--block-color": color } as CSSProperties} title={data.detail ?? data.label} aria-label={data.label}>
-    <span className="platform-canvas-node-icon" aria-hidden="true">{data.icon ?? <Box />}</span>
+    style={{ width: data.size?.width ?? relationNodeSize.width, minHeight: data.size?.height ?? relationNodeSize.height, "--block-color": color } as CSSProperties} title={data.detail ?? data.label} aria-label={data.label}>
+    <span className="platform-canvas-node-icon" aria-hidden="true">{data.icon ?? (classDecl ? <IconGlyph name={classDecl.icon} /> : <Box />)}</span>
     <span className="min-w-0 flex-1">
-      {data.caption && <span className="platform-canvas-node-caption"><span className="!max-w-full">{data.caption}</span></span>}
+      {caption && <span className="platform-canvas-node-caption"><span className="!max-w-full">{t(caption)}</span></span>}
       <span className="platform-canvas-node-title block">{data.label}</span>
     </span>
     {data.flag && <span className="platform-relation-flag" title={data.flag} />}

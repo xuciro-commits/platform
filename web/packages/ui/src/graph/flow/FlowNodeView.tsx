@@ -83,7 +83,7 @@ export function FlowNodeView({ id, data, selected }: NodeProps<FlowShapeNode>) {
     </div>;
   }
 
-  const block = compact ? { width: 160, height: 58 } : { width: flowNodeWidth, height: flowBlockHeight(kind, collapsed) };
+  const block = compact ? { width: 160, height: 58 } : { width: kind.size?.width ?? flowNodeWidth, height: flowBlockHeight(kind, collapsed) };
   return <div className={cn("platform-flow-node", selected && "platform-flow-node-selected", compact && "platform-flow-node-compact",
     data.current && "platform-flow-current", shape === "subprocess" && "platform-flow-node-subprocess")}
     style={{ ...block, "--block-color": color } as CSSProperties}

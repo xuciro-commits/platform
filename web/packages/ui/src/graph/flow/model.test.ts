@@ -1,7 +1,7 @@
 // The node type system (ADR-0089): a class declares what a node is, one table
 // decides what may join what, and the same rule reads a whole graph back.
 import { describe, expect, it } from "vitest";
-import { checkFlowEdges, flowPortFits, validateFlowConnection, type FlowCatalog, type FlowEdge, type FlowNode } from "./model";
+import { checkFlowEdges, flowBlockHeight, flowNodeBox, flowNodeWidth, flowPlacement, flowPortFits, validateFlowConnection, type FlowCatalog, type FlowEdge, type FlowNode } from "./model";
 import { flowNodeClassOf, flowNodeClasses, flowNodeGroup } from "./notation";
 
 /** The standing scenarios the canvas reaches for first: a code node, a document
@@ -83,5 +83,29 @@ describe("the same rule reads a whole graph back", () => {
     expect(validateFlowConnection({ source: "doc", sourceHandle: "doc", target: "fn", targetHandle: "arg" }, graph, [], catalog)).toBeUndefined();
     expect(validateFlowConnection({ source: "fn", sourceHandle: "out", target: "fn", targetHandle: "arg" }, graph, [], catalog)).toBe("endpoint");
     expect(validateFlowConnection({ source: "fn", sourceHandle: "missing", target: "doc", targetHandle: "doc" }, graph, [], catalog)).toBe("port");
+  });
+});
+
+// Appearance is a declaration too (ADR-0090 D3): a kind names its own box and
+// its default fold, and an instance can override the fold.
+describe("a kind carries how it looks", () => {
+  const sized = { id: "big", title: "Big", inputs: [], outputs: [], size: { width: 320, height: 200 } };
+  const foldable = { id: "fold", title: "Fold", inputs: [], outputs: [], collapsed: true };
+
+  it("sizes the box from the declaration instead of the port count", () => {
+    expect(flowNodeBox({ compact: false, collapsed: false, notation: "task", kind: "big" }, sized)).toEqual({ width: 320, height: 200 });
+    // and a kind that declares nothing keeps the computed default.
+    expect(flowNodeBox({ compact: false, collapsed: false, notation: "task", kind: "plain" }, catalog[3])).toEqual({ width: flowNodeWidth, height: 96 + 27 });
+  });
+
+  it("folds by default when the kind says so, and the instance can override either way", () => {
+    expect(flowBlockHeight(foldable, true)).toBe(74);
+    expect(flowBlockHeight(foldable)).toBe(74); // the declaration's default
+    expect(flowBlockHeight({ ...foldable, collapsed: false })).toBe(96); // overridden back open
+  });
+
+  it("keeps dropped nodes apart using the declared width", () => {
+    const placed = flowPlacement({ x: 0, y: 0 }, 100, [{ position: { x: 0, y: 0 }, width: 320, height: 100 }], 320);
+    expect(placed.x).toBeGreaterThanOrEqual(320);
   });
 });

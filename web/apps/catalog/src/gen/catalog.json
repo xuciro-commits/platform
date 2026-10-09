@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:329cc0f391424650",
+  "revision": "sha256:1f61329e2e59ec13",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5685,6 +5685,7 @@
     "ui/icon-picker": [
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
+      "web/packages/platform/src/enterprise/canvas.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/apps/workspace/src/tenantApps.tsx"
     ],
@@ -5809,6 +5810,9 @@
         "register",
         "relationLayout",
         "relationLayouts",
+        "relationNodeCaption",
+        "relationNodeClassOf",
+        "relationNodeClasses",
         "relationNodeSize",
         "routeFromHash",
         "routeKey",

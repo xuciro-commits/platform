@@ -3,7 +3,7 @@
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
 import "../i18n";
-import { Button, Card, Disclosure, useWorkspace, Form, FlowSteps, Input, PageHeader, Panel, RelationCanvas, Select, StatusTag, Tag, Textarea, defineStatuses, t, language,
+import { Button, Card, Disclosure, useWorkspace, Form, FlowSteps, Input, PageHeader, Panel, RelationCanvas, relationNodeClasses, Select, StatusTag, Tag, Textarea, defineStatuses, t, language,
   type FlowStepEdge, type FlowStepNode, type RelationEdge, type RelationNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
@@ -170,8 +170,10 @@ export function ChainGraph({ of, title = t("Chain") }: { of: string; title?: str
   const openRecord = useOpenRecord();
   const chain = useReadQuery<Api.Chain>(`/v1/chain/${of.split("/").map(encodeURIComponent).join("/")}`).data;
   if (!chain || chain.nodes.length < 2) return null;
-  const kinds: Record<string, string> = { record: t("record"), flow: t("flow"), run: t("agent run"), effect: t("effect") };
-  const nodes: RelationNode[] = chain.nodes.map((n) => ({ id: n.ref, label: n.title, caption: [kinds[n.kind] ?? n.kind, n.state].filter(Boolean).join(" · "),
+  const nodes: RelationNode[] = chain.nodes.map((n) => ({ id: n.ref, label: n.title, class: n.kind,
+    // The class word comes from the kit's table (ADR-0090 D1); the run's own
+    // state still rides beside it, and still decides the tone.
+    caption: [t(relationNodeClasses[n.kind]?.title ?? n.kind), n.state].filter(Boolean).join(" · "),
     detail: n.ref, tone: chainTone(n.state) }));
   const edges: RelationEdge[] = chain.edges.map((e) => ({ id: `${e.from}>${e.to}`, source: e.from, target: e.to }));
   return (

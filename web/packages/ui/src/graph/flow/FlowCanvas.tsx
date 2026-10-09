@@ -65,7 +65,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   const externalSelection = useRef<string | undefined>(undefined);
   const copied = useRef<{ nodes: FlowNode[]; edges: FlowEdge[] } | undefined>(undefined);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const folded = (node: FlowNode) => collapsed[node.id] ?? node.collapsed ?? false;
+  const folded = (node: FlowNode) => collapsed[node.id] ?? node.collapsed ?? catalog.find((kind) => kind.id === node.kind)?.collapsed ?? false;
   const allCollapsed = nodes.length > 0 && nodes.every(folded);
   const [palette, setPalette] = useState<FlowAddContext>();
   const [pickedEdge, setPickedEdge] = useState<string>();
@@ -208,7 +208,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
     else {
       const definition = catalog.find((item) => item.id === kind);
       const height = definition ? flowBlockHeight(definition) : 120;
-      const position = flowPlacement(palette.position, height, flowNodes.map((node) => ({ position: node.position, width: node.measured?.width ?? flowNodeWidth, height: node.measured?.height ?? 120 })));
+      const position = flowPlacement(palette.position, height, flowNodes.map((node) => ({ position: node.position, width: node.measured?.width ?? flowNodeWidth, height: node.measured?.height ?? 120 })), definition?.size?.width);
       onAdd?.(kind, { ...palette, position });
     }
     setPalette(undefined); container.current?.focus();
@@ -263,7 +263,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
         const definition = catalog.find((item) => item.id === kind);
         if (!editable || !onAdd || !definition) return;
         event.preventDefault();
-        onAdd(kind, { position: flowPlacement(screenToFlowPosition({ x: event.clientX, y: event.clientY }), flowBlockHeight(definition), measuredBoxes()) });
+        onAdd(kind, { position: flowPlacement(screenToFlowPosition({ x: event.clientX, y: event.clientY }), flowBlockHeight(definition), measuredBoxes(), definition.size?.width) });
         setPalette(undefined);
       }}>
       <FlowInteraction.Provider value={{ onCollapse: (id) => setCollapsed((current) => ({ ...current, [id]: !folded(nodes.find((node) => node.id === id) ?? { id, kind: "", label: "", position: { x: 0, y: 0 } }) })) }}>

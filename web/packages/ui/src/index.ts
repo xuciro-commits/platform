@@ -63,7 +63,7 @@ export { FLOW_NODE_DROP, checkFlowEdges, flowBlockHeight, flowNodeBox, flowNodeH
   type FlowAddContext, type FlowCatalog, type FlowConnectionIssue, type FlowDiagnostic, type FlowEdge, type FlowHistory, type FlowLane, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort } from "./graph/flow/model";
 export { flowNodeClassOf, flowNodeClasses, flowNodeGroup, flowNodeIcon, flowShape, loops, notationOf, notationTitle, type FlowBoundary, type FlowNodeClass, type FlowNotation, type FlowShape } from "./graph/flow/notation";
 export { RelationCanvas, type RelationCanvasProps } from "./graph/relation/RelationCanvas";
-export { relationNodeSize, relationLayouts, type RelationBadge, type RelationEdge, type RelationFact, type RelationLayout, type RelationNode } from "./graph/relation/model";
+export { relationNodeSize, relationLayouts, relationNodeClasses, relationNodeClassOf, relationNodeCaption, type RelationBadge, type RelationEdge, type RelationFact, type RelationLayout, type RelationNode } from "./graph/relation/model";
 export { neighborhoodPositions, relationLayout, type NeighborhoodLayoutGroup, type RelationLayoutSize } from "./graph/relation/layouts";
 export { Chart, useChartData, type ChartSource } from "./charts/Chart";
 export { Pivot, groupDomain } from "./charts/Pivot";

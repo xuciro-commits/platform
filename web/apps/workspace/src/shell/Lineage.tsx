@@ -3,11 +3,14 @@
 // pages, queries and functions over the types they read. One asset at a time,
 // or every asset of an app when nothing is chosen.
 import { assetKey, useDefinitions, type AssetRef, type Definition } from "@platform/app";
-import { PageHeader, RelationCanvas, Select, useWorkspace, type RelationEdge, type RelationNode, t } from "@platform/ui";
+import { PageHeader, RelationCanvas, relationNodeClasses, Select, useWorkspace, type RelationEdge, type RelationNode, t } from "@platform/ui";
 import { useMemo, useState } from "react";
 
-const tones: Record<string, RelationNode["tone"]> = { app: "info", page: "success", object: "warning", entity: "warning", query: "neutral", function: "neutral", linktype: "neutral", propertytype: "neutral" };
-const kindLabel = (kind: string) => ({ app: t("Application"), page: t("Page"), object: t("Object type"), entity: t("Object type"), query: t("Query"), function: t("Function"), linktype: t("Relationship"), propertytype: t("Shared property"), action: t("Action"), operation: t("Operation") })[kind] ?? kind;
+// The kit's class table decides the glyph, the caption word and the default
+// tone (ADR-0090 D1); this lineage keeps one override — a plain object type is
+// the mutable thing here, so it stays amber beside its published siblings.
+const toneOverrides: Record<string, RelationNode["tone"]> = { object: "warning" };
+const kindLabel = (kind: string) => t(relationNodeClasses[kind]?.title ?? kind);
 const titleOf = (d: Definition) => d.entity?.title ?? d.action?.title ?? d.page?.title ?? d.application?.title ?? d.ref.name;
 
 export function Lineage({ ref: requested }: { ref?: string }) {
@@ -34,7 +37,10 @@ export function Lineage({ ref: requested }: { ref?: string }) {
       const d = byKey.get(key);
       const [appId, kind, name] = key.split("/");
       const caption = `${kindLabel(kind ?? "")} · ${appId}${d?.version ? ` · ${d.version}` : ""}`;
-      return { id: key, label: d ? titleOf(d) : name ?? key, caption, detail: caption, tone: tones[kind ?? ""] ?? "neutral" };
+      // The class decides the glyph and default tone; only the override rides
+      // alongside, and a kind the kit has never heard of stays neutral.
+      return { id: key, label: d ? titleOf(d) : name ?? key, class: kind || undefined,
+        tone: kind && !relationNodeClasses[kind] ? "neutral" : toneOverrides[kind ?? ""], caption, detail: caption };
     });
     const edges: RelationEdge[] = [];
     for (const key of keep) for (const r of byKey.get(key)?.requires ?? []) { const to = assetKey(r); if (keep.has(to)) edges.push({ id: `${to}>${key}`, source: to, target: key, directed: true }); }

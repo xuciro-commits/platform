@@ -4,7 +4,7 @@
 // fit, minimap, layouts, dragging, linking and dropping, so no view draws its own
 // boxes again (ADR-0068 §6, ADR-0084 D3, ADR-0086 D3).
 import { ConnectionMode, MarkerType, MiniMap, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow } from "@xyflow/react";
-import { ArrowDownFromLine, ArrowRightFromLine, ChevronDown, ChevronUp, GitBranch, Grid3x3, Maximize, Orbit } from "lucide-react";
+import { ArrowDownFromLine, ArrowRightFromLine, ChevronDown, ChevronUp, GitBranch, Grid3x3, Maximize, Orbit, Waves } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
@@ -37,6 +37,7 @@ export type RelationCanvasProps = {
 const layoutMeta: Record<RelationLayout, { icon: ReactNode; title: string }> = {
   "tree-down": { icon: <ArrowDownFromLine />, title: "Tree, top down" }, "tree-right": { icon: <ArrowRightFromLine />, title: "Tree, left to right" },
   layered: { icon: <GitBranch />, title: "Follow the relationships" }, radial: { icon: <Orbit />, title: "Radial" }, grid: { icon: <Grid3x3 />, title: "Grid" },
+  force: { icon: <Waves />, title: "Balance by distance" },
 };
 
 function RelationCanvasContent({ nodes, edges, positions, selected, editable = false, linking = false, label, height = 480, layout: initial = "tree-down", dropType, children, onSelect, onOpen, onPositionsChange, onLink, onDrop, nodeActions, edgeActions, onReconnect, viewportKey }: RelationCanvasProps) {

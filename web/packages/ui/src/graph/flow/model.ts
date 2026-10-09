@@ -27,6 +27,11 @@ export type FlowNodeKind = {
   icon?: ReactNode; tone?: Tone;
   /** BPMN reading of this kind of step; without it the class, then the kind's own name, decides. */
   notation?: FlowNotation;
+  /** The box this kind occupies when it is drawn as a block; without it the box
+   * follows the ports. A code node may claim more room, a token node less. */
+  size?: { width: number; height: number };
+  /** This kind starts folded: its ports and details hidden until a reader opens it. */
+  collapsed?: boolean;
   /** Instance projections can customize ports without appearing as palette entries. */
   addable?: boolean;
 };
@@ -139,22 +144,22 @@ export function flowShapeBox(shape: FlowShape): CanvasBox {
   return shape === "gateway" ? { width: 76, height: 103 } : shape === "event" ? { width: 58, height: 85 } : { width: 160, height: 58 };
 }
 
-/** A full block is as tall as its ports need. */
-export const flowBlockHeight = (kind: FlowNodeKind, collapsed = false) => collapsed ? 74 : 96 + Math.max(kind.inputs.length, kind.outputs.length) * 27;
+/** A full block is as tall as its ports need, or as big as its kind declares. */
+export const flowBlockHeight = (kind: FlowNodeKind, collapsed = kind.collapsed ?? false) => collapsed ? 74 : kind.size?.height ?? 96 + Math.max(kind.inputs.length, kind.outputs.length) * 27;
 export const flowNodeHeight = (kind: FlowNodeKind) => flowBlockHeight(kind);
 
 /** One node's box, whichever way the drawing shows it — the layout and the node
  * view measure the same thing, so a drawing that mixes shapes still lines up. */
 export function flowNodeBox(node: Pick<FlowNode, "compact" | "collapsed" | "notation" | "kind">, kind: FlowNodeKind | undefined): CanvasBox {
   if (node.compact) return flowShapeBox(flowShape(node.notation ?? notationOf(node.kind), node.kind));
-  return { width: flowNodeWidth, height: flowBlockHeight(kind ?? { id: node.kind, title: node.kind, inputs: [], outputs: [] }, node.collapsed ?? false) };
+  return { width: kind?.size?.width ?? flowNodeWidth, height: flowBlockHeight(kind ?? { id: node.kind, title: node.kind, inputs: [], outputs: [] }, node.collapsed) };
 }
 
 /** Find a free tile for a newly added block without moving the builder's existing layout. */
-export function flowPlacement(position: CanvasPosition, height: number, boxes: { position: CanvasPosition; width: number; height: number }[]): CanvasPosition {
+export function flowPlacement(position: CanvasPosition, height: number, boxes: { position: CanvasPosition; width: number; height: number }[], width = flowNodeWidth): CanvasPosition {
   let candidate = { ...position };
   for (let attempt = 0; attempt < boxes.length; attempt++) {
-    const obstacle = boxes.find((box) => candidate.x < box.position.x + box.width + 24 && candidate.x + flowNodeWidth + 24 > box.position.x
+    const obstacle = boxes.find((box) => candidate.x < box.position.x + box.width + 24 && candidate.x + width + 24 > box.position.x
       && candidate.y < box.position.y + box.height + 24 && candidate.y + height + 24 > box.position.y);
     if (!obstacle) break;
     candidate = { x: obstacle.position.x + obstacle.width + 80, y: candidate.y };
