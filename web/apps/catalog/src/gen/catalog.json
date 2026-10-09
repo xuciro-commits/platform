@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:fa8e50ff11a5f75f",
+  "revision": "sha256:74ea84432d62672c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4783,7 +4783,6 @@
       "web/packages/build/src/ontology/data-source.tsx",
       "web/packages/build/src/ontology/dataset.tsx",
       "web/packages/build/src/ontology/integration-health.tsx",
-      "web/packages/build/src/ontology/lineage.tsx",
       "web/packages/build/src/ontology/link-type.tsx",
       "web/packages/build/src/ontology/match.tsx",
       "web/packages/build/src/ontology/pipeline.tsx",
@@ -5224,7 +5223,6 @@
       "web/packages/build/src/ontology/data-source.tsx",
       "web/packages/build/src/ontology/dataset.tsx",
       "web/packages/build/src/ontology/integration-health.tsx",
-      "web/packages/build/src/ontology/lineage.tsx",
       "web/packages/build/src/ontology/marking.tsx",
       "web/packages/build/src/ontology/pipeline.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
@@ -5305,6 +5303,7 @@
     "ui/relation-canvas": [
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/build/src/ontology/lineage.tsx",
       "web/packages/platform/src/enterprise/canvas.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
@@ -5627,6 +5626,7 @@
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/automate/workflow.tsx",
       "web/packages/build/src/functions/function.tsx",
+      "web/packages/build/src/ontology/pipeline.tsx",
       "web/packages/build/src/ontology/process.tsx"
     ],
     "app/composed-page": [

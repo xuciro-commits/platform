@@ -1,10 +1,11 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { MarkingTag, integrates } from "./marking";
-import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Checkbox, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
 import { PERIODS, periodLabel } from "../automate/workflow-model";
 import { cell } from "./dataset";
 
@@ -31,6 +32,33 @@ const TYPES = ["string", "number", "boolean", "date"];
 const FNS = ["sum", "min", "max", "count", "avg"];
 const RULES = ["notnull", "unique", "in", "matches", "range"];
 const fieldClass = "grid min-w-0 gap-1 text-xs";
+/** The pipeline's rows, as one typed data port: a step takes exactly one input and
+ * feeds exactly one next step, so the canvas itself refuses a fork the runner could
+ * never execute. */
+const rows = (label: string, limit = 1) => ({ id: "rows", label, type: "rows", limit, channel: "data" as const });
+const stepCatalog = (): FlowCatalog => [
+  ...KINDS.map((kind) => ({ id: kind, title: t(kind), description: kindHelp(kind), category: t("Transform"),
+    inputs: [rows(t("Rows in"))], outputs: [rows(t("Rows out"))] })),
+  { id: "dataset", title: t("Dataset"), category: t("Ends"), addable: false, notation: "event-start", inputs: [], outputs: [rows(t("Rows out"))] },
+  { id: "output", title: t("Output"), category: t("Ends"), addable: false, notation: "event-end", inputs: [rows(t("Rows in"))], outputs: [] },
+];
+
+/** What a step does, in the one line the canvas has for it; its fields stay in the
+ * inspector. */
+function stepDetail(s: Step, datasets: DatasetRow[]): string {
+  const other = datasets.find((d) => d.id === s.dataset)?.title ?? s.dataset ?? "";
+  switch (s.kind) {
+    case "select": case "dedupe": return (s.columns ?? []).join(", ");
+    case "rename": return `${s.from ?? ""} → ${s.to ?? ""}`;
+    case "cast": return `${s.column ?? ""} · ${s.type ?? ""}`;
+    case "filter": return [s.column, s.op, s.value].filter(Boolean).join(" ");
+    case "compute": return `${s.to ?? ""} = ${s.formula ?? ""}`;
+    case "lookup": case "join": return [other, s.column && s.match ? `${s.column} = ${s.match}` : "", s.as ? `${s.as}*` : ""].filter(Boolean).join(" · ");
+    case "aggregate": return [...(s.columns ?? []), ...(s.measures ?? []).map((m) => `${m.fn}(${m.column ?? "*"}) → ${m.to}`)].join(", ");
+    case "sort": return `${s.column ?? ""}${s.desc ? " ↓" : ""}`;
+    default: return "";
+  }
+}
 const kindHelp = (kind: string): string => ({
   select: t("Keep only these columns"), rename: t("Rename one column"), cast: t("Convert a column to a type"), filter: t("Keep rows where the condition holds"),
   compute: t("A new column from arithmetic over number columns"), lookup: t("Take columns from a matching row of another dataset"), join: t("Combine with another dataset's rows on a key"),
@@ -54,6 +82,7 @@ export function PipelineEditor({ id }: { id: string }) {
   // it chooses them rather than spelling their ids.
   const enterprise = useReadQuery<Api.EnterpriseModel>("/v1/enterprise").data ?? { kinds: [], elements: [] };
   const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [picked, setPicked] = useState<string>(); // the step the inspector edits
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const load = (record: Draft) => { setDraft({ ...empty(), ...record, steps: record.steps ?? [], expectations: record.expectations ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); });
@@ -90,6 +119,16 @@ export function PipelineEditor({ id }: { id: string }) {
   const column = (label: string, field: "id" | "name" | "shortName" | "kind" | "parent" | "at" | "from" | "until", placeholder: string, help?: string) =>
     <label className={fieldClass}>{label}<Input value={ent[field] ?? ""} placeholder={placeholder} list="pipeline-columns" onChange={(e) => patchEnterprise({ [field]: e.target.value })} />{help && <span className="text-[11px] text-muted">{help}</span>}</label>;
   const target = entities.find((entity) => entity.type === draft.outputObject);
+  // The sequence is the truth and the canvas reads it: positions follow the order,
+  // so nothing about a drawing has to be stored beside the steps.
+  const others = datasets.filter((d) => d.id !== draft.input);
+  const stepNodes: FlowNode[] = [
+    { id: "in", kind: "dataset", label: input?.title || draft.input || t("Input dataset"), detail: t("The dataset this pipeline reads"), position: { x: 0, y: 0 } },
+    ...draft.steps.map((s, i) => ({ id: `s${i}`, kind: s.kind, label: `${i + 1}. ${t(s.kind)}`, detail: stepDetail(s, others), position: { x: 0, y: 0 } })),
+    { id: "out", kind: "output", label: out === "enterprise" ? t("The enterprise model") : out === "object" ? (target?.title ?? draft.outputObject ?? t("An object")) : (datasets.find((d) => d.id === draft.outputDataset)?.title ?? t("A dataset (next version)")),
+      detail: out === "object" && draft.key ? `${t("Record id column")} ${draft.key}` : undefined, position: { x: 0, y: 0 } },
+  ].map((node, i) => ({ ...node, position: { x: i * 268, y: 0 } }));
+  const stepEdges: FlowEdge[] = stepNodes.slice(0, -1).map((node, i) => ({ id: `${node.id}>${stepNodes[i + 1]!.id}`, source: node.id, sourcePort: "rows", target: stepNodes[i + 1]!.id, targetPort: "rows" }));
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader title={draft.title || t("New pipeline")} description={t("Input → steps → expectations → output. Publish lets the host run it whenever the input gains a version; Run now asks for one run within seconds.")}
       actions={<div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -145,18 +184,26 @@ export function PipelineEditor({ id }: { id: string }) {
           <label className={fieldClass}>{t("Record id column")}<Input value={draft.key ?? ""} placeholder="matnr" onChange={(e) => patch({ key: e.target.value })} /><span className="text-[11px] text-muted">{t("The same id edits the existing record.")}</span></label>
         </>}
       </Panel>
-      <Panel title={t("Steps")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
-        {draft.steps.length === 0 && <p className="text-xs text-muted">{t("No steps: the input rows pass through as they are.")}</p>}
-        {draft.steps.map((s, i) => <div key={i} className="grid gap-2 rounded border border-border p-2">
+      <Panel title={t("Steps")} className="grid min-w-0 content-start gap-2 lg:col-span-2"
+        description={t("Drag a step from the library onto the line, or insert one on the arrow where it belongs. Choose a step to edit its fields below.")}>
+        <FlowCanvas catalog={stepCatalog()} nodes={stepNodes} edges={stepEdges} selected={picked} onSelect={setPicked}
+          mode={busy ? "view" : "edit"} direction="right" height={280} label={t("Steps")}
+          onAdd={(kind) => { setSteps([...draft.steps, { kind }]); setPicked(`s${draft.steps.length}`); }}
+          onInsert={(edge, kind) => { const at = edge.source === "in" ? 0 : Number(edge.source.slice(1)) + 1; setSteps([...draft.steps.slice(0, at), { kind }, ...draft.steps.slice(at)]); setPicked(`s${at}`); }}
+          onDelete={(gone) => { const drop = gone.map((n) => Number(n.id.slice(1))).filter((i) => !Number.isNaN(i)).sort((a, b) => b - a); if (drop.length) { setSteps(draft.steps.filter((_, j) => !drop.includes(j))); setPicked(undefined); } }} />
+        {picked && picked.startsWith("s") && draft.steps[Number(picked.slice(1))] && <div className="grid gap-2 rounded border border-border p-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="w-6 text-xs text-muted">{i + 1}.</span>
-            <Select value={s.kind} onChange={(e) => setSteps(draft.steps.map((x, j) => j === i ? { kind: e.target.value } : x))}>{KINDS.map((k) => <option key={k} value={k}>{t(k)}</option>)}</Select>
-            <span className="text-[11px] text-muted">{kindHelp(s.kind)}</span>
-            <span className="ml-auto flex gap-1"><Button size="sm" variant="ghost" disabled={i === 0} onClick={() => move(i, -1)}>↑</Button><Button size="sm" variant="ghost" disabled={i === draft.steps.length - 1} onClick={() => move(i, 1)}>↓</Button><Button size="sm" variant="ghost" onClick={() => setSteps(draft.steps.filter((_, j) => j !== i))}>{t("Remove")}</Button></span>
+            <span className="w-6 text-xs text-muted">{Number(picked.slice(1)) + 1}.</span>
+            <Select aria-label={t("Step kind")} value={draft.steps[Number(picked.slice(1))]!.kind} onChange={(e) => setStep(Number(picked.slice(1)), { kind: e.target.value })}>{KINDS.map((k) => <option key={k} value={k}>{t(k)}</option>)}</Select>
+            <span className="text-[11px] text-muted">{kindHelp(draft.steps[Number(picked.slice(1))]!.kind)}</span>
+            <span className="ml-auto flex gap-1">
+              <Button size="sm" variant="ghost" aria-label={t("Move up")} disabled={picked === "s0"} onClick={() => move(Number(picked.slice(1)), -1)}><ArrowUp className="size-3" /></Button>
+              <Button size="sm" variant="ghost" aria-label={t("Move down")} disabled={Number(picked.slice(1)) === draft.steps.length - 1} onClick={() => move(Number(picked.slice(1)), 1)}><ArrowDown className="size-3" /></Button>
+              <Button size="sm" variant="ghost" onClick={() => { setSteps(draft.steps.filter((_, j) => j !== Number(picked.slice(1)))); setPicked(undefined); }}>{t("Remove")}</Button>
+            </span>
           </div>
-          <StepFields step={s} datasets={datasets.filter((d) => d.id !== draft.input)} onChange={(change) => setStep(i, change)} />
-        </div>)}
-        <div><Button size="sm" onClick={() => setSteps([...draft.steps, { kind: "filter" }])}>{t("Add step")}</Button></div>
+          <StepFields step={draft.steps[Number(picked.slice(1))]!} datasets={datasets.filter((d) => d.id !== draft.input)} onChange={(change) => setStep(Number(picked.slice(1)), change)} />
+        </div>}
       </Panel>
       <Panel title={t("Expectations")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         <p className="text-xs text-muted">{t("Checked on the final rows. A row that fails is quarantined on the run and not written; the rest still are.")}</p>
