@@ -15,9 +15,9 @@ import {
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, InterfaceRecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
-  Chart, Pivot, Graph, BlockCanvas, DiagramCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
+  Chart, Pivot, FlowSteps, FlowCanvas, RelationCanvas, FlowRun, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView, type AttachedFile,
-  type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
+  type InboxTask, type Lifecycle as LifecycleInfo, type FlowCatalog, type FlowNode, type FlowEdge,
   type FlowDefinition, type FlowInstanceData, type ChartSpec, type Route,
 } from "./index";
 import { WorkspaceContext, useWorkspace } from "./shell/Workspace";
@@ -252,23 +252,32 @@ const chart: ChartSpec = { title: t("Quantity by group"), data: { values: [{ gro
 export function Charts() { return <Chart spec={chart} height={240} />; }
 const aggregateSource = { aggregate: async () => ({ columns: [{ name: "group", title: t("Group"), kind: "group" as const, type: "nominal" as const }, { name: "count", title: t("Count"), kind: "measure" as const, type: "quantitative" as const }], rows: [{ group: "Alpha", count: 12 }, { group: "Beta", count: 24 }] }) };
 export function Pivots() { return <Pivot source={aggregateSource} type="demo.record" query={{}} rows="group" measure="count" />; }
-export function Graphs() { return <Graph nodes={[{ id: "a", label: "Sample Alpha", tone: "success" }, { id: "b", label: "Sample Beta", tone: "info", current: true }]} edges={[{ from: "a", to: "b", label: t("Next") }]} height={230} />; }
+/** A process read in BPMN: a start event, a user task, a gateway and an end event. */
+export function Steps() {
+  return <FlowSteps height={230}
+    nodes={[{ id: "a", label: "Sample start", notation: "event-start", tone: "success" },
+      { id: "b", label: "Sample review", notation: "user-task" },
+      { id: "c", label: "Sample choice", notation: "gateway-exclusive", tone: "info", current: true },
+      { id: "d", label: "Sample end", notation: "event-end" }]}
+    edges={[{ from: "a", to: "b" }, { from: "b", to: "c" }, { from: "c", to: "d", label: t("Next") }, { from: "c", to: "d", dashed: true }]} />;
+}
 
-export function Diagrams() {
+export function Relations() {
   const [positions, setPositions] = useState({ a: { x: 0, y: 0 }, b: { x: 0, y: 140 } });
   const [selected, setSelected] = useState<string>();
-  return <DiagramCanvas nodes={[{ id: "a", label: "Sample Alpha", icon: <Building2 /> }, { id: "b", label: "Sample Beta", icon: <Users /> }]}
+  return <RelationCanvas nodes={[{ id: "a", label: "Sample Alpha", icon: <Building2 /> }, { id: "b", label: "Sample Beta", icon: <Users /> }]}
     edges={[{ id: "b-a", source: "b", target: "a", tree: true }]} positions={positions} height={300} editable selected={selected} onSelect={setSelected}
     onPositionsChange={(next) => setPositions((current) => ({ ...current, ...next }))} />;
 }
-const nodeCatalog: NodeCatalog = [{ id: "value", title: t("Value"), category: "data", inputs: [], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }, { id: "transform", title: t("Transform"), category: "logic", inputs: [{ id: "in", label: t("Quantity"), type: "number" }], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }];
-export function Blocks() {
+const flowCatalog: FlowCatalog = [{ id: "value", title: t("Value"), category: "data", inputs: [], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }, { id: "transform", title: t("Transform"), category: "logic", inputs: [{ id: "in", label: t("Quantity"), type: "number" }], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }];
+export function Flows() {
   const counter = useRef(3);
-  const [nodes, setNodes] = useState<CanvasNode[]>([{ id: "n1", kind: "value", label: t("Value"), position: { x: 30, y: 60 } }, { id: "n2", kind: "transform", label: t("Transform"), position: { x: 320, y: 60 } }]);
-  const [edges, setEdges] = useState<CanvasEdge[]>([{ id: "e1", source: "n1", sourcePort: "out", target: "n2", targetPort: "in" }]);
+  const [nodes, setNodes] = useState<FlowNode[]>([{ id: "n1", kind: "value", label: t("Value"), position: { x: 30, y: 60 } },
+    { id: "n2", kind: "transform", label: t("Transform"), position: { x: 320, y: 60 }, boundary: [{ id: "timeout", notation: "event-timer", label: t("Timeout") }] }]);
+  const [edges, setEdges] = useState<FlowEdge[]>([{ id: "e1", source: "n1", sourcePort: "out", target: "n2", targetPort: "in" }]);
   const [selected, setSelected] = useState<string>();
-  return <BlockCanvas catalog={nodeCatalog} nodes={nodes} edges={edges} height={360} mode="edit" selected={selected} onSelect={setSelected}
-    onAdd={(kind, context) => setNodes([...nodes.map((node) => ({ ...node, position: context.positions?.[node.id] ?? node.position })), { id: `n${counter.current++}`, kind, label: nodeCatalog.find((item) => item.id === kind)!.title, position: context.position }])}
+  return <FlowCanvas catalog={flowCatalog} nodes={nodes} edges={edges} height={360} mode="edit" selected={selected} onSelect={setSelected}
+    onAdd={(kind, context) => setNodes([...nodes.map((node) => ({ ...node, position: context.positions?.[node.id] ?? node.position })), { id: `n${counter.current++}`, kind, label: flowCatalog.find((item) => item.id === kind)!.title, position: context.position }])}
     onConnect={(connection) => setEdges([...edges, { id: `e${counter.current++}`, source: connection.source, target: connection.target, sourcePort: connection.sourceHandle ?? "out", targetPort: connection.targetHandle ?? "in" }])}
     onDisconnect={(disconnected) => setEdges(edges.filter((edge) => !disconnected.some((item) => item.id === edge.id)))}
     onPositionsChange={(positions) => setNodes(nodes.map((node) => ({ ...node, position: positions[node.id] ?? node.position })))}
@@ -277,7 +286,7 @@ export function Blocks() {
 }
 const definition: FlowDefinition = { id: "demo.review", app: "demo", title: "Sample review", version: 1, start: ["demo.created"], steps: [{ name: "prepare", title: t("Prepare"), kind: "action", next: ["review"] }, { name: "review", title: t("Review"), kind: "ask", next: [] }] };
 const instance: FlowInstanceData = { id: "demo-flow", flow: "demo.review", title: "Sample Alpha review", version: 1, key: "preview", state: "waiting", tokens: [{ id: 1, step: "review", waits: "ask" }], undo: [], trace: [{ at: stamp.at, step: "prepare", what: "done", by: "demo" }] };
-export function FlowObservation() { return <div className="grid gap-4"><FlowGraph definition={definition} height={200} /><FlowView definition={definition} instance={instance} /></div>; }
+export function FlowObservation() { return <div className="grid gap-4"><FlowGraph definition={definition} height={200} /><FlowRun definition={definition} instance={instance} /></div>; }
 export function MasterDetail() {
   const [selected, setSelected] = useState<string>();
   return <RecordWorkspace title={t("Records")} source={demoSource} type={demoInfo.type} selected={selected} onSelect={setSelected} detail={(id) => <RecordPage source={demoSource} type={demoInfo.type} id={id} />} />;
@@ -299,14 +308,14 @@ const views = [
   { id: "catalog-home", title: () => t("Home"), render: () => <ShellHome /> },
   { id: "catalog-portal", title: () => t("Applications"), render: () => <ShellHome /> },
   { id: "catalog-records", title: () => t("Records"), render: () => <MasterDetail /> },
-  { id: "catalog-graph", title: () => t("Steps"), render: () => <Blocks /> },
+  { id: "catalog-graph", title: () => t("Steps"), render: () => <Flows /> },
 ];
 export function WorkspaceShell() {
   const [current, setCurrent] = useState("records");
   const [projection, setProjection] = useState("operations");
   const apps = [
     { id: "records", title: t("Records"), icon: <Plus />, category: "business", description: t("Sample records"), home: { view: "catalog-records" } },
-    { id: "steps", title: t("Steps"), icon: <AlignLeft />, category: "build", description: t("Typed block canvas"), home: { view: "catalog-graph" } },
+    { id: "steps", title: t("Steps"), icon: <AlignLeft />, category: "build", description: t("Process canvas"), home: { view: "catalog-graph" } },
   ];
   const categories = [{ id: "business", label: t("Business applications") }, { id: "build", label: t("Build") }];
   return <Workspace product={t("Catalog preview")} storageKey="platform.catalog.workspace-preview" views={views} home={{ view: "catalog-home" }}

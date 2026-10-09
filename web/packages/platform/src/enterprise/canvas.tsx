@@ -1,9 +1,9 @@
-// The enterprise drawing surface: the shared DiagramCanvas with UAF meaning —
+// The enterprise drawing surface: the shared relationship canvas with UAF meaning —
 // an icon per stereotype and kind (SAP/ArchiMate-style pictograms), placement
 // edges as the tree, the other relationships as plain links. The modeler owns
 // the positions and the decisions.
 import type { ReactNode } from "react";
-import { DiagramCanvas, t, type DiagramAction, type DiagramEdge, type DiagramNode } from "@platform/ui";
+import { RelationCanvas, t, type CanvasAction, type RelationEdge, type RelationNode } from "@platform/ui";
 import { Award, Boxes, Briefcase, Building, Building2, Cog, Crown, DoorOpen, Factory, FileText, FolderKanban, Globe2, Handshake, Hotel, IdCard, Landmark, Layers, MapPin, Network, Scale, Store, Target, Truck, UserRound, Users, Warehouse, Workflow, Wrench } from "lucide-react";
 import { FILLS_POST, MEMBERSHIP, PLACEMENT, type Element, type Relationship } from "./model";
 
@@ -39,24 +39,24 @@ export function Canvas({ elements, relationships, pins = [], positions, selected
   /** What the details panel shows for an element: UAF type, kind, validity, where it sits. */
   facts: (el: Element) => { label: string; value: string }[];
   /** Operations on the selected element and the selected relationship (ADR-0084 D3). */
-  nodeActions: (id: string) => DiagramAction[]; edgeActions: (id: string) => DiagramAction[];
+  nodeActions: (id: string) => CanvasAction[]; edgeActions: (id: string) => CanvasAction[];
   onReconnect: (id: string, source: string, target: string) => void;
 }) {
-  const nodes: DiagramNode[] = [
+  const nodes: RelationNode[] = [
     ...elements.map((el) => ({ id: el.id, label: el.name, caption: el.kind ? t(el.kind) : title(el.stereotype), icon: elementIcon(el), tone: tones[el.stereotype],
       dim: !!el.until, flag: el.published ? "shared" : el.owner ? el.owner : undefined, detail: `${title(el.stereotype)} · ${el.id}`, facts: facts(el) })),
     // A pinned record is drawn beside the element it names, and says which app it comes from.
     ...pins.map((p) => ({ id: p.id, label: p.label, caption: p.caption ?? t("record"), icon: <FileText />, tone: "warning", linkable: false, detail: p.detail ?? p.id,
       facts: [{ label: t("Pinned record"), value: p.detail ?? p.id }, ...(p.anchorName ? [{ label: t("Names"), value: p.anchorName }] : [])] })),
   ];
-  const edges: DiagramEdge[] = [
+  const edges: RelationEdge[] = [
     ...propertyLinks.map((p) => ({ ...p, dashed: true, reconnectable: false, directed: true })),
     ...relationships.map((r) => ({ id: r.id, source: r.source, target: r.target, label: label(r), tree: r.stereotype === PLACEMENT,
       dashed: r.stereotype === MEMBERSHIP || r.stereotype === FILLS_POST, directed: r.stereotype !== PLACEMENT })),
     ...pins.filter((p) => elements.some((e) => e.id === p.anchor)).map((p) => ({ id: `pin:${p.id}`, source: p.id, target: p.anchor, label: t("names"), reconnectable: false, dashed: true, directed: true, tone: "warning" })),
   ];
   const pos = Object.fromEntries(Object.entries(positions).map(([id, [x, y]]) => [id, { x, y }]));
-  return <DiagramCanvas viewportKey={viewId} nodes={nodes} edges={edges} positions={pos} selected={selected} editable={admin} linking={linking} height="100%" dropType={STEREOTYPE_DROP}
+  return <RelationCanvas viewportKey={viewId} nodes={nodes} edges={edges} positions={pos} selected={selected} editable={admin} linking={linking} height="100%" dropType={STEREOTYPE_DROP}
     onSelect={onSelect} onLink={onLink} onDrop={(st, at) => onDrop(st, [at.x, at.y])}
     nodeActions={admin ? nodeActions : undefined} edgeActions={admin ? edgeActions : undefined} onReconnect={admin ? onReconnect : undefined}
     onPositionsChange={(next) => onPositions({ ...positions, ...Object.fromEntries(Object.entries(next).map(([id, p]) => [id, [p.x, p.y] as [number, number]])) })} />;

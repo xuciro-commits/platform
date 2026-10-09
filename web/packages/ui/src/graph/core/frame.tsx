@@ -1,9 +1,10 @@
-// One React Flow frame for read-only operating graphs and editable semantic
-// graphs. The graph adapter owns meaning; this frame owns viewport behavior.
+// One React Flow frame for both canvas families. The family owns meaning; this
+// frame owns the viewport: the border, the resize handle, expanding to the whole
+// window, the background, the zoom controls and fitting the drawing to it.
 import { Background, Controls, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { t } from "../i18n";
+import { t } from "../../i18n";
 
 export const fitting = { padding: 0.12, maxZoom: 1 };
 
@@ -25,24 +26,38 @@ export function CanvasFrame({ label, height, children, role = "figure" }: { labe
   </div>;
 }
 
-/** Call inside ReactFlow after nodes have been measured. Dragging a node does not refit. */
-export function CanvasRefit({ signature }: { signature: string }) {
-  const { fitView } = useReactFlow();
-  const measured = useNodesInitialized();
-  const width = useStore((s) => s.width), height = useStore((s) => s.height);
-  const previous = useRef<{ signature: string; width: number; height: number } | undefined>(undefined);
-  useEffect(() => {
-    if (!measured || width <= 0 || height <= 0) return;
-    const last = previous.current;
-    if (last?.signature === signature && last.width === width && last.height === height) return;
-    previous.current = { signature, width, height }; void fitView(fitting);
-  }, [fitView, measured, width, height, signature]);
-  return null;
-}
-
 export function CanvasFurniture() {
   return <>
     <Background gap={16} size={1} color="var(--border)" />
     <Controls showInteractive={false} position="bottom-right" />
   </>;
+}
+
+/** Fit the drawing once its boxes are measurable, and again when `signature` says
+ * the drawing changed. Call inside ReactFlow. Dragging a node does not refit.
+ *
+ * `once` is the relation family's rule: a view is fitted when it first arrives and
+ * not again while the reader works on it. A view change renders once with the
+ * previous nodes, so the fit waits until the new positions and measurements have
+ * reached the canvas, and a quick change of view cancels the fit still pending. */
+export function CanvasRefit({ signature, ready = true, once = false }: { signature: string; ready?: boolean; once?: boolean }) {
+  const { fitView } = useReactFlow();
+  const measured = useNodesInitialized();
+  const width = useStore((s) => s.width), height = useStore((s) => s.height);
+  const fitted = useRef<Set<string>>(new Set());
+  const previous = useRef<{ signature: string; width: number; height: number } | undefined>(undefined);
+  const usable = ready && measured && width > 0 && height > 0;
+  useEffect(() => {
+    if (!usable) return;
+    if (once) {
+      if (fitted.current.has(signature)) return;
+      let cancelled = false;
+      const timer = setTimeout(() => { void fitView(fitting).then((done) => { if (done && !cancelled) fitted.current.add(signature); }); }, 60);
+      return () => { cancelled = true; clearTimeout(timer); };
+    }
+    const last = previous.current;
+    if (last?.signature === signature && last.width === width && last.height === height) return;
+    previous.current = { signature, width, height }; void fitView(fitting);
+  }, [usable, once, signature, width, height, fitView]);
+  return null;
 }

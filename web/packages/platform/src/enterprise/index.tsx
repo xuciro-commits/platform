@@ -10,7 +10,7 @@ import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useHost, useOpenRecord, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, IconGlyph, Input, Panel, Select, Tag, Tree, Workbench, RecordTimeline, useUnsavedChanges, t, type ColumnDef, type DiagramAction, type WorkbenchTab } from "@platform/ui";
+import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, IconGlyph, Input, Panel, Select, Tag, Tree, Workbench, RecordTimeline, useUnsavedChanges, t, type ColumnDef, type CanvasAction, type WorkbenchTab } from "@platform/ui";
 import { Copy, Link2, Network, Pencil, Pin as PinIcon, PinOff, Plus, Puzzle, Save, Table2, Trash2, Workflow, CalendarDays } from "lucide-react";
 import { Canvas, STEREOTYPE_DROP, elementIcon, type CanvasPin, type Positions } from "./canvas";
 import { ElementProperties, type ElementEdit } from "./properties";
@@ -215,7 +215,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
 
   // The selected element's operations, on the canvas (ADR-0084 D3). Hiding is a
   // view decision; closing and ending are model decisions with a date.
-  const nodeActions = (id: string): DiagramAction[] => {
+  const nodeActions = (id: string): CanvasAction[] => {
     if (id.startsWith("record:")) return admin ? [{ id: "unpin", label: t("Unpin"), run: () => unpinRecord(id) }] : [];
     const el = byId(id);
     if (!el || !admin) return [];
@@ -226,7 +226,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
       { id: "close", label: t("Close…"), tone: "danger", hint: t("Ends its validity from a date: no view shows it as live; history keeps it."), run: () => setDialog({ kind: "close", id }), disabled: !!el.until },
     ];
   };
-  const edgeActions = (id: string): DiagramAction[] => {
+  const edgeActions = (id: string): CanvasAction[] => {
     const r = m.relationships.find((x) => x.id === id);
     if (!r || !admin || r.until) return [];
     return [

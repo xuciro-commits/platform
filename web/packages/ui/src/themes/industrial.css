@@ -238,7 +238,7 @@
 [data-skin="industrial"] .platform-dock .dv-tab.dv-active-tab { box-shadow: inset 0 2px 0 var(--ind-stripe); }
 [data-skin="industrial"] .platform-dock .dv-resize-container { border-radius: 3px; border: 2px solid var(--ind-key-edge); }
 
-/* ---- Canvas blocks: same keycap language ----------------------------------- */
-[data-skin="industrial"] .platform-block { border-radius: 3px; border: 1px solid var(--ind-key-edge); box-shadow: 0 2px 0 var(--ind-key-shadow); }
+/* ---- Canvas nodes: same keycap language ------------------------------------ */
+[data-skin="industrial"] .platform-flow-node, [data-skin="industrial"] .platform-relation-node { border-radius: 3px; border: 1px solid var(--ind-key-edge); box-shadow: 0 2px 0 var(--ind-key-shadow); }
 
 @media (prefers-reduced-motion: reduce) { [data-skin="industrial"] * { transition: none !important; } }

@@ -3,10 +3,10 @@
 // pages, queries and functions over the types they read. One asset at a time,
 // or every asset of an app when nothing is chosen.
 import { assetKey, useDefinitions, type AssetRef, type Definition } from "@platform/app";
-import { Graph, PageHeader, Select, useWorkspace, type GraphEdge, type GraphNode, t } from "@platform/ui";
+import { PageHeader, RelationCanvas, Select, useWorkspace, type RelationEdge, type RelationNode, t } from "@platform/ui";
 import { useMemo, useState } from "react";
 
-const tones: Record<string, GraphNode["tone"]> = { app: "info", page: "success", object: "warning", entity: "warning", query: "neutral", function: "neutral", linktype: "neutral", propertytype: "neutral" };
+const tones: Record<string, RelationNode["tone"]> = { app: "info", page: "success", object: "warning", entity: "warning", query: "neutral", function: "neutral", linktype: "neutral", propertytype: "neutral" };
 const kindLabel = (kind: string) => ({ app: t("Application"), page: t("Page"), object: t("Object type"), entity: t("Object type"), query: t("Query"), function: t("Function"), linktype: t("Relationship"), propertytype: t("Shared property"), action: t("Action"), operation: t("Operation") })[kind] ?? kind;
 const titleOf = (d: Definition) => d.entity?.title ?? d.action?.title ?? d.page?.title ?? d.application?.title ?? d.ref.name;
 
@@ -30,13 +30,14 @@ export function Lineage({ ref: requested }: { ref?: string }) {
     } else {
       for (const d of definitions) if (d.ref.app === scopeApp) { keep.add(assetKey(d.ref)); for (const r of d.requires) keep.add(assetKey(r)); }
     }
-    const nodes: GraphNode[] = [...keep].map((key) => {
+    const nodes: RelationNode[] = [...keep].map((key) => {
       const d = byKey.get(key);
       const [appId, kind, name] = key.split("/");
-      return { id: key, label: d ? titleOf(d) : name ?? key, detail: `${kindLabel(kind ?? "")} · ${appId}${d?.version ? ` · ${d.version}` : ""}`, tone: tones[kind ?? ""] ?? "neutral", current: key === focus };
+      const caption = `${kindLabel(kind ?? "")} · ${appId}${d?.version ? ` · ${d.version}` : ""}`;
+      return { id: key, label: d ? titleOf(d) : name ?? key, caption, detail: caption, tone: tones[kind ?? ""] ?? "neutral" };
     });
-    const edges: GraphEdge[] = [];
-    for (const key of keep) for (const r of byKey.get(key)?.requires ?? []) { const to = assetKey(r); if (keep.has(to)) edges.push({ from: to, to: key, directed: true }); }
+    const edges: RelationEdge[] = [];
+    for (const key of keep) for (const r of byKey.get(key)?.requires ?? []) { const to = assetKey(r); if (keep.has(to)) edges.push({ id: `${to}>${key}`, source: to, target: key, directed: true }); }
     return { nodes, edges };
   }, [definitions, focus, scopeApp]);
   const openAsset = (key: string) => {
@@ -58,6 +59,6 @@ export function Lineage({ ref: requested }: { ref?: string }) {
         </Select>
       </>} />
     {nodes.length === 0 ? <p className="text-sm text-muted">{t("No definitions available.")}</p>
-      : <Graph nodes={nodes} edges={edges} direction="right" height={Math.max(360, (typeof window !== "undefined" ? window.innerHeight : 900) - 220)} label={t("Lineage")} onOpen={(node) => openAsset(node.id)} />}
+      : <RelationCanvas layout="tree-right" nodes={nodes} edges={edges} selected={focus || undefined} height={Math.max(360, (typeof window !== "undefined" ? window.innerHeight : 900) - 220)} label={t("Lineage")} onSelect={(id) => id && openAsset(id)} />}
   </>;
 }

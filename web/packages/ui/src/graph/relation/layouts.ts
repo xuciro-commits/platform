@@ -1,32 +1,32 @@
-// Layouts every entity/relationship diagram needs (ADR-0068 §6): the owner
-// names which edges form the hierarchy; the canvas offers these to the reader.
-import { layout as layered } from "./layout";
-import type { CanvasPosition } from "./model";
+// The layouts every relationship drawing needs (ADR-0068 §6, ADR-0086 D3): the
+// owner names which edges form the hierarchy; the canvas offers these to the reader.
+import { layeredLayout } from "../core/layered";
+import type { CanvasPosition } from "../core/types";
+import { relationNodeSize, type RelationLayout } from "./model";
 
-export type DiagramLayout = "tree-down" | "tree-right" | "radial" | "grid";
-export const diagramLayouts: DiagramLayout[] = ["tree-down", "tree-right", "radial", "grid"];
+export type RelationLayoutSize = { width: number; height: number; gapX: number; gapY: number };
 type N = { id: string };
 type E = { from: string; to: string; tree?: boolean };
-export type DiagramSize = { width: number; height: number; gapX: number; gapY: number };
-export const diagramSize: DiagramSize = { width: 180, height: 56, gapX: 40, gapY: 48 };
 
-/** Positions for every node under the chosen layout; parents above (or left of) children. */
-export function diagramLayout(kind: DiagramLayout, nodes: N[], edges: E[], size: DiagramSize = diagramSize): Record<string, CanvasPosition> {
+/** Positions for every node under the chosen layout. */
+export function relationLayout(kind: RelationLayout, nodes: N[], edges: E[], size: RelationLayoutSize = relationNodeSize): Record<string, CanvasPosition> {
   const tree = edges.filter((e) => e.tree !== false);
   if (kind === "grid") return grid(nodes, size);
   if (kind === "radial") return radial(nodes, tree, size);
+  // A lineage or an execution chain is already declared in the direction it reads.
+  if (kind === "layered") return Object.fromEntries(layeredLayout(nodes, edges, "right", size));
   // The hierarchy flows parent → child; the layered layout wants edges in flow direction.
   const flow = tree.map((e) => ({ from: e.to, to: e.from }));
-  return Object.fromEntries(layered(nodes, flow, kind === "tree-down" ? "down" : "right", size));
+  return Object.fromEntries(layeredLayout(nodes, flow, kind === "tree-down" ? "down" : "right", size));
 }
 
-function grid(nodes: N[], size: DiagramSize) {
+function grid(nodes: N[], size: RelationLayoutSize) {
   const columns = Math.max(1, Math.ceil(Math.sqrt(nodes.length * 1.6)));
   return Object.fromEntries(nodes.map((n, i) => [n.id, { x: (i % columns) * (size.width + size.gapX), y: Math.floor(i / columns) * (size.height + size.gapY) }]));
 }
 
 /** Roots at the centre, each generation on a wider ring, siblings sharing their parent's sector. */
-function radial(nodes: N[], tree: E[], size: DiagramSize) {
+function radial(nodes: N[], tree: E[], size: RelationLayoutSize) {
   const ids = new Set(nodes.map((n) => n.id));
   const children = new Map<string, string[]>(nodes.map((n) => [n.id, []]));
   const hasParent = new Set<string>();
@@ -53,4 +53,19 @@ function radial(nodes: N[], tree: E[], size: DiagramSize) {
   for (const r of roots) { const span = Math.PI * 2 * ((leaves.get(r) ?? 1) / total); place(r, 0, a, a + span); a += span; }
   for (const n of nodes) out[n.id] ??= { x: 0, y: 0 };
   return out;
+}
+
+export type NeighborhoodLayoutGroup = { side: "right" | "left"; nodes: readonly string[] };
+
+/** Two half-ellipses around one record: the original presentation of a bounded
+ * neighbourhood, independent of the relationship query that filled it. */
+export function neighborhoodPositions(root: string, groups: readonly NeighborhoodLayoutGroup[]): Record<string, CanvasPosition> {
+  const positions = Object.create(null) as Record<string, CanvasPosition>;
+  positions[root] = { x: 158, y: 68 };
+  for (const group of groups) group.nodes.forEach((id, index) => {
+    if (Object.hasOwn(positions, id)) return;
+    const angle = (group.side === "right" ? -Math.PI / 2 : Math.PI / 2) + index / Math.max(1, group.nodes.length) * Math.PI;
+    positions[id] = { x: 180 + Math.cos(angle) * 90 - 12, y: 90 + Math.sin(angle) * 55 - 12 };
+  });
+  return positions;
 }

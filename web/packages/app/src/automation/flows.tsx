@@ -1,4 +1,4 @@
-import { Button, FlowView, t, useWorkspace, type FlowDefinition, type FlowInstanceData } from "@platform/ui";
+import { Button, FlowRun, t, useWorkspace, type FlowDefinition, type FlowInstanceData } from "@platform/ui";
 import { ChainGraph, useHost, useOpenRecord, useReadQuery } from "../index";
 
 /** One runtime record view for every member; original reads/actions authorize access. */
@@ -23,7 +23,7 @@ export function FlowInstanceView({ id }: { id: string }) {
       {can("flow.instance.cancel") && <Button size="sm" variant="danger" onClick={() => void decide("flow.instance.cancel", target, {})}>{t("Cancel")}</Button>}
     </div>}
     <ChainGraph of={`flow.instance/${instance.id}`} />
-    <FlowView definition={definition} instance={instance} actions={(token) => live && can("flow.instance.skip") && ["stuck", "retry", "undo"].includes(token.waits ?? "")
+    <FlowRun definition={definition} instance={instance} actions={(token) => live && can("flow.instance.skip") && ["stuck", "retry", "undo"].includes(token.waits ?? "")
       ? <Button size="sm" variant="ghost" onClick={() => void decide("flow.instance.skip", target, { token: token.id })}>{t("Skip")}</Button> : null} />
   </div>;
 }

@@ -1,7 +1,7 @@
 // The enterprise model as the host serves it (ADR-0067): UAF-typed elements,
 // relationships and views, plus the metamodel the palette draws from.
 import type { Api } from "@platform/kernel";
-import { diagramLayout } from "@platform/ui";
+import { relationLayout } from "@platform/ui";
 
 export type Model = Api.EnterpriseModel;
 export type Element = Api.Element;
@@ -130,7 +130,7 @@ export function autoLayout(m: Model, shown: string[], kind: string, day: string,
   // structure and a site structure at once (ADR-0085 D2).
   const edges = m.relationships.filter((r) => r.stereotype === PLACEMENT && (!kind || r.kind === kind) && live(r, day) && set.has(r.source) && set.has(r.target)).map((r) => ({ from: r.source, to: r.target, tree: true }));
   const below = Object.values(out).reduce((y, p) => Math.max(y, p[1] + 120), 40);
-  for (const [id, p] of Object.entries(diagramLayout("tree-down", missing.map((id) => ({ id })), edges))) out[id] = [p.x + 40, p.y + below];
+  for (const [id, p] of Object.entries(relationLayout("tree-down", missing.map((id) => ({ id })), edges))) out[id] = [p.x + 40, p.y + below];
   return out;
 }
 

@@ -1,5 +1,5 @@
 import type { Api } from "@platform/kernel";
-import { t, type CanvasEdge, type BlockDiagnostic, type Tone } from "@platform/ui";
+import { t, type FlowEdge, type FlowDiagnostic, type Tone } from "@platform/ui";
 
 export type ValueSchema = Api.ValueSchema;
 export type Binding = Api.Binding;
@@ -61,10 +61,10 @@ function stepPaths(step: WorkflowStep): { port: string; title: string; target: s
   ];
   return paths;
 }
-export function controlEdges(draft: WorkflowDraft): CanvasEdge[] {
+export function controlEdges(draft: WorkflowDraft): FlowEdge[] {
   return draft.steps.flatMap((step) => stepPaths(step).map((path) => ({ id: `${step.name}:${path.port}`, source: step.name, sourcePort: path.port, target: path.target, targetPort: "in", label: path.title, channel: "control" as const, tone: path.port === "error" ? "danger" as const : undefined })));
 }
-export function dataEdges(draft: WorkflowDraft): CanvasEdge[] {
+export function dataEdges(draft: WorkflowDraft): FlowEdge[] {
   return draft.steps.flatMap((step) => [...Object.entries(step.inputs ?? {}).map(([name, binding]) => ({ name: `input:${name}`, binding })),
     ...(["value", "target", "collection"] as const).flatMap((name) => step[name] ? [{ name: `binding:${name}`, binding: step[name]! }] : [])]
     .flatMap(({ name, binding }) => binding.source === "step" && binding.step
@@ -114,8 +114,8 @@ export function initialStep(capability: Capability, steps: WorkflowStep[]): Work
   if (step.kind === "end" || step.kind === "join") Object.assign(step, { value: { source: "input" } });
   return step;
 }
-export function workflowDiagnostics(draft: WorkflowDraft): Record<string, BlockDiagnostic[]> {
-  const issues: Record<string, BlockDiagnostic[]> = {};
+export function workflowDiagnostics(draft: WorkflowDraft): Record<string, FlowDiagnostic[]> {
+  const issues: Record<string, FlowDiagnostic[]> = {};
   const add = (step: string, message: string, severity: "error" | "warning" = "error") => (issues[step] ??= []).push({ message, severity });
   const names = new Set(draft.steps.map((step) => step.name));
   for (const step of draft.steps) {

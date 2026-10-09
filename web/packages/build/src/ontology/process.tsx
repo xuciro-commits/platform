@@ -11,8 +11,8 @@ import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../edit
 // everything again when the object is published.
 import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost } from "@platform/app";
 import {
-  Button, Card, Checkbox, Input, NodeCanvas, Panel, PanelSection, ProblemList, Select, StatusBar, StructureRow, Textarea, Workbench, canvasNodeHeight, canvasNodeWidth, cn, layout, notify, t, type WorkbenchProblem,
-  type CanvasEdge, type CanvasNode, type NodeCatalog,
+  Button, Card, Checkbox, Input, FlowCanvas, Panel, PanelSection, ProblemList, Select, StatusBar, StructureRow, Textarea, Workbench, flowBlockHeight, flowNodeWidth, cn, layeredLayout, notify, t, type WorkbenchProblem,
+  type FlowEdge, type FlowNode, type FlowCatalog,
 } from "@platform/ui";
 import { Boxes, Link2, Plus, Shield, Tags, Trash2, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -164,7 +164,7 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
   process: Process; chosen: Chosen; onChoose: (c: Chosen) => void; onChange: (p: Process) => void;
   onAddState: () => void; onAddAction: () => void;
 }) {
-  const catalog: NodeCatalog = [
+  const catalog: FlowCatalog = [
     { id: "state", title: t("State"), category: "lifecycle", description: t("A record's named status"),
       inputs: [{ id: "result", label: t("Arrives here"), type: "action-result" }],
       outputs: [{ id: "take", label: t("May take"), type: "action-start" }] },
@@ -172,20 +172,20 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
       inputs: [{ id: "from", label: t("Taken from"), type: "action-start" }],
       outputs: [{ id: "to", label: t("Leaves it in"), type: "action-result", limit: 1 }] },
   ];
-  const normal=catalog[1]!;const graphCatalog:NodeCatalog=[...catalog,{...normal,id:"action-input",addable:false,outputs:normal.outputs.map(p=>({...p,limit:undefined}))}];
+  const normal=catalog[1]!;const graphCatalog:FlowCatalog=[...catalog,{...normal,id:"action-input",addable:false,outputs:normal.outputs.map(p=>({...p,limit:undefined}))}];
   const links = process.actions.flatMap((a) => [
     ...a.from.map((s) => ({ from: `state:${s}`, to: `action:${a.name}` })),
     ...actionResultEdges(a).map(to=>({from:`action:${a.name}`,to:`state:${to}`})),
   ]);
-  const places = layout([
+  const places = layeredLayout([
     ...process.states.map((s) => ({ id: `state:${s.name}`, label: s.title })),
     ...process.actions.map((a) => ({ id: `action:${a.name}`, label: a.title })),
-  ], links, "right", { width: canvasNodeWidth, height: Math.max(...catalog.map(canvasNodeHeight)), gapX: 40, gapY: 30 });
-  const nodes: CanvasNode[] = [
+  ], links, "right", { width: flowNodeWidth, height: Math.max(...catalog.map((kind) => flowBlockHeight(kind))), gapX: 40, gapY: 30 });
+  const nodes: FlowNode[] = [
     ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, detail: s.name, position: places.get(`state:${s.name}`) ?? { x: 0, y: 0 } })),
     ...process.actions.map((a) => ({ id: `action:${a.name}`, kind:a.toInput?"action-input":"action", label: a.title || a.name, detail: a.name, position: places.get(`action:${a.name}`) ?? { x: 0, y: 0 } })),
   ];
-  const edges: CanvasEdge[] = process.actions.flatMap((a) => [
+  const edges: FlowEdge[] = process.actions.flatMap((a) => [
     ...a.from.map((s) => ({ id: `from:${a.name}:${s}`, source: `state:${s}`, sourcePort: "take", target: `action:${a.name}`, targetPort: "from" })),
     ...actionResultEdges(a).map(to=>({id:`to:${a.name}:${to}`,source:`action:${a.name}`,sourcePort:"to",target:`state:${to}`,targetPort:"result",dashed:!!a.toInput,label:a.toInput})),
   ]);
@@ -193,7 +193,7 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
   return <div className="mb-4 grid gap-2">
     <div><h3 className="text-sm font-semibold">{t("Process map")}</h3>
       <p className="text-xs text-muted">{t("Connect a state to an action to allow it; connect an action to a state for its result. Select a node to edit it. Delete a selected line to remove it.")}</p></div>
-    <NodeCanvas label={t("Process map")} catalog={graphCatalog} nodes={nodes} edges={edges} selected={selected}
+    <FlowCanvas label={t("Process map")} catalog={graphCatalog} nodes={nodes} edges={edges} selected={selected}
       onAdd={(kind) => { if (kind === "state") onAddState(); else if (process.states.length) onAddAction(); }}
       onSelect={(id) => {
         const [kind, name] = id.split(":");

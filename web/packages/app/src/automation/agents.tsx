@@ -3,7 +3,8 @@
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
 import "../i18n";
-import { Button, Card, Disclosure, useWorkspace, Form, Graph, Input, PageHeader, Panel, Select, StatusTag, Tag, Textarea, defineStatuses, t, language, type GraphEdge, type GraphNode } from "@platform/ui";
+import { Button, Card, Disclosure, useWorkspace, Form, FlowSteps, Input, PageHeader, Panel, RelationCanvas, Select, StatusTag, Tag, Textarea, defineStatuses, t, language,
+  type FlowStepEdge, type FlowStepNode, type RelationEdge, type RelationNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
 import { PayloadFields } from "../actions/actions";
@@ -133,25 +134,27 @@ export function RunView({ id, compact, application }: { id: string; compact?: bo
   );
 }
 
-/** A run drawn as a graph (#122): the goal, each tool it called in turn, the sources each step read, and how it ended. */
+/** A run drawn as a process (#122, ADR-0086 D4): the goal as a start event, each
+ * tool it called in turn as a service task, the sources it read as data objects, and
+ * how it ended as an end event. */
 function RunGraph({ run, onStep }: { run: AgentRun; onStep: (i: number) => void }) {
   const refused = (s: RunStep) => /^(refused|error|stopped|ERROR_CODE_)/i.test(s.outcome);
-  const nodes: GraphNode[] = [{ id: "goal", label: run.title, detail: run.agent, tone: "success" }];
-  const edges: GraphEdge[] = [];
+  const nodes: FlowStepNode[] = [{ id: "goal", label: run.title, detail: run.agent, notation: "event-start", tone: "success" }];
+  const edges: FlowStepEdge[] = [];
   run.steps.forEach((s, i) => {
-    nodes.push({ id: `step-${i}`, label: `${i + 1}. ${s.tool || t("answer")}`, detail: s.rationale ?? s.outcome.split("\n")[0], tone: refused(s) ? "danger" : "success" });
+    nodes.push({ id: `step-${i}`, label: `${i + 1}. ${s.tool || t("answer")}`, detail: s.rationale ?? s.outcome.split("\n")[0], notation: "service-task", tone: refused(s) ? "danger" : "success" });
     edges.push({ from: i ? `step-${i - 1}` : "goal", to: `step-${i}` });
   });
   (run.citations ?? []).forEach((c, i) => {
-    nodes.push({ id: `source-${i}`, label: c.title, detail: t("source"), tone: "neutral" });
+    nodes.push({ id: `source-${i}`, label: c.title, detail: t("source"), notation: "data-object", tone: "neutral" });
     edges.push({ from: `step-${Math.min(c.step, run.steps.length - 1)}`, to: `source-${i}`, dashed: true });
   });
   const last = run.steps.length ? `step-${run.steps.length - 1}` : "goal";
   const end = run.state === "waiting" ? { label: t("Draft waits"), tone: "warning" as const } : run.state === "running" ? { label: t("Working"), tone: "info" as const }
     : run.stopped ? { label: t("Stopped"), tone: "danger" as const } : { label: t("Done"), tone: "success" as const };
-  nodes.push({ id: "end", ...end, current: run.state === "running" || run.state === "waiting", detail: run.stopped ?? run.draft?.[0]?.action });
+  nodes.push({ id: "end", ...end, notation: run.stopped ? "event-terminate" : "event-end", current: run.state === "running" || run.state === "waiting", detail: run.stopped ?? run.draft?.[0]?.action });
   edges.push({ from: last, to: "end" });
-  return <Graph nodes={nodes} edges={edges} height={200} label={t("Steps")} onOpen={(n) => n.id.startsWith("step-") && onStep(Number(n.id.slice(5)))} />;
+  return <FlowSteps nodes={nodes} edges={edges} height={200} label={t("Steps")} onOpen={(n) => n.id.startsWith("step-") && onStep(Number(n.id.slice(5)))} />;
 }
 
 const chainTone = (state?: string) => state === "done" || state === "delivered" ? "success" as const
@@ -168,13 +171,14 @@ export function ChainGraph({ of, title = t("Chain") }: { of: string; title?: str
   const chain = useReadQuery<Api.Chain>(`/v1/chain/${of.split("/").map(encodeURIComponent).join("/")}`).data;
   if (!chain || chain.nodes.length < 2) return null;
   const kinds: Record<string, string> = { record: t("record"), flow: t("flow"), run: t("agent run"), effect: t("effect") };
-  const nodes: GraphNode[] = chain.nodes.map((n) => ({ id: n.ref, label: n.title, detail: [kinds[n.kind] ?? n.kind, n.state].filter(Boolean).join(" · "),
-    tone: chainTone(n.state), current: n.ref === of }));
-  const edges: GraphEdge[] = chain.edges.map((e) => ({ from: e.from, to: e.to }));
+  const nodes: RelationNode[] = chain.nodes.map((n) => ({ id: n.ref, label: n.title, caption: [kinds[n.kind] ?? n.kind, n.state].filter(Boolean).join(" · "),
+    detail: n.ref, tone: chainTone(n.state) }));
+  const edges: RelationEdge[] = chain.edges.map((e) => ({ id: `${e.from}>${e.to}`, source: e.from, target: e.to }));
   return (
     <div className="grid gap-1">
       <h3 className="text-xs uppercase text-muted">{title}</h3>
-      <Graph nodes={nodes} edges={edges} height={200} label={title} onOpen={(n) => { if (!n.id.startsWith("platform.effect/")) openRecord(n.id); }} />
+      <RelationCanvas layout="layered" nodes={nodes} edges={edges} selected={of} height={200} label={title}
+        onSelect={(id) => { if (id && !id.startsWith("platform.effect/")) openRecord(id); }} />
     </div>
   );
 }

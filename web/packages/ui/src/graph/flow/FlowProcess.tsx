@@ -1,12 +1,12 @@
-// A flow instance (ADR-0020): its definition drawn as steps, with the path the
+// A flow instance (ADR-0020): its definition drawn as BPMN steps, with the path the
 // instance took, where it stands now, and why it moved — the decision trace.
-import { StatusTag, defineStatuses } from "../components/StatusTag";
-import { cn } from "../lib/cn";
-import { Graph, type GraphEdge, type GraphNode } from "../graph/Graph";
-import { t } from "../i18n";
 import type { Api } from "@platform/kernel";
+import { StatusTag, defineStatuses } from "../../components/StatusTag";
+import { t } from "../../i18n";
+import { cn } from "../../lib/cn";
+import { FlowSteps, type FlowStepEdge, type FlowStepNode } from "./FlowSteps";
+import { loops, notationOf } from "./notation";
 
-export type FlowStep = Api.FlowStep;
 export type FlowDefinition = Api.FlowDefinition;
 export type FlowToken = { id: number; step: string; branch?: string; waits?: string; attempts?: number; due?: string; task?: string; child?: string; error?: string };
 export type FlowTrace = { at: string; step?: string; what: string; detail?: string; by?: string };
@@ -38,18 +38,19 @@ export function FlowReleaseBinding({ dependencies, release }: Pick<FlowInstanceD
 const kinds: Record<string, string> = { act: t("Act"), wait: t("Wait"), ask: t("Ask"), call: t("Sub-flow"), all: t("All of"), any: t("Any of"), agent: t("Agent") };
 const waits: Record<string, string> = { ready: "ready", retry: "retrying", wait: "waiting", ask: "asking people", call: "in a sub-flow", join: "waiting for its branches", undo: "retrying an undo", stuck: "stuck" };
 
-/** A flow drawn as a graph (#122): its steps from the start to the end, and, for an instance, what it did in each. */
+/** A flow drawn in BPMN (#122, ADR-0086 D4): its steps from the start event to the
+ * end event, each in the shape its kind asks for, and, for an instance, what it did. */
 export function FlowGraph({ definition, instance, height = 260 }: { definition: FlowDefinition; instance?: FlowInstanceData; height?: number }) {
   const trace = instance?.trace ?? [];
   const tokens = instance?.tokens ?? [];
   const visited = new Set(trace.map((x) => x.step).filter(Boolean));
   const undone = new Set(trace.filter((x) => x.what === "undone").map((x) => x.step));
-  const nodes: GraphNode[] = [{ id: "@start", label: t("Start"), detail: (definition.start ?? []).join(", "), tone: instance ? "success" : undefined }];
-  const edges: GraphEdge[] = definition.steps[0] ? [{ from: "@start", to: definition.steps[0].name }] : [];
+  const nodes: FlowStepNode[] = [{ id: "@start", label: t("Start"), detail: (definition.start ?? []).join(", "), notation: "event-start", tone: instance ? "success" : undefined }];
+  const edges: FlowStepEdge[] = definition.steps[0] ? [{ from: "@start", to: definition.steps[0]!.name }] : [];
   for (const s of definition.steps) {
     const here = tokens.filter((k) => k.step === s.name);
     nodes.push({
-      id: s.name, label: s.title, current: here.length > 0,
+      id: s.name, label: s.title, current: here.length > 0, notation: notationOf(s.kind), loop: loops.has(s.kind),
       detail: here.length ? here.map((k) => waits[k.waits ?? ""] ?? k.waits).join(", ") : undone.has(s.name) ? t("undone") : kinds[s.kind] ?? s.kind,
       tone: here.some((k) => k.waits === "stuck") ? "danger" : here.length ? "info" : undone.has(s.name) ? "neutral" : visited.has(s.name) ? "success" : undefined,
     });
@@ -63,12 +64,12 @@ export function FlowGraph({ definition, instance, height = 260 }: { definition: 
   for (const s of definition.steps) {
     if (s.chooses && !s.next.length) for (const o of orphans) if (o !== s.name) edges.push({ from: s.name, to: o, dashed: true, label: t("as it decides") });
   }
-  nodes.push({ id: "@end", label: t("End"), tone: instance?.state === "done" ? "success" : undefined });
-  return <Graph nodes={nodes} edges={edges} height={height} label={t("Steps")} />;
+  nodes.push({ id: "@end", label: t("End"), notation: "event-end", tone: instance?.state === "done" ? "success" : undefined });
+  return <FlowSteps nodes={nodes} edges={edges} height={height} label={t("Steps")} />;
 }
 
 /** A flow instance: its graph, where it waits and what can be done there, and why it moved. */
-export function FlowView({ definition, instance, actions, onStepSelect }: {
+export function FlowRun({ definition, instance, actions, onStepSelect }: {
   definition?: FlowDefinition; instance: FlowInstanceData; actions?: (token: FlowToken) => React.ReactNode;
   onStepSelect?: (step: string) => void;
 }) {
@@ -103,15 +104,15 @@ export function FlowView({ definition, instance, actions, onStepSelect }: {
         <h3 className="mb-1 text-xs uppercase text-muted">{t("Why it moved")}</h3>
         <table className="w-full text-sm">
           <tbody>
-            {trace.map((t, i) => (
+            {trace.map((line, i) => (
               <tr key={i} className="border-b border-border align-top">
-                <td className="w-40 py-1 pr-2 text-xs text-muted tabular-nums">{new Date(t.at).toLocaleString()}</td>
-                <td className="w-28 py-1 pr-2 font-mono text-xs">{t.step && onStepSelect
-                  ? <button type="button" className="text-left text-primary underline-offset-2 hover:underline focus-visible:underline" onClick={() => onStepSelect(t.step!)}>{title(t.step)}</button>
-                  : t.step ?? ""}</td>
-                <td className="w-28 py-1 pr-2">{t.what}</td>
-                <td className="py-1 pr-2">{t.detail}</td>
-                <td className="w-28 py-1 text-xs text-muted">{t.by}</td>
+                <td className="w-40 py-1 pr-2 text-xs text-muted tabular-nums">{new Date(line.at).toLocaleString()}</td>
+                <td className="w-28 py-1 pr-2 font-mono text-xs">{line.step && onStepSelect
+                  ? <button type="button" className="text-left text-primary underline-offset-2 hover:underline focus-visible:underline" onClick={() => onStepSelect(line.step!)}>{title(line.step)}</button>
+                  : line.step ?? ""}</td>
+                <td className="w-28 py-1 pr-2">{line.what}</td>
+                <td className="py-1 pr-2">{line.detail}</td>
+                <td className="w-28 py-1 text-xs text-muted">{line.by}</td>
               </tr>
             ))}
           </tbody>

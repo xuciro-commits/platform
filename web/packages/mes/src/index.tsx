@@ -4,7 +4,7 @@
 import "./i18n";
 import { RecordDetail, Records, defineApp, newId, useHost, useRead } from "@platform/app";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, Graph, PageHeader, Panel, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type GraphEdge, type GraphNode,
+  Button, DataTable, Dialog, EntityCard, EntityForm, FlowSteps, PageHeader, Panel, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type FlowStepEdge, type FlowStepNode,
  t } from "@platform/ui";
 import { Activity, ClipboardList, Factory, ListOrdered, Plus, ShieldAlert } from "lucide-react";
 import { useState } from "react";
@@ -171,23 +171,24 @@ function SFCTable({ initial = "work", title, description }: { initial?: keyof ty
   );
 }
 
-// The routing drawn as a graph (#122): the operations an SFC went through, the
-// one it is at and how it stands there, and the nonconformances logged on each.
+// The routing drawn as a process (#122, ADR-0086 D4): the operations an SFC went
+// through, the one it is at and how it stands there, and the nonconformances on each.
 function RoutingGraph({ sfc, operations }: { sfc: SFC; operations: Operation[] }) {
   const ended = sfc.state === "done" || sfc.state === "scrapped";
-  const nodes: GraphNode[] = operations.map((o, i) => {
+  const nodes: FlowStepNode[] = operations.map((o, i) => {
     const ncs = sfc.ncs.filter((n) => n.step === i).map((n) => n.code);
     const here = i === sfc.step && !ended;
     return {
-      id: String(i), label: `${o.step} ${o.name}`, current: here,
+      id: String(i), label: `${o.step} ${o.name}`, current: here, notation: "service-task",
       detail: [o.workCenter, ...(here ? [sfcStatus[sfc.state]?.label ?? sfc.state] : []), ...(ncs.length ? [`NC ${ncs.join(", ")}`] : [])].join(" · "),
       tone: here ? (sfc.state === "hold" ? "warning" : "info") : i < sfc.step || sfc.state === "done" ? "success" : i === sfc.step && sfc.state === "scrapped" ? "danger" : ncs.length ? "warning" : undefined,
     };
   });
-  nodes.push({ id: "end", label: sfc.state === "scrapped" ? t("Scrapped") : t("Done"), tone: sfc.state === "done" ? "success" : sfc.state === "scrapped" ? "danger" : undefined });
-  const edges: GraphEdge[] = operations.map((_, i) => ({ from: String(i), to: i + 1 < operations.length ? String(i + 1) : "end" }));
+  nodes.push({ id: "end", label: sfc.state === "scrapped" ? t("Scrapped") : t("Done"), notation: sfc.state === "scrapped" ? "event-terminate" : "event-end",
+    tone: sfc.state === "done" ? "success" : sfc.state === "scrapped" ? "danger" : undefined });
+  const edges: FlowStepEdge[] = operations.map((_, i) => ({ from: String(i), to: i + 1 < operations.length ? String(i + 1) : "end" }));
   if (sfc.state === "scrapped") edges.push({ from: String(sfc.step), to: "end", tone: "danger", dashed: true });
-  return <Graph nodes={nodes} edges={edges} height={200} label={t("Routing")} />;
+  return <FlowSteps nodes={nodes} edges={edges} height={200} label={t("Routing")} />;
 }
 
 function SFCDetail({ id }: { id: string }) {

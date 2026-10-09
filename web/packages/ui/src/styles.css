@@ -8,8 +8,10 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Capability blocks share a visual contract in editing and run observation. */
-.platform-block-canvas {
+/* One drawing surface, two families (ADR-0086): processes join through typed ports,
+   relationships do not. The surface itself — frame, toolbar, help, action bar, lines
+   and the node's own words — is shared; each family styles only its own shapes. */
+.platform-canvas {
   --xy-background-color: var(--background);
   --xy-controls-button-background-color: var(--surface);
   --xy-controls-button-background-color-hover: var(--row-hover);
@@ -18,70 +20,102 @@
   --xy-selection-background-color: color-mix(in oklch, var(--primary), transparent 92%);
   --xy-selection-border: 1px solid var(--primary);
 }
-.platform-block-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
-.platform-block-canvas .react-flow__node { border-radius: 12px; }
-.platform-block-canvas .react-flow__node:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
-.platform-block {
+.platform-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.platform-canvas .react-flow__node:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
+
+/* The words inside any node: what it is, what it is called, what it is doing. */
+.platform-canvas-node-icon { display: flex; align-items: center; justify-content: center; width: 31px; height: 31px; flex-shrink: 0; border: 1px solid color-mix(in oklch, var(--block-color), transparent 80%); border-radius: 8px; color: var(--block-color); background: color-mix(in oklch, var(--block-color), transparent 94%); }
+.platform-canvas-node-icon svg { width: 17px; height: 17px; }
+.platform-canvas-node-caption { display: flex; justify-content: space-between; gap: 6px; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+.platform-canvas-node-caption span { max-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }
+.platform-canvas-node-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; line-height: 20px; }
+.platform-canvas-node-detail { color: var(--muted); font-size: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 18px; }
+
+/* The tools and the operations of whatever is chosen, floating on the drawing. */
+.platform-canvas-toolbar { position: absolute; z-index: 10; left: 12px; top: 12px; display: flex; align-items: center; gap: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 4px; box-shadow: 0 2px 8px #00000008; }
+.platform-canvas-tool { display: inline-flex; flex-shrink: 0; white-space: nowrap; align-items: center; justify-content: center; gap: 5px; height: 28px; min-width: 28px; padding: 0 6px; border-radius: 5px; color: var(--muted); font-size: 11px; }
+.platform-canvas-tool svg { width: 14px; height: 14px; }
+.platform-canvas-tool:hover { background: var(--row-hover); color: var(--foreground); }
+.platform-canvas-tool:disabled { opacity: 0.35; pointer-events: none; }
+.platform-canvas-tool-primary { color: var(--primary); font-weight: 600; }
+.platform-canvas-tool:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.platform-canvas-actions { position: absolute; z-index: 20; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; width: max-content; max-width: calc(100% - 24px); align-items: center; gap: 4px; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 4px; box-shadow: 0 2px 8px #00000008; }
+.platform-canvas-edge-label { position: absolute; padding: 2px 5px; border-radius: 4px; background: var(--surface); color: var(--muted); font-size: 10px; pointer-events: none; }
+
+/* Processes: a block with typed ports, or, in a reader's compact view, the BPMN
+   shape its kind asks for — a diamond gateway, a ringed event, a doubled sub-process. */
+.platform-flow .react-flow__node { border-radius: 12px; }
+.platform-flow-node {
   position: relative; border: 1px solid var(--border); border-radius: 12px;
   background: var(--surface); text-align: left; color: var(--foreground);
   box-shadow: 0 2px 5px #00000008, 0 6px 18px #00000005;
   transition: border-color 120ms, box-shadow 120ms;
 }
-.platform-block:hover { border-color: color-mix(in oklch, var(--block-color), var(--border) 60%); box-shadow: 0 4px 18px #00000012; }
-.platform-block-selected { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary), transparent 78%), 0 4px 18px #00000012; }
-.platform-block-current { box-shadow: 0 0 0 3px color-mix(in oklch, var(--tone-info), transparent 75%); }
-.platform-block-accent { position: absolute; inset: 12px auto 12px 0; width: 3px; border-radius: 0 3px 3px 0; background: var(--block-color); }
-.platform-block-heading { display: flex; align-items: center; gap: 9px; height: 53px; padding: 10px 10px 0 13px; }
-.platform-block-icon { display: flex; align-items: center; justify-content: center; width: 31px; height: 31px; flex-shrink: 0; border: 1px solid color-mix(in oklch, var(--block-color), transparent 80%); border-radius: 8px; color: var(--block-color); background: color-mix(in oklch, var(--block-color), transparent 94%); }
-.platform-block-icon svg { width: 17px; height: 17px; }
-.platform-block-kind { display: flex; justify-content: space-between; gap: 6px; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
-.platform-block-kind span { max-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }
-.platform-block-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; line-height: 20px; }
-.platform-block-detail { color: var(--muted); font-size: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 18px; }
-.platform-block-collapse { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; color: var(--muted); border-radius: 4px; flex-shrink: 0; }
-.platform-block-collapse:hover { background: var(--row-hover); color: var(--foreground); }
-.platform-block-collapse svg { width: 13px; height: 13px; }
-.platform-block-port { width: 10px !important; height: 10px !important; border: 2px solid var(--surface) !important; box-shadow: 0 0 0 1px var(--border); transition: box-shadow 120ms, width 120ms, height 120ms; }
-.platform-block-port::after { content: ""; position: absolute; inset: -8px; }
-.platform-block-port:hover { width: 13px !important; height: 13px !important; box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary), transparent 70%); }
-.platform-block-port-data { border-radius: 3px !important; }
-.platform-block-port-label { position: absolute; display: flex; flex-direction: column; width: 45%; padding: 0 12px; height: 27px; color: var(--muted); font-size: 10px; line-height: 13px; }
-.platform-block-port-label-input { left: 0; }
-.platform-block-port-label-output { right: 0; text-align: right; }
-.platform-block-port-label span, .platform-block-port-label code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.platform-block-port-label code { font-family: var(--font-mono); font-size: 8px; opacity: 0.7; }
-.platform-block-status { position: absolute; inset: auto 10px 4px 13px; display: flex; align-items: center; font-size: 9px; }
-.platform-block-status span { display: inline-flex; align-items: center; gap: 4px; }
-.platform-block-status svg { width: 10px; height: 10px; }
-.platform-block-compact { border-radius: 8px; border: 2px solid var(--block-color); }
-.platform-block-compact .platform-block-heading { height: 54px; padding: 0 10px; }
-.platform-block-toolbar { position: absolute; z-index: 10; left: 12px; top: 12px; display: flex; align-items: center; gap: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 4px; box-shadow: 0 2px 8px #00000008; }
-.platform-block-tool { display: inline-flex; flex-shrink: 0; white-space: nowrap; align-items: center; justify-content: center; gap: 5px; height: 28px; min-width: 28px; padding: 0 6px; border-radius: 5px; color: var(--muted); font-size: 11px; }
-.platform-block-tool svg { width: 14px; height: 14px; }
-.platform-block-tool:hover { background: var(--row-hover); color: var(--foreground); }
-.platform-block-tool:disabled { opacity: 0.35; pointer-events: none; }
-.platform-block-tool-primary { color: var(--primary); font-weight: 600; }
-.platform-block-tool:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-.platform-block-palette { display: flex; flex-direction: column; position: absolute; left: 12px; top: 58px; bottom: 12px; width: 280px; max-width: calc(100% - 24px); z-index: 30; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); box-shadow: 0 8px 32px #00000018; }
-.platform-block-palette-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 12px; font-size: 12px; }
-.platform-block-palette-item:hover, .platform-block-palette-item:focus-visible, .platform-block-palette-item[aria-selected="true"] { background: var(--row-selected); outline: none; }
-.platform-block-palette-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border); color: var(--primary); }
-.platform-block-palette-icon svg { width: 15px; height: 15px; }
-/* Entity/relationship diagrams: an icon, a caption and a name; the owner picks icons. */
-.platform-diagram-node { position: relative; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--foreground); text-align: left; box-shadow: 0 2px 5px #00000008; transition: border-color 120ms, box-shadow 120ms; }
-.platform-diagram-node:hover { border-color: color-mix(in oklch, var(--block-color), var(--border) 60%); }
-.platform-diagram-node-selected { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary), transparent 78%); }
-.platform-diagram-node-linking { cursor: crosshair; }
-.platform-diagram-flag { position: absolute; right: 8px; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--tone-info); }
-.platform-diagram-handle { width: 8px; height: 8px; border: 1px solid var(--border); background: var(--surface); opacity: 0; }
-.platform-diagram-node-linking .platform-diagram-handle { opacity: 1; }
-.platform-diagram-handle-active { width: 10px; height: 10px; background: var(--primary); border-color: var(--surface); opacity: 1; }
-.platform-diagram .react-flow__node { border-radius: 10px; }
-.platform-diagram .react-flow__edge.selected .react-flow__edgeupdater { fill: var(--surface); stroke: var(--primary); stroke-width: 1.5px; cursor: grab; }
-.platform-block-edge-label { position: absolute; padding: 2px 5px; border-radius: 4px; background: var(--surface); color: var(--muted); font-size: 10px; pointer-events: none; }
-.platform-block-edge-add { position: absolute; display: flex; align-items: center; justify-content: center; pointer-events: all; width: 20px; height: 20px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--muted); opacity: 0.7; transition: opacity 120ms, border-color 120ms; }
-.platform-block-edge-add:hover { opacity: 1; color: var(--primary); border-color: var(--primary); }
-@media (prefers-reduced-motion: reduce) { .platform-block, .platform-block-port, .platform-block-edge-add { transition: none; } }
+.platform-flow-node:hover { border-color: color-mix(in oklch, var(--block-color), var(--border) 60%); box-shadow: 0 4px 18px #00000012; }
+.platform-flow-node-selected { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary), transparent 78%), 0 4px 18px #00000012; }
+.platform-flow-current { box-shadow: 0 0 0 3px color-mix(in oklch, var(--tone-info), transparent 75%); }
+.platform-flow-node-subprocess { border-bottom: 3px double var(--block-color); }
+.platform-flow-accent { position: absolute; inset: 12px auto 12px 0; width: 3px; border-radius: 0 3px 3px 0; background: var(--block-color); }
+.platform-flow-heading { display: flex; align-items: center; gap: 9px; height: 53px; padding: 10px 10px 0 13px; }
+.platform-flow-glyph { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; color: var(--muted); }
+.platform-flow-glyph svg { width: 13px; height: 13px; }
+.platform-flow-collapse { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; color: var(--muted); border-radius: 4px; flex-shrink: 0; }
+.platform-flow-collapse:hover { background: var(--row-hover); color: var(--foreground); }
+.platform-flow-collapse svg { width: 13px; height: 13px; }
+.platform-flow-port { width: 10px !important; height: 10px !important; border: 2px solid var(--surface) !important; box-shadow: 0 0 0 1px var(--border); transition: box-shadow 120ms, width 120ms, height 120ms; }
+.platform-flow-port::after { content: ""; position: absolute; inset: -8px; }
+.platform-flow-port:hover { width: 13px !important; height: 13px !important; box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary), transparent 70%); }
+.platform-flow-port-data { border-radius: 3px !important; }
+.platform-flow-port-label { position: absolute; display: flex; flex-direction: column; width: 45%; padding: 0 12px; height: 27px; color: var(--muted); font-size: 10px; line-height: 13px; }
+.platform-flow-port-label-input { left: 0; }
+.platform-flow-port-label-output { right: 0; text-align: right; }
+.platform-flow-port-label span, .platform-flow-port-label code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.platform-flow-port-label code { font-family: var(--font-mono); font-size: 8px; opacity: 0.7; }
+.platform-flow-status { position: absolute; inset: auto 10px 4px 13px; display: flex; align-items: center; font-size: 9px; }
+.platform-flow-status span { display: inline-flex; align-items: center; gap: 4px; }
+.platform-flow-status svg { width: 10px; height: 10px; }
+.platform-flow-node-compact { border-radius: 8px; border: 2px solid var(--block-color); }
+.platform-flow-node-compact .platform-flow-heading { height: 54px; padding: 0 10px; }
+/* Events attached to an activity sit on its lower border, as BPMN draws them. */
+.platform-flow-boundary { position: absolute; inset: auto 0 -9px 0; display: flex; justify-content: center; gap: 6px; pointer-events: none; }
+.platform-flow-boundary-event { display: flex; align-items: center; justify-content: center; pointer-events: all; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--block-color); background: var(--surface); color: var(--block-color); }
+.platform-flow-boundary-event svg { width: 9px; height: 9px; }
+/* A compact BPMN shape: the outline is drawn, the name sits underneath it. */
+.platform-flow-shape { position: relative; display: flex; flex-direction: column; align-items: center; background: none; }
+.platform-flow-figure { position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.platform-flow-outline { position: absolute; left: 0; top: 0; overflow: visible; }
+.platform-flow-marker { position: relative; display: flex; align-items: center; justify-content: center; color: var(--block-color); }
+.platform-flow-marker svg { width: 18px; height: 18px; }
+.platform-flow-shape-label { margin-top: 3px; font-size: 10px; line-height: 12px; text-align: center; color: var(--foreground); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-word; }
+.platform-flow-shape-gateway .platform-flow-shape-label { max-width: 104px; }
+.platform-flow-shape-event .platform-flow-shape-label { max-width: 84px; }
+.platform-flow-shape-selected .platform-flow-outline polygon, .platform-flow-shape-selected .platform-flow-outline circle { stroke: var(--primary); }
+.platform-flow-shape.platform-flow-current .platform-flow-outline polygon, .platform-flow-shape.platform-flow-current .platform-flow-outline circle { stroke: var(--tone-info); }
+.platform-flow-palette { display: flex; flex-direction: column; position: absolute; left: 12px; top: 58px; bottom: 12px; width: 280px; max-width: calc(100% - 24px); z-index: 30; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); box-shadow: 0 8px 32px #00000018; }
+.platform-flow-palette-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 12px; font-size: 12px; }
+.platform-flow-palette-item:hover, .platform-flow-palette-item:focus-visible, .platform-flow-palette-item[aria-selected="true"] { background: var(--row-selected); outline: none; }
+.platform-flow-palette-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border); color: var(--primary); }
+.platform-flow-palette-icon svg { width: 15px; height: 15px; }
+.platform-flow-palette-notation { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 20px; height: 28px; color: var(--muted); }
+.platform-flow-palette-notation svg { width: 13px; height: 13px; }
+.platform-flow-edge-add { position: absolute; display: flex; align-items: center; justify-content: center; pointer-events: all; width: 20px; height: 20px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--muted); opacity: 0.7; transition: opacity 120ms, border-color 120ms; }
+.platform-flow-edge-add:hover { opacity: 1; color: var(--primary); border-color: var(--primary); }
+
+/* Relationships: an icon, a caption and a name; the owner picks the icons, or asks
+   for a plain disc when the only question is which neighbour is which. */
+.platform-relation .react-flow__node { border-radius: 10px; }
+.platform-relation .react-flow__edge.selected .react-flow__edgeupdater { fill: var(--surface); stroke: var(--primary); stroke-width: 1.5px; cursor: grab; }
+.platform-relation-node { position: relative; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--foreground); text-align: left; box-shadow: 0 2px 5px #00000008; transition: border-color 120ms, box-shadow 120ms; }
+.platform-relation-node:hover { border-color: color-mix(in oklch, var(--block-color), var(--border) 60%); }
+.platform-relation-node-selected { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary), transparent 78%); }
+.platform-relation-node-linking { cursor: crosshair; }
+.platform-relation-flag { position: absolute; right: 8px; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--tone-info); }
+.platform-relation-handle { width: 8px; height: 8px; border: 1px solid var(--border); background: var(--surface); opacity: 0; }
+.platform-relation-node-linking .platform-relation-handle { opacity: 1; }
+.platform-relation-handle-active { width: 10px; height: 10px; background: var(--primary); border-color: var(--surface); opacity: 1; }
+.platform-relation-badge { position: relative; display: flex; align-items: center; justify-content: center; border: 2px solid; border-radius: 50%; color: var(--primary-foreground); text-align: center; }
+.platform-relation-badge-selected { box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary), transparent 60%); }
+@media (prefers-reduced-motion: reduce) { .platform-flow-node, .platform-flow-port, .platform-flow-edge-add, .platform-relation-node { transition: none; } }
 
 :root {
   --background: oklch(0.99 0 0);

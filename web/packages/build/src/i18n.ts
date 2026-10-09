@@ -1732,6 +1732,7 @@ register("zh-CN", {
   "Complete input value": "完整输入值",
   "Continue": "继续",
   "Error": "错误",
+  "Timeout after {seconds} seconds": "超过 {seconds} 秒后超时",
   "Output": "输出",
   "True": "真",
   "False": "假",
