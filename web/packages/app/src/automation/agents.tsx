@@ -154,7 +154,7 @@ function RunGraph({ run, onStep }: { run: AgentRun; onStep: (i: number) => void 
     : run.stopped ? { label: t("Stopped"), tone: "danger" as const } : { label: t("Done"), tone: "success" as const };
   nodes.push({ id: "end", ...end, notation: run.stopped ? "event-terminate" : "event-end", current: run.state === "running" || run.state === "waiting", detail: run.stopped ?? run.draft?.[0]?.action });
   edges.push({ from: last, to: "end" });
-  return <FlowSteps nodes={nodes} edges={edges} height={200} label={t("Steps")} onOpen={(n) => n.id.startsWith("step-") && onStep(Number(n.id.slice(5)))} />;
+  return <FlowSteps nodes={nodes} edges={edges} height={200} label={t("Steps")} storeKey={`agent-steps:${run.id}`} onOpen={(n) => n.id.startsWith("step-") && onStep(Number(n.id.slice(5)))} />;
 }
 
 const chainTone = (state?: string) => state === "done" || state === "delivered" ? "success" as const
@@ -180,6 +180,7 @@ export function ChainGraph({ of, title = t("Chain") }: { of: string; title?: str
     <div className="grid gap-1">
       <h3 className="text-xs uppercase text-muted">{title}</h3>
       <RelationCanvas layout="layered" nodes={nodes} edges={edges} selected={of} height={200} label={title}
+        storeKey={`chain:${of}`}
         onSelect={(id) => { if (id && !id.startsWith("platform.effect/")) openRecord(id); }} />
     </div>
   );

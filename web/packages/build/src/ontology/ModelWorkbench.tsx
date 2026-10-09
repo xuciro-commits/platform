@@ -151,7 +151,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
         {view === "catalog" && <DataTable data={visible} columns={columns} getRowId={(item) => item.ref.name} height="100%" loading={inventory.isLoading} searchable={false}
           onRowClick={(item) => item.draft && !item.installed ? edit(item) : choose(item)} empty={t("No matching objects.")} />}
         {view === "graph" && <div className="flex h-full min-h-[25rem] flex-col"><p className="mb-2 text-xs text-muted" role="status">{t("Showing {shown} of {total} objects", { shown: graph.nodes.length, total: visible.length })}</p>
-          <RelationCanvas layout="tree-right" nodes={graph.nodes} edges={graph.edges} selected={current} height="100%" label={t("Relationship graph")}
+          <RelationCanvas layout="tree-right" nodes={graph.nodes} edges={graph.edges} selected={current} height="100%" label={t("Relationship graph")} storeKey="model-graph"
             onSelect={(name) => { if (name) { setCurrent(name); select(undefined); } }} onOpen={(name) => { const item = resources.find((item) => item.ref.name === name); if (item) choose(item); }} /></div>}
         {view === "detail" && resource && <div className="grid gap-3">
           <div className="flex items-center gap-3"><Database className="size-6 text-primary" /><div className="min-w-0 flex-1"><h2 className="text-base font-semibold">{resource.title}</h2><p className="font-mono text-xs text-muted">{resource.ref.name}{resource.installed?.entity?.implements?.length ? <> · {t("implements")} {resource.installed.entity.implements.join(", ")}</> : null}{resource.draft?.extends ? <> · {t("extends")} {resource.draft.extends}</> : null}</p></div><Tag label={t(resource.installed ? "Published" : "Draft")} /></div>

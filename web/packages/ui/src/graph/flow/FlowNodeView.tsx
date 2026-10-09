@@ -90,7 +90,7 @@ export function FlowNodeView({ id, data, selected }: NodeProps<FlowShapeNode>) {
     aria-label={compact ? data.label : `${notationTitle(notation)}: ${data.label}`}>
     {!compact && <span className="platform-flow-accent" />}
     <div className="platform-flow-heading">
-      {!compact && <span className="platform-canvas-node-icon" aria-hidden="true" title={notationTitle(notation)}>{flowNodeIcon(kind)}</span>}
+      {!compact && <span className="platform-canvas-node-icon" aria-hidden="true" title={notationTitle(notation)}>{flowNodeIcon({ icon: kind.icon, class: kind.class, notation, id: kind.id })}</span>}
       <div className="min-w-0 flex-1">
         {!compact && <div className="platform-canvas-node-caption">{kind.title}{data.version && <span title={data.version}>{data.version}</span>}</div>}
         <div className="platform-canvas-node-title" title={data.label}>{data.label}</div>

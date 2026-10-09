@@ -63,7 +63,8 @@ export function Canvas({ elements, relationships, pins = [], positions, selected
   ];
   const pos = Object.fromEntries(Object.entries(positions).map(([id, [x, y]]) => [id, { x, y }]));
   return <RelationCanvas viewportKey={viewId} nodes={nodes} edges={edges} positions={pos} selected={selected} editable={admin} linking={linking} height="100%" dropType={STEREOTYPE_DROP}
+    storeKey={admin ? undefined : `uaf:${viewId}`}
     onSelect={onSelect} onLink={onLink} onDrop={(st, at) => onDrop(st, [at.x, at.y])}
     nodeActions={admin ? nodeActions : undefined} edgeActions={admin ? edgeActions : undefined} onReconnect={admin ? onReconnect : undefined}
-    onPositionsChange={(next) => onPositions({ ...positions, ...Object.fromEntries(Object.entries(next).map(([id, p]) => [id, [p.x, p.y] as [number, number]])) })} />;
+    onPositionsChange={admin ? (next) => onPositions({ ...positions, ...Object.fromEntries(Object.entries(next).map(([id, p]) => [id, [p.x, p.y] as [number, number]])) }) : undefined} />;
 }

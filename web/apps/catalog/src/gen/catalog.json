@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:1f61329e2e59ec13",
+  "revision": "sha256:d549238d6bb697dc",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5769,6 +5769,7 @@
         "aggregateQuery",
         "aggregateValues",
         "applyFilters",
+        "arrangeFlow",
         "checkFlowEdges",
         "cn",
         "columnOf",
@@ -5841,6 +5842,7 @@
         "Applications",
         "ApprovalInboxProps",
         "ApprovalInboxRow",
+        "ArrangeOptions",
         "AssetDirectoryItem",
         "AssetDirectoryProps",
         "AttachedFile",

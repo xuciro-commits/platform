@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 
 // jsdom has no ResizeObserver, which React Flow measures the pane with.
@@ -38,4 +38,19 @@ test("a fresh catalog array every render does not loop", () => {
   const loops = errors.mock.calls.flat().filter((m) => String(m).includes("Maximum update depth"));
   errors.mockRestore();
   expect(loops).toEqual([]);
+});
+
+// A reader's own arrangement (ADR-0092): a view-mode canvas seeds its nodes from
+// the store the first time it sees them, and tidying up writes the fresh
+// arrangement back — the store, not the owner, is what remembers it.
+test("the stored arrangement seeds a view and tidying writes it back", () => {
+  localStorage.setItem("canvas:test-map", JSON.stringify({ a: { x: 999, y: 888 } }));
+  const { container } = render(<FlowCanvas catalog={catalog()} nodes={nodes} edges={edges} height={240} mode="view" label="Steps" storeKey="test-map" />);
+  const alpha = container.querySelector('.react-flow__node[data-id="a"]') as HTMLElement | null;
+  expect(alpha?.style.transform ?? "").toContain("999");
+  fireEvent.click(within(container).getByLabelText("Tidy up workflow"));
+  const stored = JSON.parse(localStorage.getItem("canvas:test-map") ?? "{}") as Record<string, { x: number }>;
+  expect(Object.keys(stored).sort()).toEqual(["a", "b"]);
+  expect(stored.a!.x).not.toBe(999); // the fresh arrangement replaced the reader's old one
+  localStorage.removeItem("canvas:test-map");
 });

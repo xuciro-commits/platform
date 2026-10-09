@@ -8,13 +8,15 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { CanvasActionBar, CanvasActionButton, CanvasEmpty, CanvasHelp, CanvasHelpTool, CanvasTool, CanvasToolbar, CanvasToolDivider } from "../core/chrome";
 import { CanvasFurniture, CanvasFrame, CanvasRefit, fitting } from "../core/frame";
-import { laneBands, layeredLayout, type LaneAssignment } from "../core/layered";
+import { laneBands, type LaneAssignment } from "../core/layered";
+import { readCanvasPositions, writeCanvasPositions } from "../core/store";
 import type { CanvasBox, CanvasDirection, CanvasPosition } from "../core/types";
+import { arrangeFlow } from "./arrange";
 import { FlowEdgeView, FlowEdgeInteraction, type FlowLineEdge } from "./FlowEdgeView";
 import { FlowInteraction, FlowNodeView, type FlowShapeNode } from "./FlowNodeView";
 import { FlowLaneView, type FlowLaneShapeNode } from "./FlowLaneView";
 import { FlowPalette } from "./FlowPalette";
-import { FLOW_NODE_DROP, flowBlockHeight, flowNodeBox, flowNodeHeight, flowNodeWidth, flowPlacement, validateFlowConnection,
+import { FLOW_NODE_DROP, flowBlockHeight, flowNodeBox, flowNodeWidth, flowPlacement, validateFlowConnection,
   type FlowAddContext, type FlowCatalog, type FlowConnectionIssue, type FlowEdge, type FlowHistory, type FlowLane, type FlowNode, type FlowNodeKind } from "./model";
 
 export type FlowCanvasProps = {
@@ -36,6 +38,10 @@ export type FlowCanvasProps = {
   lanes?: FlowLane[];
   onLaneChange?: (id: string, lane: string) => void;
   history?: FlowHistory;
+  /** The reader's own arrangement is kept on this device for this drawing
+   * (ADR-0092): nodes become draggable even in view mode, and the arrangement
+   * survives a reload until the reader tidies it up again. */
+  storeKey?: string;
 };
 
 /** A step node, or the lane band behind it. */
@@ -53,7 +59,7 @@ const center = (element: HTMLElement | null) => {
 };
 const editableTarget = (target: EventTarget | null) => target instanceof HTMLElement && !!target.closest("input,textarea,select,[contenteditable=true]");
 
-function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onConnect, onDisconnect, onAdd, onInsert, onPositionsChange, onLayout, onDelete, onDuplicate, canConnect, lanes, onLaneChange, history, label, height = 320, mode, direction: initialDirection = "right", children }: FlowCanvasProps) {
+function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onConnect, onDisconnect, onAdd, onInsert, onPositionsChange, onLayout, onDelete, onDuplicate, canConnect, lanes, onLaneChange, history, storeKey, label, height = 320, mode, direction: initialDirection = "right", children }: FlowCanvasProps) {
   // The reader may re-flow the same graph the other way; the owner's direction is the starting point.
   const [direction, setDirection] = useState<CanvasDirection>(initialDirection);
   useEffect(() => { setDirection(initialDirection); }, [initialDirection]);
@@ -62,6 +68,10 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   const { screenToFlowPosition, fitView, getViewport, setCenter } = useReactFlow<FlowCanvasNode, FlowLineEdge>();
   const localPositions = useRef<Record<string, CanvasPosition>>({});
   const externalPositions = useRef<Record<string, CanvasPosition>>({});
+  // The reader's stored arrangement: read once per key, applied the first time
+  // each step is seen, and always yielded to a position the owner sends later.
+  const storedKey = useRef<string | undefined>(undefined);
+  const stored = useRef<Record<string, CanvasPosition> | undefined>(undefined);
   const externalSelection = useRef<string | undefined>(undefined);
   const copied = useRef<{ nodes: FlowNode[]; edges: FlowEdge[] } | undefined>(undefined);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -106,11 +116,20 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   };
 
   useEffect(() => {
+    if (storedKey.current !== storeKey) {
+      storedKey.current = storeKey;
+      stored.current = storeKey ? readCanvasPositions(storeKey) : undefined;
+      localPositions.current = {};
+      externalPositions.current = {};
+    }
     const ids = new Set(nodes.map((node) => node.id));
     for (const id of Object.keys(localPositions.current)) if (!ids.has(id)) delete localPositions.current[id];
     for (const node of nodes) {
       const previous = externalPositions.current[node.id];
       if (previous && (previous.x !== node.position.x || previous.y !== node.position.y)) delete localPositions.current[node.id];
+      // The reader's stored arrangement applies to a step the first time it is
+      // seen; the moment the owner sends a position of their own, the owner wins.
+      if (!previous && stored.current?.[node.id] && !localPositions.current[node.id]) localPositions.current[node.id] = stored.current[node.id]!;
       externalPositions.current[node.id] = node.position;
     }
     setFlowNodes((previous) => {
@@ -123,13 +142,13 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
         ariaRole: onSelect || onOpen ? "button" as const : "group" as const,
         ariaLabel: node.label,
         selected: selected !== undefined && selectionChanged && !multiple ? node.id === selected : old.get(node.id)?.selected,
-        measured: old.get(node.id)?.measured, draggable: editable, deletable: false,
+        measured: old.get(node.id)?.measured, draggable: editable || !!storeKey, deletable: false,
         data: { ...node, definition: catalog.find((kind) => kind.id === node.kind) ?? missingKind(node.kind), direction, editable,
           collapsedView: folded(node) },
       }));
       return withLanes(steps);
     });
-  }, [catalog, nodes, selected, editable, collapsed, direction, setFlowNodes, onSelect, onOpen]);
+  }, [catalog, nodes, selected, editable, collapsed, direction, setFlowNodes, onSelect, onOpen, storeKey]);
 
   useEffect(() => {
     setFlowEdges((previous) => edges.map((edge) => ({
@@ -169,10 +188,10 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   };
   const addContext = (): FlowAddContext => ({ position: screenToFlowPosition(center(container.current)) });
   const arrange = (flow: CanvasDirection = direction) => {
-    const compact = nodes.length > 0 && nodes.every((node) => node.compact);
-    const positions = Object.fromEntries(layeredLayout(nodes, edges.map((edge) => ({ from: edge.source, to: edge.target })), flow,
-      { width: compact ? 160 : flowNodeWidth, height: compact ? 58 : Math.max(58, ...catalog.map((kind) => flowNodeHeight(kind))), gapX: 80, gapY: 36 }, boxOf, assignment()));
+    const positions = arrangeFlow(nodes, edges, flow, catalog, { lanes: assignment(), box: boxOf,
+      compact: nodes.length > 0 && nodes.every((node) => node.compact) });
     localPositions.current = positions;
+    if (storeKey) writeCanvasPositions(storeKey, positions);
     setFlowNodes((current) => withLanes(current.map((node) => node.type === "lane" ? node : { ...node, position: positions[node.id]! })));
     if (editable) (onLayout ?? onPositionsChange)?.(positions);
     setRefit((value) => value + 1);
@@ -227,7 +246,11 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
     const moved = flowNodes.filter((node) => node.type !== "lane" &&
       (node.position.x !== dragStarted.current[node.id]?.x || node.position.y !== dragStarted.current[node.id]?.y));
     const positions = Object.fromEntries(moved.map((node) => [node.id, node.position]));
-    if (Object.keys(positions).length) { Object.assign(localPositions.current, positions); onPositionsChange?.(positions); }
+    if (Object.keys(positions).length) {
+      Object.assign(localPositions.current, positions);
+      if (storeKey) writeCanvasPositions(storeKey, localPositions.current);
+      onPositionsChange?.(positions);
+    }
     for (const node of moved) { const lane = laneUnder(node.id, node.position); if (lane && lane !== laneOf(node.id)) onLaneChange?.(node.id, lane); }
   };
   const removeCount = selectedNodes().length;
@@ -294,7 +317,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
             onPaneClick={() => { container.current?.focus(); setPalette(undefined); setPickedEdge(undefined); setConnectionIssue(undefined); }}
             onPaneContextMenu={(event) => { if (editable && onAdd) { event.preventDefault(); setPalette({ position: screenToFlowPosition({ x: event.clientX, y: event.clientY }) }); } }}
             onNodeDragStart={() => { dragStarted.current = Object.fromEntries(flowNodes.map((node) => [node.id, node.position])); }} onNodeDragStop={commitPositions}>
-            <CanvasRefit signature={editable ? String(refit) : flowNodes.map((node) => `${node.id}:${node.position.x}:${node.position.y}`).join("|")} />
+            <CanvasRefit signature={editable ? String(refit) : `${String(refit)}|${nodes.map((node) => `${node.id}:${node.position.x}:${node.position.y}`).join("|")}`} />
             <CanvasFurniture />
           </ReactFlow>
         </FlowEdgeInteraction.Provider>

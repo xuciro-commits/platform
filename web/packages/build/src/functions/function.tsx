@@ -185,6 +185,7 @@ function FunctionMap({ draft, source, chosen, onChoose }: { draft: FunctionDraft
   ];
   return <Card className="min-w-0 p-3">
     <FlowCanvas label={t("Function map")} catalog={catalog} nodes={nodes} selected={chosen} onSelect={(id) => onChoose(id as Stage)} height={460}
+      storeKey={`function-map:${draft.id || "new"}`}
       edges={[{ id: "input", source: "source", sourcePort: "record", target: "model", targetPort: "record" }, { id: "answer", source: "model", sourcePort: "answer", target: "output", targetPort: "answer" }]} />
     <p className="mt-2 text-xs text-muted">{t("The function returns a suggestion. Human review and business actions remain separate.")}</p>
   </Card>;

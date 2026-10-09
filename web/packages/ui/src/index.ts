@@ -57,6 +57,7 @@ export type { ColumnDef } from "@tanstack/react-table";
 export { type CanvasAction, type CanvasBox, type CanvasDirection, type CanvasPosition } from "./graph/core/types";
 export { laneBands, layeredLayout, type GraphSize, type LaneAssignment, type LaneBand } from "./graph/core/layered";
 export { FlowCanvas, type FlowCanvasNode, type FlowCanvasProps } from "./graph/flow/FlowCanvas";
+export { arrangeFlow, type ArrangeOptions } from "./graph/flow/arrange";
 export { FlowSteps, type FlowStepNode, type FlowStepEdge } from "./graph/flow/FlowSteps";
 export { FlowGraph, FlowRun, FlowReleaseBinding, flowStates, type FlowDefinition, type FlowInstanceData, type FlowToken, type FlowTrace } from "./graph/flow/FlowProcess";
 export { FLOW_NODE_DROP, checkFlowEdges, flowBlockHeight, flowNodeBox, flowNodeHeight, flowNodeWidth, flowPlacement, flowPortAccepts, flowPortFits, flowShapeBox, validateFlowConnection,

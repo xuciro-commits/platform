@@ -232,7 +232,7 @@ function RoutingFlow({ routing, master, sfc, label }: { routing?: Routing; maste
     tone: sfc?.state === "done" ? "success" : sfc?.state === "scrapped" ? "danger" : undefined });
   const edges: FlowStepEdge[] = operations.map((o, i) => ({ from: String(o.number), to: i + 1 < operations.length ? String(operations[i + 1]!.number) : "end" }));
   if (sfc?.state === "scrapped") edges.push({ from: String(sfc.operation), to: "end", tone: "danger", dashed: true });
-  return <FlowSteps nodes={nodes} edges={edges} lanes={lanes} height={Math.max(220, lanes.length * 92)} label={label} />;
+  return <FlowSteps nodes={nodes} edges={edges} lanes={lanes} height={Math.max(220, lanes.length * 92)} label={label} storeKey={`mes-routing:${routing?.id ?? sfc?.id ?? "routing"}`} />;
 }
 
 function SFCDetail({ id }: { id: string }) {

@@ -10,6 +10,7 @@ import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { CanvasActionBar, CanvasActionButton, CanvasEmpty, CanvasHelp, CanvasHelpTool, CanvasTool, CanvasToolbar } from "../core/chrome";
 import { CanvasFurniture, CanvasFrame, CanvasRefit, fitting } from "../core/frame";
+import { readCanvasPositions, writeCanvasPositions } from "../core/store";
 import type { CanvasAction, CanvasPosition } from "../core/types";
 import { relationLayout } from "./layouts";
 import { relationLayouts, relationNodeSize, type RelationEdge, type RelationLayout, type RelationNode } from "./model";
@@ -32,6 +33,10 @@ export type RelationCanvasProps = {
   onPositionsChange?: (positions: Record<string, CanvasPosition>) => void;
   onLink?: (source: string, target: string) => void;
   onDrop?: (payload: string, at: CanvasPosition) => void;
+  /** The reader's own arrangement is kept on this device for this drawing
+   * (ADR-0092): even a read-only view may be dragged, and the arrangement
+   * survives a reload until the reader chooses a layout again. */
+  storeKey?: string;
 };
 
 const layoutMeta: Record<RelationLayout, { icon: ReactNode; title: string }> = {
@@ -40,7 +45,7 @@ const layoutMeta: Record<RelationLayout, { icon: ReactNode; title: string }> = {
   force: { icon: <Waves />, title: "Balance by distance" },
 };
 
-function RelationCanvasContent({ nodes, edges, positions, selected, editable = false, linking = false, label, height = 480, layout: initial = "tree-down", dropType, children, onSelect, onOpen, onPositionsChange, onLink, onDrop, nodeActions, edgeActions, onReconnect, viewportKey }: RelationCanvasProps) {
+function RelationCanvasContent({ nodes, edges, positions, selected, editable = false, linking = false, label, height = 480, layout: initial = "tree-down", dropType, children, onSelect, onOpen, onPositionsChange, onLink, onDrop, nodeActions, edgeActions, onReconnect, viewportKey, storeKey }: RelationCanvasProps) {
   const { screenToFlowPosition, fitView } = useReactFlow<RelationShapeNode, RelationLineEdge>();
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<RelationShapeNode>([]);
   const [layout, setLayout] = useState<RelationLayout>(initial);
@@ -54,15 +59,24 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
   // A view that keeps no positions of its own is arranged here; the reader's own
   // arranging stays local until the owner asks for it through onPositionsChange.
   const arranged = useMemo(() => relationLayout(layout, nodes, relations), [layout, nodes, relations]);
-  const owned = positions ?? arranged;
+  // The reader's stored arrangement joins whatever the owner or the layout gives:
+  // it wins over both until the reader chooses a layout again (ADR-0092).
+  const [stored, setStored] = useState<Record<string, CanvasPosition>>(() => (storeKey ? readCanvasPositions(storeKey) : undefined) ?? {});
+  useEffect(() => { setStored((storeKey ? readCanvasPositions(storeKey) : undefined) ?? {}); }, [storeKey]);
+  const owned = useMemo(() => (storeKey ? { ...(positions ?? arranged), ...stored } : positions ?? arranged), [positions, arranged, stored, storeKey]);
+  const persist = (next: Record<string, CanvasPosition>) => {
+    if (!storeKey) return;
+    setStored(next);
+    writeCanvasPositions(storeKey, next);
+  };
 
   useEffect(() => {
     setFlowNodes((previous) => nodes.map((n) => {
       const old = previous.find((p) => p.id === n.id);
-      return { id: n.id, type: "entity", position: owned[n.id] ?? old?.position ?? { x: 0, y: 0 }, selected: n.id === selected, draggable: editable && !linking, measured: old?.measured,
+      return { id: n.id, type: "entity", position: owned[n.id] ?? old?.position ?? { x: 0, y: 0 }, selected: n.id === selected, draggable: (editable || !!storeKey) && !linking, measured: old?.measured,
         connectable: editable && (linking || canReconnect) && n.linkable !== false, data: { ...n, linking, acceptsConnections: editable && (linking || canReconnect) } };
     }));
-  }, [nodes, owned, selected, editable, linking, setFlowNodes, canReconnect]);
+  }, [nodes, owned, selected, editable, linking, setFlowNodes, canReconnect, storeKey]);
 
   const flowEdges = useMemo<RelationLineEdge[]>(() => {
     const byId = new Map(flowNodes.map((n) => [n.id, n]));
@@ -91,26 +105,31 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
   const arrange = (kind: RelationLayout) => {
     setLayout(kind); setMenu(false);
     const next = relationLayout(kind, nodes, relations);
+    persist(next); // choosing a layout is the reader resetting their own arrangement
     setFlowNodes((current) => current.map((n) => ({ ...n, position: next[n.id] ?? n.position })));
     onPositionsChange?.(next);
     setTimeout(() => void fitView({ ...fitting, duration: 220 }), 30);
   };
   const chosen = nodes.find((n) => n.id === selected);
-  return <CanvasFrame label={label} height={height} role={editable ? "region" : "figure"}>
+  return <CanvasFrame label={label} height={height} role={editable || storeKey ? "region" : "figure"}>
     <div className="platform-canvas platform-relation h-full outline-none" aria-label={label}
       onDragOver={(e) => { if (editable && dropType && e.dataTransfer.types.includes(dropType)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
       onDrop={(e) => { if (!editable || !dropType || !onDrop) return; const payload = e.dataTransfer.getData(dropType); if (!payload) return; e.preventDefault();
         const at = screenToFlowPosition({ x: e.clientX, y: e.clientY }); onDrop(payload, { x: at.x - relationNodeSize.width / 2, y: at.y - relationNodeSize.height / 2 }); }}>
       <ReactFlow<RelationShapeNode, RelationLineEdge> nodes={flowNodes} edges={flowEdges} nodeTypes={relationNodeTypes} edgeTypes={relationEdgeTypes} onNodesChange={onNodesChange}
         colorMode="system" minZoom={0.1} maxZoom={2.5} fitView fitViewOptions={fitting} zoomOnScroll panOnScroll={false} zoomOnPinch panOnDrag preventScrolling
-        nodesDraggable={editable && !linking} nodesConnectable={linking} connectionMode={ConnectionMode.Loose} deleteKeyCode={null} connectionRadius={40}
+        nodesDraggable={(editable || !!storeKey) && !linking} nodesConnectable={linking} connectionMode={ConnectionMode.Loose} deleteKeyCode={null} connectionRadius={40}
         isValidConnection={(c) => c.source !== c.target && nodes.some((n) => n.id === c.source && n.linkable !== false) && nodes.some((n) => n.id === c.target && n.linkable !== false)}
         onConnect={(c) => { if (c.source && c.target && c.source !== c.target) onLink?.(c.source, c.target); }}
         onNodeClick={(_, n) => { setPickedEdge(undefined); onSelect?.(n.id); }} onNodeDoubleClick={(_, n) => onOpen?.(n.id)} onPaneClick={() => { onSelect?.(undefined); setPickedEdge(undefined); setExpanded(undefined); }}
         onEdgeClick={(_, e) => { setPickedEdge(e.id); setExpanded(undefined); onSelect?.(undefined); }}
         edgesFocusable={editable && !!edgeActions}
         onReconnect={onReconnect ? (old, c) => { if (c.source && c.target && c.source !== c.target && (c.source !== old.source || c.target !== old.target)) onReconnect(old.id, c.source, c.target); } : undefined}
-        onNodeDragStop={(_, __, dragged) => onPositionsChange?.(Object.fromEntries(dragged.map((n) => [n.id, { x: Math.round(n.position.x), y: Math.round(n.position.y) }])))}>
+        onNodeDragStop={(_, __, dragged) => {
+          const changed = Object.fromEntries(dragged.map((n) => [n.id, { x: Math.round(n.position.x), y: Math.round(n.position.y) }]));
+          if (storeKey) persist({ ...owned, ...changed });
+          onPositionsChange?.(changed);
+        }}>
         <CanvasRefit signature={fitKey} ready={synchronized} once />
         <CanvasFurniture />
         {nodes.length > 12 && <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor="var(--border)" maskColor="color-mix(in oklch, var(--background), transparent 40%)" style={{ width: 140, height: 90 }} />}

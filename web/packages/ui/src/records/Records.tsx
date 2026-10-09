@@ -714,7 +714,7 @@ function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
   nodes.push({ id: "outcome", label: ended ? outcomes[a.state] ?? a.state : t("Outcome"), detail: a.outcome || undefined, notation: "event-end",
     tone: a.state === "approved" ? "success" : a.state === "rejected" || a.state === "refused" ? "danger" : a.state === "withdrawn" ? "neutral" : undefined });
   edges.push({ from: previous, to: "outcome", dashed: !ended });
-  return <FlowSteps nodes={nodes} edges={edges} height={150} label={t("Approvals")} />;
+  return <FlowSteps nodes={nodes} edges={edges} height={150} label={t("Approvals")} storeKey={`approvals:${a.id}`} />;
 }
 
 /** The processes about a record: each flow, its state, and the steps it stands at. */

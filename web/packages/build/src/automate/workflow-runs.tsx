@@ -1,5 +1,5 @@
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, DataTable, Disclosure, FlowReleaseBinding, FlowCanvas, StatusTag, flowBlockHeight, flowNodeWidth, flowStates, layeredLayout, loops, notationOf, t, type FlowNodeStatus, type FlowNode, type ColumnDef, type FlowDefinition, type FlowInstanceData, type FlowCatalog } from "@platform/ui";
+import { Button, DataTable, Disclosure, FlowReleaseBinding, FlowCanvas, StatusTag, arrangeFlow, flowStates, loops, notationOf, t, type FlowNodeStatus, type FlowNode, type ColumnDef, type FlowDefinition, type FlowInstanceData, type FlowCatalog } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
 import { controlEdges, workflowKindTitle, workflowStepClass, type WorkflowDraft } from "./workflow-model";
 
@@ -30,13 +30,15 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
   const catalog: FlowCatalog = sourceSteps.map((item) => ({ id: item.name, title: workflowKindTitle(item.kind), class: workflowStepClass(item.kind), inputs: [{ id: "in", label: t("In"), type: "flow" }],
     outputs: snapshot ? controlEdges(snapshot).filter((edge) => edge.source === item.name).map((edge) => ({ id: edge.sourcePort, label: edge.label ?? t("Next"), type: "flow" })) : [{ id: "next", label: t("Next"), type: "flow" }] }));
   const edges = snapshot ? controlEdges(snapshot) : nativeSteps.flatMap((item) => item.next.map((next, i) => ({ id: `${item.name}:${i}`, source: item.name, sourcePort: "next", target: next, targetPort: "in" })));
-  const positions = layeredLayout(sourceSteps.map((step) => ({ id: step.name })), edges.map((edge) => ({ from: edge.source, to: edge.target })), "right", { width: flowNodeWidth, height: Math.max(120, ...catalog.map((kind) => flowBlockHeight(kind))), gapX: 70, gapY: 32 });
+  // The canvas's own arrangement decides where a step sits when the snapshot
+  // holds no layout of its own (ADR-0092): one layout brain, declared sizes included.
+  const positions = arrangeFlow(sourceSteps.map((item) => ({ id: item.name, kind: item.name, label: item.title || item.name, position: { x: 0, y: 0 } })), edges, "right", catalog);
   const nodes: FlowNode[] = sourceSteps.map((item) => {
     const token = shown?.tokens?.find((token) => token.step === item.name);
     const visited = shown?.trace?.some((line) => line.step === item.name) || !!shown?.outputs && Object.hasOwn(shown.outputs, item.name);
     const status: FlowNodeStatus = token?.error || token?.waits === "stuck" ? "error" : token ? "waiting" : visited ? "success" : "idle";
     return { id: item.name, kind: item.name, notation: notationOf(item.kind), loop: loops.has(item.kind), label: item.title || item.name, detail: token?.waits ?? item.kind, status, current: !!token,
-      position: snapshot?.layout?.[item.name] ?? positions.get(item.name) ?? { x: 0, y: 0 }, diagnostics: token?.error ? [{ message: token.error, severity: "error" }] : undefined };
+      position: snapshot?.layout?.[item.name] ?? positions[item.name] ?? { x: 0, y: 0 }, diagnostics: token?.error ? [{ message: token.error, severity: "error" }] : undefined };
   });
   const inspect = (name: string) => { setStep(name); onStepSelect(name); };
   const columns: ColumnDef<WorkflowRun, any>[] = [
@@ -69,7 +71,7 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
       <FlowReleaseBinding dependencies={shown.dependencies} release={shown.release} />
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
       {shown.withheld ? <p className="text-xs text-muted">{t("Run data is withheld by the current source permissions.")}</p> : <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <FlowCanvas mode="view" label={t("Execution map")} catalog={catalog} nodes={nodes} edges={edges} height={300} selected={step} onSelect={inspect} />
+        <FlowCanvas mode="view" label={t("Execution map")} catalog={catalog} nodes={nodes} edges={edges} height={300} selected={step} onSelect={inspect} storeKey={`workflow-runs:${name}`} />
         <div className="grid content-start gap-2 rounded-lg border border-border p-3"><h4 className="text-xs font-medium">{step ? t("Accepted output: {step}", { step }) : t("Workflow input")}</h4>
           <pre className="max-h-52 overflow-auto rounded bg-background p-2 text-[10px]">{step ? output === undefined ? t("No accepted output for this step yet.") : JSON.stringify(output, null, 2) : shown.data || "{}"}</pre>
           {token && <><h4 className="text-xs font-medium">{t("Current token")}</h4><pre className="max-h-40 overflow-auto rounded bg-background p-2 text-[10px]">{JSON.stringify(token, null, 2)}</pre></>}

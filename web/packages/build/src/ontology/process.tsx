@@ -11,7 +11,7 @@ import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../edit
 // everything again when the object is published.
 import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost } from "@platform/app";
 import {
-  Button, Card, Checkbox, Input, FlowCanvas, Panel, PanelSection, ProblemList, Select, StatusBar, StructureRow, Textarea, Workbench, flowBlockHeight, flowNodeWidth, cn, layeredLayout, notify, t, type WorkbenchProblem,
+  Button, Card, Checkbox, Input, FlowCanvas, Panel, PanelSection, ProblemList, Select, StatusBar, StructureRow, Textarea, Workbench, arrangeFlow, cn, notify, t, type WorkbenchProblem,
   type FlowEdge, type FlowNode, type FlowCatalog,
 } from "@platform/ui";
 import { Boxes, Link2, Plus, Shield, Tags, Trash2, Zap } from "lucide-react";
@@ -128,7 +128,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
         <span className="text-[11px] text-muted">{t("{inputs} parameters · {rules} rules · {conditions} criteria", { inputs: a.inputs?.length ?? 0, rules: (a.sets?.length ?? 0) + (a.creates?.length ?? 0), conditions: a.conditions?.length ?? 0 })}</span>
       </Button>)}</div>
     </div>,
-    lifecycle: <div className="min-h-0 flex-1 overflow-auto p-3"><ProcessGraph key={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} /></div>,
+    lifecycle: <div className="min-h-0 flex-1 overflow-auto p-3"><ProcessGraph key={id} objectId={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} /></div>,
     permissions: <div className="grid content-start gap-3 p-4">
       <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Who may do what")}</h2><Button size="sm" onClick={addAccess}><Plus />{t("Add a role")}</Button></div>
       <table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted"><th className="px-2 py-1 font-medium">{t("Role")}</th><th className="px-2 py-1 font-medium">{t("Read")}</th><th className="px-2 py-1 font-medium">{t("Create")}</th><th className="px-2 py-1 font-medium">{t("Edit")}</th><th className="px-2 py-1 font-medium">{t("Archive")}</th></tr></thead>
@@ -160,7 +160,8 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
 }
 
 /** The lifecycle is the semantic source. Canvas edges only edit its From/To declarations. */
-function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAction }: {
+function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddState, onAddAction }: {
+  objectId: string;
   process: Process; chosen: Chosen; onChoose: (c: Chosen) => void; onChange: (p: Process) => void;
   onAddState: () => void; onAddAction: () => void;
 }) {
@@ -173,27 +174,25 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
       outputs: [{ id: "to", label: t("Leaves it in"), type: "action-result", limit: 1 }] },
   ];
   const normal=catalog[1]!;const graphCatalog:FlowCatalog=[...catalog,{...normal,id:"action-input",addable:false,outputs:normal.outputs.map(p=>({...p,limit:undefined}))}];
-  const links = process.actions.flatMap((a) => [
-    ...a.from.map((s) => ({ from: `state:${s}`, to: `action:${a.name}` })),
-    ...actionResultEdges(a).map(to=>({from:`action:${a.name}`,to:`state:${to}`})),
-  ]);
-  const places = layeredLayout([
-    ...process.states.map((s) => ({ id: `state:${s.name}`, label: s.title })),
-    ...process.actions.map((a) => ({ id: `action:${a.name}`, label: a.title })),
-  ], links, "right", { width: flowNodeWidth, height: Math.max(...catalog.map((kind) => flowBlockHeight(kind))), gapX: 40, gapY: 30 });
-  const nodes: FlowNode[] = [
-    ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, detail: s.name, position: places.get(`state:${s.name}`) ?? { x: 0, y: 0 } })),
-    ...process.actions.map((a) => ({ id: `action:${a.name}`, kind:a.toInput?"action-input":"action", label: a.title || a.name, detail: a.name, position: places.get(`action:${a.name}`) ?? { x: 0, y: 0 } })),
-  ];
   const edges: FlowEdge[] = process.actions.flatMap((a) => [
     ...a.from.map((s) => ({ id: `from:${a.name}:${s}`, source: `state:${s}`, sourcePort: "take", target: `action:${a.name}`, targetPort: "from" })),
     ...actionResultEdges(a).map(to=>({id:`to:${a.name}:${to}`,source:`action:${a.name}`,sourcePort:"to",target:`state:${to}`,targetPort:"result",dashed:!!a.toInput,label:a.toInput})),
   ]);
+  // One layout brain decides where a state or an action sits (ADR-0092): the
+  // same arrangement the canvas's own tidy-up would choose, sizes included.
+  const places = arrangeFlow([
+    ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, position: { x: 0, y: 0 } })),
+    ...process.actions.map((a) => ({ id: `action:${a.name}`, kind: a.toInput ? "action-input" : "action", label: a.title || a.name, position: { x: 0, y: 0 } })),
+  ], edges, "right", graphCatalog);
+  const nodes: FlowNode[] = [
+    ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, detail: s.name, position: places[`state:${s.name}`] ?? { x: 0, y: 0 } })),
+    ...process.actions.map((a) => ({ id: `action:${a.name}`, kind:a.toInput?"action-input":"action", label: a.title || a.name, detail: a.name, position: places[`action:${a.name}`] ?? { x: 0, y: 0 } })),
+  ];
   const selected = chosen?.kind === "state" ? `state:${process.states[chosen.at]?.name}` : chosen?.kind === "action" ? `action:${process.actions[chosen.at]?.name}` : undefined;
   return <div className="mb-4 grid gap-2">
     <div><h3 className="text-sm font-semibold">{t("Process map")}</h3>
       <p className="text-xs text-muted">{t("Connect a state to an action to allow it; connect an action to a state for its result. Select a node to edit it. Delete a selected line to remove it.")}</p></div>
-    <FlowCanvas label={t("Process map")} catalog={graphCatalog} nodes={nodes} edges={edges} selected={selected}
+    <FlowCanvas label={t("Process map")} catalog={graphCatalog} nodes={nodes} edges={edges} selected={selected} storeKey={`process:${objectId}`}
       onAdd={(kind) => { if (kind === "state") onAddState(); else if (process.states.length) onAddAction(); }}
       onSelect={(id) => {
         const [kind, name] = id.split(":");

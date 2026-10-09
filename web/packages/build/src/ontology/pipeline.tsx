@@ -187,7 +187,7 @@ export function PipelineEditor({ id }: { id: string }) {
       <Panel title={t("Steps")} className="grid min-w-0 content-start gap-2 lg:col-span-2"
         description={t("Drag a step from the library onto the line, or insert one on the arrow where it belongs. Choose a step to edit its fields below.")}>
         <FlowCanvas catalog={stepCatalog()} nodes={stepNodes} edges={stepEdges} selected={picked} onSelect={setPicked}
-          mode={busy ? "view" : "edit"} direction="right" height={280} label={t("Steps")}
+          mode={busy ? "view" : "edit"} direction="right" height={280} label={t("Steps")} storeKey={`pipeline:${id}`}
           onAdd={(kind) => { setSteps([...draft.steps, { kind }]); setPicked(`s${draft.steps.length}`); }}
           onInsert={(edge, kind) => { const at = edge.source === "in" ? 0 : Number(edge.source.slice(1)) + 1; setSteps([...draft.steps.slice(0, at), { kind }, ...draft.steps.slice(at)]); setPicked(`s${at}`); }}
           onDelete={(gone) => { const drop = gone.map((n) => Number(n.id.slice(1))).filter((i) => !Number.isNaN(i)).sort((a, b) => b - a); if (drop.length) { setSteps(draft.steps.filter((_, j) => !drop.includes(j))); setPicked(undefined); } }} />

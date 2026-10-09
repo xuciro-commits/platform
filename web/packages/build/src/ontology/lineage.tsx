@@ -140,7 +140,7 @@ export function ObjectLineage({ object, fields }: { object: string; fields: { na
   return <div className="grid gap-3">
     <Panel title={t("Data lineage")} className="grid gap-3" description={t("Declared, not observed: these are the sources and pipelines configured to write this object's records, and the writebacks configured to send its actions out. A dataset's version and a writeback's delivered count are the run evidence kept beside the declaration.")}>
       <RelationCanvas layout="tree-right" nodes={graph.nodes} edges={graph.edges} selected={picked} onSelect={setPicked}
-        onOpen={(id) => { const route = graph.routes[id]; if (route) open(route); }} height={360} label={t("Data lineage")} />
+        onOpen={(id) => { const route = graph.routes[id]; if (route) open(route); }} height={360} label={t("Data lineage")} storeKey={`lineage:object:${object}`} />
     </Panel>
     <Panel title={t("Field by field")}>
       <DataTable data={fields} getRowId={(f) => f.name} searchable={false} height={Math.min(360, 40 + fields.length * 28)} columns={[
@@ -160,7 +160,7 @@ export function DatasetLineage({ dataset }: { dataset: string }) {
     description={t("Declared, not observed: what is configured to load this dataset and what is configured to read it.")}>
     {graph.nodes.length > 1
       ? <RelationCanvas layout="tree-right" nodes={graph.nodes} edges={graph.edges} selected={picked} onSelect={setPicked}
-          onOpen={(id) => { const route = graph.routes[id]; if (route) open(route); }} height={320} label={t("Lineage")} />
+          onOpen={(id) => { const route = graph.routes[id]; if (route) open(route); }} height={320} label={t("Lineage")} storeKey={`lineage:dataset:${dataset}`} />
       : <p className="text-muted">{t("Nothing yet.")}</p>}
   </Panel>;
 }
