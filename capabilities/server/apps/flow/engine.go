@@ -206,6 +206,15 @@ func (f *Flows) decide(c platform.Caller, schema, id, key string, now time.Time,
 
 // step changes instance id as change says, then moves it on, as one decision.
 func (f *Flows) step(c platform.Caller, id string, now time.Time, change func(*session, *FlowInstance)) *kernel.Error {
+	return f.update(c, id, now, func(ss *session, in *FlowInstance) *kernel.Error {
+		change(ss, in)
+		return nil
+	})
+}
+
+// update keeps fallible frame changes inside the original ledger decision.
+// A refused change cannot advance tokens or publish partial instance images.
+func (f *Flows) update(c platform.Caller, id string, now time.Time, change func(*session, *FlowInstance) *kernel.Error) *kernel.Error {
 	x, ok := platform.Get[FlowInstance](c, id)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -215,7 +224,9 @@ func (f *Flows) step(c platform.Caller, id string, now time.Time, change func(*s
 	}
 	_, err := f.decide(c, SchemaFlowStep, id, fmt.Sprintf("%s:%d", id, x.Revision+1), now, func(ss *session) *kernel.Error {
 		in := ss.load(id)
-		change(ss, in)
+		if err := change(ss, in); err != nil {
+			return err
+		}
 		ss.advance(in)
 		return nil
 	})

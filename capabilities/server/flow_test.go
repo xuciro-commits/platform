@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -12,8 +13,178 @@ import (
 	"platformkernel/kernel"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
+
+// The source fixture enters through one ordinary accepted decision. Flow
+// remains the only instance owner; the source keeps no second runtime state.
+type frameSource struct {
+	ledger     *platform.Ledger
+	host       host.Host
+	stateBytes int
+}
+
+type frameStream struct{ platform.Record }
+
+func newFrameSource(tenant string, stateBytes int) *frameSource {
+	return &frameSource{stateBytes: stateBytes, ledger: platform.NewLedger(tenant, "frames", platform.NewCatalog(
+		platform.Action{Schema: "frames.source.start", Target: "frames.source", Title: "Start", Description: "Start the source's original Flow instance", Roles: []string{"operator"}, Payload: []platform.Field{}},
+		platform.Action{Schema: "frames.source.feed", Target: "frames.source", Title: "Feed", Description: "Accept one source batch through its original Flow instance", Roles: []string{"operator"}, Payload: []platform.Field{{Name: "batch", Type: "json", Required: true}}}), "frames.source")}
+}
+func (s *frameSource) Attach(h host.Host) { s.host = h }
+func (s *frameSource) Manifest() platform.Manifest {
+	return platform.Manifest{
+		ID: "frames", Version: "1", Actions: s.ledger.Catalog,
+		Entities: []platform.Entity{{Type: "frames.source", Title: "Source", Model: frameStream{}}},
+		Flows: []platform.Flow{{
+			Name: "window", Title: "Accepted window", Version: 1, Start: platform.Start{Manual: true},
+			Continuous: &platform.Continuous{
+				Source: "frames.source", Batch: 512, State: s.stateBytes, FrameBytes: 2 * s.stateBytes, DeadLetter: true,
+				Window: &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"},
+			},
+			Steps: []platform.Step{{Name: "intake", Wait: &platform.Wait{Until: func(platform.Caller, *platform.Run) bool { return false }}}},
+		}},
+	}
+}
+func (s *frameSource) Declarations() []*pb.AuthorityDeclaration { return s.ledger.Declarations() }
+func (s *frameSource) Snapshot() (json.RawMessage, error)       { return s.ledger.Snapshot() }
+func (s *frameSource) Restore(raw json.RawMessage) error        { return s.ledger.Restore(raw) }
+func (s *frameSource) AcceptedLedger() *platform.Ledger         { return s.ledger }
+func (s *frameSource) AcceptedActionSchemas() []string {
+	return []string{"frames.source.start", "frames.source.feed"}
+}
+func (*frameSource) Read(platform.Caller, string) (any, *kernel.Error) {
+	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "unknown read")
+}
+func (*frameSource) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
+	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "unknown input")
+}
+func (s *frameSource) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return s.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		var err *kernel.Error
+		if sub.GetSchema().GetName() == "frames.source.start" {
+			start := s.host.Processes().(interface {
+				StartManual(platform.Caller, string, string, int, string, json.RawMessage, time.Time) *kernel.Error
+			})
+			err = start.StartManual(c, "frames", "window", 1, "source", json.RawMessage(`{}`), now)
+		} else {
+			var input struct {
+				Batch flow.Batch `json:"batch"`
+			}
+			if json.Unmarshal(sub.GetPayload(), &input) != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "invalid batch")
+			}
+			consume := s.host.Processes().(interface {
+				ConsumeBatch(platform.Caller, string, flow.Batch, time.Time) (flow.BatchOutcome, *kernel.Error)
+			})
+			_, err = consume.ConsumeBatch(s.host.Automation(c, flow.ID), "frames.window:source", input.Batch, now)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return func(*pb.ChangeRecord) {}, nil
+	})
+}
+
+func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
+	const tenant = "accepted-frames"
+	compose := func() *Tenant {
+		return composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameSource(tenant, 4096))
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	at := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	first := flow.Batch{ID: "one", Signals: []flow.Signal{{Key: "A", Partition: "plant", At: at, Value: platform.Raw(4)}}}
+	decide(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": first}, at)
+	read := func() flow.FlowInstance {
+		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "frames.window:source")
+		if !ok {
+			t.Fatal("no native instance")
+		}
+		return x
+	}
+	before := read()
+	tooLarge := flow.Batch{ID: "two", Predecessor: "one", Signals: []flow.Signal{{Key: "B", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(strings.Repeat("x", 6000))}}}
+	if refusal := refuse(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": tooLarge}, at.Add(time.Second)); refusal == "ok" {
+		t.Fatal("over-budget accepted work consumed source input")
+	}
+	after := read()
+	if after.Revision != before.Revision || string(platform.Raw(after.Batch)) != string(platform.Raw(before.Batch)) || string(platform.Raw(after.Outputs)) != string(platform.Raw(before.Outputs)) {
+		t.Fatal("refused accepted work published a partial frame")
+	}
+	decide(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": first}, at.Add(time.Second))
+	if read().Revision != before.Revision {
+		t.Fatal("identical input generated another flow change")
+	}
+	changed := first
+	changed.Signals = []flow.Signal{{Key: "A", Partition: "plant", At: at, Value: platform.Raw(40)}}
+	if refuse(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": changed}, at.Add(time.Second)) == "ok" {
+		t.Fatal("reused batch identity accepted different bytes")
+	}
+	second := flow.Batch{ID: "two", Predecessor: "one", Signals: []flow.Signal{{Key: "B", Partition: "plant", At: at.Add(5 * time.Second), Value: platform.Raw(5)}}}
+	decide(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": second}, at.Add(5*time.Second))
+	if read().Batch.Cursor != "two" || read().Batch.Consumed != 2 {
+		t.Fatal("valid successor could not resume after refusal")
+	}
+	CheckReplay(t, tn, entries, compose)
+	raw, _, err := tn.Snapshot(func() int64 { return int64(len(entries)) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored := compose()
+	if err := restored.Restore(raw); err != nil {
+		t.Fatal(err)
+	}
+	copy, ok := platform.Get[flow.FlowInstance](restored.automation(flow.ID, false), "frames.window:source")
+	if !ok || string(platform.Raw(copy.Batch)) != string(platform.Raw(read().Batch)) {
+		t.Fatal("snapshot changed the accepted window")
+	}
+
+	t.Run("large window keeps bytes in the original frame", func(t *testing.T) {
+		const tenant = "large-accepted-frames"
+		compose := func() *Tenant {
+			return composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameSource(tenant, 128<<10))
+		}
+		live := compose()
+		var entries []Entry
+		live.Record = func(e Entry) { entries = append(entries, e) }
+		live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+		decide(t, live, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+		cursor := ""
+		for n := 1; n <= 9; n++ {
+			batch := flow.Batch{ID: fmt.Sprintf("%d", n), Predecessor: cursor, Signals: []flow.Signal{{Key: fmt.Sprintf("%d", n), Partition: "plant", At: at, Value: platform.Raw(strings.Repeat("x", 6000))}}}
+			decide(t, live, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": batch}, at)
+			cursor = batch.ID
+		}
+		x, ok := platform.Get[flow.FlowInstance](live.automation(flow.ID, false), "frames.window:source")
+		if !ok || len(x.Batch.State["window"]) <= 48<<10 {
+			t.Fatal("fixture did not retain a window above the inline budget")
+		}
+		var ref flow.BatchStateReference
+		if err := json.Unmarshal(x.Outputs["state:window"], &ref); err != nil || ref.Instance != x.ID || ref.Node != "window" || ref.Size != len(x.Batch.State["window"]) || ref.Digest != fmt.Sprintf("sha256:%x", sha256.Sum256(x.Batch.State["window"])) {
+			t.Fatalf("output does not identify its original accepted bytes: %+v %v", ref, err)
+		}
+		if len(platform.Raw(x.Outputs)) > 60<<10 {
+			t.Fatal("large state bypassed the existing output budget")
+		}
+		// Compact token outputs do not bypass the host's accepted-result
+		// budget. Large retained histories still need sealed state artifacts.
+		before := platform.Raw(x)
+		batch := flow.Batch{ID: "ten", Predecessor: cursor, Signals: []flow.Signal{{Key: "ten", Partition: "plant", At: at, Value: platform.Raw(strings.Repeat("x", 6000))}}}
+		if why := refuse(t, live, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": batch}, at); !strings.Contains(why, "bounded accepted result") {
+			t.Fatalf("retained history bypassed the original accepted-result bound: %s", why)
+		}
+		after, ok := platform.Get[flow.FlowInstance](live.automation(flow.ID, false), x.ID)
+		if !ok || string(before) != string(platform.Raw(after)) {
+			t.Fatal("host budget refusal advanced the large accepted window")
+		}
+		CheckReplay(t, live, entries, compose)
+	})
+}
 
 // shop is a test app: orders reserved, paid, packed and shipped by a flow.
 // An item named "broken" cannot ship, "none" cannot be reserved, and "stuck"

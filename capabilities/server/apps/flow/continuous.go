@@ -1,6 +1,7 @@
 package flow
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -32,6 +33,7 @@ import (
 // accepted. It is committed with the accepted result and replayed with it.
 type BatchFrame struct {
 	Cursor      string                     `json:"cursor,omitempty"`      // the batch identity consumed last
+	Fingerprint string                     `json:"fingerprint,omitempty"` // binds that cursor to the accepted batch bytes
 	Watermark   time.Time                  `json:"watermark,omitzero"`    // event time through which signals were folded
 	Consumed    int                        `json:"consumed"`              // signals folded, ever
 	Rejected    int                        `json:"rejected"`              // signals the flow refused, ever
@@ -42,11 +44,12 @@ type BatchFrame struct {
 // DeadLetter keeps one signal that could not be folded, with its cause, so it
 // can be inspected and replayed under the original authorization (ADR-0047 §13.3).
 type DeadLetter struct {
-	Batch  string    `json:"batch"`
-	Key    string    `json:"key,omitempty"`
-	At     time.Time `json:"at,omitzero"`
-	Reason string    `json:"reason"`
-	Value  string    `json:"value,omitempty"`
+	Batch     string    `json:"batch"`
+	Partition string    `json:"partition,omitempty"`
+	Key       string    `json:"key,omitempty"`
+	At        time.Time `json:"at,omitzero"`
+	Reason    string    `json:"reason"`
+	Value     string    `json:"value,omitempty"`
 }
 
 // Batch is one accepted batch of a real source: its identity, its predecessor,
@@ -59,9 +62,10 @@ type Batch struct {
 
 // Signal is one arriving measurement.
 type Signal struct {
-	Key   string
-	At    time.Time
-	Value json.RawMessage
+	Key       string
+	Partition string
+	At        time.Time
+	Value     json.RawMessage
 }
 
 // BatchOutcome is what the flow did with a batch.
@@ -101,13 +105,17 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 			StateSize: stateSize(x.Batch.State)}, nil
 	}
 	var folded, rejected int
-	err := f.step(c, id, now, func(_ *session, in *FlowInstance) {
+	err := f.update(c, id, now, func(_ *session, in *FlowInstance) *kernel.Error {
 		frame := in.Batch
 		if frame == nil {
 			frame = &BatchFrame{State: map[string]json.RawMessage{}}
 			in.Batch = frame
 		}
-		folded, rejected = foldBatch(frame, declared, batch)
+		var refusal *kernel.Error
+		folded, rejected, refusal = foldBatch(frame, declared, batch, now)
+		if refusal != nil {
+			return refusal
+		}
 		// The frame's state and the outputs it produced are the accepted
 		// result's data channel: both are committed with this decision.
 		in.Outputs = maps.Clone(in.Outputs)
@@ -115,9 +123,21 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 			in.Outputs = map[string]json.RawMessage{}
 		}
 		for node, state := range frame.State {
-			in.Outputs["state:"+node] = slices.Clone(state)
+			if len(state) <= 48<<10 {
+				in.Outputs["state:"+node] = slices.Clone(state)
+			} else {
+				// The durable frame owns these bytes. A compact, verifiable
+				// reference keeps token output limits instead of copying a large
+				// window into every ordinary output value.
+				in.Outputs["state:"+node] = platform.Raw(BatchStateReference{Instance: in.ID, Node: node, Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(state)), Size: len(state)})
+			}
 		}
 		in.Outputs["batch"] = json.RawMessage(fmt.Sprintf(`{"cursor":%q,"consumed":%d,"rejected":%d}`, frame.Cursor, frame.Consumed, frame.Rejected))
+		encoded, err := json.Marshal(in.Outputs)
+		if err != nil || len(encoded) > 60<<10 {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch outputs exceed the Flow output budget")
+		}
+		return nil
 	})
 	if err != nil {
 		return BatchOutcome{}, err
@@ -128,6 +148,15 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 		out.Cursor, out.Watermark, out.StateSize = x.Batch.Cursor, x.Batch.Watermark, stateSize(x.Batch.State)
 	}
 	return out, nil
+}
+
+// BatchStateReference names original instance state, not an arbitrary file or
+// URL. A consumer must read that instance as its member and verify the digest.
+type BatchStateReference struct {
+	Instance string `json:"instance"`
+	Node     string `json:"node"`
+	Digest   string `json:"digest"`
+	Size     int    `json:"size"`
 }
 
 // admitBatch is the batch's admission rule, apart from any tenant state: a batch
@@ -141,6 +170,16 @@ func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *k
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT,
 			Message: fmt.Sprintf("the batch carries %d signals, the flow accepts %d", len(batch.Signals), declared.Batch)}
 	}
+	if declared.Batch < 0 || declared.State < 0 || declared.FrameBytes < 0 {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Continuous batch budgets are non-negative")
+	}
+	digest, err := batchFingerprint(batch)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A batch needs valid JSON signal values")
+	}
+	if frame != nil && frame.Cursor == batch.ID && frame.Fingerprint != "" && frame.Fingerprint != digest {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch identity was reused with different content")
+	}
 	if frame == nil || frame.Cursor == "" || batch.ID == frame.Cursor {
 		return nil
 	}
@@ -153,39 +192,73 @@ func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *k
 
 // foldBatch folds every signal of a batch into the frame's state, keeping late
 // and timeless signals as dead letters instead of dropping them silently.
-func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) (folded, rejected int) {
-	if frame.State == nil {
-		frame.State = map[string]json.RawMessage{}
+func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acceptedAt ...time.Time) (folded, rejected int, refusal *kernel.Error) {
+	if err := admitBatch(frame, declared, batch); err != nil {
+		return 0, 0, err
 	}
-	for _, signal := range batch.Signals {
-		switch {
-		case signal.At.IsZero():
-			frame.DeadLetters = append(frame.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, Reason: "no event time", Value: string(signal.Value)})
-			rejected++
-		case !frame.Watermark.IsZero() && signal.At.Before(frame.Watermark):
-			frame.DeadLetters = append(frame.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, At: signal.At, Reason: "late: before the watermark", Value: string(signal.Value)})
-			rejected++
-		default:
-			fold(frame, declared, signal)
-			folded++
+	if frame.Cursor == batch.ID {
+		return 0, 0, nil
+	}
+	// No cursor, watermark, counter or dead letter is committed before the
+	// whole successor fits its declaration. Original state bytes stay intact.
+	next := *frame
+	next.State = maps.Clone(frame.State)
+	next.DeadLetters = slices.Clone(frame.DeadLetters)
+	if next.State == nil {
+		next.State = map[string]json.RawMessage{}
+	}
+	if declared.Window != nil {
+		if len(acceptedAt) != 1 || acceptedAt[0].IsZero() {
+			return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An event-time batch needs its accepted decision time")
 		}
-		if signal.At.After(frame.Watermark) {
-			frame.Watermark = signal.At
+		var err *kernel.Error
+		folded, rejected, err = foldWindow(&next, declared, batch, acceptedAt[0])
+		if err != nil {
+			return 0, 0, err
+		}
+	} else {
+		for _, signal := range batch.Signals {
+			switch {
+			case signal.At.IsZero():
+				next.DeadLetters = append(next.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, Reason: "no event time", Value: string(signal.Value)})
+				rejected++
+			case !next.Watermark.IsZero() && signal.At.Before(next.Watermark):
+				next.DeadLetters = append(next.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, At: signal.At, Reason: "late: before the watermark", Value: string(signal.Value)})
+				rejected++
+			default:
+				if err := fold(&next, declared, signal); err != nil {
+					return 0, 0, err
+				}
+				folded++
+			}
+			if signal.At.After(next.Watermark) {
+				next.Watermark = signal.At
+			}
 		}
 	}
-	frame.Cursor = batch.ID
-	frame.Consumed += folded
-	frame.Rejected += rejected
-	return folded, rejected
+	next.Cursor = batch.ID
+	next.Fingerprint, _ = batchFingerprint(batch)
+	next.Consumed += folded
+	next.Rejected += rejected
+	raw, err := json.Marshal(next)
+	if err != nil {
+		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch frame cannot be encoded")
+	}
+	if declared.FrameBytes > 0 && len(raw) > declared.FrameBytes {
+		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch frame exceeds its declared budget")
+	}
+	*frame = next
+	return folded, rejected, nil
 }
 
-// fold folds one signal into the named node's state. Window and aggregate keep
-// what §13.1's default flow needs: count, sum, min/max and the last values per
-// key, so a threshold step can read them without re-reading the source.
-func fold(frame *BatchFrame, declared platform.Continuous, signal Signal) {
+// fold preserves the historical scalar count/sum/last profile. It is not the
+// default graph's event-time window, aggregate or threshold implementation.
+func fold(frame *BatchFrame, declared platform.Continuous, signal Signal) *kernel.Error {
 	state := map[string]any{}
 	if raw := frame.State["window"]; len(raw) > 0 {
-		_ = json.Unmarshal(raw, &state)
+		if json.Unmarshal(raw, &state) != nil || state == nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved window state cannot be decoded")
+		}
 	}
 	count, _ := state["count"].(float64)
 	sum, _ := state["sum"].(float64)
@@ -201,9 +274,23 @@ func fold(frame *BatchFrame, declared platform.Continuous, signal Signal) {
 		last[signal.Key] = signal.Value
 	}
 	state["count"], state["sum"], state["last"] = count, sum, last
-	if raw, err := json.Marshal(state); err == nil && (declared.State == 0 || len(raw) <= declared.State) {
-		frame.State["window"] = raw
+	raw, err := json.Marshal(state)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The window state cannot be encoded")
 	}
+	if declared.State > 0 && len(raw) > declared.State {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The window state exceeds its declared budget")
+	}
+	frame.State["window"] = raw
+	return nil
+}
+
+func batchFingerprint(batch Batch) (string, error) {
+	raw, err := json.Marshal(batch)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(raw)), nil
 }
 
 func stateSize(state map[string]json.RawMessage) int {

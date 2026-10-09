@@ -182,7 +182,7 @@ func New(tenant string) *Flows {
 func flowEntities() []platform.Entity {
 	return []platform.Entity{{Type: InstanceType, Title: "Flow instance", Model: FlowInstance{}, Display: "title",
 		Scope:   platform.Scope{Participants: func(record any) []string { return []string{record.(FlowInstance).OnBehalf} }},
-		Derived: []platform.Derivation{{From: "sources", Fields: []string{"data", "outputs", "tokens", "trace", "answer"}}}, Withheld: "withheld"}}
+		Derived: []platform.Derivation{{From: "sources", Fields: []string{"data", "outputs", "tokens", "trace", "answer", "batch"}}}, Withheld: "withheld"}}
 }
 
 func (f *Flows) Manifest() platform.Manifest {
@@ -266,8 +266,13 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 		return nil, fmt.Errorf("flow %s starts on the state of %s, not an entity type of %s", id, fl.Start.Type, m.ID)
 	}
 	if fl.Continuous != nil {
-		if fl.Continuous.Source == "" || fl.Continuous.Batch < 0 || !fl.Continuous.DeadLetter {
+		if fl.Continuous.Source == "" || fl.Continuous.Batch < 0 || fl.Continuous.State < 0 || fl.Continuous.FrameBytes < 0 || !fl.Continuous.DeadLetter {
 			return nil, fmt.Errorf("flow %s: a continuous flow names its source, a batch budget of zero or more, and keeps dead letters", id)
+		}
+		if fl.Continuous.Window != nil {
+			if err := checkWindow(*fl.Continuous.Window); err != nil {
+				return nil, fmt.Errorf("flow %s: %w", id, err)
+			}
 		}
 	}
 	versions := f.defs[id]

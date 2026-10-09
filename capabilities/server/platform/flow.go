@@ -47,8 +47,25 @@ type Continuous struct {
 	Batch int
 	// State is the most bytes one node's state may hold; 0: no extra bound.
 	State int
+	// FrameBytes bounds the complete accepted frame, including dead letters
+	// and its cursor. Zero retains the historical declaration's budget.
+	FrameBytes int
+	// Window declares the native event-time profile. Nil preserves the older
+	// scalar fold; a published streaming graph explicitly freezes this rule.
+	Window *StreamWindow
 	// DeadLetter keeps signals that could not be folded, with the reason.
 	DeadLetter bool
+}
+
+// StreamWindow is a bounded state rule owned by the existing Flow frame.
+// Millisecond settings retain the source graph's timing contract.
+type StreamWindow struct {
+	Node        string `json:"node"`
+	WindowMS    int    `json:"windowMs"`
+	SlideMS     int    `json:"slideMs"`
+	WatermarkMS int    `json:"watermarkMs"`
+	MaxRecords  int    `json:"maxRecords"`
+	LateEvents  string `json:"lateEvents"` // sideOutput, accept or reject
 }
 
 // Start is what starts an instance: events (actions of the app, or protocol
