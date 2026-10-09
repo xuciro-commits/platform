@@ -953,16 +953,6 @@ export type Grant = {
   at?: string;
 };
 
-export type GridCell = {
-  id: string;
-  title: string;
-  domain: string;
-  aspect: string;
-  elements: string[];
-  relationships: string[];
-  scales?: string[];
-};
-
 export type HistogramBucket = {
   lower: string;
   upper: string;
@@ -1276,7 +1266,7 @@ export type Metamodel = {
   profile: ProfileEntry[];
   stereotypes: Record<string, Stereotype>;
   enumerations: Record<string, Enumeration>;
-  grid: GridCell[];
+  views: Viewpoint[];
   contracts: Contract[];
 };
 
@@ -3096,13 +3086,22 @@ export type Verdict = {
 export type View = {
   id: string;
   name: string;
-  grid: string;
+  viewpoint: string;
   kind?: string;
   elements: string[];
   layout?: Record<string, number[]>;
   context?: string[];
   pins?: Pin[];
   asOf?: string;
+};
+
+export type Viewpoint = {
+  id: string;
+  title: string;
+  note: string;
+  elements: string[];
+  context?: string[];
+  relationships: string[];
 };
 
 export type Word = {

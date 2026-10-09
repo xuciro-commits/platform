@@ -94,7 +94,7 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 			Payload:     []platform.Field{until}},
 		platform.Action{Schema: SchemaViewSave, Target: ViewType, Capability: "views", Title: "Save view", Roles: admin,
 			Description: "Write a drawing over the model under its own id: the name, the elements it shows, where, the records pinned beside them, and the day it shows. Saving an id writes that view; it never writes another one.",
-			Payload: []platform.Field{f("name", "string", "Name", true), f("grid", "string", "UAF grid cell, e.g. Pr-Sr, St-Tx, Rs-Sr, Pj-Rm", true),
+			Payload: []platform.Field{f("name", "string", "Name", true), f("viewpoint", "string", "The viewpoint the drawing starts from: organization, data, function, output, control", true),
 				f("kind", "string", "Relationship kind shown by the view", false), f("context", "json", "Elements explicitly added from other viewpoints", false),
 				f("elements", "json", "Element ids shown", false), f("layout", "json", "Positions by element id", false),
 				f("pins", "json", "Records pinned on the drawing: {ref, anchor, at}", false), f("asOf", "date", "The day the view shows", false)}},
@@ -200,7 +200,7 @@ func copyModel(m Model) Model {
 }
 
 type payload struct {
-	Stereotype, Name, Kind, ShortName, Reason, Source, Target, Role, Relation, Grid, Scale, Industry string
+	Stereotype, Name, Kind, ShortName, Reason, Source, Target, Role, Relation, Viewpoint, Scale, Industry string
 	Legal, External, Matrix, Primary                                                                 bool
 	Share                                                                                            float64
 	Headcount, Sites, LegalEntities                                                                  int
@@ -412,11 +412,11 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			slice := *p.Slice
 			return func(*pb.ChangeRecord) { m.Import(slice) }, nil
 		case SchemaViewSave:
-			if p.Name == "" || p.Grid == "" {
-				return nil, invalid("a view needs a name and a grid cell")
+			if p.Name == "" || p.Viewpoint == "" {
+				return nil, invalid("a view needs a name and a viewpoint")
 			}
-			if !slices.ContainsFunc(Grid(mm), func(g GridCell) bool { return g.ID == p.Grid }) {
-				return nil, invalid("{grid} is not a UAF view cell", p.Grid)
+			if !slices.ContainsFunc(Views(mm), func(v Viewpoint) bool { return v.ID == p.Viewpoint }) {
+				return nil, invalid("{viewpoint} is not a view of this model", p.Viewpoint)
 			}
 			for _, el := range p.Elements {
 				if m.element(el) == nil {
@@ -451,7 +451,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				}
 			}
 			return func(*pb.ChangeRecord) {
-				v := View{ID: id, Name: p.Name, Grid: p.Grid, Kind: kind, Context: p.Context, Elements: p.Elements, Layout: p.Layout, Pins: p.Pins, AsOf: p.AsOf}
+				v := View{ID: id, Name: p.Name, Viewpoint: p.Viewpoint, Kind: kind, Context: p.Context, Elements: p.Elements, Layout: p.Layout, Pins: p.Pins, AsOf: p.AsOf}
 				if v.Elements == nil {
 					v.Elements = []string{}
 				}
@@ -687,7 +687,7 @@ type Metamodel struct {
 	Profile      []ProfileEntry              `json:"profile"`
 	Stereotypes  map[string]*uaf.Stereotype  `json:"stereotypes"`
 	Enumerations map[string]*uaf.Enumeration `json:"enumerations"`
-	Grid         []GridCell                  `json:"grid"`
+	Views        []Viewpoint                 `json:"views"`
 	// Contracts are the relationship stereotypes as the host checks them
 	// (ADR-0085 D2): what each end accepts, the standard's text it comes from,
 	// and what this profile adds. The modeler offers exactly these.
@@ -732,7 +732,7 @@ func (e *Enterprise) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	case ReadMetamodel:
 		mm := uaf.Current()
 		return Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations,
-			Grid: Grid(mm), Contracts: Contracts(mm)}, nil
+			Views: Views(mm), Contracts: Contracts(mm)}, nil
 	}
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }

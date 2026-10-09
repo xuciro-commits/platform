@@ -80,11 +80,11 @@ type Relationship struct {
 	Until      Date    `json:"until,omitempty"`
 }
 
-// View is a drawing over the model: which elements, where, in which UAF grid cell.
+// View is a drawing over the model: which elements, where, from which viewpoint (ADR-0093).
 type View struct {
 	ID       string                `json:"id"`
 	Name     string                `json:"name"`
-	Grid     string                `json:"grid"` // "Pr-Sr", "St-Tx", "Rs-Sr", "Pj-Rm" …
+	Viewpoint string               `json:"viewpoint"` // "organization", "data", "function", "output", "control" (ADR-0093)
 	Kind     string                `json:"kind,omitempty"`
 	Elements []string              `json:"elements"`
 	Layout   map[string][2]float64 `json:"layout,omitempty"`

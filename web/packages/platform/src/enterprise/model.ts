@@ -9,7 +9,9 @@ export type Relationship = Api.Relationship;
 export type View = Api.View;
 export type Kind = Api.Kind;
 export type Metamodel = Api.Metamodel;
-export type GridCell = Api.GridCell;
+/** One description view of the model: who and where, what it holds, what it can
+ * do, what it offers, how it is run (ADR-0093). */
+export type Viewpoint = Api.Viewpoint;
 export type ProfileEntry = Api.ProfileEntry;
 export type Contract = Api.Contract;
 export type Pin = Api.Pin;
@@ -87,22 +89,18 @@ export function nextTo(layout: Record<string, [number, number]>, anchor: string,
 export const today = () => new Date().toISOString().slice(0, 10);
 export const live = (x: { from?: string; until?: string }, day: string) => (x.from ?? "") <= day && (!x.until || day < x.until);
 
-/** Organisation is also a legal endpoint in several UAF cells. Outside the
- * personnel cells it supplies ownership context, rather than every department
- * being added to every drawing. The model's actual relationships name owners. */
-export function viewpointTypes(cell?: GridCell): string[] {
-  return cell?.domain === "Personnel" ? cell.elements : cell?.elements.filter((st) => st !== ORGANIZATION) ?? [];
-}
-
-export function viewpointElements(model: Model, cell: GridCell | undefined, day: string): string[] {
-  if (!cell) return [];
-  const types = viewpointTypes(cell);
-  const base = new Set(model.elements.filter((e) => types.includes(e.stereotype) && live(e, day)).map((e) => e.id));
+/** The elements a viewpoint draws (ADR-0093): its own slice, plus the context
+ * stereotypes — every one of them drawn only when a relationship puts it beside
+ * a slice element. The organisation belongs to every question's context rather
+ * than all of it in every drawing; the model's relationships name the owners. */
+export function viewpointElements(model: Model, viewpoint: Viewpoint | undefined, day: string): string[] {
+  if (!viewpoint) return [];
+  const base = new Set(model.elements.filter((e) => viewpoint.elements.includes(e.stereotype) && live(e, day)).map((e) => e.id));
   const primary = new Set(base);
-  if (cell.elements.includes(ORGANIZATION)) for (const r of model.relationships) {
+  for (const context of viewpoint.context ?? []) for (const r of model.relationships) {
     if (!live(r, day)) continue;
     const other = primary.has(r.source) ? r.target : primary.has(r.target) ? r.source : undefined;
-    if (other && model.elements.some((e) => e.id === other && e.stereotype === ORGANIZATION && live(e, day))) base.add(other);
+    if (other && model.elements.some((e) => e.id === other && e.stereotype === context && live(e, day))) base.add(other);
   }
   return [...base];
 }

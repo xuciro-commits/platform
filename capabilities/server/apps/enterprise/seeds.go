@@ -313,11 +313,11 @@ func Template(p SeedParams) (Model, error) {
 	for _, c := range capabilitiesFor(p.Scale, p.Industry) {
 		b.capability(b.m.Elements[0].ID, c, "business")
 	}
-	b.view("Organisation", "Pr-Sr", b.org("")...)
-	b.view("Capabilities", "St-Tx", b.ofStereotype(Capability)...)
-	b.view("Sites and resources", "Rs-Sr", append(b.ofStereotype(Location), b.ofStereotype(Resource)...)...)
+	b.view("Organisation", "organization", b.org("")...)
+	b.view("Capabilities", "function", b.ofStereotype(Capability)...)
+	b.view("Sites and resources", "organization", append(b.ofStereotype(Location), b.ofStereotype(Resource)...)...)
 	if projects := b.ofStereotype(Project); len(projects) > 0 {
-		b.view("Projects", "Pj-Rm", projects...)
+		b.view("Projects", "control", projects...)
 	}
 	return b.m, nil
 }
@@ -464,8 +464,8 @@ func (b *builder) location(name, kind, parent, owner string) string {
 	return l
 }
 
-func (b *builder) view(name, grid string, elements ...string) {
-	b.m.Views = append(b.m.Views, View{ID: b.id("view", name), Name: name, Grid: grid, Elements: elements})
+func (b *builder) view(name, viewpoint string, elements ...string) {
+	b.m.Views = append(b.m.Views, View{ID: b.id("view", name), Name: name, Viewpoint: viewpoint, Elements: elements})
 }
 
 func (b *builder) org(kind string) []string {
