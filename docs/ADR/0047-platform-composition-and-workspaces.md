@@ -490,11 +490,13 @@ Backpressure 必须有界且可见：输入接受与消费队列各有预算。�
 
 **有界实现：** `apps/flow/continuous.go` 在原 Flow ledger/session 中接受批次；`BatchFrame` 以 cursor 与内容摘要绑定当前批次、校验前驱，同 ID 同内容返回原结果，同 ID 不同内容拒绝。状态、JSON 编码或完整 frame 超预算时整批拒绝，游标、水位线、计数、死信和输出不变，合法后继可以重试。旧声明继续使用 scalar count/sum/last；显式 `StreamWindow` 使用原批量与事件时间配置，按（分区、事件 key）识别事件，保留原 JSON 数值，支持窗口期限、slide、lateness 策略与有记录的 overflow。frame 的 batch 字段与其他运行数据沿原 sources 读取遮蔽。
 
-`state:<node>` 的小状态仍内联；超过 48 KiB 的状态输出只引用原实例、节点、摘要与大小，状态字节仍由 frame 持有。全部输出继续受 60 KiB 预算限制，宿主的 1 MiB 接受结果与原记录 JSON 限制也不放宽。状态及其历史仍会占用接受结果预算，超出时拒绝；这个实例内引用不是大型封存状态或 worker 数据通道。`compute_channel.go` 的调用专属结果键、摘要/大小校验与封存结果通道保持原实现。
+历史内联入口保留原预算，超过 48 KiB 的状态输出引用原实例、节点、摘要与大小。原生来源可用 `ConsumeFlowBatch`：在提交锁外准备同一窗口规则，将完整 frame 封存在原 FileStore；原记录只保存游标/计数、租户/实例/版本、宿主生成的 ticket、摘要/大小。提交前再次核对成员可读性、原主体与实例修订，原 Flow ledger/session 在原接受结果中保存引用和输出。无接受结果存储时明确拒绝，不回退到无法重放预备内容的旧日志。已接受批次通过原 ledger 识别历史重试和内容冲突，不增加第二张游标表。
 
-**证据：** `apps/flow/continuous_test.go` 检查整批回滚、摘要、乱序/重复/迟到/overflow、slide 和配置预算；根包 `flow_test.go` 的 `TestContinuousAcceptedFrameRefusalAndRecovery` 通过受控测试来源的真实提交管线核对原实例修订、输出、拒绝后的重试、接受结果重放与快照恢复，并核对大于 48 KiB 的实例状态引用及宿主接受结果超预算后的原子拒绝。它不是外部真实来源、数据库崩溃恢复、worker 或七节点业务链的验收。`upgrade_authorization_test.go` 仍只证明其覆盖的计算结果通道。
+状态制品有 64 MiB 上限及声明预算，读取核对租户、实例、版本、字节数和摘要；准备与读取的文件 I/O 不持有租户提交锁。全部输出仍受 60 KiB 预算限制，宿主的 1 MiB 接受结果与原记录 JSON 限制不放宽。确定在提交前拒绝或幂等命中未使用的独立预备文件会回收；提交结果不明确时保留字节，后续孤儿扫描及已接受历史制品的生命周期尚未实现。这条原生封存入口没有接到生产来源，也不是 worker 大输入 ABI。`compute_channel.go` 的调用专属结果通道保持原实现。
 
-**尚未接通：** 没有生产来源调用 `ConsumeBatch`；窗口规则还未接到默认图的原聚合/滞回算子、真实分区并发 8、动作或应用实例只读输出。来源消费队列/backpressure、checkpointEvery、版本化死信资产及重放、停止后同版本续接、大输入/状态封存与 worker ABI、真实持久恢复及完整浏览器路线继续属于实现与运行缺口。不能用辅助函数、受控测试来源或手动 Flow 代替完整持续执行。
+**证据：** `apps/flow/continuous_test.go` 检查整批回滚、摘要、乱序/重复/迟到/overflow、slide 和配置预算；根包 `flow_test.go` 的 `TestContinuousAcceptedFrameRefusalAndRecovery` 核对原实例提交、接受结果重放、快照及旧内联预算拒绝；`TestContinuousSealedFrameAndRecovery` 核对超过记录内联预算的窗口只保存制品引用、原批次历史重试/内容冲突、不同成员/租户拒绝、摘要损坏拦截，以及共享测试 FileStore 下的重放、快照和后继提交。它们不是外部真实来源、数据库/对象存储崩溃恢复、worker 或七节点业务链的验收。`upgrade_authorization_test.go` 仍只证明其覆盖的计算结果通道。
+
+**尚未接通：** 没有生产来源调用原生批次入口；窗口规则还未接到默认图的原聚合/滞回算子、真实分区并发 8、动作或应用实例只读输出。来源消费队列/backpressure、checkpointEvery、版本化死信资产及重放、停止后同版本续接、worker 大输入 ABI、制品生命周期、真实持久恢复及完整浏览器路线继续属于实现与运行缺口。不能用辅助函数、受控测试来源或手动 Flow 代替完整持续执行。
 
 ## 14. 当前实现边界
 

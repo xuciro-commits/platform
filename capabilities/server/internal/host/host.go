@@ -118,6 +118,13 @@ type FlowBinding struct {
 	Assets       []platform.AssetRef
 }
 
+// FlowFrameStore uses the original artifact owner on the outside I/O lane.
+// Preparing a frame is not accepting it. Accepted rows carry only its handle.
+type FlowFrameStore interface {
+	Read(platform.FlowStateArtifact) ([]byte, error)
+	Seal(instance string, version int, raw []byte, budget int) (platform.FlowStateArtifact, error)
+}
+
 // Listener is a platform app delivered other apps' events as owned work, with
 // every name an event goes by (its action and the protocol events it is).
 type Listener interface {

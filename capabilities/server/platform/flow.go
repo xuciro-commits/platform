@@ -68,6 +68,18 @@ type StreamWindow struct {
 	LateEvents  string `json:"lateEvents"` // sideOutput, accept or reject
 }
 
+// FlowStateArtifact identifies a frozen frame in the original file store.
+// The host chooses Ticket and derives the storage key; no path or URL is
+// accepted from a source, member or worker.
+type FlowStateArtifact struct {
+	Tenant   string `json:"tenant"`
+	Instance string `json:"instance"`
+	Version  int    `json:"version"`
+	Ticket   string `json:"ticket"`
+	Digest   string `json:"digest"`
+	Size     int    `json:"size"`
+}
+
 // Start is what starts an instance: events (actions of the app, or protocol
 // events "<protocol id>#<event>" the app consumes) and the decision whether one
 // starts an instance, with the instance's key (one running instance per key)

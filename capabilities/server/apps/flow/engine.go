@@ -994,7 +994,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	defer f.mu.Unlock()
 	id := s.GetTarget().GetId()
 	schema := s.GetSchema().GetName()
-	if schema == SchemaFlowStart || schema == SchemaFlowStep {
+	if schema == SchemaFlowStart || schema == SchemaFlowStep || schema == SchemaFlowBatch {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	var p struct{ Token int }

@@ -29,6 +29,7 @@ const (
 	Admin           = "admin"
 	SchemaFlowStart = "flow.instance.start"
 	SchemaFlowStep  = "flow.instance.step"
+	SchemaFlowBatch = "flow.instance.batch"
 	SchemaFlowRetry = "flow.instance.retry"
 	SchemaFlowSkip  = "flow.instance.skip"
 	SchemaFlowStop  = "flow.instance.cancel"
@@ -168,6 +169,8 @@ func New(tenant string) *Flows {
 	actions = append(actions,
 		platform.Action{Schema: SchemaFlowStart, Target: InstanceType, Capability: "flows", Title: "Start flow", Description: byHost, Payload: []platform.Field{}, Roles: admin},
 		platform.Action{Schema: SchemaFlowStep, Target: InstanceType, Capability: "flows", Title: "Take step", Description: byHost, Payload: []platform.Field{}, Roles: admin},
+		platform.Action{Schema: SchemaFlowBatch, Target: InstanceType, Capability: "flows", Title: "Accept source batch", Description: byHost, Automation: true,
+			Payload: []platform.Field{{Name: "batch", Type: "text", Required: true}, {Name: "digest", Type: "text", Required: true}}},
 		platform.Action{Schema: SchemaFlowRetry, Target: InstanceType, Capability: "flows", Title: "Retry", Payload: []platform.Field{}, Roles: admin,
 			Description: "Try a stuck or waiting instance's steps again, with fresh attempts."},
 		platform.Action{Schema: SchemaFlowSkip, Target: InstanceType, Capability: "flows", Title: "Skip step", Roles: admin,

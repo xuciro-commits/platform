@@ -360,6 +360,7 @@
   "Levels": "层级",
   "Link entities": "关联实体",
   "Made by the host as the flow runs.": "流程运行时由宿主创建。",
+  "Accept source batch": "接受来源批次",
   "Made by the host: a step the model chose.": "由宿主创建：模型选择的一步。",
   "Mark a task of yours done.": "把你的任务标记为完成。",
   "Mark notification read": "标记通知已读",

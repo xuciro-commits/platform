@@ -32,13 +32,15 @@ import (
 // what has been consumed, the watermark, per-node state and what could not be
 // accepted. It is committed with the accepted result and replayed with it.
 type BatchFrame struct {
-	Cursor      string                     `json:"cursor,omitempty"`      // the batch identity consumed last
-	Fingerprint string                     `json:"fingerprint,omitempty"` // binds that cursor to the accepted batch bytes
-	Watermark   time.Time                  `json:"watermark,omitzero"`    // event time through which signals were folded
-	Consumed    int                        `json:"consumed"`              // signals folded, ever
-	Rejected    int                        `json:"rejected"`              // signals the flow refused, ever
-	State       map[string]json.RawMessage `json:"state,omitempty"`       // node name → its state
-	DeadLetters []DeadLetter               `json:"deadLetters,omitempty"` // what could not be folded, and why
+	Cursor      string                      `json:"cursor,omitempty"`      // the batch identity consumed last
+	Fingerprint string                      `json:"fingerprint,omitempty"` // binds that cursor to the accepted batch bytes
+	Watermark   time.Time                   `json:"watermark,omitzero"`    // event time through which signals were folded
+	Consumed    int                         `json:"consumed"`              // signals folded, ever
+	Rejected    int                         `json:"rejected"`              // signals the flow refused, ever
+	State       map[string]json.RawMessage  `json:"state,omitempty"`       // node name → its state
+	DeadLetters []DeadLetter                `json:"deadLetters,omitempty"` // what could not be folded, and why
+	StateBytes  int                         `json:"stateBytes,omitempty"`
+	Sealed      *platform.FlowStateArtifact `json:"sealed,omitempty"`
 }
 
 // DeadLetter keeps one signal that could not be folded, with its cause, so it
@@ -94,6 +96,9 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 	}
 	if ended(x.State) {
 		return BatchOutcome{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: "the instance has ended"}
+	}
+	if x.Batch != nil && x.Batch.Sealed != nil {
+		return BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A sealed Flow frame is prepared on the host I/O lane")
 	}
 	declared := *d.Continuous
 	if err := admitBatch(x.Batch, declared, batch); err != nil {
@@ -240,6 +245,7 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 	next.Fingerprint, _ = batchFingerprint(batch)
 	next.Consumed += folded
 	next.Rejected += rejected
+	next.StateBytes = stateSize(next.State)
 	raw, err := json.Marshal(next)
 	if err != nil {
 		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch frame cannot be encoded")

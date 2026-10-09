@@ -186,6 +186,93 @@ func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
 	})
 }
 
+func TestContinuousSealedFrameAndRecovery(t *testing.T) {
+	const tenant, id = "sealed-frames", "frames.window:source"
+	store := &memoryFiles{}
+	compose := func() *Tenant {
+		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin"), seatOf("other", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameSource(tenant, 2<<20))
+		tn.Files = store
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	at := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	member := memberOf(t, tn, "member")
+	var first flow.Batch
+	cursor := ""
+	for n := 1; n <= 16; n++ {
+		batch := flow.Batch{ID: fmt.Sprint(n), Predecessor: cursor, Signals: []flow.Signal{{Key: fmt.Sprint(n), Partition: "plant", At: at, Value: platform.Raw(strings.Repeat("x", 6000))}}}
+		if n == 1 {
+			first = batch
+		}
+		if _, err := tn.ConsumeFlowBatch(member, id, batch, at); err != nil {
+			t.Fatalf("native batch %d: %v", n, err)
+		}
+		cursor = batch.ID
+	}
+	x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !ok || x.Batch.Sealed == nil || len(platform.Raw(x.Batch)) > 2048 || x.Batch.State != nil || x.Batch.DeadLetters != nil {
+		t.Fatal("the accepted record still carries large window bytes")
+	}
+	frame, err := tn.ReadFlowFrame(member, id, at)
+	if err != nil || frame.Consumed != 16 || len(frame.State["window"]) < 64<<10 {
+		t.Fatalf("large original state could not be resolved: %v", err)
+	}
+	before := platform.Raw(x)
+	if answer, err := tn.ConsumeFlowBatch(member, id, first, at); err != nil || answer.Cursor != first.ID {
+		t.Fatalf("historical batch retry was not recognised: %+v %v", answer, err)
+	}
+	changed := first
+	changed.Signals = []flow.Signal{{Key: "1", Partition: "plant", At: at, Value: platform.Raw("changed")}}
+	if _, err := tn.ConsumeFlowBatch(member, id, changed, at); err == nil {
+		t.Fatal("historical batch identity accepted different content")
+	}
+	if _, err := tn.ReadFlowFrame(memberOf(t, tn, "other"), id, at); err == nil {
+		t.Fatal("another member read the source's private frame")
+	}
+	after, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if string(before) != string(platform.Raw(after)) {
+		t.Fatal("retries or refusal changed the accepted frame")
+	}
+	CheckReplay(t, tn, entries, compose)
+	raw, _, snapshotErr := tn.Snapshot(func() int64 { return int64(len(entries)) })
+	if snapshotErr != nil {
+		t.Fatal(snapshotErr)
+	}
+	restored := compose()
+	if err := restored.Restore(raw); err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := restored.ReadFlowFrame(memberOf(t, restored, "member"), id, at)
+	if err != nil || string(platform.Raw(frame)) != string(platform.Raw(recovered)) {
+		t.Fatalf("restored artifact changed: %v", err)
+	}
+	restored.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	if _, err := restored.ConsumeFlowBatch(memberOf(t, restored, "member"), id, flow.Batch{ID: "17", Predecessor: "16", Signals: []flow.Signal{{Key: "17", Partition: "plant", At: at, Value: platform.Raw(17)}}}, at); err != nil {
+		t.Fatalf("restored instance could not consume its successor: %v", err)
+	}
+	files := flowFrameStore{tenant: tenant, files: store}
+	ref := *x.Batch.Sealed
+	foreign := ref
+	foreign.Tenant = "other-tenant"
+	if _, err := files.Read(foreign); err == nil {
+		t.Fatal("a foreign tenant's handle was readable")
+	}
+	key, keyErr := files.key(ref)
+	if keyErr != nil {
+		t.Fatal(keyErr)
+	}
+	store.mu.Lock()
+	store.m[key][0] = '!'
+	store.mu.Unlock()
+	if _, err := files.Read(ref); err == nil {
+		t.Fatal("corrupt bytes matched an accepted artifact")
+	}
+}
+
 // shop is a test app: orders reserved, paid, packed and shipped by a flow.
 // An item named "broken" cannot ship, "none" cannot be reserved, and "stuck"
 // cannot be released either.
