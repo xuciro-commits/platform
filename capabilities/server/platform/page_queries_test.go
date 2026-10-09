@@ -101,6 +101,72 @@ func TestQueryBindingFreezesOriginalNamedVersion(t *testing.T) {
 	}
 }
 
+func TestInterfacePageBindingKeepsPublishedShapeAndConcreteRecordIdentity(t *testing.T) {
+	root := AssetRef{App: "sample", Kind: AssetObject, Name: "sample.note"}
+	binding := AssetBinding{Ref: AssetRef{App: "sample", Kind: AssetQuery, Name: "coded"}, SourceVersion: "query-1"}
+	shape := Interface{Name: "sample.coded", Title: "Coded", Description: "Common names", Fields: []InterfaceField{{Name: "name", Type: "text", Title: "Name"}}}
+	named := NamedQuery{Name: "coded", Title: "Coded", Interface: shape.Name, InterfaceShape: &shape, Implementations: []string{root.Name}, Sort: []string{"id"}, Limit: 20}
+	definition := Definition{Ref: binding.Ref, Version: binding.SourceVersion, Query: &named}
+	p := Page{Name: "picker", Object: root, Layout: "composed", Sections: []Section{
+		{ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window", RecordPicker: &PageRecordPicker{LabelField: "name"}},
+		{ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "selected", RecordCard: &PageRecordCard{LabelField: "name", Tone: "neutral"}, Fields: []string{"name"}},
+	}, Document: &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"picker", "card"}}, "picker": {Kind: "widget", Section: "picker"}, "card": {Kind: "widget", Section: "card"}}, Queries: map[string]PageQuery{"coded": {Interface: shape.Name, Query: &binding, Limit: 20, Sort: []string{"id"}}}, Variables: map[string]PageVariable{
+		"window":   {Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "coded"}},
+		"selected": {Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "picker"}},
+	}}}
+	if err := p.Document.Check(p.Sections); err != nil {
+		t.Fatal(err)
+	}
+	for _, err := range []error{p.CheckCollectionPorts(), p.CheckRecordPorts(), p.CheckInterfaceQuery(p.Document.Queries["coded"], &definition), p.CheckInterfaceSection(p.Sections[0], &definition), p.CheckInterfaceSection(p.Sections[1], &definition)} {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if p.WindowVariableInterface("window") != shape.Name || p.RecordVariableInterface("selected") != shape.Name || p.RecordVariableObject("selected") != "" || p.RecordResourceObject("selected") != (AssetRef{}) {
+		t.Fatal("interface record acquired a fabricated concrete identity")
+	}
+	page, err := PageReleaseAsset("sample", "page-1", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	object := ReleaseAsset{Ref: root, SourceVersion: "object-1", ContractVersion: 1, Body: Raw(EntityInfo{App: root.App, Type: root.Name, Implements: []string{shape.Name}, Fields: []FieldInfo{{Name: "name", Type: "text"}}})}
+	query := ReleaseAsset{Ref: binding.Ref, SourceVersion: binding.SourceVersion, ContractVersion: 1, Requires: []AssetRef{root}, Body: Raw(named)}
+	if _, err := Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, query, object}); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name   string
+		change func(*Page, *Definition)
+	}{
+		{"changed query version", func(_ *Page, d *Definition) { d.Version = "query-2" }},
+		{"subtype field", func(p *Page, _ *Definition) { p.Sections[1].Fields = []string{"secret"} }},
+		{"wrong concrete object", func(p *Page, _ *Definition) { p.Sections[0].Object = root }},
+		{"untyped ID state", func(p *Page, _ *Definition) { p.Sections[0].PickerValueVariable = "id" }},
+		{"unsupported consumer", func(p *Page, _ *Definition) { p.Sections[0].Widget = "table" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var changed Page
+			if err := json.Unmarshal(Raw(p), &changed); err != nil {
+				t.Fatal(err)
+			}
+			d := definition
+			test.change(&changed, &d)
+			if changed.CheckInterfaceSection(changed.Sections[0], &d) == nil && changed.CheckInterfaceSection(changed.Sections[1], &d) == nil {
+				t.Fatal("invalid interface binding accepted")
+			}
+		})
+	}
+	query.SourceVersion = "query-2"
+	if _, err := Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, query, object}); err == nil {
+		t.Fatal("frozen candidate ignored interface query version")
+	}
+	query.SourceVersion = binding.SourceVersion
+	object.Body = Raw(EntityInfo{App: root.App, Type: root.Name, Fields: []FieldInfo{{Name: "name", Type: "text"}}})
+	if _, err := Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, query, object}); err == nil {
+		t.Fatal("frozen candidate accepted a type that stopped implementing the interface")
+	}
+}
+
 func TestTableCollectionPortIsVersionedAndExclusive(t *testing.T) {
 	p := queryPlanPage()
 	for i := range p.Sections {

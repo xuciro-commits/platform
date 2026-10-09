@@ -753,6 +753,16 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	for _, s := range page.Sections {
+		if q, ok := page.InterfaceQueryForSection(s); ok {
+			named, err := frozenPageInterfaceQuery(q, lookup)
+			if err != nil {
+				return err
+			}
+			if err := page.CheckInterfaceSection(s, named); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := page.CheckExplorationBinding(s); err != nil {
 			return err
 		}
@@ -928,6 +938,9 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 		if s.Widget != "collection-analysis" && s.Widget != "record-comparison" && s.Widget != "record-card" && s.Widget != "sparkline-kpi" && s.Widget != "treemap" && s.Widget != "tag-counts" && s.Widget != "heatmap" && s.Widget != "record-scatter" && s.Widget != "record-map" && s.Widget != "histogram" && s.Widget != "term-counts" && s.Widget != "record-timeline" && s.Widget != "kanban" && s.Widget != "status-tracker" && s.Widget != "record-list" && s.Widget != "record-chart" && s.Widget != "record-events" && s.Widget != "record-picker" && s.Widget != "record-leaderboard" && s.Widget != "summary-stats" && s.Widget != "record-gantt" && s.Widget != "record-calendar" && s.MetricPresentation == nil {
 			continue
 		}
+		if page.SectionInterface(s) != "" {
+			continue // its frozen common shape was checked above
+		}
 		ref := s.Object
 		if ref.Name == "" {
 			ref = page.Object
@@ -970,6 +983,16 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 			}
 		}
 		for id, plan := range page.Document.Queries {
+			if plan.Interface != "" {
+				named, err := frozenPageInterfaceQuery(plan, lookup)
+				if err != nil {
+					return err
+				}
+				if err := page.CheckInterfaceQuery(plan, named); err != nil {
+					return fmt.Errorf("page query %s: %w", id, err)
+				}
+				continue
+			}
 			objectAsset, ok := lookup[plan.Object]
 			object, err := queryObjectDescriptor(objectAsset.Body)
 			if !ok || err != nil {
@@ -1045,12 +1068,13 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 // these representations before the shared query checker reads the schema.
 func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 	var shape struct {
-		Type      string                       `json:"type"`
-		Entity    *EntityInfo                  `json:"entity"`
-		Fields    []map[string]json.RawMessage `json:"fields"`
-		Lifecycle *LifecycleInfo               `json:"lifecycle"`
-		States    []State                      `json:"states"`
-		Actions   []struct {
+		Type       string                       `json:"type"`
+		Implements []string                     `json:"implements"`
+		Entity     *EntityInfo                  `json:"entity"`
+		Fields     []map[string]json.RawMessage `json:"fields"`
+		Lifecycle  *LifecycleInfo               `json:"lifecycle"`
+		States     []State                      `json:"states"`
+		Actions    []struct {
 			Name    string   `json:"name"`
 			Title   string   `json:"title"`
 			From    []string `json:"from"`
@@ -1150,7 +1174,7 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		}
 		shape.Lifecycle = &l
 	}
-	return EntityInfo{App: owner, Type: shape.Type, Fields: fields, Lifecycle: shape.Lifecycle}, nil
+	return EntityInfo{App: owner, Type: shape.Type, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements}, nil
 }
 
 // The narrow finite context profile keeps original complete object identity.

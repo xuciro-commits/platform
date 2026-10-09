@@ -191,6 +191,39 @@ for (const fixture of [
           await expect(page.getByText("Duplicate identity", { exact: true })).toBeVisible();
           if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: info.outputPath("interface-record.png"), fullPage: true });
 
+          const publishedQuery = (await builder.definitions()).find(d => d.ref.kind === "query" && d.ref.name === `${name}lookup`);
+          const pickerPage = await builder.page({ title: "Typed receiving selection", object: type,
+            sections: [
+              { id: "picker", widget: "record-picker", configVersion: 1, title: "Choose a receiving record", collectionVariable: "window", recordPicker: { labelField: "name" } },
+              { id: "card", widget: "record-card", configVersion: 1, title: "Confirmed receiving record", recordVariable: "selected", fields: ["code", "name"], recordCard: { labelField: "name", tone: "info" } },
+            ],
+            document: { formatVersion: 2, uiProfile: pageUIProfile, root: "root", nodes: { root: { kind: "rows", children: ["picker", "card"] }, picker: { kind: "widget", section: "picker" }, card: { kind: "widget", section: "card" } },
+              queries: { coded: { object: { app: "build", kind: "object", name: type }, limit: 20, sort: ["id"] } },
+              variables: { window: { scope: "page", type: "object-set", mode: "resource", source: { kind: "plan", query: "coded" } }, selected: { scope: "page", type: "record", mode: "resource", source: { kind: "record", section: "picker" } } },
+            },
+          });
+          await editor.open(builder, pickerPage.id);
+          await editor.inspector.getByRole("tab", { name: /^Queries/ }).click();
+          await page.getByRole("combobox", { name: "Named query binding", exact: true }).selectOption(`${publishedQuery.ref.app}/${publishedQuery.ref.name}@${publishedQuery.version}`);
+          await editor.saveUntil(builder, pickerPage.id, "record-picker", 1);
+          await expect.poll(async () => (await builder.record("build.page", pickerPage.id)).document.queries.coded.interface).toBe("core.coded");
+          await editor.release();
+          const pickerRuntime = await context.newPage();
+          await operator.open(pickerRuntime, `/page?app=build&kind=page&name=${pickerPage.name}`);
+          await pickerRuntime.getByRole("combobox", { name: "Choose a receiving record", exact: true }).fill(receipt);
+          await expect(pickerRuntime.getByRole("option").filter({ hasText: `Integration receipt · ${receipt}` })).toBeVisible();
+          await pickerRuntime.getByRole("option").filter({ hasText: `Reference receipt · ${receipt}` }).click();
+          await expect(pickerRuntime.getByRole("definition").filter({ hasText: /^Duplicate identity$/ })).toBeVisible();
+          await pickerRuntime.getByRole("button", { name: "Open selected record", exact: true }).click();
+          await expect(pickerRuntime.getByRole("heading", { name: "REF", exact: true })).toBeVisible();
+          await pickerRuntime.getByRole("button", { name: "Edit", exact: true }).click();
+          const editRecord = pickerRuntime.getByRole("dialog", { name: `Edit ${receipt}`, exact: true });
+          await editRecord.getByRole("textbox", { name: "Name", exact: true }).fill("Confirmed concrete target");
+          await editRecord.getByRole("button", { name: "Save", exact: true }).click();
+          await expect.poll(async () => (await operator.record(reference.type, receipt)).name).toBe("Confirmed concrete target");
+          expect((await operator.record(type, receipt)).item).toBe("A");
+          if (process.env.PLATFORM_SCREENSHOTS) await pickerRuntime.screenshot({ path: info.outputPath("interface-page-record.png"), fullPage: true });
+
           // Grant only the integration role; its delivery view must still redact host effect payloads.
           await builder.decide("platform.member.grant", { type: "platform.member", id: member.principalId }, { app: "build", role: "integrator" }, "platform");
           const integration = await context.newPage();

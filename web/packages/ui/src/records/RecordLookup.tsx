@@ -80,8 +80,8 @@ export function RecordLookup({ id, source, type, value, onChange, window, labelF
 
 /** Interface selection preserves the original type/id pair; opening or
  * acting on it goes through that type's ordinary authorized record path. */
-export function InterfaceRecordLookup({id,source,name,value,onChange,ariaLabel,disabled}: {
-  id?:string;source:RecordSource;name:string;value?:InterfaceRecordIdentity;onChange:(reference?:InterfaceRecordIdentity)=>void;ariaLabel?:string;disabled?:boolean;
+export function InterfaceRecordLookup({id,source,name,value,onChange,ariaLabel,disabled,window,labelField}: {
+  id?:string;source:RecordSource;name:string;value?:InterfaceRecordIdentity;onChange:(reference?:InterfaceRecordIdentity)=>void;ariaLabel?:string;disabled?:boolean;window?:LookupWindow<InterfaceRecordData>;labelField?:string;
 }) {
   const keyOf = (ref:InterfaceRecordIdentity) => JSON.stringify([ref.type,ref.id]);
   const prefix = (ref:InterfaceRecordIdentity) => `${source.entity(ref.type)?.title ?? ref.type} · ${ref.id}`;
@@ -89,7 +89,7 @@ export function InterfaceRecordLookup({id,source,name,value,onChange,ariaLabel,d
     read={(search,offset) => source.interfaceList ? source.interfaceList(name,{search,offset,limit:pageSize}) : Promise.reject(Error("Interface record read is unavailable"))}
     watch={source.watchInterfaceList ? (search,offset,changed) => source.watchInterfaceList!(name,{search,offset,limit:pageSize},changed) : undefined}
     onChange={row => onChange(row && {type:row.type,id:row.id})} keyOf={keyOf} label={row => {
-      const display=source.entity(row.type)?.display,value=display && row.record[display];
+      const display=labelField??source.entity(row.type)?.display,value=display && display!=="id" && row.record[display];
       return value ? `${prefix(row)} · ${String(value)}` : prefix(row);
-    }} ariaLabel={ariaLabel} disabled={disabled}/>;
+    }} window={window} ariaLabel={ariaLabel} disabled={disabled}/>;
 }

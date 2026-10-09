@@ -9,6 +9,21 @@ const contract = JSON.parse(readFileSync(new URL("../../../../../capabilities/se
 const info={type:"sample.note",fields:[{name:"bucket",type:"text"},{name:"active",type:"boolean"},{name:"count",type:"integer"}]};
 const variables={bucket:{scope:"page",type:"string",mode:"state",initial:"A"}};
 const plan={object:{app:"sample",kind:"object",name:info.type},limit:20,conditions:[{field:"bucket",op:"=",value:{variable:"bucket"}}]};
+test("interface page plans retain the exact query version and never fabricate a concrete source",()=>{
+ const binding={ref:{app:"sample",kind:"query",name:"coded"},sourceVersion:"one"};
+ const declaration={name:"coded",object:"",interface:"sample.coded",interfaceShape:{name:"sample.coded",fields:[{name:"name",type:"text"}]},implementations:["sample.a","sample.b"],sort:["id"],limit:20};
+ const named={ref:binding.ref,version:"two",query:{...declaration,implementations:["sample.c"]},queryVersions:{one:declaration}};
+ const q={object:{app:"",kind:"",name:""},interface:"sample.coded",query:binding,limit:20,sort:["id"]};
+ const result=compileQueryPlan(q,{}, {},undefined,named,contract);
+ assert.equal(result.status,"value");assert.equal(result.object,"");assert.equal(result.interface,q.interface);assert.deepEqual(result.binding,binding);assert.deepEqual(result.query,{sort:["id"],offset:0,limit:20});
+ const searched=queryView(q,result,{search:"SAME"},undefined,named,contract,"name");
+ assert.equal(searched.status,"value");assert.equal(searched.query.search,"SAME");assert.equal(searched.query.domain,undefined);
+ for(const change of [{object:plan.object},{for:{literal:"SAME"}},{input:"objects"},{conditions:plan.conditions},{sort:["name"]},{limit:21}])assert.equal(compileQueryPlan({...q,...change},{},{},undefined,named,contract).status,"error");
+ assert.equal(compileQueryPlan(q,{},{},undefined,{...named,queryVersions:{}},contract).status,"error");
+ assert.equal(queryView(q,result,{sort:["name"]},undefined,named,contract).status,"error");
+ const search={scope:"application",type:"string",mode:"shared",source:{kind:"application",variable:"search"}};
+ assert.equal(compileQueryPlan({...q,search:{variable:"search"}},{search},{search:{status:"value",value:"SAME"}},undefined,named,contract).query.search,"SAME");
+});
 test("optional typed facets retain fixed conditions and reject malformed or failed input instead of broadening reads",()=>{
  const variables={picked:{scope:"page",type:"string-set",mode:"state",initial:{kind:"string-set",values:[]}},minimum:{scope:"page",type:"string",mode:"state",initial:""}},q={...plan,conditions:[{field:"active",op:"=",value:{literal:true}},{field:"bucket",op:"in",value:{variable:"picked"},optional:true},{field:"count",op:">=",value:{variable:"minimum"},optional:true,asDecimal:true}]};
  const compile=(picked,minimum)=>compileQueryPlan(q,variables,{picked,minimum},info,undefined,contract),value=v=>({status:"value",value:v});

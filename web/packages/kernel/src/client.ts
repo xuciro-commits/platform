@@ -47,6 +47,11 @@ export class EdgeClient {
   interfaceRecordsPath(name:string,q:Omit<Query,"domain"> & {domain?:unknown[]}={}) {
     return `/v1/interfaces/${encodeURIComponent(name)}/records?${this.readParams(q)}`;
   }
+  namedQueryPath(binding:AssetBinding,q:{search?:string;offset?:number;limit?:number}={}) {
+    if(binding.ref.kind!=="query"||!binding.sourceVersion)throw Error("Invalid named query binding");
+    const p=this.readParams(q);p.set("version",binding.sourceVersion);
+    return `/v1/queries/${encodeURIComponent(binding.ref.app)}/${encodeURIComponent(binding.ref.name)}?${p}`;
+  }
   aggregatePath(type: string, q: Omit<AggregateQuery,"domain"> & {domain?:unknown[]} = {}) {
     if (q.window || q.histogram || q.set || q.traversal || q.maxRows) return `/v1/aggregates/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
     const p = this.readParams(q);

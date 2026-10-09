@@ -119,6 +119,9 @@ func (s Section) CheckCollaborationServices(object func(AssetRef) (EntityInfo, b
 // RecordResourceObject resolves an admitted shared record or a local record
 // resource through its original producer; it retains the complete object identity, including owner.
 func (p Page) RecordResourceObject(variable string) AssetRef {
+	if p.RecordVariableInterface(variable) != "" {
+		return AssetRef{}
+	}
 	if p.Document == nil {
 		return AssetRef{}
 	}

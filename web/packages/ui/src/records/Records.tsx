@@ -78,6 +78,8 @@ export type RecordSource = {
   aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;
   interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;
   watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;
+  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;
+  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;
   /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */
   revision?: number;
   watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;

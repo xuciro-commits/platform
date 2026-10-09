@@ -2,6 +2,7 @@ import type { Api } from "@platform/kernel";
 import type { PageSessionSnapshot } from "./Session";
 import { variablePlan } from "./query-plans";
 import type { VariableResult } from "./variables";
+import {interfaceQueryForSection} from "./ontology-interface";
 
 export const recordSlot = (object: string, name?: string, overlay?:string) => `${overlay?`overlay:${overlay}/`:""}${name ? `selection:${name}` : "object"}/${object}`;
 export const recordOutputSlot=(page:Api.Page,section:Api.Section,port:string)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-output/${section.id??""}/${port}`;
@@ -24,6 +25,7 @@ export function sectionOverlay(page:Api.Page,section:string):string|undefined {
 export function selectionSlot(page:Api.Page,section:Api.Section,parent=false):string {
  const object=parent?(section.parentSelection?page.selections?.find((s)=>s.name===section.parentSelection)?.object.name??"":page.object.name):section.object?.name||page.object.name;
  const name=parent?section.parentSelection:section.selection,owner=sectionOverlay(page,section.id??"");
+ if(!parent&&interfaceQueryForSection(page,section))return `${owner?`overlay:${owner}/`:""}interface-record/${section.id??""}`;
  const profile=Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1]);
  // Application producers share the output, not each other's query-confirmation lease.
  if(!parent&&profile>=95&&section.selectionVariable&&section.id)return `record-producer/${section.id}/${object}`;

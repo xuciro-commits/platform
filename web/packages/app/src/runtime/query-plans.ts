@@ -7,6 +7,7 @@ import type {Api,pageUIManifest} from "@platform/kernel";
 import type { EntityInfo, RecordQuery } from "@platform/ui";
 import type { ResourceValue, VariableResult } from "./variables";
 import type { QueryView } from "./Session";
+import {interfaceWindowSignature} from "./ontology-interface";
 
 /** Resolve only the explicitly selected retained query version. */
 export function boundQueryDefinition(definition: Api.Definition | undefined, binding: Api.AssetBinding | undefined): Api.Definition | undefined {
@@ -23,11 +24,16 @@ export function variablePlan(page:Api.Page,variableID:string):string|undefined {
 }
 export const planKey = (id: string) => `plan/${id}`;
 type Contract = typeof pageUIManifest.runtime.query;
-export type QueryPlanResult = { status: "value"; object: string; query: RecordQuery; signature: string;sortLocked?:boolean;collection?:import("./collection-input").CollectionInput;localQuery?:RecordQuery } | { status: "empty" | "pending" } | { status: "error"; code: string };
+export type QueryPlanResult = { status: "value"; object: string; interface?:string;binding?:Api.AssetBinding;query: RecordQuery; signature: string;sortLocked?:boolean;collection?:import("./collection-input").CollectionInput;localQuery?:RecordQuery } | { status: "empty" | "pending" } | { status: "error"; code: string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|NumberValue|DecimalValue|import("./decimal").StringSetValue|ResourceValue};
 const failed = (code: string): QueryPlanResult => ({ status: "error", code });
 type QueryGraph={id:string;plans:Record<string,Api.PageQuery>};
+function variableUsesPlan(id:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],seen=new Set<string>()):boolean {
+  if(seen.has(id))return false;seen.add(id);
+  const variable=variables[id];
+  return variable?.mode==="property"&&!!variable.source?.variable&&variableUsesPlan(variable.source.variable,variables,sections,seen)||variable?.source?.kind==="plan"||variable?.mode==="aggregate"||!!variable?.source?.section&&!!sections.find(s=>s.id===variable.source!.section)?.collectionVariable||!!variable?.expression?.args.some(arg=>!!arg.variable&&variableUsesPlan(arg.variable,variables,sections,seen));
+}
 
 /** Only an actual contextual view may consume an independent confirmed record producer. */
 function recordContextQueryInput(variable:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],graph:QueryGraph):boolean {
@@ -61,6 +67,11 @@ function variableDependsOnQuery(variable:string,target:string,variables:Record<s
 export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, pickerTitle?:string): QueryPlanResult {
   named=plan.query?boundQueryDefinition(named,plan.query):named;
   if(base.status!=="value" || !view) return base;
+  if(base.interface&&base.binding){
+    if(view.sort!==undefined||view.offset!==undefined&&(!Number.isInteger(view.offset)||view.offset<0||view.offset>contract.maxOffset)||view.search!==undefined&&(plan.search||new TextEncoder().encode(view.search).length>4096))return failed("Interface query window is unavailable or incompatible.");
+    const query={...base.query,...view.offset===undefined?{}:{offset:view.offset},...view.search===undefined?{}:{search:view.search}};
+    return {...base,query,signature:interfaceWindowSignature(base.interface,base.binding,query)};
+  }
   if(base.collection&&base.localQuery){
    const local=queryView(plan,{...base,query:base.localQuery,collection:undefined,localQuery:undefined},view,info,named,contract,pickerTitle);if(local.status!=="value")return local;
    const query=collectionQuery(base.collection,local.query,view.sort??plan.sort);return query?{...base,query,signature:JSON.stringify([base.object,query])}:failed("Collection query exceeds its budget or ordering contract.");
@@ -84,11 +95,26 @@ export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: Quer
 /** Build the finite read shape from member-visible descriptors and explicit
  * values. It emits the original RecordQuery, never source text or SQL. */
 export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:Api.Section[]=[],setPredicate=false,graph?:QueryGraph): QueryPlanResult {
+  if(plan.interface){
+    const selected=boundQueryDefinition(named,plan.query),declared=selected?.query,ordering=declared?.sort?.length?declared.sort:["id"];
+    if(!plan.query||selected?.ref.app!==plan.query.ref.app||selected.ref.name!==plan.query.ref.name||declared?.interface!==plan.interface||!declared.interfaceShape||plan.object.name||plan.object.app||plan.object.kind||plan.input||plan.for||plan.direction||plan.itemOwner||plan.set||plan.conditions?.length||!Number.isInteger(plan.limit)||plan.limit<1||plan.limit>Math.min(contract.maxLimit,declared.limit||contract.maxLimit)||!Number.isInteger(plan.offset??0)||(plan.offset??0)<0||(plan.offset??0)>contract.maxOffset||plan.sort?.length&&JSON.stringify(plan.sort)!==JSON.stringify(ordering))return failed("Interface query window is unavailable or incompatible.");
+    let search:string|undefined;
+    if(plan.search){
+      const binding=plan.search,v=binding.variable?variables[binding.variable]:undefined;
+      if(!!binding.variable===(binding.literal!==undefined)||binding.variable&&(!v||v.type!=="string"||!(v.scope==="page"||v.scope==="application"||v.scope==="overlay"&&v.owner===plan.owner&&!!plan.owner)||variableUsesPlan(binding.variable,variables,sections)))return failed("Query parameter escapes its input scope.");
+      const result=binding.variable?values[binding.variable]:{status:"value" as const,value:binding.literal};
+      if(!result)return {status:"empty"};if(result.status!=="value")return result;
+      if(typeof result.value!=="string"||new TextEncoder().encode(result.value).length>4096)return failed("Query search requires text.");
+      search=result.value;
+    }
+    const query:RecordQuery={sort:ordering,offset:plan.offset??0,limit:plan.limit,...search===undefined?{}:{search}};
+    return {status:"value",object:"",interface:plan.interface,binding:plan.query,sortLocked:true,query,signature:interfaceWindowSignature(plan.interface,plan.query,query)};
+  }
   if(plan.set)return failed("A set plan requires its source graph.");
   if(plan.itemOwner&&!plan.query&&!setPredicate)return failed("Item query needs its typed parent record.");
   if (!info || info.type !== plan.object.name || plan.object.kind !== "object" || plan.limit < 1 || plan.limit > contract.maxLimit || !Number.isInteger(plan.limit) || !Number.isInteger(plan.offset ?? 0) || (plan.offset ?? 0) < 0 || (plan.offset ?? 0) > contract.maxOffset || (plan.conditions?.length ?? 0) > contract.maxConditions || (plan.sort?.length ?? 0) > contract.maxSort) return failed("Query plan is unavailable or exceeds its budget.");
   const field = (name: string) => ["id", "created", "changed"].includes(name) ? { name, type: name === "id" ? "text" : "datetime", ref: undefined } : info.fields.find((field) => field.name === name);
-  const usesPlan = (id: string, seen = new Set<string>()): boolean => { if (seen.has(id)) return false; seen.add(id); const variable = variables[id]; return variable?.mode==="property"&&!!variable.source?.variable&&usesPlan(variable.source.variable,seen)||variable?.source?.kind === "plan" || variable?.mode === "aggregate" || !!variable?.source?.section && !!sections.find((s)=>s.id===variable.source!.section)?.collectionVariable || !!variable?.expression?.args.some((arg) => arg.variable && usesPlan(arg.variable, seen)); };
+  const usesPlan = (id:string) => variableUsesPlan(id,variables,sections);
   const read = (binding: Api.PageValue): QueryValueResult => {
     if (!!binding.variable === (binding.literal !== undefined)) return { status: "error", code: "Query value needs one variable or literal." };
     if (!binding.variable) {

@@ -1,5 +1,11 @@
 import { createWidgetDefinitions } from "@platform/app";
 import {lazyInspector} from "./lazy-inspector";
+import type {ComponentType} from "react";
+import type {Api} from "@platform/kernel";
+import type {EntityInfo} from "@platform/ui";
+import type {AuthoringSection} from "../draft";
+
+export type WidgetBindingInspectorPorts={section:AuthoringSection;sections:AuthoringSection[];document:Api.PageDocument;object:string;info?:EntityInfo;overlay?:string;itemOwner?:string;onChange:(patch:Partial<AuthoringSection>)=>void;onResourcesChange:(patch:Partial<AuthoringSection>,variables:Record<string,Api.PageVariable>)=>void};
 
 const CollectionBuilderInspector=lazyInspector(()=>import("./CollectionBuilderInspector").then(module=>module.CollectionBuilderInspector));
 const MapInspector=lazyInspector(()=>import("./SpatialInspectors").then(module=>module.MapInspector));
@@ -152,6 +158,12 @@ export function widgetInspector(id:string,version:number) {
     bindings:"bindings" in implementation?implementation.bindings:undefined,
     events:"events" in implementation?implementation.events:undefined,
   }:undefined;
+}
+
+/** Bindings receive one owner context; the registry retains per-widget props
+ * checking without asking JSX to intersect every specialized component. */
+export function widgetBindingInspector(id:string,version:number):ComponentType<WidgetBindingInspectorPorts>|undefined {
+  return widgetInspector(id,version)?.bindings;
 }
 
 /** Unknown versions are distinct from the seven deliberately common editors. */

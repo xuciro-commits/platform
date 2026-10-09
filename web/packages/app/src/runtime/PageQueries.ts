@@ -7,6 +7,7 @@ import { findDefinition, useHost } from "../index";
 import type { PageSessionStore, PageSessionSnapshot, QueryView } from "./Session";
 import type { VariableResult } from "./variables";
 import { boundQueryDefinition, compileQueryPlans, queryView, variablePlan, planKey } from "./query-plans";
+import {interfaceWindowSignature} from "./ontology-interface";
 
 export function usePageQueries(page: Api.Page, values: Record<string, VariableResult>, session: PageSessionStore, snapshot: PageSessionSnapshot, overlays:Record<string,Record<string,VariableResult>>={}, editingOverlay?:string,itemOwner?:string,keepOnUnmount=false) {
   const reader=session.readSource();
@@ -40,10 +41,14 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
   useEffect(() => {
     for(const [id,result] of base)session.reconcileQueryBase(planKey(id),result.status==="value"?result.signature:undefined);
     for (const [id, plan] of compiled) {
-      if (plan.status === "value") void session.querySource(planKey(id)).list(plan.object, plan.query).catch(() => {});
+      if (plan.status === "value") void (plan.interface&&plan.binding?session.interfaceQuery(planKey(id),plan.interface,plan.binding,plan.query):session.querySource(planKey(id)).list(plan.object, plan.query)).catch(() => {});
       else session.clearQuery(planKey(id));
     }
   }, [session, requestKey, source.scope, source.revision, reader.scope,reader.revision, round]);
+  useEffect(()=>{
+    const stops=compiled.flatMap(([id,plan])=>plan.status==="value"&&plan.interface&&plan.binding?[session.watchInterfaceQuery(planKey(id),plan.interface,plan.binding,plan.query,()=>rerun(n=>n+1))]:[]);
+    return ()=>stops.forEach(stop=>stop());
+  },[session,requestKey,source.scope,reader.scope]);
   const ids = JSON.stringify(Object.keys(plans));
   useEffect(() => () => {if(!keepOnUnmount)session.resetQueries(JSON.parse(ids).map(planKey))}, [session, ids,keepOnUnmount]);
   const resources: Record<string, VariableResult> = Object.fromEntries((page.sections??[]).filter(s=>s.widget==="collection-builder"&&s.collectionOutputVariable).map(s=>[s.collectionOutputVariable!,builders[s.id!]?.result as VariableResult])), signatures: Record<string, string> = {};
@@ -55,7 +60,7 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
     signatures[queryID] = plan.signature;
     const state = snapshot.queries[planKey(queryID)];
     const window = state && "value" in state ? state.value : undefined;
-    const matches = window && JSON.stringify([window.object, window.query]) === plan.signature;
+    const matches = window && (window.interface&&window.binding?interfaceWindowSignature(window.interface,window.binding,window.query):JSON.stringify([window.object, window.query])) === plan.signature;
     resources[id] = state?.status === "error" && session.querySignature(planKey(queryID)) === plan.signature ? { status: "error", code: "Resource read failed" } : state?.status === "pending" || !matches ? { status: "pending" }
       : window!.records.length ? { status: "value", value: { kind: "object-set", window: window! } } : { status: "empty", value: { kind: "object-set", window: window! } };
   }
@@ -64,11 +69,13 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
   for(const variable of Object.keys(page.document?.variables??{})){
    const id=variablePlan(page,variable),plan=id?plans[id]:undefined,result=compiled.find(([key])=>key===id)?.[1];if(!plan||!result)continue;
    if(result.status!=="value"){collectionInputs[variable]=result;continue;}
+   if(result.interface){collectionInputs[variable]={status:"error",code:"Interface windows retain typed record references and cannot become concrete collection inputs."};continue;}
    if(snapshot.queries[planKey(id!)]?.status==="error"&&session.querySignature(planKey(id!))===result.signature){collectionInputs[variable]={status:"error",code:"Resource read failed"};continue;}
    const original=bindings(id!),distinct=Array.from(new Map(original.map(b=>[JSON.stringify(b),b])).values()),sortLocked=!!result.sortLocked||!!(plan.query&&boundQueryDefinition(findDefinition(definitions,plan.query.ref),plan.query)?.query?.sort?.length);
    collectionInputs[variable]={status:"value",value:collectionInput(plan.object,result.query,distinct,sortLocked)};
   }
   const windows = Object.fromEntries(compiled.map(([id,result]) => [id,result.status==="value" ? {
+    interface:result.interface,interfacePage:result.interface?session.interfacePage(planKey(id),result.signature):undefined,
     query:result.query,page:session.queryPage(planKey(id),result.signature),error:snapshot.queries[planKey(id)]?.status==="error"&&session.querySignature(planKey(id))===result.signature?"Resource read failed":undefined,
     inputSearch:picker(id)?snapshot.views[planKey(id)]?.search??"":undefined,searchLocked:ranked(id)||!picker(id)&&!!plans[id]?.search,sortLocked:!!result.sortLocked||observation(id)||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)||!!(plans[id]?.query&&boundQueryDefinition(findDefinition(definitions,plans[id]!.query!.ref),plans[id]!.query)?.query?.sort?.length),maxOffset:fixedObservation(id)||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)?0:pageUIManifest.runtime.query.maxOffset,
     onChange:(change:QueryView)=>{if(fixedObservation(id)||observation(id)&&change.sort!==undefined||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)&&(change.sort!==undefined||change.offset!==undefined&&change.offset!==0))return;const original=base.find(([key])=>key===id)?.[1];if(original?.status!=="value")return;const next=queryView(plans[id]!,original,{...(snapshot.views[planKey(id)]?.base===original.signature?snapshot.views[planKey(id)]:{}),...change},source.entity(plans[id]!.object.name),plans[id]?.query?findDefinition(definitions,plans[id]!.query!.ref):undefined,pageUIManifest.runtime.query,pickerTitle(id));if(next.status==="value")session.setQueryView(planKey(id),original.signature,change);}

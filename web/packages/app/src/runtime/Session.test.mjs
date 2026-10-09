@@ -7,6 +7,43 @@ const deferred = () => { let resolve, reject; const promise = new Promise((a, b)
 const record = (id) => ({ id, revision: 1, note: id });
 const plan = () => ({ objects: new Map([["parent", "sample.parent"], ["child", "sample.child"]]), children: new Map([["parent", new Set(["child"])]]), queryParents: new Map([["children", "parent"]]) });
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+test("interface windows keep duplicate IDs distinct and confirm only authorized typed members",async()=>{
+  const binding={ref:{app:"sample",kind:"query",name:"coded"},sourceVersion:"one"};
+  const rows=[{type:"sample.a",id:"SAME",record:record("SAME")},{type:"sample.b",id:"SAME",record:record("SAME")}];
+  let requests=0;
+  const reads=[];
+  const source={scope:"member",entity:()=>({fields:[]}),list:async()=>{throw Error("Interface became an object");},namedInterfaceList:async b=>{assert.deepEqual(b,binding);requests++;return {records:rows,total:2};},get:async(type,id)=>{reads.push([type,id]);return {record:{...record(id),name:type}};}};
+  const p={objects:new Map(),interfaces:new Map([["selected",new Set(["sample.a","sample.b"])]]),children:new Map(),queryParents:new Map(),querySelections:new Map([["coded",new Set(["selected"])]])};
+  const store=new PageSessionStore(source,p),query={limit:20,sort:["id"]};
+  await Promise.all([store.interfaceQuery("coded","sample.coded",binding,query),store.interfaceQuery("coded","sample.coded",binding,query)]);
+  assert.equal(requests,1);
+  assert.deepEqual(store.snapshot().queries.coded.value.records,[{object:"sample.a",id:"SAME"},{object:"sample.b",id:"SAME"}]);
+  await store.confirmInterfaceSelection("selected",rows[1],"coded");
+  assert.deepEqual(store.snapshot().records.selected.value,{object:"sample.b",id:"SAME"});
+  assert.equal(store.confirmedSelected("selected").name,"sample.b");
+  await store.confirmInterfaceSelection("selected",{...rows[1],type:"sample.hidden"},"coded");
+  await store.confirmInterfaceSelection("selected",{...rows[1],id:"hidden"},"coded");
+  await store.confirmInterfaceSelection("selected",rows[0],"foreign");
+  assert.deepEqual(reads,[["sample.b","SAME"]]);
+  store.updateSource({...source,scope:"different-member"});
+  assert.equal(store.snapshot().records.selected.status,"empty");
+  await store.confirmInterfaceSelection("selected",rows[1],"coded");
+  assert.deepEqual(reads,[["sample.b","SAME"]]);
+});
+
+test("interface query changes and late concrete reads cannot restore retired selection",async()=>{
+  const pending=deferred(),row={type:"sample.b",id:"SAME",record:record("SAME")},binding={ref:{app:"sample",kind:"query",name:"coded"},sourceVersion:"one"};
+  const source={scope:"member",entity:()=>({fields:[]}),list:async()=>({records:[],total:0}),namedInterfaceList:async()=>({records:[row],total:1}),get:()=>pending.promise};
+  const p={objects:new Map(),interfaces:new Map([["selected",new Set([row.type])]]),children:new Map(),queryParents:new Map(),querySelections:new Map([["coded",new Set(["selected"])]])};
+  const store=new PageSessionStore(source,p),query={limit:20,sort:["id"]};
+  await store.interfaceQuery("coded","sample.coded",binding,query);
+  const selected=store.confirmInterfaceSelection("selected",row,"coded");
+  assert.equal(store.snapshot().records.selected.status,"pending");
+  await store.interfaceQuery("coded","sample.coded",{...binding,sourceVersion:"two"},query);
+  pending.resolve({record:record("SAME")});await selected;
+  assert.equal(store.snapshot().records.selected.status,"empty");
+  assert.equal(store.confirmedSelected("selected"),undefined);
+});
 test("record sets confirm authorized window members, preserve producer isolation and retire failed or obsolete reads",async()=>{
  const reads=new Map(),source={scope:"member",revision:1,entity:()=>({fields:[]}),list:async()=>({records:[record("A"),record("B")],total:2}),get:(_type,id)=>{const read=deferred();reads.set(id,read);return read.promise;}},p={objects:new Map([["set","sample.note"],["other","sample.note"]]),children:new Map(),queryParents:new Map(),querySelections:new Map([["read",new Set(["set"])],["other-read",new Set(["other"])]])},store=new PageSessionStore(source,p);
  await store.querySource("read").list("sample.note",{limit:2});await store.querySource("other-read").list("sample.note",{limit:2});store.selectSet("set",["hidden"],"read");assert.equal(store.snapshot().recordSets.set,undefined);

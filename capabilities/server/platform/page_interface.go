@@ -69,6 +69,9 @@ func (d *PageDocument) checkInterface() error {
 }
 
 func (p Page) RecordVariableObject(variable string) string {
+	if p.RecordVariableInterface(variable) != "" {
+		return ""
+	}
 	d := p.Document
 	if d == nil {
 		return ""
@@ -173,7 +176,7 @@ func (p Page) NavigationTargets() []AssetRef {
 
 func (p Page) CheckRecordPorts() error {
 	for _, s := range p.Sections {
-		if s.Widget == "record-card" {
+		if s.Widget == "record-card" && p.SectionInterface(s) == "" {
 			object := s.Object
 			if object.Name == "" {
 				object = p.Object

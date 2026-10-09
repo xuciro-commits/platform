@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Interface query window is unavailable or incompatible.": "接口查询窗口不可用或不兼容。",
+  "Interface windows retain typed record references and cannot become concrete collection inputs.": "接口窗口保留对象类型与记录标识，不能转换为单一对象的集合输入。",
+  "The record could not be confirmed.": "无法确认此记录的访问权限。",
+  "Selection retains the original object type and record ID.": "选择保留原对象类型和记录 ID。",
+  "Open selected record": "打开所选记录",
   "Module": "模块",
   "Dependency release": "依赖发布",
   "Application runtime diagnostics": "应用运行诊断",

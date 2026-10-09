@@ -17,6 +17,8 @@ import {
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+export {boundQueryDefinition} from "./runtime/query-plans";
+export {interfaceQueryForSection} from "./runtime/ontology-interface";
 import { readPlaceholder } from "./runtime/read-placeholder";
 import { NewActions, RecordActions, useTransition, useRecordArchive } from "./actions/actions";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";

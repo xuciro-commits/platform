@@ -281,6 +281,9 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 // page's selections, and the parent selections bound so far.
 func (t *Tenant) checkSection(p platform.Page, page platform.EntityInfo, i int, s platform.Section, selections, parentBindings map[string]string) error {
 	where := fmt.Sprintf("page %s, section %d (%s)", p.Name, i+1, s.Widget)
+	if q, ok := p.InterfaceQueryForSection(s); ok {
+		return p.CheckInterfaceSection(s, pageNamedQuery(t.definitions, q.Query))
+	}
 	if owner, read := s.WorkViewRead(); read != "" {
 		app := t.owner["read:"+read]
 		if app == nil || app.Manifest().ID != owner {

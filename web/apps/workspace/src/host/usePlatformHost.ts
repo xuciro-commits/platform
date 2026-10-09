@@ -85,6 +85,8 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       list: (type, q) => client.records<RecordPageData>(type, q),
       interfaceList: (name,q) => client.get<InterfaceRecordPageData>(client.interfaceRecordsPath(name,q)),
       watchInterfaceList: (name,q,changed) => client.subscribeRead(client.interfaceRecordsPath(name,q),changed),
+      namedInterfaceList: (binding,q) => client.get<InterfaceRecordPageData>(client.namedQueryPath(binding,q)),
+      watchNamedInterfaceList: (binding,q,changed) => client.subscribeRead(client.namedQueryPath(binding,q),changed),
       get: (type, id) => client.record<RecordView>(type, id),
       aggregate: (type, q) => client.aggregate<AggregateData>(type, q),
       watchList: (type, q, changed) => client.subscribeRead(client.recordsPath(type, q), changed),

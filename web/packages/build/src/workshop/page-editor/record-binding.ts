@@ -10,6 +10,7 @@ export function originalRecordObject(document:Api.PageDocument,sections:Producer
  if(v.source?.kind==="item"){const set=document.variables?.[document.nodes[v.owner??""]?.loop?.collection??""];return set?.source?.kind==="plan"?document.queries?.[set.source.query??""]?.object:set?.source?.object??object(set?.source?.section);}
  if(v.mode!=="resource"||v.source?.kind!=="record")return;
  const producer=sections.find(s=>s.id===v.source?.section),port=v.source.port;if(!producer)return;
+ const window=document.variables?.[producer.collectionVariable??""];if(window?.source?.kind==="plan"&&document.queries?.[window.source.query??""]?.interface)return;
  if(producer.widget==="graph-explorer")return producer.graphExplorer?.outputs?.find(o=>o.id===port&&o.variable===variable)?.object;
  if(producer.widget==="observation"){const c=producer.observation;if(c?.kind!=="table")return;if(port==="asset"&&c.assetOutput===variable)return c.assetObject;if(port==="row"&&c.rowOutput===variable){const set=document.variables?.[producer.collectionVariable??""];return set?.source?.kind==="plan"?document.queries?.[set.source.query??""]?.object:undefined;}return;}
  return port?undefined:object(producer.id);

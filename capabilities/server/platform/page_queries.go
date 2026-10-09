@@ -17,6 +17,7 @@ type PageQuery struct {
 	Owner      string               `json:"owner,omitempty"` // empty: page; otherwise an Overlay identity
 	Title      string               `json:"title,omitempty"`
 	Object     AssetRef             `json:"object"`
+	Interface  string               `json:"interface,omitempty"`
 	Query      *AssetBinding        `json:"query,omitempty"`
 	Conditions []PageQueryCondition `json:"conditions,omitempty"`
 	Search     *PageValue           `json:"search,omitempty"`
@@ -125,7 +126,11 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 				return fmt.Errorf("page query %s needs a v2.11 overlay owner", id)
 			}
 		}
-		if !pageNodeID.MatchString(id) || len(q.Title) > 1024 || q.Object.Check() != nil || q.Object.Kind != AssetObject || q.Limit < 1 || q.Limit > c.MaxLimit || q.Offset < 0 || q.Offset > c.MaxOffset || len(q.Conditions) > c.MaxConditions || len(q.Sort) > c.MaxSort {
+		validSource := q.Object.Check() == nil && q.Object.Kind == AssetObject && q.Interface == ""
+		if q.Interface != "" {
+			validSource = PageUIProfileSupports(d.UIProfile, c.InterfaceUIProfile) && pageNodeID.MatchString(q.Interface) && q.Object == (AssetRef{}) && q.Query != nil && q.Query.Ref.Kind == AssetQuery && q.Input == "" && q.For == nil && q.Set == nil && q.Direction == "" && q.ItemOwner == "" && len(q.Conditions) == 0 && inputScope != "application"
+		}
+		if !pageNodeID.MatchString(id) || len(q.Title) > 1024 || !validSource || q.Limit < 1 || q.Limit > c.MaxLimit || q.Offset < 0 || q.Offset > c.MaxOffset || len(q.Conditions) > c.MaxConditions || len(q.Sort) > c.MaxSort {
 			return fmt.Errorf("page query %s has an invalid identity, object or budget", id)
 		}
 		if q.Input != "" {
@@ -271,7 +276,9 @@ func (p Page) QueryReferences() []AssetRef {
 	var refs []AssetRef
 	if p.Document != nil {
 		for _, q := range p.Document.Queries {
-			refs = append(refs, q.Object)
+			if q.Object.Name != "" {
+				refs = append(refs, q.Object)
+			}
 			if q.Query != nil {
 				refs = append(refs, q.Query.Ref)
 			}
@@ -312,6 +319,9 @@ func (p Page) WindowVariableObject(id string) string {
 // CheckQuerySchema compares original member-visible descriptors. Compilation
 // uses unfiltered descriptors; discovery calls it with this member's fields.
 func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition) error {
+	if q.Interface != "" {
+		return p.CheckInterfaceQuery(q, named)
+	}
 	for _, section := range p.Sections {
 		if section.SceneSampleCollectionVariable == "" || section.Scene == nil || p.Document == nil {
 			continue
@@ -445,6 +455,12 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 // CheckCollectionPorts keeps table object identity on the same frozen edge.
 func (p Page) CheckCollectionPorts() error {
 	for _, s := range p.Sections {
+		if p.SectionInterface(s) != "" {
+			if s.Widget != "record-picker" && s.Widget != "record-card" || s.Object != (AssetRef{}) || s.Selection != "" || s.SelectionVariable != "" || s.SelectionSetVariable != "" || s.FilterVariable != "" || s.ParentSelection != "" || s.Relation != "" || s.Query != (AssetRef{}) || len(s.Actions) > 0 || s.Operation != nil || s.Function != nil || len(s.Inputs) > 0 || s.PickerValueVariable != "" {
+				return fmt.Errorf("interface records need an original typed picker or card without untyped actions or ID outputs")
+			}
+			continue
+		}
 		if s.SelectionSetVariable != "" && p.Document != nil && p.Document.Variables[s.SelectionSetVariable].Mode == "shared" {
 			object := s.Object
 			if object.Name == "" {

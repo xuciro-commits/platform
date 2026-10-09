@@ -26,7 +26,7 @@ func TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers(t *testing
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	at := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
 	for _, name := range []string{"alpha", "beta", "private"} {
-		fields := []build.Field{{Name: "code", Title: "Code", Type: "text", Search: true}, {Name: "name", Title: "Name", Type: "text", Search: true}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}
+		fields := []build.Field{{Name: "code", Title: "Code", Type: "text", Search: true}, {Name: "name", Title: "Name", Type: "text", Search: true}, {Name: "secret", Title: "Secret", Type: "text", Search: true, Read: []string{build.Builder}}}
 		if name == "private" {
 			fields[0].Read = []string{build.Builder}
 		}
@@ -57,6 +57,12 @@ func TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers(t *testing
 	window.Domain = json.RawMessage(`[["secret","=","private-data"]]`)
 	if _, err := tn.InterfaceRecords(reader, "core.coded", window, at); err == nil {
 		t.Fatal("interface condition read a subtype or hidden field")
+	}
+	if page, err := tn.InterfaceRecords(memberOf(t, tn, "builder"), "core.coded", platform.Query{Search: "private-data"}, at); err != nil || page.Total != 0 {
+		t.Fatalf("interface search matched subtype fields: %+v %v", page, err)
+	}
+	if info, _ := tn.entity("build.alpha"); !slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Name == "secret" }) {
+		t.Fatal("an interface read mutated the original object schema")
 	}
 
 	decide(t, tn, "builder", build.ID, "build.query.create", build.QueryType, "QUERY", map[string]any{"name": "coded", "title": "Coded records", "description": "Interface read", "interface": "core.coded", "domain": [][]any{{"code", "=", "DUP"}}, "sort": []string{"name"}, "limit": 20}, at)
@@ -100,6 +106,48 @@ func TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers(t *testing
 	decide(t, tn, "builder", build.ID, "build.query.publish", build.QueryType, "QUERY", map[string]any{}, at)
 	readVersion("1.query-1", 2)
 	readVersion("1.query-2", 3)
+	t.Run("published page keeps its interface source and member projection", func(t *testing.T) {
+		decide(t, tn, "builder", build.ID, "build.query.create", build.QueryType, "PICKERQUERY", map[string]any{"name": "pickerquery", "title": "Picker query", "description": "Select a concrete coded record", "interface": "core.coded", "sort": []string{"id"}, "limit": 20}, at)
+		decide(t, tn, "builder", build.ID, "build.query.publish", build.QueryType, "PICKERQUERY", map[string]any{}, at)
+		binding := platform.AssetBinding{Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetQuery, Name: "pickerquery"}, SourceVersion: "1.query-1"}
+		doc := &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"picker", "card"}}, "picker": {Kind: "widget", Section: "picker"}, "card": {Kind: "widget", Section: "card"}}, Queries: map[string]platform.PageQuery{"coded": {Interface: "core.coded", Query: &binding, Sort: []string{"id"}, Limit: 20}}, Variables: map[string]platform.PageVariable{
+			"window":   {Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "coded"}},
+			"selected": {Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "picker"}},
+		}}
+		sections := []build.Section{{ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window", RecordPicker: &platform.PageRecordPicker{LabelField: "name"}}, {ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "selected", Fields: []string{"code", "name"}, RecordCard: &platform.PageRecordCard{LabelField: "name", Tone: "neutral"}}}
+		decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "INTERFACEPAGE", map[string]any{"name": "interfacepage", "title": "Interface page", "object": "build.alpha", "document": doc, "sections": sections}, at)
+		preview, err := tn.PreviewRelease(builder, platform.AssetPage, "INTERFACEPAGE")
+		if err != nil || preview.Diagnostic != "" {
+			t.Fatalf("interface page preview: %+v %v", preview, err)
+		}
+		if _, err := tn.SaveReleaseCandidate(builder, platform.AssetPage, "INTERFACEPAGE", preview.CandidateID, "interface-page-save", at); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tn.ActivateRelease(builder, preview.CandidateID, "interface-page-active", at); err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, d := range tn.Definitions(reader) {
+			if d.Ref.Kind != platform.AssetPage || d.Ref.Name != "interfacepage" {
+				continue
+			}
+			found = true
+			if len(d.Page.Sections) != 2 || d.Page.Document.Queries["coded"].Interface != "core.coded" || d.Page.RecordVariableObject("selected") != "" || d.Page.RecordVariableInterface("selected") != "core.coded" {
+				t.Fatalf("page lost its interface producer: %+v", d.Page)
+			}
+			if err := d.Page.Document.Check(d.Page.Sections); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if !found {
+			t.Fatal("reader lost a readable interface page")
+		}
+		for _, d := range tn.Definitions(reader) {
+			if d.Ref.Kind == platform.AssetQuery && d.Ref.Name == "pickerquery" && slices.Contains(d.Query.Implementations, "build.private") {
+				t.Fatal("page query leaked a hidden implementation")
+			}
+		}
+	})
 	CheckReplay(t, tn, entries, compose)
 	t.Run("joint unpublished implementation", func(t *testing.T) {
 		fresh := compose()

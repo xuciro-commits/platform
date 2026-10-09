@@ -520,6 +520,13 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 	if len(page.Sections) > 0 {
 		sections := make([]platform.Section, 0, len(page.Sections))
 		for _, section := range page.Sections {
+			if q, ok := page.InterfaceQueryForSection(section); ok {
+				named := visiblePageInterfaceQuery(page, q, entities, registeredDefinitions)
+				if named != nil && page.CheckInterfaceSection(section, named) == nil {
+					sections = append(sections, section)
+				}
+				continue
+			}
 			if slices.ContainsFunc(section.ServiceDependencies(), func(ref platform.AssetRef) bool {
 				if ref.Kind != platform.AssetObject {
 					return false // write permission does not control discovery of a readable service
@@ -810,6 +817,12 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 				}
 			}
 			for id, q := range page.Document.Queries {
+				if q.Interface != "" {
+					if visiblePageInterfaceQuery(page, q, entities, registeredDefinitions) != nil {
+						doc.Queries[id] = q
+					}
+					continue
+				}
 				info, ok := entities[q.Object.Name]
 				if !ok {
 					continue

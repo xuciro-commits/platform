@@ -1795,6 +1795,7 @@ export type PageQuery = {
   owner?: string;
   title?: string;
   object: AssetRef;
+  interface?: string;
   query?: AssetBinding;
   conditions?: PageQueryCondition[];
   search?: PageValue;
@@ -3131,7 +3132,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.108",
+  "uiProfile": "platform.page.v2.109",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -8336,7 +8337,8 @@ export const pageUIManifest = {
     "platform.page.v2.105",
     "platform.page.v2.106",
     "platform.page.v2.107",
-    "platform.page.v2.108"
+    "platform.page.v2.108",
+    "platform.page.v2.109"
   ],
   "runtime": {
     "telemetry": {
@@ -8649,7 +8651,8 @@ export const pageUIManifest = {
       },
       "inventoryUIProfile": "platform.page.v2.97",
       "maxDeclaredPlans": 16,
-      "maxDeclaredTotalLimit": 1600
+      "maxDeclaredTotalLimit": 1600,
+      "interfaceUIProfile": "platform.page.v2.109"
     },
     "decimal": {
       "maxBytes": 128

@@ -164,7 +164,11 @@ func (t *Tenant) interfaceRecordsFrom(store *recordStore, m platform.Member, dec
 		if q.InterfaceShape.Implements(view.info) != nil {
 			continue
 		}
-		reads = append(reads, interfaceRead{et, view, hidden, visible})
+		commonView := *view
+		commonView.info.Fields = slices.DeleteFunc(slices.Clone(view.info.Fields), func(field platform.FieldInfo) bool {
+			return !slices.ContainsFunc(q.InterfaceShape.Fields, func(common platform.InterfaceField) bool { return common.Name == field.Name })
+		})
+		reads = append(reads, interfaceRead{et, &commonView, hidden, visible})
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()

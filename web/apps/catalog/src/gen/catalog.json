@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:428fd35a01497b8b",
+  "revision": "sha256:a7d69335566bfa56",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4755,6 +4755,7 @@
       "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/RecordCollaboration.tsx",
+      "web/packages/app/src/widgets/RecordPicker.tsx",
       "web/packages/app/src/widgets/ScanInput.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
@@ -5350,7 +5351,6 @@
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/Table.tsx",
-      "web/packages/app/src/widgets/bindings.ts",
       "web/packages/build/src/editor/ResourceList.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/apps/workspace/src/chrome.tsx",
@@ -5962,11 +5962,13 @@
         "HostContext",
         "assetBindingKey",
         "assetKey",
+        "boundQueryDefinition",
         "categoryOf",
         "createWidgetDefinitions",
         "createWidgetRegistry",
         "defineApp",
         "findDefinition",
+        "interfaceQueryForSection",
         "isComposed",
         "isPageDecimal",
         "isPageDecimalDraft",

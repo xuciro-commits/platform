@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "This published interface window retains concrete record identities. Use a record picker and a confirmed record card.": "此发布接口窗口保留具体记录身份。可绑定记录选择器和已确认记录卡片。",
  "Query source kind": "查询来源类型",
  "Source interface": "来源接口",
  "Publication freezes the interface fields and implementation types. Publish a new version to include later implementations.": "发布会冻结接口字段和实现对象类型。要纳入后续新增的实现类型，请发布新版本。",

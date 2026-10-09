@@ -5,6 +5,34 @@ import (
 	"platformserver/platform"
 )
 
+func pageNamedQuery(definitions []platform.Definition, binding *platform.AssetBinding) *platform.Definition {
+	if binding != nil {
+		for i := range definitions {
+			if definitions[i].Ref == binding.Ref {
+				return definitions[i].QuerySourceVersion(binding.SourceVersion)
+			}
+		}
+	}
+	return nil
+}
+
+func visiblePageInterfaceQuery(p platform.Page, q platform.PageQuery, entities map[string]platform.EntityInfo, definitions []platform.Definition) *platform.Definition {
+	named := pageNamedQuery(definitions, q.Query)
+	if named == nil || named.Query == nil {
+		return nil
+	}
+	visible, ok := visibleInterfaceQuery(*named.Query, entities)
+	if !ok {
+		return nil
+	}
+	selected := *named
+	selected.Query = &visible
+	if p.CheckInterfaceQuery(q, &selected) != nil {
+		return nil
+	}
+	return &selected
+}
+
 func (t *Tenant) checkPageQueries(p platform.Page) error {
 	if err := p.CheckCollectionPorts(); err != nil {
 		return err
@@ -60,18 +88,19 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 		}
 	}
 	for id, q := range p.Document.Queries {
+		named := pageNamedQuery(t.definitions, q.Query)
+		if q.Interface != "" {
+			if err := p.CheckInterfaceQuery(q, named); err != nil {
+				return fmt.Errorf("page query %s: %w", id, err)
+			}
+			if _, err := t.bindInterfaceQuery(*named.Query); err != nil {
+				return err
+			}
+			continue
+		}
 		object, ok := t.entity(q.Object.Name)
 		if !ok || object.App != q.Object.App {
 			return fmt.Errorf("page query %s object is unavailable", id)
-		}
-		var named *platform.Definition
-		if q.Query != nil {
-			for i := range t.definitions {
-				if t.definitions[i].Ref == q.Query.Ref {
-					named = t.definitions[i].QuerySourceVersion(q.Query.SourceVersion)
-					break
-				}
-			}
 		}
 		if named != nil && named.LinkType != nil {
 			l := named.LinkType
@@ -107,6 +136,13 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 		}
 		if q.Query != nil && named != nil && named.Query != nil {
 			namedSources[*q.Query] = *named.Query
+		}
+	}
+	for _, s := range p.Sections {
+		if q, ok := p.InterfaceQueryForSection(s); ok {
+			if err := p.CheckInterfaceSection(s, pageNamedQuery(t.definitions, q.Query)); err != nil {
+				return err
+			}
 		}
 	}
 	return p.CheckQuerySetConditions(namedSources)

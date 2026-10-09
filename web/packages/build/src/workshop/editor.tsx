@@ -13,7 +13,7 @@ import {contextViewProblem} from "./page-editor/context";
 import {collaborationRecordSource,recordInputOwner,historyViewProblem,isCollaborationWidget,requiresOriginalRecord} from "./page-editor/collaboration";
 import {recordComparisonSource} from "./page-editor/record-comparison";
 import {searchInputObjects} from "@platform/app/search";
-import {pageLayoutDiagnostics} from "@platform/app";
+import {interfaceQueryForSection,pageLayoutDiagnostics} from "@platform/app";
 import { recordPaths } from "../ontology/record-paths";
 // Application Studio page design (ADR-0046). Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
@@ -35,7 +35,7 @@ import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, a
 import { QueriesPanel } from "./page-editor/QueriesPanel";
 import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";
 import { InterfacePanel } from "./page-editor/InterfacePanel";
-import { widgetInspector } from "./page-editor/widgets/registry";
+import { widgetInspector,widgetBindingInspector } from "./page-editor/widgets/registry";
 import {InspectorFrame} from "./page-editor/widgets/InspectorFrame";
 import {CompatibilityReview} from "./page-editor/CompatibilityReview";
 import {applyProfileUpgrade,pageCompatibility} from "./page-editor/compatibility";
@@ -548,7 +548,7 @@ function widgetInspectorTabs(props: PropertiesProps & { section: Draft; events: 
   const { section, sections, document, info, object, onChange, onResourcesChange } = props;
   const leaf = Object.entries(document.nodes).find(([, node]) => node.section === section.id)?.[0];
   const overlay = leaf ? overlayOwner(document, leaf) : undefined;
-  const Inspector = widgetInspector(section.widget, section.configVersion ?? 0)?.bindings;
+  const Inspector = widgetBindingInspector(section.widget, section.configVersion ?? 0);
   const contract = widgetContract(section.widget);
   return [
     { id: "properties", title: t("Properties"), content: <div className="grid content-start gap-2 p-2">
@@ -609,7 +609,7 @@ function Properties({ section, sections, document, info, catalog, object, select
   return (
     <Card className="grid content-start gap-3 p-3">
       <div className="text-xs font-semibold text-muted">{widgetTitles[section.widget]?.() ?? section.widget}</div>
-      {relatedObjects.length > 0 && allows("object") && (
+      {relatedObjects.length > 0 && allows("object") && !interfaceQueryForSection({document,sections},section) && (
         <label className="grid gap-1 text-xs">{t("Object")}
           <SemanticObjectSelect label={t("Object")} value={section.object ?? object} filter={(definition) => definition.ref.name === object || relatedObjects.includes(definition.ref.name)}
             onChange={(ref) => { if (ref) onChange({ object: ref.name === object ? undefined : ref.name,
@@ -621,7 +621,7 @@ function Properties({ section, sections, document, info, catalog, object, select
       {allows("record-set-variable")&&<label className="grid gap-1 text-xs">{t("Input record set binding")}<Select value={section.recordSetVariable??""} onChange={e=>{const binding=recordComparisonSource(document,sections,e.target.value,section.id??"",object),changed=binding&&binding.object!==(section.object||object);onChange({recordSetVariable:e.target.value||undefined,...(binding?{object:binding.object===object?undefined:binding.object}:{}),...(changed?{fields:[],recordComparison:{labelField:"id"}}:{})});}}><option value="">{t("Choose an original multi-selection")}</option>{Object.entries(document.variables??{}).filter(([id])=>!!recordComparisonSource(document,sections,id,section.id??"",object)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
       {allows("record-variable") && <label className="grid gap-1 text-xs">{t("Input record binding")}<Select value={document.variables?.[section.recordVariable ?? ""]?.source?.kind === "record" || document.variables?.[section.recordVariable ?? ""]?.mode === "input" || document.variables?.[section.recordVariable ?? ""]?.mode === "shared" ? section.recordVariable : ""} onChange={(e) => {const original=requiresOriginalRecord(section)?collaborationRecordSource(document,sections,e.target.value,section.id??"",object):undefined;onChange({recordVariable:e.target.value||undefined,selection:undefined,...(section.widget==="breadcrumb"&&!e.target.value?{object:undefined,breadcrumb:section.breadcrumb?{...section.breadcrumb,labelField:undefined}:undefined}:{}),...(original?{object:original.object===object?undefined:original.object,fields:[],actions:[]}:{})});}}><option value="">{t(requiresOriginalRecord(section)?"Choose an original record resource":"Use page selection")}</option>{!requiresOriginalRecord(section)&&Object.entries(document.interface?.inputs ?? {}).filter(([, p]) => p.type === "record").map(([id, p]) => <option key={id} value={p.variable}>{id}</option>)}{Object.entries(document.variables??{}).filter(([id,v])=>requiresOriginalRecord(section)?!!collaborationRecordSource(document,sections,id,section.id??"",object):v.type==="record"&&(v.source?.kind==="record"||v.mode==="shared")&&accessible(v)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
       {section.recordVariable && <p className="text-xs text-muted">{t(document.variables?.[section.recordVariable]?.mode === "input" ? "This widget reads the input record." : document.variables?.[section.recordVariable]?.source?.kind==="record" ? "This widget reads the bound record selection." : "This widget reads the current loop record.")}</p>}
-      {!requiresOriginalRecord(section) && !section.recordVariable && (selections.length > 0 || section.selection) && contract?.selectionMode !== "none" &&
+      {!interfaceQueryForSection({document,sections},section) && !requiresOriginalRecord(section) && !section.recordVariable && (selections.length > 0 || section.selection) && contract?.selectionMode !== "none" &&
         <label className="grid gap-1 text-xs">{contract?.selectionMode === "write" ? t("Writes selection") : t("Reads selection")}
           <Select value={section.selection ?? ""} onChange={(e) => onChange({ selection: e.target.value || undefined })}>
             <option value="">{t("Shared selection for this object")}</option>

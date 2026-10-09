@@ -363,6 +363,7 @@ type pageRuntimeContract struct {
 		Source                string   `json:"source"`
 		InventoryUIProfile    string   `json:"inventoryUIProfile"`
 		MaxDeclaredPlans      int      `json:"maxDeclaredPlans"`
+		InterfaceUIProfile    string   `json:"interfaceUIProfile"`
 		MaxDeclaredTotalLimit int      `json:"maxDeclaredTotalLimit"`
 		MaxPlans              int      `json:"maxPlans"`
 		MaxConditions         int      `json:"maxConditions"`

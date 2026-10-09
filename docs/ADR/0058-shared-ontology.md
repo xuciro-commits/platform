@@ -1,6 +1,6 @@
 # ADR-0058 — 共享本体：core 主数据包、Interface、扩展与归属（ADR-0057 A 块）
 
-状态：主数据、接口声明与扩展记录已落地；接口具名查询和共享选择器已实施，通用页面接口窗口/记录变量绑定尚未接通 · 2026-10-06 · 承接 ADR-0055（项目 = Application）、ADR-0057 §2 A
+状态：主数据、接口声明、具名查询、页面接口窗口与扩展记录首版已落地；呈现与引用边界见 §3.1 · 2026-10-06 · 承接 ADR-0055（项目 = Application）、ADR-0057 §2 A
 
 ## 1. 立场
 
@@ -47,7 +47,7 @@ Entity.Implements []string                                                      
 - build 对象草稿 `implements[]`：`checkShape` 在保存/发布前按宿主接口校验（接口必须有应用声明、字段齐全且类型一致），编译出的 `Entity.Implements` 随对象安装；
 - 对象类型编辑器"概述"页签的 **Shape** 区块：勾选接口、一键补齐缺少字段；对象模型工作台新增 **Interfaces** 视图（接口 → 实现者）。
 
-### 3.1 接口查询与选择器 As built
+### 3.1 接口查询、选择器与页面绑定 As built
 
 - `NamedQuery` 的 `object` 与 `interface` 互斥。接口查询发布时保存 `interfaceShape` 与 `implementations`，候选冻结字段签名及真实对象依赖；同一联合候选中新对象可参与绑定。后来新增的实现者不改变旧版本，重新发布才纳入。接口没有记录表，也不被注册成一个虚拟 Entity。
 - `GET /v1/interfaces/{name}/records` 读取当前实现者；`GET /v1/queries/{app}/{name}` 可带固定 `version`、`search/offset/limit`，查询条件和排序仍属于发布版本。接口结果为 `{type, id, record}`，`record` 只提供共同字段与原记录标识/修订/时间戳。不同类型相同 ID 保持独立，打开或操作始终使用真实类型。
@@ -56,7 +56,15 @@ Entity.Implements []string                                                      
 - 封存读取原生对象时解析其 `entity` 字段描述；声明的父级自引用是数据关系，不作为执行循环拒绝。没有声明的自依赖、结构/执行循环仍拒绝。
 - 证据：`TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers` 覆盖身份、权限/数量、旧版本、新实现者、联合未发布对象及重放；现有 `integration-fabric.spec.ts` 在两行业核对发布接口查询、同 ID 不同类型选择和打开真实记录。生成类型仍由 `go run ./cmd/api-types` 维护。
 
-**剩余：** 通用 PageQuery/页面集合窗口和记录变量仍是具体对象约束；页面 `record-picker` 尚不能绑定多对象接口窗口。此处的共享选择器与查询工作台不代替该页面运行契约，也不提供持久多态引用字段或接口统一动作。A2 的完整页面目标继续在 WorkQueue 第一项，不因本批通过而标为全部完成。
+页面绑定采用应用 API 的 `platform.page.v2.109`：
+
+- `PageQuery.interface` 与具体 `object` 互斥，必须绑定精确保留的接口查询版本。条件、实现者及排序属于发布查询，页面只能声明有界窗口与搜索输入，不能借接口切换到全对象读取。候选含原查询及其实现者依赖；封存和安装都核对类型仍实现原共同形状，旧页面不会自动切到新查询版本。
+- 页面设计器“Named query binding / 具名查询绑定”可选接口来源。`record-picker` 绑定同 owner 的 20 条 ID 排序窗口，输出原 `record` 资源变量；其值沿既有页面引用形状保留 `{object: 实际类型, id}`。不能绑定单独的 ID 文本输出，也不能假定选中的类型等于页面主对象。`record-card` 消费同作用域的这个变量，仅配置共同字段。
+- 选择须同时命中窗口中的类型与 ID，再经原对象 `get` 确认当前访问权限；不同类型相同 ID 不会合并。来源版本、搜索、成员权限或浮层关闭使旧选择/迟到应答失效。“Open selected record / 打开所选记录”进入原对象页面，其字段、修订、编辑/业务动作与授权均保持原路径。接口读取与单对象读取共用页面请求生命周期；不建立第二记录存储或动作执行器。
+- 接口搜索也只匹配共同字段。投影克隆读取描述，不能改原对象字段声明；候选、权限投影、读取及回放均保留这条边界。
+- `TestInterfacePageBindingKeepsPublishedShapeAndConcreteRecordIdentity` 与原 `TestInterfaceQueries` 守精确版本、候选闭包、实现者形状、成员投影及重放；原页面会话/查询计划测试守异构 ID、真实记录确认、迟到应答和作用域退休。现有 `integration-fabric` 的酒店/制造路线实际从页面编辑器选接口、封存激活、普通成员选择、打开并编辑真实对象；截图核对了卡片与原记录并列展示。
+
+**当前边界：** 页面主对象仍是已有的真实对象和原准入边界；接口窗口目前供 `record-picker`/`record-card` 与页面/浮层局部记录变量使用。Table、Loop、应用共享窗口及跨页输入/返回端口仍要求具体对象，不能把接口窗口当成它们的单对象集合输入；不提供持久多态引用字段或接口统一动作。这些呈现扩展不冒充当前已经实现的能力。
 
 
 ## 4. A3 扩展字段（已落地）
