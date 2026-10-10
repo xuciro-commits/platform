@@ -16,12 +16,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 known=$(cat <<'KNOWN'
-host	apps/mes/server/mes.go	1	#129 (6) the plant's own fact log beside the ledger (gateway states): judge whether the ledger owns it
-host	apps/pms/server/pms.go	1	#129 (6) the channel's own fact log beside the ledger: judge whether the ledger owns it
-ui	web/packages/build/src/functions/decision-table.tsx	1	ADR-0062: decision matrix as plain table until DataTable grows inline editing
-ui	web/packages/build/src/ontology/process.tsx	2	ADR-0053 §11: property and permission matrices as plain tables until DataTable grows inline editing
-ui	web/packages/build/src/projects/project-roles.tsx	1	ADR-0066: roles and scope matrix as plain table until DataTable grows inline editing
-ui	web/packages/build/src/workshop/editor.tsx	1	ADR-0053 §11: live variable values in the page dock as a plain table
+host	apps/mes/server/mes.go	1	#129 decided (2026-10-10): the plant's gateway states are the app's own K2 facts, tenant state persisted through platform.SnapshotFacts/RestoreFacts and named by the change log's fact check - not a second ledger
+host	apps/pms/server/pms.go	1	#129 decided (2026-10-10): the channel's messages are the app's own K2 facts, snapshotted with its ledger through the app API; no host-owned copy exists
+ui	web/packages/build/src/functions/decision-table.tsx	1	ADR-0062: decision matrix as plain table until DataTable grows inline editing (kept on condition, not a delivery gap)
+ui	web/packages/build/src/ontology/process.tsx	2	ADR-0053 §11: property and permission matrices as plain tables until DataTable grows inline editing (kept on condition)
+ui	web/packages/build/src/projects/project-roles.tsx	1	ADR-0066: roles and scope matrix as plain table until DataTable grows inline editing (kept on condition)
+ui	web/packages/build/src/workshop/editor.tsx	1	ADR-0053 §11: live variable values in the page dock as a plain table (kept on condition)
 KNOWN
 )
 

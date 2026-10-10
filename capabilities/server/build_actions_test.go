@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/apps/build"
 	"platformserver/platform"
 )
@@ -35,11 +36,14 @@ func TestTenantDefinedActions(t *testing.T) {
 		return m
 	}
 	keys := 0
-	do := func(who, schema, typ, id string, payload any) string {
+	submit := func(who, schema, typ, id string, payload any) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
 		keys++
 		raw, _ := json.Marshal(payload)
-		if _, err := tn.Submit(member(who), &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: build.ID, IdempotencyKey: fmt.Sprint("a", keys),
-			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); err != nil {
+		return tn.submitDiagnosed(member(who), &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: build.ID, IdempotencyKey: fmt.Sprint("a", keys),
+			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now)
+	}
+	do := func(who, schema, typ, id string, payload any) string {
+		if _, err, _ := submit(who, schema, typ, id, payload); err != nil {
 			return fmt.Sprintf("%s: %s", err.Code, err.Message)
 		}
 		return "ok"
@@ -150,9 +154,15 @@ func TestTenantDefinedActions(t *testing.T) {
 	if got := do("eli", lost+".edit", lost, "L-1", map[string]any{"state": "returned"}); got == "ok" && record("L-1")["state"] != "found" {
 		t.Error("the edit form moved the record's state")
 	}
-	// What the builder wrote is what people are told.
-	if got := do("eli", lost+".handback", lost, "L-1", map[string]any{}); !strings.Contains(got, "needs Handed to") {
+	// What the builder wrote is what people are told: the builder's own
+	// condition message stands, and a required input the builder declared is
+	// refused with a typed diagnostic naming that input (ADR-0096 D5: the
+	// form-level sentence is generic, the field is the diagnostic's path, and
+	// the form shows the declared title beside it).
+	if got := do("eli", lost+".handback", lost, "L-1", map[string]any{}); !strings.Contains(got, "Correct the highlighted fields.") {
 		t.Errorf("a required input left out: %s", got)
+	} else if _, err, issues := submit("eli", lost+".handback", lost, "L-1", map[string]any{}); err == nil || len(issues) != 1 || issues[0].Code != "required" || len(issues[0].Path) != 1 || issues[0].Path[0] != "to" {
+		t.Errorf("a required input left out is not pinned to the declared input: %v, issues=%+v", err, issues)
 	}
 	if got := do("eli", lost+".handback", lost, "L-2", map[string]any{"to": "Ada"}); !strings.Contains(got, "Something worth 500 or more goes back through the manager.") {
 		t.Errorf("a condition that does not hold: %s", got)
