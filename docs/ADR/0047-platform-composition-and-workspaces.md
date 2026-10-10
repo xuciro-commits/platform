@@ -509,6 +509,8 @@ Compute 已接入 §13.3 的 v2 worker ABI：原 Code editor 可显式选 ABI �
 
 **证据：** `apps/flow/continuous_test.go` 检查整批回滚、摘要、乱序/重复/迟到/overflow、slide 和配置预算；根包 `flow_test.go` 的 `TestContinuousAcceptedFrameRefusalAndRecovery` 核对原实例提交、接受结果重放、快照及旧内联预算拒绝；`TestContinuousSealedFrameAndRecovery` 核对超过记录内联预算的窗口只保存制品引用、原批次历史重试/内容冲突、不同成员/租户拒绝、摘要损坏拦截，以及共享测试 FileStore 下的重放、快照和后继提交。它们不是外部真实来源、数据库/对象存储崩溃恢复、worker 或七节点业务链的验收。`upgrade_authorization_test.go` 证明其覆盖的计算结果通道及外租户/调用/路径/预算拒绝。`compute_test.go` 的 `TestWasmDataABIChannels` 在固定镜像的 Go/TinyGo 编译器下通过真实 Unix socket 检查大于 1 MiB 的输入/输出、非法内存范围、摘要/租户拒绝和输出超预算；同一 ABI 经原编译、候选冻结/激活、操作队列、FileStore 封存与接受结果重放；宿主超过 1 MiB 的输入只保存小型引用，待执行调用重放后可读取原输入执行，已完成结果恢复后不重新计算。测试还核对同 key 重试/内容冲突不遗留额外预备文件、来源与外租户拒绝、输入句柄与内容损坏拒绝。原 `TestWasmCommandCompilerProfiles` 核对旧内联 ABI。上述 Go 测试使用内存 FileStore/接受结果存储。原 `deploy/local/rehearse.sh` 在两行业以真实 OIDC、固定 Go/TinyGo 隔离编译器与 worker、PostgreSQL 和 RustFS 执行 v2 调用；随后切回原应用候选，核对已接受的 Code 版本、调用与结果引用在快照重启、备份恢复和全日志重建中保持。该部署路线只使用小型 HTTP 输入，超过 1 MiB 的原生输入由前述 Go/socket 测试覆盖；不把它称为真实持续来源或七节点运行验收。演练沿现行个人动作目录、P-200 工艺版本和 typed ProcessStep 的 kind/cases；浏览器使用当前 Shell/页面深链，登录 lastSeen 不作为持久业务状态比较。
 
+PostgreSQL 接入由原 `TestPostgresTableProfilePullAndReplay` 扩展检查：真实只读表、1025 行的多批接受、空读不写日志、窗口/游标重放与快照、迟到死信、暂停/配置变化/取消，以及读取期间撤权和未使用制品回收；接受存储与 FileStore 在该 Go 检查中仍为内存。原部署演练在两个宿主沿真实 OIDC、受控只读连接、PostgreSQL 表、512 行批量和 RustFS 窗口，检查三批 1025 行、重启后消费第 1026 行、备份恢复和全日志重建保持原位置/制品；恢复后浏览器读取来源目标、连接/增量列和 Flow 接入声明。数据库登录角色由部署环境预配，不由数据库内容备份或租户日志创建。这些证据不覆盖完整七节点、吞吐或负责人手感验收。
+
 **尚未接通：** PostgreSQL → 原消费游标/窗口已接线；窗口规则还未接到默认图的原聚合/滞回算子、真实分区并发 8、动作或应用实例只读输出。算子队列与可见 backpressure、checkpointEvery、版本化死信资产及重放、取消后同版本续接、Source/Flow 的大输入投影/调用接线、制品生命周期及七节点的真实持久恢复/完整浏览器路线继续属于实现与运行缺口。不能用辅助函数、受控测试来源或手动 Flow 代替完整持续执行。
 
 ## 14. 当前实现边界
