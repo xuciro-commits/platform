@@ -331,4 +331,5 @@ AR-01–AR-17 必须逐项有“实际交付内容、适用边界、交付版本
   - **Build 资源管理（`apps/build/build.go` 1299 行）**：新资源类型的代表性变更是 ADR-0062 决策表——实现落在 `table.go` + 运行编译，`build.go` 的账本目录清单加一行，前端资源表（`resources.ts`）**未列入**“决策表”资源种类。影响面因此是：账本目录 + 实体文件 + 运行编译 + 前端资源表 + 发布闭包五处；若遗漏前端资源表或发布闭包，能力存在但不进入项目资源与候选（与 F2 同类）。核对结论：`build.table` 当前不在 `revision.go`/`joint_release.go` 的资产种类中，属 D-04 应一并收口的同类问题，已记入 WorkQueue 第 1 块剩余项。
 - 边界例外（R02/R09 证据）：`scripts/escapes.sh` 的 7 项已知例外全部逐条挂工作号（ADR-0062、ADR-0053 §11 两项、ADR-0066、#129 两项），本轮无新增；保留依据与退出条件随各工作号，不新增白名单条目。
 - D-04 权威与状态流（2026-10-10）：新增 [ADR-0098](ADR/0098-integration-records-in-candidates-and-bindings.md) 固定集成记录进入候选封存/晋级的设计——只封存定义、不封存状态（游标、行数据、运行结果各有排除清单）、`datasetversion` 数据不随候选搬运、环境绑定按名字解析且凭据不进候选、升级/退役/失败处置与制品生命周期 owner、五条实现前必须显示的拒绝条件，以及第 3 块的迁移路径。分类边界：具备定义+代码的资产（对象、页面、流程、函数、查询、代码、共享属性、决策表）走候选与闭包；纯记录型资产（Connection/Source/Dataset/Pipeline/Writeback/Matching）同样走候选，但其运行状态是环境数据，仅在绑定与历史中解析。
-- 仍待完成：Stage A 收口结论；D-04 的实现（WorkQueue 第 3 块）。
+- 版本健康证据（本分支，2026-10-10）：`capabilities/server` 下 `go build ./...`、`go vet ./...` 通过；`go test . -run 'TestLanguages|TestAPIContract'` 通过（0.43s）；`scripts/escapes.sh` 通过（7 项已知例外、无新增）。本轮改动为文档与决策，未触碰运行代码。
+- 仍待完成：Stage A 收口结论；D-04 的实现（WorkQueue 第 3 块首批，按 ADR-0098 §7 的 1–5 步）。
