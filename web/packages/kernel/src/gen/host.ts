@@ -605,6 +605,7 @@ export type Continuous = {
   Aggregate?: StreamAggregate;
   Threshold?: StreamThreshold;
   Intake?: StreamIntake;
+  CheckpointEvery?: number;
   DeadLetter?: StreamDeadLetter;
 };
 

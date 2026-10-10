@@ -181,7 +181,11 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 	t.enqueue(now)
 	x, _ := platform.Get[flow.FlowInstance](t.automation(flow.ID, false), id)
 	retained = x.Batch.Sealed != nil && x.Batch.Sealed.Ticket == prepared.Artifact().Ticket
-	return flow.BatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
+	out := flow.BatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}
+	if x.Batch.Checkpoint != nil {
+		out.Checkpoint = x.Batch.Checkpoint.Ordinal
+	}
+	return out, nil
 }
 
 // ReadFlowFrame resolves only a currently readable original instance. A role
@@ -193,6 +197,11 @@ func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*fl
 	}
 	frame, err := flow.ExpandFrame(before, flowFrameStore{tenant: t.ID, files: t.files()})
 	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+	}
+	// The frame's own explicit checkpoint must describe the frame the reader
+	// actually got: a mismatch means the record and its bytes disagree.
+	if err := flow.VerifyFrame(*frame); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
 	_, latest, _, refusal := t.continuousSnapshot(current, id, now)

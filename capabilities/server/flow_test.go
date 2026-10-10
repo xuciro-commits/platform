@@ -296,6 +296,7 @@ func TestContinuousSealedOperatorsAndRecovery(t *testing.T) {
 				c.Window = &platform.StreamWindow{Node: "window", WindowMS: 5000, SlideMS: 1000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"}
 				c.Aggregate = &platform.StreamAggregate{Node: "stats", Signal: "vibration", Group: []string{"deviceId"}, Measures: []string{"count", "mean", "max"}}
 				c.Threshold = &platform.StreamThreshold{Node: "high", Field: "mean", High: 11.5, Low: 9.5, Severity: "High"}
+				c.CheckpointEvery = 2
 			}))
 		tn.Files = store
 		return tn
@@ -310,13 +311,14 @@ func TestContinuousSealedOperatorsAndRecovery(t *testing.T) {
 		return json.RawMessage(fmt.Sprintf(`{"deviceId":%q,"vibration":%g}`, device, vibration))
 	}
 	cursor := ""
-	feed := func(tn *Tenant, name string, when time.Time, signals ...flow.Signal) {
+	feed := func(tn *Tenant, name string, when time.Time, signals ...flow.Signal) flow.BatchOutcome {
 		t.Helper()
 		out, err := tn.ConsumeFlowBatch(memberOf(t, tn, "member"), id, flow.Batch{ID: name, Predecessor: cursor, Signals: signals}, when)
 		if err != nil {
 			t.Fatalf("sealed batch %s: %v", name, err)
 		}
 		cursor = out.Cursor
+		return out
 	}
 	alertsOf := func(tn *Tenant) []flow.Alert {
 		t.Helper()
@@ -332,10 +334,12 @@ func TestContinuousSealedOperatorsAndRecovery(t *testing.T) {
 	}
 	// One slide over the high mark raises and alarms; the sealed frame, not
 	// the accepted record, owns the window, aggregate and threshold state.
-	feed(tn, "b1", at,
+	if out := feed(tn, "b1", at,
 		flow.Signal{Key: "m1", Partition: "plant-a", At: at, Value: measurement("d1", 12)},
 		flow.Signal{Key: "m2", Partition: "plant-a", At: at.Add(time.Second), Value: measurement("d1", 13)},
-		flow.Signal{Key: "m3", Partition: "plant-a", At: at.Add(2 * time.Second), Value: measurement("d1", 12)})
+		flow.Signal{Key: "m3", Partition: "plant-a", At: at.Add(2 * time.Second), Value: measurement("d1", 12)}); out.Checkpoint != 0 {
+		t.Fatalf("a checkpoint appeared off period: %d", out.Checkpoint)
+	}
 	if alerts := alertsOf(tn); len(alerts) != 1 || alerts[0].State != "triggered" || alerts[0].Group != "[d1]" || alerts[0].Field != "mean" {
 		t.Fatalf("sealed lane triggered alerts: %+v", alerts)
 	}
@@ -347,9 +351,20 @@ func TestContinuousSealedOperatorsAndRecovery(t *testing.T) {
 	if err != nil || len(frame.State["stats"]) == 0 || len(frame.State["high"]) == 0 || len(frame.State["window"]) == 0 {
 		t.Fatalf("the seal lost operator state: %s", err.Message)
 	}
+	if frame.Checkpoint != nil {
+		t.Fatalf("a checkpoint appeared off period: %+v", frame.Checkpoint)
+	}
 	// Inside the band the episode stays raised and says nothing; below the low
 	// mark it clears exactly once.
-	feed(tn, "b2", at.Add(5*time.Second), flow.Signal{Key: "m4", Partition: "plant-a", At: at.Add(6 * time.Second), Value: measurement("d1", 10)})
+	if out := feed(tn, "b2", at.Add(5*time.Second), flow.Signal{Key: "m4", Partition: "plant-a", At: at.Add(6 * time.Second), Value: measurement("d1", 10)}); out.Checkpoint != 2 {
+		t.Fatalf("the sealed lane wrote no run checkpoint at its period: %d", out.Checkpoint)
+	}
+	// The checkpoint travels inside the sealed frame and names it after the
+	// fold: the read verifies it against the bytes it actually got.
+	sealed, failure := tn.ReadFlowFrame(memberOf(t, tn, "member"), id, at.Add(5*time.Second))
+	if failure != nil || sealed.Checkpoint == nil || sealed.Checkpoint.Ordinal != 2 || sealed.Checkpoint.Digest == "" || flow.VerifyFrame(*sealed) != nil {
+		t.Fatalf("sealed checkpoint: %+v %v", sealed.Checkpoint, failure)
+	}
 	if alerts := alertsOf(tn); len(alerts) != 0 {
 		t.Fatalf("hysteresis band alarmed: %+v", alerts)
 	}

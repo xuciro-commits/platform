@@ -274,9 +274,9 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 	}
 	if fl.Continuous != nil {
 		dead := fl.Continuous.DeadLetter
-		if fl.Continuous.Source == "" || fl.Continuous.Batch < 0 || fl.Continuous.State < 0 || fl.Continuous.FrameBytes < 0 ||
+		if fl.Continuous.Source == "" || fl.Continuous.Batch < 0 || fl.Continuous.State < 0 || fl.Continuous.FrameBytes < 0 || fl.Continuous.CheckpointEvery < 0 || fl.Continuous.CheckpointEvery > 1_000_000 ||
 			dead == nil || dead.Node == "" || dead.MaxRecords < 1 || dead.MaxRecords > 1_000_000 || dead.TTLMS < 0 || dead.TTLMS > 30*24*60*60*1000 {
-			return nil, fmt.Errorf("flow %s: a continuous flow names its source, a batch budget of zero or more, and a bounded dead-letter asset", id)
+			return nil, fmt.Errorf("flow %s: a continuous flow names its source, a batch budget of zero or more, a bounded dead-letter asset and a bounded checkpoint period", id)
 		}
 		if fl.Continuous.Window != nil {
 			if err := checkWindow(*fl.Continuous.Window); err != nil {

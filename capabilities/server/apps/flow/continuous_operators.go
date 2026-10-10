@@ -114,8 +114,18 @@ func checkOperators(declared platform.Continuous) error {
 // re-reported on every slide.
 func foldOperators(frame *BatchFrame, declared platform.Continuous, batchID string, now time.Time) (stats []AggregateRecord, alerts []Alert, refusal *kernel.Error) {
 	stats, alerts, refusal = foldDeclaredOperators(frame, declared, batchID, now)
-	if refusal == nil {
-		frame.retain(declared.DeadLetter, now)
+	if refusal != nil {
+		return stats, alerts, refusal
+	}
+	frame.retain(declared.DeadLetter, now)
+	frame.commitCheckpoint(declared, now)
+	// The complete frame — operators, dead letters and the checkpoint — must
+	// still fit its declaration; the fold's own check ran earlier.
+	if declared.FrameBytes > 0 {
+		raw, err := json.Marshal(frame)
+		if err != nil || len(raw) > declared.FrameBytes {
+			return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch frame exceeds its declared budget")
+		}
 	}
 	return stats, alerts, refusal
 }

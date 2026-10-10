@@ -39,8 +39,10 @@ type BatchFrame struct {
 	Rejected    int                         `json:"rejected"`              // signals the flow refused, ever
 	State       map[string]json.RawMessage  `json:"state,omitempty"`       // node name → its state
 	DeadLetters []DeadLetter                `json:"deadLetters,omitempty"` // what could not be folded, and why
+	Batches     int64                       `json:"batches,omitempty"`     // accepted batches, ever
 	LetterSeq   int64                       `json:"letterSeq,omitempty"`   // the last dead-letter number issued
 	Dropped     int                         `json:"dropped,omitempty"`     // letters the declared bounds dropped, ever
+	Checkpoint  *FrameCheckpoint            `json:"checkpoint,omitempty"`  // the last explicit run checkpoint
 	StateBytes  int                         `json:"stateBytes,omitempty"`
 	Sealed      *platform.FlowStateArtifact `json:"sealed,omitempty"`
 	Source      *SourceCheckpoint           `json:"source,omitempty"`
@@ -73,6 +75,61 @@ type DeadLetter struct {
 	Replayed  bool      `json:"replayed,omitempty"`
 }
 
+// FrameCheckpoint is the instance's last explicit run checkpoint (ADR-0047
+// §13.3): the accepted position it names, the counters at that moment and a
+// digest of the frame as it was committed. The digest is taken over the
+// expanded frame with the checkpoint itself cleared, so a reader — recovery,
+// the host console, a handover — can verify what it read.
+type FrameCheckpoint struct {
+	Ordinal   int64     `json:"ordinal"`
+	Cursor    string    `json:"cursor"`
+	Watermark time.Time `json:"watermark,omitzero"`
+	Consumed  int       `json:"consumed"`
+	Rejected  int       `json:"rejected"`
+	Dropped   int       `json:"dropped,omitempty"`
+	Letters   int       `json:"letters,omitempty"`
+	At        time.Time `json:"at,omitzero"`
+	Digest    string    `json:"digest"`
+}
+
+// commitCheckpoint writes the declared run checkpoint when this accepted batch
+// reaches its period. Nothing else about the batch changes: the checkpoint is
+// bookkeeping about the frame, never a second copy of its state.
+func (f *BatchFrame) commitCheckpoint(declared platform.Continuous, now time.Time) {
+	if declared.CheckpointEvery <= 0 || f.Batches == 0 || f.Batches%int64(declared.CheckpointEvery) != 0 {
+		return
+	}
+	point := &FrameCheckpoint{Ordinal: f.Batches, Cursor: f.Cursor, Watermark: f.Watermark, Consumed: f.Consumed,
+		Rejected: f.Rejected, Dropped: f.Dropped, Letters: len(f.DeadLetters), At: now}
+	f.Checkpoint = nil
+	point.Digest = frameDigest(f)
+	f.Checkpoint = point
+}
+
+// frameDigest hashes the frame as a reader sees it: the checkpoint itself is
+// cleared first, so the same frame always hashes the same way.
+func frameDigest(f *BatchFrame) string {
+	clone := *f
+	clone.Checkpoint = nil
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(platform.Raw(clone)))
+}
+
+// VerifyFrame checks the frame's own explicit checkpoint against its contents.
+// A frame without a checkpoint has nothing to check.
+func VerifyFrame(f BatchFrame) error {
+	if f.Checkpoint == nil {
+		return nil
+	}
+	if f.Checkpoint.Digest == "" || f.Checkpoint.Digest != frameDigest(&f) {
+		return fmt.Errorf("the frame differs from its last run checkpoint")
+	}
+	if f.Checkpoint.Ordinal != f.Batches || f.Checkpoint.Cursor != f.Cursor || !f.Checkpoint.Watermark.Equal(f.Watermark) ||
+		f.Checkpoint.Consumed != f.Consumed || f.Checkpoint.Rejected != f.Rejected || len(f.DeadLetters) < f.Checkpoint.Letters {
+		return fmt.Errorf("the frame's position differs from its last run checkpoint")
+	}
+	return nil
+}
+
 // letter numbers one dead letter and stamps when the flow decided it. The
 // number comes from the frame, so a replayed frame never renumbers its letters.
 func (f *BatchFrame) letter(batch string, decided time.Time, signal Signal, reason string) DeadLetter {
@@ -100,13 +157,15 @@ type Signal struct {
 	Value     json.RawMessage
 }
 
-// BatchOutcome is what the flow did with a batch.
+// BatchOutcome is what the flow did with a batch. Checkpoint is the ordinal of
+// the instance's last explicit run checkpoint, 0 when it has none yet.
 type BatchOutcome struct {
-	Cursor    string    `json:"cursor"`
-	Watermark time.Time `json:"watermark,omitzero"`
-	Consumed  int       `json:"consumed"`
-	Rejected  int       `json:"rejected"`
-	StateSize int       `json:"stateSize"`
+	Cursor     string    `json:"cursor"`
+	Watermark  time.Time `json:"watermark,omitzero"`
+	Consumed   int       `json:"consumed"`
+	Rejected   int       `json:"rejected"`
+	StateSize  int       `json:"stateSize"`
+	Checkpoint int64     `json:"checkpoint,omitempty"`
 }
 
 // ConsumeBatch folds one batch into a continuous instance as one decision.
@@ -152,6 +211,9 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 	out := BatchOutcome{Consumed: folded, Rejected: rejected}
 	if x.Batch != nil {
 		out.Cursor, out.Watermark, out.StateSize = x.Batch.Cursor, x.Batch.Watermark, stateSize(x.Batch.State)
+		if x.Batch.Checkpoint != nil {
+			out.Checkpoint = x.Batch.Checkpoint.Ordinal
+		}
 	}
 	return out, nil
 }
@@ -303,6 +365,7 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 		}
 	}
 	next.Cursor = batch.ID
+	next.Batches++
 	if batch.Source != nil {
 		checkpoint := *batch.Source
 		checkpoint.Sources = slices.Clone(batch.Source.Sources)

@@ -312,6 +312,66 @@ func TestContinuousWindowAggregateAndHysteresisThreshold(t *testing.T) {
 	}
 }
 
+func TestContinuousRunCheckpointsNameTheAcceptedFrame(t *testing.T) {
+	now := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	declared := platform.Continuous{Source: "k8.meters", Batch: 512, FrameBytes: 1 << 20, CheckpointEvery: 2,
+		DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 8}}
+	frame := &BatchFrame{State: map[string]json.RawMessage{}}
+	run := func(id, predecessor string, at time.Time, signals ...Signal) {
+		t.Helper()
+		if _, _, err := foldBatch(frame, declared, Batch{ID: id, Predecessor: predecessor, Signals: signals}, at); err != nil {
+			t.Fatalf("batch %s: %v", id, err)
+		}
+		if _, _, err := foldOperators(frame, declared, id, at); err != nil {
+			t.Fatalf("operators %s: %v", id, err)
+		}
+	}
+	run("b1", "", now, Signal{Key: "m1", Partition: "plant-a", At: now, Value: json.RawMessage("4")})
+	if frame.Checkpoint != nil || frame.Batches != 1 {
+		t.Fatalf("checkpoint written off period: %+v", frame.Checkpoint)
+	}
+	// The declared period names the accepted position, its counters and the
+	// frame they describe.
+	run("b2", "b1", now.Add(time.Minute), Signal{Key: "m2", Partition: "plant-a", At: now.Add(time.Minute), Value: json.RawMessage("5")})
+	point := frame.Checkpoint
+	if point == nil || point.Ordinal != 2 || point.Cursor != "b2" || point.Consumed != 2 || point.Rejected != 0 || !point.Watermark.Equal(now.Add(time.Minute)) || !point.At.Equal(now.Add(time.Minute)) {
+		t.Fatalf("checkpoint: %+v", point)
+	}
+	if err := VerifyFrame(*frame); err != nil {
+		t.Fatalf("a committed checkpoint does not verify: %v", err)
+	}
+	// A frame whose position moved under its checkpoint is refused, not read.
+	forged := *frame
+	forged.Cursor = "b3"
+	if VerifyFrame(forged) == nil {
+		t.Fatal("a frame that does not match its checkpoint verified")
+	}
+	moved := *frame
+	moved.Batches = 3
+	if VerifyFrame(moved) == nil {
+		t.Fatal("a frame with another ordinal verified")
+	}
+	// Nothing is rewritten between periods, and the next period points at the
+	// frame as it stands then.
+	run("b3", "b2", now.Add(2*time.Minute), Signal{Key: "m3", Partition: "plant-a", At: now.Add(2 * time.Minute), Value: json.RawMessage("6")})
+	if frame.Checkpoint.Ordinal != 2 || frame.Batches != 3 {
+		t.Fatalf("checkpoint rewritten off period: %+v", frame.Checkpoint)
+	}
+	run("b4", "b3", now.Add(3*time.Minute), Signal{Key: "m4", Partition: "plant-a", At: now.Add(3 * time.Minute), Value: json.RawMessage("7")})
+	if frame.Checkpoint.Ordinal != 4 || frame.Checkpoint.Cursor != "b4" || frame.Checkpoint.Consumed != 4 {
+		t.Fatalf("checkpoint after two periods: %+v", frame.Checkpoint)
+	}
+	if err := VerifyFrame(*frame); err != nil {
+		t.Fatal(err)
+	}
+	// The frame keeps its checkpoint across its own JSON, which is what a
+	// reader verifies after recovery.
+	var restored BatchFrame
+	if json.Unmarshal(platform.Raw(frame), &restored) != nil || VerifyFrame(restored) != nil {
+		t.Fatal("the checkpoint did not survive the frame's own JSON")
+	}
+}
+
 func TestContinuousDeadLettersAreNumberedAndBounded(t *testing.T) {
 	now := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
 	declared := platform.Continuous{Source: "k8.meters", Batch: 512, DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 2}}

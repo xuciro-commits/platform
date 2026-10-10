@@ -64,6 +64,11 @@ type Continuous struct {
 	// Intake binds a controlled source record and its event columns. Nil keeps
 	// the existing native batch delivery contract.
 	Intake *StreamIntake `json:"Intake,omitempty"`
+	// CheckpointEvery writes an explicit run checkpoint into the frame every N
+	// accepted batches (ADR-0047 §13.3): the position, watermark, counters and
+	// a digest of the frame that recovery and handover can name and verify. 0
+	// keeps the per-batch frame alone.
+	CheckpointEvery int `json:"CheckpointEvery,omitempty"`
 	// DeadLetter declares the instance's dead-letter asset (ADR-0047 §13.3):
 	// what the flow could not fold stays as a numbered letter, bounded by the
 	// declared count and age, so one letter can be inspected and replayed
