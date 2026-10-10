@@ -78,6 +78,7 @@
 | **真理 (Truth)** | 每项被接受的顶级输入：提交、连接器页面、分发与作业结果、智能体步骤及其知识搜索结果、附带应答的效果结果、模型用量、启动的工作流版本 | PostgreSQL 日志，每个租户一个，故障即停 (fail-stop) | — | 一切；备份保存该日志 |
 | **派生状态 (Derived state)** | 记录及其历史、内核日志、受属工作与队列、效果意图、通知、工作流实例、智能体运行、记忆 | 内存；快照 (ADR-0019) | 已支持的结果族直接应用已保存映像；其他旧入口仍通过相同代码重放 | 启动时间 |
 | **派生索引 (Derived indexes)** | 投影 `tenant_<id>`（每个实体类型的类型化数据表）、按段落哈希索引的知识向量 | 位于日志旁的 PostgreSQL 中 | 启动时重建；向量作为受属工作重新生成嵌入 | 重建时间；嵌入模型成本 |
+| **外部制品 (Artifacts)** | 文件字节：附件上传、封存的持续 Flow 批次与大输入、隔离编译产物 | S3 兼容对象存储（部署）或进程内存（开发），键为 `<tenant>/<sha256>`，同字节只存一份 | 不重建：引用它的已接受结果/快照必须与字节同时保留；`files` 应用清理无引用的上传 | 丢失即不可恢复；封存批次与调用制品的历史保留、孤儿扫描与压缩尚未闭合，归 [ADR-0047 §13.5](ADR/0047-platform-composition-and-workspaces.md#135-当前边界) |
 | **外部且有保留期 (Outside, with retention)** | 模型调用的完整对话抄录（默认保留 30 天）；密钥（按名称，位于部署环境中） | PostgreSQL 数据表；环境变量 | 不重建 | 旧模型调用的完整文本 |
 | **易失性状态 (Volatile)** | 心跳、连接器上次拒绝原因、端点健康状态；个人读取审计（最近 5,000 条条目）。**注意**：受支持的 `work-result` 已保存作业 generation 与下次执行时间，旧作业路径仍可能不记无变化的运行 | 内存 | 受限工作从已接受结果恢复；其余 — | 运维诊断和未记入日志的旧式作业状态 |
 | **代码 (Code)** | 声明：实体类型、动作、生命周期、工作流、智能体、协议、指令 | Go 和 TypeScript，随二进制文件版本化 | — | — |
@@ -128,7 +129,7 @@
 | 集成：Dataset 与 Pipeline (ADR-0071) | 平台应用 `build`、宿主、`@pkg/build` | 受限 | 补全 | 数据集/Schema 推断、清洗步骤与期望、输出数据集或对象、新版本触发重跑已实现；独立试跑与跨环境制品化未提供；交付链所需部分属本项目补全。　入口：build.dataset, build.datasetversion, build.pipeline；[ADR-0071](ADR/0071-datasets-and-pipelines.md) |
 | 集成：Writeback 与血缘 (ADR-0072) | 平台应用 `build`、宿主、`@pkg/build`、UI Kit | 受限 | 补全 | 回写端点效果、凭证号回填、不可达排队与恢复重试、对象 Data 页血缘下钻已实现；原生回写桥接与运行冻结血缘未提供；结果核对与恢复属本项目补全（S-02）。　入口：build.writeback, Caller.Emit；[ADR-0072](ADR/0072-writebacks-and-lineage.md) |
 | 集成：Matching 与联邦切片 (ADR-0073, ADR-0074) | 平台应用 `build`、`enterprise` | 受限 | 按需触发 | 匹配规则与企业切片导入/同步已实现；SFTP/文件游标、更广映射与身份对账按真实任务触发。　入口：build.match, enterprise.slice.import/sync；[ADR-0074](ADR/0074-matching-rules.md) |
-| 标记与传播 (ADR-0075) | 平台应用 `build`、宿主 | 已交付 | 保留 | 标记定义、传播与断言入口已实现，叠加在字段级读角色之上；敏感导出与更广传播范围按 ADR-0075 边界。　入口：build.marking；[ADR-0075](ADR/0075-markings.md) |
+| 标记与传播 (ADR-0075) | 平台应用 `build`、宿主 | 已交付 | 保留 | `internal` < `confidential` < `restricted` 随数据抬升、血缘可见，叠加在字段级读角色之上；受限数据集不导出 CSV，更广策略按 ADR-0075 边界。　入口：Connection/Dataset 的 `marking`、`build.dataset.load`（marking.go）；[ADR-0075](ADR/0075-markings.md) |
 | 决策表 (ADR-0062) | 平台应用 `build`、宿主 | 已交付 | 保留 | 条件/结果列与行序裁决编译为原生运算，沿原候选封存与运行绑定执行。　入口：build.table；[ADR-0062](ADR/0062-decision-tables.md) |
 | 部署 | 宿主运行时 | 已交付 | 保留 | 宿主标志、健康、遥测与生产路径；保证按实际边界声明。　入口：Deployment, Deployment.Seed |
 | 身份提供商 | 宿主运行时 | 已交付 | 保留 | OIDC 主体与租户成员映射。　入口：OIDC |
@@ -141,7 +142,7 @@
 | 共享主数据与接口 (ADR-0058) | 平台应用 `core`、宿主运行时 | 已交付 | 保留 | 人员/伙伴/站点/库位/物料/单位/币种一次定义、各应用引用；`Interface` 字段签名在组合时校验；接口具名查询冻结字段签名/实现者，读取、共享选择器及页面选择器/记录卡片保留真实类型＋ID与原权限，封存候选核对原查询版本及实现者。　入口：capabilities/server/apps/core, platform.CheckInterfaces；[ADR-0058](ADR/0058-shared-ontology.md) |
 | 企业模型 (ADR-0067/0068) | 平台应用 `enterprise` | 受限 | 保留 | 以 UAF 1.3 元模型定型的企业图：组织、岗位、人员、能力、位置、资源、项目、目标及其随时间演进的关系；规模模板、可视化建模、租户联邦切片；`/v1/organization` 为其投影（ADR-0012 的接口保留）。　入口：capabilities/server/apps/enterprise, Caller.Enterprise()；[ADR-0067](ADR/0067-enterprise-modeling-layer.md)、[ADR-0068](ADR/0068-enterprise-layer-implementation.md) |
 | 过账与业务核 (ADR-0063, ADR-0076) | 平台应用 `core` 与 `build`、宿主 | 已交付 | 保留 | 台账过账、期间控制、冲销与业务核标准记录已实现；更广 ERP 交易深度按需触发。　入口：posts.go, core 共享类型；[ADR-0063](ADR/0063-postings.md)、[ADR-0076](ADR/0076-business-core.md) |
-| 计算字段与公式 (ADR-0064) | 平台应用 `build`、宿主 | 已交付 | 保留 | 公式字段与决策表/条件/赋值共用同一受控编译；复杂运算走能力装配（ADR-0044）。　入口：build.formula；[ADR-0064](ADR/0064-computed-fields.md) |
+| 计算字段与公式 (ADR-0064) | 平台应用 `build`、宿主 | 已交付 | 保留 | 整数/小数字段可带 `formula`，每次决定时由平台求值、只读不可手改；更复杂运算走能力装配（ADR-0044）。　入口：字段 `formula`（formula.go）；[ADR-0064](ADR/0064-computed-fields.md) |
 | 模块模板 (ADR-0065) | 平台应用 `build`、`@pkg/build`、UI Kit | 已交付 | 保留 | 五型模块模板经同一页面/动作契约装配，页面编辑器消费同一契约。　入口：Module 装配；[ADR-0065](ADR/0065-module-templates.md) |
 | 角色与范围设计器 (ADR-0066, ADR-0078) | 平台应用 `build` 与 `platform`、宿主 | 受限 | 补全 | 多角色授予、单位授予、字段读写角色与动作矩阵已实现；统一标记策略、岗位推角色与策略表达式不做；S-02 授权拒绝/撤权证据属本项目补全。　入口：build.Access, Caller.Roles；[ADR-0066](ADR/0066-roles-and-scope.md)、[ADR-0078](ADR/0078-tenancy-and-authorization.md) |
 | 用户域：身份、成员、档案与偏好 (ADR-0079) | Console（宿主内）、平台应用 `platform` | 已交付 | 保留 | 身份→成员→档案、邀请、停用、离职移交、偏好生效、个人令牌与会话已交付；多身份解绑与「下载我的数据」不做。　入口：profile.go, Console 动作；[ADR-0079](ADR/0079-user-domain.md) |

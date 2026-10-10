@@ -320,4 +320,9 @@ AR-01–AR-17 必须逐项有“实际交付内容、适用边界、交付版本
 - 能力矩阵补齐与登记：Platform §2.4 改为 96 项矩阵（能力 · 归属 · 支持状态 · 处置 · 摘要与验收证据），补入集成织物（ADR-0070–0075）、决策表、过账/业务核、计算字段、模块模板、角色与范围、用户域、定时自动化、包生命周期、环境晋级/迁移/升级等此前未列出的已交付能力。
 - 术语漂移已修正：Platform §2.1/§2.5/§9 的 `org`、`agent` 列表按代码现状改为 `build`/`core`/`enterprise`/`files`/`flow`/`knowledge`/`relations`/`work`/`ai`（控制台与智能体运行时在宿主内，ADR-0025 D4）；§2.5 增加账号—成员—档案—业务人员—企业模型元素—业务记录的权威归属表（ADR-0079、ADR-0058、ADR-0067/0068）。
 - 检查证据（本轮环境）：`scripts/escapes.sh` 通过（7 项已知例外、6 个文件、无新增）；`scripts/boundaries.sh` 因 `apps/*/server`、`protocols/*` 依赖未 vendor 不可完整运行，平台应用侧导入检查通过；业务应用/协议边界沿用基线证据。环境限制已记入 [Testing](Testing.md)。
-- 仍待完成：F4 三类代表性变更的影响证据、D-04 权威与状态流（含集成记录进入候选封存/晋级范围的迁移设计）、分层与依赖一致性复核结论、Stage A 收口。
+- F4 三类变更影响证据（2026-10-10）：
+  - **替换外部系统**：`erpadapter` → `build.connection`/`build.source`/`build.writeback`（[Subtraction](Subtraction.md) §1，已完成）。核对：全仓库代码引用为 0（`erpadapter` 在 `*.go`/`*.ts`/`*.tsx`/`*.json` 中无命中），制造组合、工作区包装配、`go.work` 与生成目录同步迁移。结论：替代由集成记录与宿主效果的原 owner 承接，旧模块连同消费面一起退出，未留下双轨。
+  - **修改共享交互**：统一输入（ADR-0096）的 `InputConstraints`/`DateRangeInput`/`DraftSession` 消费者分布——应用 API 与宿主（拥有者）、生成类型（`web/packages/kernel/src/gen`）、`@platform/ui`（控件）、`@platform/app`（动作表单）、Build（检查器/画布草稿）、业务应用经应用 API 引用（crm/hcm/mes/pms 各一处），未发现应用私有副本。结论：改动集中在拥有者、生成物与共享消费面，不需要逐应用逐页修改。
+  - **新增业务能力**：ADR-0094 标准接口与生成式 SDK——拥有者 `capabilities/server/apps/enterprise`（`sdk.go` 与测试）、生成器 `cmd/api-types`、生成物 `enterprise-sdk.ts` 与 kernel 导出、消费者 `@platform/app` 与 `@pkg/mes`。核对：MES 仅导入应用 API 与 `production` 协议，不导入宿主运行时或其他应用。结论：新能力沿公共契约进入，不改内核、不牵动无关应用。
+- 边界例外（R02/R09 证据）：`scripts/escapes.sh` 的 7 项已知例外全部逐条挂工作号（ADR-0062、ADR-0053 §11 两项、ADR-0066、#129 两项），本轮无新增；保留依据与退出条件随各工作号，不新增白名单条目。
+- 仍待完成：D-04 权威与状态流的剩余部分（集成记录进入候选封存/晋级范围的迁移设计、封存制品的生命周期收口）、分层与依赖一致性复核结论、Stage A 收口。
