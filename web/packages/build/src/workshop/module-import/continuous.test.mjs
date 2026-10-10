@@ -8,20 +8,21 @@ const {continuousSettings}=await import("./continuous.ts");
 const module=JSON.parse(readFileSync(new URL("./default.workshop.json",import.meta.url),"utf8"));
 const graph=()=>structuredClone(module.flows[0]);
 const settings={Source:"telemetry",State:2097152,FrameBytes:4194304,Intake:{sourceRecord:"STREAM-SOURCE",key:"event_id",partition:["plant","device"],eventTime:"at",value:"reading"}};
-const bindings={"flow-alert":{app:"build",kind:"action",name:"build.alert.acknowledge",version:0,sourceVersion:"1.action-1"}};
+const bindings={"flow-alert":{app:"build",kind:"action",name:"build.telemetryalert.record",version:0,sourceVersion:"1.action-1"}};
 const compile=(flow,extra={})=>compileFlowSource(JSON.stringify({flows:[flow]}),flow.id,bindings,{name:"telemetry",capabilities:[],definitions:[],continuous:settings,...extra});
 const codes=report=>report.diagnostics.map(issue=>issue.code).sort();
 
 test("the default continuous graph declares its own window, operators, effect and dead letters",()=>{
  const report=compile(graph());
  assert.deepEqual(report.diagnostics,[],JSON.stringify(report.diagnostics));
- assert.deepEqual(report.outputs,{stats:"liveTelemetryStats",acknowledge:"build.alert.acknowledge"});
+ assert.deepEqual(report.outputs,{stats:"liveTelemetryStats",acknowledge:"build.telemetryalert.record"});
  assert.deepEqual(report.continuous,{Source:"telemetry",State:2097152,FrameBytes:4194304,Intake:settings.Intake,Batch:512,
   Window:{node:"flow-window",windowMs:30000,slideMs:5000,watermarkMs:2000,maxRecords:50000,lateEvents:"sideOutput"},
   Aggregate:{node:"flow-wasm",signal:"vibration",group:["plantId","deviceId"],measures:["count","mean"]},
   Threshold:{node:"flow-threshold",field:"mean",high:11.5,low:9.5,debounceMs:3000,severity:"High"},
-  DeadLetter:{node:"flow-dlq",maxRecords:10000,ttlMs:86400000},CheckpointEvery:5000,
-  Effects:[{node:"flow-threshold",action:"build.alert.acknowledge"}]});
+  Output:{node:"flow-output",name:"liveTelemetryStats",mode:"replace"},
+  DeadLetter:{node:"flow-dlq",maxRecords:10000,ttlMs:86400000},CheckpointEvery:5000,ErrorPolicy:"deadLetter",
+  Effects:[{node:"flow-threshold",action:"build.telemetryalert.record"}]});
  const {continuous,steps,object,when,manual}=report.draft;
  assert.equal(object,"");
  assert.equal(when,"");
@@ -63,6 +64,12 @@ test("ports, bounds and owners are refused instead of approximated",()=>{
  const tooManyRows=graph();
  tooManyRows.nodes.find(n=>n.type==="window").config.maxRecords=1000001;
  assert.deepEqual(codes(compile(tooManyRows)),["flow-continuous-config"]);
+ const unsafeOutput=graph();
+ unsafeOutput.nodes.find(n=>n.type==="variableOutput").config.variableId="live-telemetry";
+ assert.deepEqual(codes(compile(unsafeOutput)),["flow-continuous-output"]);
+ const reservedOutput=graph();
+ reservedOutput.nodes.find(n=>n.type==="variableOutput").config.variableId="alerts";
+ assert.deepEqual(codes(compile(reservedOutput)),["flow-continuous-output"]);
  const parallel=graph();
  parallel.execution.maxConcurrency=8;
  assert.deepEqual(codes(compile(parallel)),["flow-concurrency-owner"]);

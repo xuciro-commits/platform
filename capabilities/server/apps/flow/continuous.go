@@ -289,7 +289,11 @@ func foldDecision(in *FlowInstance, declared platform.Continuous, batch Batch, n
 	// none. They travel as the accepted result's data channel like every
 	// other Flow output.
 	if declared.Aggregate != nil {
-		in.Outputs["stats"] = platform.Raw(stats)
+		name := "stats"
+		if declared.Output != nil {
+			name = declared.Output.Name
+		}
+		in.Outputs[name] = platform.Raw(stats)
 	}
 	if declared.Threshold != nil {
 		in.Outputs["alerts"] = platform.Raw(alerts)

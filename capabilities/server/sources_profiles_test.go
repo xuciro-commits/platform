@@ -130,7 +130,8 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 		Intake:    &platform.StreamIntake{SourceRecord: "stream", Key: "sku", Partition: []string{"plant", "device"}, EventTime: "at", Value: "signal"},
 		Window:    &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"},
 		Aggregate: &platform.StreamAggregate{Node: "stats", Signal: "reading", Group: []string{"deviceId"}, Measures: []string{"count", "mean", "max"}},
-		Threshold: &platform.StreamThreshold{Node: "high", Field: "mean", High: 11.5, Low: 9.5, Severity: "High"}}
+		Threshold: &platform.StreamThreshold{Node: "high", Field: "mean", High: 11.5, Low: 9.5, Severity: "High"},
+		Output:    &platform.StreamOutput{Node: "output", Name: "liveTelemetryStats", Mode: "replace"}}
 	submit(build.ProcessType, "consumer", "create", map[string]any{"name": "telemetry", "title": "Telemetry consumer", "manual": true, "continuous": continuous,
 		"steps": []build.ProcessStep{{Name: "intake", Kind: "wait", Condition: &platform.Predicate{Op: "eq", Left: &platform.Binding{Source: "literal", Value: platform.Raw(false)}, Right: &platform.Binding{Source: "literal", Value: platform.Raw(true)}}}}})
 	submit(build.ProcessType, "consumer", "publish", map[string]any{})
@@ -150,7 +151,7 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	}
 	// The operators' outputs are the accepted result's data channel: the first
 	// ready slide raised the declared threshold over the real rows.
-	if stats := running.Outputs["stats"]; !bytes.Contains(stats, []byte(`"mean":12`)) || !bytes.Contains(stats, []byte(`"count":512`)) {
+	if stats := running.Outputs["liveTelemetryStats"]; !bytes.Contains(stats, []byte(`"mean":12`)) || !bytes.Contains(stats, []byte(`"count":512`)) {
 		t.Fatalf("real source produced no declared aggregate record: %s", stats)
 	}
 	if alerts := running.Outputs["alerts"]; !bytes.Contains(alerts, []byte(`"state":"triggered"`)) || !bytes.Contains(alerts, []byte(`"group":"[D]"`)) || !bytes.Contains(alerts, []byte(`"field":"mean"`)) {

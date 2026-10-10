@@ -21,7 +21,7 @@ const alertFields=["group","node","field","severity","state","batch"];
 /** The keys the Flow settings own: the real Source record and its columns. The
  * graph owns the runtime chain below, so a settings copy of it is refused. */
 const settingsKeys=["Source","State","FrameBytes","Intake"] as const;
-const graphKeys=["Batch","Window","Aggregate","Threshold","Effects","DeadLetter","CheckpointEvery"] as const;
+const graphKeys=["Batch","Window","Aggregate","Threshold","Output","Effects","DeadLetter","CheckpointEvery","ErrorPolicy"] as const;
 const bounded=(v:unknown,low:number,high:number)=>Number.isSafeInteger(v)&&(v as number)>=low&&(v as number)<=high;
 const count=(v:unknown):v is number=>Number.isFinite(v);
 
@@ -105,11 +105,13 @@ export function compileContinuousGraph(flow:SourceFlow,settings:Partial<Api.Cont
   if(c.states!==undefined&&(!states.length||states.some(s=>s!=="triggered"&&s!=="cleared")))issue(`${path(alert)}/config/states`,"flow-effect-action");
   if(action){effects=[{node:threshold?.id??"",action,...(c.targetField?{target:c.targetField as string}:{}),...(states.length?{states}: {})}];outputs.acknowledge=action;}
  }
- // the statistics output is the read-only asset the Flow publishes.
+ // The statistics node names the read-only variable kept on each accepted
+ // Flow instance. The platform exposes only bounded replace semantics.
+ let streamOutput:Api.StreamOutput|undefined;
  if(output){
   const c=config(output,["variableId","mode"]);
-  if(typeof c.variableId!=="string"||!c.variableId||c.mode!=="replace")issue(`${path(output)}/config`,"flow-continuous-output");
-  else outputs.stats=c.variableId;
+  if(typeof c.variableId!=="string"||! /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(c.variableId)||c.variableId==="batch"||c.variableId==="alerts"||c.mode!=="replace")issue(`${path(output)}/config`,"flow-continuous-output");
+  else {outputs.stats=c.variableId;streamOutput={node:output.id,name:c.variableId,mode:"replace"};}
  }
  // the dead-letter asset is required and bounded; letters are kept for replay.
  if(dlq){
@@ -133,6 +135,7 @@ export function compileContinuousGraph(flow:SourceFlow,settings:Partial<Api.Cont
  if(!bounded(execution.checkpointEvery,0,1000000))issue(`${root}/execution/checkpointEvery`,"flow-checkpoint-owner");
  if(diagnostics.length)return {outputs,diagnostics};
  const declared:Api.Continuous={...settings,Source:settings.Source!,Batch:batch,State:settings.State??0,FrameBytes:settings.FrameBytes??0,
+  ...(streamOutput?{Output:streamOutput}:{}),ErrorPolicy:"deadLetter",
   Window:{node:window!.id,windowMs:window!.config.windowMs as number,slideMs:window!.config.slideMs as number,watermarkMs:window!.config.watermarkMs as number,maxRecords:window!.config.maxRecords as number,lateEvents:window!.config.lateEvents as Api.StreamWindow["lateEvents"]},
   Aggregate:{node:aggregate!.id,signal:(aggregate!.config.signal as string|undefined)||undefined,group:(aggregate!.config.groupBy as string[]|undefined)??[],measures:measuresDeclared},
   Threshold:{node:threshold!.id,field:threshold!.config.field as string,high:threshold!.config.high as number,low:threshold!.config.low as number,debounceMs:threshold!.config.debounceMs as number,...(threshold!.config.severity?{severity:threshold!.config.severity as string}:{})},

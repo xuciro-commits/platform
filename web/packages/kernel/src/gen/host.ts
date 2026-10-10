@@ -605,6 +605,8 @@ export type Continuous = {
   Aggregate?: StreamAggregate;
   Threshold?: StreamThreshold;
   Intake?: StreamIntake;
+  Output?: StreamOutput;
+  ErrorPolicy?: string;
   CheckpointEvery?: number;
   Effects?: StreamEffect[];
   DeadLetter?: StreamDeadLetter;
@@ -2914,6 +2916,12 @@ export type StreamIntake = {
   partition: string[];
   eventTime: string;
   value: string;
+};
+
+export type StreamOutput = {
+  node: string;
+  name: string;
+  mode: string;
 };
 
 export type StreamThreshold = {

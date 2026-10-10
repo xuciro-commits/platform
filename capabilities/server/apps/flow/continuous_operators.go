@@ -67,11 +67,33 @@ type Alert struct {
 
 var aggregateMeasures = []string{"count", "sum", "mean", "min", "max"}
 
+func streamOutputName(name string) bool {
+	if name == "" || len(name) > 64 {
+		return false
+	}
+	first := name[0]
+	if !(first >= 'A' && first <= 'Z' || first >= 'a' && first <= 'z') {
+		return false
+	}
+	for i := 1; i < len(name); i++ {
+		b := name[i]
+		if b != '_' && (b < '0' || b > '9') && (b < 'A' || b > 'Z') && (b < 'a' || b > 'z') {
+			return false
+		}
+	}
+	return true
+}
+
 // checkOperators validates the declared aggregate and threshold apart from any
 // tenant state. It runs before folding, so a graph that cannot be wired is
 // refused instead of silently never firing.
 func checkOperators(declared platform.Continuous) error {
 	a, t := declared.Aggregate, declared.Threshold
+	if output := declared.Output; output != nil {
+		if a == nil || output.Node == "" || !streamOutputName(output.Name) || output.Name == "batch" || output.Name == "alerts" || output.Mode != "replace" {
+			return fmt.Errorf("a stream output needs an aggregate, a safe variable name, and replace mode")
+		}
+	}
 	if a == nil && t == nil {
 		return nil
 	}

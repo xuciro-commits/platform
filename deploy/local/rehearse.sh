@@ -171,6 +171,7 @@ workflow_state() {
       records/flow.instance/build.review$suffix:WF-NEW \
       records/flow.instance/build.review$suffix:WF-JOINT \
       records/build.connection/STREAM-DB records/build.source/STREAM-SOURCE \
+      records/build.object/STREAM-ALERT-OBJECT records/build.telemetryalert/%5BD%5D \
       records/build.process/STREAM-PROCESS records/flow.instance/build.stream$suffix:pg releases/active; do
       workflow_get "$actor" "$path" || fail "workflow state $suffix $path"
     done
@@ -697,9 +698,50 @@ sql "create role rehearsal_source login password 'sinkLocalOnly00000000000000000
     done
     jq -e --arg call "$call" '.state == "completed" and .output.staged.call == $call and .output.staged.size > 49152' <<<"$result" >/dev/null || fail "data ABI result never completed"
     workflow_post "$actor" releases/active "{\"candidateId\":\"$application_release\",\"key\":\"code-restore-application\"}" | jq -e --arg id "$application_release" '.id == $id' >/dev/null || fail "restore application release after compute probe"
+    # Business members may read the tenant-owned output object but cannot write
+    # it; the Flow app's accepted automation action supplies the live alert.
+    alert_fields=$(jq -nc '[
+      {name:"node",title:"Node",type:"text"},
+      {name:"group",title:"Group",type:"text"},
+      {name:"field",title:"Measure",type:"text"},
+      {name:"value",title:"Value",type:"decimal"},
+      {name:"high",title:"High",type:"decimal"},
+      {name:"low",title:"Low",type:"decimal"},
+      {name:"severity",title:"Severity",type:"text"},
+      {name:"alertState",title:"Alert state",type:"choice",choices:"triggered,cleared"},
+      {name:"at",title:"Event time",type:"datetime"},
+      {name:"batch",title:"Accepted batch",type:"text"}
+    ]')
+    alert_actions=$(jq -nc '[{
+      name:"record",title:"Record threshold alert",description:"Store one accepted threshold episode",
+      from:["open"],to:"open",roles:["builder"],
+      inputs:[
+        {name:"node",title:"Node",type:"text",required:true},
+        {name:"group",title:"Group",type:"text",required:true},
+        {name:"field",title:"Measure",type:"text",required:true},
+        {name:"value",title:"Value",type:"decimal",required:true},
+        {name:"high",title:"High",type:"decimal",required:true},
+        {name:"low",title:"Low",type:"decimal",required:true},
+        {name:"severity",title:"Severity",type:"text",required:true},
+        {name:"state",title:"Alert state",type:"choice",choices:"triggered,cleared",required:true},
+        {name:"at",title:"Event time",type:"datetime",required:true},
+        {name:"batch",title:"Accepted batch",type:"text",required:true}
+      ],
+      sets:[
+        {field:"node",from:"node"},{field:"group",from:"group"},{field:"field",from:"field"},
+        {field:"value",from:"value"},{field:"high",from:"high"},{field:"low",from:"low"},
+        {field:"severity",from:"severity"},{field:"alertState",from:"state"},
+        {field:"at",from:"at"},{field:"batch",from:"batch"}
+      ]
+    }]')
+    alert_object=$(jq -nc --argjson fields "$alert_fields" --argjson actions "$alert_actions" \
+      '{name:"telemetryalert",title:"Telemetry alert",fields:$fields,states:[{name:"open",title:"Open"}],actions:$actions,access:[{role:"user",read:"all"}]}')
+    workflow_submit "$actor" stream-alert-object build.object.create build.object STREAM-ALERT-OBJECT "$alert_object"
+    workflow_submit "$actor" stream-alert-object-publish build.object.publish build.object STREAM-ALERT-OBJECT '{}'
+    workflow_submit "$actor" stream-alert-placeholder build.telemetryalert.create build.telemetryalert '[D]' '{}'
     # The first real stream comes from an existing PostgreSQL table through
     # the controlled read-only Connection/Source, on the host's original tick.
-    sql "create table flow_rehearsal_$suffix(seq bigint primary key, event_id text, plant text, device text, at timestamptz, reading double precision); grant select on flow_rehearsal_$suffix to rehearsal_source" >/dev/null
+    sql "create table flow_rehearsal_$suffix(seq bigint primary key, event_id text, plant text, device text, at timestamptz, reading double precision, signal jsonb); grant select on flow_rehearsal_$suffix to rehearsal_source" >/dev/null
     workflow_submit "$actor" stream-db build.connection.create build.connection STREAM-DB \
       '{"name":"streamdb","title":"Stream database","kind":"postgres","address":"postgres://rehearsal_source@postgres/platform","secret":"SINK"}'
     workflow_submit "$actor" stream-db-check build.connection.check build.connection STREAM-DB '{}'
@@ -713,9 +755,14 @@ sql "create role rehearsal_source login password 'sinkLocalOnly00000000000000000
     workflow_submit "$actor" stream-source-publish build.source.publish build.source STREAM-SOURCE '{}'
     definition=$(jq -n --arg name "stream$suffix" \
       '{name:$name,title:"PostgreSQL continuous intake",manual:true,
-        continuous:{Source:"telemetry",Batch:512,State:2097152,FrameBytes:4194304,DeadLetter:{node:"dlq",maxRecords:10000,ttlMs:86400000},
-          Intake:{sourceRecord:"STREAM-SOURCE",key:"event_id",partition:["plant","device"],eventTime:"at",value:"reading"},
-          Window:{node:"window",windowMs:30000,slideMs:5000,watermarkMs:2000,maxRecords:50000,lateEvents:"sideOutput"}},
+        continuous:{Source:"telemetry",Batch:512,State:2097152,FrameBytes:4194304,CheckpointEvery:2,ErrorPolicy:"deadLetter",
+          DeadLetter:{node:"dlq",maxRecords:10000,ttlMs:86400000},
+          Intake:{sourceRecord:"STREAM-SOURCE",key:"event_id",partition:["plant","device"],eventTime:"at",value:"signal"},
+          Window:{node:"window",windowMs:30000,slideMs:5000,watermarkMs:2000,maxRecords:50000,lateEvents:"sideOutput"},
+          Aggregate:{node:"stats",signal:"reading",group:["deviceId"],measures:["count","mean"]},
+          Threshold:{node:"high",field:"mean",high:11.5,low:9.5,debounceMs:0,severity:"High"},
+          Output:{node:"output",name:"liveTelemetryStats",mode:"replace"},
+          Effects:[{node:"high",action:"build.telemetryalert.record",states:["triggered"]}]},
         steps:[{name:"intake",kind:"wait",condition:{op:"eq",left:{source:"literal",value:false},right:{source:"literal",value:true}}}]}')
     workflow_submit "$actor" stream-process build.process.create build.process STREAM-PROCESS "$definition"
     workflow_submit "$actor" stream-process-publish build.process.publish build.process STREAM-PROCESS '{}'
@@ -723,20 +770,25 @@ sql "create role rehearsal_source login password 'sinkLocalOnly00000000000000000
     workflow_post "$actor" releases/candidates "{\"kind\":\"flow\",\"id\":\"STREAM-PROCESS\",\"candidateId\":\"$candidate\",\"key\":\"stream-save\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "stream flow save"
     workflow_post "$actor" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"stream-active\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "stream flow activation"
     workflow_submit "$actor" stream-run build.process.run build.process STREAM-PROCESS '{"key":"pg"}'
-    sql "insert into flow_rehearsal_$suffix select n,'event-'||n,'P','D',now(),12 from generate_series(1,1025) n" >/dev/null
+    sql "insert into flow_rehearsal_$suffix select n,'event-'||n,'P','D',now(),12,jsonb_build_object('deviceId','D','reading',12) from generate_series(1,1025) n" >/dev/null
     for _ in $(seq 30); do
       result=$(workflow_get "$actor" "records/flow.instance/build.stream$suffix:pg")
-      jq -e '.record.batch | .source.cursor == "1025" and .consumed == 1025 and .rejected == 0 and .sealed.size > 65536' <<<"$result" >/dev/null && break
+      alert=$(workflow_get "$actor" 'records/build.telemetryalert/%5BD%5D' 2>/dev/null || true)
+      if jq -e '.record.batch | .source.cursor == "1025" and .consumed == 1025 and .rejected == 0 and .sealed.size > 65536 and .checkpoint.ordinal == 2' <<<"$result" >/dev/null \
+        && jq -e '.record.outputs.liveTelemetryStats | any(.values.mean >= 11.5 and .values.count > 0)' <<<"$result" >/dev/null \
+        && jq -e '.record | .id == "[D]" and .node == "high" and .group == "[D]" and .field == "mean" and .alertState == "triggered" and .changed.by == "app:build"' <<<"$alert" >/dev/null; then break; fi
       sleep 1
     done
-    jq -e '.record.batch | .source.cursor == "1025" and .consumed == 1025 and .rejected == 0 and .sealed.size > 65536' <<<"$result" >/dev/null || fail "real PostgreSQL source did not accept its three bounded batches"
+    jq -e '.record.batch | .source.cursor == "1025" and .consumed == 1025 and .rejected == 0 and .sealed.size > 65536 and .checkpoint.ordinal == 2' <<<"$result" >/dev/null || fail "real PostgreSQL source did not accept three batches and checkpoint batch two"
+    jq -e '.record.outputs.liveTelemetryStats | any(.values.mean >= 11.5 and .values.count > 0)' <<<"$result" >/dev/null || fail "the named read-only aggregate output was not retained on the Flow instance"
+    jq -e '.record | .id == "[D]" and .node == "high" and .group == "[D]" and .field == "mean" and .alertState == "triggered" and .changed.by == "app:build"' <<<"$alert" >/dev/null || fail "the alert was not delivered once through the declaring Build app's accepted action"
     workflow_get "$actor" records/build.source/STREAM-SOURCE | jq -e '.record | (.cursor // "") == "" and .last == null and (.requested // false) == false' >/dev/null || fail "stream kept an import cursor or materialized rows"
     workflow_submit "$actor" stream-pause build.source.pause build.source STREAM-SOURCE '{}'
     workflow_post "$actor" releases/active "{\"candidateId\":\"$application_release\",\"key\":\"stream-restore-application\"}" | jq -e --arg id "$application_release" '.id == $id' >/dev/null || fail "restore application release after stream probe"
   done
 )
 echo "ok   Go/TinyGo data ABI: real isolated compilation, call-owned RustFS input/output and PostgreSQL result; retries keep the original call"
-echo "ok   PostgreSQL continuous sources: both hosts accept 1025 real rows in 512-row batches, with one consumer cursor and sealed RustFS window state"
+echo "ok   PostgreSQL continuous Flow: both hosts accept 1025 real rows in 512-row batches, checkpoint batch two, publish the named read-only aggregate output, and deliver the threshold alert once through the declaring app's action into its readable output record"
 before=$(settled_state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 

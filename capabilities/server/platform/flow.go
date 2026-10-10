@@ -64,6 +64,14 @@ type Continuous struct {
 	// Intake binds a controlled source record and its event columns. Nil keeps
 	// the existing native batch delivery contract.
 	Intake *StreamIntake `json:"Intake,omitempty"`
+	// Output names the read-only Flow-instance variable that receives the
+	// aggregate records from each accepted batch. Nil preserves the historical
+	// "stats" output key.
+	Output *StreamOutput `json:"Output,omitempty"`
+	// ErrorPolicy records the source graph's bounded continuous-failure policy.
+	// "deadLetter" is the only configured policy; batch-level refusals still
+	// leave the source position unchanged so the same batch can be retried.
+	ErrorPolicy string `json:"ErrorPolicy,omitempty"`
 	// CheckpointEvery writes an explicit run checkpoint into the frame every N
 	// accepted batches (ADR-0047 §13.3): the position, watermark, counters and
 	// a digest of the frame that recovery and handover can name and verify. 0
@@ -79,6 +87,14 @@ type Continuous struct {
 	// declared count and age, so one letter can be inspected and replayed
 	// under the original authorization. Nil keeps no dead letters.
 	DeadLetter *StreamDeadLetter `json:"DeadLetter,omitempty"`
+}
+
+// StreamOutput binds the aggregate node to a named, read-only variable on the
+// accepted Flow instance. Replace is the only supported output mode.
+type StreamOutput struct {
+	Node string `json:"node"`
+	Name string `json:"name"`
+	Mode string `json:"mode"`
 }
 
 // StreamEffect is one output binding: the threshold node whose alerts it

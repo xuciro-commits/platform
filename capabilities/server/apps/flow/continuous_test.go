@@ -440,6 +440,10 @@ func TestContinuousOperatorDeclarationIsChecked(t *testing.T) {
 		ok       bool
 	}{
 		{"the default graph's declared field", platform.Continuous{Window: window, Aggregate: aggregate, Threshold: threshold("mean", 9.5, 11.5)}, true},
+		{"a named read-only output", platform.Continuous{Window: window, Aggregate: aggregate, Output: &platform.StreamOutput{Node: "output", Name: "liveTelemetryStats", Mode: "replace"}}, true},
+		{"an output without an aggregate", platform.Continuous{Window: window, Output: &platform.StreamOutput{Node: "output", Name: "liveTelemetryStats", Mode: "replace"}}, false},
+		{"an output that collides with the batch view", platform.Continuous{Window: window, Aggregate: aggregate, Output: &platform.StreamOutput{Node: "output", Name: "batch", Mode: "replace"}}, false},
+		{"an output that is not a replace variable", platform.Continuous{Window: window, Aggregate: aggregate, Output: &platform.StreamOutput{Node: "output", Name: "bad-name", Mode: "append"}}, false},
 		{"a field the aggregate does not produce", platform.Continuous{Window: window, Aggregate: aggregate, Threshold: threshold("reading", 9.5, 11.5)}, false},
 		{"a threshold without its aggregate", platform.Continuous{Window: window, Threshold: threshold("mean", 9.5, 11.5)}, false},
 		{"an aggregate without the event-time window", platform.Continuous{Aggregate: aggregate, Threshold: threshold("mean", 9.5, 11.5)}, false},
@@ -453,5 +457,53 @@ func TestContinuousOperatorDeclarationIsChecked(t *testing.T) {
 		if !c.ok && err == nil {
 			t.Errorf("%s: accepted", c.why)
 		}
+	}
+}
+
+func TestContinuousNamedOutputReplacesTheFlowInstanceVariable(t *testing.T) {
+	now := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	declared := platform.Continuous{
+		Source: "telemetry", Batch: 10, DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 100},
+		Window:    &platform.StreamWindow{Node: "window", WindowMS: 5000, SlideMS: 1000, WatermarkMS: 0, MaxRecords: 100, LateEvents: "sideOutput"},
+		Aggregate: &platform.StreamAggregate{Node: "stats", Signal: "vibration", Group: []string{"deviceId"}, Measures: []string{"count", "mean"}},
+		Threshold: &platform.StreamThreshold{Node: "high", Field: "mean", High: 11.5, Low: 9.5},
+		Output:    &platform.StreamOutput{Node: "output", Name: "liveTelemetryStats", Mode: "replace"},
+	}
+	instance := &FlowInstance{ID: "build.telemetry:pg"}
+	batch := Batch{ID: "b1", Signals: []Signal{
+		{Key: "m1", Partition: "plant-a", At: now, Value: json.RawMessage(`{"deviceId":"D","vibration":12}`)},
+		{Key: "m2", Partition: "plant-a", At: now.Add(time.Second), Value: json.RawMessage(`{"deviceId":"D","vibration":13}`)},
+		{Key: "m3", Partition: "plant-a", At: now.Add(2 * time.Second), Value: json.RawMessage(`{"deviceId":"D","vibration":12}`)},
+	}}
+	if folded, rejected, err := foldDecision(instance, declared, batch, now); err != nil || folded != 3 || rejected != 0 {
+		t.Fatalf("accepted output batch: folded=%d rejected=%d error=%v", folded, rejected, err)
+	}
+	if got := instance.Outputs["liveTelemetryStats"]; !bytes.Contains(got, []byte(`"mean":12.333333333333334`)) || !bytes.Contains(got, []byte(`"count":3`)) {
+		t.Fatalf("named read-only output not published on the Flow instance: %s", got)
+	}
+	if _, exists := instance.Outputs["stats"]; exists {
+		t.Fatal("a declared output must replace the default variable name, not create a hidden second output")
+	}
+	if got := instance.Outputs["alerts"]; !bytes.Contains(got, []byte(`"state":"triggered"`)) {
+		t.Fatalf("the operator's alert output was lost beside the named statistics output: %s", got)
+	}
+}
+
+func TestContinuousErrorPolicyAcceptsOnlyTheDeclaredDeadLetterPath(t *testing.T) {
+	f := New("continuous-error-policy")
+	manifest := platform.Manifest{ID: "builder"}
+	flow := platform.Flow{
+		Name: "telemetry", Title: "Telemetry", Version: 1,
+		Start:      platform.Start{Manual: true},
+		Steps:      []platform.Step{{Name: "end", End: true}},
+		Continuous: &platform.Continuous{Source: "telemetry", DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 100}},
+	}
+	flow.Continuous.ErrorPolicy = "deadLetter"
+	if _, err := f.check(manifest, flow); err != nil {
+		t.Fatalf("the declared dead-letter policy was refused: %v", err)
+	}
+	flow.Continuous.ErrorPolicy = "stop"
+	if _, err := f.check(manifest, flow); err == nil {
+		t.Fatal("a continuous error policy without an owner was accepted")
 	}
 }
