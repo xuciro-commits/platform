@@ -499,11 +499,13 @@ Backpressure 必须有界且可见：输入接受与消费队列各有预算。�
 
 状态制品有 64 MiB 上限及声明预算，读取核对租户、实例、版本、字节数和摘要；准备与读取的文件 I/O 不持有租户提交锁。全部输出仍受 60 KiB 预算限制，宿主的 1 MiB 接受结果与原记录 JSON 限制不放宽。确定在提交前拒绝或幂等命中未使用的独立预备文件会回收；提交结果不明确时保留字节，后续孤儿扫描及已接受历史制品的生命周期尚未实现。这条原生封存入口没有接到生产来源，也不是 worker 大输入 ABI。`compute_channel.go` 的调用专属结果通道继续承担结果封存；读取先检查租户/调用/路径与 16 MiB 上限，再有界读取并校验封存大小与摘要。
 
-Compute 已接入 §13.3 的 v2 worker ABI：原 Code editor 可显式选 ABI 与通道预算，编译证据与候选冻结 ABI，激活不会采用之后修改的草稿 ABI。执行沿原 operation outbox，输入来自已接受且授权检查通过的调用，worker 通道字节回到原 schema/暂存/接受结果路径。worker 的 socket 能读取超过 1 MiB 的冻结 JSON，但宿主普通 `InvokeOperation` 请求仍按原内联输入预算准入；尚无 Source/Flow 在锁外准备大输入制品并把引用交给已接受调用。这两条边界不能混称为生产大输入链已接通。
+Compute 已接入 §13.3 的 v2 worker ABI：原 Code editor 可显式选 ABI 与通道预算，编译证据与候选冻结 ABI，激活不会采用之后修改的草稿 ABI。执行沿原 operation outbox，输入来自已接受且授权检查通过的调用，worker 通道字节回到原 schema/暂存/接受结果路径。声明 `dataInputBytes` 的原生 `InvokeOperation` 在提交锁下捕获固定定义及当前成员/来源授权，锁外按 schema/预算检查和封存输入，随后在原 Console 接受结果中只保存内容标记及调用意图的封存引用。引用绑定租户、成员、调用、定义、输入摘要和宿主 ticket；普通 JSON 请求不能构造预备上下文或提供文件路径。提交前再次核对固定定义和当前授权。原内联调用与 HTTP 请求体预算保持不变；Source/Flow 仍未将真实来源投影接入这条大输入调用链。
 
-**证据：** `apps/flow/continuous_test.go` 检查整批回滚、摘要、乱序/重复/迟到/overflow、slide 和配置预算；根包 `flow_test.go` 的 `TestContinuousAcceptedFrameRefusalAndRecovery` 核对原实例提交、接受结果重放、快照及旧内联预算拒绝；`TestContinuousSealedFrameAndRecovery` 核对超过记录内联预算的窗口只保存制品引用、原批次历史重试/内容冲突、不同成员/租户拒绝、摘要损坏拦截，以及共享测试 FileStore 下的重放、快照和后继提交。它们不是外部真实来源、数据库/对象存储崩溃恢复、worker 或七节点业务链的验收。`upgrade_authorization_test.go` 证明其覆盖的计算结果通道及外租户/调用/路径/预算拒绝。`compute_test.go` 的 `TestWasmDataABIChannels` 在固定镜像的 Go/TinyGo 编译器下通过真实 Unix socket 检查大于 1 MiB 的输入/输出、非法内存范围、摘要/租户拒绝和输出超预算；同一 ABI 经原编译、候选冻结/激活、操作队列、FileStore 封存与接受结果重放，恢复后不重新执行计算。原 `TestWasmCommandCompilerProfiles` 核对旧内联 ABI。上述测试使用内存 FileStore/接受结果存储，不代替数据库崩溃恢复或七节点运行验收。
+执行读取封存输入在提交锁外进行，校验所属调用/定义/成员、字节数、SHA-256、规范输入摘要和 schema，读取后再核对权限及 generation 才交 worker。接受结果重放与快照携带同一输入引用，恢复执行读取原字节，不读取“最新”来源。内容标记不含随机 ticket，同 key/同内容重试使用原意图并回收本次未使用的预备文件；已知拒绝同样回收，提交结果不明确时保留输入。已接受输入随原调用历史保留，尚未承诺未知提交孤儿扫描或历史制品压缩。
 
-**尚未接通：** 没有生产来源调用原生批次入口；窗口规则还未接到默认图的原聚合/滞回算子、真实分区并发 8、动作或应用实例只读输出。来源消费队列/backpressure、checkpointEvery、版本化死信资产及重放、停止后同版本续接、宿主大输入制品投影/调用接线、制品生命周期、真实持久恢复及完整浏览器路线继续属于实现与运行缺口。不能用辅助函数、受控测试来源或手动 Flow 代替完整持续执行。
+**证据：** `apps/flow/continuous_test.go` 检查整批回滚、摘要、乱序/重复/迟到/overflow、slide 和配置预算；根包 `flow_test.go` 的 `TestContinuousAcceptedFrameRefusalAndRecovery` 核对原实例提交、接受结果重放、快照及旧内联预算拒绝；`TestContinuousSealedFrameAndRecovery` 核对超过记录内联预算的窗口只保存制品引用、原批次历史重试/内容冲突、不同成员/租户拒绝、摘要损坏拦截，以及共享测试 FileStore 下的重放、快照和后继提交。它们不是外部真实来源、数据库/对象存储崩溃恢复、worker 或七节点业务链的验收。`upgrade_authorization_test.go` 证明其覆盖的计算结果通道及外租户/调用/路径/预算拒绝。`compute_test.go` 的 `TestWasmDataABIChannels` 在固定镜像的 Go/TinyGo 编译器下通过真实 Unix socket 检查大于 1 MiB 的输入/输出、非法内存范围、摘要/租户拒绝和输出超预算；同一 ABI 经原编译、候选冻结/激活、操作队列、FileStore 封存与接受结果重放；宿主超过 1 MiB 的输入只保存小型引用，待执行调用重放后可读取原输入执行，已完成结果恢复后不重新计算。测试还核对同 key 重试/内容冲突不遗留额外预备文件、来源与外租户拒绝、输入句柄与内容损坏拒绝。原 `TestWasmCommandCompilerProfiles` 核对旧内联 ABI。上述测试使用内存 FileStore/接受结果存储，不代替数据库崩溃恢复或七节点运行验收。
+
+**尚未接通：** 没有生产来源调用原生批次入口；窗口规则还未接到默认图的原聚合/滞回算子、真实分区并发 8、动作或应用实例只读输出。来源消费队列/backpressure、checkpointEvery、版本化死信资产及重放、停止后同版本续接、Source/Flow 的大输入投影/调用接线、制品生命周期、真实持久恢复及完整浏览器路线继续属于实现与运行缺口。不能用辅助函数、受控测试来源或手动 Flow 代替完整持续执行。
 
 ## 14. 当前实现边界
 

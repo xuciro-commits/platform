@@ -1659,5 +1659,14 @@
   "Value must be after or equal to {field}.": "值必须晚于或等于 {field}。",
   "The read does not exist": "该读取不存在",
   "Compute ABI": "计算 ABI",
-  "Built ABI": "已编译 ABI"
+  "Built ABI": "已编译 ABI",
+  "This member cannot prepare the operation input": "该成员无权准备此计算的输入",
+  "Sealed operation inputs require accepted-result storage": "封存计算输入需要接受结果存储",
+  "The input exceeds its declared data channel budget": "输入超出了声明的数据通道预算",
+  "The input exceeds the operation inline budget": "输入超出了计算的内联预算",
+  "The operation member is unavailable": "计算成员不可用",
+  "The prepared input belongs to another operation request": "预备输入属于另一计算请求",
+  "The operation changed while its input was prepared": "准备输入期间计算发生了变化",
+  "The accepted input artifact belongs to another operation": "已接受的输入制品属于另一计算",
+  "Operation permission or generation changed while its input was read": "读取输入期间计算权限或执行轮次发生了变化"
 }

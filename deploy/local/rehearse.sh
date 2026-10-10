@@ -175,10 +175,11 @@ workflow_state() {
   done
 }
 function_state() {
-  local SERVER actor suffix path
+  local SERVER actor suffix path tenant
   for suffix in plant hotel; do
-    if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING; actor=$SUP; else SERVER=$HOSPITALITY; actor=$MGR; fi
-    for path in records/build.function/FN-F records/build.page/FN-P records/build.testplan/FN-PLAN records/build.function-call?limit=500 records/build.evaluation?limit=500; do
+    if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING; actor=$SUP; tenant=plant-sz; else SERVER=$HOSPITALITY; actor=$MGR; tenant=hotel-a; fi
+    for path in records/build.function/FN-F records/build.page/FN-P records/build.testplan/FN-PLAN records/build.function-call?limit=500 records/build.evaluation?limit=500 \
+      records/build.code/CODE-DATA "capabilities/calls/compute/$tenant:build:operation:compute-$suffix:operation"; do
       workflow_get "$actor" "$path" || fail "function state $suffix $path"
     done
   done
@@ -655,6 +656,45 @@ function_joint_api "$HOSPITALITY" hotel-a "$SALES_TOKEN" hotel
 function_joint_wait "$MANUFACTURING" plant-sz "$SUP" plant
 function_joint_wait "$HOSPITALITY" hotel-a "$MGR" hotel
 echo "ok   joint AI function release: both industries activate one evaluated candidate for page and native flow calls"
+# Explicit v2 compute goes through the real compiler, worker, PostgreSQL
+# accepted result and RustFS input/output artifacts. The comparisons below
+# retain its exact ABI, call and staged result across restart/full replay.
+(
+  for suffix in plant hotel; do
+    if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING TENANT=plant-sz actor=$SUP language=go;
+    else SERVER=$HOSPITALITY TENANT=hotel-a actor=$MGR language=tinygo; fi
+    AUTHORITY=build
+    definition=$(jq -n --arg language "$language" --arg name "data$suffix" \
+      '{name:$name,title:"Data channel recovery",abi:"platform-wasip1-data/v2",language:$language,
+        source:"package main\nimport \"strings\"\nfunc Run(input Input)(Output,error){return Output(strings.Repeat(string(input),70000)),nil}",
+        input:{type:"string"},output:{type:"string"},roles:["builder"],
+        limits:{timeoutMillis:30000,memoryPages:2048,maxInputBytes:4096,maxOutputBytes:4096,dataInputBytes:4194304,stagedOutputBytes:8388608}}')
+    workflow_submit "$actor" code-create build.code.create build.code CODE-DATA "$definition"
+    workflow_submit "$actor" code-compile build.code.compile build.code CODE-DATA '{}'
+    for _ in $(seq 60); do
+      code_state=$(workflow_get "$actor" records/build.code/CODE-DATA | jq -r .record.state)
+      [[ $code_state == compiled ]] && break
+      [[ $code_state == failed ]] && fail "data ABI isolated build failed"
+      sleep 1
+    done
+    [[ $code_state == compiled ]] || fail "data ABI isolated build never completed"
+    candidate=$(workflow_post "$actor" releases/preview '{"kind":"compute","id":"CODE-DATA"}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "data ABI candidate"
+    workflow_post "$actor" releases/candidates "{\"kind\":\"compute\",\"id\":\"CODE-DATA\",\"candidateId\":\"$candidate\",\"key\":\"code-save\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "data ABI candidate save"
+    workflow_post "$actor" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"code-activate\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "data ABI activation"
+    input=$(jq -n --arg name "data$suffix" --arg key "compute-$suffix" '{ref:{app:"build",kind:"compute",name:$name},version:1,key:$key,inputs:"<"}')
+    call=$(workflow_post "$actor" capabilities/invoke "$input" | jq -er .call) || fail "data ABI invocation"
+    retry=$(workflow_post "$actor" capabilities/invoke "$input" | jq -er .call) || fail "data ABI idempotent invocation"
+    [[ $call == "$retry" ]] || fail "data ABI retry created another call"
+    for _ in $(seq 60); do
+      result=$(workflow_get "$actor" "capabilities/calls/compute/$call")
+      if jq -e --arg call "$call" '.state == "completed" and .output.staged.call == $call and .output.staged.size > 49152' <<<"$result" >/dev/null; then break; fi
+      [[ $(jq -r .state <<<"$result") == failed ]] && fail "data ABI execution failed"
+      sleep 1
+    done
+    jq -e --arg call "$call" '.state == "completed" and .output.staged.call == $call and .output.staged.size > 49152' <<<"$result" >/dev/null || fail "data ABI result never completed"
+  done
+)
+echo "ok   Go/TinyGo data ABI: real isolated compilation, call-owned RustFS input/output and PostgreSQL result; retries keep the original call"
 before=$(settled_state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 

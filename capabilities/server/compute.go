@@ -21,15 +21,26 @@ const operationEndpoint = "operation"
 // Both compilation and execution use the original effect outbox. They are
 // internal, owned computations: no endpoint configuration or external webhook.
 type operationBinding struct {
-	Definition platform.Operation         `json:"definition"`
-	Call       platform.OperationCall     `json:"call"`
-	Member     string                     `json:"member"`
-	Inputs     json.RawMessage            `json:"inputs,omitempty"`
-	Build      *platform.CodeBuildRequest `json:"build,omitempty"`
+	Definition  platform.Operation         `json:"definition"`
+	Call        platform.OperationCall     `json:"call"`
+	Member      string                     `json:"member"`
+	Inputs      json.RawMessage            `json:"inputs,omitempty"`
+	SealedInput *operationInputArtifact    `json:"sealedInput,omitempty"`
+	Build       *platform.CodeBuildRequest `json:"build,omitempty"`
 }
 
 func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest) (platform.OperationCall, *kernel.Error) {
-	call, intent, err := d.tenant.planOperation(c, r, q, d.records, d.intents)
+	var input *operationInputArtifact
+	if p := d.operationInput; p != nil {
+		hash, _ := canonicalDigest(q)
+		if c.App != PlatformApp || c.ID != p.ref.Member || hash != p.requestHash {
+			d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared input belongs to another operation request")
+			return platform.OperationCall{}, d.failure
+		}
+		input = &p.ref
+		d.operationInput = nil
+	}
+	call, intent, err := d.tenant.planOperation(c, r, q, d.records, d.intents, input)
 	if err != nil {
 		if d.failure == nil {
 			d.failure = err
@@ -41,7 +52,7 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 	}
 	return call, nil
 }
-func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *recordStore, pending []platform.Effect) (platform.OperationCall, platform.Effect, *kernel.Error) {
+func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *recordStore, pending []platform.Effect, sealed ...*operationInputArtifact) (platform.OperationCall, platform.Effect, *kernel.Error) {
 	refuse := func(code pb.ErrorCode, msg string) (platform.OperationCall, platform.Effect, *kernel.Error) {
 		return platform.OperationCall{}, platform.Effect{}, platform.Refuse(code, msg)
 	}
@@ -71,8 +82,14 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	if op.Check() != nil || !slices.Contains(op.Roles, member.Roles[owner]) {
 		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This member cannot call the operation")
 	}
-	if err := op.Input.Validate(q.Inputs, op.Limits.MaxInputBytes); err != nil {
-		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	var input *operationInputArtifact
+	if len(sealed) == 1 {
+		input = sealed[0]
+	}
+	if input == nil {
+		if err := op.Input.Validate(q.Inputs, op.Limits.MaxInputBytes); err != nil {
+			return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
 	}
 	for _, source := range q.Sources {
 		if !t.readableIn(store, member, strings.Split(source, "#")[0], r.GetRecordedTime().AsTime()) {
@@ -92,6 +109,15 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	}
 	hash, _ := canonicalDigest(q.Inputs)
 	id := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, owner, q.Key, operationEndpoint)
+	if input != nil {
+		if input.Tenant != t.ID || input.Member != member.ID || input.Call != id || input.Definition != definition || op.Binding.ABI != platform.WasmDataABI || input.Size > op.Limits.DataInputBytes {
+			return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The operation changed while its input was prepared")
+		}
+		if _, err := t.staged.inputKey(*input); err != nil {
+			return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		hash = input.InputHash
+	}
 	call := platform.OperationCall{ID: id, Definition: definition, InputHash: hash, Version: version, Module: op.Binding.Module, Sources: slices.Clone(q.Sources), Dependencies: closure.ID, Release: release}
 	if !c.Replaying && (t.Record == nil || c.Staging()) {
 		call.OwnerVersion = app.Manifest().Version
@@ -128,7 +154,11 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	if target == "" {
 		target = r.GetSubmission().GetTarget().GetType() + "/" + r.GetSubmission().GetTarget().GetId()
 	}
-	body, _ := json.Marshal(operationBinding{Definition: op, Call: call, Member: member.ID, Inputs: slices.Clone(q.Inputs)})
+	binding := operationBinding{Definition: op, Call: call, Member: member.ID, Inputs: slices.Clone(q.Inputs), SealedInput: input}
+	if input != nil {
+		binding.Inputs = nil
+	}
+	body, _ := json.Marshal(binding)
 	at := r.GetRecordedTime().AsTime()
 	return call, platform.Effect{ID: id, Endpoint: operationEndpoint, Event: owner + "/operation", App: owner, Key: q.Key, Target: target, At: at, Due: at, State: "pending", Body: string(body)}, nil
 }
@@ -354,6 +384,9 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 	} else {
 		op := b.Definition
 		hash, _ := canonicalDigest(b.Inputs)
+		if b.SealedInput != nil {
+			hash = b.SealedInput.InputHash
+		}
 		definition, _ := canonicalDigest([]any{x.App, op, b.Call.Version})
 		if op.Check() != nil || hash != b.Call.InputHash || definition != b.Call.Definition || !slices.Contains(op.Roles, member.Roles[x.App]) {
 			out.Detail = "Operation definition or permission differs"
@@ -365,12 +398,46 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 				return out
 			}
 		}
+		inputs := b.Inputs
+		if ref := b.SealedInput; ref != nil {
+			if len(inputs) != 0 || ref.Tenant != t.ID || ref.Call != x.ID || ref.Member != b.Member || ref.Definition != b.Call.Definition || ref.InputHash != b.Call.InputHash || ref.Size > op.Limits.DataInputBytes || op.Binding.ABI != platform.WasmDataABI {
+				out.Detail = "The accepted input artifact belongs to another operation"
+				return out
+			}
+			inputs, err = t.staged.readInput(ctx, *ref)
+			if err == nil {
+				err = op.Input.Validate(inputs, op.Limits.DataInputBytes)
+			}
+			if err == nil {
+				actual, digestErr := canonicalDigest(json.RawMessage(inputs))
+				if digestErr != nil || actual != b.Call.InputHash {
+					err = fmt.Errorf("the sealed input differs from its accepted input hash")
+				}
+			}
+			if err != nil {
+				out.Detail = err.Error()
+				return out
+			}
+			// Reading a file is outside the submission lock. Recheck the live
+			// grants and cancellation before disclosing its bytes to a guest.
+			t.mu.Lock()
+			latest, authorised := t.Member(b.Member)
+			authorised = authorised && t.admits(latest) == nil && slices.Contains(op.Roles, latest.Roles[x.App]) && t.operationCurrent(x.ID, x.Generation)
+			for _, source := range b.Call.Sources {
+				authorised = authorised && t.mayRead(latest, now, false)(source)
+			}
+			t.mu.Unlock()
+			if !authorised {
+				out.Detail = "Operation permission or generation changed while its input was read"
+				return out
+			}
+		}
 		if op.Binding.Kind == "native" {
 			executor, ok := t.app(x.App).(platform.OperationExecutor)
 			if !ok {
 				err = fmt.Errorf("Native operation executor is not available")
 			} else {
-				output, err = executor.Compute(ctx, op.Name, b.Inputs)
+				output, err = executor.Compute(ctx, op.Name, inputs)
 			}
 		} else {
 			var module []byte
@@ -381,11 +448,11 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 					worker = EnvironmentWasmWorker()
 				}
 				var result WasmResponse
-				request := WasmRequest{ABI: op.Binding.ABI, Module: module, Digest: op.Binding.Module, Input: b.Inputs, Limits: op.Limits}
+				request := WasmRequest{ABI: op.Binding.ABI, Module: module, Digest: op.Binding.Module, Input: inputs, Limits: op.Limits}
 				if op.Limits.DataInputBytes > 0 {
-					sum := sha256.Sum256(b.Inputs)
+					sum := sha256.Sum256(inputs)
 					request.Input = nil
-					request.Data = &WasmDataInput{Tenant: t.ID, Call: x.ID, Digest: hex.EncodeToString(sum[:]), Bytes: b.Inputs}
+					request.Data = &WasmDataInput{Tenant: t.ID, Call: x.ID, Digest: hex.EncodeToString(sum[:]), Bytes: inputs}
 				}
 				result, err = worker.Execute(ctx, request)
 				output = result.Output

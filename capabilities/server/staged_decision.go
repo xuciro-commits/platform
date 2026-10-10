@@ -51,6 +51,7 @@ type stagedDecision struct {
 	deliveries       []acceptedConnectorDelivery
 	operationAnswers map[string]platform.OperationResult
 	operationCancels map[string]bool
+	operationInput   *preparedOperationInput
 }
 
 func (d *stagedDecision) InputRefused(err *kernel.Error, issues []platform.FieldIssue) {

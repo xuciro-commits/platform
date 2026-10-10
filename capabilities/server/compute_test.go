@@ -439,10 +439,102 @@ func TestWasmDataABIChannels(t *testing.T) {
 			if !ok || op.Binding.ABI != platform.WasmDataABI {
 				t.Fatal("activation lost the frozen ABI")
 			}
-			call, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: build.ID, Name: "data", Version: 1, Key: "invoke", Inputs: json.RawMessage(`"<"`)}, now)
+			call, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: build.ID, Name: "data", Version: 1, Key: "invoke", Inputs: raw}, now)
 			if refusal != nil {
 				t.Fatal(refusal)
 			}
+			// The accepted input remains small; the original FileStore holds
+			// its immutable bytes. Repeated preparation leaves no extra file.
+			beforeRetry := len(entries)
+			files.mu.Lock()
+			beforeFiles := len(files.m)
+			files.mu.Unlock()
+			retry, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: build.ID, Name: "data", Version: 1, Key: "invoke", Inputs: raw}, now)
+			files.mu.Lock()
+			afterFiles := len(files.m)
+			files.mu.Unlock()
+			if refusal != nil || retry.ID != call.ID || len(entries) != beforeRetry || beforeFiles != afterFiles {
+				t.Fatalf("sealed retry changed its original intent or retained another file: %v", refusal)
+			}
+			for _, entry := range entries {
+				if len(entry.Body) > maxAcceptedResultBytes {
+					t.Fatal("large input was copied into the accepted result")
+				}
+			}
+			var inputRef operationInputArtifact
+			for _, effect := range tn.outbound {
+				if effect.ID == call.ID {
+					var binding operationBinding
+					if json.Unmarshal([]byte(effect.Body), &binding) != nil || binding.SealedInput == nil || len(binding.Inputs) != 0 {
+						t.Fatal("the operation intent carries no sealed input")
+					}
+					inputRef = *binding.SealedInput
+				}
+			}
+			if inputRef.Size != len(raw) {
+				t.Fatal("the input artifact lost its size")
+			}
+			for _, altered := range []platform.OperationRequest{
+				{App: build.ID, Name: "data", Version: 1, Key: "invoke", Inputs: json.RawMessage(`"different"`)},
+				{App: build.ID, Name: "data", Version: 1, Key: "unreadable", Inputs: raw, Sources: []string{"build.code/missing"}},
+				{App: build.ID, Name: "data", Version: 1, Key: "over-budget", Inputs: json.RawMessage(`"` + strings.Repeat("x", limits.DataInputBytes) + `"`)},
+			} {
+				if _, refusal := tn.InvokeOperation(member, altered, now); refusal == nil {
+					t.Fatal("changed, unreadable or over-budget input was accepted")
+				}
+			}
+			foreign := member
+			foreign.Tenant = "other"
+			if _, refusal := tn.InvokeOperation(foreign, platform.OperationRequest{App: build.ID, Name: "data", Version: 1, Key: "foreign", Inputs: raw}, now); refusal == nil {
+				t.Fatal("another tenant prepared the input")
+			}
+			files.mu.Lock()
+			remainingFiles := len(files.m)
+			files.mu.Unlock()
+			if remainingFiles != beforeFiles {
+				t.Fatal("known input rejection retained an unused artifact")
+			}
+			for _, change := range []func(*operationInputArtifact){
+				func(ref *operationInputArtifact) { ref.Tenant = "other" },
+				func(ref *operationInputArtifact) { ref.Call = "other" },
+				func(ref *operationInputArtifact) { ref.Member = "other" },
+				func(ref *operationInputArtifact) { ref.Size = maxOperationInputBytes + 1 },
+			} {
+				altered := inputRef
+				change(&altered)
+				if _, err := tn.staged.readInput(t.Context(), altered); err == nil {
+					t.Fatal("a foreign or over-budget input artifact was read")
+				}
+			}
+			inputKey, err := tn.staged.inputKey(inputRef)
+			if err != nil {
+				t.Fatal(err)
+			}
+			damaged := append([]byte(nil), raw...)
+			damaged[1] = '>'
+			if err := files.Put(t.Context(), inputKey, damaged, "application/json"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tn.staged.readInput(t.Context(), inputRef); err == nil {
+				t.Fatal("changed sealed bytes passed their digest")
+			}
+			if err := files.Put(t.Context(), inputKey, raw, "application/json"); err != nil {
+				t.Fatal(err)
+			}
+
+			pending := compose()
+			pending.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+			if err := pending.Replay(entries); err != nil {
+				t.Fatal(err)
+			}
+			for _, run := range pending.operationDispatches(time.Now().UTC()) {
+				run()
+			}
+			resumed, refusal := pending.ReadOperation(member, call.ID)
+			if refusal != nil || resumed.State != "completed" {
+				t.Fatalf("recovery could not execute the original sealed input: %+v %v", resumed, refusal)
+			}
+
 			for _, run := range tn.operationDispatches(now) {
 				run()
 			}
@@ -457,7 +549,7 @@ func TestWasmDataABIChannels(t *testing.T) {
 				t.Fatal("large worker output was not staged for the original call")
 			}
 			sealed, err := tn.staged.Read(reference.Staged)
-			if err != nil || json.Unmarshal(sealed, &value) != nil || value != strings.Repeat("<", 70000) {
+			if err != nil || json.Unmarshal(sealed, &value) != nil || value != strings.Repeat("<", (1<<20)+17) {
 				t.Fatalf("sealed worker bytes differ: %v", err)
 			}
 			recovered := compose()

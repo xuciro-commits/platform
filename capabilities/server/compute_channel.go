@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -30,6 +31,80 @@ const maxInlineOutputBytes = 48 << 10
 
 // maxStagedOutputBytes bounds one call's channel.
 const maxStagedOutputBytes = 16 << 20
+
+const maxOperationInputBytes = 64 << 20
+
+// Only the native preparation lane can attach this reference to an accepted
+// intent. Public operation requests have no artifact/path field.
+type operationInputArtifact struct {
+	Tenant     string `json:"tenant"`
+	Call       string `json:"call"`
+	Member     string `json:"member"`
+	Definition string `json:"definition"`
+	InputHash  string `json:"inputHash"`
+	Ticket     string `json:"ticket"`
+	Digest     string `json:"digest"`
+	Size       int    `json:"size"`
+}
+
+type preparedOperationInput struct {
+	ref         operationInputArtifact
+	requestHash string
+}
+
+func (c *stagedChannel) inputKey(ref operationInputArtifact) (string, error) {
+	ticket, te := hex.DecodeString(ref.Ticket)
+	digest, de := hex.DecodeString(ref.Digest)
+	definition, oe := hex.DecodeString(ref.Definition)
+	input, ie := hex.DecodeString(ref.InputHash)
+	if ref.Tenant != c.tenant || ref.Call == "" || ref.Member == "" || te != nil || len(ticket) != 16 || de != nil || len(digest) != sha256.Size || oe != nil || len(definition) != sha256.Size || ie != nil || len(input) != sha256.Size || ref.Size < 1 || ref.Size > maxOperationInputBytes {
+		return "", fmt.Errorf("the input artifact has an invalid owner or bound")
+	}
+	owner := sha256.Sum256(platform.Raw([]string{ref.Tenant, ref.Call, ref.Member, ref.Definition, ref.InputHash}))
+	return fmt.Sprintf("%s/artifacts/compute-input/%x/%s/%s.json", c.tenant, owner, ref.Ticket, ref.Digest), nil
+}
+
+func (c *stagedChannel) sealInput(call, member, definition, hash string, raw []byte, budget int) (operationInputArtifact, error) {
+	if budget < 1 || budget > maxOperationInputBytes || len(raw) < 1 || len(raw) > budget || !json.Valid(raw) {
+		return operationInputArtifact{}, fmt.Errorf("the input exceeds its declared data channel budget")
+	}
+	var ticket [16]byte
+	if _, err := rand.Read(ticket[:]); err != nil {
+		return operationInputArtifact{}, err
+	}
+	ref := operationInputArtifact{Tenant: c.tenant, Call: call, Member: member, Definition: definition, InputHash: hash, Ticket: hex.EncodeToString(ticket[:]), Digest: fmt.Sprintf("%x", sha256.Sum256(raw)), Size: len(raw)}
+	key, err := c.inputKey(ref)
+	if err != nil {
+		return ref, err
+	}
+	return ref, c.files().Put(context.Background(), key, raw, "application/json")
+}
+
+func (c *stagedChannel) readInput(ctx context.Context, ref operationInputArtifact) ([]byte, error) {
+	key, err := c.inputKey(ref)
+	if err != nil {
+		return nil, err
+	}
+	reader, size, err := c.files().Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	if size != int64(ref.Size) {
+		return nil, fmt.Errorf("the input artifact differs from its accepted size")
+	}
+	raw, err := io.ReadAll(io.LimitReader(reader, int64(ref.Size)+1))
+	if err != nil || len(raw) != ref.Size || fmt.Sprintf("%x", sha256.Sum256(raw)) != ref.Digest || !json.Valid(raw) {
+		return nil, fmt.Errorf("the input artifact differs from its accepted digest")
+	}
+	return raw, nil
+}
+
+func (c *stagedChannel) discardInput(ref operationInputArtifact) {
+	if key, err := c.inputKey(ref); err == nil {
+		c.files().Delete(context.Background(), key)
+	}
+}
 
 // stagedKey is the call-scoped key: the tenant, the call and the schema name it
 // claims, so two calls can never address each other's bytes.

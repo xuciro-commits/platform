@@ -452,7 +452,7 @@ func acceptsPureTransition(a platform.App, schema string) bool {
 	return false
 }
 
-func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.Submission, now time.Time, automation bool, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	// A malformed transport identity cannot reserve a durable key for another
 	// tenant, authority or member. The kernel still supplies its ordinary
 	// refusal, but no result under this tenant can represent that submission.
@@ -491,6 +491,9 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
 	}
 	draft := t.newStagedDecision()
+	if len(input) == 1 {
+		draft.operationInput = input[0]
+	}
 	record, refusal = decideAcceptedAs(a, draft, m, s, now, automation)
 	var raw []byte
 	if refusal != nil {

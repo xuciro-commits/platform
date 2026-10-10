@@ -12,7 +12,7 @@
 
 | 顺序 / 优先级 / 状态 | 批次与能力归属 | 可见结果 / 停止条件 | 依赖与适用检查 |
 |---|---|---|---|
-| 1 / P1 / 进行中 | ADR-0046 F5 / ADR-0047 §13：持续 Flow 方案 A 的实际执行链；Flow / Source / Compute owners | 从真实受控来源到原默认算子链的输入、窗口/迟到/overflow、聚合/滞回、动作与应用实例输出、版本化死信、停止与同版本续接闭合。状态超预算必须显式拒绝或按 overflow 处理，不能消费游标后丢状态；保持原规模配置、版本/主体与接受结果恢复语义 | 原 Flow 整批接受、事件时间窗口、原 FileStore 状态封存和 Go/TinyGo v2 worker 数据通道已有，证据与边界详见 §13.5；下一步在原 owner 接宿主大输入制品/生命周期、真实 Source 和完整七节点；先明确默认 alerts→threshold 的 mean/reading 字段断点与 slide/checkpoint 语义，见 §13.1，不建第二执行器。持久/worker 边界须运行对应部署验证 |
+| 1 / P1 / 进行中 | ADR-0046 F5 / ADR-0047 §13：持续 Flow 方案 A 的实际执行链；Flow / Source / Compute owners | 从真实受控来源到原默认算子链的输入、窗口/迟到/overflow、聚合/滞回、动作与应用实例输出、版本化死信、停止与同版本续接闭合。状态超预算必须显式拒绝或按 overflow 处理，不能消费游标后丢状态；保持原规模配置、版本/主体与接受结果恢复语义 | 原 Flow 整批接受、事件时间窗口、原 FileStore 状态封存、Go/TinyGo v2 worker 数据通道与宿主大输入封存调用已有，证据与边界详见 §13.5；下一步在原 owner 接真实 Source/Flow 的输入投影、完整七节点及制品生命周期；先明确默认 alerts→threshold 的 mean/reading 字段断点与 slide/checkpoint 语义，见 §13.1，不建第二执行器。持久/worker 边界须运行对应部署验证 |
 
 
 ## 暂缓与按任务触发
