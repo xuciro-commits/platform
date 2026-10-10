@@ -12,6 +12,7 @@ import (
 
 	"platformserver/apps/ai"
 	"platformserver/apps/build"
+	"platformserver/apps/core"
 	"platformserver/apps/enterprise"
 	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
@@ -24,14 +25,14 @@ import (
 // records never; every platform app's text has a Chinese translation.
 func TestLanguages(t *testing.T) {
 	tn, err := NewTenant("t-1", NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana",
-		Roles: map[string]string{PlatformApp: Admin, work.ID: "member", enterprise.ID: "admin"}}},
+		Roles: map[string]string{PlatformApp: Admin, work.ID: "member", enterprise.ID: "admin", core.ID: core.Steward}}},
 		Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{work.ID: "member"}}},
 		Seat{Subjects: []string{"cy"}, Member: platform.Member{ID: "cy", Roles: map[string]string{work.ID: "member"}}}),
-		enterprise.New("t-1", platform.OrgSeed{}), relations.New("t-1"), work.New("t-1"), flow.New("t-1"), ai.New("t-1"), NewAgents("t-1"), knowledge.New("t-1"), build.New("t-1"))
+		enterprise.New("t-1", platform.OrgSeed{}), relations.New("t-1"), work.New("t-1"), flow.New("t-1"), ai.New("t-1"), NewAgents("t-1"), knowledge.New("t-1"), core.New("t-1"), build.New("t-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, app := range []string{PlatformApp, enterprise.ID, relations.ID, work.ID, flow.ID, ai.ID, AgentApp, knowledge.ID, build.ID} {
+	for _, app := range []string{PlatformApp, enterprise.ID, relations.ID, work.ID, flow.ID, ai.ID, AgentApp, knowledge.ID, core.ID, build.ID} {
 		if missing := tn.Untranslated(app, "zh-CN"); len(missing) > 0 {
 			t.Errorf("%s lacks Chinese for %q", app, missing)
 		}
@@ -61,6 +62,10 @@ func TestLanguages(t *testing.T) {
 		{"/v1/enterprise", "", `"uaf":"1.3"`},                                 // the enterprise model (ADR-0067), readable by everyone
 		{"/v1/enterprise-metamodel", "", `"stereotype":"ActualOrganization"`}, // the UAF profile the modeler draws from
 		{"/v1/entities", "zh-CN", `"choiceTitles":["进行中",`},                   // a task's states; the choices stay the values records hold
+		{"/v1/entities", "zh-CN", `"type":"core.account"`},
+		{"/v1/entities", "zh-CN", `"type":"core.location"`},
+		{"/v1/entities", "zh-CN", `"plural":"科目"`},
+		{"/v1/entities", "zh-CN", `"plural":"库位"`},
 		{"/v1/settings", "zh-CN", `"title":"智能体使用的模型"`},
 	} {
 		if got := call(c.path, c.language); !strings.Contains(got, c.contains) {
@@ -170,5 +175,30 @@ func TestTenantWords(t *testing.T) {
 	lang, asked := tn.asked(req)
 	if !asked || tn.i18n.Say(lang, "托盘") != "Pallet" {
 		t.Fatalf("English tenant translation not selected: language %q, asked %v", lang, asked)
+	}
+}
+
+func TestAppScopedEntityTranslation(t *testing.T) {
+	tenant := "app-scoped"
+	tn, err := NewTenant(tenant, NewConsole(tenant, Seat{Subjects: []string{"u"}, Member: platform.Member{ID: "u", Roles: map[string]string{core.ID: core.Steward, "crm": "sales"}}}),
+		core.New(tenant), newTestCRMApp(tenant))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := tn.i18n.Translate(tn.Entities(platform.Member{ID: "u", Roles: map[string]string{core.ID: core.Steward, "crm": "sales"}}), "zh-CN")
+	items := raw.([]any)
+	byType := map[string]map[string]any{}
+	for _, item := range items {
+		m := item.(map[string]any)
+		byType[m["type"].(string)] = m
+	}
+	if got := byType["core.account"]; got == nil || got["title"] != "科目" || got["plural"] != "科目" {
+		t.Errorf("core.account: want title=科目, plural=科目; got %v", got)
+	}
+	if got := byType["crm.account"]; got == nil || got["title"] != "客户" || got["plural"] != "客户" {
+		t.Errorf("crm.account: want title=客户, plural=客户; got %v", got)
+	}
+	if got := byType["core.location"]; got == nil || got["title"] != "库位" || got["plural"] != "库位" {
+		t.Errorf("core.location: want title=库位, plural=库位; got %v", got)
 	}
 }

@@ -91,35 +91,59 @@ func canonical(tag string) string {
 
 // walkChoices calls f for each object of a JSON tree that lists choices.
 func walkChoices(v any, f func(map[string]any, []any)) {
+	walkChoicesWithApp(v, "", func(_ string, m map[string]any, c []any) { f(m, c) })
+}
+
+func walkChoicesWithApp(v any, currentApp string, f func(string, map[string]any, []any)) {
 	switch x := v.(type) {
 	case map[string]any:
+		app := currentApp
+		if a, ok := x["app"].(string); ok && a != "" {
+			app = a
+		} else if target, ok := x["target"].(string); ok && target != "" && strings.Contains(target, ".") {
+			app, _, _ = strings.Cut(target, ".")
+		} else if schema, ok := x["schema"].(string); ok && schema != "" && strings.Contains(schema, ".") {
+			app, _, _ = strings.Cut(schema, ".")
+		}
 		if choices, ok := x["choices"].([]any); ok {
-			f(x, choices)
+			f(app, x, choices)
 		}
 		for _, child := range x {
-			walkChoices(child, f)
+			walkChoicesWithApp(child, app, f)
 		}
 	case []any:
 		for _, child := range x {
-			walkChoices(child, f)
+			walkChoicesWithApp(child, currentApp, f)
 		}
 	}
 }
 
 // walkTexts replaces each declaration text in a JSON tree.
 func walkTexts(v any, f func(string) string) {
+	walkTextsWithApp(v, "", func(_ string, s string) string { return f(s) })
+}
+
+func walkTextsWithApp(v any, currentApp string, f func(string, string) string) {
 	switch x := v.(type) {
 	case map[string]any:
+		app := currentApp
+		if a, ok := x["app"].(string); ok && a != "" {
+			app = a
+		} else if target, ok := x["target"].(string); ok && target != "" && strings.Contains(target, ".") {
+			app, _, _ = strings.Cut(target, ".")
+		} else if schema, ok := x["schema"].(string); ok && schema != "" && strings.Contains(schema, ".") {
+			app, _, _ = strings.Cut(schema, ".")
+		}
 		for k, child := range x {
 			if s, ok := child.(string); ok && translated[k] {
-				x[k] = f(s)
+				x[k] = f(app, s)
 				continue
 			}
-			walkTexts(child, f)
+			walkTextsWithApp(child, app, f)
 		}
 	case []any:
 		for _, child := range x {
-			walkTexts(child, f)
+			walkTextsWithApp(child, currentApp, f)
 		}
 	}
 }

@@ -98,6 +98,26 @@ func (x *translator) reset() {
 	x.patternCache.Clear()
 }
 
+// SayInApp says a text in a language, looking up the app's own dictionary
+// first (ADR-0023 D1), then falling back to Say across all dictionaries.
+func (x *translator) SayInApp(app, lang, s string) string {
+	if app != "" && lang != "" && s != "" && x.apps != nil {
+		for _, a := range x.apps() {
+			if a.Manifest().ID == app {
+				dict := a.Manifest().Languages[lang]
+				if tr, ok := dict[s]; ok && tr != "" {
+					return tr
+				}
+				if tr, ok := dict[strings.ToUpper(s[:1])+s[1:]]; ok && tr != "" {
+					return tr
+				}
+				break
+			}
+		}
+	}
+	return x.Say(lang, s)
+}
+
 // Translate returns v, as JSON, with every declaration text said in a
 // language: exactly, or by a pattern (a generated action's "Create {thing}").
 func (x *translator) Translate(v any, lang string) any {
@@ -112,13 +132,12 @@ func (x *translator) Translate(v any, lang string) any {
 	if json.Unmarshal(raw, &tree) != nil {
 		return v
 	}
-	tr := func(s string) string { return x.Say(lang, s) }
-	walkTexts(tree, tr)
-	walkChoices(tree, func(m map[string]any, choices []any) {
+	walkTextsWithApp(tree, "", func(app, s string) string { return x.SayInApp(app, lang, s) })
+	walkChoicesWithApp(tree, "", func(app string, m map[string]any, choices []any) {
 		titles := make([]any, len(choices))
 		for i, c := range choices {
 			s, _ := c.(string)
-			titles[i] = tr(s)
+			titles[i] = x.SayInApp(app, lang, s)
 		}
 		m["choiceTitles"] = titles // the values stay what records hold
 	})

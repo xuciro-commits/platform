@@ -99,6 +99,7 @@ func (c *testCRMApp) Manifest() platform.Manifest {
 		Queries: []platform.NamedQuery{
 			{Name: "open-opportunities", Title: "Open opportunities", Object: "crm.opportunity", By: "account", Domain: json.RawMessage(`[["stage","=","open"]]`)},
 		},
+		Languages: platform.Languages{"zh-CN": {"Account": "客户", "Accounts": "客户"}},
 	}
 }
 func (c *testCRMApp) Snapshot() (json.RawMessage, error)       { return c.ledger.Snapshot() }
