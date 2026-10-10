@@ -50,9 +50,8 @@
 - data 视图有了可画的元素；InformationElement 同时进入档案（M/L/XL）。
 - 验证口径：`apps/enterprise` 全测试过（含新 `TestViews`：五视图、档案全覆盖、词汇表内派生）；`go build ./...` 过；`api-types` 重新生成（`host.ts`：`Api.Viewpoint`、`Metamodel.views`、`View.viewpoint`）；17 包 `tsc` 全绿；i18n 孤儿清扫（platform −12 键、server −2 键 +1 键）。**未在浏览器观察**。
 
-## 未做
+**历史恢复**已有八格到五视角的读取映射，原始日志保持，未知历史格号没有猜测映射。**MES 消费端与标准 SDK** 已由 [ADR-0094](0094-sealed-standard-interfaces.md) 接通：发布工单通过 typed query/resolve 选择企业场所、引用经内核检查；MES 主数据自身 CRUD 仍是 ADR-0088 的按需范围。这两项不再列为待实施。
 
-- **历史恢复**已有八格到五视角的读取映射，原始日志保持。未知历史格号没有猜测映射；完整 EPC 仍不由字段迁移代替。
-- **MES 消费端（mes_reads）与标准接口 SDK** 属子块④（sdk3）：示范场景的平台侧种子已由 plant/warehouse/line 样板覆盖（车间/产线/库房/仓位/人员/设备齐备），MES 主数据下拉选 enterprise 元素等接口封存后接。
+## 未做
 - **控制视图的完整 EPC 链**（过程↔事件↔信息的逐跳编排）在词汇表补上事件/信息交换关系后才成立；当前控制视图以过程+项目+规则为主体、组织为上下文。
 - 视角按钮的元素数是每次渲染现算（模型规模小，几十到几百元素）；若成为卡顿点再做 memo。

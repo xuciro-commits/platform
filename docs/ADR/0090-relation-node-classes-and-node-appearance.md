@@ -40,7 +40,8 @@ ADR-0089 给流程族建了节点类别（`FlowNodeClass`）与一张端口兼�
 - 类别表是纯数据，新增一个关系类别 = 表里加一行；站点仍可逐节点覆盖。
 - 验证口径：全部 15 包/应用 `tsc` 全绿；`ui` vitest 104 通过（新增关系类别 4 例、size/collapsed 3 例），`build` node-test 172、`app` node-test 159、`kernel` 32；目录检查（139 条目，新 API 已入册）、i18n 扫描、escapes 与 web-types 门禁通过。**未在浏览器观察**——图标与色调的实际观感需要一次真实走查。
 
+`RelationNode.size` 由 [ADR-0095](0095-elk-canvas-layout.md) 的统一布局入口消费：tree 使用逐节点 box，layered/radial/grid/force 将声明或实际测量尺寸传给共同 ELK adapter，不再只按标准盒测量。代码见 `graph/relation/layouts.ts` 与 `graph/core/layout/adapter.ts`。
+
 ## 未做
 
 - 关系族每个站点的**调色板**（企业画布已有）尚未泛化：只有 UAF 有拖放建点的调色板，其余关系站点仍是只读或编辑既有节点。泛化调色板属于「关系族编写面」的下一块。
-- `RelationNode.size` 的布局感知只到 tree/layered（经 `layeredLayout` 的 box 回调）；radial/grid 仍按标准盒测量。

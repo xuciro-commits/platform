@@ -443,6 +443,9 @@ M1 的页面重组不能被报告为 M3 的草稿闭包、M4 的持久恢复或 
 
 来源 `flowEngine.ts` 的 windows/cursors/hysteresis/delays/deadLetters 存在浏览器 Map 中；checkpointEvery 按运行次数打印内存计数，并未形成持久检查点。telemetrySource 还会从模拟列存启动数据；生产适配必须显式绑定真实来源。来源窗口使用事件时间和调用时间、按 key 去重、有限留存及 late/overflow 输出；风险函数、阈值与动作不能只按节点名字推断。
 
+默认七节点的字段链也有明确断点：来源 `flowCatalog.ts` 将 aggregate 的 `alerts` 端口接到 threshold，并配置 threshold.field=`mean`；`flowEngine.ts` 的 aggregate alert 记录只有 `reading`，`field()` 没有 mean→reading 别名，因此该配置不会进入滞回触发。slideMs 虽声明为 5000，来源 window 实现未读取它；checkpointEvery 5000 仍只打印状态。原生接线须明确字段/端口契约与映射，保留规模及声明的时间规则，不能照搬该静默路径后声称七节点已跑通。这是对当前来源代码的核查事实，不是已经实施了新的原生算子。
+
+
 本平台已有 K8 接入与游标、`accepted_connectors.go` 的分发前驱校验和同批接受结果；`apps/flow` 是唯一实例/Token/frame 推进器，`platform.Run.Outputs` 保存已完成结果；Operation 已走原受属工作及接受结果。ADR-0044 明确复用这些主人，不引入第二调度器、日志或 graph-run 数据库。缺的是持续订阅、算子状态和批次完成的原生适配。
 
 目前 Operation 声明输入最多 1 MiB、输出最多 48 KiB，流程固定绑定值还有自身预算。连续窗口与原 100 信号配置可能超过内联结果预算。不能静默减少批量/信号/窗口或放宽限制来让默认配置通过。
