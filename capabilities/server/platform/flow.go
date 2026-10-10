@@ -36,9 +36,9 @@ type Flow struct {
 }
 
 // Continuous is a flow's declared batch contract (ADR-0047 §13.3): the real
-// source it consumes, the batch and state budgets, and whether dead letters are
-// kept. The batch identity, predecessor and watermark travel with each batch;
-// the instance's frame keeps what was consumed.
+// source it consumes, the batch and state budgets, and the dead-letter rule.
+// The batch identity, predecessor and watermark travel with each batch; the
+// instance's frame keeps what was consumed.
 type Continuous struct {
 	// Source names the connector or protocol the batches arrive from.
 	Source string
@@ -64,8 +64,21 @@ type Continuous struct {
 	// Intake binds a controlled source record and its event columns. Nil keeps
 	// the existing native batch delivery contract.
 	Intake *StreamIntake `json:"Intake,omitempty"`
-	// DeadLetter keeps signals that could not be folded, with the reason.
-	DeadLetter bool
+	// DeadLetter declares the instance's dead-letter asset (ADR-0047 §13.3):
+	// what the flow could not fold stays as a numbered letter, bounded by the
+	// declared count and age, so one letter can be inspected and replayed
+	// under the original authorization. Nil keeps no dead letters.
+	DeadLetter *StreamDeadLetter `json:"DeadLetter,omitempty"`
+}
+
+// StreamDeadLetter is the dead-letter asset's declared rule: the instance
+// numbers every letter it keeps, and this bounds how many and how old they may
+// be. Letters beyond the bound are counted as dropped, never renumbered;
+// TTLMS 0 keeps letters until the count bound trims them.
+type StreamDeadLetter struct {
+	Node       string `json:"node"`
+	MaxRecords int    `json:"maxRecords"`
+	TTLMS      int    `json:"ttlMs,omitempty"`
 }
 
 type StreamIntake struct {

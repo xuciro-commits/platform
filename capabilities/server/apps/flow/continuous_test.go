@@ -17,7 +17,7 @@ import (
 // (ADR-0047 §13, plan A).
 
 func TestContinuousBatchAdmissionAndFolding(t *testing.T) {
-	declared := platform.Continuous{Source: "k8.meters", Batch: 3, DeadLetter: true}
+	declared := platform.Continuous{Source: "k8.meters", Batch: 3, DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 10000}}
 	frame := &BatchFrame{State: map[string]json.RawMessage{}}
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 
@@ -91,7 +91,7 @@ func TestContinuousBatchAdmissionAndFolding(t *testing.T) {
 
 func TestContinuousBatchRefusalKeepsEveryAcceptedFrameByte(t *testing.T) {
 	now := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
-	declared := platform.Continuous{Source: "k8.meters", Batch: 512, State: 4096, DeadLetter: true}
+	declared := platform.Continuous{Source: "k8.meters", Batch: 512, State: 4096, DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 10000}}
 	frame := &BatchFrame{State: map[string]json.RawMessage{}}
 	first := Batch{ID: "one", Signals: []Signal{{Key: "one", At: now, Value: json.RawMessage(`4`)}}}
 	if _, _, err := foldBatch(frame, declared, first); err != nil {
@@ -142,7 +142,7 @@ func TestContinuousBatchRefusalKeepsEveryAcceptedFrameByte(t *testing.T) {
 
 func TestContinuousStateEncodingFailureDoesNotConsumeItsSuccessor(t *testing.T) {
 	now := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
-	declared := platform.Continuous{Source: "k8.meters", Batch: 512, DeadLetter: true}
+	declared := platform.Continuous{Source: "k8.meters", Batch: 512, DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 10000}}
 	for _, raw := range []json.RawMessage{json.RawMessage(`{"count":1,"sum":1e308}`), json.RawMessage(`[]`)} {
 		frame := &BatchFrame{Cursor: "one", State: map[string]json.RawMessage{"window": raw}}
 		before, _ := json.Marshal(frame)
@@ -158,7 +158,7 @@ func TestContinuousStateEncodingFailureDoesNotConsumeItsSuccessor(t *testing.T) 
 
 func TestContinuousEventWindowRetainsTimingPartitionIdentityAndBudget(t *testing.T) {
 	now := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
-	declared := platform.Continuous{Source: "k8.meters", Batch: 512, State: 16 << 20, FrameBytes: 17 << 20, DeadLetter: true,
+	declared := platform.Continuous{Source: "k8.meters", Batch: 512, State: 16 << 20, FrameBytes: 17 << 20, DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 10000},
 		Window: &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"}}
 	values := make([]float64, 100)
 	for i := range values {
@@ -238,7 +238,7 @@ func TestContinuousEventWindowRetainsTimingPartitionIdentityAndBudget(t *testing
 
 func TestContinuousWindowAggregateAndHysteresisThreshold(t *testing.T) {
 	now := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
-	declared := platform.Continuous{Source: "k8.meters", Batch: 512, State: 1 << 20, FrameBytes: 2 << 20, DeadLetter: true,
+	declared := platform.Continuous{Source: "k8.meters", Batch: 512, State: 1 << 20, FrameBytes: 2 << 20, DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 10000},
 		Window:    &platform.StreamWindow{Node: "window", WindowMS: 5000, SlideMS: 1000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"},
 		Aggregate: &platform.StreamAggregate{Node: "stats", Signal: "vibration", Group: []string{"deviceId"}, Measures: []string{"count", "mean", "max"}},
 		Threshold: &platform.StreamThreshold{Node: "high", Field: "mean", High: 11.5, Low: 9.5, Severity: "High"}}
@@ -309,6 +309,46 @@ func TestContinuousWindowAggregateAndHysteresisThreshold(t *testing.T) {
 	}
 	if _, alerts, err := foldOperators(&restored, declared, "b5", now.Add(30*time.Second)); err != nil || len(alerts) != 0 {
 		t.Fatalf("replay re-emitted alarms: %+v %v", alerts, err)
+	}
+}
+
+func TestContinuousDeadLettersAreNumberedAndBounded(t *testing.T) {
+	now := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	declared := platform.Continuous{Source: "k8.meters", Batch: 512, DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 2}}
+	frame := &BatchFrame{State: map[string]json.RawMessage{}}
+	dead := func(id, predecessor string, at time.Time, keys ...string) {
+		t.Helper()
+		signals := make([]Signal, 0, len(keys))
+		for _, key := range keys {
+			// No event time: the signal cannot be folded and is kept as a letter.
+			signals = append(signals, Signal{Key: key, Partition: "plant-a", Value: json.RawMessage("1")})
+		}
+		if _, _, err := foldBatch(frame, declared, Batch{ID: id, Predecessor: predecessor, Signals: signals}, at); err != nil {
+			t.Fatalf("batch %s: %v", id, err)
+		}
+		if _, _, err := foldOperators(frame, declared, id, at); err != nil {
+			t.Fatalf("operators %s: %v", id, err)
+		}
+	}
+	// The declared count bounds the asset: the oldest letter beyond it is
+	// dropped and counted, and the letters that stay keep their numbers.
+	dead("b1", "", now, "a", "b")
+	if len(frame.DeadLetters) != 2 || frame.DeadLetters[0].Seq != 1 || frame.DeadLetters[1].Seq != 2 || frame.DeadLetters[0].Seen != now || frame.Dropped != 0 {
+		t.Fatalf("letters: %+v dropped %d", frame.DeadLetters, frame.Dropped)
+	}
+	dead("b2", "b1", now.Add(time.Minute), "c")
+	if len(frame.DeadLetters) != 2 || frame.DeadLetters[0].Seq != 2 || frame.DeadLetters[1].Seq != 3 || frame.Dropped != 1 || frame.LetterSeq != 3 {
+		t.Fatalf("bounded letters: %+v dropped %d issued %d", frame.DeadLetters, frame.Dropped, frame.LetterSeq)
+	}
+	// A declared age trims a letter whose decision is older than the TTL; the
+	// fresh one keeps the number it was given, not a new one.
+	aged := declared
+	aged.DeadLetter = &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 100, TTLMS: 60000}
+	if _, _, err := foldOperators(frame, aged, "b3", now.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if len(frame.DeadLetters) != 1 || frame.DeadLetters[0].Seq != 3 || frame.Dropped != 2 || frame.LetterSeq != 3 {
+		t.Fatalf("aged letters: %+v dropped %d issued %d", frame.DeadLetters, frame.Dropped, frame.LetterSeq)
 	}
 }
 

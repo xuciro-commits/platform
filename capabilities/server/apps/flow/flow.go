@@ -24,17 +24,18 @@ import (
 // takes it again. Acts are submitted as the declaring app's automation
 // principal; people are asked through that app's tasks (ADR-0017).
 const (
-	ID              = "flow"
-	InstanceType    = "flow.instance"
-	Admin           = "admin"
-	SchemaFlowStart = "flow.instance.start"
-	SchemaFlowStep  = "flow.instance.step"
-	SchemaFlowBatch = "flow.instance.batch"
-	SchemaFlowRetry = "flow.instance.retry"
-	SchemaFlowSkip  = "flow.instance.skip"
-	SchemaFlowStop  = "flow.instance.cancel"
-	SchemaFlowMove  = "flow.instance.move"
-	stepAttempts    = 5
+	ID               = "flow"
+	InstanceType     = "flow.instance"
+	Admin            = "admin"
+	SchemaFlowStart  = "flow.instance.start"
+	SchemaFlowStep   = "flow.instance.step"
+	SchemaFlowBatch  = "flow.instance.batch"
+	SchemaFlowRetry  = "flow.instance.retry"
+	SchemaFlowSkip   = "flow.instance.skip"
+	SchemaFlowStop   = "flow.instance.cancel"
+	SchemaFlowMove   = "flow.instance.move"
+	SchemaFlowReplay = "flow.instance.replay"
+	stepAttempts     = 5
 	// Compensate as a next step undoes the completed acts, newest first.
 	Compensate = platform.Compensate
 )
@@ -178,7 +179,10 @@ func New(tenant string) *Flows {
 		platform.Action{Schema: SchemaFlowStop, Target: InstanceType, Capability: "flows", Title: "Cancel", Payload: []platform.Field{}, Roles: admin,
 			Description: "Stop a running instance; its open tasks close. Nothing is undone."},
 		platform.Action{Schema: SchemaFlowMove, Target: InstanceType, Capability: "flows", Title: "Move to the next version", Payload: []platform.Field{}, Roles: admin,
-			Description: "Move a running instance to its flow's next version, as that version's mapping says."})
+			Description: "Move a running instance to its flow's next version, as that version's mapping says."},
+		platform.Action{Schema: SchemaFlowReplay, Target: InstanceType, Capability: "flows", Title: "Replay dead letters", Roles: admin,
+			Description: "Deliver the named dead letters' signals again under the original authorization; the letters keep their numbers.",
+			Payload:     []platform.Field{{Name: "seqs", Type: "json", Required: true, Description: "The dead-letter numbers to deliver again"}}})
 	return &Flows{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), InstanceType), defs: map[string][]*flowDef{}}
 }
 
@@ -269,8 +273,10 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 		return nil, fmt.Errorf("flow %s starts on the state of %s, not an entity type of %s", id, fl.Start.Type, m.ID)
 	}
 	if fl.Continuous != nil {
-		if fl.Continuous.Source == "" || fl.Continuous.Batch < 0 || fl.Continuous.State < 0 || fl.Continuous.FrameBytes < 0 || !fl.Continuous.DeadLetter {
-			return nil, fmt.Errorf("flow %s: a continuous flow names its source, a batch budget of zero or more, and keeps dead letters", id)
+		dead := fl.Continuous.DeadLetter
+		if fl.Continuous.Source == "" || fl.Continuous.Batch < 0 || fl.Continuous.State < 0 || fl.Continuous.FrameBytes < 0 ||
+			dead == nil || dead.Node == "" || dead.MaxRecords < 1 || dead.MaxRecords > 1_000_000 || dead.TTLMS < 0 || dead.TTLMS > 30*24*60*60*1000 {
+			return nil, fmt.Errorf("flow %s: a continuous flow names its source, a batch budget of zero or more, and a bounded dead-letter asset", id)
 		}
 		if fl.Continuous.Window != nil {
 			if err := checkWindow(*fl.Continuous.Window); err != nil {

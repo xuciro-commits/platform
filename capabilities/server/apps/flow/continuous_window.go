@@ -53,7 +53,7 @@ func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, no
 	added := map[signalIdentity]bool{}
 	state.Rows = slices.DeleteFunc(slices.Clone(state.Rows), func(s Signal) bool { return s.At.Before(oldest) })
 	appendDead := func(signal Signal, reason string) {
-		frame.DeadLetters = append(frame.DeadLetters, DeadLetter{Batch: batch.ID, Partition: signal.Partition, Key: signal.Key, At: signal.At, Reason: reason, Value: string(signal.Value)})
+		frame.DeadLetters = append(frame.DeadLetters, frame.letter(batch.ID, now, signal, reason))
 		rejected++
 	}
 	for _, signal := range batch.Signals {

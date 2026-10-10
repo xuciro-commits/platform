@@ -605,7 +605,7 @@ export type Continuous = {
   Aggregate?: StreamAggregate;
   Threshold?: StreamThreshold;
   Intake?: StreamIntake;
-  DeadLetter: boolean;
+  DeadLetter?: StreamDeadLetter;
 };
 
 export type Contract = {
@@ -2891,6 +2891,12 @@ export type StreamAggregate = {
   signal?: string;
   group?: string[];
   measures: string[];
+};
+
+export type StreamDeadLetter = {
+  node: string;
+  maxRecords: number;
+  ttlMs?: number;
 };
 
 export type StreamIntake = {

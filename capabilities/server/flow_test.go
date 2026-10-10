@@ -32,7 +32,7 @@ type frameStream struct{ platform.Record }
 // step is the test's own declared rule, as a real app's would be.
 func declared(s *frameSource) *platform.Continuous {
 	c := &platform.Continuous{
-		Source: "frames.source", Batch: 512, State: s.stateBytes, FrameBytes: 2 * s.stateBytes, DeadLetter: true,
+		Source: "frames.source", Batch: 512, State: s.stateBytes, FrameBytes: 2 * s.stateBytes, DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 10000, TTLMS: 86400000},
 		Window: &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"},
 	}
 	for _, configure := range s.configure {
@@ -375,6 +375,96 @@ func TestContinuousSealedOperatorsAndRecovery(t *testing.T) {
 	if alerts := alertsOf(restored); len(alerts) != 1 || alerts[0].State != "triggered" {
 		t.Fatalf("restored operators raised %+v", alerts)
 	}
+}
+
+// Dead letters are the instance's own numbered asset: an administrator delivers
+// named letters' signals again through the instance's action, under the
+// original authorization, and a signal is re-adjudicated rather than applied
+// twice (ADR-0047 §13.3).
+func TestContinuousDeadLetterReplay(t *testing.T) {
+	const tenant, id = "dead-letter-replay", "frames.window:source"
+	store := &memoryFiles{}
+	compose := func() *Tenant {
+		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin"), seatOf("clerk", "frames:operator")},
+			work.New(tenant), flow.New(tenant), newFrameSource(tenant, 1<<20, func(c *platform.Continuous) {
+				c.Window = &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"}
+				c.DeadLetter = &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 8}
+			}))
+		tn.Files = store
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	at := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	feed := func(when time.Time, name, predecessor string, signals ...flow.Signal) {
+		t.Helper()
+		decide(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source",
+			map[string]any{"batch": flow.Batch{ID: name, Predecessor: predecessor, Signals: signals}}, when)
+	}
+	read := func(tn *Tenant) flow.FlowInstance {
+		t.Helper()
+		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		if !ok {
+			t.Fatal("no native instance")
+		}
+		return x
+	}
+	window := func(tn *Tenant) flow.WindowState {
+		t.Helper()
+		frame, err := tn.ReadFlowFrame(memberOf(t, tn, "member"), id, at)
+		if err != nil {
+			t.Fatalf("read frame: %s", err.Message)
+		}
+		var state flow.WindowState
+		if raw := frame.State["window"]; len(raw) > 0 && json.Unmarshal(raw, &state) != nil {
+			t.Fatalf("window state is not JSON: %s", raw)
+		}
+		return state
+	}
+	feed(at, "one", "", flow.Signal{Key: "m1", Partition: "plant-a", At: at, Value: platform.Raw(4)},
+		flow.Signal{Key: "ghost", Partition: "plant-a", Value: platform.Raw(9)})
+	feed(at.Add(time.Second), "two", "one", flow.Signal{Key: "m2", Partition: "plant-a", At: at.Add(3 * time.Minute), Value: platform.Raw(5)})
+	feed(at.Add(2*time.Second), "three", "two", flow.Signal{Key: "m3", Partition: "plant-a", At: at.Add(10 * time.Second), Value: platform.Raw(6)})
+	x := read(tn)
+	if len(x.Batch.DeadLetters) != 2 || x.Batch.DeadLetters[0].Seq != 1 || x.Batch.DeadLetters[0].Key != "ghost" || x.Batch.DeadLetters[1].Seq != 2 || x.Batch.DeadLetters[1].Key != "m3" {
+		t.Fatalf("dead letters: %+v", x.Batch.DeadLetters)
+	}
+	if x.Batch.Consumed != 2 || x.Batch.Rejected != 2 || len(window(tn).Rows) != 1 {
+		t.Fatalf("frame counters: consumed %d rejected %d rows %d", x.Batch.Consumed, x.Batch.Rejected, len(window(tn).Rows))
+	}
+	// Only an administrator delivers letters again, and only numbers the
+	// instance still retains; a refusal changes nothing.
+	before := platform.Raw(x)
+	if refusal := refuse(t, tn, "clerk", flow.ID, flow.SchemaFlowReplay, flow.InstanceType, id, map[string]any{"seqs": []int64{2}}, at); !strings.Contains(refusal, "POLICY_DENIED") {
+		t.Fatalf("a clerk replayed dead letters: %s", refusal)
+	}
+	if refusal := refuse(t, tn, "member", flow.ID, flow.SchemaFlowReplay, flow.InstanceType, id, map[string]any{"seqs": []int64{99}}, at); !strings.Contains(refusal, "ERROR_CODE_INVALID_ARGUMENT") {
+		t.Fatalf("an unknown letter was replayed: %s", refusal)
+	}
+	if refusal := refuse(t, tn, "member", flow.ID, flow.SchemaFlowReplay, flow.InstanceType, id, map[string]any{"seqs": []int64{}}, at); !strings.Contains(refusal, "ERROR_CODE_INVALID_ARGUMENT") {
+		t.Fatalf("an empty replay was accepted: %s", refusal)
+	}
+	if string(before) != string(platform.Raw(read(tn))) {
+		t.Fatal("a refused replay changed the accepted frame")
+	}
+	// Delivering the late letter again re-adjudicates it under the same rule:
+	// the signal is late once more, so it becomes a fresh letter — the window
+	// gains no row and the original letter is marked as delivered.
+	decide(t, tn, "member", flow.ID, flow.SchemaFlowReplay, flow.InstanceType, id, map[string]any{"seqs": []int64{2}}, at.Add(3*time.Second))
+	x = read(tn)
+	if len(x.Batch.DeadLetters) != 3 || x.Batch.DeadLetters[2].Seq != 3 || x.Batch.DeadLetters[2].Key != "m3" || x.Batch.DeadLetters[2].Reason != x.Batch.DeadLetters[1].Reason || !x.Batch.DeadLetters[1].Replayed || x.Batch.DeadLetters[0].Replayed {
+		t.Fatalf("replayed letters: %+v", x.Batch.DeadLetters)
+	}
+	if x.Batch.Consumed != 2 || x.Batch.Rejected != 3 || x.Batch.LetterSeq != 3 {
+		t.Fatalf("replay counters: consumed %d rejected %d issued %d", x.Batch.Consumed, x.Batch.Rejected, x.Batch.LetterSeq)
+	}
+	if state := window(tn); len(state.Rows) != 1 || state.Rows[0].Key != "m2" || state.Duplicate != 0 {
+		t.Fatalf("the replay changed the retained window: %+v", state)
+	}
+	CheckReplay(t, tn, entries, compose)
 }
 
 // shop is a test app: orders reserved, paid, packed and shipped by a flow.

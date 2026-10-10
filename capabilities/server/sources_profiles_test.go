@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -117,14 +118,19 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 
 	// The same controlled PostgreSQL connection feeds an actual continuous
 	// instance. Machine-rate rows never become dataset versions or objects.
-	if _, err := db.Exec(ctx, "truncate "+table+"; alter table "+table+" add plant text default 'P', add device text default 'D', add at timestamptz default '2026-10-06T09:00:00Z', add reading double precision default 12; insert into "+table+"(seq,sku) select n,'event-'||n from generate_series(1,1025) n"); err != nil {
+	if _, err := db.Exec(ctx, "truncate "+table+"; alter table "+table+" add plant text default 'P', add device text default 'D', add at timestamptz default '2026-10-06T09:00:00Z', add reading double precision default 12, add signal jsonb default '{\"deviceId\":\"D\",\"reading\":12}'::jsonb; insert into "+table+"(seq,sku) select n,'event-'||n from generate_series(1,1025) n"); err != nil {
 		t.Fatal(err)
 	}
 	submit(build.SourceType, "stream", "create", map[string]any{"name": "telemetry", "title": "Telemetry", "connection": "db", "profile": "table", "entity": strings.Trim(table, "\""), "since": "seq", "stream": true})
 	submit(build.SourceType, "stream", "publish", map[string]any{})
-	continuous := &platform.Continuous{Source: "telemetry", Batch: 512, State: 2 << 20, FrameBytes: 4 << 20, DeadLetter: true,
-		Intake: &platform.StreamIntake{SourceRecord: "stream", Key: "sku", Partition: []string{"plant", "device"}, EventTime: "at", Value: "reading"},
-		Window: &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"}}
+	// The default streaming graph's own operators, on a real controlled table:
+	// each row's value column is a JSON object, so the aggregate groups by the
+	// declared device field and the threshold reads the declared mean.
+	continuous := &platform.Continuous{Source: "telemetry", Batch: 512, State: 2 << 20, FrameBytes: 4 << 20, DeadLetter: &platform.StreamDeadLetter{Node: "dlq", MaxRecords: 10000, TTLMS: 86400000},
+		Intake:    &platform.StreamIntake{SourceRecord: "stream", Key: "sku", Partition: []string{"plant", "device"}, EventTime: "at", Value: "signal"},
+		Window:    &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"},
+		Aggregate: &platform.StreamAggregate{Node: "stats", Signal: "reading", Group: []string{"deviceId"}, Measures: []string{"count", "mean", "max"}},
+		Threshold: &platform.StreamThreshold{Node: "high", Field: "mean", High: 11.5, Low: 9.5, Severity: "High"}}
 	submit(build.ProcessType, "consumer", "create", map[string]any{"name": "telemetry", "title": "Telemetry consumer", "manual": true, "continuous": continuous,
 		"steps": []build.ProcessStep{{Name: "intake", Kind: "wait", Condition: &platform.Predicate{Op: "eq", Left: &platform.Binding{Source: "literal", Value: platform.Raw(false)}, Right: &platform.Binding{Source: "literal", Value: platform.Raw(true)}}}}})
 	submit(build.ProcessType, "consumer", "publish", map[string]any{})
@@ -141,6 +147,14 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	running, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), instance)
 	if running.State != "waiting" || len(running.Tokens) != 1 || running.Tokens[0].Waits != "wait" || !running.Tokens[0].Due.IsZero() {
 		t.Fatal("the original timer mistook the initial yield deadline for a wait timeout")
+	}
+	// The operators' outputs are the accepted result's data channel: the first
+	// ready slide raised the declared threshold over the real rows.
+	if stats := running.Outputs["stats"]; !bytes.Contains(stats, []byte(`"mean":12`)) || !bytes.Contains(stats, []byte(`"count":512`)) {
+		t.Fatalf("real source produced no declared aggregate record: %s", stats)
+	}
+	if alerts := running.Outputs["alerts"]; !bytes.Contains(alerts, []byte(`"state":"triggered"`)) || !bytes.Contains(alerts, []byte(`"group":"[D]"`)) || !bytes.Contains(alerts, []byte(`"field":"mean"`)) {
+		t.Fatalf("real source did not raise the declared threshold: %s", alerts)
 	}
 	stream, _ := platform.Get[build.Source](tn.automation(build.ID, false), "stream")
 	if stream.Cursor != "" || stream.Last != nil || stream.Requested || stream.Due(at) {

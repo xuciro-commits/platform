@@ -39,6 +39,8 @@ type BatchFrame struct {
 	Rejected    int                         `json:"rejected"`              // signals the flow refused, ever
 	State       map[string]json.RawMessage  `json:"state,omitempty"`       // node name → its state
 	DeadLetters []DeadLetter                `json:"deadLetters,omitempty"` // what could not be folded, and why
+	LetterSeq   int64                       `json:"letterSeq,omitempty"`   // the last dead-letter number issued
+	Dropped     int                         `json:"dropped,omitempty"`     // letters the declared bounds dropped, ever
 	StateBytes  int                         `json:"stateBytes,omitempty"`
 	Sealed      *platform.FlowStateArtifact `json:"sealed,omitempty"`
 	Source      *SourceCheckpoint           `json:"source,omitempty"`
@@ -54,14 +56,31 @@ type SourceCheckpoint struct {
 }
 
 // DeadLetter keeps one signal that could not be folded, with its cause, so it
-// can be inspected and replayed under the original authorization (ADR-0047 §13.3).
+// can be inspected and replayed under the original authorization (ADR-0047
+// §13.3). Seq is the instance's own number for the letter: it is what a replay
+// names, so replaying is stable even after older letters have been trimmed.
+// Seen is when the flow decided not to fold it — the age the declared TTL
+// measures. Replayed marks a letter whose event was delivered again.
 type DeadLetter struct {
+	Seq       int64     `json:"seq"`
 	Batch     string    `json:"batch"`
 	Partition string    `json:"partition,omitempty"`
 	Key       string    `json:"key,omitempty"`
 	At        time.Time `json:"at,omitzero"`
+	Seen      time.Time `json:"seen,omitzero"`
 	Reason    string    `json:"reason"`
 	Value     string    `json:"value,omitempty"`
+	Replayed  bool      `json:"replayed,omitempty"`
+}
+
+// letter numbers one dead letter and stamps when the flow decided it. The
+// number comes from the frame, so a replayed frame never renumbers its letters.
+func (f *BatchFrame) letter(batch string, decided time.Time, signal Signal, reason string) DeadLetter {
+	if decided.IsZero() {
+		decided = signal.At
+	}
+	f.LetterSeq++
+	return DeadLetter{Seq: f.LetterSeq, Batch: batch, Partition: signal.Partition, Key: signal.Key, At: signal.At, Seen: decided, Reason: reason, Value: string(signal.Value)}
 }
 
 // Batch is one accepted batch of a real source: its identity, its predecessor,
@@ -122,55 +141,9 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 	}
 	var folded, rejected int
 	err := f.update(c, id, now, func(_ *session, in *FlowInstance) *kernel.Error {
-		frame := in.Batch
-		if frame == nil {
-			frame = &BatchFrame{State: map[string]json.RawMessage{}}
-			in.Batch = frame
-		}
 		var refusal *kernel.Error
-		folded, rejected, refusal = foldBatch(frame, declared, batch, now)
-		if refusal != nil {
-			return refusal
-		}
-		// The declared operators advance in the same decision as the fold: a
-		// refusal here discards the batch, so the cursor never advances past
-		// signals whose aggregate or threshold state could not be committed.
-		stats, alerts, refusal := foldOperators(frame, declared, batch.ID, now)
-		if refusal != nil {
-			return refusal
-		}
-		// The frame's state and the outputs it produced are the accepted
-		// result's data channel: both are committed with this decision.
-		in.Outputs = maps.Clone(in.Outputs)
-		if in.Outputs == nil {
-			in.Outputs = map[string]json.RawMessage{}
-		}
-		for node, state := range frame.State {
-			if len(state) <= 48<<10 {
-				in.Outputs["state:"+node] = slices.Clone(state)
-			} else {
-				// The durable frame owns these bytes. A compact, verifiable
-				// reference keeps token output limits instead of copying a large
-				// window into every ordinary output value.
-				in.Outputs["state:"+node] = platform.Raw(BatchStateReference{Instance: in.ID, Node: node, Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(state)), Size: len(state)})
-			}
-		}
-		in.Outputs["batch"] = json.RawMessage(fmt.Sprintf(`{"cursor":%q,"consumed":%d,"rejected":%d}`, frame.Cursor, frame.Consumed, frame.Rejected))
-		// The operators' own outputs: the groups' fixed measures and the
-		// hysteresis alerts this batch accepted, empty when this batch
-		// produced none. They travel as the accepted result's data channel
-		// like every other Flow output.
-		if declared.Aggregate != nil {
-			in.Outputs["stats"] = platform.Raw(stats)
-		}
-		if declared.Threshold != nil {
-			in.Outputs["alerts"] = platform.Raw(alerts)
-		}
-		encoded, err := json.Marshal(in.Outputs)
-		if err != nil || len(encoded) > 60<<10 {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch outputs exceed the Flow output budget")
-		}
-		return nil
+		folded, rejected, refusal = foldDecision(in, declared, batch, now)
+		return refusal
 	})
 	if err != nil {
 		return BatchOutcome{}, err
@@ -181,6 +154,59 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 		out.Cursor, out.Watermark, out.StateSize = x.Batch.Cursor, x.Batch.Watermark, stateSize(x.Batch.State)
 	}
 	return out, nil
+}
+
+// foldDecision folds one batch into an instance as a single decision: the
+// batch frame, then the declared window→aggregate→threshold operators in the
+// same step — a refusal discards the batch, so the cursor never advances past
+// signals whose operator state could not be committed. The frame's state and
+// the outputs the batch produced are the accepted result's data channel, and
+// both are committed together. Callers already hold the tenant decision (the
+// direct consumer, the prepared host lane, or the replay action).
+func foldDecision(in *FlowInstance, declared platform.Continuous, batch Batch, now time.Time) (folded, rejected int, refusal *kernel.Error) {
+	frame := in.Batch
+	if frame == nil {
+		frame = &BatchFrame{State: map[string]json.RawMessage{}}
+		in.Batch = frame
+	}
+	folded, rejected, refusal = foldBatch(frame, declared, batch, now)
+	if refusal != nil {
+		return 0, 0, refusal
+	}
+	stats, alerts, refusal := foldOperators(frame, declared, batch.ID, now)
+	if refusal != nil {
+		return 0, 0, refusal
+	}
+	in.Outputs = maps.Clone(in.Outputs)
+	if in.Outputs == nil {
+		in.Outputs = map[string]json.RawMessage{}
+	}
+	for node, state := range frame.State {
+		if len(state) <= 48<<10 {
+			in.Outputs["state:"+node] = slices.Clone(state)
+		} else {
+			// The durable frame owns these bytes. A compact, verifiable
+			// reference keeps token output limits instead of copying a large
+			// window into every ordinary output value.
+			in.Outputs["state:"+node] = platform.Raw(BatchStateReference{Instance: in.ID, Node: node, Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(state)), Size: len(state)})
+		}
+	}
+	in.Outputs["batch"] = json.RawMessage(fmt.Sprintf(`{"cursor":%q,"consumed":%d,"rejected":%d}`, frame.Cursor, frame.Consumed, frame.Rejected))
+	// The operators' own outputs: the groups' fixed measures and the
+	// hysteresis alerts this batch accepted, empty when this batch produced
+	// none. They travel as the accepted result's data channel like every
+	// other Flow output.
+	if declared.Aggregate != nil {
+		in.Outputs["stats"] = platform.Raw(stats)
+	}
+	if declared.Threshold != nil {
+		in.Outputs["alerts"] = platform.Raw(alerts)
+	}
+	encoded, err := json.Marshal(in.Outputs)
+	if err != nil || len(encoded) > 60<<10 {
+		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch outputs exceed the Flow output budget")
+	}
+	return folded, rejected, nil
 }
 
 // BatchStateReference names original instance state, not an arbitrary file or
@@ -253,13 +279,17 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 			return 0, 0, err
 		}
 	} else {
+		decided := time.Time{}
+		if len(acceptedAt) == 1 {
+			decided = acceptedAt[0]
+		}
 		for _, signal := range batch.Signals {
 			switch {
 			case signal.At.IsZero():
-				next.DeadLetters = append(next.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, Reason: "no event time", Value: string(signal.Value)})
+				next.DeadLetters = append(next.DeadLetters, next.letter(batch.ID, decided, signal, "no event time"))
 				rejected++
 			case !next.Watermark.IsZero() && signal.At.Before(next.Watermark):
-				next.DeadLetters = append(next.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, At: signal.At, Reason: "late: before the watermark", Value: string(signal.Value)})
+				next.DeadLetters = append(next.DeadLetters, next.letter(batch.ID, decided, signal, "late: before the watermark"))
 				rejected++
 			default:
 				if err := fold(&next, declared, signal); err != nil {

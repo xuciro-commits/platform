@@ -1051,6 +1051,49 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			x.State, x.Tokens = "canceled", nil
 			ss.trace(x, "", "canceled", "", c.ID)
 			return ss.apply, nil
+		case SchemaFlowReplay:
+			// Deliver the named dead letters' signals again, in this same
+			// instance decision (ADR-0047 §13.3): the letters keep their
+			// numbers, the batch they form is a fresh successor of the frame's
+			// cursor, and a signal the window still retains is absorbed as a
+			// duplicate rather than applied twice.
+			var in struct {
+				Seqs []int64 `json:"seqs"`
+			}
+			if json.Unmarshal(s.GetPayload(), &in) != nil || len(in.Seqs) == 0 || len(in.Seqs) > 256 || len(in.Seqs) != len(slices.Compact(slices.Clone(in.Seqs))) {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A replay names 1 to 256 distinct dead-letter numbers")
+			}
+			if x.Batch == nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The instance has no dead letters to replay")
+			}
+			d := f.def(x.Flow, x.Version)
+			if d == nil || d.Continuous == nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "This instance's flow is not continuous")
+			}
+			retained := map[int64]DeadLetter{}
+			for _, letter := range x.Batch.DeadLetters {
+				retained[letter.Seq] = letter
+			}
+			signals := make([]Signal, 0, len(in.Seqs))
+			for _, seq := range in.Seqs {
+				letter, ok := retained[seq]
+				if !ok {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, fmt.Sprintf("Dead letter %d is not retained on this instance", seq))
+				}
+				signals = append(signals, Signal{Key: letter.Key, Partition: letter.Partition, At: letter.At, Value: json.RawMessage(letter.Value)})
+			}
+			batch := Batch{ID: fmt.Sprintf("replay:%d:%d", x.Revision+1, len(in.Seqs)), Predecessor: x.Batch.Cursor, Signals: signals}
+			if _, _, refusal := foldDecision(x, *d.Continuous, batch, now); refusal != nil {
+				return nil, refusal
+			}
+			// The letters were delivered; a refusal above left them as they
+			// were, so nothing is marked that did not happen.
+			for i := range x.Batch.DeadLetters {
+				if slices.Contains(in.Seqs, x.Batch.DeadLetters[i].Seq) {
+					x.Batch.DeadLetters[i].Replayed = true
+				}
+			}
+			ss.trace(x, "", "replayed", fmt.Sprintf("%d dead letters", len(in.Seqs)), c.ID)
 		case SchemaFlowMove:
 			versions := f.defs[x.Flow]
 			i := slices.IndexFunc(versions, func(d *flowDef) bool { return d.Version == x.Version })

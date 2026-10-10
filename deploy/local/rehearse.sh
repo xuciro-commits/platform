@@ -713,7 +713,7 @@ sql "create role rehearsal_source login password 'sinkLocalOnly00000000000000000
     workflow_submit "$actor" stream-source-publish build.source.publish build.source STREAM-SOURCE '{}'
     definition=$(jq -n --arg name "stream$suffix" \
       '{name:$name,title:"PostgreSQL continuous intake",manual:true,
-        continuous:{Source:"telemetry",Batch:512,State:2097152,FrameBytes:4194304,DeadLetter:true,
+        continuous:{Source:"telemetry",Batch:512,State:2097152,FrameBytes:4194304,DeadLetter:{node:"dlq",maxRecords:10000,ttlMs:86400000},
           Intake:{sourceRecord:"STREAM-SOURCE",key:"event_id",partition:["plant","device"],eventTime:"at",value:"reading"},
           Window:{node:"window",windowMs:30000,slideMs:5000,watermarkMs:2000,maxRecords:50000,lateEvents:"sideOutput"}},
         steps:[{name:"intake",kind:"wait",condition:{op:"eq",left:{source:"literal",value:false},right:{source:"literal",value:true}}}]}')

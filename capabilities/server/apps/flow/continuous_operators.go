@@ -113,6 +113,38 @@ func checkOperators(declared platform.Continuous) error {
 // aggregated are dead-lettered once and leave the window, so they are not
 // re-reported on every slide.
 func foldOperators(frame *BatchFrame, declared platform.Continuous, batchID string, now time.Time) (stats []AggregateRecord, alerts []Alert, refusal *kernel.Error) {
+	stats, alerts, refusal = foldDeclaredOperators(frame, declared, batchID, now)
+	if refusal == nil {
+		frame.retain(declared.DeadLetter, now)
+	}
+	return stats, alerts, refusal
+}
+
+// retain keeps the instance's dead-letter asset inside its declared bounds
+// (ADR-0047 §13.3): oldest-first by count, and by age when a TTL is declared.
+// Every letter it drops is counted in the frame, so trimming is visible rather
+// than silent, and the numbers of the letters that stay never change — a
+// replay names a letter's Seq, not its position.
+func (f *BatchFrame) retain(rule *platform.StreamDeadLetter, now time.Time) {
+	if rule == nil || len(f.DeadLetters) == 0 {
+		return
+	}
+	kept := f.DeadLetters[:0]
+	for _, letter := range f.DeadLetters {
+		if rule.TTLMS > 0 && !now.IsZero() && !letter.Seen.IsZero() && now.Sub(letter.Seen) > time.Duration(rule.TTLMS)*time.Millisecond {
+			f.Dropped++
+			continue
+		}
+		kept = append(kept, letter)
+	}
+	if over := len(kept) - rule.MaxRecords; over > 0 {
+		f.Dropped += over
+		kept = kept[over:]
+	}
+	f.DeadLetters = kept
+}
+
+func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batchID string, now time.Time) (stats []AggregateRecord, alerts []Alert, refusal *kernel.Error) {
 	// Empty, never nil: a batch that produced no records says so, and the
 	// accepted result replaces the previous batch's operator outputs instead
 	// of leaving stale ones in place.
@@ -146,7 +178,7 @@ func foldOperators(frame *BatchFrame, declared platform.Continuous, batchID stri
 	for _, row := range window.Rows {
 		group, value, why := aggregateRow(*a, row)
 		if why != "" {
-			frame.DeadLetters = append(frame.DeadLetters, DeadLetter{Batch: batchID, Partition: row.Partition, Key: row.Key, At: row.At, Reason: why, Value: string(row.Value)})
+			frame.DeadLetters = append(frame.DeadLetters, frame.letter(batchID, now, row, why))
 			continue
 		}
 		if _, seen := byGroup[group]; !seen {
