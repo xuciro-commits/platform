@@ -151,7 +151,7 @@ func (c ContainerCompiler) Compile(ctx context.Context, q platform.CodeBuildRequ
 	if q.Language != "go" && q.Language != "tinygo" || len(q.Source) == 0 || len(q.Source) > 256<<10 {
 		return result, nil, fmt.Errorf("source requires a bounded Go/TinyGo profile")
 	}
-	sdk, err := GenerateComputeSDK(q.Input, q.Output)
+	sdk, err := GenerateComputeSDK(q.Input, q.Output, q.ABI)
 	if err != nil {
 		return result, nil, err
 	}
@@ -208,7 +208,14 @@ func (c ContainerCompiler) Compile(ctx context.Context, q platform.CodeBuildRequ
 
 // GenerateComputeSDK emits explicit typed decoding/encoding. TinyGo uses no
 // reflection-based encoding/json path. The owner's schema remains authoritative.
-func GenerateComputeSDK(input, output platform.ValueSchema) ([]byte, error) {
+func GenerateComputeSDK(input, output platform.ValueSchema, bindingABI ...string) ([]byte, error) {
+	abi := platform.WasmCommandABI
+	if len(bindingABI) > 0 && bindingABI[0] != "" {
+		abi = bindingABI[0]
+	}
+	if abi != platform.WasmCommandABI && abi != platform.WasmDataABI {
+		return nil, fmt.Errorf("unknown compute ABI")
+	}
 	if err := input.Check(); err != nil {
 		return nil, err
 	}
@@ -223,8 +230,27 @@ func GenerateComputeSDK(input, output platform.ValueSchema) ([]byte, error) {
 	source := "package main\nimport(\"bytes\";\"errors\";\"io\";\"os\";\"strconv\";\"unicode/utf8\")\n" + g.types.String() + sdkHelpers + g.code.String() + `
 func main(){raw,err:=io.ReadAll(io.LimitReader(os.Stdin,1048577));if err==nil&&len(raw)>1048576{err=errors.New("input limit")};var input Input;if err==nil{input,err=decodeInput(raw)};var output Output;if err==nil{output,err=Run(input)};if err!=nil{os.Stdout.Write(append(append([]byte("{\"ok\":false,\"error\":{\"code\":\"compute\",\"message\":"),jsonQuote(err.Error())...),[]byte("}}")...));return};encoded:=encodeOutput(output);os.Stdout.Write(append(append([]byte("{\"ok\":true,\"value\":"),encoded...),'}'))}
 `
+	if abi == platform.WasmDataABI {
+		source = strings.Replace(source, `"unicode/utf8")`, `"unicode/utf8";"unsafe")`, 1)
+		source = strings.Replace(source, `"io";`, "", 1)
+		source = strings.Replace(source, `io.ReadAll(io.LimitReader(os.Stdin,1048577))`, `readDataInput()`, 1)
+		source = strings.Replace(source, `len(raw)>1048576`, `len(raw)>67108864`, 1)
+		source = strings.Replace(source, `os.Stdout.Write(append(append([]byte("{\"ok\":true,\"value\":"),encoded...),'}'))`, `if err=writeDataOutput(encoded);err!=nil{os.Stdout.Write([]byte("{\"ok\":false,\"error\":{\"code\":\"channel\",\"message\":\"output channel refused\"}}"));return};os.Stdout.Write([]byte("{\"ok\":true,\"channel\":true}"))`, 1)
+		source += sdkDataHelpers
+	}
 	return format.Source([]byte(source))
 }
+
+const sdkDataHelpers = `
+//go:wasmimport platform_data_v2 input_size
+func dataInputSize() uint32
+//go:wasmimport platform_data_v2 read_input
+func dataReadInput(offset,ptr,size uint32) uint32
+//go:wasmimport platform_data_v2 write_output
+func dataWriteOutput(ptr,size uint32) uint32
+func readDataInput()([]byte,error){size:=dataInputSize();if size==0||size>67108864{return nil,errors.New("input channel limit")};raw:=make([]byte,size);for offset:=uint32(0);offset<size;{n:=size-offset;if n>65536{n=65536};if dataReadInput(offset,uint32(uintptr(unsafe.Pointer(&raw[offset]))),n)!=0{return nil,errors.New("input channel refused")};offset+=n};return raw,nil}
+func writeDataOutput(raw []byte)error{for offset:=0;offset<len(raw);{n:=len(raw)-offset;if n>65536{n=65536};if dataWriteOutput(uint32(uintptr(unsafe.Pointer(&raw[offset]))),uint32(n))!=0{return errors.New("output channel refused")};offset+=n};return nil}
+`
 
 type sdkGenerator struct{ types, code *strings.Builder }
 

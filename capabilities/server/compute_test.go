@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -313,6 +315,162 @@ func TestWasmCommandCompilerProfiles(t *testing.T) {
 				t.Fatalf("%s nullable variant: %+v %v", language, null, err)
 			}
 			t.Logf("%s module=%d bytes instantiate=%dµs execute=%dµs", language, len(module), result.InstantiateMicros, result.ExecuteMicros)
+		})
+	}
+}
+
+func TestWasmDataABIChannels(t *testing.T) {
+	compiler := ContainerCompiler{GoImage: os.Getenv("PLATFORM_GO_WASM_IMAGE"), TinyGoImage: os.Getenv("PLATFORM_TINYGO_WASM_IMAGE")}
+	if compiler.GoImage == "" || compiler.TinyGoImage == "" {
+		t.Skip("pinned Go/TinyGo compiler images are not configured")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	dir, err := os.MkdirTemp("", "data-abi-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	socket := filepath.Join(dir, "worker.sock")
+	done := make(chan error, 1)
+	go func() { done <- ServeWasmWorker(ctx, socket, 2) }()
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		if CheckComputeSocket(socket) == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("worker socket was not ready")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	defer func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	}()
+	schema := platform.ValueSchema{Type: "string"}
+	for _, language := range []string{"go", "tinygo"} {
+		t.Run(language, func(t *testing.T) {
+			buildCtx, stop := context.WithTimeout(t.Context(), 180*time.Second)
+			defer stop()
+			source := "package main\nimport \"strings\"\nfunc Run(input Input)(Output,error){if dataReadInput(^uint32(0),0,1)==0||dataWriteOutput(^uint32(0),1)==0{panic(\"unbounded memory access\")};if len(input)<16{return Output(strings.Repeat(string(input),70000)),nil};return input,nil}"
+			_, module, err := compiler.Compile(buildCtx, platform.CodeBuildRequest{ABI: platform.WasmDataABI, Language: language, Input: schema, Output: schema, Source: source})
+			if err != nil {
+				t.Fatal(err)
+			}
+			hash := sha256.Sum256(module)
+			raw := json.RawMessage(`"` + strings.Repeat("<", (1<<20)+17) + `"`)
+			digest := sha256.Sum256(raw)
+			request := WasmRequest{ABI: platform.WasmDataABI, Module: module, Digest: hex.EncodeToString(hash[:]), Data: &WasmDataInput{Tenant: "data", Call: "data:call-1", Bytes: raw, Digest: hex.EncodeToString(digest[:])}, Limits: platform.OperationLimits{TimeoutMillis: 30000, MemoryPages: 2048, MaxInputBytes: 4096, MaxOutputBytes: 4096, DataInputBytes: 4 << 20, StagedOutputBytes: 8 << 20}}
+			worker := socketWasmWorker{socket: socket}
+			result, err := worker.Execute(t.Context(), request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var value string
+			if json.Unmarshal(result.Output, &value) != nil || value != strings.Repeat("<", (1<<20)+17) {
+				t.Fatal("channel output was changed or truncated")
+			}
+			inlineRequest := request
+			inlineRequest.Data = nil
+			inlineRequest.Input = json.RawMessage(`"<"`)
+			inlineRequest.Limits.DataInputBytes = 0
+			inline, err := worker.Execute(t.Context(), inlineRequest)
+			if err != nil || json.Unmarshal(inline.Output, &value) != nil || value != strings.Repeat("<", 70000) {
+				t.Fatalf("v2 inline input did not use the call channel: %v", err)
+			}
+			if err := ValidateWasm(t.Context(), module); err == nil {
+				t.Fatal("v2 imports were accepted as legacy WASI")
+			}
+			request.Data.Digest = strings.Repeat("0", 64)
+			if _, err := worker.Execute(t.Context(), request); err == nil {
+				t.Fatal("changed input digest was executed")
+			}
+			request.Data.Digest = hex.EncodeToString(digest[:])
+			request.Data.Tenant = "other"
+			if _, err := worker.Execute(t.Context(), request); err == nil {
+				t.Fatal("another tenant claimed the call")
+			}
+			request.Data.Tenant = "data"
+			request.Limits.StagedOutputBytes = 64 << 10
+			if _, err := worker.Execute(t.Context(), request); err == nil {
+				t.Fatal("output above the call budget was accepted")
+			}
+
+			// The same ABI goes through the original compilation, candidate,
+			// operation outbox and accepted-result recovery owners.
+			files := &memoryFiles{}
+			compose := func() *Tenant {
+				tn := builderTenant(t, "data-"+language)
+				tn.Files = files
+				tn.Compiler = compiler
+				tn.ComputeWorker = worker
+				return tn
+			}
+			tn := compose()
+			var entries []Entry
+			tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+			now := time.Now().UTC()
+			limits := request.Limits
+			limits.StagedOutputBytes = 8 << 20
+			decide(t, tn, "builder", build.ID, "build.code.create", build.CodeType, "C", map[string]any{
+				"name": "data", "title": "Data", "abi": platform.WasmDataABI, "language": language, "source": source,
+				"input": schema, "output": schema, "roles": []string{build.Builder}, "limits": limits,
+			}, now)
+			decide(t, tn, "builder", build.ID, build.SchemaCodeCompile, build.CodeType, "C", map[string]any{}, now)
+			for _, run := range tn.operationDispatches(now) {
+				run()
+			}
+			member := memberOf(t, tn, "builder")
+			preview, err := tn.PreviewRelease(member, platform.AssetCompute, "C")
+			if err != nil {
+				t.Fatal(err)
+			}
+			now = time.Now().UTC()
+			if _, err := tn.SaveReleaseCandidate(member, platform.AssetCompute, "C", preview.CandidateID, "save", now); err != nil {
+				t.Fatal(err)
+			}
+			decide(t, tn, "builder", build.ID, "build.code.edit", build.CodeType, "C", map[string]any{"abi": ""}, now)
+			if _, err := tn.ActivateRelease(member, preview.CandidateID, "activate", now); err != nil {
+				t.Fatal(err)
+			}
+			op, _, ok := operationDefinition(tn.app(build.ID), "data", 1)
+			if !ok || op.Binding.ABI != platform.WasmDataABI {
+				t.Fatal("activation lost the frozen ABI")
+			}
+			call, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: build.ID, Name: "data", Version: 1, Key: "invoke", Inputs: json.RawMessage(`"<"`)}, now)
+			if refusal != nil {
+				t.Fatal(refusal)
+			}
+			for _, run := range tn.operationDispatches(now) {
+				run()
+			}
+			accepted, refusal := tn.ReadOperation(member, call.ID)
+			if refusal != nil || accepted.State != "completed" {
+				t.Fatalf("accepted channel output: %+v %v", accepted, refusal)
+			}
+			var reference struct {
+				Staged platform.StagedResult `json:"staged"`
+			}
+			if json.Unmarshal(accepted.Output, &reference) != nil || reference.Staged.Call != call.ID {
+				t.Fatal("large worker output was not staged for the original call")
+			}
+			sealed, err := tn.staged.Read(reference.Staged)
+			if err != nil || json.Unmarshal(sealed, &value) != nil || value != strings.Repeat("<", 70000) {
+				t.Fatalf("sealed worker bytes differ: %v", err)
+			}
+			recovered := compose()
+			if err := recovered.Replay(entries); err != nil {
+				t.Fatal(err)
+			}
+			saved, refusal := recovered.ReadOperation(member, call.ID)
+			if refusal != nil || saved.State != "completed" || string(saved.Output) != string(accepted.Output) || len(recovered.operationDispatches(time.Now().UTC())) != 0 {
+				t.Fatalf("recovery lost the channel or reran the worker: %+v %v", saved, refusal)
+			}
+			if _, err := recovered.staged.Read(reference.Staged); err != nil {
+				t.Fatal(err)
+			}
 		})
 	}
 }

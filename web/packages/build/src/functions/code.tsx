@@ -11,6 +11,7 @@ import { JSONEditor, SchemaEditor, schemaDefault } from "../automate/workflow-bi
 import type { ValueSchema } from "../automate/workflow-model";
 
 type CodeDraft = {
+  abi?: string;
   id: string; revision: number; name: string; title: string; description: string; language: string; source: string;
   input: ValueSchema; output: ValueSchema; roles: string[]; limits: Api.OperationLimits;
   state?: string; version?: number; published?: string; call?: string; module?: string; diagnostics?: string;
@@ -49,8 +50,8 @@ export function CodeEditor({ id }: { id: string }) {
   const change = (patch: Partial<CodeDraft>) => { setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); setSDK(""); };
   const perform = async (action: () => Promise<unknown>) => { setBusy(true); setError(""); try { await action(); } catch (failure) { setError(failure instanceof Error ? failure.message : t("The code function could not be saved or loaded.")); } finally { setBusy(false); } };
   const save = async (): Promise<number | undefined> => {
-    const target = draft.id || createID, { name, title, description, language, source, input, output, roles, limits } = draft;
-    if (!await decide(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: target }, { name, title, description, language, source, input, output, roles, limits },
+    const target = draft.id || createID, { abi, name, title, description, language, source, input, output, roles, limits } = draft;
+    if (!await decide(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: target }, { abi, name, title, description, language, source, input, output, roles, limits },
       { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) return;
     if (!draft.id) { markSaved(); setDirty(false); open({ view: "code", params: { id: target } }); close({ view: "code", params: { id } }); return 1; }
     const saved = await query.refetch();
@@ -63,7 +64,7 @@ export function CodeEditor({ id }: { id: string }) {
     if (await decide("build.code.compile", { type: "build.code", id: draft.id }, {}, { expectedRevision: revision, quiet: true, onRefused: setError })) await query.refetch();
   };
   const previewSDK = async () => {
-    const answer = await client.call<Api.ComputeSDK>("POST", "/v1/build/code/sdk", { input: draft.input, output: draft.output });
+    const answer = await client.call<Api.ComputeSDK>("POST", "/v1/build/code/sdk", { abi: draft.abi, input: draft.input, output: draft.output });
     if (!answer.ok) { setError(apiErrorMessage(answer.body) ?? t("The SDK could not be generated.")); return; }
     setSDK(answer.body.source); setTab("sdk");
   };
@@ -127,6 +128,15 @@ export function CodeEditor({ id }: { id: string }) {
         <label className="grid gap-1 text-xs">{t("Function title")}<Input value={draft.title} onChange={(event) => change({ title: event.target.value })} /></label>
         <label className="grid gap-1 text-xs">{t("Function description")}<Textarea rows={3} value={draft.description} onChange={(event) => change({ description: event.target.value })} /></label>
         <label className="grid gap-1 text-xs">{t("Compiler profile")}<Select value={draft.language} onChange={(event) => change({ language: event.target.value })}><option value="go">Go / WASIp1</option><option value="tinygo">TinyGo / WASIp1</option></Select></label>
+        <label className="grid gap-1 text-xs">{t("Compute ABI")}
+          <Select value={draft.abi ?? ""} onChange={(event) => change({ abi: event.target.value, limits: { ...draft.limits, dataInputBytes: undefined, stagedOutputBytes: event.target.value ? 16 * 1024 * 1024 : undefined } })}>
+            <option value="">{t("Inline JSON (v1)")}</option><option value="platform-wasip1-data/v2">{t("Call data channels (v2)")}</option>
+          </Select>
+        </label>
+        {draft.abi === "platform-wasip1-data/v2" && (["dataInputBytes", "stagedOutputBytes"] as const).map((key) => <label key={key} className="grid gap-1 text-xs">
+          {t(key === "dataInputBytes" ? "Read channel bytes (optional)" : "Output channel bytes")}
+          <Input draftKey={`limits:${key}`} type="number" step={1} min={key === "dataInputBytes" ? draft.limits.maxInputBytes + 1 : draft.limits.maxOutputBytes + 1} max={key === "dataInputBytes" ? 64 * 1024 * 1024 : 16 * 1024 * 1024} value={draft.limits[key] ?? ""} onChange={(event) => change({ limits: { ...draft.limits, [key]: event.target.value === "" ? undefined : event.target.valueAsNumber } })} />
+        </label>)}
         <fieldset className="grid gap-2"><legend className="mb-2 text-xs">{t("Callable by")}</legend>{["builder", "user"].map((value) => <Checkbox key={value} checked={draft.roles.includes(value)} onChange={(enabled) => change({ roles: enabled ? [...new Set([...draft.roles, value])] : draft.roles.filter((old) => old !== value) })}>{value}</Checkbox>)}</fieldset>
         {(["timeoutMillis", "memoryPages", "maxInputBytes", "maxOutputBytes"] as const).map((key) => <label key={key} className="grid gap-1 text-xs">{t(({ timeoutMillis: "Time limit (ms)", memoryPages: "Memory limit (64 KiB pages)", maxInputBytes: "Maximum input bytes", maxOutputBytes: "Maximum output bytes" })[key])}
           <Input draftKey={`limits:${key}`} type="number" min={1} max={({ timeoutMillis: 30000, memoryPages: 4096, maxInputBytes: 65536, maxOutputBytes: 49152 })[key]} value={draft.limits[key]} onChange={(event) => change({ limits: { ...draft.limits, [key]: Number(event.target.value) } })} /></label>)}

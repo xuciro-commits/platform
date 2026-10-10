@@ -10,6 +10,7 @@ import (
 )
 
 type ComputeSDKRequest struct {
+	ABI    string               `json:"abi,omitempty"`
 	Input  platform.ValueSchema `json:"input"`
 	Output platform.ValueSchema `json:"output"`
 }

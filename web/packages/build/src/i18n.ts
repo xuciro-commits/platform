@@ -3769,4 +3769,9 @@ register("zh-CN", {
   "schedule": "计划",
   "effect": "效果",
   "Read from the integration definitions themselves: what is configured to feed this object's records and where its actions are configured to go. It is not a record-by-record history.": "读自集成定义本身：哪些来源被配置为写入这个对象的记录、哪些动作被配置为发往外部系统。它不是逐条记录的历史。",
+  "Compute ABI": "计算 ABI",
+  "Inline JSON (v1)": "内联 JSON（v1）",
+  "Call data channels (v2)": "调用数据通道（v2）",
+  "Read channel bytes (optional)": "读取通道字节预算（可选）",
+  "Output channel bytes": "输出通道字节预算",
 });

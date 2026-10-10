@@ -1657,5 +1657,7 @@
   "Value must be after {field}.": "值必须晚于 {field}。",
   "Value must be before or equal to {field}.": "值必须早于或等于 {field}。",
   "Value must be after or equal to {field}.": "值必须晚于或等于 {field}。",
-  "The read does not exist": "该读取不存在"
+  "The read does not exist": "该读取不存在",
+  "Compute ABI": "计算 ABI",
+  "Built ABI": "已编译 ABI"
 }

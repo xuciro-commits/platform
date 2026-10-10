@@ -45,7 +45,7 @@ func (h *Host) routesBuild(rt *routes) {
 		if !readCapabilityBody(w, r, &q) {
 			return
 		}
-		source, err := GenerateComputeSDK(q.Input, q.Output)
+		source, err := GenerateComputeSDK(q.Input, q.Output, q.ABI)
 		if err != nil {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error()))
 			return

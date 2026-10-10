@@ -502,6 +502,18 @@ func TestStagedResultChannel(t *testing.T) {
 	if err != nil || len(back) != len(big) {
 		t.Fatalf("read staged: %v", err)
 	}
+	for _, change := range []func(*platform.StagedResult){
+		func(h *platform.StagedResult) { h.Tenant = "other" },
+		func(h *platform.StagedResult) { h.Call = "other" },
+		func(h *platform.StagedResult) { h.Key = "uploads/other" },
+		func(h *platform.StagedResult) { h.Size = maxStagedOutputBytes + 1 },
+	} {
+		foreign := *handle
+		change(&foreign)
+		if _, err := tn.staged.Read(foreign); err == nil {
+			t.Fatal("a foreign or over-budget handle was read")
+		}
+	}
 	// Inline results stay inline.
 	small := json.RawMessage(`{"note":"ok"}`)
 	_, inline, err := tn.staged.output(op, "call-2", small)

@@ -339,7 +339,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 		var module []byte
 		result, module, err = compiler.Compile(ctx, *b.Build)
 		if err == nil {
-			err = ValidateWasm(ctx, module)
+			err = ValidateWasm(ctx, module, b.Build.ABI)
 			if err == nil {
 				hash := sha256.Sum256(module)
 				result.Module = hex.EncodeToString(hash[:])
@@ -381,7 +381,13 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 					worker = EnvironmentWasmWorker()
 				}
 				var result WasmResponse
-				result, err = worker.Execute(ctx, WasmRequest{Module: module, Digest: op.Binding.Module, Input: b.Inputs, Limits: op.Limits})
+				request := WasmRequest{ABI: op.Binding.ABI, Module: module, Digest: op.Binding.Module, Input: b.Inputs, Limits: op.Limits}
+				if op.Limits.DataInputBytes > 0 {
+					sum := sha256.Sum256(b.Inputs)
+					request.Input = nil
+					request.Data = &WasmDataInput{Tenant: t.ID, Call: x.ID, Digest: hex.EncodeToString(sum[:]), Bytes: b.Inputs}
+				}
+				result, err = worker.Execute(ctx, request)
 				output = result.Output
 			}
 		}

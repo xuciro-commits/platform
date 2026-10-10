@@ -17,6 +17,7 @@ import (
 )
 
 const WasmCommandABI = "platform-wasip1-json/v1"
+const WasmDataABI = "platform-wasip1-data/v2"
 
 // ValueSchema is the bounded JSON Schema profile shared by ordinary compute
 // inputs, outputs and Logic Studio ports. Objects are closed; recursion, remote
@@ -282,6 +283,8 @@ type OperationLimits struct {
 	// sealed into the per-call result channel the host owns (ADR-0047 §13.3).
 	// 0 keeps the inline-only profile; the worker still never writes anywhere.
 	StagedOutputBytes int `json:"stagedOutputBytes,omitempty"`
+	// DataInputBytes bounds the call-owned read channel; it never raises stdin.
+	DataInputBytes int `json:"dataInputBytes,omitempty"`
 }
 type Operation struct {
 	Name        string           `json:"name"`
@@ -304,7 +307,7 @@ func (o Operation) Check() error {
 	if err := o.Output.Check(); err != nil {
 		return fmt.Errorf("output: %w", err)
 	}
-	if o.Binding.Kind != "native" && o.Binding.Kind != "wasm" || o.Binding.Kind == "wasm" && (len(o.Binding.Module) != 64 || o.Binding.ABI != WasmCommandABI) || o.Binding.Kind == "native" && (o.Binding.Module != "" || o.Binding.ABI != "") {
+	if o.Binding.Kind != "native" && o.Binding.Kind != "wasm" || o.Binding.Kind == "wasm" && (len(o.Binding.Module) != 64 || (o.Binding.ABI != WasmCommandABI && o.Binding.ABI != WasmDataABI)) || o.Binding.Kind == "native" && (o.Binding.Module != "" || o.Binding.ABI != "") {
 		return fmt.Errorf("operation needs a native binding or pinned WASIp1 command")
 	}
 	if o.Binding.Kind == "wasm" {
@@ -320,6 +323,12 @@ func (o Operation) Check() error {
 	if o.Limits.StagedOutputBytes < 0 || o.Limits.StagedOutputBytes > 16<<20 ||
 		o.Limits.StagedOutputBytes > 0 && o.Limits.StagedOutputBytes <= o.Limits.MaxOutputBytes {
 		return fmt.Errorf("operation staged output must exceed the inline budget and stay within 16 MiB")
+	}
+	if o.Binding.ABI == WasmDataABI && o.Limits.StagedOutputBytes == 0 {
+		return fmt.Errorf("the v2 data ABI needs a bounded call output channel")
+	}
+	if o.Limits.DataInputBytes < 0 || o.Limits.DataInputBytes > 64<<20 || o.Limits.DataInputBytes > 0 && (o.Binding.Kind != "wasm" || o.Binding.ABI != WasmDataABI || o.Limits.DataInputBytes <= o.Limits.MaxInputBytes) {
+		return fmt.Errorf("operation data input requires the v2 read channel, above stdin and within 64 MiB")
 	}
 	seen := map[string]bool{}
 	for _, r := range o.Roles {
@@ -401,6 +410,7 @@ func (c Caller) CancelOperation(r *pb.ChangeRecord, id string) *kernel.Error {
 }
 
 type CodeBuildRequest struct {
+	ABI      string      `json:"abi,omitempty"`
 	Language string      `json:"language"`
 	Source   string      `json:"source"`
 	Input    ValueSchema `json:"input"`

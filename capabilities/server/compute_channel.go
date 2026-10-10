@@ -1,12 +1,12 @@
 package platformserver
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
 	"strings"
 	"sync"
@@ -106,16 +106,21 @@ func (c *stagedChannel) Stage(callID, schema string, raw []byte, budget int) (pl
 // Read reads a handle back and verifies its digest, so a result is exactly
 // what the call sealed.
 func (c *stagedChannel) Read(handle platform.StagedResult) ([]byte, error) {
+	if handle.Tenant != c.tenant || handle.Call == "" || handle.Schema == "" || handle.Key != stagedKey(c.tenant, handle.Call, handle.Schema) || handle.Size < 1 || handle.Size > maxStagedOutputBytes {
+		return nil, fmt.Errorf("staged result does not belong to this call channel")
+	}
 	reader, size, err := c.files().Get(context.Background(), handle.Key)
 	if err != nil {
 		return nil, err
 	}
 	defer reader.Close()
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(reader); err != nil {
+	if size != int64(handle.Size) {
+		return nil, fmt.Errorf("staged result %s differs from its sealed size", handle.Call)
+	}
+	raw, err := io.ReadAll(io.LimitReader(reader, int64(handle.Size)+1))
+	if err != nil {
 		return nil, err
 	}
-	raw := buf.Bytes()
 	sum := sha256.Sum256(raw)
 	if "sha256:"+hex.EncodeToString(sum[:]) != handle.Digest || len(raw) != handle.Size || size != int64(handle.Size) {
 		return nil, fmt.Errorf("staged result %s differs from its sealed digest", handle.Call)

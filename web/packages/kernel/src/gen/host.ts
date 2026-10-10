@@ -537,6 +537,7 @@ export type ComputeSDK = {
 };
 
 export type ComputeSDKRequest = {
+  abi?: string;
   input: ValueSchema;
   output: ValueSchema;
 };
@@ -1423,6 +1424,7 @@ export type OperationLimits = {
   maxInputBytes: number;
   maxOutputBytes: number;
   stagedOutputBytes?: number;
+  dataInputBytes?: number;
 };
 
 export type OperationRef = {

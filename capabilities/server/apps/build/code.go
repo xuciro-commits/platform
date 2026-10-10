@@ -27,6 +27,8 @@ type Code struct {
 	Name          string                   `json:"name" field:"required,search"`
 	Title         string                   `json:"title" field:"required,search"`
 	Description   string                   `json:"description" type:"longtext"`
+	ABI           string                   `json:"abi,omitempty" field:"aside" title:"Compute ABI"`
+	BuiltABI      string                   `json:"builtABI,omitempty" field:"readonly,aside" title:"Built ABI"`
 	Language      string                   `json:"language" field:"required" choices:"go,tinygo"`
 	Source        string                   `json:"source" field:"required" type:"longtext"`
 	Input         platform.ValueSchema     `json:"input" field:"aside" type:"json"`
@@ -50,7 +52,11 @@ type Code struct {
 }
 
 func (c Code) definition() platform.Operation {
-	return platform.Operation{Name: c.Name, Title: c.Title, Description: c.Description, Input: c.Input, Output: c.Output, Roles: c.Roles, Binding: platform.OperationBinding{Kind: "wasm", Module: c.Module, ABI: platform.WasmCommandABI}, Limits: c.Limits}
+	abi := c.ABI
+	if abi == "" {
+		abi = platform.WasmCommandABI
+	}
+	return platform.Operation{Name: c.Name, Title: c.Title, Description: c.Description, Input: c.Input, Output: c.Output, Roles: c.Roles, Binding: platform.OperationBinding{Kind: "wasm", Module: c.Module, ABI: abi}, Limits: c.Limits}
 }
 func (c Code) sourceHash() string {
 	h := sha256.Sum256([]byte(c.Source))
@@ -58,7 +64,7 @@ func (c Code) sourceHash() string {
 }
 
 func (c Code) buildHash() string {
-	raw, _ := json.Marshal(platform.CodeBuildRequest{Language: c.Language, Source: c.Source, Input: c.Input, Output: c.Output})
+	raw, _ := json.Marshal(platform.CodeBuildRequest{ABI: c.ABI, Language: c.Language, Source: c.Source, Input: c.Input, Output: c.Output})
 	value, err := platform.DecodeValue(raw, 1<<20)
 	if err != nil {
 		return ""
@@ -98,7 +104,7 @@ func (b *Build) submitCodeCompile(c platform.Caller, s *pb.Submission, now time.
 			return nil, err
 		}
 		return func(r *pb.ChangeRecord) {
-			call, err := c.RequestCompilation(r, r.GetChangeId(), CodeType+"/"+code.ID, platform.CodeBuildRequest{Language: code.Language, Source: code.Source, Input: code.Input, Output: code.Output})
+			call, err := c.RequestCompilation(r, r.GetChangeId(), CodeType+"/"+code.ID, platform.CodeBuildRequest{ABI: code.ABI, Language: code.Language, Source: code.Source, Input: code.Input, Output: code.Output})
 			if err != nil {
 				return
 			}
@@ -124,9 +130,10 @@ func (b *Build) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time
 		return func(r *pb.ChangeRecord) {
 			code.Diagnostics = payload.Result.Diagnostics
 			code.State = "failed"
-			built := Code{Language: payload.Request.Language, Source: payload.Request.Source, Input: payload.Request.Input, Output: payload.Request.Output}
+			built := Code{ABI: payload.Request.ABI, Language: payload.Request.Language, Source: payload.Request.Source, Input: payload.Request.Input, Output: payload.Request.Output}
 			if payload.Result.Module != "" && payload.Result.SourceHash == built.sourceHash() && payload.Result.BuildHash == built.buildHash() {
 				code.Module, code.SourceHash, code.Toolchain, code.BuildHash = payload.Result.Module, payload.Result.SourceHash, payload.Result.Toolchain, payload.Result.BuildHash
+				code.BuiltABI = payload.Request.ABI
 				code.BuiltSource, code.BuiltLanguage, code.BuiltInput, code.BuiltOutput = payload.Request.Source, payload.Request.Language, payload.Request.Input, payload.Request.Output
 				code.State = "compiled"
 			} else if code.Diagnostics == "" {
@@ -366,11 +373,12 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 		if ordinal == record.Version {
 			continue
 		}
-		built := Code{Language: record.BuiltLanguage, Source: record.BuiltSource, Input: record.BuiltInput, Output: record.BuiltOutput}
+		built := Code{ABI: record.BuiltABI, Language: record.BuiltLanguage, Source: record.BuiltSource, Input: record.BuiltInput, Output: record.BuiltOutput}
 		if ordinal != record.Version+1 || record.Module != op.Binding.Module || record.SourceHash != built.sourceHash() || record.BuildHash != built.buildHash() {
 			return nil, fmt.Errorf("compute source changed after candidate construction")
 		}
 		frozen := record
+		frozen.ABI = record.BuiltABI
 		frozen.Source, frozen.Language = record.BuiltSource, record.BuiltLanguage
 		frozen.Input, frozen.Output, frozen.Roles, frozen.Limits = op.Input, op.Output, op.Roles, op.Limits
 		frozen.Title, frozen.Description, frozen.Version, frozen.State = op.Title, op.Description, ordinal, "published"
