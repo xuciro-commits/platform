@@ -277,6 +277,12 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 				return nil, fmt.Errorf("flow %s: %w", id, err)
 			}
 		}
+		// The declared operators are checked here too, so a graph whose
+		// threshold reads a field the aggregate does not produce is refused
+		// when it is saved or published, not on its first real batch.
+		if err := checkOperators(*fl.Continuous); err != nil {
+			return nil, fmt.Errorf("flow %s: %w", id, err)
+		}
 		if intake := fl.Continuous.Intake; intake != nil {
 			if intake.SourceRecord == "" || intake.Key == "" || len(intake.Partition) < 1 || len(intake.Partition) > 8 || intake.EventTime == "" || intake.Value == "" || fl.Continuous.Window == nil || fl.Continuous.Batch < 1 {
 				return nil, fmt.Errorf("flow %s: an intake needs a source record, event columns, window and positive batch budget", id)

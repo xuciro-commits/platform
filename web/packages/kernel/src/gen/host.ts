@@ -602,6 +602,8 @@ export type Continuous = {
   State: number;
   FrameBytes: number;
   Window: StreamWindow;
+  Aggregate?: StreamAggregate;
+  Threshold?: StreamThreshold;
   Intake?: StreamIntake;
   DeadLetter: boolean;
 };
@@ -2884,12 +2886,28 @@ export type Stereotype = {
   supplier?: string[];
 };
 
+export type StreamAggregate = {
+  node: string;
+  signal?: string;
+  group?: string[];
+  measures: string[];
+};
+
 export type StreamIntake = {
   sourceRecord: string;
   key: string;
   partition: string[];
   eventTime: string;
   value: string;
+};
+
+export type StreamThreshold = {
+  node: string;
+  field: string;
+  high: number;
+  low: number;
+  debounceMs?: number;
+  severity?: string;
 };
 
 export type StreamWindow = {

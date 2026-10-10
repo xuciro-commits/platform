@@ -53,6 +53,14 @@ type Continuous struct {
 	// Window declares the native event-time profile. Nil preserves the older
 	// scalar fold; a published streaming graph explicitly freezes this rule.
 	Window *StreamWindow
+	// Aggregate declares the fixed measures the window's retained rows feed
+	// (ADR-0047 §13.1). Nil keeps the window without a native aggregate.
+	Aggregate *StreamAggregate `json:"Aggregate,omitempty"`
+	// Threshold declares the hysteresis rule the aggregate's records drive: a
+	// group raises at High and clears at Low, with its own debounce. Field must
+	// name a measure the Aggregate declares, so a graph whose port carries a
+	// different name fails here instead of never firing.
+	Threshold *StreamThreshold `json:"Threshold,omitempty"`
 	// Intake binds a controlled source record and its event columns. Nil keeps
 	// the existing native batch delivery contract.
 	Intake *StreamIntake `json:"Intake,omitempty"`
@@ -77,6 +85,33 @@ type StreamWindow struct {
 	WatermarkMS int    `json:"watermarkMs"`
 	MaxRecords  int    `json:"maxRecords"`
 	LateEvents  string `json:"lateEvents"` // sideOutput, accept or reject
+}
+
+// StreamAggregate is the window's fixed computation (ADR-0047 §13.1): named
+// measures per group over the retained event-time rows. Signal names the
+// numeric field inside a signal's JSON value; empty means the value is the
+// number itself. Group names the value's identity fields; empty groups by the
+// signal's own partition and key. Measure names are the output record's field
+// names — the graph's port contract is these names, never a silent alias such
+// as reading.
+type StreamAggregate struct {
+	Node     string   `json:"node"`
+	Signal   string   `json:"signal,omitempty"`
+	Group    []string `json:"group,omitempty"`
+	Measures []string `json:"measures"`
+}
+
+// StreamThreshold is the hysteresis rule over an aggregate record (ADR-0047
+// §13.1): a group raises when Field reaches High, stays raised through the band
+// down to Low, and clears at Low. DebounceMS is event time the condition must
+// hold before an alert is emitted, so a momentary spike does not alarm.
+type StreamThreshold struct {
+	Node       string  `json:"node"`
+	Field      string  `json:"field"`
+	High       float64 `json:"high"`
+	Low        float64 `json:"low"`
+	DebounceMS int     `json:"debounceMs,omitempty"`
+	Severity   string  `json:"severity,omitempty"`
 }
 
 // FlowStateArtifact identifies a frozen frame in the original file store.

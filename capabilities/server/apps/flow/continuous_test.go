@@ -3,10 +3,13 @@ package flow
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -230,5 +233,109 @@ func TestContinuousEventWindowRetainsTimingPartitionIdentityAndBudget(t *testing
 	}
 	if _, _, err := foldBatch(&restored, declared, third, now.Add(time.Minute)); err != nil || !bytes.Equal(before, platform.Raw(&restored)) {
 		t.Fatalf("restored input was refolded: %v", err)
+	}
+}
+
+func TestContinuousWindowAggregateAndHysteresisThreshold(t *testing.T) {
+	now := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	declared := platform.Continuous{Source: "k8.meters", Batch: 512, State: 1 << 20, FrameBytes: 2 << 20, DeadLetter: true,
+		Window:    &platform.StreamWindow{Node: "window", WindowMS: 5000, SlideMS: 1000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"},
+		Aggregate: &platform.StreamAggregate{Node: "stats", Signal: "vibration", Group: []string{"deviceId"}, Measures: []string{"count", "mean", "max"}},
+		Threshold: &platform.StreamThreshold{Node: "high", Field: "mean", High: 11.5, Low: 9.5, Severity: "High"}}
+	frame := &BatchFrame{State: map[string]json.RawMessage{}}
+	measurement := func(device string, vibration float64) json.RawMessage {
+		return json.RawMessage(fmt.Sprintf(`{"deviceId":%q,"vibration":%g}`, device, vibration))
+	}
+	run := func(id, predecessor string, at time.Time, signals ...Signal) ([]AggregateRecord, []Alert, *kernel.Error) {
+		t.Helper()
+		batch := Batch{ID: id, Predecessor: predecessor, Signals: signals}
+		if _, _, err := foldBatch(frame, declared, batch, at); err != nil {
+			return nil, nil, err
+		}
+		return foldOperators(frame, declared, id, at)
+	}
+	// A slide whose mean is over the high mark raises and, with no debounce,
+	// alarms once with the aggregate's own field names.
+	stats, alerts, err := run("b1", "", now, []Signal{
+		{Key: "m1", Partition: "plant-a", At: now, Value: measurement("d1", 12)},
+		{Key: "m2", Partition: "plant-a", At: now.Add(time.Second), Value: measurement("d1", 13)},
+		{Key: "m3", Partition: "plant-a", At: now.Add(2 * time.Second), Value: measurement("d1", 12)},
+	}...)
+	if err != nil {
+		t.Fatalf("aggregate fold: %v", err)
+	}
+	if len(stats) != 1 || stats[0].Count != 3 || stats[0].Values["mean"] != 37.0/3 || stats[0].Values["max"] != 13 {
+		t.Fatalf("aggregate records: %+v", stats)
+	}
+	if len(alerts) != 1 || alerts[0].State != "triggered" || alerts[0].Field != "mean" || alerts[0].Group != "[d1]" || alerts[0].Severity != "High" || alerts[0].Batch != "b1" {
+		t.Fatalf("triggered alert: %+v", alerts)
+	}
+	// Inside the band the episode stays raised and says nothing; below the low
+	// mark it clears exactly once.
+	if _, alerts, err = run("b2", "b1", now.Add(5*time.Second), Signal{Key: "m4", Partition: "plant-a", At: now.Add(6 * time.Second), Value: measurement("d1", 10)}); err != nil || len(alerts) != 0 {
+		t.Fatalf("hysteresis band emitted: %+v %v", alerts, err)
+	}
+	if _, alerts, err = run("b3", "b2", now.Add(10*time.Second), Signal{Key: "m5", Partition: "plant-a", At: now.Add(11 * time.Second), Value: measurement("d1", 8)}); err != nil || len(alerts) != 1 || alerts[0].State != "cleared" {
+		t.Fatalf("cleared alert: %+v %v", alerts, err)
+	}
+	// A row the declared signal cannot read is dead-lettered once and leaves
+	// the window, so the next slide does not report it again.
+	if _, _, err = run("b4", "b3", now.Add(15*time.Second), Signal{Key: "m6", Partition: "plant-a", At: now.Add(16 * time.Second), Value: json.RawMessage(`{"deviceId":"d1"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if len(frame.DeadLetters) != 1 || frame.DeadLetters[0].Reason != "aggregate: no numeric vibration" {
+		t.Fatalf("dead letters: %+v", frame.DeadLetters)
+	}
+	if _, _, err = run("b5", "b4", now.Add(20*time.Second), Signal{Key: "m7", Partition: "plant-a", At: now.Add(21 * time.Second), Value: measurement("d1", 12)}); err != nil || len(frame.DeadLetters) != 1 {
+		t.Fatalf("dead letter reported twice: %+v %v", frame.DeadLetters, err)
+	}
+	// The declaration is checked, not inferred: a threshold field the
+	// aggregate does not produce is refused and the frame is untouched.
+	before := platform.Raw(frame)
+	mismatched := declared
+	reading := *declared.Threshold
+	reading.Field = "reading"
+	mismatched.Threshold = &reading
+	if _, _, err := foldOperators(frame, mismatched, "b6", now.Add(25*time.Second)); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+		t.Fatalf("an unwired threshold field was accepted: %v", err)
+	}
+	if !bytes.Equal(before, platform.Raw(frame)) {
+		t.Fatal("a refused declaration changed the accepted frame")
+	}
+	// An accepted frame replays without re-emitting its alarms.
+	var restored BatchFrame
+	if err := json.Unmarshal(before, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if _, alerts, err := foldOperators(&restored, declared, "b5", now.Add(30*time.Second)); err != nil || len(alerts) != 0 {
+		t.Fatalf("replay re-emitted alarms: %+v %v", alerts, err)
+	}
+}
+
+func TestContinuousOperatorDeclarationIsChecked(t *testing.T) {
+	window := &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"}
+	aggregate := &platform.StreamAggregate{Node: "stats", Signal: "vibration", Group: []string{"deviceId"}, Measures: []string{"count", "mean", "max"}}
+	threshold := func(field string, low, high float64) *platform.StreamThreshold {
+		return &platform.StreamThreshold{Node: "high", Field: field, High: high, Low: low, DebounceMS: 3000}
+	}
+	for _, c := range []struct {
+		why      string
+		declared platform.Continuous
+		ok       bool
+	}{
+		{"the default graph's declared field", platform.Continuous{Window: window, Aggregate: aggregate, Threshold: threshold("mean", 9.5, 11.5)}, true},
+		{"a field the aggregate does not produce", platform.Continuous{Window: window, Aggregate: aggregate, Threshold: threshold("reading", 9.5, 11.5)}, false},
+		{"a threshold without its aggregate", platform.Continuous{Window: window, Threshold: threshold("mean", 9.5, 11.5)}, false},
+		{"an aggregate without the event-time window", platform.Continuous{Aggregate: aggregate, Threshold: threshold("mean", 9.5, 11.5)}, false},
+		{"a measure outside the fixed set", platform.Continuous{Window: window, Aggregate: &platform.StreamAggregate{Node: "stats", Signal: "vibration", Measures: []string{"median"}}}, false},
+		{"low above high", platform.Continuous{Window: window, Aggregate: aggregate, Threshold: threshold("mean", 12, 11.5)}, false},
+	} {
+		err := checkOperators(c.declared)
+		if c.ok && err != nil {
+			t.Errorf("%s: refused: %v", c.why, err)
+		}
+		if !c.ok && err == nil {
+			t.Errorf("%s: accepted", c.why)
+		}
 	}
 }

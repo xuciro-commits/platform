@@ -132,6 +132,13 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 		if refusal != nil {
 			return refusal
 		}
+		// The declared operators advance in the same decision as the fold: a
+		// refusal here discards the batch, so the cursor never advances past
+		// signals whose aggregate or threshold state could not be committed.
+		stats, alerts, refusal := foldOperators(frame, declared, batch.ID, now)
+		if refusal != nil {
+			return refusal
+		}
 		// The frame's state and the outputs it produced are the accepted
 		// result's data channel: both are committed with this decision.
 		in.Outputs = maps.Clone(in.Outputs)
@@ -149,6 +156,15 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 			}
 		}
 		in.Outputs["batch"] = json.RawMessage(fmt.Sprintf(`{"cursor":%q,"consumed":%d,"rejected":%d}`, frame.Cursor, frame.Consumed, frame.Rejected))
+		// The operators' own outputs: the groups' fixed measures and the
+		// hysteresis alerts this batch accepted. They travel as the accepted
+		// result's data channel like every other Flow output.
+		if len(stats) > 0 {
+			in.Outputs["stats"] = platform.Raw(stats)
+		}
+		if len(alerts) > 0 {
+			in.Outputs["alerts"] = platform.Raw(alerts)
+		}
 		encoded, err := json.Marshal(in.Outputs)
 		if err != nil || len(encoded) > 60<<10 {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch outputs exceed the Flow output budget")
