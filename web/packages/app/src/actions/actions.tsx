@@ -13,7 +13,7 @@ import { GeneratedForm, newId, useHost } from "../index";
 
 type Field = ActionDeclaration["payload"][number];
 
-function payloadSchema(fields: Field[]) {
+export function payloadSchema(fields: Field[]) {
   return recordSchema({ name: "action", primary: "id", fields: Object.fromEntries(fields.map(f => {
     const common = { input:f, label: f.description || f.name, required: f.required };
     const type: FieldType = f.choices?.length ? field.singleSelect({ ...common, options: f.choices.map(value => ({ value, label: value })) })
@@ -70,7 +70,7 @@ export function PayloadFields({ fields, values, onChange, preview = false, submi
 function JsonInput({ id, value, onChange, onInvalid }: { id: string; value: unknown; onChange: (v: unknown) => void; onInvalid?: (invalid: boolean) => void }) {
   const [text, setText] = useState(() => value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value, null, 2));
   const [invalid, setInvalid] = useState(false);
-  return <Textarea id={id} rows={6} className="font-mono" aria-invalid={invalid} value={text} placeholder='[{"id": 1}]' onChange={(e) => {
+  return <Textarea parse="json" id={id} rows={6} className="font-mono" aria-invalid={invalid} value={text} placeholder='[{"id": 1}]' onChange={(e) => {
     const next = e.target.value; setText(next);
     if (!next.trim()) { setInvalid(false); onInvalid?.(false); onChange(undefined); return; }
     try { onChange(JSON.parse(next)); setInvalid(false); onInvalid?.(false); } catch { setInvalid(true); onInvalid?.(true); onChange(next); }
@@ -129,7 +129,7 @@ function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,previ
  const {decide}=useHost(),lock=useRef(false);
  const [values,setValues]=useState<Record<string,unknown>>(initial),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(false),[invalidJSON,setInvalidJSON]=useState<Record<string,boolean>>({}),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>([]);
  const submit=async()=>{if(!enabled||preview||lock.current||!target.id)return;setSubmitted(true);if(Object.values(invalidJSON).some(Boolean)||!payloadSchema(declared.payload).safeParse(values).success||inputIssues(declared.payload,values).length>0)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal,onOutcome:entry=>{setOwnerIssues(entry.issues??[]);setPending(entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN");}}))onCompleted();}catch{setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
- return <Form className="grid gap-3" noValidate onSubmit={()=>void submit()}>
+ return <Form className="grid gap-3" noValidate onSubmit={()=>submit()}>
  {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
  {refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}

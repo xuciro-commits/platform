@@ -28,11 +28,12 @@ export function StudioTemplates({ initial }: { initial?: string }) {
   };
   const toggle = (values: string[], name: string, selected: boolean) => selected ? [...values, name] : values.filter((value) => value !== name);
   const valid = !!object && fields.length > 0 && /^[a-z][a-z0-9]*$/.test(name) && !!title.trim() && (!template.child || !!child);
+  const [pageID]=useState(()=>newId("PAGE"));
   const create = async () => {
     if (!object || !valid || busy || !host.can("build.page.create")) return;
     setBusy(true); setError("");
     try {
-      const id = newId("PAGE");
+      const id = pageID;
       // Description is informative provenance. It remains editable like any
       // page description and is not a protected version or execution binding.
       const description = `${t(template.summary)}\n${t("Created from template {template} (revision {revision}).", { template: template.id, revision: template.revision })}`;
@@ -48,7 +49,7 @@ export function StudioTemplates({ initial }: { initial?: string }) {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{pageTemplates.map((item) => <div key={item.id} role="button" tabIndex={0} onClick={() => setTemplateId(item.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setTemplateId(item.id); }} aria-pressed={item.id === template.id}
         className={`grid cursor-pointer gap-1 rounded-lg border p-3 text-left ${item.id === template.id ? "border-accent bg-accent/5" : "border-border hover:bg-surface-raised"}`}>
         <span className="text-sm font-semibold">{t(item.title)}</span><span className="text-xs text-muted">{t(item.summary)}</span><span className="font-mono text-[10px] text-muted">{item.id} · {item.revision}</span></div>)}</div>
-      <Form className="grid gap-4" onSubmit={() => void create()}>
+      <Form className="grid gap-4" onSubmit={() => create()}>
         <Panel className="grid gap-3 p-4">
           <h3 className="text-sm font-semibold">{t("Required bindings")}</h3>
           <label className="grid gap-1 text-xs">{t("Object")}<Select value={objectType} onChange={(event) => chooseObject(event.target.value)} disabled={busy}>

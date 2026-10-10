@@ -219,7 +219,7 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
           meta={s.id === "parameters" ? String(inputs.length) : s.id === "rules" ? String(sets.length) : s.id === "criteria" ? String(conditions.length) : s.id === "effects" ? String(creates.length) : s.id === "approval" && action.approval ? "✓" : undefined} />)}
       </PanelSection>}
     </div> }}
-    right={{ label: t("Action inspector"), content: inspector }}
+    right={{ label: t("Action inspector"),scope:JSON.stringify([at,pick]),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("["));setPick(scope?(JSON.parse(scope) as [number,Pick])[1]:pick);}, content: inspector }}
     dock={{ label: t("Action dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The action can be published with its object type.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
     {action ? <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[section]}</fieldset>

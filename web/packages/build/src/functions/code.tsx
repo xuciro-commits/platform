@@ -1,11 +1,13 @@
+import {DraftInputs,useInputBuffers,InputDraftProvider} from "@platform/ui";
+import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, Select, Textarea, Workbench, t, useUnsavedChanges } from "@platform/ui";
-import { useCallback, useEffect, useState } from "react";
-import { JSONEditor, SchemaEditor, WorkflowFormProblems, schemaDefault } from "../automate/workflow-binding";
+import { useEffect, useState } from "react";
+import { JSONEditor, SchemaEditor, schemaDefault } from "../automate/workflow-binding";
 import type { ValueSchema } from "../automate/workflow-model";
 
 type CodeDraft = {
@@ -32,22 +34,22 @@ export function CodeFunctions() {
 
 export function CodeEditor({ id }: { id: string }) {
   const { decide, client, role } = useHost(), { open, close } = useApplicationWorkspace(), invoke = useInvokeCapability();
-  const [draft, setDraft] = useState<CodeDraft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [draft, setDraft] = useState<CodeDraft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const [tab, setTab] = useState<"source" | "contract" | "sdk" | "test">("source"), [sdk, setSDK] = useState("");
-  const [input, setInput] = useState<unknown>({}), [executedInput, setExecutedInput] = useState<unknown>(), [call, setCall] = useState(""), [problems, setProblems] = useState<Record<string, string>>({});
+  const testInputs=useInputBuffers();
+  const [input, setInput] = useState<unknown>({}), [executedInput, setExecutedInput] = useState<unknown>(), [call, setCall] = useState("");
   const query = useReadQuery<{ record?: CodeDraft }>(`/v1/records/build.code/${encodeURIComponent(id)}`, draft.state === "compiling" ? 1000 : undefined);
-  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { setDraft(query.data?.record ?? empty); setDirty(false); setError(""); setSDK(""); setProblems({}); });
+  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { setDraft(query.data?.record ?? empty); setDirty(false); setError(""); setSDK(""); });
   const result = useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`, 1000, !!call && tab === "test");
   useEffect(() => { if (query.data?.record && !dirty) setDraft(query.data.record); }, [query.data, dirty]);
   const testSchemaKey = JSON.stringify((() => { try { return JSON.parse(draft.published ?? "").input; } catch { return draft.input; } })());
   useEffect(() => { setInput(schemaDefault(JSON.parse(testSchemaKey))); setCall(""); setExecutedInput(undefined); }, [testSchemaKey]);
-  const [testProblems, setTestProblems] = useState<Record<string, string>>({});
-  const reportTest = useCallback((key: string, problem: string) => setTestProblems((old) => old[key] === problem ? old : { ...old, [key]: problem }), []);
   const change = (patch: Partial<CodeDraft>) => { setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); setSDK(""); };
-  const report = useCallback((key: string, problem: string) => setProblems((old) => old[key] === problem ? old : { ...old, [key]: problem }), []);
   const perform = async (action: () => Promise<unknown>) => { setBusy(true); setError(""); try { await action(); } catch (failure) { setError(failure instanceof Error ? failure.message : t("The code function could not be saved or loaded.")); } finally { setBusy(false); } };
   const save = async (): Promise<number | undefined> => {
-    const target = draft.id || crypto.randomUUID(), { name, title, description, language, source, input, output, roles, limits } = draft;
+    const target = draft.id || createID, { name, title, description, language, source, input, output, roles, limits } = draft;
     if (!await decide(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: target }, { name, title, description, language, source, input, output, roles, limits },
       { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) return;
     if (!draft.id) { markSaved(); setDirty(false); open({ view: "code", params: { id: target } }); close({ view: "code", params: { id } }); return 1; }
@@ -66,16 +68,17 @@ export function CodeEditor({ id }: { id: string }) {
     setSDK(answer.body.source); setTab("sdk");
   };
   const run = async () => {
+    if(testInputs.invalid)return;
     setCall(""); setExecutedInput(JSON.parse(JSON.stringify(input)));
-    const answer = await invoke({ ref: { app: "build", kind: "compute", name: draft.name }, key: crypto.randomUUID(), version: draft.version, inputs: input });
+    const answer=await invoke({ref:{app:"build",kind:"compute",name:draft.name},key:crypto.randomUUID(),version:draft.version,inputs:input});
     setCall(answer.call ?? "");
   };
   if (role("build") !== "builder") return <Workbench storageKey="code" title={t("Code function")}><WorkbenchMessage>{t("Only a builder can edit code functions.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="code" title={t("Code function")}><WorkbenchMessage>{query.isError ? t("The code function could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
-  const invalid = Object.values(problems).some(Boolean);
+  const invalid = !!inputs?.invalid;
   let published: CodeDraft | undefined;
   try { published = draft.published ? JSON.parse(draft.published) as CodeDraft : undefined; } catch { /* the owner rejects invalid publications */ }
-  return <WorkflowFormProblems.Provider value={report}><Workbench storageKey="code" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "code" }) }, { label: t("Code functions"), onClick: () => open({ view: "code" }) }]} title={draft.title || t("New code function")}
+  return <Workbench storageKey="code" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "code" }) }, { label: t("Code functions"), onClick: () => open({ view: "code" }) }]} title={draft.title || t("New code function")}
     status={<DraftStatus state={draft.module ? "published" : "draft"} />} saving={savingState(dirty, busy, error || undefined)}
     actions={<>
         <Button size="sm" disabled={busy || invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
@@ -94,17 +97,17 @@ export function CodeEditor({ id }: { id: string }) {
           <label className="grid gap-1 text-xs">{t("Source code")}<Textarea spellCheck={false} rows={22} className="font-mono text-xs leading-6" value={draft.source} onChange={(event) => change({ source: event.target.value })} /></label>
         </>}
         {tab === "contract" && <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-          <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Input schema")}</legend><SchemaEditor schema={draft.input} onChange={(input) => change({ input })} /></fieldset>
-          <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Output schema")}</legend><SchemaEditor schema={draft.output} onChange={(output) => change({ output })} /></fieldset>
+          <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Input schema")}</legend><InputDraftProvider scope="input-schema"><SchemaEditor schema={draft.input} onChange={(input) => change({ input })} /></InputDraftProvider></fieldset>
+          <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Output schema")}</legend><InputDraftProvider scope="output-schema"><SchemaEditor schema={draft.output} onChange={(output) => change({ output })} /></InputDraftProvider></fieldset>
         </div>}
         {tab === "sdk" && <><Button disabled={busy || invalid} onClick={() => void perform(previewSDK)}>{t("Generate SDK")}</Button>
           {sdk && <pre className="max-h-[36rem] overflow-auto rounded-lg bg-background p-3 text-[11px]" aria-label={t("Generated SDK")}>{sdk}</pre>}</>}
         {tab === "test" && <>
           <p className="text-xs text-muted">{t("This calls the installed version with the current member and saves its accepted result.")}</p>
-          <WorkflowFormProblems.Provider value={reportTest}>
+          <DraftInputs.Provider value={{...testInputs,scope:"test"}}>
             <JSONEditor label={t("Test input")} value={input} onChange={setInput} schema={published?.input ?? draft.input} rows={6} />
-          </WorkflowFormProblems.Provider>
-          <Button disabled={busy || Object.values(testProblems).some(Boolean) || !draft.version} onClick={() => void perform(run)}>{busy ? t("Running function…") : t("Run function")}</Button>
+          </DraftInputs.Provider>
+          <Button disabled={busy || testInputs.invalid || !draft.version} onClick={() => void perform(run)}>{busy ? t("Running function…") : t("Run function")}</Button>
           <Panel title={t("Function output")} role="status" className="grid gap-2 text-sm">
             {!call ? <p className="text-muted">{t(busy ? "Running function…" : "Run the function to see its output here.")}</p> : <>
               <p>{t("State")}: {t(({ pending: "Pending", running: "Running", completed: "Completed", failed: "Failed", cancelled: "Cancelled" } as Record<string, string>)[result.data?.state ?? "pending"] ?? result.data?.state ?? "Pending")}</p>
@@ -126,7 +129,7 @@ export function CodeEditor({ id }: { id: string }) {
         <label className="grid gap-1 text-xs">{t("Compiler profile")}<Select value={draft.language} onChange={(event) => change({ language: event.target.value })}><option value="go">Go / WASIp1</option><option value="tinygo">TinyGo / WASIp1</option></Select></label>
         <fieldset className="grid gap-2"><legend className="mb-2 text-xs">{t("Callable by")}</legend>{["builder", "user"].map((value) => <Checkbox key={value} checked={draft.roles.includes(value)} onChange={(enabled) => change({ roles: enabled ? [...new Set([...draft.roles, value])] : draft.roles.filter((old) => old !== value) })}>{value}</Checkbox>)}</fieldset>
         {(["timeoutMillis", "memoryPages", "maxInputBytes", "maxOutputBytes"] as const).map((key) => <label key={key} className="grid gap-1 text-xs">{t(({ timeoutMillis: "Time limit (ms)", memoryPages: "Memory limit (64 KiB pages)", maxInputBytes: "Maximum input bytes", maxOutputBytes: "Maximum output bytes" })[key])}
-          <Input type="number" min={1} max={({ timeoutMillis: 30000, memoryPages: 4096, maxInputBytes: 65536, maxOutputBytes: 49152 })[key]} value={draft.limits[key]} onChange={(event) => change({ limits: { ...draft.limits, [key]: Number(event.target.value) } })} /></label>)}
+          <Input draftKey={`limits:${key}`} type="number" min={1} max={({ timeoutMillis: 30000, memoryPages: 4096, maxInputBytes: 65536, maxOutputBytes: 49152 })[key]} value={draft.limits[key]} onChange={(event) => change({ limits: { ...draft.limits, [key]: Number(event.target.value) } })} /></label>)}
         <div className="grid gap-2 border-t border-border pt-3 text-xs" role="status"><span>{t("Build status")}: {t(({ draft: "Draft", compiling: "Compiling", compiled: "Compiled", failed: "Build failed", published: "Published" })[draft.state as "draft"] ?? "Draft")}{dirty ? ` · ${t("Unsaved changes")}` : ""}</span>
           {!!draft.version && <span>{t("Published version")}: {draft.version}</span>}
           {draft.module && <span className="break-all">{t("Module digest")}: <code>{draft.module}</code></span>}
@@ -135,5 +138,5 @@ export function CodeEditor({ id }: { id: string }) {
         </div>
       </Panel>
     </div>
-  </div></Workbench></WorkflowFormProblems.Provider>;
+  </div></Workbench>;
 }

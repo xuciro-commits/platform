@@ -1,7 +1,8 @@
+import {useState} from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod";
-import { DataTable, EntityForm, Markdown, MarkdownEditor, NotificationList, RecordLookup, RecordPage, StatusTag, humanizeKernelError, setLanguage, submissionStatuses, type ColumnDef, type RecordSource } from "../index";
+import {Button,Form,Input,InputDraftProvider,Textarea,useInputDrafts, DataTable, EntityForm, Markdown, MarkdownEditor, NotificationList, RecordLookup, RecordPage, StatusTag, humanizeKernelError, setLanguage, submissionStatuses, type ColumnDef, type RecordSource } from "../index";
 
 afterEach(cleanup);
 
@@ -316,3 +317,55 @@ test("EntityForm renders helper text and read-only field states", () => {
 });
 
 
+
+
+test("incomplete numbers survive inspector switches and block the owning form", async () => {
+  const submit = vi.fn();
+  function Fields() {
+    const [selected,setSelected]=useState("a"),[number,setNumber]=useState(3);
+    const inputs=useInputDrafts();
+    return <>
+      <Button onClick={()=>setSelected(selected==="a"?"b":"a")}>Switch inspector</Button>
+      <span data-testid="input-state">{inputs?.invalid?"invalid":"valid"}</span>
+      <InputDraftProvider scope={selected}>
+        {selected==="a"&&<Input aria-label="Count" draftKey="count" type="number" optional={false} value={number} onChange={event=>setNumber(event.target.valueAsNumber)}/>}
+      </InputDraftProvider>
+      <Button type="submit">Commit</Button>
+    </>;
+  }
+  render(<Form onSubmit={submit}><Fields/></Form>);
+  fireEvent.change(screen.getByRole("spinbutton",{name:"Count"}),{target:{value:"-"}});
+  fireEvent.click(screen.getByRole("button",{name:"Switch inspector"}));
+  expect(screen.getByTestId("input-state").textContent).toBe("invalid");
+  fireEvent.click(screen.getByRole("button",{name:"Commit"}));
+  expect(submit).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button",{name:"Switch inspector"}));
+  expect((screen.getByRole("spinbutton",{name:"Count"}) as HTMLInputElement).value).toBe("-");
+  fireEvent.change(screen.getByRole("spinbutton",{name:"Count"}),{target:{value:"1."}});
+  expect(screen.getByTestId("input-state").textContent).toBe("invalid");
+  fireEvent.change(screen.getByRole("spinbutton",{name:"Count"}),{target:{value:"1.5"}});
+  expect(screen.getByTestId("input-state").textContent).toBe("valid");
+  fireEvent.click(screen.getByRole("button",{name:"Commit"}));
+  await waitFor(()=>expect(submit).toHaveBeenCalledOnce());
+});
+
+test("a JSON form waits for its request and retains the rejected input", async () => {
+  let refuse!: (error:Error)=>void;
+  const submit=vi.fn(()=>new Promise<void>((_resolve,reject)=>{refuse=reject;}));
+  function Fields(){const [json,setJSON]=useState("{}");return <>
+    <Textarea parse="json" draftKey="payload" aria-label="Payload" value={json} onChange={event=>setJSON(event.target.value)}/>
+    <Button type="submit">Commit</Button>
+  </>;}
+  render(<Form onSubmit={submit}><Fields/></Form>);
+  fireEvent.change(screen.getByRole("textbox",{name:"Payload"}),{target:{value:"{"}});
+  fireEvent.click(screen.getByRole("button",{name:"Commit"}));
+  expect(submit).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByRole("textbox",{name:"Payload"}),{target:{value:'{"quantity":2}'}});
+  fireEvent.click(screen.getByRole("button",{name:"Commit"}));
+  expect((screen.getByRole("textbox",{name:"Payload"}) as HTMLTextAreaElement).disabled||screen.getByRole("textbox",{name:"Payload"}).closest("fieldset")?.disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button",{name:"Commit"}));
+  expect(submit).toHaveBeenCalledOnce();
+  await act(async()=>refuse(new Error("Owner refused")));
+  expect(screen.getByText("Owner refused")).toBeTruthy();
+  expect((screen.getByRole("textbox",{name:"Payload"}) as HTMLTextAreaElement).value).toBe('{"quantity":2}');
+});

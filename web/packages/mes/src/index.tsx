@@ -126,9 +126,9 @@ function PlannedOrders() {
             fields={[{ name: "order", label: t("Shop order") }, { name: "sfcs", label: t("SFCs (lots)"), kind: "number" }]}
             submitLabel={t("Release")} onCancel={() => setReleasing(undefined)}
             onSubmit={async (v) => {
-              await decide("mes.order.release", { type: "mes.order", id: v.order },
+              const ok=await decide("mes.order.release", { type: "mes.order", id: v.order },
                 { product: releasing.product, quantity: releasing.quantity, sfcs: v.sfcs, planned: releasing.erpId });
-              setReleasing(undefined);
+              if(ok)setReleasing(undefined);return ok;
             }} />
         </>)}
       </Dialog>
@@ -175,8 +175,8 @@ function ShopOrders() {
             submitLabel={t("Release")} onCancel={() => setReleasing(false)}
             onSubmit={async (v) => {
               const { order, planned, place, ...rest } = v;
-              if (await decide("mes.order.release", { type: "mes.order", id: order },
-                { ...rest, ...(planned ? { planned } : {}), ...(place ? { place } : {}) })) setReleasing(false);
+              const ok=await decide("mes.order.release", { type: "mes.order", id: order },
+                { ...rest, ...(planned ? { planned } : {}), ...(place ? { place } : {}) });if(ok)setReleasing(false);return ok;
             }} />
         )}
       </Dialog>

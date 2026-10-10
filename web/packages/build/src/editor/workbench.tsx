@@ -1,6 +1,7 @@
 // What every builder editor shares on top of the Workbench chrome
 // (ADR-0053 §4, D6): drafts save themselves, the title bar shows one
 // status, and "Publish" is one menu with the same entries everywhere.
+import {useInputDrafts} from "@platform/ui";
 import { useRecordArchive } from "@platform/app";
 import { ActionMenu, Button, StatusTag, defineStatuses, t, useWorkspace, type ContextCommand, type Route, type WorkbenchSaving } from "@platform/ui";
 import { ChevronDown, Rocket } from "lucide-react";
@@ -11,15 +12,16 @@ import { useApplicationScope } from "../projects/application-scope";
 const draftStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" }, archived: { label: t("Archived"), tone: "neutral" } });
 
 /** Save a dirty, valid draft after a pause; the caller's `save` owns locking and refetch. */
-export function useAutoSave({ enabled = true, dirty, invalid = false, busy = false, save, delay = 900 }: {
-  enabled?: boolean; dirty: boolean; invalid?: boolean; busy?: boolean; save: () => Promise<unknown>; delay?: number;
+export function useAutoSave({ enabled = true, dirty, invalid = false, busy = false, save, delay = 900, generation }: {
+  enabled?: boolean; dirty: boolean; invalid?: boolean; busy?: boolean; save: () => Promise<unknown>; delay?: number; generation?:unknown;
 }) {
-  const latest = useRef(save); latest.current = save;
+  const inputs=useInputDrafts(),attempt=useRef<unknown>(undefined),latest = useRef(save); latest.current = save;
+  invalid ||= !!inputs?.invalid;busy ||=!!inputs?.busy;
   useEffect(() => {
-    if (!enabled || !dirty || invalid || busy) return;
-    const timer = setTimeout(() => { void latest.current(); }, delay);
+    if (!enabled || !dirty || invalid || busy || attempt.current===generation&&generation!==undefined) return;
+    const timer = setTimeout(() => { attempt.current=generation;void latest.current().catch(()=>undefined); }, delay);
     return () => clearTimeout(timer);
-  }, [enabled, dirty, invalid, busy, delay]);
+  }, [enabled, dirty, invalid, busy, delay,generation]);
 }
 
 export const savingState = (dirty: boolean, saving: boolean, error?: string): WorkbenchSaving => error ? "error" : saving ? "saving" : dirty ? "dirty" : "saved";
@@ -37,6 +39,7 @@ export function PublishMenu({ type, record, dirty, busy = false, invalid = false
   type: string; record?: { id?: string; revision?: number; archived?: boolean; state?: string }; dirty: boolean; busy?: boolean; invalid?: boolean; empty?: boolean;
   onReview: () => void; onInstall?: () => void; onSave?: () => void; onDiscard?: () => void; route?: Route; extra?: ContextCommand[];
 }) {
+  const inputs=useInputDrafts();invalid ||=!!inputs?.invalid;
   const { open, close } = useWorkspace();
   const application = useApplicationScope();
   const directInstall = useDirectInstall();
@@ -52,7 +55,7 @@ export function PublishMenu({ type, record, dirty, busy = false, invalid = false
     ...(record?.id && !record.archived && archive.available ? [{ id: "archive", label: t("Archive…"), danger: true, disabled: busy, run: () => archive.take({ id: record.id!, revision: record.revision ?? 0 }, leave) }] : []),
   ];
   return <>
-    {onSave && <Button size="sm" disabled={busy || !dirty} onClick={onSave}>{t("Save")}</Button>}
+    {onSave && <Button size="sm" disabled={busy || !dirty||invalid} onClick={onSave}>{t("Save")}</Button>}
     <div className="flex items-center">
       <Button variant="primary" size="sm" className="rounded-r-none" disabled={busy || invalid || empty} onClick={onReview} title={invalid ? t("Fix the problems first.") : empty ? t("Nothing to publish yet.") : undefined}>{t("Publish")}</Button>
       <ActionMenu label={t("Publish options")} variant="primary" icon={<ChevronDown />} commands={commands} />

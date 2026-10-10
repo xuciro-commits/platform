@@ -64,5 +64,6 @@ test('deleting a group removes active and dormant descendants and undo restores 
  const d=fixture();d.nodes.root.children=['group','c'];d.nodes.group={kind:'columns',children:['a']};d.unusedWidgets=[{node:'b',parent:'group'}];d.events=[{source:'a',event:'click',target:'state'},{source:'c',event:'click',target:'state'}];
  const before=JSON.stringify(d),result=canvasRemove(d,'group');assert.deepEqual([...result.sections].sort(),['a','b']);assert.deepEqual(Object.keys(result.document.nodes).sort(),['c','root']);assert.deepEqual(result.document.unusedWidgets,[]);assert.equal(result.document.events[0].source,'c');assert.equal(JSON.stringify(d),before);
  const state={draft:{document:d},saved:'',past:[],future:[]},edited=reduceDraft(state,{type:'edit',edit:{document:result.document}});assert.deepEqual(reduceDraft(edited,{type:'undo'}).draft.document,d);
+ const raw={'/widget:deleted/number:width':{text:'-',source:'10',problem:'invalid'}};const withRaw=reduceDraft(state,{type:'edit',edit:{document:result.document},inputs:raw});assert.deepEqual(withRaw.past.at(-1).inputs,raw);assert.deepEqual(reduceDraft(reduceDraft(withRaw,{type:'undo',inputs:{}}),{type:'redo',inputs:raw}).draft.document,result.document);
  assert.equal(canvasRemove(d,'root'),undefined);d.nodes.group.slot='footer';assert.equal(canvasRemove(d,'group'),undefined);
 });

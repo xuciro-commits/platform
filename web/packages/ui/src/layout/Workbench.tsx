@@ -1,3 +1,4 @@
+import {InputDraftProvider,InputProblems,useInputDrafts} from "../fields/draft";
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronRight, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Redo2, Undo2 } from "lucide-react";
 import { t } from "../i18n";
@@ -13,7 +14,7 @@ import { useViewTitle } from "../shell/Workspace";
  */
 export type WorkbenchCrumb = { label: ReactNode; onClick?: () => void };
 export type WorkbenchTab = { id: string; title: ReactNode; badge?: number | string; content: ReactNode };
-export type WorkbenchPanel = { label: string; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };
+export type WorkbenchPanel = { label: string; scope?:string; locate?:(path?:string)=>void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };
 export type WorkbenchHistory = { canUndo: boolean; canRedo: boolean; undo: () => void; redo: () => void };
 export type WorkbenchSaving = "idle" | "dirty" | "saving" | "saved" | "error";
 
@@ -26,6 +27,7 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
   left?: WorkbenchPanel; right?: WorkbenchPanel; dock?: WorkbenchPanel; children: ReactNode; className?: string; mainLabel?: string;
   onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void;
 }) {
+  const inputs=useInputDrafts();if(inputs?.dirty&&saving!=="saving"&&saving!=="error")saving="dirty";
   useViewTitle(typeof title === "string" ? title : undefined);
   const [layout, setLayout] = useState<Layout>(() => read(storageKey));
   const previousDock = useRef(dock?.value);
@@ -60,7 +62,7 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
       if (command && event.key.toLowerCase() === "j" && dock) { event.preventDefault(); patch({ dockOpen: !layout.dockOpen }); return; }
       onKeyDown?.(event);
     }}>
-    <header className="flex min-h-10 flex-wrap items-center gap-1 border-b border-border px-2 py-1">
+    <InputProblems/><header className="flex min-h-10 flex-wrap items-center gap-1 border-b border-border px-2 py-1">
       {left && <Button variant="ghost" size="sm" aria-label={t("Toggle structure panel")} aria-pressed={layout.leftOpen} title="⌘\\" onClick={() => patch({ leftOpen: !layout.leftOpen })}>{layout.leftOpen ? <PanelLeftClose /> : <PanelLeftOpen />}</Button>}
       <nav aria-label={t("Breadcrumbs")} className="flex min-w-0 items-center gap-1 text-sm">
         {crumbs.map((crumb, index) => <span key={index} className="flex min-w-0 items-center gap-1">
@@ -75,19 +77,19 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
         <Button variant="ghost" size="sm" aria-label={t("Redo")} title={t("Redo") + " ⇧⌘Z"} disabled={!history.canRedo} onClick={history.redo}><Redo2 /></Button>
       </div>}
       {savingLabel && <span role="status" className={cn("ml-2 text-xs", saving === "error" ? "text-danger" : "text-muted")}>{savingLabel}</span>}
-      <div className="ml-auto flex flex-wrap items-center gap-1">{actions}</div>
+      <fieldset disabled={inputs?.busy} className="ml-auto flex flex-wrap items-center gap-1">{actions}</fieldset>
       {dock && <Button variant="ghost" size="sm" aria-label={t("Toggle dock")} aria-pressed={layout.dockOpen} title="⌘J" onClick={() => patch({ dockOpen: !layout.dockOpen })}>{layout.dockOpen ? <PanelBottomClose /> : <PanelBottomOpen />}</Button>}
       {right && <Button variant="ghost" size="sm" aria-label={t("Toggle inspector panel")} aria-pressed={layout.rightOpen} title="⌥⌘\\" onClick={() => patch({ rightOpen: !layout.rightOpen })}>{layout.rightOpen ? <PanelRightClose /> : <PanelRightOpen />}</Button>}
     </header>
-    <div className="grid min-h-0 flex-1 lg:grid-cols-[var(--workbench-columns)]" style={{ "--workbench-columns": columns } as CSSProperties}>
-      {showLeft && <><aside role="region" aria-label={left.label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border"><PanelBody panel={left} /></aside>{splitter("left")}</>}
+    <fieldset disabled={inputs?.busy||saving==="saving"} className="grid min-h-0 flex-1 lg:grid-cols-[var(--workbench-columns)]" style={{ "--workbench-columns": columns } as CSSProperties}>
+      {showLeft && <><aside role="region" aria-label={left.label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border"><InputDraftProvider scope={left.scope??"structure"} reveal={()=>patch({leftOpen:true})}><PanelBody panel={left} /></InputDraftProvider></aside>{splitter("left")}</>}
       <div role="region" aria-label={mainLabel ?? t("Editor")} className="flex min-h-0 min-w-0 flex-col overflow-hidden">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
         {dock && <DockBar dock={dock} open={layout.dockOpen} height={layout.dock} tab={dock.value ?? layout.dockTab} splitter={showDock ? splitter("dock") : null}
           onOpen={(id) => { dock.onChange?.(id); patch({ dockOpen: !(layout.dockOpen && (dock.value ?? layout.dockTab) === id), dockTab: id }); }} />}
       </div>
-      {showRight && <>{splitter("right")}<aside role="region" aria-label={right.label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-l border-border"><PanelBody panel={right} /></aside></>}
-    </div>
+      {showRight && <>{splitter("right")}<aside role="region" aria-label={right.label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-l border-border"><InputDraftProvider scope={right.scope??"inspector"} reveal={path=>{patch({rightOpen:true});right.locate?.(path);}}><PanelBody panel={right} /></InputDraftProvider></aside></>}
+    </fieldset>
   </div>;
 }
 
@@ -104,7 +106,7 @@ function PanelBody({ panel }: { panel: WorkbenchPanel }) {
         className={cn("flex shrink-0 items-center gap-1 whitespace-nowrap rounded-t border-b-2 px-2 py-1 text-xs", tab.id === current.id ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}
         onClick={() => choose(tab.id)}>{tab.title}{tab.badge !== undefined && tab.badge !== 0 && <span className="rounded-full bg-row-selected px-1.5 text-[10px]">{tab.badge}</span>}</button>)}
     </div>
-    <div role="tabpanel" aria-labelledby={`${prefix}-${current.id}`} className="min-h-0 flex-1 overflow-auto">{current.content}</div>
+    <div role="tabpanel" aria-labelledby={`${prefix}-${current.id}`} className="min-h-0 flex-1 overflow-auto"><InputDraftProvider scope={current.id} reveal={path=>{panel.onChange?.(current.id);setOwn(current.id);panel.locate?.(path);}}>{current.content}</InputDraftProvider></div>
   </>;
 }
 

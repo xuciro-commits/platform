@@ -83,6 +83,7 @@ export function AutomationEditor({ id }: { id: string }) {
   const catalogQuery = useReadQuery<Capability[]>("/v1/capabilities");
   const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");
   const session = useDraftSession<WorkflowDraft>(empty());
+  const [createID]=useState(()=>crypto.randomUUID());
   const { draft, dirty } = session;
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const [chosen, setChosen] = useState<Chosen>("trigger");
@@ -113,7 +114,7 @@ export function AutomationEditor({ id }: { id: string }) {
   ];
   const invalid = problems.some((problem) => problem.id !== "host");
   const save = async () => {
-    const submitted = structuredClone(draft), target = submitted.id || crypto.randomUUID(), revision = submitted.id ? baseRevision.current : 0;
+    const submitted = structuredClone(draft), target = submitted.id || createID, revision = submitted.id ? baseRevision.current : 0;
     if (!submitted.name) submitted.name = (submitted.title.toLowerCase().replace(/[^a-z0-9]/g, "") || "automation") + Date.now().toString(36).slice(-4);
     if (!await decide(`build.process.${submitted.id ? "edit" : "create"}`, { type: "build.process", id: target }, { ...workflowInputs(submitted), kind: "automation" }, { expectedRevision: submitted.id ? revision : undefined, quiet: true, onRefused: setError })) return false;
     baseRevision.current = revision + 1; loaded.current = `${target}:${revision + 1}`;
@@ -124,7 +125,7 @@ export function AutomationEditor({ id }: { id: string }) {
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The automation request could not be completed.")); } finally { lock.current = false; setBusy(false); } };
   const publish = async () => { if (dirty && !await save()) return; await decide("build.process.publish", { type: "build.process", id: draft.id }, {}, { onRefused: setError }); await query.refetch(); };
   const saveRef = useRef<() => Promise<unknown>>(async () => false); saveRef.current = () => perform(save);
-  useAutoSave({ dirty, invalid, busy, save: () => saveRef.current() });
+  useAutoSave({ generation:JSON.stringify(draft), dirty, invalid, busy, save: () => saveRef.current() });
   if (role("build") !== "builder") return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{t("Only a builder can edit automations.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{query.isError ? t("The automation could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const chosenStep = effects.find((step) => step.name === chosen);
@@ -142,7 +143,7 @@ export function AutomationEditor({ id }: { id: string }) {
       <ActionMenu label={t("More automation commands")} icon={<MoreHorizontal />} commands={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: !draft.id, run: () => open({ view: "flow", params: { id: draft.id } }) }]} />
       <PublishMenu type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} onReview={() => open({ view: "release-review", params: { kind: "flow", id: draft.id } })} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "automation", params: { id } }} />
     </>}
-    right={{ label: t("Automation inspector"), content: <div className="p-2">
+    right={{ label: t("Automation inspector"),scope:String(chosen),locate:()=>setChosen(chosen), content: <div className="p-2">
       {chosen === "trigger" && <div className="grid gap-3">
         <label className="grid gap-1 text-xs">{t("Title")}<Input value={draft.title} onChange={(event) => change({ title: event.target.value })} /></label>
         <label className="grid gap-1 text-xs">{t("Start kind")}<Select value={draft.every ? draft.every : ""} disabled={!!draft.published} onChange={(event) => change(event.target.value ? { every: event.target.value, object: "", when: "" } : { every: undefined })}><option value="">{t("When a record reaches a state")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>

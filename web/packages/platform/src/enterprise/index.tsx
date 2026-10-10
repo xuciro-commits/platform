@@ -24,7 +24,7 @@ type Decide = (schema: string, target: { type: string; id: string }, payload: un
  * where they sit, and the records pinned on it (ADR-0085 D3). */
 type Draft = { view: string; elements: string[]; layout: Positions; name: string; viewpoint: string; pins: Pin[]; context: string[]; kind: string; asOf: string; dirty: boolean };
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
-const fresh = (prefix: string, name: string) => `${prefix}-${slug(name)}-${Math.random().toString(36).slice(2, 6)}`;
+const makeID = (prefix: string, name: string) => `${prefix}-${slug(name)}-${Math.random().toString(36).slice(2, 6)}`;
 const relationshipTitles: Record<string, string> = {
   ActualResourceRelationship: "Placement", ActualOrganizationRole: "Membership", FillsPost: "Fills post", typedBy: "Typed by",
   ResponsibleFor: "Responsible for", Exhibits: "Has capability", IsCapableToPerform: "Can perform", OwnsProcess: "Owns process",
@@ -96,6 +96,9 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     | { kind: "view"; mode: "create" | "saveAs" }
     | { kind: "rename"; id: string; name: string }
     | { kind: "deleteView"; id: string; name: string }>();
+
+  const requestIDs=useMemo(()=>new Map<string,string>(),[dialog]);
+  const fresh=(prefix:string,name:string)=>{const key=`${prefix}:${name}`;let id=requestIDs.get(key);if(!id){id=makeID(prefix,name);requestIDs.set(key,id);}return id;};
   const [filter, setFilter] = useState("");
   const [left, setLeft] = useState("viewpoint");
   const patterns = useRead<PatternInfo[]>("/v1/enterprise-patterns").data ?? [];
@@ -179,8 +182,8 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   const relLabel = (r: Relationship) => r.stereotype === PLACEMENT ? t(r.relation || "part of") : r.stereotype === MEMBERSHIP ? (r.role || t("member")) : r.stereotype === FILLS_POST ? t("fills") : title(r.stereotype);
   const addElement = async (stereotype: string, values: { name: string; kind: string; parent?: string; legal?: boolean; properties?: Record<string, unknown> }, at?: [number, number]) => {
     const id = fresh(slug(title(stereotype)).slice(0, 4), values.name);
-    if (!await decide("enterprise.element.add", { type: ELEMENT, id }, { stereotype, name: values.name, kind: values.kind || undefined, legal: values.legal || undefined, from: day, properties: values.properties })) return false;
-    if (values.parent && stereotype === ORGANIZATION) await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("rel", id) }, { stereotype: PLACEMENT, kind: placementKind, source: id, target: values.parent, relation: "part of", from: day });
+    if (!m.elements.some(element=>element.id===id)&&!await decide("enterprise.element.add", { type: ELEMENT, id }, { stereotype, name: values.name, kind: values.kind || undefined, legal: values.legal || undefined, from: day, properties: values.properties })) return false;
+    if (values.parent && stereotype === ORGANIZATION&&!await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("rel", id) }, { stereotype: PLACEMENT, kind: placementKind, source: id, target: values.parent, relation: "part of", from: day }))return false;
     const layout = { ...working.layout, [id]: at ?? [40 + Math.random() * 300, 40 + Math.random() * 200] as [number, number] };
     setWorking({ elements: [...working.elements, id], context: (viewpoint?.elements ?? []).includes(stereotype) ? working.context : [...working.context, id], layout });
     setSelected(id);
@@ -343,7 +346,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
         {admin && <Button size="sm" variant="ghost" title={t("A new view from what is drawn now")} onClick={() => setDialog({ kind: "view", mode: "saveAs" })}><Copy />{t("Save as…")}</Button>}
       </>}
       left={{ label: t("Model"), tabs, value: left, onChange: setLeft }}
-      right={{ label: t("Inspector"), content: <>{selectedPin ? <div className="grid gap-3 p-3 text-sm">
+      right={{ label: t("Inspector"),scope:selected??"",locate:()=>setSelected(selected), content: <>{selectedPin ? <div className="grid gap-3 p-3 text-sm">
         <p className="font-medium">{selectedPin.label}</p><p className="break-all text-xs text-muted">{selectedPin.ref}</p>
         <p className="text-xs text-muted">{t("Names")}: {byId(selectedPin.anchor)?.name ?? selectedPin.anchor}</p>
         <Button size="sm" onClick={() => openRecord(selectedPin.ref.slice(7))}>{t("Open record")}</Button>
@@ -499,6 +502,8 @@ function People({ element: el, model: m, day, admin, decide, post, setPost, hold
   const posts = m.relationships.filter((r) => r.stereotype === RESPONSIBLE_FOR && r.source === el.id && live(r, day))
     .map((r) => m.elements.find((e) => e.id === r.target)).filter((e): e is Element => !!e && e.stereotype === POST && live(e, day));
   const heldBy = (post: string) => m.relationships.filter((r) => r.stereotype === FILLS_POST && r.target === post && live(r, day)).map((r) => name(r.source));
+  const requestIDs=useMemo(()=>new Map<string,string>(),[el.id,!!post,!!holder]);
+  const fresh=(prefix:string,name:string)=>{const key=`${prefix}:${name}`;let id=requestIDs.get(key);if(!id){id=makeID(prefix,name);requestIDs.set(key,id);}return id;};
   const people = m.elements.filter((e) => e.stereotype === PERSON && live(e, day));
   const openPosts = el.stereotype === POST ? [el] : posts.filter((p) => heldBy(p.id).length === 0);
   return <div className="grid gap-2">
@@ -510,7 +515,7 @@ function People({ element: el, model: m, day, admin, decide, post, setPost, hold
     {admin && el.stereotype === ORGANIZATION && (post
       ? <Form className="grid gap-1" onSubmit={async () => {
           const id = fresh("post", post.name);
-          if (!await decide("enterprise.element.add", { type: ELEMENT, id }, { stereotype: POST, name: post.name, kind: post.kind || undefined, from: day })) return;
+          if (!m.elements.some(element=>element.id===id)&&!await decide("enterprise.element.add", { type: ELEMENT, id }, { stereotype: POST, name: post.name, kind: post.kind || undefined, from: day })) return;
           if (await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("rel", id) }, { stereotype: RESPONSIBLE_FOR, source: el.id, target: id, from: day })) setPost(undefined);
         }}>
           <Input aria-label={t("Post title (Warehouse manager, Operator …)")} placeholder={t("Post title (Warehouse manager, Operator …)")} value={post.name} onChange={(x) => setPost({ ...post, name: x.target.value })} />
@@ -523,7 +528,7 @@ function People({ element: el, model: m, day, admin, decide, post, setPost, hold
           let person = holder.person;
           if (person.startsWith("new:")) {
             const created = fresh("person", person.slice(4));
-            if (!await decide("enterprise.element.add", { type: ELEMENT, id: created }, { stereotype: PERSON, name: person.slice(4), from: day })) return;
+            if (!m.elements.some(element=>element.id===created)&&!await decide("enterprise.element.add", { type: ELEMENT, id: created }, { stereotype: PERSON, name: person.slice(4), from: day })) return;
             person = created;
           }
           if (await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("fill", person) }, { stereotype: FILLS_POST, source: person, target: holder.post, from: day })) setHolder(undefined);
@@ -604,7 +609,7 @@ function EditElementDialog({ element: el, meta, model, day, onClose, onSubmit }:
   const entry = meta.profile.find((p) => p.stereotype === el.stereotype);
   const [v, setV] = useState<ElementEdit>({ name: el.name, kind: el.kind ?? "", shortName: el.shortName ?? "", properties: el.properties ?? {} });
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={t("Edit {name}", { name: el.name })}>
-    <Form className="grid gap-3" onSubmit={() => void onSubmit(v)}>
+    <Form className="grid gap-3" onSubmit={() => onSubmit(v)}>
       {field(t("Name"), <Input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />)}
       {field(t("Kind"), <><Input list={`kinds-${el.stereotype}`} value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })} />
         <datalist id={`kinds-${el.stereotype}`}>{(entry?.kinds ?? []).map((k) => <option key={k} value={k} />)}</datalist></>)}
@@ -623,7 +628,7 @@ function DateDialog({ title, note, confirm, defaultDay, onClose, onSubmit }: {
 }) {
   const [day, setDay] = useState(defaultDay);
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={title}>
-    <Form className="grid gap-3" onSubmit={() => void onSubmit(day)}>
+    <Form className="grid gap-3" onSubmit={() => onSubmit(day)}>
       <p className="text-xs text-muted">{note}</p>
       {field(t("On"), <Input type="date" value={day} onChange={(e) => setDay(e.target.value)} />)}
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" variant="danger" disabled={!day}>{confirm}</Button></div>
@@ -638,7 +643,7 @@ function ElementDialog({ stereotype, meta, model, day, organisations, parent, on
   const entry = meta.profile.find((p) => p.stereotype === stereotype);
   const [v, setV] = useState({ name: "", kind: entry?.kinds?.[0] ?? "", parent: parent ?? "", legal: false, properties: {} as Record<string, unknown> });
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={t("New {thing}", { thing: t(entry?.title ?? stereotype) })}>
-    <Form className="grid gap-3" onSubmit={() => void onSubmit({ ...v, parent: v.parent || undefined })}>
+    <Form className="grid gap-3" onSubmit={() => onSubmit({ ...v, parent: v.parent || undefined })}>
       {field(t("Name"), <Input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />)}
       {field(t("Kind"), entry?.kinds?.length ? <Input list={`kinds-${stereotype}`} value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })} /> : <Input value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })} />)}
       {entry?.kinds?.length ? <datalist id={`kinds-${stereotype}`}>{entry.kinds.map((k) => <option key={k} value={k} />)}</datalist> : null}
@@ -670,7 +675,7 @@ function LinkDialog({ source, target, meta, kinds, defaultKind, title, existing,
       <p>{t("UAF joins nothing between a {a} and a {b} here.", { a: title(source.stereotype), b: title(target.stereotype) })}</p>
       <p className="text-xs">{t("What is allowed: {type} (client) to {list}.", { type: source.stereotype, list: (meta.contracts ?? []).flatMap((c) => (c.client ?? []).some((e) => e === source.stereotype) ? (c.supplier ?? []) : []).join(", ") || "—" })}</p>
     </div> :
-    <Form className="grid gap-3" onSubmit={() => void onSubmit({ stereotype: v.stereotype, kind: v.stereotype === PLACEMENT ? v.kind : undefined, role: v.role || undefined, relation: v.stereotype === PLACEMENT ? v.relation : undefined, share: v.share ? +v.share : undefined })}>
+    <Form className="grid gap-3" onSubmit={() => onSubmit({ stereotype: v.stereotype, kind: v.stereotype === PLACEMENT ? v.kind : undefined, role: v.role || undefined, relation: v.stereotype === PLACEMENT ? v.relation : undefined, share: v.share ? +v.share : undefined })}>
       {field(t("Relationship"), <><Select value={v.stereotype} onChange={(e) => setV({ ...v, stereotype: e.target.value })}>{allowed.map((st) => <option key={st} value={st}>{title(st)} · {st}</option>)}</Select>
         {contractNote(meta, v.stereotype) && <span className="text-[10px] text-muted">{t(contractNote(meta, v.stereotype))}</span>}</>)}
       {v.stereotype === PLACEMENT && field(t("Kind"), <Select value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })}>{kinds.map((k) => <option key={k.id} value={k.id}>{t(k.name)}</option>)}</Select>)}
@@ -707,7 +712,7 @@ function ViewDialog({ viewpoints, title, note, initial, allowEmpty, onClose, onS
   const [v, setV] = useState({ name: initial.name, viewpoint: initial.viewpoint || viewpoints[0]?.id || "organization" });
   const [empty, setEmpty] = useState(false);
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={title}>
-    <Form className="grid gap-3" onSubmit={() => void onSubmit(v.name, v.viewpoint, empty)}>
+    <Form className="grid gap-3" onSubmit={() => onSubmit(v.name, v.viewpoint, empty)}>
       <p className="text-xs text-muted">{note}</p>
       {field(t("Name"), <Input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />)}
       {allowEmpty && <Checkbox checked={empty} onChange={setEmpty}>{t("Start with an empty view")}</Checkbox>}
@@ -723,7 +728,7 @@ function NameDialog({ title, note, initial, onClose, onSubmit }: {
 }) {
   const [name, setName] = useState(initial);
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={title}>
-    <Form className="grid gap-3" onSubmit={() => void onSubmit(name)}>
+    <Form className="grid gap-3" onSubmit={() => onSubmit(name)}>
       <p className="text-xs text-muted">{note}</p>
       {field(t("Name"), <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />)}
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" disabled={!name}>{t("Save")}</Button></div>
@@ -735,7 +740,7 @@ function ConfirmDialog({ title, note, confirm, onClose, onSubmit }: {
   title: string; note: string; confirm: string; onClose: () => void; onSubmit: () => Promise<void>;
 }) {
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={title}>
-    <Form className="grid gap-3" onSubmit={() => void onSubmit()}>
+    <Form className="grid gap-3" onSubmit={() => onSubmit()}>
       <p className="text-xs text-muted">{note}</p>
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" variant="danger">{confirm}</Button></div>
     </Form>
@@ -749,6 +754,8 @@ function Inspector({ element: el, model: m, view, meta, day, admin, decide, titl
   type Slots = { edit?: ElementEdit; member?: { id: string; role: string }; post?: { name: string; kind: string }; holder?: { person: string; post: string } };
   const [drafts, setDrafts] = useState<Record<string, Slots>>({});
   const key = el?.id ?? "";
+  const requestIDs=useMemo(()=>new Map<string,string>(),[el?.id,!!drafts[el?.id??""]?.member]);
+  const fresh=(prefix:string,name:string)=>{const key=`${prefix}:${name}`;let id=requestIDs.get(key);if(!id){id=makeID(prefix,name);requestIDs.set(key,id);}return id;};
   const current = drafts[key] ?? {};
   const setter = <K extends keyof Slots>(slot: K) => (value: Slots[K]) => setDrafts((all) => {
     if (value === undefined && all[key]?.[slot] !== current[slot]) return all;

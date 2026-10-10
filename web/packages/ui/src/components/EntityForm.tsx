@@ -3,6 +3,7 @@ import { Controller, useForm, useWatch, type DefaultValues, type FieldValues, ty
 import type {Api} from "@platform/kernel";
 import type { z } from "zod";
 import { useEffect, useId, useRef, useState } from "react";
+import {InputDraftProvider,useInputDrafts,InputProblems} from "../fields/draft";
 import {DateRangeInput} from "./DateRangeInput";
 import { Button } from "../primitives/button";
 import { activeValues, recordSchema, type Entity } from "../fields/entity";
@@ -48,7 +49,7 @@ type Props<S extends z.ZodType<FieldValues, FieldValues>> = {
 
 /** A form whose editors come from field types; the schema validates the whole record. */
 export function EntityForm<S extends z.ZodType<FieldValues, FieldValues>>({ schema, fields, ...rest }: Props<S>) {
-  return <FieldForm schema={schema} fields={fields.map((f) => ({ name: f.name as string, type: typeOf(f) }))} {...rest} />;
+  return <InputDraftProvider isolated scope="entity-form"><FieldForm schema={schema} fields={fields.map((f) => ({ name: f.name as string, type: typeOf(f) }))} {...rest} /></InputDraftProvider>;
 }
 
 /** A form for an entity's editable fields, validated by their field types. */
@@ -59,14 +60,15 @@ export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLab
 }) {
   const shown = (keys ?? Object.keys(entity.fields)).filter((k) => !entity.fields[k]!.readOnly && entity.fields[k]!.editor);
   // A conditional field (#138) that does not apply is kept in the form's state but not sent.
-  return <FieldForm schema={recordSchema(entity, shown)} fields={shown.map((k) => ({ name: k, type: entity.fields[k]! }))}
-    defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} submitLabel={submitLabel} onCancel={onCancel} onBusy={onBusy} issues={issues} />;
+  return <InputDraftProvider isolated scope="record-form"><FieldForm schema={recordSchema(entity, shown)} fields={shown.map((k) => ({ name: k, type: entity.fields[k]! }))}
+    defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} submitLabel={submitLabel} onCancel={onCancel} onBusy={onBusy} issues={issues} /></InputDraftProvider>;
 }
 
 function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel, onBusy, issues }: {
   issues?:Api.FieldIssue[]; schema: z.ZodType; fields: { name: string; type: FieldType }[]; defaultValues?: object;
   onSubmit: (values: any, event?: unknown) => void | boolean | Promise<void | boolean>; submitLabel?: string; onCancel?: () => void; onBusy?: (busy: boolean) => void;
 }) {
+  const inputs=useInputDrafts();
   const prefix = useId(), lock = useRef(false), [failure, setFailure] = useState("");
   const { control, handleSubmit, setValue, setError, trigger, formState: { errors, isSubmitting } } =
     useForm<Record<string, unknown>>({ mode: "onTouched", resolver: zodResolver(schema as never) as never, defaultValues: defaultValues as never });
@@ -77,12 +79,12 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
   const current = Object.fromEntries(conditions.map((name, i) => [name, watched[i]]));
   return (
     <form onSubmit={handleSubmit(async (values, event) => {
-      if (lock.current) return; lock.current = true; setFailure(""); onBusy?.(true);
+      if (lock.current||inputs?.invalid) return; lock.current = true; setFailure("");inputs?.reject();inputs?.pending(1); onBusy?.(true);
       try { if (await onSubmit(values, event) === false) setFailure(t("The request was not confirmed. Your input is retained.")); }
       catch (error) { setFailure(error instanceof Error ? error.message : t("The request was not confirmed. Your input is retained.")); }
-      finally { lock.current = false; onBusy?.(false); }
+      finally { lock.current = false;inputs?.pending(-1); onBusy?.(false); }
     })} className="grid gap-3" noValidate>
-      {failure && <p role="alert" className="text-sm text-danger">{failure}</p>}
+      <InputProblems/>{failure && <p role="alert" className="text-sm text-danger">{failure}</p>}
       <fieldset disabled={isSubmitting} className="grid gap-3">
       {fields.map(({ name, type }) => {
         if (!applies(type, current)) return null;

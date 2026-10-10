@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useState } from "react";
@@ -18,7 +19,9 @@ export function LinkTypes() {
 export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;child?:string;via?:string}) {
  const {decide,role,definitions}=useHost(),{open,close}=useApplicationWorkspace();
  const query=useReadQuery<{record?:Draft}>(`/v1/records/build.linktype/${encodeURIComponent(id)}`);
- const [draft,setDraft]=useState<Draft>(()=>({...empty(),parent:parent??"",child:child??"",via:via??""})),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [draft,setDraft]=useState<Draft>(()=>({...empty(),parent:parent??"",child:child??"",via:via??""})),[edited,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
  const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{setDraft(query.data?.record?hydrate(query.data.record):empty());setDirty(false);setError("");});
  useEffect(()=>{if(query.data?.record&&!dirty)setDraft(hydrate(query.data.record));},[query.data,dirty]);
  const object={app:"build",kind:"object" as const,name:draft.child};
@@ -26,7 +29,7 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  const perform=async(action:()=>Promise<unknown>)=>{setBusy(true);setError("");try{await action();}catch{setError(t("The relationship could not be saved or loaded. Your draft is still here."));}finally{setBusy(false);}};
  const reload=async()=>{const r=await query.refetch();if(r.data?.record&&!r.isError){setDraft(hydrate(r.data.record));markSaved();setDirty(false);}else setError(t("Reload the saved relationship before editing again."));};
  const save=async():Promise<number|undefined>=>{
-  const target=draft.id||crypto.randomUUID(),{name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy}=draft;
+  const target=draft.id || createID,{name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy}=draft;
   if(!await decide(`build.linktype.${draft.id?"edit":"create"}`,{type:"build.linktype",id:target},{name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy},{expectedRevision:draft.id?draft.revision:undefined,quiet:true,onRefused:setError}))return;
   const revision=draft.id?draft.revision+1:1;
   if(!draft.id){markSaved();setDirty(false);open({view:"link-type",params:{id:target}});close({view:"link-type",params:{id}});}else await reload();

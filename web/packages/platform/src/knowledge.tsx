@@ -43,7 +43,7 @@ function GlossaryReach() {
 // The tenant's glossary (ADR-0023 D1): its own words, layered on the model.
 export function Glossary() {
   const { can, decide } = useHost();
-  const [writing, setWriting] = useState(false);
+  const [writing, setWriting] = useState(false),[id,setId]=useState(()=>newId("KNOWLEDGE"));
   return (
     <>
       <GlossaryReach />
@@ -51,7 +51,7 @@ export function Glossary() {
         actions={can("knowledge.term.create") && <Button variant="primary" onClick={() => setWriting(true)}><BookA />{t("New term")}</Button>} />
       <Dialog open={writing} onOpenChange={setWriting} title={t("New term")}>
         <GeneratedForm type="knowledge.term" submitLabel={t("Save")} onCancel={() => setWriting(false)}
-          onSubmit={async (v) => { if (await decide("knowledge.term.create", { type: "knowledge.term", id: newId("TERM") }, v, { expectedRevision: 0 })) setWriting(false); }} />
+          onSubmit={async (v) => { if (await decide("knowledge.term.create", { type: "knowledge.term", id }, v, { expectedRevision: 0 })) {setWriting(false);setId(newId("KNOWLEDGE"));} }} />
       </Dialog>
     </>
   );
@@ -61,7 +61,7 @@ export function Glossary() {
 // an embedding model, by meaning; each is read by members of the apps it names.
 export function Knowledge() {
   const { can, decide, client } = useHost();
-  const [writing, setWriting] = useState(false);
+  const [writing, setWriting] = useState(false),[id,setId]=useState(()=>newId("KNOWLEDGE"));
   const [q, setQ] = useState("");
   const [found, setFound] = useState<Passage[]>();
   return (
@@ -82,7 +82,7 @@ export function Knowledge() {
       </div>}
       <Dialog open={writing} onOpenChange={setWriting} title={t("New document")} wide>
         <GeneratedForm type="knowledge.document" submitLabel={t("Save")} onCancel={() => setWriting(false)}
-          onSubmit={async (v) => { if (await decide("knowledge.document.create", { type: "knowledge.document", id: newId("DOC") }, v, { expectedRevision: 0 })) setWriting(false); }} />
+          onSubmit={async (v) => { if (await decide("knowledge.document.create", { type: "knowledge.document", id }, v, { expectedRevision: 0 })) {setWriting(false);setId(newId("KNOWLEDGE"));} }} />
       </Dialog>
     </>
   );

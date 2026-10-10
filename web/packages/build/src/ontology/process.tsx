@@ -148,7 +148,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setChosen(undefined); }, redo: () => { session.redo(); setChosen(undefined); } }}
     actions={<PublishMenu type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "object-type", params: { id } }} />}
     left={{ label: t("Object structure"), content: structure }}
-    right={{ label: t("Object inspector"), content: inspector }}
+    right={{ label: t("Object inspector"),scope:JSON.stringify(chosen),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("{"));setChosen(scope?JSON.parse(scope) as Chosen:chosen);}, content: inspector }}
     dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
     <div role="tablist" aria-label={t("Object sections")} className="flex shrink-0 gap-1 overflow-x-auto border-b border-border px-3 pt-2">

@@ -221,8 +221,8 @@ function AILimits() {
     <>
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Limits")}</h2>
       <p className="mb-2 text-xs text-muted">{t("A member's, agent's or app's own limits, in place of the defaults in App settings → AI (people) and Agents (agents). A call past a limit is refused before it reaches the model.")}</p>
-      <Form className="mb-2 flex flex-wrap items-center gap-2" onSubmit={() => {
-        void decideOn("ai.limit.set", { type: "ai.limit", id: who.trim() }, { dailyTokens: Number(daily) || 0, perMinute: Number(minute) || 0 }).then(() => { setWho(""); setDaily(""); setMinute(""); });
+      <Form className="mb-2 flex flex-wrap items-center gap-2" onSubmit={async () => {
+        if(await decideOn("ai.limit.set", { type: "ai.limit", id: who.trim() }, { dailyTokens: Number(daily) || 0, perMinute: Number(minute) || 0 })){setWho("");setDaily("");setMinute("");}
       }}>
         <MemberSelect label={t("Member ID")} empty={t("Choose a member or agent")} agents value={who} onChange={setWho} className="w-72" />
         <Input aria-label={t("Tokens a day")} type="number" min={0} placeholder={t("Tokens a day")} value={daily} onChange={(e) => setDaily(e.target.value)} className="w-36" />

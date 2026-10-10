@@ -1,3 +1,4 @@
+import {useInputBuffers} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import {FlowImportDialog} from "../workshop/module-import/FlowImportDialog";
@@ -14,7 +15,7 @@ import { ActionMenu, Button, FLOW_NODE_DROP, FlowCanvas, Input, PageHeader, Pane
 import { MoreHorizontal, Play, Plus, Search, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {useQueries} from "@tanstack/react-query";
-import { DataField, JSONEditor, WorkflowFormProblems, schemaIssue } from "./workflow-binding";
+import { DataField, JSONEditor, schemaIssue } from "./workflow-binding";
 import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
 import { capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, replaceReferences, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle, workflowStepClass,
   type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
@@ -122,6 +123,7 @@ export function FlowEditor({ id }: { id: string }) {
   const catalogQuery = useReadQuery<Capability[]>("/v1/capabilities");
   const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");
   const session=useDraftSession<WorkflowDraft>(empty());
+  const [createID]=useState(()=>crypto.randomUUID());
   const {draft,dirty}=session;
   const loaded=useRef(""),baseRevision=useRef(0),lock=useRef(false),acknowledged=useRef<WorkflowDraft|undefined>(undefined);
   const [chosen, setChosen] = useState("");
@@ -131,16 +133,12 @@ export function FlowEditor({ id }: { id: string }) {
   const [mountedDocks, setMountedDocks] = useState<Partial<Record<typeof dock, true>>>({});
   const [search, setSearch] = useState(""), [filter, setFilter] = useState("all");
   const [run, setRun] = useState<WorkflowRun>();
+  const runInputs=useInputBuffers();
   const [runInput, setRunInput] = useState<unknown>({}), [runKey, setRunKey] = useState("");
-  const [formProblems, setFormProblems] = useState<Record<string, string>>({});
   const [validation, setValidation] = useState<{ valid: boolean; issues: { node?: string; message: string }[] }>();
   const { markSaved, confirmDiscard, discardChanges } = useUnsavedChanges(dirty, () => {
-    const saved=query.data?.record??empty();session.load(saved);baseRevision.current=saved.revision;loaded.current=`${saved.id}:${saved.revision}`; setError(""); setValidation(undefined); setChosen(""); setFormProblems({});
+    const saved=query.data?.record??empty();session.load(saved);baseRevision.current=saved.revision;loaded.current=`${saved.id}:${saved.revision}`; setError(""); setValidation(undefined); setChosen("");
   });
-  const reportProblem = useCallback((key: string, problem: string) => setFormProblems((previous) => {
-    if ((previous[key] ?? "") === problem) return previous;
-    const next = { ...previous }; if (problem) next[key] = problem; else delete next[key]; return next;
-  }), []);
   useEffect(()=>{const saved=query.data?.record;if(saved&&saved.revision>=baseRevision.current&&!dirty&&!busy&&loaded.current!==`${saved.id}:${saved.revision}`){session.load(saved);baseRevision.current=saved.revision;loaded.current=`${saved.id}:${saved.revision}`;}},[query.data,dirty,busy,session.load]);
   useEffect(() => { setMountedDocks((previous) => previous[dock] ? previous : { ...previous, [dock]: true }); }, [dock]);
   const change = useCallback((edit: Edit) => {if(lock.current)return;session.edit(edit);setError("");setValidation(undefined);},[session.edit]);
@@ -174,7 +172,7 @@ export function FlowEditor({ id }: { id: string }) {
   const saved = query.data?.record;
   const synchronized=!draft.id||saved?.revision===baseRevision.current;
   const runIssue = installed?.inputSchema ? schemaIssue(installed.inputSchema, runInput) : undefined;
-  const inputProblems = { ...formProblems, ...session.inputProblems };
+  const inputProblems = session.inputProblems;
   const brokenForm = Object.values(inputProblems).filter(Boolean);
 
   const add = (kind: string, context?: FlowAddContext) => {
@@ -244,7 +242,7 @@ export function FlowEditor({ id }: { id: string }) {
     const ids = new Set(removed.map((item) => item.id));
     change((current) => ({ ...current, steps: current.steps.filter((step) => !ids.has(step.name)).map((step) => [...ids].reduce((result, id) => replaceReferences(result, id, ""), step)),
       layout: Object.fromEntries(Object.entries(current.layout ?? {}).filter(([name]) => !ids.has(name))) }));
-    for (const key of Object.keys(session.inputs.values)) if ([...ids].some(id => key.startsWith(`step:${id}/`))) session.inputs.set(key);
+    for (const key of Object.keys(session.inputs.values)) if ([...ids].some(id => key.startsWith(`step:${id}/`)||key.includes(`/step:${id}/`))) session.inputs.set(key);
     if (ids.has(chosen)) setChosen("");
   };
   const duplicate = (selected: FlowNode[]) => {
@@ -260,7 +258,7 @@ export function FlowEditor({ id }: { id: string }) {
   };
   const save = async () => {
     if (brokenForm.length) return;
-    const submitted=structuredClone(draft),target=submitted.id||crypto.randomUUID(),revision=submitted.id?baseRevision.current:0;
+    const submitted=structuredClone(draft),target=submitted.id||createID,revision=submitted.id?baseRevision.current:0;
     if(!await decide(`build.process.${submitted.id?"edit":"create"}`,{type:"build.process",id:target},workflowInputs(submitted),{expectedRevision:submitted.id?revision:undefined,quiet:true,onRefused:setError}))return;
     baseRevision.current=revision+1;loaded.current=`${target}:${revision+1}`;
     if(!submitted.id){
@@ -289,6 +287,7 @@ export function FlowEditor({ id }: { id: string }) {
   };
   const perform=async(action:()=>Promise<unknown>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError("");try{await action();}catch{setError(t("The workflow request could not be completed."));}finally{lock.current=false;setBusy(false);}};
   const start = async () => {
+    if(runInputs.invalid)return;
     const key = runKey || crypto.randomUUID(); setRunKey(key);
     if(!synchronized)return;
     if (await decide("build.process.run", { type: "build.process", id: draft.id }, { key, input: JSON.stringify(runInput) }, { quiet: true, onRefused: setError })) setDock("history");
@@ -298,7 +297,7 @@ export function FlowEditor({ id }: { id: string }) {
     const old = node.name;
     change((current) => ({ ...current, steps: current.steps.map((step) => ({ ...replaceReferences(step, old, name), name: step.name === old ? name : step.name })),
       layout: Object.fromEntries(Object.entries(current.layout ?? {}).map(([id, point]) => [id === old ? name : id, point])) }));
-    for (const [key, value] of Object.entries(session.inputs.values)) if (key.startsWith(`step:${old}/`)) { session.inputs.set(key); if (key !== `step:${old}/identifier:${t("Step name")}:${old}`) session.inputs.set(`step:${name}/${key.slice(`step:${old}/`.length)}`, value); }
+    for (const [key, value] of Object.entries(session.inputs.values)) if (key.startsWith(`step:${old}/`)||key.includes(`/step:${old}/`)) { session.inputs.set(key); if (key !== `step:${old}/identifier:${t("Step name")}:${old}`) session.inputs.set(key.replace(`step:${old}/`,`step:${name}/`), {...value,reveal:()=>setChosen(name)}); }
     setChosen(name);
   };
   const filtered = (catalogQuery.data??[]).filter((capability) => (filter === "all" || filter === "control" ? filter === "all" || capability.ref.kind === "control" : filter === "code" ? capability.kind === "compute" : capability.ref.kind !== "control" && capability.kind !== "compute")
@@ -331,7 +330,7 @@ export function FlowEditor({ id }: { id: string }) {
     {draft.steps.map((step, at) => <StructureRow key={step.name} depth={1} icon={flowNodeIcon({ class: workflowStepClass(step.kind) })} label={step.title || step.name} meta={at === 0 ? t("Entry") : undefined} selected={chosen === step.name} onClick={() => setChosen(step.name)} />)}
     {!draft.steps.length && <p className="px-2 py-1 text-[11px] text-muted">{t("Drag a block onto the map, or pick one from the library.")}</p>}
   </div>;
-  return <WorkflowFormProblems.Provider value={reportProblem}>
+  return <>
     <Workbench storageKey="flow" crumbs={[{ label: t("Automate"), onClick: () => open({ view: "automation" }) }, { label: t("Flows"), onClick: () => open({ view: "flow" }) }]} title={draft.title || t("New flow")}
       status={<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.filter((p) => p.severity !== "warning").length} />} saving={savingState(dirty, busy, error || undefined)}
       history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setValidation(undefined); }, redo: () => { session.redo(); setValidation(undefined); } }}
@@ -350,23 +349,23 @@ export function FlowEditor({ id }: { id: string }) {
         { id: "blocks", title: t("Blocks"), content: library },
         { id: "data", title: t("Data"), content: data },
       ] }}
-      right={{ label: t("Flow inspector"), content: <DraftInputs.Provider value={{...session.inputs,scope:node ? `step:${node.name}` : "settings"}}><div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
+      right={{ label: t("Flow inspector"), content: <DraftInputs.Provider value={{...session.inputs,scope:node ? `step:${node.name}` : "settings",reveal:()=>setChosen(node?.name??"")}}><div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
         onChange={(patch) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === chosen ? { ...step, ...patch } : step) }))} onRename={rename}
         onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} onClose={() => setChosen("")} />
         : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} onClose={() => setChosen("")} />}</div></DraftInputs.Provider> }}
       dock={{ label: t("Flow dock"), value: dock, onChange: (next) => setDock(next as typeof dock), tabs: [
         { id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} empty={validation?.valid ? t("The native compiler accepted this draft.") : t("No problems.")} /> },
-        { id: "run", title: t("Run"), content: <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_280px]"><JSONEditor label={t("Run input (JSON)")} value={runInput} schema={installed?.inputSchema} onChange={setRunInput} rows={5} />
+        { id: "run", title: t("Run"), content: <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_280px]"><DraftInputs.Provider value={{...runInputs,scope:"run"}}><JSONEditor label={t("Run input (JSON)")} value={runInput} schema={installed?.inputSchema} onChange={setRunInput} rows={5} /></DraftInputs.Provider>
           <div className="grid content-start gap-2"><h4 className="text-xs font-medium">{t("Run published flow")}</h4><p className="text-[11px] leading-5 text-muted">{t("Runs use the published version and real permissions. Actions and effects can change your platform data.")}</p>
             <Input aria-label={t("Stable run key")} placeholder={t("Stable run key (generated on first run)")} value={runKey} onChange={(event) => setRunKey(event.target.value)} />
-            <Button variant="primary" disabled={busy || dirty || !synchronized || !installed?.manual || !!runIssue || brokenForm.length > 0} onClick={() => void perform(start)}><Play className="mr-1 size-3" />{t("Run published version")}</Button>
+            <Button variant="primary" disabled={busy || runInputs.invalid || dirty || !synchronized || !installed?.manual || !!runIssue || brokenForm.length > 0} onClick={() => void perform(start)}><Play className="mr-1 size-3" />{t("Run published version")}</Button>
             <Button variant="ghost" onClick={() => setRunKey(crypto.randomUUID())}>{t("New run key")}</Button>{!installed?.manual && <p className="text-xs text-muted">{t("Save and publish a manual flow before running it here.")}</p>}{dirty && <p className="text-xs text-muted">{t("Save or undo draft changes before running the published version.")}</p>}
           </div></div> },
         { id: "history", title: t("Runs"), content: <div className="p-3">{run && <p className="mb-2 flex items-center gap-2 text-[10px] text-muted">{run.id} · v{run.version}<Button variant="ghost" size="sm" type="button" className="text-primary" onClick={() => setRun(undefined)}>{t("Clear run overlay")}</Button></p>}{mountedDocks.history && <WorkflowRuns name={draft.name} versions={saved?.versions ?? draft.versions} onStepSelect={(name) => setChosen(name)} onRunSelect={setRun} />}</div> },
         { id: "test", title: t("Test"), content: <div className="p-3">{mountedDocks.test && (draft.id && !dirty && synchronized ? <CandidateTest processId={draft.id} embedded onStepSelect={(name) => setChosen(name)} /> : <p className="text-xs text-muted">{t("Save the flow before isolated testing.")}</p>)}</div> },
         { id: "release", title: t("Release"), content: <div className="p-3">{mountedDocks.release && (draft.id && !dirty && synchronized ? <ReleaseReview initialKind="flow" initialID={draft.id} embedded /> : <p className="text-xs text-muted">{t("Save the flow before release review.")}</p>)}</div> },
       ] }}>
-      {importingFlow && <FlowImportDialog name={draft.name || "importedflow"} capabilities={capabilities} onClose={() => setImportingFlow(false)} onApply={(next) => { change(next); setChosen(""); setImportingFlow(false); setFormProblems({}); }} />}
+      {importingFlow && <FlowImportDialog name={draft.name || "importedflow"} capabilities={capabilities} onClose={() => setImportingFlow(false)} onApply={(next) => { change(next); setChosen(""); setImportingFlow(false); }} />}
       {run && !matchingRun && <Panel role="status" className="m-2 text-xs text-muted">{t("This run belongs to a different saved definition or the draft has changed. Inspect its recorded version in Executions.")}</Panel>}
       <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col border-0 p-0"><FlowCanvas label={t("Flow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
         onSelect={(name) => setChosen(name)} onOpen={(name) => setChosen(name)} onAdd={add} onInsert={insert} onConnect={connect} onDisconnect={disconnect}
@@ -382,5 +381,5 @@ export function FlowEditor({ id }: { id: string }) {
           return true;
         }} /></fieldset>
     </Workbench>
-  </WorkflowFormProblems.Provider>;
+  </>;
 }

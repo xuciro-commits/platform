@@ -111,7 +111,7 @@ export const number = (o: Common & { decimals?: number; unit?: string; min?: num
     type: "number", align: "right", ...o, compare: byNumber, operators: numberOps, text: (v) => (v === undefined ? "" : String(v)),
     schema: z.number().min(o.min ?? -Infinity).max(o.max ?? Infinity),
     display: (v) => (v === undefined || v === null ? muted : <span className="tabular-nums">{format(v)}{o.unit ? ` ${o.unit}` : ""}</span>),
-    editor: input("number", (s) => Number(s), String, { step: o.decimals ? 1 / 10 ** o.decimals : 1 }),
+    editor: input("number", (s) => Number(s), String, { optional:!o.required,step: o.decimals ? 1 / 10 ** o.decimals : 1 }),
   };
 };
 

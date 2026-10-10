@@ -5,7 +5,7 @@
 // shipped text. Shipped translations may be overridden the same way.
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, Checkbox, Form, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
+import {useDraftInput,useInputDrafts,useUnsavedChanges, Button, Checkbox, Form, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { useAdmin } from "./shared";
 
@@ -13,7 +13,8 @@ const languageNames: Record<string, string> = { en: "English", "zh-CN": "简体�
 const languageName = (tag: string) => languageNames[tag] ? `${languageNames[tag]} (${tag})` : tag;
 
 export function Words() {
-  const { decide } = useHost();
+  const { decide } = useHost(),inputs=useInputDrafts();
+  useUnsavedChanges(!!inputs?.dirty,()=>inputs?.clear());
   const { apps } = useAdmin();
   const [app, setApp] = useState("build");
   const [lang, setLang] = useState("zh-CN");
@@ -28,7 +29,7 @@ export function Words() {
   const list = (words.data?.words ?? []).filter((w) => (!onlyMissing || !w.translations[lang]) && (!needle || w.text.toLocaleLowerCase().includes(needle) || (w.translations[lang] ?? "").toLocaleLowerCase().includes(needle)));
   const missing = (words.data?.words ?? []).filter((w) => !w.translations[lang]).length;
   const save = async (text: string, translation: string) => {
-    if (await decide("platform.translation.set", { type: "platform.translation", id: lang }, { text, translation })) await words.refetch();
+    const ok=await decide("platform.translation.set",{type:"platform.translation",id:lang},{text,translation});if(ok)await words.refetch();return ok;
   };
   const appTitle = (id: string) => apps.find((a) => a.id === id)?.title || id;
   return <>
@@ -62,14 +63,13 @@ export function Words() {
   </>;
 }
 
-function WordRow({ word: w, lang, onSave }: { word: Api.Word; lang: string; onSave: (text: string, translation: string) => Promise<void> }) {
+function WordRow({ word: w, lang, onSave }: { word: Api.Word; lang: string; onSave: (text: string, translation: string) => Promise<boolean> }) {
   const own = w.own[lang], shipped = w.translations[lang];
-  const [value, setValue] = useState(own ?? "");
-  useEffect(() => setValue(own ?? ""), [own, lang]);
-  const commit = async () => { if ((value.trim() || "") !== (own ?? "")) await onSave(w.text, value.trim()); };
+  const input=useDraftInput(`translation:${lang}:${w.text}`,own??"",true),value=input.text;
+  const commit = async () => { if ((value.trim() || "") !== (own ?? "")) if(await onSave(w.text,value.trim()))input.clear(); };
   return <div className="grid grid-cols-[minmax(12rem,1fr)_minmax(16rem,1.4fr)_6rem] items-center gap-x-3 border-b border-border py-1 text-xs last:border-0">
     <span className="min-w-0 break-words">{w.text}</span>
-    <Input aria-label={t("Translation of {text}", { text: w.text })} value={value} placeholder={own === undefined && shipped ? shipped : t("Not translated")} onChange={(e) => setValue(e.target.value)}
+    <Input aria-label={t("Translation of {text}", { text: w.text })} value={value} placeholder={own === undefined && shipped ? shipped : t("Not translated")} data-draft-key={input.path} onChange={(e) => input.write(e.target.value)}
       onBlur={() => void commit()} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commit(); } }} className="h-7 text-xs" />
     <span>{own !== undefined ? <Tag label={t("Own")} tone="success" /> : shipped ? <Tag label={t("Shipped")} /> : <Tag label={t("Missing")} tone="warning" />}</span>
   </div>;

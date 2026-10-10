@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 // Alert rules (ADR-0077): when a record of an object comes to match a
 // condition, a role is told - once per record or every time. The operations
 // face's "situation": nobody has to keep a page open to see it.
@@ -29,7 +30,9 @@ export function AlertEditor({ id }: { id: string }) {
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.alertrule/${encodeURIComponent(id)}`);
   const inventory = useRecordInventory<Source>("build.object");
   const objects = installedObjects(inventory.data?.records ?? []);
-  const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const loaded = useRef("");
   const load = (record: Draft) => { setDraft({ ...empty(), ...record }); loaded.current = `${record.id}:${record.revision}`; };
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); });
@@ -42,7 +45,7 @@ export function AlertEditor({ id }: { id: string }) {
   const save = async () => {
     setBusy(true); setError("");
     try {
-      const target = draft.id || crypto.randomUUID();
+      const target = draft.id || createID;
       const { name, title, object, field, operator, value, message, role, every, active } = draft;
       if (!await decide(`build.alertrule.${draft.id ? "edit" : "create"}`, { type: "build.alertrule", id: target }, { name, title, object, field, operator, value: noValue ? "" : value ?? "", message, role: role ?? "", every: !!every, active },
         { expectedRevision: draft.id ? draft.revision : 0, quiet: true, onRefused: setError })) return;

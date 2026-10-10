@@ -137,6 +137,7 @@ export const entries: CatalogEntry[] = [
   asset("ui/field-types", "Typed field vocabulary", "One field type owns display, editing, validation, sorting and filtering.", 3,
     "fields/types.tsx", ["field.text", "field.json", "field.longText", "field.markdown", "field.number", "field.currency", "field.percent", "field.checkbox", "field.date", "field.datetime", "field.duration", "field.singleSelect", "field.multiSelect", "field.tags", "field.email", "field.url", "field.phone", "field.barcode", "field.rating", "field.attachment", "field.link", "field.formula", "field.timestamp", "field.applies"], "Fields", { type: "FieldType", tags: ["text", "json", "longText", "markdown", "number", "currency", "percent", "checkbox", "date", "datetime", "duration", "singleSelect", "multiSelect", "tags", "email", "url", "phone", "barcode", "rating", "attachment", "link", "formula", "timestamp"],
       constraints: ["Reference links need a Workspace; attachment upload needs an explicit caller implementation."] }),
+  asset("ui/input-drafts","Scoped input drafts","Keep unparsed number and JSON text in its original document and block unsafe submissions.",3,"fields/draft.tsx",["DraftInputs","InputDraftProvider","InputProblems"],"SchemaForms",{tags:["input","draft","validation"],dependencies:["ui/field-types"]}),
   asset("ui/entity-form", "Schema form", "Render labelled editors and validate an ad hoc schema before submission.", 3,
     "components/EntityForm.tsx", ["EntityForm"], "SchemaForms", { tags: ["form", "schema"], states: ["Invalid", "Submitting"], dependencies: ["ui/field-types", "ui/button"] }),
   asset("ui/record-form", "Entity form", "Edit declared entity fields using their shared validators and editors.", 3,
@@ -193,7 +194,7 @@ export const entries: CatalogEntry[] = [
 export const api = [
   "iconGlyphs", "iconGroups",
   "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
-  "defineEntity", "columnsFor", "recordSchema", "inputIssues", "activeValues", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useViewTitle", "useUnsavedChanges", "notify",
+  "useDraftInput", "useInputBuffers", "useInputDrafts", "defineEntity", "columnsFor", "recordSchema", "inputIssues", "activeValues", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useViewTitle", "useUnsavedChanges", "notify",
   "routeKey", "routeToHash", "routeFromHash", "layeredLayout", "laneBands", "relationLayout", "relationLayouts", "neighborhoodPositions", "relationNodeSize",
   "arrangeFlow", "useFlowArrangement", "useCanvasLayout",
   "relationNodeClasses", "relationNodeClassOf", "relationNodeCaption",

@@ -1,8 +1,8 @@
 import { Button, Checkbox, Disclosure, Input, Select, Tag, Textarea, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { ArrowDownToLine, Braces, Plus, X } from "lucide-react";
-import { useContext, useEffect, useId, useState, type ReactNode } from "react";
-import { BindingEditor, JSONEditor, PredicateEditor, SchemaEditor, WorkflowFormProblems } from "./workflow-binding";
+import { useState, type ReactNode } from "react";
+import { BindingEditor, JSONEditor, PredicateEditor, SchemaEditor } from "./workflow-binding";
 import { PERIODS, parameterSchema, periodLabel, sourceCapability, type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { ProtocolSelect, RoleSelect, useHost } from "@platform/app";
 import { useDraftInput } from "../session/DraftSession";
@@ -12,11 +12,10 @@ const emptyPredicate = () => ({ op: "eq" as const, left: { source: "input" as co
 const fieldClass = "grid gap-1 text-xs";
 
 function IdentifierInput({ value, label, onCommit, invalid }: { value: string; label: string; onCommit: (name: string) => void; invalid?: (name: string) => boolean }) {
-  const input = useDraftInput(`identifier:${label}:${value}`, value), { text } = input, id = useId(), report = useContext(WorkflowFormProblems);
+  const input = useDraftInput(`identifier:${label}:${value}`, value), { text } = input;
   const problem = invalid?.(text) ? t("Choose a unique, valid identifier.") : "";
-  useEffect(() => { if (input.retained) return; report(id, problem); return () => report(id, ""); }, [id, problem, report, input.retained]);
   const commit = () => { if (!problem) { input.clear(); if (text !== value) onCommit(text); } };
-  return <><Input aria-label={label} aria-invalid={!!problem} value={text} onChange={(event) => input.write(event.target.value, invalid?.(event.target.value) ? t("Choose a unique, valid identifier.") : event.target.value !== value ? t("Finish editing this identifier before saving.") : "")} onBlur={commit}
+  return <><Input data-draft-key={input.path} aria-label={label} aria-invalid={!!problem} value={text} onChange={(event) => input.write(event.target.value, invalid?.(event.target.value) ? t("Choose a unique, valid identifier.") : event.target.value !== value ? t("Finish editing this identifier before saving.") : "")} onBlur={commit}
     onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); commit(); } }} />{problem && <span className="text-[10px] text-danger">{problem}</span>}</>;
 }
 

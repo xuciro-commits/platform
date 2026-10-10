@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -32,7 +33,9 @@ export function MatchEditor({ id }: { id: string }) {
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.match/${encodeURIComponent(id)}`, 5000);
   const pipelines = useReadQuery<{ records: Producer[] }>("/v1/records/build.pipeline?limit=200").data?.records ?? [];
   const sources = useReadQuery<{ records: Producer[] }>("/v1/records/build.source?limit=200").data?.records ?? [];
-  const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const load = (record: Draft) => { setDraft({ ...empty(), ...record, keys: record.keys ?? [], prefer: record.prefer ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); });
@@ -40,7 +43,7 @@ export function MatchEditor({ id }: { id: string }) {
   const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The matching rule could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
   const save = async (): Promise<{ id: string; revision: number } | undefined> => {
-    const target = draft.id || crypto.randomUUID(), expected = baseRevision.current;
+    const target = draft.id || createID, expected = baseRevision.current;
     const { name, title, object, keys, prefer } = draft;
     const payload = { name, title, object, keys: keys.map((k) => ({ fields: k.fields.filter(Boolean), normalize: k.normalize ?? "" })), prefer };
     if (!await decide(`build.match.${draft.id ? "edit" : "create"}`, { type: "build.match", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;

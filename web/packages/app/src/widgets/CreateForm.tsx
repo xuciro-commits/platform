@@ -56,8 +56,9 @@ export function CreateFormRenderer({object:type,parentObject:parentType,config:s
           const payload = refField && master ? { ...values, [refField.name]: master.id } : values;
           try {
             if (Object.keys(bindings).length > 0) {
-              await invoke({ ref: { app: type.split(".")[0]!, kind: "action", name: `${type}.create` }, target: id, key: crypto.randomUUID(),
+              const answer=await invoke({ ref: { app: type.split(".")[0]!, kind: "action", name: `${type}.create` }, target: id, key: crypto.randomUUID(),
                 inputs: payload, bindings, record: Object.values(bindings).some((binding) => binding.source === "subject") && master ? `${parentType}/${master.id}` : undefined, expectedRevision: 0 });
+              if(answer.state!=="completed"&&!answer.result)throw new Error(t("The capability result is still awaiting confirmation. Retry the original request."));
               setRound((r) => r + 1);
             } else {
               const ok = await decide(`${type}.create`, { type, id }, payload, { expectedRevision: 0, quiet: true, onRefused: setError });

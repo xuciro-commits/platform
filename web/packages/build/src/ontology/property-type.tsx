@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import {useEffect,useRef,useState} from "react";
@@ -21,7 +22,9 @@ export function PropertyTypes() {
 export function PropertyTypeEditor({id}:{id:string}) {
  const {decide,role,definitions}=useHost(),{open,close}=useApplicationWorkspace();
  const query=useReadQuery<{record?:Draft}>(`/v1/records/build.propertytype/${encodeURIComponent(id)}`);
- const [draft,setDraft]=useState<Draft>(empty),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [draft,setDraft]=useState<Draft>(empty),[edited,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
  const loaded=useRef(""),baseRevision=useRef(0),lock=useRef(false);
  const load=(record:Draft)=>{setDraft(hydrate(record));baseRevision.current=record.revision;loaded.current=`${record.id}:${record.revision}`;};
  const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{if(query.data?.record)load(query.data.record);else setDraft(empty());setDirty(false);setError("");});
@@ -30,7 +33,7 @@ export function PropertyTypeEditor({id}:{id:string}) {
  const perform=async(action:()=>Promise<unknown>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError("");try{await action();}catch{setError(t("The shared property could not be saved or loaded. Your draft is still here."));}finally{lock.current=false;setBusy(false);}};
  const reload=async()=>{const result=await query.refetch();if(result.isSuccess&&result.data?.record){load(result.data.record);markSaved();setDirty(false);}else setError(t("Reload the saved shared property before editing again."));};
  const save=async():Promise<{id:string;revision:number}|undefined>=>{
-  const target=draft.id||crypto.randomUUID(),expected=baseRevision.current,{name,title,description,type}=draft;
+  const target=draft.id || createID,expected=baseRevision.current,{name,title,description,type}=draft;
   if(!await decide(`build.propertytype.${draft.id?"edit":"create"}`,{type:"build.propertytype",id:target},{name,title,description,type},{expectedRevision:draft.id?expected:0,quiet:true,onRefused:setError}))return;
   baseRevision.current=expected+1;loaded.current=`${target}:${expected+1}`;
   setDraft(d=>({...d,id:target,revision:expected+1}));markSaved();setDirty(false);

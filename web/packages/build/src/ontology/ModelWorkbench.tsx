@@ -193,6 +193,7 @@ function PageFromModel({ seed, onClose }: { seed: PageSeed; onClose: () => void 
   const initialFields = seed.field ? [seed.field] : entity?.fields.filter((field) => !field.aside && field.type !== "lines").slice(0, 4).map((field) => field.name) ?? [];
   const [fields, setFields] = useState(initialFields);
   const valid = !!entity && fields.length > 0 && /^[a-z][a-z0-9]*$/.test(name) && !!title.trim() && can("build.page.create");
+  const [pageID]=useState(()=>newId("PAGE"));
   const create = async () => {
     if (!valid || busy) return; setBusy(true); setError("");
     try {
@@ -206,7 +207,7 @@ function PageFromModel({ seed, onClose }: { seed: PageSeed; onClose: () => void 
         lifted.document.variables={...lifted.document.variables,parentRecord:{scope:"page",type:"record",mode:"resource",source:{kind:"record",section:lifted.sections[0]!.id}},relatedWindow:{scope:"page",type:"object-set",mode:"resource",source:{kind:"plan",query:"related"}}};
         lifted.document.queries={related:{title:relation.linkType?.title,object:relation.ref.object,query:relation.ref.binding,direction:"forward",for:{variable:"parentRecord"},sort:["id"],limit:50}};
       }
-      const id = newId("PAGE");
+      const id = pageID;
       const payload = { name, title: title.trim(), object: seed.object.name, document: lifted.document,
         sections: lifted.sections.map((section) => ({ ...section, object: section.object?.name })),
         selections: relation ? [{ name: "parent", object: seed.object }, { name: "related", object: relation.ref.object }] : [] };
@@ -215,7 +216,7 @@ function PageFromModel({ seed, onClose }: { seed: PageSeed; onClose: () => void 
     finally { setBusy(false); }
   };
   return <Panel role="region" aria-label={t("Create page from model")} title={t("Create page from model")} className="mt-4">
-    <Form className="grid gap-3" onSubmit={() => void create()}>
+    <Form className="grid gap-3" onSubmit={() => create()}>
       <p className="text-xs text-muted">{t("This creates a controlled page draft. Review its bindings before releasing it.")}</p>
       <fieldset disabled={busy} className="grid gap-3">
         <label className="grid gap-1 text-xs">{t("Page name")}<Input value={name} onChange={(event) => setName(event.target.value)} required /></label>

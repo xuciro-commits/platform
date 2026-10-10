@@ -63,13 +63,13 @@ export function Evaluations() {
   const models = useRead<AIModel[]>("/v1/ai-models").data ?? [];
   const [agent, setAgent] = useState("");
   const [model, setModel] = useState("");
-  const [suite, setSuite] = useState(false);
+  const [suite, setSuite] = useState(false),[evaluation,setEvaluation]=useState(()=>newId("EVAL"));
   const chosen = agent || agents[0]?.id || "";
   return (
     <>
       <PageHeader title={t("Evaluations")} description={t("A candidate model re-runs an agent's latest runs that people confirmed, changed, rejected, accepted or corrected — dry: it sees what the run saw, its actions are checked, never taken. Each case agrees or differs with what people accepted, or repeats or avoids what they corrected.")} />
       {can("agent.evaluation.start") && (
-        <Form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={() => { void decide("agent.evaluation.start", { type: "agent.evaluation", id: newId("EVAL") }, { agent: chosen, model, suite }); }}>
+        <Form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={async () => {const ok=await decide("agent.evaluation.start",{type:"agent.evaluation",id:evaluation},{agent:chosen,model,suite});if(ok)setEvaluation(newId("EVAL"));return ok;}}>
           <Select aria-label={t("Agent")} className="w-64" value={chosen} onChange={(e) => setAgent(e.target.value)}>
             {agents.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
           </Select>

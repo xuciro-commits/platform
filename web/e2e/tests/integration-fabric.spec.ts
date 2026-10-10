@@ -56,7 +56,8 @@ for (const fixture of [
         await page.getByLabel("Pipeline title", { exact: true }).fill("Clean external rows");
         await page.getByRole("combobox", { name: /^Input dataset/ }).selectOption(raw);
         await page.getByRole("combobox", { name: "Output dataset", exact: true }).selectOption(clean);
-        await page.getByRole("button", { name: "Add step", exact: true }).click();
+        await page.getByRole("button",{name:"Add block",exact:true}).click();
+        await page.getByRole("option", { name: /^cast/ }).click();
         // Select the step by its available grammar, then fill its labelled fields.
         await page.locator("select").filter({ has: page.locator('option[value="cast"]') }).selectOption("cast");
         await page.getByLabel("Column", { exact: true }).fill("qty");
@@ -76,7 +77,7 @@ for (const fixture of [
         if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: info.outputPath("pipeline.png"), fullPage: true });
         await builder.open(page, `/dataset?id=${clean}`);
         await expect(page.getByText("A", { exact: true }).last()).toBeVisible();
-        await page.getByRole("button", { name: "Pipeline Clean external rows", exact: true }).click();
+        await page.getByRole("region",{name:"Lineage",exact:true}).getByText("Clean external rows",{exact:true}).dblclick();
         await expect(page.getByLabel("Pipeline name", { exact: true })).toHaveValue(`${name}pipe`);
 
         // Deliver a page and its native flow together; the object is also the pipeline's target.

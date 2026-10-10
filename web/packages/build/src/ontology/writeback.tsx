@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -33,7 +34,9 @@ export function WritebackEditor({ id }: { id: string }) {
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.writeback/${encodeURIComponent(id)}`, 5000);
   const connections = (useReadQuery<{ records: ConnectionRow[] }>("/v1/records/build.connection?limit=100").data?.records ?? []).filter((c) => c.state === "ready" && c.kind !== "postgres");
   const effects = useReadQuery<Api.IntegrationEffect[]>("/v1/integration-effects", 5000).data ?? [];
-  const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const load = (record: Draft) => { setDraft({ ...empty(), ...record, mapping: record.mapping ?? [], result: record.result ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); });
@@ -41,7 +44,7 @@ export function WritebackEditor({ id }: { id: string }) {
   const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The writeback could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
   const save = async (): Promise<{ id: string; revision: number } | undefined> => {
-    const target = draft.id || crypto.randomUUID(), expected = baseRevision.current;
+    const target = draft.id || createID, expected = baseRevision.current;
     const { name, title, connection, object, on, method, path, mapping, result } = draft;
     const payload = { name, title, connection, object, on, method: method ?? "POST", path: path ?? "", mapping, result };
     if (!await decide(`build.writeback.${draft.id ? "edit" : "create"}`, { type: "build.writeback", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;

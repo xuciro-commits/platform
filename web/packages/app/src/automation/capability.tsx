@@ -1,5 +1,5 @@
 import { type Api } from "@platform/kernel";
-import { Button, Panel, Textarea, t, type EntityRecord } from "@platform/ui";
+import { InputDraftProvider,InputProblems,useInputDrafts,Button, Panel, Textarea, t, type EntityRecord } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { useInvokeCapability, useReadQuery } from "../index";
 
@@ -25,14 +25,17 @@ function unsafeInteger(schema: Api.ValueSchema | undefined, value: unknown): boo
 
 /** The page renders an exact owner contract and calls the shared invocation
  * route. Record bindings are resolved by the host with source permissions. */
-export function ComputeCall({ binding, bindings, record, recordType, live = true }: {
+export function ComputeCall(props:Parameters<typeof ComputeCallForm>[0]) {
+ return <InputDraftProvider isolated scope="calculation"><ComputeCallForm {...props}/></InputDraftProvider>;
+}
+function ComputeCallForm({ binding, bindings, record, recordType, live = true }: {
   binding?: Api.AssetBinding; bindings?: Record<string, Api.Binding>; record?: EntityRecord; recordType: string; live?: boolean;
 }) {
-  const invoke = useInvokeCapability(), [input, setInput] = useState("{}"), [call, setCall] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const drafts=useInputDrafts(),invoke = useInvokeCapability(), [input, setInput] = useState("{}"), [call, setCall] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const version = Number(binding?.sourceVersion.match(/\.compute-(\d+)$/)?.[1] ?? 0);
   const descriptor = useReadQuery<Api.CapabilityDescriptor>(`/v1/capabilities/${encodeURIComponent(binding?.ref.app ?? "")}/compute/${encodeURIComponent(binding?.ref.name ?? "")}?version=${version}`, undefined, !!binding);
   const answer = useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`, 1000, !!call && live);
-  useEffect(() => { setInput(JSON.stringify(example(descriptor.data?.input), null, 2)); setCall(""); setError(""); }, [descriptor.data?.input, binding?.sourceVersion]);
+  useEffect(() => { setInput(JSON.stringify(example(descriptor.data?.input), null, 2)); setCall(""); setError(""); }, [JSON.stringify(descriptor.data?.input), binding?.sourceVersion]);
   useEffect(() => { setCall(""); }, [record?.id]);
   const subject = Object.values(bindings ?? {}).some((value) => value.source === "subject");
   const bound = Object.keys(bindings ?? {}).length > 0;
@@ -42,8 +45,8 @@ export function ComputeCall({ binding, bindings, record, recordType, live = true
     {!live ? <p className="text-xs text-muted">{t("Calculations run when this page is opened by its operator.")}</p> : <>
       {subject && !record && <p className="text-sm text-muted">{t("Select a record to calculate its result.")}</p>}
       {(!bound || Object.values(bindings ?? {}).some((value) => value.source === "input")) && <label className="grid gap-1 text-xs">{t("Calculation input")}
-        <Textarea rows={6} spellCheck={false} className="font-mono text-xs" value={input} onChange={(event) => setInput(event.target.value)} /></label>}
-      <Button disabled={busy || descriptor.isError || descriptor.isLoading || subject && !record} onClick={async () => {
+        <Textarea parse="json" draftKey="input" rows={6} spellCheck={false} className="font-mono text-xs" value={input} onChange={(event) => setInput(event.target.value)} /></label>}
+      <Button disabled={busy || drafts?.invalid || descriptor.isError || descriptor.isLoading || subject && !record} onClick={async () => {
         setBusy(true); setError("");
         try {
           const values: unknown = JSON.parse(input);
@@ -62,6 +65,6 @@ export function ComputeCall({ binding, bindings, record, recordType, live = true
       </Panel>}
     </>}
     {descriptor.isError && <p role="alert" className="text-sm text-danger">{t("The published calculation is unavailable.")}</p>}
-    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+    <InputProblems/>{error && <p role="alert" className="text-sm text-danger">{error}</p>}
   </div>;
 }

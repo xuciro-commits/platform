@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useRef, useState } from "react";
@@ -30,7 +31,9 @@ export function Datasets() {
 export function DatasetEditor({ id }: { id: string }) {
   const { decide, role } = useHost(), { open, close } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: Draft & EntityRecord }>(`/v1/records/build.dataset/${encodeURIComponent(id)}`, 5000);
-  const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+ const [createID]=useState(()=>crypto.randomUUID()),[objectID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const [shown, setShown] = useState(0);
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const load = (record: Draft) => { setDraft({ ...empty(), ...record }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
@@ -41,7 +44,7 @@ export function DatasetEditor({ id }: { id: string }) {
   const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The dataset could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
   const save = async () => {
-    const target = draft.id || crypto.randomUUID(), expected = baseRevision.current;
+    const target = draft.id || createID, expected = baseRevision.current;
     const payload = { name: draft.name, title: draft.title, keep: Number(draft.keep) || 0, marking: draft.marking ?? "" };
     if (!await decide(`build.dataset.${draft.id ? "edit" : "create"}`, { type: "build.dataset", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
     baseRevision.current = expected + 1; loaded.current = `${target}:${expected + 1}`;
@@ -62,7 +65,7 @@ export function DatasetEditor({ id }: { id: string }) {
       seen.add(n);
       return { name: n, title: f.name, type: typeOf[f.type] ?? "text" };
     });
-    const target = crypto.randomUUID();
+    const target = objectID;
     const payload = { name, title: draft.title || name, description: t("Drafted from the dataset {name}", { name: draft.name }), fields,
       states: [{ name: "active", title: t("Active"), tone: "success" }], actions: [] };
     if (await decide("build.object.create", { type: "build.object", id: target }, payload, { expectedRevision: 0, quiet: true, onRefused: setError })) open({ view: "object-type", params: { id: target } });
@@ -86,7 +89,7 @@ export function DatasetEditor({ id }: { id: string }) {
       <Panel title={t("Dataset")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Dataset name")}<Input disabled={!!draft.producer} value={draft.name} placeholder="sapmaterials" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Dataset title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
-        <label className={fieldClass}>{t("Versions kept")}<Input type="number" min={1} max={50} value={draft.keep ?? ""} placeholder="3" onChange={(e) => patch({ keep: Number(e.target.value) })} />
+        <label className={fieldClass}>{t("Versions kept")}<Input draftKey="versions-kept" type="number" min={1} max={50} value={draft.keep ?? ""} placeholder="3" onChange={(e) => patch({ keep: Number(e.target.value) })} />
           <span className="text-[11px] text-muted">{t("Older versions keep their row count but lose their rows.")}</span></label>
         <MarkingField value={draft.marking ?? ""} onChange={(marking) => patch({ marking })} help={t("Raised by what loads it - the connection, the pipeline's input; lowered only here. Confidential and restricted data only reaches object fields that name their readers; restricted never leaves as CSV.")} />
         {draft.producer && <p className="text-xs text-muted">{t("Loaded by")}: <span className="font-mono">{draft.producer}</span></p>}

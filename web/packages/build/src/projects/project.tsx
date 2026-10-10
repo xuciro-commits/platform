@@ -154,7 +154,7 @@ export function ProjectHome({ id }: { id: string }) {
     } catch { setError(t("The project could not be saved.")); return false; } finally { setSaving(false); }
   };
   const editSettings = (next: NonNullable<typeof settings>) => { setEdited(true); setSettings(next); };
-  useAutoSave({ dirty, busy: saving, save: async () => { if (await patch(changedSettings)) setEdited(false); } });
+  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, busy: saving, save: async () => { if (await patch(changedSettings)) setEdited(false); } });
   const addCreated = async (kind: ResourceKindInfo, target: { type: string; id: string }) => {
     if (!project) return;
     const record = await fetchRecord(target);

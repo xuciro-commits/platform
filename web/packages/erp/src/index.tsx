@@ -22,7 +22,7 @@ function Coded({ type, label, placeholder }: { type: string; label: string; plac
         <div className="grid gap-3">
           <label className="grid gap-1 text-xs font-medium text-muted">{t("Code")} *<Input value={code} onChange={(e) => setCode(e.target.value.trim())} placeholder={placeholder} /></label>
           <GeneratedForm type={type} submitLabel={t("Create")} onCancel={() => setCreating(false)}
-            onSubmit={async (v) => { if (code && await decide(`${type}.create`, { type, id: code }, v, { expectedRevision: 0 })) { setCreating(false); setCode(""); } }} />
+            onSubmit={async (v) => {const ok=!!code&&await decide(`${type}.create`,{type,id:code},v,{expectedRevision:0});if(ok){setCreating(false);setCode("");}return ok;}} />
         </div>
       </Dialog>
     </>
@@ -32,13 +32,13 @@ function Coded({ type, label, placeholder }: { type: string; label: string; plac
 // Records people draft in a form and then move along their lifecycle from their page.
 function Drafted({ type, label, prefix, initial, wide }: { type: string; label: string; prefix: string; initial?: object; wide?: boolean }) {
   const { can, decide } = useHost();
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(false),[id,setId]=useState(()=>newId(prefix));
   return (
     <>
       <Records type={type} covers={[`${type}.create`]} actions={can(`${type}.create`) && <Button variant="primary" onClick={() => setCreating(true)}><Plus />{label}</Button>} />
       <Dialog wide={wide} open={creating} onOpenChange={setCreating} title={label}>
         <GeneratedForm type={type} record={initial as never} submitLabel={t("Save draft")} onCancel={() => setCreating(false)}
-          onSubmit={async (v) => { if (await decide(`${type}.create`, { type, id: newId(prefix) }, v, { expectedRevision: 0 })) setCreating(false); }} />
+          onSubmit={async (v) => {const ok=await decide(`${type}.create`,{type,id},v,{expectedRevision:0});if(ok){setCreating(false);setId(newId(prefix));}return ok;}} />
       </Dialog>
     </>
   );

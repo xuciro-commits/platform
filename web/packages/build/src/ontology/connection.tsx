@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useRef, useState } from "react";
@@ -28,7 +29,9 @@ export function Connections() {
 export function ConnectionEditor({ id }: { id: string }) {
   const { decide, role } = useHost(), { open, close } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.connection/${encodeURIComponent(id)}`, 5000);
-  const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const load = (record: Draft) => { setDraft({ ...empty(), ...record }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); });
@@ -36,7 +39,7 @@ export function ConnectionEditor({ id }: { id: string }) {
   const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The connection could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
   const save = async (): Promise<{ id: string; revision: number } | undefined> => {
-    const target = draft.id || crypto.randomUUID(), expected = baseRevision.current;
+    const target = draft.id || createID, expected = baseRevision.current;
     const { name, title, kind, address, secret, allowPrivate, marking } = draft;
     const payload = { name, title, kind, address, secret: secret ?? "", allowPrivate: !!allowPrivate, marking: marking ?? "" };
     if (!await decide(`build.connection.${draft.id ? "edit" : "create"}`, { type: "build.connection", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;

@@ -1,3 +1,4 @@
+import {DateTimeInput} from "@platform/ui";
 import { Checkbox, Disclosure, Input, Select, t } from "@platform/ui";
 import { is, live, type Metamodel, type Model } from "./model";
 
@@ -45,10 +46,10 @@ export function ElementProperties({ stereotype, meta, model, day, value, onChang
     } else if (!p.many && p.type === "Boolean") control = <Checkbox checked={current === true} disabled={disabled} onChange={(v) => set(p.name, v)}>{t(labels[p.name] ?? p.name)}</Checkbox>;
     else if (!p.many && ["String", "Integer", "Real", "ISO8601DateTime"].includes(p.type)) {
       const date = p.type === "ISO8601DateTime", numeric = p.type === "Integer" || p.type === "Real";
-      const update = (raw: string) => set(p.name, !raw ? "" : date ? `${raw}T00:00:00Z` : numeric ? Number(raw) : raw);
-      control = <Input disabled={disabled} type={date ? "date" : numeric ? "number" : "text"} step={p.type === "Integer" ? 1 : "any"}
-        value={date ? String(current ?? "").slice(0, 10) : String(current ?? "")}
-        onInput={date ? (e) => update(e.currentTarget.value) : undefined} onChange={(e) => update(e.target.value)} />;
+      const update = (raw: string) => set(p.name, !raw ? "" : numeric ? Number(raw) : raw);
+      control = date?<DateTimeInput title={t(labels[p.name]??p.name)} disabled={disabled} value={String(current??"")} offset="Z" onChange={raw=>set(p.name,raw)}/>:<Input draftKey={p.name} disabled={disabled} type={numeric ? "number" : "text"} step={p.type === "Integer" ? 1 : "any"}
+        value={String(current ?? "")}
+        onChange={(e) => update(e.target.value)} />;
     } else control = <span className="text-xs text-muted">{current === undefined ? "—" : typeof current === "object" ? JSON.stringify(current) : String(current)}</span>;
     return <label key={p.name} className="grid gap-1 text-xs text-muted" title={p.description}>{t(labels[p.name] ?? p.name)}{control}</label>;
   };

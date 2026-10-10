@@ -32,7 +32,7 @@ export function Organisation() {
     }
     const current = draft[s.name] ?? s.value;
     return <span className="flex gap-2">
-      <Input aria-label={s.title} list={s.name === "timezone" ? "platform-tenant-timezones" : undefined} type={s.type === "integer" ? "number" : "text"} value={current}
+      <Input aria-label={s.title} list={s.name === "timezone" ? "platform-tenant-timezones" : undefined} draftKey={s.name} step={s.type==="integer"?1:undefined} optional={false} type={s.type === "integer" ? "number" : "text"} value={current}
         onChange={(e) => setDraft({ ...draft, [s.name]: e.target.value })} />
       <Button size="md" disabled={current === s.value} onClick={async () => { if (await set(s, current)) setDraft(({ [s.name]: _, ...rest }) => rest); }}>{t("Save")}</Button>
     </span>;

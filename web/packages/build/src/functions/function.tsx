@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
@@ -42,7 +43,9 @@ export function FunctionEditor({ id }: { id: string }) {
   const [draft, setDraft] = useState<FunctionDraft>(empty);
   const [chosen, setChosen] = useState<Stage>("settings");
   const [testing, setTesting] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [edited, setDirty] = useState(false);
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const { markSaved, confirmDiscard, discardChanges } = useUnsavedChanges(dirty, () => {
@@ -68,7 +71,7 @@ export function FunctionEditor({ id }: { id: string }) {
     finally { setBusy(false); }
   };
   const save = async (): Promise<number | undefined> => {
-    const target = draft.id || crypto.randomUUID();
+    const target = draft.id || createID;
     const { conversation,name, title, description, object, fields, instructions, output, model, maxInputBytes, maxOutputBytes, maxTokens, roles } = draft;
     if (!await decide(`build.function.${draft.id ? "edit" : "create"}`, { type: "build.function", id: target },
       { conversation:conversation??false,name, title, description, object, fields, instructions, output, model: model ?? "", maxInputBytes, maxOutputBytes, maxTokens, roles },
@@ -144,17 +147,17 @@ export function FunctionEditor({ id }: { id: string }) {
           <fieldset className="grid gap-2"><legend className="mb-2 text-xs">{t("Input fields")}</legend>
             {fields.map((field) => <Checkbox key={field.name} checked={draft.fields.includes(field.name)} onChange={(enabled) => change({ fields: toggle(draft.fields, field.name, enabled) })}>{field.title} · {field.type}</Checkbox>)}
           </fieldset>
-          <label className="grid gap-1 text-xs">{t("Maximum input bytes")}<Input type="number" min={1} max={32768} value={draft.maxInputBytes} onChange={(e) => change({ maxInputBytes: Number(e.target.value) })} /></label>
+          <label className="grid gap-1 text-xs">{t("Maximum input bytes")}<Input draftKey="maximum-input-bytes" type="number" min={1} max={32768} value={draft.maxInputBytes} onChange={(e) => change({ maxInputBytes: Number(e.target.value) })} /></label>
         </>}
         {chosen === "model" && <>
           <label className="grid gap-1 text-xs">{t("Model identifier (empty: application default)")}<Input value={draft.model ?? ""} onChange={(e) => change({ model: e.target.value })} placeholder="provider/model" /></label>
           <Checkbox checked={draft.conversation??false} onChange={conversation=>change({conversation})}>{t("Accept conversation questions and retained call history")}</Checkbox>
           {draft.conversation&&<p className="text-xs text-muted">{t("Conversation input contains the authorized record, current question and up to eight completed calls. The full input still uses the original byte and token budgets.")}</p>}
           <label className="grid gap-1 text-xs">{t("Model instructions")}<Textarea rows={8} value={draft.instructions} onChange={(e) => change({ instructions: e.target.value })} /></label>
-          <label className="grid gap-1 text-xs">{t("Maximum tokens")}<Input type="number" min={1} max={4096} value={draft.maxTokens} onChange={(e) => change({ maxTokens: Number(e.target.value) })} /></label>
+          <label className="grid gap-1 text-xs">{t("Maximum tokens")}<Input draftKey="maximum-tokens" type="number" min={1} max={4096} value={draft.maxTokens} onChange={(e) => change({ maxTokens: Number(e.target.value) })} /></label>
         </>}
         {chosen === "output" && <>
-          <label className="grid gap-1 text-xs">{t("Maximum output bytes")}<Input type="number" min={1} max={32768} value={draft.maxOutputBytes} onChange={(e) => change({ maxOutputBytes: Number(e.target.value) })} /></label>
+          <label className="grid gap-1 text-xs">{t("Maximum output bytes")}<Input draftKey="maximum-output-bytes" type="number" min={1} max={32768} value={draft.maxOutputBytes} onChange={(e) => change({ maxOutputBytes: Number(e.target.value) })} /></label>
           {draft.output.map((field, index) => <Card key={index} role="group" aria-label={t("Output field {n}", { n: index + 1 })} className="grid gap-2 p-2">
             <label className="grid gap-1 text-xs">{t("Output field name")}<Input value={field.name} onChange={(e) => updateOutput(index, { name: e.target.value })} /></label>
             <label className="grid gap-1 text-xs">{t("Output type")}<Select value={field.type} onChange={(e) => updateOutput(index, { type: e.target.value, choices: undefined })}>

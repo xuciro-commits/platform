@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:3d25960bd58246ba",
+  "revision": "sha256:b540decead55d770",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2446,6 +2446,34 @@
       ]
     },
     {
+      "id": "ui/input-drafts",
+      "owner": "@platform/ui",
+      "name": "Scoped input drafts",
+      "summary": "Keep unparsed number and JSON text in its original document and block unsafe submissions.",
+      "layer": 3,
+      "source": "web/packages/ui/src/fields/draft.tsx",
+      "exports": [
+        "DraftInputs",
+        "InputDraftProvider",
+        "InputProblems"
+      ],
+      "example": "SchemaForms",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "input",
+        "draft",
+        "validation"
+      ],
+      "dependencies": [
+        "ui/field-types"
+      ]
+    },
+    {
       "id": "ui/inspector-controls",
       "owner": "@platform/ui",
       "name": "Compact property inspector",
@@ -4445,6 +4473,7 @@
       "Isolated external document": "隔离的外部文档",
       "Keep record browsing and focused detail in one responsive task frame.": "在响应式任务框架中同时保留记录浏览与聚焦详情。",
       "Keep selection and detail together using the existing record workspace or controlled table/detail sections.": "使用原记录工作台或受控表格与详情区块，保持选择与详情连贯。",
+      "Keep unparsed number and JSON text in its original document and block unsafe submissions.": "把未解析的数字和 JSON 原文保留在原文档中，并阻止无效提交。",
       "Keyboard focus": "键盘焦点",
       "Layout canvas editor": "布局画布编辑器",
       "Lifecycle status bar": "生命周期状态栏",
@@ -4573,6 +4602,7 @@
       "Reveal supporting details while keeping the summary visible.": "显示补充详情，同时保留摘要。",
       "Rows are always expanded; collapse and full tree keyboard navigation are not implemented.": "所有行始终展开；尚未实现折叠与完整的树键盘导航。",
       "Schema form": "模式表单",
+      "Scoped input drafts": "会话内输入草稿",
       "Scoped search input": "有范围的搜索输入",
       "Search a caller's scoped source to choose a reference by record ID.": "搜索调用方的限定范围数据源，按记录 ID 选择引用。",
       "Search and fold resource groups while preserving caller-owned selection.": "搜索和折叠资源分组，保留调用方控制的选择。",
@@ -4752,7 +4782,8 @@
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/exploration/observation-reader.ts",
       "web/packages/app/src/widgets/DateInput.tsx",
-      "web/packages/build/src/workshop/editor.tsx"
+      "web/packages/build/src/workshop/editor.tsx",
+      "web/packages/platform/src/enterprise/properties.tsx"
     ],
     "ui/date-input": [
       "web/packages/app/src/actions/actions.tsx",
@@ -5343,6 +5374,15 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
+    "ui/input-drafts": [
+      "web/packages/app/src/automation/capability.tsx",
+      "web/packages/app/src/index.tsx",
+      "web/packages/build/src/automate/workflow-binding.tsx",
+      "web/packages/build/src/functions/code.tsx",
+      "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/build/src/workshop/ModuleWorkbench.tsx",
+      "web/packages/build/src/workshop/editor.tsx"
+    ],
     "ui/flow": [
       "web/packages/app/src/automation/flows.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
@@ -5830,7 +5870,10 @@
         "t",
         "useCanvasLayout",
         "useChartData",
+        "useDraftInput",
         "useFlowArrangement",
+        "useInputBuffers",
+        "useInputDrafts",
         "useTheme",
         "useUnsavedChanges",
         "useViewCall",
@@ -5916,6 +5959,7 @@
         "IconName",
         "ImageAnnotationProps",
         "InboxTask",
+        "InputBuffers",
         "InterfaceRecordData",
         "InterfaceRecordIdentity",
         "InterfaceRecordPageData",

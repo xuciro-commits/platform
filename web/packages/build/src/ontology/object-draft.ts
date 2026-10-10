@@ -37,9 +37,42 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     && definitions.some((definition) => definition.source === "tenant" && definition.ref.app === "build" && definition.ref.kind === "object" && definition.ref.name === entity.type));
   const issuesOf = (name: string) => { const a = process.actions.find((x) => x.name === name); return a ? actionIssues(a, process, parent, targets, entities) : []; };
   const issues = process.actions.flatMap((a) => actionIssues(a, process, parent, targets, entities).map((message) => `${a.title || a.name}: ${message}`));
-  const change = (next: Process) => { if (!lock.current) session.edit(next); };
+  const change = (next: Process) => {
+    if(lock.current)return;
+    // Inspector rows have no serialized UI ids. Move their buffers with the
+    // original row when a sibling is removed or reordered; renames keep the slot.
+    const indexOf=(before:unknown[],after:unknown[],at:number)=>{const found=after.indexOf(before[at]);return found>=0?found:before.length===after.length?at:-1;};
+    const collections={field:"fields",state:"states",action:"actions",access:"access"} as const;
+    const parts={parameter:"inputs",rule:"sets",criterion:"conditions",effect:"creates",posting:"posts"} as const;
+    const moves=Object.entries(session.inputs.values).flatMap(([key,value])=>{
+      const segments=key.split("/");let changed=false,removed=false;
+      for(let i=0;i<segments.length;i++){
+        const segment=segments[i]!;
+        if(!segment.startsWith("{")&&!segment.startsWith("["))continue;
+        let parsed:unknown;try{parsed=JSON.parse(segment);}catch{continue;}
+        if(Array.isArray(parsed)&&typeof parsed[0]==="number"&&parsed[1]?.kind in parts){
+          const oldAt=parsed[0],at=indexOf(process.actions,next.actions,oldAt);
+          if(at<0){removed=true;break;}
+          const part=parts[parsed[1].kind as keyof typeof parts];
+          const row=indexOf(process.actions[oldAt]?.[part]??[],next.actions[at]?.[part]??[],parsed[1].at);
+          if(row<0){removed=true;break;}
+          segments[i]=JSON.stringify([at,{...parsed[1],at:row}]);changed ||= segments[i]!==segment;
+        }else if(parsed&&typeof parsed==="object"&&"kind" in parsed&&"at" in parsed&&(parsed.kind as string) in collections){
+          const pick=parsed as {kind:keyof typeof collections;at:number},collection=collections[pick.kind];
+          const at=indexOf(process[collection],next[collection],pick.at);
+          if(at<0){removed=true;break;}
+          segments[i]=JSON.stringify({...pick,at});changed ||= segments[i]!==segment;
+        }
+      }
+      return changed||removed?[{key,next:removed?undefined:segments.join("/"),value}]:[];
+    });
+    for(const move of moves)session.inputs.set(move.key);
+    for(const move of moves)if(move.next)session.inputs.set(move.next,move.value);
+    session.edit(next);
+  };
   const save = async () => {
     setRefused(undefined);
+    if(session.inputs.invalid){setRefused(t("Correct the input drafts before submitting."));return false;}
     const expectedRevision = baseRevision.current;
     const changes = objectChanges(process, baseline.current);
     if (!Object.keys(changes).length) return true;

@@ -1,3 +1,4 @@
+import {useInputDrafts} from "../fields/draft";
 import {useTheme} from "../themes/theme";
 import { Command } from "cmdk";
 import { DockviewDefaultTab, DockviewReact, themeLight,themeDark, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps } from "dockview-react";
@@ -86,11 +87,12 @@ export function useViewTitle(name?: string) {
 
 /** Editors own their draft; the shell owns close/reload confirmation. */
 export function useUnsavedChanges(dirty: boolean, discard: () => void) {
+  const inputs=useInputDrafts();dirty ||=!!inputs?.dirty;
   const { unsaved } = useWorkspace();
   const panel = useContext(PanelContext);
   const owner = useRef(Symbol());
   const reset = useRef(discard);
-  reset.current = discard;
+  reset.current = ()=>{inputs?.clear();discard();};
   useLayoutEffect(() => {
     if (!panel || !unsaved) return; // local reference examples have no draft host
     unsaved.register(panel, owner.current, dirty ? () => {
@@ -100,7 +102,7 @@ export function useUnsavedChanges(dirty: boolean, discard: () => void) {
     return () => unsaved.register(panel, owner.current);
   }, [dirty, panel, unsaved]);
   return {
-    markSaved: () => { if (panel) unsaved?.register(panel, owner.current); },
+    markSaved: () => { if(inputs?.dirty)return;if (panel) unsaved?.register(panel, owner.current); },
     discardChanges: () => { if (panel) unsaved?.register(panel, owner.current); reset.current(); },
     confirmDiscard: (run: () => void) => panel && unsaved ? unsaved.ask([panel], run) : run(),
   };

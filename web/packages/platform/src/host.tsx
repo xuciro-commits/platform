@@ -1,9 +1,10 @@
+import {useInputDrafts} from "@platform/ui";
 // Host Console (ADR-0052 §3.4, batch P5): the host administrator's view over
 // every tenant this host runs — health, lifecycle, support sessions, trusted
 // artifacts, and promotions and migrations between tenants (environments).
 // Everything here calls the host console's own routes (`/v1/host/*`); who may
 // call them is decided by the host (`HostAdmins`), not by this file.
-import type { Api } from "@platform/kernel";
+import {apiErrorMessage,type Api} from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Panel, Select, Tag, Textarea, notify, useWorkspace, type ColumnDef, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,18 +18,19 @@ type Manifest = Api.MigrationManifest;
 
 /** One call to the console; errors come back as the host wrote them. */
 function useConsole() {
-  const { client } = useHost();
+  const { client } = useHost(),inputs=useInputDrafts();
   const queries = useQueryClient();
   return async <T,>(path: string, body: unknown): Promise<T | undefined> => {
+    inputs?.reject();inputs?.pending(1);
     try {
       const result = await client.call<T & { error?: string }>("POST", path, body);
-      if (!result.ok) { notify.error(result.body?.error ?? t("The host refused this request.")); return undefined; }
+      if (!result.ok) { inputs?.reject(apiErrorMessage(result.body) ?? t("The host refused this request.")); return undefined; }
       await queries.invalidateQueries();
       return result.body;
     } catch {
-      notify.error(t("The host is unreachable."));
+      inputs?.reject(t("The host is unreachable."));
       return undefined;
-    }
+    }finally{inputs?.pending(-1);}
   };
 }
 
@@ -138,7 +140,7 @@ export function HostTenant({ tenant }: { tenant: string }) {
       </Panel>
     </div>
     <Dialog open={!!lifecycle} onOpenChange={(o) => !o && setLifecycle(undefined)} title={lifecycle === "suspend" ? t("Suspend {tenant}", { tenant }) : lifecycle === "resume" ? t("Resume {tenant}", { tenant }) : t("Decommission {tenant}", { tenant })}>
-      <Form className="grid gap-3" onSubmit={() => void submitLifecycle()}>
+      <Form className="grid gap-3" onSubmit={() => submitLifecycle()}>
         <p className="text-sm text-muted">{lifecycle === "decommission" ? t("A decommissioned tenant no longer accepts sign-ins or work. Its history is kept.") : t("The reason is recorded in the tenant's audit.")}</p>
         <label className="grid gap-1 text-sm">{t("Reason")}<Textarea required value={reason} onChange={(e) => setReason(e.target.value)} /></label>
         <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => setLifecycle(undefined)}>{t("Cancel")}</Button><Button type="submit" variant="primary">{t("Confirm")}</Button></div>
@@ -163,7 +165,7 @@ function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     if (created) { notify.success(t("Tenant {id} created.", { id: created.id })); onOpenChange(false); setId(""); setName(""); setAdmin(""); openView({ view: "host-tenant", params: { tenant: created.id } }); }
   };
   return <Dialog open={open} onOpenChange={onOpenChange} title={t("Create tenant")}>
-    <Form className="grid gap-3" onSubmit={() => void submit()}>
+    <Form className="grid gap-3" onSubmit={() => submit()}>
       <p className="text-sm text-muted">{t("A tenant is a hard boundary: its own members, records, settings and audit. Subsidiaries and sites normally live inside one tenant's enterprise model.")}</p>
       <label className="grid gap-1 text-sm">{t("Tenant ID")}<Input required pattern="[a-z][a-z0-9-]{1,31}" value={id} onChange={(e) => setId(e.target.value)} placeholder="acme" />
         <span className="text-xs text-muted">{t("Lower case, digits, dashes; it cannot change later.")}</span></label>
@@ -189,7 +191,7 @@ function SupportDialog({ tenant, open, onOpenChange }: { tenant: string; open: b
     if (grant) { notify.success(t("Support session {id} opened until {expires}.", { id: grant.id, expires: when(grant.expires) })); onOpenChange(false); setMember(""); setReason(""); }
   };
   return <Dialog open={open} onOpenChange={onOpenChange} title={t("Open a support session")}>
-    <Form className="grid gap-3" onSubmit={() => void submit()}>
+    <Form className="grid gap-3" onSubmit={() => submit()}>
       <p className="text-sm text-muted">{t("Reads the tenant's health and audit as one of its members, for a bounded time. Every use is recorded.")}</p>
       <label className="grid gap-1 text-sm">{t("Member")}<Input required value={member} onChange={(e) => setMember(e.target.value)} placeholder="member-id" /></label>
       <label className="grid gap-1 text-sm">{t("Reason")}<Textarea required value={reason} onChange={(e) => setReason(e.target.value)} /></label>
@@ -228,7 +230,7 @@ export function HostPromotions({ tenant, from: initialFrom, candidate: initialCa
   };
   return <>
     <PageHeader title={t("Promote a release")} description={t("Move a sealed candidate from one tenant into another — development to test, test to production — through a support session on the target.")} />
-    <Form className="grid max-w-2xl gap-3" onSubmit={() => void submit()}>
+    <Form className="grid max-w-2xl gap-3" onSubmit={() => submit()}>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="grid gap-1 text-sm">{t("From tenant")}<Select value={source} onChange={(e) => { setFrom(e.target.value); setCandidate(""); }}>{tenants.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}</Select></label>
         <label className="grid gap-1 text-sm">{t("Into tenant")}<Select value={target} onChange={(e) => { setTo(e.target.value); setGrant(""); }}>{tenants.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}</Select></label>
@@ -293,7 +295,7 @@ export function HostMigrations({ tenant }: { tenant?: string }) {
   const grantOptions = (grants?: Grant[]) => (grants ?? []).map((g) => <option key={g.id} value={g.id}>{g.id} · {g.member}</option>);
   return <>
     <PageHeader title={t("Migrate records")} description={t("Copy records of chosen types from one tenant into another through its own actions, under a support session on each side.")} />
-    <Form className="grid max-w-2xl gap-3" onSubmit={() => void submit()}>
+    <Form className="grid max-w-2xl gap-3" onSubmit={() => submit()}>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="grid gap-1 text-sm">{t("From tenant")}<Select value={source} onChange={(e) => { setFrom(e.target.value); setSourceGrant(""); }}>{tenants.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}</Select></label>
         <label className="grid gap-1 text-sm">{t("Into tenant")}<Select value={target} onChange={(e) => { setTo(e.target.value); setTargetGrant(""); }}>{tenants.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}</Select></label>

@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 // Agents a builder declares over the ontology (ADR-0077): instructions, the
 // published actions and queries they may use, a budget, checkpoints and the
 // cases they must pass. Publishing installs one as build.<name>; the host runs
@@ -38,7 +39,9 @@ export function AgentEditor({ id }: { id: string }) {
     ...(queries.data?.records ?? []).filter((q) => q.published).map((q) => ({ value: `query:${q.name}`, label: t("Query: {name}", { name: q.title }) })),
   ];
   const roles = [...new Set(["builder", ...objects.flatMap((o) => (o.access ?? []).map((a) => a.role))])];
-  const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const loaded = useRef("");
   const load = (record: Draft) => { setDraft({ ...empty(), ...record, tools: record.tools ?? [], cases: record.cases ?? [] }); loaded.current = `${record.id}:${record.revision}`; };
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); });
@@ -54,7 +57,7 @@ export function AgentEditor({ id }: { id: string }) {
     return { name, title, description, instructions, tools, steps: steps || 0, tokens: tokens || 0, actions: actions || 0, cost: cost || 0, checkpoints: checkpoints ?? [], handoffRole: handoffRole ?? "", cases: cases ?? [] };
   };
   const save = async (): Promise<{ id: string; revision: number } | undefined> => {
-    const target = draft.id || crypto.randomUUID();
+    const target = draft.id || createID;
     if (!await decide(`build.agent.${draft.id ? "edit" : "create"}`, { type: "build.agent", id: target }, payload(), { expectedRevision: draft.id ? draft.revision : 0, quiet: true, onRefused: setError })) return;
     const revision = draft.id ? draft.revision + 1 : 1;
     markSaved(); setDirty(false);
@@ -102,10 +105,10 @@ export function AgentEditor({ id }: { id: string }) {
           <Toggles options={tools.filter((x) => draft.tools.includes(x.value))} value={draft.checkpoints ?? []} onChange={(checkpoints) => change({ checkpoints })} />
           <span className="text-[11px] text-muted">{t("Tools that always wait for a person to confirm, even when the agent runs on its own: the irreversible ones.")}</span></fieldset>}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <label className={fieldClass}>{t("Model turns")}<Input type="number" min={1} value={draft.steps ?? ""} placeholder="10" onChange={(e) => change({ steps: Number(e.target.value) || undefined })} /></label>
-          <label className={fieldClass}>{t("Tokens")}<Input type="number" min={1} value={draft.tokens ?? ""} placeholder="40000" onChange={(e) => change({ tokens: Number(e.target.value) || undefined })} /></label>
-          <label className={fieldClass}>{t("Actions")}<Input type="number" min={1} value={draft.actions ?? ""} placeholder="3" onChange={(e) => change({ actions: Number(e.target.value) || undefined })} /></label>
-          <label className={fieldClass}>{t("USD per run")}<Input type="number" min={0} step={0.01} value={draft.cost ?? ""} placeholder="0" onChange={(e) => change({ cost: Number(e.target.value) || undefined })} /></label>
+          <label className={fieldClass}>{t("Model turns")}<Input draftKey="model-turns" type="number" min={1} value={draft.steps ?? ""} placeholder="10" onChange={(e) => change({ steps: Number(e.target.value) || undefined })} /></label>
+          <label className={fieldClass}>{t("Tokens")}<Input draftKey="tokens" type="number" min={1} value={draft.tokens ?? ""} placeholder="40000" onChange={(e) => change({ tokens: Number(e.target.value) || undefined })} /></label>
+          <label className={fieldClass}>{t("Actions")}<Input draftKey="actions" type="number" min={1} value={draft.actions ?? ""} placeholder="3" onChange={(e) => change({ actions: Number(e.target.value) || undefined })} /></label>
+          <label className={fieldClass}>{t("USD per run")}<Input draftKey="usd-per-run" type="number" min={0} step={0.01} value={draft.cost ?? ""} placeholder="0" onChange={(e) => change({ cost: Number(e.target.value) || undefined })} /></label>
         </div>
       </Panel>
       <Panel title={t("Evaluation cases")} className="grid content-start gap-2 lg:col-span-2">

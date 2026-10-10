@@ -79,6 +79,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/image-annotation": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ImageAnnotationExample })),
   "ui/indexed-choices": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.IndexedChoicesExample })),
   "ui/input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Inputs })),
+  "ui/input-drafts": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SchemaForms })),
   "ui/inspector-controls": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.InspectorControlsExample })),
   "ui/layout-region": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SizedLayouts })),
   "ui/lifecycle": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Lifecycle })),

@@ -1,21 +1,19 @@
 import {schemaIssue} from "./workflow-schema";
 export {schemaIssue} from "./workflow-schema";
-import { Button, Checkbox, Disclosure, Input, Select, Textarea, t } from "@platform/ui";
+import { InputDraftProvider, Button, Checkbox, Disclosure, Input, Select, Textarea, t } from "@platform/ui";
 import { Braces, ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from "lucide-react";
-import { createContext, useContext, useEffect, useId, useState } from "react";
+import { useState } from "react";
 import { useDraftInput } from "../session/DraftSession";
 import { commonSchemaProperties, type Binding, type Predicate, type ValueSchema, type WorkflowStep } from "./workflow-model";
 
-export const WorkflowFormProblems = createContext<(id: string, problem: string) => void>(() => {});
 const bindingMime = "application/platform-binding";
 
 /** Buffer invalid edits visibly, and make the owning form's Save unavailable until corrected. */
 export function JSONEditor({ value, onChange, label, rows = 4, schema, draftKey = label }: { value: unknown; onChange: (value: unknown) => void; label: string; rows?: number; schema?: ValueSchema; draftKey?: string }) {
-  const source = JSON.stringify(value ?? null, null, 2), id = useId(), report = useContext(WorkflowFormProblems);
+  const source = JSON.stringify(value ?? null, null, 2);
   const input = useDraftInput(draftKey, source), { text, problem } = input;
-  useEffect(() => { if (input.retained) return; report(id, problem); return () => report(id, ""); }, [id, problem, report, input.retained]);
   return <label className="grid gap-1 text-xs"><span className="flex items-center justify-between">{label}{schema && <code className="text-[10px] text-muted">{schema.type}</code>}</span>
-    <Textarea aria-invalid={!!problem} rows={rows} spellCheck={false} className="font-mono text-[11px]" value={text} onChange={(event) => {
+    <Textarea data-draft-key={input.path} aria-invalid={!!problem} rows={rows} spellCheck={false} className="font-mono text-[11px]" value={text} onChange={(event) => {
       const next = event.target.value;
       try { const parsed: unknown = JSON.parse(next); const issue = schema && schemaIssue(schema, parsed); if (issue) { input.write(next, issue); return; } input.clear(); onChange(parsed); }
       catch { input.write(next, t("Enter valid JSON before saving.")); }
@@ -99,10 +97,10 @@ export function SchemaEditor({ schema, onChange, depth = 0, fixedObject = false,
         }])) });
       }} /></label>
       {Object.entries(schema.variants ?? {}).map(([tag, branch]) => <Disclosure key={tag} className="rounded border border-border p-2" summary={<span className="text-xs font-medium">{tag}</span>}><div className="mt-2 grid gap-2">
-        {depth < 12 && <SchemaEditor schema={branch} fixedObject lockedFields={[schema.discriminator ?? "kind"]} onChange={(next) => {
+        {depth < 12 && <InputDraftProvider scope={`variant:${tag}`}><SchemaEditor schema={branch} fixedObject lockedFields={[schema.discriminator ?? "kind"]} onChange={(next) => {
           const discriminator = schema.discriminator ?? "kind";
           onChange({ ...schema, variants: { ...schema.variants, [tag]: { ...next, type: "object", nullable: undefined, properties: { ...next.properties, [discriminator]: { type: "string", enum: [tag] } }, required: [...new Set([...(next.required ?? []), discriminator])] } } });
-        }} depth={depth + 1} />}
+        }} depth={depth + 1} /></InputDraftProvider>}
         <Button variant="ghost" disabled={Object.keys(schema.variants ?? {}).length <= 1} onClick={() => onChange({ ...schema, variants: Object.fromEntries(Object.entries(schema.variants ?? {}).filter(([name]) => name !== tag)) })}>{t("Remove variant")}</Button>
       </div></Disclosure>)}
       <div className="flex gap-1"><Input aria-label={t("New variant tag")} placeholder={t("Variant tag")} value={newName} onChange={(event) => setNewName(event.target.value)} />
@@ -115,16 +113,16 @@ export function SchemaEditor({ schema, onChange, depth = 0, fixedObject = false,
     {schema.type === "object" && <>
       {Object.entries(schema.properties ?? {}).map(([name, property]) => <Disclosure key={name} className="rounded border border-border p-2" summary={<span className="text-xs font-medium">{name} <code className="ml-1 text-[10px] text-muted">{property.type}</code></span>}>
         <div className="mt-2 grid gap-2"><Checkbox disabled={lockedFields.includes(name)} checked={schema.required?.includes(name) ?? false} onChange={(required) => onChange({ ...schema, required: required ? [...(schema.required ?? []), name] : schema.required?.filter((field) => field !== name) })}>{t("Required")}</Checkbox>
-          {lockedFields.includes(name) ? <code className="text-[10px] text-muted">{JSON.stringify(property.enum)}</code> : depth < 12 && <SchemaEditor schema={property} onChange={(next) => onChange({ ...schema, properties: { ...schema.properties, [name]: next } })} depth={depth + 1} />}
+          {lockedFields.includes(name) ? <code className="text-[10px] text-muted">{JSON.stringify(property.enum)}</code> : depth < 12 && <InputDraftProvider scope={`property:${name}`}><SchemaEditor schema={property} onChange={(next) => onChange({ ...schema, properties: { ...schema.properties, [name]: next } })} depth={depth + 1} /></InputDraftProvider>}
           {!lockedFields.includes(name) && <Button variant="ghost" onClick={() => onChange({ ...schema, properties: Object.fromEntries(Object.entries(schema.properties ?? {}).filter(([field]) => field !== name)), required: schema.required?.filter((field) => field !== name) })}>{t("Remove field")}</Button>}</div>
       </Disclosure>)}
       <div className="flex gap-1"><Input aria-label={t("New schema field")} placeholder={t("Field name")} value={newName} onChange={(event) => setNewName(event.target.value)} />
         <Button aria-label={t("Add field")} disabled={!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(newName) || !!schema.properties?.[newName]} onClick={() => { onChange({ ...schema, properties: { ...schema.properties, [newName]: { type: "string" } } }); setNewName(""); }}><Plus className="size-3" /></Button></div>
     </>}
-    {schema.type === "array" && depth < 12 && <><SchemaEditor schema={schema.items ?? { type: "string" }} onChange={(items) => onChange({ ...schema, items })} depth={depth + 1} />
-      <label className="grid gap-1 text-xs">{t("Maximum items")}<Input type="number" min={1} max={10000} value={schema.maxItems ?? 100} onChange={(event) => onChange({ ...schema, maxItems: Number(event.target.value) })} /></label></>}
+    {schema.type === "array" && depth < 12 && <><InputDraftProvider scope="items"><SchemaEditor schema={schema.items ?? { type: "string" }} onChange={(items) => onChange({ ...schema, items })} depth={depth + 1} /></InputDraftProvider>
+      <label className="grid gap-1 text-xs">{t("Maximum items")}<Input draftKey="maximum-items" type="number" min={1} max={10000} value={schema.maxItems ?? 100} onChange={(event) => onChange({ ...schema, maxItems: Number(event.target.value) })} /></label></>}
     {schema.type === "string" && <><label className="grid gap-1 text-xs">{t("Allowed values, one per line")}<Textarea rows={2} value={schema.enum?.join("\n") ?? ""} onChange={(event) => onChange({ ...schema, enum: event.target.value ? event.target.value.split("\n") : undefined })} /></label>
-      <label className="grid gap-1 text-xs">{t("Maximum length")}<Input type="number" min={0} value={schema.maxLength ?? 0} onChange={(event) => onChange({ ...schema, maxLength: Number(event.target.value) })} /></label></>}
+      <label className="grid gap-1 text-xs">{t("Maximum length")}<Input draftKey="maximum-length" type="number" min={0} value={schema.maxLength ?? 0} onChange={(event) => onChange({ ...schema, maxLength: Number(event.target.value) })} /></label></>}
     <Input aria-label={t("Schema description")} placeholder={t("Description")} value={schema.description ?? ""} onChange={(event) => onChange({ ...schema, description: event.target.value })} />
   </div>;
 }

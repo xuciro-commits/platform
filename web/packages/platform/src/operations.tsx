@@ -244,7 +244,7 @@ export function AppSettingsView() {
                       </Select>
                     ) : (
                       <span className="flex gap-2">
-                        <Input aria-label={s.title} type={s.type === "integer" ? "number" : "text"} value={draft[key] ?? s.value}
+                        <Input aria-label={s.title} draftKey={s.name} step={s.type==="integer"?1:undefined} optional={false} type={s.type === "integer" ? "number" : "text"} value={draft[key] ?? s.value}
                           onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
                         <Button size="md" disabled={(draft[key] ?? s.value) === s.value}
                           onClick={async () => { if (await set(a.app, s, draft[key]!)) setDraft(({ [key]: _, ...rest }) => rest); }}>{t("Save")}</Button>

@@ -1,3 +1,4 @@
+import {InputDraftProvider} from "@platform/ui";
 // The Workshop module (ADR-0053 §5.3, D1): a project's pages, navigation,
 // header and module-level variables, edited in one Workbench. With a page in
 // hand the main view is that page's canvas (PageEditor); without one it is the
@@ -72,30 +73,31 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const pageRecords = useRecordInventory<PageRecord>("build.page");
   const session = useDraftSession<ModuleDraft>({ pages: [], groups: [], title: "" }, id);
   const { draft, dirty } = session;
-  const loaded = useRef(""), lock = useRef(false);
+  const loaded = useRef(""),baseRevision=useRef(0), lock = useRef(false);
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [focus, setFocus] = useState<ModuleFocus>(isModuleFocus(initialFocus) ? initialFocus : "navigation");
   const [templates, setTemplates] = useState(false);
-  useEffect(() => { if (project && !dirty && !saving && loaded.current !== `${project.id}:${project.revision}`) { session.load(hydrate(project)); loaded.current = `${project.id}:${project.revision}`; } }, [project, dirty, saving, session.load]);
+  useEffect(() => { if (project && !dirty && !saving && loaded.current !== `${project.id}:${project.revision}`) { session.load(hydrate(project));baseRevision.current=project.revision; loaded.current = `${project.id}:${project.revision}`; } }, [project, dirty, saving, session.load]);
   const canEdit = role("build") === "builder";
   const pages = useMemo(() => (draft.pages ?? []).map((name) => { const record = pageRecords.data?.records.find((item) => item.name === name && !item.archived); return { name, title: record?.title ?? name, id: record?.id, state: record?.state }; }), [draft.pages, pageRecords.data]);
   const save = async () => {
     if (!project || lock.current) return false;
     lock.current = true; setSaving(true); setError(undefined);
     try {
-      const ok = await decide("build.app.edit", { type: "build.app", id: project.id }, moduleChanges(draft), { expectedRevision: project.revision, quiet: true, onRefused: setError });
-      if (ok) { const result = await query.refetch(); const next = result.data?.record; session.saved(draft, next ? hydrate(next) : undefined); if (next) loaded.current = `${next.id}:${next.revision}`; }
+      const expected=baseRevision.current;
+      const ok = await decide("build.app.edit", { type: "build.app", id: project.id }, moduleChanges(draft), { expectedRevision: expected, quiet: true, onRefused: setError });
+      if (ok) { const result = await query.refetch(); const next = result.data?.record?.revision===expected+1?result.data.record:undefined;baseRevision.current=expected+1; session.saved(draft, next ? hydrate(next) : undefined); if (next) loaded.current = `${next.id}:${next.revision}`; }
       return ok;
     } catch { setError(t("The module could not be saved.")); return false; } finally { lock.current = false; setSaving(false); }
   };
-  useAutoSave({ enabled: canEdit, dirty, busy: saving, save });
+  useAutoSave({ generation:JSON.stringify(draft), invalid:Object.values(session.inputProblems).some(Boolean), enabled: canEdit, dirty, busy: saving, save });
   const edit = (patch: Partial<ModuleDraft>) => { if (canEdit) session.edit((old) => ({ ...old, ...patch })); };
   const createPage = useNewRecord("build.page", async (target) => {
     try {
       const { record } = await client.get<{ record: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(target.id)}`);
       const next = { ...draft, pages: [...new Set([...(draft.pages ?? []), record.name])] };
       session.edit(next);
-      if (project) await decide("build.app.edit", { type: "build.app", id: project.id }, moduleChanges(next), { expectedRevision: project.revision, quiet: true, onRefused: setError });
+      if (project) {const expected=baseRevision.current;if(!await decide("build.app.edit",{type:"build.app",id:project.id},moduleChanges(next),{expectedRevision:expected,quiet:true,onRefused:setError}))return;baseRevision.current=expected+1;loaded.current=`${project.id}:${expected+1}`;session.saved(next);}
       await query.refetch();
       openPage(record.id);
     } catch { setError(t("The page was created but could not be added to this module. Add it from the project's resources.")); }
@@ -103,7 +105,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const context: ModuleContext | undefined = project ? { project, pages, currentPage: page, canEdit, openPage, addPage: () => createPage.take(),
     openModule: (next) => { if (next) setFocus(next); if (page) open({ view: "module", params: { id: project.id, application: project.id } }); } } : undefined;
   if (!project || !context) return <Workbench storageKey="module" title={t("Module")}><WorkbenchMessage>{query.isError ? t("The project could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
-  if (page) return <>{<PageEditor key={page} id={page} module={context} />}{createPage.dialog}</>;
+  if (page) return <>{<InputDraftProvider isolated scope={`page:${page}`}><PageEditor key={page} id={page} module={context} /></InputDraftProvider>}{createPage.dialog}</>;
   const problems: WorkbenchProblem[] = [
     ...pages.filter((item) => !item.id && pageRecords.data).map((item) => ({ id: `missing:${item.name}`, severity: "warning" as const, text: t("Page {name} is listed but has no saved draft.", { name: item.name }), locate: () => edit({ pages: (draft.pages ?? []).filter((name) => name !== item.name) }) })),
     ...(!pages.length ? [{ id: "empty", severity: "info" as const, text: t("Add at least one page before publishing the module.") }] : []),
@@ -161,7 +163,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
         {canEdit && <Button size="sm" variant="primary" disabled={!pages.length || dirty} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id } })}>{t("Publish")}</Button>}
       </>}
       left={{ label: t("Module structure"), content: <ModuleTree context={context} focus={focus} onFocus={setFocus} /> }}
-      right={{ label: t("Module inspector"), tabs: tabs.map((tab) => ({ id: tab.id, title: tab.title, content: inspector[tab.id] })), value: focus, onChange: (next) => setFocus(next as ModuleFocus) }}
+      right={{ label: t("Module inspector"),scope:focus, tabs: tabs.map((tab) => ({ id: tab.id, title: tab.title, content: inspector[tab.id] })), value: focus, onChange: (next) => setFocus(next as ModuleFocus) }}
       dock={{ label: t("Module dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-canvas p-4">
         <div className="mx-auto w-full max-w-5xl overflow-hidden border border-border bg-surface rounded-md shadow-sm">

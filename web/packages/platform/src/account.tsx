@@ -5,7 +5,7 @@
 // form on a member's page (people.tsx).
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Form, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t } from "@platform/ui";
+import {useUnsavedChanges, Button, Form, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
 import type { Member } from "./shared";
 
@@ -57,10 +57,11 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
     const roles = members.find((m) => m.id === member)?.roles ?? {};
     return Object.keys(roles).sort().map((id) => ({ id, title: me.apps.find((a) => a.id === id)?.title ?? id }));
   }, [self, me.apps, members, member]);
-  useEffect(() => setDraft({}), [account]);
+  useEffect(() => setDraft({}), [member]);
   const value = (k: keyof Profile) => (draft[k] ?? (account[k] as string | boolean | undefined) ?? "") as string;
   const flag = (k: "inApp" | "mail") => (draft[k] ?? account[k] ?? true) as boolean;
   const dirty = Object.keys(draft).length > 0;
+  useUnsavedChanges(dirty,()=>setDraft({}));
   const zones = useMemo(timezones, []);
   const defaults = tenant?.settings ?? {};
   const inherit = (k: string, label: string) => `${t("Tenant default")}: ${defaults[k] || label}`;
@@ -213,17 +214,18 @@ function Tokens() {
   const [label, setLabel] = useState("");
   const [scopes, setScopes] = useState("");
   const [until, setUntil] = useState("");
+  const [tokenID,setTokenID]=useState(()=>"t"+crypto.randomUUID());
   const [secret, setSecret] = useState<{ id: string; secret: string } | null>(null);
   if (!can("platform.token.issue")) return null;
   const issue = async () => {
-    const id = "t" + Date.now().toString(36);
+    const id = tokenID;
     const payload = { label, scopes: scopes.split(/[\s,]+/).filter(Boolean), until };
     if (!(await decide("platform.token.issue", { type: "platform.token", id }, payload))) return;
     try {
       const got = await client.get<{ secret: string }>(`/v1/tokens/${encodeURIComponent(id)}/secret`, true);
       setSecret({ id, secret: got.secret });
     } catch { notify.error(t("The secret could not be collected")); }
-    setLabel(""); setScopes(""); setUntil("");
+    setTokenID("t"+crypto.randomUUID());setLabel(""); setScopes(""); setUntil("");
     void tokens.refetch();
   };
   return (

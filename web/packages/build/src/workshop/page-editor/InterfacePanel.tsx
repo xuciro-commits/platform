@@ -8,7 +8,7 @@ export function InterfacePanel({ document, object, onChange }: { document: Api.P
   const update = (next: Api.PageInterface, values = variables) => onChange({ ...document, uiProfile: pageUIProfile, interface: next, variables: values });
   const patch = (direction: "inputs" | "outputs", id: string, value: Partial<Api.PagePort>) => update({ ...iface, [direction]: { ...iface[direction], [id]: { ...iface[direction]![id]!, ...value } } });
   return <Card className="grid gap-3 p-3"><strong className="text-sm">{t("Page interface")}</strong>
-    <label className="grid gap-1 text-xs">{t("Interface version")}<Input type="number" min={1} max={65535} value={iface.version} onChange={(e) => update({ ...iface, version: Number(e.target.value) })} /></label>
+    <label className="grid gap-1 text-xs">{t("Interface version")}<Input draftKey="interface-version" type="number" min={1} max={65535} value={iface.version} onChange={(e) => update({ ...iface, version: Number(e.target.value) })} /></label>
     {(["inputs", "outputs"] as const).map((direction) => <div key={direction} className="grid gap-3 border-t border-border pt-3">
       <strong className="text-xs">{t(direction === "inputs" ? "Page inputs" : "Page outputs")}</strong>
       {Object.entries(iface[direction] ?? {}).map(([id, port]) => <div key={id} className="grid gap-2 border border-border p-2">

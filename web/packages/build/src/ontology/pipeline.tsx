@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { ArrowDown, ArrowUp } from "lucide-react";
@@ -81,7 +82,9 @@ export function PipelineEditor({ id }: { id: string }) {
   // The enterprise model's own kinds and elements, so a pipeline writing into
   // it chooses them rather than spelling their ids.
   const enterprise = useReadQuery<Api.EnterpriseModel>("/v1/enterprise").data ?? { kinds: [], elements: [] };
-  const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const [picked, setPicked] = useState<string>(); // the step the inspector edits
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const load = (record: Draft) => { setDraft({ ...empty(), ...record, steps: record.steps ?? [], expectations: record.expectations ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
@@ -90,7 +93,7 @@ export function PipelineEditor({ id }: { id: string }) {
   const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The pipeline could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
   const save = async (): Promise<{ id: string; revision: number } | undefined> => {
-    const target = draft.id || crypto.randomUUID(), expected = baseRevision.current;
+    const target = draft.id || createID, expected = baseRevision.current;
     const { name, title, input, steps, expectations, outputDataset, outputObject, outputEnterprise, key, every } = draft;
     const payload = { name, title, input, steps, expectations, outputDataset: outputDataset ?? "", outputObject: outputObject ?? "", outputEnterprise: outputEnterprise ?? null, key: key ?? "", every: every ?? "" };
     if (!await decide(`build.pipeline.${draft.id ? "edit" : "create"}`, { type: "build.pipeline", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;

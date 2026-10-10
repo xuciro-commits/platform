@@ -1,3 +1,5 @@
+import {InputDraftProvider,InputProblems,useInputDrafts} from "../fields/draft";
+import {t} from "../i18n";
 import { useRef, useState, type FormHTMLAttributes, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "../lib/cn";
@@ -59,7 +61,11 @@ export function Switch({checked,onChange,label,ariaLabel,disabled,className}:{
 
 /** A form that submits on Enter and on its submit button, without reloading the page. */
 export function Form({ onSubmit, ...props }: Omit<FormHTMLAttributes<HTMLFormElement>, "onSubmit"> & { onSubmit: () => void }) {
-  return <form {...props} onSubmit={(e) => { e.preventDefault(); onSubmit(); }} />;
+  return <InputDraftProvider isolated scope="form"><FormBody {...props} onSubmit={onSubmit}/></InputDraftProvider>;
+}
+function FormBody({onSubmit,children,...props}:Omit<FormHTMLAttributes<HTMLFormElement>,"onSubmit">&{onSubmit:()=>void}){
+ const inputs=useInputDrafts(),lock=useRef(false),[busy,setBusy]=useState(false),[failure,setFailure]=useState("");
+ return <form {...props} onSubmit={async event=>{event.preventDefault();if(lock.current||inputs?.invalid)return;lock.current=true;setBusy(true);setFailure("");inputs?.reject();inputs?.pending(1);try{await onSubmit();}catch(error){setFailure(error instanceof Error?error.message:t("The request was not confirmed. Your input is retained."));}finally{lock.current=false;setBusy(false);inputs?.pending(-1);}}}><fieldset disabled={busy} className="contents">{children}</fieldset><InputProblems/>{failure&&<p role="alert" className="text-xs text-danger">{failure}</p>}</form>;
 }
 
 /** A row that opens to show more: a run's step, a citation's passage. */

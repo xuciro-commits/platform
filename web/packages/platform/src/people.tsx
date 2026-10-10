@@ -139,7 +139,7 @@ function GrantForm({ apps, onSubmit, onCancel }: { apps: { id: string; roles: st
   const structure = chart?.edges.find((e) => e.unit === unit)?.structure ?? chart?.structures[0]?.id ?? "";
   const field = (label: string, control: React.ReactNode) => <label className="grid gap-1 text-sm"><span className="text-xs text-muted">{label}</span>{control}</label>;
   return (
-    <Form className="grid gap-3" onSubmit={() => { void onSubmit({ app, role: chosen, ...(unit ? { unit, structure } : {}), ...(until ? { until } : {}), ...(reason ? { reason } : {}) }); }}>
+    <Form className="grid gap-3" onSubmit={() => { return onSubmit({ app, role: chosen, ...(unit ? { unit, structure } : {}), ...(until ? { until } : {}), ...(reason ? { reason } : {}) }); }}>
       {field(t("App"), <Select value={app} onChange={(e) => setApp(e.target.value)}>{apps.map((a) => <option key={a.id} value={a.id}>{a.id}</option>)}</Select>)}
       {field(t("Role"), <Select value={chosen} onChange={(e) => setRole(e.target.value)}>{roles.map((r) => <option key={r} value={r}>{r}</option>)}</Select>)}
       {chart && chart.units.length > 0 && field(t("Only within a unit (optional)"), <Select value={unit} onChange={(e) => setUnit(e.target.value)}>

@@ -1,3 +1,4 @@
+import {InputDraftProvider} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import {WidgetGlyph,LayoutGlyph} from "./page-editor/WidgetGlyph";
 import {canvasModel,canvasDrop,canvasMove,canvasResize,canvasResetSize,canvasGroup,canvasEqualize,canvasUngroup,canvasRemove} from "./page-editor/canvas-layout";
@@ -24,13 +25,13 @@ import {
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
 import { Copy, Clipboard, Columns2, Download, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, MoreHorizontal, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ModuleTree, type ModuleContext } from "./ModuleWorkbench";
 import type { Route } from "@platform/ui";
 import { WidgetLibrary } from "./page-editor/WidgetLibrary";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState, useAutoSave } from "../editor/workbench";
 import {pageUIManifest,type Api as HostApi} from "@platform/kernel";
-import { BindingEditor, WorkflowFormProblems } from "../automate/workflow-binding";
+import { BindingEditor } from "../automate/workflow-binding";
 import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, layoutID, stashWidget, restoreWidget, setLayoutKind } from "./page-layout";
 import { QueriesPanel } from "./page-editor/QueriesPanel";
 import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";
@@ -42,7 +43,7 @@ import {applyProfileUpgrade,pageCompatibility} from "./page-editor/compatibility
 import { OverlayProperties } from "./page-editor/OverlayPanel";
 import {LayoutTree} from "./page-editor/LayoutTree";
 import {LayoutProperties,LayoutSizing} from "./page-editor/LayoutProperties";
-import { DraftInputs, useDraftSession } from "../session/DraftSession";
+import { useDraftSession } from "../session/DraftSession";
 import {copyLayout,copyLayoutIssue,pasteLayout,type LayoutClipboard,type ClipboardIssue} from "./page-editor/clipboard";
 import type {AuthoringSection,PageDraft} from "./page-editor/draft";
 import {ModuleImportDialog,type ImportPackage} from "./module-import/ModuleImportDialog";
@@ -131,11 +132,9 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const [saving, setSaving] = useState(false), [publishing, setPublishing] = useState(false);
   const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0);
   const busy = saving || publishing;
-  const [formProblems, setFormProblems] = useState<Record<string, string>>({});
-  const report = useCallback((id: string, problem: string) => setFormProblems((old) => old[id] === problem ? old : { ...old, [id]: problem }), []);
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     if (page) { session.load(loadDraft(page)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`; }
-    select({ kind: "page" }); setRefused(undefined); setFormProblems({});
+    select({ kind: "page" }); setRefused(undefined);
   });
   useEffect(() => {
     if (!page || dirty || busy || loaded.current === `${page.id}:${page.revision}`) return;
@@ -155,7 +154,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
     const document=key==="module-import"?next.document:{...next.document,uiProfile:old.document.uiProfile};
     return { ...next, ...synchronizeLoopBindings(document, next.sections) };
   }, key); };
-  const history = (direction: "undo" | "redo") => { if (lock.current) return; session[direction](); setFormProblems({}); setRefused(undefined); };
+  const history = (direction: "undo" | "redo") => { if (lock.current) return; session[direction](); setRefused(undefined); };
   const selectionProblem = selections.some((v, i) => !/^[a-z][a-z0-9_-]{0,63}$/.test(v.name) || selections.some((other, at) => at !== i && other.name === v.name))
     ? t("Selection names must be unique lowercase identifiers.") : sections.some((s) =>
       s.selection && !selections.some((v) => v.name === s.selection && v.object.name === (s.object || page?.object)) ||
@@ -221,13 +220,13 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
   const observationInvalid=sections.some(s=>observationProblem(document,sections,s,page?.object??"",type=>source.entity(type),definitions));
   const analysisProblem=sections.some(s=>collectionAnalysisProblem(document,s,page?.object??"",type=>source.entity(type),definitions));
   const recordWorkInvalid=sections.some(s=>recordWorkProblem(document,s,page?.object??"",name=>source.entity(name),catalog,definitions));
-  const invalid = sections.some(s=>s.widget==="external-frame"&&!validExternalFrame(s.externalFrame))||sections.some(s=>s.widget==="embedded-page"&&(!s.embedding||!/^page\.sha256\.[0-9a-f]{64}$/.test(s.embedding.contentVersion)))||observationInvalid||recordWorkInvalid||analysisProblem||sections.some(s=>s.widget==="histogram"&&(!s.histogram?.field||!Number.isInteger(s.histogram.bins)||s.histogram.bins<1||s.histogram.bins>64||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||sections.some(s=>s.widget==="term-counts"&&(!s.group||s.group==="count"||s.group.includes(":")||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||searchInputProblem||pickerValueProblem||spacerProblem||separatorProblem||noticeProblem||alertProblem||pickerProblem||dateProblem||choiceProblem||booleanProblem||rangeProblem||leaderboardProblem||summaryProblem||gaugeProblem||progressProblem||recordGanttProblem||recordCalendarProblem||recordEventsProblem||recordCardProblem||recordComparisonProblem||collaborationProblem||workViewProblem||contextProblem||explorationProblem||historyProblem||sparklineProblem||treemapProblem||tagCountsProblem||heatmapProblem||scatterProblem||recordChartProblem||recordListProblem||sharedRecordOutputProblem||sharedRecordSetOutputProblem||titleProblem||metricPresentationProblem||statusTrackerProblem||recordLinksProblem||groupProblem||recordViewProblem||tablePresentationProblem||tableEditProblem || inlineProblem || layoutProblems.length>0 || queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values({...formProblems,...session.inputProblems}).some(Boolean) || !!selectionProblem || incompatible;
+  const invalid = sections.some(s=>s.widget==="external-frame"&&!validExternalFrame(s.externalFrame))||sections.some(s=>s.widget==="embedded-page"&&(!s.embedding||!/^page\.sha256\.[0-9a-f]{64}$/.test(s.embedding.contentVersion)))||observationInvalid||recordWorkInvalid||analysisProblem||sections.some(s=>s.widget==="histogram"&&(!s.histogram?.field||!Number.isInteger(s.histogram.bins)||s.histogram.bins<1||s.histogram.bins>64||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||sections.some(s=>s.widget==="term-counts"&&(!s.group||s.group==="count"||s.group.includes(":")||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||searchInputProblem||pickerValueProblem||spacerProblem||separatorProblem||noticeProblem||alertProblem||pickerProblem||dateProblem||choiceProblem||booleanProblem||rangeProblem||leaderboardProblem||summaryProblem||gaugeProblem||progressProblem||recordGanttProblem||recordCalendarProblem||recordEventsProblem||recordCardProblem||recordComparisonProblem||collaborationProblem||workViewProblem||contextProblem||explorationProblem||historyProblem||sparklineProblem||treemapProblem||tagCountsProblem||heatmapProblem||scatterProblem||recordChartProblem||recordListProblem||sharedRecordOutputProblem||sharedRecordSetOutputProblem||titleProblem||metricPresentationProblem||statusTrackerProblem||recordLinksProblem||groupProblem||recordViewProblem||tablePresentationProblem||tableEditProblem || inlineProblem || layoutProblems.length>0 || queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(session.inputProblems).some(Boolean) || !!selectionProblem || incompatible;
   const relatedObjects = useMemo(() => definitions.filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
     .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && [page?.object, ...selections.map((selection) => selection.object.name)].includes(f.ref))).map((d) => d.ref.name), [definitions, page?.object, selections]);
   const [queryPreviewOwner,setQueryPreviewOwner]=useState<string|undefined>(undefined);
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
   const saveRef = useRef<() => Promise<unknown>>(async () => false);
-  useAutoSave({ dirty, invalid, busy, save: () => saveRef.current() });
+  useAutoSave({ generation:JSON.stringify(session.draft), dirty, invalid, busy, save: () => saveRef.current() });
   if (!page) return <Workbench storageKey="page" title={t("Page")}><WorkbenchMessage>{query.isError ? t("The page could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const info = authoringEntity(page.object);
 const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s) }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
@@ -305,7 +304,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     ...layoutProblems.map((issue, i) => ({ id: `layout:${i}`, text: t(issue.code), subject: issue.node, locate: () => canvasSelect(issue.node) })),
     ...variableProblems.map((issue, i) => ({ id: `variable:${i}`, text: t(issue.code), subject: issue.variable, locate: () => select({ kind: "variables" }) })),
     ...(selectionProblem ? [{ id: "selection", text: selectionProblem, locate: () => select({ kind: "page" }) }] : []),
-    ...Object.entries({...formProblems,...session.inputProblems}).filter(([, problem]) => problem).map(([id, problem]) => ({ id: `form:${id}`, text: problem, subject: id })),
+    ...Object.entries(session.inputProblems).filter(([, problem]) => problem).map(([id, problem]) => ({ id: `form:${id}`, text: problem, subject: id })),
     ...(inputProblem ? [{ id: "input", text: t("Bind each input to a writable text or decimal state in its own scope.") }] : []),
     ...(queryProblem ? [{ id: "query", text: t("Each query needs a field for every condition and a limit within the budget.") }] : []),
     ...(inlineProblem ? [{ id: "inline", text: t("An inline action needs exactly one action and valid defaults.") }] : []),
@@ -395,7 +394,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       const contract=sections[at]&&widgetContract(sections[at]!.widget);
       if(contract&&'slots'in contract)for(const slot of contract.slots)commands.push({id:'slot-'+slot.id,label:t('Edit {slot} slot',{slot:t(slot.title)}),icon:<Group/>,run:()=>{const result=addWidgetSlot(document,node.section!,sections[at]!.widget,slot.id);if(result.id){canvasEdit(result.document);select({kind:'container',id:result.id});}else setCompatibilityOpen(true);}});
     }
-    commands.push({id:'delete',label:t(node.kind==='widget'?'Delete widget':'Delete layout'),icon:<Trash2/>,primary:true,danger:true,separatorBefore:true,disabled:root||!!node.slot,run:()=>{const result=canvasRemove(document,id);if(result){edit(old=>({...old,document:result.document,sections:old.sections.filter(s=>!result.sections.has(s.id??''))}));select({kind:'page'});}}});
+    commands.push({id:'delete',label:t(node.kind==='widget'?'Delete widget':'Delete layout'),icon:<Trash2/>,primary:true,danger:true,separatorBefore:true,disabled:root||!!node.slot,run:()=>{const result=canvasRemove(document,id);if(result){for(const [removed,node] of Object.entries(document.nodes))if(!result.document.nodes[removed]){session.inputs.clear(`${session.inputs.scope}/container:${removed}/`);session.inputs.clear(`${session.inputs.scope}/layout:${removed}/`);if(node.section)session.inputs.clear(`${session.inputs.scope}/widget:${node.section}/`);}edit(old=>({...old,document:result.document,sections:old.sections.filter(s=>!result.sections.has(s.id??''))}));select({kind:'page'});}}});
     return commands;
   };
   const selectionCommands=nodeID?canvasCommands(nodeID):[];
@@ -418,13 +417,13 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     { id: "layout", title: t("Layout"), content: <div className="grid content-start gap-2 p-2">
       {overlayEntries.map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
         onChange={(patch) => edit({ document: { ...document, overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
-        onRemove={() => { const result = removeOverlay(document, id); edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}
-      <DraftInputs.Provider value={session.inputs}><LayoutProperties sections={sections} document={document} id={container}
+        onRemove={() => { const result = removeOverlay(document, id);for(const removed of result.sections)session.inputs.clear(`${session.inputs.scope}/widget:${removed}/`);edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}
+      <InputDraftProvider scope="layout" reveal={()=>select(selection)}><LayoutProperties sections={sections} document={document} id={container}
         onPatch={patchNode} onChange={(kind) => edit((old) => ({ ...old, document: setLayoutKind(old.document, container, kind) }))}
-        onUngroup={() => canvasCommands(container).find((command) => command.id === "ungroup")?.run()} ungroupDisabled={!canvasUngroup(document, container, sections)} /></DraftInputs.Provider>
+        onUngroup={() => canvasCommands(container).find((command) => command.id === "ungroup")?.run()} ungroupDisabled={!canvasUngroup(document, container, sections)} /></InputDraftProvider>
     </div> },
     { id: "appearance", title: t("Appearance"), content: <div className="grid content-start gap-2 p-2">
-      <DraftInputs.Provider value={session.inputs}><LayoutSizing document={document} id={container} onPatch={patchNode} /></DraftInputs.Provider>
+      <InputDraftProvider scope="layout" reveal={()=>select(selection)}><LayoutSizing document={document} id={container} onPatch={patchNode} /></InputDraftProvider>
       <NodeBindings document={document} id={container} button={false} input={false} onChange={(patch) => patchNode(container, patch)} />
     </div> },
   ] : [];
@@ -435,7 +434,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     events: (() => { const Inspector = widgetInspector(canvasSelection.widget, canvasSelection.configVersion ?? 0)?.events; return <InspectorFrame id={canvasSelection.id ?? String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion ?? 0} part="events">{Inspector && <Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons, document) => edit({ document, sections: sections.map((s) => s.id === canvasSelection.id ? { ...s, buttons } : s) })} document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} overlay={nodeID ? overlayOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}</InspectorFrame>; })(),
     appearance: <>
       {Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value && nodeID) canvasCommitDrop({ kind: "move", id: nodeID, label: canvasSelection.title ?? nodeID }, { kind: "into", parent: event.target.value }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
-      {nodeID && <DraftInputs.Provider value={session.inputs}><LayoutSizing document={document} id={nodeID} onPatch={patchNode} /></DraftInputs.Provider>}
+      {nodeID && <InputDraftProvider scope="layout" reveal={()=>select(selection)}><LayoutSizing document={document} id={nodeID} onPatch={patchNode} /></InputDraftProvider>}
       {nodeID && <NodeBindings document={document} id={nodeID} button={!!widgetContract(canvasSelection.widget)?.inputPorts.some((port) => port.bindingField === "enabledWhen") && canvasSelection.widget !== "input"} input={canvasSelection.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />}
     </>,
   }) : [];
@@ -448,7 +447,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     { label: module.project.title || module.project.name, onClick: () => open({ view: "project", params: { id: module.project.id } }) },
     { label: t("Module"), onClick: () => module.openModule() },
   ] : [{ label: t("Pages"), onClick: () => open({ view: "module" }) }];
-  return <WorkflowFormProblems.Provider value={report}>
+  return <>
     <Workbench storageKey="page" crumbs={crumbs} title={title || page.title}
       status={<DraftStatus state={page.state} problems={problemList.length} />} saving={savingState(dirty, saving, refused)}
       history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => history("undo"), redo: () => history("redo") }}
@@ -486,7 +485,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         </div> },
         { id: "widgets", title: t("Widgets"), content: <WidgetLibrary widgets={widgets} widgetTitles={widgetTitles} onAdd={(widget) => add(widget)} /> },
       ] }}
-      right={preview ? undefined : { label: t("Inspector"), value: inspectorValue, onChange: (next) => { if (["variables", "queries", "interface"].includes(next) && !canvasSelection && !container) select({ kind: next as "variables" | "queries" | "interface" }); else if (next === "page") select({ kind: "page" }); setInspectorTab((old) => ({ ...old, [inspectorKey.split(":")[0]!]: next })); },
+      right={preview ? undefined : { label: t("Inspector"),scope:inspectorKey,locate:()=>select(selection), value: inspectorValue, onChange: (next) => { if (["variables", "queries", "interface"].includes(next) && !canvasSelection && !container) select({ kind: next as "variables" | "queries" | "interface" }); else if (next === "page") select({ kind: "page" }); setInspectorTab((old) => ({ ...old, [inspectorKey.split(":")[0]!]: next })); },
         tabs: [{ id: "__head", title: <span className="flex items-center gap-1">{canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : container ? <LayoutGlyph kind={document.nodes[container]?.kind ?? "rows"} /> : <Settings2 className="size-3" />}<span className="max-w-24 truncate">{canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}</span></span>, content: null }, ...inspectorTabs].filter((tab) => tab.id !== "__head") }}
       dock={{ label: t("Page dock"), tabs: [
         { id: "problems", title: t("Problems"), badge: problemList.length, content: <ProblemList problems={problemList} empty={t("No problems. The page can be published.")} /> },
@@ -495,8 +494,8 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       ] }}>
       {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
       {!source.entity(page.object) && info && <p className="px-3 pt-2 text-xs text-warning" role="status">{t("Field choices come from a saved object draft. Business data is available after joint activation.")}</p>}
-      {importing && <ModuleImportDialog key={clipboardScope} open retained={importPackage?.scope === clipboardScope ? importPackage.pack : undefined} object={page.object} profile={pageUIProfile} onClose={() => setImporting(false)} onApply={(draft, pack) => { setImportPackage({ scope: clipboardScope, pack }); edit(draft, "module-import"); select({ kind: "page" }); setFormProblems({}); setRefused(undefined); }} />}
-      {compatibilityOpen && <CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={() => setCompatibilityOpen(false)} onLocate={(id) => { select({ kind: "widget", id }); setCompatibilityOpen(false); }} onApply={(review) => { if (lock.current) return; const next = applyProfileUpgrade(session.draft, review); if (!next) return; session.edit(next, "profile-upgrade"); setCompatibilityOpen(false); setFormProblems({}); setRefused(undefined); }} />}
+      {importing && <ModuleImportDialog key={clipboardScope} open retained={importPackage?.scope === clipboardScope ? importPackage.pack : undefined} object={page.object} profile={pageUIProfile} onClose={() => setImporting(false)} onApply={(draft, pack) => { setImportPackage({ scope: clipboardScope, pack }); edit(draft, "module-import"); select({ kind: "page" }); setRefused(undefined); }} />}
+      {compatibilityOpen && <CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={() => setCompatibilityOpen(false)} onLocate={(id) => { select({ kind: "widget", id }); setCompatibilityOpen(false); }} onApply={(review) => { if (lock.current) return; const next = applyProfileUpgrade(session.draft, review); if (!next) return; session.edit(next, "profile-upgrade"); setCompatibilityOpen(false); setRefused(undefined); }} />}
       <fieldset disabled={busy || incompatible} className="flex min-h-0 min-w-0 flex-1 flex-col">
         <CanvasEditor model={canvasModel(document, sections, { ...Object.fromEntries(Object.entries(widgetTitles).map(([id, title]) => [id, title()])), rows: t("Rows"), columns: t("Columns"), tabs: t("Tabs"), flow: t("Flow layout"), toolbar: t("Toolbar"), loop: t("Loop") })} selected={preview ? undefined : nodeID} revision={session.draft} zoom={zoom / 100} disabled={busy || incompatible || preview}
           commands={selectionCommands} icon={canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : <LayoutGlyph kind={document.nodes[nodeID ?? ""]?.kind ?? "rows"} />}
@@ -530,7 +529,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         </CanvasEditor>
       </fieldset>
     </Workbench>
-  </WorkflowFormProblems.Provider>;
+  </>;
 }
 
 /** The panel that configures the widget in hand: only what that widget binds. */

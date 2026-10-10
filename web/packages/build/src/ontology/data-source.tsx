@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -33,7 +34,9 @@ export function DataSourceEditor({ id }: { id: string }) {
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.source/${encodeURIComponent(id)}`, 5000);
   const connections = (useReadQuery<{ records: ConnectionRow[] }>("/v1/records/build.connection?limit=100").data?.records ?? []).filter((c) => c.state === "ready");
   const datasets = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200").data?.records ?? [];
-  const [draft, setDraft] = useState<Draft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const load = (record: Draft) => { setDraft({ ...empty(), ...record, mapping: record.mapping ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); });
@@ -41,7 +44,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The data source could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
   const save = async (): Promise<{ id: string; revision: number } | undefined> => {
-    const target = draft.id || crypto.randomUUID(), expected = baseRevision.current;
+    const target = draft.id || createID, expected = baseRevision.current;
     const { name, title, url, allowPrivate, header, path, object, key, mapping, every, connection, profile, entity, filter, since, dataset } = draft;
     const payload = { name, title, url: url ?? "", allowPrivate: !!allowPrivate, header: header ?? "", path: path ?? "", object: dataset ? "" : object, key: dataset ? "" : key, mapping: dataset ? [] : mapping, every: every ?? "", dataset: dataset ?? "",
       connection: connection ?? "", profile: profile ?? "json", entity: entity ?? "", filter: filter ?? "", since: since ?? "" };

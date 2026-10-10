@@ -1,3 +1,5 @@
+import {InputDraftProvider} from "@platform/ui";
+import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { AppSelect, PayloadFields, useHost, useRecordInventory } from "@platform/app";
@@ -15,7 +17,10 @@ type EvaluationPolicy = { minQuality: number; maxCostUsd: number; maxLatencyMill
 type TestPlan = { id: string; revision: number; title: string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
 
 /** The host owns the test runtime. This editor only assembles its fixed inputs. */
-export function CandidateTest({ processId = "", functionId = "", objectId = "", embedded = false, onStepSelect }: {
+export function CandidateTest(props:Parameters<typeof CandidateTestForm>[0]) {
+  return <InputDraftProvider isolated scope="candidate-test"><CandidateTestForm {...props}/></InputDraftProvider>;
+}
+function CandidateTestForm({ processId = "", functionId = "", objectId = "", embedded = false, onStepSelect }: {
   processId?: string; functionId?: string; objectId?: string; embedded?: boolean; onStepSelect?: (step: string) => void;
 }) {
   const { client, role, decide, action } = useHost();
@@ -26,10 +31,11 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
   const functions = useRecordInventory<FunctionDraft>("build.function");
   const [kind, setKind] = useState<"object" | "flow" | "function">(functionId ? "function" : processId ? "flow" : "object");
   const [model, setModel] = useState("fixture/probe");
-  const [planID, setPlanID] = useState("");
+  const [planID, setPlanID] = useState(""),[createID,setCreateID]=useState(()=>crypto.randomUUID());
   const [revision, setRevision] = useState(0);
   const [title, setTitle] = useState("");
-  const [dirty, setDirty] = useState(false);
+  const [edited, setDirty] = useState(false);
+ const inputDrafts=useInputDrafts(),dirty=edited||!!inputDrafts?.dirty;
   const [saved, setSaved] = useState(false);
   const [id, setID] = useState(functionId || processId || objectId);
   const [member, setMember] = useState("");
@@ -97,7 +103,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
     clear(); setKind(nextKind); setID(nextID); setSteps([]);
     // A new root gets a new plan identity; Save must never move the previous
     // asset's plan simply because the user selected a different draft.
-    setPlanID(""); setRevision(0); setTitle(""); setMember(""); setSamples("[]");
+    setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setMember(""); setSamples("[]");
     setModel("fixture/probe"); setEvaluationEnabled(false);
     setMinQuality(1); setMaxCostUsd(0.1); setMaxLatencyMillis(30000);
     setCases([{ name: "synthetic", input: "{}", expected: "{}" }]);
@@ -150,7 +156,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
         evaluation = [{ minQuality, maxCostUsd, maxLatencyMillis, cases: parsed }];
       } catch { setError(t("Use bounded thresholds and JSON objects for every evaluation case.")); return; }
     }
-    const target = planID || crypto.randomUUID();
+    const target = planID || createID;
     setBusy(true);
     try {
       if (await decide(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: target },
@@ -191,7 +197,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
           <label className="grid gap-1 text-xs">{t("Saved test plan")}
             <Select value={planID} onChange={(event) => {
               const plan = ownPlans.find((record) => record.id === event.target.value);
-              clear(); setPlanID(plan?.id ?? ""); setRevision(plan?.revision ?? 0);
+              clear();setCreateID(crypto.randomUUID());inputDrafts?.clear(); setPlanID(plan?.id ?? ""); setRevision(plan?.revision ?? 0);
               if (plan) load(plan);
             }}>
               <option value="">{t("New test plan")}</option>
@@ -204,7 +210,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
         </div>
         {kind === "flow" && <Disclosure summary={<span className="text-xs font-medium">{t("Synthetic query samples")}</span>}><div className="mt-2 grid gap-2">
           <p className="text-[11px] leading-5 text-muted">{t("Declare sample datasets as [{type, records}]. Tests never copy production records or send native business actions to live owners.")}</p>
-          <Textarea aria-label={t("Synthetic query samples (JSON)")} rows={4} className="font-mono text-[11px]" value={samples} onChange={(event) => { setSamples(event.target.value); clear(); }} />
+          <Textarea parse="json" aria-label={t("Synthetic query samples (JSON)")} rows={4} className="font-mono text-[11px]" value={samples} onChange={(event) => { setSamples(event.target.value); clear(); }} />
         </div></Disclosure>}
         {plans.isError && <p role="alert" className="text-sm text-danger">{t("The saved test plans could not be loaded.")}</p>}
         {!embedded && <label className="grid gap-1 text-xs">{t("Candidate kind")}
@@ -244,16 +250,16 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
           {evaluationEnabled && <>
             <p className="text-xs text-muted">{t("These synthetic cases run three times each against the enabled model. Reported USD cost and per-call latency must stay within the limits.")}</p>
             <div className="grid gap-2 sm:grid-cols-3">
-              <label className="grid gap-1 text-xs">{t("Minimum exact-match quality")}<Input type="number" min={0.01} max={1} step={0.01} value={minQuality} onChange={(e) => { setMinQuality(Number(e.target.value)); clear(); }} /></label>
-              <label className="grid gap-1 text-xs">{t("Maximum total USD cost")}<Input type="number" min={0.000001} step={0.01} value={maxCostUsd} onChange={(e) => { setMaxCostUsd(Number(e.target.value)); clear(); }} /></label>
-              <label className="grid gap-1 text-xs">{t("Maximum latency per call (ms)")}<Input type="number" min={1} max={300000} value={maxLatencyMillis} onChange={(e) => { setMaxLatencyMillis(Number(e.target.value)); clear(); }} /></label>
+              <label className="grid gap-1 text-xs">{t("Minimum exact-match quality")}<Input draftKey="minimum-exact-match-quality" type="number" min={0.01} max={1} step={0.01} value={minQuality} onChange={(e) => { setMinQuality(Number(e.target.value)); clear(); }} /></label>
+              <label className="grid gap-1 text-xs">{t("Maximum total USD cost")}<Input draftKey="maximum-total-usd-cost" type="number" min={0.000001} step={0.01} value={maxCostUsd} onChange={(e) => { setMaxCostUsd(Number(e.target.value)); clear(); }} /></label>
+              <label className="grid gap-1 text-xs">{t("Maximum latency per call (ms)")}<Input draftKey="maximum-latency-per-call-ms" type="number" min={1} max={300000} value={maxLatencyMillis} onChange={(e) => { setMaxLatencyMillis(Number(e.target.value)); clear(); }} /></label>
             </div>
             {fn?.conversation&&<p className="text-xs text-muted">{t("For a conversation, provide record fields, a question and synthetic question/answer history in record/question/history. No production call IDs are used.")}</p>}
             {cases.map((item, index) => <Card key={index} className="grid gap-2 p-2">
               <div className="flex items-center justify-between"><span className="text-xs font-medium">{t("Evaluation case {n}", { n: index + 1 })}</span><Button disabled={cases.length === 1} onClick={() => { setCases((old) => old.filter((_, i) => i !== index)); clear(); }}>{t("Remove")}</Button></div>
               <label className="grid gap-1 text-xs">{t("Case name")}<Input value={item.name} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, name: e.target.value } : c)); clear(); }} /></label>
-              <label className="grid gap-1 text-xs">{t("Synthetic input (JSON object)")}<Textarea rows={3} value={item.input} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, input: e.target.value } : c)); clear(); }} className="font-mono" /></label>
-              <label className="grid gap-1 text-xs">{t("Expected typed answer (JSON object)")}<Textarea rows={3} value={item.expected} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, expected: e.target.value } : c)); clear(); }} className="font-mono" /></label>
+              <label className="grid gap-1 text-xs">{t("Synthetic input (JSON object)")}<Textarea draftKey={`case:${index}:input`} parse="json" rows={3} value={item.input} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, input: e.target.value } : c)); clear(); }} className="font-mono" /></label>
+              <label className="grid gap-1 text-xs">{t("Expected typed answer (JSON object)")}<Textarea draftKey={`case:${index}:expected`} parse="json" rows={3} value={item.expected} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, expected: e.target.value } : c)); clear(); }} className="font-mono" /></label>
             </Card>)}
             <Button disabled={cases.length >= 5} onClick={() => { setCases((old) => [...old, { name: `synthetic${old.length + 1}`, input: "{}", expected: "{}" }]); clear(); }}>{t("Add an evaluation case")}</Button>
           </>}
@@ -294,7 +300,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
           </div>
           {(kind === "flow" || kind === "function") && <div className="grid gap-2 sm:grid-cols-2">
             <label className="grid gap-1 text-xs">{t("Step member ID (empty: plan member)")}<Input value={step.as ?? ""} onChange={(e) => update(index, { as: e.target.value })} /></label>
-            <label className="grid gap-1 text-xs">{t("Advance clock (seconds)")}<Input type="number" min={0} max={86400} value={step.advanceSeconds ?? 0} onChange={(e) => update(index, { advanceSeconds: Number(e.target.value) })} /></label>
+            <label className="grid gap-1 text-xs">{t("Advance clock (seconds)")}<Input draftKey={`step:${index}:clock`} type="number" min={0} max={86400} value={step.advanceSeconds ?? 0} onChange={(e) => update(index, { advanceSeconds: Number(e.target.value) })} /></label>
           </div>}
           <label className="grid gap-1 text-xs">{t("Expected outcome")}
             <Select value={step.expect} onChange={(event) => update(index, { expect: event.target.value as Step["expect"] })}>
@@ -309,15 +315,15 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
           {(kind === "flow" || step.action === "build.function-call.start") && <Checkbox checked={!!step.function} onChange={(enabled) => update(index, { function: enabled ? { output: "{}", inputTokens: 0, outputTokens: 0, expectState: "ready" } : undefined })}>{t("Supply a fixed model answer")}</Checkbox>}
           {step.function && <fieldset className="grid gap-2 rounded border border-border p-2">
             <legend className="px-1 text-xs">{t("Fixed model answer")}</legend>
-            <label className="grid gap-1 text-xs">{t("Provider answer")}<Textarea rows={3} value={step.function.output} onChange={(e) => update(index, { function: { ...step.function!, output: e.target.value } })} className="font-mono" /></label>
+            <label className="grid gap-1 text-xs">{t("Provider answer")}<Textarea draftKey={`step:${index}:function-output`} parse="json" rows={3} value={step.function.output} onChange={(e) => update(index, { function: { ...step.function!, output: e.target.value } })} className="font-mono" /></label>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="grid gap-1 text-xs">{t("Input tokens")}<Input type="number" min={0} max={1048576} value={step.function.inputTokens} onChange={(e) => update(index, { function: { ...step.function!, inputTokens: Number(e.target.value) } })} /></label>
-              <label className="grid gap-1 text-xs">{t("Output tokens")}<Input type="number" min={0} max={1048576} value={step.function.outputTokens} onChange={(e) => update(index, { function: { ...step.function!, outputTokens: Number(e.target.value) } })} /></label>
+              <label className="grid gap-1 text-xs">{t("Input tokens")}<Input draftKey={`step:${index}:input-tokens`} type="number" min={0} max={1048576} value={step.function.inputTokens} onChange={(e) => update(index, { function: { ...step.function!, inputTokens: Number(e.target.value) } })} /></label>
+              <label className="grid gap-1 text-xs">{t("Output tokens")}<Input draftKey={`step:${index}:output-tokens`} type="number" min={0} max={1048576} value={step.function.outputTokens} onChange={(e) => update(index, { function: { ...step.function!, outputTokens: Number(e.target.value) } })} /></label>
             </div>
             <label className="grid gap-1 text-xs">{t("Expected function state")}<Select value={step.function.expectState} onChange={(e) => update(index, { function: { ...step.function!, expectState: e.target.value as Api.FunctionFixture["expectState"], expectOutput: e.target.value === "rejected" ? undefined : step.function?.expectOutput } })}>
               <option value="ready">{t("Ready")}</option><option value="rejected">{t("Rejected")}</option>
             </Select></label>
-            {step.function.expectState === "ready" && <label className="grid gap-1 text-xs">{t("Expected typed answer (JSON, optional)")}<Textarea rows={3} value={step.function.expectOutput ?? ""} onChange={(e) => update(index, { function: { ...step.function!, expectOutput: e.target.value } })} className="font-mono" /></label>}
+            {step.function.expectState === "ready" && <label className="grid gap-1 text-xs">{t("Expected typed answer (JSON, optional)")}<Textarea draftKey={`step:${index}:function-expected`} parse="json" rows={3} value={step.function.expectOutput ?? ""} onChange={(e) => update(index, { function: { ...step.function!, expectOutput: e.target.value } })} className="font-mono" /></label>}
           </fieldset>}
           {kind === "flow" && <Checkbox checked={!!step.compute} onChange={(enabled) => {
             const computation = process?.steps.find((node) => node.kind === "compute")?.operation;
@@ -327,9 +333,9 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
             <div className="grid gap-2 sm:grid-cols-2"><label className="grid gap-1 text-xs">{t("Capability owner")}<AppSelect value={step.compute.app ?? "build"} onChange={(app) => update(index, { compute: { ...step.compute!, app } })} /></label>
               <label className="grid gap-1 text-xs">{t("Computation name")}<Input value={step.compute.name} onChange={(event) => update(index, { compute: { ...step.compute!, name: event.target.value } })} /></label></div>
             <label className="grid gap-1 text-xs">{t("Expected computation state")}<Select value={step.compute.expectState} onChange={(event) => update(index, { compute: { ...step.compute!, expectState: event.target.value as Api.ComputeFixture["expectState"] } })}><option value="completed">{t("Completed")}</option><option value="failed">{t("Failed")}</option></Select></label>
-            {step.compute.expectState === "completed" ? <label className="grid gap-1 text-xs">{t("Fixed output (JSON)")}<Textarea rows={3} className="font-mono" value={step.compute.output ?? "{}"} onChange={(event) => update(index, { compute: { ...step.compute!, output: event.target.value } })} /></label>
+            {step.compute.expectState === "completed" ? <label className="grid gap-1 text-xs">{t("Fixed output (JSON)")}<Textarea draftKey={`step:${index}:compute-output`} parse="json" rows={3} className="font-mono" value={step.compute.output ?? "{}"} onChange={(event) => update(index, { compute: { ...step.compute!, output: event.target.value } })} /></label>
               : <label className="grid gap-1 text-xs">{t("Fixed computation error")}<Input value={step.compute.error ?? ""} onChange={(event) => update(index, { compute: { ...step.compute!, error: event.target.value } })} /></label>}
-            <label className="grid gap-1 text-xs">{t("Expected output (JSON, optional)")}<Textarea rows={2} className="font-mono" value={step.compute.expectOutput ?? ""} onChange={(event) => update(index, { compute: { ...step.compute!, expectOutput: event.target.value || undefined } })} /></label>
+            <label className="grid gap-1 text-xs">{t("Expected output (JSON, optional)")}<Textarea draftKey={`step:${index}:compute-expected`} parse="json" rows={2} className="font-mono" value={step.compute.expectOutput ?? ""} onChange={(event) => update(index, { compute: { ...step.compute!, expectOutput: event.target.value || undefined } })} /></label>
           </fieldset>}
         </Card>)}
         <div className="flex flex-wrap gap-2">
@@ -339,7 +345,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
           <AssetControls type="build.testplan" record={planID ? { id: planID, revision } : undefined} dirty={dirty} busy={busy} onCancel={discardChanges} />
           <Button disabled={(!object && !process?.manual) || !steps.length || !title.trim()} onClick={save}>{t("Save test plan")}</Button>
           <Button disabled={!planID} onClick={reload}>{t("Reload saved plan")}</Button>
-          <Button onClick={() => { clear(); setPlanID(""); setRevision(0); setTitle(""); }}>{t("New test plan")}</Button>
+          <Button onClick={() => { clear(); setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); }}>{t("New test plan")}</Button>
           <Button variant="primary" disabled={(!object && !process?.manual) || !steps.length} onClick={run}>{busy ? t("Running test…") : t("Run isolated test")}</Button>
         </div>
       </fieldset>
@@ -407,7 +413,7 @@ function TestPayload({ fields, payload, onChange }: { fields?: ActionDeclaration
     {showFields ? fields!.length ? <PayloadFields fields={fields!} values={values!} preview
       onChange={(next) => onChange(JSON.stringify(next))} /> : <p className="text-xs text-muted">{t("This action takes no input fields.")}</p>
       : <label className="grid gap-1 text-xs">{t("Test inputs (JSON)")}
-        <Textarea rows={3} value={payload} onChange={(event) => onChange(event.target.value)} className="font-mono" />
+        <Textarea parse="json" rows={3} value={payload} onChange={(event) => onChange(event.target.value)} className="font-mono" />
       </label>}
     <p className="text-xs text-muted">{t("Reference values are fixed test record IDs. Complex values and deliberate invalid inputs use advanced JSON.")}</p>
   </fieldset>;

@@ -137,7 +137,7 @@ function RoleForm({ catalog, onSubmit, onCancel }: { catalog: AppPermissions[]; 
   const [actions, setActions] = useState<string[]>([]);
   const ids = Array.from(new Set((catalog.find((a) => a.app === app)?.roles ?? []).flatMap((r) => r.actions.map((x) => x.id))));
   return (
-    <Form className="grid gap-3" onSubmit={() => { void onSubmit(id, { app, title, actions }); }}>
+    <Form className="grid gap-3" onSubmit={() => { return onSubmit(id, { app, title, actions }); }}>
       {field(t("App"), <Select value={app} onChange={(e) => { setApp(e.target.value); setActions([]); }}>{catalog.map((a) => <option key={a.app} value={a.app}>{a.title}</option>)}</Select>)}
       {field(t("Role ID"), <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="shift-lead" />)}
       {field(t("Title"), <Input value={title} onChange={(e) => setTitle(e.target.value)} />)}
@@ -160,7 +160,7 @@ function PolicyForm({ members, onSubmit, onCancel }: { members: Member[]; onSubm
   const [until, setUntil] = useState("");
   const where = { ...(member ? { member } : {}), ...(agent ? { agent: "true" } : {}) };
   return (
-    <Form className="grid gap-3" onSubmit={() => { void onSubmit(id, { title, effect, permission, where, ...(from ? { from } : {}), ...(until ? { until } : {}) }); }}>
+    <Form className="grid gap-3" onSubmit={() => { return onSubmit(id, { title, effect, permission, where, ...(from ? { from } : {}), ...(until ? { until } : {}) }); }}>
       {field(t("Policy ID"), <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="freeze-closing" />)}
       {field(t("Title"), <Input value={title} onChange={(e) => setTitle(e.target.value)} />)}
       {field(t("Effect"), <Select value={effect} onChange={(e) => setEffect(e.target.value)}><option value="deny">{t("deny")}</option><option value="allow">{t("allow")}</option></Select>)}
@@ -181,7 +181,7 @@ function TeamForm({ members, catalog, onSubmit, onCancel }: { members: Member[];
   const parsed = grants.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => { const [app, role] = l.split(/[:\s]+/); return { app, role }; });
   const valid = parsed.every((g) => catalog.some((a) => a.app === g.app && a.roles.some((r) => r.role === g.role)));
   return (
-    <Form className="grid gap-3" onSubmit={() => { void onSubmit(id, { name, members: chosen, grants: parsed }); }}>
+    <Form className="grid gap-3" onSubmit={() => { return onSubmit(id, { name, members: chosen, grants: parsed }); }}>
       {field(t("Team ID"), <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="night-shift" />)}
       {field(t("Name"), <Input value={name} onChange={(e) => setName(e.target.value)} />)}
       <fieldset className="grid max-h-48 gap-1 overflow-auto text-sm"><legend className="text-xs text-muted">{t("Members")}</legend>
@@ -205,7 +205,7 @@ function ProjectForm({ members, project, onSubmit, onCancel }: { members: Member
   const parsed = assets.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => { const [kind, name, app] = l.split(/[:\s]+/); return { kind: kind ?? "", name: name ?? "", ...(app ? { app } : {}) }; });
   const valid = parsed.every((a) => assetKinds.includes(a.kind) && !!a.name);
   return (
-    <Form className="grid gap-3" onSubmit={() => { void onSubmit(id, { name: id, title, members: chosen.map((member) => ({ member, role: "editor" })), assets: parsed }); }}>
+    <Form className="grid gap-3" onSubmit={() => { return onSubmit(id, { name: id, title, members: chosen.map((member) => ({ member, role: "editor" })), assets: parsed }); }}>
       {field(t("Project ID"), <Input value={id} disabled={!!project} onChange={(e) => setId(e.target.value)} placeholder="hotel-opening" />)}
       {field(t("Title"), <Input value={title} onChange={(e) => setTitle(e.target.value)} />)}
       <fieldset className="grid max-h-48 gap-1 overflow-auto text-sm"><legend className="text-xs text-muted">{t("Editors")}</legend>

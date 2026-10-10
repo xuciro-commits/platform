@@ -1,3 +1,4 @@
+import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useState } from "react";
@@ -23,7 +24,9 @@ export function QueryEditor({id}:{id:string}) {
  const query=useReadQuery<{record?:Draft}>(`/v1/records/build.query/${encodeURIComponent(id)}`);
  const apps=useReadQuery<Api.AppInfo[]>("/v1/apps").data ?? [];
  const interfaces=apps.flatMap(app=>app.interfaces??[]);
- const [draft,setDraft]=useState<Draft>(empty),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [draft,setDraft]=useState<Draft>(empty),[edited,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
  const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{setDraft(query.data?.record?hydrate(query.data.record):empty());setDirty(false);setError("");});
  useEffect(()=>{if(query.data?.record&&!dirty)setDraft(hydrate(query.data.record));},[query.data,dirty]);
  const object={app:"build",kind:"object" as const,name:draft.object??""},info=definitions.find((d)=>d.ref.kind==="object"&&d.ref.name===draft.object)?.entity;
@@ -33,7 +36,7 @@ export function QueryEditor({id}:{id:string}) {
  const perform=async(action:()=>Promise<unknown>)=>{setBusy(true);setError("");try{await action();}catch{setError(t("The query could not be saved or loaded. Your draft is still here."));}finally{setBusy(false);}};
  const reload=async()=>{const r=await query.refetch();if(r.data?.record&&!r.isError){setDraft(hydrate(r.data.record));markSaved();setDirty(false);}else setError(t("Reload the saved query before editing again."));};
  const save=async():Promise<number|undefined>=>{
-  const target=draft.id||crypto.randomUUID(),{name,title,description,object,interface:interfaceName,by,domain,sort,limit}=draft;
+  const target=draft.id || createID,{name,title,description,object,interface:interfaceName,by,domain,sort,limit}=draft;
   if(!await decide(`build.query.${draft.id?"edit":"create"}`,{type:"build.query",id:target},{name,title,description,object:object??"",interface:interfaceName??"",by:by??"",domain,sort,limit},{expectedRevision:draft.id?draft.revision:undefined,quiet:true,onRefused:setError}))return;
   const revision=draft.id?draft.revision+1:1;
   if(!draft.id){markSaved();setDirty(false);open({view:"query",params:{id:target}});close({view:"query",params:{id}});}else await reload();
@@ -58,7 +61,7 @@ export function QueryEditor({id}:{id:string}) {
  <label className="grid min-w-0 gap-1 text-xs">{t("Query description")}<Textarea value={draft.description} onChange={(e)=>patch({description:e.target.value})}/></label>
  <label className="grid min-w-0 gap-1 text-xs">{t("Query source kind")}<Select value={draft.interface?"interface":"object"} disabled={!!draft.published} onChange={event=>patch({object:"",interface:event.target.value==="interface"?interfaces[0]?.name??"":"",domain:[],sort:["id"],by:""})}><option value="object">{t("Object type")}</option><option value="interface" disabled={!interfaces.length}>{t("Interface")}</option></Select></label>
  {draft.interface?<><label className="grid min-w-0 gap-1 text-xs">{t("Source interface")}<Select value={draft.interface} disabled={!!draft.published} onChange={event=>patch({interface:event.target.value,domain:[],sort:["id"],by:""})}>{interfaces.map(item=><option key={item.name} value={item.name}>{item.title} · {item.name}</option>)}</Select></label><p className="text-xs text-muted">{t("Publication freezes the interface fields and implementation types. Publish a new version to include later implementations.")}</p></>:<><label className="grid min-w-0 gap-1 text-xs">{t("Source object")}<SemanticObjectSelect value={draft.object??""} label={t("Source object")} filter={(d)=>d.ref.app==="build"&&d.source==="tenant"} disabled={!!draft.published} onChange={(ref)=>{if(ref)patch({object:ref.name,domain:[],sort:["id"],by:""})}}/></label><label className="grid min-w-0 gap-1 text-xs">{t("Parent reference")}<SemanticPropertySelect object={object} value={draft.by??""} label={t("Parent reference")} filter={(f)=>f.type==="reference"} onChange={(ref)=>patch({by:ref?.field??""})}/></label></>}
- <label className="grid min-w-0 gap-1 text-xs">{t("Query window limit")}<Input type="number" min={1} max={200} value={draft.limit??50} onChange={(e)=>patch({limit:Number(e.target.value)})}/></label>
+ <label className="grid min-w-0 gap-1 text-xs">{t("Query window limit")}<Input draftKey="query-window-limit" type="number" min={1} max={200} value={draft.limit??50} onChange={(e)=>patch({limit:Number(e.target.value)})}/></label>
  <label className="grid min-w-0 gap-1 text-xs">{t("Query sort")}<Select value={draft.sort?.[0]??"id"} onChange={(e)=>patch({sort:[e.target.value]})}><option value="id">{t("ID")}</option>{fields?.filter((f)=>supported.includes(f.type)).flatMap((f)=>[f.name,`-${f.name}`].map((name)=><option key={name} value={name}>{f.title} {name.startsWith("-")?"↓":"↑"}</option>))}</Select></label>
  </Panel>
  <Panel title={t("Fixed query conditions")} className="grid min-w-0 content-start gap-3">

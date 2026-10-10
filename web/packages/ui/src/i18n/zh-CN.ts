@@ -1,5 +1,12 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Scoped input drafts": "会话内输入草稿",
+ "Keep unparsed number and JSON text in its original document and block unsafe submissions.": "把未解析的数字和 JSON 原文保留在原文档中，并阻止无效提交。",
+ "The input draft limit was reached. Correct or discard an existing draft first.": "输入草稿已达到上限，请先修正或放弃已有草稿。",
+ "This input exceeds 65536 characters. The previous draft is retained.": "此输入超过 65536 个字符，已保留此前的草稿。",
+ "Enter valid JSON. The original draft is retained.": "请输入有效的 JSON，原文草稿已保留。",
+ "Correct the input drafts before submitting.": "请先修正输入草稿再提交。",
+
   "{count} day": "{count} 天",
   "{count} night": "{count} 晚",
   "Enter a value.": "请输入一个值。",
@@ -1459,4 +1466,7 @@ export default {
   "Effect": "副作用",
   // The force layout's word in the arrange menu (ADR-0091).
   "Balance by distance": "按距离平衡",
+  "Retry the original request before changing its inputs.": "更改输入之前，请先重试原请求。",
+  "The capability result is still awaiting confirmation. Retry the original request.": "能力调用结果仍待确认，请重试原请求。",
+  "Discard": "放弃",
 } as Record<string, string>;

@@ -3,11 +3,11 @@
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
 import "../i18n";
-import { Button, Card, Disclosure, useWorkspace, Form, FlowSteps, Input, PageHeader, Panel, RelationCanvas, relationNodeClasses, Select, StatusTag, Tag, Textarea, defineStatuses, t, language,
+import { Button, Card, Disclosure, inputIssues, useWorkspace, Form, FlowSteps, Input, PageHeader, Panel, RelationCanvas, relationNodeClasses, Select, StatusTag, Tag, Textarea, defineStatuses, t, language,
   type FlowStepEdge, type FlowStepNode, type RelationEdge, type RelationNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
-import { PayloadFields } from "../actions/actions";
+import { PayloadFields,payloadSchema } from "../actions/actions";
 import { newId, useHost, useOpenRecord, useRead, useReadQuery } from "../index";
 
 // Generated from the host's Go types (ADR-0023 D7).
@@ -39,16 +39,16 @@ function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
   const { decide, action } = useHost();
   const declared = action(draft.action.includes("#") ? draft.action.split("#")[1]! : draft.action);
   const [values, setValues] = useState<Record<string, unknown>>(() => { try { return JSON.parse(draft.payload) as Record<string, unknown>; } catch { return {}; } });
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(""),[submitted,setSubmitted]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[invalidJSON,setInvalidJSON]=useState<Record<string,boolean>>({});
   const target = { type: "agent.run", id: run.id };
   const fields = declared?.payload ?? Object.keys(values).map((name) => ({ name, type: "string", description: name }));
   return (
     <Card className="grid gap-2 border-[var(--tone-warning)] p-3">
       <div className="text-sm font-semibold">{declared?.title ?? draft.action} <span className="font-mono text-xs text-muted">{draft.target}</span></div>
       {draft.rationale && <p className="text-sm text-muted">{draft.rationale}</p>}
-      <PayloadFields fields={fields} values={values} onChange={setValues} />
+      <fieldset disabled={busy}><PayloadFields fields={fields} values={values} onChange={setValues} submitted={submitted} onInvalid={(name,invalid)=>setInvalidJSON(old=>({...old,[name]:invalid}))}/></fieldset>{error&&<p role="alert" className="text-xs text-danger">{error}</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="primary" onClick={() => void decide("agent.run.confirm", target, { payload: values })}>{t("Confirm")}</Button>
+        <Button size="sm" variant="primary" disabled={busy} onClick={async()=>{setSubmitted(true);if(busy||Object.values(invalidJSON).some(Boolean)||!payloadSchema(fields).safeParse(values).success||inputIssues(fields,values).length)return;setBusy(true);try{await decide("agent.run.confirm",target,{payload:values},{onRefused:setError});}finally{setBusy(false);}}}>{t("Confirm")}</Button>
         <Input className="w-64" placeholder={t("Why not, for the agent")} value={reason} onChange={(e) => setReason(e.target.value)} />
         <Button size="sm" variant="danger" onClick={() => void decide("agent.run.reject", target, { reason })}>{t("Reject")}</Button>
       </div>
@@ -231,7 +231,7 @@ export function Assistant({ about }: { about?: string }) {
     <div className="grid max-w-3xl gap-3">
       <PageHeader title={t("Assistant")} description={about ? `Ask an agent about ${about}. It drafts; you confirm.` : t("Ask one of your apps' agents. It works on your behalf, within what you may do; you confirm what it drafts.")} />
       {agents.length === 0 ? <p className="text-sm text-muted">{t("None of your apps declares an agent.")}</p> : (
-        <Form className="grid gap-2" onSubmit={() => { if (goal.trim()) void start(); }}>
+        <Form className="grid gap-2" onSubmit={() => { if (goal.trim()) return start(); }}>
           <Select aria-label={t("Agent")} value={chosen} onChange={(e) => setAgent(e.target.value)}>
             {suited.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
           </Select>
@@ -291,7 +291,7 @@ export function Search({ initial = "" }: { initial?: string }) {
   return (
     <div className="grid max-w-3xl gap-3">
       <PageHeader title={t("Search")} description={t("Records of every app you work in, and the knowledge you may read, by text, within what you may see.")} />
-      <Form onSubmit={() => void run(q)}>
+      <Form onSubmit={() => run(q)}>
         <Input aria-label={t("Search")} autoFocus placeholder={t("Search records")} value={q} onChange={(e) => setQ(e.target.value)} />
       </Form>
       {passages.length > 0 && (

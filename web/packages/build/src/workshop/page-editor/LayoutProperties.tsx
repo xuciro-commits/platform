@@ -14,7 +14,7 @@ function NumberProperty({id,path,label,value,min,max,onChange,prefix,optional=fa
   const number=Number(raw),valid=/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw)&&Number.isFinite(number)&&number>=min&&number<=max&&(!integer||Number.isSafeInteger(number));
   if(valid){input.clear();onChange(number);}else input.write(raw,t("Enter a number within the allowed range."));
  };
- const props={type:"text",inputMode:"decimal" as const,value:input.text,placeholder,"aria-invalid":!!input.problem,onChange:(event:ChangeEvent<HTMLInputElement>)=>update(event.target.value)};
+ const props={"data-draft-key":input.path,type:"text",inputMode:"decimal" as const,value:input.text,placeholder,"aria-invalid":!!input.problem,onChange:(event:ChangeEvent<HTMLInputElement>)=>update(event.target.value)};
  return <div className="grid gap-1">{prefix?<InspectorField label={label} prefix={prefix} unit="px" {...props}/>:<label className="grid gap-1 text-xs">{label}<Input {...props}/></label>}{input.problem&&<p role="alert" className="text-xs text-danger">{input.problem}</p>}</div>;
 }
 
@@ -49,7 +49,7 @@ export function LayoutProperties({ document, id, sections=[],onChange, onPatch, 
     </>}
     <Button size="sm" variant="ghost" disabled={ungroupDisabled || !!node.slot || node.kind==="loop" || id === document.root || Object.values(document.overlays ?? {}).some((overlay) => overlay.root === id)} onClick={onUngroup}>{t("Ungroup")}</Button>
     </InspectorSection>
-    {["rows","columns"].includes(node.kind)&&<InspectorSection title={t("Region presentation")} actions={<Button size="icon" variant="ghost" aria-label={t("Reset region presentation")} title={t("Reset region presentation")} onClick={()=>{for(const key of Object.keys(inputs?.values??{}))if(key.startsWith(`/layout:${id}/presentation.`))inputs?.set(key);onPatch(id,{presentation:undefined});}}><RotateCcw/></Button>}>
+    {["rows","columns"].includes(node.kind)&&<InspectorSection title={t("Region presentation")} actions={<Button size="icon" variant="ghost" aria-label={t("Reset region presentation")} title={t("Reset region presentation")} onClick={()=>{for(const key of Object.keys(inputs?.values??{}))if(key.startsWith(`${inputs?.scope??""}/layout:${id}/presentation.`))inputs?.set(key);onPatch(id,{presentation:undefined});}}><RotateCcw/></Button>}>
       <div className="grid grid-cols-2 gap-2">
         <NumberProperty id={id} path="presentation.padding" label={t("Region padding (px)")} prefix={<SquareDashed/>} min={0} max={pageUIManifest.layout.maxPadding} value={node.presentation?.padding} optional placeholder="0" onChange={padding=>onPatch(id,{presentation:{...node.presentation,padding}})}/>
         <Select aria-label={t("Region background")} className="text-xs" value={node.presentation?.background??"default"} onChange={e=>onPatch(id,{presentation:{...node.presentation,background:e.target.value}})}><option value="default">{t("Default")}</option><option value="panel">{t("Panel")}</option></Select>
@@ -70,7 +70,7 @@ export function LayoutSizing({document,id,onPatch}:{document:Api.PageDocument;id
  };
  const dimension=(key:keyof Api.PageLayoutSize,label:string,prefix:string)=><NumberProperty id={id} path={`size.${key}`} label={t(label)} prefix={prefix} min={limits.minSize} max={limits.maxSize} value={node.size?.[key] as number|undefined} optional placeholder={t("Automatic")} onChange={value=>update(key,value)}/>;
  const constrained=!!(node.size?.minWidth||node.size?.maxWidth||node.size?.minHeight||node.size?.maxHeight||node.size?.weight);
- return <div className="grid content-start"><InspectorSection title={t("Region sizing")} actions={<Button size="icon" variant="ghost" aria-label={t("Reset region sizing")} title={t("Reset region sizing")} onClick={()=>{for(const key of Object.keys(inputs?.values??{}))if(key.startsWith(`/layout:${id}/size.`)||key===`/layout:${id}/gap`)inputs?.set(key);onPatch(id,{size:undefined,gap:undefined});}}><RotateCcw/></Button>}>
+ return <div className="grid content-start"><InspectorSection title={t("Region sizing")} actions={<Button size="icon" variant="ghost" aria-label={t("Reset region sizing")} title={t("Reset region sizing")} onClick={()=>{for(const key of Object.keys(inputs?.values??{}))if(key.startsWith(`${inputs?.scope??""}/layout:${id}/size.`)||key===`${inputs?.scope??""}/layout:${id}/gap`)inputs?.set(key);onPatch(id,{size:undefined,gap:undefined});}}><RotateCcw/></Button>}>
   <div className="grid grid-cols-2 gap-2">{dimension('width','Width (px)','W')}{dimension('height','Height (px)','H')}</div>
   {["rows","columns"].includes(node.kind)&&<NumberProperty id={id} path="gap" label={t("Layout gap (px)")} prefix={<BetweenHorizontalStart/>} min={0} max={limits.maxGap} value={node.gap} optional placeholder="12" onChange={gap=>onPatch(id,{gap})}/>}
   <Select aria-label={t("Region scroll")} className="text-xs" value={node.size?.scroll??"visible"} onChange={e=>update("scroll",e.target.value==="visible"?undefined:e.target.value)}><option value="visible">{t("Natural flow")}</option><option value="auto">{t("Scroll inside region")}</option></Select>

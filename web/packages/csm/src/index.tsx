@@ -13,7 +13,7 @@ const ticket = z.object({ subject: z.string().min(1), customer: z.email(), accou
 
 function Tickets() {
   const { can, decide } = useHost();
-  const [opening, setOpening] = useState(false);
+  const [opening, setOpening] = useState(false),[id,setId]=useState(()=>newId("T"));
   return (
     <>
       <Records type="csm.ticket" description={t("Customers' tickets. The triage agent classifies and answers new ones; a reply it writes is mailed once a person approves it. Late tickets go to the desk's leads.")}
@@ -22,7 +22,7 @@ function Tickets() {
         <EntityForm schema={ticket} defaultValues={{ subject: "", customer: "", account: "", body: "" }} submitLabel={t("Open")} onCancel={() => setOpening(false)}
           fields={[{ name: "subject", label: t("Subject") }, { name: "customer", label: t("Customer e-mail") },
             { name: "account", label: t("Customer account (CRM ID)") }, { name: "body", label: t("What the customer wrote") }]}
-          onSubmit={async (v) => { if (await decide("csm.ticket.open", { type: "csm.ticket", id: newId("T") }, v, { expectedRevision: 0 })) setOpening(false); }} />
+          onSubmit={async (v) => { const ok=await decide("csm.ticket.open", { type: "csm.ticket", id }, v, { expectedRevision: 0 });if(ok){setOpening(false);setId(newId("T"));}return ok; }} />
       </Dialog>
     </>
   );

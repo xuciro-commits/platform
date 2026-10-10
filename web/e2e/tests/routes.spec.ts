@@ -1,11 +1,11 @@
 // Browser smoke: canonical build/use paths. Visual layout is reviewed manually.
-import { expect, test } from "./kit";
+import {Builder,pageUIProfile, expect, test } from "./kit";
 import type { Page } from "@playwright/test";
 import { decide, fresh, open } from "./host";
 
 const value = (page: Page, text: string) => page.getByRole("definition").filter({ hasText: new RegExp(`^${text}$`, "i") });
 
-test("route 17: every action has an entry, pages follow changes", async ({ page, request }) => {
+test("route 17: every action has an entry, pages follow changes", async ({ browser, page, request }) => {
   const account = fresh("ACC"), opp = fresh("OPP");
   await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Acme " + account, kind: "company" });
   await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Board offsite" });
@@ -65,6 +65,39 @@ test("route 17: every action has an entry, pages follow changes", async ({ page,
   await page.getByRole("dialog").getByRole("combobox").first().selectOption("won");
   await page.getByRole("dialog").getByRole("button", { name: "Close opportunity" }).click();
   await expect(value(page, "won")).toBeVisible();
+  // Bound creation uses the shared capability route. A lost reply retains its
+  // request key; an explicit refusal permits a corrected proposal.
+  const builder=new Builder(request,"manager");
+  const boundObject=await builder.object({title:"Bound input records",fields:[{name:"note",title:"Note",type:"text",required:true},{name:"quantity",title:"Quantity",type:"integer",required:true}]});
+  const boundPage=await builder.page({title:"Bound input form",object:boundObject.type,
+    sections:[{id:"create",widget:"form",configVersion:1,fields:["note"],inputs:{quantity:{source:"literal",value:3}}}],
+    document:{formatVersion:2,uiProfile:pageUIProfile,root:"root",nodes:{root:{kind:"rows",children:["create"]},create:{kind:"widget",section:"create"}}},
+  });
+  await builder.decide("build.page.publish",{type:"build.page",id:boundPage.id},{});
+  const bound=await browser.newPage({baseURL:"http://127.0.0.1:18496",locale:"en-US"});
+  try{
+  await builder.open(bound,`/page?app=build&kind=page&name=${boundPage.name}`);
+  const note=bound.getByRole("textbox",{name:/^Note/});
+  await note.fill("Retain this note");
+  const invocations:{key:string;target:string}[]=[];
+  await bound.route("**/v1/capabilities/invoke",async route=>{
+    invocations.push(route.request().postDataJSON());
+    if(invocations.length===1)return route.abort();
+    return route.fulfill({status:400,contentType:"application/json",body:JSON.stringify({error:{code:"ERROR_CODE_INVALID_ARGUMENT",message:"Bound form refused"}})});
+  });
+  await bound.getByRole("button",{name:"Create",exact:true}).click();
+  await expect(note).toHaveValue("Retain this note");
+  await expect(bound.getByRole("button",{name:"Create",exact:true})).toBeEnabled();
+  await bound.getByRole("button",{name:"Create",exact:true}).click();
+  await expect(bound.getByText("Bound form refused",{exact:true})).toBeVisible();
+  expect(invocations).toHaveLength(2);expect(invocations[1]).toMatchObject({key:invocations[0]!.key,target:invocations[0]!.target});
+  await bound.unroute("**/v1/capabilities/invoke");
+  await note.fill("Corrected note");
+  await bound.getByRole("button",{name:"Create",exact:true}).click();
+  await expect(note).toHaveValue("");
+  expect(await builder.record(boundObject.type,invocations[0]!.target)).toMatchObject({note:"Corrected note",quantity:3});
+
+  }finally{await bound.close();}
 });
 
 test("route 4: an approval reaches the requester's page", async ({ page, request }) => {

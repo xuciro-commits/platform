@@ -1,3 +1,4 @@
+import {DraftInputs,InputDraftProvider,InputProblems,useInputDrafts,notify} from "@platform/ui";
 export { ApplicationRuns, OperationRunView } from "./automation/application-runs";
 export {createRecordExploration,type RecordExplorationReader} from "./exploration/reader";
 import {createRecordCollaboration} from "./collaboration/service";
@@ -78,9 +79,9 @@ export type Host = {
 export const HostContext = createContext<Host | null>(null);
 
 export function useHost(): Host {
-  const host = useContext(HostContext);
+  const host = useContext(HostContext),inputs=useInputDrafts();
   if (!host) throw new Error("useHost outside the workspace");
-  return host;
+  return useMemo(()=>({...host,decide:async(schema,target,payload,options)=>{if(inputs?.invalid){const message=t("Correct the input drafts before submitting.");options?.onRefused?.(message);if(!options?.onRefused)notify.error(message);return false;}inputs?.reject();inputs?.pending(1);try{return await host.decide(schema,target,payload,inputs&&!options?.onRefused?{...options,onRefused:inputs.reject}:options);}finally{inputs?.pending(-1);}}}),[host,inputs?.invalid,inputs?.pending]);
 }
 
 /** A read of the host (`/v1/...`) for the signed-in member, refreshed while shown. */
@@ -130,12 +131,27 @@ export function useCapabilities(): UseQueryResult<Api.CapabilityDescriptor[]> {
 
 /** Page, editor and tool callers use the same owner route. Keep the request key
  * when retrying a submission whose response was lost. */
-export function useInvokeCapability(): (request: Api.CapabilityInvocation) => Promise<Api.CapabilityResult> {
-  const { client } = useHost();
-  return async (request) => {
-    const answer = await client.call<Api.CapabilityResult>("POST", "/v1/capabilities/invoke", request);
-    if (!answer.ok) throw new Error(apiErrorMessage(answer.body) ?? t("The capability call was refused."));
-    return answer.body;
+export function useInvokeCapability(automatic = false): (request: Api.CapabilityInvocation) => Promise<Api.CapabilityResult> {
+  const {client}=useHost(),inputs=useInputDrafts(),pending=useRef<Api.CapabilityInvocation|undefined>(undefined);
+  return async request => {
+    const send=async (original:Api.CapabilityInvocation)=>{
+      const answer=await client.call<Api.CapabilityResult>("POST","/v1/capabilities/invoke",original);
+      if(!answer.ok){
+        const rejected=answer.status>=400&&answer.status<500&&answer.status!==409;
+        if(rejected)pending.current=undefined;
+        throw new Error(apiErrorMessage(answer.body)??t("The capability call was refused."),{cause:rejected?"rejected":"unconfirmed"});
+      }
+      if(answer.body.state!=="completed"&&!answer.body.call&&!answer.body.result)throw new Error(t("The capability result is still awaiting confirmation. Retry the original request."));
+      pending.current=undefined;return answer.body;
+    };
+    // Page computations already own concurrent invocation identities in their
+    // original resource ledger; interactive callers retain one pending request.
+    if(automatic)return send(request);
+    if(inputs?.invalid)throw new Error(t("Correct the input drafts before submitting."),{cause:"rejected"});
+    if(pending.current&&JSON.stringify({...pending.current,key:undefined})!==JSON.stringify({...request,key:undefined}))throw new Error(t("Retry the original request before changing its inputs."));
+    pending.current??=structuredClone(request);
+    inputs?.pending(1);
+    try{return await send(pending.current);}finally{inputs?.pending(-1);}
   };
 }
 
@@ -202,7 +218,16 @@ export type AppUI = {
   dashboards?: Dashboard[];
 };
 
-export const defineApp = (app: AppUI): AppUI => app;
+function AppInputView({scope,children}:{scope:string;children:ReactNode}) {
+  const host=useContext(HostContext);
+  const identity=`${host?.client.connection.tenant??""}:${host?.me.principalId??""}:${scope}`;
+  return <InputDraftProvider isolated key={identity} scope={scope}><AppInputBody>{children}</AppInputBody></InputDraftProvider>;
+}
+function AppInputBody({children}:{children:ReactNode}) {
+  const inputs=useInputDrafts();
+  return <><InputProblems/><DraftInputs.Provider value={inputs&&{...inputs,problemsShown:true}}><fieldset disabled={inputs?.busy} className="contents">{children}</fieldset></DraftInputs.Provider></>;
+}
+export const defineApp = (app: AppUI): AppUI => ({...app,views:app.views.map(view=>({...view,render:params=><AppInputView scope={`${app.id}/${view.id}/${params.id??""}/${params.page??""}`}>{view.render(params)}</AppInputView>}))});
 
 // Generated pages (ADR-0016), for any app's entity types.
 
@@ -264,7 +289,7 @@ export function Records({ type, description, actions, covers, saved }: { type: s
         description={saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : description ?? info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see.")} />
       <RecordList key={saved?.id ?? type} source={source} type={type} initial={initial} onSave={setSaving} onOpen={(r) => openRecord({ type, id: r.id })} />
       <Dialog open={!!saving} onOpenChange={(o) => !o && !busy && setSaving(undefined)} title={saved ? t("Save {name}", { name: saved.title }) : t("Save view")}>
-        <Form className="grid gap-3" onSubmit={() => { if (title.trim() && !busy) void save(); }}>
+        <Form className="grid gap-3" onSubmit={() => { if (title.trim() && !busy) return save(); }}>
           <Input aria-label={t("Name")} placeholder={t("Name of the view")} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} autoFocus />
           <div className="flex justify-end gap-2">
             <Button type="button" onClick={() => setSaving(undefined)} disabled={busy}>{t("Cancel")}</Button>
