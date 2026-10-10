@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -540,6 +541,109 @@ func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
 		}
 		CheckReplay(t, live, entries, compose)
 	})
+}
+
+type transientDeleteFiles struct {
+	*memoryFiles
+	failures int
+}
+
+func (s *transientDeleteFiles) Delete(ctx context.Context, key string) error {
+	if s.failures > 0 {
+		s.failures--
+		return errors.New("injected object-store delete failure")
+	}
+	return s.memoryFiles.Delete(ctx, key)
+}
+
+func TestContinuousArtifactRetirementRetriesAndUsesHostAcceptedWork(t *testing.T) {
+	const tenant, id = "continuous-artifact-retirement", "frames.window:source"
+	files := &transientDeleteFiles{memoryFiles: &memoryFiles{}}
+	compose := func() *Tenant {
+		source := newFrameSource(tenant, 2<<20)
+		source.checkpointEvery = 2
+		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+		tn.Files = files
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	at := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	member := memberOf(t, tn, "member")
+	feed := func(batch flow.Batch, now time.Time) flow.FlowInstance {
+		t.Helper()
+		if _, err := tn.ConsumeFlowBatch(member, id, batch, now); err != nil {
+			t.Fatalf("accept source batch %s: %v", batch.ID, err)
+		}
+		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		if !ok || x.Batch == nil || x.Batch.Sealed == nil {
+			t.Fatal("accepted batch did not retain its sealed frame")
+		}
+		return x
+	}
+	stored := func(ref platform.FlowStateArtifact) bool {
+		t.Helper()
+		key, err := (flowFrameStore{tenant: tenant, files: files}).key(ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return files.Exists(context.Background(), key)
+	}
+	one := feed(flow.Batch{ID: "one", Signals: []flow.Signal{{Key: "one", Partition: "plant", At: at, Value: platform.Raw(1)}}}, at)
+	firstFrame := *one.Batch.Sealed
+	two := feed(flow.Batch{ID: "two", Predecessor: "one", Signals: []flow.Signal{{Key: "two", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(2)}}}, at.Add(time.Second))
+	firstCheckpoint := *two.Batch.CheckpointArtifact
+	if !two.CleanupPending || len(two.ArtifactCleanup) != 1 || two.ArtifactCleanup[0] != firstFrame || !stored(firstFrame) {
+		t.Fatalf("the accepted replacement did not durably identify its superseded frame: %+v", two.ArtifactCleanup)
+	}
+	if !stored(*two.Batch.Sealed) || !stored(firstCheckpoint) {
+		t.Fatal("the live frame and checkpoint must remain stored")
+	}
+	if result := refuse(t, tn, "member", flow.ID, flow.SchemaFlowArtifactCleanup, flow.InstanceType, id, map[string]string{"digest": "forged"}, at.Add(time.Second)); !strings.Contains(result, pb.ErrorCode_ERROR_CODE_POLICY_DENIED.String()) {
+		t.Fatalf("a member submitted the host-only cleanup action: %s", result)
+	}
+
+	f := tn.procs.(*flow.Flows)
+	cleanup, refusal := f.PlanArtifactCleanup(two, at.Add(2*time.Second))
+	if refusal != nil {
+		t.Fatal(refusal)
+	}
+	files.failures = 1
+	if refusal := tn.retireContinuousArtifacts(cleanup, at.Add(2*time.Second)); refusal == nil {
+		t.Fatal("a transient object-store failure must leave cleanup unacknowledged")
+	}
+	stillPending, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !stillPending.CleanupPending || stillPending.Revision != two.Revision || !stored(firstFrame) {
+		t.Fatal("a failed delete cleared the durable retry intent or removed the object")
+	}
+
+	three := feed(flow.Batch{ID: "three", Predecessor: "two", Signals: []flow.Signal{{Key: "three", Partition: "plant", At: at.Add(2 * time.Second), Value: platform.Raw(3)}}}, at.Add(3*time.Second))
+	thirdFrame := *three.Batch.Sealed
+	if !three.CleanupPending || len(three.ArtifactCleanup) != 1 || three.ArtifactCleanup[0] != *two.Batch.Sealed || stored(firstFrame) {
+		t.Fatalf("a retried cleanup did not precede the next accepted batch: %+v", three.ArtifactCleanup)
+	}
+	four := feed(flow.Batch{ID: "four", Predecessor: "three", Signals: []flow.Signal{{Key: "four", Partition: "plant", At: at.Add(3 * time.Second), Value: platform.Raw(4)}}}, at.Add(4*time.Second))
+	if !four.CleanupPending || len(four.ArtifactCleanup) != 2 || four.ArtifactCleanup[0] != thirdFrame || four.ArtifactCleanup[1] != firstCheckpoint {
+		t.Fatalf("checkpoint rollover did not retire both replaced artifacts: %+v", four.ArtifactCleanup)
+	}
+	if !stored(thirdFrame) || !stored(firstCheckpoint) {
+		t.Fatal("accepted cleanup intent must not delete artifacts before host work")
+	}
+
+	// The original shared host source loop discovers and retries cleanup even
+	// when this Flow has no further source records to consume.
+	tn.PullContinuousSources(at.Add(5 * time.Second))
+	cleaned, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !ok || cleaned.CleanupPending || len(cleaned.ArtifactCleanup) != 0 || stored(thirdFrame) || stored(firstCheckpoint) {
+		t.Fatalf("host cleanup did not delete and acknowledge the superseded frame/checkpoint: %+v", cleaned.ArtifactCleanup)
+	}
+	if !stored(*cleaned.Batch.Sealed) || !stored(*cleaned.Batch.CheckpointArtifact) {
+		t.Fatal("host cleanup removed a live Flow artifact")
+	}
+	CheckReplay(t, tn, entries, compose)
 }
 
 func TestContinuousPeriodicCheckpointIsRetainedAndVersionBound(t *testing.T) {

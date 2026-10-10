@@ -81,10 +81,15 @@ func (s flowFrameStore) Read(ref platform.FlowStateArtifact) ([]byte, error) {
 	return raw, nil
 }
 
-func (s flowFrameStore) Discard(ref platform.FlowStateArtifact) {
-	if key, err := s.key(ref); err == nil {
-		s.files.Delete(context.Background(), key)
+func (s flowFrameStore) Discard(ref platform.FlowStateArtifact) error {
+	key, err := s.key(ref)
+	if err != nil {
+		return err
 	}
+	if err := s.files.Delete(context.Background(), key); err != nil {
+		return fmt.Errorf("discard Flow artifact: %w", err)
+	}
+	return nil
 }
 
 func (t *Tenant) continuousSnapshot(m platform.Member, id string, now time.Time) (*flow.Flows, flow.FlowInstance, platform.Member, *kernel.Error) {
@@ -116,6 +121,25 @@ func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time
 	return f, x, current, nil
 }
 
+func (t *Tenant) cleanupFlowArtifactsFor(m platform.Member, id string, now time.Time) *kernel.Error {
+	t.mu.Lock()
+	f, before, _, refusal := t.continuousSnapshotLocked(m, id, now)
+	if refusal != nil {
+		t.mu.Unlock()
+		return refusal
+	}
+	if !before.CleanupPending {
+		t.mu.Unlock()
+		return nil
+	}
+	plan, refusal := f.PlanArtifactCleanup(before, now)
+	t.mu.Unlock()
+	if refusal != nil {
+		return refusal
+	}
+	return t.retireContinuousArtifacts(plan, now)
+}
+
 // ConsumeFlowBatch is the native source's outside-lane ingress. It prepares
 // immutable bytes without the tenant lock, then commits through the existing
 // accepted-result pipeline. HTTP submissions cannot construct the opaque plan.
@@ -124,11 +148,7 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Sealed Flow batches require accepted-result storage")
 	}
 	t.mu.Lock()
-	f, before, current, refusal := t.continuousSnapshotLocked(m, id, now)
-	var plan *flow.BatchPreparation
-	if refusal == nil {
-		plan, refusal = f.PlanBatch(before, t.automation(flow.ID, false))
-	}
+	f, before, _, refusal := t.continuousSnapshotLocked(m, id, now)
 	t.mu.Unlock()
 	if refusal != nil {
 		return flow.BatchOutcome{}, refusal
@@ -148,6 +168,22 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 		}
 		return flow.BatchOutcome{Cursor: batch.ID}, nil
 	}
+	if before.CleanupPending {
+		if refusal := t.cleanupFlowArtifactsFor(m, id, now); refusal != nil {
+			return flow.BatchOutcome{}, refusal
+		}
+	}
+	var current platform.Member
+	var plan *flow.BatchPreparation
+	t.mu.Lock()
+	f, before, current, refusal = t.continuousSnapshotLocked(m, id, now)
+	if refusal == nil {
+		plan, refusal = f.PlanBatch(before, t.automation(flow.ID, false))
+	}
+	t.mu.Unlock()
+	if refusal != nil {
+		return flow.BatchOutcome{}, refusal
+	}
 	store := flowFrameStore{tenant: t.ID, files: t.files()}
 	prepared, refusal := plan.Prepare(batch, now, store)
 	if refusal != nil {
@@ -158,7 +194,7 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 		preparedInput, refusal = t.prepareContinuousOperationInput(current, id, request)
 		if refusal != nil {
 			for _, artifact := range prepared.Artifacts() {
-				store.Discard(artifact)
+				_ = store.Discard(artifact)
 			}
 			return flow.BatchOutcome{}, refusal
 		}
@@ -167,7 +203,7 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 	defer func() {
 		if !retained {
 			for _, artifact := range prepared.Artifacts() {
-				store.Discard(artifact)
+				_ = store.Discard(artifact)
 			}
 		}
 		if preparedInput != nil && !inputRetained {
@@ -199,6 +235,46 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 	retained = x.Batch.Sealed != nil && x.Batch.Sealed.Ticket == prepared.Artifact().Ticket
 	inputRetained = preparedInput != nil
 	return flow.BatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
+}
+
+// retireContinuousArtifacts deletes only refs named by an already-accepted
+// cleanup intent. The intent is acknowledged through the ordinary Flow result
+// ledger after every delete succeeds, so process restarts safely retry partial
+// object-store failures without a second queue or cursor.
+func (t *Tenant) retireContinuousArtifacts(plan *flow.ArtifactCleanupPreparation, now time.Time) *kernel.Error {
+	if t.AcceptResult == nil || plan == nil || plan.Instance() == "" || now.IsZero() {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Flow artifact cleanup is unavailable")
+	}
+	refs := plan.Artifacts()
+	if len(refs) == 0 {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow artifact cleanup intent is empty")
+	}
+	store := flowFrameStore{tenant: t.ID, files: t.files()}
+	for _, ref := range refs {
+		if ref.Tenant != t.ID {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A retired Flow artifact belongs to another tenant")
+		}
+		if err := store.Discard(ref); err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A superseded Flow artifact could not be retired: "+err.Error())
+		}
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	latest, ok := platform.Get[flow.FlowInstance](t.automation(flow.ID, false), plan.Instance())
+	if !ok {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow artifact cleanup owner is unavailable")
+	}
+	if !plan.Matches(latest) {
+		// Another host pass may have acknowledged the same intent while these
+		// idempotent deletes ran. The artifact bytes are already safe to discard.
+		return nil
+	}
+	if _, refusal := t.submitAccepted(plan.Decision(), platform.Member{ID: "app:" + flow.ID, Tenant: t.ID}, plan.Submission(t.ID), now, true); refusal != nil {
+		return refusal
+	}
+	t.enqueue(now)
+	return nil
 }
 
 func (t *Tenant) retryContinuousCompute(member platform.Member, plan *flow.ComputeRetryPreparation, now time.Time) {
@@ -359,6 +435,12 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 // Its consumer offset is accepted with the original window frame. No raw
 // source rows enter an import record or a second cursor/queue database.
 func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) (flow.BatchOutcome, *kernel.Error) {
+	if t.AcceptResult == nil {
+		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Continuous Flow sources require accepted-result storage")
+	}
+	if refusal := t.cleanupFlowArtifactsFor(m, id, now); refusal != nil {
+		return flow.BatchOutcome{}, refusal
+	}
 	t.mu.Lock()
 	f, before, current, refusal := t.continuousSnapshotLocked(m, id, now)
 	var plan *flow.BatchPreparation
@@ -539,9 +621,26 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 		plan   *flow.ComputeRetryPreparation
 		member platform.Member
 	}
+	type cleanup struct {
+		plan     *flow.ArtifactCleanupPreparation
+		instance string
+		refusal  *kernel.Error
+	}
 	var retries []retry
+	var cleanups []cleanup
 	if ok {
 		for _, instance := range instances {
+			if instance.CleanupPending {
+				plan, err := f.PlanArtifactCleanup(instance, now)
+				if err != nil {
+					cleanups = append(cleanups, cleanup{instance: instance.ID, refusal: err})
+				} else {
+					cleanups = append(cleanups, cleanup{plan: plan, instance: instance.ID})
+				}
+				// Cleanup is independent host work. Do not prepare a source batch
+				// against an instance whose prior retirement intent is unresolved.
+				continue
+			}
 			member, exists := t.Member(instance.OnBehalf)
 			if !exists {
 				continue
@@ -561,6 +660,15 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 		}
 	}
 	t.mu.Unlock()
+	for _, cleanup := range cleanups {
+		if cleanup.refusal != nil {
+			log.Printf("continuous Flow artifact cleanup %s refused: %s", cleanup.instance, cleanup.refusal.Code)
+			continue
+		}
+		if refusal := t.retireContinuousArtifacts(cleanup.plan, now); refusal != nil {
+			log.Printf("continuous Flow artifact cleanup %s refused: %s", cleanup.instance, refusal.Code)
+		}
+	}
 	for _, retry := range retries {
 		t.retryContinuousCompute(retry.member, retry.plan, now)
 	}

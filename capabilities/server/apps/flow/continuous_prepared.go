@@ -24,6 +24,7 @@ type PreparedBatch struct {
 	before      FlowInstance
 	frame       *BatchFrame
 	artifacts   []platform.FlowStateArtifact
+	retired     []platform.FlowStateArtifact
 	outputs     map[string]json.RawMessage
 	sources     []string
 	batch       Batch
@@ -367,6 +368,12 @@ func (d preparedComputeRetryDecision) Submit(c platform.Caller, sub *pb.Submissi
 // I/O or mutable registry read occurs in the accepted ledger callback.
 func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.FlowFrameStore) (*PreparedBatch, *kernel.Error) {
 	x := plan.before
+	if err := validateArtifactCleanup(x); err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+	}
+	if x.CleanupPending {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Superseded Flow artifacts must be retired before another source batch is accepted")
+	}
 	frame, err := ExpandFrame(x, store)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
@@ -439,7 +446,10 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 			operationRequest = &request
 		}
 	}
-	var artifacts []platform.FlowStateArtifact
+	var artifacts, retired []platform.FlowStateArtifact
+	if x.Batch != nil && x.Batch.Sealed != nil {
+		retired = append(retired, *x.Batch.Sealed)
+	}
 	if frame.checkpointDue {
 		if frame.CheckpointEvery < 1 || frame.CheckpointCursor == "" || frame.CheckpointCursor != frame.Cursor || frame.BatchesSinceCheckpoint != 0 {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared periodic checkpoint has an invalid cursor")
@@ -453,6 +463,9 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 		if checkpointErr != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, checkpointErr.Error())
 		}
+		if frame.CheckpointArtifact != nil {
+			retired = append(retired, *frame.CheckpointArtifact)
+		}
 		frame.CheckpointArtifact = &checkpointRef
 		artifacts = append(artifacts, checkpointRef)
 	}
@@ -460,13 +473,13 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 	ref, err := store.Seal(x.ID, x.Version, platform.Raw(frame), plan.rule.FrameBytes)
 	if err != nil {
 		for _, artifact := range artifacts {
-			store.Discard(artifact)
+			_ = store.Discard(artifact)
 		}
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
 	artifacts = append(artifacts, ref)
 	frame.State, frame.DeadLetters, frame.Sealed = nil, nil, &ref
-	return &PreparedBatch{owner: plan.owner, before: x, frame: frame, artifacts: artifacts, outputs: outputs, sources: sources, batch: batch, at: now,
+	return &PreparedBatch{owner: plan.owner, before: x, frame: frame, artifacts: artifacts, retired: retired, outputs: outputs, sources: sources, batch: batch, at: now,
 		entry: plan.entry, windowInput: windowInput, resumeInput: resumeInput, operation: operationRequest}, nil
 }
 
@@ -490,7 +503,8 @@ func (p *PreparedBatch) Submission(tenant string) *pb.Submission {
 }
 
 func (p *PreparedBatch) Matches(x FlowInstance) bool {
-	return x.ID == p.before.ID && x.Revision == p.before.Revision && x.Flow == p.before.Flow && x.Version == p.before.Version && x.Release == p.before.Release && x.Dependencies == p.before.Dependencies && x.OnBehalf == p.before.OnBehalf && x.State == p.before.State && bytes.Equal(platform.Raw(x.Batch), platform.Raw(p.before.Batch))
+	return x.ID == p.before.ID && x.Revision == p.before.Revision && x.Flow == p.before.Flow && x.Version == p.before.Version && x.Release == p.before.Release && x.Dependencies == p.before.Dependencies && x.OnBehalf == p.before.OnBehalf && x.State == p.before.State &&
+		bytes.Equal(platform.Raw(x.Batch), platform.Raw(p.before.Batch)) && x.CleanupPending == p.before.CleanupPending && bytes.Equal(platform.Raw(x.ArtifactCleanup), platform.Raw(p.before.ArtifactCleanup))
 }
 
 func (p *PreparedBatch) Artifact() platform.FlowStateArtifact { return *p.frame.Sealed }
@@ -537,6 +551,16 @@ func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 		}
 		x.Batch, x.Outputs, x.Sources = p.frame, p.outputs, p.sources
+		if len(p.retired) > 0 {
+			if x.CleanupPending || len(x.ArtifactCleanup) != 0 {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A previous Flow artifact cleanup is still pending")
+			}
+			x.ArtifactCleanup = cloneArtifacts(p.retired)
+			x.CleanupPending = true
+			if err := validateArtifactCleanup(*x); err != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+			}
+		}
 		if p.operation != nil {
 			if len(p.windowInput) == 0 || p.entry == "" {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute input is incomplete")

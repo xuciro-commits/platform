@@ -24,17 +24,18 @@ import (
 // takes it again. Acts are submitted as the declaring app's automation
 // principal; people are asked through that app's tasks (ADR-0017).
 const (
-	ID              = "flow"
-	InstanceType    = "flow.instance"
-	Admin           = "admin"
-	SchemaFlowStart = "flow.instance.start"
-	SchemaFlowStep  = "flow.instance.step"
-	SchemaFlowBatch = "flow.instance.batch"
-	SchemaFlowRetry = "flow.instance.retry"
-	SchemaFlowSkip  = "flow.instance.skip"
-	SchemaFlowStop  = "flow.instance.cancel"
-	SchemaFlowMove  = "flow.instance.move"
-	stepAttempts    = 5
+	ID                        = "flow"
+	InstanceType              = "flow.instance"
+	Admin                     = "admin"
+	SchemaFlowStart           = "flow.instance.start"
+	SchemaFlowStep            = "flow.instance.step"
+	SchemaFlowBatch           = "flow.instance.batch"
+	SchemaFlowRetry           = "flow.instance.retry"
+	SchemaFlowSkip            = "flow.instance.skip"
+	SchemaFlowStop            = "flow.instance.cancel"
+	SchemaFlowMove            = "flow.instance.move"
+	SchemaFlowArtifactCleanup = "flow.instance.artifact-cleanup"
+	stepAttempts              = 5
 	// Compensate as a next step undoes the completed acts, newest first.
 	Compensate = platform.Compensate
 )
@@ -61,9 +62,13 @@ type FlowInstance struct {
 	// Batch is the continuous instance's frame (ADR-0047 §13): the cursor it
 	// consumed through, its watermark, node state and dead letters.
 	Batch *BatchFrame `json:"batch,omitempty" field:"readonly" type:"json"`
-	Undo  []UndoEntry `json:"undo" field:"readonly" title:"To undo"`
-	Trace []TraceLine `json:"trace" field:"readonly"`
-	Seq   int         `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
+	// ArtifactCleanup is a durable retirement intent for already-superseded
+	// frame/checkpoint objects. The host deletes and acknowledges it idempotently.
+	ArtifactCleanup []platform.FlowStateArtifact `json:"artifactCleanup,omitempty" field:"readonly" type:"json"`
+	CleanupPending  bool                         `json:"cleanupPending,omitempty" field:"readonly"`
+	Undo            []UndoEntry                  `json:"undo" field:"readonly" title:"To undo"`
+	Trace           []TraceLine                  `json:"trace" field:"readonly"`
+	Seq             int                          `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
 }
 
 // Token is where a path of the instance stands (BPMN's token): a step it is at
@@ -182,7 +187,9 @@ func New(tenant string) *Flows {
 		platform.Action{Schema: SchemaFlowStop, Target: InstanceType, Capability: "flows", Title: "Cancel", Payload: []platform.Field{}, Roles: admin,
 			Description: "Stop a running instance; its open tasks close. Nothing is undone."},
 		platform.Action{Schema: SchemaFlowMove, Target: InstanceType, Capability: "flows", Title: "Move to the next version", Payload: []platform.Field{}, Roles: admin,
-			Description: "Move a running instance to its flow's next version, as that version's mapping says."})
+			Description: "Move a running instance to its flow's next version, as that version's mapping says."},
+		platform.Action{Schema: SchemaFlowArtifactCleanup, Target: InstanceType, Capability: "flows", Title: "Retire superseded Flow artifacts", Payload: []platform.Field{{Name: "digest", Type: "text", Required: true}}, Automation: true,
+			Description: "Acknowledge host deletion of already-superseded frame and checkpoint artifacts."})
 	return &Flows{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), InstanceType), defs: map[string][]*flowDef{}}
 }
 
