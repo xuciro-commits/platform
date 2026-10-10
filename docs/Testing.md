@@ -17,14 +17,16 @@
 | 成组交付、重要集成或发布节点 | 按影响面选择一条联合浏览器路线；按影响面 `make e2e SPEC=<spec>`；需要全量验收时 `make e2e` 共用一次完整 Playwright，不按每个组件重复 |
 | 两行业应用交付闭环（ADR-0047 M6 / ADR-0048） | `make e2e SPEC=integration-fabric`：酒店/制造各从真实 HTTP 来源拉行，经数据集清洗/隔离、Pipeline 落对象，页面＋Flow＋应用联合候选封存激活，普通成员收货并核对实例候选绑定，外部故障后同键/同请求重试且仅一次成功、回写自动回显/刷新后保留；故意空分组，发布拒绝后返回 Navigation 修正。`make e2e SPEC=workspaces` 另守原生 PMS/Knowledge 与规范入口。受控接入记录本身不在候选晋级范围，不宣称行业全量语义 |
 | 接口查询、页面绑定与共享记录选择器（ADR-0058） | `make test-go PKG=. RUN=TestInterfaceQueries`：不同对象相同 ID、原类型/行/共同字段权限、元数据/数量不泄漏、搜索只取共同字段且不改原 schema、冻结实现者、旧版本、页面成员投影、联合未发布对象及重放；`make test-go PKG=./platform` 守精确页面来源版本、候选闭包、实现者形状与合法数据自引用。原 app 会话/查询计划测试守类型＋ID、原记录访问确认、迟到应答和成员退休。现有 `integration-fabric` 在两行业核对查询工作台和页面编辑器选接口/发布、同 ID 不同类型选择、卡片、打开原对象并按原权限编辑；其他窗口/端口仍按 ADR-0058 §3.1 的具体对象边界 |
-| 持续 Flow 批次接受与窗口（ADR-0047 §13.5） | `make test-go PKG='./apps/flow/... .' RUN=TestContinuous`：原批次摘要/前驱、整批预算拒绝、乱序/分区身份、迟到/overflow/slide；原实例提交、历史重试、接受结果重放与快照。封存测试使用共享测试 FileStore，核对大窗口的记录只保留引用、不同成员/租户拒绝、摘要损坏拦截及恢复后消费后继；不放宽原输出/接受结果预算。完整真实来源/七节点/worker、数据库与对象存储故障、浏览器链尚未接通，不能据此报通过 |
+| 持续 Flow 批次接受与窗口（ADR-0047 §13.5） | `make test-go PKG='./apps/flow/... .' RUN=TestContinuous`：原批次摘要/前驱、整批预算拒绝、乱序/分区身份、迟到/overflow/slide；原实例提交、历史重试、接受结果重放与快照。封存测试使用共享测试 FileStore，核对大窗口的记录只保留引用、不同成员/租户拒绝、摘要损坏拦截及恢复后消费后继；不放宽原输出/接受结果预算。完整七节点算子链/worker、数据库与对象存储故障、浏览器链尚未接通（受控 PostgreSQL 表已接原消费游标与窗口），不能据此报通过 |
 | 纯样式/布局/文案 | `make check-web`，启动查看并截所改页面；不要求重跑浏览器业务路线 |
 | 结构整理（搬文件、拆函数、Tenant 组件化，ADR-0080） | 零行为变更：`go build ./... && go vet .` 加全量 `go test .`；web 侧对应包 `tsc --noEmit` 与 `node scripts/catalog.mjs generate` 零语义差异；不加新测试 |
 | 环境生命周期（定义→候选→封存→激活→晋级→迁移→升级，ADR-0047 §11 / ADR-0080 §3.1） | `go test -run 'TestApplicationLifecycle' .`：`environment_lifecycle_test.go` 走租户方法，`environment_http_test.go` 走 `Host.Handler()` 的真实路由（含宿主控制台）；本地两租户宿主上通过发布工作台/Host Console 将已封存候选晋级到目标租户，并在 Migrate records 迁移主数据；旧 WMS 装配脚本已清理 |
 | 应用全生命周期跨环境（发布、晋级、迁移、升级、恢复） | `go test -run TestApplicationLifecycleAcrossEnvironments .`：一个对象+页面+应用的联合候选在 dev 封存激活，业务写入后晋级到 prod，`MigrateRecords` 迁数据（二次运行零写入），v2 加一个可选标量经两环境各自审阅的计划激活，最后 prod 从快照+日志尾恢复并通过 `CheckReplay`；改动候选/发布/环境/迁移任一 owner 时先跑它 |
 | 提交/恢复/激活语义或部署 | 对应持久化/故障检查及 `make rehearse`；纯发布导航不自动触发 |
 
-通过后只有新代码、失败修复或环境变化才重跑；文档更新不是重跑理由。新增测试先确认它能发现哪种实际回归、哪一层是规范主人；已由服务端/契约证明的规则不在浏览器逐项重测。
+通过后只有新代码、失败修复或环境变化才重跑；文档更新不是重跑理由。
+
+离线环境（无 Go 模块代理、无浏览器）里 `apps/*/server` 与 `protocols/*` 是独立模块且依赖未 vendor：`scripts/boundaries.sh` 不能完整运行，可运行的是 `scripts/escapes.sh` 与平台应用侧检查（`capabilities/server/apps/*` 只导入应用 API 与 `internal/host`，本轮通过）。业务应用与协议的边界结论以最近一次完整运行为准，报告时写明哪些检查在当前环境未运行。新增测试先确认它能发现哪种实际回归、哪一层是规范主人；已由服务端/契约证明的规则不在浏览器逐项重测。
 
 ## 测试规范
 

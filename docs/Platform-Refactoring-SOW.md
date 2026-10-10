@@ -311,3 +311,13 @@ AR-01–AR-17 必须逐项有“实际交付内容、适用边界、交付版本
 | E9 | [共享业务对象](../capabilities/server/apps/core/core.go)、[企业模型](../capabilities/server/apps/enterprise/enterprise.go)、[WorkQueue](WorkQueue.md) ADR-0088 条目 | 已有人员/账号、地点/企业元素等关联；行业能力限制明确，不把相近概念直接认定为重复 |
 | E10 | [边界检查](../scripts/boundaries.sh)、[已知例外检查](../scripts/escapes.sh)、[减法清单](Subtraction.md)、[ADR-0080](ADR/0080-great-cleanup.md) | 现有工程约束与清理机制；合法历史兼容不能机械删除 |
 | E11 | [Testing](Testing.md)、[ADR-0047](ADR/0047-platform-composition-and-workspaces.md) §13.5 | 验证证据与体验边界；具体文档漂移例：ADR 状态行及 Testing 的持续 Flow 条目仍使用“真实来源未接通”等旧概括，而 §13.5 已记录 PostgreSQL 接入完成、完整算子链未完成 |
+
+### 实施增量记录（D-01）
+
+本轮（2026-10-10，供应商侧，基线 `95c3e1c`）完成的核对与处置：
+
+- E11 漂移已修正：ADR-0047 状态行、§14 摘要、ADR-0046 §13 与 F5 行、Testing 持续 Flow 条目统一为“受控 PostgreSQL 输入已接原消费游标/窗口，完整算子链/七节点/制品生命周期未通”。书写规则写入 [ADR-0097](ADR/0097-capability-status-authority-and-extension-boundaries.md) §4。
+- 能力矩阵补齐与登记：Platform §2.4 改为 96 项矩阵（能力 · 归属 · 支持状态 · 处置 · 摘要与验收证据），补入集成织物（ADR-0070–0075）、决策表、过账/业务核、计算字段、模块模板、角色与范围、用户域、定时自动化、包生命周期、环境晋级/迁移/升级等此前未列出的已交付能力。
+- 术语漂移已修正：Platform §2.1/§2.5/§9 的 `org`、`agent` 列表按代码现状改为 `build`/`core`/`enterprise`/`files`/`flow`/`knowledge`/`relations`/`work`/`ai`（控制台与智能体运行时在宿主内，ADR-0025 D4）；§2.5 增加账号—成员—档案—业务人员—企业模型元素—业务记录的权威归属表（ADR-0079、ADR-0058、ADR-0067/0068）。
+- 检查证据（本轮环境）：`scripts/escapes.sh` 通过（7 项已知例外、6 个文件、无新增）；`scripts/boundaries.sh` 因 `apps/*/server`、`protocols/*` 依赖未 vendor 不可完整运行，平台应用侧导入检查通过；业务应用/协议边界沿用基线证据。环境限制已记入 [Testing](Testing.md)。
+- 仍待完成：F4 三类代表性变更的影响证据、D-04 权威与状态流（含集成记录进入候选封存/晋级范围的迁移设计）、分层与依赖一致性复核结论、Stage A 收口。

@@ -25,7 +25,7 @@
 | **内核 (Kernel)** | 语言中立契约 K1–K9：身份标识、事实、决策、权威归属、租户隔离、模式版本、连接器、工作所有权（§4） | `contract/`（规范、测试向量、Go） | 内核假说被修订时（规范与测试向量先行） |
 | **宿主运行时 (Host runtime)** | 编排、路由、日志与重放、快照、记录存储、受属工作、效果分发、模型调用；实现 `platform.Runtime` | `platformserver` | 平台扩展机制时 |
 | **应用 API (App API)** | 应用所见表面：`Member`、`Caller`、`Manifest`、各项声明（实体、生命周期、动作、读取、工作流、智能体、作业、设置、效果类别）及 `Ledger`。应用仅通过 `Runtime` 访问宿主 | `platformserver/platform`；UI 层为 `@platform/app` | 应用需要宿主已具备的能力时 |
-| **平台级应用 (Platform apps)** | 作为应用运行的跨行业通用能力：`platform`（控制台）、`org`、`relations`、`work`、`flow`、`ai`、`agent`、`knowledge` | `platformserver`（§9 风险 6） | 跨行业需求在第二个应用中出现时 |
+| **平台级应用 (Platform apps)** | 作为应用运行的跨行业通用能力：`build`、`core`、`enterprise`、`files`、`flow`、`knowledge`、`relations`、`work`、`ai`（智能体运行时在 `ai` 内）；`platform`（控制台）与智能体运行时按 ADR-0025 D4 保留在宿主内部 | `platformserver`（§9 风险 6） | 跨行业需求在第二个应用中出现时 |
 | **协议 (Protocols)** | 应用提供和消费的版本化接口，附带一致性测试 | `protocols/` | 出现第二个提供方或消费方时 |
 | **交付应用 (Apps)** | 某个行业或职能的规则、实体、工作流、智能体及 UI | `apps/`、`web/packages/*` | 其业务发生变化时 |
 
@@ -68,7 +68,7 @@
 | 编排 (Composition) | 解决方案、租户、应用、清单、协议、绑定、设置 | 代码（解决方案、应用）；绑定与设置属于控制台决策 |
 | 真理 (Truth) | 提交、输入、决策、事实、日志分录、效果结果、用量 | 对目标数据类别拥有权威的应用（K5）；宿主记入日志 |
 | 读取 (Reads) | 记录、历史、聚合、上下文、搜索、投影、段落、快照 | 宿主，从真理中派生 |
-| 人员与工作 (People and work) | 成员、角色、单元、结构、审批请求、任务、通知、已存视图 | `platform`、`org`、`work` |
+| 人员与工作 (People and work) | 成员、角色、单元、结构、审批请求、任务、通知、已存视图 | `platform`（宿主内控制台）、`enterprise`、`work` |
 | 智能体 (Agents) | 智能体、运行、步骤、草稿、信号、评估、记忆、文档、对话抄录 | `agent`、`knowledge`、`ai` |
 
 ### 2.3 数据归宿
@@ -84,89 +84,108 @@
 
 **原始遥测数据绝不进入日志**（2026-09-26）：机器速率的采样在边缘（网关）按时间窗口聚合成具有明确含义的观察值——状态批次、停机、计数——仅将这些记入日志，以使重放体积保持较小；用于原始信号的流处理平面属于后续阶段门禁。应用所裁决的业务状态是**记录** (ADR-0016)。来自外部的观察与断言是**事实** (K2)，决策将其引用为证据；工厂将机器状态、ERP 断言与派生的停机时间保留为事实。从其他数值计算出的数值是派生值，绝不作为真理存储。
 
-### 2.4 能力地图（当前已存在的能力）
+### 2.4 ### 2.4 能力矩阵（负责人、支持状态与处置）
 
-仅列能力、归属与入口；实现细节/证据/限制由对应 ADR 的 As built 维护，不在此复制检查历史。内核语义见 §4。
+仅列能力、负责组件、支持状态、处置与验收证据；实现细节与限制由对应 ADR 的 As built 维护，不在此复制检查历史。支持状态与处置的词汇与判定规则见 [ADR-0097](ADR/0097-capability-status-authority-and-extension-boundaries.md)：「已交付」表示声明边界内实现完成且有自动证据，「受限」表示可用但有已声明的未闭合边界；「代码存在」不等于「已验收」。归属列列出负责组件；多个组件并列时以第一个为责任人，其余为执行面或消费面。内核语义见 §4。
 
-| 能力 | 归属 | 当前摘要 | 入口 |
-|---|---|---|---|
-| 身份标识与重定向 (K1) | 内核 | 稳定不透明 ID，合并/拆分重定向。 | kernel.Identity |
-| 事实、观察与断言 (K2, K3) | 内核 | 来源、时间及观察/断言，决策显式引用证据。 | kernel.FactLog |
-| 决策 (K4) | 内核 | 幂等提交、修订与因果变更记录。 | kernel.ChangeLog |
-| K4 幂等性有界证明 (ADR-0041) | 内核研发工具 | 选定 K4 模型/定理与向量/Go 测试映射，明示未证明前提。 | contract/lean, scripts/verify.sh formal；[ADR-0041](ADR/0041-first-kernel-proof.md) |
-| 权威归属与发件箱 (K5) | 内核 | 按数据类别归属权威，Go/Rust/TS 发件箱。 | kernel.Authorities |
-| 租户隔离与策略 (K6) | 内核 | 接收顺序与每次决策的策略边界。 | kernel.Receiver |
-| 模式版本演进 (K7) | 内核 | 版本载荷与动态 Schema 注册；更广演进仍需验证。 | kernel.SchemaRegistry, Learn |
-| 连接器 (K8) | 内核 | 推送/轮询共用描述符、游标和健康。 | kernel.Connectors |
-| 工作所有权 (K9) | 内核 | 世代与过期结果作废；检查点未使用。 | kernel.Works |
-| 编排与路由 | 宿主运行时 | 清单校验及动作/读取/输入路由。 | NewTenant, checkManifest |
-| 日志、重放与快照 | 宿主运行时 | 每租户保序日志/快照；受限结果纯应用恢复与租户隔离，旧输入仍重判。 | Journal, Tenant.Replay |
-| 记录存储与通用读取 (ADR-0016) | 应用 API、宿主运行时 | 实体、作用域/字段授权、搜索分页、历史/关联、标准动作与表单；提交字段整体替换。 | platform.Entity, Caller.Put；[ADR-0016](ADR/0016-application-model.md) |
-| 编号序列 (ADR-0024) | 应用 API、宿主运行时 | 已接受决定分配年度连续编号，拒绝不占号。 | platform.Sequence, Caller.Next；[ADR-0024](ADR/0024-erp.md) |
-| 聚合与投影 (ADR-0019) | 宿主运行时 | 权限内分组度量及每租户只读 PostgreSQL 投影。 | /v1/aggregates, -project；[ADR-0019](ADR/0019-read-models-analytics-snapshots.md) |
-| 动作目录 | 应用 API、宿主运行时 | 统一声明与按调用者角色发现动作。 | platform.Action, /v1/actions |
-| 已安装定义与有界页面 | 应用 API、宿主运行时、`@platform/app`、`@platform/ui` | 限定引用、依赖校验、授权目录、具类型记录选择/父来源绑定及只读样本预览。 | platform.AssetRef, Manifest.Pages；[ADR-0032](ADR/0032-shared-application-definitions.md)、[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
-| 发布候选审查与活跃闭包（ADR-0039 20a–20b） | 应用 API、平台应用 `build`、宿主、`@pkg/build` | 规范候选、差异/依赖校验、持久字节、可续接发布工作台与活跃/运行一致性；有界对象/页面/应用闭包提交后一起安装并激活。 | platform.Candidate, Build.DraftReleaseAssets；[ADR-0039](ADR/0039-minimal-definition-release.md) |
-| 具名查询 (ADR-0040 21c) | 应用 API、宿主运行时、共享页面与智能体工具 | 成员、页面和 AI 共用受权纯查询；候选包含查询依赖。 | platform.NamedQuery, Tenant.RunQuery；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
-| Projects / 共享资源总览 | 平台应用 `build`、`@pkg/build` | 能力卡片与资产图、搜索/状态、编辑器入口、选中资产测试/发布和返回上下文。 | `StudioOverview`；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
-| 租户原生流程编写 | 平台应用 `build`、`flow`、`work`、宿主 | 共享 Block IDE、类型化输入/绑定、分支/集合/并发、原生调用、固定测试及只读运行；原 Flow/Work 与精确版本绑定。 | build.Process/TestPlan；[ADR-0044](ADR/0044-capability-fabric.md) |
-| 固定数据候选测试 (ADR-0040 21d) | 宿主、平台应用 `build`、共享 UI | 空内存租户的固定样本/预期/恢复核对；非物理沙箱。 | build.TestPlan, Tenant.SimulateCandidate；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
-| 租户交付的应用 (ADR-0036) | 平台应用 `build`、宿主运行时、`web/apps/workspace` | 已发布页面及共享资源编组为应用，应用根闭合对象/流程/计算依赖并沿原候选激活；按成员可见页面进入启动器，不增加权限。 | platform.Application, Tenant.InstallApplication；[ADR-0036](ADR/0036-an-application-a-tenant-hands-to-its-people.md) |
-| 由组件布局的页面 (ADR-0035 / 0040) | `@platform/app`、`@platform/ui`、平台应用 `build`、宿主运行时 | 按对象的选择/过滤、关联列表与详情/动作绑定、只读实时画布及原保存/发布校验。 | platform.Section, Tenant.checkSections；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
-| 租户编排的页面 (ADR-0034 15b) | 平台应用 `build`、宿主运行时、`@pkg/build`、`@platform/ui` | Build 在已安装对象上编排并发布页面，草稿不改已发布镜像。 | build.page, Tenant.InstallPage；[ADR-0034](ADR/0034-tenant-defined-objects.md) |
-| 租户定义的对象 (ADR-0034) | 平台应用 `build`、宿主运行时、`@pkg/build` | Build 强类型字段、动态注册、标准页面/动作及受控演进。 | apps/build, Tenant.Install；[ADR-0034](ADR/0034-tenant-defined-objects.md) |
-| 租户定义的状态与动作 (ADR-0037 18a, ADR-0040 21a) | 平台应用 `build`、`@pkg/build`、账本生命周期 | 状态/动作、输入/条件/赋值编译为原生生命周期；条件可比较已声明的关联路径与类型兼容字段，审批放行重查申请人权限及当前来源。 | build.State, build.Action；[ADR-0037](ADR/0037-actions-and-access-a-tenant-defines.md), [ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
-| 租户定义的访问控制 (ADR-0037 18b) | 平台应用 `build`、宿主运行时（`Scope`、`Standard`、账本） | 对象行范围、动词/动作角色与字段权限编译为统一读取和动作门禁。 | build.Access, checkAccess；[ADR-0037](ADR/0037-actions-and-access-a-tenant-defines.md) |
-| 租户动作的审批 (ADR-0037 18c) | 平台应用 `build` 编译定义；平台应用 `work` 拥有请求、任务与决策 | 动作等待审批，沿原生 Work 处理层级/驳回/恢复。 | build.ActionApproval, checkProcess；[ADR-0037](ADR/0037-actions-and-access-a-tenant-defines.md) |
-| 读取与读取授权 | 宿主运行时 | 成员读取统一收窄视野/字段，应用内读取走规范 Caller。 | Tenant.Read, Tenant.admits |
-| 派生内容声明其来源 (ADR-0033, #130) | 应用 API、宿主运行时 | 显式来源声明，宿主读时重查并隐去无权派生字段。 | platform.Derivation, Entity.Derived；[ADR-0033](ADR/0033-derived-content-declares-its-sources.md) |
-| 应用包账本 (Package ledger) | 应用 API | 应用各自账本，跨包因果边界保持显式。 | platform.Ledger |
-| 受属工作：分发与作业 (ADR-0013, ADR-0027) | 宿主运行时 | 持久受属工作、事件/定时、重试/配额及世代校验。 | Manifest.Jobs, Tenant.Work；[ADR-0013](ADR/0013-platform-operations.md), [ADR-0027](ADR/0027-one-runtime-for-durable-work.md) |
-| 托管连接器 | 宿主运行时 | 外部输入由声明与动作接入，支持轮询/推送及游标。 | Tenant.Connect, Caller.Deliver |
-| 外部效果 (ADR-0014, 0022) | 宿主运行时 | 意图、尝试/回执、重试/熔断及受支持不可逆 AI 效果审批。 | Tenant.Dispatch, Caller.Emit；[ADR-0014](ADR/0014-outbound-effects.md) |
-| 部署 | 宿主运行时 | 宿主标志、健康、遥测与生产路径；保证按实际边界声明。 | Deployment, Deployment.Seed |
-| 身份提供商 | 宿主运行时 | OIDC 主体与租户成员映射。 | OIDC |
-| 多语言支持 (ADR-0023) | 应用 API、宿主运行时、Web | 英文键与简体中文，API 元数据/拒绝及 UI 共用语言体系。 | platform.Languages, languages.go；[ADR-0023](ADR/0023-meaning-languages-api-contract.md) |
-| 含义与词汇表 (ADR-0023) | 应用 API、平台应用 `knowledge` | 实体/字段语义、同义词和租户术语补充。 | Entity.Description, help；[ADR-0023](ADR/0023-meaning-languages-api-contract.md) |
-| 宿主 API 契约 (ADR-0023) | 宿主运行时 | 宿主声明生成 TypeScript 类型，契约漂移检查。 | api.go, /v1/openapi.json；[ADR-0023](ADR/0023-meaning-languages-api-contract.md) |
-| 开发者工具套件 (ADR-0023) | 应用 API、宿主运行时 | 应用脚手架、API 发现与既有 MCP 工具；MCP 鉴权/资源仍有余项。 | docs/Apps.md, cmd/new-app；[ADR-0023](ADR/0023-meaning-languages-api-contract.md) |
-| 智能体对外门户 | 宿主运行时 | 受权 MCP/A2A 接入；非完整 AI 构建 SDK。 | POST /mcp, /a2a/<tenant>/<agent> |
-| 控制台 | 平台应用 `platform` | 成员、角色和运行配置的宿主治理入口。 | console.go |
-| 共享主数据与接口 (ADR-0058) | 平台应用 `core`、宿主运行时 | 人员/伙伴/站点/库位/物料/单位/币种一次定义、各应用引用；`Interface` 字段签名在组合时校验；接口具名查询冻结字段签名/实现者，读取、共享选择器及页面选择器/记录卡片保留真实类型＋ID与原权限，封存候选核对原查询版本及实现者。 | capabilities/server/apps/core, platform.CheckInterfaces；[ADR-0058](ADR/0058-shared-ontology.md) |
-| 企业模型 (ADR-0067/0068) | 平台应用 `enterprise` | 以 UAF 1.3 元模型定型的企业图：组织、岗位、人员、能力、位置、资源、项目、目标及其随时间演进的关系；规模模板、可视化建模、租户联邦切片；`/v1/organization` 为其投影（ADR-0012 的接口保留）。 | capabilities/server/apps/enterprise, Caller.Enterprise()；[ADR-0067](ADR/0067-enterprise-modeling-layer.md)、[ADR-0068](ADR/0068-enterprise-layer-implementation.md) |
-| 关联、时间线、评论与关注者 | 平台应用 `relations` | 规范链接、记录动态、评论/提及/关注。 | capabilities/server/apps/relations, Caller.Link |
-| 字段安全性与个人数据 (ADR-0028) | 应用 API、宿主运行时 | 行/字段/来源权限贯穿读取与派生；个人读取审计仍为易失状态。 | FieldInfo.Read, Write；[ADR-0028](ADR/0028-the-application-half.md) |
-| 文件管理 (ADR-0028) | 平台应用 `files`、宿主 | 记录授权关联的 S3 字节、摘要、文本知识摄入与孤立上传清理。 | capabilities/server/apps/files, capabilities/server/filestore.go；[ADR-0028](ADR/0028-the-application-half.md) |
-| 导入与导出 (ADR-0028) | 宿主运行时、`@platform/app` | CSV 动作化导入/预览/去重及受权导出。 | POST /v1/import/{type}, GET /v1/export/{type}；[ADR-0028](ADR/0028-the-application-half.md) |
-| 图谱呈现 (#122, ADR-0040 D4 第一批次) | `@platform/ui`、`build` 中的语义适配器 | 共享 Graph/NodeCanvas 交互与语义适配，不新增图执行器或持久布局。 | CanvasFrame, Graph；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
-| 通知系统 | 宿主、`platform` 中的读取状态 | 成员/角色通知、去重、邮件与任务关联已读。 | Caller.Notify |
-| 生命周期、审批、任务、收件箱 (ADR-0017) | 应用 API、平台应用 `work` | 状态迁移、多级/代办审批、任务/升级与收件箱。 | platform.Lifecycle, platform.Approval；[ADR-0017](ADR/0017-lifecycles-approvals-tasks.md) |
-| 工作流 | 应用 API、平台应用 `flow` | 原生动作/等待/人工/并行/子流程/AI/计算、持久 scope/frame、超时/补偿、取消与追踪。 | platform.Flow；[ADR-0044](ADR/0044-capability-fabric.md) |
-| AI 提供商与模型 (ADR-0015, ADR-0029) | 平台应用 `ai` | 多供应商、受权模型、预算/熔断、SSE 及接受时模型绑定。 | capabilities/server/apps/ai/ai.go, aicall.go；[ADR-0015](ADR/0015-ai-providers.md), [ADR-0029](ADR/0029-ai-control-plane.md) |
-| 类型化 AI 函数 (ADR-0043 24b–24c 部分实现) | 应用 API、宿主 AI 模型效果路径 | 强类型建议、Build 版本/独立结果、页面/Flow 复用与评测门禁；ADR-0046 §6.80增加可选受权问题/原调用历史输入。真实模型质量未验收。 | platform.AIFunction, Caller.RequestFunction；[ADR-0043](ADR/0043-typed-ai-functions.md) |
-| 能力装配与代码计算 | 应用 API、宿主、Build、FileStore、独立 Go worker | 原生目录投影/共同调用，Go/TinyGo 隔离编译、候选制品、wazero、页面/Flow 复用；显式 v2 数据通道的原生调用在锁外封存大输入，接受结果保存引用；原来源权限与 generation。 | platform.Operation/ValueSchema、build.code；[ADR-0044 §12](ADR/0044-capability-fabric.md#12-实际构建边界) |
-| 智能体 (ADR-0021, 0022) | 应用 API、平台应用 `agent` | 受管主体、交集权限、工具、草稿确认、追踪/记忆/评估和暂停。 | platform.Agent, agent*.go；[ADR-0021](ADR/0021-agents.md) |
-| 知识库 (ADR-0022) | 平台应用 `knowledge` | 权限内文本/向量检索、增量索引与引用来源；规模证据归 ADR-0033。 | knowledge.go, index.postings；[ADR-0022](ADR/0022-knowledge-memory-a2a.md) |
-| 协议 (ADR-0011) | 协议 | 版本化跨应用动作/读取/应答；住宿暂留与生产确认。 | platform.Protocol, Caller.Probe；[ADR-0011](ADR/0011-apps-interoperate-through-protocols.md) |
-| UI 库 | Web | 共享表格/表单/详情/工作区/画布；记录工作区集中任务、审批、流程，窄屏属性单列。 | @platform/ui |
-| 统一输入（ADR-0096 A–D） | 应用 API、宿主、共享 UI/App/Build | 原 Field/FieldInfo/build.Input 约束与字段拒绝；业务/动作/Inspector/治理沿同一输入 buffer、锁与原文门禁，原 DraftSession/history/AutoSave 保留基线和草稿；日区间、房型目录、同 key 重试与运行试填隔离已接入。 | InputConstraints、DateRangeInput、ErrorBody；[ADR-0096 §9](ADR/0096-unified-form-input-and-inspector-editing.md#9-as-built) |
-| Workshop 页面编辑器（ADR-0046 §5–§6，持续实施） | 应用 API、Build、共享 UI | 原 V2 页面/应用契约、类型化会话、统一本体工作台、受控关系与共享属性；75 个原生插件、92 类来源有限 profile、七页完整 Module 装配、页头/slots 与原保存/候选路径。当前版本联合运行已具备；持续 Flow 采用方案 A，原批次 frame 与调用结果通道有有界实现，受控 PostgreSQL 表已接原消费游标/窗口，完整算子链仍在实施，见 ADR-0047 §13.5。详细边界只归 ADR。 | platform/pageui、PageDocument、EditorWorkbench、app/semantic；[ADR-0046 §14](ADR/0046-application-studio-fusion.md#14-代价审阅点与当前实现边界) |
-| 业务观测（ADR-0046，F1e58） | 共享 UI | 原宽表的两轴虚拟化/固定与隐藏列、受控窗口统计、真实时间/独立单位三曲线和完整平均值/SLO可在代码及Catalog组合；原宿主最近1–100000条业务时间窗口统计及受控App读者已接通；四种原生观测/资产双确认、设计检查器、复制与冻结已接通；四类Workshop Module显式真实来源/查询/信号及资产消费者迁移已接通；更广来源配置及当前版本整页运行验收仍待验证。 | @platform/ui ObservationTable/ObservationStatistics/ObservationTimeSeries/ObservationAvailability；[ADR-0046 §6.78](ADR/0046-application-studio-fusion.md#678-业务观测宽表窗口统计与真实时间序列) |
-| 固定页面内容与受控嵌入（ADR-0046，F1e59） | 原页面/宿主/前端边缘、UI Kit、Build | 原页面内容摘要与64份发布内容、当前成员精确版本读取、固定子页面候选闭包、原类型化接口、独立会话、共同预算、隔离外部文档及四类来源有限导入已接通；原类型化集合输入与默认CustomWidget集合参数已接通；集合返回与更广来源模块仍待实施，当前版本默认嵌入待联合运行验收。 | [ADR-0046 §6.79](ADR/0046-application-studio-fusion.md#679-受控嵌入与组合页面) |
-| 记录 AI 呈现与会话（ADR-0046，F1e60） | 原 AI/函数宿主、应用 API、UI Kit、Build | 固定受权函数、原确认记录/类型化结果、三种原生呈现与有限来源导入已接通；问题/原调用历史、同owner状态与退役、候选函数评估门禁沿原路径。跨集合/知识上下文和真实模型质量仍待验证。 | [ADR-0046 §6.80](ADR/0046-application-studio-fusion.md#680-三种原生-ai-呈现与受控会话) |
-| 原表单默认值与三处动作装配（ADR-0046，F1e63e2） | 应用 API、Build、Go | 原字段默认值、检查器/显式映射、共享记录草稿/revision保持、完整动作候选声明及三浮层共同冻结/真实状态与关联创建已接通；动作规则设计器和完整Module待接。 | [ADR-0046 §6.88](ADR/0046-application-studio-fusion.md#688-原动作参数默认值与三个表单) |
-| 受控动作参数与条件守卫（ADR-0046，F1e63e1） | Build、原Lifecycle/Caller | 原状态choice参数、类型化引用参数、UTF-16最小长度和单层条件守卫已接通原发布/调用/关联创建与内存重放；原动作设计器配置、多目标图/预览和三表单共同旅程已接通；更广规则/完整Module待接。 | [ADR-0046 §6.87](ADR/0046-application-studio-fusion.md#687-默认动作的原宿主规则与参数装配) |
-| 默认页面/抽屉集合与关联装配（ADR-0046，F1e63d） | Build、应用 API | 原页面变量可供浮层读取且保持唯一owner；双标题完整计数、双关联列表及生命周期状态可共同映射/冻结，浮层导航先关闭原遮罩再开原记录窗口；完整默认Module仍有动作等断点。 | [ADR-0046 §6.86](ADR/0046-application-studio-fusion.md#686-默认页面与抽屉的集合关联和状态消费者) |
-| 默认浮层与共享AI上下文（ADR-0046，F1e63c） | UI Kit、应用 API、Build、Go | 四个原浮层尺寸/关闭规则、检查器/导入/冻结及原共享record AI确认已接通；同记录刷新保留受理请求，换记录/owner退役仍清理；完整默认Module与真实模型质量待后续。 | [ADR-0046 §6.85](ADR/0046-application-studio-fusion.md#685-原默认浮层呈现与共享-ai-上下文) |
-| 原Operations表格与KPI呈现（ADR-0046，F1e63b） | UI Kit、应用 API、Build | 密度/工具栏/授权全集计数标题、显式静态KPI注释、检查器/导入/冻结已接通；完整默认Module与真期间趋势待后续。 | [ADR-0046 §6.84](ADR/0046-application-studio-fusion.md#684-默认四个-kpi-与资产表格的呈现配置) |
-| 模块原应用共享映射（ADR-0046，F1e63a） | Build、应用 API、Go | 模块接口逐项映射原record/string/boolean共享要求，根表格、详情、原动作与有限呈现事件可跨页/浮层沿原应用实例联动并共同冻结；完整默认Module仍有配置断点。 | [ADR-0046 §6.83](ADR/0046-application-studio-fusion.md#683-默认-module-的原应用共享绑定) |
-| 原集合构建与装配（ADR-0046，F1e62） | UI Kit、应用 API、Build | 类型化条件、同owner完整谓词输出、独立表格/计数、检查器/显式导入及共同冻结已接通；无效草稿保留已应用集合，原权限/版本/反馈预算保留，完整Module与更广集合形态待后续。 | [ADR-0046 §6.82](ADR/0046-application-studio-fusion.md#682-集合构建器与完整谓词装配) |
-| 共享空间呈现与附件标注（ADR-0046，F1e61） | UI Kit、Files、应用 API | 地图/图片标注/GLB 三类共享 UI、Catalog与原文件作者/revision标注决定、原生绑定/检查器、共同候选和有限来源导入已接通；3D最新样本沿固定原查询与当前权限确认，更多空间语义/完整来源配置待实施。 | [ADR-0046 §6.81](ADR/0046-application-studio-fusion.md#681-记录地图附件标注与原生-3d-场景) |
-| Platform Catalog (ADR-0045) | UI/app/build owner、Web 目录 | 六层复用发现、真实示例、开发/构建视角与有界查询；Studio 模板沿原草稿创建，租户能力沿原作用域读取。 | web/apps/catalog、scripts/catalog.mjs；[ADR-0045 §11](ADR/0045-platform-catalog.md#11-当前实现边界) |
-| 工作区与 UI 应用 API (ADR-0018/0047) | Web | 统一登录与 Rail/门户/投影（ADR-0052）；构建、治理、开发参考应用按任务分区，入口切换保留原编辑标签。角色与执行检查保持原 owner。 | @platform/app, web/apps/workspace；[ADR-0047 §14](ADR/0047-platform-composition-and-workspaces.md#14-当前实现边界) |
-| 边缘客户端与登录 | Web | HTTP 边缘客户端、发件箱、PKCE/OIDC 与可读拒绝。 | @platform/kernel |
-| 设置中心 | Web | 系统治理与运行设置界面。 | @pkg/platform |
-| 应用 UI 包 | Web | 业务视图组合共享 UI/API，跨记录共性能力归平台。 | @pkg/<id>, crm |
+| 能力 | 归属 | 支持状态 | 处置 | 摘要与验收证据 |
+|---|---|---|---|---|
+| 身份标识与重定向 (K1) | 内核 | 已交付 | 保留 | 稳定不透明 ID，合并/拆分重定向。　入口：kernel.Identity |
+| 事实、观察与断言 (K2, K3) | 内核 | 已交付 | 保留 | 来源、时间及观察/断言，决策显式引用证据。　入口：kernel.FactLog |
+| 决策 (K4) | 内核 | 已交付 | 保留 | 幂等提交、修订与因果变更记录。　入口：kernel.ChangeLog |
+| K4 幂等性有界证明 (ADR-0041) | 内核研发工具 | 受限 | 保留 | 选定 K4 模型/定理与向量/Go 测试映射，明示未证明前提。　入口：contract/lean, scripts/verify.sh formal；[ADR-0041](ADR/0041-first-kernel-proof.md) |
+| 权威归属与发件箱 (K5) | 内核 | 受限 | 保留 | 按数据类别归属权威，Go/Rust/TS 发件箱。　入口：kernel.Authorities |
+| 租户隔离与策略 (K6) | 内核 | 已交付 | 保留 | 接收顺序与每次决策的策略边界。　入口：kernel.Receiver |
+| 模式版本演进 (K7) | 内核 | 受限 | 保留 | 版本载荷与动态 Schema 注册；更广演进仍需验证。　入口：kernel.SchemaRegistry, Learn |
+| 连接器 (K8) | 内核 | 受限 | 保留 | 推送/轮询共用描述符、游标和健康。　入口：kernel.Connectors |
+| 工作所有权 (K9) | 内核 | 受限 | 保留 | 世代与过期结果作废；检查点未使用。　入口：kernel.Works |
+| 编排与路由 | 宿主运行时 | 已交付 | 保留 | 清单校验及动作/读取/输入路由。　入口：NewTenant, checkManifest |
+| 日志、重放与快照 | 宿主运行时 | 受限 | 补全 | 每租户保序日志/快照；受限结果纯应用恢复与租户隔离，旧输入仍重判。　入口：Journal, Tenant.Replay |
+| 记录存储与通用读取 (ADR-0016) | 应用 API、宿主运行时 | 已交付 | 保留 | 实体、作用域/字段授权、搜索分页、历史/关联、标准动作与表单；提交字段整体替换。　入口：platform.Entity, Caller.Put；[ADR-0016](ADR/0016-application-model.md) |
+| 编号序列 (ADR-0024) | 应用 API、宿主运行时 | 已交付 | 保留 | 已接受决定分配年度连续编号，拒绝不占号。　入口：platform.Sequence, Caller.Next；[ADR-0024](ADR/0024-erp.md) |
+| 聚合与投影 (ADR-0019) | 宿主运行时 | 已交付 | 保留 | 权限内分组度量及每租户只读 PostgreSQL 投影。　入口：/v1/aggregates, -project；[ADR-0019](ADR/0019-read-models-analytics-snapshots.md) |
+| 动作目录 | 应用 API、宿主运行时 | 已交付 | 保留 | 统一声明与按调用者角色发现动作。　入口：platform.Action, /v1/actions |
+| 已安装定义与有界页面 | 应用 API、宿主运行时、`@platform/app`、`@platform/ui` | 已交付 | 保留 | 限定引用、依赖校验、授权目录、具类型记录选择/父来源绑定及只读样本预览。　入口：platform.AssetRef, Manifest.Pages；[ADR-0032](ADR/0032-shared-application-definitions.md)、[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
+| 发布候选审查与活跃闭包（ADR-0039 20a–20b） | 应用 API、平台应用 `build`、宿主、`@pkg/build` | 受限 | 补全 | 规范候选、差异/依赖校验、持久字节、可续接发布工作台与活跃/运行一致性；有界对象/页面/应用闭包提交后一起安装并激活。　入口：platform.Candidate, Build.DraftReleaseAssets；[ADR-0039](ADR/0039-minimal-definition-release.md) |
+| 具名查询 (ADR-0040 21c) | 应用 API、宿主运行时、共享页面与智能体工具 | 已交付 | 保留 | 成员、页面和 AI 共用受权纯查询；候选包含查询依赖。　入口：platform.NamedQuery, Tenant.RunQuery；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
+| Projects / 共享资源总览 | 平台应用 `build`、`@pkg/build` | 受限 | 保留 | 能力卡片与资产图、搜索/状态、编辑器入口、选中资产测试/发布和返回上下文。　入口：`StudioOverview`；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
+| 租户原生流程编写 | 平台应用 `build`、`flow`、`work`、宿主 | 受限 | 保留 | 共享 Block IDE、类型化输入/绑定、分支/集合/并发、原生调用、固定测试及只读运行；原 Flow/Work 与精确版本绑定。　入口：build.Process/TestPlan；[ADR-0044](ADR/0044-capability-fabric.md) |
+| 固定数据候选测试 (ADR-0040 21d) | 宿主、平台应用 `build`、共享 UI | 受限 | 保留 | 空内存租户的固定样本/预期/恢复核对；非物理沙箱。　入口：build.TestPlan, Tenant.SimulateCandidate；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
+| 租户交付的应用 (ADR-0036) | 平台应用 `build`、宿主运行时、`web/apps/workspace` | 受限 | 补全 | 已发布页面及共享资源编组为应用，应用根闭合对象/流程/计算依赖并沿原候选激活；按成员可见页面进入启动器，不增加权限。　入口：platform.Application, Tenant.InstallApplication；[ADR-0036](ADR/0036-an-application-a-tenant-hands-to-its-people.md) |
+| 由组件布局的页面 (ADR-0035 / 0040) | `@platform/app`、`@platform/ui`、平台应用 `build`、宿主运行时 | 已交付 | 保留 | 按对象的选择/过滤、关联列表与详情/动作绑定、只读实时画布及原保存/发布校验。　入口：platform.Section, Tenant.checkSections；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
+| 租户编排的页面 (ADR-0034 15b) | 平台应用 `build`、宿主运行时、`@pkg/build`、`@platform/ui` | 已交付 | 保留 | Build 在已安装对象上编排并发布页面，草稿不改已发布镜像。　入口：build.page, Tenant.InstallPage；[ADR-0034](ADR/0034-tenant-defined-objects.md) |
+| 租户定义的对象 (ADR-0034) | 平台应用 `build`、宿主运行时、`@pkg/build` | 已交付 | 保留 | Build 强类型字段、动态注册、标准页面/动作及受控演进。　入口：apps/build, Tenant.Install；[ADR-0034](ADR/0034-tenant-defined-objects.md) |
+| 租户定义的状态与动作 (ADR-0037 18a, ADR-0040 21a) | 平台应用 `build`、`@pkg/build`、账本生命周期 | 已交付 | 保留 | 状态/动作、输入/条件/赋值编译为原生生命周期；条件可比较已声明的关联路径与类型兼容字段，审批放行重查申请人权限及当前来源。　入口：build.State, build.Action；[ADR-0037](ADR/0037-actions-and-access-a-tenant-defines.md), [ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
+| 租户定义的访问控制 (ADR-0037 18b) | 平台应用 `build`、宿主运行时（`Scope`、`Standard`、账本） | 已交付 | 保留 | 对象行范围、动词/动作角色与字段权限编译为统一读取和动作门禁。　入口：build.Access, checkAccess；[ADR-0037](ADR/0037-actions-and-access-a-tenant-defines.md) |
+| 租户动作的审批 (ADR-0037 18c) | 平台应用 `build` 编译定义；平台应用 `work` 拥有请求、任务与决策 | 已交付 | 保留 | 动作等待审批，沿原生 Work 处理层级/驳回/恢复。　入口：build.ActionApproval, checkProcess；[ADR-0037](ADR/0037-actions-and-access-a-tenant-defines.md) |
+| 读取与读取授权 | 宿主运行时 | 已交付 | 保留 | 成员读取统一收窄视野/字段，应用内读取走规范 Caller。　入口：Tenant.Read, Tenant.admits |
+| 派生内容声明其来源 (ADR-0033, #130) | 应用 API、宿主运行时 | 受限 | 补全 | 显式来源声明，宿主读时重查并隐去无权派生字段。　入口：platform.Derivation, Entity.Derived；[ADR-0033](ADR/0033-derived-content-declares-its-sources.md) |
+| 应用包账本 (Package ledger) | 应用 API | 已交付 | 保留 | 应用各自账本，跨包因果边界保持显式。　入口：platform.Ledger |
+| 受属工作：分发与作业 (ADR-0013, ADR-0027) | 宿主运行时 | 受限 | 补全 | 持久受属工作、事件/定时、重试/配额及世代校验。　入口：Manifest.Jobs, Tenant.Work；[ADR-0013](ADR/0013-platform-operations.md), [ADR-0027](ADR/0027-one-runtime-for-durable-work.md) |
+| 托管连接器 | 宿主运行时 | 受限 | 补全 | 外部输入由声明与动作接入，支持轮询/推送及游标。　入口：Tenant.Connect, Caller.Deliver |
+| 外部效果 (ADR-0014, 0022) | 宿主运行时 | 受限 | 补全 | 意图、尝试/回执、重试/熔断及受支持不可逆 AI 效果审批。　入口：Tenant.Dispatch, Caller.Emit；[ADR-0014](ADR/0014-outbound-effects.md) |
+| 集成：Connection 与 Source (ADR-0070) | 平台应用 `build`、宿主、`@pkg/build` | 受限 | 补全 | http/OData/postgres/CSV 连接、过滤/增量列、Publish/Pull now 与恶意过滤拦截已实现；受控接入记录不在候选封存与晋级范围，完整交付依赖与环境差异属本项目补全（S-01/S-02）。　入口：build.connection, build.source；[ADR-0070](ADR/0070-connections-and-source-profiles.md) |
+| 集成：Dataset 与 Pipeline (ADR-0071) | 平台应用 `build`、宿主、`@pkg/build` | 受限 | 补全 | 数据集/Schema 推断、清洗步骤与期望、输出数据集或对象、新版本触发重跑已实现；独立试跑与跨环境制品化未提供；交付链所需部分属本项目补全。　入口：build.dataset, build.datasetversion, build.pipeline；[ADR-0071](ADR/0071-datasets-and-pipelines.md) |
+| 集成：Writeback 与血缘 (ADR-0072) | 平台应用 `build`、宿主、`@pkg/build`、UI Kit | 受限 | 补全 | 回写端点效果、凭证号回填、不可达排队与恢复重试、对象 Data 页血缘下钻已实现；原生回写桥接与运行冻结血缘未提供；结果核对与恢复属本项目补全（S-02）。　入口：build.writeback, Caller.Emit；[ADR-0072](ADR/0072-writebacks-and-lineage.md) |
+| 集成：Matching 与联邦切片 (ADR-0073, ADR-0074) | 平台应用 `build`、`enterprise` | 受限 | 按需触发 | 匹配规则与企业切片导入/同步已实现；SFTP/文件游标、更广映射与身份对账按真实任务触发。　入口：build.match, enterprise.slice.import/sync；[ADR-0074](ADR/0074-matching-rules.md) |
+| 标记与传播 (ADR-0075) | 平台应用 `build`、宿主 | 已交付 | 保留 | 标记定义、传播与断言入口已实现，叠加在字段级读角色之上；敏感导出与更广传播范围按 ADR-0075 边界。　入口：build.marking；[ADR-0075](ADR/0075-markings.md) |
+| 决策表 (ADR-0062) | 平台应用 `build`、宿主 | 已交付 | 保留 | 条件/结果列与行序裁决编译为原生运算，沿原候选封存与运行绑定执行。　入口：build.table；[ADR-0062](ADR/0062-decision-tables.md) |
+| 部署 | 宿主运行时 | 已交付 | 保留 | 宿主标志、健康、遥测与生产路径；保证按实际边界声明。　入口：Deployment, Deployment.Seed |
+| 身份提供商 | 宿主运行时 | 已交付 | 保留 | OIDC 主体与租户成员映射。　入口：OIDC |
+| 多语言支持 (ADR-0023) | 应用 API、宿主运行时、Web | 已交付 | 保留 | 英文键与简体中文，API 元数据/拒绝及 UI 共用语言体系。　入口：platform.Languages, languages.go；[ADR-0023](ADR/0023-meaning-languages-api-contract.md) |
+| 含义与词汇表 (ADR-0023) | 应用 API、平台应用 `knowledge` | 已交付 | 保留 | 实体/字段语义、同义词和租户术语补充。　入口：Entity.Description, help；[ADR-0023](ADR/0023-meaning-languages-api-contract.md) |
+| 宿主 API 契约 (ADR-0023) | 宿主运行时 | 已交付 | 保留 | 宿主声明生成 TypeScript 类型，契约漂移检查。　入口：api.go, /v1/openapi.json；[ADR-0023](ADR/0023-meaning-languages-api-contract.md) |
+| 开发者工具套件 (ADR-0023) | 应用 API、宿主运行时 | 受限 | 按需触发 | 应用脚手架、API 发现与既有 MCP 工具；MCP 鉴权/资源仍有余项。　入口：docs/Apps.md, cmd/new-app；[ADR-0023](ADR/0023-meaning-languages-api-contract.md) |
+| 智能体对外门户 | 宿主运行时 | 受限 | 保留 | 受权 MCP/A2A 接入；非完整 AI 构建 SDK。　入口：POST /mcp, /a2a/<tenant>/<agent> |
+| 控制台 | 平台应用 `platform` | 已交付 | 保留 | 成员、角色和运行配置的宿主治理入口。　入口：console.go |
+| 共享主数据与接口 (ADR-0058) | 平台应用 `core`、宿主运行时 | 已交付 | 保留 | 人员/伙伴/站点/库位/物料/单位/币种一次定义、各应用引用；`Interface` 字段签名在组合时校验；接口具名查询冻结字段签名/实现者，读取、共享选择器及页面选择器/记录卡片保留真实类型＋ID与原权限，封存候选核对原查询版本及实现者。　入口：capabilities/server/apps/core, platform.CheckInterfaces；[ADR-0058](ADR/0058-shared-ontology.md) |
+| 企业模型 (ADR-0067/0068) | 平台应用 `enterprise` | 受限 | 保留 | 以 UAF 1.3 元模型定型的企业图：组织、岗位、人员、能力、位置、资源、项目、目标及其随时间演进的关系；规模模板、可视化建模、租户联邦切片；`/v1/organization` 为其投影（ADR-0012 的接口保留）。　入口：capabilities/server/apps/enterprise, Caller.Enterprise()；[ADR-0067](ADR/0067-enterprise-modeling-layer.md)、[ADR-0068](ADR/0068-enterprise-layer-implementation.md) |
+| 过账与业务核 (ADR-0063, ADR-0076) | 平台应用 `core` 与 `build`、宿主 | 已交付 | 保留 | 台账过账、期间控制、冲销与业务核标准记录已实现；更广 ERP 交易深度按需触发。　入口：posts.go, core 共享类型；[ADR-0063](ADR/0063-postings.md)、[ADR-0076](ADR/0076-business-core.md) |
+| 计算字段与公式 (ADR-0064) | 平台应用 `build`、宿主 | 已交付 | 保留 | 公式字段与决策表/条件/赋值共用同一受控编译；复杂运算走能力装配（ADR-0044）。　入口：build.formula；[ADR-0064](ADR/0064-computed-fields.md) |
+| 模块模板 (ADR-0065) | 平台应用 `build`、`@pkg/build`、UI Kit | 已交付 | 保留 | 五型模块模板经同一页面/动作契约装配，页面编辑器消费同一契约。　入口：Module 装配；[ADR-0065](ADR/0065-module-templates.md) |
+| 角色与范围设计器 (ADR-0066, ADR-0078) | 平台应用 `build` 与 `platform`、宿主 | 受限 | 补全 | 多角色授予、单位授予、字段读写角色与动作矩阵已实现；统一标记策略、岗位推角色与策略表达式不做；S-02 授权拒绝/撤权证据属本项目补全。　入口：build.Access, Caller.Roles；[ADR-0066](ADR/0066-roles-and-scope.md)、[ADR-0078](ADR/0078-tenancy-and-authorization.md) |
+| 用户域：身份、成员、档案与偏好 (ADR-0079) | Console（宿主内）、平台应用 `platform` | 已交付 | 保留 | 身份→成员→档案、邀请、停用、离职移交、偏好生效、个人令牌与会话已交付；多身份解绑与「下载我的数据」不做。　入口：profile.go, Console 动作；[ADR-0079](ADR/0079-user-domain.md) |
+| 组织与结构 (ADR-0012 → ADR-0067/0068) | 平台应用 `enterprise` | 已交付 | 保留 | 单位、结构、成员与日历接口由 Enterprise 投影保留，历史角色与日志按原字节恢复；不再存在独立 `org` 应用。　入口：enterprise, /v1/organization；[ADR-0067](ADR/0067-enterprise-modeling-layer.md) |
+| 定时自动化 (ADR-0060) | 应用 API、宿主、平台应用 `build` | 已交付 | 保留 | 按钟表启动的流程实例与受属工作，沿原调度、版本与恢复语义。　入口：Manifest.Jobs；[ADR-0060](ADR/0060-scheduled-automations.md) |
+| 数据源 (ADR-0061) | 平台应用 `build` | 已交付 | 保留 | HTTP JSON 数据源与增量列，后并入 Connection/Source（ADR-0070）。　入口：build.source；[ADR-0061](ADR/0061-data-sources.md) |
+| 关联、时间线、评论与关注者 | 平台应用 `relations` | 已交付 | 保留 | 规范链接、记录动态、评论/提及/关注。　入口：capabilities/server/apps/relations, Caller.Link |
+| 字段安全性与个人数据 (ADR-0028) | 应用 API、宿主运行时 | 受限 | 补全 | 行/字段/来源权限贯穿读取与派生；个人读取审计仍为易失状态。　入口：FieldInfo.Read, Write；[ADR-0028](ADR/0028-the-application-half.md) |
+| 文件管理 (ADR-0028) | 平台应用 `files`、宿主 | 已交付 | 保留 | 记录授权关联的 S3 字节、摘要、文本知识摄入与孤立上传清理。　入口：capabilities/server/apps/files, capabilities/server/filestore.go；[ADR-0028](ADR/0028-the-application-half.md) |
+| 导入与导出 (ADR-0028) | 宿主运行时、`@platform/app` | 已交付 | 保留 | CSV 动作化导入/预览/去重及受权导出。　入口：POST /v1/import/{type}, GET /v1/export/{type}；[ADR-0028](ADR/0028-the-application-half.md) |
+| 图谱呈现 (#122, ADR-0040 D4 第一批次) | `@platform/ui`、`build` 中的语义适配器 | 受限 | 保留 | 共享 Graph/NodeCanvas 交互与语义适配，不新增图执行器或持久布局。　入口：CanvasFrame, Graph；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
+| 通知系统 | 宿主、`platform` 中的读取状态 | 已交付 | 保留 | 成员/角色通知、去重、邮件与任务关联已读。　入口：Caller.Notify |
+| 生命周期、审批、任务、收件箱 (ADR-0017) | 应用 API、平台应用 `work` | 已交付 | 保留 | 状态迁移、多级/代办审批、任务/升级与收件箱。　入口：platform.Lifecycle, platform.Approval；[ADR-0017](ADR/0017-lifecycles-approvals-tasks.md) |
+| 工作流 | 应用 API、平台应用 `flow` | 受限 | 补全 | 原生动作/等待/人工/并行/子流程/AI/计算、持久 scope/frame、超时/补偿、取消与追踪。　入口：platform.Flow；[ADR-0044](ADR/0044-capability-fabric.md) |
+| AI 提供商与模型 (ADR-0015, ADR-0029) | 平台应用 `ai` | 已交付 | 保留 | 多供应商、受权模型、预算/熔断、SSE 及接受时模型绑定。　入口：capabilities/server/apps/ai/ai.go, aicall.go；[ADR-0015](ADR/0015-ai-providers.md), [ADR-0029](ADR/0029-ai-control-plane.md) |
+| 类型化 AI 函数 (ADR-0043 24b–24c 部分实现) | 应用 API、宿主 AI 模型效果路径 | 受限 | 补全 | 强类型建议、Build 版本/独立结果、页面/Flow 复用与评测门禁；ADR-0046 §6.80增加可选受权问题/原调用历史输入。真实模型质量未验收。　入口：platform.AIFunction, Caller.RequestFunction；[ADR-0043](ADR/0043-typed-ai-functions.md) |
+| 能力装配与代码计算 | 应用 API、宿主、Build、FileStore、独立 Go worker | 受限 | 保留 | 原生目录投影/共同调用，Go/TinyGo 隔离编译、候选制品、wazero、页面/Flow 复用；显式 v2 数据通道的原生调用在锁外封存大输入，接受结果保存引用；原来源权限与 generation。　入口：platform.Operation/ValueSchema、build.code；[ADR-0044 §12](ADR/0044-capability-fabric.md#12-实际构建边界) |
+| 智能体 (ADR-0021, 0022) | 应用 API、平台应用 `agent` | 受限 | 补全 | 受管主体、交集权限、工具、草稿确认、追踪/记忆/评估和暂停。　入口：platform.Agent, agent*.go；[ADR-0021](ADR/0021-agents.md) |
+| 知识库 (ADR-0022) | 平台应用 `knowledge` | 受限 | 补全 | 权限内文本/向量检索、增量索引与引用来源；规模证据归 ADR-0033。　入口：knowledge.go, index.postings；[ADR-0022](ADR/0022-knowledge-memory-a2a.md) |
+| AI 运营与用量 (ADR-0029, ADR-0077) | 平台应用 `ai`、宿主 | 受限 | 补全 | 模型治理、预算/熔断、用量计量、评测与运行追踪已实现；S-04 的真实任务质量、来源权限、预算与人工接管证据属本项目补全。　入口：apps/ai, quota.go；[ADR-0077](ADR/0077-ai-operations.md) |
+| 协议 (ADR-0011) | 协议 | 受限 | 补全 | 版本化跨应用动作/读取/应答；住宿暂留与生产确认。　入口：platform.Protocol, Caller.Probe；[ADR-0011](ADR/0011-apps-interoperate-through-protocols.md) |
+| UI 库 | Web | 已交付 | 保留 | 共享表格/表单/详情/工作区/画布；记录工作区集中任务、审批、流程，窄屏属性单列。　入口：@platform/ui |
+| 统一输入（ADR-0096 A–D） | 应用 API、宿主、共享 UI/App/Build | 受限 | 补全 | 原 Field/FieldInfo/build.Input 约束与字段拒绝；业务/动作/Inspector/治理沿同一输入 buffer、锁与原文门禁，原 DraftSession/history/AutoSave 保留基线和草稿；日区间、房型目录、同 key 重试与运行试填隔离已接入。　入口：InputConstraints、DateRangeInput、ErrorBody；[ADR-0096 §9](ADR/0096-unified-form-input-and-inspector-editing.md#9-as-built) |
+| Workshop 页面编辑器（ADR-0046 §5–§6，持续实施） | 应用 API、Build、共享 UI | 受限 | 补全 | 原 V2 页面/应用契约、类型化会话、统一本体工作台、受控关系与共享属性；75 个原生插件、92 类来源有限 profile、七页完整 Module 装配、页头/slots 与原保存/候选路径。当前版本联合运行已具备；持续 Flow 采用方案 A，原批次 frame 与调用结果通道有有界实现，受控 PostgreSQL 表已接原消费游标/窗口，完整算子链仍在实施，见 ADR-0047 §13.5。详细边界只归 ADR。　入口：platform/pageui、PageDocument、EditorWorkbench、app/semantic；[ADR-0046 §14](ADR/0046-application-studio-fusion.md#14-代价审阅点与当前实现边界) |
+| 业务观测（ADR-0046，F1e58） | 共享 UI | 受限 | 补全 | 原宽表的两轴虚拟化/固定与隐藏列、受控窗口统计、真实时间/独立单位三曲线和完整平均值/SLO可在代码及Catalog组合；原宿主最近1–100000条业务时间窗口统计及受控App读者已接通；四种原生观测/资产双确认、设计检查器、复制与冻结已接通；四类Workshop Module显式真实来源/查询/信号及资产消费者迁移已接通；更广来源配置及当前版本整页运行验收仍待验证。　入口：@platform/ui ObservationTable/ObservationStatistics/ObservationTimeSeries/ObservationAvailability；[ADR-0046 §6.78](ADR/0046-application-studio-fusion.md#678-业务观测宽表窗口统计与真实时间序列) |
+| 固定页面内容与受控嵌入（ADR-0046，F1e59） | 原页面/宿主/前端边缘、UI Kit、Build | 受限 | 补全 | 原页面内容摘要与64份发布内容、当前成员精确版本读取、固定子页面候选闭包、原类型化接口、独立会话、共同预算、隔离外部文档及四类来源有限导入已接通；原类型化集合输入与默认CustomWidget集合参数已接通；集合返回与更广来源模块仍待实施，当前版本默认嵌入待联合运行验收。　入口：[ADR-0046 §6.79](ADR/0046-application-studio-fusion.md#679-受控嵌入与组合页面) |
+| 记录 AI 呈现与会话（ADR-0046，F1e60） | 原 AI/函数宿主、应用 API、UI Kit、Build | 受限 | 补全 | 固定受权函数、原确认记录/类型化结果、三种原生呈现与有限来源导入已接通；问题/原调用历史、同owner状态与退役、候选函数评估门禁沿原路径。跨集合/知识上下文和真实模型质量仍待验证。　入口：[ADR-0046 §6.80](ADR/0046-application-studio-fusion.md#680-三种原生-ai-呈现与受控会话) |
+| 原表单默认值与三处动作装配（ADR-0046，F1e63e2） | 应用 API、Build、Go | 受限 | 补全 | 原字段默认值、检查器/显式映射、共享记录草稿/revision保持、完整动作候选声明及三浮层共同冻结/真实状态与关联创建已接通；动作规则设计器和完整Module待接。　入口：[ADR-0046 §6.88](ADR/0046-application-studio-fusion.md#688-原动作参数默认值与三个表单) |
+| 受控动作参数与条件守卫（ADR-0046，F1e63e1） | Build、原Lifecycle/Caller | 受限 | 补全 | 原状态choice参数、类型化引用参数、UTF-16最小长度和单层条件守卫已接通原发布/调用/关联创建与内存重放；原动作设计器配置、多目标图/预览和三表单共同旅程已接通；更广规则/完整Module待接。　入口：[ADR-0046 §6.87](ADR/0046-application-studio-fusion.md#687-默认动作的原宿主规则与参数装配) |
+| 默认页面/抽屉集合与关联装配（ADR-0046，F1e63d） | Build、应用 API | 受限 | 补全 | 原页面变量可供浮层读取且保持唯一owner；双标题完整计数、双关联列表及生命周期状态可共同映射/冻结，浮层导航先关闭原遮罩再开原记录窗口；完整默认Module仍有动作等断点。　入口：[ADR-0046 §6.86](ADR/0046-application-studio-fusion.md#686-默认页面与抽屉的集合关联和状态消费者) |
+| 默认浮层与共享AI上下文（ADR-0046，F1e63c） | UI Kit、应用 API、Build、Go | 受限 | 补全 | 四个原浮层尺寸/关闭规则、检查器/导入/冻结及原共享record AI确认已接通；同记录刷新保留受理请求，换记录/owner退役仍清理；完整默认Module与真实模型质量待后续。　入口：[ADR-0046 §6.85](ADR/0046-application-studio-fusion.md#685-原默认浮层呈现与共享-ai-上下文) |
+| 原Operations表格与KPI呈现（ADR-0046，F1e63b） | UI Kit、应用 API、Build | 受限 | 补全 | 密度/工具栏/授权全集计数标题、显式静态KPI注释、检查器/导入/冻结已接通；完整默认Module与真期间趋势待后续。　入口：[ADR-0046 §6.84](ADR/0046-application-studio-fusion.md#684-默认四个-kpi-与资产表格的呈现配置) |
+| 模块原应用共享映射（ADR-0046，F1e63a） | Build、应用 API、Go | 受限 | 补全 | 模块接口逐项映射原record/string/boolean共享要求，根表格、详情、原动作与有限呈现事件可跨页/浮层沿原应用实例联动并共同冻结；完整默认Module仍有配置断点。　入口：[ADR-0046 §6.83](ADR/0046-application-studio-fusion.md#683-默认-module-的原应用共享绑定) |
+| 原集合构建与装配（ADR-0046，F1e62） | UI Kit、应用 API、Build | 受限 | 补全 | 类型化条件、同owner完整谓词输出、独立表格/计数、检查器/显式导入及共同冻结已接通；无效草稿保留已应用集合，原权限/版本/反馈预算保留，完整Module与更广集合形态待后续。　入口：[ADR-0046 §6.82](ADR/0046-application-studio-fusion.md#682-集合构建器与完整谓词装配) |
+| 共享空间呈现与附件标注（ADR-0046，F1e61） | UI Kit、Files、应用 API | 受限 | 补全 | 地图/图片标注/GLB 三类共享 UI、Catalog与原文件作者/revision标注决定、原生绑定/检查器、共同候选和有限来源导入已接通；3D最新样本沿固定原查询与当前权限确认，更多空间语义/完整来源配置待实施。　入口：[ADR-0046 §6.81](ADR/0046-application-studio-fusion.md#681-记录地图附件标注与原生-3d-场景) |
+| Platform Catalog (ADR-0045) | UI/app/build owner、Web 目录 | 已交付 | 保留 | 六层复用发现、真实示例、开发/构建视角与有界查询；Studio 模板沿原草稿创建，租户能力沿原作用域读取。　入口：web/apps/catalog、scripts/catalog.mjs；[ADR-0045 §11](ADR/0045-platform-catalog.md#11-当前实现边界) |
+| 工作区与 UI 应用 API (ADR-0018/0047) | Web | 受限 | 补全 | 统一登录与 Rail/门户/投影（ADR-0052）；构建、治理、开发参考应用按任务分区，入口切换保留原编辑标签。角色与执行检查保持原 owner。　入口：@platform/app, web/apps/workspace；[ADR-0047 §14](ADR/0047-platform-composition-and-workspaces.md#14-当前实现边界) |
+| 包安装生命周期 (ADR-0008, ADR-0048) | 宿主、平台应用 `platform`、`@pkg/platform` | 已交付 | 保留 | 包索引、依赖预检、安装、升级、排空与退役已实现；退役后所带内容仍可读。　入口：packages.go, /v1/packages；[ADR-0008](ADR/0008-packages-customization-and-callers.md) |
+| 环境晋级、迁移与升级 (ADR-0039, ADR-0047 §11) | 宿主、平台应用 `build` 与 `platform` | 受限 | 补全 | 不可变候选、激活、同宿主晋级、记录迁移与有界标量升级及失败处置已实现；客户扩展保留、其它升级类型与灰度按需；S-02 的目标环境交付、受支持升级与失败处置证据属本项目补全。　入口：revision.go, Host Console；[ADR-0039](ADR/0039-minimal-definition-release.md) |
+| 边缘客户端与登录 | Web | 已交付 | 保留 | HTTP 边缘客户端、发件箱、PKCE/OIDC 与可读拒绝。　入口：@platform/kernel |
+| 设置中心 | Web | 已交付 | 保留 | 系统治理与运行设置界面。　入口：@pkg/platform |
+| 应用 UI 包 | Web | 已交付 | 保留 | 业务视图组合共享 UI/API，跨记录共性能力归平台。　入口：@pkg/<id>, crm |
+| 手持/扫码/打印 (ADR-0059) | 业务包（如 `@pkg/mes`）、UI Kit | 已交付 | 保留 | 契约 `platform.page.v2.107` 下的手持采集与打印路线；更广设备语义按需触发。　入口：web/packages/*；[ADR-0059](ADR/0059-handheld-scan-print.md) |
+| 标准接口与生成式 SDK (ADR-0094) | 平台应用 `enterprise`、宿主、业务包 | 已交付 | 保留 | query/ref/write 三类契约与从元模型生成的 typed SDK，MES 主数据下拉为首个消费者。　入口：/v1/enterprise-query, /v1/enterprise-resolve, enterprise-sdk.ts；[ADR-0094](ADR/0094-sealed-standard-interfaces.md) |
 
 ### 2.5 术语与归属权
 
@@ -174,6 +193,20 @@
 - **应用 (App)** 是一项能力单元：一个 Go 清单 (manifest)，通常附带一个 UI 包。**平台级应用 (Platform apps)** 即 §2.1 中列出的 8 个应用。**参考应用 (Reference apps)** 位于 `apps/` 目录下（在 2026-09-26 内核验证阶段前曾被称为 `slices/`）。ADR-0008 和 ADR-0009 中的“应用包 (Package)”均指交付应用。
 - **解决方案 (Solution)** 是针对某个特定宿主的一组应用编排，按其行业命名：`solutions/hospitality`、`solutions/manufacturing`；独立应用可在其开发宿主 `cmd/<id>-server` 上单独运行 (ADR-0025)。
 - **事件 (Event)** 是已接受的决策在外部观察者眼中的形态。业务领域自身的术语“事件”（例如设备停机事件）不是此概念。
+
+**账号、人员、组织、地点与模型元素**（ADR-0079、ADR-0058、ADR-0067/0068 的归属；同名概念不在两处各自定义）：
+
+| 概念 | 权威来源 | 与相邻概念的关系 |
+|---|---|---|
+| **身份 (Identity)** | Console 的已决状态（ADR-0079）：`subject → member` 映射，成员可有多个身份 | 只表示“以什么凭据登录”，不是业务记录；身份不跨租户共享 |
+| **成员 (Member)** | Console 的已决状态（`platform.member.*` 决定的结果） | 租户内的账户：角色、授予与状态；不是业务主数据的“人员” |
+| **档案与偏好 (Profile)** | `platform.profile` 实体（ADR-0079） | 成员的姓名、联系与偏好；时区参与记账日期等业务计算 |
+| **业务人员 (Person)** | 平台应用 `core` 的 `core.person` 记录 | 组织打交道的自然人（员工、承包商、伙伴联系人）；`member` 指向其登录账号（若有），`partner`/`site` 指向伙伴与场所；客户与伙伴侧的人员引用这里，不复制账号 |
+| **岗位、组织与地点（模型元素）** | 平台应用 `enterprise` 的企业模型：`ActualPerson`、`ActualPost`、`ActualOrganization`、`ActualLocation` 等 UAF 元素与带有效区间的关系 | 它们是**模型元素**，不是业务记录；任职以关系表达、离职写 `Until` 不删；`core.site.place`/`unit` 分别引用 `ActualLocation`/`ActualOrganization`，`core.person` 与 `ActualPerson` 是不同语义对象、无自动同步（ADR-0068 §5） |
+| **组织单位与结构** | 平台应用 `enterprise`（ADR-0067/0068 已取代 ADR-0012 的独立 `org` 应用） | 单位、结构、成员与日历接口由 Enterprise 投影保留（`/v1/organization`、`Caller.Units`）；历史角色与日志按原字节恢复 |
+| **业务记录 (Record)** | 对目标数据类别拥有权威的应用账本 | 模型元素不因被引用而成为业务记录；记录之间的关系由 `relations` 链接或企业模型关系表达，均按 K5 归属判断 |
+
+因此“给谁建账号”“给谁记人员档案”“把谁放进组织与岗位模型”是三个不同决定，各有唯一负责方；需要跨它们的同步时按真实任务立项（当前不提供自动同步）。
 
 | 术语 | 含义 | 归属方 | 持久化形态 |
 |---|---|---|---|
@@ -409,7 +442,7 @@
 3. **ERP 的庞大复杂度可能吞噬整体规划**。它是所有目标应用中最庞大深邃的一个；必须坚决让其保持轻量。它对平台的价值在于带来资金流、复式记账、会计期间控制和生产订单下达的强架构压力，而非广袤的边缘特性。
 4. **构建语言过度膨胀无界的风险**。类型化编排需要足够的表达力来承载真实工作，并依靠代码扩展支撑复杂算法。引入多套表达式引擎、未经校验的脚本或权限边界割裂的配置体系，将摧毁平台的可维护性。
 5. **服务端实现绝不等于内核本身**；将其混为一谈会把平台强行重新绑定到单一的特定部署形态上。
-6. **宿主运行时收容了其自身的内置应用** (#113, ADR-0025 D4, 8c 已构建)。`relations`、`org`、`work`、`flow`、`ai` 和 `knowledge` 是位于 `capabilities/server/apps` 下的独立包，仅依赖应用 API 与 `internal/host`，通过宿主检测到的角色接口（`Attached`、`Observer`、`Linker`、`Directory`、`Tasks`、`Processes`、`Runs`、`Listener`）进行交互，并由 `scripts/boundaries.sh` 实施强校验。智能体运行时与控制台依据决策（D4 修订）保留在宿主内部：前者属于宿主执行核心——模型调用、全应用工具调用、搜索、逐步骤记入日志——而后者是宿主每次请求都必须读取的全局配置；若将它们移出，几乎整个宿主都要暴露在 `internal/host` 之后。经验 6 同样适用于宿主自身。
+6. **宿主运行时收容了其自身的内置应用** (#113, ADR-0025 D4, 8c 已构建)。`ai`、`build`、`core`、`enterprise`、`files`、`flow`、`knowledge`、`relations`、`work` 是位于 `capabilities/server/apps` 下的独立包，仅依赖应用 API 与 `internal/host`，通过宿主检测到的角色接口（`Attached`、`Observer`、`Linker`、`Directory`、`Tasks`、`Processes`、`Runs`、`Listener`）进行交互，并由 `scripts/boundaries.sh` 实施强校验。智能体运行时与控制台依据决策（D4 修订）保留在宿主内部：前者属于宿主执行核心——模型调用、全应用工具调用、搜索、逐步骤记入日志——而后者是宿主每次请求都必须读取的全局配置；若将它们移出，几乎整个宿主都要暴露在 `internal/host` 之后。经验 6 同样适用于宿主自身。
 7. **文档内容漂移滞后**。在本次梳理之前，相同的状态在五个不同地方维护，且全部发生了陈旧滞后。每项事实必须有且仅有一个唯一归宿（本文档头部的权威声明）；每次代码批次必须伴随文档更新一同收尾（AGENTS.md 规则 8）。
 8. **在单机环境下验证的局部性风险**曾经是核心短板，直到 CI 落地 (#112)；Docker 全组件演练目前仍仅在负责人的 Mac 上运行，计时规模测试已按 ADR-0082 删除；发布工作流仅在版本标签或手动发布时运行。
 9. **智能体严重依赖平台不可控的外部基础模型**。反馈信号机制与离线评测体系是核心守卫；调用配额与速率限制守卫在每次调用必经的唯一关口 (ADR-0029 12a)。
