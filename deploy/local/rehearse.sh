@@ -211,7 +211,7 @@ workflow_setup() {
     "{\"name\":\"rehearsal$suffix\",\"title\":\"Workflow recovery sample\",\"fields\":[{\"name\":\"note\",\"title\":\"Note\",\"type\":\"text\"}],\"states\":[{\"name\":\"open\",\"title\":\"Open\"},{\"name\":\"done\",\"title\":\"Done\"},{\"name\":\"rejected\",\"title\":\"Rejected\"}],\"actions\":[{\"name\":\"close\",\"title\":\"Close\",\"from\":[\"open\"],\"to\":\"done\"},{\"name\":\"reject\",\"title\":\"Reject\",\"from\":[\"open\"],\"to\":\"rejected\"}]}"
   workflow_submit "$builder" wf-object-publish build.object.publish build.object WF-O '{}'
   workflow_submit "$builder" wf-process build.process.create build.process WF-P \
-    "{\"name\":\"review$suffix\",\"title\":\"Recovery review\",\"object\":\"$typ\",\"when\":\"open\",\"steps\":[{\"name\":\"review\",\"ask\":\"user\",\"answers\":[\"approve\"],\"branches\":{\"approve\":\"close\"}},{\"name\":\"close\",\"act\":\"close\"}]}"
+    "{\"name\":\"review$suffix\",\"title\":\"Recovery review\",\"object\":\"$typ\",\"when\":\"open\",\"steps\":[{\"name\":\"review\",\"kind\":\"ask\",\"ask\":\"user\",\"answers\":[\"approve\"],\"cases\":{\"approve\":\"close\"}},{\"name\":\"close\",\"kind\":\"action\",\"act\":\"close\"}]}"
   plan=$(jq -n --arg typ "$typ" --arg flow "$flow" --arg who "$operator_id" \
     '{process:"WF-P",title:"Fixed workflow recovery plan",as:$who,at:"2026-10-01T09:00:00Z",steps:[{type:$typ,id:"WF-TEST",action:($typ+".create"),payload:"{\"note\":\"isolated\"}",expect:"accepted",advanceSeconds:2},{type:$typ,id:"WF-TEST",flow:$flow,step:"review",answer:"approve",payload:"{}",expect:"accepted",advanceSeconds:2}]}')
   workflow_submit "$builder" wf-plan build.testplan.create build.testplan WF-PLAN "$plan"
@@ -223,7 +223,7 @@ workflow_setup() {
   workflow_submit "$operator" wf-old "$typ.create" "$typ" WF-OLD '{"note":"old native path"}'
   workflow_wait "$builder" "$flow:WF-OLD" 1 "$first"
   workflow_submit "$builder" wf-edit build.process.edit build.process WF-P \
-    '{"steps":[{"name":"review","ask":"user","answers":["approve"],"branches":{"approve":"reject"}},{"name":"reject","act":"reject"}]}'
+    '{"steps":[{"name":"review","kind":"ask","ask":"user","answers":["approve"],"cases":{"approve":"reject"}},{"name":"reject","kind":"action","act":"reject"}]}'
   workflow_submit "$builder" wf-publish-2 build.process.publish build.process WF-P '{}'
   second=$(workflow_activate "$builder" 2)
   [[ $first != "$second" ]] || fail "workflow branch change kept release ID"
@@ -309,7 +309,7 @@ function_joint_setup() {
   local name=advice$suffix flow=build.review$suffix candidate result
   # The retained first function version now belongs to both operator paths.
   workflow_submit "$builder" fn-joint-flow-edit build.process.edit build.process WF-P \
-    "{\"steps\":[{\"name\":\"infer\",\"function\":{\"name\":\"$name\",\"version\":1},\"next\":\"review\"},{\"name\":\"review\",\"ask\":\"user\",\"answers\":[\"approve\"],\"branches\":{\"approve\":\"reject\"}},{\"name\":\"reject\",\"act\":\"reject\"}]}"
+    "{\"steps\":[{\"name\":\"infer\",\"kind\":\"ai\",\"function\":{\"name\":\"$name\",\"version\":1},\"next\":\"review\"},{\"name\":\"review\",\"kind\":\"ask\",\"ask\":\"user\",\"answers\":[\"approve\"],\"cases\":{\"approve\":\"reject\"}},{\"name\":\"reject\",\"kind\":\"action\",\"act\":\"reject\"}]}"
   workflow_submit "$builder" fn-joint-flow-publish build.process.publish build.process WF-P '{}'
   result=$(workflow_post "$builder" releases/preview '{"kind":"object","id":"WF-O"}') || fail "joint function preview"
   candidate=$(jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId' <<<"$result") || fail "joint function candidate"
@@ -428,14 +428,14 @@ agent() { (cd ../../apps/mes/server && MES_AGENT_CLIENT=mes-assistant \
   MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 \
   go run ./cmd/mes-agent -server "$MANUFACTURING" -oidc-token "$IDP/oidc/token" "$@"); }
 catalog=$(agent actions | jq -c '[.[].schema | select(startswith("work.") or startswith("agent.") or startswith("files.") or IN("platform.link", "platform.unlink", "platform.note", "platform.comment.add", "platform.follow.add", "platform.follow.remove") | not)]')
-[[ $catalog == '["platform.member.language","platform.notification.read","platform.operation.call","build.function-call.start","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog: $catalog"
+[[ $catalog == '["platform.profile.update","platform.member.delegate","platform.token.issue","platform.token.revoke","platform.notification.read","platform.operation.call","build.function-call.start","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog: $catalog"
 event=$(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/downtime" | jq -r 'first(.[] | select(.resource == "CNC-11")).id')
 agent do mes.downtime.reason "$event" '{"reason":"Setup"}' | jq -e .record >/dev/null || fail "assistant reason"
 ! agent do mes.order.release WO-9 '{}' 2>/dev/null || fail "assistant acted outside its catalog"
 AGENT=$(curl -sf "$IDP/oidc/token" -d grant_type=client_credentials -d client_id=mes-assistant \
   -d client_secret=assistantLocalOnly0000000000000000000000000000000000000000000000 | jq -r .access_token)
 [[ $(submit "$AGENT" a-1 mes.order.release mes.order WO-9 '{"product":"P-100","quantity":1,"sfcs":1}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "server let the assistant release"
-echo "ok   AI assistant: catalog of one plant action (and its own notifications), acted within line L1, refused outside it"
+echo "ok   AI assistant: catalog of permitted plant actions and personal controls, acted within line L1, refused outside it"
 
 # An order released without a planned order is refused at once. The line's AI
 # assistant resends it against MO-3, but it holds no role in the ERP, so the ERP
@@ -498,7 +498,7 @@ curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/mes.order/WO-
 AUTHORITY=platform submit "$SUP" ag-1 platform.setting.set platform.setting agent/model '{"value":"local/echo"}' | jq -e .record >/dev/null || fail "agents' model"
 submit "$SUP" r-4 mes.order.release mes.order WO-4 '{"product":"P-200","quantity":8,"sfcs":1}' | jq -e .record >/dev/null || fail "release WO-4"
 rev=0
-for resource in CNC-21 ASM-1 TEST-1; do
+for resource in CNC-21 CNC-21 ASM-1 TEST-1; do
   submit "$OP2" "w4-s$rev" mes.sfc.start mes.sfc WO-4-001 "{\"resource\":\"$resource\"}" $rev | jq -e .record >/dev/null || fail "start WO-4 at $resource"
   submit "$OP2" "w4-c$rev" mes.sfc.complete mes.sfc WO-4-001 '{}' $((rev + 1)) | jq -e .record >/dev/null || fail "complete WO-4 at $resource"
   rev=$((rev + 2))
