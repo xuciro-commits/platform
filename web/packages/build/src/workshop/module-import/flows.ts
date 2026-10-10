@@ -1,15 +1,16 @@
 import {schemaIssue} from "../../automate/workflow-schema";
 import type {Api} from "@platform/kernel";
 import type {Capability,WorkflowDraft,WorkflowStep} from "../../automate/workflow-model";
+import {compileContinuousGraph,isContinuousNode,type ContinuousOutputs} from "./continuous";
 
 type ObjectValue=Record<string,unknown>;
 export type SourceFlowNode={id:string;type:string;name:string;x:number;y:number;config:ObjectValue;disabled?:boolean;retry?:{attempts:number;backoffMs:number};lastStatus?:string};
 export type SourceFlowEdge={id:string;source:string;sourcePort:string;target:string;targetPort:string;enabled?:boolean;label?:string};
 export type SourceFlow={id:string;name:string;description:string;enabled:boolean;version:number;nodes:SourceFlowNode[];edges:SourceFlowEdge[];execution:{mode:string;maxConcurrency:number;checkpointEvery:number;errorPolicy:string;scheduleMs?:number}};
-export type FlowNodeBinding={app:string;kind:"query"|"compute";name:string;version:number;sourceVersion:string;object?:string;inputs?:Record<string,Api.Binding>};
+export type FlowNodeBinding={app:string;kind:"query"|"compute"|"action";name:string;version:number;sourceVersion:string;object?:string;inputs?:Record<string,Api.Binding>};
 export type FlowBindings=Record<string,FlowNodeBinding>;
 export type FlowIssue={path:string;code:string};
-export type FlowImportReport={formatVersion:1;source:string;flow:string;bindings:FlowBindings;diagnostics:FlowIssue[];ids:Record<string,string>;draft?:WorkflowDraft};
+export type FlowImportReport={formatVersion:1;source:string;flow:string;bindings:FlowBindings;diagnostics:FlowIssue[];ids:Record<string,string>;draft?:WorkflowDraft;continuous?:Api.Continuous;outputs?:ContinuousOutputs};
 export const flowPorts:Record<string,{inputs:string[];outputs:string[];owner:"query"|"compute"|"runtime"}>={
  objectSource:{inputs:[],outputs:["objects"],owner:"query"},
  filter:{inputs:["in"],outputs:["out","rejected"],owner:"compute"},
@@ -43,13 +44,26 @@ export function parseFlowSource(source:string):{flows:SourceFlow[];diagnostics:F
 
 /** A bounded, serial, stateless DAG uses original native requests. Unsupported
  * scheduling/state/effects never become an approximate manual workflow. */
-export function compileFlowSource(source:string,flowID:string,bindings:FlowBindings,target:{name:string;capabilities:Capability[];definitions:Api.Definition[]}):FlowImportReport{
+export function compileFlowSource(source:string,flowID:string,bindings:FlowBindings,target:{name:string;capabilities:Capability[];definitions:Api.Definition[];continuous?:Partial<Api.Continuous>}):FlowImportReport{
  const parsed=parseFlowSource(source),report:FlowImportReport={formatVersion:1,source,flow:flowID,bindings:structuredClone(bindings),diagnostics:[...parsed.diagnostics],ids:{}};
  const issue=(path:string,code:string)=>report.diagnostics.push({path,code});
  const flow=parsed.flows.find(f=>f.id===flowID);if(!flow){issue("/flows","flow-required");return report;}
  const root=`/flows/${pointer(flow.id)}`;
  const keys=(v:object,allowed:string[],path:string)=>Object.keys(v).filter(k=>!allowed.includes(k)).forEach(k=>issue(`${path}/${pointer(k)}`,"unsupported-setting"));
  keys(flow,["id","name","description","enabled","version","nodes","edges","execution"],root);
+ // A source graph with runtime nodes is the continuous route: the declared
+ // window/aggregate/threshold/effects are derived from its nodes and ports
+ // (ADR-0047 §13.1), and the Flow settings keep only the real source binding.
+ if(flow.nodes.some(n=>isContinuousNode(n.type))){
+  keys(flow.execution,["mode","maxConcurrency","checkpointEvery","errorPolicy","scheduleMs"],`${root}/execution`);
+  if(!flow.enabled||!flow.name.trim()||! /^[a-z][a-z0-9]{0,63}$/.test(target.name))issue(root,"flow-destination");
+  const derived=compileContinuousGraph(flow,target.continuous??{},bindings);
+  report.diagnostics.push(...derived.diagnostics);
+  report.outputs=derived.outputs;
+  report.continuous=derived.continuous;
+  if(!report.diagnostics.length)report.draft={id:"",revision:0,name:target.name,title:flow.name,object:"",when:"",manual:true,input:{},inputSchema:{type:"object",properties:{}},continuous:derived.continuous,steps:[{name:"intake",kind:"wait",condition:{op:"eq",left:{source:"literal",value:false},right:{source:"literal",value:true}}}],layout:{}};
+  return report;
+ }
  keys(flow.execution,["mode","maxConcurrency","checkpointEvery","errorPolicy","scheduleMs"],`${root}/execution`);
  if(flow.execution.mode!=="onDemand")issue(`${root}/execution/mode`,"flow-mode-owner");
  if(flow.execution.maxConcurrency!==1)issue(`${root}/execution/maxConcurrency`,"flow-concurrency-owner");

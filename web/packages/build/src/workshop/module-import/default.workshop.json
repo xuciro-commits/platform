@@ -3654,10 +3654,7 @@
           "x": 80,
           "y": 180,
           "config": {
-            "plants": [],
-            "batchSize": 512,
-            "partitionBy": "deviceId",
-            "offset": "latest"
+            "batchSize": 512
           },
           "retry": {
             "attempts": 3,
@@ -3675,7 +3672,8 @@
             "slideMs": 5000,
             "watermarkMs": 2000,
             "lateEvents": "sideOutput",
-            "windowKind": "sliding"
+            "windowKind": "sliding",
+            "maxRecords": 50000
           },
           "retry": {
             "attempts": 3,
@@ -3690,8 +3688,11 @@
           "y": 180,
           "config": {
             "signal": "vibration",
-            "threshold": 11.5,
-            "kernel": "wasm:f32-window-stats",
+            "kernel": "native",
+            "measures": [
+              "count",
+              "mean"
+            ],
             "groupBy": [
               "plantId",
               "deviceId"
@@ -3813,7 +3814,7 @@
       ],
       "execution": {
         "mode": "stream",
-        "maxConcurrency": 8,
+        "maxConcurrency": 1,
         "checkpointEvery": 5000,
         "errorPolicy": "deadLetter",
         "scheduleMs": 1000
