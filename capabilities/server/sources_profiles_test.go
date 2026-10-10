@@ -135,6 +135,16 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	if failure != nil || frame.Consumed != 1025 || frame.Source == nil || frame.Source.Cursor != "1025" || frame.Source.Record != "stream" {
 		t.Fatalf("real source checkpoint unavailable or counters incorrect: %v", failure)
 	}
+	// A quiet source still advances the event-time slide after its grace
+	// interval. The accepted timer frame must not advance the PostgreSQL cursor.
+	windowTickAt := at.Add(7 * time.Second)
+	tn.PullContinuousSources(windowTickAt)
+	ticked, failure := tn.ReadFlowFrame(member, instance, windowTickAt)
+	var tickState flow.WindowState
+	stateErr := json.Unmarshal(ticked.State["window"], &tickState)
+	if failure != nil || stateErr != nil || ticked.Cursor == frame.Cursor || ticked.Source == nil || ticked.Source.Cursor != frame.Source.Cursor || ticked.Consumed != frame.Consumed || !ticked.Watermark.After(frame.Watermark) || !tickState.Ready || !tickState.EmittedAt.Equal(at.Add(5*time.Second)) {
+		t.Fatalf("idle slide tick changed the source cursor or did not advance its window: before=%+v after=%+v state=%+v refusal=%v stateErr=%v", frame, ticked, tickState, failure, stateErr)
+	}
 	for tick := 1; tick <= 4; tick++ {
 		tn.Work(at.Add(time.Duration(tick) * time.Second))
 	}

@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"slices"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -80,7 +81,7 @@ func (s flowFrameStore) Read(ref platform.FlowStateArtifact) ([]byte, error) {
 	return raw, nil
 }
 
-func (s flowFrameStore) discard(ref platform.FlowStateArtifact) {
+func (s flowFrameStore) Discard(ref platform.FlowStateArtifact) {
 	if key, err := s.key(ref); err == nil {
 		s.files.Delete(context.Background(), key)
 	}
@@ -126,7 +127,7 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 	f, before, current, refusal := t.continuousSnapshotLocked(m, id, now)
 	var plan *flow.BatchPreparation
 	if refusal == nil {
-		plan, refusal = f.PlanBatch(before)
+		plan, refusal = f.PlanBatch(before, t.automation(flow.ID, false))
 	}
 	t.mu.Unlock()
 	if refusal != nil {
@@ -152,10 +153,25 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 	if refusal != nil {
 		return flow.BatchOutcome{}, refusal
 	}
-	retained := false
+	var preparedInput *preparedOperationInput
+	if request, ok := prepared.OperationRequest(); ok {
+		preparedInput, refusal = t.prepareContinuousOperationInput(current, id, request)
+		if refusal != nil {
+			for _, artifact := range prepared.Artifacts() {
+				store.Discard(artifact)
+			}
+			return flow.BatchOutcome{}, refusal
+		}
+	}
+	retained, inputRetained := false, false
 	defer func() {
 		if !retained {
-			store.discard(prepared.Artifact())
+			for _, artifact := range prepared.Artifacts() {
+				store.Discard(artifact)
+			}
+		}
+		if preparedInput != nil && !inputRetained {
+			t.staged.discardInput(preparedInput.ref)
 		}
 	}()
 	t.mu.Lock()
@@ -168,20 +184,117 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
 	}
 	if batch.Source != nil {
-		if refusal := t.checkStreamSourceLocked(current, plan, latest, *batch.Source, now); refusal != nil {
+		if refusal := t.checkStreamSourceLocked(current, plan, latest, *batch.Source, batch.Tick, now); refusal != nil {
 			return flow.BatchOutcome{}, refusal
 		}
 	}
-	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + flow.ID, Tenant: t.ID}, prepared.Submission(t.ID), now, true); refusal != nil {
+	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + flow.ID, Tenant: t.ID}, prepared.Submission(t.ID), now, true, preparedInput); refusal != nil {
 		// An append error may have committed despite losing its response.
 		// Retain its bytes until the original journal resolves that outcome.
-		retained = true
+		retained, inputRetained = true, true
 		return flow.BatchOutcome{}, refusal
 	}
 	t.enqueue(now)
 	x, _ := platform.Get[flow.FlowInstance](t.automation(flow.ID, false), id)
 	retained = x.Batch.Sealed != nil && x.Batch.Sealed.Ticket == prepared.Artifact().Ticket
+	inputRetained = preparedInput != nil
 	return flow.BatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
+}
+
+func (t *Tenant) retryContinuousCompute(member platform.Member, plan *flow.ComputeRetryPreparation, now time.Time) {
+	if t.AcceptResult == nil {
+		return
+	}
+	prepared, refusal := plan.Prepare(now, flowFrameStore{tenant: t.ID, files: t.files()})
+	if refusal != nil {
+		log.Printf("continuous Compute retry %s refused: %s", plan.Instance(), refusal.Code)
+		return
+	}
+	instance := prepared.Instance()
+	var preparedInput *preparedOperationInput
+	preparedInput, refusal = t.prepareContinuousOperationInput(member, instance, prepared.OperationRequest())
+	if refusal != nil {
+		log.Printf("continuous Compute retry %s input refused: %s", instance, refusal.Code)
+		return
+	}
+	inputRetained := false
+	defer func() {
+		if preparedInput != nil && !inputRetained {
+			t.staged.discardInput(preparedInput.ref)
+		}
+	}()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, latest, _, refusal := t.continuousSnapshotLocked(member, instance, now)
+	if refusal != nil || !prepared.Matches(latest) {
+		if refusal == nil {
+			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its Compute retry was prepared")
+		}
+		log.Printf("continuous Compute retry %s refused: %s", instance, refusal.Code)
+		return
+	}
+	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + flow.ID, Tenant: t.ID}, prepared.Submission(t.ID), now, true, preparedInput); refusal != nil {
+		// Preserve a possibly committed call input until the accepted journal
+		// resolves whether the retry decision was durable.
+		inputRetained = true
+		log.Printf("continuous Compute retry %s refused: %s", instance, refusal.Code)
+		return
+	}
+	t.enqueue(now)
+	inputRetained = preparedInput != nil
+}
+
+// prepareContinuousOperationInput seals an entry's window projection in the
+// existing per-call compute channel when its retained operation declares the
+// v2 data input ABI. Only an opaque, call/member/definition-bound reference is
+// handed into the accepted decision; the full projection stays off Flow.Data.
+func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instance string, request platform.OperationRequest) (*preparedOperationInput, *kernel.Error) {
+	refuse := func(code pb.ErrorCode, message string) (*preparedOperationInput, *kernel.Error) {
+		return nil, platform.Refuse(code, message)
+	}
+	if request.App == "" || request.Name == "" || request.Key == "" || request.OnBehalf != member.ID || request.Target != flow.InstanceType+"/"+instance {
+		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The prepared window names an invalid Compute operation")
+	}
+	t.mu.Lock()
+	current, ok := t.Member(member.ID)
+	owner := t.app(request.App)
+	if !ok || current.Tenant != t.ID || owner == nil {
+		t.mu.Unlock()
+		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared window Compute owner or member is unavailable")
+	}
+	op, version, ok := operationDefinition(owner, request.Name, request.Version)
+	if !ok || op.Check() != nil {
+		t.mu.Unlock()
+		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The prepared window Compute operation is not retained")
+	}
+	definition, err := canonicalDigest([]any{request.App, op, version})
+	budget := op.Limits.DataInputBytes
+	t.mu.Unlock()
+	if err != nil {
+		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute definition cannot be bound")
+	}
+	if budget == 0 {
+		return nil, nil
+	}
+	if err := op.Input.Validate(request.Inputs, budget); err != nil {
+		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The window does not satisfy its Compute input: "+err.Error())
+	}
+	hash, err := canonicalDigest(request.Inputs)
+	if err != nil {
+		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The prepared window Compute input cannot be encoded")
+	}
+	call := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, request.App, request.Key, operationEndpoint)
+	ref, err := t.staged.sealInput(call, member.ID, definition, hash, request.Inputs, budget)
+	if err != nil {
+		t.staged.discardInput(ref)
+		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute input could not be sealed: "+err.Error())
+	}
+	requestHash, err := canonicalDigest(request)
+	if err != nil {
+		t.staged.discardInput(ref)
+		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute request cannot be bound")
+	}
+	return &preparedOperationInput{ref: ref, requestHash: requestHash}, nil
 }
 
 // ReadFlowFrame resolves only a currently readable original instance. A role
@@ -250,7 +363,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	f, before, current, refusal := t.continuousSnapshotLocked(m, id, now)
 	var plan *flow.BatchPreparation
 	if refusal == nil {
-		plan, refusal = f.PlanBatch(before)
+		plan, refusal = f.PlanBatch(before, t.automation(flow.ID, false))
 	}
 	if refusal != nil {
 		t.mu.Unlock()
@@ -258,9 +371,10 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	}
 	name, intake, budget := plan.Intake()
 	source, connection, hash, refusal := t.streamSourceLocked(current, name, intake, now)
+	latestBootstrap := intake.Offset == "latest" && (before.Batch == nil || before.Batch.Source == nil)
 	if refusal == nil && before.Batch != nil && before.Batch.Source != nil {
 		checkpoint := before.Batch.Source
-		if checkpoint.Record != source.ID || checkpoint.Config != hash {
+		if checkpoint.Record != source.ID || checkpoint.Config != hash || checkpoint.Initialized && checkpoint.Offset != intake.Offset || intake.Offset == "latest" && !checkpoint.Initialized {
 			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source changed after this Flow began consuming it")
 		} else {
 			source.Cursor = checkpoint.Cursor
@@ -270,9 +384,21 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	if refusal != nil {
 		return flow.BatchOutcome{}, refusal
 	}
+	if latestBootstrap {
+		cursor, cursorErr := t.latestTableCursor(source, connection)
+		if cursorErr != nil {
+			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, cursorErr.Error())
+		}
+		source.Cursor = cursor
+	}
 	columns := append([]string{source.Since, intake.Key, intake.EventTime, intake.Value}, intake.Partition...)
 	rows, err := t.readTable(source, connection, columns...)
 	if err != nil {
+		if tick, due, tickErr := plan.WindowTick(now, flowFrameStore{tenant: t.ID, files: t.files()}); tickErr != nil {
+			return flow.BatchOutcome{}, tickErr
+		} else if due {
+			return t.ConsumeFlowBatch(current, id, tick, now)
+		}
 		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
 	if len(rows) > budget {
@@ -284,7 +410,24 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		rows = rows[:budget]
 	}
 	if len(rows) == 0 {
-		return flow.BatchOutcome{}, nil
+		if !latestBootstrap {
+			if tick, due, tickErr := plan.WindowTick(now, flowFrameStore{tenant: t.ID, files: t.files()}); tickErr != nil {
+				return flow.BatchOutcome{}, tickErr
+			} else if due {
+				return t.ConsumeFlowBatch(current, id, tick, now)
+			}
+			return flow.BatchOutcome{}, nil
+		}
+		batch := flow.Batch{Bootstrap: true, Source: &flow.SourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Cursor, Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
+		if before.Batch != nil {
+			batch.Predecessor = before.Batch.Cursor
+		}
+		fingerprint, fingerprintErr := canonicalDigest([]any{batch.Predecessor, batch.Source, batch.Bootstrap, batch.Signals})
+		if fingerprintErr != nil {
+			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source bootstrap cannot be bound")
+		}
+		batch.ID = "source:" + fingerprint
+		return t.ConsumeFlowBatch(current, id, batch, now)
 	}
 	position := source
 	for _, row := range rows {
@@ -294,7 +437,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		}
 		position.Cursor = next
 	}
-	batch := flow.Batch{Source: &flow.SourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Advance(rows), Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}}}
+	batch := flow.Batch{Source: &flow.SourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Advance(rows), Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
 	if before.Batch != nil {
 		batch.Predecessor = before.Batch.Cursor
 	}
@@ -320,7 +463,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		}
 		batch.Signals = append(batch.Signals, flow.Signal{Key: key, Partition: string(platform.Raw(partition)), At: at, Value: value})
 	}
-	fingerprint, err := canonicalDigest([]any{batch.Predecessor, batch.Source, batch.Signals})
+	fingerprint, err := canonicalDigest([]any{batch.Predecessor, batch.Source, batch.Bootstrap, batch.Signals})
 	if err != nil {
 		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source batch cannot be bound")
 	}
@@ -328,18 +471,34 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	return t.ConsumeFlowBatch(current, id, batch, now)
 }
 
-func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan *flow.BatchPreparation, x flow.FlowInstance, checkpoint flow.SourceCheckpoint, now time.Time) *kernel.Error {
+func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan *flow.BatchPreparation, x flow.FlowInstance, checkpoint flow.SourceCheckpoint, tick bool, now time.Time) *kernel.Error {
 	name, intake, _ := plan.Intake()
 	source, connection, hash, refusal := t.streamSourceLocked(m, name, intake, now)
 	if refusal != nil {
 		return refusal
 	}
 	refs := []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}
-	if checkpoint.Record != source.ID || checkpoint.Config != hash || checkpoint.Cursor == "" || !slices.Equal(checkpoint.Sources, refs) || x.Batch != nil && x.Batch.Source != nil && (x.Batch.Source.Record != source.ID || x.Batch.Source.Config != hash) {
+	if checkpoint.Record != source.ID || checkpoint.Config != hash || !slices.Equal(checkpoint.Sources, refs) || x.Batch != nil && x.Batch.Source != nil && (x.Batch.Source.Record != source.ID || x.Batch.Source.Config != hash) || intake.Offset == "latest" && (!checkpoint.Initialized || checkpoint.Offset != "latest") || checkpoint.Initialized && checkpoint.Offset != intake.Offset {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow source configuration or protected references changed")
 	}
 	if x.Batch != nil && x.Batch.Source != nil {
 		source.Cursor = x.Batch.Source.Cursor
+	}
+	if tick {
+		var prior *flow.SourceCheckpoint
+		if x.Batch != nil {
+			prior = x.Batch.Source
+		}
+		if prior == nil || prior.Cursor != checkpoint.Cursor || prior.Initialized != checkpoint.Initialized || prior.Offset != checkpoint.Offset || !slices.Equal(prior.Sources, checkpoint.Sources) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A slide tick cannot advance or replace the source checkpoint")
+		}
+		return nil
+	}
+	if checkpoint.Cursor == "" {
+		if intake.Offset != "latest" || !checkpoint.Initialized || x.Batch != nil && x.Batch.Source != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source checkpoint must advance its accepted position")
+		}
+		return nil // an empty source was initialized at its latest offset
 	}
 	if source.Advance([]map[string]any{{source.Since: checkpoint.Cursor}}) != checkpoint.Cursor || source.Cursor == checkpoint.Cursor {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source checkpoint must advance its accepted position")
@@ -376,9 +535,22 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 	instances, _, _ := platform.Find[flow.FlowInstance](t.automation(flow.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","waiting"]]`), Sort: []string{"id"}})
 	f, ok := t.procs.(*flow.Flows)
 	var pending []flow.FlowInstance
+	type retry struct {
+		plan   *flow.ComputeRetryPreparation
+		member platform.Member
+	}
+	var retries []retry
 	if ok {
 		for _, instance := range instances {
-			if plan, err := f.PlanBatch(instance); err == nil {
+			member, exists := t.Member(instance.OnBehalf)
+			if !exists {
+				continue
+			}
+			if plan, err := f.PlanComputeRetry(instance, t.automation(flow.ID, false), now); err == nil {
+				retries = append(retries, retry{plan: plan, member: member})
+				continue
+			}
+			if plan, err := f.PlanBatch(instance, t.automation(flow.ID, false)); err == nil {
 				if _, intake, _ := plan.Intake(); intake != nil {
 					source, exists := platform.Get[build.Source](t.automation(build.ID, false), intake.SourceRecord)
 					if exists && source.Stream && source.State == "published" {
@@ -389,6 +561,9 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 		}
 	}
 	t.mu.Unlock()
+	for _, retry := range retries {
+		t.retryContinuousCompute(retry.member, retry.plan, now)
+	}
 	for _, instance := range pending {
 		member, exists := t.Member(instance.OnBehalf)
 		if !exists {
@@ -400,7 +575,7 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 				log.Printf("continuous source intake %s refused: %s", instance.ID, refusal.Code)
 				break
 			}
-			if outcome.Cursor == "" {
+			if outcome.Cursor == "" || strings.HasPrefix(outcome.Cursor, "tick:") {
 				break
 			}
 		}

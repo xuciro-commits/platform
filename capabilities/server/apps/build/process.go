@@ -104,6 +104,8 @@ type ProcessStep struct {
 	Mode           string                      `json:"mode,omitempty" enum:"all,any"`
 	TimeoutSeconds int                         `json:"timeoutSeconds,omitempty"`
 	UntilSeconds   int                         `json:"untilSeconds,omitempty"`
+	RetryAttempts  int                         `json:"retryAttempts,omitempty"`
+	RetryBackoffMs int                         `json:"retryBackoffMs,omitempty"`
 	Flow           string                      `json:"flow,omitempty"`
 	FlowVersion    int                         `json:"flowVersion,omitempty"`
 }
@@ -144,7 +146,7 @@ func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A process may retain at most 64 published versions")
 	}
 	p.Version++
-	if p.Every != "" {
+	if p.Every != "" || p.Continuous != nil && p.Continuous.Intake != nil {
 		p.Scheduler = c.ID
 	} else {
 		p.Scheduler = ""
@@ -247,7 +249,11 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 			return refuse("A scheduled process has no source record and is not started by hand")
 		}
 	}
-	if !p.Manual && p.Every == "" {
+	continuousStart := p.Continuous != nil && p.Continuous.Intake != nil
+	if continuousStart && (p.Manual || p.Every != "" || p.Object != "" || p.When != "") {
+		return refuse("A controlled continuous Process starts from its published source, not by hand, on a schedule or from a record state")
+	}
+	if !p.Manual && p.Every == "" && !continuousStart {
 		var states []platform.State
 		if entity.Type == p.Object && entity.Lifecycle != nil {
 			states = entity.Lifecycle.States
@@ -312,6 +318,9 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 		}
 		if step.TimeoutSeconds < 0 || step.TimeoutSeconds > 30*86400 || step.UntilSeconds < 0 || step.UntilSeconds > 30*86400 {
 			return problem("wait/timeout exceeds its bound")
+		}
+		if step.RetryAttempts < 0 || step.RetryAttempts > 20 || step.RetryBackoffMs < 0 || step.RetryBackoffMs > int((5*time.Minute)/time.Millisecond) {
+			return problem("retry attempts/backoff exceed their bounds")
 		}
 		if step.TimeoutSeconds > 0 && step.Error == "" {
 			return problem("a timeout needs an error path")
@@ -588,6 +597,16 @@ func (b *Build) flowOf(p Process) platform.Flow {
 	if p.Every != "" {
 		fl.Start.Every, _ = time.ParseDuration(p.Every)
 		fl.Start.OnBehalf = p.Scheduler
+	} else if p.Continuous != nil && p.Continuous.Intake != nil {
+		processID, processName, processVersion := p.ID, p.Name, p.Version
+		fl.Start.Manual, fl.Start.Continuous, fl.Start.OnBehalf = false, true, p.Scheduler
+		fl.Start.Enabled = func(c platform.Caller) bool {
+			if b.host == nil || processID == "" || processVersion < 1 {
+				return false
+			}
+			current, ok := platform.Get[Process](b.host.Automation(c, ID), processID)
+			return ok && current.State == "published" && current.Version == processVersion && current.Name == processName
+		}
 	} else if !p.Manual {
 		fl.Start.Type = p.Object
 		stateField := "state"
@@ -606,6 +625,9 @@ func (b *Build) flowOf(p Process) platform.Flow {
 	for _, node := range p.Steps {
 		s := node
 		step := platform.Step{Name: s.Name, Title: cmp.Or(s.Title, s.Name), Next: s.Next, Fault: s.Error, Timeout: time.Duration(s.TimeoutSeconds) * time.Second, OnTimeout: s.Error}
+		if s.RetryAttempts > 0 || s.RetryBackoffMs > 0 {
+			step.Retry = &platform.RetryPolicy{Attempts: s.RetryAttempts, Backoff: time.Duration(s.RetryBackoffMs) * time.Millisecond}
+		}
 		subject := func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
 			if p.Object == "" {
 				return json.RawMessage("{}"), nil

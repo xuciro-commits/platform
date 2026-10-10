@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -20,9 +21,20 @@ import (
 // The source fixture enters through one ordinary accepted decision. Flow
 // remains the only instance owner; the source keeps no second runtime state.
 type frameSource struct {
-	ledger     *platform.Ledger
-	host       host.Host
-	stateBytes int
+	ledger          *platform.Ledger
+	host            host.Host
+	stateBytes      int
+	checkpointEvery int
+	compute         bool
+	retryCompute    bool
+	computeFailures int
+	largeInput      bool
+	autoStart       bool
+	autoEnabled     bool
+	module          []byte
+	moduleDigest    string
+	computeInputs   []json.RawMessage
+	windowOutputs   []map[string]json.RawMessage
 }
 
 type frameStream struct{ platform.Record }
@@ -32,20 +44,120 @@ func newFrameSource(tenant string, stateBytes int) *frameSource {
 		platform.Action{Schema: "frames.source.start", Target: "frames.source", Title: "Start", Description: "Start the source's original Flow instance", Roles: []string{"operator"}, Payload: []platform.Field{}},
 		platform.Action{Schema: "frames.source.feed", Target: "frames.source", Title: "Feed", Description: "Accept one source batch through its original Flow instance", Roles: []string{"operator"}, Payload: []platform.Field{{Name: "batch", Type: "json", Required: true}}}), "frames.source")}
 }
+func newFrameComputeSource(tenant string, stateBytes int) *frameSource {
+	s := newFrameSource(tenant, stateBytes)
+	s.compute = true
+	return s
+}
+func newFrameRetryComputeSource(tenant string, stateBytes int) *frameSource {
+	s := newFrameComputeSource(tenant, stateBytes)
+	s.retryCompute, s.computeFailures = true, 1
+	return s
+}
+func newFrameDataComputeSource(tenant string, stateBytes int) *frameSource {
+	s := newFrameComputeSource(tenant, stateBytes)
+	s.largeInput = true
+	s.module = []byte("fixture-wasm-module")
+	s.moduleDigest = fmt.Sprintf("%x", sha256.Sum256(s.module))
+	return s
+}
+
+type frameDataWorker struct {
+	calls int
+	data  []byte
+}
+
+func (w *frameDataWorker) Execute(_ context.Context, request WasmRequest) (WasmResponse, error) {
+	if request.Data == nil || len(request.Input) != 0 || request.Limits.DataInputBytes <= request.Limits.MaxInputBytes {
+		return WasmResponse{}, fmt.Errorf("the large Compute input did not use the declared data channel")
+	}
+	w.calls++
+	w.data = slices.Clone(request.Data.Bytes)
+	return WasmResponse{Output: platform.Raw(map[string]int{"bytes": len(request.Data.Bytes)})}, nil
+}
+
 func (s *frameSource) Attach(h host.Host) { s.host = h }
 func (s *frameSource) Manifest() platform.Manifest {
+	continuous := &platform.Continuous{
+		Source: "frames.source", Batch: 512, State: s.stateBytes, FrameBytes: 2 * s.stateBytes, CheckpointEvery: s.checkpointEvery, DeadLetter: true,
+		Window: &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"},
+	}
+	start := platform.Start{Manual: true}
+	if s.autoStart {
+		continuous.Intake = &platform.StreamIntake{SourceRecord: "stream", Key: "eventId", Partition: []string{"plantId"}, EventTime: "eventAt", Value: "reading", Offset: "latest"}
+		start = platform.Start{Continuous: true, OnBehalf: "member", Enabled: func(platform.Caller) bool { return s.autoEnabled }}
+	}
+	steps := []platform.Step{{Name: "intake", Wait: &platform.Wait{Until: func(platform.Caller, *platform.Run) bool { return false }}}}
+	var operations []platform.Operation
+	if s.compute {
+		continuous.Entry = "aggregate"
+		var retry *platform.RetryPolicy
+		if s.retryCompute {
+			retry = &platform.RetryPolicy{Attempts: 2, Backoff: time.Millisecond}
+		}
+		steps = []platform.Step{
+			{Name: "aggregate", Next: "finish", Retry: retry, Operation: &platform.OperationStep{Request: func(_ platform.Caller, run *platform.Run) (platform.OperationRequest, *kernel.Error) {
+				var input flow.ContinuousWindowInput
+				if json.Unmarshal(run.Data, &input) != nil {
+					return platform.OperationRequest{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "window input is malformed")
+				}
+				previous := make(map[string]json.RawMessage, len(input.Outputs))
+				for name, raw := range input.Outputs {
+					previous[name] = slices.Clone(raw)
+				}
+				s.windowOutputs = append(s.windowOutputs, previous)
+				if s.largeInput {
+					if len(input.Signals) == 0 {
+						return platform.OperationRequest{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "the window has no signal")
+					}
+					var payload string
+					if json.Unmarshal(input.Signals[0].Value, &payload) != nil {
+						return platform.OperationRequest{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "the signal payload is not text")
+					}
+					return platform.OperationRequest{App: "frames", Name: "aggregate", Inputs: platform.Raw(map[string]string{"payload": payload})}, nil
+				}
+				return platform.OperationRequest{App: "frames", Name: "aggregate", Inputs: platform.Raw(map[string]int{"signalCount": len(input.Signals)})}, nil
+			}}},
+			{Name: "finish", End: true},
+		}
+		operation := platform.Operation{
+			Name: "aggregate", Title: "Aggregate window", Description: "Count events in a ready window", Roles: []string{"operator"},
+			Input:   platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"signalCount": {Type: "integer"}}, Required: []string{"signalCount"}},
+			Output:  platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"count": {Type: "integer"}}, Required: []string{"count"}},
+			Binding: platform.OperationBinding{Kind: "native"}, Limits: platform.OperationLimits{TimeoutMillis: 1000, MemoryPages: 64, MaxInputBytes: 4096, MaxOutputBytes: 4096},
+		}
+		if s.largeInput {
+			operation.Input = platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"payload": {Type: "string", MaxLength: 200000}}, Required: []string{"payload"}}
+			operation.Output = platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"bytes": {Type: "integer"}}, Required: []string{"bytes"}}
+			operation.Binding = platform.OperationBinding{Kind: "wasm", Module: s.moduleDigest, ABI: platform.WasmDataABI}
+			operation.Limits = platform.OperationLimits{TimeoutMillis: 1000, MemoryPages: 64, MaxInputBytes: 4096, MaxOutputBytes: 4096, StagedOutputBytes: 8192, DataInputBytes: 256 << 10}
+		}
+		operations = []platform.Operation{operation}
+	}
+	fl := platform.Flow{Name: "window", Title: "Accepted window", Version: 1, Start: start, Continuous: continuous, Steps: steps}
 	return platform.Manifest{
 		ID: "frames", Version: "1", Actions: s.ledger.Catalog,
-		Entities: []platform.Entity{{Type: "frames.source", Title: "Source", Model: frameStream{}}},
-		Flows: []platform.Flow{{
-			Name: "window", Title: "Accepted window", Version: 1, Start: platform.Start{Manual: true},
-			Continuous: &platform.Continuous{
-				Source: "frames.source", Batch: 512, State: s.stateBytes, FrameBytes: 2 * s.stateBytes, DeadLetter: true,
-				Window: &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"},
-			},
-			Steps: []platform.Step{{Name: "intake", Wait: &platform.Wait{Until: func(platform.Caller, *platform.Run) bool { return false }}}},
-		}},
+		Entities:   []platform.Entity{{Type: "frames.source", Title: "Source", Model: frameStream{}}},
+		Flows:      []platform.Flow{fl},
+		Operations: operations,
 	}
+}
+func (s *frameSource) Compute(_ context.Context, name string, raw json.RawMessage) (json.RawMessage, error) {
+	if !s.compute || name != "aggregate" {
+		return nil, fmt.Errorf("unknown computation %s", name)
+	}
+	s.computeInputs = append(s.computeInputs, slices.Clone(raw))
+	if s.computeFailures > 0 {
+		s.computeFailures--
+		return nil, fmt.Errorf("transient Compute failure")
+	}
+	var input struct {
+		SignalCount int `json:"signalCount"`
+	}
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]int{"count": input.SignalCount})
 }
 func (s *frameSource) Declarations() []*pb.AuthorityDeclaration { return s.ledger.Declarations() }
 func (s *frameSource) Snapshot() (json.RawMessage, error)       { return s.ledger.Snapshot() }
@@ -85,6 +197,250 @@ func (s *frameSource) Submit(c platform.Caller, sub *pb.Submission, now time.Tim
 		}
 		return func(*pb.ChangeRecord) {}, nil
 	})
+}
+
+func TestContinuousFlowAutoStartsOnceAndStopIsDurable(t *testing.T) {
+	const tenant, id = "continuous-auto-start", "frames.window:continuous-v1"
+	source := newFrameSource(tenant, 128<<10)
+	source.autoStart = true
+	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+	procs := tn.app(flow.ID).(*flow.Flows)
+	at := time.Date(2026, 10, 10, 10, 0, 0, 0, time.UTC)
+	if err := procs.Run(tn.automation(flow.ID, false), "", at); err != nil {
+		t.Fatalf("inactive published-owner guard: %v", err)
+	}
+	if _, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id); ok {
+		t.Fatal("a continuous flow started while its published Process owner was inactive")
+	}
+	source.autoEnabled = true
+	if err := procs.Run(tn.automation(flow.ID, false), "", at.Add(time.Second)); err != nil {
+		t.Fatalf("start continuous flow: %v", err)
+	}
+	instance, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !ok || instance.State != "waiting" || instance.OnBehalf != "member" || len(instance.Tokens) != 1 || instance.Tokens[0].Waits != "stream" {
+		t.Fatalf("published stream did not start one retained waiting instance: %+v", instance)
+	}
+	if err := procs.Run(tn.automation(flow.ID, false), "", at.Add(2*time.Second)); err != nil {
+		t.Fatalf("idempotent start tick: %v", err)
+	}
+	if _, duplicate := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id+"#2"); duplicate {
+		t.Fatal("the continuous start tick created a duplicate instance")
+	}
+	decide(t, tn, "member", flow.ID, flow.SchemaFlowStop, flow.InstanceType, id, map[string]any{}, at.Add(3*time.Second))
+	if err := procs.Run(tn.automation(flow.ID, false), "", at.Add(4*time.Second)); err != nil {
+		t.Fatalf("stop retention tick: %v", err)
+	}
+	stopped, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !ok || stopped.State != "canceled" {
+		t.Fatalf("the explicit stop did not remain terminal: %+v", stopped)
+	}
+	if _, restarted := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id+"#2"); restarted {
+		t.Fatal("a durable stop was silently restarted by the timer")
+	}
+}
+
+func TestContinuousWindowRunsRetainedComputeWithBackpressure(t *testing.T) {
+	const tenant, id = "continuous-window-compute", "frames.window:source"
+	source := newFrameComputeSource(tenant, 128<<10)
+	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+	store := &memoryFiles{}
+	tn.Files = store
+	var entries []Entry
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	at := time.Date(2026, 10, 9, 10, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	member := memberOf(t, tn, "member")
+	read := func() flow.FlowInstance {
+		t.Helper()
+		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		if !ok {
+			t.Fatal("continuous Compute instance was not created")
+		}
+		return x
+	}
+	first := flow.Batch{ID: "window-1", Signals: []flow.Signal{{Key: "A", Partition: "plant", At: at.Add(-time.Second), Value: platform.Raw(4)}}}
+	acceptedAt := at.Add(3 * time.Second)
+	if _, err := tn.ConsumeFlowBatch(member, id, first, acceptedAt); err != nil {
+		t.Fatalf("first window batch: %v", err)
+	}
+	accepted := read()
+	if accepted.State != "waiting" || accepted.Data != "{}" || accepted.Batch == nil || accepted.Batch.Cursor != first.ID {
+		t.Fatalf("window input changed shared Flow data or failed to accept its cursor: %+v", accepted)
+	}
+	var continuation json.RawMessage
+	for _, token := range accepted.Tokens {
+		if token.Waits == "operation" {
+			continuation = slices.Clone(token.Input)
+		}
+	}
+	var priorState struct {
+		Outputs map[string]json.RawMessage `json:"outputs"`
+		Signals []flow.Signal              `json:"signals"`
+	}
+	if len(accepted.Tokens) != 2 || !slices.ContainsFunc(accepted.Tokens, func(token flow.Token) bool { return token.Waits == "stream" }) || len(continuation) == 0 || json.Unmarshal(continuation, &priorState) != nil || priorState.Outputs == nil || len(priorState.Signals) != 0 {
+		t.Fatalf("Compute token was not retained with bounded continuation state beside the idle source token: %+v", accepted.Tokens)
+	}
+	second := flow.Batch{ID: "window-2", Predecessor: first.ID, Signals: []flow.Signal{{Key: "B", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(5)}}}
+	if _, err := tn.ConsumeFlowBatch(member, id, second, at.Add(time.Second)); err == nil {
+		t.Fatal("source advanced while its previous Compute operation was running")
+	}
+	if current := read(); current.Batch.Cursor != first.ID || current.Revision != accepted.Revision {
+		t.Fatal("backpressure refusal advanced the accepted window")
+	}
+	runs := tn.operationDispatches(acceptedAt)
+	if len(runs) != 1 {
+		t.Fatalf("ready window did not enqueue exactly one Compute operation: %d", len(runs))
+	}
+	runs[0]()
+	computed := read()
+	if computed.State != "waiting" || len(computed.Tokens) != 1 || computed.Tokens[0].Waits != "stream" || computed.Data != "{}" {
+		t.Fatalf("OperationEnded did not resume the same long-lived flow: %+v", computed)
+	}
+	var aggregate map[string]int
+	if json.Unmarshal(computed.Outputs["aggregate"], &aggregate) != nil || aggregate["count"] != 1 || len(source.computeInputs) != 1 {
+		t.Fatalf("Compute result was not retained as the latest step output: %s", computed.Outputs["aggregate"])
+	}
+	var used struct {
+		SignalCount int `json:"signalCount"`
+	}
+	if json.Unmarshal(source.computeInputs[0], &used) != nil || used.SignalCount != 1 {
+		t.Fatalf("Compute received the wrong window projection: %s", source.computeInputs[0])
+	}
+	if len(source.windowOutputs) != 1 || len(source.windowOutputs[0]) != 0 {
+		t.Fatalf("the first window should receive an empty prior-output state: %+v", source.windowOutputs)
+	}
+	if _, err := tn.ConsumeFlowBatch(member, id, second, at.Add(8*time.Second)); err != nil {
+		t.Fatalf("second window batch after completion: %v", err)
+	}
+	nextRuns := tn.operationDispatches(time.Now().UTC().Add(time.Second))
+	if len(nextRuns) != 1 {
+		current := read()
+		t.Fatalf("next ready window did not schedule a fresh retained Compute operation: tokens=%+v", current.Tokens)
+	}
+	var previousOutput map[string]int
+	if len(source.windowOutputs) != 2 || json.Unmarshal(source.windowOutputs[1]["aggregate"], &previousOutput) != nil || previousOutput["count"] != 1 {
+		t.Fatalf("the next window did not receive the previous accepted Flow output: %+v", source.windowOutputs)
+	}
+	nextRuns[0]()
+	computed = read()
+	if json.Unmarshal(computed.Outputs["aggregate"], &aggregate) != nil || aggregate["count"] != 2 || len(source.computeInputs) != 2 {
+		t.Fatalf("second ready window did not replace the latest Compute output: %s", computed.Outputs["aggregate"])
+	}
+	CheckReplay(t, tn, entries, func() *Tenant {
+		return composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameComputeSource(tenant, 128<<10))
+	})
+}
+
+func TestContinuousWindowRetriesComputeFromItsAcceptedSealedFrame(t *testing.T) {
+	const tenant, id = "continuous-window-compute-retry", "frames.window:source"
+	source := newFrameRetryComputeSource(tenant, 128<<10)
+	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+	tn.Files = &memoryFiles{}
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	at := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	batch := flow.Batch{ID: "retry-window", Signals: []flow.Signal{{Key: "A", Partition: "plant", At: at.Add(-time.Second), Value: platform.Raw(7)}}}
+	acceptedAt := at.Add(3 * time.Second)
+	if _, err := tn.ConsumeFlowBatch(memberOf(t, tn, "member"), id, batch, acceptedAt); err != nil {
+		t.Fatalf("retry window batch: %v", err)
+	}
+	runs := tn.operationDispatches(acceptedAt)
+	if len(runs) != 1 {
+		t.Fatalf("ready window did not enqueue its initial Compute: %d", len(runs))
+	}
+	runs[0]()
+	instance, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !ok || !slices.ContainsFunc(instance.Tokens, func(token flow.Token) bool {
+		return token.Step == "aggregate" && token.Waits == "retry" && token.Attempts == 1
+	}) {
+		t.Fatalf("the transient Compute failure did not retain its step retry: %+v", instance.Tokens)
+	}
+	retryAt := time.Now().UTC().Add(time.Second)
+	tn.PullContinuousSources(retryAt)
+	retries := tn.operationDispatches(retryAt.Add(time.Second))
+	if len(retries) != 1 {
+		t.Fatalf("the accepted sealed window did not enqueue one retry: %d", len(retries))
+	}
+	retries[0]()
+	instance, _ = platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	var output map[string]int
+	if instance.Batch.Cursor != batch.ID || instance.Data != "{}" || instance.State != "waiting" || len(instance.Tokens) != 1 || instance.Tokens[0].Waits != "stream" || len(source.computeInputs) != 2 || !slices.Equal(source.computeInputs[0], source.computeInputs[1]) || json.Unmarshal(instance.Outputs["aggregate"], &output) != nil || output["count"] != 1 {
+		t.Fatalf("the retry did not reuse the exact sealed window and settle the original Flow: %+v", instance)
+	}
+}
+
+func TestContinuousWindowSealsLargeComputeInput(t *testing.T) {
+	const tenant, id = "continuous-window-data-input", "frames.window:source"
+	source := newFrameDataComputeSource(tenant, 256<<10)
+	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+	store := &memoryFiles{}
+	tn.Files = store
+	worker := &frameDataWorker{}
+	tn.ComputeWorker = worker
+	if err := store.Put(context.Background(), artifactKey(tenant, source.moduleDigest), source.module, "application/wasm"); err != nil {
+		t.Fatal(err)
+	}
+	var entries []Entry
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	at := time.Date(2026, 10, 9, 11, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	member := memberOf(t, tn, "member")
+	text := strings.Repeat("x", 90<<10)
+	value, err := json.Marshal(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch := flow.Batch{ID: "large-window", Signals: []flow.Signal{{Key: "A", Partition: "plant", At: at.Add(-time.Second), Value: value}}}
+	if _, err := tn.ConsumeFlowBatch(member, id, batch, at.Add(3*time.Second)); err != nil {
+		t.Fatalf("large window Compute batch: %v", err)
+	}
+	instance, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !ok || instance.Data != "{}" || instance.Batch == nil || instance.Batch.Sealed == nil || len(platform.Raw(instance.Batch)) > 2048 {
+		t.Fatal("the large window or operation input was copied into the durable Flow record")
+	}
+	if worker.calls != 0 {
+		t.Fatal("the worker ran inside the accepted source decision")
+	}
+	tn.opsMu.Lock()
+	var inputRef *operationInputArtifact
+	for _, item := range tn.outbound {
+		if item.Endpoint != operationEndpoint {
+			continue
+		}
+		var binding operationBinding
+		if json.Unmarshal([]byte(item.Body), &binding) != nil || binding.SealedInput == nil || len(binding.Inputs) != 0 {
+			tn.opsMu.Unlock()
+			t.Fatal("the operation intent did not reference the sealed per-call input")
+		}
+		copy := *binding.SealedInput
+		inputRef = &copy
+	}
+	tn.opsMu.Unlock()
+	if inputRef == nil || inputRef.Tenant != tenant || inputRef.Member != member.ID || inputRef.Size <= 4096 || inputRef.Size > 256<<10 {
+		t.Fatalf("the operation input handle has a wrong owner or bound: %+v", inputRef)
+	}
+	sealed, err := tn.staged.readInput(context.Background(), *inputRef)
+	if err != nil || len(sealed) != inputRef.Size {
+		t.Fatalf("the operation input could not be resolved: %v", err)
+	}
+	for _, entry := range entries {
+		if len(entry.Body) > maxAcceptedResultBytes {
+			t.Fatal("the large window input was copied into the accepted journal result")
+		}
+	}
+	runs := tn.operationDispatches(time.Now().UTC().Add(time.Second))
+	if len(runs) != 1 {
+		t.Fatalf("the sealed operation was not dispatched once: %d", len(runs))
+	}
+	runs[0]()
+	if worker.calls != 1 || string(worker.data) != string(sealed) {
+		t.Fatal("the worker did not receive exactly the accepted call's sealed bytes")
+	}
+	instance, _ = platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	var output map[string]int
+	if json.Unmarshal(instance.Outputs["aggregate"], &output) != nil || output["bytes"] != len(sealed) {
+		t.Fatalf("the operation result did not resume into the original Flow output: %s", instance.Outputs["aggregate"])
+	}
 }
 
 func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
@@ -184,6 +540,62 @@ func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
 		}
 		CheckReplay(t, live, entries, compose)
 	})
+}
+
+func TestContinuousPeriodicCheckpointIsRetainedAndVersionBound(t *testing.T) {
+	const tenant, id = "periodic-checkpoints", "frames.window:source"
+	store := &memoryFiles{}
+	compose := func() *Tenant {
+		source := newFrameSource(tenant, 2<<20)
+		source.checkpointEvery = 2
+		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+		tn.Files = store
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	at := time.Date(2026, 10, 8, 11, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	member := memberOf(t, tn, "member")
+	feed := func(batch flow.Batch, now time.Time) {
+		t.Helper()
+		if _, err := tn.ConsumeFlowBatch(member, id, batch, now); err != nil {
+			t.Fatalf("accept source batch %s: %v", batch.ID, err)
+		}
+	}
+	read := func() flow.FlowInstance {
+		t.Helper()
+		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		if !ok {
+			t.Fatal("the original Flow instance was not retained")
+		}
+		return x
+	}
+	first := flow.Batch{ID: "one", Signals: []flow.Signal{{Key: "one", Partition: "plant", At: at, Value: platform.Raw(1)}}}
+	feed(first, at)
+	if x := read(); x.Batch.CheckpointArtifact != nil || x.Batch.BatchesSinceCheckpoint != 1 || x.Batch.CheckpointEvery != 2 {
+		t.Fatalf("checkpoint was not scheduled at the declared interval: %+v", x.Batch)
+	}
+	second := flow.Batch{ID: "two", Predecessor: "one", Signals: []flow.Signal{{Key: "two", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(2)}}}
+	feed(second, at.Add(time.Second))
+	x := read()
+	if x.Batch.CheckpointArtifact == nil || x.Batch.Sealed == nil || x.Batch.CheckpointCursor != "two" || x.Batch.BatchesSinceCheckpoint != 0 || x.Batch.CheckpointEvery != 2 || x.Batch.CheckpointArtifact.Ticket == x.Batch.Sealed.Ticket {
+		t.Fatalf("the second accepted batch did not create a distinct periodic checkpoint: %+v", x.Batch)
+	}
+	checkpointRaw, err := (flowFrameStore{tenant: tenant, files: store}).Read(*x.Batch.CheckpointArtifact)
+	var checkpoint flow.BatchFrame
+	if err != nil || json.Unmarshal(checkpointRaw, &checkpoint) != nil || checkpoint.Cursor != "two" || checkpoint.CheckpointCursor != "two" || checkpoint.CheckpointArtifact != nil || checkpoint.Sealed != nil || len(checkpoint.State) == 0 {
+		t.Fatalf("the periodic checkpoint is not a self-contained versioned frame: %+v %v", checkpoint, err)
+	}
+	third := flow.Batch{ID: "three", Predecessor: "two", Signals: []flow.Signal{{Key: "three", Partition: "plant", At: at.Add(2 * time.Second), Value: platform.Raw(3)}}}
+	feed(third, at.Add(2*time.Second))
+	frame, refusal := tn.ReadFlowFrame(memberOf(t, tn, "member"), id, at.Add(2*time.Second))
+	if refusal != nil || frame.CheckpointCursor != "two" || frame.BatchesSinceCheckpoint != 1 || frame.CheckpointArtifact == nil || frame.Cursor != "three" {
+		t.Fatalf("the current frame did not retain the last checkpoint reference: %+v %v", frame, refusal)
+	}
+	CheckReplay(t, tn, entries, compose)
 }
 
 func TestContinuousSealedFrameAndRecovery(t *testing.T) {

@@ -225,7 +225,11 @@ func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, rules func()
 		if !c.Replaying {
 			var payload map[string]any
 			json.Unmarshal(s.GetPayload(), &payload)
-			if issues := InputIssues(declared.Payload, payload); len(issues) > 0 {
+			issues := InputIssues(declared.Payload, payload)
+			if declared.DeferRequired {
+				issues = slices.DeleteFunc(issues, func(issue FieldIssue) bool { return issue.Code == "required" })
+			}
+			if len(issues) > 0 {
 				return nil, c.RefuseFields(issues)
 			}
 			for _, f := range declared.Payload {

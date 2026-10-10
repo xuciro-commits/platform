@@ -504,7 +504,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 			}
 		}
 		l.Transitions = append(l.Transitions, platform.Transition{Name: a.Name, Title: a.Title, Description: a.Description,
-			From: slices.Clone(a.From), To: reach, ToInput: a.ToInput, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval,
+			From: slices.Clone(a.From), To: reach, ToInput: a.ToInput, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval, DeferRequired: true,
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
 				return take(o, action, c, record, raw, now, creates, lookup)
 			}, After: stored(o, action, creates)})
@@ -548,7 +548,16 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 			fields = append(fields, in.field())
 		}
 		if issues := platform.InputIssues(fields, inputs); len(issues) > 0 {
-			return c.RefuseFields(issues)
+			refusal := c.RefuseFields(issues)
+			if required := slices.IndexFunc(issues, func(issue platform.FieldIssue) bool { return issue.Code == "required" && len(issue.Path) > 0 }); required >= 0 {
+				name := issues[required].Path[0]
+				label := name
+				if input := slices.IndexFunc(a.Inputs, func(in Input) bool { return in.Name == name }); input >= 0 && a.Inputs[input].Title != "" {
+					label = a.Inputs[input].Title
+				}
+				refusal.Message = fmt.Sprintf("%s needs %s", a.Title, label)
+			}
+			return refusal
 		}
 	}
 	v := reflect.ValueOf(record).Elem()

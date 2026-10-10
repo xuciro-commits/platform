@@ -19,20 +19,21 @@ import (
 // A session is one decision of the flow app: it loads instances, moves them
 // until each waits, and applies what changed as that decision.
 type session struct {
-	f                *Flows
-	c                platform.Caller // the flow app, automated
-	now              time.Time
-	changed          map[string]*FlowInstance
-	order            []string
-	assigns          []flowTask
-	runs             []host.RunStart // agent runs its steps start (ADR-0021)
-	signals          []runSignal     // what people made of their proposals
-	close            []string
-	event            *platform.Event
-	moves            int
-	operations       []operationStart
-	cancelOperations []string
-	withdrawals      []approvalWithdrawal
+	f                  *Flows
+	c                  platform.Caller // the flow app, automated
+	now                time.Time
+	changed            map[string]*FlowInstance
+	order              []string
+	assigns            []flowTask
+	runs               []host.RunStart // agent runs its steps start (ADR-0021)
+	signals            []runSignal     // what people made of their proposals
+	close              []string
+	event              *platform.Event
+	moves              int
+	operations         []operationStart
+	preparedOperations map[int]platform.OperationRequest
+	cancelOperations   []string
+	withdrawals        []approvalWithdrawal
 }
 
 type approvalWithdrawal struct{ app, id, member string }
@@ -67,7 +68,7 @@ type flowTask struct {
 const movesPerDecision = 1000 // a flow that loops without waiting is stopped
 
 func (f *Flows) session(c platform.Caller, now time.Time) *session {
-	return &session{f: f, c: c, now: now, changed: map[string]*FlowInstance{}}
+	return &session{f: f, c: c, now: now, changed: map[string]*FlowInstance{}, preparedOperations: map[int]platform.OperationRequest{}}
 }
 
 func (ss *session) load(id string) *FlowInstance {
@@ -185,6 +186,9 @@ func (ss *session) run(x *FlowInstance, token ...int) *platform.Run {
 	r.Now = ss.now
 	if len(token) > 0 {
 		tok := ss.token(x, token[0])
+		if len(tok.Input) > 0 {
+			r.Data = slices.Clone(tok.Input)
+		}
 		r.Outputs = maps.Clone(tok.Outputs)
 		r.Frames = slices.Clone(tok.Frames)
 	}
@@ -256,8 +260,12 @@ func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBeh
 		x := ss.create(d, id, key, data, onBehalf, parent)
 		x.Dependencies, x.Release = bound.Dependencies, bound.Release
 		if len(deferAdvance) > 0 && deferAdvance[0] {
-			x.Tokens[0].Waits = "yield"
-			x.Tokens[0].Due = now
+			if d.Continuous != nil {
+				x.Tokens[0].Waits = "stream"
+			} else {
+				x.Tokens[0].Waits = "yield"
+				x.Tokens[0].Due = now
+			}
 			x.State = "waiting"
 		} else {
 			ss.advance(x)
@@ -311,7 +319,7 @@ func (ss *session) next(x *FlowInstance, token int, to string) {
 			}
 		}
 	}
-	*tok = Token{ID: tok.ID, Step: to, Branch: tok.Branch, Parent: tok.Parent, Frames: tok.Frames, Outputs: tok.Outputs, Waits: "ready"}
+	*tok = Token{ID: tok.ID, Step: to, Branch: tok.Branch, Parent: tok.Parent, Frames: tok.Frames, Input: tok.Input, Outputs: tok.Outputs, Waits: "ready"}
 	if x.State == "waiting" {
 		x.State = "running"
 	}
@@ -405,10 +413,15 @@ func (ss *session) take(x *FlowInstance, token int) {
 	case step.Loop != nil:
 		ss.beginLoop(x, token, step, app, run)
 	case step.Operation != nil:
-		request, err := step.Operation.Request(app, run)
-		if err != nil {
-			ss.failed(x, token, step, err.Error())
-			return
+		request, prepared := ss.preparedOperations[token]
+		delete(ss.preparedOperations, token)
+		if !prepared {
+			var err *kernel.Error
+			request, err = step.Operation.Request(app, run)
+			if err != nil {
+				ss.failed(x, token, step, err.Error())
+				return
+			}
 		}
 		request.Key = fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq)
 		request.OnBehalf = x.OnBehalf
@@ -572,7 +585,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 	case len(step.All) > 0 || len(step.Any) > 0:
 		tok.Waits = "join"
 		for _, branch := range append(slices.Clone(step.All), step.Any...) {
-			x.Tokens = append(x.Tokens, Token{ID: ss.tokenID(x), Step: branch, Branch: branch, Parent: token, Frames: slices.Clone(tok.Frames), Outputs: maps.Clone(tok.Outputs), Waits: "ready"})
+			x.Tokens = append(x.Tokens, Token{ID: ss.tokenID(x), Step: branch, Branch: branch, Parent: token, Frames: slices.Clone(tok.Frames), Input: slices.Clone(tok.Input), Outputs: maps.Clone(tok.Outputs), Waits: "ready"})
 		}
 		ss.trace(x, step.Name, "branched", strings.Join(append(slices.Clone(step.All), step.Any...), ", "), "")
 	}
@@ -635,14 +648,25 @@ func (ss *session) act(appID, protocol, action, target string, payload json.RawM
 // failed retries a step's act with backoff, then takes its fault path, then compensates.
 func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why string) {
 	tok := ss.token(x, token)
+	limit := stepAttempts
+	var delay time.Duration
+	if step.Retry != nil {
+		if step.Retry.Attempts > 0 {
+			limit = step.Retry.Attempts
+		}
+		delay = step.Retry.Backoff
+	}
 	if step.NoRetry {
-		tok.Attempts = stepAttempts
+		tok.Attempts = limit
 	}
 	tok.Attempts++
 	tok.Error = why
 	switch {
-	case tok.Attempts < stepAttempts:
-		tok.Waits, tok.Due = "retry", ss.now.Add(backoff(tok.Attempts))
+	case tok.Attempts < limit:
+		if delay <= 0 {
+			delay = backoff(tok.Attempts)
+		}
+		tok.Waits, tok.Due = "retry", ss.now.Add(delay)
 		ss.trace(x, tok.Step, "retry", why, "")
 	case step.Fault != "":
 		ss.output(x, token, platform.Raw(map[string]string{"error": why}))
@@ -943,7 +967,7 @@ func (ss *session) fillLoop(x *FlowInstance, token int) {
 		} else {
 			item = frame.State
 		}
-		child := Token{ID: ss.tokenID(x), Step: loop.Body, Parent: token, Waits: "ready", Frames: append(slices.Clone(parent.Frames), platform.Frame{Node: step.Name, Index: index, Item: item}), Outputs: maps.Clone(parent.Outputs)}
+		child := Token{ID: ss.tokenID(x), Step: loop.Body, Parent: token, Waits: "ready", Frames: append(slices.Clone(parent.Frames), platform.Frame{Node: step.Name, Index: index, Item: item}), Input: slices.Clone(parent.Input), Outputs: maps.Clone(parent.Outputs)}
 		x.Tokens = append(x.Tokens, child)
 		active++
 	}
@@ -1020,11 +1044,20 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 					if t.Task != "" && t.Waits == "stuck" {
 						ss.close = append(ss.close, t.Task)
 					}
+					if d := ss.def(x); d.Continuous != nil && d.Continuous.Entry != "" && t.Step == d.Continuous.Entry && (t.Waits == "stuck" || t.Waits == "retry") {
+						t.Waits, t.Attempts, t.Due, t.Task = "retry", 0, now, ""
+						continue // the outside source lane rebuilds the exact sealed window input
+					}
 					t.Waits, t.Attempts, t.Due, t.Task = "ready", 0, time.Time{}, ""
 				}
 			}
 			if x.State == "stuck" {
-				x.State = map[bool]string{true: "compensating", false: "running"}[slices.ContainsFunc(x.Tokens, func(t Token) bool { return t.Step == "@undo" })]
+				d := ss.def(x)
+				if d.Continuous != nil && d.Continuous.Entry != "" && slices.ContainsFunc(x.Tokens, func(t Token) bool { return t.Step == d.Continuous.Entry && t.Waits == "retry" }) {
+					x.State = "waiting"
+				} else {
+					x.State = map[bool]string{true: "compensating", false: "running"}[slices.ContainsFunc(x.Tokens, func(t Token) bool { return t.Step == "@undo" })]
+				}
 			}
 			ss.trace(x, "", "retried", "", c.ID)
 		case SchemaFlowSkip:

@@ -156,12 +156,13 @@ type Transition struct {
 	Description string
 	From, To    []string
 	// ToInput names the required choice payload that the original action uses as its destination.
-	ToInput    string
-	Roles      []string
-	Payload    []Field
-	Capability string    // default: the entity type
-	Approval   *Approval // the transition waits for these approvers (ADR-0017)
-	Do         func(c Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error
+	ToInput       string
+	Roles         []string
+	Payload       []Field
+	DeferRequired bool      `json:"-"` // the transition owner explains missing inputs in its own terms
+	Capability    string    // default: the entity type
+	Approval      *Approval // the transition waits for these approvers (ADR-0017)
+	Do            func(c Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error
 	// After runs once the transition is accepted and the record stored: what
 	// follows from it elsewhere (another record, a notification, an effect).
 	After func(c Caller, r *pb.ChangeRecord, record any, now time.Time)
@@ -582,7 +583,7 @@ func EntityActions(e Entity) []Action {
 				description = fmt.Sprintf("Move %s from %s to %s.", article(info.Title), strings.Join(t.From, " or "), strings.Join(t.To, " or "))
 			}
 			out = append(out, Action{Schema: e.Type + "." + t.Name, Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
-				Description: description, Payload: payload, Roles: t.Roles, Approval: t.Approval})
+				Description: description, Payload: payload, Roles: t.Roles, Approval: t.Approval, DeferRequired: t.DeferRequired})
 			if t.Approval != nil && t.Approval.Pending != "" { // the work app's alone: no role holds them
 				for _, m := range [][2]string{{ApprovalHeld, "Hold for approval"}, {ApprovalRejected, "Mark rejected"}, {ApprovalReturned, "Return from approval"}} {
 					suffix, title := m[0], m[1]

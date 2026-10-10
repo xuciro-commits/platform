@@ -123,6 +123,7 @@ type FlowBinding struct {
 type FlowFrameStore interface {
 	Read(platform.FlowStateArtifact) ([]byte, error)
 	Seal(instance string, version int, raw []byte, budget int) (platform.FlowStateArtifact, error)
+	Discard(platform.FlowStateArtifact)
 }
 
 // Listener is a platform app delivered other apps' events as owned work, with

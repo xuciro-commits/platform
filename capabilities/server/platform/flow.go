@@ -42,6 +42,9 @@ type Flow struct {
 type Continuous struct {
 	// Source names the connector or protocol the batches arrive from.
 	Source string
+	// Entry is the retained Compute step that receives one ready event-time
+	// window. Empty keeps the original fold-only delivery contract.
+	Entry string `json:"entry,omitempty"`
 	// Batch is the most signals one batch may carry; 0 keeps the flow's own
 	// budget. A batch over it is refused, never trimmed.
 	Batch int
@@ -50,6 +53,9 @@ type Continuous struct {
 	// FrameBytes bounds the complete accepted frame, including dead letters
 	// and its cursor. Zero retains the historical declaration's budget.
 	FrameBytes int
+	// CheckpointEvery retains a full sealed checkpoint after this many accepted
+	// source batches; zero disables periodic checkpoint snapshots.
+	CheckpointEvery int `json:"checkpointEvery,omitempty"`
 	// Window declares the native event-time profile. Nil preserves the older
 	// scalar fold; a published streaming graph explicitly freezes this rule.
 	Window *StreamWindow
@@ -58,6 +64,9 @@ type Continuous struct {
 	Intake *StreamIntake `json:"Intake,omitempty"`
 	// DeadLetter keeps signals that could not be folded, with the reason.
 	DeadLetter bool
+	// DeadLetterMaxRecords and DeadLetterTTLMs bound the retained replay view.
+	DeadLetterMaxRecords int `json:"deadLetterMaxRecords,omitempty"`
+	DeadLetterTTLMs      int `json:"deadLetterTtlMs,omitempty"`
 }
 
 type StreamIntake struct {
@@ -66,17 +75,20 @@ type StreamIntake struct {
 	Partition    []string `json:"partition"`
 	EventTime    string   `json:"eventTime"`
 	Value        string   `json:"value"`
+	Offset       string   `json:"offset,omitempty" enum:"latest,earliest"`
 }
 
 // StreamWindow is a bounded state rule owned by the existing Flow frame.
 // Millisecond settings retain the source graph's timing contract.
 type StreamWindow struct {
-	Node        string `json:"node"`
-	WindowMS    int    `json:"windowMs"`
-	SlideMS     int    `json:"slideMs"`
+	Node     string `json:"node"`
+	WindowMS int    `json:"windowMs"`
+	SlideMS  int    `json:"slideMs"`
+	// WatermarkMS is the event-time grace held back from the observed
+	// high-water mark before a slide closes and expired rows are evicted.
 	WatermarkMS int    `json:"watermarkMs"`
 	MaxRecords  int    `json:"maxRecords"`
-	LateEvents  string `json:"lateEvents"` // sideOutput, accept or reject
+	LateEvents  string `json:"lateEvents"` // sideOutput, accept or reject beyond the retained window and grace
 }
 
 // FlowStateArtifact identifies a frozen frame in the original file store.
@@ -99,8 +111,13 @@ type Start struct {
 	// Manual is a typed, explicitly submitted entry point. It shares the
 	// same instance, tokens and accepted-result path as state/event starts.
 	Manual bool
-	On     []string
-	Begin  func(c Caller, e Event) (key string, data any, ok bool)
+	// Continuous starts one stable, long-lived instance for a controlled stream.
+	// Enabled binds that start to its current published owner; ending the instance
+	// is durable and does not silently create a replacement.
+	Continuous bool
+	Enabled    func(Caller) bool
+	On         []string
+	Begin      func(c Caller, e Event) (key string, data any, ok bool)
 	// Type and When start an instance the first time a decision brings a
 	// record of Type into a state When accepts, whichever record the decision
 	// named (ADR-0028 D8); its key is the record's ID. Either this or On.
@@ -109,9 +126,16 @@ type Start struct {
 	// Every starts an instance once per period (ADR-0057 E1, a tenant's
 	// scheduled automation): its key is the period's start time, so a tick
 	// never starts the same period twice. At least a minute. OnBehalf is the
-	// member its steps act as — the one who published the schedule.
+	// member its steps act as — the one who published the schedule or stream.
 	Every    time.Duration
 	OnBehalf string
+}
+
+// RetryPolicy is the bounded retry schedule of one retained step. Attempts is
+// the total number of tries, including the first; zero keeps the platform default.
+type RetryPolicy struct {
+	Attempts int
+	Backoff  time.Duration
 }
 
 // Step is one step: exactly one of Act, Wait, Ask, Call, All, Any or Agent.
@@ -120,6 +144,9 @@ type Start struct {
 type Step struct {
 	Name  string
 	Title string
+	// Retry overrides the Flow's default total attempts and exponential delay.
+	// Backoff is fixed between attempts when positive; zero uses the default.
+	Retry *RetryPolicy
 	Act   *Act
 	Wait  *Wait
 	Ask   *Ask

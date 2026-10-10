@@ -33,7 +33,9 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 	var input *operationInputArtifact
 	if p := d.operationInput; p != nil {
 		hash, _ := canonicalDigest(q)
-		if c.App != PlatformApp || c.ID != p.ref.Member || hash != p.requestHash {
+		platformOwner := c.App == PlatformApp && c.ID == p.ref.Member
+		flowOwner := c.Automation && c.App == "flow" && c.ID == "app:flow" && q.OnBehalf == p.ref.Member
+		if !platformOwner && !flowOwner || hash != p.requestHash {
 			d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared input belongs to another operation request")
 			return platform.OperationCall{}, d.failure
 		}

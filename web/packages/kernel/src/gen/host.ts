@@ -598,12 +598,16 @@ export type ContextView = {
 
 export type Continuous = {
   Source: string;
+  entry?: string;
   Batch: number;
   State: number;
   FrameBytes: number;
+  checkpointEvery?: number;
   Window: StreamWindow;
   Intake?: StreamIntake;
   DeadLetter: boolean;
+  deadLetterMaxRecords?: number;
+  deadLetterTtlMs?: number;
 };
 
 export type Contract = {
@@ -2245,6 +2249,8 @@ export type ProcessStep = {
   mode?: "all" | "any";
   timeoutSeconds?: number;
   untilSeconds?: number;
+  retryAttempts?: number;
+  retryBackoffMs?: number;
   flow?: string;
   flowVersion?: number;
 };
@@ -2890,6 +2896,7 @@ export type StreamIntake = {
   partition: string[];
   eventTime: string;
   value: string;
+  offset?: "latest" | "earliest";
 };
 
 export type StreamWindow = {
@@ -3041,6 +3048,7 @@ export type Token = {
   error?: string;
   parent?: number;
   frames?: Frame[];
+  input?: unknown;
   outputs?: Record<string, unknown>;
   operation?: string;
   loop?: LoopFrame;
