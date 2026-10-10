@@ -17,8 +17,9 @@ import { DataTable } from "../components/DataTable";
 import {ContentTabs} from "../layout/ContentTabs";
 import {pageUIManifest} from "@platform/kernel";
 import { PropertyList } from "../components/EntityCard";
-import { Tag } from "../components/StatusTag";
-import { columnsFor, defineEntity, type Entity } from "../fields/entity";
+import { Tag, type Tone } from "../components/StatusTag";
+import { columnsFor, defineEntity, valueOf, type Entity } from "../fields/entity";
+import { RecordKanban, type KanbanLane, type KanbanMove } from "./RecordKanban";
 import { checkbox, date, datetime, json, longText, markdown, multiSelect, number, singleSelect, tags, text, type FieldType } from "../fields/types";
 import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
@@ -234,14 +235,14 @@ export function measurable(info: EntityInfo): { value: string; label: string }[]
     .flatMap((f) => [{ value: `sum:${f.name}`, label: `${f.title} (sum)` }, { value: `avg:${f.name}`, label: `${f.title} (average)` }])];
 }
 
-type ListView = "list" | "pivot" | "chart";
+type ListView = "list" | "kanban" | "pivot" | "chart";
 /** What a list shows: kept by a member as a saved view (ADR-0019 D4). */
 export type ListState = {
   view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];
   group?: string; columns?: string; measure?: string; mark?: Mark;
 };
 
-export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet,columnPresentation,showSearch=true,tablePresentation,cards,selectedId,onNavigate }: {
+export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet,columnPresentation,showSearch=true,tablePresentation,cards,selectedId,onNavigate, kanban, onMove, moves }: {
   tablePresentation?:Api.PageTablePresentation;onNavigate?:(record:EntityRecord)=>void;cards?:{layout:"grid"|"list";labelField:string};selectedId?:string;columnPresentation?:RecordColumnPresentation[];showSearch?:boolean;
   selectionSet?:RecordSelectionPort;
   inlineEdit?:RecordEditPort;
@@ -255,6 +256,9 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   domain?: unknown[];
   /** Where the list starts, such as a saved view; `onSave` offers to save where it is. */
   initial?: ListState; onSave?: (state: ListState) => void;
+  kanban?: { lanes?: KanbanLane[]; stateField?: string; labelField?: string; properties?: (record: EntityRecord) => [string, ReactNode][] };
+  onMove?: (record: EntityRecord, schema: string, destination?: string) => void;
+  moves?: KanbanMove[];
 }) {
   const densityIdentity=JSON.stringify([source.scope,type,tablePresentation]),[densityChoice,setDensityChoice]=useState<{identity:string;density:string}>();
   const density=densityChoice?.identity===densityIdentity?densityChoice.density:tablePresentation?.density??"compact",showToolbar=tablePresentation?.showToolbar!==false;
@@ -281,6 +285,38 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const [measure, setMeasure] = useState(initial.measure ?? "count");
   const [mark, setMark] = useState<Mark>(initial.mark ?? "bar");
   const rows = group || (info?.lifecycle?.field ?? groups[0]?.value ?? "");
+  const lifecycle = info?.lifecycle;
+  const kanbanStateField = kanban?.stateField ?? lifecycle?.field ?? info?.fields.find((f) => (f.name === "stage" || f.name === "state" || f.type === "choice") && (f.choices?.length ?? 0) > 0)?.name;
+  const choiceField = kanbanStateField ? info?.fields.find((f) => f.name === kanbanStateField) : undefined;
+  const kanbanLanes: KanbanLane[] = useMemo(() => {
+    if (kanban?.lanes?.length) return kanban.lanes;
+    if (lifecycle?.states?.length && lifecycle.field === kanbanStateField) {
+      return lifecycle.states.map((s) => ({ name: s.name, title: s.title, tone: s.tone as Tone }));
+    }
+    if (choiceField?.choices?.length) {
+      return choiceField.choices.map((c, i) => ({ name: c, title: choiceField.choiceTitles?.[i] ?? c }));
+    }
+    return [];
+  }, [kanban?.lanes, lifecycle, choiceField, kanbanStateField]);
+  const kanbanMoves: KanbanMove[] = useMemo(() => {
+    if (moves?.length) return moves;
+    if (lifecycle?.transitions?.length) {
+      return lifecycle.transitions.flatMap((t) => t.to.map((to) => ({
+        schema: t.schema,
+        title: t.title,
+        from: t.from,
+        to,
+        input: t.toInput,
+      })));
+    }
+    return [];
+  }, [moves, lifecycle]);
+  const aggregate = window ? undefined : source.aggregate;
+  const availableViews = useMemo<ListView[]>(() => [
+    "list",
+    ...(kanbanLanes.length > 0 && kanbanStateField ? ["kanban" as const] : []),
+    ...(aggregate && rows ? ["pivot" as const, "chart" as const] : []),
+  ], [kanbanLanes.length, kanbanStateField, aggregate, rows]);
   const fixedKey = JSON.stringify(fixed ?? []);
   useEffect(() => { setOffset(0); }, [fixedKey, type]);
   const domain = useMemo(() => [...JSON.parse(fixedKey), ...(drilled ?? [])], [fixedKey, drilled]);
@@ -295,7 +331,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const sourceIdentity = source.scope ?? source;
   const visible = useViewVisible();
   useEffect(() => {
-    if (!visible || window || !info || view !== "list") return;
+    if (!visible || window || !info || (view !== "list" && view !== "kanban")) return;
     let current = true;
     const source = from.current;
     setError(undefined);
@@ -314,7 +350,6 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const columnsOf = presentRecordColumns([{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
     ...columnsFor(entity,[...new Set(fields??listed(entity))].filter(name=>listed(entity).includes(name))).map((c) => ({ ...c, enableSorting: false }))],entity,info,columnPresentation);
   const total = page?.total ?? 0;
-  const aggregate = window ? undefined : source.aggregate;
   const query = { domain, search, archived };
   const measureEncoding = measure === "count" ? { type: "quantitative" as const, aggregate: "count" as const }
     : { type: "quantitative" as const, aggregate: measure.split(":")[0] as "sum" | "avg", field: measure.split(":")[1] };
@@ -330,7 +365,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
         {tablePresentation&&<Select aria-label={t("Record density")} value={density} onChange={e=>setDensityChoice({identity:densityIdentity,density:e.target.value})}><option value="compact">{t("Compact")}</option><option value="normal">{t("Comfortable")}</option></Select>}
         {showSearch&&<Input aria-label={t("Search")} placeholder={t("Search {things}", { things: info.plural.toLowerCase() })} value={search} disabled={window?.searchLocked} className="w-56"
           onChange={(e) => { if(window)window.onChange({search:e.target.value,offset:0});else {setSearch(e.target.value);setOffset(0);} }} />}
-        {view === "list" ? (
+        {(view === "list" || view === "kanban") ? (
           <Select aria-label={t("Sort")} value={sort} disabled={window?.sortLocked} className="w-48" onChange={(e) => { if(window)window.onChange({sort:[e.target.value],offset:0});else {setSort(e.target.value);setOffset(0);} }}>
             {[["-changed", t("Recently changed")], ["id", t("ID")], ...info.fields.filter((f) => f.type !== "references" && f.type !== "tags").flatMap((f) =>
               [[f.name, `${f.title} ↑`], [`-${f.name}`, `${f.title} ↓`]])].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -354,21 +389,23 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
             </Select>
           )}
         </>}
-        {!window && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />archived</label>}
+        {!window && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />{t("Archived")}</label>}
         {drilled && <Button size="sm" variant="ghost" onClick={() => { setDrilled(undefined); setOffset(0); }}>{t("Clear drill-down ×")}</Button>}
         {cards&&<span role="group" aria-label={t("Record layout")} className="flex gap-1">{(["list","grid"] as const).map(layout=><Button key={layout} size="sm" variant="ghost" aria-pressed={cardLayout===layout} onClick={()=>setCardChoice({identity:cardIdentity,layout})}>{t(layout==="grid"?"Grid":"List")}</Button>)}</span>}
         {toolbar}
         {onSave && <Button size="sm" variant="ghost" onClick={() => onSave({ view, search, sort, archived, drilled, group: rows, columns, measure, mark })}>{t("Save view…")}</Button>}
-        {aggregate && (
+        {availableViews.length > 1 && (
           <span role="group" aria-label={t("View")} className="flex rounded-md border border-border">
-            {(["list", "pivot", "chart"] as const).map((v) => (
+            {availableViews.map((v) => (
               <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}
-                className={`h-7 px-2 text-xs capitalize ${view === v ? "bg-row-selected font-medium" : "hover:bg-row-hover"}`}>{v}</button>
+                className={`h-7 px-2 text-xs capitalize ${view === v ? "bg-row-selected font-medium" : "hover:bg-row-hover"}`}>
+                {v === "list" ? t("List") : v === "kanban" ? t("Board") : v === "pivot" ? t("Pivot") : t("Chart")}
+              </button>
             ))}
           </span>
         )}
         </>}
-        {view === "list" && (
+        {(view === "list" || view === "kanban") && (
           <span className="ml-auto flex items-center gap-1 text-xs text-muted">
             {error ?? (total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : "none")}
             <Button size="sm" variant="ghost" aria-label={t("Previous page")} disabled={offset === 0} onClick={() => window ? window.onChange({offset:Math.max(0,offset-pageSize)}) : setOffset(Math.max(0, offset - pageSize))}><ChevronLeft /></Button>
@@ -379,6 +416,22 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
       {view === "list" && cards && (error?<p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>:!page?<p role="status" className="text-sm text-muted">{t("Loading…")}</p>:<RecordCards records={page.records} info={info} fields={fields} labelField={cards.labelField} layout={cardLayout} selected={selectedId} onSelect={onOpen} onNavigate={onNavigate}/>)}
       {view === "list" && !cards && (
         <EditableRecordGrid key={JSON.stringify([source.scope,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.scope,inlineEdit?.preview,domain,search,sort,offset,archived,error])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} rowHeight={density==="normal"?36:28} showToolbar={showToolbar} port={inlineEdit} selectionSet={selectionSet} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
+      )}
+      {view === "kanban" && kanbanLanes.length > 0 && kanbanStateField && (
+        error ? <p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>
+        : !page ? <p role="status" className="text-sm text-muted">{t("Loading…")}</p>
+        : <RecordKanban
+            records={page.records}
+            lanes={kanbanLanes}
+            stateField={kanbanStateField}
+            labelField={kanban?.labelField ?? cards?.labelField ?? (info.display !== "id" && info.display ? info.display : "title" in entity.fields ? "title" : "id")}
+            selected={selectedId}
+            onSelect={(r) => { if (r && onOpen) onOpen(r); }}
+            moves={kanbanMoves}
+            onMove={onMove}
+            properties={kanban?.properties ?? (r => (fields ?? listed(entity)).slice(0, 4).filter(k => k !== kanbanStateField && k !== (info.display ?? "id")).map(k => [entity.fields[k]?.label ?? k, entity.fields[k]?.display(valueOf(entity, k, r), r)]))}
+            label={info.plural ?? type}
+          />
       )}
       {view === "pivot" && aggregate && rows && (
         <Pivot source={{ aggregate, scope: source.scope, revision: source.revision, watchAggregate: source.watchAggregate }} type={type} query={query} rows={rows} columns={columns || undefined} measure={measure}

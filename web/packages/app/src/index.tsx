@@ -15,7 +15,7 @@ import "./i18n";
 import { apiErrorMessage, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
 import {
   Button, Chart, Dialog, FilePicker, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
-  type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
+  type ChartSpec, type EntityInfo, type EntityRecord, type KanbanMove, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 export {boundQueryDefinition} from "./runtime/query-plans";
@@ -260,15 +260,48 @@ export type SavedView = Api.SavedView;
  * A type's generated list. It offers every action that makes a new record of
  * the type (F-33); an app that offers one itself names it in `covers`.
  */
-export function Records({ type, description, actions, covers, saved }: { type: string; description?: string; actions?: ReactNode; covers?: string[]; saved?: SavedView }) {
-  const { source, decide, client, can } = useHost();
+export function Records({ type, description, actions, covers, saved, kanban }: { type: string; description?: string; actions?: ReactNode; covers?: string[]; saved?: SavedView; kanban?: Parameters<typeof RecordList>[0]["kanban"] }) {
+  const { source, decide, client, can, catalog } = useHost();
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const info = source.entity(type);
+  const transition = useTransition(type);
   const [saving, setSaving] = useState<ListState>();
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState(saved?.title ?? "");
   const initial = useMemo<ListState>(() => { try { return saved ? JSON.parse(saved.state) as ListState : {}; } catch { return {}; } }, [saved]);
+  const moves: KanbanMove[] = useMemo(() => {
+    const l = info?.lifecycle;
+    if (l?.transitions?.length) {
+      return l.transitions.flatMap((t) => t.to.map((to) => ({
+        schema: t.schema,
+        title: t.title,
+        from: t.from,
+        to,
+        input: t.toInput,
+      })));
+    }
+    const stateField = l?.field ?? info?.fields.find((f) => (f.name === "stage" || f.name === "state" || f.type === "choice") && (f.choices?.length ?? 0) > 0)?.name;
+    const choices = stateField ? info?.fields.find((f) => f.name === stateField)?.choices : undefined;
+    if (stateField && choices?.length) {
+      const initial = l?.initial ?? choices[0];
+      const from = choices.filter((c) => c === initial || c === "open" || c === "pending");
+      return catalog.filter((a) => a.target === type).flatMap((a) => {
+        const destField = a.payload.find((p) => p.type === "string" && p.choices?.some((c) => choices.includes(c)));
+        if (destField?.choices) {
+          return destField.choices.filter((c) => choices.includes(c)).map((to) => ({
+            schema: a.schema,
+            title: a.title,
+            from,
+            to,
+            input: destField.name,
+          }));
+        }
+        return [];
+      });
+    }
+    return [];
+  }, [info, catalog, type]);
   const save = async () => {
     if (busy) return;
     setBusy(true);
@@ -287,7 +320,21 @@ export function Records({ type, description, actions, covers, saved }: { type: s
       <PageHeader title={saved?.title ?? info?.plural ?? type} actions={<>{actions}<NewActions type={type} covers={covers} />
         <Transfer type={type} client={client} importable={can(`${type}.create`) || can(`${type}.edit`)} /></>}
         description={saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : description ?? info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see.")} />
-      <RecordList key={saved?.id ?? type} source={source} type={type} initial={initial} onSave={setSaving} onOpen={(r) => openRecord({ type, id: r.id })} />
+      <RecordList
+        key={saved?.id ?? type}
+        source={source}
+        type={type}
+        initial={initial}
+        onSave={setSaving}
+        onOpen={(r) => openRecord({ type, id: r.id })}
+        kanban={kanban}
+        moves={moves}
+        onMove={(record, schema, destination) => {
+          const move = moves.find((m) => m.schema === schema && (!destination || m.to === destination));
+          transition.take(schema, record, move?.input && destination ? { parameter: move.input, value: destination } : undefined);
+        }}
+      />
+      {transition.dialog}
       <Dialog open={!!saving} onOpenChange={(o) => !o && !busy && setSaving(undefined)} title={saved ? t("Save {name}", { name: saved.title }) : t("Save view")}>
         <Form className="grid gap-3" onSubmit={() => { if (title.trim() && !busy) return save(); }}>
           <Input aria-label={t("Name")} placeholder={t("Name of the view")} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} autoFocus />
