@@ -25,6 +25,7 @@ type stagedDecision struct {
 	sequences        map[string]int // private counters, copied before any decision code
 	allocated        map[string]int // counters actually consumed by this decision
 	sequenceBases    map[string]int
+	inputIssues      map[*kernel.Error][]platform.FieldIssue
 	failure          *kernel.Error
 	active           map[string]bool // reject cycles before re-entering an app/ledger lock
 	at               time.Time
@@ -50,6 +51,13 @@ type stagedDecision struct {
 	deliveries       []acceptedConnectorDelivery
 	operationAnswers map[string]platform.OperationResult
 	operationCancels map[string]bool
+}
+
+func (d *stagedDecision) InputRefused(err *kernel.Error, issues []platform.FieldIssue) {
+	if d.inputIssues == nil {
+		d.inputIssues = map[*kernel.Error][]platform.FieldIssue{}
+	}
+	d.inputIssues[err] = issues
 }
 
 var _ platform.Runtime = (*stagedDecision)(nil)
@@ -223,8 +231,8 @@ func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platfo
 	d.requests = append(d.requests, request{Request: q, caller: c,
 		record: proto.Clone(r).(*pb.ChangeRecord), n: n})
 }
-func (d *stagedDecision) Query(c platform.Caller, protocol, read string) ([]platform.ProviderResult, *kernel.Error) {
-	return d.tenant.query(c, protocol, read)
+func (d *stagedDecision) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
+	return d.tenant.query(c, protocol, read, provider...)
 }
 func (d *stagedDecision) Setting(c platform.Caller, name string) string {
 	return d.tenant.setting(c, name)
@@ -362,4 +370,8 @@ func (d *stagedDecision) Next(c platform.Caller, rec *pb.ChangeRecord, name stri
 	d.sequences[key]++
 	d.allocated[key] = d.sequences[key]
 	return s.Format(date.Year(), d.sequences[key]), nil
+}
+
+func (d *stagedDecision) BoundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {
+	return d.tenant.boundProvider(c, protocol)
 }

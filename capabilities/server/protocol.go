@@ -210,7 +210,10 @@ func (t *Tenant) answer(q request, now time.Time) {
 }
 
 // query reads a protocol read from every provider, the bound one first (Caller.Query).
-func (t *Tenant) query(c platform.Caller, protocol, read string) ([]platform.ProviderResult, *kernel.Error) {
+func (t *Tenant) query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
+	if len(provider) > 1 {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
 	if !t.consumes(c, protocol) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
@@ -221,8 +224,15 @@ func (t *Tenant) query(c platform.Caller, protocol, read string) ([]platform.Pro
 	}
 	var out []platform.ProviderResult
 	for _, b := range all {
+		if len(provider) > 0 && b.provider.Manifest().ID != provider[0] {
+			continue
+		}
 		called := platform.RouteCaller(c, b.provider.Manifest().ID)
-		result, err := b.provider.Read(called, b.provision.Reads[read])
+		name, ok := b.provision.Reads[read]
+		if !ok || !slices.Contains(b.provision.Protocol.Reads, read) {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		result, err := b.provider.Read(called, name)
 		if err != nil {
 			return nil, err
 		}
@@ -369,4 +379,14 @@ func (t *Tenant) Protocols() []ProtocolInfo {
 		out = append(out, *byID[id])
 	}
 	return out
+}
+
+func (t *Tenant) boundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {
+	if !t.consumes(c, protocol) {
+		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	if b, ok := t.resolve(protocol); ok {
+		return b.provider.Manifest().ID, nil
+	}
+	return "", nil
 }

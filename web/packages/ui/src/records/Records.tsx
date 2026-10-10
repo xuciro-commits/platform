@@ -2,6 +2,7 @@
 // host (`GET /v1/entities`) becomes a kit entity, a list page with server-side
 // search, sort and paging, a record page (fields, related records, history) and
 // generated forms. Components take a RecordSource, so the kit knows no client.
+import {DateTimeInput} from "../components/DateTimeInput";
 import { ChevronLeft, ChevronRight, History as HistoryIcon, Printer } from "lucide-react";
 import { Barcode } from "./barcode";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -117,7 +118,7 @@ export function entityFrom(info: EntityInfo, options: Options = {}, source?: Rec
 function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source?: RecordSource): Record<string, FieldType<any, EntityRecord>> {
   const fields: Record<string, FieldType<any, EntityRecord>> = {};
   for (const f of infos) {
-    const common = { label: f.title, help: f.help, required: f.required, readOnly: f.readOnly, when: f.when };
+    const common = { input:{name:f.name,type:f.type==="integer"?"integer":f.type==="decimal"?"number":f.type==="date"||f.type==="datetime"||f.type==="boolean"?f.type:"string",required:f.required,description:f.title,constraints:f.constraints,range:f.range,group:f.group}, label: f.title, help: f.help, required: f.required, readOnly: f.readOnly, when: f.when };
     fields[f.name] = (() => {
       switch (f.type) {
         case "json": return json(common);
@@ -129,7 +130,7 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
         case "decimal": return number({ ...common, decimals: 2 });
         case "money": return money(common);
         case "date": return date(common);
-        case "datetime": return datetime(common);
+        case "datetime": return f.constraints?{...datetime(common),editor:({value,onChange})=><DateTimeInput value={value??""} title={f.title} offset="Z" onChange={onChange}/>} : datetime(common);
         case "boolean": return checkbox(common);
         case "choice": return info.lifecycle?.field === f.name ? lifecycleField(common, info.lifecycle)
           : singleSelect({ ...common, options: (f.choices ?? []).map((c, i) => ({ value: c, label: f.choiceTitles?.[i] ?? c })) });

@@ -1641,5 +1641,21 @@
   "A reusable record query over a published object or interface; draft edits do not change published bindings.": "对已发布对象或接口的可复用记录查询；草稿编辑不会改变发布绑定。",
   "Interface reads use common-field conditions, search and sorting": "接口读取使用共同字段条件、搜索和排序",
   "offset and limit are non-negative": "offset 和 limit 必须为非负数",
-  "A published query implementation is unavailable": "已发布查询的某个实现对象不可用"
+  "A published query implementation is unavailable": "已发布查询的某个实现对象不可用",
+  "Choose a readable listed value.": "请选择有权读取的列表值。",
+  "Correct the highlighted fields.": "请修正标注的字段。",
+  "Enter a value.": "请输入一个值。",
+  "Enter a valid value.": "请输入有效的值。",
+  "Choose a listed value.": "请从列表中选择。",
+  "Use at least {count} characters.": "请至少输入 {count} 个字符。",
+  "Use at most {count} characters.": "请最多输入 {count} 个字符。",
+  "Value must be at least {value}.": "值必须至少为 {value}。",
+  "Value must be greater than {value}.": "值必须大于 {value}。",
+  "Value must be at most {value}.": "值必须不超过 {value}。",
+  "Value must be less than {value}.": "值必须小于 {value}。",
+  "Value must be before {field}.": "值必须早于 {field}。",
+  "Value must be after {field}.": "值必须晚于 {field}。",
+  "Value must be before or equal to {field}.": "值必须早于或等于 {field}。",
+  "Value must be after or equal to {field}.": "值必须晚于或等于 {field}。",
+  "The read does not exist": "该读取不存在"
 }

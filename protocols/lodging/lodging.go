@@ -54,3 +54,18 @@ func Protocol() platform.Protocol {
 			{Name: "confirmed", Title: "Hold confirmed"}, {Name: "released", Title: "Hold released"}},
 	}
 }
+
+// RoomTypes is a versioned directory alongside booking/1; hourly units are
+// explicit and the original booking action contract keeps its meaning.
+const RoomTypes = "lodging.room-types/1"
+
+func RoomTypeProtocol() platform.Protocol {
+	return platform.Protocol{Name: "lodging.room-types", Version: 1, Reads: []string{"room-types"}}
+}
+
+// RoomType is the bounded directory read shape. Unit is night or hour.
+type RoomType struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Unit string `json:"unit"`
+}

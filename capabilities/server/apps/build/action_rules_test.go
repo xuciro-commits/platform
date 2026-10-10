@@ -54,7 +54,7 @@ func TestOriginalReferenceInputsAndUTF16MinimumHaveBoundedDeclarations(t *testin
 		t.Fatal(err)
 	}
 	descriptor := lifecycle(o, []string{User}, nil, lookup)
-	if descriptor.Transitions[0].Payload[0].Ref != "build.operator" {
+	if descriptor.Transitions[0].Payload[0].Ref != "build.operator" || descriptor.Transitions[0].Payload[1].Constraints == nil || *descriptor.Transitions[0].Payload[1].Constraints.MinLength != min {
 		t.Fatal("reference became an ordinary text parameter")
 	}
 	for _, input := range []struct {

@@ -46,8 +46,8 @@ func (r runtime) Request(c platform.Caller, rec *pb.ChangeRecord, q platform.Req
 	r.t.requests = append(r.t.requests, request{Request: q, caller: c, record: rec, n: n})
 }
 
-func (r runtime) Query(c platform.Caller, protocol, read string) ([]platform.ProviderResult, *kernel.Error) {
-	return r.t.query(c, protocol, read)
+func (r runtime) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
+	return r.t.query(c, protocol, read, provider...)
 }
 
 func (r runtime) Notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
@@ -120,4 +120,8 @@ func (t *Tenant) closeTask(c platform.Caller, r *pb.ChangeRecord, id string) {
 
 func (r runtime) Readable(c platform.Caller, ref string) bool {
 	return r.t.Readable(c.Member, ref, time.Now())
+}
+
+func (r runtime) BoundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {
+	return r.t.boundProvider(c, protocol)
 }

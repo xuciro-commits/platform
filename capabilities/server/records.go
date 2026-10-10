@@ -500,19 +500,57 @@ func (s *recordStore) check(c platform.Caller, entity any, now time.Time) *kerne
 		}
 		return cv.String()
 	}
+	// Check the resulting record too: a partial edit must not bypass a
+	// declared relationship by omitting its unchanged endpoint.
+	if !c.Replaying && slices.ContainsFunc(et.info.Fields, func(f platform.FieldInfo) bool { return f.Constraints != nil }) {
+		raw, marshalErr := json.Marshal(entity)
+		if marshalErr != nil {
+			return invalid
+		}
+		var values map[string]any
+		if json.Unmarshal(raw, &values) != nil {
+			return invalid
+		}
+		fields := []platform.Field{}
+		for _, f := range et.info.Fields {
+			if f.When != nil && !f.Active(stringOf) {
+				continue
+			}
+			// omitempty is a transport detail; a stored zero or false is a value.
+			if _, present := values[f.Name]; !present {
+				raw, err := json.Marshal(v.FieldByIndex(f.Index).Interface())
+				if err != nil {
+					return invalid
+				}
+				var value any
+				if json.Unmarshal(raw, &value) != nil {
+					return invalid
+				}
+				values[f.Name] = value
+			}
+			typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime"}[f.Type]
+			if typ == "" {
+				typ = "string"
+			}
+			fields = append(fields, platform.Field{Name: f.Name, Type: typ, Required: f.Required, Description: f.Title, Constraints: f.Constraints, Choices: f.Choices})
+		}
+		if issues := platform.InputIssues(fields, values); len(issues) > 0 {
+			return c.RefuseFields(issues)
+		}
+	}
 	for _, f := range et.info.Fields {
 		fv := v.FieldByIndex(f.Index)
 		if f.When != nil {
 			on, _ := et.info.Field(f.When.Field)
 			switch active := f.Active(stringOf); {
-			case active && f.Required && fv.IsZero():
+			case active && f.Required && f.Constraints == nil && fv.IsZero():
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} is required when {condition} is {values}", f.Title, on.Title, strings.Join(f.When.In, ", "))
 			case !active && !fv.IsZero():
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} applies only when {condition} is {values}", f.Title, on.Title, strings.Join(f.When.In, ", "))
 			case !active:
 				continue
 			}
-		} else if f.Required && fv.IsZero() {
+		} else if f.Required && f.Constraints == nil && fv.IsZero() {
 			return invalid
 		}
 		if fv.Kind() == reflect.Pointer {

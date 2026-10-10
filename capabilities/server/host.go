@@ -277,7 +277,18 @@ func (t *Tenant) caller(m platform.Member, app platform.App, replaying bool) pla
 func unknown() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA} }
 
 // Submit routes a submission to the app declaring its action and records it when accepted.
-func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, err *kernel.Error) {
+func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return t.submit(m, s, now, nil)
+}
+
+// submitDiagnosed captures one invocation, including its original durable refusal.
+func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
+	var issues []platform.FieldIssue
+	record, err := t.submit(m, s, now, func(_ *kernel.Error, found []platform.FieldIssue) { issues = found })
+	return record, err, issues
+}
+
+func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, report func(*kernel.Error, []platform.FieldIssue)) (record *pb.ChangeRecord, err *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
@@ -298,12 +309,32 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 	if err = t.delegatedBound(m, s); err != nil {
 		return nil, err
 	}
+	if prior, ok := t.committed.refusals[s.GetAuthority()+"/"+s.GetIdempotencyKey()]; ok {
+		hash, _ := submissionHash(s)
+		if hash != prior.RequestHash || s.GetPrincipalId() != m.ID {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+		}
+		if report != nil {
+			report(&prior.Error, prior.Issues)
+		}
+		answer := prior.Error
+		return nil, &answer
+	}
 	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
 	if t.AcceptResult != nil {
 		if resultApp, ok := a.(platform.ResultApp); ok && t.acceptsGenerated(a, s) {
-			return t.submitAccepted(resultApp, m, s, now, false)
+			record, err = t.submitAccepted(resultApp, m, s, now, false)
+			if report != nil && err != nil {
+				if prior, ok := t.committed.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok {
+					hash, _ := submissionHash(s)
+					if prior.RequestHash == hash {
+						report(err, prior.Issues)
+					}
+				}
+			}
+			return record, err
 		}
 	}
 	if m.Agent && t.suspended(m.ID) { // an agent an administrator switched off (ADR-0029 D4)
@@ -313,7 +344,41 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil && t.owner["action:"+work.SchemaRequest] != nil {
 		return t.request(m, a, s, now)
 	}
-	record, err = a.Submit(t.caller(m, a, false), s, now)
+	var inputErr *kernel.Error
+	var issues []platform.FieldIssue
+	record, err = a.Submit(t.caller(m, a, false).WithInputDiagnostics(func(e *kernel.Error, found []platform.FieldIssue) { inputErr = e; issues = found }), s, now)
+	if err != nil && err == inputErr {
+		if report != nil {
+			report(err, issues)
+		}
+		if resultApp, ok := a.(platform.ResultApp); ok && t.AcceptResult != nil && s.GetTenantId() == t.ID && s.GetPrincipalId() == m.ID && s.GetAuthority() == a.Manifest().ID && s.GetIdempotencyKey() != "" {
+			raw, encodeErr := encodeRefusedResult(s, now, err, issues...)
+			if encodeErr != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
+			}
+			member, _ := json.Marshal(m)
+			hash, _ := submissionHash(s)
+			committed, commitErr := t.AcceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result", Principal: member, Body: raw, At: now}, s.GetIdempotencyKey(), hash)
+			if commitErr != nil {
+				if report != nil {
+					report(nil, nil)
+				}
+				if commitErr == errAcceptedConflict {
+					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+				}
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted result could not be committed")
+			}
+			record, err = t.finishCommittedResult(resultApp, m, hash, committed)
+			if report != nil {
+				if prior, ok := t.committed.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok && prior.RequestHash == hash {
+					report(err, prior.Issues)
+				} else {
+					report(nil, nil)
+				}
+			}
+			return record, err
+		}
+	}
 	if err == nil {
 		t.journal(a, m, s, now)
 	}
@@ -430,7 +495,7 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 	var raw []byte
 	if refusal != nil {
 		refusal = explained(refusal, a, s.GetSchema().GetName(), target(s))
-		raw, err = encodeRefusedResult(s, now, refusal)
+		raw, err = encodeRefusedResult(s, now, refusal, draft.inputIssues[refusal]...)
 	} else {
 		selected, explicit := a.(platform.AcceptedActionApp)
 		schema := s.GetSchema().GetName()

@@ -262,13 +262,10 @@ var statuses = map[pb.ErrorCode]int{
 
 // Reply writes {"record": …}, {"ok": true} or {"error": {"code": …}}; clients map
 // the code to outbox events (K5 A8), never the HTTP status.
-func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error) {
+func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error, issues ...platform.FieldIssue) {
 	switch {
 	case err != nil:
-		body := map[string]string{"code": err.Error()}
-		if err.Message != "" {
-			body["message"] = err.Message
-		}
+		body := ErrorBody{Code: err.Error(), Message: err.Message, Issues: issues}
 		status := statuses[err.Code]
 		if status == 0 {
 			status = http.StatusInternalServerError

@@ -147,7 +147,8 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
       <Card className="grid gap-2 p-3">
         <h3 className="text-sm font-semibold">{action.title}</h3>
         {action.description && <p className="text-sm text-muted">{action.description}</p>}
-        <FormPreview inputs={inputs} />
+        <div className="flex flex-wrap gap-1">{inputs.map((input,at)=><Button key={input.name} size="sm" onClick={()=>setPick({kind:"parameter",at})}>{input.title}</Button>)}</div>
+        <FormPreview key={JSON.stringify(inputs)} inputs={inputs} />
         {conditions.length > 0 && <ul className="grid gap-1 text-xs text-muted">{conditions.map((c, i) => <li key={i}>{c.message || `${c.field} ${c.operator} ${c.value ?? c.valueField ?? ""}`}</li>)}</ul>}
         <Button variant="primary" size="sm" className="w-fit" disabled>{action.title}</Button>
       </Card>
@@ -191,7 +192,7 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
 
   const inspector = action && pick ? <div className="p-2">
     {pick.kind === "parameter" && inputs[pick.at] && <RowCard title={t("Parameter")} onRemove={() => { patch({ inputs: inputs.filter((_, i) => i !== pick.at) }); setPick(undefined); }}>
-      <ParameterEditor input={inputs[pick.at]!} entities={entities} onChange={(p) => patch({ inputs: inputs.map((x, i) => i === pick.at ? { ...x, ...p } : x) })} /></RowCard>}
+      <ParameterEditor input={inputs[pick.at]!} inputs={inputs} entities={entities} onChange={(p) => patch({ inputs: inputs.map((x, i) => i === pick.at ? { ...x, ...p } : x) })} /></RowCard>}
     {pick.kind === "rule" && sets[pick.at] && <RowCard title={t("Rule")} onRemove={() => { patch({ sets: sets.filter((_, i) => i !== pick.at) }); setPick(undefined); }}>
       <AssignmentEditor fields={process.fields} sources={sources} set={sets[pick.at]!} onChange={(p) => patch({ sets: sets.map((x, i) => i === pick.at ? { ...x, ...p } : x) })} /></RowCard>}
     {pick.kind === "criterion" && conditions[pick.at] && <RowCard title={t("Submission criterion")} onRemove={() => { patch({ conditions: conditions.filter((_, i) => i !== pick.at) }); setPick(undefined); }}>
@@ -236,19 +237,26 @@ function RowCard({ title, children, onRemove }: { title: string; children: React
 function FormPreview({ inputs }: { inputs: Input_[] }) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   return <PayloadFields preview values={values} onChange={setValues} fields={inputs.map((i) => ({
-    name: i.name, type: i.type === "integer" ? "integer" : i.type === "decimal" ? "number" : i.type === "date" ? "date" : i.type === "boolean" ? "boolean" : "string",
+    name: i.name, type: i.type === "integer" ? "integer" : i.type === "decimal" ? "number" : i.type === "date"||i.type === "datetime" ? i.type : i.type === "boolean" ? "boolean" : "string",
+    ref:i.ref,constraints:{...i.constraints,minLength:i.minLength??i.constraints?.minLength},range:i.range,group:i.group,
     required: i.required, description: i.title, choices: i.type === "choice" ? (i.choices ?? "").split(",").map((c) => c.trim()).filter(Boolean) : undefined,
   }))} />;
 }
 
-function ParameterEditor({ input, entities, onChange }: { input: Input_; entities: EntityInfo[]; onChange: (patch: Partial<Input_>) => void }) {
+function ParameterEditor({ input, inputs, entities, onChange }: { input: Input_; inputs:Input_[]; entities: EntityInfo[]; onChange: (patch: Partial<Input_>) => void }) {
   return <>
     <Label text={t("Label")}><Input value={input.title} onChange={(e) => onChange({ title: e.target.value })} /></Label>
     <Label text={t("Name")}><Input className="font-mono" value={input.name} onChange={(e) => onChange({ name: e.target.value })} /></Label>
-    <Label text={t("Type")}><Select value={input.type} onChange={(e) => onChange({ type: e.target.value, ref: undefined, choices: undefined, minLength: undefined })}>{inputTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
+    <Label text={t("Type")}><Select value={input.type} onChange={(e) => onChange({ type: e.target.value, ref: undefined, choices: undefined, minLength: undefined, constraints:undefined,range:undefined })}>{inputTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
     {input.type === "choice" && <Label text={t("Choices")}><Input placeholder="a, b, c" value={input.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
     {input.type === "reference" && <Label text={t("Reference object")}><Select value={input.ref ?? ""} onChange={(e) => onChange({ ref: e.target.value || undefined })}><option value="">{t("Choose an object")}</option>{entities.map((e) => <option key={e.type} value={e.type}>{e.title} · {e.type}</option>)}</Select></Label>}
     {["text", "longtext"].includes(input.type) && <Label text={t("Minimum length")}><Input type="number" min={0} max={4096} value={input.minLength ?? ""} onChange={(e) => onChange({ minLength: e.target.value === "" ? undefined : e.target.valueAsNumber })} /></Label>}
+    <Label text={t("Group")}><Input value={input.group??""} onChange={e=>onChange({group:e.target.value||undefined})}/></Label>
+    {["integer","decimal"].includes(input.type)&&(["min","max"] as const).map(bound=><Label key={bound} text={bound==="min"?t("Minimum"):t("Maximum")}><Input type="number" value={input.constraints?.[bound]??""} onChange={e=>onChange({constraints:{...input.constraints,[bound]:e.target.value===""?undefined:e.target.valueAsNumber}})}/><Checkbox checked={!!input.constraints?.[bound==="min"?"exclusiveMin":"exclusiveMax"]} onChange={exclusive=>onChange({constraints:{...input.constraints,[bound==="min"?"exclusiveMin":"exclusiveMax"]:exclusive}})}>{t("Exclusive bound")}</Checkbox></Label>)}
+    {["text","longtext"].includes(input.type)&&<Label text={t("Maximum length")}><Input type="number" min={0} max={4096} value={input.constraints?.maxLength??""} onChange={e=>onChange({constraints:{...input.constraints,maxLength:e.target.value===""?undefined:e.target.valueAsNumber}})}/></Label>}
+    {["date","datetime","integer","decimal"].includes(input.type)&&(["before","after"] as const).map(relation=><Label key={relation} text={relation==="before"?t("Before parameter"):t("After parameter")}><Select value={input.constraints?.[relation]??""} onChange={e=>onChange({constraints:{...input.constraints,[relation]:e.target.value||undefined}})}><option value="">—</option>{inputs.filter(other=>other.name!==input.name&&other.type===input.type).map(other=><option key={other.name} value={other.name}>{other.title}</option>)}</Select></Label>)}
+    {(input.constraints?.before||input.constraints?.after)&&<Checkbox checked={!!input.constraints.inclusive} onChange={inclusive=>onChange({constraints:{...input.constraints,inclusive}})}>{t("Allow equal endpoints")}</Checkbox>}
+    {input.type==="date"&&<Label text={t("Date range end")}><Select value={input.range?.end??""} onChange={e=>onChange({range:e.target.value?{end:e.target.value,inclusive:input.range?.inclusive}:undefined})}><option value="">—</option>{inputs.filter(other=>other.name!==input.name&&other.type==="date"&&!other.range).map(other=><option key={other.name} value={other.name}>{other.title}</option>)}</Select>{input.range&&<Checkbox checked={!!input.range.inclusive} onChange={inclusive=>onChange({range:{...input.range!,inclusive}})}>{t("Include end date")}</Checkbox>}</Label>}
     <Checkbox className="text-xs" checked={!!input.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
   </>;
 }

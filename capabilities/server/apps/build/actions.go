@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf16"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -90,13 +89,27 @@ type ApproverLevel struct {
 
 // Input is one value a person gives when taking an action.
 type Input struct {
-	Ref       string `json:"ref,omitempty" title:"Reference object"`
-	MinLength *int   `json:"minLength,omitempty" title:"Minimum length"`
-	Name      string `json:"name" field:"required" example:"to"`
-	Title     string `json:"title" field:"required" title:"Label" example:"Handed to"`
-	Type      string `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,boolean,choice,reference"`
-	Choices   string `json:"choices,omitempty" help:"For a choice: the values, comma-separated"`
-	Required  bool   `json:"required,omitempty"`
+	Constraints *platform.InputConstraints `json:"constraints,omitempty"`
+	Range       *platform.DateRange        `json:"range,omitempty"`
+	Group       string                     `json:"group,omitempty"`
+	Ref         string                     `json:"ref,omitempty" title:"Reference object"`
+	MinLength   *int                       `json:"minLength,omitempty" title:"Minimum length"`
+	Name        string                     `json:"name" field:"required" example:"to"`
+	Title       string                     `json:"title" field:"required" title:"Label" example:"Handed to"`
+	Type        string                     `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,datetime,boolean,choice,reference"`
+	Choices     string                     `json:"choices,omitempty" help:"For a choice: the values, comma-separated"`
+	Required    bool                       `json:"required,omitempty"`
+}
+
+func (in Input) field() platform.Field {
+	c := platform.InputConstraints{}
+	if in.Constraints != nil {
+		c = *in.Constraints
+	}
+	if in.MinLength != nil {
+		c.MinLength = in.MinLength
+	}
+	return platform.Field{Name: in.Name, Type: inputTypes[in.Type], Ref: in.Ref, Required: in.Required, Description: in.Title, Choices: choices(in.Choices), Constraints: &c, Range: in.Range, Group: in.Group}
 }
 
 // Set is a field of the record an action sets, from an input, a fixed value,
@@ -120,7 +133,7 @@ type Condition struct {
 // Operators are the comparisons a condition may make.
 var Operators = []string{"=", "!=", "<", "<=", ">", ">=", "empty", "not empty"}
 
-var inputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "boolean": "boolean", "choice": "string", "reference": "string"}
+var inputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string"}
 
 // checkProcess refuses states and actions people could not take: names that are
 // not names, an action from or to a state the object has not, an input or a
@@ -225,6 +238,13 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 				return fmt.Errorf("%s input minimum length is not supported", where)
 			}
 			inputs[in.Name] = in
+		}
+		declarations := make([]platform.Field, 0, len(a.Inputs))
+		for _, in := range a.Inputs {
+			declarations = append(declarations, in.field())
+		}
+		if err := platform.CheckInputs(declarations); err != nil {
+			return fmt.Errorf("%s: %w", where, err)
 		}
 		if a.ToInput != "" {
 			in := inputs[a.ToInput]
@@ -469,7 +489,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 		}
 		payload := []platform.Field{}
 		for _, in := range a.Inputs {
-			payload = append(payload, platform.Field{Name: in.Name, Type: inputTypes[in.Type], Ref: in.Ref, Required: in.Required, Description: in.Title, Choices: choices(in.Choices)})
+			payload = append(payload, in.field())
 		}
 		action := a
 		takers := slices.Clone(roles)
@@ -522,22 +542,14 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 	if len(raw) > 0 && json.Unmarshal(raw, &inputs) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} takes an object of inputs", a.Title)
 	}
-	for _, in := range a.Inputs {
-		if v, ok := inputs[in.Name]; in.Required && (!ok || v == nil || v == "") {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} needs {input}", a.Title, in.Title)
+	if !c.Replaying {
+		fields := make([]platform.Field, 0, len(a.Inputs))
+		for _, in := range a.Inputs {
+			fields = append(fields, in.field())
 		}
-		if in.MinLength != nil {
-			if text, ok := inputs[in.Name].(string); ok && text != "" {
-				units := 0
-				for _, r := range text {
-					units += utf16.RuneLen(r)
-				}
-				if units < *in.MinLength {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{input} is shorter than its required minimum", in.Title)
-				}
-			}
+		if issues := platform.InputIssues(fields, inputs); len(issues) > 0 {
+			return c.RefuseFields(issues)
 		}
-
 	}
 	v := reflect.ValueOf(record).Elem()
 	value := func(name string) (any, *kernel.Error) {

@@ -1,6 +1,6 @@
 # ADR-0096 平台统一输入：业务表单、动作参数与 Inspector 编辑
 
-状态：Accepted，A 块工程已实现（2026-10-09），负责人体验验收待走查。负责人已授权按规划执行并要求不增加范围、额外抽象或辅助代码；B–D 尚未实现。执行顺序归 [WorkQueue](../WorkQueue.md)。
+状态：Accepted，A–B 块工程已实现（2026-10-09），负责人体验验收待走查。负责人已授权按规划执行并要求不增加范围、额外抽象或辅助代码；C–D 尚未实现。执行顺序归 [WorkQueue](../WorkQueue.md)。
 
 ## 1. 当前软件是什么，要变成什么
 
@@ -221,4 +221,16 @@ A 块沿原文件交付，没有新表单框架、业务执行器、依赖或辅
 
 验证：`make check-web`（含 Catalog 与全部包类型检查）；现有 UI `components.test.tsx`/`fields.test.tsx` 共 22 项；`make e2e SPEC=routes` 4 项、`make e2e SPEC=workflow` 酒店/制造 2 项。仅扩展既有表单测试和这两条路线中的相关步骤：首次失焦校验、动作未知答复同 key 重试、后端拒绝保留原日期/房型、Flow 非法 JSON 切选中项后仍在且仍阻止校验/保存。没有新建测试框架或独立 spec。生成 Catalog 沿原工具再生成，条目数保持 139。
 
-边界：住宿日期区间/房型协议目录、minLength/范围与跨字段声明、宿主 typed 字段诊断与拒绝封套属于 B；全部 Inspector/治理/原生入口迁入属于 C–D。布局数字的视觉/切换手感、MES 实际业务拒绝和负责人原现场的消失根因尚未单独走查；自动路线不等于负责人体验验收。输入 buffer 未承诺跨文档删除/Undo 的完整原文恢复或整页/跨设备持久恢复。后续合并更新此节，不追加日志。
+B 块沿原声明、账本、RHF/Zod、协议与拒绝封套交付：
+
+- FieldInfo/Field 与 build.Input 投影有限 InputConstraints：安全整数、数值上下界及包含性、UTF-16 min/max length、日期/显式带偏移 datetime、同类型 before/after；字段的 group 与两条真实 date 路径的 range 仍属于原动作。原 minLength 字段保留其已发布定义格式，编译到同一约束；take 不再保留单独长度实现。声明检查拒绝不存在/类型不符的端点、重复区间终点、空范围和比较依赖循环。记录检查器同时检查修改后的完整记录，部分 edit 不能靠省略另一端绕过关系；未完成关系只在填写时等待两端。旧未声明约束的字段继续沿 owner 检查，未批量重写所有规则；replay 跳过新增输入约束。
+- 公共 RecordForm/GeneratedForm、PayloadFields（弹窗、inline、AI 及 Form 预览）消费这些声明；动作 Form 可选参数并在原 Inspector 配分组、区间及约束。原标准创建继承字段约束，特定动作投影到原字段；不建立 Form 实体、注册表、执行器或新依赖。关联/选项拒绝与有限约束拒绝均能定位顶层实际字段，修改只撤对应字段/依赖的 owner 错误。生成创建的拒绝原因只显示一次。
+- UI Kit DateRangeInput 提供单入口、双月/窄屏单月、连续区间、悬停/拖选与方向键/Enter；第一次选起点保留未完成端点，完成后两端一起写回，原文可直接修复。CRM 为 exclusive 日区间、cutoff 独立 before arrive；PMS 日住宿复用，选择按小时房型后保留原两个本地 datetime 输入及单位规则，不截去小时；HCM 保留包含最后一天的口径。MES 数量/SFC 数量边界与产品来源沿同一声明，库存、状态、签署及协议业务判断仍在 owner。
+- lodging.room-types/1 是有界 typed 目录，与 booking/1 并列；booking/1 原动作/历史含义不变。PMS 从原受权 RoomType 记录给出 id/name/night-or-hour；CRM 沿原受控 Query 读取当前 booking 提供方的目录，不导入 PMS。BoundProvider 只解析已声明协议绑定；Query 的可选 provider 只筛已有提供方，不接受 URL。目录最多读取 200 项；旧选中值保留并标不可用。只有当前提供方未接目录时显式人工来源，读取失败/撤权/空目录分别显示，失败不降级 ID 输入。
+- 实际 Reply 与生成 ErrorBody/SubmissionAnswer 使用同一 typed DTO；原 code/HTTP/outbox 状态保持。Caller/暂存决定捕获本次诊断，Entry 传回原字段。带诊断的持久拒绝用版本 2，issues 纳入摘要、数量/路径/文字有界；版本 1 原省略字段与摘要口径不变。已选择结果路径及原直接路径中无效果的输入拒绝均沿 AcceptResult 提交，保存失败不公开拒绝；同 key/同载荷重试读取封存答复，改变载荷仍冲突。未启用 AcceptResult 的测试/轻量宿主仅返回请求内诊断。内核 Error/Protobuf 未变。
+
+B 验证：make check；原 build 动作、FieldConditions、记录隔离（完整记录比较及 0/false）、API 类型/语言、持久拒绝测试；composition 中两个协议、CRM/CSM/ERP/HCM 和酒店/制造组合；原 PMS/MES owner、PMS K5/离线流程检查；原 UI components/fields/i18n 25 项。routes 4 项与 business-access 既有路线验证真实房型目录、数量/跨字段提前提示、跨月拖选、窄屏键盘、酒店晚数、HCM 包含终点及审批；未知答复/字段拒绝步骤用原拦截请求证明同 key/输入保留，直接 API 与新旧拒绝/摘要/恢复由 Go 测试证明。未新增独立 spec 或测试辅助框架。
+
+额外既有 web 路线暴露 integration-fabric 两行业的 Pipeline “Add step” 定位失败，未动其实现或测试；它不属于本块，不能称全浏览器集通过。负责人中英文外观/手感验收仍待走查；自动路线不等于体验认可。首版诊断只涵盖顶层字段，嵌套稳定行身份、完整 Problems 跳转和全部入口迁入仍归 C–D。目录的大规模搜索/分页及统一 datetime 区间未在本批引入。
+
+边界：全部 Inspector/治理/原生入口迁入属于 C–D。布局数字的视觉/切换手感、MES 实际业务拒绝和负责人原现场的消失根因尚未单独走查；自动路线不等于负责人体验验收。输入 buffer 未承诺跨文档删除/Undo 的完整原文恢复或整页/跨设备持久恢复。后续合并更新此节，不追加日志。

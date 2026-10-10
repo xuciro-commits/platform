@@ -8,7 +8,7 @@ import { t, type EntityInfo } from "@platform/ui";
 
 export type Field = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; formula?: string; when?: string; ref?: string; inverse?: string; read?: string[]; write?: string[] };
 export type State = { name: string; title: string; tone?: string; description?: string };
-export type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean;ref?:string;minLength?:number };
+export type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean;ref?:string;minLength?:number;constraints?:Api.InputConstraints;range?:Api.DateRange;group?:string };
 export type Set_ = { field: string; from: string };
 export type Condition = { field: string; operator: string; value?: string; valueField?: string; message: string;when?:Condition };
 export type ApproverLevel = { title: string; role: string; all?: boolean };
@@ -47,7 +47,7 @@ export const missingInterfaceFields = (fields: Field[], shape: { fields: { name:
 export type Chosen = { kind: "field" | "state" | "action" | "access"; at: number } | undefined;
 
 export const tones = ["info", "success", "warning", "danger", "neutral"];
-export const inputTypes = ["text", "longtext", "integer", "decimal", "date", "boolean", "choice", "reference"];
+export const inputTypes = ["text", "longtext", "integer", "decimal", "date", "datetime", "boolean", "choice", "reference"];
 export const fieldTypes = ["text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference"];
 export const operators = ["=", "!=", "<", "<=", ">", ">=", "empty", "not empty"];
 const valueFits = (kind: string, raw: string) => {

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:39b16e57a04a7bfd",
+  "revision": "sha256:3d25960bd58246ba",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1724,6 +1724,7 @@
       "source": "web/packages/ui/src/components/DateInput.tsx",
       "exports": [
         "DateInput",
+        "DateRangeInput",
         "validCivilDate"
       ],
       "example": "DateInputExample",
@@ -4747,6 +4748,16 @@
       "web/packages/build/src/workshop/editor.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutTree.tsx"
     ],
+    "ui/datetime-input": [
+      "web/packages/app/src/actions/actions.tsx",
+      "web/packages/app/src/exploration/observation-reader.ts",
+      "web/packages/app/src/widgets/DateInput.tsx",
+      "web/packages/build/src/workshop/editor.tsx"
+    ],
+    "ui/date-input": [
+      "web/packages/app/src/actions/actions.tsx",
+      "web/packages/app/src/widgets/DateInput.tsx"
+    ],
     "ui/button": [
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/automation/agents.tsx",
@@ -5153,6 +5164,23 @@
       "web/apps/workspace/src/session/Problems.tsx",
       "web/apps/workspace/src/shell/Home.tsx"
     ],
+    "ui/form": [
+      "web/packages/app/src/actions/actions.tsx",
+      "web/packages/app/src/automation/agents.tsx",
+      "web/packages/app/src/index.tsx",
+      "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/build/src/workshop/template-ui.tsx",
+      "web/packages/platform/src/account.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
+      "web/packages/platform/src/host.tsx",
+      "web/packages/platform/src/knowledge.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/packages/platform/src/permissions.tsx",
+      "web/packages/platform/src/processes.tsx",
+      "web/packages/platform/src/words.tsx",
+      "web/apps/pms-desk/src/App.tsx"
+    ],
     "ui/dialog": [
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/index.tsx",
@@ -5183,22 +5211,6 @@
       "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/RecordPicker.tsx",
       "web/packages/build/src/ontology/query.tsx"
-    ],
-    "ui/form": [
-      "web/packages/app/src/automation/agents.tsx",
-      "web/packages/app/src/index.tsx",
-      "web/packages/build/src/ontology/ModelWorkbench.tsx",
-      "web/packages/build/src/workshop/template-ui.tsx",
-      "web/packages/platform/src/account.tsx",
-      "web/packages/platform/src/ai.tsx",
-      "web/packages/platform/src/enterprise/index.tsx",
-      "web/packages/platform/src/host.tsx",
-      "web/packages/platform/src/knowledge.tsx",
-      "web/packages/platform/src/people.tsx",
-      "web/packages/platform/src/permissions.tsx",
-      "web/packages/platform/src/processes.tsx",
-      "web/packages/platform/src/words.tsx",
-      "web/apps/pms-desk/src/App.tsx"
     ],
     "ui/disclosure": [
       "web/packages/app/src/automation/agents.tsx",
@@ -5341,11 +5353,6 @@
       "web/packages/app/src/catalog.examples.tsx",
       "web/packages/app/src/widgets/Observation.tsx"
     ],
-    "ui/datetime-input": [
-      "web/packages/app/src/exploration/observation-reader.ts",
-      "web/packages/app/src/widgets/DateInput.tsx",
-      "web/packages/build/src/workshop/editor.tsx"
-    ],
     "ui/file-picker": [
       "web/packages/app/src/index.tsx"
     ],
@@ -5446,9 +5453,6 @@
     ],
     "ui/static-image": [
       "web/packages/app/src/widgets/ContextViews.tsx"
-    ],
-    "ui/date-input": [
-      "web/packages/app/src/widgets/DateInput.tsx"
     ],
     "ui/external-frame": [
       "web/packages/app/src/widgets/EmbeddedPage.tsx"
@@ -5797,6 +5801,7 @@
         "humanizeKernelError",
         "iconGlyphs",
         "iconGroups",
+        "inputIssues",
         "laneBands",
         "language",
         "languages",

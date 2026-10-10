@@ -631,6 +631,11 @@ export type CustomRole = {
   actions: string[];
 };
 
+export type DateRange = {
+  end: string;
+  inclusive?: boolean;
+};
+
 export type Definition = {
   contentVersion?: string;
   propertyType?: PropertyType;
@@ -815,6 +820,8 @@ export type Enumeration = {
 };
 
 export type ErrorBody = {
+  message?: string;
+  issues?: FieldIssue[];
   code: string;
   status?: number;
   detail?: string;
@@ -840,6 +847,10 @@ export type Field = {
   from?: string;
   key?: string;
   label?: string;
+  constraints?: InputConstraints;
+  range?: DateRange;
+  group?: string;
+  manual?: boolean;
 };
 
 export type FieldChange = {
@@ -854,6 +865,9 @@ export type FieldCondition = {
 };
 
 export type FieldInfo = {
+  constraints?: InputConstraints;
+  range?: DateRange;
+  group?: string;
   property?: AssetBinding;
   name: string;
   title: string;
@@ -876,6 +890,13 @@ export type FieldInfo = {
   example?: string;
   when?: FieldCondition;
   fields?: FieldInfo[];
+};
+
+export type FieldIssue = {
+  code: string;
+  message: string;
+  path: string[];
+  relatedPaths?: string[][];
 };
 
 export type FlowDefinition = {
@@ -1075,6 +1096,30 @@ export type InboxTask = {
   answers?: string[];
   answer?: string;
   answerTitles?: string[];
+};
+
+export type InputConstraints = {
+  min?: number;
+  max?: number;
+  exclusiveMin?: boolean;
+  exclusiveMax?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  before?: string;
+  after?: string;
+  inclusive?: boolean;
+  dateTime?: boolean;
+};
+
+export type InputOption = {
+  id: string;
+  name: string;
+  unit?: string;
+};
+
+export type InputOptions = {
+  manual?: boolean;
+  items: InputOption[];
 };
 
 export type InstalledPackage = {

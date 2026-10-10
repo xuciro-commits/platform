@@ -11,7 +11,7 @@ import { IconPicker, IconGlyph } from "./components/IconPicker";
 import { GroupedList } from "./components/GroupedList";
 import { z } from "zod";
 import {
-  AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, DateRangeInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, InterfaceRecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -446,7 +446,7 @@ export function IndexedChoicesExample(){const [value,setValue]=useState("1"),opt
 
 export function MultipleChoiceInputExample(){const [value,setValue]=useState(["Open"]);return <MultipleChoiceInput clearable value={value} options={["Open","In progress","Done"]} label="Status" title="Task status" onChange={setValue}/>;}
 
-export function DateInputExample(){const [value,setValue]=useState("2028-02-29");return <DateInput value={value} title="Business date" label="Date" onChange={setValue}/>;}
+export function DateInputExample(){const [value,setValue]=useState("2028-02-29");const [end,setEnd]=useState("2028-03-02");return <div className="grid gap-3"><DateInput value={value} title="Business date" label="Date" onChange={setValue}/><DateRangeInput start={value} end={end} startLabel="Arrival" endLabel="Departure" onChange={(start,end)=>{setValue(start);setEnd(end);}}/></div>;}
 
 export function DateTimeInputExample(){const [value,setValue]=useState("2028-02-29T08:30:45.123456789+08:00");return <DateTimeInput value={value} offset="Z" title="Business time" label="Date and time" onChange={setValue}/>;}
 

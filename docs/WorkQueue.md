@@ -12,7 +12,7 @@
 
 | 顺序 / 优先级 / 状态 | 批次与能力归属 | 可见结果 / 停止条件 | 依赖与适用检查 |
 |---|---|---|---|
-| 1 / P1 / 待执行 | [ADR-0096 §6 B](ADR/0096-unified-form-input-and-inspector-editing.md)：统一输入声明、日期区间与引用来源；UI / App / Build / 宿主及协议 owners | A 块共享表单校验/拒绝保留、原 outbox 同 key 重试及 Flow/Workshop 首批 raw buffer 已实现，证据与边界归 §9。下一整块只做 B：Field/build.Input 约束贯通、typed 拒绝、日期区间和版本化住宿目录，两行业复用；C–D 按同 ADR 后续迁入，不新增邻接功能或输入框架 | 复用 A 与原声明/发布/读取；owner/Web/选定浏览器检查，拒绝封套变化须恢复验证。负责人体验走查独立；main 代码更新后核对两 Docker 宿主 |
+| 1 / P1 / 待执行 | [ADR-0096 §6 C](ADR/0096-unified-form-input-and-inspector-editing.md)：构建者与企业 Inspector 迁入；UI / Build / 企业 owner | A–B 已实现，声明约束、区间、目录、typed 拒绝及恢复边界归 §9。下一整块只迁 C 的既有输入族：稳定 raw/诊断/基线与原保存门禁；D 后续，不新增框架或邻接功能 | 复用原 DraftSession/Problems/编辑器；按实际 owner/Web/选定路线验证，负责人手感走查独立；main 更新后核对两 Docker 宿主 |
 | 2 / P1 / 进行中 | ADR-0046 F5 / ADR-0047 §13：持续 Flow 方案 A 的实际执行链；Flow / Source / Compute owners | 从真实受控来源到原默认算子链的输入、窗口/迟到/overflow、聚合/滞回、动作与应用实例输出、版本化死信、停止与同版本续接闭合。状态超预算必须显式拒绝或按 overflow 处理，不能消费游标后丢状态；保持原规模配置、版本/主体与接受结果恢复语义 | 原 Flow 整批接受、事件时间窗口和原 FileStore 状态封存已有，测试证明原实例提交/重放/快照及权限/摘要边界，详见 §13.5；下一步接真实 Source、原七节点、worker 数据通道及制品生命周期，不建第二执行器。持久/worker 边界须运行对应部署验证 |
 
 

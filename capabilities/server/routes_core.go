@@ -53,8 +53,12 @@ func (h *Host) routesCore(rt *routes) {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}
-		record, err := t.Submit(m, sub, h.Now())
-		Reply(w, record, t.i18n.said(err, t.Language(m, r)))
+		record, err, issues := t.submitDiagnosed(m, sub, h.Now())
+		localized := append([]platform.FieldIssue(nil), issues...)
+		for i := range localized {
+			localized[i].Message = t.i18n.said(&kernel.Error{Message: localized[i].Message}, t.Language(m, r)).Message
+		}
+		Reply(w, record, t.i18n.said(err, t.Language(m, r)), localized...)
 	})
 	rt.handle(Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors; ADR-0078)", Answer: Explanation{},
 		Query: []Param{{"member", "the member to ask about"}, {"permission", "an action's schema, or <app>:read:<name>"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

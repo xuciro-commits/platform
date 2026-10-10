@@ -1,6 +1,7 @@
 // Field types (Airtable/Directus-style): one object decides how a value is shown,
 // edited, validated, sorted, filtered and searched. Domains declare entities with
 // them in typed code (entity.tsx); tables, forms, filters and cards follow.
+import type {Api} from "@platform/kernel";
 import { Check, Copy, ExternalLink, Paperclip, Star, X } from "lucide-react";
 import { useContext, type ReactNode } from "react";
 import { z } from "zod";
@@ -17,6 +18,7 @@ export type EditorProps<V> = { id?: string; value: V | undefined; onChange: (val
 export type Operator<V> = { id: string; label: string; needsArg: boolean; test: (value: V | undefined, arg: V | undefined) => boolean };
 
 export type FieldType<V = any, R = any> = {
+ input?: Api.Field;
   type: string;
   label: string;
   /** What the field holds, from its declaration (ADR-0023 D1): shown under the label of forms. */

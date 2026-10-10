@@ -130,10 +130,17 @@ func (m Member) Today(now time.Time) string { return now.In(m.Location()).Format
 // answer), as member "app:<id>"; its manifest is its grant.
 type Caller struct {
 	Member
-	App        string
-	Replaying  bool
-	Automation bool
-	rt         Runtime
+	App          string
+	Replaying    bool
+	Automation   bool
+	inputRefused func(*kernel.Error, []FieldIssue)
+	rt           Runtime
+}
+
+// WithInputDiagnostics observes only this call's refused input checks.
+func (c Caller) WithInputDiagnostics(report func(*kernel.Error, []FieldIssue)) Caller {
+	c.inputRefused = report
+	return c
 }
 
 // RolesHere are every role the member holds in the app being called.
@@ -253,7 +260,8 @@ type Runtime interface {
 	Publish(c Caller, record *pb.ChangeRecord)
 	Probe(c Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error
 	Request(c Caller, r *pb.ChangeRecord, q Request)
-	Query(c Caller, protocol, read string) ([]ProviderResult, *kernel.Error)
+	Query(c Caller, protocol, read string, provider ...string) ([]ProviderResult, *kernel.Error)
+	BoundProvider(c Caller, protocol string) (string, *kernel.Error)
 	Notify(c Caller, n Notification, now time.Time, to []Recipient) []string
 	Setting(c Caller, name string) string
 	Emit(c Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error)

@@ -94,9 +94,52 @@ type Field struct {
 	// from, when the values are not records here (an ERP's planned orders a
 	// plant reads through a protocol): Key is the item's value, Label what
 	// people read. Forms offer the list; the app checks the value (#129).
-	From  string `json:"from,omitempty"`
-	Key   string `json:"key,omitempty"`
-	Label string `json:"label,omitempty"`
+	From        string            `json:"from,omitempty"`
+	Key         string            `json:"key,omitempty"`
+	Label       string            `json:"label,omitempty"`
+	Constraints *InputConstraints `json:"constraints,omitempty"`
+	Range       *DateRange        `json:"range,omitempty"`
+	Group       string            `json:"group,omitempty"`
+	// Manual allows explicit unbound protocol sources, never read failures.
+	Manual bool `json:"manual,omitempty"`
+}
+
+// InputConstraints are pure input checks, applied after authorization (ADR-0096).
+type InputConstraints struct {
+	Min          *float64 `json:"min,omitempty"`
+	Max          *float64 `json:"max,omitempty"`
+	ExclusiveMin bool     `json:"exclusiveMin,omitempty"`
+	ExclusiveMax bool     `json:"exclusiveMax,omitempty"`
+	MinLength    *int     `json:"minLength,omitempty"`
+	MaxLength    *int     `json:"maxLength,omitempty"`
+	Before       string   `json:"before,omitempty"`
+	After        string   `json:"after,omitempty"`
+	Inclusive    bool     `json:"inclusive,omitempty"`
+	// DateTime retains the original lodging date-or-local-time input contract.
+	DateTime bool `json:"dateTime,omitempty"`
+}
+
+type DateRange struct {
+	End       string `json:"end"`
+	Inclusive bool   `json:"inclusive,omitempty"`
+}
+
+type FieldIssue struct {
+	Code         string     `json:"code"`
+	Message      string     `json:"message"`
+	Path         []string   `json:"path"`
+	RelatedPaths [][]string `json:"relatedPaths,omitempty"`
+}
+
+// InputOptions is a bounded app read; Manual is true only for an unbound source.
+type InputOptions struct {
+	Manual bool          `json:"manual,omitempty"`
+	Items  []InputOption `json:"items"`
+}
+type InputOption struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Unit string `json:"unit,omitempty"`
 }
 
 // Catalog holds a domain's actions and which capabilities are deactivated for a
@@ -136,6 +179,9 @@ func (c *Catalog) UsePolicies(policies func() []authz.Policy) {
 
 func NewCatalog(actions ...Action) *Catalog {
 	for i := range actions {
+		if err := CheckInputs(actions[i].Payload); err != nil {
+			panic(err)
+		}
 		actions[i].NeedsApproval = actions[i].Approval != nil
 	}
 	return &Catalog{actions: actions, disabled: map[string]bool{}}
@@ -159,6 +205,9 @@ func (c *Catalog) Add(actions ...Action) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, a := range actions {
+		if err := CheckInputs(a.Payload); err != nil {
+			panic(err)
+		}
 		a.NeedsApproval = a.Approval != nil
 		if i := slices.IndexFunc(c.actions, func(x Action) bool { return x.Schema == a.Schema }); i >= 0 {
 			c.actions[i] = a

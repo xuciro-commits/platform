@@ -100,3 +100,12 @@ test("a tags field takes words a person types and gives them back", () => {
   expect(onChange).toHaveBeenLastCalledWith([]);
   expect(free.text(["title", "stage"])).toBe("title stage");
 });
+
+test("declared bounds and date relationships share record validation",()=>{
+ const start={name:"arrive",type:"date",required:true,description:"Arrival",constraints:{},range:{end:"depart"}};
+ const end={name:"depart",type:"date",required:true,description:"Departure",constraints:{after:"arrive"}};
+ const entity=defineEntity({name:"stay",primary:"id",fields:{arrive:{...field.date({label:"Arrival",required:true}),input:start},depart:{...field.date({label:"Departure",required:true}),input:end},rooms:{...field.number({label:"Rooms",required:true}),input:{name:"rooms",type:"integer",required:true,description:"Rooms",constraints:{min:1,max:20}}}}});
+ const schema=recordSchema(entity);
+ expect(schema.safeParse({arrive:"2028-02-29",depart:"2028-03-01",rooms:1}).success).toBe(true);
+ for(const values of [{arrive:"2027-02-29",depart:"2028-03-01",rooms:1},{arrive:"2028-02-29",depart:"2028-02-29",rooms:1},{arrive:"2028-02-29",depart:"2028-03-01",rooms:1.5},{arrive:"2028-02-29",depart:"2028-03-01",rooms:21}])expect(schema.safeParse(values).success).toBe(false);
+});

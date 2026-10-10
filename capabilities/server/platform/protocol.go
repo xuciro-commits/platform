@@ -165,9 +165,17 @@ func Raw(v any) []byte {
 // Query reads a protocol read from every provider of the tenant, the bound one
 // first: switching the binding sends new calls elsewhere, but what the other
 // providers hold stays visible (#99). Only a consumer of the protocol may query it.
-func (c Caller) Query(protocol, read string) ([]ProviderResult, *kernel.Error) {
+func (c Caller) Query(protocol, read string, provider ...string) ([]ProviderResult, *kernel.Error) {
 	if c.rt == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	return c.rt.Query(c, protocol, read)
+	return c.rt.Query(c, protocol, read, provider...)
+}
+
+// BoundProvider identifies the selected provider without reading its records.
+func (c Caller) BoundProvider(protocol string) (string, *kernel.Error) {
+	if c.rt == nil {
+		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	return c.rt.BoundProvider(c, protocol)
 }

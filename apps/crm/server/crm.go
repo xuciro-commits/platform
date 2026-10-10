@@ -117,6 +117,7 @@ func Entities() []platform.Entity {
 
 // Actions is the CRM catalog (ADR-0008).
 func Actions() *platform.Catalog {
+	minimum, maximum := 1.0, 20.0
 	both := []string{string(Sales), string(Manager)}
 	return platform.NewCatalog(append(append(append(platform.EntityActions(Entities()[0]), platform.EntityActions(Entities()[1])...), adviceActions()...),
 		platform.Action{Schema: SchemaOpen, Target: OpportunityType, New: true, Capability: "opportunities", Title: "Open opportunity",
@@ -128,10 +129,10 @@ func Actions() *platform.Catalog {
 			Payload:     []platform.Field{{Name: "outcome", Type: "string", Required: true, Description: "won or lost", Choices: []string{"won", "lost"}}}, Roles: both},
 		platform.Action{Schema: SchemaPlan, Target: OpportunityType, Capability: "stays", Title: "Plan group stay",
 			Description: "Hold the rooms a group needs until a cutoff date: won, they are confirmed; lost, or past the cutoff, they are released. Refused at once when the provider cannot hold such a room; when it cannot hold them all, the block fails and the rooms held are given back.",
-			Payload: []platform.Field{{Name: "rooms", Type: "integer", Required: true, Description: "Rooms, 1 to 20"},
-				{Name: "roomType", Type: "string", Required: true, Description: "The provider's room type"},
-				{Name: "arrive", Type: "date", Required: true, Description: "First night"}, {Name: "depart", Type: "date", Required: true, Description: "Departure"},
-				{Name: "cutoff", Type: "date", Required: true, Description: "The last day the rooms are held"}},
+			Payload: []platform.Field{{Name: "rooms", Type: "integer", Required: true, Description: "Rooms, 1 to 20", Constraints: &platform.InputConstraints{Min: &minimum, Max: &maximum}},
+				{Name: "roomType", Type: "string", Required: true, Description: "The provider's room type", From: "lodging-room-types", Key: "id", Label: "name", Manual: true, Constraints: &platform.InputConstraints{}},
+				{Name: "arrive", Type: "date", Required: true, Description: "First night", Constraints: &platform.InputConstraints{}, Range: &platform.DateRange{End: "depart"}}, {Name: "depart", Type: "date", Required: true, Description: "Departure", Constraints: &platform.InputConstraints{After: "arrive"}},
+				{Name: "cutoff", Type: "date", Required: true, Description: "The last day the rooms are held", Constraints: &platform.InputConstraints{Before: "arrive"}}},
 			Roles: both},
 		platform.Action{Schema: SchemaBook, Target: OpportunityType, Capability: "stays", Title: "Book stay",
 			Description: "Book a stay for an opportunity with the tenant's lodging provider and link it to the opportunity; the provider decides with your role there.",
@@ -222,16 +223,6 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			if o.Block == "holding" || o.Block == "held" || o.Block == "confirming" || o.Block == "releasing" {
 				// one block at a time; a failed or released one may be planned again
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The opportunity's group rooms are {block}; one group block at a time", o.Block)
-			}
-			switch {
-			case p.Rooms < 1 || p.Rooms > 20:
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A group holds 1 to 20 rooms, not {rooms}", p.Rooms)
-			case strings.TrimSpace(p.RoomType) == "":
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Name the provider's room type")
-			case p.Depart <= p.Arrive:
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Departure {depart} must be after arrival {arrive}", p.Depart, p.Arrive)
-			case p.Cutoff == "" || p.Cutoff >= p.Arrive:
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The rooms are held until a day before arrival {arrive}", p.Arrive)
 			}
 			o.Rooms, o.RoomType, o.Arrive, o.Depart, o.Cutoff, o.Block = p.Rooms, p.RoomType, p.Arrive, p.Depart, p.Cutoff, "holding"
 			o.Plans++
@@ -425,21 +416,46 @@ func (c *CRM) Snapshot() (json.RawMessage, error) { return c.ledger.Snapshot() }
 func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) }
 
 func (c *CRM) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: ID, Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(), Queries: queries,
+	return platform.Manifest{Languages: languages, ID: ID, Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(), Queries: queries, Reads: []string{"lodging-room-types"},
 		Functions: []platform.AIFunction{platform.RecordAdviceFunction(OpportunityType, []string{"title", "stage"}, []string{string(Sales), string(Manager)})},
 		Pages: []platform.Page{{Name: "opportunities", Title: "Opportunities", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: OpportunityType},
 			Layout: "list-detail", ListFields: []string{"title", "account", "stage", "rooms"},
 			DetailFields: []string{"title", "account", "owner", "stage", "margin", "rooms", "roomType", "arrive", "depart", "cutoff", "block", "stays"},
 			Actions:      []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: SchemaOpen}, {App: ID, Kind: platform.AssetAction, Name: SchemaPlan}, {App: ID, Kind: platform.AssetAction, Name: SchemaClose}}}},
 		Agents:     []platform.Agent{Assistant()},
-		Consumes:   []platform.Consumption{{Protocol: lodging.ID, Optional: true}},
+		Consumes:   []platform.Consumption{{Protocol: lodging.ID, Optional: true}, {Protocol: lodging.RoomTypes, Optional: true}},
 		Subscribes: []string{platform.ProtocolAction(lodging.ID, "released")}}
 }
 
 // Read: the CRM serves its accounts and opportunities as records; an
 // opportunity's stays are the records linked to it (the platform's record page).
-func (c *CRM) Read(platform.Caller, string) (any, *kernel.Error) {
-	return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
+func (c *CRM) Read(who platform.Caller, name string) (any, *kernel.Error) {
+	if name != "lodging-room-types" {
+		return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
+	}
+	provider, err := who.BoundProvider(lodging.ID)
+	if err != nil {
+		return nil, err
+	}
+	if provider == "" {
+		return platform.InputOptions{Manual: true, Items: []platform.InputOption{}}, nil
+	}
+	results, err := who.Query(lodging.RoomTypes, "room-types", provider)
+	if err != nil {
+		return nil, err
+	}
+	options := platform.InputOptions{Items: []platform.InputOption{}, Manual: len(results) == 0}
+	// Caller.Query puts the bound provider first. A binding selects one catalog.
+	if len(results) > 0 {
+		types, ok := results[0].Result.([]lodging.RoomType)
+		if !ok {
+			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+		}
+		for _, typ := range types {
+			options.Items = append(options.Items, platform.InputOption{ID: typ.ID, Name: typ.Name, Unit: typ.Unit})
+		}
+	}
+	return options, nil
 }
 
 func (c *CRM) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {

@@ -1,7 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, useWatch, type DefaultValues, type FieldValues, type Path } from "react-hook-form";
+import type {Api} from "@platform/kernel";
 import type { z } from "zod";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import {DateRangeInput} from "./DateRangeInput";
 import { Button } from "../primitives/button";
 import { activeValues, recordSchema, type Entity } from "../fields/entity";
 import { applies, checkbox, date, datetime, longText, markdown, number, singleSelect, text, type FieldType } from "../fields/types";
@@ -50,26 +52,27 @@ export function EntityForm<S extends z.ZodType<FieldValues, FieldValues>>({ sche
 }
 
 /** A form for an entity's editable fields, validated by their field types. */
-export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLabel, onCancel, onBusy }: {
-  entity: Entity<R>; keys?: string[]; defaultValues?: Partial<R>; onSubmit: (values: Partial<R>) => void | boolean | Promise<void | boolean>;
+export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLabel, onCancel, onBusy, issues }: {
+  issues?:Api.FieldIssue[]; entity: Entity<R>; keys?: string[]; defaultValues?: Partial<R>; onSubmit: (values: Partial<R>) => void | boolean | Promise<void | boolean>;
   onBusy?: (busy: boolean) => void;
   submitLabel?: string; onCancel?: () => void;
 }) {
   const shown = (keys ?? Object.keys(entity.fields)).filter((k) => !entity.fields[k]!.readOnly && entity.fields[k]!.editor);
   // A conditional field (#138) that does not apply is kept in the form's state but not sent.
   return <FieldForm schema={recordSchema(entity, shown)} fields={shown.map((k) => ({ name: k, type: entity.fields[k]! }))}
-    defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} submitLabel={submitLabel} onCancel={onCancel} onBusy={onBusy} />;
+    defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} submitLabel={submitLabel} onCancel={onCancel} onBusy={onBusy} issues={issues} />;
 }
 
-function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel, onBusy }: {
-  schema: z.ZodType; fields: { name: string; type: FieldType }[]; defaultValues?: object;
+function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel, onBusy, issues }: {
+  issues?:Api.FieldIssue[]; schema: z.ZodType; fields: { name: string; type: FieldType }[]; defaultValues?: object;
   onSubmit: (values: any, event?: unknown) => void | boolean | Promise<void | boolean>; submitLabel?: string; onCancel?: () => void; onBusy?: (busy: boolean) => void;
 }) {
   const prefix = useId(), lock = useRef(false), [failure, setFailure] = useState("");
-  const { control, handleSubmit, formState: { errors, isSubmitting } } =
+  const { control, handleSubmit, setValue, setError, trigger, formState: { errors, isSubmitting } } =
     useForm<Record<string, unknown>>({ mode: "onTouched", resolver: zodResolver(schema as never) as never, defaultValues: defaultValues as never });
+  useEffect(()=>{for(const issue of issues??[])if(issue.path.length===1&&fields.some(f=>f.name===issue.path[0]))setError(issue.path[0]!,{type:"owner",message:issue.message});},[issues,setError]);
   // Conditional fields (#138) follow the values they depend on; what was typed into a hidden field stays until the form closes.
-  const conditions = fields.flatMap(({ type }) => (type.when ? [type.when.field] : []));
+  const conditions = [...new Set(fields.flatMap(({name,type}) => [name,...(type.when ? [type.when.field] : [])]))];
   const watched = useWatch({ control, name: conditions });
   const current = Object.fromEntries(conditions.map((name, i) => [name, watched[i]]));
   return (
@@ -83,6 +86,8 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
       <fieldset disabled={isSubmitting} className="grid gap-3">
       {fields.map(({ name, type }) => {
         if (!applies(type, current)) return null;
+        if(fields.some(f=>f.type.input?.range?.end===name))return null;
+        const range=type.input?.range,endField=range&&fields.find(f=>f.name===range.end),endError=endField?(errors as Record<string,{message?:string}>)[endField.name]?.message:undefined;
         const error = (errors as Record<string, { message?: string }>)[name]?.message;
         const id = `${prefix}-field-${name}`;
         const helpId = type.help ? `${id}-help` : undefined;
@@ -106,11 +111,13 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
                     {type.display(field.value, (defaultValues ?? {}) as never)}
                   </div>
                 ) : (
-                  type.editor?.({ id, value: field.value, onChange: field.onChange, invalid: !!error, describedBy: ariaDescribedBy }) ??
+                  range&&endField?<DateRangeInput id={id} start={String(field.value??"")} end={String(current[endField.name]??"")} startLabel={type.label} endLabel={endField.type.label} inclusive={range.inclusive} invalid={!!error||!!endError} describedBy={ariaDescribedBy} onChange={(start,end)=>{setValue(name,start,{shouldTouch:true,shouldDirty:true});setValue(endField.name,end,{shouldTouch:!!end,shouldDirty:true});void trigger(end?[name,endField.name]:[name]);}}/>:type.editor?.({ id, value: field.value, onChange: value=>{field.onChange(value);const dependent=fields.filter(f=>errors[f.name]&&(f.type.input?.constraints?.before===name||f.type.input?.constraints?.after===name||issues?.some(issue=>issue.path[0]===f.name&&issue.relatedPaths?.some(path=>path[0]===name)))).map(f=>f.name);if(dependent.length)void trigger(dependent);}, invalid: !!error, describedBy: ariaDescribedBy }) ??
                   type.display(field.value, (defaultValues ?? {}) as never)
                 )}
               </span>
             )} />
+            {type.input?.group&&<span className="text-xs text-muted">{type.input.group}</span>}
+            {endError&&<p role="alert" className="text-xs text-danger">{endField?.type.label}: {endError}</p>}
             {error && <p id={errorId} className="text-xs text-[var(--tone-danger)]">{error}</p>}
           </div>
         );

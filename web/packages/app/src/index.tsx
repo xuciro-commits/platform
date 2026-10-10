@@ -207,8 +207,8 @@ export const defineApp = (app: AppUI): AppUI => app;
 // Generated pages (ADR-0016), for any app's entity types.
 
 /** A form generated from an entity's declaration; submits only editable fields. */
-export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submitLabel, onBusy }: {
-  type: string; record?: EntityRecord; onSubmit: (values: object) => void | boolean | Promise<void | boolean>; onCancel: () => void; submitLabel: string; onBusy?: (busy: boolean) => void;
+export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submitLabel, onBusy, issues }: {
+  issues?:Api.FieldIssue[]; type: string; record?: EntityRecord; onSubmit: (values: object) => void | boolean | Promise<void | boolean>; onCancel: () => void; submitLabel: string; onBusy?: (busy: boolean) => void;
   /** Presentation subset, in this order: a composed page's form asks for these (ADR-0035 16b). */
   fields?: string[];
 }) {
@@ -219,7 +219,7 @@ export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submit
   // A field a purpose-built editor owns (`aside`) is not asked for here (ADR-0035).
   const inputs = new Set(action.payload.map((field) => field.name));
   const editable = info.fields.filter((f) => inputs.has(f.name) && !f.readOnly && !f.aside && (!fields || fields.includes(f.name))).map((f) => f.name);
-  return <RecordForm entity={entityFrom(info, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel} onBusy={onBusy}
+  return <RecordForm entity={entityFrom({...info,fields:info.fields.map(f=>{const input=action.payload.find(i=>i.name===f.name);return input?{...f,constraints:input.constraints??f.constraints,range:input.range??f.range,group:input.group??f.group}:f;})}, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel} onBusy={onBusy} issues={issues}
     onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
 }
 

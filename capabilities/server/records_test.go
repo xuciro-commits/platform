@@ -108,6 +108,33 @@ func stockTenant(t testing.TB, extra ...platform.App) *Tenant {
 }
 
 func TestRecordDraftIsolationAndPromotion(t *testing.T) {
+	t.Run("declared record constraints include unchanged endpoints and zero values", func(t *testing.T) {
+		type window struct {
+			platform.Record
+			Start string `json:"start" type:"date" field:"required"`
+			End   string `json:"end" type:"date" field:"required" constraints:"{\"after\":\"start\"}"`
+			Flag  bool   `json:"flag,omitempty" field:"required" constraints:"{}"`
+			Count int    `json:"count,omitempty" field:"required" constraints:"{\"min\":0}"`
+		}
+		info, err := platform.Describe("stock", platform.Entity{Type: "stock.window", Model: window{}}, func(reflect.Type) string { return "" })
+		if err != nil {
+			t.Fatal(err)
+		}
+		store := newRecordStore()
+		et := &entityType{info: info}
+		store.byGo[info.Go] = et
+		caller := platform.As("stock", platform.Member{ID: "ana"})
+		record := window{Record: platform.Record{ID: "W1"}, Start: "2028-02-29", End: "2028-03-01"}
+		if err := store.check(caller, record, time.Now()); err != nil {
+			t.Fatalf("zero/false lost their value: %v", err)
+		}
+		record.End = "2028-02-28"
+		var issues []platform.FieldIssue
+		caller = caller.WithInputDiagnostics(func(_ *kernel.Error, found []platform.FieldIssue) { issues = found })
+		if err := store.check(caller, record, time.Now()); err == nil || len(issues) != 1 || issues[0].Path[0] != "end" {
+			t.Fatalf("unchanged start bypassed comparison: %v %+v", err, issues)
+		}
+	})
 	tn := stockTenant(t)
 	c := platform.NewCaller(runtime{tn}, platform.Member{ID: "ana", Tenant: "t-1"}, "stock", false, false)
 	at := timestamppb.New(time.Date(2026, 9, 28, 9, 0, 0, 0, time.UTC))

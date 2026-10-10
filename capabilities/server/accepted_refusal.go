@@ -14,6 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 // A refused top-level decision has a durable, effect-free answer too. It
@@ -21,15 +22,16 @@ import (
 // cannot be mistaken for a kernel change receipt or applied to the record
 // store. The bounded envelope carries the original submission and answer.
 type refusedResult struct {
-	Version     int             `json:"version"`
-	Kind        string          `json:"kind"`
-	Tenant      string          `json:"tenant"`
-	App         string          `json:"app"`
-	At          time.Time       `json:"at"`
-	RequestHash string          `json:"requestHash"`
-	Digest      string          `json:"digest"`
-	Submission  json.RawMessage `json:"submission"`
-	Error       kernel.Error    `json:"error"`
+	Version     int                   `json:"version"`
+	Kind        string                `json:"kind"`
+	Tenant      string                `json:"tenant"`
+	App         string                `json:"app"`
+	At          time.Time             `json:"at"`
+	RequestHash string                `json:"requestHash"`
+	Digest      string                `json:"digest"`
+	Submission  json.RawMessage       `json:"submission"`
+	Issues      []platform.FieldIssue `json:"issues,omitempty"`
+	Error       kernel.Error          `json:"error"`
 }
 
 func submissionHash(s *pb.Submission) (string, error) {
@@ -41,7 +43,7 @@ func submissionHash(s *pb.Submission) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
-func encodeRefusedResult(s *pb.Submission, at time.Time, refusal *kernel.Error) ([]byte, error) {
+func encodeRefusedResult(s *pb.Submission, at time.Time, refusal *kernel.Error, issues ...platform.FieldIssue) ([]byte, error) {
 	if s == nil || refusal == nil {
 		return nil, fmt.Errorf("refused result needs a submission and answer")
 	}
@@ -55,6 +57,10 @@ func encodeRefusedResult(s *pb.Submission, at time.Time, refusal *kernel.Error) 
 	}
 	result := refusedResult{Version: 1, Kind: "refusal", Tenant: s.GetTenantId(), App: s.GetAuthority(),
 		At: at.UTC(), RequestHash: hash, Submission: sub, Error: *refusal}
+	if len(issues) > 0 {
+		result.Version = 2
+		result.Issues = issues
+	}
 	result.Digest, err = digestRefusedResult(result)
 	if err != nil {
 		return nil, err
@@ -94,11 +100,21 @@ func decodeRefusedResult(raw []byte) (refusedResult, *pb.Submission, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if result.Version != 1 || result.Kind != "refusal" || result.Tenant == "" || result.App == "" ||
+	if (result.Version != 1 && result.Version != 2) || result.Version == 1 && len(result.Issues) > 0 || len(result.Issues) > 64 || result.Kind != "refusal" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || result.RequestHash != hash || result.Tenant != sub.GetTenantId() ||
 		result.App != sub.GetAuthority() || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || result.Error.Code == pb.ErrorCode_ERROR_CODE_UNSPECIFIED {
 		return result, nil, fmt.Errorf("refused result has inconsistent identity or answer")
+	}
+	for _, issue := range result.Issues {
+		if issue.Code == "" || len(issue.Code) > 64 || len(issue.Message) > 1024 || len(issue.Path) != 1 || len(issue.Path[0]) > 128 || len(issue.RelatedPaths) > 4 {
+			return result, nil, fmt.Errorf("refused input issue exceeds its bounds")
+		}
+		for _, path := range issue.RelatedPaths {
+			if len(path) != 1 || len(path[0]) > 128 {
+				return result, nil, fmt.Errorf("refused related path exceeds its bounds")
+			}
+		}
 	}
 	return result, &sub, nil
 }

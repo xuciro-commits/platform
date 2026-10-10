@@ -101,9 +101,11 @@ type SubmissionAnswer struct {
 }
 
 type ErrorBody struct {
-	Code   string `json:"code"`
-	Status int    `json:"status,omitempty"`
-	Detail string `json:"detail,omitempty"`
+	Message string                `json:"message,omitempty"`
+	Issues  []platform.FieldIssue `json:"issues,omitempty"`
+	Code    string                `json:"code"`
+	Status  int                   `json:"status,omitempty"`
+	Detail  string                `json:"detail,omitempty"`
 }
 
 // ProtocolCall is the body of a call to a protocol's action.
@@ -142,6 +144,7 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	s := newSchemas()
 	// Original page call values also belong to the generated application API.
 	s.of(reflect.TypeFor[platform.PageCollectionInput]())
+	s.of(reflect.TypeFor[platform.InputOptions]())
 	s.of(reflect.TypeFor[files.ImageRegionsRequest]())
 	s.of(reflect.TypeFor[build.Table]())
 	s.of(reflect.TypeFor[build.Source]())

@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "An earlier request is awaiting confirmation. Retry it before submitting changes.": "此前的请求尚待确认。请先重试确认，再提交修改。",
+ "Awaiting confirmation. Retry sends the same request.": "请求尚待确认。重试会发送同一请求。",
  "Home": "首页",
  "Applications": "应用",
  "Platform": "平台",

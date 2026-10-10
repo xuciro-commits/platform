@@ -5,6 +5,7 @@ import "platformserver/platform"
 // Actions is the plant's action catalog (ADR-0008): screens, integrations and AI
 // agents receive the part their role may call; line conditions stay in allowed.
 func Actions() *platform.Catalog {
+	minimum := 1.0
 	roles := func(r ...Role) []string {
 		out := make([]string, len(r))
 		for i, x := range r {
@@ -15,9 +16,9 @@ func Actions() *platform.Catalog {
 	return platform.NewCatalog(append(append(append(adviceActions(), []platform.Action{
 		{Schema: SchemaRelease, Target: OrderType, New: true, Capability: "orders", Title: "Release shop order",
 			Description: "Release a shop order for a product; it splits into SFCs that start at the routing's first operation. Name the ERP planned order it fulfils.",
-			Payload: []platform.Field{{Name: "product", Type: "string", Required: true, Description: "Product ID"},
-				{Name: "quantity", Type: "integer", Required: true, Description: "Units to make"},
-				{Name: "sfcs", Type: "integer", Required: true, Description: "Number of SFCs (lots), at most the quantity"},
+			Payload: []platform.Field{{Name: "product", Type: "string", Required: true, Description: "Product ID", From: "products", Key: "id", Label: "name", Constraints: &platform.InputConstraints{}},
+				{Name: "quantity", Type: "integer", Required: true, Description: "Units to make", Constraints: &platform.InputConstraints{Min: &minimum}},
+				{Name: "sfcs", Type: "integer", Required: true, Description: "Number of SFCs (lots), at most the quantity", Constraints: &platform.InputConstraints{Min: &minimum, Before: "quantity", Inclusive: true}},
 				{Name: "planned", Type: "string", Description: "ERP planned order ID"},
 				{Name: "place", Type: "string", Ref: "enterprise.element", Description: "The place in the enterprise model this order runs at — a plant, line, workshop or warehouse (optional; ADR-0094)"}},
 			Roles: roles(Supervisor)},

@@ -225,13 +225,16 @@ func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, rules func()
 		if !c.Replaying {
 			var payload map[string]any
 			json.Unmarshal(s.GetPayload(), &payload)
+			if issues := InputIssues(declared.Payload, payload); len(issues) > 0 {
+				return nil, c.RefuseFields(issues)
+			}
 			for _, f := range declared.Payload {
 				v, ok := payload[f.Name].(string)
 				if !ok || v == "" {
 					continue
 				}
 				if len(f.Choices) > 0 && !slices.Contains(f.Choices, v) || f.Ref != "" && c.rt != nil && !c.rt.Readable(c, f.Ref+"/"+v) {
-					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+					return nil, c.RefuseFields([]FieldIssue{{Code: "reference", Path: []string{f.Name}, Message: "Choose a readable listed value."}})
 				}
 				if f.Ref == "enterprise.element" && f.Stereotype != "" && c.rt != nil {
 					if el, ok := c.rt.Element(c, v, now); !ok || el.Stereotype != f.Stereotype {

@@ -98,7 +98,7 @@ func Actions() *platform.Catalog {
 	return platform.NewCatalog(append([]platform.Action{{Schema: SchemaCreate, Target: LeaveType, Capability: "leave", Title: "Draft leave request", New: true,
 		Description: "Draft a request for days off, from its first to its last day.", Roles: []string{Employee},
 		Payload: []platform.Field{{Name: "kind", Type: "string", Required: true, Description: "vacation, sick or unpaid", Choices: []string{"vacation", "sick", "unpaid"}},
-			{Name: "from", Type: "date", Required: true, Description: "First day"}, {Name: "until", Type: "date", Required: true, Description: "Last day"},
+			{Name: "from", Type: "date", Required: true, Description: "First day", Constraints: &platform.InputConstraints{}, Range: &platform.DateRange{End: "until", Inclusive: true}}, {Name: "until", Type: "date", Required: true, Description: "Last day", Constraints: &platform.InputConstraints{After: "from", Inclusive: true}},
 			{Name: "note", Type: "string", Description: "For the approvers"},
 			{Name: "health", Type: "string", Description: "For a sick leave: the medical reason, which only HR reads"}}}},
 		platform.EntityActions(Entities()[0])...)...)
@@ -158,7 +158,7 @@ func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Ch
 		}
 		from, err1 := time.Parse(time.DateOnly, p.From)
 		until, err2 := time.Parse(time.DateOnly, p.Until)
-		if err1 != nil || err2 != nil || until.Before(from) {
+		if err1 != nil || err2 != nil {
 			return nil, invalid
 		}
 		leave := Leave{Record: platform.Record{ID: s.GetTarget().GetId()}, Employee: c.ID, Kind: p.Kind, From: p.From, Until: p.Until,

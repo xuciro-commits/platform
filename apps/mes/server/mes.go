@@ -467,7 +467,7 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 		return advice(who, s)
 	case SchemaRelease:
 		var r releasePayload
-		if json.Unmarshal(s.GetPayload(), &r) != nil || p.product(r.Product) == nil || r.Quantity < 1 || r.SFCs < 1 || r.SFCs > r.Quantity {
+		if json.Unmarshal(s.GetPayload(), &r) != nil || p.product(r.Product) == nil {
 			return nil, invalid
 		}
 		routing := p.routingFor(r.Product) // read after the payload: a lot is fixed to the newest version at release
@@ -762,7 +762,7 @@ func (p *Plant) Manifest() platform.Manifest {
 			Layout: "list-detail", ListFields: []string{"product", "quantity", "status", "erp"},
 			DetailFields: []string{"product", "quantity", "status", "planned", "sfcs", "erp", "confirmation", "erpDetail"},
 			Actions:      []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: SchemaRelease}, {App: ID, Kind: platform.AssetAction, Name: SchemaResend}}}},
-		Reads: []string{"master", "planned-orders", "downtime"}, Entities: p.entities,
+		Reads: []string{"master", "products", "planned-orders", "downtime"}, Entities: p.entities,
 		Consumes: []platform.Consumption{{Protocol: production.ID, Optional: true}},
 		Inputs:   map[string]bool{"states": true},
 		Jobs:     []platform.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},
@@ -796,6 +796,8 @@ func (p *Plant) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	switch name {
 	case "master":
 		return p.Master(), nil
+	case "products":
+		return p.Master().Products, nil
 	case "planned-orders": // the orders of production.orders/1's providers
 		return planned(c), nil
 	}

@@ -260,13 +260,16 @@ func (s Scope) LevelFor(roles []string) string {
 
 // FieldInfo describes one field, for the host's reads and the UI kit's pages.
 type FieldInfo struct {
-	Property *AssetBinding `json:"property,omitempty"`
-	Name     string        `json:"name"`
-	Title    string        `json:"title"`
-	Type     string        `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines,json"`
-	Required bool          `json:"required,omitempty"`
-	Search   bool          `json:"search,omitempty"`
-	ReadOnly bool          `json:"readOnly,omitempty"`
+	Constraints *InputConstraints `json:"constraints,omitempty"`
+	Range       *DateRange        `json:"range,omitempty"`
+	Group       string            `json:"group,omitempty"`
+	Property    *AssetBinding     `json:"property,omitempty"`
+	Name        string            `json:"name"`
+	Title       string            `json:"title"`
+	Type        string            `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines,json"`
+	Required    bool              `json:"required,omitempty"`
+	Search      bool              `json:"search,omitempty"`
+	ReadOnly    bool              `json:"readOnly,omitempty"`
 	// Aside marks a field a purpose-built surface writes — a page's sections in
 	// the composer (ADR-0035) — so generated forms do not ask for it. Its
 	// actions still take it, and it is read and shown like any other field.
@@ -539,7 +542,7 @@ func EntityActions(e Entity) []Action {
 		if f.Example != "" {
 			description += ", e.g. " + f.Example
 		}
-		field := Field{Name: f.Name, Type: typ, Required: f.Required, Description: description}
+		field := Field{Name: f.Name, Type: typ, Required: f.Required && f.When == nil, Description: description, Choices: f.Choices, Constraints: f.Constraints, Range: f.Range, Group: f.Group}
 		if f.Ref == "enterprise.element" {
 			field.Ref, field.Stereotype = f.Ref, f.Stereotype
 		}
@@ -699,6 +702,17 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		}
 		f := FieldInfo{Name: name, Title: sf.Tag.Get("title"), Index: sf.Index, Knowledge: sf.Tag.Get("knowledge") == "true",
 			Help: sf.Tag.Get("help"), Synonyms: sf.Tag.Get("synonyms"), Example: sf.Tag.Get("example"), Personal: sf.Tag.Get("personal")}
+		if raw := sf.Tag.Get("constraints"); raw != "" {
+			if err := json.Unmarshal([]byte(raw), &f.Constraints); err != nil {
+				return nil, fmt.Errorf("%s.%s constraints: %w", e.Type, name, err)
+			}
+		}
+		if raw := sf.Tag.Get("range"); raw != "" {
+			if err := json.Unmarshal([]byte(raw), &f.Range); err != nil {
+				return nil, fmt.Errorf("%s.%s range: %w", e.Type, name, err)
+			}
+		}
+		f.Group = sf.Tag.Get("group")
 		if roles := sf.Tag.Get("read"); roles != "" {
 			f.Read = strings.Split(roles, ",")
 		}

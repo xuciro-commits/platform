@@ -57,5 +57,7 @@
  "released": "已释放",
  "{n} arrivals on {day}": "{day} 有 {n} 位客人到店",
  "{roomType} oversold on {day}": "{roomType} 在 {day} 超订",
- "{sold} sold for {rooms} rooms: someone may have to be walked.": "{rooms} 间房卖出了 {sold} 间：可能需要为客人安排别处入住。"
+ "{sold} sold for {rooms} rooms: someone may have to be walked.": "{rooms} 间房卖出了 {sold} 间：可能需要为客人安排别处入住。",
+ "You may not read room types": "你无权读取房型",
+ "The read does not exist": "该读取不存在"
 }

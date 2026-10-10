@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -60,6 +61,57 @@ func TestAcceptedRefusalIsDurableAndImmutableOnRetry(t *testing.T) {
 		t.Fatal("refusal modified the record store")
 	}
 	CheckReplay(t, live, entries, func() *Tenant { return stockTenant(t) })
+
+	t.Run("field issues survive retry and replay", func(t *testing.T) {
+		tenant := stockTenant(t)
+		member, _ := tenant.Member("ana")
+		app := tenant.app("stock").(*stock)
+		declared, _ := app.ledger.Catalog.Action("stock.item.create")
+		declared.Payload = append([]platform.Field(nil), declared.Payload...)
+		for i := range declared.Payload {
+			if declared.Payload[i].Name == "qty" {
+				min := 0.0
+				declared.Payload[i].Constraints = &platform.InputConstraints{Min: &min}
+			}
+		}
+		app.ledger.Catalog.Add(declared)
+		var entries []Entry
+		tenant.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+		request := proto.Clone(submission).(*pb.Submission)
+		request.IdempotencyKey = "field-refusal"
+		request.Payload = []byte(`{"name":"Bolt","qty":-1,"line":"L1"}`)
+		_, refusal, issues := tenant.submitDiagnosed(member, request, at)
+		if refusal == nil || len(issues) != 1 || issues[0].Path[0] != "qty" || issues[0].Code != "min" {
+			t.Fatalf("missing input issue: %v %+v", refusal, issues)
+		}
+		saved, _, decodeErr := decodeRefusedResult(entries[0].Body)
+		if decodeErr != nil || saved.Version != 2 || len(saved.Issues) != 1 {
+			t.Fatalf("missing version 2 refusal: %+v %v", saved, decodeErr)
+		}
+		app.ledger.Catalog.Add(platform.Action{Schema: declared.Schema, Payload: []platform.Field{}})
+		_, again, repeated := tenant.submitDiagnosed(member, request, at.Add(time.Hour))
+		if again == nil || *again != *refusal || !reflect.DeepEqual(repeated, issues) || len(entries) != 1 {
+			t.Fatalf("retry recast diagnostics: %v %+v", again, repeated)
+		}
+		recovered := stockTenant(t)
+		if err := recovered.Replay(entries); err != nil {
+			t.Fatal(err)
+		}
+		_, _, restored := recovered.submitDiagnosed(member, request, at)
+		if !reflect.DeepEqual(restored, issues) {
+			t.Fatalf("replay recast diagnostics: %+v", restored)
+		}
+		legacy, encodeErr := encodeRefusedResult(request, at, refusal)
+		old, _, decodeErr := decodeRefusedResult(legacy)
+		if encodeErr != nil || decodeErr != nil || old.Version != 1 || len(old.Issues) != 0 {
+			t.Fatalf("version 1 changed: %v %v", encodeErr, decodeErr)
+		}
+		saved.Issues[0].Message = "tampered issue"
+		damaged, _ := json.Marshal(saved)
+		if _, _, err := decodeRefusedResult(damaged); err == nil {
+			t.Fatal("issue tampering passed the digest")
+		}
+	})
 
 	damaged := entries[0]
 	var decoded refusedResult

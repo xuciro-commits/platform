@@ -56,9 +56,9 @@ const (
 // Actions is the hotel's action catalog (ADR-0008): front desk and channels
 // create and modify; only managers cancel. Other packages act through it too.
 func Actions() *platform.Catalog {
-	stay := []platform.Field{{Name: "roomType", Type: "string", Required: true, Description: "Room type"},
-		{Name: "checkIn", Type: "date", Required: true, Description: "First night (YYYY-MM-DD; hourly types YYYY-MM-DDTHH:MM)"},
-		{Name: "checkOut", Type: "date", Required: true, Description: "Departure, exclusive"}}
+	stay := []platform.Field{{Name: "roomType", Type: "string", Required: true, Description: "Room type", From: "room-types", Key: "id", Label: "name", Constraints: &platform.InputConstraints{}},
+		{Name: "checkIn", Type: "date", Required: true, Description: "First night (YYYY-MM-DD; hourly types YYYY-MM-DDTHH:MM)", Constraints: &platform.InputConstraints{DateTime: true}, Range: &platform.DateRange{End: "checkOut"}},
+		{Name: "checkOut", Type: "date", Required: true, Description: "Departure, exclusive", Constraints: &platform.InputConstraints{After: "checkIn", DateTime: true}}}
 	book := []string{string(FrontDesk), string(Manager), string(Channel)}
 	return platform.NewCatalog(append(platform.EntityActions(Entities(nil)[0]),
 		platform.Action{Schema: SchemaCreate, Target: ReservationType, New: true, Capability: "reservations", Title: "Create reservation",
@@ -310,7 +310,7 @@ func (h *Hotel) Restore(raw json.RawMessage) error {
 
 func (h *Hotel) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "PMS", Version: "1", Actions: h.ledger.Catalog, Entities: h.entities,
-		Reads: []string{"lodging-bookings"}, Inputs: map[string]bool{"channel-bookings": true},
+		Reads: []string{"lodging-bookings", "room-types"}, Inputs: map[string]bool{"channel-bookings": true},
 		Jobs: []platform.Job{{Name: JobArrivals, Title: "Send the front desk the arrivals list", Every: time.Hour},
 			{Name: JobHolds, Title: "Release holds past their date", Every: time.Hour}},
 		Settings: []platform.Setting{
@@ -327,12 +327,34 @@ func (h *Hotel) Manifest() platform.Manifest {
 				"hold": SchemaHold, "confirm": SchemaConfirm, "release": SchemaRelease},
 			Reads: map[string]string{"bookings": "lodging-bookings"},
 			Events: map[string]string{"changed": SchemaModify, "canceled": SchemaCancel,
-				"confirmed": SchemaConfirm, "released": SchemaRelease}}}}
+				"confirmed": SchemaConfirm, "released": SchemaRelease}}, {Protocol: lodging.RoomTypeProtocol(), Reads: map[string]string{"room-types": "room-types"}}}}
 }
 
 // Read "lodging-bookings": the reservations as the lodging protocol shows them.
 // Reservations and room types themselves are read as records (/v1/records/<type>).
-func (h *Hotel) Read(c platform.Caller, _ string) (any, *kernel.Error) {
+func (h *Hotel) Read(c platform.Caller, name string) (any, *kernel.Error) {
+	if name == "room-types" {
+		if !c.Automation && len(c.RolesHere()) == 0 {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "You may not read room types")
+		}
+		types, _, err := platform.Find[RoomType](c, platform.Query{Limit: 200, Sort: []string{"name", "id"}})
+		if err != nil {
+			return nil, err
+		}
+		out := []lodging.RoomType{}
+		for _, typ := range types {
+			unit := "night"
+			if typ.Hourly {
+				unit = "hour"
+			}
+			out = append(out, lodging.RoomType{ID: typ.ID, Name: typ.Name, Unit: unit})
+		}
+		return out, nil
+	}
+	if name != "lodging-bookings" {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The read does not exist")
+	}
+
 	out := []lodging.Booking{}
 	for _, r := range reservations(c) {
 		out = append(out, lodging.Booking{ID: r.ID, RoomType: string(r.RoomType), CheckIn: r.CheckIn, CheckOut: r.CheckOut, Guest: r.Guest, Status: r.Status, Until: r.Until})
