@@ -16,6 +16,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
+	"platformserver/apps/flow"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -35,11 +37,10 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Exec(ctx, "drop table "+table)
+	files := &memoryFiles{}
 	compose := func() *Tenant {
-		tn, err := NewTenant("table-profile", NewConsole("table-profile", Seat{Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}), build.New("table-profile"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		tn := composeTenant(t, "table-profile", []Seat{seatOf("builder", "build:builder", "flow:admin"), seatOf("admin", "platform:admin")}, build.New("table-profile"), work.New("table-profile"), flow.New("table-profile"))
+		tn.Files = files
 		return tn
 	}
 	tn := compose()
@@ -69,9 +70,7 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	at := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
 	submit := func(typ, id, verb string, payload any) {
 		t.Helper()
-		if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: fmt.Sprintf("%s:%s:%d", id, verb, len(entries)), Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + "." + verb, Version: 1}, Payload: platform.Raw(payload)}, at); err != nil {
-			t.Fatal(err)
-		}
+		decide(t, tn, "builder", build.ID, typ+"."+verb, typ, id, payload, at)
 	}
 	submit(build.DatasetType, "rows", "create", map[string]any{"name": "tablerows", "title": "Table rows"})
 	submit(build.ConnectionType, "db", "create", map[string]any{"name": "db", "title": "Database", "kind": "postgres", "address": address.String(), "secret": secret})
@@ -115,6 +114,106 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 		t.Fatalf("loaded rows: %s (%v)", version.Data, err)
 	}
 	CheckReplay(t, tn, entries, compose)
+
+	// The same controlled PostgreSQL connection feeds an actual continuous
+	// instance. Machine-rate rows never become dataset versions or objects.
+	if _, err := db.Exec(ctx, "truncate "+table+"; alter table "+table+" add plant text default 'P', add device text default 'D', add at timestamptz default '2026-10-06T09:00:00Z', add reading double precision default 12; insert into "+table+"(seq,sku) select n,'event-'||n from generate_series(1,1025) n"); err != nil {
+		t.Fatal(err)
+	}
+	submit(build.SourceType, "stream", "create", map[string]any{"name": "telemetry", "title": "Telemetry", "connection": "db", "profile": "table", "entity": strings.Trim(table, "\""), "since": "seq", "stream": true})
+	submit(build.SourceType, "stream", "publish", map[string]any{})
+	continuous := &platform.Continuous{Source: "telemetry", Batch: 512, State: 2 << 20, FrameBytes: 4 << 20, DeadLetter: true,
+		Intake: &platform.StreamIntake{SourceRecord: "stream", Key: "sku", Partition: []string{"plant", "device"}, EventTime: "at", Value: "reading"},
+		Window: &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"}}
+	submit(build.ProcessType, "consumer", "create", map[string]any{"name": "telemetry", "title": "Telemetry consumer", "manual": true, "continuous": continuous,
+		"steps": []build.ProcessStep{{Name: "intake", Kind: "wait", Condition: &platform.Predicate{Op: "eq", Left: &platform.Binding{Source: "literal", Value: platform.Raw(false)}, Right: &platform.Binding{Source: "literal", Value: platform.Raw(true)}}}}})
+	submit(build.ProcessType, "consumer", "publish", map[string]any{})
+	submit(build.ProcessType, "consumer", "run", map[string]any{"key": "pg"})
+	const instance = "build.telemetry:pg"
+	tn.PullContinuousSources(at)
+	frame, failure := tn.ReadFlowFrame(member, instance, at)
+	if failure != nil || frame.Consumed != 1025 || frame.Source == nil || frame.Source.Cursor != "1025" || frame.Source.Record != "stream" {
+		t.Fatalf("real source checkpoint unavailable or counters incorrect: %v", failure)
+	}
+	for tick := 1; tick <= 4; tick++ {
+		tn.Work(at.Add(time.Duration(tick) * time.Second))
+	}
+	running, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), instance)
+	if running.State != "waiting" || len(running.Tokens) != 1 || running.Tokens[0].Waits != "wait" || !running.Tokens[0].Due.IsZero() {
+		t.Fatal("the original timer mistook the initial yield deadline for a wait timeout")
+	}
+	stream, _ := platform.Get[build.Source](tn.automation(build.ID, false), "stream")
+	if stream.Cursor != "" || stream.Last != nil || stream.Requested || stream.Due(at) {
+		t.Fatal("the stream also scheduled an import or kept a second cursor")
+	}
+	count := len(entries)
+	tn.PullContinuousSources(at)
+	if len(entries) != count {
+		t.Fatal("empty source pull wrote another accepted batch")
+	}
+	CheckReplay(t, tn, entries, compose)
+	raw, _, snapErr := tn.Snapshot(func() int64 { return int64(len(entries)) })
+	if snapErr != nil {
+		t.Fatal(snapErr)
+	}
+	restored := compose()
+	if err := restored.Restore(raw); err != nil {
+		t.Fatal(err)
+	}
+	restored.Secrets = tn.Secrets
+	restored.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	if _, err := db.Exec(ctx, "insert into "+table+"(seq,sku,at) values (1026,'after-recovery','2026-10-06T09:00:01Z'), (1027,'late','2026-10-06T08:59:20Z')"); err != nil {
+		t.Fatal(err)
+	}
+	restored.PullContinuousSources(at.Add(time.Second))
+	recovered, failure := restored.ReadFlowFrame(memberOf(t, restored, "builder"), instance, at)
+	if failure != nil || recovered.Source.Cursor != "1027" || recovered.Consumed != 1026 || recovered.Rejected != 1 || len(recovered.DeadLetters) != 1 {
+		t.Fatalf("restored source did not continue the accepted cursor/window: %v", failure)
+	}
+	// Pause/republication, changed definitions, and stopped instances cannot
+	// read past the committed predecessor or silently rebind a running flow.
+	decide(t, restored, "builder", build.ID, "build.source.pause", build.SourceType, "stream", map[string]any{}, at)
+	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err == nil {
+		t.Fatal("a paused source continued consuming")
+	}
+	decide(t, restored, "builder", build.ID, "build.source.publish", build.SourceType, "stream", map[string]any{}, at)
+	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err != nil {
+		t.Fatalf("an unchanged source did not resume: %v", err)
+	}
+	decide(t, restored, "builder", build.ID, "build.source.edit", build.SourceType, "stream", map[string]any{"filter": "seq > 10"}, at)
+	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err == nil {
+		t.Fatal("a changed source silently rebound its consumer")
+	}
+	decide(t, restored, "builder", build.ID, "build.source.edit", build.SourceType, "stream", map[string]any{"filter": ""}, at)
+	decide(t, restored, "builder", build.ID, build.SchemaProcessRun, build.ProcessType, "consumer", map[string]any{"key": "revoked"}, at)
+	// Revoke the source role after the outside read captured its member,
+	// before its prepared frame is accepted; the old grant cannot carry it.
+	secrets, revoked := restored.Secrets, false
+	restored.Secrets = func(name string) ([]byte, bool) {
+		if !revoked {
+			revoked = true
+			decide(t, restored, "admin", PlatformApp, "platform.member.revoke", "platform.member", "builder", map[string]any{"app": build.ID}, at)
+		}
+		return secrets(name)
+	}
+	files.mu.Lock()
+	beforeFiles := len(files.m)
+	files.mu.Unlock()
+	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), "build.telemetry:revoked", at); err == nil || !revoked {
+		t.Fatalf("a captured source grant survived its revocation during I/O (revoked=%v, refusal=%v, role=%s)", revoked, err, memberOf(t, restored, "builder").Roles[build.ID])
+	}
+	files.mu.Lock()
+	afterFiles := len(files.m)
+	files.mu.Unlock()
+	if afterFiles != beforeFiles {
+		t.Fatal("permission refusal kept an unused prepared source frame")
+	}
+	restored.Secrets = secrets
+	decide(t, restored, "admin", PlatformApp, "platform.member.grant", "platform.member", "builder", map[string]any{"app": build.ID, "role": build.Builder}, at)
+	decide(t, restored, "builder", flow.ID, flow.SchemaFlowStop, flow.InstanceType, instance, map[string]any{}, at)
+	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err == nil {
+		t.Fatal("a canceled flow continued consuming")
+	}
 }
 
 func TestODataWalksPagesPastCursor(t *testing.T) {

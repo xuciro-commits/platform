@@ -53,8 +53,19 @@ type Continuous struct {
 	// Window declares the native event-time profile. Nil preserves the older
 	// scalar fold; a published streaming graph explicitly freezes this rule.
 	Window *StreamWindow
+	// Intake binds a controlled source record and its event columns. Nil keeps
+	// the existing native batch delivery contract.
+	Intake *StreamIntake `json:"Intake,omitempty"`
 	// DeadLetter keeps signals that could not be folded, with the reason.
 	DeadLetter bool
+}
+
+type StreamIntake struct {
+	SourceRecord string   `json:"sourceRecord"`
+	Key          string   `json:"key"`
+	Partition    []string `json:"partition"`
+	EventTime    string   `json:"eventTime"`
+	Value        string   `json:"value"`
 }
 
 // StreamWindow is a bounded state rule owned by the existing Flow frame.

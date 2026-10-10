@@ -41,6 +41,16 @@ type BatchFrame struct {
 	DeadLetters []DeadLetter                `json:"deadLetters,omitempty"` // what could not be folded, and why
 	StateBytes  int                         `json:"stateBytes,omitempty"`
 	Sealed      *platform.FlowStateArtifact `json:"sealed,omitempty"`
+	Source      *SourceCheckpoint           `json:"source,omitempty"`
+}
+
+// SourceCheckpoint is the instance's own incremental position; it is accepted
+// with its window state, rather than written onto the import source's cursor.
+type SourceCheckpoint struct {
+	Record  string   `json:"record"`
+	Config  string   `json:"config"`
+	Cursor  string   `json:"cursor"`
+	Sources []string `json:"sources"`
 }
 
 // DeadLetter keeps one signal that could not be folded, with its cause, so it
@@ -60,6 +70,7 @@ type Batch struct {
 	ID          string
 	Predecessor string
 	Signals     []Signal
+	Source      *SourceCheckpoint `json:"Source,omitempty"`
 }
 
 // Signal is one arriving measurement.
@@ -168,6 +179,9 @@ type BatchStateReference struct {
 // over the declared budget, or one whose predecessor is not the frame's cursor,
 // is refused so the source can retry; the same batch twice is idempotent.
 func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *kernel.Error {
+	if declared.Intake != nil && batch.Source == nil || declared.Intake == nil && batch.Source != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source checkpoint must match the declared intake")
+	}
 	if batch.ID == "" {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: "the batch has no identity"}
 	}
@@ -242,6 +256,11 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 		}
 	}
 	next.Cursor = batch.ID
+	if batch.Source != nil {
+		checkpoint := *batch.Source
+		checkpoint.Sources = slices.Clone(batch.Source.Sources)
+		next.Source = &checkpoint
+	}
 	next.Fingerprint, _ = batchFingerprint(batch)
 	next.Consumed += folded
 	next.Rejected += rejected

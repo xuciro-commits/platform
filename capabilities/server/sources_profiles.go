@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -105,7 +106,7 @@ func odataLiteral(v string) string {
 }
 
 // readTable selects a database table past the cursor, read-only, bounded.
-func (t *Tenant) readTable(s build.Source, c build.Connection) ([]map[string]any, error) {
+func (t *Tenant) readTable(s build.Source, c build.Connection, columns ...string) ([]map[string]any, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	conn, err := t.openPostgres(ctx, c)
@@ -118,16 +119,26 @@ func (t *Tenant) readTable(s build.Source, c build.Connection) ([]map[string]any
 	if s.Filter != "" {
 		where = append(where, "("+s.Filter+")")
 	}
-	query := "select * from " + s.Entity
+	selection := "*"
+	if len(columns) > 0 {
+		columns = slices.Clone(columns)
+		slices.Sort(columns)
+		columns = slices.Compact(columns)
+		for i, column := range columns {
+			columns[i] = pgx.Identifier{column}.Sanitize()
+		}
+		selection = strings.Join(columns, ",")
+	}
+	query := "select " + selection + " from " + pgx.Identifier(strings.Split(s.Entity, ".")).Sanitize()
 	if s.Since != "" && s.Cursor != "" {
-		where = append(where, fmt.Sprintf("%s > $1", s.Since))
+		where = append(where, fmt.Sprintf("%s > $1", pgx.Identifier{s.Since}.Sanitize()))
 		args = append(args, s.Cursor)
 	}
 	if len(where) > 0 {
 		query += " where " + strings.Join(where, " and ")
 	}
 	if s.Since != "" {
-		query += " order by " + s.Since
+		query += " order by " + pgx.Identifier{s.Since}.Sanitize()
 	}
 	query += " limit 5001"
 	rows, err := conn.Query(ctx, query, args...)
@@ -137,6 +148,7 @@ func (t *Tenant) readTable(s build.Source, c build.Connection) ([]map[string]any
 	defer rows.Close()
 	fields := rows.FieldDescriptions()
 	var out []map[string]any
+	projectedBytes := 0
 	for rows.Next() {
 		values, err := rows.Values()
 		if err != nil {
@@ -145,6 +157,12 @@ func (t *Tenant) readTable(s build.Source, c build.Connection) ([]map[string]any
 		row := map[string]any{}
 		for i, f := range fields {
 			row[f.Name] = plain(values[i])
+		}
+		if len(columns) > 0 {
+			projectedBytes += len(platform.Raw(row))
+			if projectedBytes > build.SourceBody {
+				return nil, fmt.Errorf("the projected table rows exceed the source byte budget")
+			}
 		}
 		out = append(out, row)
 	}

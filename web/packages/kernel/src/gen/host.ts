@@ -596,6 +596,16 @@ export type ContextView = {
   tasks: TaskSummary[];
 };
 
+export type Continuous = {
+  Source: string;
+  Batch: number;
+  State: number;
+  FrameBytes: number;
+  Window: StreamWindow;
+  Intake?: StreamIntake;
+  DeadLetter: boolean;
+};
+
 export type Contract = {
   stereotype: string;
   client?: string[];
@@ -2180,6 +2190,7 @@ export type Process = {
   scheduler?: string;
   input?: unknown;
   inputSchema?: ValueSchema;
+  continuous?: Continuous;
   steps: ProcessStep[];
   lanes?: ProcessLane[];
   layout?: Record<string, NodePosition>;
@@ -2815,6 +2826,7 @@ export type Source = {
   object?: string;
   key?: string;
   mapping?: SourceField[];
+  stream?: boolean;
   every?: string;
   state: string;
   puller?: string;
@@ -2870,6 +2882,23 @@ export type Stereotype = {
   constraints?: string[];
   client?: string[];
   supplier?: string[];
+};
+
+export type StreamIntake = {
+  sourceRecord: string;
+  key: string;
+  partition: string[];
+  eventTime: string;
+  value: string;
+};
+
+export type StreamWindow = {
+  node: string;
+  windowMs: number;
+  slideMs: number;
+  watermarkMs: number;
+  maxRecords: number;
+  lateEvents: string;
 };
 
 export type Structure = {

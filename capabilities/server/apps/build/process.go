@@ -43,6 +43,7 @@ type Process struct {
 	Scheduler   string                `json:"scheduler,omitempty" field:"readonly" title:"Runs as"`
 	Input       json.RawMessage       `json:"input,omitempty" type:"json" title:"Default input"`
 	InputSchema *platform.ValueSchema `json:"inputSchema,omitempty" type:"json" title:"Input schema"`
+	Continuous  *platform.Continuous  `json:"continuous,omitempty" type:"json" title:"Continuous source intake"`
 	Steps       []ProcessStep         `json:"steps" field:"aside"`
 	// Lanes are the responsibilities the process is drawn across (ADR-0087 D2): a
 	// step names the lane that does it. A lane carries no execution semantics, so
@@ -128,6 +129,15 @@ func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 	if !c.Replaying {
 		if err := b.checkFlow(*p); err != nil {
 			return err
+		}
+		if p.Continuous != nil && p.Continuous.Intake != nil {
+			source, ok := platform.Get[Source](c, p.Continuous.Intake.SourceRecord)
+			if !ok || !source.Stream || source.State != "published" || source.Name != p.Continuous.Source {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The intake names a readable published continuous source")
+			}
+			if err := b.checkSource(c, source); err != nil {
+				return err
+			}
 		}
 	}
 	if p.Version >= 64 {
@@ -574,7 +584,7 @@ func processImage(image []byte) (Process, error) {
 
 // flowOf compiles every declarative block into the existing native owner.
 func (b *Build) flowOf(p Process) platform.Flow {
-	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{Builder}, Start: platform.Start{Manual: p.Manual}}
+	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{Builder}, Start: platform.Start{Manual: p.Manual}, Continuous: p.Continuous}
 	if p.Every != "" {
 		fl.Start.Every, _ = time.ParseDuration(p.Every)
 		fl.Start.OnBehalf = p.Scheduler

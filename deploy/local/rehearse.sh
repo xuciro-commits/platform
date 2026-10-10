@@ -33,7 +33,7 @@ fail() {
   # Retain tenant-local recovery diagnostics before the disposable project is
   # removed. Do not dump requests, environment variables or credentials.
   compose logs --no-color manufacturing-server hospitality-server 2>/dev/null |
-    grep -E 'quarantin|accepted work|accepted result|record batch|snapshot|replayed' | tail -20 >&2 || true
+    grep -E 'quarantin|accepted work|accepted result|record batch|snapshot|replayed|continuous source intake' | tail -20 >&2 || true
   if [[ -n ${SUP:-} ]]; then
     curl -s --max-time 3 -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/health" |
       jq -c '{status, recoveryError, queues, failed}' >&2 || true
@@ -98,7 +98,7 @@ state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500
   curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/ai-usage" | jq -c '.totals'
   workflow_state
   function_state; } |
-  jq -cS 'walk(if type == "object" then del(.changed, .created, .profile.lastSeen) else . end)'; } # record clocks and login presence are not durable business state
+  jq -cS 'walk(if type == "object" then del(.changed, .created) | if (.profile | type) == "object" then del(.profile.lastSeen) else . end else . end)'; } # record clocks and login presence are not durable business state
 same_state() {
   local expected=$1 actual
   for _ in $(seq 20); do
@@ -169,7 +169,9 @@ workflow_state() {
     for path in records/build.object/WF-O records/build.process/WF-P records/build.testplan/WF-PLAN \
       records/build.rehearsal$suffix records/flow.instance/build.review$suffix:WF-OLD \
       records/flow.instance/build.review$suffix:WF-NEW \
-      records/flow.instance/build.review$suffix:WF-JOINT releases/active; do
+      records/flow.instance/build.review$suffix:WF-JOINT \
+      records/build.connection/STREAM-DB records/build.source/STREAM-SOURCE \
+      records/build.process/STREAM-PROCESS records/flow.instance/build.stream$suffix:pg releases/active; do
       workflow_get "$actor" "$path" || fail "workflow state $suffix $path"
     done
   done
@@ -659,6 +661,7 @@ echo "ok   joint AI function release: both industries activate one evaluated can
 # Explicit v2 compute goes through the real compiler, worker, PostgreSQL
 # accepted result and RustFS input/output artifacts. The comparisons below
 # retain its exact ABI, call and staged result across restart/full replay.
+sql "create role rehearsal_source login password 'sinkLocalOnly0000000000000000000000000000000000000000000000000000'; grant connect on database platform to rehearsal_source; grant usage on schema public to rehearsal_source" >/dev/null
 (
   for suffix in plant hotel; do
     if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING TENANT=plant-sz actor=$SUP language=go;
@@ -694,15 +697,72 @@ echo "ok   joint AI function release: both industries activate one evaluated can
     done
     jq -e --arg call "$call" '.state == "completed" and .output.staged.call == $call and .output.staged.size > 49152' <<<"$result" >/dev/null || fail "data ABI result never completed"
     workflow_post "$actor" releases/active "{\"candidateId\":\"$application_release\",\"key\":\"code-restore-application\"}" | jq -e --arg id "$application_release" '.id == $id' >/dev/null || fail "restore application release after compute probe"
+    # The first real stream comes from an existing PostgreSQL table through
+    # the controlled read-only Connection/Source, on the host's original tick.
+    sql "create table flow_rehearsal_$suffix(seq bigint primary key, event_id text, plant text, device text, at timestamptz, reading double precision); grant select on flow_rehearsal_$suffix to rehearsal_source" >/dev/null
+    workflow_submit "$actor" stream-db build.connection.create build.connection STREAM-DB \
+      '{"name":"streamdb","title":"Stream database","kind":"postgres","address":"postgres://rehearsal_source@postgres/platform","secret":"SINK"}'
+    workflow_submit "$actor" stream-db-check build.connection.check build.connection STREAM-DB '{}'
+    for _ in $(seq 30); do
+      [[ $(workflow_get "$actor" records/build.connection/STREAM-DB | jq -r .record.state) == ready ]] && break
+      sleep 1
+    done
+    [[ $(workflow_get "$actor" records/build.connection/STREAM-DB | jq -r .record.state) == ready ]] || fail "stream database readiness"
+    workflow_submit "$actor" stream-source build.source.create build.source STREAM-SOURCE \
+      "{\"name\":\"telemetry\",\"title\":\"Telemetry\",\"connection\":\"STREAM-DB\",\"profile\":\"table\",\"entity\":\"flow_rehearsal_$suffix\",\"since\":\"seq\",\"stream\":true}"
+    workflow_submit "$actor" stream-source-publish build.source.publish build.source STREAM-SOURCE '{}'
+    definition=$(jq -n --arg name "stream$suffix" \
+      '{name:$name,title:"PostgreSQL continuous intake",manual:true,
+        continuous:{Source:"telemetry",Batch:512,State:2097152,FrameBytes:4194304,DeadLetter:true,
+          Intake:{sourceRecord:"STREAM-SOURCE",key:"event_id",partition:["plant","device"],eventTime:"at",value:"reading"},
+          Window:{node:"window",windowMs:30000,slideMs:5000,watermarkMs:2000,maxRecords:50000,lateEvents:"sideOutput"}},
+        steps:[{name:"intake",kind:"wait",condition:{op:"eq",left:{source:"literal",value:false},right:{source:"literal",value:true}}}]}')
+    workflow_submit "$actor" stream-process build.process.create build.process STREAM-PROCESS "$definition"
+    workflow_submit "$actor" stream-process-publish build.process.publish build.process STREAM-PROCESS '{}'
+    candidate=$(workflow_post "$actor" releases/preview '{"kind":"flow","id":"STREAM-PROCESS"}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "stream flow preview"
+    workflow_post "$actor" releases/candidates "{\"kind\":\"flow\",\"id\":\"STREAM-PROCESS\",\"candidateId\":\"$candidate\",\"key\":\"stream-save\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "stream flow save"
+    workflow_post "$actor" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"stream-active\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "stream flow activation"
+    workflow_submit "$actor" stream-run build.process.run build.process STREAM-PROCESS '{"key":"pg"}'
+    sql "insert into flow_rehearsal_$suffix select n,'event-'||n,'P','D',now(),12 from generate_series(1,1025) n" >/dev/null
+    for _ in $(seq 30); do
+      result=$(workflow_get "$actor" "records/flow.instance/build.stream$suffix:pg")
+      jq -e '.record.batch | .source.cursor == "1025" and .consumed == 1025 and .rejected == 0 and .sealed.size > 65536' <<<"$result" >/dev/null && break
+      sleep 1
+    done
+    jq -e '.record.batch | .source.cursor == "1025" and .consumed == 1025 and .rejected == 0 and .sealed.size > 65536' <<<"$result" >/dev/null || fail "real PostgreSQL source did not accept its three bounded batches"
+    workflow_get "$actor" records/build.source/STREAM-SOURCE | jq -e '.record | (.cursor // "") == "" and .last == null and (.requested // false) == false' >/dev/null || fail "stream kept an import cursor or materialized rows"
+    workflow_submit "$actor" stream-pause build.source.pause build.source STREAM-SOURCE '{}'
+    workflow_post "$actor" releases/active "{\"candidateId\":\"$application_release\",\"key\":\"stream-restore-application\"}" | jq -e --arg id "$application_release" '.id == $id' >/dev/null || fail "restore application release after stream probe"
   done
 )
 echo "ok   Go/TinyGo data ABI: real isolated compilation, call-owned RustFS input/output and PostgreSQL result; retries keep the original call"
+echo "ok   PostgreSQL continuous sources: both hosts accept 1025 real rows in 512-row batches, with one consumer cursor and sealed RustFS window state"
 before=$(settled_state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
 compose restart manufacturing-server hospitality-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/me") == 200 ]] && break; sleep 1; done
 same_state "$before" || fail "state after restart differs"
+(
+  for suffix in plant hotel; do
+    if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING TENANT=plant-sz actor=$SUP;
+    else SERVER=$HOSPITALITY TENANT=hotel-a actor=$MGR; fi
+    AUTHORITY=build
+    workflow_submit "$actor" stream-resume build.source.publish build.source STREAM-SOURCE '{}'
+    sql "insert into flow_rehearsal_$suffix values (1026,'after-restart','P','D',now(),13)" >/dev/null
+    for _ in $(seq 30); do
+      result=$(workflow_get "$actor" "records/flow.instance/build.stream$suffix:pg")
+      jq -e '.record.batch | .source.cursor == "1026" and .consumed == 1026' <<<"$result" >/dev/null && break
+      sleep 1
+    done
+    if ! jq -e '.record.batch | .source.cursor == "1026" and .consumed == 1026' <<<"$result" >/dev/null; then
+      jq -c '.record | {state,version,release,dependencies,batch:(.batch|{cursor,source,consumed,rejected}),trace}' <<<"$result" >&2
+      fail "restored stream did not resume its original cursor"
+    fi
+    workflow_submit "$actor" stream-pause-again build.source.pause build.source STREAM-SOURCE '{}'
+  done
+)
+echo "ok   continuous intake restart: both retained instances resumed at the accepted PostgreSQL position without re-consuming earlier rows"
 # Snapshots (ADR-0019 D6): each host saved its tenant at shutdown and started from it.
 logged() { for _ in $(seq 10); do compose logs "$1" | grep "$2" >/dev/null && return; sleep 1; done; return 1; }
 for host in manufacturing-server hospitality-server; do
@@ -736,6 +796,9 @@ compose stop manufacturing-server hospitality-server >/dev/null 2>&1
 compose rm -sf postgres >/dev/null 2>&1
 docker volume rm platform-rehearsal_pgdata >/dev/null
 compose up -d --wait postgres >/dev/null 2>&1
+# Database dumps do not provision external login roles. Restore this
+# disposable source reader before applying its table ACLs from the dump.
+sql "create role rehearsal_source login password 'sinkLocalOnly0000000000000000000000000000000000000000000000000000'" >/dev/null
 compose exec -T postgres pg_restore -U platform -d platform --no-owner <"$backup/platform.dump"
 compose start manufacturing-server hospitality-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/me") == 200 ]] && break; sleep 1; done

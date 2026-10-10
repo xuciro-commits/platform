@@ -596,6 +596,7 @@ func runWorkFrom(current func() []*Tenant) {
 			var outside []func()
 			for _, t := range tenants {
 				outside = append(append(outside, t.dispatches(Now())...), t.turns(Now())...)
+				outside = append(outside, t.continuousSources(Now())...)
 			}
 			go onLane(outside)
 		}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -23,6 +24,7 @@ type PreparedBatch struct {
 	before  FlowInstance
 	frame   *BatchFrame
 	outputs map[string]json.RawMessage
+	sources []string
 	batch   Batch
 	at      time.Time
 }
@@ -54,7 +56,7 @@ func ExpandFrame(x FlowInstance, store host.FlowFrameStore) (*BatchFrame, error)
 	if err := decoder.Decode(&frame); err != nil {
 		return nil, err
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF || frame.Sealed != nil || frame.Cursor != x.Batch.Cursor || frame.Fingerprint != x.Batch.Fingerprint || !frame.Watermark.Equal(x.Batch.Watermark) || frame.Consumed != x.Batch.Consumed || frame.Rejected != x.Batch.Rejected || stateSize(frame.State) != x.Batch.StateBytes {
+	if err := decoder.Decode(new(any)); err != io.EOF || frame.Sealed != nil || frame.Cursor != x.Batch.Cursor || frame.Fingerprint != x.Batch.Fingerprint || !frame.Watermark.Equal(x.Batch.Watermark) || frame.Consumed != x.Batch.Consumed || frame.Rejected != x.Batch.Rejected || stateSize(frame.State) != x.Batch.StateBytes || !bytes.Equal(platform.Raw(frame.Source), platform.Raw(x.Batch.Source)) {
 		return nil, fmt.Errorf("the sealed frame differs from its accepted summary")
 	}
 	return &frame, nil
@@ -81,7 +83,21 @@ func (f *Flows) PlanBatch(x FlowInstance) (*BatchPreparation, *kernel.Error) {
 		window := *rule.Window
 		rule.Window = &window
 	}
+	if rule.Intake != nil {
+		intake := *rule.Intake
+		intake.Partition = slices.Clone(intake.Partition)
+		rule.Intake = &intake
+	}
 	return &BatchPreparation{owner: f, before: x, rule: rule}, nil
+}
+
+func (plan *BatchPreparation) Intake() (string, *platform.StreamIntake, int) {
+	if plan.rule.Intake == nil {
+		return plan.rule.Source, nil, plan.rule.Batch
+	}
+	intake := *plan.rule.Intake
+	intake.Partition = slices.Clone(intake.Partition)
+	return plan.rule.Source, &intake, plan.rule.Batch
 }
 
 // Prepare uses the original folding rule outside the tenant lock. No file
@@ -114,7 +130,15 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
 	frame.State, frame.DeadLetters, frame.Sealed = nil, nil, &ref
-	return &PreparedBatch{owner: plan.owner, before: x, frame: frame, outputs: outputs, batch: batch, at: now}, nil
+	sources := append([]string(nil), x.Sources...)
+	if batch.Source != nil {
+		for _, source := range batch.Source.Sources {
+			if !slices.Contains(sources, source) {
+				sources = append(sources, source)
+			}
+		}
+	}
+	return &PreparedBatch{owner: plan.owner, before: x, frame: frame, outputs: outputs, sources: sources, batch: batch, at: now}, nil
 }
 
 // BatchKey is stable across preparation races and process recovery. Content
@@ -161,7 +185,7 @@ func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time
 		if err := d.checkBinding(*x); err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 		}
-		x.Batch, x.Outputs = p.frame, p.outputs
+		x.Batch, x.Outputs, x.Sources = p.frame, p.outputs, p.sources
 		ss.advance(x)
 		return ss.apply, nil
 	})

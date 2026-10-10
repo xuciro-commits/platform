@@ -57,6 +57,19 @@ for (const fixture of fixtures) {
         expect(active.id).toBe(preview.candidateId);
       });
     }
+	if (phase === "after") {
+	  test("builder retains the controlled source and its continuous intake after recovery", async ({ page }) => {
+	    await signIn(page, fixture.builder);
+	    await page.goto("/#/data-source?id=STREAM-SOURCE");
+	    await expect(page.getByRole("combobox", { name: "Rows go to", exact: true })).toHaveValue("stream");
+	    await expect(page.getByRole("combobox", { name: /^Connection\b/ })).toHaveValue("STREAM-DB");
+	    await expect(page.getByRole("textbox", { name: "Incremental column", exact: false })).toHaveValue("seq");
+	    await expect(page.getByRole("button", { name: "Pull now", exact: true })).toHaveCount(0);
+	    await page.goto("/#/flow?id=STREAM-PROCESS");
+	    const properties = page.getByRole("region", { name: "Workflow properties", exact: true });
+	    await expect(properties.getByLabel("Continuous source intake", { exact: false })).toHaveValue(/"sourceRecord":\s*"STREAM-SOURCE"/);
+	  });
+	}
     test(`shared function page and flow ${phase} database recovery`, async ({ page, request }) => {
       const token = await signIn(page, fixture.email);
       const headers = { Authorization: `Bearer ${token}` };

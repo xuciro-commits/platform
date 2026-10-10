@@ -13,6 +13,9 @@ register("zh-CN", {
   "Include end date": "包含结束日期",
 
   "Finish editing this identifier before saving.": "请完成此标识的编辑后再保存。",
+  "Continuous source intake": "连续数据源接入",
+  "A continuous Flow": "持续流",
+  "The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.": "流程负责其位点与事件投影。请使用唯一递增的增量列；暂停此数据源可停止接入。",
   "Enter a number within the allowed range.": "请输入允许范围内的数值。",
  "This published interface window retains concrete record identities. Use a record picker and a confirmed record card.": "此发布接口窗口保留具体记录身份。可绑定记录选择器和已确认记录卡片。",
  "Query source kind": "查询来源类型",

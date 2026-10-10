@@ -8,10 +8,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/platform"
 )
@@ -157,12 +160,17 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 	}()
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	_, latest, _, refusal := t.continuousSnapshotLocked(current, id, now)
+	_, latest, current, refusal := t.continuousSnapshotLocked(current, id, now)
 	if refusal != nil {
 		return flow.BatchOutcome{}, refusal
 	}
 	if !prepared.Matches(latest) {
 		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
+	}
+	if batch.Source != nil {
+		if refusal := t.checkStreamSourceLocked(current, plan, latest, *batch.Source, now); refusal != nil {
+			return flow.BatchOutcome{}, refusal
+		}
 	}
 	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + flow.ID, Tenant: t.ID}, prepared.Submission(t.ID), now, true); refusal != nil {
 		// An append error may have committed despite losing its response.
@@ -195,4 +203,206 @@ func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*fl
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its state was read")
 	}
 	return frame, nil
+}
+
+// streamSource captures only controlled source/connection definitions. Their
+// mutable pull summaries and record clocks are not the stream's configuration.
+func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *platform.StreamIntake, now time.Time) (build.Source, build.Connection, string, *kernel.Error) {
+	refuse := func(message string) (build.Source, build.Connection, string, *kernel.Error) {
+		return build.Source{}, build.Connection{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, message)
+	}
+	if intake == nil {
+		return refuse("The Flow has no controlled source intake")
+	}
+	view, err := t.RecordOf(m, build.SourceType, intake.SourceRecord, now)
+	if err != nil {
+		return refuse("The Flow source is not readable")
+	}
+	source, ok := view.Record.(build.Source)
+	if !ok || !source.Stream || source.State != "published" || source.Name != name || source.Since == "" || source.Profile != "table" {
+		return refuse("The Flow source must be a published incremental stream source")
+	}
+	view, err = t.RecordOf(m, build.ConnectionType, source.Connection, now)
+	if err != nil {
+		return refuse("The Flow connection is not readable")
+	}
+	connection, ok := view.Record.(build.Connection)
+	if !ok || connection.State != "ready" {
+		return refuse("The Flow connection is not ready")
+	}
+	frozenSource, frozenConnection := source, connection
+	frozenSource.Record, frozenSource.State, frozenSource.Cursor, frozenSource.Requested, frozenSource.Last = platform.Record{}, "", "", false, nil
+	frozenConnection.Record, frozenConnection.State, frozenConnection.Requested, frozenConnection.Last = platform.Record{}, "", false, nil
+	frozenSource.Title, frozenSource.Puller = "", ""
+	frozenConnection.Name, frozenConnection.Title = "", ""
+	hash, hashErr := canonicalDigest([]any{frozenSource, frozenConnection, intake})
+	if hashErr != nil {
+		return refuse("The Flow source configuration cannot be bound")
+	}
+	return source, connection, hash, nil
+}
+
+// ConsumeFlowSource reads an incremental registered Source on the I/O lane.
+// Its consumer offset is accepted with the original window frame. No raw
+// source rows enter an import record or a second cursor/queue database.
+func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) (flow.BatchOutcome, *kernel.Error) {
+	t.mu.Lock()
+	f, before, current, refusal := t.continuousSnapshotLocked(m, id, now)
+	var plan *flow.BatchPreparation
+	if refusal == nil {
+		plan, refusal = f.PlanBatch(before)
+	}
+	if refusal != nil {
+		t.mu.Unlock()
+		return flow.BatchOutcome{}, refusal
+	}
+	name, intake, budget := plan.Intake()
+	source, connection, hash, refusal := t.streamSourceLocked(current, name, intake, now)
+	if refusal == nil && before.Batch != nil && before.Batch.Source != nil {
+		checkpoint := before.Batch.Source
+		if checkpoint.Record != source.ID || checkpoint.Config != hash {
+			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source changed after this Flow began consuming it")
+		} else {
+			source.Cursor = checkpoint.Cursor
+		}
+	}
+	t.mu.Unlock()
+	if refusal != nil {
+		return flow.BatchOutcome{}, refusal
+	}
+	columns := append([]string{source.Since, intake.Key, intake.EventTime, intake.Value}, intake.Partition...)
+	rows, err := t.readTable(source, connection, columns...)
+	if err != nil {
+		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+	}
+	if len(rows) > budget {
+		left, right := source.Advance(rows[:budget]), source.Advance(rows[:budget+1])
+		if left == right {
+			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source cursor group exceeds the Flow batch budget")
+		}
+		// The remaining rows stay behind the accepted incremental position.
+		rows = rows[:budget]
+	}
+	if len(rows) == 0 {
+		return flow.BatchOutcome{}, nil
+	}
+	position := source
+	for _, row := range rows {
+		next := position.Advance([]map[string]any{row})
+		if next == position.Cursor {
+			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Stream rows need unique increasing incremental positions")
+		}
+		position.Cursor = next
+	}
+	batch := flow.Batch{Source: &flow.SourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Advance(rows), Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}}}
+	if before.Batch != nil {
+		batch.Predecessor = before.Batch.Cursor
+	}
+	for _, row := range rows {
+		key, _ := row[intake.Key].(string)
+		stamp, _ := row[intake.EventTime].(string)
+		at, _ := time.Parse(time.RFC3339Nano, stamp)
+		partition := make([]string, 0, len(intake.Partition))
+		for _, field := range intake.Partition {
+			value, ok := row[field].(string)
+			if !ok || value == "" {
+				return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source partition field needs a nonempty string")
+			}
+			partition = append(partition, value)
+		}
+		input, exists := row[intake.Value]
+		if !exists {
+			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source signal column is missing")
+		}
+		value, encodeErr := json.Marshal(input)
+		if encodeErr != nil {
+			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source signal needs a JSON value")
+		}
+		batch.Signals = append(batch.Signals, flow.Signal{Key: key, Partition: string(platform.Raw(partition)), At: at, Value: value})
+	}
+	fingerprint, err := canonicalDigest([]any{batch.Predecessor, batch.Source, batch.Signals})
+	if err != nil {
+		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source batch cannot be bound")
+	}
+	batch.ID = "source:" + fingerprint
+	return t.ConsumeFlowBatch(current, id, batch, now)
+}
+
+func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan *flow.BatchPreparation, x flow.FlowInstance, checkpoint flow.SourceCheckpoint, now time.Time) *kernel.Error {
+	name, intake, _ := plan.Intake()
+	source, connection, hash, refusal := t.streamSourceLocked(m, name, intake, now)
+	if refusal != nil {
+		return refusal
+	}
+	refs := []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}
+	if checkpoint.Record != source.ID || checkpoint.Config != hash || checkpoint.Cursor == "" || !slices.Equal(checkpoint.Sources, refs) || x.Batch != nil && x.Batch.Source != nil && (x.Batch.Source.Record != source.ID || x.Batch.Source.Config != hash) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow source configuration or protected references changed")
+	}
+	if x.Batch != nil && x.Batch.Source != nil {
+		source.Cursor = x.Batch.Source.Cursor
+	}
+	if source.Advance([]map[string]any{{source.Since: checkpoint.Cursor}}) != checkpoint.Cursor || source.Cursor == checkpoint.Cursor {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source checkpoint must advance its accepted position")
+	}
+	return nil
+}
+
+// PullContinuousSources uses the host's existing outside loop. The Flow
+// ledger remains the only consumer cursor owner; an overlapping pass backs
+// off instead of creating duplicate concurrent reads of one predecessor.
+func (t *Tenant) PullContinuousSources(now time.Time) {
+	for _, pull := range t.continuousSources(now) {
+		pull()
+	}
+}
+
+// Reserve before entering the shared I/O lane, so a slow database does not
+// accumulate one waiting goroutine per timer tick for the same tenant.
+func (t *Tenant) continuousSources(now time.Time) []func() {
+	if t.quarantined() || !t.streamMu.TryLock() {
+		return nil
+	}
+	return []func(){func() {
+		defer t.streamMu.Unlock()
+		t.pullContinuousSources(now)
+	}}
+}
+
+func (t *Tenant) pullContinuousSources(now time.Time) {
+	if t.quarantined() {
+		return
+	}
+	t.mu.Lock()
+	instances, _, _ := platform.Find[flow.FlowInstance](t.automation(flow.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","waiting"]]`), Sort: []string{"id"}})
+	f, ok := t.procs.(*flow.Flows)
+	var pending []flow.FlowInstance
+	if ok {
+		for _, instance := range instances {
+			if plan, err := f.PlanBatch(instance); err == nil {
+				if _, intake, _ := plan.Intake(); intake != nil {
+					source, exists := platform.Get[build.Source](t.automation(build.ID, false), intake.SourceRecord)
+					if exists && source.Stream && source.State == "published" {
+						pending = append(pending, instance)
+					}
+				}
+			}
+		}
+	}
+	t.mu.Unlock()
+	for _, instance := range pending {
+		member, exists := t.Member(instance.OnBehalf)
+		if !exists {
+			continue
+		}
+		for round := 0; round < 8; round++ {
+			outcome, refusal := t.ConsumeFlowSource(member, instance.ID, now)
+			if refusal != nil {
+				log.Printf("continuous source intake %s refused: %s", instance.ID, refusal.Code)
+				break
+			}
+			if outcome.Cursor == "" {
+				break
+			}
+		}
+	}
 }

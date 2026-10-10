@@ -26,6 +26,10 @@ func TestSourceProfilesDecodeAndGuard(t *testing.T) {
 	if got := sequence.Advance([]map[string]any{{"seq": json.Number("9007199254740993")}}); got != "9007199254740993" {
 		t.Fatalf("full-width sequence cursor = %s", got)
 	}
+	timestamps := Source{Since: "at", Cursor: "2026-10-10T00:00:00Z"}
+	if got := timestamps.Advance([]map[string]any{{"at": "2026-10-10T00:00:00.1Z"}}); got != "2026-10-10T00:00:00.1Z" {
+		t.Fatal("fractional event position did not advance chronologically")
+	}
 	for where, ok := range map[string]bool{"": true, "plant = '1000'": true, "plant = '1000' and active = true": true, "1=1; drop table x": false, "plant in ('1')": false} {
 		if simpleWhere(where) != ok {
 			t.Fatalf("simpleWhere(%q) != %v", where, ok)

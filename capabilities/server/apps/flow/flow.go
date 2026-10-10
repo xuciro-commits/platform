@@ -277,6 +277,24 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 				return nil, fmt.Errorf("flow %s: %w", id, err)
 			}
 		}
+		if intake := fl.Continuous.Intake; intake != nil {
+			if intake.SourceRecord == "" || intake.Key == "" || len(intake.Partition) < 1 || len(intake.Partition) > 8 || intake.EventTime == "" || intake.Value == "" || fl.Continuous.Window == nil || fl.Continuous.Batch < 1 {
+				return nil, fmt.Errorf("flow %s: an intake needs a source record, event columns, window and positive batch budget", id)
+			}
+			columns := append([]string{intake.Key, intake.EventTime, intake.Value}, intake.Partition...)
+			for _, column := range columns {
+				if len(column) == 0 || len(column) > 128 || strings.IndexFunc(column, func(r rune) bool {
+					return r != '_' && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9')
+				}) >= 0 || column[0] >= '0' && column[0] <= '9' {
+					return nil, fmt.Errorf("flow %s: intake columns must be plain identifiers", id)
+				}
+			}
+			partitions := slices.Clone(intake.Partition)
+			slices.Sort(partitions)
+			if len(slices.Compact(partitions)) != len(intake.Partition) {
+				return nil, fmt.Errorf("flow %s: intake partition columns must be unique", id)
+			}
+		}
 	}
 	versions := f.defs[id]
 	if len(versions) > 0 && versions[len(versions)-1].Version >= fl.Version {
@@ -622,7 +640,10 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 					ss.next(in, tok.ID, "")
 				})
 			case tok.Waits == "retry" || tok.Waits == "undo" || tok.Waits == "yield":
-				err = f.step(c, x.ID, now, func(ss *session, in *FlowInstance) { ss.token(in, tok.ID).Waits = "ready" })
+				err = f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
+					ready := ss.token(in, tok.ID)
+					ready.Waits, ready.Due = "ready", time.Time{}
+				})
 			case tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.At != nil && due:
 				err = f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					ss.trace(in, tok.Step, "time", "reached", "")

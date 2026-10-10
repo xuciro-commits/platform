@@ -55,6 +55,7 @@ type Tenant struct {
 	i18n        translator     // says declarations and messages in a language (ADR-0023)
 	agentRun    string         // the run whose agent is submitting, under mu: its effects name it
 	mu          sync.Mutex
+	streamMu    sync.Mutex                  // one outside-lane source intake pass per tenant
 	fault       atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
 	apps        []platform.App
 	committed   committed               // answers by idempotency key (committed.go)

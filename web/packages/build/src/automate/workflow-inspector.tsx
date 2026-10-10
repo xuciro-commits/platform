@@ -65,6 +65,7 @@ export function WorkflowSettings({ draft, onChange, objects, onClose }: { draft:
       <Disclosure defaultOpen summary={<span className="text-xs font-medium">{t("Workflow input schema")}</span>}>
         <SchemaEditor schema={draft.inputSchema ?? { type: "object", properties: {} }} onChange={(inputSchema) => onChange({ inputSchema })} /></Disclosure>
       <JSONEditor label={t("Default workflow input")} value={draft.input ?? {}} schema={draft.inputSchema} onChange={(input) => onChange({ input })} />
+      <JSONEditor label={t("Continuous source intake")} value={draft.continuous ?? null} onChange={(continuous) => onChange({ continuous: continuous as Api.Continuous | undefined })} />
       <p className="text-[11px] leading-5 text-muted">{t("The entry is the first declared block. Use Make entry on a selected block to change it.")}</p>
     </div>
   </div>;

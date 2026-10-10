@@ -313,6 +313,8 @@ Go 类型内嵌 `platform.Record`，由 `platform.Entity` 声明：
 
 代码使用 `platform.Flow`，租户使用 `build.process`，都由原 Flow/Work 执行。步骤明确 `kind`，数据使用 `Binding{source,path,step,value}`，条件使用结构化 Predicate；`next/error/cases/body` 决定控制路径。ForEach/While 是有界 scope，break/continue 只影响所在循环；fork `all` 等待全部，`any` 等待首个成功路径。保存和发布由同一 owner compiler 校验；布局不决定运行顺序。
 
+持续 PostgreSQL 来源：在 Data sources 中选已 Check 就绪的 PostgreSQL 连接、表与唯一递增的 Incremental column，将 Rows go to 选为 A continuous Flow，保存并 Publish。每个原 Flow 实例独立持有消费位置，Source 不生成对象/数据集行，也不提供 Pull now/Reset cursor；暂停 Source 可停止读取，保持配置不变再 Publish 从原位置继续。Flow 设置的 Continuous source intake 保存 `Source`（来源 name）、`Batch`、`State`、`FrameBytes`、`DeadLetter`、`Window` 及 `Intake:{sourceRecord,key,partition,eventTime,value}`，声明随原 Process 版本/候选保留。分区列为 1–8 个非空字符串列，事件时间为数据库时间戳；修改来源/连接配置后旧实例拒绝换绑。当前接线到原消费游标/事件时间窗口，完整图边界见 [ADR-0047 §13.5](ADR/0047-platform-composition-and-workspaces.md#135-当前边界)。
+
 函数节点固定版本并等待严格结果，再接人工或对象动作。固定测试步骤可供模型回答，推进测试时钟后继续；回答留在独立函数调用记录。候选不同时包含同名函数的两个版本，相关页面/流程升级需一起对齐。更广描述符、迁移与节点支持范围见 ADR-0042 / 0043。
 
 `GET /v1/capabilities` 从受权 owner 目录生成节点视图；`POST /v1/capabilities/invoke` 供页面/工具调用，前端使用 `useCapabilities/useInvokeCapability`。调用必须带稳定 key，网络重试沿用该 key。计算结果从共同 calls/compute 路径读取，AI 结果从 calls/ai 读取；pending 不表示动作已成功。代码页面可使用 `ComputeCall`；可视化页面添加 Code function 组件，固定版本并绑定常量、操作员输入或当前记录字段。宿主解析记录绑定、保存来源并在结果读取时重查权限。
