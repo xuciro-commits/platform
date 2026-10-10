@@ -29,18 +29,31 @@ type operationBinding struct {
 	Build       *platform.CodeBuildRequest `json:"build,omitempty"`
 }
 
+func pendingOperationInputs(inputs map[string][]*preparedOperationInput) int {
+	pending := 0
+	for _, prepared := range inputs {
+		pending += len(prepared)
+	}
+	return pending
+}
+
 func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest) (platform.OperationCall, *kernel.Error) {
 	var input *operationInputArtifact
-	if p := d.operationInput; p != nil {
-		hash, _ := canonicalDigest(q)
-		platformOwner := c.App == PlatformApp && c.ID == p.ref.Member
-		flowOwner := c.Automation && c.App == "flow" && c.ID == "app:flow" && q.OnBehalf == p.ref.Member
-		if !platformOwner && !flowOwner || hash != p.requestHash {
+	hash, _ := canonicalDigest(q)
+	if pending := d.operationInputs[hash]; len(pending) > 0 {
+		prepared := pending[0]
+		platformOwner := c.App == PlatformApp && c.ID == prepared.ref.Member
+		flowOwner := c.Automation && c.App == "flow" && c.ID == "app:flow" && q.OnBehalf == prepared.ref.Member
+		if !platformOwner && !flowOwner || hash != prepared.requestHash {
 			d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared input belongs to another operation request")
 			return platform.OperationCall{}, d.failure
 		}
-		input = &p.ref
-		d.operationInput = nil
+		input = &prepared.ref
+		if len(pending) == 1 {
+			delete(d.operationInputs, hash)
+		} else {
+			d.operationInputs[hash] = pending[1:]
+		}
 	}
 	call, intent, err := d.tenant.planOperation(c, r, q, d.records, d.intents, input)
 	if err != nil {

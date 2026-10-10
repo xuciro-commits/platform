@@ -492,10 +492,19 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
 	}
 	draft := t.newStagedDecision()
-	if len(input) == 1 {
-		draft.operationInput = input[0]
+	if len(input) > 0 {
+		draft.operationInputs = make(map[string][]*preparedOperationInput, len(input))
+		for _, prepared := range input {
+			if prepared != nil {
+				draft.operationInputs[prepared.requestHash] = append(draft.operationInputs[prepared.requestHash], prepared)
+			}
+		}
 	}
 	record, refusal = decideAcceptedAs(a, draft, m, s, now, automation)
+	if refusal == nil && pendingOperationInputs(draft.operationInputs) > 0 {
+		record = nil
+		refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A prepared Compute input was not consumed by this accepted Flow decision")
+	}
 	var raw []byte
 	if refusal != nil {
 		refusal = explained(refusal, a, s.GetSchema().GetName(), target(s))
