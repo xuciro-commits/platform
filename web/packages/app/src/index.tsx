@@ -43,6 +43,8 @@ export type Decision = {
   /** Told why the host refused, for a screen that keeps the reason in front of
    *  the person instead of letting a notice pass by. */
   onRefused?: (reason: string) => void;
+  /** This request's outbox state, including an unknown answer awaiting a same-key retry. */
+  onOutcome?: (entry: Entry) => void;
 };
 
 /** What an app's UI may use of the host, for the signed-in member. */
@@ -205,8 +207,8 @@ export const defineApp = (app: AppUI): AppUI => app;
 // Generated pages (ADR-0016), for any app's entity types.
 
 /** A form generated from an entity's declaration; submits only editable fields. */
-export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submitLabel }: {
-  type: string; record?: EntityRecord; onSubmit: (values: object) => void | Promise<void>; onCancel: () => void; submitLabel: string;
+export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submitLabel, onBusy }: {
+  type: string; record?: EntityRecord; onSubmit: (values: object) => void | boolean | Promise<void | boolean>; onCancel: () => void; submitLabel: string; onBusy?: (busy: boolean) => void;
   /** Presentation subset, in this order: a composed page's form asks for these (ADR-0035 16b). */
   fields?: string[];
 }) {
@@ -217,7 +219,7 @@ export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submit
   // A field a purpose-built editor owns (`aside`) is not asked for here (ADR-0035).
   const inputs = new Set(action.payload.map((field) => field.name));
   const editable = info.fields.filter((f) => inputs.has(f.name) && !f.readOnly && !f.aside && (!fields || fields.includes(f.name))).map((f) => f.name);
-  return <RecordForm entity={entityFrom(info, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel}
+  return <RecordForm entity={entityFrom(info, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel} onBusy={onBusy}
     onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
 }
 

@@ -63,17 +63,36 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     if (!client.authorities.authorityOf(client.connection.tenant, target.type)) {
       await client.refreshDeclarations().catch(() => undefined);
     }
-    const key = client.draft(schema, target, payload, options.evidence, options.expectedRevision);
-    for (const entry of await client.send()) {
+    const pending = client.authorities.outbox.find(entry => entry.submission.tenantId === client.connection.tenant && entry.submission.principalId === client.connection.principal
+      && entry.submission.schema?.name === schema && entry.submission.target?.type === target.type && entry.submission.target?.id === target.id
+      && (entry.state === "SUBMISSION_STATE_PENDING" || entry.state === "SUBMISSION_STATE_UNKNOWN"));
+    if (pending && (pending.submission.payload !== btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(payload))))
+      || pending.submission.expectedRevision !== options.expectedRevision || JSON.stringify(pending.submission.evidenceFactIds ?? []) !== JSON.stringify(options.evidence ?? []))) {
+      options.onOutcome?.(pending);
+      const reason = t("An earlier request is awaiting confirmation. Retry it before submitting changes.");
+      if (options.onRefused) options.onRefused(reason); else notify.error(reason);
+      return false;
+    }
+    const key = pending?.submission.idempotencyKey ?? client.draft(schema, target, payload, options.evidence, options.expectedRevision);
+    const answered = await client.send();
+    for (const entry of answered) {
       const ok = entry.state === "SUBMISSION_STATE_CONFIRMED", own = entry.submission.tenantId === client.connection.tenant && entry.submission.idempotencyKey === key;
       const declared = actions?.find((a) => a.schema === entry.submission.schema?.name);
       const done = declared?.needsApproval ? t("sent for approval") : t("done"); // held by the host until its approvers agree (ADR-0017)
       const outcomeText = ok ? done : humanizeKernelError(entry.reason ?? entry.outcome);
       if (!ok && own) options.onRefused?.(outcomeText);
-      if (!ok || !options.quiet) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? entry.submission.schema?.name ?? schema, target: entry.submission.target?.id ?? target.id, outcome: outcomeText }));
+      if ((!ok && !(own && options.onRefused)) || (ok && !options.quiet)) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? entry.submission.schema?.name ?? schema, target: entry.submission.target?.id ?? target.id, outcome: outcomeText }));
+    }
+    const outcome = client.authorities.outbox.find(entry => entry.submission.tenantId === client.connection.tenant && entry.submission.idempotencyKey === key);
+    if (outcome) {
+      options.onOutcome?.(outcome);
+      if (outcome.state === "SUBMISSION_STATE_PENDING" || outcome.state === "SUBMISSION_STATE_UNKNOWN") {
+        const reason = t("Awaiting confirmation. Retry sends the same request.");
+        if (options.onRefused) options.onRefused(reason); else notify.error(reason);
+      }
     }
     setOutbox([...client.authorities.outbox]);
-    await refresh();
+    if (answered.some(entry => entry.state === "SUBMISSION_STATE_CONFIRMED")) await refresh().catch(() => undefined);
     return confirmedDecision(client.authorities.outbox, client.connection.tenant, key);
   }, [actions, client, refresh]);
 

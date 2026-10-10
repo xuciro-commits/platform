@@ -1,5 +1,6 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+  "The request was not confirmed. Your input is retained.": "请求尚未确认，已保留填写内容。",
   "Top to bottom": "自上而下",
   "Left to right": "自左向右",
   "Compact arrangement": "紧凑排列",

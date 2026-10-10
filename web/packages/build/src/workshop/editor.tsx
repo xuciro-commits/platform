@@ -42,7 +42,7 @@ import {applyProfileUpgrade,pageCompatibility} from "./page-editor/compatibility
 import { OverlayProperties } from "./page-editor/OverlayPanel";
 import {LayoutTree} from "./page-editor/LayoutTree";
 import {LayoutProperties,LayoutSizing} from "./page-editor/LayoutProperties";
-import { useDraftSession } from "../session/DraftSession";
+import { DraftInputs, useDraftSession } from "../session/DraftSession";
 import {copyLayout,copyLayoutIssue,pasteLayout,type LayoutClipboard,type ClipboardIssue} from "./page-editor/clipboard";
 import type {AuthoringSection,PageDraft} from "./page-editor/draft";
 import {ModuleImportDialog,type ImportPackage} from "./module-import/ModuleImportDialog";
@@ -221,7 +221,7 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
   const observationInvalid=sections.some(s=>observationProblem(document,sections,s,page?.object??"",type=>source.entity(type),definitions));
   const analysisProblem=sections.some(s=>collectionAnalysisProblem(document,s,page?.object??"",type=>source.entity(type),definitions));
   const recordWorkInvalid=sections.some(s=>recordWorkProblem(document,s,page?.object??"",name=>source.entity(name),catalog,definitions));
-  const invalid = sections.some(s=>s.widget==="external-frame"&&!validExternalFrame(s.externalFrame))||sections.some(s=>s.widget==="embedded-page"&&(!s.embedding||!/^page\.sha256\.[0-9a-f]{64}$/.test(s.embedding.contentVersion)))||observationInvalid||recordWorkInvalid||analysisProblem||sections.some(s=>s.widget==="histogram"&&(!s.histogram?.field||!Number.isInteger(s.histogram.bins)||s.histogram.bins<1||s.histogram.bins>64||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||sections.some(s=>s.widget==="term-counts"&&(!s.group||s.group==="count"||s.group.includes(":")||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||searchInputProblem||pickerValueProblem||spacerProblem||separatorProblem||noticeProblem||alertProblem||pickerProblem||dateProblem||choiceProblem||booleanProblem||rangeProblem||leaderboardProblem||summaryProblem||gaugeProblem||progressProblem||recordGanttProblem||recordCalendarProblem||recordEventsProblem||recordCardProblem||recordComparisonProblem||collaborationProblem||workViewProblem||contextProblem||explorationProblem||historyProblem||sparklineProblem||treemapProblem||tagCountsProblem||heatmapProblem||scatterProblem||recordChartProblem||recordListProblem||sharedRecordOutputProblem||sharedRecordSetOutputProblem||titleProblem||metricPresentationProblem||statusTrackerProblem||recordLinksProblem||groupProblem||recordViewProblem||tablePresentationProblem||tableEditProblem || inlineProblem || layoutProblems.length>0 || queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
+  const invalid = sections.some(s=>s.widget==="external-frame"&&!validExternalFrame(s.externalFrame))||sections.some(s=>s.widget==="embedded-page"&&(!s.embedding||!/^page\.sha256\.[0-9a-f]{64}$/.test(s.embedding.contentVersion)))||observationInvalid||recordWorkInvalid||analysisProblem||sections.some(s=>s.widget==="histogram"&&(!s.histogram?.field||!Number.isInteger(s.histogram.bins)||s.histogram.bins<1||s.histogram.bins>64||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||sections.some(s=>s.widget==="term-counts"&&(!s.group||s.group==="count"||s.group.includes(":")||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||searchInputProblem||pickerValueProblem||spacerProblem||separatorProblem||noticeProblem||alertProblem||pickerProblem||dateProblem||choiceProblem||booleanProblem||rangeProblem||leaderboardProblem||summaryProblem||gaugeProblem||progressProblem||recordGanttProblem||recordCalendarProblem||recordEventsProblem||recordCardProblem||recordComparisonProblem||collaborationProblem||workViewProblem||contextProblem||explorationProblem||historyProblem||sparklineProblem||treemapProblem||tagCountsProblem||heatmapProblem||scatterProblem||recordChartProblem||recordListProblem||sharedRecordOutputProblem||sharedRecordSetOutputProblem||titleProblem||metricPresentationProblem||statusTrackerProblem||recordLinksProblem||groupProblem||recordViewProblem||tablePresentationProblem||tableEditProblem || inlineProblem || layoutProblems.length>0 || queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values({...formProblems,...session.inputProblems}).some(Boolean) || !!selectionProblem || incompatible;
   const relatedObjects = useMemo(() => definitions.filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
     .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && [page?.object, ...selections.map((selection) => selection.object.name)].includes(f.ref))).map((d) => d.ref.name), [definitions, page?.object, selections]);
   const [queryPreviewOwner,setQueryPreviewOwner]=useState<string|undefined>(undefined);
@@ -305,7 +305,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     ...layoutProblems.map((issue, i) => ({ id: `layout:${i}`, text: t(issue.code), subject: issue.node, locate: () => canvasSelect(issue.node) })),
     ...variableProblems.map((issue, i) => ({ id: `variable:${i}`, text: t(issue.code), subject: issue.variable, locate: () => select({ kind: "variables" }) })),
     ...(selectionProblem ? [{ id: "selection", text: selectionProblem, locate: () => select({ kind: "page" }) }] : []),
-    ...Object.entries(formProblems).filter(([, problem]) => problem).map(([id, problem]) => ({ id: `form:${id}`, text: problem, subject: id })),
+    ...Object.entries({...formProblems,...session.inputProblems}).filter(([, problem]) => problem).map(([id, problem]) => ({ id: `form:${id}`, text: problem, subject: id })),
     ...(inputProblem ? [{ id: "input", text: t("Bind each input to a writable text or decimal state in its own scope.") }] : []),
     ...(queryProblem ? [{ id: "query", text: t("Each query needs a field for every condition and a limit within the budget.") }] : []),
     ...(inlineProblem ? [{ id: "inline", text: t("An inline action needs exactly one action and valid defaults.") }] : []),
@@ -370,7 +370,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   const nodeID = container ?? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection?.id && node.kind === "widget")?.[0];
   const patchNode = (id: string, patch: Partial<HostApi.PageLayoutNode>) => edit((old) => ({ ...old, document: { ...old.document, nodes: { ...old.document.nodes, [id]: { ...old.document.nodes[id]!, ...patch } } } }), `node:${id}:${Object.keys(patch).join(",")}`);
   const canvasSelect=(id:string)=>{const node=document.nodes[id];if(!node)return;if(node.kind==='widget'){const index=sections.findIndex(s=>s.id===node.section);if(index>=0)choose(index);}else{select({kind:'container',id});}};
-  const canvasEdit=(next:HostApi.PageDocument|undefined)=>{if(next)edit({document:next});};
+  const canvasEdit=(next:HostApi.PageDocument|undefined)=>{if(next){for(const key of Object.keys(session.inputs.values)){const node=key.match(/^\/layout:([^/]+)\//)?.[1];if(node&&!next.nodes[node])session.inputs.set(key);}edit({document:next});}};
   const canvasCommitDrop=(payload:CanvasPayload,target:CanvasDrop)=>{if(lock.current)return;if(payload.kind==='new')add(payload.type,undefined,target);else{const next=canvasDrop(document,payload.id,target,sections);if(next){canvasEdit(next);canvasSelect(payload.id);}else notify.error(t("This move would change a protected scope or exceed the layout limits."));}};
   const canvasCommitSizes=(sizes:Record<string,HostApi.PageLayoutSize>)=>{if(lock.current)return;const next=structuredClone(document);for(const [id,size]of Object.entries(sizes))if(next.nodes[id])next.nodes[id]!.size=Object.keys(size).length?size:undefined;if(!pageLayoutDiagnostics(next,sections).length)canvasEdit(next);};
   const canvasCommands=(id:string):CanvasCommand[]=>{
@@ -419,12 +419,12 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       {overlayEntries.map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
         onChange={(patch) => edit({ document: { ...document, overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
         onRemove={() => { const result = removeOverlay(document, id); edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}
-      <LayoutProperties sections={sections} document={document} id={container}
+      <DraftInputs.Provider value={session.inputs}><LayoutProperties sections={sections} document={document} id={container}
         onPatch={patchNode} onChange={(kind) => edit((old) => ({ ...old, document: setLayoutKind(old.document, container, kind) }))}
-        onUngroup={() => canvasCommands(container).find((command) => command.id === "ungroup")?.run()} ungroupDisabled={!canvasUngroup(document, container, sections)} />
+        onUngroup={() => canvasCommands(container).find((command) => command.id === "ungroup")?.run()} ungroupDisabled={!canvasUngroup(document, container, sections)} /></DraftInputs.Provider>
     </div> },
     { id: "appearance", title: t("Appearance"), content: <div className="grid content-start gap-2 p-2">
-      <LayoutSizing document={document} id={container} onPatch={patchNode} />
+      <DraftInputs.Provider value={session.inputs}><LayoutSizing document={document} id={container} onPatch={patchNode} /></DraftInputs.Provider>
       <NodeBindings document={document} id={container} button={false} input={false} onChange={(patch) => patchNode(container, patch)} />
     </div> },
   ] : [];
@@ -435,7 +435,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     events: (() => { const Inspector = widgetInspector(canvasSelection.widget, canvasSelection.configVersion ?? 0)?.events; return <InspectorFrame id={canvasSelection.id ?? String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion ?? 0} part="events">{Inspector && <Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons, document) => edit({ document, sections: sections.map((s) => s.id === canvasSelection.id ? { ...s, buttons } : s) })} document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} overlay={nodeID ? overlayOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}</InspectorFrame>; })(),
     appearance: <>
       {Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value && nodeID) canvasCommitDrop({ kind: "move", id: nodeID, label: canvasSelection.title ?? nodeID }, { kind: "into", parent: event.target.value }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
-      {nodeID && <LayoutSizing document={document} id={nodeID} onPatch={patchNode} />}
+      {nodeID && <DraftInputs.Provider value={session.inputs}><LayoutSizing document={document} id={nodeID} onPatch={patchNode} /></DraftInputs.Provider>}
       {nodeID && <NodeBindings document={document} id={nodeID} button={!!widgetContract(canvasSelection.widget)?.inputPorts.some((port) => port.bindingField === "enabledWhen") && canvasSelection.widget !== "input"} input={canvasSelection.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />}
     </>,
   }) : [];

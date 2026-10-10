@@ -6,36 +6,53 @@ import {queryElements,resolveElements,type Api,type EnterpriseStereotype} from "
 // each record's page, with a form generated from its declared payload. A
 // hand-written view only adds entries; it never needs to repeat these.
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, Checkbox, Dialog, Input, RecordLookup, Select, Textarea, Panel, t, type EntityInfo, type EntityRecord } from "@platform/ui";
+import { Button, Checkbox, Dialog, Input, RecordLookup, Select, Textarea, Panel, field, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "../index";
 
 type Field = ActionDeclaration["payload"][number];
 
+function payloadSchema(fields: Field[]) {
+  return recordSchema({ name: "action", primary: "id", fields: Object.fromEntries(fields.map(f => {
+    const common = { label: f.description || f.name, required: f.required };
+    const type: FieldType = f.choices?.length ? field.singleSelect({ ...common, options: f.choices.map(value => ({ value, label: value })) })
+      : f.type === "integer" || f.type === "number" ? field.number(common)
+      : f.type === "boolean" ? field.checkbox(common) : f.type === "date" ? field.date(common)
+      : f.type === "datetime" ? field.datetime(common) : f.type === "json" ? { ...field.json(common), readOnly: false } : field.text(common);
+    if (f.type === "integer") type.schema = type.schema.refine(value => typeof value === "number" && Number.isSafeInteger(value), t("Enter a whole number."));
+    return [f.name, type];
+  })) });
+}
+
 /** Inputs for an action's declared payload fields. */
-export function PayloadFields({ fields, values, onChange, preview = false }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; preview?: boolean }) {
-  const prefix = useId();
+export function PayloadFields({ fields, values, onChange, preview = false, submitted = false, onInvalid }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; preview?: boolean; submitted?: boolean; onInvalid?: (name: string, invalid: boolean) => void }) {
+  const prefix = useId(), [touched, setTouched] = useState<Record<string, boolean>>({});
+  const parsed = payloadSchema(fields).safeParse(values);
+  const errors = parsed.success ? {} : Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0]), issue.message]));
   return <>{fields.map((f) => {
     const value = values[f.name];
     const set = (v: unknown) => onChange({ ...values, [f.name]: v });
     const label = `${f.description || f.name}${f.required ? " *" : ""}`;
     const id = `${prefix}-payload-${f.name}`;
+    const error = !preview && (submitted || touched[f.name]) ? errors[f.name] : undefined;
     if (f.type === "boolean" && !f.choices?.length && !f.ref)
       return <Checkbox key={f.name} className="text-xs text-muted" checked={!!value} onChange={set}>{label}</Checkbox>;
     return (
-      <div key={f.name} className="grid gap-1 text-xs text-muted"><label htmlFor={id}>{label}</label>
-        {f.choices?.length ? <Select id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value || undefined)}>
+      <div key={f.name} className="grid gap-1 text-xs text-muted" onBlurCapture={() => setTouched(old => ({ ...old, [f.name]: true }))}><label htmlFor={id}>{label}</label>
+        {f.choices?.length ? <Select id={id} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} value={String(value ?? "")} onChange={(e) => set(e.target.value || undefined)}>
             <option value="">—</option>{f.choices.map((c) => <option key={c} value={c}>{t(c)}</option>)}</Select>
           : f.ref ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
             : f.ref === "enterprise.element" ? <ElementPicker id={id} stereotype={f.stereotype} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
             : <RecordPicker id={id} type={f.ref} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
           : f.from ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
             : <ReadPicker id={id} field={f} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
-          : f.type === "json" ? <JsonInput id={id} value={value} onChange={set} />
+          : f.type === "json" ? <JsonInput id={id} value={value} onChange={set} onInvalid={invalid => onInvalid?.(f.name, invalid)} />
           : f.type === "string" && String(value ?? "").length > 60 ? <Textarea id={id} rows={4} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
           : <Input id={id} type={f.type === "integer" || f.type === "number" ? "number" : f.type === "date" ? "date" : f.type === "datetime" ? "datetime-local" : "text"} value={value === undefined ? "" : String(value)}
+              aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined}
               onChange={(e) => set(f.type === "integer" || f.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value)} />}
+        {error && <p id={`${id}-error`} role="alert" className="text-danger">{error}</p>}
       </div>
     );
   })}</>;
@@ -43,13 +60,13 @@ export function PayloadFields({ fields, values, onChange, preview = false }: { f
 
 /** A structured payload field (type json, e.g. a dataset load's rows): typed as text, submitted
  * as the parsed value once it parses; until then the text stays and the field reads as invalid (UX-07). */
-function JsonInput({ id, value, onChange }: { id: string; value: unknown; onChange: (v: unknown) => void }) {
+function JsonInput({ id, value, onChange, onInvalid }: { id: string; value: unknown; onChange: (v: unknown) => void; onInvalid?: (invalid: boolean) => void }) {
   const [text, setText] = useState(() => value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value, null, 2));
   const [invalid, setInvalid] = useState(false);
   return <Textarea id={id} rows={6} className="font-mono" aria-invalid={invalid} value={text} placeholder='[{"id": 1}]' onChange={(e) => {
     const next = e.target.value; setText(next);
-    if (!next.trim()) { setInvalid(false); onChange(undefined); return; }
-    try { onChange(JSON.parse(next)); setInvalid(false); } catch { setInvalid(true); onChange(next); }
+    if (!next.trim()) { setInvalid(false); onInvalid?.(false); onChange(undefined); return; }
+    try { onChange(JSON.parse(next)); setInvalid(false); onInvalid?.(false); } catch { setInvalid(true); onInvalid?.(true); onChange(next); }
   }} />;
 }
 
@@ -104,29 +121,29 @@ export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(
 /** The original action submission form, shared by dialogs and inline hosts. */
 function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy,initial={},enabled=true}:{declared:ActionDeclaration;target:{type:string;id:string};revision:number;onCancel:()=>void;onCompleted:()=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean}) {
  const {decide}=useHost(),lock=useRef(false);
- const [values,setValues]=useState<Record<string,unknown>>(initial),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState("");
- const missing=declared.payload.some(f=>f.required&&(values[f.name]===undefined||values[f.name]===""));
- const submit=async()=>{if(!enabled||preview||lock.current||missing||!target.id)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal}))onCompleted();}catch{setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
- return <div className="grid gap-3">
+ const [values,setValues]=useState<Record<string,unknown>>(initial),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(false),[invalidJSON,setInvalidJSON]=useState<Record<string,boolean>>({});
+ const submit=async()=>{if(!enabled||preview||lock.current||!target.id)return;setSubmitted(true);if(Object.values(invalidJSON).some(Boolean)||!payloadSchema(declared.payload).safeParse(values).success)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal,onOutcome:entry=>setPending(entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN")}))onCompleted();}catch{setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
+ return <form className="grid gap-3" noValidate onSubmit={event=>{event.preventDefault();void submit();}}>
  {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
  {refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}
  {preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}
- <fieldset disabled={submitting||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload} values={values} onChange={setValues} preview={preview}/></fieldset>
- <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{t("Cancel")}</Button><Button variant="primary" disabled={!enabled||preview||missing||!target.id||submitting} onClick={submit}>{submitting?t("Executing…"):declared.title}</Button></div>
- </div>;
+ <fieldset disabled={submitting||pending||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload} values={values} onChange={setValues} preview={preview} submitted={submitted} onInvalid={(name,invalid)=>setInvalidJSON(old=>({...old,[name]:invalid}))}/></fieldset>
+ <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{pending?t("Close"):t("Cancel")}</Button><Button type="submit" variant="primary" disabled={!enabled||preview||!target.id||submitting}>{submitting?t("Executing…"):pending?t("Retry confirmation"):declared.title}</Button></div>
+ </form>;
 }
 
 /** One action taken through the existing modal entry point. */
 function ActionDialog({ declared, type, record, onClose, onCompleted, initial={} }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown> }) {
  const {decide,source}=useHost(),info=source.entity(type);
+ const [baseline]=useState(record);
  const [id,setId]=useState(()=>newId(prefixOf(type))),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState("");
- const target={type,id:record?.id??id},options={expectedRevision:record?.revision??0,quiet:true,onRefused:setRefusal};
- const done=(ok:boolean)=>{if(ok){onClose();onCompleted?.(target);}},generated=declared.schema===`${type}.create`;
+ const target={type,id:baseline?.id??id},options={expectedRevision:baseline?.revision??0,quiet:true,onRefused:setRefusal};
+ const done=(ok:boolean)=>{if(ok){onClose();onCompleted?.(target);}return ok;},generated=declared.schema===`${type}.create`;
  return <Dialog open wide={generated&&info?.fields.some(f=>f.type==="lines")} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
  <div className="grid gap-3">
  {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting}/></label>}
- {generated?<>{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}<GeneratedForm type={type} submitLabel={t("Create")} onCancel={onClose} onSubmit={async values=>done(!!id&&await decide(declared.schema,target,values,options))}/></>:<DeclaredActionForm declared={declared} target={target} revision={record?.revision??0} onCancel={onClose} onCompleted={()=>done(true)} onBusy={setSubmitting} initial={initial}/>}
+ {generated?<>{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}<GeneratedForm type={type} submitLabel={t("Create")} onCancel={onClose} onBusy={setSubmitting} onSubmit={async values=>done(!!id&&await decide(declared.schema,target,values,options))}/></>:<DeclaredActionForm declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={()=>done(true)} onBusy={setSubmitting} initial={initial}/>}
  </div></Dialog>;
 }
 

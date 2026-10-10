@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Enter a whole number.": "请输入整数。",
+  "Retry confirmation": "重试确认",
+  "Awaiting confirmation. Retry sends the same request.": "正在等待确认，重试会发送同一请求。",
+  "An earlier request is awaiting confirmation. Retry it before submitting changes.": "此前的请求仍待确认，请先重试确认该请求，再提交修改。",
   "Interface query window is unavailable or incompatible.": "接口查询窗口不可用或不兼容。",
   "Interface windows retain typed record references and cannot become concrete collection inputs.": "接口窗口保留对象类型与记录标识，不能转换为单一对象的集合输入。",
   "The record could not be confirmed.": "无法确认此记录的访问权限。",

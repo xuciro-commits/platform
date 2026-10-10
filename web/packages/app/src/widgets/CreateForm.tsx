@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {PropertyList,t,type EntityRecord} from '@platform/ui';
 import type {Api} from '@platform/kernel';
 import {GeneratedForm,newId,useHost,useInvokeCapability} from '../index';
@@ -11,6 +11,7 @@ export function CreateFormRenderer({object:type,parentObject:parentType,config:s
   const [round, setRound] = useState(0), [error, setError] = useState("");
   const bindings = section.inputs ?? {};
   const bindingKey = JSON.stringify([parentType, master?.id, bindings]);
+  const id = useMemo(() => newId(prefixOf(type)), [type, round, bindingKey]);
   const [bound, setBound] = useState<{ key: string; values?: Record<string, unknown>; error?: string }>({ key: "" });
   useEffect(() => {
     let current = true;
@@ -53,14 +54,17 @@ export function CreateFormRenderer({object:type,parentObject:parentType,config:s
           if (!live) return;
           setError("");
           const payload = refField && master ? { ...values, [refField.name]: master.id } : values;
-          const id = newId(prefixOf(type));
           try {
             if (Object.keys(bindings).length > 0) {
               await invoke({ ref: { app: type.split(".")[0]!, kind: "action", name: `${type}.create` }, target: id, key: crypto.randomUUID(),
                 inputs: payload, bindings, record: Object.values(bindings).some((binding) => binding.source === "subject") && master ? `${parentType}/${master.id}` : undefined, expectedRevision: 0 });
               setRound((r) => r + 1);
-            } else if (await decide(`${type}.create`, { type, id }, payload, { expectedRevision: 0 })) setRound((r) => r + 1);
-          } catch (failure) { setError(failure instanceof Error ? failure.message : t("The related record could not be created.")); }
+            } else {
+              const ok = await decide(`${type}.create`, { type, id }, payload, { expectedRevision: 0, quiet: true, onRefused: setError });
+              if (ok) setRound((r) => r + 1);
+              return ok;
+            }
+          } catch (failure) { setError(failure instanceof Error ? failure.message : t("The related record could not be created.")); return false; }
         }} />
     </fieldset>
   </div>;

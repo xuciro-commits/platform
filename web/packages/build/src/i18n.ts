@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Finish editing this identifier before saving.": "请完成此标识的编辑后再保存。",
+  "Enter a number within the allowed range.": "请输入允许范围内的数值。",
  "This published interface window retains concrete record identities. Use a record picker and a confirmed record card.": "此发布接口窗口保留具体记录身份。可绑定记录选择器和已确认记录卡片。",
  "Query source kind": "查询来源类型",
  "Source interface": "来源接口",

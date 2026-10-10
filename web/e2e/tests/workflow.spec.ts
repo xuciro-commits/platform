@@ -23,6 +23,14 @@ for (const fixture of [
       // Edit and save through the current flow workbench, then test synthetic data.
       await builder.open(page, `/flow?id=${id}`);
       const properties = page.getByRole("region", { name: "Workflow properties", exact: true });
+      await properties.getByLabel("Default workflow input", { exact: false }).fill("{");
+      const structure = page.getByRole("region", { name: "Flow structure", exact: true });
+      await structure.getByRole("button", { name: /^Review sample/ }).click();
+      await expect(page.getByRole("button", { name: "Validate", exact: true })).toBeDisabled();
+      await structure.getByRole("button", { name: "Native review", exact: true }).click();
+      await expect(properties.getByLabel("Default workflow input", { exact: false })).toHaveValue("{");
+      await properties.getByLabel("Default workflow input", { exact: false }).fill("{}");
+      await expect(page.getByRole("button", { name: "Validate", exact: true })).toBeEnabled();
       await properties.getByRole("textbox", { name: "Workflow title", exact: true }).fill("Reviewed native flow");
       await page.keyboard.press("ControlOrMeta+s");
       await expect.poll(async () => (await builder.record("build.process", id)).title).toBe("Reviewed native flow");

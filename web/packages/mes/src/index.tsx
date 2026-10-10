@@ -318,7 +318,7 @@ function SFCDetail({ id }: { id: string }) {
             { name: "reworkOperation", label: t("Rework from operation"), kind: "select", options: upto.map((o) => ({ value: String(o.number), label: `${o.number} ${o.name}` })) },
           ]}
           submitLabel={t("Sign")} onCancel={() => setSigning(false)}
-          onSubmit={async (v) => { await decide("mes.sfc.sign", target, v, { expectedRevision: sfc.revision }); setSigning(false); }} />
+          onSubmit={async (v) => { let reason = ""; const ok = await decide("mes.sfc.sign", target, v, { expectedRevision: sfc.revision, quiet: true, onRefused: value => { reason = value; } }); if (ok) setSigning(false); else if (reason) throw new Error(reason); return ok; }} />
       </Dialog>
     </div>
   );
@@ -383,7 +383,7 @@ function Equipment() {
           <EntityForm schema={z.object({ reason: z.string().min(1) })} defaultValues={{ reason: assigning.reason ?? downtimeReasons[0] }}
             fields={[{ name: "reason", label: t("Reason"), kind: "select", options: downtimeReasons.map((r) => ({ value: r, label: r })) }]}
             submitLabel={t("Save")} onCancel={() => setAssigning(undefined)}
-            onSubmit={async (v) => { await decide("mes.downtime.reason", { type: "mes.downtime", id: assigning.id }, v); setAssigning(undefined); }} />
+            onSubmit={async (v) => { let reason = ""; const ok = await decide("mes.downtime.reason", { type: "mes.downtime", id: assigning.id }, v, { quiet: true, onRefused: value => { reason = value; } }); if (ok) setAssigning(undefined); else if (reason) throw new Error(reason); return ok; }} />
         )}
       </Dialog>
     </>

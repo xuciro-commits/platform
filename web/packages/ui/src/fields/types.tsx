@@ -13,7 +13,7 @@ import { WorkspaceContext } from "../shell/Workspace";
 import type { Route } from "../shell/route";
 import { t } from "../i18n";
 
-export type EditorProps<V> = { id?: string; value: V | undefined; onChange: (value: V | undefined) => void; invalid?: boolean; autoFocus?: boolean };
+export type EditorProps<V> = { id?: string; value: V | undefined; onChange: (value: V | undefined) => void; invalid?: boolean; autoFocus?: boolean; describedBy?: string };
 export type Operator<V> = { id: string; label: string; needsArg: boolean; test: (value: V | undefined, arg: V | undefined) => boolean };
 
 export type FieldType<V = any, R = any> = {
@@ -61,8 +61,8 @@ const timeOps: Operator<string>[] = [equals,
   { id: "after", label: t("is after"), needsArg: true, test: (v, a) => !!v && !!a && v > a }, isEmpty, notEmpty];
 
 function input<V>(type: string, parse: (raw: string) => V | undefined, show: (v: V) => string = String, extra: object = {}) {
-  return ({ id, value, onChange, invalid, autoFocus }: EditorProps<V>) => (
-    <Input id={id} type={type} aria-invalid={invalid} autoFocus={autoFocus} {...extra}
+  return ({ id, value, onChange, invalid, autoFocus, describedBy }: EditorProps<V>) => (
+    <Input id={id} type={type} aria-invalid={invalid} aria-describedby={describedBy} autoFocus={autoFocus} {...extra}
       value={value === undefined || value === null ? "" : show(value)}
       onChange={(e) => onChange(e.target.value === "" ? undefined : parse(e.target.value))} />
   );
@@ -87,8 +87,8 @@ export const json = (o: Common): FieldType<unknown> => {
 export const longText = (o: Common & { rows?: number; placeholder?: string }): FieldType<string> => ({
   ...text(o), type: "longText",
   display: (v) => (empty(v) ? muted : <span className="line-clamp-2 whitespace-pre-wrap">{v}</span>),
-  editor: ({ id, value, onChange, invalid, autoFocus }) => (
-    <textarea id={id} aria-invalid={invalid} autoFocus={autoFocus} rows={o.rows ?? 4} value={value ?? ""}
+  editor: ({ id, value, onChange, invalid, autoFocus, describedBy }) => (
+    <textarea id={id} aria-invalid={invalid} aria-describedby={describedBy} autoFocus={autoFocus} rows={o.rows ?? 4} value={value ?? ""}
       placeholder={o.placeholder}
       onChange={(e) => onChange(e.target.value || undefined)}
       className="w-full min-h-[88px] rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring" />
@@ -167,8 +167,8 @@ export const singleSelect = (o: Common & { options: Option[] }): FieldType<strin
     operators: [equals, { id: "isNot", label: t("is not"), needsArg: true, test: (v, a) => v !== a }, isEmpty, notEmpty],
     text: (v) => find(v)?.label ?? v ?? "",
     display: (v) => (v ? <Tag label={find(v)?.label ?? v} tone={find(v)?.tone} /> : muted),
-    editor: ({ id, value, onChange, invalid, autoFocus }) => (
-      <Select id={id} aria-invalid={invalid} autoFocus={autoFocus} value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
+    editor: ({ id, value, onChange, invalid, autoFocus, describedBy }) => (
+      <Select id={id} aria-invalid={invalid} aria-describedby={describedBy} autoFocus={autoFocus} value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
         <option value="">—</option>{o.options.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}
       </Select>
     ),

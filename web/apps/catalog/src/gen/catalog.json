@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:fdb7bcbb9ea01e6e",
+  "revision": "sha256:39b16e57a04a7bfd",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5174,6 +5174,10 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/session/ReleaseInformation.tsx"
     ],
+    "ui/field-types": [
+      "web/packages/app/src/actions/actions.tsx",
+      "web/packages/app/src/widgets/CollectionBuilder.tsx"
+    ],
     "ui/record-lookup": [
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
@@ -5425,9 +5429,6 @@
     "ui/record-scatter": [
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
       "web/packages/app/src/widgets/RecordScatter.tsx"
-    ],
-    "ui/field-types": [
-      "web/packages/app/src/widgets/CollectionBuilder.tsx"
     ],
     "ui/filter-bar": [
       "web/packages/app/src/widgets/CollectionBuilder.tsx"

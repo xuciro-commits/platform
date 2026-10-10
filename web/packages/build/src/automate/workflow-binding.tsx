@@ -3,22 +3,22 @@ export {schemaIssue} from "./workflow-schema";
 import { Button, Checkbox, Disclosure, Input, Select, Textarea, t } from "@platform/ui";
 import { Braces, ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from "lucide-react";
 import { createContext, useContext, useEffect, useId, useState } from "react";
+import { useDraftInput } from "../session/DraftSession";
 import { commonSchemaProperties, type Binding, type Predicate, type ValueSchema, type WorkflowStep } from "./workflow-model";
 
 export const WorkflowFormProblems = createContext<(id: string, problem: string) => void>(() => {});
 const bindingMime = "application/platform-binding";
 
 /** Buffer invalid edits visibly, and make the owning form's Save unavailable until corrected. */
-export function JSONEditor({ value, onChange, label, rows = 4, schema }: { value: unknown; onChange: (value: unknown) => void; label: string; rows?: number; schema?: ValueSchema }) {
+export function JSONEditor({ value, onChange, label, rows = 4, schema, draftKey = label }: { value: unknown; onChange: (value: unknown) => void; label: string; rows?: number; schema?: ValueSchema; draftKey?: string }) {
   const source = JSON.stringify(value ?? null, null, 2), id = useId(), report = useContext(WorkflowFormProblems);
-  const [text, setText] = useState(source), [problem, setProblem] = useState("");
-  useEffect(() => { setText(source); setProblem(""); }, [source]);
-  useEffect(() => { report(id, problem); return () => report(id, ""); }, [id, problem, report]);
+  const input = useDraftInput(draftKey, source), { text, problem } = input;
+  useEffect(() => { if (input.retained) return; report(id, problem); return () => report(id, ""); }, [id, problem, report, input.retained]);
   return <label className="grid gap-1 text-xs"><span className="flex items-center justify-between">{label}{schema && <code className="text-[10px] text-muted">{schema.type}</code>}</span>
     <Textarea aria-invalid={!!problem} rows={rows} spellCheck={false} className="font-mono text-[11px]" value={text} onChange={(event) => {
-      const next = event.target.value; setText(next);
-      try { const parsed: unknown = JSON.parse(next); const issue = schema && schemaIssue(schema, parsed); if (issue) { setProblem(issue); return; } setProblem(""); onChange(parsed); }
-      catch { setProblem(t("Enter valid JSON before saving.")); }
+      const next = event.target.value;
+      try { const parsed: unknown = JSON.parse(next); const issue = schema && schemaIssue(schema, parsed); if (issue) { input.write(next, issue); return; } input.clear(); onChange(parsed); }
+      catch { input.write(next, t("Enter valid JSON before saving.")); }
     }} />{problem && <span role="alert" className="text-danger">{problem}</span>}
   </label>;
 }
@@ -29,10 +29,11 @@ export const schemaDefault = (schema?: ValueSchema): unknown => {
   if (schema?.type === "object") return Object.fromEntries((schema.required ?? []).map((name) => [name, schemaDefault(schema.properties?.[name])]));
   return schema?.type === "array" ? [] : schema?.type === "boolean" ? false : schema?.type === "number" || schema?.type === "integer" ? 0 : schema?.enum?.[0] ?? "";
 };
-export function BindingEditor({ label, value, onChange, steps, schema, optional = false, sources }: {
-  label: string; value?: Binding; onChange: (value: Binding | undefined) => void; steps: WorkflowStep[]; schema?: ValueSchema; optional?: boolean; sources?: Binding["source"][];
+export function BindingEditor({ label, value, onChange, steps, schema, optional = false, sources, draftKey = label }: {
+  label: string; value?: Binding; onChange: (value: Binding | undefined) => void; steps: WorkflowStep[]; schema?: ValueSchema; optional?: boolean; sources?: Binding["source"][]; draftKey?: string;
 }) {
   const binding = value ?? { source: "literal" as const, value: schemaDefault(schema) };
+  const input = useDraftInput(`binding:${draftKey}`, JSON.stringify(binding.value ?? null, null, 2));
   const choices: Binding["source"][] = sources ?? ["literal", "input", "step", "subject", "item", "index", "answer"];
   return <div className="grid gap-2 rounded-lg border border-border bg-background/50 p-2"
     onDragOver={(event) => { if (event.dataTransfer.types.includes(bindingMime)) event.preventDefault(); }}
@@ -41,9 +42,10 @@ export function BindingEditor({ label, value, onChange, steps, schema, optional 
       event.preventDefault(); event.stopPropagation(); try { const binding = JSON.parse(raw) as Binding; if (choices.includes(binding.source)) onChange(binding); } catch { /* unrelated or truncated drag payload */ }
     }}>
     <div className="flex items-center justify-between gap-2 text-xs font-medium"><span>{label}</span>{schema && <code className="text-[9px] font-normal text-muted">{schema.type}</code>}
-      {optional && value && <Button variant="ghost" type="button" onClick={() => onChange(undefined)} aria-label={t("Remove binding")} className="ml-auto rounded p-0.5 text-muted hover:text-danger"><Trash2 className="size-3" /></Button>}</div>
+      {optional && value && <Button variant="ghost" type="button" onClick={() => { input.clear(); onChange(undefined); }} aria-label={t("Remove binding")} className="ml-auto rounded p-0.5 text-muted hover:text-danger"><Trash2 className="size-3" /></Button>}</div>
     {!value ? <Button variant="ghost" onClick={() => onChange(binding)}>{t("Add binding")}</Button> : <>
       <Select aria-label={t("Binding source")} value={binding.source} onChange={(event) => {
+        input.clear();
         const source = event.target.value as Binding["source"];
         onChange(source === "literal" ? { source, value: schemaDefault(schema) } : source === "step" ? { source, step: steps[0]?.name ?? "", path: [] } : { source, path: [] });
       }}>{choices.map((source) => <option key={source} value={source}>{t(({ literal: "Constant", input: "Workflow input", step: "Upstream output", subject: "Source record", item: "Current item", index: "Iteration index", answer: "Human answer" })[source])}</option>)}</Select>
@@ -55,14 +57,14 @@ export function BindingEditor({ label, value, onChange, steps, schema, optional 
         ? schema.enum?.length ? <Select aria-label={label} value={String(binding.value ?? "")} onChange={(event) => onChange({ source: "literal", value: event.target.value })}><option value="">{t("Choose an option")}</option>{schema.enum.map((item) => <option key={item}>{item}</option>)}</Select>
           : <Input aria-label={label} value={typeof binding.value === "string" ? binding.value : ""} onChange={(event) => onChange({ source: "literal", value: event.target.value })} />
         : schema?.type === "boolean" ? <Checkbox checked={binding.value === true} onChange={(checked) => onChange({ source: "literal", value: checked })}>{t("True")}</Checkbox>
-          : <JSONEditor label={t("JSON value")} value={binding.value} onChange={(value) => onChange({ source: "literal", value })} schema={schema} rows={schema?.type === "object" || schema?.type === "array" ? 3 : 1} />
+          : <JSONEditor label={label} draftKey={`binding:${draftKey}`} value={binding.value} onChange={(value) => onChange({ source: "literal", value })} schema={schema} rows={schema?.type === "object" || schema?.type === "array" ? 3 : 1} />
         : <Input aria-label={t("Field path")} placeholder={t("Whole value, or field.path")} value={(binding.path ?? []).join(".")} onChange={(event) => onChange({ ...binding, path: event.target.value ? event.target.value.split(".") : [] })} />}
     </>}
     <p className="text-[10px] leading-4 text-muted">{schema?.description ?? t("Drag a field from available data, or choose a typed source.")}</p>
   </div>;
 }
 
-export function PredicateEditor({ value, onChange, steps, depth = 0 }: { value: Predicate; onChange: (predicate: Predicate) => void; steps: WorkflowStep[]; depth?: number }) {
+export function PredicateEditor({ value, onChange, steps, depth = 0, path = "condition" }: { value: Predicate; onChange: (predicate: Predicate) => void; steps: WorkflowStep[]; depth?: number; path?: string }) {
   const logical = ["all", "any", "not"].includes(value.op);
   return <div className="grid gap-2 rounded-lg border border-border p-2">
     <Select aria-label={t("Condition operator")} value={value.op} onChange={(event) => {
@@ -70,11 +72,11 @@ export function PredicateEditor({ value, onChange, steps, depth = 0 }: { value: 
       onChange(["all", "any", "not"].includes(op) ? { op, terms: [value.left ? { ...value, op: "eq", terms: undefined } : { op: "eq", left: { source: "literal", value: true }, right: { source: "literal", value: true } }] }
         : { op, left: value.left ?? { source: "input" }, ...(op === "exists" ? {} : { right: value.right ?? { source: "literal", value: true } }) });
     }}>{(["eq", "neq", "gt", "gte", "lt", "lte", "contains", "exists", ...(depth < 4 ? ["all", "any", "not"] : [])] as Predicate["op"][]).map((op) => <option key={op} value={op}>{t(({ eq: "Equals", neq: "Does not equal", gt: "Greater than", gte: "Greater or equal", lt: "Less than", lte: "Less or equal", contains: "Contains", exists: "Exists", all: "All conditions", any: "Any condition", not: "Not" })[op])}</option>)}</Select>
-    {logical ? <>{value.terms?.map((term, i) => <div key={i} className="grid gap-1"><PredicateEditor value={term} onChange={(next) => onChange({ ...value, terms: value.terms!.map((old, index) => index === i ? next : old) })} steps={steps} depth={depth + 1} />
+    {logical ? <>{value.terms?.map((term, i) => <div key={i} className="grid gap-1"><PredicateEditor path={`${path}.terms.${i}`} value={term} onChange={(next) => onChange({ ...value, terms: value.terms!.map((old, index) => index === i ? next : old) })} steps={steps} depth={depth + 1} />
       {value.op !== "not" && value.terms!.length > 1 && <Button variant="ghost" onClick={() => onChange({ ...value, terms: value.terms!.filter((_, index) => index !== i) })}>{t("Remove condition")}</Button>}</div>)}
       {value.op !== "not" && <Button onClick={() => onChange({ ...value, terms: [...(value.terms ?? []), { op: "eq", left: { source: "input" }, right: { source: "literal", value: true } }] })}>{t("Add condition")}</Button>}</>
-      : <><BindingEditor label={t("Left value")} value={value.left} onChange={(left) => onChange({ ...value, left })} steps={steps} />
-        {value.op !== "exists" && <BindingEditor label={t("Right value")} value={value.right} onChange={(right) => onChange({ ...value, right })} steps={steps} />}</>}
+      : <><BindingEditor draftKey={`${path}.left`} label={t("Left value")} value={value.left} onChange={(left) => onChange({ ...value, left })} steps={steps} />
+        {value.op !== "exists" && <BindingEditor draftKey={`${path}.right`} label={t("Right value")} value={value.right} onChange={(right) => onChange({ ...value, right })} steps={steps} />}</>}
   </div>;
 }
 

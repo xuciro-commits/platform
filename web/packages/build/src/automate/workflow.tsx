@@ -2,7 +2,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import {FlowImportDialog} from "../workshop/module-import/FlowImportDialog";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
-import {useDraftSession} from "../session/DraftSession";
+import {DraftInputs,useDraftSession} from "../session/DraftSession";
 import {workflowInputs,workflowRunMatches} from "./workflow-session";
 // Logic Studio edits the one build.process definition. Its native Flow owner
 // compiles, executes and accepts outcomes; React Flow remains presentation.
@@ -174,7 +174,8 @@ export function FlowEditor({ id }: { id: string }) {
   const saved = query.data?.record;
   const synchronized=!draft.id||saved?.revision===baseRevision.current;
   const runIssue = installed?.inputSchema ? schemaIssue(installed.inputSchema, runInput) : undefined;
-  const brokenForm = Object.values(formProblems).filter(Boolean);
+  const inputProblems = { ...formProblems, ...session.inputProblems };
+  const brokenForm = Object.values(inputProblems).filter(Boolean);
 
   const add = (kind: string, context?: FlowAddContext) => {
     const capability = capabilities.find((item) => capabilityKey(item) === kind); if (!capability) return;
@@ -243,6 +244,7 @@ export function FlowEditor({ id }: { id: string }) {
     const ids = new Set(removed.map((item) => item.id));
     change((current) => ({ ...current, steps: current.steps.filter((step) => !ids.has(step.name)).map((step) => [...ids].reduce((result, id) => replaceReferences(result, id, ""), step)),
       layout: Object.fromEntries(Object.entries(current.layout ?? {}).filter(([name]) => !ids.has(name))) }));
+    for (const key of Object.keys(session.inputs.values)) if ([...ids].some(id => key.startsWith(`step:${id}/`))) session.inputs.set(key);
     if (ids.has(chosen)) setChosen("");
   };
   const duplicate = (selected: FlowNode[]) => {
@@ -257,6 +259,7 @@ export function FlowEditor({ id }: { id: string }) {
     if (steps[0]) setChosen(steps[0].name);
   };
   const save = async () => {
+    if (brokenForm.length) return;
     const submitted=structuredClone(draft),target=submitted.id||crypto.randomUUID(),revision=submitted.id?baseRevision.current:0;
     if(!await decide(`build.process.${submitted.id?"edit":"create"}`,{type:"build.process",id:target},workflowInputs(submitted),{expectedRevision:submitted.id?revision:undefined,quiet:true,onRefused:setError}))return;
     baseRevision.current=revision+1;loaded.current=`${target}:${revision+1}`;
@@ -295,6 +298,7 @@ export function FlowEditor({ id }: { id: string }) {
     const old = node.name;
     change((current) => ({ ...current, steps: current.steps.map((step) => ({ ...replaceReferences(step, old, name), name: step.name === old ? name : step.name })),
       layout: Object.fromEntries(Object.entries(current.layout ?? {}).map(([id, point]) => [id === old ? name : id, point])) }));
+    for (const [key, value] of Object.entries(session.inputs.values)) if (key.startsWith(`step:${old}/`)) { session.inputs.set(key); if (key !== `step:${old}/identifier:${t("Step name")}:${old}`) session.inputs.set(`step:${name}/${key.slice(`step:${old}/`.length)}`, value); }
     setChosen(name);
   };
   const filtered = (catalogQuery.data??[]).filter((capability) => (filter === "all" || filter === "control" ? filter === "all" || capability.ref.kind === "control" : filter === "code" ? capability.kind === "compute" : capability.ref.kind !== "control" && capability.kind !== "compute")
@@ -303,7 +307,7 @@ export function FlowEditor({ id }: { id: string }) {
   if (role("build") !== "builder") return <Workbench storageKey="flow" title={t("Flow")}><WorkbenchMessage>{t("Only a builder can edit flows.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="flow" title={t("Flow")}><WorkbenchMessage>{query.isError ? t("The flow could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const problems: WorkbenchProblem[] = [
-    ...Object.entries(formProblems).filter(([, problem]) => problem).map(([key, problem]) => ({ id: `form:${key}`, text: problem, subject: key })),
+    ...Object.entries(inputProblems).filter(([, problem]) => problem).map(([key, problem]) => ({ id: `form:${key}`, text: problem, subject: key })),
     ...(validation && !validation.valid ? validation.issues.map((issue, i) => ({ id: `compile:${i}`, text: issue.message })) : []),
     ...(error ? [{ id: "error", text: error }] : []),
     ...(!synchronized ? [{ id: "sync", severity: "warning" as const, text: t("The current flow revision differs from this editing session. Reload before running or reviewing a release.") }] : []),
@@ -346,10 +350,10 @@ export function FlowEditor({ id }: { id: string }) {
         { id: "blocks", title: t("Blocks"), content: library },
         { id: "data", title: t("Data"), content: data },
       ] }}
-      right={{ label: t("Flow inspector"), content: <div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
+      right={{ label: t("Flow inspector"), content: <DraftInputs.Provider value={{...session.inputs,scope:node ? `step:${node.name}` : "settings"}}><div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
         onChange={(patch) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === chosen ? { ...step, ...patch } : step) }))} onRename={rename}
         onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} onClose={() => setChosen("")} />
-        : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} onClose={() => setChosen("")} />}</div> }}
+        : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} onClose={() => setChosen("")} />}</div></DraftInputs.Provider> }}
       dock={{ label: t("Flow dock"), value: dock, onChange: (next) => setDock(next as typeof dock), tabs: [
         { id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} empty={validation?.valid ? t("The native compiler accepted this draft.") : t("No problems.")} /> },
         { id: "run", title: t("Run"), content: <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_280px]"><JSONEditor label={t("Run input (JSON)")} value={runInput} schema={installed?.inputSchema} onChange={setRunInput} rows={5} />

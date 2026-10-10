@@ -5,19 +5,19 @@ import { useContext, useEffect, useId, useState, type ReactNode } from "react";
 import { BindingEditor, JSONEditor, PredicateEditor, SchemaEditor, WorkflowFormProblems } from "./workflow-binding";
 import { PERIODS, parameterSchema, periodLabel, sourceCapability, type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { ProtocolSelect, RoleSelect, useHost } from "@platform/app";
+import { useDraftInput } from "../session/DraftSession";
 
 const textSchema: ValueSchema = { type: "string" };
 const emptyPredicate = () => ({ op: "eq" as const, left: { source: "input" as const }, right: { source: "literal" as const, value: true } });
 const fieldClass = "grid gap-1 text-xs";
 
 function IdentifierInput({ value, label, onCommit, invalid }: { value: string; label: string; onCommit: (name: string) => void; invalid?: (name: string) => boolean }) {
-  const [text, setText] = useState(value), id = useId(), report = useContext(WorkflowFormProblems);
-  useEffect(() => { setText(value); }, [value]);
+  const input = useDraftInput(`identifier:${label}:${value}`, value), { text } = input, id = useId(), report = useContext(WorkflowFormProblems);
   const problem = invalid?.(text) ? t("Choose a unique, valid identifier.") : "";
-  useEffect(() => { report(id, problem); return () => report(id, ""); }, [id, problem, report]);
-  const commit = () => { if (!problem && text !== value) onCommit(text); };
-  return <><Input aria-label={label} aria-invalid={!!problem} value={text} onChange={(event) => setText(event.target.value)} onBlur={commit}
-    onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } }} />{problem && <span className="text-[10px] text-danger">{problem}</span>}</>;
+  useEffect(() => { if (input.retained) return; report(id, problem); return () => report(id, ""); }, [id, problem, report, input.retained]);
+  const commit = () => { if (!problem) { input.clear(); if (text !== value) onCommit(text); } };
+  return <><Input aria-label={label} aria-invalid={!!problem} value={text} onChange={(event) => input.write(event.target.value, invalid?.(event.target.value) ? t("Choose a unique, valid identifier.") : event.target.value !== value ? t("Finish editing this identifier before saving.") : "")} onBlur={commit}
+    onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); commit(); } }} />{problem && <span className="text-[10px] text-danger">{problem}</span>}</>;
 }
 
 function NamedInputs({ inputs = {}, schema, parameters = [], steps, onChange, editableNames = false }: { inputs?: Record<string, Binding>; schema?: ValueSchema; parameters?: Api.Field[]; steps: WorkflowStep[]; onChange: (inputs: Record<string, Binding>) => void; editableNames?: boolean }) {

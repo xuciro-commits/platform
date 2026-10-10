@@ -147,6 +147,10 @@ test("EntityForm validates with the schema before submitting", async () => {
   const schema = z.object({ guest: z.string().min(1, "Required"), nights: z.number().min(1, "At least one night") });
   render(<EntityForm schema={schema} onSubmit={submit} defaultValues={{ guest: "", nights: 0 }}
     fields={[{ name: "guest", label: "Guest" }, { name: "nights", label: "Nights", kind: "number" }]} />);
+  expect(screen.queryByText("At least one night")).toBeNull();
+  await act(async () => { fireEvent.blur(screen.getByLabelText("Nights")); });
+  expect(screen.getByText("At least one night")).toBeTruthy();
+  expect(submit).not.toHaveBeenCalled();
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save" })); });
   expect(submit).not.toHaveBeenCalled();
   expect(screen.getByText("Required")).toBeTruthy();

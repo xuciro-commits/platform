@@ -13,6 +13,34 @@ test("route 17: every action has an entry, pages follow changes", async ({ page,
   for (const action of ["Close opportunity", "Plan group stay", "Book stay"]) {
     await expect(page.getByRole("button", { name: action })).toBeVisible();
   }
+  await page.getByRole("button", { name: "Plan group stay" }).click();
+  const plan = page.getByRole("dialog");
+  await plan.getByLabel("Rooms, 1 to 20", { exact: false }).fill("1.5");
+  await plan.getByLabel("The provider's room type", { exact: false }).fill("10");
+  await expect(plan.getByText("Enter a whole number.")).toBeVisible();
+  await plan.getByLabel("Rooms, 1 to 20", { exact: false }).fill("1");
+  await plan.getByLabel("First night", { exact: false }).fill("2030-01-10");
+  await plan.getByLabel("Departure", { exact: false }).fill("2030-01-11");
+  await plan.getByLabel("The last day the rooms are held", { exact: false }).fill("2030-01-11");
+  const keys: string[] = [];
+  await page.route("**/v1/submissions", async route => {
+    const submission = route.request().postDataJSON();
+    if (submission.schema?.name !== "crm.opportunity.plan") return route.continue();
+    keys.push(submission.idempotencyKey);
+    if (keys.length === 1) return route.abort();
+    await route.continue();
+  });
+  await plan.getByRole("button", { name: "Plan group stay" }).click();
+  await expect(plan.getByRole("button", { name: "Retry confirmation" })).toBeVisible();
+  await expect(plan.getByLabel("The provider's room type", { exact: false })).toHaveValue("10");
+  await plan.getByRole("button", { name: "Retry confirmation" }).click();
+  await expect(plan.getByRole("alert")).toContainText("before arrival");
+  expect(keys).toHaveLength(2);
+  expect(keys[1]).toBe(keys[0]);
+  await expect(plan.getByLabel("First night", { exact: false })).toHaveValue("2030-01-10");
+  await expect(plan.getByLabel("The provider's room type", { exact: false })).toHaveValue("10");
+  await page.unroute("**/v1/submissions");
+  await plan.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Close opportunity" }).click();
   await page.getByRole("dialog").getByRole("combobox").first().selectOption("won");
   await page.getByRole("dialog").getByRole("button", { name: "Close opportunity" }).click();
