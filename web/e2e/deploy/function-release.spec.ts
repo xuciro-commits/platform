@@ -1,6 +1,6 @@
 import process from "node:process";
-import { expect, test, type Page } from "@playwright/test";
-import { decide } from "../tests/host";
+import type { Page } from "@playwright/test";
+import { expect, test, Member } from "../tests/kit";
 
 const phase = process.env.PLATFORM_DEPLOY_PHASE;
 if (phase !== "before" && phase !== "after") throw new Error("PLATFORM_DEPLOY_PHASE must be before or after");
@@ -18,7 +18,7 @@ async function signIn(page: Page, email: string) {
   await page.locator('button[type="submit"]').click();
   await page.locator('input[type="password"]').fill(password);
   await page.locator('button[type="submit"]').click();
-  await expect(page.getByRole("button", { name: "Projects" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Applications", exact: true })).toBeVisible();
   const token = await page.evaluate(() => (JSON.parse(sessionStorage.getItem("oidc:session") ?? "null") as { accessToken?: string } | null)?.accessToken);
   if (!token) throw new Error("OIDC sign-in returned no browser session");
   return token;
@@ -64,28 +64,30 @@ for (const fixture of fixtures) {
       expect(active.id).toMatch(/^sha256-v1:/);
       const source = "WF-BROWSER";
       if (phase === "before") {
-        await decide(request, token, "build", `${fixture.type}.create`, { type: fixture.type, id: source }, { note: "Browser recovery sample" });
+        await new Member(request, token).decide(`${fixture.type}.create`, { type: fixture.type, id: source }, { note: "Browser recovery sample" });
       }
-      await page.goto("/#/home");
-      await page.getByRole("button", { name: "Projects" }).first().click();
-      await page.getByRole("button", { name: fixture.page, exact: true }).click();
-      await page.getByRole("textbox", { name: "Search" }).first().fill(source);
-      await page.getByRole("row").filter({ hasText: source }).click();
+      const instanceURL = `/v1/records/flow.instance/${fixture.flow}:${source}`;
+      const retained = phase === "after" ? await (await request.get(instanceURL, { headers })).json() as { record: { release: string } } : undefined;
+      const release = retained?.record.release ?? active.id;
+      expect(release).toMatch(/^sha256-v1:/);
+      await page.goto(`/#/page?app=build&kind=page&name=advicepage${fixture.suffix}`);
+      await page.getByRole("table").first().getByRole("row").filter({ hasText: source }).click();
       if (phase === "before") await page.getByRole("button", { name: "Request advice" }).click();
       await expect.poll(async () => {
         const calls = await (await request.get("/v1/records/build.function-call?limit=500", { headers })).json() as {
           records: { source: string; release: string; version: number; state: string; costReported: boolean }[];
         };
-        return calls.records.filter((call) => call.source === `${fixture.type}/${source}` && call.release === active.id &&
+        return calls.records.filter((call) => call.source === `${fixture.type}/${source}` && call.release === release &&
           call.version === 1 && call.state === "ready" && call.costReported).length;
       }).toBe(2);
+      await page.reload();
+      await page.getByRole("table").first().getByRole("row").filter({ hasText: source }).click();
       await page.getByRole("button", { name: "Refresh advice" }).click();
       await page.getByRole("table").last().getByRole("row").filter({ hasText: `${fixture.type}/${source}` }).last().click();
       await expect(page.getByText("Measured model call")).toBeVisible();
       await expect(page.getByText("$0.010000")).toBeVisible();
-      const instanceURL = `/v1/records/flow.instance/${fixture.flow}:${source}`;
       const instance = await (await request.get(instanceURL, { headers })).json() as { record: { release: string; version: number; state: string } };
-      expect(instance.record.release).toBe(active.id);
+      expect(instance.record.release).toBe(release);
       expect(instance.record.version).toBe(3);
       expect(instance.record.state).toBe("waiting");
       await page.goto("/#/inbox");
@@ -99,7 +101,7 @@ for (const fixture of fixtures) {
         }).toBe("rejected");
         const finished = await (await request.get(instanceURL, { headers })).json() as { record: { state: string; release: string } };
         expect(finished.record.state).toBe("done");
-        expect(finished.record.release).toBe(active.id);
+        expect(finished.record.release).toBe(release);
       }
     });
   });

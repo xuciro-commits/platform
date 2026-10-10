@@ -33,7 +33,7 @@ fail() {
   # Retain tenant-local recovery diagnostics before the disposable project is
   # removed. Do not dump requests, environment variables or credentials.
   compose logs --no-color manufacturing-server hospitality-server 2>/dev/null |
-    grep -E 'quarantin|accepted work|accepted result|record batch' | tail -20 >&2 || true
+    grep -E 'quarantin|accepted work|accepted result|record batch|snapshot|replayed' | tail -20 >&2 || true
   if [[ -n ${SUP:-} ]]; then
     curl -s --max-time 3 -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/health" |
       jq -c '{status, recoveryError, queues, failed}' >&2 || true
@@ -98,7 +98,7 @@ state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500
   curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/ai-usage" | jq -c '.totals'
   workflow_state
   function_state; } |
-  jq -cS 'walk(if type == "object" then del(.changed, .created) else . end)'; } # when the host accepted a record is not state: a resent decision is accepted again
+  jq -cS 'walk(if type == "object" then del(.changed, .created, .profile.lastSeen) else . end)'; } # record clocks and login presence are not durable business state
 same_state() {
   local expected=$1 actual
   for _ in $(seq 20); do
@@ -664,6 +664,7 @@ echo "ok   joint AI function release: both industries activate one evaluated can
     if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING TENANT=plant-sz actor=$SUP language=go;
     else SERVER=$HOSPITALITY TENANT=hotel-a actor=$MGR language=tinygo; fi
     AUTHORITY=build
+    application_release=$(workflow_get "$actor" releases/active | jq -er .id) || fail "application release before compute probe"
     definition=$(jq -n --arg language "$language" --arg name "data$suffix" \
       '{name:$name,title:"Data channel recovery",abi:"platform-wasip1-data/v2",language:$language,
         source:"package main\nimport \"strings\"\nfunc Run(input Input)(Output,error){return Output(strings.Repeat(string(input),70000)),nil}",
@@ -692,6 +693,7 @@ echo "ok   joint AI function release: both industries activate one evaluated can
       sleep 1
     done
     jq -e --arg call "$call" '.state == "completed" and .output.staged.call == $call and .output.staged.size > 49152' <<<"$result" >/dev/null || fail "data ABI result never completed"
+    workflow_post "$actor" releases/active "{\"candidateId\":\"$application_release\",\"key\":\"code-restore-application\"}" | jq -e --arg id "$application_release" '.id == $id' >/dev/null || fail "restore application release after compute probe"
   done
 )
 echo "ok   Go/TinyGo data ABI: real isolated compilation, call-owned RustFS input/output and PostgreSQL result; retries keep the original call"
@@ -702,7 +704,7 @@ compose restart manufacturing-server hospitality-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/me") == 200 ]] && break; sleep 1; done
 same_state "$before" || fail "state after restart differs"
 # Snapshots (ADR-0019 D6): each host saved its tenant at shutdown and started from it.
-logged() { for _ in $(seq 10); do compose logs "$1" | grep -q "$2" && return; sleep 1; done; return 1; }
+logged() { for _ in $(seq 10); do compose logs "$1" | grep "$2" >/dev/null && return; sleep 1; done; return 1; }
 for host in manufacturing-server hospitality-server; do
   logged $host "saved a snapshot of" || fail "$host saved no snapshot at shutdown"
   logged $host "from the snapshot at" || fail "$host did not start from its snapshot"
@@ -835,6 +837,7 @@ result=$(AUTHORITY=build SERVER=$HOSPITALITY TENANT=hotel-a \
   submit "$MGR" rp-direct build.object.publish build.object WF-O '{}')
 jq -e '.error.code == "ERROR_CODE_POLICY_DENIED"' <<<"$result" >/dev/null || fail "production accepted a direct install"
 jq -e '.error.message | test("release candidate")' <<<"$result" >/dev/null || fail "the refusal did not name the candidate route"
-candidate=$(AUTHORITY=build workflow_post "$MGR" releases/preview '{"kind":"page","id":"FN-P"}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "production preview"
-joint=$(AUTHORITY=build workflow_post "$MGR" releases/preview '{"drafts":[{"kind":"object","id":"WF-O"},{"kind":"page","id":"FN-P"}]}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "production joint preview"
+preview=$(AUTHORITY=build SERVER=$HOSPITALITY workflow_post "$MGR" releases/preview '{"kind":"page","id":"FN-P"}') || fail "production preview request"
+candidate=$(jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId' <<<"$preview") || { jq -c '{diagnostic,diagnostics}' <<<"$preview" >&2; fail "production preview"; }
+joint=$(AUTHORITY=build SERVER=$HOSPITALITY workflow_post "$MGR" releases/preview '{"drafts":[{"kind":"object","id":"WF-O"},{"kind":"page","id":"FN-P"}]}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "production joint preview"
 echo "ok   delivery profile: production refuses the direct install with the candidate route named; single and joint candidates still preview"
