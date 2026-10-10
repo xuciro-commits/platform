@@ -69,11 +69,27 @@ type Continuous struct {
 	// a digest of the frame that recovery and handover can name and verify. 0
 	// keeps the per-batch frame alone.
 	CheckpointEvery int `json:"CheckpointEvery,omitempty"`
+	// Effects binds the graph's output nodes to original app actions
+	// (ADR-0047 §13.3): each triggered or cleared episode becomes one
+	// submission as the declaring app's automation principal. Empty keeps
+	// threshold alerts as accepted outputs only.
+	Effects []StreamEffect `json:"Effects,omitempty"`
 	// DeadLetter declares the instance's dead-letter asset (ADR-0047 §13.3):
 	// what the flow could not fold stays as a numbered letter, bounded by the
 	// declared count and age, so one letter can be inspected and replayed
 	// under the original authorization. Nil keeps no dead letters.
 	DeadLetter *StreamDeadLetter `json:"DeadLetter,omitempty"`
+}
+
+// StreamEffect is one output binding: the threshold node whose alerts it
+// takes, the app's own declared action each episode is submitted to, and which
+// alert field carries that action's target record id (empty: the group).
+// States restricts delivery to "triggered" or "cleared"; empty takes both.
+type StreamEffect struct {
+	Node   string   `json:"node"`
+	Action string   `json:"action"`
+	Target string   `json:"target,omitempty"`
+	States []string `json:"states,omitempty"`
 }
 
 // StreamDeadLetter is the dead-letter asset's declared rule: the instance

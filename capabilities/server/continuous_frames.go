@@ -199,9 +199,9 @@ func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*fl
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
-	// The frame's own explicit checkpoint must describe the frame the reader
-	// actually got: a mismatch means the record and its bytes disagree.
-	if err := flow.VerifyFrame(*frame); err != nil {
+	// The live frame may have moved past its last checkpoint, but it can never
+	// claim one it has not reached.
+	if err := flow.VerifyCheckpointAhead(*frame); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
 	_, latest, _, refusal := t.continuousSnapshot(current, id, now)

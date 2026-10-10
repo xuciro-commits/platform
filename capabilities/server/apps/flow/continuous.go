@@ -40,6 +40,8 @@ type BatchFrame struct {
 	State       map[string]json.RawMessage  `json:"state,omitempty"`       // node name → its state
 	DeadLetters []DeadLetter                `json:"deadLetters,omitempty"` // what could not be folded, and why
 	Batches     int64                       `json:"batches,omitempty"`     // accepted batches, ever
+	EffectSeq   int64                       `json:"effectSeq,omitempty"`   // the last effect intent number issued
+	Pending     []EffectRequest             `json:"pending,omitempty"`     // threshold effects waiting for delivery
 	LetterSeq   int64                       `json:"letterSeq,omitempty"`   // the last dead-letter number issued
 	Dropped     int                         `json:"dropped,omitempty"`     // letters the declared bounds dropped, ever
 	Checkpoint  *FrameCheckpoint            `json:"checkpoint,omitempty"`  // the last explicit run checkpoint
@@ -102,30 +104,55 @@ func (f *BatchFrame) commitCheckpoint(declared platform.Continuous, now time.Tim
 	point := &FrameCheckpoint{Ordinal: f.Batches, Cursor: f.Cursor, Watermark: f.Watermark, Consumed: f.Consumed,
 		Rejected: f.Rejected, Dropped: f.Dropped, Letters: len(f.DeadLetters), At: now}
 	f.Checkpoint = nil
-	point.Digest = frameDigest(f)
+	point.Digest = checkpointDigest(f)
 	f.Checkpoint = point
 }
 
-// frameDigest hashes the frame as a reader sees it: the checkpoint itself is
-// cleared first, so the same frame always hashes the same way.
-func frameDigest(f *BatchFrame) string {
-	clone := *f
-	clone.Checkpoint = nil
-	return fmt.Sprintf("sha256:%x", sha256.Sum256(platform.Raw(clone)))
+// checkpointDigest hashes the position a checkpoint names: the accepted
+// ordinals, cursor, watermark and counters, the bound source checkpoint and
+// each node state's own digest. What changes after the batch — dead letters,
+// pending effects, marks — is deliberately outside it, so the digest keeps
+// naming the batch that wrote it.
+func checkpointDigest(f *BatchFrame) string {
+	state := map[string]string{}
+	for node, raw := range f.State {
+		state[node] = fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
+	}
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(platform.Raw(map[string]any{
+		"batches": f.Batches, "cursor": f.Cursor, "watermark": f.Watermark, "fingerprint": f.Fingerprint,
+		"consumed": f.Consumed, "rejected": f.Rejected, "source": f.Source, "state": state})))
 }
 
-// VerifyFrame checks the frame's own explicit checkpoint against its contents.
-// A frame without a checkpoint has nothing to check.
-func VerifyFrame(f BatchFrame) error {
+// VerifyCheckpoint checks a frame against the run checkpoint it carries. It is
+// meaningful for the frame of the batch the checkpoint names — the accepted
+// ledger and the sealed artifact of that batch are what a handover reads — and
+// says so plainly when given any other frame. A frame without a checkpoint has
+// nothing to check.
+func VerifyCheckpoint(f BatchFrame) error {
 	if f.Checkpoint == nil {
 		return nil
 	}
-	if f.Checkpoint.Digest == "" || f.Checkpoint.Digest != frameDigest(&f) {
-		return fmt.Errorf("the frame differs from its last run checkpoint")
+	if f.Batches != f.Checkpoint.Ordinal {
+		return fmt.Errorf("the frame is at batch %d, not the batch %d this checkpoint names", f.Batches, f.Checkpoint.Ordinal)
 	}
-	if f.Checkpoint.Ordinal != f.Batches || f.Checkpoint.Cursor != f.Cursor || !f.Checkpoint.Watermark.Equal(f.Watermark) ||
-		f.Checkpoint.Consumed != f.Consumed || f.Checkpoint.Rejected != f.Rejected || len(f.DeadLetters) < f.Checkpoint.Letters {
-		return fmt.Errorf("the frame's position differs from its last run checkpoint")
+	if f.Checkpoint.Digest == "" || f.Checkpoint.Digest != checkpointDigest(&f) {
+		return fmt.Errorf("the frame differs from its run checkpoint")
+	}
+	if f.Checkpoint.Cursor != f.Cursor || !f.Checkpoint.Watermark.Equal(f.Watermark) ||
+		f.Checkpoint.Consumed != f.Consumed || f.Checkpoint.Rejected != f.Rejected {
+		return fmt.Errorf("the frame's position differs from its run checkpoint")
+	}
+	return nil
+}
+
+// VerifyCheckpointAhead refuses a frame whose checkpoint names a batch the
+// frame has not reached: the live read's own consistency rule.
+func VerifyCheckpointAhead(f BatchFrame) error {
+	if f.Checkpoint == nil {
+		return nil
+	}
+	if f.Checkpoint.Cursor == "" || f.Checkpoint.Ordinal > f.Batches {
+		return fmt.Errorf("the frame names a run checkpoint it has not reached")
 	}
 	return nil
 }
@@ -239,6 +266,9 @@ func foldDecision(in *FlowInstance, declared platform.Continuous, batch Batch, n
 	if refusal != nil {
 		return 0, 0, refusal
 	}
+	// The declared effects become durable intents on the frame, delivered by
+	// the flow's own timer after this decision is accepted.
+	queueEffects(frame, declared, in.ID, batch.ID, alerts, now)
 	in.Outputs = maps.Clone(in.Outputs)
 	if in.Outputs == nil {
 		in.Outputs = map[string]json.RawMessage{}

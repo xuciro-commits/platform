@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/flow"
@@ -28,6 +30,12 @@ type frameSource struct {
 
 type frameStream struct{ platform.Record }
 
+type frameAlert struct {
+	platform.Record
+	Group string `json:"group" field:"readonly"`
+	State string `json:"state" field:"readonly" choices:"raised,acknowledged"`
+}
+
 // declared builds the test source's continuous declaration; each configure
 // step is the test's own declared rule, as a real app's would be.
 func declared(s *frameSource) *platform.Continuous {
@@ -44,13 +52,15 @@ func declared(s *frameSource) *platform.Continuous {
 func newFrameSource(tenant string, stateBytes int, configure ...func(*platform.Continuous)) *frameSource {
 	return &frameSource{stateBytes: stateBytes, configure: configure, ledger: platform.NewLedger(tenant, "frames", platform.NewCatalog(
 		platform.Action{Schema: "frames.source.start", Target: "frames.source", Title: "Start", Description: "Start the source's original Flow instance", Roles: []string{"operator"}, Payload: []platform.Field{}},
-		platform.Action{Schema: "frames.source.feed", Target: "frames.source", Title: "Feed", Description: "Accept one source batch through its original Flow instance", Roles: []string{"operator"}, Payload: []platform.Field{{Name: "batch", Type: "json", Required: true}}}), "frames.source")}
+		platform.Action{Schema: "frames.source.feed", Target: "frames.source", Title: "Feed", Description: "Accept one source batch through its original Flow instance", Roles: []string{"operator"}, Payload: []platform.Field{{Name: "batch", Type: "json", Required: true}}},
+		platform.Action{Schema: "frames.alert.ack", Target: "frames.alert", Title: "Acknowledge alert", Description: "Record that a person took the alert", Roles: []string{"operator"}, Payload: []platform.Field{{Name: "group", Type: "text", Required: true}}},
+		platform.Action{Schema: "frames.alert.reject", Target: "frames.alert", Title: "Reject alert", Description: "Refuse the alert in this tenant", Roles: []string{"operator"}, Payload: []platform.Field{{Name: "group", Type: "text", Required: true}}}), "frames.source", "frames.alert")}
 }
 func (s *frameSource) Attach(h host.Host) { s.host = h }
 func (s *frameSource) Manifest() platform.Manifest {
 	return platform.Manifest{
 		ID: "frames", Version: "1", Actions: s.ledger.Catalog,
-		Entities: []platform.Entity{{Type: "frames.source", Title: "Source", Model: frameStream{}}},
+		Entities: []platform.Entity{{Type: "frames.source", Title: "Source", Model: frameStream{}}, {Type: "frames.alert", Title: "Alert", Model: frameAlert{}}},
 		Flows: []platform.Flow{{
 			Name: "window", Title: "Accepted window", Version: 1, Start: platform.Start{Manual: true},
 			Continuous: declared(s),
@@ -63,7 +73,7 @@ func (s *frameSource) Snapshot() (json.RawMessage, error)       { return s.ledge
 func (s *frameSource) Restore(raw json.RawMessage) error        { return s.ledger.Restore(raw) }
 func (s *frameSource) AcceptedLedger() *platform.Ledger         { return s.ledger }
 func (s *frameSource) AcceptedActionSchemas() []string {
-	return []string{"frames.source.start", "frames.source.feed"}
+	return []string{"frames.source.start", "frames.source.feed", "frames.alert.ack", "frames.alert.reject"}
 }
 func (*frameSource) Read(platform.Caller, string) (any, *kernel.Error) {
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "unknown read")
@@ -74,6 +84,12 @@ func (*frameSource) Input(platform.Caller, string, []byte, time.Time) (any, *ker
 func (s *frameSource) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return s.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var err *kernel.Error
+		switch sub.GetSchema().GetName() {
+		case "frames.alert.ack":
+			return func(*pb.ChangeRecord) {}, nil
+		case "frames.alert.reject":
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The alert cannot be acknowledged here")
+		}
 		if sub.GetSchema().GetName() == "frames.source.start" {
 			start := s.host.Processes().(interface {
 				StartManual(platform.Caller, string, string, int, string, json.RawMessage, time.Time) *kernel.Error
@@ -362,7 +378,7 @@ func TestContinuousSealedOperatorsAndRecovery(t *testing.T) {
 	// The checkpoint travels inside the sealed frame and names it after the
 	// fold: the read verifies it against the bytes it actually got.
 	sealed, failure := tn.ReadFlowFrame(memberOf(t, tn, "member"), id, at.Add(5*time.Second))
-	if failure != nil || sealed.Checkpoint == nil || sealed.Checkpoint.Ordinal != 2 || sealed.Checkpoint.Digest == "" || flow.VerifyFrame(*sealed) != nil {
+	if failure != nil || sealed.Checkpoint == nil || sealed.Checkpoint.Ordinal != 2 || sealed.Checkpoint.Digest == "" || flow.VerifyCheckpoint(*sealed) != nil {
 		t.Fatalf("sealed checkpoint: %+v %v", sealed.Checkpoint, failure)
 	}
 	if alerts := alertsOf(tn); len(alerts) != 0 {
@@ -389,6 +405,144 @@ func TestContinuousSealedOperatorsAndRecovery(t *testing.T) {
 		flow.Signal{Key: "m7", Partition: "plant-a", At: at.Add(17 * time.Second), Value: measurement("d1", 13)})
 	if alerts := alertsOf(restored); len(alerts) != 1 || alerts[0].State != "triggered" {
 		t.Fatalf("restored operators raised %+v", alerts)
+	}
+}
+
+// A threshold effect is delivered through the declaring app's own action, as
+// its automation principal, under a stable key (ADR-0047 §13.3): the intent is
+// durable on the frame until the effect is accepted, and replaying the journal
+// delivers it once.
+func TestContinuousThresholdEffectDelivery(t *testing.T) {
+	const tenant, id = "effect-delivery", "frames.window:source"
+	store := &memoryFiles{}
+	var source *frameSource
+	compose := func() *Tenant {
+		source = newFrameSource(tenant, 1<<20, func(c *platform.Continuous) {
+			c.Window = &platform.StreamWindow{Node: "window", WindowMS: 5000, SlideMS: 1000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"}
+			c.Aggregate = &platform.StreamAggregate{Node: "stats", Signal: "vibration", Group: []string{"deviceId"}, Measures: []string{"count", "mean"}}
+			c.Threshold = &platform.StreamThreshold{Node: "high", Field: "mean", High: 11.5, Low: 9.5, Severity: "High"}
+			c.Effects = []platform.StreamEffect{{Node: "high", Action: "frames.alert.ack", Target: "group", States: []string{"triggered"}}}
+		})
+		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+		tn.Files = store
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	at := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	feed := func(name, predecessor string, when time.Time, signals ...flow.Signal) {
+		t.Helper()
+		decide(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source",
+			map[string]any{"batch": flow.Batch{ID: name, Predecessor: predecessor, Signals: signals}}, when)
+	}
+	read := func() flow.FlowInstance {
+		t.Helper()
+		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		if !ok {
+			t.Fatal("no native instance")
+		}
+		return x
+	}
+	measurement := func(vibration float64) json.RawMessage {
+		return json.RawMessage(fmt.Sprintf(`{"deviceId":"d1","vibration":%g}`, vibration))
+	}
+	feed("b1", "", at, flow.Signal{Key: "m1", Partition: "plant-a", At: at, Value: measurement(12)},
+		flow.Signal{Key: "m2", Partition: "plant-a", At: at.Add(time.Second), Value: measurement(13)})
+	x := read()
+	if len(x.Batch.Pending) != 1 || x.Batch.Pending[0].Action != "frames.alert.ack" || x.Batch.Pending[0].Target != "[d1]" || x.Batch.Pending[0].State != "triggered" {
+		t.Fatalf("pending effects: %+v", x.Batch.Pending)
+	}
+	key := x.Batch.Pending[0].Key
+	// The flow's own timer delivers it as the app's automation principal, and
+	// the intent leaves the frame in the same decision.
+	tn.Work(at.Add(time.Second))
+	delivered := source.ledger.AcceptedFor(tenant, key)
+	if delivered == nil || delivered.GetSubmission().GetTarget().GetId() != "[d1]" || !bytes.Contains(delivered.GetSubmission().GetPayload(), []byte(`"state":"triggered"`)) {
+		t.Fatalf("the effect was not delivered through the app's action: %+v", delivered)
+	}
+	if x = read(); len(x.Batch.Pending) != 0 {
+		t.Fatalf("a delivered effect stayed pending: %+v", x.Batch.Pending)
+	}
+	// Nothing is delivered twice, and the journal replays to the same state.
+	tn.Work(at.Add(2 * time.Second))
+	if x = read(); len(x.Batch.Pending) != 0 {
+		t.Fatalf("an effect was delivered twice: %+v", x.Batch.Pending)
+	}
+	if again := source.ledger.AcceptedFor(tenant, key); again == nil || !proto.Equal(again, delivered) {
+		t.Fatal("the second run delivered a new effect")
+	}
+	CheckReplay(t, tn, entries, compose)
+}
+
+// An effect the app refuses is not lost or retried for ever: it backs off on
+// the platform's own schedule and, after its attempts, stays as a dead letter
+// that names the action and the refusal (ADR-0047 §13.3).
+func TestContinuousThresholdEffectRefusalBecomesDeadLetter(t *testing.T) {
+	const tenant, id = "effect-refusal", "frames.window:source"
+	store := &memoryFiles{}
+	compose := func() *Tenant {
+		source := newFrameSource(tenant, 1<<20, func(c *platform.Continuous) {
+			c.Window = &platform.StreamWindow{Node: "window", WindowMS: 5000, SlideMS: 1000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"}
+			c.Aggregate = &platform.StreamAggregate{Node: "stats", Signal: "vibration", Group: []string{"deviceId"}, Measures: []string{"count", "mean"}}
+			c.Threshold = &platform.StreamThreshold{Node: "high", Field: "mean", High: 11.5, Low: 9.5, Severity: "High"}
+			c.Effects = []platform.StreamEffect{{Node: "high", Action: "frames.alert.reject"}}
+		})
+		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+		tn.Files = store
+		return tn
+	}
+	tn := compose()
+	tn.Record = func(Entry) {}
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	at := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	measurement := func(vibration float64) json.RawMessage {
+		return json.RawMessage(fmt.Sprintf(`{"deviceId":"d1","vibration":%g}`, vibration))
+	}
+	decide(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source",
+		map[string]any{"batch": flow.Batch{ID: "b1", Signals: []flow.Signal{
+			{Key: "m1", Partition: "plant-a", At: at, Value: measurement(12)},
+			{Key: "m2", Partition: "plant-a", At: at.Add(time.Second), Value: measurement(13)}}}}, at)
+	read := func() flow.FlowInstance {
+		t.Helper()
+		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		if !ok {
+			t.Fatal("no native instance")
+		}
+		return x
+	}
+	if x := read(); len(x.Batch.Pending) != 1 || x.Batch.Pending[0].Target != "[d1]" {
+		t.Fatalf("pending effects: %+v", x.Batch.Pending)
+	}
+	// The refusal backs the intent off on the platform's own schedule.
+	previous := time.Time{}
+	for _, tick := range []time.Time{at.Add(time.Second), at.Add(4 * time.Second), at.Add(9 * time.Second), at.Add(18 * time.Second)} {
+		tn.Work(tick)
+		pending := read().Batch.Pending
+		if len(pending) != 1 || pending[0].Error != "ERROR_CODE_CONFLICT" || !pending[0].Due.After(tick) || !pending[0].Due.After(previous) {
+			t.Fatalf("refusal at %s: %+v", tick.Format(time.TimeOnly), pending)
+		}
+		previous = pending[0].Due
+	}
+	// The attempts are spent: nothing retries, and the reason is kept.
+	tn.Work(previous.Add(time.Second))
+	x := read()
+	if len(x.Batch.Pending) != 0 || len(x.Batch.DeadLetters) != 1 {
+		t.Fatalf("spent effect: pending %+v letters %+v", x.Batch.Pending, x.Batch.DeadLetters)
+	}
+	letter := x.Batch.DeadLetters[0]
+	if letter.Seq != 1 || letter.Key != "[d1]" || letter.Partition != "high" || !strings.Contains(letter.Reason, "frames.alert.reject") || !strings.Contains(letter.Reason, "ERROR_CODE_CONFLICT") {
+		t.Fatalf("effect dead letter: %+v", letter)
+	}
+	if x.Batch.LetterSeq != 1 || x.Batch.Batches != 1 {
+		t.Fatalf("frame after the refusal: %+v", x.Batch)
+	}
+	tn.Work(previous.Add(time.Hour))
+	if again := read(); len(again.Batch.Pending) != 0 || len(again.Batch.DeadLetters) != 1 {
+		t.Fatalf("a spent effect was retried: %+v", again.Batch)
 	}
 }
 

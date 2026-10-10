@@ -337,18 +337,18 @@ func TestContinuousRunCheckpointsNameTheAcceptedFrame(t *testing.T) {
 	if point == nil || point.Ordinal != 2 || point.Cursor != "b2" || point.Consumed != 2 || point.Rejected != 0 || !point.Watermark.Equal(now.Add(time.Minute)) || !point.At.Equal(now.Add(time.Minute)) {
 		t.Fatalf("checkpoint: %+v", point)
 	}
-	if err := VerifyFrame(*frame); err != nil {
+	if err := VerifyCheckpoint(*frame); err != nil {
 		t.Fatalf("a committed checkpoint does not verify: %v", err)
 	}
 	// A frame whose position moved under its checkpoint is refused, not read.
 	forged := *frame
 	forged.Cursor = "b3"
-	if VerifyFrame(forged) == nil {
+	if VerifyCheckpoint(forged) == nil {
 		t.Fatal("a frame that does not match its checkpoint verified")
 	}
 	moved := *frame
 	moved.Batches = 3
-	if VerifyFrame(moved) == nil {
+	if VerifyCheckpoint(moved) == nil {
 		t.Fatal("a frame with another ordinal verified")
 	}
 	// Nothing is rewritten between periods, and the next period points at the
@@ -357,18 +357,34 @@ func TestContinuousRunCheckpointsNameTheAcceptedFrame(t *testing.T) {
 	if frame.Checkpoint.Ordinal != 2 || frame.Batches != 3 {
 		t.Fatalf("checkpoint rewritten off period: %+v", frame.Checkpoint)
 	}
+	// The live frame has moved past the batch the checkpoint names: it may not
+	// claim a checkpoint ahead of itself, and the checkpoint is only verified
+	// against the frame of its own batch (the ledger and artifact of that
+	// batch are what a handover reads).
+	if err := VerifyCheckpointAhead(*frame); err != nil {
+		t.Fatalf("a frame past its checkpoint was refused: %v", err)
+	}
+	if err := VerifyCheckpoint(*frame); err == nil {
+		t.Fatal("a frame past its checkpoint verified as that checkpoint")
+	}
 	run("b4", "b3", now.Add(3*time.Minute), Signal{Key: "m4", Partition: "plant-a", At: now.Add(3 * time.Minute), Value: json.RawMessage("7")})
 	if frame.Checkpoint.Ordinal != 4 || frame.Checkpoint.Cursor != "b4" || frame.Checkpoint.Consumed != 4 {
 		t.Fatalf("checkpoint after two periods: %+v", frame.Checkpoint)
 	}
-	if err := VerifyFrame(*frame); err != nil {
+	if err := VerifyCheckpoint(*frame); err != nil {
 		t.Fatal(err)
 	}
 	// The frame keeps its checkpoint across its own JSON, which is what a
 	// reader verifies after recovery.
 	var restored BatchFrame
-	if json.Unmarshal(platform.Raw(frame), &restored) != nil || VerifyFrame(restored) != nil {
+	if json.Unmarshal(platform.Raw(frame), &restored) != nil || VerifyCheckpoint(restored) != nil {
 		t.Fatal("the checkpoint did not survive the frame's own JSON")
+	}
+	// A checkpoint ahead of the frame it travels with is impossible state.
+	ahead := restored
+	ahead.Batches = 1
+	if VerifyCheckpointAhead(ahead) == nil {
+		t.Fatal("a frame claimed a checkpoint it had not reached")
 	}
 }
 

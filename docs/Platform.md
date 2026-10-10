@@ -150,7 +150,7 @@
 | 协议 (ADR-0011) | 协议 | 版本化跨应用动作/读取/应答；住宿暂留与生产确认。 | platform.Protocol, Caller.Probe；[ADR-0011](ADR/0011-apps-interoperate-through-protocols.md) |
 | UI 库 | Web | 共享表格/表单/详情/工作区/画布；记录工作区集中任务、审批、流程，窄屏属性单列。 | @platform/ui |
 | 统一输入（ADR-0096 A–D） | 应用 API、宿主、共享 UI/App/Build | 原 Field/FieldInfo/build.Input 约束与字段拒绝；业务/动作/Inspector/治理沿同一输入 buffer、锁与原文门禁，原 DraftSession/history/AutoSave 保留基线和草稿；日区间、房型目录、同 key 重试与运行试填隔离已接入。 | InputConstraints、DateRangeInput、ErrorBody；[ADR-0096 §9](ADR/0096-unified-form-input-and-inspector-editing.md#9-as-built) |
-| Workshop 页面编辑器（ADR-0046 §5–§6，持续实施） | 应用 API、Build、共享 UI | 原 V2 页面/应用契约、类型化会话、统一本体工作台、受控关系与共享属性；75 个原生插件、92 类来源有限 profile、七页完整 Module 装配、页头/slots 与原保存/候选路径。当前版本联合运行已具备；持续 Flow 采用方案 A，原批次 frame 与调用结果通道有有界实现，受控 PostgreSQL 表已接原消费游标/窗口，窗口→聚合→滞回算子与死信资产已在两条批次通道落地，默认图接线与完整执行链仍在实施，见 ADR-0047 §13.5。详细边界只归 ADR。 | platform/pageui、PageDocument、EditorWorkbench、app/semantic；[ADR-0046 §14](ADR/0046-application-studio-fusion.md#14-代价审阅点与当前实现边界) |
+| Workshop 页面编辑器（ADR-0046 §5–§6，持续实施） | 应用 API、Build、共享 UI | 原 V2 页面/应用契约、类型化会话、统一本体工作台、受控关系与共享属性；75 个原生插件、92 类来源有限 profile、七页完整 Module 装配、页头/slots 与原保存/候选路径。当前版本联合运行已具备；持续 Flow 采用方案 A，原批次 frame 与调用结果通道有有界实现，受控 PostgreSQL 表已接原消费游标/窗口，窗口→聚合→滞回算子、编号死信资产、显式运行检查点与阈值效果投递已在两条批次通道落地，默认图接线与完整执行链仍在实施，见 ADR-0047 §13.5。详细边界只归 ADR。 | platform/pageui、PageDocument、EditorWorkbench、app/semantic；[ADR-0046 §14](ADR/0046-application-studio-fusion.md#14-代价审阅点与当前实现边界) |
 | 业务观测（ADR-0046，F1e58） | 共享 UI | 原宽表的两轴虚拟化/固定与隐藏列、受控窗口统计、真实时间/独立单位三曲线和完整平均值/SLO可在代码及Catalog组合；原宿主最近1–100000条业务时间窗口统计及受控App读者已接通；四种原生观测/资产双确认、设计检查器、复制与冻结已接通；四类Workshop Module显式真实来源/查询/信号及资产消费者迁移已接通；更广来源配置及当前版本整页运行验收仍待验证。 | @platform/ui ObservationTable/ObservationStatistics/ObservationTimeSeries/ObservationAvailability；[ADR-0046 §6.78](ADR/0046-application-studio-fusion.md#678-业务观测宽表窗口统计与真实时间序列) |
 | 固定页面内容与受控嵌入（ADR-0046，F1e59） | 原页面/宿主/前端边缘、UI Kit、Build | 原页面内容摘要与64份发布内容、当前成员精确版本读取、固定子页面候选闭包、原类型化接口、独立会话、共同预算、隔离外部文档及四类来源有限导入已接通；原类型化集合输入与默认CustomWidget集合参数已接通；集合返回与更广来源模块仍待实施，当前版本默认嵌入待联合运行验收。 | [ADR-0046 §6.79](ADR/0046-application-studio-fusion.md#679-受控嵌入与组合页面) |
 | 记录 AI 呈现与会话（ADR-0046，F1e60） | 原 AI/函数宿主、应用 API、UI Kit、Build | 固定受权函数、原确认记录/类型化结果、三种原生呈现与有限来源导入已接通；问题/原调用历史、同owner状态与退役、候选函数评估门禁沿原路径。跨集合/知识上下文和真实模型质量仍待验证。 | [ADR-0046 §6.80](ADR/0046-application-studio-fusion.md#680-三种原生-ai-呈现与受控会话) |
@@ -191,7 +191,7 @@
 | 内核契约 K1–K9、宿主运行时、应用 API、协议、共享 UI | 有界实现 | 保留 | §2.4 各条目；`make check`、`verify.sh capabilities composition` |
 | 记录、动作、生命周期、审批、任务、查询与联合候选 | 有界实现 | 保留 | ADR-0016/0017/0037/0039；根包与各平台应用测试 |
 | 共享输入与 Inspector 编辑（ADR-0096 A–D） | 有界实现 | 保留 + 补全走查（S-05） | 工程已收口（`platform/input.go`、FieldIssue/ErrorBody、DateRangeInput）；负责人体验走查未做 |
-| 持续 Flow（ADR-0047 §13 方案 A） | 补全中 | 补全（S-03） | 已接：批次 frame/窗口、受控 PostgreSQL 表消费游标/窗口、窗口→聚合→滞回算子（两条批次通道同一决策、声明不合即拒绝）、编号死信资产（按声明条数/年龄裁剪）与管理员按编号重放、显式运行检查点（`CheckpointEvery`，读取时按摘要核对）；缺：默认图接入声明、真实并发 8、动作/只读输出、制品生命周期 |
+| 持续 Flow（ADR-0047 §13 方案 A） | 补全中 | 补全（S-03） | 已接：批次 frame/窗口、受控 PostgreSQL 表消费游标/窗口、窗口→聚合→滞回算子（两条批次通道同一决策、声明不合即拒绝）、编号死信资产（按声明条数/年龄裁剪）与管理员按编号重放、显式运行检查点（`CheckpointEvery`，读取时按位置摘要核对）、阈值效果投递（`Continuous.Effects` 绑定声明应用自己的动作，接受即清意图、拒绝按平台退避重试、用尽转为编号死信）；缺：默认图接入声明与可见动作输出、真实并发 8、只读输出、制品生命周期 |
 | 集成织物 Connection/Source/Dataset/Pipeline/Matching/Writeback | 有界实现 | 补全（S-01、S-02 的候选覆盖、追踪、核对与恢复） | ADR-0069/0070–0077；集成记录不在候选封存/晋级范围（ADR-0047 §14） |
 | 应用、环境与包生命周期 | 有界实现 | 保留 + 补全（AR-10 的依赖、客户扩展保留与在途任务） | `packages.go`、环境生命周期测试、Host Console |
 | AI 模型、函数、智能体、预算与评测 | 有界实现 | 保留 + 补全真实任务质量验收（S-04） | `agent_eval.go`、`quota.go`、`aicall.go`；替身不构成质量证据 |

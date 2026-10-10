@@ -121,6 +121,7 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 	if refusal != nil {
 		return nil, refusal
 	}
+	queueEffects(frame, plan.rule, x.ID, batch.ID, alerts, now)
 	outputs := maps.Clone(x.Outputs)
 	if outputs == nil {
 		outputs = map[string]json.RawMessage{}

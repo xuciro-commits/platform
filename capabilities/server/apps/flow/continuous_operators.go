@@ -104,6 +104,24 @@ func checkOperators(declared platform.Continuous) error {
 			return fmt.Errorf("a stream threshold needs low < high and a bounded debounce")
 		}
 	}
+	if len(declared.Effects) > 4 {
+		return fmt.Errorf("a stream threshold delivers to at most 4 effects")
+	}
+	nodes := map[string]bool{}
+	for _, effect := range declared.Effects {
+		if effect.Node == "" || effect.Action == "" || nodes[effect.Node] {
+			return fmt.Errorf("each stream effect needs its own node and an action")
+		}
+		nodes[effect.Node] = true
+		if t == nil {
+			return fmt.Errorf("a stream effect needs the threshold whose alerts it delivers")
+		}
+		for _, state := range effect.States {
+			if state != "triggered" && state != "cleared" {
+				return fmt.Errorf("a stream effect delivers triggered and cleared, not %q", state)
+			}
+		}
+	}
 	return nil
 }
 

@@ -632,6 +632,24 @@ func (ss *session) act(appID, protocol, action, target string, payload json.RawM
 	return r.GetSubmission().GetTarget(), nil
 }
 
+// attemptAct is ss.act whose refusal the flow itself records: the nested
+// decision is isolated in the parent's savepoint, so the retry, the backoff or
+// the dead letter the flow writes about it stays in the same decision. An
+// accepted attempt that was not caught would be discarded with the refused
+// changes (a step's act keeps the plain route: a held approval is its answer).
+func (ss *session) attemptAct(appID, action, target string, payload json.RawMessage, key string) (*pb.EntityRef, *kernel.Error) {
+	var ref *pb.EntityRef
+	_, err := platform.Attempt(ss.c, func() (*pb.ChangeRecord, *kernel.Error) {
+		r, err := ss.act(appID, "", action, target, payload, key)
+		ref = r
+		if err != nil {
+			return nil, err
+		}
+		return nil, nil
+	})
+	return ref, err
+}
+
 // failed retries a step's act with backoff, then takes its fault path, then compensates.
 func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why string) {
 	tok := ss.token(x, token)

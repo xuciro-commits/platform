@@ -171,8 +171,36 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 	r, err = decide()
 	if err != nil {
 		*d = saved
+		return r, err
 	}
+	d.promoteLogs(&saved)
 	return r, err
+}
+
+// promoteLogs keeps the parent's own decision whole after a savepoint: it
+// merges the attempt's private change logs back into the objects the parent
+// already handed out. A receiver that took its log before the attempt keeps
+// writing there when the attempt returns, so pointing the decision at a newer
+// fork would orphan the parent's own receipt from the result it builds at the
+// end (the batch would no longer find it in the staged ledger).
+func (d *stagedDecision) promoteLogs(parent *stagedDecision) {
+	for ledger, log := range d.logs {
+		held, known := parent.logs[ledger]
+		if !known {
+			continue
+		}
+		for _, record := range log.Records(d.tenant.ID) {
+			if _, err := held.ApplyAccepted(record); err != nil {
+				unsupportedStagedEffect()
+			}
+		}
+		d.logs[ledger] = held
+	}
+	for ledger, held := range parent.logs {
+		if d.logs[ledger] == nil {
+			d.logs[ledger] = held
+		}
+	}
 }
 
 func (d *stagedDecision) privateFork() *stagedDecision {

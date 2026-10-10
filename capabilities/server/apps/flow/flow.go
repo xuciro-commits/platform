@@ -289,6 +289,13 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 		if err := checkOperators(*fl.Continuous); err != nil {
 			return nil, fmt.Errorf("flow %s: %w", id, err)
 		}
+		// An effect delivers through the declaring app's own actions: an
+		// action the app does not declare cannot be wired here.
+		for _, effect := range fl.Continuous.Effects {
+			if _, own := m.Actions.Action(effect.Action); !own {
+				return nil, fmt.Errorf("flow %s: the effect action %s is not declared by %s", id, effect.Action, m.ID)
+			}
+		}
 		if intake := fl.Continuous.Intake; intake != nil {
 			if intake.SourceRecord == "" || intake.Key == "" || len(intake.Partition) < 1 || len(intake.Partition) > 8 || intake.EventTime == "" || intake.Value == "" || fl.Continuous.Window == nil || fl.Continuous.Batch < 1 {
 				return nil, fmt.Errorf("flow %s: an intake needs a source record, event columns, window and positive batch budget", id)
@@ -626,6 +633,13 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 		d := f.def(x.Flow, x.Version)
 		if d == nil {
 			continue
+		}
+		// Threshold effects wait in the instance's own frame: they are
+		// delivered here, on the flow's timer, as the app's automation.
+		if x.Batch != nil {
+			if err := f.deliverEffects(c, x.ID, now); err != nil {
+				return err
+			}
 		}
 		run := f.run(&x)
 		run.Now = now

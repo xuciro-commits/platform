@@ -606,6 +606,7 @@ export type Continuous = {
   Threshold?: StreamThreshold;
   Intake?: StreamIntake;
   CheckpointEvery?: number;
+  Effects?: StreamEffect[];
   DeadLetter?: StreamDeadLetter;
 };
 
@@ -2898,6 +2899,13 @@ export type StreamDeadLetter = {
   node: string;
   maxRecords: number;
   ttlMs?: number;
+};
+
+export type StreamEffect = {
+  node: string;
+  action: string;
+  target?: string;
+  states?: string[];
 };
 
 export type StreamIntake = {
