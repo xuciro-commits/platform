@@ -2,7 +2,7 @@
 
 **意图：** 让业务人员知道在哪里完成工作，让构建者在同一个应用上下文中完成交付，让管理员能管理和恢复这份交付。以稳定的功能结构收敛现有菜单、应用、编辑器与后台，而不是继续按源码包和能力数量增加入口。
 
-**状态：** 功能域、依赖层、术语与边界（§2–§4、§8、§10、§13）已接受（2026-10-05）；**§5–§6 的四种入口与页面清单、§9 的去向表已被 [ADR-0052](0052-foundry-aligned-platform-experience.md) 取代**（一个 Shell + Applications 门户 + 三种投影），编辑器结构归 ADR-0053。入口、联合候选、生产直接安装替代，以及 M5 的角色、项目、包生命周期、封存、晋级/迁移和宿主控制台前端已有实现，现状见 §14。持续 Flow 方案 A 已决定并有批次 frame/结果通道的有界实现；受控 PostgreSQL 表来源已接原消费游标/窗口，窗口到默认图算子、并发、输出与制品生命周期仍未接通，见 §13.5。自动路线和机制测试不代表 M0–M6 全部体验或生产验收。
+**状态：** 功能域、依赖层、术语与边界（§2–§4、§8、§10、§13）已接受（2026-10-05）；**§5–§6 的四种入口与页面清单、§9 的去向表已被 [ADR-0052](0052-foundry-aligned-platform-experience.md) 取代**（一个 Shell + Applications 门户 + 三种投影），编辑器结构归 ADR-0053。入口、联合候选、生产直接安装替代，以及 M5 的角色、项目、包生命周期、封存、晋级/迁移和宿主控制台前端已有实现，现状见 §14。持续 Flow 方案 A 已决定并有批次 frame/结果通道的有界实现；受控 PostgreSQL 表来源已接原消费游标/窗口，窗口到聚合/滞回的原生算子已按 §13.1 契约落地，默认图接线、并发、输出与制品生命周期仍未接通，见 §13.5。自动路线和机制测试不代表 M0–M6 全部体验或生产验收。
 **设计日期：** 2026-10-05。静态源码基线：`87b830767f75`；工作区已有文档改动不视为代码实现。
 **范围：** 前端功能架构、用户与权限职责、入口与页面、构建交付路线、能力归属及旧路径移除。持续 Flow 采用方案 A，其有界实现与未完成执行链见 §13.5。
 
@@ -405,7 +405,7 @@ M1 的页面重组不能被报告为 M3 的草稿闭包、M4 的持久恢复或 
 - 资源身份仍是租户内唯一名称与草稿/发布 ID，没有 alias 层；联合候选依赖由宿主 `drafts/referenced` 给出。复合编辑走原一次提交管线，不另设业务执行器。
 - 包支持声明、预检、封存制品、安装/升级/排空/退役与保留历史。可信 Go 和 Web 的供给仍是受审构建/部署，不支持任意代码热插拔；前端生命周期任务面归 Packages。
 - 候选支持内容寻址封存及同宿主租户之间的晋级；目标租户仍走自己的保存、授权和激活/升级计划。记录迁移只支持受托管类型，沿原导出/导入与幂等规则；不支持跨宿主直接晋级，不搬成员、密钥或任意数据库。对应任务面归 Host Console；细化边界见 ADR-0080 §3.1。
-- 持续 Flow 采用方案 A；批次准入/折入与结果通道已实现，受控 PostgreSQL 表来源已接原消费游标/窗口，窗口到默认图算子、输出与制品生命周期尚未接通，见 §13.5。
+- 持续 Flow 采用方案 A；批次准入/折入、结果通道与窗口→聚合→滞回算子已实现，受控 PostgreSQL 表来源已接原消费游标/窗口，默认图接线、输出与制品生命周期尚未接通，见 §13.5。
 
 原稿提出的宽命名、无主对象页面、递归读取、任意层级和更大内联预算均不在首批自动放开。按实际阻塞任务在原 owner 扩展有界 profile；不支持时给出明确限制，不能把暂缓项删掉后声称支持。BOM 可检验复合/层级能力，但不是平台重组必需的首个应用；既有 ERP 组件清单不等于完整多层 BOM，业务真理只能有一个 owner。
 
@@ -445,6 +445,8 @@ M1 的页面重组不能被报告为 M3 的草稿闭包、M4 的持久恢复或 
 
 默认七节点的字段链也有明确断点：来源 `flowCatalog.ts` 将 aggregate 的 `alerts` 端口接到 threshold，并配置 threshold.field=`mean`；`flowEngine.ts` 的 aggregate alert 记录只有 `reading`，`field()` 没有 mean→reading 别名，因此该配置不会进入滞回触发。slideMs 虽声明为 5000，来源 window 实现未读取它；checkpointEvery 5000 仍只打印状态。原生接线须明确字段/端口契约与映射，保留规模及声明的时间规则，不能照搬该静默路径后声称七节点已跑通。这是对当前来源代码的核查事实，不是已经实施了新的原生算子。
 
+原生算子契约已定（2026-10-10，实施见 §13.5）：aggregate 输出记录的字段名就是它声明的度量名（count/sum/mean/min/max，每个至多一次），group 字段按声明命名，不设任何隐式别名；threshold.field 必须命名同一 aggregate 声明的度量，由声明检查以 INVALID_ARGUMENT 拒绝，而不是静默永不触发。slideMs 是发出节奏：到达 slideMs 的 UTC 边界时把当前保留行交给算子，windowMs 才是保留期限。因此默认图 threshold.field=`mean` 与来源只发 `reading` 的断点，在本合同中表现为明确的声明拒绝，接线时必须把图声明为 `mean` 并调整端口，不能保留 mean→reading 的隐式映射。
+
 
 本平台已有 K8 接入与游标、`accepted_connectors.go` 的分发前驱校验和同批接受结果；`apps/flow` 是唯一实例/Token/frame 推进器，`platform.Run.Outputs` 保存已完成结果；Operation 已走原受属工作及接受结果。ADR-0044 明确复用这些主人，不引入第二调度器、日志或 graph-run 数据库。缺的是持续订阅、算子状态和批次完成的原生适配。
 
@@ -473,7 +475,7 @@ M1 的页面重组不能被报告为 M3 的草稿闭包、M4 的持久恢复或 
 
 Build 保存显式来源、对象/字段、事件时间与 key、分区、固定算子/动作版本及预算；候选冻结完整依赖。stream 与 scheduled 分别声明启动策略，不能靠浏览器定时器保持运行。Flow 的原暂停/取消/重试入口控制后续批次，租户代码不得自行访问网络、修改 Flow 或提交业务。
 
-原 Flow Token/frame 扩展批次身份、消费前驱、watermark、每个节点的状态摘要/引用及待调用 ID。窗口/迟到输出、滞回/防抖、限速、延迟、去重与死信是有状态规则，必须声明版本、状态 schema 和预算；pure Operation 接收状态与批次，返回结果及新状态，状态只在原接受结果提交后可见。业务效果仍由原 Action/Effect 执行，稳定逻辑键绑定实例、节点、分区及批次身份，不把重试 attempt 当成新业务请求。
+原 Flow Token/frame 扩展批次身份、消费前驱、watermark、每个节点的状态摘要/引用及待调用 ID。窗口/迟到输出、滞回/防抖、限速、延迟、去重与死信是有状态规则，必须声明版本、状态 schema 和预算；pure Operation 接收状态与批次，返回结果及新状态，状态只在原接受结果提交后可见。窗口到聚合再到滞回的原生声明是：`StreamWindow.node/windowMs/slideMs/watermarkMs/maxRecords/lateEvents`（windowMs 为保留期限，slideMs 为发出节奏）、`StreamAggregate.node/signal/group/measures`（度量名即输出字段名）、`StreamThreshold.node/field/high/low/debounceMs/severity`（field 必须命名已声明的度量）；三者在保存/安装时整体检查，算子状态与批次折入在同一接受结果中提交。业务效果仍由原 Action/Effect 执行，稳定逻辑键绑定实例、节点、分区及批次身份，不把重试 attempt 当成新业务请求。
 
 输入接收游标与 Flow 消费游标分开：K8 接受不等于业务已处理。消费游标、新状态、输出引用和后续意图在一个原接受结果中提交；前驱不符、旧 generation、迟到或重复答复不能推进。已有结果重放，不重新读取“最新”数据或重新计算；取消不撤销已接受动作。逐批接受保证恢复正确性，checkpointEvery 5000 保留为显式运行检查点/压缩策略，不以来源的一条打印日志冒充实现。
 
@@ -493,7 +495,7 @@ Backpressure 必须有界且可见：输入接受与消费队列各有预算。�
 
 **决定（2026-10-05，负责人授权自行决定）：采用方案 A。** 理由：A 保持“只有原 Flow 主人推进状态”的既有语义，批次 frame 与每次调用通道都是可分批落地、可回放的增量，不需要第二套运行主人；B 会把“每次调用新建通道”作为默认语义，改动既有 Flow 契约与在途版本。A 的落地顺序（每次调用通道 → 批次 frame → 状态/数据通道 → 持续输出）进入 M5/专项，不阻塞 M6 的入口收口。
 
-**有界实现：** `apps/flow/continuous.go` 在原 Flow ledger/session 中接受批次；`BatchFrame` 以 cursor 与内容摘要绑定当前批次、校验前驱，同 ID 同内容返回原结果，同 ID 不同内容拒绝。状态、JSON 编码或完整 frame 超预算时整批拒绝，游标、水位线、计数、死信和输出不变，合法后继可以重试。旧声明继续使用 scalar count/sum/last；显式 `StreamWindow` 使用原批量与事件时间配置，按（分区、事件 key）识别事件，保留原 JSON 数值，支持窗口期限、slide、lateness 策略与有记录的 overflow。frame 的 batch 字段与其他运行数据沿原 sources 读取遮蔽。
+**有界实现：** `apps/flow/continuous.go` 在原 Flow ledger/session 中接受批次；`BatchFrame` 以 cursor 与内容摘要绑定当前批次、校验前驱，同 ID 同内容返回原结果，同 ID 不同内容拒绝。状态、JSON 编码或完整 frame 超预算时整批拒绝，游标、水位线、计数、死信和输出不变，合法后继可以重试。旧声明继续使用 scalar count/sum/last；显式 `StreamWindow` 使用原批量与事件时间配置，按（分区、事件 key）识别事件，保留原 JSON 数值，支持窗口期限、slide、lateness 策略与有记录的 overflow。窗口→聚合→滞回的原生算子在 `apps/flow/continuous_operators.go`：声明整体检查（度量集合、度量只声明一次、至少一个 group 之外必有 signal、field 必须命名已声明度量、low < high、滞回与 group 数有界），并在每次窗口就绪的批次折入中与 `foldBatch` 在同一 ledger 决策里推进，拒绝即整批不提交、游标不越过未提交的算子状态。聚合状态只保留声明 group 的 count/sum/min/max 与运行均值，滞回状态只保留已触发 group；触发/清除按事件时间去抖，一次事件只产生一条 triggered/cleared；无法按声明聚合的行进入死信并从窗口移除（不逐 slide 重复上报）。算子在两条既有通道里都推进：进程内 `ConsumeBatch`，以及宿主 I/O 通道的策展/封存批次（`PlanBatch`→`Prepare` 折入批次后在同一决策里运行算子，结果随接受结果提交、状态随封存 frame 保存）；接受结果只带本批次产生的 `stats`/`alerts`（无产出时为空数组，不残留上一批），记录中的状态字节数与封存内容一致，使制品可按接受摘要核对展开。声明里出现算子而聚合缺 window、threshold 读未声明的度量等不一致，在保存/安装时即拒绝。frame 的 batch 字段与其他运行数据沿原 sources 读取遮蔽。
 
 历史内联入口保留原预算，超过 48 KiB 的状态输出引用原实例、节点、摘要与大小。原生来源可用 `ConsumeFlowBatch`：在提交锁外准备同一窗口规则，将完整 frame 封存在原 FileStore；原记录只保存游标/计数、租户/实例/版本、宿主生成的 ticket、摘要/大小。提交前再次核对成员可读性、原主体与实例修订，原 Flow ledger/session 在原接受结果中保存引用和输出。无接受结果存储时明确拒绝，不回退到无法重放预备内容的旧日志。已接受批次通过原 ledger 识别历史重试和内容冲突，不增加第二张游标表。
 
@@ -507,11 +509,11 @@ Compute 已接入 §13.3 的 v2 worker ABI：原 Code editor 可显式选 ABI �
 
 执行读取封存输入在提交锁外进行，校验所属调用/定义/成员、字节数、SHA-256、规范输入摘要和 schema，读取后再核对权限及 generation 才交 worker。接受结果重放与快照携带同一输入引用，恢复执行读取原字节，不读取“最新”来源。内容标记不含随机 ticket，同 key/同内容重试使用原意图并回收本次未使用的预备文件；已知拒绝同样回收，提交结果不明确时保留输入。已接受输入随原调用历史保留，尚未承诺未知提交孤儿扫描或历史制品压缩。
 
-**证据：** `apps/flow/continuous_test.go` 检查整批回滚、摘要、乱序/重复/迟到/overflow、slide 和配置预算；根包 `flow_test.go` 的 `TestContinuousAcceptedFrameRefusalAndRecovery` 核对原实例提交、接受结果重放、快照及旧内联预算拒绝；`TestContinuousSealedFrameAndRecovery` 核对超过记录内联预算的窗口只保存制品引用、原批次历史重试/内容冲突、不同成员/租户拒绝、摘要损坏拦截，以及共享测试 FileStore 下的重放、快照和后继提交。它们不是外部真实来源、数据库/对象存储崩溃恢复、worker 或七节点业务链的验收。`upgrade_authorization_test.go` 证明其覆盖的计算结果通道及外租户/调用/路径/预算拒绝。`compute_test.go` 的 `TestWasmDataABIChannels` 在固定镜像的 Go/TinyGo 编译器下通过真实 Unix socket 检查大于 1 MiB 的输入/输出、非法内存范围、摘要/租户拒绝和输出超预算；同一 ABI 经原编译、候选冻结/激活、操作队列、FileStore 封存与接受结果重放；宿主超过 1 MiB 的输入只保存小型引用，待执行调用重放后可读取原输入执行，已完成结果恢复后不重新计算。测试还核对同 key 重试/内容冲突不遗留额外预备文件、来源与外租户拒绝、输入句柄与内容损坏拒绝。原 `TestWasmCommandCompilerProfiles` 核对旧内联 ABI。上述 Go 测试使用内存 FileStore/接受结果存储。原 `deploy/local/rehearse.sh` 在两行业以真实 OIDC、固定 Go/TinyGo 隔离编译器与 worker、PostgreSQL 和 RustFS 执行 v2 调用；随后切回原应用候选，核对已接受的 Code 版本、调用与结果引用在快照重启、备份恢复和全日志重建中保持。该部署路线只使用小型 HTTP 输入，超过 1 MiB 的原生输入由前述 Go/socket 测试覆盖；不把它称为真实持续来源或七节点运行验收。演练沿现行个人动作目录、P-200 工艺版本和 typed ProcessStep 的 kind/cases；浏览器使用当前 Shell/页面深链，登录 lastSeen 不作为持久业务状态比较。
+**证据：** `apps/flow/continuous_test.go` 检查整批回滚、摘要、乱序/重复/迟到/overflow、slide 和配置预算；`TestContinuousWindowAggregateAndHysteresisThreshold` 检查按 group 的 count/mean/max、High 触发、带内静默、Low 清除、事件时间去抖、无法聚合行只死信一次、field 不匹配的声明拒绝与重放不重复告警，`TestContinuousOperatorDeclarationIsChecked` 检查未声明度量、低不小于高、缺窗口或缺聚合的声明拒绝；根包 `flow_test.go` 的 `TestContinuousAcceptedFrameRefusalAndRecovery` 核对原实例提交、接受结果重放、快照及旧内联预算拒绝；`TestContinuousSealedFrameAndRecovery` 核对超过记录内联预算的窗口只保存制品引用、原批次历史重试/内容冲突、不同成员/租户拒绝、摘要损坏拦截，以及共享测试 FileStore 下的重放、快照和后继提交；`TestContinuousSealedOperatorsAndRecovery` 经由封存通道核对窗口→聚合→滞回算子在策展批次里推进（触发/带内静默/清除、本批 outputs、算子状态在封存 frame 内）以及快照恢复后按恢复的滞回状态再次触发。它们不是外部真实来源、数据库/对象存储崩溃恢复、worker 或七节点业务链的验收。`upgrade_authorization_test.go` 证明其覆盖的计算结果通道及外租户/调用/路径/预算拒绝。`compute_test.go` 的 `TestWasmDataABIChannels` 在固定镜像的 Go/TinyGo 编译器下通过真实 Unix socket 检查大于 1 MiB 的输入/输出、非法内存范围、摘要/租户拒绝和输出超预算；同一 ABI 经原编译、候选冻结/激活、操作队列、FileStore 封存与接受结果重放；宿主超过 1 MiB 的输入只保存小型引用，待执行调用重放后可读取原输入执行，已完成结果恢复后不重新计算。测试还核对同 key 重试/内容冲突不遗留额外预备文件、来源与外租户拒绝、输入句柄与内容损坏拒绝。原 `TestWasmCommandCompilerProfiles` 核对旧内联 ABI。上述 Go 测试使用内存 FileStore/接受结果存储。原 `deploy/local/rehearse.sh` 在两行业以真实 OIDC、固定 Go/TinyGo 隔离编译器与 worker、PostgreSQL 和 RustFS 执行 v2 调用；随后切回原应用候选，核对已接受的 Code 版本、调用与结果引用在快照重启、备份恢复和全日志重建中保持。该部署路线只使用小型 HTTP 输入，超过 1 MiB 的原生输入由前述 Go/socket 测试覆盖；不把它称为真实持续来源或七节点运行验收。演练沿现行个人动作目录、P-200 工艺版本和 typed ProcessStep 的 kind/cases；浏览器使用当前 Shell/页面深链，登录 lastSeen 不作为持久业务状态比较。
 
 PostgreSQL 接入由原 `TestPostgresTableProfilePullAndReplay` 扩展检查：真实只读表、1025 行的多批接受、空读不写日志、窗口/游标重放与快照、迟到死信、暂停/配置变化/取消，以及读取期间撤权和未使用制品回收；接受存储与 FileStore 在该 Go 检查中仍为内存。原部署演练在两个宿主沿真实 OIDC、受控只读连接、PostgreSQL 表、512 行批量和 RustFS 窗口，检查三批 1025 行、重启后消费第 1026 行、备份恢复和全日志重建保持原位置/制品；恢复后浏览器读取来源目标、连接/增量列和 Flow 接入声明。数据库登录角色由部署环境预配，不由数据库内容备份或租户日志创建。这些证据不覆盖完整七节点、吞吐或负责人手感验收。
 
-**尚未接通：** PostgreSQL → 原消费游标/窗口已接线；窗口规则还未接到默认图的原聚合/滞回算子、真实分区并发 8、动作或应用实例只读输出。算子队列与可见 backpressure、checkpointEvery、版本化死信资产及重放、取消后同版本续接、Source/Flow 的大输入投影/调用接线、制品生命周期及七节点的真实持久恢复/完整浏览器路线继续属于实现与运行缺口。不能用辅助函数、受控测试来源或手动 Flow 代替完整持续执行。
+**尚未接通：** PostgreSQL → 原消费游标/窗口已接线；窗口→聚合→滞回的原生算子已在声明与批次折入中落地，但检查入的默认图还没有把 `threshold.field=mean` 与 aggregate 只发 `reading` 的断点对齐，真实分区并发 8、动作或应用实例只读输出仍未接通。算子队列与可见 backpressure、checkpointEvery、版本化死信资产及重放、取消后同版本续接、Source/Flow 的大输入投影/调用接线、制品生命周期及七节点的真实持久恢复/完整浏览器路线继续属于实现与运行缺口。不能用辅助函数、受控测试来源或手动 Flow 代替完整持续执行。
 
 ## 14. 当前实现边界
 
@@ -522,4 +524,4 @@ PostgreSQL 接入由原 `TestPostgresTableProfilePullAndReplay` 扩展检查：�
 - **运行和恢复：** Flow/工作任务仍由原 owner 持有版本、主体、输出和原恢复动作，发布标识是最后激活候选，开发直接安装漂移另行显示。内存测试、HTTP 路由和快照用例不能代替 PostgreSQL/OIDC/文件/worker 的持久部署；该边界改变时运行 `deploy/local/rehearse.sh`。旧的 `rehearse-lite.sh` 已删除，不作为现行证据。按应用关联的全类运行与生产验收仍未整体完成。
 - **切换与地址：** 入口/页签布局按租户/主体隔离，切应用不重建编辑器；切身份/租户经 dirty 守卫清理旧导航目标。唯一规范格式为 `#/<view>?<params>`，view ID 保持原身份，参数携带 application/instance/记录 ID，租户由会话确定。只要 view ID 仍被声明，支持期内的旧书签/布局继续解析；退役时给出显式引用反馈，不把删除菜单当作迁移完成。
 - **交付路线证据：** `workspaces.spec.ts` 守受控应用交付与原生 PMS/Knowledge 入口；`integration-fabric.spec.ts` 在酒店和制造宿主串接真实 HTTP 数据→清洗/隔离→对象记录→页面/Flow 联合候选→封存激活→普通成员收货→外部故障/稳定幂等重试/结果回显，并从错误分组的发布拒绝返回 Navigation 修改；`workflow.spec.ts` 守固定候选的测试/操作员应答，`routes.spec.ts` 守规范入口。已删除的 `application-state.spec.ts` 不再作为现行证据。这些是有界平台路线，不宣称完整 WMS/ERP 行业语义、所有页面体验或负责人认可。
-- **持续运行余项：** §13.5 的窗口到默认图算子/输出/制品生命周期与持久验收尚未闭合；其他客户扩展、灰度、复杂升级及运行关联按原 ADR 边界触发，不把 M6 的入口收口外推为它们已经交付。
+- **持续运行余项：** §13.5 的默认图接线、并发、输出/制品生命周期与持久验收尚未闭合；其他客户扩展、灰度、复杂升级及运行关联按原 ADR 边界触发，不把 M6 的入口收口外推为它们已经交付。

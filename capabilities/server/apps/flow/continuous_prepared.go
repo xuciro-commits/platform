@@ -112,6 +112,15 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 	if refusal != nil {
 		return nil, refusal
 	}
+	// The declared window→aggregate→threshold operators advance in the same
+	// prepared decision as the fold (ADR-0047 §13.1): the sealed frame carries
+	// their state, the accepted result carries their outputs, and a refusal
+	// discards the preparation, so no artifact survives a batch whose
+	// operators could not commit.
+	stats, alerts, refusal := foldOperators(frame, plan.rule, batch.ID, now)
+	if refusal != nil {
+		return nil, refusal
+	}
 	outputs := maps.Clone(x.Outputs)
 	if outputs == nil {
 		outputs = map[string]json.RawMessage{}
@@ -122,6 +131,12 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 		outputs["state:"+node] = platform.Raw(BatchStateReference{Instance: x.ID, Node: node, Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(raw)), Size: len(raw)})
 	}
 	outputs["batch"] = platform.Raw(map[string]any{"cursor": frame.Cursor, "consumed": frame.Consumed, "rejected": frame.Rejected})
+	if plan.rule.Aggregate != nil {
+		outputs["stats"] = platform.Raw(stats)
+	}
+	if plan.rule.Threshold != nil {
+		outputs["alerts"] = platform.Raw(alerts)
+	}
 	if len(platform.Raw(outputs)) > 60<<10 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch outputs exceed the Flow output budget")
 	}

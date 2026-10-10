@@ -23,12 +23,26 @@ type frameSource struct {
 	ledger     *platform.Ledger
 	host       host.Host
 	stateBytes int
+	configure  []func(*platform.Continuous)
 }
 
 type frameStream struct{ platform.Record }
 
-func newFrameSource(tenant string, stateBytes int) *frameSource {
-	return &frameSource{stateBytes: stateBytes, ledger: platform.NewLedger(tenant, "frames", platform.NewCatalog(
+// declared builds the test source's continuous declaration; each configure
+// step is the test's own declared rule, as a real app's would be.
+func declared(s *frameSource) *platform.Continuous {
+	c := &platform.Continuous{
+		Source: "frames.source", Batch: 512, State: s.stateBytes, FrameBytes: 2 * s.stateBytes, DeadLetter: true,
+		Window: &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"},
+	}
+	for _, configure := range s.configure {
+		configure(c)
+	}
+	return c
+}
+
+func newFrameSource(tenant string, stateBytes int, configure ...func(*platform.Continuous)) *frameSource {
+	return &frameSource{stateBytes: stateBytes, configure: configure, ledger: platform.NewLedger(tenant, "frames", platform.NewCatalog(
 		platform.Action{Schema: "frames.source.start", Target: "frames.source", Title: "Start", Description: "Start the source's original Flow instance", Roles: []string{"operator"}, Payload: []platform.Field{}},
 		platform.Action{Schema: "frames.source.feed", Target: "frames.source", Title: "Feed", Description: "Accept one source batch through its original Flow instance", Roles: []string{"operator"}, Payload: []platform.Field{{Name: "batch", Type: "json", Required: true}}}), "frames.source")}
 }
@@ -39,11 +53,8 @@ func (s *frameSource) Manifest() platform.Manifest {
 		Entities: []platform.Entity{{Type: "frames.source", Title: "Source", Model: frameStream{}}},
 		Flows: []platform.Flow{{
 			Name: "window", Title: "Accepted window", Version: 1, Start: platform.Start{Manual: true},
-			Continuous: &platform.Continuous{
-				Source: "frames.source", Batch: 512, State: s.stateBytes, FrameBytes: 2 * s.stateBytes, DeadLetter: true,
-				Window: &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"},
-			},
-			Steps: []platform.Step{{Name: "intake", Wait: &platform.Wait{Until: func(platform.Caller, *platform.Run) bool { return false }}}},
+			Continuous: declared(s),
+			Steps:      []platform.Step{{Name: "intake", Wait: &platform.Wait{Until: func(platform.Caller, *platform.Run) bool { return false }}}},
 		}},
 	}
 }
@@ -270,6 +281,99 @@ func TestContinuousSealedFrameAndRecovery(t *testing.T) {
 	store.mu.Unlock()
 	if _, err := files.Read(ref); err == nil {
 		t.Fatal("corrupt bytes matched an accepted artifact")
+	}
+}
+
+// The sealed lane prepares the host's batches outside the tenant lock; the
+// declared window→aggregate→threshold operators must advance in that same
+// decision, not only in the direct in-process consumer (ADR-0047 §13.1).
+func TestContinuousSealedOperatorsAndRecovery(t *testing.T) {
+	const tenant, id = "sealed-operators", "frames.window:source"
+	store := &memoryFiles{}
+	compose := func() *Tenant {
+		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant),
+			newFrameSource(tenant, 1<<20, func(c *platform.Continuous) {
+				c.Window = &platform.StreamWindow{Node: "window", WindowMS: 5000, SlideMS: 1000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"}
+				c.Aggregate = &platform.StreamAggregate{Node: "stats", Signal: "vibration", Group: []string{"deviceId"}, Measures: []string{"count", "mean", "max"}}
+				c.Threshold = &platform.StreamThreshold{Node: "high", Field: "mean", High: 11.5, Low: 9.5, Severity: "High"}
+			}))
+		tn.Files = store
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	at := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	measurement := func(device string, vibration float64) json.RawMessage {
+		return json.RawMessage(fmt.Sprintf(`{"deviceId":%q,"vibration":%g}`, device, vibration))
+	}
+	cursor := ""
+	feed := func(tn *Tenant, name string, when time.Time, signals ...flow.Signal) {
+		t.Helper()
+		out, err := tn.ConsumeFlowBatch(memberOf(t, tn, "member"), id, flow.Batch{ID: name, Predecessor: cursor, Signals: signals}, when)
+		if err != nil {
+			t.Fatalf("sealed batch %s: %v", name, err)
+		}
+		cursor = out.Cursor
+	}
+	alertsOf := func(tn *Tenant) []flow.Alert {
+		t.Helper()
+		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		if !ok {
+			t.Fatal("no native instance")
+		}
+		var alerts []flow.Alert
+		if raw := x.Outputs["alerts"]; len(raw) > 0 && json.Unmarshal(raw, &alerts) != nil {
+			t.Fatalf("alerts output is not JSON: %s", raw)
+		}
+		return alerts
+	}
+	// One slide over the high mark raises and alarms; the sealed frame, not
+	// the accepted record, owns the window, aggregate and threshold state.
+	feed(tn, "b1", at,
+		flow.Signal{Key: "m1", Partition: "plant-a", At: at, Value: measurement("d1", 12)},
+		flow.Signal{Key: "m2", Partition: "plant-a", At: at.Add(time.Second), Value: measurement("d1", 13)},
+		flow.Signal{Key: "m3", Partition: "plant-a", At: at.Add(2 * time.Second), Value: measurement("d1", 12)})
+	if alerts := alertsOf(tn); len(alerts) != 1 || alerts[0].State != "triggered" || alerts[0].Group != "[d1]" || alerts[0].Field != "mean" {
+		t.Fatalf("sealed lane triggered alerts: %+v", alerts)
+	}
+	x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !ok || x.Batch.Sealed == nil || x.Batch.State != nil {
+		t.Fatal("the sealed lane kept operator state in the accepted record")
+	}
+	frame, err := tn.ReadFlowFrame(memberOf(t, tn, "member"), id, at)
+	if err != nil || len(frame.State["stats"]) == 0 || len(frame.State["high"]) == 0 || len(frame.State["window"]) == 0 {
+		t.Fatalf("the seal lost operator state: %s", err.Message)
+	}
+	// Inside the band the episode stays raised and says nothing; below the low
+	// mark it clears exactly once.
+	feed(tn, "b2", at.Add(5*time.Second), flow.Signal{Key: "m4", Partition: "plant-a", At: at.Add(6 * time.Second), Value: measurement("d1", 10)})
+	if alerts := alertsOf(tn); len(alerts) != 0 {
+		t.Fatalf("hysteresis band alarmed: %+v", alerts)
+	}
+	feed(tn, "b3", at.Add(10*time.Second), flow.Signal{Key: "m5", Partition: "plant-a", At: at.Add(11 * time.Second), Value: measurement("d1", 8)})
+	if alerts := alertsOf(tn); len(alerts) != 1 || alerts[0].State != "cleared" {
+		t.Fatalf("cleared alert: %+v", alerts)
+	}
+	// Recovery carries the operators' committed state with the instance: the
+	// restored flow raises a fresh episode from the state the artifact holds,
+	// so a lost or stale episode state would alarm differently.
+	raw, _, snapshotErr := tn.Snapshot(func() int64 { return int64(len(entries)) })
+	if snapshotErr != nil {
+		t.Fatal(snapshotErr)
+	}
+	restored := compose()
+	if err := restored.Restore(raw); err != nil {
+		t.Fatal(err)
+	}
+	restored.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	feed(restored, "b4", at.Add(16*time.Second),
+		flow.Signal{Key: "m6", Partition: "plant-a", At: at.Add(16 * time.Second), Value: measurement("d1", 12)},
+		flow.Signal{Key: "m7", Partition: "plant-a", At: at.Add(17 * time.Second), Value: measurement("d1", 13)})
+	if alerts := alertsOf(restored); len(alerts) != 1 || alerts[0].State != "triggered" {
+		t.Fatalf("restored operators raised %+v", alerts)
 	}
 }
 

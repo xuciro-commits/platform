@@ -113,25 +113,29 @@ func checkOperators(declared platform.Continuous) error {
 // aggregated are dead-lettered once and leave the window, so they are not
 // re-reported on every slide.
 func foldOperators(frame *BatchFrame, declared platform.Continuous, batchID string, now time.Time) (stats []AggregateRecord, alerts []Alert, refusal *kernel.Error) {
+	// Empty, never nil: a batch that produced no records says so, and the
+	// accepted result replaces the previous batch's operator outputs instead
+	// of leaving stale ones in place.
+	stats, alerts = []AggregateRecord{}, []Alert{}
 	if err := checkOperators(declared); err != nil {
-		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	w := declared.Window
 	if w == nil {
-		return nil, nil, nil
+		return stats, alerts, nil
 	}
 	window := WindowState{Rows: []Signal{}}
 	if raw := frame.State[w.Node]; len(raw) > 0 {
 		if json.Unmarshal(raw, &window) != nil || window.Rows == nil {
-			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved event-time window cannot be decoded")
+			return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved event-time window cannot be decoded")
 		}
 	}
 	if !window.Ready {
-		return nil, nil, nil
+		return stats, alerts, nil
 	}
 	a := declared.Aggregate
 	if a == nil {
-		return nil, nil, nil
+		return stats, alerts, nil
 	}
 	// Group the retained rows under the declared measure contract. A row whose
 	// value or group fields do not fit becomes a dead letter and leaves the
@@ -160,14 +164,14 @@ func foldOperators(frame *BatchFrame, declared platform.Continuous, batchID stri
 	state := AggregateState{Groups: map[string]AggregateRecord{}}
 	if raw := frame.State[a.Node]; len(raw) > 0 {
 		if json.Unmarshal(raw, &state) != nil || state.Groups == nil {
-			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved aggregate state cannot be decoded")
+			return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved aggregate state cannot be decoded")
 		}
 	}
 	thresholds := ThresholdState{Raised: map[string]thresholdRaise{}}
 	if t := declared.Threshold; t != nil {
 		if raw := frame.State[t.Node]; len(raw) > 0 {
 			if json.Unmarshal(raw, &thresholds) != nil || thresholds.Raised == nil {
-				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved threshold state cannot be decoded")
+				return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved threshold state cannot be decoded")
 			}
 		}
 	}
@@ -203,7 +207,7 @@ func foldOperators(frame *BatchFrame, declared platform.Continuous, batchID stri
 		if t := declared.Threshold; t != nil {
 			emit, next, ok := advanceThreshold(*t, thresholds.Raised[group], record, at, batchID)
 			if !ok {
-				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The aggregate record has no value for the declared threshold field")
+				return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The aggregate record has no value for the declared threshold field")
 			}
 			if emit != nil {
 				alerts = append(alerts, *emit)
@@ -225,28 +229,32 @@ func foldOperators(frame *BatchFrame, declared platform.Continuous, batchID stri
 		}
 	}
 	if raw, err := json.Marshal(state); err != nil {
-		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The aggregate state cannot be encoded")
+		return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The aggregate state cannot be encoded")
 	} else if declared.State > 0 && len(raw) > declared.State {
-		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The aggregate state exceeds its declared budget")
+		return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The aggregate state exceeds its declared budget")
 	} else {
 		frame.State[a.Node] = raw
 	}
 	if t := declared.Threshold; t != nil {
 		raw, err := json.Marshal(thresholds)
 		if err != nil {
-			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The threshold state cannot be encoded")
+			return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The threshold state cannot be encoded")
 		}
 		if declared.State > 0 && len(raw) > declared.State {
-			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The threshold state exceeds its declared budget")
+			return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The threshold state exceeds its declared budget")
 		}
 		frame.State[t.Node] = raw
 	}
 	if declared.FrameBytes > 0 {
 		raw, err := json.Marshal(frame)
 		if err != nil || len(raw) > declared.FrameBytes {
-			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch frame exceeds its declared budget")
+			return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch frame exceeds its declared budget")
 		}
 	}
+	// The record's state size must cover the operators' own state: a sealed
+	// frame is expanded against the accepted summary, and a stale size would
+	// make every later read of the artifact disagree with its record.
+	frame.StateBytes = stateSize(frame.State)
 	return stats, alerts, nil
 }
 

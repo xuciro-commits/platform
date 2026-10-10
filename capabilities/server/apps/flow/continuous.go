@@ -157,12 +157,13 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 		}
 		in.Outputs["batch"] = json.RawMessage(fmt.Sprintf(`{"cursor":%q,"consumed":%d,"rejected":%d}`, frame.Cursor, frame.Consumed, frame.Rejected))
 		// The operators' own outputs: the groups' fixed measures and the
-		// hysteresis alerts this batch accepted. They travel as the accepted
-		// result's data channel like every other Flow output.
-		if len(stats) > 0 {
+		// hysteresis alerts this batch accepted, empty when this batch
+		// produced none. They travel as the accepted result's data channel
+		// like every other Flow output.
+		if declared.Aggregate != nil {
 			in.Outputs["stats"] = platform.Raw(stats)
 		}
-		if len(alerts) > 0 {
+		if declared.Threshold != nil {
 			in.Outputs["alerts"] = platform.Raw(alerts)
 		}
 		encoded, err := json.Marshal(in.Outputs)
