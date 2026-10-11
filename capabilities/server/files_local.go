@@ -5,9 +5,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"platformserver/journal"
+	"slices"
 	"strings"
 )
 
@@ -96,4 +98,36 @@ func (s *localFiles) Delete(_ context.Context, key string) error {
 		return fmt.Errorf("files: %w", err)
 	}
 	return nil
+}
+
+// List walks only the prefix's own directory: a key names nested parts of the
+// store, so the walk root is a path like every other key.
+func (s *localFiles) List(_ context.Context, prefix string) ([]string, error) {
+	root, err := s.path(strings.TrimSuffix(prefix, "/"))
+	if err != nil {
+		return nil, err
+	}
+	var keys []string
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		key, relErr := filepath.Rel(s.dir, path)
+		if relErr != nil {
+			return relErr
+		}
+		keys = append(keys, filepath.ToSlash(key))
+		return nil
+	})
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("files: %w", err)
+	}
+	slices.Sort(keys)
+	return keys, nil
 }

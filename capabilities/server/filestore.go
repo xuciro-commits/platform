@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
@@ -22,6 +23,9 @@ type FileStore interface {
 	Get(ctx context.Context, key string) (io.ReadCloser, int64, error)
 	Exists(ctx context.Context, key string) bool
 	Delete(ctx context.Context, key string) error
+	// List names the keys under a prefix, in no order. It serves the owners'
+	// own lifecycle scans (ADR-0047 §13.5): nothing keeps a second index.
+	List(ctx context.Context, prefix string) ([]string, error)
 }
 
 // memoryFiles is the development store: bytes in the process.
@@ -62,6 +66,19 @@ func (s *memoryFiles) Delete(_ context.Context, key string) error {
 	defer s.mu.Unlock()
 	delete(s.m, key)
 	return nil
+}
+
+func (s *memoryFiles) List(_ context.Context, prefix string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keys := make([]string, 0, len(s.m))
+	for key := range s.m {
+		if strings.HasPrefix(key, prefix) {
+			keys = append(keys, key)
+		}
+	}
+	slices.Sort(keys)
+	return keys, nil
 }
 
 // s3Files is an S3-compatible bucket: RustFS locally, any S3 in production.
@@ -121,6 +138,17 @@ func (s *s3Files) Exists(ctx context.Context, key string) bool {
 
 func (s *s3Files) Delete(ctx context.Context, key string) error {
 	return s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
+}
+
+func (s *s3Files) List(ctx context.Context, prefix string) ([]string, error) {
+	var keys []string
+	for object := range s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		if object.Err != nil {
+			return nil, fmt.Errorf("files: %v", object.Err)
+		}
+		keys = append(keys, object.Key)
+	}
+	return keys, nil
 }
 
 // files is the tenant's file store: the deployment's, or memory.

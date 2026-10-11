@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -288,6 +289,19 @@ func TestContinuousSealedFrameAndRecovery(t *testing.T) {
 	if _, err := files.Read(foreign); err == nil {
 		t.Fatal("a foreign tenant's handle was readable")
 	}
+	// Seventeen accepted batches left one artifact, not seventeen: each frame
+	// releases the one it replaced (ADR-0047 §13.5).
+	if keys := artifactKeys(t, store, tenant); len(keys) != 1 {
+		t.Fatalf("accepted history kept more than its current frame: %v", keys)
+	}
+	if _, err := files.Read(ref); err == nil {
+		t.Fatal("a superseded frame was still readable")
+	}
+	current, _ := platform.Get[flow.FlowInstance](restored.automation(flow.ID, false), id)
+	if current.Batch.Sealed == nil || current.Batch.Sealed.Ticket == ref.Ticket {
+		t.Fatal("the restored instance did not seal its own frame")
+	}
+	ref = *current.Batch.Sealed
 	key, keyErr := files.key(ref)
 	if keyErr != nil {
 		t.Fatal(keyErr)
@@ -297,6 +311,83 @@ func TestContinuousSealedFrameAndRecovery(t *testing.T) {
 	store.mu.Unlock()
 	if _, err := files.Read(ref); err == nil {
 		t.Fatal("corrupt bytes matched an accepted artifact")
+	}
+}
+
+// artifactKeys names the sealed Flow frames a tenant's store actually holds.
+func artifactKeys(t *testing.T, store FileStore, tenant string) []string {
+	t.Helper()
+	keys, err := store.List(context.Background(), tenant+"/artifacts/flow/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// A sealed frame no accepted record names is an orphan — a preparation a
+// crash left behind, or a previous process's unclear commit that never
+// landed — and the sweep reclaims its bytes. What an accepted instance frame
+// names stays, and another owner's keys are not artifacts (ADR-0047 §13.5).
+func TestContinuousFrameArtifactsAreSwept(t *testing.T) {
+	const tenant, id = "frame-sweep", "frames.window:source"
+	store := &memoryFiles{}
+	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameSource(tenant, 1<<20))
+	tn.Files = store
+	tn.Record = func(Entry) {}
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	at := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	// A previous process sealed this one and never committed it: this
+	// process's registry knows nothing of it.
+	if _, err := (flowFrameStore{tenant: tenant, files: store}).Seal(id, 1, platform.Raw(map[string]string{"abandoned": "window"}), 1<<20); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(context.Background(), tenant+"/9f2c0b", []byte("the bytes of a picture"), "image/png"); err != nil {
+		t.Fatal(err)
+	}
+	tn.SweepFlowArtifacts()
+	if keys := artifactKeys(t, store, tenant); len(keys) != 0 {
+		t.Fatalf("the sweep kept an orphaned frame: %v", keys)
+	}
+	if !store.Exists(context.Background(), tenant+"/9f2c0b") {
+		t.Fatal("the sweep reclaimed a file that is not a sealed frame")
+	}
+	// Still sealed here, still one commit away: not the sweep's to reclaim.
+	store2 := tn.frameStore()
+	pending, err := store2.Seal(id, 1, platform.Raw(map[string]string{"pending": "window"}), 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tn.SweepFlowArtifacts()
+	if keys := artifactKeys(t, store, tenant); len(keys) != 1 {
+		t.Fatalf("the sweep reclaimed bytes a preparation still holds: %v", keys)
+	}
+	store2.discard(pending)
+	// An accepted frame is what keeps an artifact, and it is what releases it.
+	member := memberOf(t, tn, "member")
+	cursor := ""
+	for n := 1; n <= 2; n++ {
+		batch := flow.Batch{ID: fmt.Sprint(n), Predecessor: cursor, Signals: []flow.Signal{{Key: fmt.Sprint(n), Partition: "plant", At: at, Value: platform.Raw(n)}}}
+		if _, err := tn.ConsumeFlowBatch(member, id, batch, at); err != nil {
+			t.Fatalf("batch %d: %v", n, err)
+		}
+		cursor = batch.ID
+	}
+	if keys := artifactKeys(t, store, tenant); len(keys) != 1 {
+		t.Fatalf("accepted batches did not replace their frame: %v", keys)
+	}
+	x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !ok || x.Batch.Sealed == nil {
+		t.Fatal("the accepted frame is not sealed")
+	}
+	ref, _ := store2.key(*x.Batch.Sealed)
+	tn.SweepFlowArtifacts()
+	if keys := artifactKeys(t, store, tenant); len(keys) != 1 || keys[0] != ref {
+		t.Fatalf("the sweep reclaimed the accepted frame: %v", keys)
+	}
+	if frame, err := tn.ReadFlowFrame(member, id, at); err != nil || frame.Cursor != "2" {
+		t.Fatalf("the accepted frame could not be read after its sweep: %v", err)
 	}
 }
 

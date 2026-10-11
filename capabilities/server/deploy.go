@@ -614,6 +614,7 @@ func runWorkFrom(current func() []*Tenant) {
 				t.Embed(Now())
 				t.PurgeTranscripts(Now())
 				t.SweepUploads(Now())
+				t.SweepFlowArtifacts()
 			}
 		}
 	}()

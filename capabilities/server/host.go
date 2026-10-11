@@ -108,6 +108,7 @@ type Tenant struct {
 	ctx       context.Context // the span of the work being done under mu (telemetry.go)
 	// Files keeps file bytes (ADR-0028 D1); nil: memory, for development and tests.
 	Files         FileStore
+	frames        sealedFrames // sealed Flow frames not yet attached to an accepted record (continuous_frames.go)
 	ComputeWorker WasmWorker
 	Compiler      CodeCompiler
 	cancels       cancels // running operations' cancel handles

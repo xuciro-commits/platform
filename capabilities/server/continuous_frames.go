@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"slices"
+	"sync"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -24,8 +25,51 @@ import (
 const maxFlowFrameBytes = 64 << 20
 
 type flowFrameStore struct {
-	tenant string
-	files  FileStore
+	tenant  string
+	files   FileStore
+	sealing *sealedFrames
+}
+
+// sealedFrames names the Flow frames this process sealed but has not attached
+// to an accepted record yet. The sweep may reclaim nothing that is here: the
+// prepared bytes are still one commit away from being the instance's frame.
+// A previous process's leftovers are deliberately not kept — that is what the
+// orphan scan collects (ADR-0047 §13.5).
+type sealedFrames struct {
+	mu   sync.Mutex
+	keys map[string]bool
+}
+
+func (s *sealedFrames) add(key string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.keys == nil {
+		s.keys = map[string]bool{}
+	}
+	s.keys[key] = true
+}
+
+func (s *sealedFrames) drop(key string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.keys, key)
+}
+
+func (s *sealedFrames) union(into map[string]bool) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key := range s.keys {
+		into[key] = true
+	}
 }
 
 func (s flowFrameStore) key(ref platform.FlowStateArtifact) (string, error) {
@@ -54,7 +98,12 @@ func (s flowFrameStore) Seal(instance string, version int, raw []byte, budget in
 	if err != nil {
 		return ref, err
 	}
+	// The key is known before the bytes exist, and the sweep lists before it
+	// reads the reachable set: registering here means a listed key is always
+	// either reachable or still sealing, so no sweep can reclaim it in between.
+	s.sealing.add(key)
 	if err := s.files.Put(context.Background(), key, raw, "application/json"); err != nil {
+		s.sealing.drop(key)
 		return ref, fmt.Errorf("seal Flow frame: %w", err)
 	}
 	return ref, nil
@@ -82,8 +131,69 @@ func (s flowFrameStore) Read(ref platform.FlowStateArtifact) ([]byte, error) {
 
 func (s flowFrameStore) discard(ref platform.FlowStateArtifact) {
 	if key, err := s.key(ref); err == nil {
+		s.sealing.drop(key)
 		s.files.Delete(context.Background(), key)
 	}
+}
+
+// attach hands a sealed frame to its accepted record: from here the instance's
+// own frame, not this process's registry, keeps it reachable.
+func (s flowFrameStore) attach(ref platform.FlowStateArtifact) {
+	if key, err := s.key(ref); err == nil {
+		s.sealing.drop(key)
+	}
+}
+
+// SweepFlowArtifacts reclaims sealed Flow frames that no accepted record keeps
+// (ADR-0047 §13.5). The original instance record is the only index there is:
+// the sweep lists what the store holds, reads every flow instance's frame
+// reference, and deletes what neither references nor is still sealing. It runs
+// on the I/O lane, so listing and deleting hold no tenant lock.
+func (t *Tenant) SweepFlowArtifacts() {
+	if t.quarantined() {
+		return
+	}
+	store := t.frameStore()
+	keys, err := store.list()
+	if err != nil {
+		log.Printf("flow artifact sweep %s: %v", t.ID, err)
+		return
+	}
+	if len(keys) == 0 {
+		return
+	}
+	reachable := map[string]bool{}
+	t.mu.Lock()
+	if instances, _, err := platform.Find[flow.FlowInstance](t.automation(flow.ID, false), platform.Query{Limit: 100000, Archived: true}); err == nil {
+		for _, x := range instances {
+			if x.Batch != nil && x.Batch.Sealed != nil {
+				if key, keyErr := store.key(*x.Batch.Sealed); keyErr == nil {
+					reachable[key] = true
+				}
+			}
+		}
+	}
+	t.frames.union(reachable)
+	t.mu.Unlock()
+	for _, key := range keys {
+		if !reachable[key] {
+			if err := t.files().Delete(context.Background(), key); err != nil {
+				log.Printf("flow artifact sweep %s: %v", t.ID, err)
+			}
+		}
+	}
+}
+
+// list names the tenant's sealed Flow frame keys. Nothing else lives under the
+// artifacts/flow prefix: file uploads are keyed "<tenant>/<hash>".
+func (s flowFrameStore) list() ([]string, error) {
+	return s.files.List(context.Background(), s.tenant+"/artifacts/flow/")
+}
+
+// frameStore is the tenant's Flow frame store, with the process's own
+// not-yet-attached seals registered in it.
+func (t *Tenant) frameStore() flowFrameStore {
+	return flowFrameStore{tenant: t.ID, files: t.files(), sealing: &t.frames}
 }
 
 func (t *Tenant) continuousSnapshot(m platform.Member, id string, now time.Time) (*flow.Flows, flow.FlowInstance, platform.Member, *kernel.Error) {
@@ -147,15 +257,23 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 		}
 		return flow.BatchOutcome{Cursor: batch.ID}, nil
 	}
-	store := flowFrameStore{tenant: t.ID, files: t.files()}
+	store := t.frameStore()
 	prepared, refusal := plan.Prepare(batch, now, store)
 	if refusal != nil {
 		return flow.BatchOutcome{}, refusal
 	}
 	retained := false
+	var superseded *platform.FlowStateArtifact
 	defer func() {
 		if !retained {
 			store.discard(prepared.Artifact())
+		} else if superseded != nil {
+			// The accepted frame supersedes the one it replaced: the
+			// instance's own record is the only reader of sealed frames, and
+			// it now names the new artifact. Releasing the old one keeps
+			// accepted history bounded (ADR-0047 §13.5); a reader of the old
+			// revision is refused either way.
+			store.discard(*superseded)
 		}
 	}()
 	t.mu.Lock()
@@ -181,6 +299,12 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 	t.enqueue(now)
 	x, _ := platform.Get[flow.FlowInstance](t.automation(flow.ID, false), id)
 	retained = x.Batch.Sealed != nil && x.Batch.Sealed.Ticket == prepared.Artifact().Ticket
+	if retained {
+		store.attach(*x.Batch.Sealed)
+		if latest.Batch != nil && latest.Batch.Sealed != nil && latest.Batch.Sealed.Ticket != x.Batch.Sealed.Ticket {
+			superseded = latest.Batch.Sealed
+		}
+	}
 	out := flow.BatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}
 	if x.Batch.Checkpoint != nil {
 		out.Checkpoint = x.Batch.Checkpoint.Ordinal
@@ -195,7 +319,7 @@ func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*fl
 	if refusal != nil {
 		return nil, refusal
 	}
-	frame, err := flow.ExpandFrame(before, flowFrameStore{tenant: t.ID, files: t.files()})
+	frame, err := flow.ExpandFrame(before, t.frameStore())
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}

@@ -59,6 +59,20 @@ func TestLocalFilesKeepsTheSameContract(t *testing.T) {
 			if err := store.Put(ctx, key, data, "image/png"); err != nil {
 				t.Fatalf("rewriting the same bytes: %v", err)
 			}
+			// The owners' lifecycle scans read the store itself; no second
+			// index lists what is held (ADR-0047 §13.5).
+			if err := store.Put(ctx, "t-1/artifacts/flow/aa.json", []byte("{}"), "application/json"); err != nil {
+				t.Fatal(err)
+			}
+			if keys, err := store.List(ctx, "t-1/artifacts/"); err != nil || len(keys) != 1 || keys[0] != "t-1/artifacts/flow/aa.json" {
+				t.Fatalf("list: %v %v", keys, err)
+			}
+			if keys, err := store.List(ctx, "t-2/"); err != nil || len(keys) != 0 {
+				t.Fatalf("another tenant's prefix listed %v, %v", keys, err)
+			}
+			if err := store.Delete(ctx, "t-1/artifacts/flow/aa.json"); err != nil {
+				t.Fatal(err)
+			}
 			if err := store.Delete(ctx, key); err != nil {
 				t.Fatal(err)
 			}
