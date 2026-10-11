@@ -22,6 +22,8 @@ export function FlowInstanceView({ id }: { id: string }) {
       {can("flow.instance.move") && next && <Button size="sm" onClick={() => void decide("flow.instance.move", target, {})}>{t("Move to the next version")}</Button>}
       {can("flow.instance.cancel") && <Button size="sm" variant="danger" onClick={() => void decide("flow.instance.cancel", target, {})}>{t("Cancel")}</Button>}
     </div>}
+    {instance.state === "canceled" && instance.batch && can("flow.instance.resume") &&
+      <Button size="sm" onClick={() => void decide("flow.instance.resume", target, {})}>{t("Resume continuous run")}</Button>}
     <ChainGraph of={`flow.instance/${instance.id}`} />
     <FlowRun definition={definition} instance={instance} actions={(token) => live && can("flow.instance.skip") && ["stuck", "retry", "undo"].includes(token.waits ?? "")
       ? <Button size="sm" variant="ghost" onClick={() => void decide("flow.instance.skip", target, { token: token.id })}>{t("Skip")}</Button> : null} />

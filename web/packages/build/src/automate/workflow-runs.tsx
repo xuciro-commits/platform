@@ -66,6 +66,7 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
     {shown && <>
       <div className="flex flex-wrap items-center gap-2 text-[11px]"><StatusTag status={shown.state} registry={flowStates} /><code>{shown.id}</code><span className="text-muted">v{shown.version}</span>
         {can("flow.instance.cancel") && !["done", "canceled", "compensated"].includes(shown.state) && <Button disabled={busy} onClick={() => void command("flow.instance.cancel", {})}>{t("Cancel run")}</Button>}
+        {shown.state === "canceled" && shown.batch && can("flow.instance.resume") && <Button disabled={busy} onClick={() => void command("flow.instance.resume", {})}>{t("Resume continuous run")}</Button>}
         {token?.waits === "stuck" && can("flow.instance.retry") && <Button disabled={busy} onClick={() => void command("flow.instance.retry", {})}>{t("Retry run")}</Button>}
       </div>
       <FlowReleaseBinding dependencies={shown.dependencies} release={shown.release} />

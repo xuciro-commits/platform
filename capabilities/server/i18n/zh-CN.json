@@ -385,6 +385,8 @@
   "Move a {thing} from {from} to {to}.": "把{thing}从{from}改为{to}。",
   "Move an {thing} from {from} to {to}.": "把{thing}从{from}改为{to}。",
   "Move to the next version": "迁移到下一版本",
+  "Resume a canceled continuous instance at its accepted cursor, with its original flow version and frame.": "从已接受的游标恢复已取消的持续实例，沿用原流程版本和数据帧。",
+  "Resume continuous run": "恢复持续运行",
   "Name": "名称",
   "Name of the API key in the secret store (optional for local)": "API 密钥在密钥库中的名字（本地模型可不填）",
   "Name of the signing secret in the secret store": "签名密钥在密钥库中的名字",

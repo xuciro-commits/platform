@@ -1023,7 +1023,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		if x == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
-		if ended(x.State) {
+		if ended(x.State) && !(schema == SchemaFlowResume && x.State == "canceled") {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		if schema != SchemaFlowStop {
@@ -1069,6 +1069,19 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			x.State, x.Tokens = "canceled", nil
 			ss.trace(x, "", "canceled", "", c.ID)
 			return ss.apply, nil
+		case SchemaFlowResume:
+			d := f.def(x.Flow, x.Version)
+			if x.State != "canceled" || d == nil || d.Continuous == nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Only a canceled continuous instance can resume")
+			}
+			// Resume the same instance, version, accepted frame and bound source
+			// position. This does not create a new key or replay an accepted batch.
+			x.State, x.Tokens = "waiting", []Token{}
+			detail := fmt.Sprintf("version %d", x.Version)
+			if x.Batch != nil && x.Batch.Cursor != "" {
+				detail += " at accepted cursor " + x.Batch.Cursor
+			}
+			ss.trace(x, "", "resumed", detail, c.ID)
 		case SchemaFlowReplay:
 			// Deliver the named dead letters' signals again, in this same
 			// instance decision (ADR-0047 §13.3): the letters keep their

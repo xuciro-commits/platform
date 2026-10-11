@@ -420,6 +420,7 @@ register("zh-CN", {
   "Move to the next version": "迁移到下一版本",
   "Skip": "跳过",
   "Retry": "重试",
+  "Resume continuous run": "恢复持续运行",
   "Authorized workflow run": "受权流程运行",
   "Inspect a workflow's recorded version and startup release through the member's original read permissions.": "沿成员原有读取权限，检查流程运行所记录的版本与启动发布。",
   "Back to inbox": "返回收件箱",

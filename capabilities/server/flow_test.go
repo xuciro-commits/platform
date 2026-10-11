@@ -919,3 +919,46 @@ func TestFlows(t *testing.T) {
 		t.Error("flows without a flow app were accepted")
 	}
 }
+
+func TestContinuousCanceledInstanceResumesSameVersionAndAcceptedCursor(t *testing.T) {
+	const tenant, id = "resumable-canceled-frame", "frames.window:source"
+	store := &memoryFiles{}
+	compose := func() *Tenant {
+		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameSource(tenant, 1<<20))
+		tn.Files = store
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	at := time.Date(2026, 10, 10, 10, 0, 0, 0, time.UTC)
+	member := memberOf(t, tn, "member")
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	first := flow.Batch{ID: "b1", Signals: []flow.Signal{{Key: "m1", Partition: "plant-a", At: at, Value: json.RawMessage(`12`)}}}
+	if _, err := tn.ConsumeFlowBatch(member, id, first, at); err != nil {
+		t.Fatalf("first continuous batch: %v", err)
+	}
+	decide(t, tn, "member", flow.ID, flow.SchemaFlowStop, flow.InstanceType, id, map[string]any{}, at.Add(time.Second))
+	canceled, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !ok || canceled.State != "canceled" || canceled.Version != 1 || canceled.Batch == nil || canceled.Batch.Cursor != "b1" || canceled.Batch.Consumed != 1 {
+		t.Fatalf("cancel discarded its accepted frame: %+v", canceled)
+	}
+	if _, err := tn.ConsumeFlowBatch(member, id, flow.Batch{ID: "b2", Predecessor: "b1", Signals: []flow.Signal{{Key: "m2", Partition: "plant-a", At: at.Add(time.Second), Value: json.RawMessage(`13`)}}}, at.Add(time.Second)); err == nil {
+		t.Fatal("a canceled instance accepted another source batch before resuming")
+	}
+	decide(t, tn, "member", flow.ID, flow.SchemaFlowResume, flow.InstanceType, id, map[string]any{}, at.Add(2*time.Second))
+	resumed, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !ok || resumed.State != "waiting" || resumed.Version != canceled.Version || resumed.Batch == nil || resumed.Batch.Cursor != canceled.Batch.Cursor || resumed.Batch.Consumed != canceled.Batch.Consumed {
+		t.Fatalf("resume started another version, instance or frame: %+v", resumed)
+	}
+	second := flow.Batch{ID: "b2", Predecessor: resumed.Batch.Cursor, Signals: []flow.Signal{{Key: "m2", Partition: "plant-a", At: at.Add(time.Second), Value: json.RawMessage(`13`)}}}
+	if _, err := tn.ConsumeFlowBatch(member, id, second, at.Add(3*time.Second)); err != nil {
+		t.Fatalf("same-version successor after resume: %v", err)
+	}
+	resumed, _ = platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if resumed.State != "waiting" || resumed.Version != 1 || resumed.Batch.Cursor != "b2" || resumed.Batch.Consumed != 2 {
+		t.Fatalf("the resumed instance did not accept the exact successor: %+v", resumed)
+	}
+	CheckReplay(t, tn, entries, compose)
+}

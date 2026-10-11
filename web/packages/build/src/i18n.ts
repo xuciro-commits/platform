@@ -2196,6 +2196,7 @@ register("zh-CN", {
   "Execution history": "执行历史",
   "Execution map": "执行流程图",
   "Cancel run": "取消运行",
+  "Resume continuous run": "恢复持续运行",
   "Retry selected step": "重试选中步骤",
   "Run data is withheld by the current source permissions.": "当前来源权限不允许查看该运行的数据。",
   "Accepted output: {step}": "已接受输出：{step}",

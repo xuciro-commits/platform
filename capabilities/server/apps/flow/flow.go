@@ -34,6 +34,7 @@ const (
 	SchemaFlowSkip   = "flow.instance.skip"
 	SchemaFlowStop   = "flow.instance.cancel"
 	SchemaFlowMove   = "flow.instance.move"
+	SchemaFlowResume = "flow.instance.resume"
 	SchemaFlowReplay = "flow.instance.replay"
 	stepAttempts     = 5
 	// Compensate as a next step undoes the completed acts, newest first.
@@ -180,6 +181,8 @@ func New(tenant string) *Flows {
 			Description: "Stop a running instance; its open tasks close. Nothing is undone."},
 		platform.Action{Schema: SchemaFlowMove, Target: InstanceType, Capability: "flows", Title: "Move to the next version", Payload: []platform.Field{}, Roles: admin,
 			Description: "Move a running instance to its flow's next version, as that version's mapping says."},
+		platform.Action{Schema: SchemaFlowResume, Target: InstanceType, Capability: "flows", Title: "Resume continuous run", Payload: []platform.Field{}, Roles: admin,
+			Description: "Resume a canceled continuous instance at its accepted cursor, with its original flow version and frame."},
 		platform.Action{Schema: SchemaFlowReplay, Target: InstanceType, Capability: "flows", Title: "Replay dead letters", Roles: admin,
 			Description: "Deliver the named dead letters' signals again under the original authorization; the letters keep their numbers.",
 			Payload:     []platform.Field{{Name: "seqs", Type: "json", Required: true, Description: "The dead-letter numbers to deliver again"}}})

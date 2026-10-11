@@ -13,6 +13,7 @@ export type FlowTrace = { at: string; step?: string; what: string; detail?: stri
 export type FlowInstanceData = {
   id: string; flow: string; title: string; version: number; key: string; state: string; subject?: string; onBehalf?: string; answer?: string; parent?: string;
   dependencies?: string; release?: string;
+  batch?: { cursor?: string; consumed?: number };
   tokens: FlowToken[] | null; undo: { step: string; action: string; target: string }[] | null; trace: FlowTrace[] | null;
 };
 
