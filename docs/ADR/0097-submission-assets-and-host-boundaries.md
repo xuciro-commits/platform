@@ -15,7 +15,7 @@
 | 评审项 | 当前代码证据 | 裁决 |
 |---|---|---|
 | RC-1：提交/恢复覆盖双轨 | `platform/app.go` 的 `ResultApp`、`AcceptedActionApp`、`AcceptedWorker`、`AcceptedPublisher`、`AcceptedStateApp`、`AcceptedInputApp`、`AcceptedFactApp` 七个接口；`host.go:Tenant.Submit/acceptsGenerated/submitAccepted/Input/request` | 成立。是否走暂存接受结果与存储配置、应用能力、声明动作有关；结果路径内还按 schema/草稿内容选单记录或批次编码。必须消除新业务写入的隐式选择与直接修改路径。 |
-| RC-1 的推论：两种结果编码就是两套权威、Input 必然静默回退 | 不成立。单记录与批次都属于已接受结果族；`Tenant.Input` 对声明需记录、但不支持接受结果的 connector input 在已配置结果存储时明确拒绝。`acceptsGenerated` 还核对实际声明，不只看后缀 | 改为核验入口覆盖与提交语义，不能靠删一种编码或只删后缀证明恢复一致。纯读取/校验 Input 与改变权威状态的 Input 分开。 |
+| RC-1 的推论：两种结果编码就是两套权威、Input 必然静默回退 | 不成立。单记录与批次都属于已接受结果族；评审基线中，`Tenant.Input` 在已配置结果存储时拒绝不支持接受结果的记录型输入，当前已统一所有存储模式。`acceptsGenerated` 还核对实际声明，不只看后缀 | 改为核验入口覆盖与提交语义，不能靠删一种编码或只删后缀证明恢复一致。纯读取/校验 Input 与改变权威状态的 Input 分开。 |
 | RC-2：资产生命周期逐类接线、集成依赖缺发布闭环 | `platform/app.go:Manifest` 的 11 个定义切片；`internal/host/host.go:Host` 的七组安装/校验入口及额外 dependents 校验；`release_candidate.go`、`release_install.go`、`apps/build/activation.go` | 成立。新增生命周期能力需要跨 owner、安装、候选和激活同步，Connection/Source/Dataset/Pipeline 的记录不在候选中。 |
 | RC-2 的前提：资产没有共同模型，应新增 AssetKind | 不成立。`platform/definition.go` 已有 `AssetKind/AssetRef`，`platform/revision.go` 已有 `ReleaseAsset/AssetBinding/ReleaseCandidate` 与通用 `Candidate` 闭包 | 在现有模型上增加 owner 生命周期注册，不建立第二套身份、闭包或资产存储。共享交付契约不等于把所有领域数据或 Go 行为声明合成无类型 JSON。 |
 | RC-3：宿主越过平台应用边界，守门脚本缺反向规则 | `host.go:NewTenant/Member/request` 导入 work、断言 Console/Agents、读取 Console 私有成员 map；`continuous_frames.go:pullContinuousSources` 还断言 `*flow.Flows`；`scripts/boundaries.sh` 只检查应用依赖及账本直访等既有方向 | 成立，SRS F4 改为已确认的具体契约耦合。范围超过评审列出的一个 import 和两个断言；不能只改 host.go 就宣称解决。脚本通过仅证明它已覆盖的规则。 |
@@ -88,16 +88,16 @@ Connection/Source/Dataset/Pipeline 的**定义描述符**及选定任务必需�
 
 `platform.Runtime.ProbeDecision` 已是必需的正式契约，删除匿名检测与缺能力时直接执行的兜底。普通 runtime 从现有 stagedDecision 创建私有视图，已暂存的父决策从 privateFork 派生；预检状态只属于该视图。Tenant 的全局 probing 字段及审批/导入切换路径已删除。协议与 Agent 原消费者经同一契约运行；审批预检看到父决策的未提交记录，预检不会再创建审批请求。`boundaries.sh` 在原检查入口禁止恢复 Tenant 共享开关。
 
-`Runtime` 的 `DecisionRuntime` 明确要求 Decide、Attempt 和 ProbeDecision；有宿主的调用不再匿名探测后兜底直调 App.Submit。`StagedRuntime` 是具名的完整私有 Runtime 与 DraftChanges 契约，替代 marker；账本拒绝空日志或 live 日志，不能降回权威账本。无宿主单应用、普通内存/未迁移入口及旧输入 replay 的明确直接语义仍保留，不能把正式方法的存在当成全入口原子接受保证。Work 的嵌套 Attempt 与普通协议调用经正式 Runtime 路由；原审批行为、调用主体与提交锁边界保持。
+`Runtime` 的 `DecisionRuntime` 明确要求 Decide、Attempt 和 ProbeDecision；有宿主的调用不再匿名探测后兜底直调 App.Submit。`StagedRuntime` 是具名的完整私有 Runtime 与 DraftChanges 契约，替代 marker；账本拒绝空日志或 live 日志，不能降回权威账本。无宿主单应用、尚未迁移的 Submit/Work/Effect 入口及旧输入 replay 的明确直接语义仍保留，不能把正式方法的存在当成全入口原子接受保证。Work 的嵌套 Attempt 与普通协议调用经正式 Runtime 路由；原审批行为、调用主体与提交锁边界保持。
 
 保存点/预检的 privateFork 现隔离预备 Compute 输入队列、输入诊断及其路径、OperationResult 的可变输出/引用。拒绝或异常恢复父决策，预检丢弃子视图；成功只消费本次输入，不改不可变制品或已接受历史的归属。`TestAcceptedNestedAttemptOwnsPreparedComputeAndPrivateState` 沿真实 RequestOperation、私有 Console 状态、记录及通知验证四种结果；对重构前 privateFork 的同一测试复现子拒绝/异常/预检消耗父输入。新契约与历史 owner 定向检查经独立子智能体审查通过。
+
+`Tenant.Input` 对 `Manifest.Inputs[name] == true` 始终先私有决策，再接受同一 `input-result` 并纯应用；生产 MES `states`、PMS `channel-bookings` 的旧“live 修改后记录输入”新写路径已删除。AcceptResult、Record 与内存只选择存储方式，不再选择决策方式；Record 仍要求追加失败停服，内存不提供进程崩溃持久性。缺 AcceptedInputApp 的记录型输入在三种模式均明确拒绝，读取/校验输入保留原路径。成功和业务拒绝均按原请求身份复用已保存答复；拒绝丢弃本次私有事实、记录及成功投递标记，保留已接受历史，并从保存的拒绝恢复原 LastError 诊断。PMS 原内存路径“拒绝后仍保留新观测”的行为随旧写路径退出。旧输入日志继续按原 Replay 解码运行；历史订单首次转入新路径的重试，仅当私有账本所有记录与 live 账本逐条相同时才可保存原收据，不放行未发布的新决定。混合日志和快照仍保留读取义务；没有为取消操作扩建输入格式，无法表示的取消明确拒绝。
 
 规则检查仍可检查尚未迁到接受结果的旧动作：私有账本验证后不运行应用 callback，也不能将该预检当作可提交的决定。已有 AcceptedStateApp 的私有状态沿原 fork 保留；未声明状态参与者的应用私有副作用仍须在后续迁移中治理，不宣称所有任意规则都已隔离。普通规则异常继续抛出；不支持的宿主效果明确拒绝。原 journal/结果格式、动作语义与预算未改。
 
 `TestPrivateProbeDoesNotChangeLiveOrParentState` 沿原 testkit 检查成功、拒绝、不支持效果和规则异常下的 live/父记录、通知及模式保全；原审批、协议、嵌套接受结果用例继续守业务行为。全部新写入口的共同接受边界、七类选择接口退出、资产生命周期注册及宿主角色迁移尚未完成。
 
-`make check`、宿主全包 `make test-go PKG=./...`、`scripts/verify.sh composition` 与预检/审批/协议/嵌套的定向 race 检查通过。持续 Flow 的 64 批既有用例修正派发时钟：固定事件时间不能早于上一轮真实完成时间和接受记录的 Due；原预算、历史、重放断言保留。检查不代表全部提交统一、SRS 完整场景、负责人体验或生产验收。
-
 已覆盖的顶级 Submit 由 stagedDecision.sealResult 封存，先按动作声明检查目标，不能利用编码回退接受错误目标。单记录格式的 writer 明确拒绝无法携带的私有状态、观察、计算取消、通知及其他意图，转由完整批次 writer 表达；删除宿主中按 schema 后缀/选择接口加九个草稿条件的编码分流。保留 App.Submit 的现有返回类型、旧单记录/批次解码与预算，尚未迁移入口的准入范围不随此编码整理扩大。`TestAcceptedGeneratedRecordKeepsPrivateOwnerState` 检查一个生成记录动作同时修改私有状态，在追加失败、成功、重试及禁止再调用决策的重放中保持同一接受保证；在重构前源码上，该用例复现提交成功但私有状态丢失。
 
-封存及正式嵌套契约/保存点改动通过 `make check`、宿主全包 `make test-go PKG=./...`、应用/协议组合检查、相关 owner 定向 race 与 `make rehearse`。隔离排演包含两行业 PostgreSQL、接受结果/输入崩溃恢复、真实 worker 与来源、重启、备份/全混合日志重建及前后浏览器路线；原单记录/批次历史保持可读。新私有状态与保存点用例是内存接受存储的行为证据，不能据此提升为所有入口或生产容量保证。
+封存、正式嵌套/保存点及记录型输入改动通过 `make check`、宿主全包 `make test-go PKG=./...`、MES/PMS 完整 owner 测试、应用/协议组合检查、相关 owner 定向 race 与 `make rehearse`。输入迁移经三个子智能体分别实施、核对真实消费者及独立审查；真实 PMS 旧历史重试回归先复现误拒绝，再验证精确只读账本修复。隔离排演包含两行业 PostgreSQL、接受结果/输入崩溃恢复、真实 worker 与来源、重启、备份/全混合日志重建及前后浏览器路线；原单记录/批次历史保持可读。持续 Flow 的原 64 批用例按上一轮真实完成时间和接受记录 Due 派发，原预算/历史断言保留。内存行为证据与上述受限排演不能提升为全入口、SRS 完整场景、负责人体验或生产容量保证。

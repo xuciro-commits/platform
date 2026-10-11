@@ -174,7 +174,7 @@ type AcceptedStateApp interface {
 	ApplyAcceptedState(json.RawMessage) error
 }
 
-// AcceptedInputApp opts a connector input into result-based recovery. Its Input
+// AcceptedInputApp is required for Tenant inputs declared as recorded. Its Input
 // implementation must mutate only its caller's staged Runtime or an
 // AcceptedStateApp fork. DecodeAcceptedInput reconstructs the already saved
 // answer on retry; it must not run business rules or external calls.
@@ -309,7 +309,7 @@ type Manifest struct {
 	Version string
 	Actions *Catalog
 	Reads   []string
-	Inputs  map[string]bool // connector inputs; true: recorded in the journal
+	Inputs  map[string]bool // connector inputs; true: accepted result before live application
 	// Subscribes names its own actions, or events of protocols it consumes
 	// ("<protocol id>#<event>"), delivered to Handle after commit. Apps know no
 	// other app: they reach each other through protocols only (ADR-0011).

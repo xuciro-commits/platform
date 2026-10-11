@@ -100,8 +100,17 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 		}
 		return raw, nil
 	}
-	if len(d.intents) > 0 || len(d.observations) > 0 || len(d.allocated) > 0 || len(d.logs) > 0 {
+	if len(d.intents) > 0 || len(d.observations) > 0 || len(d.allocated) > 0 || len(d.operationCancels) > 0 {
 		return nil, fmt.Errorf("connector input contains effects without a decision")
+	}
+	// A legacy input retry may read its saved receipt through a private log.
+	// Permit that read only when every receipt still equals the live ledger;
+	// a newly accepted decision without a published event cannot disappear.
+	for ledger, staged := range d.logs {
+		if !slices.EqualFunc(ledger.RecordsFor(d.tenant.ID), staged.Records(d.tenant.ID),
+			func(before, after *pb.ChangeRecord) bool { return proto.Equal(before, after) }) {
+			return nil, fmt.Errorf("connector input contains an unpublished decision")
+		}
 	}
 	result.States, err = d.savedStates()
 	if err != nil {
@@ -207,12 +216,25 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 	if t.procs != nil {
 		versions = t.procs.Versions()
 	}
-	committed, err := t.AcceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
+	committed, err := t.commitInputResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
 		Principal: principal, Body: raw, At: now, Versions: versions}, key, hash)
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	return t.finishCommittedInput(a, m, name, key, hash, committed)
+}
+
+// Storage chooses how the already staged result is accepted, never whether
+// the input is staged. Record retains its fatal-on-append-failure contract;
+// memory acceptance still applies and caches the same complete result.
+func (t *Tenant) commitInputResult(entry Entry, key, hash string) ([]byte, error) {
+	if t.AcceptResult != nil {
+		return t.AcceptResult(entry, key, hash)
+	}
+	if t.Record != nil {
+		t.Record(entry)
+	}
+	return entry.Body, nil
 }
 
 func (t *Tenant) finishCommittedInput(a platform.AcceptedInputApp, m platform.Member, name, key, hash string, committed []byte) (answer any, refusal *kernel.Error) {

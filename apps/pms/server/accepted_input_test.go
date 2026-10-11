@@ -62,6 +62,101 @@ func TestAcceptedChannelBookingKeepsFactDecisionAndConnectorTogether(t *testing.
 	})
 }
 
+func TestChannelInputUsesAcceptedResultsWithoutAcceptCallback(t *testing.T) {
+	for _, storage := range []string{"memory", "record"} {
+		t.Run(storage, func(t *testing.T) {
+			var entries []platformserver.Entry
+			hotel, tn := hotelTenant(t, &entries)
+			at := time.Date(2026, 10, 11, 20, 0, 0, 0, time.UTC)
+			tn.Record = nil
+			if storage == "record" {
+				tn.Record = func(entry platformserver.Entry) {
+					if entry.Kind != "accepted-result" {
+						t.Fatalf("connector wrote the legacy input entry: %s", entry.Kind)
+					}
+					if len(hotel.facts.Records(tn.ID)) != len(entries) || count(hotel) != len(entries) {
+						t.Fatal("channel observation or reservation escaped before acceptance")
+					}
+					if seen := tn.Connectors(at)[0].LastSeen; len(entries) == 0 && seen != nil ||
+						len(entries) == 1 && (seen == nil || !seen.Equal(at)) {
+						t.Fatal("connector cursor escaped before booking acceptance")
+					}
+					entries = append(entries, entry)
+				}
+			}
+			booking := ChannelBooking{MessageID: "channel-storage", ReservationID: "r-storage", Guest: "Guest",
+				Stay: Stay{RoomType: "suite", CheckIn: "2026-11-01", CheckOut: "2026-11-02"}, SentAt: at}
+			body, _ := json.Marshal(booking)
+			answer, refusal := tn.Input(channel.Member, "channel-bookings", body, at)
+			record, ok := answer.(*pb.ChangeRecord)
+			if refusal != nil || !ok || len(hotel.facts.Records(tn.ID)) != 1 || count(hotel) != 1 {
+				t.Fatalf("channel booking was not accepted: %v, %v", answer, refusal)
+			}
+			cursor := tn.Connectors(at)[0].LastSeen
+			if cursor == nil {
+				t.Fatal("accepted booking omitted the connector cursor")
+			}
+			booking.MessageID, booking.ReservationID = "channel-sold-out", "r-sold-out"
+			soldOut, _ := json.Marshal(booking)
+			if _, refusal = tn.Input(channel.Member, "channel-bookings", soldOut, at.Add(time.Minute)); refusal == nil {
+				t.Fatal("a second booking was accepted into the only suite")
+			}
+			if len(hotel.facts.Records(tn.ID)) != 1 || count(hotel) != 1 ||
+				!tn.Connectors(at)[0].LastSeen.Equal(*cursor) {
+				t.Fatal("refused booking changed facts, reservations or connector cursor")
+			}
+			_, againRefusal := tn.Input(channel.Member, "channel-bookings", soldOut, at.Add(2*time.Minute))
+			if againRefusal == nil || againRefusal.Error() != refusal.Error() {
+				t.Fatalf("refused retry changed its saved answer: %v", againRefusal)
+			}
+			again, againRefusal := tn.Input(channel.Member, "channel-bookings", body, at.Add(3*time.Minute))
+			if againRefusal != nil || again.(*pb.ChangeRecord).GetChangeId() != record.GetChangeId() ||
+				!tn.Connectors(at)[0].LastSeen.Equal(*cursor) {
+				t.Fatalf("successful retry changed its decision or cursor: %v", againRefusal)
+			}
+			if storage == "record" {
+				if len(entries) != 2 {
+					t.Fatalf("retries wrote extra input results: %d", len(entries))
+				}
+				platformserver.CheckReplay(t, tn, entries, func() *platformserver.Tenant {
+					var ignored []platformserver.Entry
+					_, fresh := hotelTenant(t, &ignored)
+					return fresh
+				})
+			}
+		})
+	}
+}
+
+func TestLegacyChannelInputRetryUsesAcceptedResult(t *testing.T) {
+	var entries []platformserver.Entry
+	hotel, tn := hotelTenant(t, &entries)
+	at := time.Date(2026, 10, 11, 21, 0, 0, 0, time.UTC)
+	body, _ := json.Marshal(ChannelBooking{MessageID: "channel-legacy", ReservationID: "r-legacy", Guest: "Guest",
+		Stay: Stay{RoomType: "suite", CheckIn: "2026-11-01", CheckOut: "2026-11-02"}, SentAt: at})
+	principal, _ := json.Marshal(channel.Member)
+	legacy := platformserver.Entry{App: ID, Kind: "channel-bookings", Principal: principal, Body: body, At: at}
+	if err := tn.Replay([]platformserver.Entry{legacy}); err != nil {
+		t.Fatal(err)
+	}
+	if count(hotel) != 1 || len(hotel.facts.Records(tn.ID)) != 1 {
+		t.Fatal("legacy input did not restore its reservation and fact")
+	}
+	answer, refusal := tn.Input(channel.Member, "channel-bookings", body, at.Add(time.Minute))
+	record, ok := answer.(*pb.ChangeRecord)
+	if refusal != nil || !ok || record.GetChangeId() == "" {
+		t.Fatalf("retry of a restored legacy booking failed: %v, %v", answer, refusal)
+	}
+	if len(entries) != 1 || entries[0].Kind != "accepted-result" || count(hotel) != 1 || len(hotel.facts.Records(tn.ID)) != 1 {
+		t.Fatal("legacy retry reran the booking or used a legacy entry")
+	}
+	platformserver.CheckReplay(t, tn, append([]platformserver.Entry{legacy}, entries...), func() *platformserver.Tenant {
+		var ignored []platformserver.Entry
+		_, fresh := hotelTenant(t, &ignored)
+		return fresh
+	})
+}
+
 func TestJournalAcceptedChannelBookingCrashAndRestart(t *testing.T) {
 	url := os.Getenv("PLATFORM_TEST_DATABASE")
 	if url == "" {

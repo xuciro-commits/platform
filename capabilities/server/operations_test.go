@@ -19,6 +19,14 @@ import (
 // about each delivery, and runs a job that tells them again unless its limit is 0.
 type probe struct{ *notes }
 
+func (p probe) ForkAcceptedState() (platform.App, error) {
+	fork, err := p.notes.ForkAcceptedState()
+	if err != nil {
+		return nil, err
+	}
+	return probe{fork.(*notes)}, nil
+}
+
 func (p probe) Manifest() platform.Manifest {
 	m := p.notes.Manifest()
 	m.Jobs = []platform.Job{{Name: "tick", Title: "Tick", Every: time.Minute}}
@@ -162,7 +170,7 @@ func TestOperations(t *testing.T) {
 	for _, e := range journal {
 		kinds = append(kinds, e.Kind)
 	}
-	if !slices.Equal(kinds, []string{"p-feed", "submission", "submission", "p-feed", "submission", "submission", "job"}) {
+	if !slices.Equal(kinds, []string{"accepted-result", "submission", "accepted-result", "submission", "accepted-result", "submission", "submission", "job"}) {
 		t.Fatalf("journal %v", kinds)
 	}
 	if s := tn.Settings(); len(s) != 2 || s[1].App != "p" || s[1].Settings[0].Value != "3" { // the platform's own, then the app's

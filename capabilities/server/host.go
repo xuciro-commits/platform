@@ -729,24 +729,18 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 	}
 	end := t.begin("input "+name, trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
-	if t.AcceptResult != nil {
-		if a.Manifest().Inputs[name] {
-			accepted, ok := a.(platform.AcceptedInputApp)
-			if !ok || !slices.Contains(accepted.AcceptedInputs(), name) {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT,
-					"This connector input has no accepted-result boundary")
-			}
-			return t.inputAccepted(accepted, m, name, body, now)
+	if a.Manifest().Inputs[name] {
+		accepted, ok := a.(platform.AcceptedInputApp)
+		if !ok || !slices.Contains(accepted.AcceptedInputs(), name) {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT,
+				"This connector input has no accepted-result boundary")
 		}
+		return t.inputAccepted(accepted, m, name, body, now)
 	}
 	defer t.enqueue(now)
 	out, err = a.Input(t.caller(m, a, false), name, body, now)
 	if err != nil {
 		t.refused(m.ID, name, err, now)
-	}
-	if err == nil && a.Manifest().Inputs[name] {
-		t.audit.remember(AuditEntry{At: now, Member: m.ID, App: a.Manifest().ID, Action: "input:" + name})
-		t.record(a, name, m, body, now)
 	}
 	return out, err
 }

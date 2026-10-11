@@ -185,9 +185,9 @@ func TestChannelDuplicatesCollapse(t *testing.T) {
 	}
 	b.MessageID, b.ReservationID = "ota-779", "r-ota-779"
 	_, err = deliver(tn, b, now)
-	expect(t, err.Error(), "ERROR_CODE_CONFLICT") // sold out: the observation stays, the decision is rejected
-	if n := len(h.facts.Records("hotel-a")); n != 2 {
-		t.Fatalf("observation of the refused booking was not kept: %d", n)
+	expect(t, err.Error(), "ERROR_CODE_CONFLICT") // sold out: the entire input is refused
+	if n := len(h.facts.Records("hotel-a")); n != 1 {
+		t.Fatalf("refused booking leaked a private observation: %d", n)
 	}
 	if c := tn.Connectors(now); c[0].LastError == nil || c[0].LastError.Error != "ERROR_CODE_CONFLICT" {
 		t.Fatalf("the refused delivery is not shown on the connector: %+v", c)

@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -48,6 +49,25 @@ func (n *notes) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 func (n *notes) Input(c platform.Caller, _ string, body []byte, _ time.Time) (any, *kernel.Error) {
 	n.texts["feed"] = string(body)
 	return nil, nil
+}
+
+func (n *notes) AcceptedLedger() *platform.Ledger { return n.ledger }
+func (n *notes) AcceptedInputs() []string         { return []string{n.id + "-feed"} }
+func (*notes) DecodeAcceptedInput(raw json.RawMessage) (any, error) {
+	var answer any
+	err := json.Unmarshal(raw, &answer)
+	return answer, err
+}
+func (n *notes) ForkAcceptedState() (platform.App, error) {
+	return &notes{id: n.id, ledger: n.ledger, texts: maps.Clone(n.texts)}, nil
+}
+func (n *notes) AcceptedState() (json.RawMessage, error) { return json.Marshal(n.texts) }
+func (*notes) ValidateAcceptedState(raw json.RawMessage) error {
+	var texts map[string]string
+	return json.Unmarshal(raw, &texts)
+}
+func (n *notes) ApplyAcceptedState(raw json.RawMessage) error {
+	return json.Unmarshal(raw, &n.texts)
 }
 
 func note(tenant, member, app, key, topic, text string) *pb.Submission {

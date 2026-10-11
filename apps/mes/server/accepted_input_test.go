@@ -67,6 +67,69 @@ func TestAcceptedEquipmentBatchAndDowntimeAreAtomic(t *testing.T) {
 	})
 }
 
+func TestEquipmentInputUsesAcceptedResultsWithoutAcceptCallback(t *testing.T) {
+	for _, storage := range []string{"memory", "record"} {
+		t.Run(storage, func(t *testing.T) {
+			plant, tn := plantTenant(t)
+			at := time.Date(2026, 10, 11, 19, 0, 0, 0, time.UTC)
+			var entries []platformserver.Entry
+			if storage == "record" {
+				tn.Record = func(entry platformserver.Entry) {
+					if entry.Kind != "accepted-result" {
+						t.Fatalf("connector wrote the legacy input entry: %s", entry.Kind)
+					}
+					if len(plant.facts.Records(tn.ID)) != len(entries) || len(plant.Downtime()) != len(entries) {
+						t.Fatal("equipment observation or downtime escaped before acceptance")
+					}
+					if seen := tn.Connectors(at)[0].LastSeen; len(entries) == 0 && seen != nil ||
+						len(entries) == 1 && (seen == nil || !seen.Equal(at)) {
+						t.Fatal("connector cursor escaped before equipment acceptance")
+					}
+					entries = append(entries, entry)
+				}
+			}
+			batch := StateBatch{BatchID: "gateway-storage", Resource: "CNC-11", Samples: []Sample{{At: at, State: "down"}}}
+			body, _ := json.Marshal(batch)
+			answer, refusal := tn.Input(gw.Member, "states", body, at)
+			fact, ok := answer.(*pb.FactRecord)
+			if refusal != nil || !ok || len(plant.facts.Records(tn.ID)) != 1 || len(plant.Downtime()) != 1 {
+				t.Fatalf("equipment input was not accepted: %v, %v", answer, refusal)
+			}
+			cursor := tn.Connectors(at)[0].LastSeen
+			if cursor == nil {
+				t.Fatal("accepted input omitted the connector cursor")
+			}
+			batch.Samples[0].State = "running"
+			conflicting, _ := json.Marshal(batch)
+			if _, refusal = tn.Input(gw.Member, "states", conflicting, at.Add(time.Minute)); refusal == nil {
+				t.Fatal("changed contents of the same gateway batch were accepted")
+			}
+			if len(plant.facts.Records(tn.ID)) != 1 || len(plant.Downtime()) != 1 ||
+				!tn.Connectors(at)[0].LastSeen.Equal(*cursor) {
+				t.Fatal("refused input changed the observation, downtime or connector cursor")
+			}
+			_, againRefusal := tn.Input(gw.Member, "states", conflicting, at.Add(2*time.Minute))
+			if againRefusal == nil || againRefusal.Error() != refusal.Error() {
+				t.Fatalf("refused retry changed its saved answer: %v", againRefusal)
+			}
+			again, againRefusal := tn.Input(gw.Member, "states", body, at.Add(3*time.Minute))
+			if againRefusal != nil || again.(*pb.FactRecord).GetFactId() != fact.GetFactId() ||
+				!tn.Connectors(at)[0].LastSeen.Equal(*cursor) {
+				t.Fatalf("successful retry changed its fact or cursor: %v", againRefusal)
+			}
+			if storage == "record" {
+				if len(entries) != 2 {
+					t.Fatalf("retries wrote extra input results: %d", len(entries))
+				}
+				platformserver.CheckReplay(t, tn, entries, func() *platformserver.Tenant {
+					_, fresh := plantTenant(t)
+					return fresh
+				})
+			}
+		})
+	}
+}
+
 func TestJournalAcceptedEquipmentCrashAndRestart(t *testing.T) {
 	url := os.Getenv("PLATFORM_TEST_DATABASE")
 	if url == "" {
