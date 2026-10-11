@@ -88,6 +88,12 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	}
 	if input == nil {
 		if err := op.Input.Validate(q.Inputs, op.Limits.MaxInputBytes); err != nil {
+			// A decision builds its input inside the accepting transaction, where
+			// artifact I/O is forbidden: only the native prepared call can reach a
+			// declared data channel, and this route says so rather than trimming.
+			if len(q.Inputs) > op.Limits.MaxInputBytes && op.Limits.DataInputBytes > 0 {
+				return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The input exceeds its inline budget; the declared data channel needs a prepared native call")
+			}
 			return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 	}
