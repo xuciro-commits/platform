@@ -28,3 +28,7 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 
 - `web/packages/build/src/ontology/data-source.tsx` 中数据源的 `object/key/mapping` 直写分支在数据集目标普及后可收（ADR-0071 §减法）：等探针三源都改为 dataset 目标后，删掉"直接写对象"的 profile 分支与 `Source.MapRows` 的对象路径；`applyRows` 只剩管道一个入口（匹配规则随之只有一个调用点）。
 - `enterprise.slice.import`（ADR-0068 跨租户联邦）与 `enterprise.slice.sync`（ADR-0073）并列保留；两者形状一致，若联邦场景一年内未启用，收掉 import。
+
+## 4. 四处 `ui` 逃逸的等待条件已失效（处置：按实际缺口保留）
+
+`scripts/escapes.sh` 曾把这四处记为「等 DataTable 长出行内编辑」。该能力已交付：`inlineEdit` 沿 `RecordList` 接到 `DataTable.onCellEdit`（ADR-0004、ADR-0046 F1e3），所以这句等待不再成立，例外清单已改为逐站点记实际缺口——决策矩阵需要跨列的分组表头，角色/权限矩阵每格是 Select 加多个 Checkbox 的多行单元，页面坞的实时变量表不要搜索条与固定 28px 行高。ADR-0052 要求列表统一走 `Records`/`DataTable`，这几处的差异是网格形态而非第二套权威，因此不为它们新增 `DataTable` 变体（SRS §5.3 的「无当前需求的功能广度」）。`ontology/process.tsx` 的单行字段清单可在下次触碰该文件时直接迁到 `DataTable` 并同步删计数；其余三处待真实任务需要时再定，不作为已完成项也不计入欠账。

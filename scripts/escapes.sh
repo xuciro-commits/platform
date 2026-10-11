@@ -18,10 +18,10 @@ cd "$(dirname "$0")/.."
 known=$(cat <<'KNOWN'
 host	apps/mes/server/mes.go	1	#129 (6) the plant's own fact log beside the ledger (gateway states): judge whether the ledger owns it
 host	apps/pms/server/pms.go	1	#129 (6) the channel's own fact log beside the ledger: judge whether the ledger owns it
-ui	web/packages/build/src/functions/decision-table.tsx	1	ADR-0062: decision matrix as plain table until DataTable grows inline editing
-ui	web/packages/build/src/ontology/process.tsx	2	ADR-0053 §11: property and permission matrices as plain tables until DataTable grows inline editing
-ui	web/packages/build/src/projects/project-roles.tsx	1	ADR-0066: roles and scope matrix as plain table until DataTable grows inline editing
-ui	web/packages/build/src/workshop/editor.tsx	1	ADR-0053 §11: live variable values in the page dock as a plain table
+ui	web/packages/build/src/functions/decision-table.tsx	1	ADR-0062: the rule grid needs a two-tier header (When/Then span their columns) and editors in the header row; DataTable has flat header groups, so it needs column groups here
+ui	web/packages/build/src/ontology/process.tsx	2	ADR-0053 §11: the access matrix stacks a Select plus three Checkboxes in one cell; DataTable's fixed rowHeight and virtual rows fit one-line cells (its field list may move to DataTable when next touched)
+ui	web/packages/build/src/projects/project-roles.tsx	1	ADR-0066: one cell per role holds a Select plus a verb row and the object cell carries a second line; needs multi-line cells, not the inline edit DataTable already has
+ui	web/packages/build/src/workshop/editor.tsx	1	ADR-0053 §11: the dock tab lists live values without search, sorting or a fixed grid height; move to DataTable only if the kit grows an auto-height plain variant
 KNOWN
 )
 
