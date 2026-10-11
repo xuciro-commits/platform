@@ -41,6 +41,10 @@ type Connection struct {
 	State     string           `json:"state" field:"readonly"`
 	Requested bool             `json:"requested,omitempty" field:"readonly" title:"Check requested"`
 	Last      *ConnectionCheck `json:"last,omitempty" field:"readonly" type:"json" title:"Last check"`
+	// Definition publication is independent of data/runtime versions.
+	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
 // ConnectionCheck is what one check found.

@@ -356,7 +356,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 	for key, raw := range s.AcceptedAnswers {
 		if strings.HasPrefix(key, "release:") {
 			result, err := decodeAcceptedRelease(raw)
-			if err != nil || result.Version != 3 || result.Tenant != t.ID || key != "release:"+result.Key || s.ReleaseApplied[result.Key] != result.Digest || !bytes.Equal(s.ReleaseCandidates[result.CandidateID], result.Bytes) {
+			if err != nil || (result.Version != 3 && result.Version != 4) || result.Tenant != t.ID || key != "release:"+result.Key || s.ReleaseApplied[result.Key] != result.Digest || !bytes.Equal(s.ReleaseCandidates[result.CandidateID], result.Bytes) {
 				return fmt.Errorf("tenant %s: release answer snapshot %s is incompatible", t.ID, key)
 			}
 			continue

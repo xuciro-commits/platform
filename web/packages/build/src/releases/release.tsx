@@ -4,6 +4,7 @@ import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, Disclosure, PageHeader, Select, StatusTag, t, useWorkspace } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope } from "../projects/application-scope";
+import { resourceKinds, type ResourceKind } from "../projects/resources";
 import { diagnose } from "./diagnostics";
 import { useState } from "react";
 
@@ -22,7 +23,7 @@ const merged = (current: JointChoice[], incoming: JointChoice[]): JointChoice[] 
   return out;
 };
 
-export type ReleaseKind = "object" | "page" | "app" | "flow" | "link-type" | "property-type" | "query" | "function" | "compute";
+export type ReleaseKind = Exclude<ResourceKind, "action" | "automation"> | "app";
 /** A route carries the already-known candidate inputs as "kind:id,kind:id"
  * (ADR-0048 D6: the import's saved draft objects are the application's
  * dependencies, so its review opens with them selected). */
@@ -39,15 +40,8 @@ type Record = { id: string; title: string; name: string; state: string };
 type EvaluationPlan = { id: string; title: string; function?: string; evaluation?: unknown[] };
 type EvaluationReport = { id: string; candidate: string; function: string; state: string; quality: number; costUsd: number; costComplete: boolean; peakLatencyMillis: number; attempts: unknown[] };
 const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
-  { kind: "object", type: "build.object", label: "Objects" },
-  { kind: "page", type: "build.page", label: "Pages" },
+  ...resourceKinds.filter((item) => item.kind !== "action" && item.kind !== "automation").map((item) => ({ kind: item.kind as ReleaseKind, type: item.type, label: item.plural })),
   { kind: "app", type: "build.app", label: "Applications" },
-  { kind: "flow", type: "build.process", label: "Workflows" },
-  {kind:"link-type",type:"build.linktype",label:"Relationships"},
-  {kind:"property-type",type:"build.propertytype",label:"Shared properties"},
-  { kind: "query", type: "build.query", label: "Queries" },
-  { kind: "function", type: "build.function", label: "AI functions" },
-  { kind: "compute", type: "build.code", label: "Code functions" },
 ];
 export const releaseKinds: ReleaseKind[] = kinds.map((item) => item.kind);
 

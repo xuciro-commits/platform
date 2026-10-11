@@ -101,17 +101,11 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 						if slices.Contains(fixed, ref) {
 							return fmt.Errorf("embedded page %s differs from its explicit release root", ref)
 						}
-						owner, ok := t.app(ref.App).(interface {
-							PageContent(string, string) (platform.Page, bool)
-						})
-						if !ok {
-							return fmt.Errorf("embedded page has no retained content owner")
+						registry, err := t.assetRegistryLocked()
+						if err != nil {
+							return err
 						}
-						retained, ok := owner.PageContent(ref.Name, e.ContentVersion)
-						if !ok {
-							return fmt.Errorf("embedded page content is not retained")
-						}
-						asset, err := platform.PageReleaseAsset(ref.App, e.Page.SourceVersion, retained)
+						asset, err := registry.ResolvePinned(ref, e.Page.SourceVersion, e.ContentVersion)
 						if err != nil {
 							return err
 						}
@@ -186,52 +180,11 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 		if slices.Contains(fixed, ref) {
 			return platform.ReleaseCandidate{}, fmt.Errorf("asset %s differs from the version pinned by its dependents", ref)
 		}
-		if !slices.Contains([]platform.AssetKind{platform.AssetPropertyType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute}, ref.Kind) {
-			return platform.ReleaseCandidate{}, fmt.Errorf("asset %s has no retained source version %s", ref, version)
+		registry, err := t.assetRegistryLocked()
+		if err != nil {
+			return platform.ReleaseCandidate{}, err
 		}
-		var asset platform.ReleaseAsset
-		var err error
-		if ref.Kind == platform.AssetPropertyType {
-			owner, ok := t.app(ref.App).(interface {
-				PropertyTypeReleaseAsset(string, string) (platform.ReleaseAsset, error)
-			})
-			if !ok {
-				return platform.ReleaseCandidate{}, fmt.Errorf("property has no retained owner")
-			}
-			asset, err = owner.PropertyTypeReleaseAsset(ref.Name, version)
-		} else if ref.Kind == platform.AssetLinkType {
-			owner, ok := t.app(ref.App).(interface {
-				LinkTypeReleaseAsset(string, string) (platform.ReleaseAsset, error)
-			})
-			if !ok {
-				return platform.ReleaseCandidate{}, fmt.Errorf("link type has no retained owner")
-			}
-			asset, err = owner.LinkTypeReleaseAsset(ref.Name, version)
-		} else if ref.Kind == platform.AssetQuery {
-			owner, ok := t.app(ref.App).(interface {
-				QueryReleaseAsset(string, string) (platform.ReleaseAsset, error)
-			})
-			if !ok {
-				return platform.ReleaseCandidate{}, fmt.Errorf("query %s has no retained version owner", ref)
-			}
-			asset, err = owner.QueryReleaseAsset(ref.Name, version)
-		} else if ref.Kind == platform.AssetCompute {
-			owner, ok := t.app(ref.App).(interface {
-				OperationReleaseAsset(string, string) (platform.ReleaseAsset, error)
-			})
-			if !ok {
-				return platform.ReleaseCandidate{}, fmt.Errorf("compute %s has no retained version owner", ref)
-			}
-			asset, err = owner.OperationReleaseAsset(ref.Name, version)
-		} else {
-			owner, ok := t.app(ref.App).(interface {
-				FunctionReleaseAsset(string, string) (platform.ReleaseAsset, error)
-			})
-			if !ok {
-				return platform.ReleaseCandidate{}, fmt.Errorf("function %s has no retained version owner", ref)
-			}
-			asset, err = owner.FunctionReleaseAsset(ref.Name, version)
-		}
+		asset, err := registry.ResolvePinned(ref, version)
 		if err != nil {
 			return platform.ReleaseCandidate{}, err
 		}

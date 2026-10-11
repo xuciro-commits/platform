@@ -386,77 +386,94 @@ func digestAcceptedBatch(result acceptedBatch) (string, error) {
 
 // Validate every row, counter and ledger on private forks before promotion.
 // A late invalid child cannot advance an earlier authoritative ledger.
+type preparedAcceptedBatch struct {
+	result  acceptedBatch
+	records *recordStore
+	ledgers map[string]*platform.Ledger
+	changes map[string]*pb.ChangeRecord
+	key     string
+	raw     []byte
+}
+
 func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error) {
+	prepared, err := t.prepareAcceptedBatch(l, raw)
+	if err != nil || prepared == nil {
+		return false, err
+	}
+	return t.promoteAcceptedBatch(prepared)
+}
+
+func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*preparedAcceptedBatch, error) {
 	result, receipt, err := decodeAcceptedBatch(raw)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	owner, ok := t.app(result.App).(platform.App)
 	if result.Tenant != t.ID || !ok || owner.AcceptedLedger() != l {
-		return false, fmt.Errorf("record batch belongs to another tenant or ledger")
+		return nil, fmt.Errorf("record batch belongs to another tenant or ledger")
 	}
 	sub, _ := batchSubmission(result, receipt)
 	key := result.App + "/" + sub.GetIdempotencyKey()
 	if saved := t.committed.answers[key]; len(saved) > 0 {
 		prior, answer, err := decodeAcceptedBatch(saved)
 		if err != nil || prior.RequestHash != result.RequestHash || !proto.Equal(answer, receipt) {
-			return false, fmt.Errorf("record batch key belongs to another answer")
+			return nil, fmt.Errorf("record batch key belongs to another answer")
 		}
-		return false, nil
+		return nil, nil
 	}
 	answerOwner, ok := t.app(receipt.GetSubmission().GetAuthority()).(platform.App)
 	if !ok {
-		return false, fmt.Errorf("record batch answer has no authority")
+		return nil, fmt.Errorf("record batch answer has no authority")
 	}
 	if prior := answerOwner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()); prior != nil {
 		if !proto.Equal(prior, receipt) {
-			return false, fmt.Errorf("record batch key belongs to another result")
+			return nil, fmt.Errorf("record batch key belongs to another result")
 		}
-		return false, nil // later commits may already have changed rows/counters
+		return nil, nil // later commits may already have changed rows/counters
 	}
 	ledgers := map[string]*platform.Ledger{}
 	changes := map[string]*pb.ChangeRecord{}
 	for _, decision := range result.Decisions {
 		ra, ok := t.app(decision.Event.App).(platform.App)
 		if !ok {
-			return false, fmt.Errorf("record batch needs missing authority %s", decision.Event.App)
+			return nil, fmt.Errorf("record batch needs missing authority %s", decision.Event.App)
 		}
 		ledgers[decision.Event.App] = ra.AcceptedLedger()
 		for _, subscriber := range decision.Event.Subscribers {
 			if t.app(subscriber) == nil {
-				return false, fmt.Errorf("record batch needs missing subscriber %s", subscriber)
+				return nil, fmt.Errorf("record batch needs missing subscriber %s", subscriber)
 			}
 		}
 		r := new(pb.ChangeRecord)
 		if err := protojson.Unmarshal(decision.Receipt, r); err != nil {
-			return false, err
+			return nil, err
 		}
 		if _, refused := t.committed.refusals[decision.Event.App+"/"+r.GetSubmission().GetIdempotencyKey()]; refused {
-			return false, fmt.Errorf("record batch reused a refused child key")
+			return nil, fmt.Errorf("record batch reused a refused child key")
 		}
 		changes[decision.Event.App+"/"+r.GetChangeId()] = r
 	}
 	draft := t.records.forkRecords()
 	if err := t.validateAcceptedControl(result.Control); err != nil {
-		return false, err
+		return nil, err
 	}
 	if err := t.validateAcceptedNotices(result.Notices); err != nil {
-		return false, err
+		return nil, err
 	}
 	if err := t.validateAcceptedIntents(result.Intents); err != nil {
-		return false, err
+		return nil, err
 	}
 	if err := t.validateAcceptedObservations(result.Observations); err != nil {
-		return false, err
+		return nil, err
 	}
 	if err := t.validateAcceptedStates(result.States); err != nil {
-		return false, err
+		return nil, err
 	}
 	if err := t.validateOperationCancellations(result.Operations); err != nil {
-		return false, err
+		return nil, err
 	}
 	if err := t.validateControlDeliveries(result.Control, result.Deliveries); err != nil {
-		return false, err
+		return nil, err
 	}
 	for _, decision := range result.Decisions {
 		if decision.Publication == nil {
@@ -465,30 +482,30 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 		publisher, ok := t.app(decision.Event.App).(platform.AcceptedPublisher)
 		if !ok || !slices.Contains(publisher.AcceptedPublicationSchemas(), decision.Publication.Schema) ||
 			decision.Publication.Schema != decision.Event.Names[0] {
-			return false, fmt.Errorf("record batch has an invalid publication")
+			return nil, fmt.Errorf("record batch has an invalid publication")
 		}
 		if err := publisher.ValidateAcceptedPublication(decision.Publication.Schema, decision.Publication.Image); err != nil {
-			return false, err
+			return nil, err
 		}
 	}
 	if err := t.prepareCallbackRows(draft, result.DirectRows, result.At); err != nil {
-		return false, err
+		return nil, err
 	}
 	if err := t.applyBatchRows(draft, result, ledgers, changes); err != nil {
-		return false, err
+		return nil, err
 	}
 	for _, decision := range result.Decisions {
 		if p := decision.Publication; p != nil {
 			if err := t.installPublicationLinkConstraint(draft, p.Schema, p.Image); err != nil {
-				return false, err
+				return nil, err
 			}
 		}
 	}
 	if err := draft.validateLinkConstraints(); err != nil {
-		return false, err
+		return nil, err
 	}
 	if err := t.sequences.check(result.SequenceBases, result.Sequences); err != nil {
-		return false, err
+		return nil, err
 	}
 	checks := map[string]*kernel.ChangeLog{}
 	for app, ledger := range ledgers {
@@ -497,9 +514,15 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 	for _, decision := range result.Decisions {
 		r := changes[decision.Event.App+"/"+receiptID(decision.Receipt)]
 		if changed, err := checks[decision.Event.App].ApplyAccepted(r); err != nil || !changed {
-			return false, fmt.Errorf("record batch ledger validation: %v (new=%t)", err, changed)
+			return nil, fmt.Errorf("record batch ledger validation: %v (new=%t)", err, changed)
 		}
 	}
+	return &preparedAcceptedBatch{result, draft, ledgers, changes, key, raw}, nil
+}
+
+func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, error) {
+	result, draft := prepared.result, prepared.records
+	ledgers, changes, key, raw := prepared.ledgers, prepared.changes, prepared.key, prepared.raw
 	for _, decision := range result.Decisions {
 		r := changes[decision.Event.App+"/"+receiptID(decision.Receipt)]
 		if changed, err := ledgers[decision.Event.App].ApplyAcceptedChange(r); err != nil || !changed {

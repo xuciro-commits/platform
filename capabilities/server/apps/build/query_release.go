@@ -146,28 +146,6 @@ func (b *Build) prepareQueryReleasePublications(assets []platform.ReleaseAsset) 
 		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Object != record.Object || q.Interface != record.Interface {
 			return nil, fmt.Errorf("invalid next query version")
 		}
-		if q.Interface != "" {
-			var overlays []platform.EntityInfo
-			for _, selected := range assets {
-				if selected.Ref.App != ID || selected.Ref.Kind != platform.AssetObject {
-					continue
-				}
-				var object Object
-				if json.Unmarshal(selected.Body, &object) != nil || TypeOf(object.Name) != selected.Ref.Name {
-					continue
-				}
-				info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
-				if err != nil {
-					return nil, err
-				}
-				overlays = append(overlays, info)
-			}
-			if _, err := b.host.BindInterfaceQuery(q, overlays...); err != nil {
-				return nil, err
-			}
-		} else if err := b.host.ValidateInstallQuery(q); err != nil {
-			return nil, err
-		}
 		frozen := Query{Record: record.Record, Name: q.Name, Title: q.Title, Description: q.Description, Object: q.Object, Interface: q.Interface, InterfaceShape: q.InterfaceShape, Implementations: q.Implementations, By: q.By, Domain: q.Domain, Sort: q.Sort, Limit: q.Limit, State: "published", Version: version}
 		record.State, record.Version, record.Published = "published", version, published(frozen)
 		record.Versions = append(slices.Clone(record.Versions), record.Published)

@@ -16,7 +16,7 @@
 
 ## 2. 产品模型
 
-**当前实现**。权威状态新写入统一为私有决定、接受结果和纯应用；App 账本及 Runtime 角色是正式契约，存储方式不再决定提交语义。类型化定义、包生命周期、不可变候选和旧格式恢复继续保留。实现与验证边界归 ADR-0097，原结果恢复不变量归 ADR-0038；资产生命周期和宿主依赖收敛仍待交付。
+**当前实现**。权威状态新写入统一为私有决定、接受结果和纯应用；App 账本及 Runtime 角色是正式契约，存储方式不再决定提交语义。类型化定义、包生命周期、不可变候选和旧格式恢复继续保留。实现与验证边界归 ADR-0097，原结果恢复不变量归 ADR-0038；可信 owner 生命周期、六类集成定义及一次接受的环境交付已实现；宿主具体应用依赖仍待角色收敛。
 
 ### 2.1 分层
 
@@ -35,9 +35,9 @@
 
 #### 当前结构核验与整改归属
 
-[ADR-0097](ADR/0097-submission-assets-and-host-boundaries.md) 的提交管线现已覆盖实际新写入口：不再用动作/工作名单、匿名 Caller 能力或存储配置选择直接修改路径。私有状态和保存点由正式 owner 契约治理。资产身份与候选闭包仍缺统一生命周期协调，宿主对具体平台应用的依赖仍待角色收敛；单写者和锁外准备/回锁再校验保持。计数与基线裁决在 ADR，不以文件、字段或接口数量验收。
+[ADR-0097](ADR/0097-submission-assets-and-host-boundaries.md) 的提交管线现已覆盖实际新写入口：不再用动作/工作名单、匿名 Caller 能力或存储配置选择直接修改路径。私有状态和保存点由正式 owner 契约治理。可信 `AssetRegistry/AssetLifecycleOwner` 已统一候选生命周期；原 owner 提供 typed 描述符、依赖、绑定、私有 bootstrap/安装及纯恢复。宿主对具体平台应用的依赖仍待角色收敛；单写者和锁外准备/回锁再校验保持。计数与基线裁决在 ADR，不以文件、字段或接口数量验收。
 
-资产共同模型已经是 `AssetKind/AssetRef/ReleaseAsset/Candidate`；对象、页面、Flow 与集成记录的生命周期覆盖不同，不能称为“完全没有资产模型”。共同交付协调由原发布 owner 承接，类型化定义和执行仍由原 owner 负责。代码 Package、租户定义资产、环境绑定及运行数据分别治理；资产注册不能自动证明产品成熟度或生成业务菜单。
+资产共同模型已经是 `AssetKind/AssetRef/ReleaseAsset/Candidate`；对象、页面、Flow 与 Connection/Source/Dataset/Pipeline/Writeback/Matching 复用可信 owner 生命周期；各 kind 的支持操作和迁移边界仍不同。共同交付协调由原发布 owner 承接，类型化定义和执行仍由原 owner 负责。代码 Package、租户定义资产、环境绑定及运行数据分别治理；资产注册不能自动证明产品成熟度或生成业务菜单。
 
 ### 2.2 整体协作方式
 
@@ -104,11 +104,11 @@
 |---|---|---|---|---|
 | D1 工作区与业务使用 / 平台基础 | 业务使用者、FDE、治理与运行人员 | Workspace Shell 与 UI Kit；各原生应用及租户应用仍拥有自身业务语义 | Shell、门户、角色投影和若干跨应用路线已实现；完整任务体验待真实角色走查（ADR-0052、ADR-0047 §14、Testing） | 按选定酒店及制造任务验证对象上下文、反馈、拒绝和恢复；不重做全部界面 |
 | D2 业务语义与企业模型 / 平台基础 + 行业归属 | 构建者、业务领域所有者 | `platform` 公共契约；`core` 共享业务主数据；`enterprise` 企业模型；交易记录由相应行业应用拥有（ADR-0058、0067–0068、0073） | 共享对象、Interface 查询和 UAF 企业模型已有有界实现；完整行业模型不在支持声明内 | `platform.member`、`core.person`、岗位/组织/地点模型及行业记录保持不同权威；人员与企业模型元素的同步未实现，不得假定自动一致 |
-| D3 数据连接与集成 / 可选平台能力 | Integrator、FDE、运维人员 | Build 的 Connection/Source/Dataset/Pipeline/Writeback/Matching；Host 密钥及外部效果 owner（ADR-0070–0075） | 首版接入、数据转换和回写有跨应用内部路线；只在已声明 profile 内有界支持 | 集成记录当前不在候选封存/环境晋级范围；选定应用若依赖持续集成，必须纳入其版本、环境绑定、失败与恢复闭环；不以连接器数量验收 |
+| D3 数据连接与集成 / 可选平台能力 | Integrator、FDE、运维人员 | Build 的 Connection/Source/Dataset/Pipeline/Writeback/Matching；Host 密钥及外部效果 owner（ADR-0070–0075、0097） | 六类 typed 定义已进入候选/环境交付，酒店与制造首次交付、v2 升级、故障及恢复通过内存/真实 PostgreSQL/race 场景 | 目标重新绑定本地 ready Connection、凭据及执行成员；数据、游标、历史、回执不移植。不支持的输入/输出身份迁移明确拒绝；完整行业与产品体验另验 |
 | D4 应用构建与共享交互 / 平台基础 | FDE、客户构建者、业务操作者 | Build 定义 owner；`@platform/app`、`@platform/ui` 共享编辑与呈现（ADR-0053、0096） | 共享输入、Inspector buffer、拒绝与重试机制工程已整合；负责人跨页面任务体验仍待验收 | 复用既有输入约束、草稿和历史；在选定任务验证表单/弹窗/表格/Inspector 一致性，不另建表单引擎 |
 | D5 业务执行与协作 / 平台基础 + 可选能力 | 操作者、审批者、流程构建者 | 原 Action/Lifecycle owner；`work` 管任务/审批，`flow` 管流程实例，Compute 管计算（ADR-0017、0044、0047 §13.5） | 动作、Work、常规 Flow 已实现；持续 Flow 的受控 PostgreSQL 游标、空闲 slide/grace、固定 Compute entry、周期 checkpoint 及被替换制品清理意图已有有界实现。ADR-0047 §13.5/§14 记录真实 PostgreSQL owner 测试与两行业来源/worker/重启/备份/全日志重建的本地演练；ADR-0097 整块交付已重跑这些本地路线。完整七节点 mean/reading/业务输出、并发 8、版本化死信/重放、未接受预备/终态制品及更广 GC/故障/容量仍未验收 | 保持唯一执行 owner；按 WorkQueue 收口，不由单个窗口/worker通道测试冒充完整持续链 |
 | D6 AI 与知识 / 可选平台能力 | 构建者、业务操作者、AI 治理者 | `ai`、`agent`、`knowledge` 及 AI Function 所属应用；复用原授权、预算、Work/Effect（ADR-0043、0077） | 模型接入、预算、运行与评测机制已有实现；真实模型任务质量、引文权限及人工接管仍待按任务验收 | 只在选定任务实际使用 AI 时闭合对应链路；不扩建通用评测平台或模型市场 |
-| D7 应用与扩展交付 / 平台基础 | FDE、Publisher、Host Admin | Build 候选/激活、Host Console 环境绑定；可信代码 Package 生命周期是不同机制（ADR-0039、0047、0048） | 明确候选、依赖闭包、激活、同宿主晋级、记录迁移及一个可选标量升级已实现；更广升级仅受限支持 | 连接/来源/数据集/管道记录未纳入候选；其他数据形状升级、通用客户扩展保留和退役未承诺。完整交付不能由“页面发布成功”推断 |
+| D7 应用与扩展交付 / 平台基础 | FDE、Publisher、Host Admin | Build 可信 owner 生命周期、候选/激活；Host Console 环境绑定；可信代码 Package 是不同机制（ADR-0039、0047、0048、0097） | 不可变闭包、私有 bootstrap、一次接受的激活/晋级、记录迁移及有界升级已实现 | 首次 Property/Link/Query/Function 仅第 1 版或已有所需 family；Compute 仍需匹配 compiled target。一般数据转换、通用扩展保留与退役未承诺，SRS 整体验收未完成 |
 | D8 治理与运行维护 / 平台基础 | Tenant Admin、Auditor、Publisher、Host Operator | `platform`、Host Console、Runs、授权及各数据 owner（ADR-0047、0078） | 成员/角色、包生命周期、运行与部分恢复有实现；权限读取边界与运行证据并非全链路统一 | 动作授权、行范围、字段遮蔽和派生读取须分别证明；容量、保留、RTO/RPO 及资源清理须按承诺运行范围明确 |
 | D9 行业应用与业务包 / 行业包 + 验证探针 | FDE、行业业务人员 | `apps/*` 及 `protocols/`、`solutions/`；业务语义留在行业 owner | 酒店与制造提供受控组合和集成探针，不等于完整行业产品 | 本项目完成两行业选定任务；不默认扩建完整 ERP/MES、排产或 MES 工艺深度 |
 
@@ -252,7 +252,7 @@
 | **Package / 能力包** | 可信代码或受控定义的版本化分发/贡献单元；按声明预检、兼容安装、升级、排空、退役；不等于任意在线代码热插拔，也不替代租户定义候选/发布 | Host package manager（`capabilities/server/packages.go`） | 包版本、制品摘要、贡献和租户安装/保留状态；见 [ADR-0047 §4.2、§10.3、§14](ADR/0047-platform-composition-and-workspaces.md) |
 | **Process / Flow / Flow instance** | `build.process` 是构建器定义记录；发布时编译到 `platform.Flow`；运行中的 `FlowInstance` 持有固定版本、主体、Token/帧与结果。持续 Flow 仍由同一 `flow` owner 推进，不是新调度器 | `build` 定义，`flow` 执行，动作/Work/Compute 各守自身 owner | 已发布定义/候选与 instance 决策历史；见 [ADR-0044](ADR/0044-capability-fabric.md)、[ADR-0047 §13.5](ADR/0047-platform-composition-and-workspaces.md#135-当前边界) |
 | **Candidate / Release / Active / Binding** | 草稿是可变作者态；候选是可审查的选定闭包；Release 是封存内容；Active 是租户最后激活指针；运行实例绑定自己的启动版本；Environment binding 是另一个部署目标配置。彼此不可互代 | Build/原发布与激活 owner；Host Console 承担受支持晋级 | 不可变候选/发布、激活指针、实例版本和环境配置分别留证；见 [ADR-0039 As built](ADR/0039-minimal-definition-release.md)、[ADR-0048](ADR/0048-joint-draft-candidates-and-direct-install-retirement.md) |
-| **Connection / Source / Integration asset** | Connection 是宿主层的受控外部连接配置（含凭据）；Source、Dataset、Pipeline、Backing/Writeback 是 `build` 层资产；集成记录目前未纳入封存候选/环境晋级，不能因被应用引用而宣称随应用发布 | Host 持有连接与密钥；`build` 持有来源/数据/管道定义；宿主外循环执行同步与回写 | 外部绑定、定义与运行结果分别持有；边界见 [ADR-0069 §2.4](ADR/0069-phase-two-coexist-absorb-replace.md#24-架构位置)；后续 ADR-0070–0075 细化各 profile；与 D3 对照 |
+| **Connection / Source / Integration asset** | Build 拥有 Connection/Source/Dataset/Pipeline/Writeback/Matching 的 typed 定义；候选固定配置与逻辑依赖，本地地址/密钥绑定和运行数据各自保留 | Build + Host 密钥/来源/效果 owner；可信 AssetLifecycleOwner 协调生命周期 | 原 AssetRef/ReleaseAsset/Candidate 闭包及 owner 安装映像；同名同 kind ready Connection 与目标执行成员重新验证，旧在途沿固定版本，见 ADR-0039/0097 |
 
 归属权规则：宿主持有共享运行时状态；`platform` 应用裁决管理员所做的每一次变更，各个领域裁决各自的目标类型；应用仅裁决属于自身数据类别的内容，通过 `Caller` 访问平台，应用彼此之间仅通过协议交互。
 
@@ -404,7 +404,7 @@
 
 所有构建路径均基于统一的、经过校验的定义模型，并共享完全相同的底层运行时能力 (§10.3)。代码支撑的扩展函数对外暴露严格类型化的输入/输出、所需能力集与外部效果边界；序列化的业务定义引用这些强类型函数，绝不直接序列化任意无约束的 Go 闭包代码。声明式规则绝不能逾越动作本身的业务不变式约束、权限检查或外部效果边界。纯计算表达式必须有界且无副作用；持久化的等待与重试机制必须收敛归属于工作流/受属工作。本平台绝不承诺支持无限制的外部 JavaScript、裸 SQL 或租户插件的任意执行。
 
-[Apps.md](Apps.md) 中现有的开发者构建路径保持完全可执行。新的编辑器、资产注册表、发布体系与定义持久化属于未来要落地的新能力。运行时的迁移演进必须在声明的退出标准达成后，彻底淘汰旧有的竞争路径。编写权限、发布权限与最终的业务执行权限必须严格清晰分离，并在各自独立的边界上接受强校验。
+[Apps.md](Apps.md) 中现有的开发者构建路径保持完全可执行。现有编辑器、可信资产生命周期、候选发布与定义持久化按已实现 profile 使用，边界归 ADR-0039/0097。运行时的迁移演进必须在声明的退出标准达成后，彻底淘汰旧有的竞争路径。编写权限、发布权限与最终的业务执行权限必须严格清晰分离，并在各自独立的边界上接受强校验。
 
 ## 7. 按关注点划分的立场
 

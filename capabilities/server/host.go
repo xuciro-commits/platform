@@ -262,6 +262,15 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	if err := t.registerDefinitions(); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
+	var assetOwners []platform.AssetLifecycleOwner
+	for _, app := range apps {
+		if owner, ok := app.(platform.AssetLifecycleOwner); ok {
+			assetOwners = append(assetOwners, owner)
+		}
+	}
+	if _, err := platform.NewAssetRegistry(assetOwners...); err != nil {
+		return nil, fmt.Errorf("tenant %s: %v", id, err)
+	}
 	return t, nil
 }
 

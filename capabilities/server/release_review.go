@@ -173,13 +173,13 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	if reply.RunningMatches {
 		err = t.pendingWorkFitsLocked(id, raw)
 	} else {
-		_, err = t.prepareReleaseActivationLocked(id, raw)
+		_, _, err = t.prepareReleaseLifecycleLocked(saved, m, time.Now().UTC(), false)
 	}
 	reply.CanActivate = err == nil
 	if err != nil {
 		reply.ActivationDiagnostic = err.Error()
-		if plan, planErr := t.releaseUpgradePlanLocked(saved); planErr == nil && plan != nil {
-			if _, checkErr := t.prepareReleaseActivationLocked(id, raw, true); checkErr == nil {
+		if plan, planErr := t.releaseUpgradePlanLocked(saved, m); planErr == nil && plan != nil {
+			if _, _, checkErr := t.prepareReleaseLifecycleLocked(saved, m, time.Now().UTC(), true); checkErr == nil {
 				reply.UpgradePlan = plan
 			}
 		}

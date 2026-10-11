@@ -27,6 +27,14 @@ const (
 	AssetFlow     AssetKind = "flow"
 	AssetFunction AssetKind = "function"
 	AssetCompute  AssetKind = "compute"
+	// Integration assets describe existing owner configuration. They never
+	// include target credentials, cursors, data or running-work state.
+	AssetConnection AssetKind = "connection"
+	AssetSource     AssetKind = "source"
+	AssetDataset    AssetKind = "dataset"
+	AssetPipeline   AssetKind = "pipeline"
+	AssetWriteback  AssetKind = "writeback"
+	AssetMatching   AssetKind = "matching"
 )
 
 // NamedQuery reads records of one object: fixed conditions, and optionally
@@ -60,7 +68,8 @@ type AssetRef struct {
 func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + r.Name }
 
 func (r AssetRef) Check() error {
-	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetPropertyType && r.Kind != AssetLinkType && r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage && r.Kind != AssetApp && r.Kind != AssetQuery && r.Kind != AssetFlow && r.Kind != AssetFunction && r.Kind != AssetCompute {
+	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFlow, AssetFunction, AssetCompute,
+		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching}, r.Kind) {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -369,6 +378,9 @@ func IconName(s string) bool {
 // Entity and Action reuse the same descriptions as the existing record/action
 // APIs; this registry is an index over those owners, not another executor.
 type Definition struct {
+	// OwnerRecord is the internal metadata read boundary for assets whose
+	// descriptor is not itself a record type. It never enters discovery JSON.
+	OwnerRecord      string                  `json:"-"`
 	ContentVersion   string                  `json:"contentVersion,omitempty"`
 	PropertyType     *PropertyType           `json:"propertyType,omitempty"`
 	PropertyVersions map[string]PropertyType `json:"propertyVersions,omitempty"`

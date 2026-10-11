@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"slices"
 	"strings"
@@ -31,7 +32,13 @@ func (t *Tenant) PullSources(now time.Time) {
 	t.mu.Lock()
 	sources, _, _ := platform.Find[build.Source](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	t.mu.Unlock()
+	owner := t.app(build.ID).(*build.Build)
 	for _, s := range sources {
+		s, err := owner.ExecutionSource(s)
+		if err != nil {
+			log.Printf("source definition refused: %v", err)
+			continue
+		}
 		if s.Due(now) {
 			t.pullSource(s, now)
 		}
@@ -39,7 +46,7 @@ func (t *Tenant) PullSources(now time.Time) {
 }
 
 func (t *Tenant) pullSource(s build.Source, now time.Time) {
-	pull := build.SourcePull{At: now}
+	pull := build.SourcePull{At: now, DefinitionVersion: s.ExecutionVersion()}
 	member, ok := t.Member(s.Puller)
 	if !ok {
 		pull.Error = "The publishing member is no longer available"
@@ -115,13 +122,28 @@ func (t *Tenant) connectionMarking(connection string) string {
 		return ""
 	}
 	conn, _ := platform.Get[build.Connection](t.automation(build.ID, false), connection)
-	return conn.Marking
+	fixed, err := t.app(build.ID).(*build.Build).ExecutionConnection(conn)
+	if err != nil {
+		return "restricted"
+	}
+	return fixed.Marking
 }
 
 // resolver is the object's published matching rule (ADR-0074) over its
 // records as they are now, or nil when rows land as they come.
 func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *build.Resolver {
 	rules, _, _ := platform.Find[build.Match](t.automation(build.ID, false), platform.Query{Limit: 500})
+	owner := t.app(build.ID).(*build.Build)
+	var fixed []build.Match
+	for _, rule := range rules {
+		execution, err := owner.ExecutionMatching(rule)
+		if err != nil {
+			log.Printf("matching definition refused: %v", err)
+			continue
+		}
+		fixed = append(fixed, execution)
+	}
+	rules = fixed
 	i := slices.IndexFunc(rules, func(m build.Match) bool { return m.Object == object && m.State == "published" })
 	if i < 0 {
 		return nil
@@ -164,6 +186,13 @@ func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
 	if s.Connection != "" {
 		t.mu.Lock()
 		c, ok := platform.Get[build.Connection](t.automation(build.ID, false), s.Connection)
+		if ok {
+			var err error
+			c, err = t.app(build.ID).(*build.Build).ExecutionConnection(c)
+			if err != nil {
+				ok = false
+			}
+		}
 		t.mu.Unlock()
 		if !ok || c.State != "ready" {
 			return nil, fmt.Errorf("the connection is not ready")

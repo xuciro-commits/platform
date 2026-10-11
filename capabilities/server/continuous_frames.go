@@ -402,6 +402,13 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 		return refuse("The Flow source is not readable")
 	}
 	source, ok := view.Record.(build.Source)
+	if ok {
+		var err error
+		source, err = t.app(build.ID).(*build.Build).ExecutionSource(source)
+		if err != nil {
+			ok = false
+		}
+	}
 	if !ok || !source.Stream || source.State != "published" || source.Name != name || source.Since == "" || source.Profile != "table" {
 		return refuse("The Flow source must be a published incremental stream source")
 	}
@@ -410,6 +417,13 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 		return refuse("The Flow connection is not readable")
 	}
 	connection, ok := view.Record.(build.Connection)
+	if ok {
+		var err error
+		connection, err = t.app(build.ID).(*build.Build).ExecutionConnection(connection)
+		if err != nil {
+			ok = false
+		}
+	}
 	if !ok || connection.State != "ready" {
 		return refuse("The Flow connection is not ready")
 	}
@@ -417,6 +431,8 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	frozenSource.Record, frozenSource.State, frozenSource.Cursor, frozenSource.Requested, frozenSource.Last = platform.Record{}, "", "", false, nil
 	frozenConnection.Record, frozenConnection.State, frozenConnection.Requested, frozenConnection.Last = platform.Record{}, "", false, nil
 	frozenSource.Title, frozenSource.Puller = "", ""
+	frozenSource.DefinitionVersion, frozenSource.Published, frozenSource.Versions = 0, "", nil
+	frozenConnection.DefinitionVersion, frozenConnection.Published, frozenConnection.Versions = 0, "", nil
 	frozenConnection.Name, frozenConnection.Title = "", ""
 	hash, hashErr := canonicalDigest([]any{frozenSource, frozenConnection, intake})
 	if hashErr != nil {
@@ -643,6 +659,13 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 			if plan, err := f.PlanBatch(instance, t.automation(flow.ID, false)); err == nil {
 				if _, intake, _ := plan.Intake(); intake != nil {
 					source, exists := platform.Get[build.Source](t.automation(build.ID, false), intake.SourceRecord)
+					if exists {
+						var err error
+						source, err = t.app(build.ID).(*build.Build).ExecutionSource(source)
+						if err != nil {
+							exists = false
+						}
+					}
 					if exists && source.Stream && source.State == "published" {
 						pending = append(pending, instance)
 					}

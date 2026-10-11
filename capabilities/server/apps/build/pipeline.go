@@ -53,6 +53,10 @@ type Pipeline struct {
 	Runner    string       `json:"runner,omitempty" field:"readonly" title:"Runs as"`
 	Requested bool         `json:"requested,omitempty" field:"readonly"`
 	Last      *PipelineRun `json:"last,omitempty" field:"readonly" type:"json" title:"Last run"`
+	// Definition publication is independent of data/runtime versions.
+	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
 // Step is one transformation. The fields used depend on Kind:
@@ -101,18 +105,19 @@ type Expectation struct {
 
 // PipelineRun is what one run did.
 type PipelineRun struct {
-	At          time.Time        `json:"at"`
-	Input       int              `json:"inputVersion"`
-	Rows        int              `json:"rows"`              // rows after the steps
-	Written     int              `json:"written"`           // rows written to the output
-	Marking     string           `json:"marking,omitempty"` // the highest marking of the inputs (ADR-0075)
-	Merged      int              `json:"merged,omitempty"`  // rows merged into matched records (ADR-0074)
-	Quarantined int              `json:"quarantined"`
-	Failed      int              `json:"failed"` // rows the output refused
-	Error       string           `json:"error,omitempty"`
-	Quarantine  []QuarantinedRow `json:"quarantine,omitempty"`
-	Failures    []SourceFailure  `json:"failures,omitempty"`
-	Output      int              `json:"outputVersion,omitempty"`
+	DefinitionVersion string           `json:"definitionVersion,omitempty"`
+	At                time.Time        `json:"at"`
+	Input             int              `json:"inputVersion"`
+	Rows              int              `json:"rows"`              // rows after the steps
+	Written           int              `json:"written"`           // rows written to the output
+	Marking           string           `json:"marking,omitempty"` // the highest marking of the inputs (ADR-0075)
+	Merged            int              `json:"merged,omitempty"`  // rows merged into matched records (ADR-0074)
+	Quarantined       int              `json:"quarantined"`
+	Failed            int              `json:"failed"` // rows the output refused
+	Error             string           `json:"error,omitempty"`
+	Quarantine        []QuarantinedRow `json:"quarantine,omitempty"`
+	Failures          []SourceFailure  `json:"failures,omitempty"`
+	Output            int              `json:"outputVersion,omitempty"`
 }
 
 type QuarantinedRow struct {
@@ -162,6 +167,13 @@ func (b *Build) publishPipeline(c platform.Caller, record any, _ json.RawMessage
 		return err
 	}
 	p.Runner, p.Requested = c.ID, true
+	if !c.Replaying {
+		fixed, err := b.freezeDirectIntegration(platform.AssetPipeline, *p)
+		if err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		*p = fixed.(Pipeline)
+	}
 	return nil
 }
 
@@ -174,6 +186,10 @@ func (b *Build) checkPipeline(c platform.Caller, p Pipeline) *kernel.Error {
 	}
 	if _, ok := platform.Get[Dataset](c, p.Input); !ok {
 		return refuse("The input dataset does not exist")
+	}
+	marking, markErr := b.inputMarking(c, p)
+	if markErr != nil {
+		return refuse(markErr.Error())
 	}
 	for i, s := range p.Steps {
 		if err := checkStep(c, s); err != nil {
@@ -200,7 +216,7 @@ func (b *Build) checkPipeline(c platform.Caller, p Pipeline) *kernel.Error {
 	case outputs != 1:
 		return refuse("A pipeline writes either a dataset, an object or the enterprise model")
 	case p.OutputEnterprise != nil:
-		if Guarded(b.inputMarking(c, p)) {
+		if Guarded(marking) {
 			return refuse("The enterprise model is tenant-readable; confidential or restricted rows cannot land there")
 		}
 		if err := p.OutputEnterprise.check(); err != nil {
@@ -221,7 +237,7 @@ func (b *Build) checkPipeline(c platform.Caller, p Pipeline) *kernel.Error {
 		if p.Key == "" {
 			return refuse("Name the column that is the record id")
 		}
-		if marking := b.inputMarking(c, p); Guarded(marking) {
+		if Guarded(marking) {
 			if open := UnguardedFields(info, nil); len(open) > 0 {
 				return refuse("The input is {marking}; name who reads {object}'s fields {fields} first, or lower the marking", marking, p.OutputObject, strings.Join(open, ", "))
 			}
@@ -597,6 +613,10 @@ func (b *Build) submitPipelineRan(c platform.Caller, s *pb.Submission, now time.
 		if !ok || json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Run.At.IsZero() {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Run result has no pipeline")
 		}
+		equivalent, versionErr := retainedExecutionEquivalent(p, payload.Run.DefinitionVersion)
+		if versionErr != nil || !equivalent {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration definition changed before its result was accepted")
+		}
 		return func(r *pb.ChangeRecord) {
 			run := payload.Run
 			p.Last, p.Requested = &run, false
@@ -670,14 +690,18 @@ func keyOf(r map[string]any, cols []string) string {
 }
 
 // inputMarking is the highest marking of the datasets a pipeline reads.
-func (b *Build) inputMarking(c platform.Caller, p Pipeline) string {
+func (b *Build) inputMarking(c platform.Caller, p Pipeline) (string, error) {
 	marking := ""
 	for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
 		if ds, ok := platform.Get[Dataset](c, id); ok {
-			marking = HigherMarking(marking, ds.Marking)
+			fixed, err := b.ExecutionDataset(ds)
+			if err != nil {
+				return "", err
+			}
+			marking = HigherMarking(marking, fixed.Marking)
 		}
 	}
-	return marking
+	return marking, nil
 }
 
 // StepDatasets are the other datasets steps look up or join.

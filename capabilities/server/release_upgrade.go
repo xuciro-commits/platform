@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"time"
 
-	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -50,38 +50,46 @@ func optionalStoredAddition(old, next platform.EntityInfo) *platform.FieldInfo {
 
 // The plan is derived from immutable candidate bytes and current storage;
 // callers cannot supply migration instructions or replace its source binding.
-func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate) (*ReleaseUpgradePlan, error) {
-	owner := t.app(build.ID).(*build.Build)
-	publications, _, err := owner.PrepareReleasePublications(candidate.Assets)
+func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, members ...platform.Member) (*ReleaseUpgradePlan, error) {
+	var member platform.Member
+	if len(members) > 0 {
+		member = members[0]
+	}
+	installations, bootstrap, err := t.prepareReleaseLifecycleLocked(candidate, member, time.Now().UTC(), true)
+	if err != nil {
+		return nil, err
+	}
+	records := t.records
+	if len(bootstrap) > 0 {
+		prepared, err := t.prepareAcceptedBatch(t.app("build").AcceptedLedger(), bootstrap)
+		if err != nil || prepared == nil {
+			return nil, fmt.Errorf("upgrade bootstrap cannot prepare: %v", err)
+		}
+		records = prepared.records
+	}
+	view, err := t.assetInstallationView(records)
+	if err != nil {
+		return nil, err
+	}
+	trial, err := view.stageReleaseInstallationLocked(installations, true, true)
 	if err != nil {
 		return nil, err
 	}
 	plan := &ReleaseUpgradePlan{CandidateID: candidate.ID, ActiveID: t.releases.active}
-	for _, publication := range publications {
-		if publication.Schema != build.SchemaPublish {
+	for typ, old := range t.records.types {
+		next := trial.records.types[typ]
+		if next == nil || len(old.rows) == 0 || sameStoredFields(old.info, next.info) {
 			continue
 		}
-		declaration, err := owner.ReleaseDeclaration(publication)
-		if err != nil {
-			return nil, err
-		}
-		info, err := platform.Describe(build.ID, declaration.Entity, func(reflect.Type) string { return "" })
-		if err != nil {
-			return nil, err
-		}
-		old := t.records.types[info.Type]
-		if old == nil || len(old.rows) == 0 || sameStoredFields(old.info, info) {
-			continue
-		}
-		field := optionalStoredAddition(old.info, info)
+		field := optionalStoredAddition(old.info, next.info)
 		if field == nil {
-			return nil, fmt.Errorf("object %s needs an unsupported storage migration", info.Type)
+			return nil, fmt.Errorf("object %s needs an unsupported storage migration", typ)
 		}
 		shape, err := canonicalDigest(old.info.Fields)
 		if err != nil {
 			return nil, err
 		}
-		plan.Additions = append(plan.Additions, ReleaseFieldAddition{Type: info.Type, Field: field.Name, Kind: field.Type, Records: len(old.rows), SourceShape: shape})
+		plan.Additions = append(plan.Additions, ReleaseFieldAddition{Type: typ, Field: field.Name, Kind: field.Type, Records: len(old.rows), SourceShape: shape})
 	}
 	if len(plan.Additions) == 0 {
 		return nil, nil

@@ -558,6 +558,9 @@ export type Connection = {
   state: string;
   requested?: boolean;
   last?: ConnectionCheck;
+  definitionVersion?: number;
+  published?: string;
+  definitionVersions?: string[];
 };
 
 export type ConnectionCheck = {
@@ -2838,6 +2841,9 @@ export type Source = {
   puller?: string;
   requested?: boolean;
   last?: SourcePull;
+  definitionVersion?: number;
+  published?: string;
+  definitionVersions?: string[];
 };
 
 export type SourceFailure = {
@@ -2852,6 +2858,7 @@ export type SourceField = {
 };
 
 export type SourcePull = {
+  definitionVersion?: string;
   at: string;
   rows: number;
   applied: number;

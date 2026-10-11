@@ -50,6 +50,10 @@ type Writeback struct {
 	Rejected  int            `json:"rejected,omitempty" field:"readonly"`
 	Failed    int            `json:"failed,omitempty" field:"readonly"`
 	Answers   []WritebackAns `json:"answers,omitempty" field:"readonly" type:"json" title:"Recent answers"`
+	// Definition publication is independent of data/runtime versions.
+	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
 // WritebackAns is one settled attempt as the builder sees it.
@@ -94,6 +98,13 @@ func (b *Build) publishWriteback(c platform.Caller, record any, _ json.RawMessag
 		return err
 	}
 	w.Publisher = c.ID
+	if !c.Replaying {
+		fixed, err := b.freezeDirectIntegration(platform.AssetWriteback, *w)
+		if err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		*w = fixed.(Writeback)
+	}
 	return nil
 }
 
@@ -105,6 +116,13 @@ func (b *Build) checkWriteback(c platform.Caller, w Writeback) *kernel.Error {
 		return refuse(err.Error())
 	}
 	conn, ok := platform.Get[Connection](c, w.Connection)
+	if ok {
+		fixed, err := b.ExecutionConnection(conn)
+		if err != nil {
+			return refuse(err.Error())
+		}
+		conn = fixed
+	}
 	if !ok || conn.State != "ready" {
 		return refuse("The connection is not ready; check it first")
 	}
@@ -149,17 +167,41 @@ func (w Writeback) Schema() string { return w.Object + "." + w.On }
 // WritebackRequest is the frozen request an effect carries: everything the
 // dispatcher needs without reading records, the secret only by name.
 type WritebackRequest struct {
-	Writeback    string         `json:"writeback"`
-	Method       string         `json:"method"`
-	URL          string         `json:"url"`
-	Secret       string         `json:"secret,omitempty"`
-	AllowPrivate bool           `json:"allowPrivate,omitempty"`
-	Body         map[string]any `json:"body"`
+	Version           int            `json:"version,omitempty"`
+	Object            string         `json:"object,omitempty"`
+	DefinitionVersion int            `json:"definitionVersion,omitempty"`
+	Result            []SourceField  `json:"result,omitempty"`
+	Writeback         string         `json:"writeback"`
+	Method            string         `json:"method"`
+	URL               string         `json:"url"`
+	Secret            string         `json:"secret,omitempty"`
+	AllowPrivate      bool           `json:"allowPrivate,omitempty"`
+	Body              map[string]any `json:"body"`
 }
 
 // Request freezes the request for one accepted decision: the payload mapped to
 // the body (or sent whole with its id), the path's placeholders filled.
 func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) (WritebackRequest, error) {
+	definitionVersion := 0
+	if w.Published != "" {
+		var asset platform.ReleaseAsset
+		if err := decodeIntegration([]byte(w.Published), &asset); err != nil {
+			return WritebackRequest{}, err
+		}
+		if asset.Ref != (platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: w.Name}) {
+			return WritebackRequest{}, fmt.Errorf("writeback publication identity differs")
+		}
+		if err := validateIntegrationDescriptor(asset); err != nil {
+			return WritebackRequest{}, err
+		}
+		version, err := integrationOrdinal(asset)
+		if err != nil {
+			return WritebackRequest{}, err
+		}
+		definitionVersion = version
+	} else if w.DefinitionVersion != 0 {
+		return WritebackRequest{}, fmt.Errorf("versioned writeback has no accepted definition")
+	}
 	var in map[string]any
 	if len(payload) > 0 {
 		if err := json.Unmarshal(payload, &in); err != nil {
@@ -189,7 +231,7 @@ func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) 
 	if method == "" {
 		method = "POST"
 	}
-	return WritebackRequest{Writeback: w.ID, Method: method, URL: conn.Resolve(path), Secret: conn.Secret, AllowPrivate: conn.AllowPrivate, Body: body}, nil
+	return WritebackRequest{Version: 1, Object: w.Object, DefinitionVersion: definitionVersion, Result: slices.Clone(w.Result), Writeback: w.ID, Method: method, URL: conn.Resolve(path), Secret: conn.Secret, AllowPrivate: conn.AllowPrivate, Body: body}, nil
 }
 
 // Fields are what the answer writes onto the record, by the Result mapping.
@@ -277,6 +319,16 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 	w, ok := platform.Get[Writeback](c, req.Writeback)
 	if !ok {
 		return nil
+	}
+	// New requests carry their original answer mapping, so an accepted reply
+	// never acquires a different meaning after a compatible definition upgrade.
+	if req.Version == 1 {
+		w.Object, w.Result = req.Object, slices.Clone(req.Result)
+		if w.Object == "" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Writeback request has no frozen target")
+		}
+	} else if req.Version != 0 || w.DefinitionVersion != 0 {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Historical writeback request requires its original unversioned definition")
 	}
 	ans := WritebackAns{Effect: effect.ID, Target: effect.Target, Result: out.Result, Detail: out.Detail, Answer: clipAnswer(out.Answer)}
 	if out.Result != "delivered" && out.Result != "rejected" {

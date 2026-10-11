@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -34,28 +35,29 @@ func (t *Tenant) PageContentDefinition(m platform.Member, ref platform.AssetRef,
 		return denied()
 	}
 	if digest != version {
-		owner, ok := t.app(ref.App).(interface {
-			PageContent(string, string) (platform.Page, bool)
-		})
-		if !ok {
-			return denied()
-		}
-		page, ok := owner.PageContent(ref.Name, version)
-		if !ok {
-			return denied()
-		}
-		actual, err := platform.PageContentVersion(page)
-		if err != nil || actual != version || page.Name != ref.Name {
-			return denied()
-		}
-		original.Page = &page
-		asset, err := platform.PageReleaseAsset(ref.App, original.Version, page)
+		registry, err := t.assetRegistryLocked()
 		if err != nil {
 			return denied()
 		}
+		asset, err := registry.ResolvePinned(ref, original.Version, version)
+		if err != nil {
+			return denied()
+		}
+		var page platform.Page
+		if json.Unmarshal(asset.Body, &page) != nil {
+			return denied()
+		}
+		original.Page = &page
 		original.Requires = asset.Requires
 	}
-	registered := slices.Clone(t.definitions)
+	registered, err := t.ownedAssetDefinitions(t.definitions)
+	if err != nil {
+		return denied()
+	}
+	current = slices.IndexFunc(registered, func(d platform.Definition) bool { return d.Ref == ref && d.Page != nil })
+	if current < 0 {
+		return denied()
+	}
 	registered[current] = original
 	for _, d := range t.definitionsFrom(m, registered) {
 		if d.Ref == ref && d.Page != nil && d.ContentVersion == version {

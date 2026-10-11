@@ -80,7 +80,8 @@ for (const fixture of [
         await page.getByRole("region",{name:"Lineage",exact:true}).getByText("Clean external rows",{exact:true}).dblclick();
         await expect(page.getByLabel("Pipeline name", { exact: true })).toHaveValue(`${name}pipe`);
 
-        // Deliver a page and its native flow together; the object is also the pipeline's target.
+        // The object is the integration pipeline's target. The whole delivery
+        // is frozen after its complete integration closure exists.
         const { id: object, type } = await builder.object({ name: `${name}receipt`, title: "Integration receipt", plural: "Integration receipts",
           fields: [{ name: "item", title: "Item", type: "text", search: true }, { name: "qty", title: "Quantity", type: "integer" }, { name: "docno", title: "Document", type: "text" },
             { name: "code", title: "Code", type: "text", search: true }, { name: "name", title: "Name", type: "text", search: true }],
@@ -96,8 +97,36 @@ for (const fixture of [
         });
         const flowID = fresh("FLOW"), flowName = `${name}received`, appID = fresh("APP");
         await builder.decide("build.process.create", { type: "build.process", id: flowID }, { name: flowName, title: "Received delivery", object: type, when: "received", steps: [{ name: "done", kind: "end" }] });
+        const matching = fresh("MATCH");
+        await builder.decide("build.match.create", { type: "build.match", id: matching }, { name: `${name}match`, title: "Match receiving items", object: type, keys: [{ fields: ["item"], normalize: "folded" }] });
+        await builder.decide("build.match.publish", { type: "build.match", id: matching }, {});
+        const land = fresh("PIPE");
+        await builder.decide("build.pipeline.create", { type: "build.pipeline", id: land }, { name: `${name}land`, title: "Land receiving records", input: clean, steps: [{ kind: "rename", from: "sku", to: "item" }] });
+        await builder.open(page, `/pipeline?id=${land}`);
+        await page.getByRole("combobox", { name: "Write to", exact: true }).selectOption("object");
+        await page.getByRole("combobox", { name: /^Output object/ }).selectOption(type);
+        await page.getByRole("textbox", { name: /^Record id column/ }).fill("id");
+        await page.getByRole("button", { name: "Publish", exact: true }).click();
+        await expect.poll(async () => (await record("build.pipeline", land)).last?.written, { timeout: 15_000 }).toBe(1);
+        const wb = fresh("WB"), receipt = "IN-A";
+        expect(await record(type, receipt)).toMatchObject({ item: "A", qty: 3, state: "open" });
+        await builder.decide("build.writeback.create", { type: "build.writeback", id: wb }, { name: `${name}wb`, title: "Receipt delivery", object: type, on: "receive", connection: conn, path: "receipts", result: [{ from: "MaterialDocument", to: "docno" }] });
+        await builder.open(page, `/writeback?id=${wb}`);
+        await page.getByRole("button", { name: "Publish", exact: true }).click();
+        await expect.poll(async () => (await record("build.writeback", wb))?.state).toBe("published");
+
         await builder.decide("build.app.create", { type: "build.app", id: appID }, { name: `${name}app`, title: "Receiving application", pages: [receiving.name],
-          resources: [{ app: "build", kind: "flow", name: `build.${flowName}` }], groups: [{ title: "Empty receiving group", pages: [] }],
+          resources: [
+            { app: "build", kind: "flow", name: `build.${flowName}` },
+            { app: "build", kind: "connection", name: `${name}conn` },
+            { app: "build", kind: "source", name: `${name}source` },
+            { app: "build", kind: "dataset", name },
+            { app: "build", kind: "dataset", name: `${name}clean` },
+            { app: "build", kind: "pipeline", name: `${name}pipe` },
+            { app: "build", kind: "pipeline", name: `${name}land` },
+            { app: "build", kind: "writeback", name: `${name}wb` },
+            { app: "build", kind: "matching", name: `${name}match` },
+          ], groups: [{ title: "Empty receiving group", pages: [] }],
         });
         await builder.open(page, `/module?id=${appID}`);
         await page.getByRole("button", { name: "Publish", exact: true }).click();
@@ -113,23 +142,14 @@ for (const fixture of [
           await expect(page.getByRole("list", { name: "Joint selection", exact: true })).toContainText(receiving.id);
           await expect(page.getByRole("list", { name: "Joint selection", exact: true })).toContainText(flowID);
           candidate = await page.getByText("Saved candidate:", { exact: false }).locator("code").innerText();
+          const saved = await request.get(`/v1/releases/candidates/${candidate}`, { headers });
+          expect(saved.ok()).toBe(true);
+          const review = await saved.json();
+          const kinds = new Set(review.assets.map((asset: { ref: { kind: string } }) => asset.ref.kind));
+          for (const kind of ["connection", "source", "dataset", "pipeline", "writeback", "matching"]) expect(kinds.has(kind)).toBe(true);
         }, true);
         await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
-
-        const land = fresh("PIPE");
-        await builder.decide("build.pipeline.create", { type: "build.pipeline", id: land }, { name: `${name}land`, title: "Land receiving records", input: clean, steps: [{ kind: "rename", from: "sku", to: "item" }] });
-        await builder.open(page, `/pipeline?id=${land}`);
-        await page.getByRole("combobox", { name: "Write to", exact: true }).selectOption("object");
-        await page.getByRole("combobox", { name: /^Output object/ }).selectOption(type);
-        await page.getByRole("textbox", { name: /^Record id column/ }).fill("id");
-        await page.getByRole("button", { name: "Publish", exact: true }).click();
-        await expect.poll(async () => (await record("build.pipeline", land)).last?.written, { timeout: 15_000 }).toBe(1);
-        const wb = fresh("WB"), receipt = "IN-A";
-        expect(await record(type, receipt)).toMatchObject({ item: "A", qty: 3, state: "open" });
-        await builder.decide("build.writeback.create", { type: "build.writeback", id: wb }, { name: `${name}wb`, title: "Receipt delivery", object: type, on: "receive", connection: conn, path: "receipts", result: [{ from: "MaterialDocument", to: "docno" }] });
         await builder.open(page, `/writeback?id=${wb}`);
-        await page.getByRole("button", { name: "Publish", exact: true }).click();
-        await expect.poll(async () => (await record("build.writeback", wb))?.state).toBe("published");
 
         const context = await browser.newContext({ baseURL: fixture.baseURL, locale: "en-US" });
         const member = await (await request.get("/v1/me", { headers: operator.headers })).json();

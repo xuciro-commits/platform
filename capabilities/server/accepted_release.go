@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/protobuf/encoding/protojson"
 	"io"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"slices"
+	"strings"
 	"time"
 
 	"platformserver/apps/build"
@@ -34,6 +37,7 @@ type acceptedRelease struct {
 	// from; the target's audit of the promotion is rebuilt from it on replay.
 	From          string                `json:"from,omitempty"`
 	Installations []releaseInstallation `json:"installations,omitempty"`
+	Bootstrap     json.RawMessage       `json:"bootstrap,omitempty"`
 	RequestHash   string                `json:"requestHash"`
 	Digest        string                `json:"digest"`
 }
@@ -83,16 +87,74 @@ func decodeAcceptedRelease(raw []byte) (acceptedRelease, error) {
 		return saved, fmt.Errorf("release result has trailing data")
 	}
 	hash, err := releaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, saved.Active, saved.UpgradeID)
-	if err != nil || (saved.Version != 1 && saved.Version != 2 && saved.Version != 3) || saved.Kind != "release-result" || saved.App != build.ID ||
+	if err != nil || (saved.Version != 1 && saved.Version != 2 && saved.Version != 3 && saved.Version != 4) || saved.Kind != "release-result" || saved.App != build.ID ||
 		saved.Tenant == "" || saved.Member == "" || saved.Key == "" || saved.At.IsZero() ||
 		saved.RequestHash != hash {
 		return saved, fmt.Errorf("invalid release result identity")
 	}
-	if (saved.Version == 3) != (saved.UpgradeID != "") || saved.Version == 3 && !saved.Active {
+	if saved.Version < 4 && (saved.Version == 3) != (saved.UpgradeID != "") || saved.UpgradeID != "" && !saved.Active {
 		return saved, fmt.Errorf("storage upgrade needs an active format-3 result")
 	}
 	if len(saved.Installations) > 0 && (saved.Version < 2 || !saved.Active) {
 		return saved, fmt.Errorf("definition installation needs an active format-2 release result")
+	}
+	if len(saved.Bootstrap) > 0 {
+		if saved.Version != 4 || !saved.Active || len(saved.Installations) == 0 {
+			return saved, fmt.Errorf("draft bootstrap needs a complete format-4 activation")
+		}
+		batch, receipt, err := decodeAcceptedBatch(saved.Bootstrap)
+		if err != nil || batch.Tenant != saved.Tenant || batch.App != saved.App || !batch.At.Equal(saved.At) || receipt.GetSubmission().GetPrincipalId() != saved.Member {
+			return saved, fmt.Errorf("release bootstrap identity differs: %v", err)
+		}
+		for _, decision := range batch.Decisions {
+			r := new(pb.ChangeRecord)
+			if protojson.Unmarshal(decision.Receipt, r) != nil {
+				return saved, fmt.Errorf("invalid release bootstrap decision")
+			}
+			sub := r.GetSubmission()
+			if sub.GetPrincipalId() != saved.Member || !strings.HasPrefix(sub.GetIdempotencyKey(), "release-bootstrap:"+saved.CandidateID+":"+saved.Member+":") {
+				return saved, fmt.Errorf("release bootstrap belongs to another command")
+			}
+		}
+	}
+	if saved.Version == 4 {
+		candidate, err := platform.ReadCandidate(saved.CandidateID, saved.Bytes)
+		if err != nil {
+			return saved, err
+		}
+		refs := map[platform.AssetRef]bool{}
+		for _, asset := range candidate.Assets {
+			refs[asset.Ref] = true
+		}
+		seen := map[platform.AssetRef]bool{}
+		records := map[string]bool{}
+		for _, installation := range saved.Installations {
+			if installation.Ref == nil || !refs[*installation.Ref] || seen[*installation.Ref] || installation.Record == "" || records[installation.Record] {
+				return saved, fmt.Errorf("format-4 release has missing, duplicate or unrelated installation identity")
+			}
+			seen[*installation.Ref] = true
+			records[installation.Record] = true
+		}
+		if len(saved.Bootstrap) > 0 {
+			batch, _, _ := decodeAcceptedBatch(saved.Bootstrap)
+			for _, decision := range batch.Decisions {
+				r := new(pb.ChangeRecord)
+				_ = protojson.Unmarshal(decision.Receipt, r)
+				sub := r.GetSubmission()
+				ref := sub.GetTarget().GetType() + "/" + sub.GetTarget().GetId()
+				if !records[ref] || sub.GetSchema().GetName() != sub.GetTarget().GetType()+".create" || decision.Publication != nil {
+					return saved, fmt.Errorf("release bootstrap is not an original create of its installation metadata")
+				}
+			}
+			for _, row := range batch.Rows {
+				if !records[row.Type+"/"+row.ID] {
+					return saved, fmt.Errorf("release bootstrap has an unrelated row")
+				}
+			}
+			if len(batch.DirectRows) > 0 || batch.Control != nil {
+				return saved, fmt.Errorf("release bootstrap has an unrelated callback or control mutation")
+			}
+		}
 	}
 	digest, err := releaseDigest(saved)
 	if err != nil || saved.Digest != digest {
@@ -122,29 +184,72 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 		return saved, nil
 	}
 	if len(saved.Installations) > 0 {
-		if !saved.Active {
-			return saved, fmt.Errorf("a saved candidate cannot install definitions")
+		records := t.records
+		var bootstrap *preparedAcceptedBatch
+		if len(saved.Bootstrap) > 0 {
+			bootstrap, err = t.prepareAcceptedBatch(t.app(saved.App).AcceptedLedger(), saved.Bootstrap)
+			if err != nil || bootstrap == nil {
+				return saved, fmt.Errorf("release bootstrap cannot prepare: %v", err)
+			}
+			records = bootstrap.records
 		}
-		draft, err := t.stageReleaseInstallationLocked(saved.Installations, false)
+		view, err := t.assetInstallationView(records)
 		if err != nil {
 			return saved, err
 		}
-		if err := t.records.promoteRecords(draft.records); err != nil {
+		draft, err := view.stageReleaseInstallationLocked(saved.Installations, false)
+		if err != nil {
 			return saved, err
 		}
-		t.owner, t.definitions = draft.owner, draft.definitions
-		publisher := t.app(build.ID).(*build.Build)
-		for _, installation := range saved.Installations {
-			if err := publisher.ApplyAcceptedPublication(installation.Schema, installation.Image); err != nil {
+		if saved.Version == 4 {
+			candidate, err := platform.ReadCandidate(saved.CandidateID, saved.Bytes)
+			if err != nil {
 				return saved, err
 			}
+			running, err := draft.runningReleaseLocked(candidate)
+			if err != nil || running.ID != candidate.ID {
+				return saved, fmt.Errorf("accepted installation differs from its frozen candidate: %v", err)
+			}
+		}
+		if err := t.anchorReleaseRecords(draft.records); err != nil {
+			return saved, err
+		}
+		if bootstrap != nil {
+			bootstrap.records = draft.records
+			if _, err := t.promoteAcceptedBatch(bootstrap); err != nil {
+				return saved, err
+			}
+		} else if err := t.records.promoteRecords(draft.records); err != nil {
+			return saved, err
+		}
+		t.definitions = draft.definitions
+		for key, app := range draft.owner {
+			draft.owner[key] = t.app(app.Manifest().ID)
+		}
+		t.owner = draft.owner
+		registry, err := t.assetRegistryLocked()
+		if err != nil {
+			return saved, err
+		}
+		for _, installation := range saved.Installations {
+			plan, err := t.installationPlan(registry, installation)
+			if err != nil {
+				return saved, err
+			}
+			if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{}); err != nil {
+				return saved, err
+			}
+		}
+		if bootstrap != nil {
+			t.publishAcceptedBatch(bootstrap.result)
+			t.enqueue(saved.At)
 		}
 	}
 	if err := t.releases.commit(saved.Key, saved.Digest, saved.CandidateID, saved.Bytes, saved.Active); err != nil {
 		return saved, err
 	}
 	t.releases.rememberRequest(saved.Key, saved.RequestHash)
-	if saved.Version == 3 {
+	if saved.Version >= 3 {
 		t.committed.saveAnswer("release:"+saved.Key, raw)
 	}
 	if saved.From != "" {
@@ -185,7 +290,7 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 	if prior := t.releases.raw(candidateID); prior != nil {
 		candidateBytes = slices.Clone(prior)
 	} else {
-		preview, candidate, err := t.previewReleaseLocked(drafts)
+		preview, candidate, err := t.previewReleaseLocked(drafts, m)
 		if err != nil {
 			return "", err
 		}
@@ -244,12 +349,13 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 		return "", fmt.Errorf("release candidate %s is not saved", candidateID)
 	}
 	var installations []releaseInstallation
+	var bootstrap json.RawMessage
 	if upgradeID != "" {
 		candidate, err := platform.ReadCandidate(candidateID, raw)
 		if err != nil {
 			return "", err
 		}
-		plan, err := t.releaseUpgradePlanLocked(candidate)
+		plan, err := t.releaseUpgradePlanLocked(candidate, m)
 		if err != nil {
 			return "", err
 		}
@@ -257,13 +363,12 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 			return "", fmt.Errorf("storage upgrade plan changed; refresh and review it again")
 		}
 	}
-	if t.runningMatchesLocked(candidateID, raw) != nil {
-		var err error
-		installations, err = t.prepareReleaseActivationLocked(candidateID, raw, upgradeID != "")
-		if err != nil {
-			return "", err
-		}
-	} else if err := t.pendingWorkFitsLocked(candidateID, raw); err != nil {
+	candidate, err := platform.ReadCandidate(candidateID, raw)
+	if err != nil {
+		return "", err
+	}
+	installations, bootstrap, err = t.prepareReleaseLifecycleLocked(candidate, m, now, upgradeID != "")
+	if err != nil {
 		return "", err
 	}
 	if err := t.evaluationsReadyLocked(candidateID, raw); err != nil {
@@ -271,14 +376,13 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	}
 	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: t.ID, App: build.ID,
 		Member: m.ID, Key: "activate:" + key, At: now.UTC(), CandidateID: candidateID,
-		Bytes: slices.Clone(raw), Active: true, Installations: installations}
+		Bytes: slices.Clone(raw), Active: true, Installations: installations, Bootstrap: bootstrap}
 	if len(installations) > 0 {
-		saved.Version = 2
+		saved.Version = 4
 	}
 	if upgradeID != "" {
-		saved.Version, saved.UpgradeID = 3, upgradeID
+		saved.Version, saved.UpgradeID = 4, upgradeID
 	}
-	var err error
 	saved.RequestHash, err = releaseRequestHash(t.ID, m.ID, saved.Key, candidateID, true, upgradeID)
 	if err != nil {
 		return "", err
@@ -391,6 +495,18 @@ func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedRelease) (
 	if err != nil {
 		return "", err
 	}
+	return t.finishCommittedRelease(m, saved, committed)
+}
+
+func (t *Tenant) finishCommittedRelease(m platform.Member, saved acceptedRelease, committed []byte) (id string, err error) {
+	defer func() {
+		if failure := recover(); failure != nil {
+			err = fmt.Errorf("apply committed release: %v", failure)
+			t.quarantine(err)
+			id = ""
+		}
+	}()
+	candidateID := saved.CandidateID
 	applied, err := t.applyAcceptedRelease(committed)
 	if err != nil || applied.Key != saved.Key || applied.RequestHash != saved.RequestHash ||
 		applied.Member != m.ID || applied.CandidateID != candidateID {

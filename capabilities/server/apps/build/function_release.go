@@ -109,3 +109,50 @@ func (b *Build) functionDraftAssets(id string) (before, after []platform.Release
 	after = append(after, asset)
 	return
 }
+
+func (b *Build) prepareFunctionReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
+	rows, err := b.functionInventory()
+	if err != nil {
+		return nil, err
+	}
+	var out []ReleasePublication
+	for _, asset := range assets {
+		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetFunction {
+			continue
+		}
+		text, found := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+".function-")
+		version, err := strconv.Atoi(text)
+		if !found || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != text {
+			return nil, fmt.Errorf("invalid function version")
+		}
+		index := slices.IndexFunc(rows, func(r Function) bool { return !r.Archived && r.Name == asset.Ref.Name })
+		if index < 0 {
+			return nil, fmt.Errorf("function has no target owner draft")
+		}
+		record := rows[index]
+		if version <= record.Version {
+			prior, err := b.FunctionReleaseAsset(asset.Ref.Name, asset.SourceVersion)
+			if err != nil || !equalIntegrationAsset(prior, asset) {
+				return nil, fmt.Errorf("function retained bytes differ")
+			}
+			continue
+		}
+		var frozen Function
+		if version != record.Version+1 || decodeIntegration(asset.Body, &frozen) != nil || frozen.definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
+			return nil, fmt.Errorf("function version requires its retained predecessors and matching target definition")
+		}
+		expected, err := functionReleaseAsset(Function{Name: frozen.Name, Object: frozen.Object, Version: version}, b.Manifest().Version)
+		if err != nil || asset.ContractVersion != 1 || !slices.Equal(expected.Requires, asset.Requires) {
+			return nil, fmt.Errorf("function candidate dependencies differ")
+		}
+		frozen.Record, frozen.Version, frozen.State = record.Record, version, "published"
+		record.State, record.Version, record.Published = "published", version, published(frozen)
+		record.Versions = append(slices.Clone(record.Versions), record.Published)
+		raw, err := json.Marshal(record)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ReleasePublication{Schema: SchemaFunction, Image: raw})
+	}
+	return out, nil
+}

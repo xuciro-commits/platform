@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"platformserver/platform"
 )
@@ -305,7 +307,116 @@ func uniqueRefs(refs []platform.AssetRef) []platform.AssetRef {
 // fields and actions are filtered through the existing read/catalog paths at
 // request time, so role and field changes are never cached in the registry.
 func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
-	return t.definitionsFrom(m, t.definitions)
+	definitions, err := t.definitionsFor(m)
+	if err != nil {
+		return []platform.Definition{}
+	}
+	return definitions
+}
+
+func (t *Tenant) definitionsFor(m platform.Member) ([]platform.Definition, error) {
+	registered, err := t.ownedAssetDefinitions(t.definitions)
+	if err != nil {
+		return nil, err
+	}
+	return t.definitionsFrom(m, registered), nil
+}
+
+func ownedMetadataKind(kind platform.AssetKind) bool {
+	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching}, kind)
+}
+
+// ownedAssetDefinition indexes only an owner's accepted descriptor identity.
+// The original image remains the authority; no descriptor body is copied into
+// discovery, and its metadata record is retained solely for read filtering.
+func ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition, bool, error) {
+	if !ownedMetadataKind(plan.Ref.Kind) {
+		return platform.Definition{}, false, nil
+	}
+	var record struct {
+		Published string `json:"published"`
+	}
+	if err := json.Unmarshal(plan.Image, &record); err != nil || record.Published == "" {
+		return platform.Definition{}, false, fmt.Errorf("asset %s has no accepted definition", plan.Ref)
+	}
+	var asset platform.ReleaseAsset
+	if err := json.Unmarshal([]byte(record.Published), &asset); err != nil || asset.Ref != plan.Ref || asset.SourceVersion == "" || asset.ContractVersion < 1 {
+		return platform.Definition{}, false, fmt.Errorf("asset %s has an invalid accepted definition", plan.Ref)
+	}
+	return platform.Definition{Ref: plan.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), OwnerRecord: plan.Record}, true, nil
+}
+
+// ownedAssetDefinitions is a temporary read projection over stored owner
+// publication images. Direct publication and recovery use the same index;
+// reading it never installs definitions or changes the live registry.
+func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.Definition, error) {
+	type image struct {
+		app, schema, record string
+		raw                 json.RawMessage
+	}
+	var images []image
+	t.records.mu.Lock()
+	for typ, et := range t.records.types {
+		published, hasPublished := et.info.Go.FieldByName("Published")
+		version, hasVersion := et.info.Go.FieldByName("DefinitionVersion")
+		if !hasPublished || !hasVersion || published.Type.Kind() != reflect.String || version.Type.Kind() != reflect.Int {
+			continue // other metadata retains its original installed index
+		}
+		if _, ok := t.app(et.info.App).(platform.AssetLifecycleOwner); !ok {
+			continue
+		}
+		for id, row := range et.rows {
+			if recordOf(row.value).Archived {
+				continue
+			}
+			ordinal := row.value.FieldByIndex(version.Index).Int()
+			raw := row.value.FieldByIndex(published.Index).String()
+			if ordinal == 0 && raw == "" {
+				continue // an unpublished legacy/development configuration
+			}
+			if ordinal < 1 || raw == "" {
+				t.records.mu.Unlock()
+				return nil, fmt.Errorf("owned metadata %s/%s has no valid publication", typ, id)
+			}
+			body, err := row.image()
+			if err != nil {
+				t.records.mu.Unlock()
+				return nil, err
+			}
+			images = append(images, image{et.info.App, typ + ".publish", typ + "/" + id, slices.Clone(body)})
+		}
+	}
+	t.records.mu.Unlock()
+	out := slices.DeleteFunc(slices.Clone(base), func(def platform.Definition) bool { return ownedMetadataKind(def.Ref.Kind) })
+	if len(images) == 0 {
+		slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+		return out, nil
+	}
+	registry, err := t.assetRegistryLocked()
+	if err != nil {
+		return nil, err
+	}
+	seen := map[platform.AssetRef]bool{}
+	for _, image := range images {
+		plan, err := registry.DecodeAssetInstallation(image.app, image.schema, image.raw)
+		if err != nil {
+			return nil, fmt.Errorf("owned metadata %s: %w", image.record, err)
+		}
+		if plan.Record != image.record {
+			return nil, fmt.Errorf("owned publication metadata identity differs")
+		}
+		def, indexed, err := ownedAssetDefinition(plan)
+		if err != nil {
+			return nil, err
+		}
+		if !indexed || seen[def.Ref] {
+			return nil, fmt.Errorf("owned metadata %s has an unsupported or duplicate asset", image.record)
+		}
+		seen[def.Ref] = true
+		out = append(out, def)
+	}
+	slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	return out, nil
 }
 
 func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []platform.Definition) []platform.Definition {
@@ -445,6 +556,15 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.Operation == nil || !m.May(def.Ref.App, def.Operation.Name, def.Operation.Roles).Allow {
 				continue
 			}
+		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching:
+			typ, _, _ := strings.Cut(def.OwnerRecord, "/")
+			info, ok := entities[typ]
+			if !ok || def.OwnerRecord == "" || !m.Active() || t.admits(m) != nil {
+				continue
+			}
+			if _, visibleName := info.Field("name"); !visibleName || !t.Readable(m, def.OwnerRecord, time.Now()) {
+				continue
+			}
 		case platform.AssetPage:
 			visible, ok := t.visiblePage(def, m, entities, actions, registeredDefinitions)
 			if !ok {
@@ -457,6 +577,16 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		out = append(out, def)
 	}
 	out = filterPageNavigation(out)
+	visible := map[platform.AssetRef]bool{}
+	for _, def := range out {
+		visible[def.Ref] = true
+	}
+	for i, def := range out {
+		switch def.Ref.Kind {
+		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching:
+			out[i].Requires = slices.DeleteFunc(slices.Clone(def.Requires), func(ref platform.AssetRef) bool { return !visible[ref] })
+		}
+	}
 	// An application is offered to whoever may open one of its pages (ADR-0036).
 	opens := map[platform.AssetRef]bool{}
 	for _, def := range out {

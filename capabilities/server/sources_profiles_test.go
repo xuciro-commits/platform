@@ -181,8 +181,8 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	if failure != nil || recovered.Source.Cursor != "1027" || recovered.Consumed != 1026 || recovered.Rejected != 1 || len(recovered.DeadLetters) != 1 {
 		t.Fatalf("restored source did not continue the accepted cursor/window: %v", failure)
 	}
-	// Pause/republication, changed definitions, and stopped instances cannot
-	// read past the committed predecessor or silently rebind a running flow.
+	// Pause/republication, accepted definition changes, and stopped instances
+	// cannot read past the committed predecessor or rebind a running flow.
 	decide(t, restored, "builder", build.ID, "build.source.pause", build.SourceType, "stream", map[string]any{}, at)
 	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err == nil {
 		t.Fatal("a paused source continued consuming")
@@ -191,11 +191,29 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err != nil {
 		t.Fatalf("an unchanged source did not resume: %v", err)
 	}
+	consumerConfig := recovered.Source.Config
 	decide(t, restored, "builder", build.ID, "build.source.edit", build.SourceType, "stream", map[string]any{"filter": "seq > 10"}, at)
-	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err == nil {
+	editedSource, _ := platform.Get[build.Source](restored.automation(build.ID, false), "stream")
+	executionSource, sourceErr := restored.app(build.ID).(*build.Build).ExecutionSource(editedSource)
+	if sourceErr != nil || editedSource.Filter != "seq > 10" || executionSource.Filter != "" {
+		t.Fatalf("source draft changed its accepted execution filter: %v", sourceErr)
+	}
+	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err != nil {
+		t.Fatalf("an unpublished source edit stopped its accepted consumer: %v", err)
+	}
+	draftFrame, failure := restored.ReadFlowFrame(memberOf(t, restored, "builder"), instance, at)
+	if failure != nil || draftFrame.Source == nil || draftFrame.Source.Config != consumerConfig || draftFrame.Source.Cursor != recovered.Source.Cursor {
+		t.Fatalf("source draft rebound its consumer configuration or checkpoint: %v", failure)
+	}
+	decide(t, restored, "builder", build.ID, "build.source.publish", build.SourceType, "stream", map[string]any{}, at)
+	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
 		t.Fatal("a changed source silently rebound its consumer")
 	}
 	decide(t, restored, "builder", build.ID, "build.source.edit", build.SourceType, "stream", map[string]any{"filter": ""}, at)
+	decide(t, restored, "builder", build.ID, "build.source.publish", build.SourceType, "stream", map[string]any{}, at)
+	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err != nil {
+		t.Fatalf("the accepted original source definition did not resume its consumer: %v", err)
+	}
 	restored.PullContinuousSources(at) // settle superseded artifacts before the I/O refusal
 	if _, err := db.Exec(ctx, "insert into "+table+"(seq,sku,at) values (1028,'during-revocation','2026-10-06T09:00:01Z')"); err != nil {
 		t.Fatal(err)

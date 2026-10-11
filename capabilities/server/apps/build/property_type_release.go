@@ -143,9 +143,6 @@ func (b *Build) preparePropertyTypeReleasePublications(assets []platform.Release
 		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Type != record.Type {
 			return nil, fmt.Errorf("invalid next property type version")
 		}
-		if err := b.host.ValidateInstallPropertyType(q); err != nil {
-			return nil, err
-		}
 		frozen := propertyTypeFromDeclaration(q)
 		frozen.Record = record.Record
 		frozen.State = "published"

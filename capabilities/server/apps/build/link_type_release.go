@@ -144,9 +144,6 @@ func (b *Build) prepareLinkTypeReleasePublications(assets []platform.ReleaseAsse
 		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Parent.Name != record.Parent || q.Child.Name != record.Child || q.Via != record.Via || !linkKeepsGuarantees(prior, linkTypeFromDeclaration(q)) {
 			return nil, fmt.Errorf("invalid next link type version")
 		}
-		if err := b.host.ValidateInstallLinkType(q); err != nil {
-			return nil, err
-		}
 		frozen := linkTypeFromDeclaration(q)
 		frozen.Record = record.Record
 		frozen.State = "published"

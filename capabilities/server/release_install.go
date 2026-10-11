@@ -3,258 +3,178 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/apps/build"
+	"platformserver/internal/host"
+	"platformserver/platform"
 	"reflect"
 	"slices"
-
-	"platformserver/apps/build"
-	"platformserver/platform"
+	"strings"
 )
 
 type releaseInstallation struct {
 	build.ReleasePublication
-	Before string `json:"before"`
+	Before string             `json:"before"`
+	Ref    *platform.AssetRef `json:"ref,omitempty"`
+	Record string             `json:"record,omitempty"`
 }
 
-func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte, upgrade ...bool) ([]releaseInstallation, error) {
-	saved, err := platform.ReadCandidate(id, raw)
-	if err != nil {
-		return nil, err
-	}
-	installations, err := t.releaseInstallationsLocked(saved, upgrade...)
-	if err != nil {
-		return nil, err
-	}
-	if err := t.pendingWorkFitsLocked(id, raw); err != nil {
-		return nil, err
-	}
-	return installations, nil
-}
-
-// releaseInstallationsLocked resolves one candidate's exact bytes against the
-// current owner assets and installs it into a tenant draft. It changes nothing
-// committed, so the same call proves a joint draft candidate installs before
-// it is saved (ADR-0048 D2/D4).
-func (t *Tenant) releaseInstallationsLocked(saved platform.ReleaseCandidate, upgrade ...bool) ([]releaseInstallation, error) {
-	id := saved.ID
-	owner, ok := t.app(build.ID).(*build.Build)
+func (t *Tenant) installationPredecessor(record string) (string, error) {
+	typ, id, ok := strings.Cut(record, "/")
 	if !ok {
-		return nil, fmt.Errorf("tenant has no builder")
+		return "", fmt.Errorf("invalid installation record %s", record)
 	}
-	publications, builderAssets, err := owner.PrepareReleasePublications(saved.Assets)
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	et := t.records.types[typ]
+	if et == nil || et.rows[id] == nil {
+		return "", fmt.Errorf("release metadata needs its predecessor %s", record)
+	}
+	image, err := et.rows[id].image()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	available, err := t.releaseAssetsLocked(builderAssets, true)
-	if err != nil {
-		return nil, err
-	}
-	roots := make([]platform.AssetRef, 0, len(saved.Assets))
-	for _, asset := range saved.Assets {
-		roots = append(roots, asset.Ref)
-	}
-	resolved, err := t.candidateWithBindings(roots, available, nil)
-	if err != nil {
-		return nil, fmt.Errorf("saved release cannot be installed with this runtime: %w", err)
-	}
-	if resolved.ID != id {
-		added, removed, changed, _ := platform.CandidateDiff(saved, resolved)
-		return nil, fmt.Errorf("saved release cannot be installed with this runtime: changed %v, missing %v, extra %v", changed, removed, added)
-	}
-	priority := func(schema string) int {
-		switch schema {
-		case build.SchemaPropertyType:
-			return -1
-		case build.SchemaPublish:
-			return 0
-		case build.SchemaLinkType, build.SchemaQuery:
-			return 1
-		case build.SchemaRelease:
-			return 2
-		case build.SchemaCodePublish, build.SchemaFunction:
-			return 1
-		case build.SchemaProcess:
-			return 2
-		default:
-			return 3
-		}
-	}
-	slices.SortStableFunc(publications, func(a, b build.ReleasePublication) int { return priority(a.Schema) - priority(b.Schema) })
-	installations := make([]releaseInstallation, 0, len(publications))
-	for _, publication := range publications {
-		typ, rowID, err := build.PublicationRecord(publication)
-		if err != nil {
-			return nil, err
-		}
-		t.records.mu.Lock()
-		row := t.records.types[typ].rows[rowID]
-		image, err := row.image()
-		before, err := canonicalDigest(image)
-		t.records.mu.Unlock()
-		if err != nil {
-			return nil, err
-		}
-		if publication.Schema == build.SchemaPublish {
-			if err := owner.ValidateAcceptedPublication(publication.Schema, publication.Image); err != nil {
-				return nil, err
-			}
-		}
-		installations = append(installations, releaseInstallation{publication, before})
-	}
-	if _, err := t.stageReleaseInstallationLocked(installations, true, upgrade...); err != nil {
-		return nil, err
-	}
-	return installations, nil
+	return canonicalDigest(image)
 }
 
-// The same private installation machinery prepares a live activation and
-// applies committed descriptor images. Replay does not run today's policies.
-func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallation, validate bool, upgrade ...bool) (*Tenant, error) {
-	owner := t.app(build.ID).(*build.Build)
-	draft := (hostView{t: t, app: owner}).installationDraft()
-	if t.procs != nil {
-		draft.procs = t.procs.InstallationDraft()
+func (t *Tenant) installationPlan(registry *platform.AssetRegistry, installation releaseInstallation) (platform.AssetInstallation, error) {
+	app := build.ID
+	if installation.Ref != nil {
+		app = installation.Ref.App
 	}
-	ledger := platform.NewLedger(t.ID, build.ID, platform.NewCatalog())
+	plan, err := registry.DecodeAssetInstallation(app, installation.Schema, installation.Image)
+	if err != nil {
+		return plan, err
+	}
+	if installation.Ref != nil && (*installation.Ref != plan.Ref || installation.Record != plan.Record) {
+		return plan, fmt.Errorf("release installation identity differs")
+	}
+	return plan, nil
+}
+
+// The owner performs every kind-specific install into this isolated runtime.
+// Historical images and new plans share this machinery, never a second switch.
+func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallation, validate bool, upgrade ...bool) (*Tenant, error) {
+	draft, err := t.assetInstallationView(t.records)
+	if err != nil {
+		return nil, err
+	}
+	registry, err := draft.assetRegistryLocked()
+	if err != nil {
+		return nil, err
+	}
 	for _, installation := range installations {
-		typ, id, err := build.PublicationRecord(installation.ReleasePublication)
+		plan, err := draft.installationPlan(registry, installation)
 		if err != nil {
 			return nil, err
 		}
-		et := draft.records.types[typ]
-		if et == nil || et.rows[id] == nil {
-			return nil, fmt.Errorf("release metadata needs its predecessor %s/%s", typ, id)
-		}
-		image, err := et.rows[id].image()
-		if err != nil {
-			return nil, err
-		}
-		before, err := canonicalDigest(image)
+		before, err := draft.installationPredecessor(plan.Record)
 		if err != nil || before != installation.Before {
-			return nil, fmt.Errorf("release metadata predecessor differs for %s/%s", typ, id)
+			return nil, fmt.Errorf("release metadata predecessor differs for %s: %v", plan.Record, err)
 		}
-		value := reflect.New(et.info.Go).Elem()
-		if err := json.Unmarshal(installation.Image, value.Addr().Interface()); err != nil {
+		if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{Validate: validate, Upgrade: len(upgrade) > 0 && upgrade[0], Private: true}); err != nil {
 			return nil, err
 		}
-		// Publication is derived metadata; the mutable draft and its revision
-		// are preserved. Its history is not another generated edit decision.
+		typ, id, _ := strings.Cut(plan.Record, "/")
+		et := draft.records.types[typ]
+		value := reflect.New(et.info.Go).Elem()
+		if err := json.Unmarshal(plan.Image, value.Addr().Interface()); err != nil {
+			return nil, err
+		}
 		et.rows[id].value = value
 		et.rows[id].original = nil
-		et.rows[id].retainOriginal(installation.Image)
-		draft.records.writes[typ+"/"+id] = true
-		decl, err := owner.ReleaseDeclaration(installation.ReleasePublication)
-		if err != nil {
+		et.rows[id].retainOriginal(plan.Image)
+		draft.records.writes[plan.Record] = true
+		if err := draft.registerInstalledAsset(plan); err != nil {
 			return nil, err
 		}
-		switch installation.Schema {
-		case build.SchemaPublish:
-			if validate {
-				info, err := platform.Describe(build.ID, decl.Entity, func(reflect.Type) string { return "" })
-				if err != nil {
-					return nil, err
-				}
-				if old := draft.records.types[info.Type]; old != nil && len(old.rows) > 0 && !sameStoredFields(old.info, info) {
-					if len(upgrade) == 0 || !upgrade[0] || optionalStoredAddition(old.info, info) == nil {
-						return nil, fmt.Errorf("object %s has records; changing their storage shape needs an upgrade plan", info.Type)
-					}
-				}
-				for _, def := range t.definitions {
-					if def.Ref.App == build.ID && def.Action != nil && def.Action.Target == info.Type &&
-						!slices.ContainsFunc(decl.Actions, func(a platform.Action) bool { return a.Schema == def.Ref.Name }) {
-						return nil, fmt.Errorf("retiring action %s needs an upgrade plan", def.Ref.Name)
-					}
-				}
-			}
-			if err := ledger.Extend([]string{decl.Entity.Type}, decl.Actions); err != nil {
-				return nil, err
-			}
-			if err := draft.Install(owner, decl.Entity, decl.Actions, decl.Pages...); err != nil {
-				return nil, err
-			}
-		case build.SchemaRelease:
-			if err := draft.installPage(owner, decl.Pages[0], false); err != nil {
-				return nil, err
-			}
-		case build.SchemaHandOver:
-			if err := draft.InstallApplication(owner, *decl.Application); err != nil {
-				return nil, err
-			}
-		case build.SchemaCodePublish:
-			view := hostView{t: draft, app: owner}
-			if err := view.InstallOperation(platform.Caller{Replaying: true}, *decl.Operation, decl.Version); err != nil {
-				return nil, err
-			}
-		case build.SchemaPropertyType:
-			var record build.PropertyType
-			if json.Unmarshal(installation.Image, &record) != nil {
-				return nil, fmt.Errorf("invalid property family")
-			}
-			view := hostView{t: draft, app: owner}
-			for i, raw := range record.Versions {
-				var p build.PropertyType
-				if json.Unmarshal([]byte(raw), &p) != nil {
-					return nil, fmt.Errorf("invalid retained property")
-				}
-				if err := view.InstallPropertyType(platform.Caller{Replaying: true}, platform.PropertyType{Name: p.Name, Title: p.Title, Description: p.Description, Type: p.Type}, i+1); err != nil {
-					return nil, err
-				}
-			}
-		case build.SchemaLinkType:
-			var record build.LinkType
-			if err := json.Unmarshal(installation.Image, &record); err != nil {
-				return nil, err
-			}
-			view := hostView{t: draft, app: owner}
-			for i, raw := range record.Versions {
-				var l build.LinkType
-				if json.Unmarshal([]byte(raw), &l) != nil {
-					return nil, fmt.Errorf("invalid link family")
-				}
-				declaration := l.Declaration()
-				if err := view.InstallLinkType(platform.Caller{Replaying: true}, declaration, i+1); err != nil {
-					return nil, err
-				}
-			}
-		case build.SchemaQuery:
-			var record build.Query
-			if err := json.Unmarshal(installation.Image, &record); err != nil {
-				return nil, err
-			}
-			view := hostView{t: draft, app: owner}
-			for i, raw := range record.Versions {
-				var q build.Query
-				if json.Unmarshal([]byte(raw), &q) != nil {
-					return nil, fmt.Errorf("invalid query family")
-				}
-				declaration := platform.NamedQuery{Name: q.Name, Title: q.Title, Description: q.Description, Object: q.Object, Interface: q.Interface, InterfaceShape: q.InterfaceShape, Implementations: q.Implementations, By: q.By, Domain: q.Domain, Sort: q.Sort, Limit: q.Limit}
-				if err := view.InstallQuery(platform.Caller{Replaying: true}, declaration, i+1); err != nil {
-					return nil, err
-				}
-			}
-		case build.SchemaFunction:
-			view := hostView{t: draft, app: owner}
-			if err := view.InstallFunction(platform.Caller{Replaying: true}, *decl.Function, decl.Version); err != nil {
-				return nil, err
-			}
-		case build.SchemaProcess:
-			if draft.procs == nil {
-				return nil, fmt.Errorf("flow runtime is unavailable")
-			}
-			if err := draft.procs.Install(owner, *decl.Flow); err != nil {
-				return nil, err
+
+	}
+	if validate {
+		if err := t.validateAssetStorage(draft, len(upgrade) > 0 && upgrade[0]); err != nil {
+			return nil, err
+		}
+	}
+	if err := draft.validateAssetSet(); err != nil {
+		return nil, err
+	}
+	return draft, nil
+}
+
+func (t *Tenant) assetInstallationView(records *recordStore) (*Tenant, error) {
+	draft := (hostView{t: t}).installationDraft()
+	draft.records = records.forkRecords()
+	var control tenantState
+	t.console.snapshot(&control)
+	draft.console.restore(&control)
+	draft.Secrets = t.Secrets
+	draft.apps = slices.Clone(t.apps)
+	if t.procs != nil {
+		draft.procs = t.procs.InstallationDraft()
+		if attached, ok := draft.procs.(host.Attached); ok {
+			if app, ok := draft.procs.(platform.App); ok {
+				attached.Attach(hostView{t: draft, app: app})
 			}
 		}
 	}
+	for i, app := range draft.apps {
+		if _, ok := app.(platform.AssetLifecycleOwner); !ok {
+			continue
+		}
+		var fork platform.App
+		var err error
+		if owner, ok := app.(platform.DecisionForkApp); ok {
+			fork, err = owner.ForkDecision()
+		} else if owner, ok := app.(platform.AcceptedStateApp); ok {
+			fork, err = owner.ForkAcceptedState()
+		} else {
+			return nil, fmt.Errorf("asset owner %s has no private installation fork", app.Manifest().ID)
+		}
+		if err != nil || fork == nil {
+			return nil, fmt.Errorf("asset owner %s cannot fork: %v", app.Manifest().ID, err)
+		}
+		draft.apps[i] = fork
+		if attached, ok := fork.(host.Attached); ok {
+			attached.Attach(hostView{t: draft, app: fork})
+		}
+	}
+	if err := draft.registerOwnedAssetMetadata(); err != nil {
+		return nil, err
+	}
+	for key, app := range draft.owner {
+		draft.owner[key] = draft.app(app.Manifest().ID)
+	}
+	return draft, nil
+}
+
+func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool) error {
+	for typ, old := range t.records.types {
+		next := draft.records.types[typ]
+		if next == nil || len(old.rows) == 0 {
+			continue
+		}
+		if !sameStoredFields(old.info, next.info) && (!upgrade || optionalStoredAddition(old.info, next.info) == nil) {
+			return fmt.Errorf("object %s has records; changing their storage shape needs a supported upgrade plan", typ)
+		}
+	}
+	for _, definition := range t.definitions {
+		if definition.Action != nil && definition.Source != "code" && !slices.ContainsFunc(draft.definitions, func(next platform.Definition) bool { return next.Ref == definition.Ref }) {
+			return fmt.Errorf("retiring action %s needs an upgrade plan", definition.Ref.Name)
+		}
+	}
+	return nil
+}
+
+func (t *Tenant) validateAssetSet() error {
 	pages := map[platform.AssetRef]platform.Page{}
-	for _, definition := range draft.definitions {
+	for _, definition := range t.definitions {
 		if definition.LinkType != nil {
-			view := hostView{t: draft, app: draft.app(definition.Ref.App)}
+			view := hostView{t: t, app: t.app(definition.Ref.App)}
 			if err := view.ValidateInstallLinkType(*definition.LinkType); err != nil {
-				return nil, err
+				return err
 			}
-			for _, l := range definition.LinkVersions {
-				if err := view.ValidateInstallLinkType(l); err != nil {
-					return nil, err
+			for _, link := range definition.LinkVersions {
+				if err := view.ValidateInstallLinkType(link); err != nil {
+					return err
 				}
 			}
 		}
@@ -262,29 +182,29 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 			pages[definition.Ref] = *definition.Page
 		}
 	}
-	for _, definition := range draft.definitions {
+	for _, definition := range t.definitions {
 		if definition.Application != nil {
-			if err := draft.checkPageQueries(definition.Application.QueryPage()); err != nil {
-				return nil, err
+			if err := t.checkPageQueries(definition.Application.QueryPage()); err != nil {
+				return err
 			}
 			for _, name := range definition.Application.Pages {
 				ref := platform.AssetRef{App: definition.Ref.App, Kind: platform.AssetPage, Name: name}
 				page, ok := pages[ref]
 				if !ok {
-					return nil, fmt.Errorf("application page %s is unavailable", ref)
+					return fmt.Errorf("application page %s is unavailable", ref)
 				}
 				if err := definition.Application.CheckPageVariables(page); err != nil {
-					return nil, err
+					return err
 				}
 			}
 		}
 		if definition.Page != nil {
-			if err := draft.checkPageNavigation(*definition.Page, definition.Ref.App); err != nil {
-				return nil, err
+			if err := t.checkPageNavigation(*definition.Page, definition.Ref.App); err != nil {
+				return err
 			}
 		}
 	}
-	return draft, nil
+	return nil
 }
 
 func sameStoredFields(a, b platform.EntityInfo) bool {

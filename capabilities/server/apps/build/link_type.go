@@ -197,3 +197,13 @@ func linkKeepsGuarantees(old, next LinkType) bool {
 	before, after := old.definition(), next.definition()
 	return !(before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
 }
+
+// LinkTypePublication decodes the original accepted owner image without a
+// new publication decision or a generic release declaration union.
+func LinkTypePublication(image []byte) (platform.LinkType, error) {
+	saved, err := linkTypeImage(image)
+	if err != nil {
+		return platform.LinkType{}, err
+	}
+	return saved.definition(), nil
+}

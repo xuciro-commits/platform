@@ -124,16 +124,9 @@ func (t *Tenant) installPublicationLinkConstraint(store *recordStore, schema str
 	if schema != build.SchemaLinkType {
 		return nil
 	}
-	owner, ok := t.app(build.ID).(*build.Build)
-	if !ok {
-		return fmt.Errorf("link publication has no owner")
-	}
-	decl, err := owner.ReleaseDeclaration(build.ReleasePublication{Schema: schema, Image: image})
+	declaration, err := build.LinkTypePublication(image)
 	if err != nil {
 		return err
 	}
-	if decl.LinkType == nil {
-		return fmt.Errorf("link publication has no declaration")
-	}
-	return store.installLinkConstraint(*decl.LinkType)
+	return store.installLinkConstraint(declaration)
 }

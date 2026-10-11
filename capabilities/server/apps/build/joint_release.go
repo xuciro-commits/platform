@@ -289,6 +289,9 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 // singleDraftAssets is the owner's original one-draft comparison, unchanged for
 // simple kinds and routed through the shared record substitution otherwise.
 func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+	if integrationKind(kind) {
+		return b.integrationDraftAssets(kind, id)
+	}
 	if kind == platform.AssetPropertyType {
 		return b.propertyTypeDraftAssets(id)
 	}

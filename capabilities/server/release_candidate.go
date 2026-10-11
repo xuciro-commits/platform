@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"time"
 
 	"platformserver/apps/build"
 	"platformserver/platform"
@@ -28,119 +29,126 @@ func (t *Tenant) releaseCandidateLocked(roots []platform.AssetRef) (platform.Rel
 }
 
 func (t *Tenant) releaseAssetsLocked(builderAssets []platform.ReleaseAsset, replaceBuilder bool) ([]platform.ReleaseAsset, error) {
+	registry, err := t.assetRegistryLocked()
+	if err != nil {
+		return nil, err
+	}
+	available, err := registry.ReleaseAssets()
+	if err != nil {
+		return nil, err
+	}
+	if !replaceBuilder {
+		return available, nil
+	}
+	code := map[platform.AssetRef]bool{}
+	for _, definition := range t.definitions {
+		if definition.Source == "code" {
+			code[definition.Ref] = true
+		}
+	}
+	out := slices.DeleteFunc(available, func(asset platform.ReleaseAsset) bool { return asset.Ref.App == build.ID && !code[asset.Ref] })
+	return append(out, builderAssets...), nil
+}
+
+func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAsset, error) {
+	manifest := app.Manifest()
 	var available []platform.ReleaseAsset
-	for _, app := range t.apps {
-		manifest := app.Manifest()
-		if source, ok := app.(interface {
-			ReleaseAssets() ([]platform.ReleaseAsset, error)
-		}); ok {
-			if replaceBuilder && manifest.ID == build.ID {
-				available = append(available, builderAssets...)
-			} else {
-				owned, err := source.ReleaseAssets()
-				if err != nil {
-					return nil, fmt.Errorf("%s release assets: %w", manifest.ID, err)
-				}
-				available = append(available, owned...)
-			}
+	for _, def := range t.definitions {
+		if def.Ref.App != manifest.ID || def.Source != "code" {
+			continue
 		}
-		for _, def := range t.definitions {
-			if def.Ref.App != manifest.ID || def.Source != "code" {
-				continue
+		switch def.Ref.Kind {
+		case platform.AssetObject:
+			i := slices.IndexFunc(manifest.Entities, func(e platform.Entity) bool { return e.Type == def.Ref.Name })
+			if i < 0 || def.Entity == nil {
+				return nil, fmt.Errorf("code object %s has no owner declaration", def.Ref)
 			}
-			switch def.Ref.Kind {
-			case platform.AssetObject:
-				i := slices.IndexFunc(manifest.Entities, func(e platform.Entity) bool { return e.Type == def.Ref.Name })
-				if i < 0 || def.Entity == nil {
-					return nil, fmt.Errorf("code object %s has no owner declaration", def.Ref)
-				}
-				body, err := json.Marshal(codeObjectDescriptor(manifest.Entities[i], *def.Entity))
-				if err != nil {
-					return nil, fmt.Errorf("encode code object %s: %w", def.Ref, err)
-				}
-				available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-					SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
-			case platform.AssetAction:
-				action, ok := manifest.Actions.Action(def.Ref.Name)
-				if !ok {
-					return nil, fmt.Errorf("code action %s has no owner declaration", def.Ref)
-				}
-				body, err := json.Marshal(codeActionDescriptor(action))
-				if err != nil {
-					return nil, fmt.Errorf("encode code action %s: %w", def.Ref, err)
-				}
-				available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-					SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
-			case platform.AssetPropertyType:
-				if def.PropertyType == nil {
-					return nil, fmt.Errorf("property has no descriptor")
-				}
-				body, err := json.Marshal(def.PropertyType)
-				if err != nil {
-					return nil, err
-				}
-				available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Body: body})
-			case platform.AssetLinkType:
-				if def.LinkType == nil {
-					return nil, fmt.Errorf("code link type has no descriptor")
-				}
-				body, err := json.Marshal(def.LinkType)
-				if err != nil {
-					return nil, err
-				}
-				available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Requires: def.Requires, Body: body})
-			case platform.AssetQuery:
-				if def.Query == nil {
-					return nil, fmt.Errorf("code query %s has no owner declaration", def.Ref)
-				}
-				body, err := json.Marshal(def.Query)
-				if err != nil {
-					return nil, fmt.Errorf("encode code query %s: %w", def.Ref, err)
-				}
-				available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-					SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
-			case platform.AssetFunction:
-				if def.Function == nil {
-					return nil, fmt.Errorf("code function %s has no owner declaration", def.Ref)
-				}
-				body, err := json.Marshal(def.Function)
-				if err != nil {
-					return nil, err
-				}
-				available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-					SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
-			case platform.AssetCompute:
-				if def.Operation == nil {
-					return nil, fmt.Errorf("compute %s has no owner declaration", def.Ref)
-				}
-				body, err := json.Marshal(def.Operation)
-				if err != nil {
-					return nil, err
-				}
-				available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion, SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
-			case platform.AssetPage:
-				if def.Page == nil {
-					return nil, fmt.Errorf("code page %s has no owner declaration", def.Ref)
-				}
-				asset, err := platform.PageReleaseAsset(manifest.ID, manifest.Version, *def.Page)
-				if err != nil {
-					return nil, err
-				}
-				available = append(available, asset)
+			body, err := json.Marshal(codeObjectDescriptor(manifest.Entities[i], *def.Entity))
+			if err != nil {
+				return nil, fmt.Errorf("encode code object %s: %w", def.Ref, err)
 			}
-		}
-		if len(manifest.Pages) > 0 {
-			pages := make([]string, len(manifest.Pages))
-			for i, page := range manifest.Pages {
-				pages[i] = page.Name
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
+				SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+		case platform.AssetAction:
+			action, ok := manifest.Actions.Action(def.Ref.Name)
+			if !ok {
+				return nil, fmt.Errorf("code action %s has no owner declaration", def.Ref)
 			}
-			asset, err := platform.ApplicationReleaseAsset(manifest.ID, manifest.Version,
-				platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages})
+			body, err := json.Marshal(codeActionDescriptor(action))
+			if err != nil {
+				return nil, fmt.Errorf("encode code action %s: %w", def.Ref, err)
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
+				SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+		case platform.AssetPropertyType:
+			if def.PropertyType == nil {
+				return nil, fmt.Errorf("property has no descriptor")
+			}
+			body, err := json.Marshal(def.PropertyType)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Body: body})
+		case platform.AssetLinkType:
+			if def.LinkType == nil {
+				return nil, fmt.Errorf("code link type has no descriptor")
+			}
+			body, err := json.Marshal(def.LinkType)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Requires: def.Requires, Body: body})
+		case platform.AssetQuery:
+			if def.Query == nil {
+				return nil, fmt.Errorf("code query %s has no owner declaration", def.Ref)
+			}
+			body, err := json.Marshal(def.Query)
+			if err != nil {
+				return nil, fmt.Errorf("encode code query %s: %w", def.Ref, err)
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
+				SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+		case platform.AssetFunction:
+			if def.Function == nil {
+				return nil, fmt.Errorf("code function %s has no owner declaration", def.Ref)
+			}
+			body, err := json.Marshal(def.Function)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
+				SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+		case platform.AssetCompute:
+			if def.Operation == nil {
+				return nil, fmt.Errorf("compute %s has no owner declaration", def.Ref)
+			}
+			body, err := json.Marshal(def.Operation)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion, SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+		case platform.AssetPage:
+			if def.Page == nil {
+				return nil, fmt.Errorf("code page %s has no owner declaration", def.Ref)
+			}
+			asset, err := platform.PageReleaseAsset(manifest.ID, manifest.Version, *def.Page)
 			if err != nil {
 				return nil, err
 			}
 			available = append(available, asset)
 		}
+	}
+	if len(manifest.Pages) > 0 {
+		pages := make([]string, len(manifest.Pages))
+		for i, page := range manifest.Pages {
+			pages[i] = page.Name
+		}
+		asset, err := platform.ApplicationReleaseAsset(manifest.ID, manifest.Version,
+			platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages})
+		if err != nil {
+			return nil, err
+		}
+		available = append(available, asset)
 	}
 	return available, nil
 }
@@ -291,7 +299,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	reply, candidate, err := t.previewReleaseLocked(drafts)
+	reply, candidate, err := t.previewReleaseLocked(drafts, m)
 	reply.CandidateActions = []platform.Action{}
 	if err != nil {
 		return reply, err
@@ -320,7 +328,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 // The candidate returned here is exactly what the builder saw in the
 // comparison. A later save must recompute it under the tenant lock and reject
 // a stale candidate ID rather than trusting bytes supplied by the browser.
-func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef) (ReleasePreview, platform.ReleaseCandidate, error) {
+func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef, members ...platform.Member) (ReleasePreview, platform.ReleaseCandidate, error) {
 	owner, ok := t.app(build.ID).(*build.Build)
 	if !ok {
 		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
@@ -392,7 +400,11 @@ func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef) (ReleasePrev
 	// the preview as it does for a single draft; activation still demands the
 	// reviewed plan.
 	if len(drafts) > 1 {
-		if _, err := t.releaseInstallationsLocked(candidate, true); err != nil {
+		var member platform.Member
+		if len(members) > 0 {
+			member = members[0]
+		}
+		if _, _, err := t.prepareReleaseLifecycleLocked(candidate, member, time.Now().UTC(), true); err != nil {
 			reply.Diagnostic = err.Error()
 			return reply, platform.ReleaseCandidate{}, nil
 		}

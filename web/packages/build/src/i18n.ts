@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Link types": "关系类型",
+  "Logic flows": "逻辑流程",
   "Group": "分组",
   "Minimum": "最小值",
   "Maximum": "最大值",

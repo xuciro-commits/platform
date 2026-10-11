@@ -72,6 +72,10 @@ type Source struct {
 	Puller    string      `json:"puller,omitempty" field:"readonly" title:"Pulls as"`
 	Requested bool        `json:"requested,omitempty" field:"readonly" title:"Pull requested"`
 	Last      *SourcePull `json:"last,omitempty" field:"readonly" type:"json" title:"Last pull"`
+	// Definition publication is independent of data/runtime versions.
+	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
 // SourceField maps one row field onto one object field, optionally converted.
@@ -83,13 +87,14 @@ type SourceField struct {
 
 // SourcePull is what one pull did: counted, with the first failures kept.
 type SourcePull struct {
-	At       time.Time       `json:"at"`
-	Rows     int             `json:"rows"`
-	Applied  int             `json:"applied"`
-	Failed   int             `json:"failed"`
-	Merged   int             `json:"merged,omitempty"` // rows that became an edit of a matched record (ADR-0074)
-	Error    string          `json:"error,omitempty"`
-	Failures []SourceFailure `json:"failures,omitempty"`
+	DefinitionVersion string          `json:"definitionVersion,omitempty"`
+	At                time.Time       `json:"at"`
+	Rows              int             `json:"rows"`
+	Applied           int             `json:"applied"`
+	Failed            int             `json:"failed"`
+	Merged            int             `json:"merged,omitempty"` // rows that became an edit of a matched record (ADR-0074)
+	Error             string          `json:"error,omitempty"`
+	Failures          []SourceFailure `json:"failures,omitempty"`
 	// Cursor is the last incremental value the pull reached; kept on the source.
 	Cursor string `json:"cursor,omitempty"`
 }
@@ -156,6 +161,13 @@ func (b *Build) publishSource(c platform.Caller, record any, _ json.RawMessage, 
 		return err
 	}
 	s.Puller, s.Requested = c.ID, !s.Stream
+	if !c.Replaying {
+		fixed, err := b.freezeDirectIntegration(platform.AssetSource, *s)
+		if err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		*s = fixed.(Source)
+	}
 	if s.Stream {
 		s.Cursor, s.Last = "", nil
 	}
@@ -185,6 +197,13 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 		}
 	} else {
 		conn, ok := platform.Get[Connection](c, s.Connection)
+		if ok {
+			fixed, err := b.ExecutionConnection(conn)
+			if err != nil {
+				return refuse(err.Error())
+			}
+			conn = fixed
+		}
 		if !ok || conn.State != "ready" {
 			return refuse("The connection is not ready; check it first")
 		}
@@ -218,8 +237,14 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 		return checkEvery(s.Every)
 	}
 	if s.Connection != "" {
-		if conn, ok := platform.Get[Connection](c, s.Connection); ok && Guarded(conn.Marking) {
-			return refuse("A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules")
+		if conn, ok := platform.Get[Connection](c, s.Connection); ok {
+			fixed, err := b.ExecutionConnection(conn)
+			if err != nil {
+				return refuse(err.Error())
+			}
+			if Guarded(fixed.Marking) {
+				return refuse("A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules")
+			}
 		}
 	}
 	info, ok := b.lookupEntity(s.Object)
@@ -333,6 +358,10 @@ func (b *Build) submitSourcePulled(c platform.Caller, s *pb.Submission, now time
 		src, ok := platform.Get[Source](c, s.GetTarget().GetId())
 		if !ok || json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Pull.At.IsZero() {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Pull result has no source")
+		}
+		equivalent, versionErr := retainedExecutionEquivalent(src, payload.Pull.DefinitionVersion)
+		if versionErr != nil || !equivalent {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration definition changed before its result was accepted")
 		}
 		return func(r *pb.ChangeRecord) {
 			pull := payload.Pull

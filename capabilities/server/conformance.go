@@ -20,6 +20,14 @@ import (
 // secret store), and a job's run count and next run (runs that did nothing).
 func CheckReplay(t testing.TB, live *Tenant, journal []Entry, build func() *Tenant) {
 	t.Helper()
+	observe := func(tenant *Tenant) string {
+		t.Helper()
+		image, err := checkedSnapshot(tenant)
+		if err != nil {
+			t.Fatalf("observable tenant metadata: %v", err)
+		}
+		return image
+	}
 	stored := make([]Entry, len(journal)) // as the PostgreSQL journal keeps them
 	for i, e := range journal {
 		raw, _ := json.Marshal(e)
@@ -33,8 +41,8 @@ func CheckReplay(t testing.TB, live *Tenant, journal []Entry, build func() *Tena
 	if err := again.Replay(stored); err != nil {
 		t.Fatalf("replay: %v", err)
 	}
-	want := snapshot(live)
-	if got := snapshot(again); got != want {
+	want := observe(live)
+	if got := observe(again); got != want {
 		t.Fatalf("replayed tenant differs from the live one:\nlive:   %s\nreplay: %s", want, got)
 	}
 	// A snapshot is a shortcut, never a different outcome (ADR-0019 D6): taken
@@ -60,13 +68,21 @@ func CheckReplay(t testing.TB, live *Tenant, journal []Entry, build func() *Tena
 		if err := restored.Replay(stored[k:]); err != nil {
 			t.Fatalf("replay after the snapshot at %d: %v", k, err)
 		}
-		if got := snapshot(restored); got != want {
+		if got := observe(restored); got != want {
 			t.Fatalf("a snapshot after %d of %d entries, then the rest, differs from the live tenant:\nlive:     %s\nrestored: %s", k, len(stored), want, got)
 		}
 	}
 }
 
 func snapshot(t *Tenant) string {
+	image, err := checkedSnapshot(t)
+	if err != nil {
+		panic(err)
+	}
+	return image
+}
+
+func checkedSnapshot(t *Tenant) (string, error) {
 	at := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC) // effect bodies are kept: nothing is 30 days old
 	connectors := []any{}
 	for _, c := range t.Connectors(at) {
@@ -117,9 +133,13 @@ func snapshot(t *Tenant) string {
 	t.records.mu.Unlock()
 	// Include the installed catalog: matching record bytes alone do not prove
 	// that a recovered publication offers the same pages and actions.
-	raw, err := json.Marshal([]any{records, t.definitions, t.Audit(), t.committed.refusals, t.committed.answers, t.releases.candidates, t.releases.active, t.releases.applied, t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
+	definitions, err := t.ownedAssetDefinitions(t.definitions)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
-	return string(raw)
+	raw, err := json.Marshal([]any{records, definitions, t.Audit(), t.committed.refusals, t.committed.answers, t.releases.candidates, t.releases.active, t.releases.applied, t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }

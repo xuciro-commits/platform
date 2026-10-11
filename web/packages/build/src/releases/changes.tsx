@@ -9,15 +9,13 @@ import { PackageCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useApplicationScope } from "../projects/application-scope";
 import { kindIcon } from "../projects/project";
-import { resourceKinds, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "../projects/resources";
+import { resourceKinds, resourceRoute, type ResourceRecord } from "../projects/resources";
 import { ReleaseReview, releaseKinds, type ReleaseKind } from "./release";
-
-const releaseKindOf: Partial<Record<ResourceKindInfo["kind"], ReleaseKind>> = { object: "object", page: "page", flow: "flow", "link-type": "link-type", "property-type": "property-type", query: "query", function: "function", compute: "compute" };
 
 export function Changes({ initialKind, initialID }: { initialKind?: string; initialID?: string }) {
   const { role } = useHost(), { open } = useWorkspace();
   const scope = useApplicationScope();
-  const kinds = resourceKinds.filter((kind) => releaseKindOf[kind.kind]);
+  const kinds = resourceKinds.filter((kind) => releaseKinds.includes(kind.kind as ReleaseKind));
   // One inventory per kind; the kind list is a module constant, so the hook count is stable.
   const inventories = kinds.map((kind) => ({ kind, rows: useRecordInventory<ResourceRecord>(kind.type, 500) }));
   const loading = inventories.some((entry) => entry.rows.isLoading);
@@ -32,7 +30,7 @@ export function Changes({ initialKind, initialID }: { initialKind?: string; init
         {kinds.map((kind) => { const rows = changed.filter((entry) => entry.kind.kind === kind.kind); if (!rows.length) return null; return <div key={kind.kind} className="border-b border-border">
           <h3 className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">{t(kind.plural)} <span className="rounded-full bg-row-hover px-1.5 text-[10px]">{rows.length}</span></h3>
           <ul>{rows.map(({ row }) => <li key={row.id}><Button variant="row" type="button" aria-pressed={picked?.id === row.id}
-            onClick={() => setPicked({ kind: releaseKindOf[kind.kind]!, id: row.id })} onDoubleClick={() => open(resourceRoute(kind, row.id, scope))}
+            onClick={() => setPicked({ kind: kind.kind as ReleaseKind, id: row.id })} onDoubleClick={() => open(resourceRoute(kind, row.id, scope))}
             className={cn("flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-row-hover", picked?.id === row.id && "bg-row-selected")}>
             <span className="text-muted [&>svg]:size-4">{kindIcon[kind.kind]}</span><span className="min-w-0 flex-1 truncate">{row.title || row.name}</span><Tag label={t("Draft")} tone="warning" />
           </Button></li>)}</ul>

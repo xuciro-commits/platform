@@ -5,7 +5,7 @@
 import { pageUIProfile, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, notify, t, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
-import { Boxes, Braces, FolderKanban, Layers, LayoutTemplate, Link2, Plus, Search, Sparkles, Tags, Workflow } from "lucide-react";
+import { Boxes, Braces, Database, FolderKanban, Layers, LayoutTemplate, Link2, Plus, Search, Sparkles, Tags, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApplicationImport";
 import type { ApplicationImportDependency } from "../workshop/module-import/application-import";
@@ -18,6 +18,7 @@ export type Project = Api.Application & { id: string; revision: number; state: s
 
 export const kindIcon: Record<string, ReactNode> = {
   object: <Boxes />, "link-type": <Link2 />, "property-type": <Tags />, query: <Search />, page: <LayoutTemplate />, flow: <Workflow />, function: <Sparkles />, compute: <Braces />,
+  connection: <Link2 />, source: <Database />, dataset: <Database />, pipeline: <Workflow />, writeback: <Link2 />, matching: <Layers />,
 };
 
 /** Every project the builder may open, with what each holds. */

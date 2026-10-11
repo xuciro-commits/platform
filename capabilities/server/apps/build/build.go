@@ -95,8 +95,9 @@ type Field struct {
 
 // Build is the builder app of one tenant.
 type Build struct {
-	host   host.Host
-	ledger *platform.Ledger
+	releaseDraftIDs map[platform.AssetRef]string
+	host            host.Host
+	ledger          *platform.Ledger
 	// installed are the objects published in this tenant, by entity type: their
 	// declarations, so generated actions of a defined object reach the record store.
 	installed map[string]platform.Entity
@@ -263,7 +264,8 @@ const (
 // directInstallSchemas are the builder's direct install entries: each installs a
 // definition for operators at once, without a saved candidate.
 var directInstallSchemas = []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess,
-	SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish}
+	SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish,
+	SourceType + ".publish", PipelineType + ".publish", WritebackType + ".publish", MatchType + ".publish"}
 
 // checkReleaseProfile refuses a direct install that a production tenant has
 // retired, naming the schema and the route that replaces it. Replay and
@@ -1304,7 +1306,7 @@ func goName(name string) string {
 // validation context, while retaining declarations and the ledger identity.
 func (b *Build) ForkDecision() (platform.App, error) {
 	return &Build{host: b.host, ledger: b.ledger,
-		installed: maps.Clone(b.installed), jointEntities: maps.Clone(b.jointEntities), jointMode: b.jointMode,
+		releaseDraftIDs: maps.Clone(b.releaseDraftIDs), installed: maps.Clone(b.installed), jointEntities: maps.Clone(b.jointEntities), jointMode: b.jointMode,
 		linkTypes: maps.Clone(b.linkTypes), propertyTypes: maps.Clone(b.propertyTypes),
 		queries: maps.Clone(b.queries), functions: maps.Clone(b.functions), agents: maps.Clone(b.agents),
 		codes: maps.Clone(b.codes), tables: maps.Clone(b.tables)}, nil

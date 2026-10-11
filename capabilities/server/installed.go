@@ -120,6 +120,9 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 // reinstall asks every app that installs its own definitions to install them
 // again: after a restore, before the records of the types they define (D4).
 func (t *Tenant) reinstall() error {
+	if err := t.registerOwnedAssetMetadata(); err != nil {
+		return err
+	}
 	for _, a := range t.apps {
 		x, ok := a.(interface{ Reinstall() error })
 		if !ok {
@@ -233,17 +236,17 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 		}
 		digest, _ := platform.PageContentVersion(child)
 		if digest != embedding.ContentVersion {
-			owner, ok := t.app(embedding.Page.Ref.App).(interface {
-				PageContent(string, string) (platform.Page, bool)
-			})
-			if !ok {
-				return fmt.Errorf("embedded page content owner is unavailable")
+			registry, err := t.assetRegistryLocked()
+			if err != nil {
+				return err
 			}
-			retained, ok := owner.PageContent(embedding.Page.Ref.Name, embedding.ContentVersion)
-			if !ok {
-				return fmt.Errorf("embedded page content is unavailable")
+			asset, err := registry.ResolvePinned(embedding.Page.Ref, embedding.Page.SourceVersion, embedding.ContentVersion)
+			if err != nil {
+				return err
 			}
-			child = retained
+			if err := json.Unmarshal(asset.Body, &child); err != nil {
+				return err
+			}
 		}
 		if source != embedding.Page.SourceVersion {
 			return fmt.Errorf("embedded page source differs")

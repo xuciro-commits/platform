@@ -76,12 +76,21 @@ func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
 	c := t.automation(build.ID, false)
 	writebacks, _, _ := platform.Find[build.Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	var planned []platform.Effect
+	owner := t.app(build.ID).(*build.Build)
 	for _, w := range writebacks {
+		w, err := owner.ExecutionWriteback(w)
+		if err != nil {
+			continue
+		}
 		if w.Schema() != schema {
 			continue
 		}
 		conn, ok := platform.Get[build.Connection](c, w.Connection)
 		if !ok {
+			continue
+		}
+		conn, err = owner.ExecutionConnection(conn)
+		if err != nil {
 			continue
 		}
 		req, err := w.Request(conn, s.GetTarget().GetId(), s.GetPayload())

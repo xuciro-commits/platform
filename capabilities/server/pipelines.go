@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
@@ -26,13 +27,21 @@ func (t *Tenant) RunPipelines(now time.Time) {
 	c := t.automation(build.ID, false)
 	pipelines, _, _ := platform.Find[build.Pipeline](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	versions := map[string]int{}
+	owner := t.app(build.ID).(*build.Build)
+	var fixed []build.Pipeline
 	for _, p := range pipelines {
+		p, err := owner.ExecutionPipeline(p)
+		if err != nil {
+			log.Printf("pipeline definition refused: %v", err)
+			continue
+		}
+		fixed = append(fixed, p)
 		if ds, ok := platform.Get[build.Dataset](c, p.Input); ok {
 			versions[p.ID] = ds.Version
 		}
 	}
 	t.mu.Unlock()
-	for _, p := range pipelines {
+	for _, p := range fixed {
 		if p.Due(now, versions[p.ID]) {
 			t.runPipeline(p, now)
 		}
@@ -40,7 +49,7 @@ func (t *Tenant) RunPipelines(now time.Time) {
 }
 
 func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
-	run := build.PipelineRun{At: now}
+	run := build.PipelineRun{At: now, DefinitionVersion: p.ExecutionVersion()}
 	member, ok := t.Member(p.Runner)
 	if !ok {
 		run.Error = "The publishing member is no longer available"
@@ -57,7 +66,12 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 		}
 		for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
 			if ds, ok := platform.Get[build.Dataset](c, id); ok {
-				run.Marking = build.HigherMarking(run.Marking, ds.Marking)
+				fixed, definitionErr := t.app(build.ID).(*build.Build).ExecutionDataset(ds)
+				if definitionErr != nil {
+					err = definitionErr
+					break
+				}
+				run.Marking = build.HigherMarking(run.Marking, fixed.Marking)
 			}
 		}
 		t.mu.Unlock()

@@ -36,6 +36,10 @@ type Dataset struct {
 	Schema   []DatasetField `json:"schema,omitempty" field:"readonly" type:"json"`
 	Version  int            `json:"version,omitempty" field:"readonly" title:"Latest version"`
 	Last     *DatasetLoad   `json:"last,omitempty" field:"readonly" type:"json" title:"Latest load"`
+	// Definition publication is independent of data/runtime versions.
+	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
 // DatasetField is one inferred column: its name and the widest type seen.
@@ -141,6 +145,10 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 		if !ok {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The dataset does not exist")
 		}
+		fixed, err := b.ExecutionDataset(ds)
+		if err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+		}
 		if json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Rows == nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A load carries an array of rows")
 		}
@@ -177,7 +185,7 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 			ds.Marking = HigherMarking(ds.Marking, payload.Marking)
 			c.Put(r, ds)
 			c.Put(r, DatasetVersion{Record: platform.Record{ID: VersionID(ds.ID, ds.Version)}, Dataset: ds.ID, Version: ds.Version, At: now, Rows: len(payload.Rows), Data: data})
-			keep := ds.Keep
+			keep := fixed.Keep
 			if keep <= 0 {
 				keep = DatasetKeepDefault
 			}

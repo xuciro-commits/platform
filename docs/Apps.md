@@ -243,7 +243,11 @@ Ontology 的"Object types"统一展示当前成员可见的原生/租户资源�
 
 测试输入按保存候选的动作类型显示字段；引用填写测试记录 ID，复杂输入和拒绝用例切换“高级 JSON”。两种编辑方式保存同一份输入，重载后可重复运行。测试从空样本状态开始，不复制生产数据或外部凭据；候选准备可读取控制面的兼容性信息。对象动作测试最多 20 步；流程步骤可指定成员、0–86400 秒时钟推进或人工答案。函数固定回答是隔离/类型回归；正式函数候选还需实测评测报告。计划保存输入，不缓存未来草稿的通过结论。
 
-应用编辑器的“Application resources / 应用资源”搜索并选择已发布对象、流程、AI/代码函数，Pages 单独管理导航及分组。资源可被多个应用复用，原归属方、调用权限和运行路径保持明确；应用不授予访问。先保存应用，再点“Review application release / 审查应用发布”，检查闭包、保存不可变候选并激活。候选采用依赖的已发布版本，不自动把资源编辑器中尚未发布的草稿上线；未安装/不可用依赖在原审查中拒绝。
+应用编辑器的“Application resources / 应用资源”搜索并选择已发布对象、流程、AI/代码函数及 Connection/Source/Dataset/Pipeline/Writeback/Matching 定义，Pages 单独管理导航及分组。资源可被多个应用复用，原归属方、调用权限和运行路径保持明确；应用不授予访问。先保存应用，再点“Review application release / 审查应用发布”，检查闭包、保存不可变候选并激活。候选采用依赖的已发布版本，不自动把资源编辑器中尚未发布的草稿上线；未安装/不可用依赖在原审查中拒绝。
+
+集成应用交付：先配置来源、数据集、管道、回写/匹配与业务对象，在应用资源中纳入任务需要的定义；development 可使用原 Publish，production 使用保存候选、审查与激活。候选固定依赖配置，编辑后续草稿不会替换当前执行。晋级前在目标设置唯一同名、同 kind 的 Connection，完成 Check，并配置目标自己的密钥；发布主体必须具有原创建/发布、数据写及答复编辑权限，个人令牌 scope 也必须覆盖。晋级创建缺失元数据与安装定义、指针一次接受，不复制来源游标、数据集内容、运行历史或回执；数据迁移仍使用独立的 Migrate records。
+
+升级时先在目标审查支持计划。来源已有数据/游标时改变输入身份、目标或映射，管道改变输入/输出身份会拒绝并保持当前状态。Property/Link/Query/Function 首次部署只支持第 1 版，或目标已有所需保留版本；高版本不能凭空补历史。Compute 需要目标匹配的已编译 owner，裸 module 描述符不创建源码/编译证据。企业模型落地管道及裸地址/内嵌 header 来源不在便携 profile；将来源改为本地 Connection 绑定后再审查。旧 Writeback 回复使用请求原映射；Source/Pipeline 标题兼容升级允许旧请求完成，实际配置改变时旧结果拒绝，已有数据保留并按新定义再跑。
 
 冲突保留本地编辑，显式重载取得最新修订。对象、页面、流程、AI 与代码编辑器切换标签保留草稿；关闭、重载或切换身份时可继续编辑或放弃修改，浏览器刷新有原生提示。新代码编辑器使用共享 `useUnsavedChanges(dirty, discard)`，只在原保存确认后 `markSaved()`，不自建另一套离开拦截。对象/页面/应用/流程/代码可保存候选后激活，安装冻结闭包并保留后续草稿；AI 仍由函数 owner 的版本/评测治理负责。已有记录的存储形状变化、重命名、动作退役或页面能力绑定改变受原升级门禁约束。编译容器与 Wasm worker 已隔离；候选数据模拟仍是空租户内存环境，不冒称完整物理沙箱或通用客户升级。
 
@@ -288,7 +292,7 @@ go run ./cmd/new-app -id purchasing -entity request -title "Purchase request" -z
 
 生成 `apps/<id>/server` 的应用、测试、中文词典和开发宿主，以及 `web/packages/<id>` 的 UI 包并注册工作区；`-web=false` 只生成服务端。在 `apps/<id>/server` 用 `go test ./...` 做首次检查。应用只导入 `platformserver/platform`，开发宿主与测试可导入 `platformserver`；跨应用使用协议。
 
-`platform.App` 提供 Manifest、Submit、Read/Input（如有）、Declarations、Snapshot/Restore；宿主管记录，Ledger 管决策账本。参考 HCM 的审批、CSM 的智能体、CRM 的协议及 MES 的连接器。
+`platform.App` 提供 Manifest、Submit、Read/Input（如有）、Declarations、必需 AcceptedLedger、Snapshot/Restore；宿主管记录，Ledger 管决策账本。参考 HCM 的审批、CSM 的智能体、CRM 的协议及 MES 的连接器。
 
 ## 2. 声明实体
 

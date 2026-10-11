@@ -190,6 +190,13 @@ func (h hostView) Action(schema string) (string, platform.Action, bool) {
 		return "", platform.Action{}, false
 	}
 	declared, ok := a.Manifest().Actions.Action(schema)
+	if !ok {
+		for _, definition := range h.t.definitions {
+			if definition.Ref == (platform.AssetRef{App: a.Manifest().ID, Kind: platform.AssetAction, Name: schema}) && definition.Action != nil && definition.Action.Schema == schema {
+				return a.Manifest().ID, *definition.Action, true
+			}
+		}
+	}
 	return a.Manifest().ID, declared, ok
 }
 

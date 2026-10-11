@@ -30,6 +30,10 @@ type Match struct {
 	Prefer    []Preference `json:"prefer,omitempty" type:"json" title:"Preferred producers"`
 	State     string       `json:"state" field:"readonly"`
 	Publisher string       `json:"publisher,omitempty" field:"readonly"`
+	// Definition publication is independent of data/runtime versions.
+	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
 // MatchKey is one way to say "the same": the fields compared, and how they are
@@ -72,6 +76,13 @@ func (b *Build) publishMatch(c platform.Caller, record any, _ json.RawMessage, _
 		return err
 	}
 	m.Publisher = c.ID
+	if !c.Replaying {
+		fixed, err := b.freezeDirectIntegration(platform.AssetMatching, *m)
+		if err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		*m = fixed.(Match)
+	}
 	return nil
 }
 

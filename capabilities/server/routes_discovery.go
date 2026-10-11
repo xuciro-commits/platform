@@ -65,7 +65,12 @@ func (h *Host) routesDiscovery(rt *routes) {
 		WriteJSON(w, http.StatusOK, answer)
 	})
 	rt.metadata(Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies (ADR-0032)", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Definitions(m), t.Language(m, r)))
+		definitions, err := t.definitionsFor(m)
+		if err != nil {
+			http.Error(w, "Asset discovery is unavailable because accepted owner metadata could not be read", http.StatusInternalServerError)
+			return
+		}
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(definitions, t.Language(m, r)))
 	})
 	rt.metadata(Route{Pattern: "GET /v1/pages/{app}/{name}/{contentVersion}", Summary: "Read exact published page content through current member discovery permissions (ADR-0046)", Answer: platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.PageContentDefinition(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetPage, Name: r.PathValue("name")}, r.PathValue("contentVersion"))
