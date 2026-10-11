@@ -10,7 +10,7 @@ test("route 17: every action has an entry, pages follow changes", async ({ brows
   const account = fresh("ACC"), opp = fresh("OPP");
   await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Acme " + account, kind: "company" });
   await open(page, "sales", "/page?app=crm&kind=page&name=opportunities");
-  await page.getByRole("button", { name: "Open opportunity", exact: true }).click();
+  await page.getByRole("button", { name: "+ Open opportunity", exact: true }).click();
   const opening = page.getByRole("dialog");
   await opening.getByRole("textbox", { name: "ID *", exact: true }).fill(opp);
   await opening.getByRole("combobox", { name: /^Account/ }).fill(account);
@@ -88,23 +88,25 @@ test("route 17: every action has an entry, pages follow changes", async ({ brows
     ] }],
   });
   // The builder configures the same references and date contract used by business actions.
-  await builder.open(page, `/action-type?id=${boundObject.id}&action=schedule`);
-  const structure = page.getByRole("region", { name: "Action structure", exact: true });
-  const inspector = page.getByRole("region", { name: "Action inspector", exact: true });
+  // A new page: the builder signs in through an init script, which a hash-only navigation on the sales page never re-runs.
+  const authoring = await browser.newPage({baseURL:"http://127.0.0.1:18496",locale:"en-US"});
+  await builder.open(authoring, `/action-type?id=${boundObject.id}&action=schedule`);
+  const structure = authoring.getByRole("region", { name: "Action structure", exact: true });
+  const inspector = authoring.getByRole("region", { name: "Action inspector", exact: true });
   await structure.getByRole("button", { name: "Form", exact: true }).click();
-  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await authoring.getByRole("button", { name: "Account", exact: true }).click();
   await inspector.getByRole("combobox", { name: "Reference object", exact: true }).selectOption("crm.account");
-  await page.getByRole("button", { name: "First night", exact: true }).click();
+  await authoring.getByRole("button", { name: "First night", exact: true }).click();
   await expect(inspector.getByRole("combobox", { name: "Date range end", exact: true })).toHaveValue("depart");
-  await page.getByRole("button", { name: /^First night \*/ }).click();
-  const previewRange = page.getByRole("group", { name: "Choose a date range", exact: true });
+  await authoring.getByRole("button", { name: /^First night \*/ }).click();
+  const previewRange = authoring.getByRole("group", { name: "Choose a date range", exact: true });
   await previewRange.getByRole("textbox", { name: "First night", exact: true }).fill("2030-01-30");
   await previewRange.getByRole("textbox", { name: "Departure", exact: true }).fill("2030-02-30");
   await expect(previewRange.getByRole("textbox", { name: "Departure", exact: true })).toHaveValue("2030-02-30");
   await expect(previewRange.getByRole("textbox", { name: "Departure", exact: true })).toHaveAttribute("aria-invalid", "true");
   await previewRange.getByRole("textbox", { name: "Departure", exact: true }).fill("2030-02-02");
   await previewRange.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(page.getByText("3 nights", { exact: true })).toBeVisible();
+  await expect(authoring.getByText("3 nights", { exact: true })).toBeVisible();
   const boundPage=await builder.page({title:"Bound input form",object:boundObject.type,
     sections:[{id:"create",widget:"form",configVersion:1,fields:["note"],inputs:{quantity:{source:"literal",value:3}}}],
     document:{formatVersion:2,uiProfile:pageUIProfile,root:"root",nodes:{root:{kind:"rows",children:["create"]},create:{kind:"widget",section:"create"}}},
