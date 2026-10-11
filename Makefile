@@ -59,6 +59,10 @@ dev: ## 基于容器 PostgreSQL 与 Rauthy，在 air 下热重载运行宿主（
 	mkdir -p .build/dev
 	SOLUTION=$(SOLUTION) "$(AIR)" -c deploy/dev/air.toml -- $(SOLUTION) $(PORT.$(SOLUTION))
 
+.PHONY: lite
+lite: ## 一键启动零 Docker 轻量持久化宿主（单数据目录、自研 IdP、本地存储、内置工作台）
+	deploy/local/lite.sh $(SOLUTION) $(PORT.$(SOLUTION))
+
 .PHONY: dev-light
 dev-light: ## 轻量内存模式运行宿主（使用开发令牌，完全不依赖 Docker）
 	@test -x "$(AIR)" || { echo 'run make setup to install air'; exit 1; }
