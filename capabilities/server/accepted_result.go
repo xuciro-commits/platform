@@ -56,7 +56,33 @@ type acceptedEvent struct {
 	Stopped     []string          `json:"stopped,omitempty"`
 }
 
+// sealResult preserves the complete decision. The compact record format is
+// only an encoding optimisation; its writer must account for every effect.
+// The batch format also handles history that no longer fits a compact result.
+func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
+	owner := d.tenant.app(app)
+	if owner == nil || request.GetAuthority() != app {
+		return nil, fmt.Errorf("decision has no matching submission owner")
+	}
+	action, declared := owner.Manifest().Actions.Action(request.GetSchema().GetName())
+	if !declared || action.Target != request.GetTarget().GetType() {
+		return nil, fmt.Errorf("submission target differs from its declared action")
+	}
+	if proto.Equal(request, receipt.GetSubmission()) {
+		if raw, err := d.result(app, receipt, at); err == nil {
+			return raw, nil
+		}
+	}
+	return d.batchResult(app, request, receipt, at)
+}
+
 func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedAt time.Time) ([]byte, error) {
+	if d.failure != nil || len(d.allocated) > 0 || d.noticeChanged || len(d.noticeEffects) > 0 ||
+		len(d.intents) > 0 || len(d.observations) > 0 || len(d.states) > 0 ||
+		len(d.deliveries) > 0 || len(d.operationCancels) > 0 ||
+		d.observed && len(d.tenant.observers) > 0 {
+		return nil, fmt.Errorf("decision needs a result carrying all state and intents")
+	}
 	if receipt == nil || len(d.events) != 1 || len(d.records.writes) != 1 || len(d.logs) != 1 {
 		return nil, fmt.Errorf("one accepted record and event are required")
 	}

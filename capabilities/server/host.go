@@ -509,20 +509,7 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 		refusal = explained(refusal, a, s.GetSchema().GetName(), target(s))
 		raw, err = encodeRefusedResult(s, now, refusal, draft.inputIssues[refusal]...)
 	} else {
-		selected, explicit := a.(platform.AcceptedActionApp)
-		schema := s.GetSchema().GetName()
-		single := strings.HasSuffix(schema, ".create") || strings.HasSuffix(schema, ".edit") ||
-			strings.HasSuffix(schema, ".archive") || acceptsPureTransition(a, schema)
-		if publisher, ok := a.(platform.AcceptedPublisher); ok {
-			single = single || slices.Contains(publisher.AcceptedPublicationSchemas(), schema)
-		}
-		if len(draft.events) > 1 || len(draft.records.writes) > 1 || len(draft.allocated) > 0 || draft.noticeChanged || len(draft.intents) > 0 || len(draft.deliveries) > 0 ||
-			!proto.Equal(record.GetSubmission(), s) || !single || draft.observed && len(t.observers) > 0 ||
-			explicit && slices.Contains(selected.AcceptedActionSchemas(), s.GetSchema().GetName()) {
-			raw, err = draft.batchResult(a.Manifest().ID, s, record, now)
-		} else {
-			raw, err = draft.result(a.Manifest().ID, record, now)
-		}
+		raw, err = draft.sealResult(a.Manifest().ID, s, record, now)
 		if err != nil {
 			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
 			raw, err = encodeRefusedResult(s, now, refusal)

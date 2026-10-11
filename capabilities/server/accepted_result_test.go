@@ -21,6 +21,102 @@ type acceptedListener struct {
 	enabled bool
 }
 
+// A generated record action can also update its owner's private state.
+// It needs the same acceptance guarantee as an explicitly selected action.
+type statefulStock struct {
+	*stock
+	accepted       int
+	blockDecisions bool
+}
+
+func (s *statefulStock) ForkAcceptedState() (platform.App, error) {
+	copy := *s
+	return &copy, nil
+}
+
+func (s *statefulStock) AcceptedState() (json.RawMessage, error) {
+	return json.Marshal(s.accepted)
+}
+
+func (*statefulStock) ValidateAcceptedState(raw json.RawMessage) error {
+	var count int
+	if err := json.Unmarshal(raw, &count); err != nil {
+		return err
+	}
+	if count < 0 {
+		return errors.New("negative accepted count")
+	}
+	return nil
+}
+
+func (s *statefulStock) ApplyAcceptedState(raw json.RawMessage) error {
+	return json.Unmarshal(raw, &s.accepted)
+}
+
+func (s *statefulStock) Submit(c platform.Caller, sub *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if s.blockDecisions {
+		panic("saved result called decision code")
+	}
+	receipt, err := s.stock.Submit(c, sub, at)
+	if err == nil && receipt != nil {
+		s.accepted++
+	}
+	return receipt, err
+}
+
+func TestAcceptedGeneratedRecordKeepsPrivateOwnerState(t *testing.T) {
+	const tenant = "accepted-owner-state"
+	compose := func() *Tenant {
+		return composeTenant(t, tenant, []Seat{seatOf("ana", "stock:clerk")}, &statefulStock{stock: newStock(tenant)})
+	}
+	live := compose()
+	owner := live.app("stock").(*statefulStock)
+	member := memberOf(t, live, "ana")
+	request := submission(live, member, "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 2})
+	at := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
+	var entries []Entry
+	fail := true
+	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		if owner.accepted != 0 || len(owner.AcceptedLedger().RecordsFor(tenant)) != 0 {
+			t.Fatal("private owner state or receipt became visible before acceptance")
+		}
+		if fail {
+			return nil, errors.New("injected append failure")
+		}
+		entries = append(entries, e)
+		return e.Body, nil
+	}
+	if _, refusal := live.Submit(member, request, at); refusal == nil || owner.accepted != 0 || len(entries) != 0 {
+		t.Fatal("failed append exposed a record or private state")
+	}
+	fail = false
+	first, refusal := live.Submit(member, request, at)
+	if refusal != nil || owner.accepted != 1 || len(entries) != 1 {
+		t.Fatalf("accepted record lost its owner's state: count=%d, refusal=%v", owner.accepted, refusal)
+	}
+	batch, _, err := decodeAcceptedBatch(entries[0].Body)
+	if err != nil || len(batch.States) != 1 || batch.States[0].App != "stock" {
+		t.Fatalf("result omitted private owner state: %+v, %v", batch.States, err)
+	}
+	owner.blockDecisions = true
+	again, refusal := live.Submit(member, request, at.Add(time.Hour))
+	if refusal != nil || again.GetChangeId() != first.GetChangeId() || owner.accepted != 1 || len(entries) != 1 {
+		t.Fatal("retry re-ran the decision or changed private state")
+	}
+	restored := compose()
+	restored.app("stock").(*statefulStock).blockDecisions = true
+	if err := restored.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	if restored.app("stock").(*statefulStock).accepted != 1 {
+		t.Fatal("recovery did not apply the saved owner state")
+	}
+	item, ok := platform.Get[Item](restored.caller(member, restored.app("stock"), false), "I1")
+	if !ok || item.Qty != 2 {
+		t.Fatal("recovery lost the record paired with private state")
+	}
+}
+
 func (a acceptedListener) Interested([]string, platform.Event) bool { return a.enabled }
 func (a acceptedListener) Listen(platform.Caller, platform.Event, []string, time.Time) *kernel.Error {
 	return nil
