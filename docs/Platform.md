@@ -25,7 +25,7 @@
 | **内核 (Kernel)** | 语言中立契约 K1–K9：身份标识、事实、决策、权威归属、租户隔离、模式版本、连接器、工作所有权（§4） | `contract/`（规范、测试向量、Go） | 内核假说被修订时（规范与测试向量先行） |
 | **宿主运行时 (Host runtime)** | 编排、路由、日志与重放、快照、记录存储、受属工作、效果分发、模型调用；实现 `platform.Runtime` | `platformserver` | 平台扩展机制时 |
 | **应用 API (App API)** | 应用所见表面：`Member`、`Caller`、`Manifest`、各项声明（实体、生命周期、动作、读取、工作流、智能体、作业、设置、效果类别）及 `Ledger`。应用仅通过 `Runtime` 访问宿主 | `platformserver/platform`；UI 层为 `@platform/app` | 应用需要宿主已具备的能力时 |
-| **平台级应用 (Platform apps)** | 作为应用运行的跨行业通用能力：`platform`（控制台）、`org`、`relations`、`work`、`flow`、`ai`、`agent`、`knowledge` | `capabilities/server/apps/*`；Console/Agents 等部分实现仍在根包 | 跨行业需求在第二个应用中出现时 |
+| **平台级应用 (Platform apps)** | 作为应用运行的跨行业通用能力：`build`、`core`、`enterprise`、`files`、`flow`、`knowledge`、`relations`、`work`、`ai` 九个包；控制台与智能体运行时（`platform`、`agent`）按 ADR-0025 D4 留在宿主根包 | `capabilities/server/apps/*`；Console/Agents 等部分实现仍在根包 | 跨行业需求在第二个应用中出现时 |
 | **协议 (Protocols)** | 应用提供和消费的版本化接口，附带一致性测试 | `protocols/` | 出现第二个提供方或消费方时 |
 | **交付应用 (Apps)** | 某个行业或职能的规则、实体、工作流、智能体及 UI | `apps/`、`web/packages/*` | 其业务发生变化时 |
 
@@ -74,7 +74,7 @@
 | 编排 (Composition) | 解决方案、租户、应用、清单、协议、绑定、设置 | 代码（解决方案、应用）；绑定与设置属于控制台决策 |
 | 真理 (Truth) | 提交、输入、决策、事实、日志分录、效果结果、用量 | 对目标数据类别拥有权威的应用（K5）；宿主记入日志 |
 | 读取 (Reads) | 记录、历史、聚合、上下文、搜索、投影、段落、快照 | 宿主，从真理中派生 |
-| 人员与工作 (People and work) | 成员、角色、单元、结构、审批请求、任务、通知、已存视图 | `platform`、`org`、`work` |
+| 人员与工作 (People and work) | 成员、角色、单元、结构、审批请求、任务、通知、已存视图 | `platform`（成员与授予）；单元/结构/任职由 `enterprise` 模型裁决，`/v1/organization` 是其投影；`work`（审批与任务） |
 | 智能体 (Agents) | 智能体、运行、步骤、草稿、信号、评估、记忆、文档、对话抄录 | `agent`、`knowledge`、`ai` |
 
 ### 2.3 数据归宿
@@ -241,6 +241,11 @@
 | **文档 (Document)**、**段落 (Passage)** | 知识库文本及其切分出的片段；向量属于派生数据 | `knowledge` | 决策；向量由其派生 |
 | **术语 (Term)** | 租户词汇表中的词汇：在当前租户的含义、同义词、所引用的声明；叠置于模型之上，绝不修改模型本身 | `knowledge` | 决策 |
 | **对话抄录 (Transcript)** | 模型调用的完整请求与应答文本 | 宿主，位于日志之外 | 受保留期设置控制 |
+| **人员 (Person)** | 组织与之打交道的自然人的共享主数据记录（员工、承包商、伙伴联系人）；它不是登录主体：某人登录时是 Member，其在结构中的位置是企业模型元素。`core.person` 与成员记录各自独立，不由任一方自动同步（ADR-0058、ADR-0076） | `core` | 记录，由 `core` 账本裁决 |
+| **岗位 (Post) 与任职 (Membership/FillsPost)** | 岗位是模型中的职责元素（UAF `ActualPost`）；`FillsPost` 把人员挂到岗位，`ActualOrganizationRole`（Membership）把主体（成员或元素）挂到组织单元并带角色，两者各带 from/until。岗位不是权限——动作能力仍由 Grant 与 Policy 判定，任职只解释"谁在何处承担什么"（ADR-0067、ADR-0068） | `enterprise` | 决策：元素与关系各带 from/until |
+| **组织单元与结构 (Unit / Structure)** | 视野、审批人与汇报范围所在的单元协作网络；ADR-0012 的多套结构已由企业模型承接，`/v1/organization` 与 `platform.member` 的授予单位是其投影与消费方，不另存一份组织树（ADR-0012 已被 0067/0068 取代） | `enterprise`（授予单位由 `platform` 记录） | 决策；读取为投影 |
+| **地点 (Site / Location 与 ActualLocation)** | `core.site`、`core.location` 是可被业务记录引用的站点/库位主数据；企业模型的 `ActualLocation` 是模型元素。名称相近不等于同一权威，两者不互相覆盖，也不因同名而自动一致（ADR-0058、ADR-0067） | `core` 与 `enterprise` 各按其记录 | 记录 / 决策 |
+| **科目 (Account) 与账号 (Login account)** | 本仓库的 `account` 同名异义：`core.account` 与 `core.period` 是账簿科目与会计期间（业务记录），OIDC/个人令牌所说的账号是 Member 的登录主体。UI、契约与文档不得用"账号"互相代替（ADR-0063、ADR-0079） | 科目归 `core`/账簿 owner，登录主体归 `platform` | 记录 / 决策 |
 | **Tenant / 租户** | Host 上的持久安全/数据隔离范围；业务组织、项目、环境名本身都不创建租户边界 | Host/平台租户管理；租户业务对象由各应用 owner 裁决 | Tenant ID、成员、日志与派生状态；规则见 [ADR-0078 §1、§2](ADR/0078-tenancy-and-authorization.md) 与 [ADR-0047 §4.1](ADR/0047-platform-composition-and-workspaces.md#41-管理范围构建关系交付版本分开) |
 | **Member / Grant / Role / Permission** | Member 是租户内已解析的人员/服务/Agent 主体；Grant 把某应用的命名 Role 授予成员（可带单位/结构/生效期）；Permission 是 owner 声明的动作/读取能力。Policy 与行/字段/来源 scope 是独立判定，不可由角色标签、菜单可见性或登录身份代替 | `platform` 管理成员/授予；各 `platform.App` 清单声明其动作、读取和内置角色；宿主对真实请求重验 | 成员、授予、Role/Policy/Team 配置；能力与限制按 [ADR-0078 As-built](ADR/0078-tenancy-and-authorization.md) 为准，尤其不得把未实现的 `related` ReBAC 谓词宣称为已交付 |
 | **Host / 宿主** | 运行多个 Tenant 的运行时/部署实例；负责路由、持久化、身份接入和受控 I/O，不拥有行业业务语义 | Go host 与部署/解决方案装配 | 配置、日志及受支持快照；见 [ADR-0010](ADR/0010-platform-host-and-apps.md)、[ADR-0078](ADR/0078-tenancy-and-authorization.md) |
@@ -448,7 +453,7 @@
 3. **ERP 的庞大复杂度可能吞噬整体规划**。它是所有目标应用中最庞大深邃的一个；必须坚决让其保持轻量。它对平台的价值在于带来资金流、复式记账、会计期间控制和生产订单下达的强架构压力，而非广袤的边缘特性。
 4. **构建语言过度膨胀无界的风险**。类型化编排需要足够的表达力来承载真实工作，并依靠代码扩展支撑复杂算法。引入多套表达式引擎、未经校验的脚本或权限边界割裂的配置体系，将摧毁平台的可维护性。
 5. **服务端实现绝不等于内核本身**；将其混为一谈会把平台强行重新绑定到单一的特定部署形态上。
-6. **宿主运行时收容了其自身的内置应用** (#113, ADR-0025 D4, 8c 已构建)。`relations`、`org`、`work`、`flow`、`ai` 和 `knowledge` 是位于 `capabilities/server/apps` 下的独立包，仅依赖应用 API 与 `internal/host`，通过宿主检测到的角色接口（`Attached`、`Observer`、`Linker`、`Directory`、`Tasks`、`Processes`、`Runs`、`Listener`）进行交互，并由 `scripts/boundaries.sh` 实施强校验。智能体运行时与控制台依据决策（D4 修订）保留在宿主内部：前者属于宿主执行核心——模型调用、全应用工具调用、搜索、逐步骤记入日志——而后者是宿主每次请求都必须读取的全局配置；若将它们移出，几乎整个宿主都要暴露在 `internal/host` 之后。经验 6 同样适用于宿主自身。
+6. **宿主运行时收容了其自身的内置应用** (#113, ADR-0025 D4, 8c 已构建)。`relations`、`work`、`flow`、`ai`、`knowledge`、`build`、`core`、`enterprise` 和 `files` 是位于 `capabilities/server/apps` 下的独立包，仅依赖应用 API 与 `internal/host`，通过宿主检测到的角色接口（`Attached`、`Observer`、`Linker`、`Directory`、`Tasks`、`Processes`、`Runs`、`Listener`）进行交互，并由 `scripts/boundaries.sh` 实施强校验。智能体运行时与控制台依据决策（D4 修订）保留在宿主内部：前者属于宿主执行核心——模型调用、全应用工具调用、搜索、逐步骤记入日志——而后者是宿主每次请求都必须读取的全局配置；若将它们移出，几乎整个宿主都要暴露在 `internal/host` 之后。经验 6 同样适用于宿主自身。
 7. **文档内容漂移滞后**。在本次梳理之前，相同的状态在五个不同地方维护，且全部发生了陈旧滞后。每项事实必须有且仅有一个唯一归宿（本文档头部的权威声明）；每次代码批次必须伴随文档更新一同收尾（AGENTS.md 规则 8）。
 8. **在单机环境下验证的局部性风险**曾经是核心短板，直到 CI 落地 (#112)；Docker 全组件演练目前仍仅在负责人的 Mac 上运行，计时规模测试已按 ADR-0082 删除；发布工作流仅在版本标签或手动发布时运行。
 9. **智能体严重依赖平台不可控的外部基础模型**。反馈信号机制与离线评测体系是核心守卫；调用配额与速率限制守卫在每次调用必经的唯一关口 (ADR-0029 12a)。
