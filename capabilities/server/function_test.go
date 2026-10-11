@@ -177,9 +177,6 @@ func (a *functionStock) Manifest() platform.Manifest {
 	m.Entities[1].Scope.Levels["lead"] = platform.ScopeTenant
 	return m
 }
-func (*functionStock) AcceptedActionSchemas() []string {
-	return []string{"stock.item.advise", "stock.item.advice-answer"}
-}
 func (a *functionStock) Submit(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if s.GetSchema().GetName() != "stock.item.advise" && s.GetSchema().GetName() != "stock.item.advice-answer" {
 		return a.stock.Submit(c, s, at)

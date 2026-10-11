@@ -223,7 +223,7 @@ func TestJournalAcceptedRefusalAfterCrashAndRestart(t *testing.T) {
 	valid.Payload = []byte(`{"code":"A"}`)
 	stale := compose()
 	draft := stale.newStagedDecision()
-	receipt, refused := decideAccepted(stale.app("stock").(platform.ResultApp), draft, m, valid, at)
+	receipt, refused := decideAccepted(stale.app("stock").(platform.App), draft, m, valid, at)
 	if refused != nil {
 		t.Fatalf("the alternate submission should be valid: %v", refused)
 	}

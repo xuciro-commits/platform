@@ -65,6 +65,7 @@ func NewMemory(tenant string) *Memory {
 
 // Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0019 D6).
 func (m *Memory) Snapshot() (json.RawMessage, error) { return m.ledger.Snapshot() }
+func (m *Memory) AcceptedLedger() *platform.Ledger   { return m.ledger }
 
 func (m *Memory) Restore(raw json.RawMessage) error { return m.ledger.Restore(raw) }
 

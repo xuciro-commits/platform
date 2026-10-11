@@ -164,9 +164,6 @@ func (s *frameSource) Declarations() []*pb.AuthorityDeclaration { return s.ledge
 func (s *frameSource) Snapshot() (json.RawMessage, error)       { return s.ledger.Snapshot() }
 func (s *frameSource) Restore(raw json.RawMessage) error        { return s.ledger.Restore(raw) }
 func (s *frameSource) AcceptedLedger() *platform.Ledger         { return s.ledger }
-func (s *frameSource) AcceptedActionSchemas() []string {
-	return []string{"frames.source.start", "frames.source.feed"}
-}
 func (*frameSource) Read(platform.Caller, string) (any, *kernel.Error) {
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "unknown read")
 }
@@ -899,6 +896,8 @@ func newShop(tenant string, flows ...platform.Flow) *shop {
 	}
 	return &shop{ledger: platform.NewLedger(tenant, "shop", platform.NewCatalog(actions...), "shop.order"), flows: flows}
 }
+
+func (s *shop) AcceptedLedger() *platform.Ledger { return s.ledger }
 
 func (s *shop) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "shop", Version: "1", Actions: s.ledger.Catalog, Entities: shopEntities(), Flows: s.flows}

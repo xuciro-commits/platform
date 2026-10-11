@@ -302,13 +302,9 @@ func (d *Console) Manifest() platform.Manifest {
 
 func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
 
-// Member decisions are the Console's bounded, app-owned state. Host operations
-// remain outside this path until their respective owners can be staged too.
+// The Console owns member and governance state. Host controls participate
+// through the caller's private control component, not this directory image.
 func (d *Console) AcceptedLedger() *platform.Ledger { return d.ledger }
-func (*Console) AcceptedActionSchemas() []string {
-	return []string{SchemaAdd, SchemaInvite, SchemaJoin, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard, SchemaGrant, SchemaRevoke, SchemaDelegate, SchemaTokenIssue, SchemaTokenRevoke, SchemaRoleSave, SchemaRoleRemove, SchemaPolicySave, SchemaPolicyDrop, SchemaTeamSave, SchemaTeamRemove, SchemaProfileUpdate, SchemaOperationCall, SchemaProjectSave, SchemaProjectArchive,
-		SchemaPackageInstall, SchemaPackageUpgrade, SchemaPackageDrain, SchemaPackageRetire}
-}
 
 func (d *Console) ForkAcceptedState() (platform.App, error) {
 	d.mu.Lock()
@@ -478,11 +474,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 		if d.t == nil { // not composed: a tenant's operations need one
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
-		areas := map[string]func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error){
-			ConnectorType: d.t.decideConnector, SettingType: d.t.decideSetting, WorkType: d.t.decideWork, ProtocolType: d.t.decideBinding,
-			NotificationType: d.t.decideNotification, EndpointType: d.t.decideEndpoint, EffectType: d.t.decideEffect, TranslationType: d.t.decideTranslation,
-		}
-		return areas[declared.Target](c, s, now)
+		return platform.ControlDecision(c, s, now)
 	})
 }
 

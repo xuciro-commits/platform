@@ -76,10 +76,8 @@ type FunctionRef struct {
 // of its accepted decision. It uses the same model effect and Reply path as
 // Request; a refusal also invalidates the enclosing staged decision.
 func (c Caller) RequestFunction(r *pb.ChangeRecord, request FunctionRequest) (FunctionCall, *kernel.Error) {
-	if rt, ok := c.rt.(interface {
-		RequestFunction(Caller, *pb.ChangeRecord, FunctionRequest) (FunctionCall, *kernel.Error)
-	}); ok {
-		return rt.RequestFunction(c, r, request)
+	if c.rt != nil {
+		return c.rt.RequestFunction(c, r, request)
 	}
 	return FunctionCall{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "AI functions require an accepted decision")
 }

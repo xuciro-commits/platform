@@ -384,27 +384,21 @@ type OperationResult struct {
 }
 
 func (c Caller) RequestOperation(r *pb.ChangeRecord, q OperationRequest) (OperationCall, *kernel.Error) {
-	if rt, ok := c.rt.(interface {
-		RequestOperation(Caller, *pb.ChangeRecord, OperationRequest) (OperationCall, *kernel.Error)
-	}); ok {
-		return rt.RequestOperation(c, r, q)
+	if c.rt != nil {
+		return c.rt.RequestOperation(c, r, q)
 	}
 	return OperationCall{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operations require an accepted decision")
 }
 func (c Caller) OperationResult(id string) (OperationResult, *kernel.Error) {
-	if rt, ok := c.rt.(interface {
-		OperationResult(Caller, string) (OperationResult, *kernel.Error)
-	}); ok {
-		return rt.OperationResult(c, id)
+	if c.rt != nil {
+		return c.rt.OperationResult(c, id)
 	}
 	return OperationResult{}, notFound()
 }
 
 func (c Caller) CancelOperation(r *pb.ChangeRecord, id string) *kernel.Error {
-	if rt, ok := c.rt.(interface {
-		CancelOperation(Caller, *pb.ChangeRecord, string) *kernel.Error
-	}); ok {
-		return rt.CancelOperation(c, r, id)
+	if c.rt != nil {
+		return c.rt.CancelOperation(c, r, id)
 	}
 	return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Cancellation requires an accepted decision")
 }
@@ -425,10 +419,8 @@ type CodeBuildResult struct {
 }
 
 func (c Caller) RequestCompilation(r *pb.ChangeRecord, key, target string, q CodeBuildRequest) (OperationCall, *kernel.Error) {
-	if rt, ok := c.rt.(interface {
-		RequestCompilation(Caller, *pb.ChangeRecord, string, string, CodeBuildRequest) (OperationCall, *kernel.Error)
-	}); ok {
-		return rt.RequestCompilation(c, r, key, target, q)
+	if c.rt != nil {
+		return c.rt.RequestCompilation(c, r, key, target, q)
 	}
 	return OperationCall{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Compilation requires an accepted decision")
 }

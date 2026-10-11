@@ -65,6 +65,32 @@ func TestTraceFollowsWork(t *testing.T) {
 			t.Fatalf("%s: attributes %v", s.Name(), s.Attributes())
 		}
 	}
+	// Private request decisions retain the same observation boundary after
+	// removing their separate legacy submission journal writes.
+	requests := newRequestsTenant(t, true)
+	buyer := platform.Member{ID: "buyer", Tenant: requests.ID, Roles: map[string]string{"cart": "buyer", "stock": "keeper"}}
+	for _, item := range []string{"pen", "none"} {
+		spans.Reset()
+		if _, refusal := requests.Submit(buyer, submission(requests, buyer, "cart", "cart.line.ask", "cart.line", item, map[string]string{"item": item}), now); refusal != nil {
+			t.Fatal(refusal)
+		}
+		byName := map[string]sdktrace.ReadOnlySpan{}
+		for _, span := range spans.GetSpans().Snapshots() {
+			byName[span.Name()] = span
+		}
+		input, request := byName["submit cart.line.ask"], byName["request "+testProtocol().ID()+"#hold"]
+		if input == nil || request == nil || request.SpanContext().TraceID() != input.SpanContext().TraceID() || request.Parent().SpanID() != input.SpanContext().SpanID() {
+			t.Fatalf("private request lost its input trace: %v", keys(byName))
+		}
+		outcome := "ok"
+		if item == "none" {
+			outcome = "ERROR_CODE_CONFLICT"
+		}
+		if !has(request, "platform.outcome", outcome) || !has(request, "platform.tenant", requests.ID) {
+			t.Fatalf("request outcome changed: %v", request.Attributes())
+		}
+	}
+
 }
 
 func keys[V any](m map[string]V) []string {

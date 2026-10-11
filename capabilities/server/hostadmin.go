@@ -32,7 +32,7 @@ type HostTenantView struct {
 	ID            string    `json:"id"`
 	Quarantined   bool      `json:"quarantined,omitempty"`
 	Fault         string    `json:"fault,omitempty"`
-	Lifecycle     string    `json:"lifecycle,omitempty"` // "", "suspended" or "decommissioned"
+	Lifecycle     string    `json:"lifecycle,omitempty"` // "", "suspend" or "decommission"
 	Apps          []string  `json:"apps"`
 	Members       int       `json:"members"`
 	Audit         int       `json:"audit"`
@@ -326,7 +326,10 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
 				return
 			}
-			to.rememberMigration(result, target.ID, h.Now())
+			if err := to.rememberMigration(result, target.ID, h.Now()); err != nil {
+				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
+				return
+			}
 			WriteJSON(w, http.StatusOK, result)
 		})
 	h.hostRoute(mux, Route{Pattern: "GET /v1/host/tenants/{tenant}/migrations", Summary: "What the host console moved in or out of this tenant (host administrators)", Answer: []MigrationManifest{}},
@@ -410,42 +413,50 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time)
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	switch action {
-	case "suspend", "decommission", "resume", "open":
-	default:
+	if !slices.Contains([]string{"suspend", "decommission", "resume", "open"}, action) {
 		return errSupport("lifecycle action must be suspend, resume, decommission or open")
 	}
-	if t.quarantined() && action != "open" && action != "resume" {
-		return errSupport("a quarantined tenant is already stopped; repair it through recovery")
-	}
-	switch action {
-	case "suspend", "decommission":
-		t.console.setState(action)
-	case "resume", "open":
-		t.console.setState("")
-	}
-	t.audit.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
-		Action: "host.lifecycle." + action, Target: t.ID + ":" + reason})
-	return nil
+	request := struct{ Action, Reason string }{action, reason}
+	_, err := t.acceptHostControl("lifecycle", "host:"+subject, request, now,
+		AuditEntry{Action: "host.lifecycle." + action, Target: t.ID + ":" + reason}, func(image *hostControlImage) (SupportGrant, error) {
+			if t.quarantined() && action != "open" && action != "resume" {
+				return SupportGrant{}, errSupport("a quarantined tenant is already stopped; repair it through recovery")
+			}
+			image.Lifecycle = ""
+			if action == "suspend" || action == "decommission" {
+				image.Lifecycle = action
+			}
+			return SupportGrant{}, nil
+		})
+	return err
 }
 
-// openSupport authorizes a support session for a member of this tenant. The
-// member must exist: the console looks at what that member may look at, so it
-// can never exceed a real member's reads, and the grant bounds the time.
+// openSupport authorizes a support session for a real member. Its accepted
+// receipt fixes the original grant; a same-clock retry does not append another.
 func (t *Tenant) openSupport(member, reason, subject string, minutes int, now time.Time) (SupportGrant, error) {
-	if member == "" || reason == "" || minutes < 1 || minutes > 24*60 {
+	if member == "" || reason == "" || subject == "" || now.IsZero() || minutes < 1 || minutes > 24*60 {
 		return SupportGrant{}, errSupport("a support session needs a member, a reason and 1 to 1440 minutes")
 	}
-	if _, ok := t.Member(member); !ok {
-		return SupportGrant{}, errSupport("no such member in this tenant")
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	request := struct {
+		Member, Reason string
+		Minutes        int
+	}{member, reason, minutes}
+	hash, err := canonicalDigest([]any{t.ID, subject, request, now.UTC()})
+	if err != nil {
+		return SupportGrant{}, err
 	}
-	id := "support:" + strconv.FormatInt(now.UTC().UnixNano(), 36)
-	grant := SupportGrant{ID: id, Tenant: t.ID, Member: member, Reason: reason, Opened: subject,
-		Expires: now.UTC().Add(time.Duration(minutes) * time.Minute)}
-	t.console.addSupport(grant)
-	t.audit.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
-		Action: "host.support.open", Target: member + ":" + reason})
-	return grant, nil
+	id := "support:" + strconv.FormatInt(now.UTC().UnixNano(), 36) + ":" + hash[:12]
+	return t.acceptHostControl("support.open", "host:"+subject, request, now,
+		AuditEntry{Action: "host.support.open", Target: member + ":" + reason}, func(image *hostControlImage) (SupportGrant, error) {
+			if _, ok := t.Member(member); !ok {
+				return SupportGrant{}, errSupport("no such member in this tenant")
+			}
+			grant := SupportGrant{ID: id, Tenant: t.ID, Member: member, Reason: reason, Opened: subject, Expires: now.UTC().Add(time.Duration(minutes) * time.Minute)}
+			image.Support = append(image.Support, grant)
+			return grant, nil
+		})
 }
 
 // supportGrants lists the tenant's sessions, newest first.
@@ -458,14 +469,25 @@ func (t *Tenant) supportGrants(now time.Time) []SupportGrant {
 // and the reads the granted member may make. The use is recorded in the audit
 // with the operator and the grant, and the grant's count moves.
 func (t *Tenant) useSupport(id, subject string, now time.Time) (SupportRead, error) {
-	grant, err := t.console.useSupport(id, now)
+	t.mu.Lock()
+	_, err := t.acceptHostControl("support.use", "host:"+subject, struct{ ID string }{id}, now,
+		AuditEntry{Action: "host.support.use", Target: id}, func(image *hostControlImage) (SupportGrant, error) {
+			i := slices.IndexFunc(image.Support, func(g SupportGrant) bool { return g.ID == id })
+			if i < 0 {
+				return SupportGrant{}, errUnknownGrant
+			}
+			if !image.Support[i].Expires.After(now) {
+				return SupportGrant{}, errSupport("the support session has ended")
+			}
+			image.Support[i].Uses++
+			return image.Support[i], nil
+		})
+	t.mu.Unlock()
 	if err != nil {
 		return SupportRead{}, err
 	}
-	t.audit.remember(AuditEntry{At: now.UTC(), Member: "host:" + subject, App: PlatformApp,
-		Action: "host.support.use", Target: grant.ID})
 	audit := tailAudit(t.Audit(), 20)
-	// Health takes its own locks and is read outside the tenant's.
+	// Health takes its own locks and is read after the accepted use commits.
 	return SupportRead{Tenant: t.ID, Grant: id, At: now.UTC(), Health: t.Health(now), Audit: audit}, nil
 }
 

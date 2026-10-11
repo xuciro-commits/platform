@@ -36,9 +36,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 		request.Key == "" || len(request.Key) > 200 || now.IsZero() {
 		return "", fmt.Errorf("a builder, saved candidate, test plan and idempotency key are required")
 	}
-	if t.AcceptResult == nil {
-		return "", fmt.Errorf("function evaluation needs an accepted-result journal")
-	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	defer t.enqueue(now)
@@ -117,7 +115,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	sub := &pb.Submission{TenantId: t.ID, PrincipalId: "app:" + build.ID, Authority: build.ID,
 		IdempotencyKey: "evaluation:" + identity, Target: &pb.EntityRef{Type: build.EvaluationType, Id: id},
 		Schema: &pb.SchemaRef{Name: build.SchemaEvaluationStart, Version: 1}, Payload: platform.Raw(start)}
-	app := t.app(build.ID).(platform.ResultApp)
+	app := t.app(build.ID).(platform.App)
 	if _, refusal := t.submitAccepted(app, platform.Member{ID: sub.PrincipalId, Tenant: t.ID}, sub, now, true); refusal != nil {
 		return "", fmt.Errorf("function evaluation was refused: %s", refusal.Message)
 	}

@@ -33,6 +33,10 @@ type authoritativeDraftRuntime struct{ Runtime }
 
 func (authoritativeDraftRuntime) Probing() bool { return false }
 
+func (authoritativeDraftRuntime) HoldChanges(*Ledger) (func(), *kernel.Error) {
+	return func() {}, nil
+}
+
 func (authoritativeDraftRuntime) DraftChanges(l *Ledger, _ func() *kernel.ChangeLog) *kernel.ChangeLog {
 	return l.changes
 }

@@ -1,4 +1,9 @@
 {
+  "Only the console may decide tenant controls": "只有控制台可以决定租户管理动作",
+  "Control actions require a private decision": "管理动作需要私有决策",
+  "The model usage cannot be accepted": "无法接受模型用量记录",
+  "The model usage was not accepted": "模型用量记录尚未被接受",
+  "This tenant is isolated until its accepted results recover": "此租户已隔离，直至其已接受结果恢复",
   "Continuous Flow source": "持续流数据源",
   "Continuous source intake": "连续数据源接入",
   "Acknowledge host deletion of already-superseded frame and checkpoint artifacts.": "确认宿主已删除被替换的帧和检查点制品。",
@@ -1684,5 +1689,13 @@
   "The prepared input belongs to another operation request": "预备输入属于另一计算请求",
   "The operation changed while its input was prepared": "准备输入期间计算发生了变化",
   "The accepted input artifact belongs to another operation": "已接受的输入制品属于另一计算",
-  "Operation permission or generation changed while its input was read": "读取输入期间计算权限或执行轮次发生了变化"
+  "Operation permission or generation changed while its input was read": "读取输入期间计算权限或执行轮次发生了变化",
+  "A new decision requires a private runtime": "新决定需要私有运行时",
+  "Approval requests require a private decision": "审批请求需要私有决定",
+  "Operation requests require a private decision": "操作请求需要私有决定",
+  "Operation cancellation requires a private decision": "取消操作需要私有决定",
+  "Compilation requests require a private decision": "编译请求需要私有决定",
+  "Function requests require a private decision": "函数请求需要私有决定",
+  "The decision cannot re-enter its held ledger": "决定不能重复进入正在执行的账本",
+  "The decision cannot re-enter its held owner": "决定不能重复进入正在执行的归属方"
 }

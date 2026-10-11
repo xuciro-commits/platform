@@ -12,10 +12,13 @@ import (
 )
 
 type resultProjection struct {
-	notes []string
-	plans int
-	fail  bool
+	ledger *platform.Ledger
+	notes  []string
+	plans  int
+	fail   bool
 }
+
+func (p *resultProjection) AcceptedLedger() *platform.Ledger { return p.ledger }
 
 func (*resultProjection) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "projection", Title: "Projection", Version: "1",
@@ -67,7 +70,7 @@ func TestAcceptedObservationsArePrivateAndRecoveredWithoutReplanning(t *testing.
 	compose := func() *Tenant {
 		tn, err := NewTenant("observation", NewConsole("observation", Seat{Subjects: []string{"ana"},
 			Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}),
-			newStock("observation"), &resultProjection{})
+			newStock("observation"), &resultProjection{ledger: platform.NewLedger("observation", "projection", platform.NewCatalog())})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -117,7 +120,7 @@ func TestAcceptedObservationsArePrivateAndRecoveredWithoutReplanning(t *testing.
 	bad, _ := json.Marshal(batch)
 	empty := compose()
 	before = snapshot(empty)
-	if _, err := empty.applyAcceptedBatch(empty.app("stock").(platform.ResultApp).AcceptedLedger(), bad); err == nil ||
+	if _, err := empty.applyAcceptedBatch(empty.app("stock").(platform.App).AcceptedLedger(), bad); err == nil ||
 		snapshot(empty) != before {
 		t.Fatal("invalid observation leaked an earlier decision")
 	}

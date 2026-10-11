@@ -6,6 +6,8 @@ import (
 	"maps"
 	"slices"
 
+	"platformserver/apps/flow"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -16,34 +18,63 @@ type acceptedState struct {
 }
 
 func (d *stagedDecision) stateApp(app platform.App) platform.App {
-	owner, ok := app.(platform.AcceptedStateApp)
-	if !ok {
-		return app
-	}
 	id := app.Manifest().ID
-	if existing := d.states[id]; existing != nil {
+	if existing := d.privateApps[id]; existing != nil {
 		return existing
 	}
-	before, err := owner.AcceptedState()
-	if err != nil {
+	var fork platform.App
+	var before json.RawMessage
+	var err error
+	owner, ownsState := app.(platform.AcceptedStateApp)
+	if ownsState {
+		before, err = owner.AcceptedState()
+		if err == nil {
+			fork, err = owner.ForkAcceptedState()
+		}
+	} else if execution, ok := app.(platform.DecisionForkApp); ok {
+		fork, err = execution.ForkDecision()
+	} else {
+		return app
+	}
+	if err != nil || fork == nil || fork.Manifest().ID != id || fork.AcceptedLedger() != app.AcceptedLedger() {
 		unsupportedStagedEffect()
 	}
-	fork, err := owner.ForkAcceptedState()
-	copy, ok := fork.(platform.AcceptedStateApp)
-	if err != nil || !ok || fork.Manifest().ID != id {
-		unsupportedStagedEffect()
+	if d.privateApps == nil {
+		d.privateApps = map[string]platform.App{}
 	}
-	originalLedger, originalOK := app.(platform.ResultApp)
-	privateLedger, privateOK := fork.(platform.ResultApp)
-	if !originalOK || !privateOK || originalLedger.AcceptedLedger() != privateLedger.AcceptedLedger() {
-		unsupportedStagedEffect()
+	d.privateApps[id] = fork
+	if attached, ok := fork.(host.Attached); ok {
+		attached.Attach(hostView{t: d.tenant, app: fork, decision: d})
 	}
-	if d.states == nil {
-		d.states = map[string]platform.AcceptedStateApp{}
-		d.stateBases = map[string]json.RawMessage{}
+	if ownsState {
+		copy, ok := fork.(platform.AcceptedStateApp)
+		if !ok {
+			unsupportedStagedEffect()
+		}
+		if d.states == nil {
+			d.states = map[string]platform.AcceptedStateApp{}
+			d.stateBases = map[string]json.RawMessage{}
+		}
+		d.states[id], d.stateBases[id] = copy, slices.Clone(before)
 	}
-	d.states[id], d.stateBases[id] = copy, slices.Clone(before)
 	return fork
+}
+
+func (d *stagedDecision) attachPrivateHosts() {
+	for _, app := range d.privateApps {
+		if attached, ok := app.(host.Attached); ok {
+			attached.Attach(hostView{t: d.tenant, app: app, decision: d})
+		}
+	}
+}
+
+// Version choices belong to the private Flow instance that actually decided.
+// They are saved with the result before the live registry is changed.
+func (d *stagedDecision) flowVersions() map[string]int {
+	if private, ok := d.privateApps[flow.ID].(host.Processes); ok {
+		return private.Versions()
+	}
+	return nil
 }
 
 func (d *stagedDecision) savedStates() ([]acceptedState, error) {

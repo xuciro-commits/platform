@@ -339,10 +339,7 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 			b.Tool, b.Arguments, b.Observation = "", nil, nil
 		}
 	}
-	body, _ := json.Marshal(b)
-	t.record(t.agents, "agent", t.agents.member(run.Agent), body, now)
-	t.agents.apply(b, now, false)
-	t.enqueue(now)
+	t.acceptAgentStep(b, now)
 }
 
 func normalizedStepJSON(raw json.RawMessage) (json.RawMessage, error) {
@@ -360,8 +357,11 @@ func normalizedStepJSON(raw json.RawMessage) (json.RawMessage, error) {
 
 // apply takes one journaled step as a decision of the agent app.
 func (a *Agents) apply(b stepBody, now time.Time, replaying bool) *kernel.Error {
+	return a.applyCaller(a.t.automation(AgentApp, replaying), b, now)
+}
+
+func (a *Agents) applyCaller(c platform.Caller, b stepBody, now time.Time) *kernel.Error {
 	t := a.t
-	c := t.automation(AgentApp, replaying)
 	if ev := b.Evaluation; ev != nil {
 		s := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: ev.ID + ":report",
 			Target: &pb.EntityRef{Type: EvaluationType, Id: ev.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}
@@ -377,7 +377,7 @@ func (a *Agents) apply(b stepBody, now time.Time, replaying bool) *kernel.Error 
 	if !known {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if t.ai != nil && b.Usage.Model != "" {
+	if !c.Staging() && t.ai != nil && b.Usage.Model != "" {
 		t.ai.Meter(b.Usage)
 	}
 	s := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
@@ -615,7 +615,10 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 			}
 		}
 		t.agentRun = run.ID // effects it causes name the run (discarded, a signal)
-		_, _, err := t.invoke(agent, protocol, schema, target, body, key, run.ID, now)
+		_, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
+			_, record, err := t.invoke(agent, protocol, schema, target, body, key, run.ID, now)
+			return record, err
+		})
 		t.agentRun = ""
 		if err != nil {
 			return "refused: " + err.Error(), nil
@@ -642,7 +645,9 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		}
 	}
 	t.agentRun = run.ID
-	record, err := platform.Decide(agent, app, s, now)
+	record, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
+		return platform.Decide(agent, app, s, now)
+	})
 	t.agentRun = ""
 	if err != nil {
 		return "refused: " + err.Error(), nil
@@ -679,8 +684,12 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord
 
 // ended hands a flow's run back to its flow.
 func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run AgentRunRecord, now time.Time) {
-	if run.Flow != "" && a.t.procs != nil {
-		a.t.procs.RunEnded(c, host.RunEnd{ID: run.ID, Agent: run.Agent, Flow: run.Flow, State: run.State, Result: run.Result, Stopped: run.Stopped, Token: run.Token}, now)
+	processes := a.t.procs
+	if a.host != nil {
+		processes = a.host.Processes()
+	}
+	if run.Flow != "" && processes != nil {
+		processes.RunEnded(c, host.RunEnd{ID: run.ID, Agent: run.Agent, Flow: run.Flow, State: run.State, Result: run.Result, Stopped: run.Stopped, Token: run.Token}, now)
 	}
 }
 

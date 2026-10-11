@@ -59,6 +59,24 @@ var ErrAcceptedConflict = errors.New("accepted result idempotency key reused for
 var ErrTenantJournal = errors.New("tenant journal is damaged")
 var ErrTenantSnapshot = errors.New("tenant snapshot is damaged")
 
+// The current index and lookup share the same scope expression. Historical
+// schema statements remain unchanged; the final migration replaces the older
+// index so existing journals gain the new result scopes without rewriting rows.
+const acceptedScopeSQL = `(case when body ->> 'kind' = 'work-result' then 'work'
+ when body ->> 'kind' = 'input-result' then 'input'
+ when body ->> 'kind' = 'effect-result' then 'effect'
+ when body ->> 'kind' = 'host-result' then 'host'
+ when body ->> 'kind' = 'composite-result' then 'composite'
+ when body ->> 'kind' = 'usage-result' then 'usage'
+ when body ->> 'kind' = 'agent-result' then 'agent' else 'submission' end)`
+
+const legacyScopedIndexSQL = `create unique index if not exists journal_result_scoped_key on journal
+		(tenant, app, (case when body ->> 'kind' = 'work-result' then 'work'
+			when body ->> 'kind' = 'input-result' then 'input'
+			when body ->> 'kind' = 'effect-result' then 'effect' else 'submission' end),
+		 (coalesce(body ->> 'key', body #>> '{submission,idempotencyKey}', body #>> '{receipt,submission,idempotencyKey}')))
+		where kind = 'accepted-result'`
+
 // schema is forward-only: new statements are appended, never edited.
 var schema = []string{
 	`create table if not exists journal (
@@ -82,10 +100,10 @@ var schema = []string{
 	`drop index if exists journal_result_request_key`,
 	`drop index if exists journal_result_input_key`,
 	`drop index if exists journal_result_scoped_key`,
-	`create unique index if not exists journal_result_scoped_key on journal
-		(tenant, app, (case when body ->> 'kind' = 'work-result' then 'work'
-			when body ->> 'kind' = 'input-result' then 'input'
-			when body ->> 'kind' = 'effect-result' then 'effect' else 'submission' end),
+	legacyScopedIndexSQL,
+	`drop index if exists journal_result_scoped_key`,
+	`create unique index journal_result_scoped_key on journal
+		(tenant, app, ` + acceptedScopeSQL + `,
 		 (coalesce(body ->> 'key', body #>> '{submission,idempotencyKey}', body #>> '{receipt,submission,idempotencyKey}')))
 		where kind = 'accepted-result'`,
 }
@@ -115,6 +133,12 @@ func initializeJournal(ctx context.Context, pool *pgxpool.Pool) error {
 		return err
 	}
 	for _, stmt := range schema {
+		// The newer scope migration supersedes this index definition. Rebuilding
+		// it first would reject rows that now legitimately share a key across
+		// the new scopes, even though the final index accepts those rows.
+		if stmt == legacyScopedIndexSQL {
+			continue
+		}
 		if _, err := tx.Exec(ctx, stmt); err != nil {
 			return err
 		}
@@ -292,9 +316,7 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 		err := j.pool.QueryRow(ctx, `select body from journal where tenant=$1 and app=$2
 			and kind='accepted-result' and coalesce(body ->> 'key', body #>> '{submission,idempotencyKey}',
 				body #>> '{receipt,submission,idempotencyKey}')=$3
-			and (case when body ->> 'kind' = 'work-result' then 'work'
-				when body ->> 'kind' = 'input-result' then 'input'
-				when body ->> 'kind' = 'effect-result' then 'effect' else 'submission' end)=$4`,
+			and `+acceptedScopeSQL+`=$4`,
 			tenant, e.App, key, identity.Scope).Scan(&raw)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -340,7 +362,11 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	// inside raw record history values; applying the caller's pre-insert bytes
 	// would leave live history different from a restart's recovered history.
 	// Always apply the exact representation the committed journal returns.
-	return read()
+	committed, err := read()
+	if err == nil && len(committed) == 0 {
+		return nil, fmt.Errorf("journal: accepted result missing after append")
+	}
+	return committed, err
 }
 
 func (j *Postgres) Close() { j.pool.Close() }

@@ -17,8 +17,9 @@ import (
 // hostView is the tenant as one of its own apps sees it; app is that app, for
 // what it declares at runtime (ADR-0034).
 type hostView struct {
-	t   *Tenant
-	app platform.App
+	t        *Tenant
+	app      platform.App
+	decision *stagedDecision
 }
 
 // Install declares an entity this app composed at runtime (ADR-0034).
@@ -158,10 +159,26 @@ func (h hostView) Automation(parent platform.Caller, app string) platform.Caller
 	return h.t.automated(parent, app)
 }
 
-func (h hostView) Member(id string) (platform.Member, bool) { return h.t.member(id) }
+func (h hostView) Member(id string) (platform.Member, bool) {
+	if h.decision != nil {
+		if owner, ok := h.decision.stateApp(h.t.app(PlatformApp)).(*Console); ok {
+			owner.mu.Lock()
+			defer owner.mu.Unlock()
+			m := owner.members[id]
+			if m == nil {
+				return platform.Member{}, false
+			}
+			return owner.currentMember(m), true
+		}
+	}
+	return h.t.member(id)
+}
 
 func (h hostView) Holding(app, role string) []string {
 	if d, ok := h.t.app(PlatformApp).(*Console); ok {
+		if h.decision != nil {
+			d = h.decision.stateApp(d).(*Console)
+		}
 		return d.holding(app, role)
 	}
 	return nil
@@ -201,10 +218,18 @@ func (h hostView) Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*
 }
 
 func (h hostView) Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
+	if h.decision != nil {
+		return h.decision.recipients(c, now, to)
+	}
 	return h.t.recipients(c, now, to)
 }
 
-func (h hostView) Directory() host.Directory { return h.t.directory }
+func (h hostView) Directory() host.Directory {
+	if h.decision != nil {
+		return h.decision.directoryView()
+	}
+	return h.t.directory
+}
 
 func (h hostView) Seen(c platform.Caller, keys ...string) {
 	if c.Staging() {
@@ -219,9 +244,19 @@ func (h hostView) Invoke(c platform.Caller, protocol, action, id string, payload
 	return ref, err
 }
 
-func (h hostView) Tasks() host.Tasks { return h.t.tasks }
+func (h hostView) Tasks() host.Tasks {
+	if h.decision != nil && h.t.tasks != nil {
+		return h.decision.stateApp(h.t.tasks.(platform.App)).(host.Tasks)
+	}
+	return h.t.tasks
+}
 
-func (h hostView) Processes() host.Processes { return h.t.procs }
+func (h hostView) Processes() host.Processes {
+	if h.decision != nil && h.t.procs != nil {
+		return h.decision.stateApp(h.t.procs.(platform.App)).(host.Processes)
+	}
+	return h.t.procs
+}
 
 // ActiveRelease is read inside a decision, which already holds the tenant lock.
 func (h hostView) ActiveRelease() string { return h.t.releases.active }
@@ -229,6 +264,9 @@ func (h hostView) ActiveRelease() string { return h.t.releases.active }
 func (h hostView) Runs() host.Runs {
 	if h.t.agents == nil {
 		return nil
+	}
+	if h.decision != nil {
+		return h.decision.stateApp(h.t.agents).(host.Runs)
 	}
 	return h.t.agents
 }
@@ -288,4 +326,9 @@ func (h hostView) Stored(tenant, hash string) bool {
 	return h.t.files().Exists(context.Background(), tenant+"/"+hash)
 }
 
-func (h hostView) Record(ref string) (any, bool) { return h.t.Held(ref) }
+func (h hostView) Record(ref string) (any, bool) {
+	if h.decision != nil {
+		return (&Tenant{records: h.decision.records}).Held(ref)
+	}
+	return h.t.Held(ref)
+}

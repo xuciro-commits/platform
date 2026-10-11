@@ -101,6 +101,8 @@ var clerksOf = func(platform.Caller, *platform.Run) []platform.Recipient {
 	return []platform.Recipient{{AppRole: "clerk"}}
 }
 
+func (d *desk) AcceptedLedger() *platform.Ledger { return d.ledger }
+
 func (d *desk) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "desk", Version: "1", Actions: d.ledger.Catalog, Reads: []string{"queue"},
 		Entities: []platform.Entity{{Type: "desk.ticket", Title: "Ticket", Model: Ticket{}, Display: "subject", Synonyms: "case,issue",

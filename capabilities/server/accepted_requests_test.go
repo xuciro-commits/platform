@@ -41,9 +41,6 @@ func (a *modelResultCart) Submit(c platform.Caller, s *pb.Submission, at time.Ti
 type resultCart struct{ *cart }
 
 func (a *resultCart) AcceptedLedger() *platform.Ledger { return a.ledger }
-func (*resultCart) AcceptedActionSchemas() []string {
-	return []string{"cart.line.add", "cart.line.ask", "cart.line.greedy", "cart.line.answer"}
-}
 
 type resultDepot struct {
 	*depot
@@ -51,7 +48,6 @@ type resultDepot struct {
 }
 
 func (a *resultDepot) AcceptedLedger() *platform.Ledger { return a.ledger }
-func (*resultDepot) AcceptedActionSchemas() []string    { return []string{"stock.hold.make"} }
 func (a *resultDepot) Submit(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if a.forbidDecisions {
 		panic("recovery must not run the provider")

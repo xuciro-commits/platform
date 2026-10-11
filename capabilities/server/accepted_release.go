@@ -183,9 +183,6 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 	}
 	var candidateBytes []byte
 	if prior := t.releases.raw(candidateID); prior != nil {
-		if t.AcceptResult == nil { // in memory: already saved, nothing new to record
-			return candidateID, nil
-		}
 		candidateBytes = slices.Clone(prior)
 	} else {
 		preview, candidate, err := t.previewReleaseLocked(drafts)
@@ -381,27 +378,16 @@ func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedRelease) (
 		return "", err
 	}
 	entry := Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: saved.At}
-	if t.AcceptResult == nil {
-		// The in-memory development host journals through Record, like its
-		// other inputs; replay applies the same saved bytes. A retried key is
-		// answered as a journal would: the same request is done, another
-		// request under it is refused.
-		if prior, ok := t.releases.request(saved.Key); ok {
-			if prior != saved.RequestHash {
-				return "", fmt.Errorf("release key %s belongs to another request", saved.Key)
-			}
-			return candidateID, nil
+	if prior, ok := t.releases.request(saved.Key); ok {
+		if prior != saved.RequestHash {
+			return "", fmt.Errorf("release key %s belongs to another request", saved.Key)
 		}
-		if _, err := t.applyAcceptedRelease(raw); err != nil {
-			return "", err
-		}
-		if t.Record != nil {
-			t.Record(entry)
-		}
-		t.changed()
 		return candidateID, nil
 	}
-	committed, err := t.AcceptResult(entry, saved.Key, saved.RequestHash)
+	if _, applied := t.releases.appliedDigest(saved.Key); applied && t.AcceptResult == nil {
+		return "", fmt.Errorf("historical release request needs its journal receipt")
+	}
+	committed, err := t.acceptResult(entry, saved.Key, saved.RequestHash)
 	if err != nil {
 		return "", err
 	}

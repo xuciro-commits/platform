@@ -8,6 +8,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -949,9 +950,9 @@ func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 	if err := b.check(o, o.ID); err != nil && !c.Replaying {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	// The in-memory development path has no accepted-result staging. Validate
-	// before extending the ledger, or a refused publication leaves new
-	// authority/actions in the running tenant.
+	// Historical direct publication and pure recovery validate before extending
+	// the ledger. New decisions validate privately and install only their saved
+	// publication image after acceptance.
 	if err := b.validateObjectInstallation(o); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
@@ -1297,3 +1298,16 @@ func goType(kind string) reflect.Type {
 func goName(name string) string {
 	return strings.ToUpper(name[:1]) + name[1:]
 }
+
+// Published definitions are immutable values; installs replace registry
+// entries after acceptance. A private builder owns registry maps and its joint
+// validation context, while retaining declarations and the ledger identity.
+func (b *Build) ForkDecision() (platform.App, error) {
+	return &Build{host: b.host, ledger: b.ledger,
+		installed: maps.Clone(b.installed), jointEntities: maps.Clone(b.jointEntities), jointMode: b.jointMode,
+		linkTypes: maps.Clone(b.linkTypes), propertyTypes: maps.Clone(b.propertyTypes),
+		queries: maps.Clone(b.queries), functions: maps.Clone(b.functions), agents: maps.Clone(b.agents),
+		codes: maps.Clone(b.codes), tables: maps.Clone(b.tables)}, nil
+}
+
+var _ platform.DecisionForkApp = (*Build)(nil)

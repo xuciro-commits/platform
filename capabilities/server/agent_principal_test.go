@@ -1,7 +1,6 @@
 package platformserver
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -40,9 +39,12 @@ func TestAgentPrincipalRevocation(t *testing.T) {
 	if !ok || stopped.State != "stopped" || !strings.Contains(stopped.Stopped, "no longer has access") || len(stopped.Citations) != 0 {
 		t.Errorf("revoked in-flight tool was applied: %+v", stopped)
 	}
-	var recorded stepBody
-	if len(entries) != 1 || json.Unmarshal(entries[0].Body, &recorded) != nil || recorded.Stop == "" || recorded.Tool != "" || len(recorded.Observation) != 0 {
-		t.Errorf("revocation not fixed in journaled step: %+v, %+v", entries, recorded)
+	if len(entries) != 1 || entries[0].Kind != "accepted-result" {
+		t.Fatalf("revocation did not accept exactly one result: %+v", entries)
+	}
+	recorded, decodeErr := decodeAcceptedAgent(entries[0].Body)
+	if decodeErr != nil || recorded.Step.Stop == "" || recorded.Step.Tool != "" || len(recorded.Step.Observation) != 0 {
+		t.Errorf("revocation not fixed in accepted step: %+v, %v", recorded.Step, decodeErr)
 	}
 	revoked := platform.As(AgentApp, platform.Member{ID: "ana", Tenant: tn.ID, Roles: map[string]string{}})
 	runs, err := tn.agents.Read(revoked, "runs")

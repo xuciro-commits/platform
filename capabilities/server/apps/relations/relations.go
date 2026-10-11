@@ -142,9 +142,6 @@ func (r *Relations) Manifest() platform.Manifest {
 
 func (r *Relations) Declarations() []*pb.AuthorityDeclaration { return r.ledger.Declarations() }
 func (r *Relations) AcceptedLedger() *platform.Ledger         { return r.ledger }
-func (*Relations) AcceptedActionSchemas() []string {
-	return []string{SchemaLink, SchemaUnlink, SchemaComment, SchemaFollow, SchemaUnfollow}
-}
 
 // Only the link graph is private decision state. Timeline notes are projected
 // from saved observations, not recomputed by an action or copied with this

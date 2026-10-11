@@ -76,12 +76,8 @@ func (t *Tenant) Simulate(builder platform.Member, as string, s *pb.Submission, 
 		m = other
 	}
 	a := t.owner["action:"+s.GetSchema().GetName()]
-	ra, ok := a.(platform.ResultApp)
-	if a == nil || !ok {
+	if a == nil {
 		return Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "{action} cannot be tried", s.GetSchema().GetName())
-	}
-	if !t.acceptsGenerated(a, s) {
-		return Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{action} cannot be tried without running it", s.GetSchema().GetName())
 	}
 	s = proto.Clone(s).(*pb.Submission)
 	s.TenantId, s.PrincipalId, s.Authority = t.ID, m.ID, a.Manifest().ID
@@ -89,7 +85,7 @@ func (t *Tenant) Simulate(builder platform.Member, as string, s *pb.Submission, 
 		s.IdempotencyKey = "simulate"
 	}
 	draft := t.newStagedDecision()
-	_, refusal := decideAccepted(ra, draft, m, s, now)
+	_, refusal := decideAccepted(a, draft, m, s, now)
 	out := Simulation{Changes: []SimulatedChange{}}
 	if refusal != nil {
 		out.Refusal = explained(refusal, a, s.GetSchema().GetName(), target(s)).Message

@@ -3,7 +3,6 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 	"testing"
 	"time"
 
@@ -149,14 +148,17 @@ func TestOperations(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Settings are typed; the job reads them. A run that tells no one is not journaled.
+	// Settings are typed; an idle job still accepts its K9 generation and next due time.
 	if err := decide(ana, SchemaSettingSet, SettingType, "p/limit", `{"value":"many"}`); code(err) != "ERROR_CODE_INVALID_ARGUMENT" {
 		t.Fatalf("an integer setting took text: %v", err)
 	}
 	entries := len(journal)
 	tn.Work(now)
-	if len(journal) != entries {
-		t.Fatal("a job run that did nothing was journaled")
+	if len(journal) != entries+1 {
+		t.Fatal("an idle job did not accept its scheduling result")
+	}
+	if result, err := decodeAcceptedWork(journal[entries].Body); err != nil || result.Outcome != "ok" || len(result.Changes) != 0 || result.Notices != nil {
+		t.Fatalf("idle job introduced business changes: %v", err)
 	}
 	if err := decide(ana, SchemaSettingSet, SettingType, "p/limit", `{"value":"3"}`); err != nil {
 		t.Fatal(err)
@@ -166,12 +168,21 @@ func TestOperations(t *testing.T) {
 	if got := inbox(sup); len(got) != 3 || got[0].Title != "Tick" || len(inbox(ana)) != 1 {
 		t.Fatalf("after ticks: sup %+v, ana %+v", got, inbox(ana))
 	}
-	kinds := []string{}
+	workResults := 0
 	for _, e := range journal {
-		kinds = append(kinds, e.Kind)
+		if e.Kind != "accepted-result" {
+			t.Fatalf("new operation used legacy journal kind %q", e.Kind)
+		}
+		var envelope struct{ Kind string }
+		if err := json.Unmarshal(e.Body, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope.Kind == "work-result" {
+			workResults++
+		}
 	}
-	if !slices.Equal(kinds, []string{"accepted-result", "submission", "accepted-result", "submission", "accepted-result", "submission", "submission", "job"}) {
-		t.Fatalf("journal %v", kinds)
+	if workResults != 3 {
+		t.Fatalf("idle and notifying jobs need one result per generation, got %d", workResults)
 	}
 	if s := tn.Settings(); len(s) != 2 || s[1].App != "p" || s[1].Settings[0].Value != "3" { // the platform's own, then the app's
 		t.Fatalf("settings %+v", s)

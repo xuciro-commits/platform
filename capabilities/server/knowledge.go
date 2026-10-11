@@ -654,7 +654,9 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 		}
 		u.TokensEstimated = u.Input > 0
 	}
-	t.meter(platform.Member{ID: u.Member, Tenant: t.ID}, u)
+	if err := t.meter(platform.Member{ID: u.Member, Tenant: t.ID}, u); err != nil {
+		return nil, fmt.Errorf("the embedding usage was not accepted: %v", err)
+	}
 	if u.Outcome != "ok" {
 		return nil, fmt.Errorf("%s", u.Outcome)
 	}

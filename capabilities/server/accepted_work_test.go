@@ -27,6 +27,7 @@ type resultWorker struct {
 	reject bool
 	emit   bool
 	idle   bool
+	nested bool
 }
 
 func newResultWorker(id string) *resultWorker {
@@ -44,12 +45,19 @@ func (w *resultWorker) Manifest() platform.Manifest {
 }
 func (w *resultWorker) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Declarations() }
 func (w *resultWorker) AcceptedLedger() *platform.Ledger         { return w.ledger }
-func (*resultWorker) AcceptedWork()                              {}
-func (*resultWorker) AcceptedActionSchemas() []string            { return []string{"worker.document.write"} }
 func (w *resultWorker) Snapshot() (json.RawMessage, error)       { return w.ledger.Snapshot() }
 func (w *resultWorker) Restore(raw json.RawMessage) error        { return w.ledger.Restore(raw) }
 func (w *resultWorker) Submit(c platform.Caller, sub *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return w.ledger.Receive(c, sub, at, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		if w.nested {
+			_, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
+				c.Notify(platform.Notification{Title: "Ready", Key: "ready:" + sub.GetTarget().GetId()}, at, platform.Recipient{Member: "ana"})
+				return nil, nil
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
 		return func(r *pb.ChangeRecord) {
 			number, _ := c.Next(r, "document", at)
 			c.Put(r, workDocument{Record: platform.Record{ID: sub.GetTarget().GetId()}, Number: number})
@@ -337,4 +345,29 @@ func TestAcceptedWorkOutboundIntentCommitsWithoutDispatchOrReplanning(t *testing
 		recovered.outbound[0].Body != live.outbound[0].Body {
 		t.Fatalf("recovery re-planned or lost the outbound effect: %v", err)
 	}
+}
+
+func TestAcceptedWorkerDirectLedgerKeepsParentAcrossSavepoint(t *testing.T) {
+	live := resultWorkTenant(t, "worker-parent-ledger")
+	live.app("worker").(*resultWorker).nested = true
+	at := time.Date(2026, 10, 11, 17, 0, 0, 0, time.UTC)
+	var entries []Entry
+	live.Record = func(e Entry) { entries = append(entries, e) }
+	decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I", map[string]any{"name": "Bolt", "qty": 2, "line": "L1"}, at)
+	task := live.work.queues["worker"][0]
+	live.mu.Lock()
+	outcome := live.attempt(task, at, false)
+	live.mu.Unlock()
+	if outcome != "ok" || len(entries) != 2 || len(live.notices.all) != 3 {
+		t.Fatalf("parent ledger lost its receipt after a child savepoint: %s fault=%v notices=%d entries=%d", outcome, live.fault.Load(), len(live.notices.all), len(entries))
+	}
+	saved, err := decodeAcceptedWork(entries[1].Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch, _, err := decodeAcceptedBatch(saved.Changes)
+	if err != nil || len(batch.Decisions) != 1 {
+		t.Fatalf("parent worker decision not sealed: %v", err)
+	}
+	CheckReplay(t, live, entries, func() *Tenant { return resultWorkTenant(t, live.ID) })
 }

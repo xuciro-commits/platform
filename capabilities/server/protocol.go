@@ -1,11 +1,7 @@
 package platformserver
 
 import (
-	"encoding/json"
 	"fmt"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-	"log"
 	"slices"
 	"strings"
 	"time"
@@ -176,37 +172,6 @@ type request struct {
 	caller platform.Caller
 	record *pb.ChangeRecord
 	n      int
-}
-
-// answer runs a decision's request at the provider, as the member who decided,
-// and submits the answer to the requesting app's reply action on the
-// decision's target (ADR-0026 D2). Both are journaled as submissions of their
-// apps: a replay runs what was recorded and never asks the provider again.
-func (t *Tenant) answer(q request, now time.Time) {
-	end := t.begin("request "+q.Protocol+"#"+q.Action, trace.SpanContext{}, attribute.String("platform.app", q.caller.App), attribute.String("platform.target", q.Target))
-	outcome := "ok"
-	defer func() { end(outcome) }()
-	s := q.record.GetSubmission()
-	key := fmt.Sprintf("%s:%s#%d", q.caller.App, s.GetIdempotencyKey(), q.n)
-	answer := platform.Answer{Call: q.Target, Action: q.Action, Outcome: "accepted"}
-	ref, done, err := t.invoke(q.caller, q.Protocol, q.Action, q.Target, platform.Raw(q.Payload), key, s.GetIdempotencyKey(), now)
-	if err != nil {
-		answer.Outcome, answer.Code, answer.Reason = "refused", err.Code.String(), err.Message
-		outcome = answer.Code
-	} else {
-		answer.Ref = ref.GetType() + "/" + ref.GetId()
-		t.journal(t.app(t.owner["action:"+done.GetSubmission().GetSchema().GetName()].Manifest().ID), q.caller.Member, done.GetSubmission(), now)
-	}
-	app := t.app(q.caller.App)
-	payload, _ := json.Marshal(answer)
-	c := t.automation(q.caller.App, false)
-	reply := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: s.GetAuthority(), Target: s.GetTarget(),
-		Schema: &pb.SchemaRef{Name: q.Reply, Version: 1}, IdempotencyKey: "answer:" + key, CorrelationId: s.GetIdempotencyKey(), Payload: payload}
-	if _, err := app.Submit(c, reply, now); err != nil {
-		log.Printf("tenant %s: %s refused the answer %s to its request %s: %v", t.ID, q.caller.App, payload, key, err) // a defect of the app
-		return
-	}
-	t.journal(app, c.Member, reply, now)
 }
 
 // query reads a protocol read from every provider, the bound one first (Caller.Query).

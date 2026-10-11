@@ -164,7 +164,6 @@ func (n *nestedIssuer) Manifest() platform.Manifest {
 }
 func (n *nestedIssuer) Declarations() []*pb.AuthorityDeclaration { return n.ledger.Declarations() }
 func (n *nestedIssuer) AcceptedLedger() *platform.Ledger         { return n.ledger }
-func (*nestedIssuer) AcceptedActionSchemas() []string            { return []string{"nested.document.issue"} }
 func (n *nestedIssuer) Snapshot() (json.RawMessage, error)       { return n.ledger.Snapshot() }
 func (n *nestedIssuer) Restore(raw json.RawMessage) error        { return n.ledger.Restore(raw) }
 func (*nestedIssuer) Read(platform.Caller, string) (any, *kernel.Error) {
@@ -255,7 +254,7 @@ func TestAcceptedNestedPublicationSharesParentCommitAndInstallation(t *testing.T
 	fail := true
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		if _, exists := live.owner["action:build.visit.create"]; exists ||
-			live.records.types["build.visit"] != nil || len(live.app(build.ID).(platform.ResultApp).AcceptedLedger().RecordsFor(live.ID)) != 0 {
+			live.records.types["build.visit"] != nil || len(live.app(build.ID).(platform.App).AcceptedLedger().RecordsFor(live.ID)) != 0 {
 			t.Fatal("nested publication installed before the parent's commit")
 		}
 		if fail {

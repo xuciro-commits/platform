@@ -13,6 +13,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/build"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -133,6 +134,7 @@ type agentDef struct {
 
 // Agents is a tenant's agent app.
 type Agents struct {
+	host   host.Host
 	mu     sync.Mutex
 	t      *Tenant
 	ledger *platform.Ledger
@@ -141,6 +143,8 @@ type Agents struct {
 	buildStamp string
 	busy       map[string]bool // runs whose model is being called
 }
+
+func (a *Agents) Attach(h host.Host) { a.host = h }
 
 func NewAgents(tenant string) *Agents {
 	var actions []platform.Action
@@ -204,7 +208,6 @@ func (a *Agents) Manifest() platform.Manifest {
 }
 
 func (a *Agents) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
-func (a *Agents) AcceptedActionSchemas() []string          { return []string{SchemaRunStart} }
 func (a *Agents) AcceptedLedger() *platform.Ledger         { return a.ledger }
 func (a *Agents) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
 func (a *Agents) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
@@ -502,7 +505,7 @@ func (a *Agents) confirm(c platform.Caller, run AgentRunRecord, d Draft, payload
 	key := fmt.Sprintf("agent:%s:%d:confirm", run.ID, d.Step+1)
 	if d.Kind == "protocol" {
 		protocol, schema, _ := strings.Cut(d.Action, "#")
-		_, _, err := t.invoke(platform.NewCaller(runtime{t}, c.Member, a.def(run.Agent).app, c.Replaying, false), protocol, schema, d.Target, []byte(payload), key, run.ID, now)
+		_, _, err := t.invoke(platform.ActingCaller(c, c.Member, a.def(run.Agent).app, false), protocol, schema, d.Target, []byte(payload), key, run.ID, now)
 		if err != nil {
 			return "", err
 		}
@@ -512,7 +515,7 @@ func (a *Agents) confirm(c platform.Caller, run AgentRunRecord, d Draft, payload
 	if app == nil {
 		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	record, err := app.Submit(t.caller(c.Member, app, c.Replaying), &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: app.Manifest().ID, IdempotencyKey: key,
+	record, err := platform.Decide(c, app, &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: app.Manifest().ID, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: d.Type, Id: d.Target}, Schema: &pb.SchemaRef{Name: d.Action, Version: 1}, Payload: []byte(payload), CorrelationId: run.ID}, now)
 	if err != nil {
 		return "", err
@@ -653,3 +656,15 @@ func visibleAgentInstructions(c platform.Caller, d *agentDef) string {
 	}
 	return d.Instructions
 }
+
+// Agent definitions contain callbacks and remain immutable after declaration.
+// Refresh replaces map entries; a private run owns that map and its execution
+// bookkeeping without replacing live model reservations when it commits.
+func (a *Agents) ForkDecision() (platform.App, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return &Agents{t: a.t, host: a.host, ledger: a.ledger, defs: maps.Clone(a.defs),
+		buildStamp: a.buildStamp, busy: maps.Clone(a.busy)}, nil
+}
+
+var _ platform.DecisionForkApp = (*Agents)(nil)

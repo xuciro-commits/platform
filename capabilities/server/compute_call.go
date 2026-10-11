@@ -76,9 +76,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	}
 	t.mu.Unlock()
 	if seal {
-		if t.AcceptResult == nil {
-			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Sealed operation inputs require accepted-result storage")
-		}
+
 		if len(q.Inputs) > op.Limits.DataInputBytes {
 			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The input exceeds its declared data channel budget")
 		}
@@ -121,7 +119,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 		if !ok || t.quarantined() || t.admits(latest) != nil {
 			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The operation member is unavailable")
 		}
-		owner, ok := t.app(PlatformApp).(platform.ResultApp)
+		owner, ok := t.app(PlatformApp).(platform.App)
 		if !ok {
 			return platform.OperationCall{}, unknown()
 		}

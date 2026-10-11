@@ -33,6 +33,8 @@ func testProtocol() platform.Protocol {
 
 type depot struct{ ledger *platform.Ledger }
 
+func (s *depot) AcceptedLedger() *platform.Ledger { return s.ledger }
+
 func (s *depot) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "stock", Version: "1", Actions: s.ledger.Catalog,
 		Entities: []platform.Entity{{Type: "stock.hold", Title: "Hold", Model: Hold{}}},
@@ -60,6 +62,8 @@ func (s *depot) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*p
 }
 
 type cart struct{ ledger *platform.Ledger }
+
+func (a *cart) AcceptedLedger() *platform.Ledger { return a.ledger }
 
 func (a *cart) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "cart", Version: "1", Actions: a.ledger.Catalog,

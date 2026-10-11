@@ -19,6 +19,9 @@ var _ platform.Runtime = runtime{}
 // They offer no savepoint or atomic-result guarantee. Accepted entry points
 // supply stagedDecision instead; nested calls never switch back to runtime.
 func (runtime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if !c.Replaying {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A new decision requires a private runtime")
+	}
 	return app.Submit(c, s, at)
 }
 
@@ -39,20 +42,13 @@ func (r runtime) Probe(c platform.Caller, protocol, action, id string, payload [
 }
 
 func (r runtime) Request(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
-	if q.Protocol == "" { // a model's (ADR-0029 D3): owned work, rebuilt by a replay, answered once
+	if !c.Replaying {
+		unsupportedStagedEffect()
+	}
+	if q.Protocol == "" {
 		r.t.askModel(c, rec, q)
-		return
 	}
-	if c.Replaying {
-		return // the journal holds what the request decided
-	}
-	n := 0 // the decision's requests are numbered for their keys
-	for _, x := range r.t.requests {
-		if x.record == rec {
-			n++
-		}
-	}
-	r.t.requests = append(r.t.requests, request{Request: q, caller: c, record: rec, n: n})
+	// Historical protocol answers are already separate journal entries.
 }
 
 func (r runtime) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
@@ -133,4 +129,24 @@ func (r runtime) Readable(c platform.Caller, ref string) bool {
 
 func (r runtime) BoundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {
 	return r.t.boundProvider(c, protocol)
+}
+
+// The live runtime serves historical replay and reads; new execution requests
+// require a private decision so their intents are accepted with its records.
+func (r runtime) Seen(c platform.Caller, keys ...string)          { r.t.notices.markKeysRead(c.App, keys) }
+func (runtime) InputRefused(*kernel.Error, []platform.FieldIssue) {}
+func (runtime) RequestApproval(platform.Caller, string, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Approval requests require a private decision")
+}
+func (runtime) RequestOperation(platform.Caller, *pb.ChangeRecord, platform.OperationRequest) (platform.OperationCall, *kernel.Error) {
+	return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation requests require a private decision")
+}
+func (runtime) CancelOperation(platform.Caller, *pb.ChangeRecord, string) *kernel.Error {
+	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation cancellation requires a private decision")
+}
+func (runtime) RequestCompilation(platform.Caller, *pb.ChangeRecord, string, string, platform.CodeBuildRequest) (platform.OperationCall, *kernel.Error) {
+	return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Compilation requests require a private decision")
+}
+func (runtime) RequestFunction(platform.Caller, *pb.ChangeRecord, platform.FunctionRequest) (platform.FunctionCall, *kernel.Error) {
+	return platform.FunctionCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Function requests require a private decision")
 }

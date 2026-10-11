@@ -43,6 +43,8 @@ type acceptedBatch struct {
 	States        []acceptedState                 `json:"states,omitempty"`
 	Deliveries    []acceptedConnectorDelivery     `json:"deliveries,omitempty"`
 	Operations    []acceptedOperationCancellation `json:"operations,omitempty"`
+	Control       *acceptedControl                `json:"control,omitempty"`
+	DirectRows    []acceptedCallbackRow           `json:"directRows,omitempty"`
 }
 
 type acceptedBatchRow struct {
@@ -100,6 +102,13 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		Notices: d.savedNotices(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations),
 		Deliveries: slices.Clone(d.deliveries)}
 	var err error
+	result.Control, err = d.savedControl()
+	if err != nil {
+		return nil, err
+	}
+	if result.Control != nil {
+		result.Version = 3
+	}
 	result.Operations, err = d.savedOperationCancellations()
 	if err != nil {
 		return nil, err
@@ -124,7 +133,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	}
 	seen := map[string]bool{}
 	for _, event := range d.events {
-		owner, ok := d.tenant.app(event.App).(platform.ResultApp)
+		owner, ok := d.tenant.app(event.App).(platform.App)
 		if !ok || d.logs[owner.AcceptedLedger()] == nil {
 			return nil, fmt.Errorf("batch decision has no staged ledger for %s", event.App)
 		}
@@ -142,7 +151,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		if err != nil {
 			return nil, err
 		}
-		plan := d.tenant.planAcceptedEvent(event)
+		plan := d.routingTenant().planAcceptedEvent(event)
 		plan.Observed = d.observed
 		plan.Hops = d.hops
 		if plan.Hops > maxHops {
@@ -158,13 +167,23 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		}
 	}
 	if len(seen) != len(d.records.writes) {
-		return nil, fmt.Errorf("batch event omits a written record")
+		result.DirectRows, err = d.savedCallbackRows(seen)
+		if err != nil {
+			return nil, err
+		}
+		if len(seen)+len(result.DirectRows) != len(d.records.writes) {
+			return nil, fmt.Errorf("batch event omits a written record")
+		}
+		result.Version = 4
 	}
 	d.records.mu.Lock()
 	defer d.records.mu.Unlock()
 	d.records.parent.mu.Lock()
 	defer d.records.parent.mu.Unlock()
 	for _, ref := range slices.Sorted(maps.Keys(d.records.writes)) {
+		if !seen[ref] {
+			continue
+		}
 		typ, id, ok := strings.Cut(ref, "/")
 		et := d.records.types[typ]
 		if !ok || et == nil || et.rows[id] == nil {
@@ -231,13 +250,16 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if (result.Version != 1 && result.Version != 2) || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
+	if (result.Version != 1 && result.Version != 2 && result.Version != 3 && result.Version != 4) || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || sub == nil || sub.GetTenantId() != result.Tenant ||
 		sub.GetAuthority() != result.App || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || receipt.GetChangeId() == "" ||
 		receipt.GetRecordedTime() == nil || receipt.GetValidTime() == nil ||
 		len(result.Decisions) == 0 {
 		return result, nil, fmt.Errorf("record batch has inconsistent identity or effects")
+	}
+	if result.Version < 4 && (result.Version == 3) != (result.Control != nil) || (result.Version == 4) != (len(result.DirectRows) > 0) {
+		return result, nil, fmt.Errorf("record batch control format differs")
 	}
 	hash, err := submissionHash(sub)
 	if err != nil || result.RequestHash != hash {
@@ -307,6 +329,14 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 			return result, nil, fmt.Errorf("record batch row history differs from its decision")
 		}
 	}
+	for _, direct := range result.DirectRows {
+		row := direct.Row
+		ref := row.Type + "/" + row.ID
+		if seen[ref] || written[ref] || row.Type == "" || row.ID == "" || row.App == "" || direct.Source.ID == "" || direct.Source.App != row.App || len(row.History) == 0 || len(row.Value) == 0 {
+			return result, nil, fmt.Errorf("record batch has invalid or overlapping callback rows")
+		}
+		seen[ref] = true
+	}
 	for key, n := range result.Sequences {
 		app, _, ok := strings.Cut(key, "/")
 		base, exists := result.SequenceBases[key]
@@ -361,7 +391,7 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 	if err != nil {
 		return false, err
 	}
-	owner, ok := t.app(result.App).(platform.ResultApp)
+	owner, ok := t.app(result.App).(platform.App)
 	if result.Tenant != t.ID || !ok || owner.AcceptedLedger() != l {
 		return false, fmt.Errorf("record batch belongs to another tenant or ledger")
 	}
@@ -374,7 +404,7 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 		}
 		return false, nil
 	}
-	answerOwner, ok := t.app(receipt.GetSubmission().GetAuthority()).(platform.ResultApp)
+	answerOwner, ok := t.app(receipt.GetSubmission().GetAuthority()).(platform.App)
 	if !ok {
 		return false, fmt.Errorf("record batch answer has no authority")
 	}
@@ -387,7 +417,7 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 	ledgers := map[string]*platform.Ledger{}
 	changes := map[string]*pb.ChangeRecord{}
 	for _, decision := range result.Decisions {
-		ra, ok := t.app(decision.Event.App).(platform.ResultApp)
+		ra, ok := t.app(decision.Event.App).(platform.App)
 		if !ok {
 			return false, fmt.Errorf("record batch needs missing authority %s", decision.Event.App)
 		}
@@ -407,6 +437,9 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 		changes[decision.Event.App+"/"+r.GetChangeId()] = r
 	}
 	draft := t.records.forkRecords()
+	if err := t.validateAcceptedControl(result.Control); err != nil {
+		return false, err
+	}
 	if err := t.validateAcceptedNotices(result.Notices); err != nil {
 		return false, err
 	}
@@ -422,7 +455,7 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 	if err := t.validateOperationCancellations(result.Operations); err != nil {
 		return false, err
 	}
-	if err := t.validateAcceptedDeliveries(result.Deliveries); err != nil {
+	if err := t.validateControlDeliveries(result.Control, result.Deliveries); err != nil {
 		return false, err
 	}
 	for _, decision := range result.Decisions {
@@ -437,6 +470,9 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 		if err := publisher.ValidateAcceptedPublication(decision.Publication.Schema, decision.Publication.Image); err != nil {
 			return false, err
 		}
+	}
+	if err := t.prepareCallbackRows(draft, result.DirectRows, result.At); err != nil {
+		return false, err
 	}
 	if err := t.applyBatchRows(draft, result, ledgers, changes); err != nil {
 		return false, err
@@ -471,6 +507,9 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 		}
 	}
 	if err := t.records.promoteRecords(draft); err != nil {
+		return false, err
+	}
+	if err := t.applyAcceptedControl(result.Control); err != nil {
 		return false, err
 	}
 	if err := t.applyAcceptedStates(result.States); err != nil {
@@ -509,7 +548,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 	for _, image := range result.Rows {
 		ledger := ledgers[image.App]
 		if ledger == nil {
-			if owner, ok := t.app(image.App).(platform.ResultApp); ok {
+			if owner, ok := t.app(image.App).(platform.App); ok {
 				ledger = owner.AcceptedLedger()
 			}
 		}
@@ -541,7 +580,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 			}
 			baseHistory, revision = len(prior.history), recordOf(prior.value).Revision
 		}
-		if result.Version == 2 {
+		if result.Version >= 2 {
 			if image.HistoryBase != baseHistory {
 				return fmt.Errorf("record batch history predecessor differs for %s/%s", image.Type, image.ID)
 			}

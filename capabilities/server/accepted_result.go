@@ -77,7 +77,7 @@ func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt 
 }
 
 func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedAt time.Time) ([]byte, error) {
-	if d.failure != nil || len(d.allocated) > 0 || d.noticeChanged || len(d.noticeEffects) > 0 ||
+	if d.control != nil || d.failure != nil || len(d.allocated) > 0 || d.noticeChanged || len(d.noticeEffects) > 0 ||
 		len(d.intents) > 0 || len(d.observations) > 0 || len(d.states) > 0 ||
 		len(d.deliveries) > 0 || len(d.operationCancels) > 0 ||
 		d.observed && len(d.tenant.observers) > 0 {

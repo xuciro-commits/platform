@@ -104,13 +104,21 @@ func (p *ArtifactCleanupPreparation) Submission(tenant string) *pb.Submission {
 		Payload: platform.Raw(map[string]string{"digest": p.digest})}
 }
 
-func (p *ArtifactCleanupPreparation) Decision() platform.ResultApp {
+func (p *ArtifactCleanupPreparation) Decision() platform.App {
 	return preparedArtifactCleanupDecision{Flows: p.owner, prepared: p}
 }
 
 type preparedArtifactCleanupDecision struct {
 	*Flows
 	prepared *ArtifactCleanupPreparation
+}
+
+func (d preparedArtifactCleanupDecision) ForkDecision() (platform.App, error) {
+	fork, err := d.Flows.ForkDecision()
+	if err != nil {
+		return nil, err
+	}
+	return preparedArtifactCleanupDecision{Flows: fork.(*Flows), prepared: d.prepared}, nil
 }
 
 func (d preparedArtifactCleanupDecision) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {

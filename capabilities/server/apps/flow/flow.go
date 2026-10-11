@@ -206,16 +206,8 @@ func (f *Flows) Manifest() platform.Manifest {
 
 func (f *Flows) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }
 func (f *Flows) AcceptedLedger() *platform.Ledger         { return f.ledger }
-func (*Flows) AcceptedWork()                              {}
-func (f *Flows) AcceptedActionSchemas() []string {
-	var schemas []string
-	for _, action := range f.ledger.Catalog.All() {
-		schemas = append(schemas, action.Schema)
-	}
-	return schemas
-}
-func (f *Flows) Snapshot() (json.RawMessage, error) { return f.ledger.Snapshot() }
-func (f *Flows) Restore(raw json.RawMessage) error  { return f.ledger.Restore(raw) }
+func (f *Flows) Snapshot() (json.RawMessage, error)       { return f.ledger.Snapshot() }
+func (f *Flows) Restore(raw json.RawMessage) error        { return f.ledger.Restore(raw) }
 func (f *Flows) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
@@ -898,3 +890,19 @@ func (f *Flows) StartManual(c platform.Caller, app, name string, version int, ke
 func (f *Flows) HasDefinition(app, name string, version int) bool {
 	return f.def(app+"."+name, version) != nil
 }
+
+// Definitions are installed declarations containing callbacks. Decisions only
+// read them, while their chosen versions and replay pins belong to this private
+// execution context. Installation still belongs to accepted publication apply.
+func (f *Flows) ForkDecision() (platform.App, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	defs := maps.Clone(f.defs)
+	for id, versions := range defs {
+		defs[id] = slices.Clone(versions)
+	}
+	return &Flows{host: f.host, ledger: f.ledger, defs: defs,
+		chosen: maps.Clone(f.chosen), pins: maps.Clone(f.pins)}, nil
+}
+
+var _ platform.DecisionForkApp = (*Flows)(nil)

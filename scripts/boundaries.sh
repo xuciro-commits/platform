@@ -53,5 +53,11 @@ leaks=$(grep -rnE '\.(Changes|changes)\.' --include="*.go" apps/ protocols/ capa
 probe=$(sed -n '/^type Tenant struct {$/,/^}$/p' capabilities/server/host.go | grep -E '^[[:space:]]+probing[[:space:]]' || true)
 [[ -z $probe ]] || fail "Tenant has a shared probing mode; use platform.Runtime.ProbeDecision"
 
+# ADR-0097: caller capabilities belong to named Runtime roles.
+anonymous=$(grep -nE 'c\.rt\.\(interface' capabilities/server/platform/*.go | grep -v '_test.go:' || true)
+[[ -z $anonymous ]] || fail "Caller probes anonymous Runtime capabilities:"$'\n'"$anonymous"
+selection=$(grep -nE 'type (ResultApp|AcceptedActionApp|AcceptedWorker) interface|func .*acceptsGenerated' capabilities/server/platform/*.go capabilities/server/host.go || true)
+[[ -z $selection ]] || fail "submission admission has optional legacy selectors:"$'\n'"$selection"
+
 platformapps=$(cd capabilities/server && go list ./apps/... 2>/dev/null | wc -l | tr -d ' ')
 echo "boundaries ok: ${#apps[@]} apps, ${#protocols[@]} protocols, $platformapps platform apps as packages"

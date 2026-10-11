@@ -77,6 +77,8 @@ func (k *Knowledge) Manifest() platform.Manifest {
 			Description: "The enabled model that embeds passages, <provider>/<model>, on the OpenAI wire. Empty: knowledge is searched by words only."}}}
 }
 
+func (k *Knowledge) AcceptedLedger() *platform.Ledger { return k.ledger }
+
 func (k *Knowledge) Declarations() []*pb.AuthorityDeclaration { return k.ledger.Declarations() }
 func (k *Knowledge) Snapshot() (json.RawMessage, error)       { return k.ledger.Snapshot() }
 func (k *Knowledge) Restore(raw json.RawMessage) error        { return k.ledger.Restore(raw) }
@@ -125,3 +127,9 @@ func (k *Knowledge) TermsFor(declaration string) []string {
 	}
 	return out
 }
+
+func (k *Knowledge) ForkDecision() (platform.App, error) {
+	return &Knowledge{host: k.host, ledger: k.ledger}, nil
+}
+
+var _ platform.DecisionForkApp = (*Knowledge)(nil)

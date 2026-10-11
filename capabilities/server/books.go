@@ -144,15 +144,7 @@ func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time
 // app's automation); t.mu is held.
 func (t *Tenant) submitAutomated(app platform.App, caller platform.Caller, sub *pb.Submission, now time.Time) *kernel.Error {
 	sub.PrincipalId = caller.ID
-	if result, ok := app.(platform.ResultApp); ok && t.AcceptResult != nil {
-		_, err := t.submitAccepted(result, caller.Member, sub, now, true)
-		return err
-	}
-	_, err := app.Submit(caller, sub, now)
-	if err == nil {
-		t.journal(app, caller.Member, sub, now)
-		t.enqueue(now)
-	}
+	_, err := t.submitAccepted(app, caller.Member, sub, now, true)
 	return err
 }
 

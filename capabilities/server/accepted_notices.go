@@ -8,8 +8,10 @@ import (
 	"slices"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -23,9 +25,22 @@ type acceptedNotices struct {
 	Effects []platform.Effect       `json:"effects,omitempty"`
 }
 
+// Reuse the tenant recipient resolver over private directory owners. This
+// read view has no runtime lane, storage hooks or mutable host components.
+func (d *stagedDecision) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
+	view := &Tenant{apps: slices.Clone(d.tenant.apps), directory: d.directoryView()}
+	for i, app := range view.apps {
+		if app.Manifest().ID == PlatformApp {
+			view.apps[i] = d.stateApp(app)
+			break
+		}
+	}
+	return view.recipients(c, now, to)
+}
+
 func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
 	var out []string
-	for _, member := range d.tenant.recipients(c, now, to) {
+	for _, member := range d.recipients(c, now, to) {
 		if n.Key != "" && slices.ContainsFunc(d.notices, func(x platform.Notification) bool {
 			return x.Member == member && x.App == c.App && x.Key == n.Key
 		}) {
@@ -46,9 +61,10 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 			if !to.InApp {
 				d.notices[len(d.notices)-1].Read = true
 			}
-			d.tenant.opsMu.Lock()
-			d.noticeEffects = append(d.noticeEffects, d.tenant.planMailNotice(x, to)...)
-			d.tenant.opsMu.Unlock()
+			router := d.routingTenant()
+			router.opsMu.Lock()
+			d.noticeEffects = append(d.noticeEffects, router.planMailNotice(x, to)...)
+			router.opsMu.Unlock()
 		}
 	}
 	if len(d.notices) > noticesKept {
@@ -158,6 +174,7 @@ func (t *Tenant) applyAcceptedNotices(n *acceptedNotices) {
 func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)) (r *pb.ChangeRecord, err *kernel.Error) {
 	saved := *d
 	*d = *d.privateFork()
+	d.attachPrivateHosts()
 	defer func() {
 		if p := recover(); p != nil {
 			*d = saved
@@ -177,6 +194,12 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 
 func (d *stagedDecision) privateFork() *stagedDecision {
 	fork := *d
+	fork.callbackWrites = maps.Clone(d.callbackWrites)
+	if d.callbackOrigin != nil {
+		origin := *d.callbackOrigin
+		origin.Output = slices.Clone(origin.Output)
+		fork.callbackOrigin = &origin
+	}
 	fork.operationCancels = maps.Clone(d.operationCancels)
 	fork.operationAnswers = maps.Clone(d.operationAnswers)
 	for id, answer := range fork.operationAnswers {
@@ -210,7 +233,21 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	fork.records.writes = maps.Clone(d.records.writes)
 	fork.logs = map[*platform.Ledger]*kernel.ChangeLog{}
 	for ledger, log := range d.logs {
-		fork.logs[ledger] = log.Fork()
+		suspended := d.receiving[ledger]
+		for id := range d.active {
+			owner := d.tenant.app(id)
+			if owner != nil && owner.AcceptedLedger() == ledger {
+				suspended = true
+				break
+			}
+		}
+		if suspended {
+			// Receive appends its parent's receipt after deciding the nested
+			// child. The parent's live stack already holds this private log.
+			fork.logs[ledger] = log
+		} else {
+			fork.logs[ledger] = log.Fork()
+		}
 	}
 	fork.events, fork.notices = slices.Clone(d.events), slices.Clone(d.notices)
 	fork.sequences, fork.allocated, fork.sequenceBases = maps.Clone(d.sequences), maps.Clone(d.allocated), maps.Clone(d.sequenceBases)
@@ -219,23 +256,62 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	fork.intents = slices.Clone(d.intents)
 	fork.observations = slices.Clone(d.observations)
 	fork.active = maps.Clone(d.active)
+	fork.receiving = maps.Clone(d.receiving)
 	fork.requests, fork.requestCounts = slices.Clone(d.requests), maps.Clone(d.requestCounts)
 	descriptors, marks := d.connectors.State()
+	for i, descriptor := range descriptors {
+		descriptors[i] = proto.Clone(descriptor).(*pb.ConnectorDescriptor)
+	}
 	fork.connectors = kernel.NewConnectors()
 	fork.connectors.Restore(descriptors, marks)
 	fork.deliveries = slices.Clone(d.deliveries)
+	fork.privateApps = map[string]platform.App{}
 	fork.states, fork.stateBases = map[string]platform.AcceptedStateApp{}, map[string]json.RawMessage{}
 	for id, base := range d.stateBases {
 		fork.stateBases[id] = slices.Clone(base)
 	}
 	for id, owner := range d.states {
+		// A suspended parent is still executing this receiver. Children cannot
+		// re-enter its owner (Decide guards active IDs), so keep that receiver
+		// instead of replacing it or taking its already-held decision lock.
+		if d.active[id] || d.receiving[owner.AcceptedLedger()] {
+			fork.states[id], fork.privateApps[id] = owner, owner
+			continue
+		}
 		app, err := owner.ForkAcceptedState()
 		copy, ok := app.(platform.AcceptedStateApp)
 		if err != nil || !ok {
 			unsupportedStagedEffect()
 		}
-		fork.states[id] = copy
+		fork.states[id], fork.privateApps[id] = copy, app
 	}
+	for id, app := range d.privateApps {
+		if d.active[id] || d.receiving[app.AcceptedLedger()] {
+			fork.privateApps[id] = app
+			continue
+		}
+		if fork.privateApps[id] != nil {
+			continue
+		}
+		owner, ok := app.(platform.DecisionForkApp)
+		if !ok {
+			unsupportedStagedEffect()
+		}
+		copy, err := owner.ForkDecision()
+		if err != nil || copy == nil || copy.Manifest().ID != id || copy.AcceptedLedger() != app.AcceptedLedger() {
+			unsupportedStagedEffect()
+		}
+		fork.privateApps[id] = copy
+	}
+	for id, app := range fork.privateApps {
+		if d.active[id] || d.receiving[app.AcceptedLedger()] {
+			continue
+		}
+		if attached, ok := app.(host.Attached); ok {
+			attached.Attach(hostView{t: d.tenant, app: app, decision: &fork})
+		}
+	}
+	fork.forkControlDecision(d.control)
 	for ledger := range fork.logs {
 		fork.bindPrivateFacts(ledger)
 	}

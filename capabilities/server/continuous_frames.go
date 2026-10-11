@@ -144,9 +144,6 @@ func (t *Tenant) cleanupFlowArtifactsFor(m platform.Member, id string, now time.
 // immutable bytes without the tenant lock, then commits through the existing
 // accepted-result pipeline. HTTP submissions cannot construct the opaque plan.
 func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch, now time.Time) (flow.BatchOutcome, *kernel.Error) {
-	if t.AcceptResult == nil {
-		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Sealed Flow batches require accepted-result storage")
-	}
 	t.mu.Lock()
 	f, before, _, refusal := t.continuousSnapshotLocked(m, id, now)
 	t.mu.Unlock()
@@ -242,7 +239,7 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 // ledger after every delete succeeds, so process restarts safely retry partial
 // object-store failures without a second queue or cursor.
 func (t *Tenant) retireContinuousArtifacts(plan *flow.ArtifactCleanupPreparation, now time.Time) *kernel.Error {
-	if t.AcceptResult == nil || plan == nil || plan.Instance() == "" || now.IsZero() {
+	if plan == nil || plan.Instance() == "" || now.IsZero() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Flow artifact cleanup is unavailable")
 	}
 	refs := plan.Artifacts()
@@ -278,9 +275,6 @@ func (t *Tenant) retireContinuousArtifacts(plan *flow.ArtifactCleanupPreparation
 }
 
 func (t *Tenant) retryContinuousCompute(member platform.Member, plan *flow.ComputeRetryPreparation, now time.Time) {
-	if t.AcceptResult == nil {
-		return
-	}
 	prepared, refusal := plan.Prepare(now, flowFrameStore{tenant: t.ID, files: t.files()})
 	if refusal != nil {
 		log.Printf("continuous Compute retry %s refused: %s", plan.Instance(), refusal.Code)
@@ -435,9 +429,6 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 // Its consumer offset is accepted with the original window frame. No raw
 // source rows enter an import record or a second cursor/queue database.
 func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) (flow.BatchOutcome, *kernel.Error) {
-	if t.AcceptResult == nil {
-		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Continuous Flow sources require accepted-result storage")
-	}
 	if refusal := t.cleanupFlowArtifactsFor(m, id, now); refusal != nil {
 		return flow.BatchOutcome{}, refusal
 	}

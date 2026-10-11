@@ -154,17 +154,11 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 	r.Digest, _ = operationClaimDigest(r)
 	raw, _ := json.Marshal(r)
 	principal, _ := json.Marshal(t.automation(PlatformApp, false).Member)
-	if t.AcceptResult != nil {
-		saved, err := t.AcceptResult(Entry{App: PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: now}, r.Key, r.RequestHash)
-		if err != nil {
-			return platform.Effect{}, false
-		}
-		raw = saved
-	} else {
-		if app := t.app(PlatformApp); app != nil {
-			t.record(app, "accepted-result", t.automation(PlatformApp, false).Member, raw, now)
-		}
+	saved, err := t.acceptResult(Entry{App: PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: now}, r.Key, r.RequestHash)
+	if err != nil {
+		return platform.Effect{}, false
 	}
+	raw = saved
 	if _, err := t.applyOperationClaim(raw); err != nil {
 		t.quarantine(err)
 		return platform.Effect{}, false

@@ -345,7 +345,9 @@ func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.P
 			return dry, why
 		}
 		answer, failure := t.call(pv, model, who, req, now)
-		t.meter(who, answer.Usage)
+		if err := t.meter(who, answer.Usage); err != nil {
+			return dry, "the model usage was not accepted: " + err.Error()
+		}
 		dry.StepsUsed++
 		dry.TokensUsed += answer.Usage.Input + answer.Usage.Output
 		if answer.Usage.CostReported {

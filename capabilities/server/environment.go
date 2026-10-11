@@ -196,7 +196,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if to.quarantined() {
 		return result, fmt.Errorf("tenant %s is quarantined", to.ID)
 	}
-	if err := to.releases.put(candidate.ID, raw); err != nil {
+	if prior := to.releases.raw(candidate.ID); prior != nil && !bytes.Equal(prior, raw) {
 		return result, fmt.Errorf("candidate %s exists in %s with different bytes", candidate.ID, to.ID)
 	}
 	var installations []releaseInstallation
@@ -264,9 +264,8 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 		result.Types = append(result.Types, part)
 	}
 	// Each row entered the target as an audited submission; the run itself is
-	// the console's migration manifest (rememberMigration), kept with the
-	// snapshot like the rest of the console's state. An audit line here
-	// would not survive a replay from the journal alone.
+	// the console's migration manifest (rememberMigration), accepted separately
+	// after the row results so journal-only recovery retains the actual run.
 	return result, nil
 }
 
@@ -290,8 +289,15 @@ type MigrationManifest struct {
 }
 
 // rememberMigration keeps the console's own view of what moved.
-func (t *Tenant) rememberMigration(result MigrationResult, member string, now time.Time) {
-	t.console.addMigration(MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
+func (t *Tenant) rememberMigration(result MigrationResult, member string, now time.Time) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, err := t.acceptHostControl("migration", member, result, now,
+		AuditEntry{Action: "host.migration", Target: result.Key}, func(image *hostControlImage) (SupportGrant, error) {
+			image.Migrations = append(image.Migrations, MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
+			return SupportGrant{}, nil
+		})
+	return err
 }
 
 // Migrations lists what the console moved in or out of this tenant.

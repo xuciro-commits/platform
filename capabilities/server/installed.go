@@ -23,7 +23,7 @@ import (
 // already taught its own ledger the classes and schemas.
 func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
 	id := app.Manifest().ID
-	if t.owner["action:"+actions[0].Schema] != nil && t.owner["action:"+actions[0].Schema] != app {
+	if other := t.owner["action:"+actions[0].Schema]; other != nil && (other.Manifest().ID != id || other.AcceptedLedger() != app.AcceptedLedger()) {
 		return fmt.Errorf("%s: another app owns %s", e.Type, actions[0].Schema)
 	}
 	info, err := platform.Describe(id, e, func(reflect.Type) string { return "" })
@@ -40,7 +40,11 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 		if action.Target != e.Type {
 			return fmt.Errorf("%s: action %s targets %s", e.Type, action.Schema, action.Target)
 		}
-		t.owner["action:"+action.Schema] = app
+		owner := t.app(id)
+		if owner == nil {
+			owner = app
+		}
+		t.owner["action:"+action.Schema] = owner
 	}
 	t.installDefinitions(id, info, actions, pages)
 	return nil

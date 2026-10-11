@@ -68,10 +68,6 @@ func functionCallActions(roles []string) []platform.Action {
 			Description: "Keep the validated suggestion or refusal on its call record.", Automation: true, Payload: platform.FunctionAnswerFields()}}
 }
 
-func (*Build) AcceptedActionSchemas() []string {
-	return []string{SchemaFunctionCall, SchemaFunctionAnswer, SchemaEvaluationStart, SchemaEvaluationAnswer, SchemaCodeCompile, SchemaCodeCompiled, SchemaConnectionChecked, SchemaWritebackAnswered}
-}
-
 func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		if !c.Staging() {

@@ -205,8 +205,6 @@ func (c *Core) Manifest() platform.Manifest {
 		Interfaces: Interfaces(), Roles: []string{Steward, Accountant}, Reads: []string{ReadTrialBalance}}
 }
 
-func (*Core) AcceptedActionSchemas() []string { return []string{JournalType + ".reverse"} }
-
 func (c *Core) AcceptedLedger() *platform.Ledger         { return c.ledger }
 func (c *Core) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
 func (c *Core) Snapshot() (json.RawMessage, error)       { return c.ledger.Snapshot() }

@@ -117,6 +117,14 @@ func TestAcceptedGeneratedRecordKeepsPrivateOwnerState(t *testing.T) {
 	}
 }
 
+func (a acceptedListener) ForkAcceptedState() (platform.App, error) {
+	fork, err := a.notes.ForkAcceptedState()
+	if err != nil {
+		return nil, err
+	}
+	return acceptedListener{fork.(*notes), a.enabled}, nil
+}
+
 func (a acceptedListener) Interested([]string, platform.Event) bool { return a.enabled }
 func (a acceptedListener) Listen(platform.Caller, platform.Event, []string, time.Time) *kernel.Error {
 	return nil

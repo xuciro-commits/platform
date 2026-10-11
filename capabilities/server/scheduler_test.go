@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -62,8 +63,17 @@ func TestScheduler(t *testing.T) {
 	busy, busyJournal := build("busy")
 	quiet, quietJournal := build("quiet")
 	var order []string
-	busy.Record = func(e Entry) { *busyJournal = append(*busyJournal, e); order = append(order, "busy "+e.Kind) }
-	quiet.Record = func(e Entry) { *quietJournal = append(*quietJournal, e); order = append(order, "quiet "+e.Kind) }
+	record := func(who string, journal *[]Entry) func(Entry) {
+		return func(e Entry) {
+			*journal = append(*journal, e)
+			var result acceptedWork
+			if e.Kind == "accepted-result" && json.Unmarshal(e.Body, &result) == nil && result.Kind == "work-result" && result.Input.Kind == "delivery" {
+				order = append(order, who+" delivery")
+			}
+		}
+	}
+	busy.Record = record("busy", busyJournal)
+	quiet.Record = record("quiet", quietJournal)
 	for i := range 50 {
 		submit(busy, fmt.Sprint("b", i), fmt.Sprint("t", i), "burst")
 	}

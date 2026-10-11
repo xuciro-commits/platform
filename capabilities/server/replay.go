@@ -132,6 +132,31 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		t.enqueue(saved.At)
 		return nil
 	}
+	if envelope.Kind == "host-result" {
+		saved, err := decodeAcceptedHostControl(e.Body)
+		if err != nil || saved.App != e.App || saved.Member != m.ID || saved.Tenant != t.ID || !journal.SameTime(saved.At, e.At) {
+			return fmt.Errorf("entry %d: invalid host result: %v", i+1, err)
+		}
+		if _, err := t.applyAcceptedHostControl(e.Body); err != nil {
+			return fmt.Errorf("entry %d: host result: %w", i+1, err)
+		}
+		return nil
+	}
+	if envelope.Kind == "usage-result" {
+		saved, err := t.applyAcceptedUsage(e.Body)
+		if err != nil || saved.App != e.App || saved.Member != m.ID || !journal.SameTime(saved.At, e.At) {
+			return fmt.Errorf("entry %d: model usage result: %v", i+1, err)
+		}
+		return nil
+	}
+	if envelope.Kind == "agent-result" {
+		saved, err := t.applyAcceptedAgent(e.Body)
+		if err != nil || saved.App != e.App || saved.Member != m.ID || !journal.SameTime(saved.At, e.At) {
+			return fmt.Errorf("entry %d: agent result: %v", i+1, err)
+		}
+		t.enqueue(saved.At)
+		return nil
+	}
 	if envelope.Kind == "operation-claim" {
 		saved, err := t.applyOperationClaim(e.Body)
 		if err != nil || saved.App != e.App || m.ID != "app:"+PlatformApp || !journal.SameTime(saved.At, e.At) {
@@ -146,10 +171,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		t.opsMu.Unlock()
 		return nil
 	}
-	ra, ok := a.(platform.ResultApp)
-	if !ok {
-		return fmt.Errorf("entry %d: app %s cannot apply accepted results", i+1, e.App)
-	}
+	ra := a
 	if envelope.Kind == "work-result" {
 		saved, decodeErr := decodeAcceptedWork(e.Body)
 		if decodeErr != nil || saved.App != e.App || !journal.SameTime(saved.At, e.At) || m.ID != "app:"+e.App {

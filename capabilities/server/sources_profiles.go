@@ -280,14 +280,8 @@ func (t *Tenant) CheckConnections(now time.Time) {
 			if t.quarantined() {
 				return
 			}
-			app := t.app(build.ID).(platform.ResultApp)
-			if t.AcceptResult != nil {
-				if _, err := t.submitAccepted(app, caller.Member, sub, now, true); err != nil {
-					log.Printf("tenant %s: connection check result refused: %v", t.ID, err)
-				}
-			} else if _, err := app.Submit(caller, sub, now); err == nil {
-				t.journal(app, caller.Member, sub, now)
-			} else {
+			app := t.app(build.ID)
+			if _, err := t.submitAccepted(app, caller.Member, sub, now, true); err != nil {
 				log.Printf("tenant %s: connection check result refused: %v", t.ID, err)
 			}
 		}()

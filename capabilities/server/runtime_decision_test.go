@@ -9,7 +9,7 @@ import (
 	"platformserver/platform"
 )
 
-func TestLegacyDecisionRuntimeRetainsDirectAndReplayPaths(t *testing.T) {
+func TestLiveRuntimeRefusesNewDecisionsAndRetainsHistoricalReplay(t *testing.T) {
 	for _, replay := range []bool{false, true} {
 		name := "live"
 		if replay {
@@ -24,8 +24,14 @@ func TestLegacyDecisionRuntimeRetainsDirectAndReplayPaths(t *testing.T) {
 			record, err := platform.Decide(caller, app,
 				submission(tn, member, "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 2}), at)
 			item, found := platform.Get[Item](caller, "I1")
+			if !replay {
+				if err == nil || err.Code != pb.ErrorCode_ERROR_CODE_CONFLICT || record != nil || found || len(app.AcceptedLedger().RecordsFor(tn.ID)) != 0 {
+					t.Fatalf("live runtime bypassed private acceptance: record=%v item=%+v err=%v", record, item, err)
+				}
+				return
+			}
 			if err != nil || record == nil || !found || item.Qty != 2 || caller.Staging() ||
-				len(app.(platform.ResultApp).AcceptedLedger().RecordsFor(tn.ID)) != 1 {
+				len(app.(platform.App).AcceptedLedger().RecordsFor(tn.ID)) != 1 {
 				t.Fatalf("legacy decision path changed: record=%v item=%+v err=%v", record, item, err)
 			}
 			called := false
@@ -43,6 +49,10 @@ func TestLegacyDecisionRuntimeRetainsDirectAndReplayPaths(t *testing.T) {
 
 type missingPrivateLedgerRuntime struct{ platform.Runtime }
 
+func (missingPrivateLedgerRuntime) HoldChanges(*platform.Ledger) (func(), *kernel.Error) {
+	return func() {}, nil
+}
+
 func (missingPrivateLedgerRuntime) DraftChanges(*platform.Ledger, func() *kernel.ChangeLog) *kernel.ChangeLog {
 	return nil
 }
@@ -56,7 +66,7 @@ func TestStagedRuntimeWithoutPrivateLedgerRefusesBeforeApplication(t *testing.T)
 	_, err := platform.Decide(caller, app,
 		submission(tn, member, "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 2}), time.Now())
 	if err == nil || err.Code != pb.ErrorCode_ERROR_CODE_CONFLICT || !caller.Staging() ||
-		len(app.(platform.ResultApp).AcceptedLedger().RecordsFor(tn.ID)) != 0 || snapshot(tn) != before {
+		len(app.(platform.App).AcceptedLedger().RecordsFor(tn.ID)) != 0 || snapshot(tn) != before {
 		t.Fatalf("missing private ledger fell back to authoritative state: %v", err)
 	}
 }

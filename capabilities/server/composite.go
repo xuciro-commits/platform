@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -22,8 +25,8 @@ import (
 // Only when every edit is accepted is the composite itself committed as one
 // accepted result: the fork is promoted in the same commit, so a refused edit
 // refuses the whole command and nothing half-applied becomes visible. The
-// committed result is journaled like a release result, and replay re-runs the
-// same edits against the replayed state.
+// committed result carries sealed record/state images; recovery applies those
+// images without deciding the edits again. Version 1 remains historical.
 
 // CompositeEdit is one asset edit of a composite command.
 type CompositeEdit struct {
@@ -49,6 +52,8 @@ type acceptedComposite struct {
 	Key         string          `json:"key"`
 	At          time.Time       `json:"at"`
 	Edits       []CompositeEdit `json:"edits"`
+	Changes     json.RawMessage `json:"changes,omitempty"`
+	Refusal     string          `json:"refusal,omitempty"`
 	RequestHash string          `json:"requestHash"`
 	Digest      string          `json:"digest"`
 }
@@ -92,7 +97,7 @@ func decodeAcceptedComposite(raw []byte) (acceptedComposite, error) {
 		return saved, fmt.Errorf("composite result has trailing data")
 	}
 	hash, err := compositeRequestHash(saved.Tenant, saved.Member, saved.Key, saved.Edits)
-	if err != nil || saved.Version != 1 || saved.Kind != "composite-result" || saved.App != build.ID ||
+	if err != nil || (saved.Version != 1 && saved.Version != 2) || saved.Kind != "composite-result" || saved.App != build.ID ||
 		saved.Tenant == "" || saved.Member == "" || saved.Key == "" || saved.At.IsZero() ||
 		len(saved.Edits) == 0 || len(saved.Edits) > 64 || saved.RequestHash != hash {
 		return saved, fmt.Errorf("invalid composite result identity")
@@ -104,6 +109,31 @@ func decodeAcceptedComposite(raw []byte) (acceptedComposite, error) {
 	for i, edit := range saved.Edits {
 		if edit.Schema == "" || edit.Target == nil || edit.Target.GetType() == "" {
 			return saved, fmt.Errorf("composite edit %d has no schema or target", i+1)
+		}
+	}
+	if saved.Version == 1 && (len(saved.Changes) != 0 || saved.Refusal != "") || saved.Version == 2 && (len(saved.Changes) == 0) == (saved.Refusal == "") {
+		return saved, fmt.Errorf("composite result has incompatible changes or refusal")
+	}
+	if saved.Version == 2 && saved.Refusal == "" {
+		batch, receipt, err := decodeAcceptedBatch(saved.Changes)
+		if err != nil || batch.Tenant != saved.Tenant || batch.App != saved.App || !batch.At.Equal(saved.At) || receipt.GetSubmission().GetPrincipalId() != saved.Member {
+			return saved, fmt.Errorf("composite result changes differ: %v", err)
+		}
+		for i, edit := range saved.Edits {
+			found := false
+			for _, decision := range batch.Decisions {
+				r := new(pb.ChangeRecord)
+				if protojson.Unmarshal(decision.Receipt, r) != nil {
+					return saved, fmt.Errorf("invalid composite receipt")
+				}
+				x := r.GetSubmission()
+				if x.GetAuthority() == build.ID && x.GetPrincipalId() == saved.Member && x.GetIdempotencyKey() == strings.TrimPrefix(saved.Key, "composite:")+"#"+strconv.Itoa(i) && x.GetSchema().GetName() == edit.Schema && proto.Equal(x.GetTarget(), edit.Target) && bytes.Equal(x.GetPayload(), edit.Payload) {
+					found = true
+				}
+			}
+			if !found {
+				return saved, fmt.Errorf("composite edit %d has no sealed decision", i)
+			}
 		}
 	}
 	return saved, nil
@@ -127,45 +157,102 @@ func (t *Tenant) Composite(m platform.Member, key string, edits []CompositeEdit,
 	if t.quarantined() {
 		return CompositeAnswer{}, fmt.Errorf("tenant is quarantined")
 	}
-	saved := acceptedComposite{Version: 1, Kind: "composite-result", Tenant: t.ID, App: build.ID, Member: m.ID,
+	saved := acceptedComposite{Version: 2, Kind: "composite-result", Tenant: t.ID, App: build.ID, Member: m.ID,
 		Key: "composite:" + key, At: now.UTC(), Edits: edits}
 	var err error
-	if saved.RequestHash, err = compositeRequestHash(t.ID, m.ID, saved.Key, edits); err != nil {
+	saved.RequestHash, err = compositeRequestHash(t.ID, m.ID, saved.Key, edits)
+	if err != nil {
 		return CompositeAnswer{}, err
+	}
+	if prior := t.committed.compositeAnswers[saved.Key]; len(prior) > 0 {
+		answer, err := decodeAcceptedComposite(prior)
+		if err != nil || answer.RequestHash != saved.RequestHash {
+			return CompositeAnswer{}, fmt.Errorf("composite key belongs to another request")
+		}
+		return compositeAnswer(answer)
+	}
+	if digest, exists := t.committed.composites[saved.Key]; exists {
+		for i, edit := range edits {
+			r := t.app(build.ID).AcceptedLedger().AcceptedFor(t.ID, key+"#"+strconv.Itoa(i))
+			x := r.GetSubmission()
+			if x.GetPrincipalId() != m.ID || x.GetSchema().GetName() != edit.Schema || !proto.Equal(x.GetTarget(), edit.Target) || !bytes.Equal(x.GetPayload(), edit.Payload) {
+				return CompositeAnswer{}, fmt.Errorf("historical composite key belongs to another request")
+			}
+		}
+		return CompositeAnswer{Key: key, Applied: len(edits), Digest: digest}, nil
+	}
+	draft := t.newStagedDecision()
+	var receipt *pb.ChangeRecord
+	for i, edit := range edits {
+		app := t.owner["action:"+edit.Schema]
+		if app == nil || app.Manifest().ID != build.ID {
+			saved.Refusal = fmt.Sprintf("edit %d: %s is not a builder action", i+1, edit.Schema)
+			break
+		}
+		sub := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: key + "#" + strconv.Itoa(i), Target: edit.Target, Schema: &pb.SchemaRef{Name: edit.Schema, Version: 1}, Payload: edit.Payload}
+		if refusal := t.delegatedBound(m, sub); refusal != nil {
+			saved.Refusal = fmt.Sprintf("edit %d: %s refused (%s)", i+1, edit.Schema, refusal.Error())
+			break
+		}
+		r, refusal := platform.Decide(platform.NewCaller(draft, m, build.ID, false, false), app, sub, now)
+		if refusal != nil {
+			saved.Refusal = fmt.Sprintf("edit %d: %s refused (%s)", i+1, edit.Schema, refusal.Error())
+			break
+		}
+		receipt = r
+	}
+	if saved.Refusal == "" {
+		if refusal := draft.answerRequests(now); refusal != nil {
+			saved.Refusal = refusal.Error()
+		}
+	}
+	if saved.Refusal == "" {
+		if refusal := draft.stageObservers(); refusal != nil {
+			saved.Refusal = refusal.Error()
+		}
+	}
+	if saved.Refusal == "" {
+		saved.Changes, err = draft.batchResult(build.ID, receipt.GetSubmission(), receipt, now)
+		if err != nil {
+			return CompositeAnswer{}, err
+		}
 	}
 	raw, err := encodeAcceptedComposite(saved)
 	if err != nil {
 		return CompositeAnswer{}, err
 	}
-	// Stage every edit before anything is journaled: a refusal here leaves no trace.
-	if _, err := t.stageCompositeLocked(m, edits, key, now); err != nil {
-		return CompositeAnswer{}, err
-	}
-	if t.AcceptResult == nil {
-		applied, err := t.applyAcceptedComposite(raw)
-		if err != nil {
-			return CompositeAnswer{}, err
-		}
-		if t.Record != nil {
-			principal, _ := json.Marshal(m)
-			t.Record(Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now})
-		}
-		t.changed()
-		return CompositeAnswer{Key: key, Applied: len(applied.Edits), Digest: applied.Digest}, nil
-	}
 	principal, _ := json.Marshal(m)
-	entry := Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now}
-	committed, err := t.AcceptResult(entry, saved.Key, saved.RequestHash)
+	committed, err := t.acceptResult(Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()}, saved.Key, saved.RequestHash)
 	if err != nil {
 		return CompositeAnswer{}, err
 	}
+	return t.finishCommittedComposite(m, saved, committed)
+}
+
+func (t *Tenant) finishCommittedComposite(m platform.Member, saved acceptedComposite, committed []byte) (answer CompositeAnswer, err error) {
+	// The bytes are durable: a faulty pure participant must isolate this tenant
+	// before another command can observe or extend a partially applied image.
+	defer func() {
+		if failure := recover(); failure != nil {
+			err = fmt.Errorf("apply committed composite: %v", failure)
+			t.quarantine(err)
+			answer = CompositeAnswer{}
+		}
+	}()
 	applied, err := t.applyAcceptedComposite(committed)
 	if err != nil || applied.Key != saved.Key || applied.RequestHash != saved.RequestHash || applied.Member != m.ID {
 		t.quarantine(fmt.Errorf("committed composite result differs: %v", err))
 		return CompositeAnswer{}, fmt.Errorf("committed composite result differs: %v", err)
 	}
 	t.changed()
-	return CompositeAnswer{Key: key, Applied: len(applied.Edits), Digest: applied.Digest}, nil
+	return compositeAnswer(applied)
+}
+
+func compositeAnswer(saved acceptedComposite) (CompositeAnswer, error) {
+	if saved.Refusal != "" {
+		return CompositeAnswer{}, fmt.Errorf("%s", saved.Refusal)
+	}
+	return CompositeAnswer{Key: strings.TrimPrefix(saved.Key, "composite:"), Applied: len(saved.Edits), Digest: saved.Digest}, nil
 }
 
 // stageCompositeLocked probes every edit on a private fork. The draft shares
@@ -188,7 +275,7 @@ func (t *Tenant) stageCompositeLocked(m platform.Member, edits []CompositeEdit, 
 		if err := t.delegatedBound(m, sub); err != nil {
 			return nil, fmt.Errorf("edit %d: %s refused (%s)", i+1, edit.Schema, err.Error())
 		}
-		if _, err := draft.Submit(m, sub, now); err != nil {
+		if _, err := app.Submit(platform.NewCaller(runtime{draft}, m, build.ID, true, false), sub, now); err != nil {
 			return nil, fmt.Errorf("edit %d: %s refused (%s)", i+1, edit.Schema, err.Error())
 		}
 	}
@@ -210,6 +297,20 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedComposite, error) {
 		if prior != saved.Digest {
 			return saved, fmt.Errorf("composite idempotency key changed")
 		}
+		return saved, nil
+	}
+	if saved.Version == 2 {
+		if saved.Refusal == "" {
+			batch, _, _ := decodeAcceptedBatch(saved.Changes)
+			if _, err := t.applyAcceptedBatch(t.app(build.ID).AcceptedLedger(), saved.Changes); err != nil {
+				return saved, err
+			}
+			t.publishAcceptedBatch(batch)
+			t.audit.remember(AuditEntry{At: saved.At, Member: saved.Member, App: build.ID, Action: "composite", Target: saved.Key})
+		}
+		t.committed.saveComposite(saved.Key, saved.Digest)
+		t.committed.saveCompositeAnswer(saved.Key, raw)
+		t.enqueue(saved.At)
 		return saved, nil
 	}
 	draft, err := t.stageCompositeLocked(platform.Member{ID: saved.Member, Tenant: t.ID, Roles: t.rolesOf(saved.Member)}, saved.Edits, saved.Key, saved.At)

@@ -10,7 +10,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"io"
-	"log"
 	"net/http"
 	"slices"
 	"strconv"
@@ -163,7 +162,9 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time, delta .
 		req.delta = delta[0]
 	}
 	answer, failure := t.call(pv, model, m, req, now)
-	t.meter(m, answer.Usage)
+	if err := t.meter(m, answer.Usage); err != nil {
+		return ChatAnswer{}, err, nil
+	}
 	return answer, nil, failure
 }
 
@@ -231,12 +232,13 @@ func estimateTokens(text string) int {
 }
 
 // meter journals a call's usage, then applies it.
-func (t *Tenant) meter(m platform.Member, u ai.Usage) {
+func (t *Tenant) meter(m platform.Member, u ai.Usage) *kernel.Error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	body, _ := json.Marshal(u)
-	t.record(t.ai, "usage", m, body, u.At)
-	t.ai.Meter(u)
+	if t.quarantined() {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This tenant is isolated until its accepted results recover")
+	}
+	return t.acceptUsage(m, u)
 }
 
 // openAIMessages puts a conversation on the OpenAI wire: tool calls as
@@ -686,21 +688,6 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 		}
 	}
 	return out, &answer.Usage
-}
-
-// answerModel submits a settled model request's answer to the app's Reply
-// action, as the app, and journals it; a replay has it in the journal.
-func (t *Tenant) answerModel(x platform.Effect, o platform.Outcome, usage *ai.Usage, now time.Time) {
-	app, reply := t.modelAnswerSubmission(x, o, usage)
-	if app == nil || reply == nil {
-		return
-	}
-	c := t.automation(x.App, false)
-	if _, err := app.Submit(c, reply, now); err != nil {
-		log.Printf("tenant %s: %s refused the answer to its model request %s: %v", t.ID, x.App, x.ID, err) // a defect of the app
-		return
-	}
-	t.journal(app, c.Member, reply, now)
 }
 
 func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome, usage *ai.Usage) (platform.App, *pb.Submission) {

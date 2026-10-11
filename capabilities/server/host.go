@@ -15,7 +15,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -39,7 +38,9 @@ type Delivery struct {
 // Tenant runs a tenant's apps: routing by name, one ordered journal, and calls
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
-	ID string
+	// Private control views route callbacks back into their owning decision.
+	controlAnswer func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
+	ID            string
 	// Record, when set, makes each accepted input durable before it is answered;
 	// a failure must stop the server (ADR-0007).
 	Record func(Entry)
@@ -112,8 +113,7 @@ type Tenant struct {
 	Compiler      CodeCompiler
 	cancels       cancels // running operations' cancel handles
 	memFiles      memoryFiles
-	uploads       uploads   // hashes uploaded and not yet attached (uploads.go)
-	requests      []request // accepted decisions' requests of other apps, run with their events (ADR-0026)
+	uploads       uploads // hashes uploaded and not yet attached (uploads.go)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -144,6 +144,9 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	}
 	for i, a := range apps {
 		m := a.Manifest()
+		if a.AcceptedLedger() == nil {
+			return nil, fmt.Errorf("tenant %s: app %s has no decision ledger", id, m.ID)
+		}
 		if err := t.bind(i, a); err != nil {
 			return nil, err
 		}
@@ -323,116 +326,16 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
-	if t.AcceptResult != nil {
-		if resultApp, ok := a.(platform.ResultApp); ok && t.acceptsGenerated(a, s) {
-			record, err = t.submitAccepted(resultApp, m, s, now, false)
-			if report != nil && err != nil {
-				if prior, ok := t.committed.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok {
-					hash, _ := submissionHash(s)
-					if prior.RequestHash == hash {
-						report(err, prior.Issues)
-					}
-				}
-			}
-			return record, err
-		}
-	}
-	if m.Agent && t.suspended(m.ID) { // an agent an administrator switched off (ADR-0029 D4)
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
-	}
-	defer t.enqueue(now)
-	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil && t.owner["action:"+work.SchemaRequest] != nil {
-		return t.request(m, a, s, now)
-	}
-	var inputErr *kernel.Error
-	var issues []platform.FieldIssue
-	record, err = a.Submit(t.caller(m, a, false).WithInputDiagnostics(func(e *kernel.Error, found []platform.FieldIssue) { inputErr = e; issues = found }), s, now)
-	if err != nil && err == inputErr {
-		if report != nil {
-			report(err, issues)
-		}
-		if resultApp, ok := a.(platform.ResultApp); ok && t.AcceptResult != nil && s.GetTenantId() == t.ID && s.GetPrincipalId() == m.ID && s.GetAuthority() == a.Manifest().ID && s.GetIdempotencyKey() != "" {
-			raw, encodeErr := encodeRefusedResult(s, now, err, issues...)
-			if encodeErr != nil {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
-			}
-			member, _ := json.Marshal(m)
+	record, err = t.submitAccepted(a, m, s, now, false)
+	if report != nil && err != nil {
+		if prior, ok := t.committed.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok {
 			hash, _ := submissionHash(s)
-			committed, commitErr := t.AcceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result", Principal: member, Body: raw, At: now}, s.GetIdempotencyKey(), hash)
-			if commitErr != nil {
-				if report != nil {
-					report(nil, nil)
-				}
-				if commitErr == errAcceptedConflict {
-					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
-				}
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted result could not be committed")
-			}
-			record, err = t.finishCommittedResult(resultApp, m, hash, committed)
-			if report != nil {
-				if prior, ok := t.committed.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok && prior.RequestHash == hash {
-					report(err, prior.Issues)
-				} else {
-					report(nil, nil)
-				}
-			}
-			return record, err
-		}
-	}
-	if err == nil {
-		t.journal(a, m, s, now)
-	}
-	return record, explained(err, a, s.GetSchema().GetName(), target(s))
-}
-
-func (t *Tenant) acceptsGenerated(a platform.App, s *pb.Submission) bool {
-	schema := s.GetSchema().GetName()
-	if selected, ok := a.(platform.AcceptedActionApp); ok &&
-		slices.Contains(selected.AcceptedActionSchemas(), schema) {
-		return true
-	}
-	if published, ok := a.(platform.AcceptedPublisher); ok &&
-		slices.Contains(published.AcceptedPublicationSchemas(), schema) {
-		return true
-	}
-	if acceptsPureTransition(a, schema) {
-		return true
-	}
-	// Generated callbacks run through the same private Runtime. Any capability
-	// not yet representable fails closed instead of changing the live tenant.
-	for _, entity := range a.Manifest().Entities {
-		verb, match := strings.CutPrefix(schema, entity.Type+".")
-		if !match || entity.Lifecycle == nil {
-			continue
-		}
-		for _, transition := range entity.Lifecycle.Transitions {
-			if verb == transition.Name {
-				return true
-			}
-			if transition.Approval != nil && transition.Approval.Pending != "" &&
-				slices.Contains([]string{transition.Name + platform.ApprovalHeld,
-					transition.Name + platform.ApprovalRejected, transition.Name + platform.ApprovalReturned}, verb) {
-				return true
+			if prior.RequestHash == hash {
+				report(err, prior.Issues)
 			}
 		}
 	}
-	if !strings.HasSuffix(schema, ".create") && !strings.HasSuffix(schema, ".edit") &&
-		!strings.HasSuffix(schema, ".archive") {
-		return false
-	}
-	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
-	// Select by the declared action, not the submitted target. A malformed
-	// target must be refused inside the isolated decision, not silently routed
-	// to the legacy direct mutator.
-	for _, et := range t.records.types {
-		if et.info.App == a.Manifest().ID && slices.Contains(et.info.Standard, schema) &&
-			(schema == et.info.Type+".create" || schema == et.info.Type+".edit" ||
-				schema == et.info.Type+".archive") {
-			return true
-		}
-	}
-	return false
+	return record, err
 }
 
 // Callback-free transitions retain the smaller version-4 result format.
@@ -452,13 +355,17 @@ func acceptsPureTransition(a platform.App, schema string) bool {
 	return false
 }
 
-func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.Submission, now time.Time, automation bool, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	// A malformed transport identity cannot reserve a durable key for another
 	// tenant, authority or member. The kernel still supplies its ordinary
 	// refusal, but no result under this tenant can represent that submission.
-	if s.GetTenantId() != t.ID || s.GetAuthority() != a.Manifest().ID ||
-		s.GetPrincipalId() != m.ID || s.GetIdempotencyKey() == "" ||
-		s.GetTarget() == nil || s.GetSchema() == nil {
+	if s.GetTenantId() != t.ID || s.GetPrincipalId() != m.ID {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	if s.GetAuthority() != a.Manifest().ID {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_AUTHORITY}
+	}
+	if s.GetIdempotencyKey() == "" || s.GetTarget() == nil || s.GetSchema() == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission has an invalid identity")
 	}
 	ledger := a.AcceptedLedger()
@@ -521,9 +428,9 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 	member, _ := json.Marshal(m)
 	var versions map[string]int
 	if t.procs != nil {
-		versions = t.procs.Versions()
+		versions = draft.flowVersions()
 	}
-	committed, err := t.AcceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
+	committed, err := t.acceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
 		Principal: member, Body: raw, At: now, Versions: versions}, s.GetIdempotencyKey(), hash)
 	if err != nil {
 		if err == errAcceptedConflict {
@@ -534,7 +441,7 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 	return t.finishCommittedResult(a, m, hash, committed)
 }
 
-func (t *Tenant) finishCommittedResult(a platform.ResultApp, m platform.Member, hash string, committed []byte) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash string, committed []byte) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	// Once committed, even an unexpected application panic is tenant-local:
 	// never answer from a possibly half-applied memory image or take down the
 	// other tenants. A repaired journal requires a fresh process to resume.
@@ -613,11 +520,11 @@ func (t *Tenant) finishCommittedResult(a platform.ResultApp, m platform.Member, 
 
 // Only decision evaluation may turn an unsupported-effect panic into a
 // refusal. A panic after the journal commit must escape so the tenant stops.
-func decideAccepted(a platform.ResultApp, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func decideAccepted(a platform.App, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	return decideAcceptedAs(a, draft, m, s, now, false)
 }
 
-func decideAcceptedAs(a platform.ResultApp, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if _, ok := p.(stagedEffectPanic); !ok {
@@ -679,40 +586,6 @@ func outcomeOf(err *kernel.Error) string {
 }
 
 // journal records an accepted submission as the member's, for the audit and the journal.
-func (t *Tenant) journal(a platform.App, m platform.Member, s *pb.Submission, now time.Time) {
-	t.audit.remember(submitted(m.ID, a, s, now))
-	body, _ := protojson.Marshal(s)
-	t.record(a, "submission", m, body, now)
-}
-
-// request holds a submission whose action needs approval (ADR-0017): its
-// policy and rules are checked now, as the requester, without effect; then the
-// work app opens the request, and the submission runs when the last approver
-// agrees. A resend with the same key answers with the request made.
-func (t *Tenant) request(m platform.Member, a platform.App, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	id := a.Manifest().ID + "." + s.GetIdempotencyKey()
-	approvals := t.owner["action:"+work.SchemaRequest] // the work app
-	c := t.automation(work.ID, false)
-	if _, known := platform.Get[work.ApprovalRequest](c, id); !known {
-		err := platform.ProbeDecision(t.caller(m, a, false), func(probe platform.Caller) *kernel.Error {
-			_, err := platform.Decide(probe, a, s, now)
-			return err
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	held, _ := protojson.Marshal(s)
-	payload, _ := json.Marshal(map[string]any{"requester": m.ID, "submission": json.RawMessage(held)})
-	request := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: work.ID, IdempotencyKey: "approval:" + id,
-		Target: &pb.EntityRef{Type: work.ApprovalType, Id: id}, Schema: &pb.SchemaRef{Name: work.SchemaRequest, Version: 1}, Payload: payload}
-	record, err := approvals.Submit(c, request, now)
-	if err == nil { // the journal holds the request, made by the work app; the requester is on the request
-		t.journal(approvals, c.Member, request, now)
-	}
-	return record, err
-}
-
 // Input routes a connector input (push batch, poll page, heartbeat) to its app.
 func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Time) (out any, err *kernel.Error) {
 	if t.quarantined() {
@@ -816,19 +689,6 @@ func (t *Tenant) publishAccepted(e platform.Event, plan acceptedEvent, version i
 
 // Deliveries is the tenant's recent event deliveries, oldest first.
 func (t *Tenant) Deliveries() []Delivery { return t.audit.recentDeliveries() }
-
-func (t *Tenant) record(a platform.App, kind string, m platform.Member, body []byte, now time.Time) {
-	t.changedOwner(a.Manifest().ID)
-	if t.Record == nil {
-		return
-	}
-	member, _ := json.Marshal(m)
-	var versions map[string]int
-	if t.procs != nil {
-		versions = t.procs.Versions()
-	}
-	t.Record(Entry{App: a.Manifest().ID, Kind: kind, Principal: member, Body: body, At: now, Versions: versions})
-}
 
 func submitted(member string, a platform.App, s *pb.Submission, at time.Time) AuditEntry {
 	return AuditEntry{At: at, Member: member, App: a.Manifest().ID, Action: s.GetSchema().GetName(),

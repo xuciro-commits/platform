@@ -28,7 +28,8 @@ type releaseStore struct {
 	origins map[string]ReleaseOrigin
 	// requests remembers the request hash behind each applied key, so the
 	// in-memory host answers a retried command without a journal to ask;
-	// it is not part of the snapshot (the journal is the durable record).
+	// snapshots preserve the same retry boundary; old snapshots can resolve
+	// missing receipts through the authoritative journal.
 	requests map[string]string
 }
 
@@ -136,10 +137,12 @@ func (r *releaseStore) origin(id string) (ReleaseOrigin, bool) {
 
 // snapshot and restore carry the store through the tenant snapshot.
 func (r *releaseStore) snapshot(s *tenantState) {
+	s.ReleaseRequests = maps.Clone(r.requests)
 	s.ReleaseCandidates, s.ReleaseApplied, s.ActiveRelease, s.Sealed, s.ReleaseOrigins = maps.Clone(r.candidates), maps.Clone(r.applied), r.active, maps.Clone(r.sealed), maps.Clone(r.origins)
 }
 
 func (r *releaseStore) restore(s *tenantState) {
+	r.requests = maps.Clone(s.ReleaseRequests)
 	r.candidates, r.applied, r.active, r.origins = maps.Clone(s.ReleaseCandidates), maps.Clone(s.ReleaseApplied), s.ActiveRelease, maps.Clone(s.ReleaseOrigins)
 	if s.Sealed != nil {
 		r.sealed = s.Sealed

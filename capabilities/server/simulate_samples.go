@@ -39,6 +39,7 @@ func newSampleOwner(tenant string, manifest platform.Manifest) *sampleOwner {
 	}
 	return &sampleOwner{manifest: manifest, ledger: platform.NewLedger(tenant, manifest.ID, manifest.Actions, classes...)}
 }
+func (a *sampleOwner) AcceptedLedger() *platform.Ledger         { return a.ledger }
 func (a *sampleOwner) Manifest() platform.Manifest              { return a.manifest }
 func (a *sampleOwner) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 func (a *sampleOwner) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }

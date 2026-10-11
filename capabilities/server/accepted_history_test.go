@@ -14,8 +14,6 @@ import (
 
 type resultStockCount struct{ *stock }
 
-func (*resultStockCount) AcceptedActionSchemas() []string { return []string{"stock.item.count"} }
-
 func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.T) {
 	id := "canonical-history"
 	build := func() *Tenant {

@@ -21,6 +21,12 @@ import (
 // call it, acting within their grants; an agent asks an external agent through
 // an effect and goes on with its answer, which the journal keeps.
 func TestA2A(t *testing.T) {
+	for _, storage := range []string{"memory", "record", "accepted"} {
+		t.Run(storage, func(t *testing.T) { testA2A(t, storage) })
+	}
+}
+
+func testA2A(t *testing.T, storage string) {
 	model := scriptedModel(t)
 	var heard []string
 	partner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +55,11 @@ func TestA2A(t *testing.T) {
 	}
 	tn := build()
 	tn.AIClient = nil
-	tn.Record = func(e Entry) { journal = append(journal, e) }
+	if storage == "record" {
+		tn.Record = func(e Entry) { journal = append(journal, e) }
+	} else if storage == "accepted" {
+		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { journal = append(journal, e); return e.Body, nil }
+	}
 	tn.Secrets = func(string) ([]byte, bool) { return []byte("partner-token"), true }
 	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
@@ -184,5 +194,19 @@ answered: {"product":"P-200","leadTimeDays":12}`)
 	think(2)
 	run, _ = platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "S2")
 	expect("discarded", fmt.Sprint(run.State, " ", strings.HasSuffix(run.Result, "discarded by ana"), " ", run.Signals[0].Kind, " ", len(heard)), "done true discarded 1")
-	CheckReplay(t, tn, journal, build)
+	if storage != "memory" {
+		CheckReplay(t, tn, journal, build)
+	} else {
+		raw, _, err := tn.Snapshot(func() int64 { return 0 })
+		if err != nil {
+			t.Fatal(err)
+		}
+		recovered := build()
+		if err := recovered.Restore(raw); err != nil {
+			t.Fatal(err)
+		}
+		if snapshot(recovered) != snapshot(tn) {
+			t.Fatal("in-memory A2A snapshot recovery differs")
+		}
+	}
 }

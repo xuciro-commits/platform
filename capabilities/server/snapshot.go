@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/protobuf/encoding/protojson"
 	"maps"
 	"reflect"
 	"slices"
@@ -32,6 +33,7 @@ type tenantState struct {
 	AcceptedAnswers   map[string]json.RawMessage   `json:"acceptedAnswers,omitempty"`
 	AcceptedInputs    map[string]json.RawMessage   `json:"acceptedInputs,omitempty"`
 	ReleaseCandidates map[string]json.RawMessage   `json:"releaseCandidates,omitempty"`
+	ReleaseRequests   map[string]string            `json:"releaseRequests,omitempty"`
 	ReleaseApplied    map[string]string            `json:"releaseApplied,omitempty"`
 	ActiveRelease     string                       `json:"activeRelease,omitempty"`
 	Deliveries        []Delivery                   `json:"deliveries"`
@@ -53,14 +55,16 @@ type tenantState struct {
 	Outbound          []effectState                `json:"outbound"`
 	// The host console's lifecycle and support sessions (ADR-0047 §6.5) travel
 	// with the tenant: a restart keeps a suspension and its authorized sessions.
-	HostLifecycle  string                           `json:"hostLifecycle,omitempty"`
-	Support        []SupportGrant                   `json:"support,omitempty"`
-	Sealed         map[string]SealedArtifact        `json:"sealed,omitempty"`
-	ReleaseOrigins map[string]ReleaseOrigin         `json:"releaseOrigins,omitempty"`
-	Migrations     []MigrationManifest              `json:"migrations,omitempty"`
-	Composites     map[string]string                `json:"composites,omitempty"`
-	Staged         map[string]platform.StagedResult `json:"staged,omitempty"`
-	Sequences      map[string]int                   `json:"sequences,omitempty"`
+	HostRequests     map[string]hostControlReceipt    `json:"hostRequests,omitempty"`
+	HostLifecycle    string                           `json:"hostLifecycle,omitempty"`
+	Support          []SupportGrant                   `json:"support,omitempty"`
+	Sealed           map[string]SealedArtifact        `json:"sealed,omitempty"`
+	ReleaseOrigins   map[string]ReleaseOrigin         `json:"releaseOrigins,omitempty"`
+	Migrations       []MigrationManifest              `json:"migrations,omitempty"`
+	CompositeAnswers map[string]json.RawMessage       `json:"compositeAnswers,omitempty"`
+	Composites       map[string]string                `json:"composites,omitempty"`
+	Staged           map[string]platform.StagedResult `json:"staged,omitempty"`
+	Sequences        map[string]int                   `json:"sequences,omitempty"`
 }
 
 type recordState struct {
@@ -234,6 +238,9 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		return err
 	}
 	t.audit.restore(&s)
+	if err := validateHostImage(t.ID, hostControlImage{s.HostLifecycle, s.Support, s.Migrations, s.HostRequests}); err != nil {
+		return err
+	}
 	t.console.restore(&s)
 	if s.Staged != nil {
 		t.staged.restore(s.Staged)
@@ -321,6 +328,30 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 			return fmt.Errorf("tenant %s: refusal snapshot %s is incompatible: %v", t.ID, key, err)
 		}
 	}
+	for key, hash := range s.ReleaseRequests {
+		if len(hash) != 64 || s.ReleaseApplied[key] == "" {
+			return fmt.Errorf("release request snapshot %s is incompatible", key)
+		}
+	}
+	for key, raw := range s.CompositeAnswers {
+		r, err := decodeAcceptedComposite(raw)
+		if err != nil || r.Version != 2 || r.Tenant != t.ID || r.Key != key || s.Composites[key] != r.Digest {
+			return fmt.Errorf("tenant %s: composite answer snapshot %s is incompatible", t.ID, key)
+		}
+		if r.Refusal == "" {
+			batch, _, _ := decodeAcceptedBatch(r.Changes)
+			for _, decision := range batch.Decisions {
+				receipt := new(pb.ChangeRecord)
+				if protojson.Unmarshal(decision.Receipt, receipt) != nil {
+					return fmt.Errorf("invalid composite snapshot receipt")
+				}
+				owner := t.app(decision.Event.App)
+				if owner == nil || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
+					return fmt.Errorf("composite snapshot has no accepted receipt")
+				}
+			}
+		}
+	}
 	t.committed.restore(s)
 	for key, raw := range s.AcceptedAnswers {
 		if strings.HasPrefix(key, "release:") {
@@ -336,7 +367,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 			len(result.Submission) == 0 || key != result.App+"/"+sub.GetIdempotencyKey() {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s is incompatible", t.ID, key)
 		}
-		owner, ok := t.app(receipt.GetSubmission().GetAuthority()).(platform.ResultApp)
+		owner, ok := t.app(receipt.GetSubmission().GetAuthority()).(platform.App)
 		if !ok || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s has no receipt", t.ID, key)
 		}

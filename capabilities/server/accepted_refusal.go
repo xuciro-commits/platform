@@ -151,6 +151,26 @@ func acceptedIdentity(raw []byte) (resultIdentity, error) {
 		return identity, err
 	}
 	identity.Scope = "submission"
+	if envelope.Kind == "host-result" {
+		r, e := decodeAcceptedHostControl(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "host"
+		return identity, e
+	}
+	if envelope.Kind == "composite-result" {
+		r, e := decodeAcceptedComposite(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "composite"
+		return identity, e
+	}
+	if envelope.Kind == "usage-result" {
+		r, e := decodeAcceptedUsage(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "usage"
+		return identity, e
+	}
+	if envelope.Kind == "agent-result" {
+		r, e := decodeAcceptedAgent(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "agent"
+		return identity, e
+	}
 	if envelope.Kind == "operation-claim" {
 		result, err := decodeOperationClaim(raw)
 		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash

@@ -100,7 +100,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 		}
 		return raw, nil
 	}
-	if len(d.intents) > 0 || len(d.observations) > 0 || len(d.allocated) > 0 || len(d.operationCancels) > 0 {
+	if d.control != nil || len(d.intents) > 0 || len(d.observations) > 0 || len(d.allocated) > 0 || len(d.operationCancels) > 0 {
 		return nil, fmt.Errorf("connector input contains effects without a decision")
 	}
 	// A legacy input retry may read its saved receipt through a private log.
@@ -214,27 +214,14 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 	principal, _ := json.Marshal(m)
 	var versions map[string]int
 	if t.procs != nil {
-		versions = t.procs.Versions()
+		versions = draft.flowVersions()
 	}
-	committed, err := t.commitInputResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
+	committed, err := t.acceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
 		Principal: principal, Body: raw, At: now, Versions: versions}, key, hash)
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	return t.finishCommittedInput(a, m, name, key, hash, committed)
-}
-
-// Storage chooses how the already staged result is accepted, never whether
-// the input is staged. Record retains its fatal-on-append-failure contract;
-// memory acceptance still applies and caches the same complete result.
-func (t *Tenant) commitInputResult(entry Entry, key, hash string) ([]byte, error) {
-	if t.AcceptResult != nil {
-		return t.AcceptResult(entry, key, hash)
-	}
-	if t.Record != nil {
-		t.Record(entry)
-	}
-	return entry.Body, nil
 }
 
 func (t *Tenant) finishCommittedInput(a platform.AcceptedInputApp, m platform.Member, name, key, hash string, committed []byte) (answer any, refusal *kernel.Error) {
@@ -363,7 +350,7 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedInput, bool, error) {
 		return result, false, nil
 	}
 	if len(result.Changes) > 0 {
-		owner, ok := t.app(result.App).(platform.ResultApp)
+		owner, ok := t.app(result.App).(platform.App)
 		if !ok {
 			return result, false, fmt.Errorf("connector result needs missing child authority")
 		}

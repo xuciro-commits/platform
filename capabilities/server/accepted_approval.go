@@ -13,7 +13,7 @@ import (
 )
 
 func (d *stagedDecision) RequestApproval(c platform.Caller, app string, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	a, ok := d.tenant.app(app).(platform.ResultApp)
+	a, ok := d.tenant.app(app).(platform.App)
 	if !ok || c.Automation || c.Tenant != d.tenant.ID || s.GetAuthority() != app || s.GetPrincipalId() != c.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval needs its original authorised member")
 	}
@@ -23,7 +23,7 @@ func (d *stagedDecision) RequestApproval(c platform.Caller, app string, s *pb.Su
 	return d.requestApproval(a, c.Member, s, now)
 }
 
-func (d *stagedDecision) requestApproval(a platform.ResultApp, m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (d *stagedDecision) requestApproval(a platform.App, m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	// Permission/attribute/rule checks occur privately. Even a rule that uses
 	// another app cannot leave anything in the actual request transaction.
 	c := platform.NewCaller(d, m, a.Manifest().ID, false, false)

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -37,6 +38,8 @@ type acceptedWork struct {
 	Changes     json.RawMessage   `json:"changes,omitempty"`
 	Notices     *acceptedNotices  `json:"notices,omitempty"`
 	Intents     []platform.Effect `json:"intents,omitempty"`
+	States      []acceptedState   `json:"states,omitempty"`
+	Control     *acceptedControl  `json:"control,omitempty"`
 }
 
 func stateOfTask(task *Task) (taskState, error) {
@@ -57,6 +60,11 @@ func workInputHash(input taskState, prior json.RawMessage) (string, error) {
 }
 
 func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
+	if task.event != nil {
+		end := t.begin("deliver "+task.event.Record.GetSubmission().GetSchema().GetName()+" to "+task.App, task.event.span,
+			attribute.String("platform.app", task.App), attribute.String("platform.target", target(task.event.Record.GetSubmission())))
+		defer func() { end(outcome); counted(t, "delivery", task.App, outcome) }()
+	}
 	// Everything below is under the top-level tenant commit lock.
 	defer func() {
 		if p := recover(); p != nil {
@@ -135,14 +143,21 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 		}
 	} else if len(draft.records.writes) > 0 || len(draft.deliveries) > 0 || draft.failure != nil ||
-		len(draft.states) > 0 && len(draft.stateBases) > 0 {
+		len(draft.observations) > 0 || len(draft.allocated) > 0 || len(draft.logs) > 0 || len(draft.operationCancels) > 0 || len(draft.requests) > 0 {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	} else {
 		result.Notices = draft.savedNotices()
 		result.Intents = slices.Clone(draft.intents)
+		result.States, err = draft.savedStates()
+		if err == nil {
+			result.Control, err = draft.savedControl()
+		}
+		if err != nil {
+			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
+		}
 	}
-	if t.procs != nil {
-		t.procs.Versions() // saved record images already pin each chosen version
+	if result.Control != nil || len(result.States) > 0 {
+		result.Version = 2
 	}
 	result.Digest, err = digestAcceptedWork(result)
 	if err != nil {
@@ -156,7 +171,7 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	principal, _ := json.Marshal(c.Member)
-	committed, err := t.AcceptResult(Entry{App: task.App, Kind: "accepted-result", Principal: principal, Body: raw, At: now},
+	committed, err := t.acceptResult(Entry{App: task.App, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()},
 		result.Key, result.RequestHash)
 	if err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
@@ -171,7 +186,7 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	t.enqueue(saved.At)
-	if len(saved.Changes) == 0 && saved.Notices == nil {
+	if len(saved.Changes) == 0 && len(saved.States) == 0 && saved.Notices == nil {
 		t.operationsChanged(saved.App)
 	} else {
 		t.changedOwner(saved.App)
@@ -190,17 +205,17 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *Task, now
 		}
 	}()
 	if task.Kind == "job" {
-		refusal = t.app(task.App).(platform.Runner).Run(c, task.job.Name, now)
+		refusal = d.stateApp(t.app(task.App)).(platform.Runner).Run(c, task.job.Name, now)
 	} else {
 		t.hops = task.event.hops + 1
-		if listener, ok := t.app(task.App).(host.Listener); ok {
+		if listener, ok := d.stateApp(t.app(task.App)).(host.Listener); ok {
 			names := append([]string{task.event.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(task.event.Event)...)
 			if task.event.plan != nil {
 				names = task.event.plan.Names
 			}
 			refusal = listener.Listen(c, task.event.Event, names, now)
 		} else {
-			refusal = t.app(task.App).(platform.Subscriber).Handle(c, task.event.Event)
+			refusal = d.stateApp(t.app(task.App)).(platform.Subscriber).Handle(c, task.event.Event)
 		}
 	}
 	if refusal == nil {
@@ -238,7 +253,7 @@ func decodeAcceptedWork(raw []byte) (acceptedWork, error) {
 	finished := new(pb.Work)
 	workErr := protojson.Unmarshal(result.Work, finished)
 	if err != nil || hashErr != nil || result.Digest != digest || result.RequestHash != hash || workErr != nil ||
-		result.Version != 1 || result.Kind != "work-result" || result.Tenant == "" || result.App == "" || result.At.IsZero() ||
+		(result.Version != 1 && result.Version != 2) || result.Version == 1 && (result.Control != nil || len(result.States) > 0) || result.Kind != "work-result" || result.Tenant == "" || result.App == "" || result.At.IsZero() ||
 		result.Input.ID == "" || result.Input.App != result.App || result.Input.Kind != "delivery" && result.Input.Kind != "job" ||
 		result.After.ID != result.Input.ID || result.After.App != result.App || result.After.Kind != result.Input.Kind ||
 		result.After.Title != result.Input.Title || result.After.Attempts != result.Input.Attempts+1 ||
@@ -276,7 +291,7 @@ func decodeAcceptedWork(raw []byte) (acceptedWork, error) {
 	}
 	if len(result.Changes) > 0 {
 		changes, _, err := decodeAcceptedBatch(result.Changes)
-		if err != nil || changes.Tenant != result.Tenant || !changes.At.Equal(result.At) || result.Notices != nil || len(result.Intents) > 0 ||
+		if err != nil || changes.Tenant != result.Tenant || !changes.At.Equal(result.At) || result.Notices != nil || len(result.Intents) > 0 || len(result.States) > 0 || result.Control != nil ||
 			result.Outcome != "ok" {
 			return result, fmt.Errorf("work result has invalid business changes")
 		}
@@ -335,15 +350,27 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	if err := t.validateAcceptedIntents(result.Intents); err != nil {
 		return false, err
 	}
+	if err := t.validateAcceptedControl(result.Control); err != nil {
+		return false, err
+	}
+	if err := t.validateAcceptedStates(result.States); err != nil {
+		return false, err
+	}
 	if len(result.Changes) > 0 {
 		batch, _, _ := decodeAcceptedBatch(result.Changes)
-		owner, ok := t.app(batch.App).(platform.ResultApp)
-		if !ok {
+		owner := t.app(batch.App)
+		if owner == nil {
 			return false, fmt.Errorf("work result needs missing business authority")
 		}
 		if applied, err := t.applyAcceptedBatch(owner.AcceptedLedger(), result.Changes); err != nil || !applied {
 			return false, fmt.Errorf("work result business application: %v", err)
 		}
+	}
+	if err := t.applyAcceptedControl(result.Control); err != nil {
+		return false, err
+	}
+	if err := t.applyAcceptedStates(result.States); err != nil {
+		return false, err
 	}
 	t.works = works
 	t.applyAcceptedNotices(result.Notices)

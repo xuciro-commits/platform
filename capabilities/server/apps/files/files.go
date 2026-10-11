@@ -83,7 +83,6 @@ func (f *Files) Manifest() platform.Manifest {
 
 func (f *Files) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }
 func (f *Files) AcceptedLedger() *platform.Ledger         { return f.ledger }
-func (*Files) AcceptedActionSchemas() []string            { return []string{SchemaAnnotate} }
 func (f *Files) Snapshot() (json.RawMessage, error)       { return f.ledger.Snapshot() }
 func (f *Files) Restore(raw json.RawMessage) error        { return f.ledger.Restore(raw) }
 func (f *Files) Read(platform.Caller, string) (any, *kernel.Error) {
@@ -161,3 +160,10 @@ func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	})
 }
+
+// The file decisions use staged records and the private host's permission view.
+func (f *Files) ForkDecision() (platform.App, error) {
+	return &Files{host: f.host, ledger: f.ledger}, nil
+}
+
+var _ platform.DecisionForkApp = (*Files)(nil)

@@ -174,6 +174,15 @@ type AcceptedStateApp interface {
 	ApplyAcceptedState(json.RawMessage) error
 }
 
+// DecisionForkApp isolates an owner's decision context and runtime caches while
+// retaining immutable declarations. Its fork must have the same app ID and
+// ledger identity. This is not an acceptance opt-in: every App is staged, and
+// mutable authoritative state still requires AcceptedStateApp's complete image.
+type DecisionForkApp interface {
+	App
+	ForkDecision() (App, error)
+}
+
 // AcceptedInputApp is required for Tenant inputs declared as recorded. Its Input
 // implementation must mutate only its caller's staged Runtime or an
 // AcceptedStateApp fork. DecodeAcceptedInput reconstructs the already saved
@@ -225,8 +234,8 @@ func Attempt(c Caller, decide func() (*pb.ChangeRecord, *kernel.Error)) (*pb.Cha
 
 // MarkSeen stays within the calling decision's notification view.
 func MarkSeen(c Caller, keys ...string) {
-	if owner, ok := c.rt.(interface{ Seen(Caller, ...string) }); ok {
-		owner.Seen(c, keys...)
+	if c.rt != nil {
+		c.rt.Seen(c, keys...)
 	}
 }
 
@@ -261,11 +270,68 @@ type DecisionRuntime interface {
 	ProbeDecision(Caller, func(Caller) *kernel.Error) *kernel.Error
 }
 
+// ReadRuntime serves scoped reads from the calling decision's view. A private
+// owner must not substitute live records for its uncommitted writes.
+type ReadRuntime interface {
+	ReadQuery(Caller, string, string, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
+	ReadQueryVersion(Caller, string, string, int, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
+	ReadRecord(Caller, string, string, time.Time) (json.RawMessage, *kernel.Error)
+	ReadRecordPath(Caller, string, string, []string, time.Time) (json.RawMessage, []string, *kernel.Error)
+}
+
+// OperationRuntime owns controlled computation and cancellation. A runtime
+// outside an accepted decision must explicitly refuse requests.
+type OperationRuntime interface {
+	RequestOperation(Caller, *pb.ChangeRecord, OperationRequest) (OperationCall, *kernel.Error)
+	OperationResult(Caller, string) (OperationResult, *kernel.Error)
+	CancelOperation(Caller, *pb.ChangeRecord, string) *kernel.Error
+	RequestCompilation(Caller, *pb.ChangeRecord, string, string, CodeBuildRequest) (OperationCall, *kernel.Error)
+}
+
+// FunctionRuntime plans model work within its enclosing accepted result.
+type FunctionRuntime interface {
+	RequestFunction(Caller, *pb.ChangeRecord, FunctionRequest) (FunctionCall, *kernel.Error)
+}
+
+// ApprovalRuntime stages an approval request with its parent decision.
+type ApprovalRuntime interface {
+	RequestApproval(Caller, string, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
+}
+
+// NotificationRuntime owns notification changes in the current decision.
+type NotificationRuntime interface {
+	Notify(Caller, Notification, time.Time, []Recipient) []string
+	Seen(Caller, ...string)
+}
+
+// InputDiagnosticRuntime associates field issues with this decision's refusal.
+type InputDiagnosticRuntime interface {
+	InputRefused(*kernel.Error, []FieldIssue)
+}
+
+// ControlRuntime validates host administration against the current decision's
+// private owner. Its callback contributes to that result and cannot publish it.
+type ControlRuntime interface {
+	ControlDecision(Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error)
+}
+
+// ControlDecision keeps administration within the caller's decision owner.
+func ControlDecision(c Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	if c.rt == nil {
+		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Host controls require a private decision")
+	}
+	return c.rt.ControlDecision(c, s, at)
+}
+
 // StagedRuntime is a complete private decision view. DraftChanges is called
 // with the ledger lock held; it must return the same private log for that
 // ledger throughout the decision and must never return the live log.
 type StagedRuntime interface {
 	Runtime
+	// HoldChanges is entered before taking the ledger lock. It rejects a nested
+	// receive of the same ledger, and retains a parent's private log identity
+	// across nested savepoints until the returned release function runs.
+	HoldChanges(*Ledger) (release func(), refusal *kernel.Error)
 	DraftChanges(*Ledger, func() *kernel.ChangeLog) *kernel.ChangeLog
 }
 
@@ -273,12 +339,18 @@ type StagedRuntime interface {
 // it. Each method acts as c, for c's app, within the input being handled.
 type Runtime interface {
 	DecisionRuntime
+	ReadRuntime
+	OperationRuntime
+	FunctionRuntime
+	ApprovalRuntime
+	NotificationRuntime
+	InputDiagnosticRuntime
+	ControlRuntime
 	Publish(c Caller, record *pb.ChangeRecord)
 	Probe(c Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error
 	Request(c Caller, r *pb.ChangeRecord, q Request)
 	Query(c Caller, protocol, read string, provider ...string) ([]ProviderResult, *kernel.Error)
 	BoundProvider(c Caller, protocol string) (string, *kernel.Error)
-	Notify(c Caller, n Notification, now time.Time, to []Recipient) []string
 	Setting(c Caller, name string) string
 	Emit(c Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error)
 	Units(c Caller, structure string, now time.Time) []string
@@ -353,35 +425,15 @@ func (m Manifest) AllRoles() []string {
 
 // App is one app's instance in one tenant.
 type App interface {
+	// AcceptedLedger is the owner's authoritative ledger. All new decisions
+	// are staged; an empty action catalog does not remove this obligation.
+	AcceptedLedger() *Ledger
 	Manifest() Manifest
 	Declarations() []*pb.AuthorityDeclaration
 	Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
 	// Read serves a named read; the app refuses callers it does not show it to.
 	Read(c Caller, name string) (any, *kernel.Error)
 	Input(c Caller, name string, body []byte, now time.Time) (any, *kernel.Error)
-}
-
-// ResultApp exposes the ledger that pure result application advances. Only
-// supported generated/selected actions and explicitly audited workers use it;
-// it does not certify arbitrary app-owned mutable state.
-type ResultApp interface {
-	App
-	AcceptedLedger() *Ledger
-}
-
-// AcceptedActionApp opts explicitly audited non-generated actions into the
-// same private result decision. Actions not listed retain the legacy path
-// until their owned effects can be represented without live mutation.
-type AcceptedActionApp interface {
-	ResultApp
-	AcceptedActionSchemas() []string
-}
-
-// AcceptedWorker declares that this app's jobs/listener use only the staged
-// Runtime and host routes. Their own K9 attempt is part of the same result.
-type AcceptedWorker interface {
-	ResultApp
-	AcceptedWork()
 }
 
 // Event is an accepted decision, delivered to subscribers after commit.

@@ -325,12 +325,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		if tenant.Record == nil {
 			tenant.Record = appendEntry
 		}
-		if tenant.AcceptResult == nil {
-			tenant.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
-				appendEntry(e)
-				return e.Body, nil
-			}
-		}
+
 	}
 	seed := func(t *Tenant) error {
 		if d.Seed != nil && !t.quarantined() && (journal == nil || fresh[t.ID]) {

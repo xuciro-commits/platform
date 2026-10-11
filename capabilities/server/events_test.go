@@ -18,6 +18,14 @@ var notesProtocol = platform.Protocol{Name: "notes", Version: 1, Reads: []string
 // published is a notes app that provides notesProtocol.
 type published struct{ *notes }
 
+func (p published) ForkAcceptedState() (platform.App, error) {
+	fork, err := p.notes.ForkAcceptedState()
+	if err != nil {
+		return nil, err
+	}
+	return published{fork.(*notes)}, nil
+}
+
 func (p published) Manifest() platform.Manifest {
 	m := p.notes.Manifest()
 	m.Provides = []platform.Provision{{Protocol: notesProtocol, Reads: map[string]string{"notes": p.id + "-notes"}, Events: map[string]string{"noted": p.id + ".note"}}}
@@ -28,6 +36,14 @@ func (p published) Manifest() platform.Manifest {
 // own note for each. A note "fail" is refused every time; "wait:<topic>" is
 // refused until the provider has that topic.
 type watcher struct{ *notes }
+
+func (w watcher) ForkAcceptedState() (platform.App, error) {
+	fork, err := w.notes.ForkAcceptedState()
+	if err != nil {
+		return nil, err
+	}
+	return watcher{fork.(*notes)}, nil
+}
 
 func (w watcher) Manifest() platform.Manifest {
 	m := w.notes.Manifest()
@@ -141,8 +157,8 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	if got := tn.Tasks(); len(got) != 1 || got[0].Attempts != 2*deliveryRetry.Attempts || got[0].State != "failed" {
 		t.Fatalf("after the retried schedule %+v", got)
 	}
-	// The journal holds the inputs and every attempt; a replay rebuilds the
-	// handlers' decisions, the deliveries and the owned work.
+	// The journal holds complete accepted attempts; replay restores their
+	// decisions, deliveries and owned work without calling today's handler.
 	again, w2 := build()
 	if err := again.Replay(journal); err != nil {
 		t.Fatal(err)
@@ -151,16 +167,24 @@ func TestEventsAreOwnedWork(t *testing.T) {
 		t.Fatalf("replay: %v, %v, %+v", w2.texts, outcomes(again), again.Tasks())
 	}
 	CheckReplay(t, tn, journal, func() *Tenant { tn, _ := build(); return tn })
-	// A replay whose handler ends differently than recorded is refused.
+	// The saved outcome is authenticated with the complete result. Changing an
+	// accepted success into a refusal cannot silently rebuild different work.
 	tampered := slices.Clone(journal)
+	changed := false
 	for i, e := range tampered {
-		if e.Kind == "delivery" {
-			tampered[i].Body = json.RawMessage(strings.Replace(string(e.Body), `"ok"`, `"ERROR_CODE_CONFLICT"`, 1))
+		var result acceptedWork
+		if e.Kind == "accepted-result" && json.Unmarshal(e.Body, &result) == nil && result.Kind == "work-result" && result.Outcome == "ok" {
+			result.Outcome = "ERROR_CODE_CONFLICT"
+			tampered[i].Body, _ = json.Marshal(result)
+			changed = true
 			break
 		}
 	}
+	if !changed {
+		t.Fatal("successful delivery did not save a work result")
+	}
 	if third, _ := build(); third.Replay(tampered) == nil {
-		t.Fatal("a replay that disagrees with the recorded outcome was accepted")
+		t.Fatal("a replay with a tampered recorded outcome was accepted")
 	}
 	// Reads are for members with a role in the app.
 	if _, err := tn.Read(ana, "w-notes"); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
@@ -175,6 +199,14 @@ type echo struct {
 }
 
 func (e echo) as(action string) echo { e.subscribes = action; return e }
+
+func (e echo) ForkAcceptedState() (platform.App, error) {
+	fork, err := e.notes.ForkAcceptedState()
+	if err != nil {
+		return nil, err
+	}
+	return echo{fork.(*notes), e.subscribes}, nil
+}
 
 func (e echo) Manifest() platform.Manifest {
 	m := e.notes.Manifest()

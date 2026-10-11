@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"platformserver/apps/ai"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -46,6 +47,7 @@ type acceptedEffect struct {
 	States        []acceptedState    `json:"states,omitempty"`
 	WorkBefore    json.RawMessage    `json:"workBefore,omitempty"`
 	Work          json.RawMessage    `json:"work,omitempty"`
+	Control       *acceptedControl   `json:"control,omitempty"`
 }
 
 func effectResultKey(before effectState) string {
@@ -79,7 +81,7 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 	expected := &effect{Effect: result.Before.Effect, since: result.Before.Since}
 	markEffect(expected, result.Outcome, result.At)
 	if err != nil || hashErr != nil || result.Digest != digest || result.RequestHash != hash ||
-		result.Version != 1 || result.Kind != "effect-result" || result.Tenant == "" ||
+		(result.Version != 1 && result.Version != 2) || result.Version == 1 && result.Control != nil || result.Kind != "effect-result" || result.Tenant == "" ||
 		result.App != PlatformApp || result.At.IsZero() || result.Before.ID == "" ||
 		!slices.Contains([]string{"delivered", "rejected", "retry"}, result.Outcome.Result) ||
 		len(result.Outcome.Answer) > 64<<10 ||
@@ -88,7 +90,7 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 		!reflect.DeepEqual(result.After, effectState{Effect: expected.Effect, Since: expected.since}) {
 		return result, fmt.Errorf("effect result has inconsistent identity, transition or digest")
 	}
-	if len(result.Changes) > 0 && (result.Notices != nil || len(result.Intents) > 0 || len(result.States) > 0) {
+	if len(result.Changes) > 0 && (result.Notices != nil || len(result.Intents) > 0 || len(result.States) > 0 || result.Control != nil) {
 		return result, fmt.Errorf("effect result duplicates its child decision effects")
 	}
 	if len(result.Rows) > 0 && result.Member == "" {
@@ -181,6 +183,9 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 	if err := t.validateAcceptedIntents(result.Intents); err != nil {
 		return result, false, err
 	}
+	if err := t.validateAcceptedControl(result.Control); err != nil {
+		return result, false, err
+	}
 	if err := t.validateAcceptedStates(result.States); err != nil {
 		return result, false, err
 	}
@@ -195,8 +200,8 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 		if err != nil || batch.Tenant != t.ID || !batch.At.Equal(result.At) {
 			return result, false, fmt.Errorf("effect result has an invalid child decision: %v", err)
 		}
-		owner, ok := t.app(batch.App).(platform.ResultApp)
-		if !ok {
+		owner := t.app(batch.App)
+		if owner == nil {
 			return result, false, fmt.Errorf("effect result needs missing child authority")
 		}
 		directRefs := make(map[string]bool, len(result.Rows))
@@ -226,6 +231,9 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 	}
 	if child != nil {
 		t.publishAcceptedBatch(*child)
+	}
+	if err := t.applyAcceptedControl(result.Control); err != nil {
+		return result, false, err
 	}
 	if err := t.applyAcceptedStates(result.States); err != nil {
 		return result, false, err
@@ -354,6 +362,9 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *ai.Usage
 		} else if err == nil {
 			result.Notices, result.Intents = draft.savedNotices(), slices.Clone(draft.intents)
 			result.States, err = draft.savedStates()
+			if err == nil {
+				result.Control, err = draft.savedControl()
+			}
 		}
 	}
 	if err != nil {
@@ -365,6 +376,9 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *ai.Usage
 			t.quarantine(fmt.Errorf("stage effect %s direct rows: %w", id, err))
 			return
 		}
+	}
+	if result.Control != nil {
+		result.Version = 2
 	}
 	result.Digest, err = digestAcceptedEffect(result)
 	if err != nil {
@@ -380,12 +394,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *ai.Usage
 		return
 	}
 	principal, _ := json.Marshal(t.automation(PlatformApp, false).Member)
-	committed := raw
-	if t.AcceptResult != nil {
-		committed, err = t.AcceptResult(Entry{App: PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at}, result.Key, result.RequestHash)
-	} else if app := t.app(PlatformApp); app != nil {
-		t.record(app, "accepted-result", t.automation(PlatformApp, false).Member, raw, at)
-	}
+	committed, err := t.acceptResult(Entry{App: PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, result.Key, result.RequestHash)
 	if err != nil {
 		if errors.Is(err, errAcceptedConflict) {
 			t.quarantine(fmt.Errorf("effect %s conflicts with a previously committed outcome", id))
@@ -470,7 +479,11 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 	}
 	if x.Endpoint == operationEndpoint {
 		draft.operationAnswers = map[string]platform.OperationResult{x.ID: operationResultOf(x)}
-		if processes, ok := t.procs.(interface {
+		processesOwner := t.procs
+		if app, ok := t.procs.(platform.App); ok {
+			processesOwner = draft.stateApp(app).(host.Processes)
+		}
+		if processes, ok := processesOwner.(interface {
 			OperationEnded(platform.Caller, string, time.Time) *kernel.Error
 		}); ok {
 			c := platform.NewCaller(draft, platform.Member{ID: "app:" + "flow", Tenant: t.ID}, "flow", false, true)
@@ -480,13 +493,31 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		}
 	}
 	c := platform.NewCaller(draft, platform.Member{ID: "app:" + x.App, Tenant: t.ID}, x.App, false, true)
-	if app, ok := t.app(x.App).(platform.Answerer); ok {
-		if err := app.Answer(c, x, out, at); err != nil {
-			return err
+	if app, ok := draft.stateApp(t.app(x.App)).(platform.Answerer); ok {
+		var source platform.Effect
+		t.opsMu.Lock()
+		for _, effect := range t.outbound {
+			if effect.ID == x.ID {
+				source = effect.Effect
+				break
+			}
+		}
+		t.opsMu.Unlock()
+		if source.ID == "" || source.App != x.App {
+			return fmt.Errorf("effect callback has no accepted source")
+		}
+		previous := draft.callbackOrigin
+		refusal := func() *kernel.Error {
+			draft.callbackOrigin = &source
+			defer func() { draft.callbackOrigin = previous }()
+			return app.Answer(c, x, out, at)
+		}()
+		if refusal != nil {
+			return refusal
 		}
 	}
 	if t.agents != nil {
-		t.agents.effectEnded(t.automated(c, AgentApp), nil, x, out, at)
+		draft.stateApp(t.agents).(*Agents).effectEnded(t.automated(c, AgentApp), nil, x, out, at)
 	}
 	if draft.failure != nil {
 		return draft.failure

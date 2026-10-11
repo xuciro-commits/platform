@@ -222,16 +222,6 @@ func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Decla
 
 func (w *Work) AcceptedLedger() *platform.Ledger { return w.ledger }
 
-func (*Work) AcceptedWork() {}
-
-func (w *Work) AcceptedActionSchemas() []string {
-	var schemas []string
-	for _, action := range w.ledger.Catalog.All() {
-		schemas = append(schemas, action.Schema)
-	}
-	return schemas
-}
-
 func (w *Work) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
@@ -704,3 +694,11 @@ func (w *Work) delegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRec
 	}
 	return func(r *pb.ChangeRecord) { c.Put(r, d) }, nil
 }
+
+// Work stores its authority in the ledger and staged records. Its private
+// instance receives the private host view for directory and approval reads.
+func (w *Work) ForkDecision() (platform.App, error) {
+	return &Work{host: w.host, ledger: w.ledger}, nil
+}
+
+var _ platform.DecisionForkApp = (*Work)(nil)

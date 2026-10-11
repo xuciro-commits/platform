@@ -12,12 +12,16 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
 // stagedDecision owns the private record, ledger and intent views for supported
 // ADR-0038 transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
+	callbackOrigin   *platform.Effect
+	callbackWrites   map[string]callbackWrite
+	control          *controlDecision
 	tenant           *Tenant
 	records          *recordStore
 	logs             map[*platform.Ledger]*kernel.ChangeLog
@@ -45,6 +49,8 @@ type stagedDecision struct {
 	hops             int
 	requests         []request
 	requestCounts    map[string]int
+	receiving        map[*platform.Ledger]bool
+	privateApps      map[string]platform.App
 	states           map[string]platform.AcceptedStateApp
 	stateBases       map[string]json.RawMessage
 	connectors       *kernel.Connectors
@@ -52,6 +58,19 @@ type stagedDecision struct {
 	operationAnswers map[string]platform.OperationResult
 	operationCancels map[string]bool
 	operationInputs  map[string][]*preparedOperationInput
+}
+
+// HoldChanges tracks the stack that owns a private ledger receive. Savepoints
+// must retain its captured log and receiver until that receive returns.
+func (d *stagedDecision) HoldChanges(ledger *platform.Ledger) (func(), *kernel.Error) {
+	if d.receiving[ledger] {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held ledger")
+	}
+	if d.receiving == nil {
+		d.receiving = map[*platform.Ledger]bool{}
+	}
+	d.receiving[ledger] = true
+	return func() { delete(d.receiving, ledger) }, nil
 }
 
 func (d *stagedDecision) InputRefused(err *kernel.Error, issues []platform.FieldIssue) {
@@ -69,6 +88,9 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 	t.opsMu.Lock()
 	descriptors, marks := t.connectors.kernel.State()
 	t.opsMu.Unlock()
+	for i, descriptor := range descriptors {
+		descriptors[i] = proto.Clone(descriptor).(*pb.ConnectorDescriptor)
+	}
 	connectors := kernel.NewConnectors()
 	connectors.Restore(descriptors, marks)
 	before, _ := canonicalDigest(notices)
@@ -80,14 +102,13 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 }
 
 func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	// A probe also checks legacy actions, but can never commit them: the
-	// ledger validates against a private log and skips its apply callback.
-	if !d.probing {
-		if _, ok := app.(platform.ResultApp); !ok || !d.tenant.acceptsGenerated(app, s) {
-			unsupportedStagedEffect()
-		}
+	if app.AcceptedLedger() == nil {
+		unsupportedStagedEffect()
 	}
 	id := app.Manifest().ID
+	if d.receiving[app.AcceptedLedger()] {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held owner")
+	}
 	if d.active[id] || len(d.active) >= maxHops {
 		unsupportedStagedEffect()
 	}
@@ -121,7 +142,7 @@ func (d *stagedDecision) DraftChanges(l *platform.Ledger, fork func() *kernel.Ch
 
 func (d *stagedDecision) bindPrivateFacts(l *platform.Ledger) {
 	for _, owner := range d.states {
-		ledger, ok := owner.(platform.ResultApp)
+		ledger, ok := owner.(platform.App)
 		if !ok || ledger.AcceptedLedger() != l {
 			continue
 		}
@@ -141,7 +162,16 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 		et := d.records.of(c, reflect.TypeOf(entity))
 		id := recordOf(copyOf(et.info.Go, entity)).ID
 		ref := et.info.Type + "/" + id
+		history := len(et.rows[id].history)
 		d.records.mu.Unlock()
+		if origin := d.callbackOrigin; origin != nil && origin.App == c.App && c.ID == "app:"+origin.App &&
+			r.GetChangeId() == "" && r.GetSubmission().GetAuthority() == "" && r.GetSubmission().GetPrincipalId() == c.ID &&
+			r.GetSubmission().GetSchema().GetName() != "" && r.GetRecordedTime().AsTime().Equal(d.at) {
+			if d.callbackWrites == nil {
+				d.callbackWrites = map[string]callbackWrite{}
+			}
+			d.callbackWrites[ref] = callbackWrite{Source: *origin, History: history}
+		}
 		app := r.GetSubmission().GetAuthority()
 		d.writers[ref] = append(d.writers[ref], app)
 		key := app + "/" + r.GetChangeId()
@@ -212,14 +242,14 @@ type stagedEffectPanic struct{}
 func unsupportedStagedEffect() { panic(stagedEffectPanic{}) }
 
 func (d *stagedDecision) Probe(c platform.Caller, protocol, action, id string, payload []byte, at time.Time) *kernel.Error {
-	return d.tenant.probe(c, protocol, action, id, payload, at)
+	return d.routingTenant().probe(c, protocol, action, id, payload, at)
 }
 func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platform.Request) {
 	if r.GetSubmission().GetTenantId() != d.tenant.ID || r.GetSubmission().GetAuthority() != c.App {
 		unsupportedStagedEffect()
 	}
 	if q.Protocol == "" {
-		d.intents = append(d.intents, d.tenant.planModelRequest(c, r, q, d.intents))
+		d.intents = append(d.intents, d.routingTenant().planModelRequest(c, r, q, d.intents))
 		return
 	}
 	// Own both the payload and receipt. An application may reuse either after
@@ -235,13 +265,13 @@ func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platfo
 		record: proto.Clone(r).(*pb.ChangeRecord), n: n})
 }
 func (d *stagedDecision) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
-	return d.tenant.query(c, protocol, read, provider...)
+	return d.routingTenant().query(c, protocol, read, provider...)
 }
 func (d *stagedDecision) Setting(c platform.Caller, name string) string {
-	return d.tenant.setting(c, name)
+	return d.routingTenant().setting(c, name)
 }
 func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
-	planned, err := d.tenant.planAppEffects(c, kind, key, entity, data, now, d.intents)
+	planned, err := d.routingTenant().planAppEffects(c, kind, key, entity, data, now, d.intents)
 	if err != nil {
 		if d.failure == nil {
 			d.failure = err
@@ -256,19 +286,19 @@ func (d *stagedDecision) Units(c platform.Caller, structure string, now time.Tim
 	if d.tenant.directory == nil {
 		return nil
 	}
-	return d.tenant.directory.Units("member:"+c.ID, structure, c.Today(now))
+	return d.directoryView().Units("member:"+c.ID, structure, c.Today(now))
 }
 func (d *stagedDecision) Element(c platform.Caller, id string, now time.Time) (platform.ElementInfo, bool) {
 	if d.tenant.directory == nil {
 		return platform.ElementInfo{}, false
 	}
-	return d.tenant.directory.Element(id, now.UTC().Format(time.DateOnly))
+	return d.directoryView().Element(id, now.UTC().Format(time.DateOnly))
 }
 func (d *stagedDecision) Related(c platform.Caller, element, stereotype string, outgoing bool, now time.Time) []string {
 	if d.tenant.directory == nil {
 		return nil
 	}
-	return d.tenant.directory.Related(element, stereotype, outgoing, now.UTC().Format(time.DateOnly))
+	return d.directoryView().Related(element, stereotype, outgoing, now.UTC().Format(time.DateOnly))
 }
 func (d *stagedDecision) Links(c platform.Caller, entity string) []string {
 	if d.tenant.linker == nil {
@@ -376,5 +406,12 @@ func (d *stagedDecision) Next(c platform.Caller, rec *pb.ChangeRecord, name stri
 }
 
 func (d *stagedDecision) BoundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {
-	return d.tenant.boundProvider(c, protocol)
+	return d.routingTenant().boundProvider(c, protocol)
+}
+
+func (d *stagedDecision) directoryView() host.Directory {
+	if owner, ok := d.tenant.directory.(platform.App); ok {
+		return d.stateApp(owner).(host.Directory)
+	}
+	return d.tenant.directory
 }

@@ -243,10 +243,8 @@ func (c Caller) RefuseFields(issues []FieldIssue) *kernel.Error {
 	if c.inputRefused != nil {
 		c.inputRefused(err, issues)
 	}
-	if sink, ok := c.rt.(interface {
-		InputRefused(*kernel.Error, []FieldIssue)
-	}); ok {
-		sink.InputRefused(err, issues)
+	if c.rt != nil {
+		c.rt.InputRefused(err, issues)
 	}
 	return err
 }

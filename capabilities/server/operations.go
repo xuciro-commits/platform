@@ -54,17 +54,11 @@ type Task struct {
 	job      platform.Job
 }
 
-// enqueue runs the input's requests of other apps and queues its events for
-// their subscribers, after the platform's own observers have seen them; it runs
-// inside the input, and inside a replay.
+// enqueue publishes accepted event plans to their subscribers. Nested
+// requests are decided privately before acceptance; legacy replay reads their
+// already-journaled answers.
 func (t *Tenant) enqueue(now time.Time) {
-	for len(t.requests) > 0 || len(t.events) > 0 {
-		if len(t.events) == 0 { // a decision's requests after its events, in the order a replay meets them
-			q := t.requests[0]
-			t.requests = t.requests[1:]
-			t.answer(q, now)
-			continue
-		}
+	for len(t.events) > 0 {
 		e := t.events[0]
 		t.events = t.events[1:]
 		s := e.Record.GetSubmission()
@@ -256,10 +250,8 @@ func (t *Tenant) Deferred(now time.Time) []string {
 
 // attempt hands a queued event to its subscriber once; the outcome is journaled.
 func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
-	if !replaying && t.AcceptResult != nil {
-		if _, ok := t.app(task.App).(platform.AcceptedWorker); ok {
-			return t.acceptWork(task, now)
-		}
+	if !replaying {
+		return t.acceptWork(task, now)
 	}
 	generation, _, _ := t.works.Start(task.ID, "host")
 	t.hops = task.event.hops + 1
@@ -307,22 +299,16 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 	if task.State == "failed" {
 		t.failedWork("Delivery to "+task.App+" failed: "+task.Title, outcome, task.ID, now, replaying)
 	}
-	if !replaying {
-		body, _ := json.Marshal(workBody{Work: task.ID, Outcome: outcome})
-		t.record(t.app(task.App), "delivery", t.automation(task.App, false).Member, body, now)
-	}
+
 	t.enqueue(now)
 	return outcome
 }
 
 // run runs a job once; it is journaled when it decided or notified something.
 func (t *Tenant) run(task *Task, now time.Time, replaying bool) string {
-	if !replaying && t.AcceptResult != nil {
-		if _, ok := t.app(task.App).(platform.AcceptedWorker); ok {
-			return t.acceptWork(task, now)
-		}
+	if !replaying {
+		return t.acceptWork(task, now)
 	}
-	before := t.acted
 	generation, _, _ := t.works.Start(task.ID, "host")
 	outcome := "ok"
 	if err := t.app(task.App).(platform.Runner).Run(t.automation(task.App, replaying), task.job.Name, now); err != nil {
@@ -332,10 +318,7 @@ func (t *Tenant) run(task *Task, now time.Time, replaying bool) string {
 	t.opsMu.Lock()
 	task.Attempts, task.Last, task.Due, task.Error = int(generation), now, now.Add(task.job.Every), map[bool]string{true: "", false: outcome}[outcome == "ok"]
 	t.opsMu.Unlock()
-	if !replaying && t.acted != before {
-		body, _ := json.Marshal(workBody{Work: task.ID, Outcome: outcome})
-		t.record(t.app(task.App), "job", t.automation(task.App, false).Member, body, now)
-	}
+
 	t.enqueue(now)
 	return outcome
 }

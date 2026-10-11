@@ -131,12 +131,21 @@ func TestTenantComposition(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Two successful decisions, their durable refusal and one recorded input.
+	if len(journal) != 4 {
+		t.Fatalf("expected four complete accepted results, got %d", len(journal))
+	}
+	refused, original, decodeErr := decodeRefusedResult(journal[2].Body)
+	if decodeErr != nil || journal[2].Kind != "accepted-result" || original.GetIdempotencyKey() != "k3" || refused.Error.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+		t.Fatalf("unauthorized decision lost its accepted refusal: %+v, %v", refused, decodeErr)
+	}
+
 	// A second tenant replays the journal into the same state.
 	again, a2, b2 := setup(t, nil)
 	if err := again.Replay(journal); err != nil {
 		t.Fatal(err)
 	}
-	if fmt.Sprint(a2.texts, b2.texts) != fmt.Sprint(a.texts, b.texts) || len(journal) != 3 {
+	if fmt.Sprint(a2.texts, b2.texts) != fmt.Sprint(a.texts, b.texts) || len(journal) != 4 {
 		t.Fatalf("replayed %v %v from %d entries", a2.texts, b2.texts, len(journal))
 	}
 }

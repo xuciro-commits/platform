@@ -10,8 +10,6 @@ import (
 const SchemaAdvice = "crm.opportunity.advise"
 const SchemaAdviceAnswer = "crm.opportunity.advice-answer"
 
-func (*CRM) AcceptedActionSchemas() []string { return []string{SchemaAdvice, SchemaAdviceAnswer} }
-
 func adviceActions() []platform.Action {
 	return []platform.Action{{Schema: SchemaAdvice, Target: OpportunityType, Capability: "opportunities", Title: "Request review advice",
 		Description: "Ask the declared AI function for a suggestion; business actions still require your decision.", Payload: []platform.Field{}, Roles: []string{string(Sales), string(Manager)}},

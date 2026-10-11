@@ -12,12 +12,11 @@ import (
 
 type runtimeInputOwner struct {
 	*notes
-	decisions   *int
-	refuse      bool
-	blocked     bool
-	cancel      *pb.ChangeRecord
-	operation   string
-	unpublished *pb.Submission
+	decisions *int
+	refuse    bool
+	blocked   bool
+	cancel    *pb.ChangeRecord
+	operation string
 }
 
 func (a *runtimeInputOwner) ForkAcceptedState() (platform.App, error) {
@@ -35,9 +34,6 @@ func (a *runtimeInputOwner) Input(c platform.Caller, name string, body []byte, a
 		panic("saved input called decision code")
 	}
 	*a.decisions++
-	if a.unpublished != nil {
-		return a.ledger.Receive(c, a.unpublished, at, nil, nil)
-	}
 	if a.cancel != nil {
 		if refusal := c.CancelOperation(a.cancel, a.operation); refusal != nil {
 			return nil, refusal
@@ -176,16 +172,27 @@ func TestRecordedInputCannotDropAnOperationCancellation(t *testing.T) {
 	}
 }
 
+// This private owner deliberately omits its publication while retaining all
+// other named staged-runtime methods, so the writer sees the unreported log.
+type unpublishedInputRuntime struct{ platform.StagedRuntime }
+
+func (unpublishedInputRuntime) Publish(platform.Caller, *pb.ChangeRecord) {}
+
 func TestRecordedInputCannotDropAnUnpublishedDecision(t *testing.T) {
 	calls := 0
 	owner := &runtimeInputOwner{notes: newNotes("input-unpublished", "a"), decisions: &calls}
 	tn := composeTenant(t, "input-unpublished", []Seat{seatOf("ana", "a:writer")}, owner)
 	member := memberOf(t, tn, "ana")
-	owner.unpublished = submission(tn, member, "a", "a.note", "a.topic", "feed", "")
-	tn.Record = func(Entry) { t.Fatal("an unpublished decision wrote an input result") }
-	_, refusal := tn.Input(member, "a-feed", []byte("private"), time.Now())
-	if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT || calls != 1 ||
+	at := time.Date(2026, 10, 11, 22, 0, 0, 0, time.UTC)
+	draft := tn.newStagedDecision()
+	caller := platform.NewCaller(unpublishedInputRuntime{draft}, member, "a", false, false)
+	receipt, refusal := owner.ledger.Receive(caller, submission(tn, member, "a", "a.note", "a.topic", "feed", ""), at, nil, nil)
+	if refusal != nil || len(draft.events) != 0 {
+		t.Fatalf("unpublished private decision fixture failed: %v", refusal)
+	}
+	// The writer must not silently omit an actual unreported private receipt.
+	if _, err := draft.inputResult("a", "a-feed", member, []byte("private"), receipt, at); err == nil ||
 		len(owner.AcceptedLedger().RecordsFor(tn.ID)) != 0 || len(tn.committed.inputs) != 0 {
-		t.Fatalf("input lost a private decision: %v, decisions=%d", refusal, calls)
+		t.Fatalf("input result dropped an unpublished private decision: %v", err)
 	}
 }

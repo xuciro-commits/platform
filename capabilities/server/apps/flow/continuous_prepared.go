@@ -327,13 +327,21 @@ func (p *PreparedComputeRetry) OperationRequest() platform.OperationRequest {
 	return request
 }
 
-func (p *PreparedComputeRetry) Decision() platform.ResultApp {
+func (p *PreparedComputeRetry) Decision() platform.App {
 	return preparedComputeRetryDecision{Flows: p.owner, prepared: p}
 }
 
 type preparedComputeRetryDecision struct {
 	*Flows
 	prepared *PreparedComputeRetry
+}
+
+func (d preparedComputeRetryDecision) ForkDecision() (platform.App, error) {
+	fork, err := d.Flows.ForkDecision()
+	if err != nil {
+		return nil, err
+	}
+	return preparedComputeRetryDecision{Flows: fork.(*Flows), prepared: d.prepared}, nil
 }
 
 func (d preparedComputeRetryDecision) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -491,7 +499,7 @@ func BatchKey(instance string, version int, batch string) string {
 
 // Decision wraps the original app only for this native delivery. It has no
 // ledger, record store or executor of its own and is never registered as an app.
-func (p *PreparedBatch) Decision() platform.ResultApp {
+func (p *PreparedBatch) Decision() platform.App {
 	return preparedDecision{Flows: p.owner, prepared: p}
 }
 
@@ -534,6 +542,14 @@ func (p *PreparedBatch) OperationRequest() (platform.OperationRequest, bool) {
 type preparedDecision struct {
 	*Flows
 	prepared *PreparedBatch
+}
+
+func (d preparedDecision) ForkDecision() (platform.App, error) {
+	fork, err := d.Flows.ForkDecision()
+	if err != nil {
+		return nil, err
+	}
+	return preparedDecision{Flows: fork.(*Flows), prepared: d.prepared}, nil
 }
 
 func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {

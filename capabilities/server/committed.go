@@ -12,10 +12,11 @@ import (
 // composite commands applied. Guarded by the tenant's lock; rebuilt by replay
 // and carried by snapshots. Retries read here before any decision runs.
 type committed struct {
-	refusals   map[string]refusedResult   // "<app>/<key>"
-	answers    map[string]json.RawMessage // "<app>/<key>", "release:<key>"
-	inputs     map[string]json.RawMessage // "<app>/<key>"
-	composites map[string]string          // key → applied digest
+	refusals         map[string]refusedResult   // "<app>/<key>"
+	answers          map[string]json.RawMessage // "<app>/<key>", "release:<key>"
+	inputs           map[string]json.RawMessage // "<app>/<key>"
+	compositeAnswers map[string]json.RawMessage
+	composites       map[string]string // key → applied digest
 }
 
 func (c *committed) saveAnswer(key string, raw json.RawMessage) {
@@ -32,6 +33,13 @@ func (c *committed) saveInput(key string, raw json.RawMessage) {
 	c.inputs[key] = slices.Clone(raw)
 }
 
+func (c *committed) saveCompositeAnswer(key string, raw json.RawMessage) {
+	if c.compositeAnswers == nil {
+		c.compositeAnswers = map[string]json.RawMessage{}
+	}
+	c.compositeAnswers[key] = slices.Clone(raw)
+}
+
 func (c *committed) saveComposite(key, digest string) {
 	if c.composites == nil {
 		c.composites = map[string]string{}
@@ -40,10 +48,12 @@ func (c *committed) saveComposite(key, digest string) {
 }
 
 func (c *committed) snapshot(s *tenantState) {
+	s.CompositeAnswers = maps.Clone(c.compositeAnswers)
 	s.Refusals, s.AcceptedAnswers, s.AcceptedInputs, s.Composites = maps.Clone(c.refusals), maps.Clone(c.answers), maps.Clone(c.inputs), maps.Clone(c.composites)
 }
 
 func (c *committed) restore(s *tenantState) {
+	c.compositeAnswers = maps.Clone(s.CompositeAnswers)
 	c.refusals, c.answers, c.inputs = maps.Clone(s.Refusals), maps.Clone(s.AcceptedAnswers), maps.Clone(s.AcceptedInputs)
 	if c.refusals == nil {
 		c.refusals = map[string]refusedResult{}

@@ -643,7 +643,7 @@ func (ss *session) act(appID, protocol, action, target string, payload json.RawM
 	authority, _ := h.OwnerOf(declared.Target)
 	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: authority, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: declared.Target, Id: target}, Schema: &pb.SchemaRef{Name: action, Version: 1}, Payload: payload}
-	r, err := h.Submit(c, s, ss.now)
+	r, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) { return h.Submit(c, s, ss.now) })
 	if err != nil {
 		return nil, err
 	}

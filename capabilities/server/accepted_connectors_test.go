@@ -39,11 +39,8 @@ func (a *connectorOrderApp) Manifest() platform.Manifest {
 }
 func (a *connectorOrderApp) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 func (a *connectorOrderApp) AcceptedLedger() *platform.Ledger         { return a.ledger }
-func (*connectorOrderApp) AcceptedActionSchemas() []string {
-	return []string{"connector.order.commit"}
-}
-func (a *connectorOrderApp) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
-func (a *connectorOrderApp) Restore(raw json.RawMessage) error  { return a.ledger.Restore(raw) }
+func (a *connectorOrderApp) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
+func (a *connectorOrderApp) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
 func (*connectorOrderApp) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, unknown()
 }

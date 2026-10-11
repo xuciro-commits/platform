@@ -15,8 +15,11 @@ import (
 )
 
 type dummyAppWithAgent struct {
-	agent platform.Agent
+	ledger *platform.Ledger
+	agent  platform.Agent
 }
+
+func (d *dummyAppWithAgent) AcceptedLedger() *platform.Ledger { return d.ledger }
 
 func (d *dummyAppWithAgent) Manifest() platform.Manifest {
 	return platform.Manifest{
@@ -54,6 +57,7 @@ func TestAgentUnknownQueryFailsComposition(t *testing.T) {
 		Tools:        []string{"query:nonexistent"},
 	}
 	app := &dummyAppWithAgent{agent: ag}
+	app.ledger = platform.NewLedger("t-agent-test", "testapp", app.Manifest().Actions, "testapp.item")
 	_, err := NewTenant("t-agent-test", NewAgents("t-agent-test"), app)
 	if err == nil || !strings.Contains(err.Error(), "not a query of") {
 		t.Fatalf("expected error containing 'not a query of', got: %v", err)
@@ -86,6 +90,8 @@ func newTestCRMApp(tenant string) *testCRMApp {
 		ledger: platform.NewLedger(tenant, "crm", platform.NewCatalog(actions...), "crm.account", "crm.opportunity"),
 	}
 }
+
+func (c *testCRMApp) AcceptedLedger() *platform.Ledger { return c.ledger }
 
 func (c *testCRMApp) Manifest() platform.Manifest {
 	return platform.Manifest{

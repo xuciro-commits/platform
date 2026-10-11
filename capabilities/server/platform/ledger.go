@@ -145,6 +145,16 @@ func (l *Ledger) AcceptedFor(tenant, key string) *pb.ChangeRecord {
 // published to the tenant's subscribers (ADR-0010).
 func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	allowed func() bool, rules func() (func(*pb.ChangeRecord), *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
+	if draft, ok := c.rt.(StagedRuntime); ok {
+		release, refusal := draft.HoldChanges(l)
+		if refusal != nil {
+			return nil, refusal
+		}
+		if release == nil {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		defer release()
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !c.Replaying && !l.Catalog.Enabled(s.GetSchema().GetName()) {
@@ -174,7 +184,9 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 			return ok
 		}}
 	var apply func(*pb.ChangeRecord)
+	decided := false
 	record, err := receiver.Receive(kernel.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
+		decided = true // retries reuse a receipt without entering business rules
 		if rules == nil {
 			return nil
 		}
@@ -188,9 +200,13 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	if probing {
 		return nil, err
 	}
-	if err == nil && apply != nil {
-		apply(record)
-		if c.rt != nil {
+	if err == nil && decided {
+		if apply != nil {
+			apply(record)
+		}
+		// Historical live replay retains its original nil-callback semantics;
+		// every private/new accepted receipt publishes even without mutations.
+		if c.rt != nil && (apply != nil || c.Staging() || !c.Replaying) {
 			c.rt.Publish(c, record)
 		}
 	}

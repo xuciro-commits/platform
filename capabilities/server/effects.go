@@ -430,9 +430,6 @@ func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
 }
 
 func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *ai.Usage, now time.Time) {
-	if t.AcceptResult == nil && usage != nil {
-		t.meter(platform.Member{ID: usage.Member, Tenant: t.ID}, *usage)
-	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
@@ -455,20 +452,12 @@ func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *ai.Us
 			o.Result, o.Detail, o.Answer, o.Digest = "rejected", "Operation permission or source access was revoked", nil, ""
 		}
 	}
-	if t.AcceptResult != nil || o.Generation != 0 {
-		t.settleAccepted(effect, o, usage, now)
-		return
-	}
-	body, _ := json.Marshal(o)
-	if p := t.app(PlatformApp); p != nil {
-		t.record(p, "effect", t.automation(PlatformApp, false).Member, body, now)
-	}
-	t.apply(o, now, false, usage)
+	t.settleAccepted(effect, o, usage, now)
 }
 
 // apply records an outcome on its effect and, once the effect is settled, tells
 // the app that emitted it; replay calls it with the journaled outcome.
-func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool, measured ...*ai.Usage) bool {
+func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 	x, ok := t.mark(o, at)
 	if !ok {
 		return false
@@ -476,15 +465,9 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool, measure
 	if x.State == "failed" {
 		t.failedWork("Effect to "+x.Endpoint+" failed: "+x.Event, x.Error, x.ID, at, replaying)
 	}
-	if x.Endpoint == modelEndpoint { // an app's model request: its answer goes to the app's reply action, once
-		if settled(x.State) && !replaying {
-			var usage *ai.Usage
-			if len(measured) != 0 {
-				usage = measured[0]
-			}
-			t.answerModel(x, o, usage, at)
-			t.enqueue(at)
-		}
+	if x.Endpoint == modelEndpoint {
+		// Legacy journals contain the separate model reply submission. Recovery
+		// updates only the effect here and reads that saved reply later.
 		return true
 	}
 	if x.App != "" && settled(x.State) && x.State != "discarded" {
@@ -503,10 +486,11 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool, measure
 // told tells the app that emitted an effect that it was discarded, inside the
 // decision that discarded it, so a replay tells it again (F-24).
 func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, replaying bool) {
+	if t.controlAnswer != nil {
+		t.controlAnswer(x, o, now)
+		return
+	}
 	if x.Endpoint == modelEndpoint { // a model request answers its app's reply action, refused
-		if !replaying {
-			t.answerModel(x, o, nil, now)
-		}
 		return
 	}
 	if a, ok := t.app(x.App).(platform.Answerer); ok && x.App != "" {
