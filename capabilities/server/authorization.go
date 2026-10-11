@@ -9,7 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -122,11 +122,11 @@ func (d *Console) decideProject(c platform.Caller, s *pb.Submission) (func(*pb.C
 			return nil, invalid
 		}
 	}
-	if d.t == nil {
+	if d.host == nil {
 		return nil, invalid
 	}
 	for _, e := range p.Members { // only members of this tenant may be named
-		if _, ok := d.t.Member(e.Member); !ok {
+		if _, ok := d.MemberByID(e.Member); !ok {
 			return nil, invalid
 		}
 	}
@@ -153,7 +153,7 @@ func (d *Console) ProjectViews() []BuildProject {
 
 // edits reports whether the member is an editor of a project that covers the
 // asset. An archived project delegates nothing.
-func (d *Console) edits(member string, ref ProjectAsset) bool {
+func (d *Console) EditsProjectAsset(member string, ref ProjectAsset) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for _, p := range d.projects {
@@ -227,17 +227,17 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 	if !viaProject || slices.Contains(independent, build.Builder) || owner.Manifest().Actions.PermitsAny(independent, s.GetSchema().GetName()) { // preserve only actions held independently
 		return nil
 	}
-	d := consoleOf(t)
+	d, _ := t.app(PlatformApp).(ProjectAccess)
 	ref, ok := delegatedAsset(s)
 	if ok {
 		// Projects name assets the way candidates do, by the draft's name;
 		// the submission targets the draft's record ID (UX-11). Either form
 		// in the project covers the edit.
-		if name := t.draftName(s); name != "" && name != ref.Name && d != nil && d.edits(m.ID, ProjectAsset{App: ref.App, Kind: ref.Kind, Name: name}) {
+		if name := t.draftName(s); name != "" && name != ref.Name && d != nil && d.EditsProjectAsset(m.ID, ProjectAsset{App: ref.App, Kind: ref.Kind, Name: name}) {
 			ref.Name = name
 		}
 	}
-	if m.Agent || d == nil || !ok || !d.edits(m.ID, ref) {
+	if m.Agent || d == nil || !ok || !d.EditsProjectAsset(m.ID, ref) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project delegation covers only the draft edits of the assets your projects name; {action} on {target} is outside it", s.GetSchema().GetName(), target(s))
 	}
 	return nil

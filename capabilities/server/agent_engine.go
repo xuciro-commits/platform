@@ -14,21 +14,19 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/ai"
-	"platformserver/apps/work"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
 // stepBody is an agent entry: what the model chose at one step (ADR-0021 D3).
 type stepBody struct {
-	Run       string          `json:"run"`
-	Tool      string          `json:"tool,omitempty"`
-	Arguments json.RawMessage `json:"arguments,omitempty"`
-	Content   string          `json:"content,omitempty"` // text the model gave instead of, or beside, a tool call
-	Usage     ai.Usage        `json:"usage"`
-	Failure   string          `json:"failure,omitempty"` // the model did not answer
-	Stop      string          `json:"stop,omitempty"`    // the host stopped the run before calling a model
+	Run       string           `json:"run"`
+	Tool      string           `json:"tool,omitempty"`
+	Arguments json.RawMessage  `json:"arguments,omitempty"`
+	Content   string           `json:"content,omitempty"` // text the model gave instead of, or beside, a tool call
+	Usage     platform.AIUsage `json:"usage"`
+	Failure   string           `json:"failure,omitempty"` // the model did not answer
+	Stop      string           `json:"stop,omitempty"`    // the host stopped the run before calling a model
 	// Observation is what a knowledge search found, made outside the lock like
 	// the model's answer and applied from here on replay (ADR-0022 D4).
 	Observation json.RawMessage `json:"observation,omitempty"`
@@ -38,13 +36,14 @@ type stepBody struct {
 
 const preamble = `You are an agent of a business platform. You act only through the tools given: each action is a decision recorded with your name, and what cannot be undone waits for a person. Give a one-sentence rationale with every tool call. Read before you act; ask a person when you are unsure; end with finish and the result the goal asks for.`
 
-type turn struct {
-	run   AgentRunRecord
-	model ai.Model
-	pv    ai.Provider
-	req   ChatRequest
-	stop  string
+type AgentTurn struct {
+	Run      AgentRunRecord
+	Model    platform.AIModel
+	Provider platform.AIProvider
+	Request  ChatRequest
+	Stop     string
 }
+type turn = AgentTurn
 
 // Think gives each running agent its next model turn (ADR-0021). The host
 // calls it every second, apart from other owned work: model calls are slow and
@@ -58,7 +57,7 @@ func (t *Tenant) turns(now time.Time) []func() {
 		return nil
 	}
 	var out []func()
-	for _, x := range t.agents.due(now) {
+	for _, x := range t.agents.DueAgentTurns(now) {
 		out = append(out, func() {
 			if !t.quarantined() {
 				t.take(x, now)
@@ -78,7 +77,7 @@ func (t *Tenant) stillRunning(id string) bool {
 	defer t.mu.Unlock()
 	run, known := platform.Get[AgentRunRecord](t.automation(AgentApp, false), id)
 	if !known || run.State != "running" {
-		t.agents.idle(id)
+		t.agents.IdleAgentTurn(id)
 		return false
 	}
 	return true
@@ -87,19 +86,17 @@ func (t *Tenant) stillRunning(id string) bool {
 // take takes one run's turn: its model's answer becomes the run's next step.
 func (t *Tenant) take(x turn, now time.Time) {
 	{
-		if x.stop != "" {
-			t.agentStep(stepBody{Run: x.run.ID, Stop: x.stop}, now)
+		if x.Stop != "" {
+			t.agentStep(stepBody{Run: x.Run.ID, Stop: x.Stop}, now)
 			return
 		}
-		if x.run.OnBehalf != "" {
-			reader := t.agents.reader(x.run)
-			definition := t.agents.def(x.run.Agent)
-			if definition == nil || reader.Tenant != t.ID || reader.Roles[definition.app] == "" {
-				t.agentStep(stepBody{Run: x.run.ID, Stop: "the person no longer has access to this agent's app"}, now)
+		if x.Run.OnBehalf != "" {
+			if !t.agents.AllowsAgentRun(x.Run) {
+				t.agentStep(stepBody{Run: x.Run.ID, Stop: "the person no longer has access to this agent's app"}, now)
 				return
 			}
 		}
-		answer, failure := t.call(x.pv, x.model, t.agents.member(x.run.Agent), x.req, now)
+		answer, failure := t.call(x.Provider, x.Model, t.agents.AgentPrincipal(x.Run.Agent), x.Request, now)
 		if t.quarantined() {
 			return // do not apply a late model answer to a tenant under recovery
 		}
@@ -108,17 +105,17 @@ func (t *Tenant) take(x turn, now time.Time) {
 		// cancelled, stopped or suspended in the meantime. A late answer must
 		// not run its tool then (ADR-0050 D3, review AI-02). What it cost is
 		// still journaled and metered, so spend stays accounted for.
-		if !t.stillRunning(x.run.ID) {
-			t.meter(t.agents.member(x.run.Agent), answer.Usage)
+		if !t.stillRunning(x.Run.ID) {
+			t.meter(t.agents.AgentPrincipal(x.Run.Agent), answer.Usage)
 			return
 		}
-		body := stepBody{Run: x.run.ID, Content: answer.Content, Usage: answer.Usage}
+		body := stepBody{Run: x.Run.ID, Content: answer.Content, Usage: answer.Usage}
 		if failure != nil {
 			body.Failure = failure.Detail
 		} else if len(answer.ToolCalls) > 0 {
 			body.Tool, body.Arguments = answer.ToolCalls[0].Name, answer.ToolCalls[0].Arguments // one step at a time
 			if body.Tool == "knowledge" {
-				body.Observation = t.agents.look(x.run, body.Arguments, now)
+				body.Observation = t.agents.ObserveAgentKnowledge(x.Run, body.Arguments, now)
 			}
 		}
 		t.agentStep(body, now)
@@ -126,68 +123,63 @@ func (t *Tenant) take(x turn, now time.Time) {
 }
 
 // look searches knowledge for a run, as whom it reads, outside the tenant's lock.
-func (a *Agents) look(run AgentRunRecord, args json.RawMessage, now time.Time) json.RawMessage {
+func (a *Agents) ObserveAgentKnowledge(run AgentRunRecord, args json.RawMessage, now time.Time) json.RawMessage {
 	var p struct{ Query string }
 	json.Unmarshal(args, &p)
 	app := ""
 	if d := a.def(run.Agent); d != nil {
 		app = d.app
 	}
-	found := a.t.Knowledge(a.reader(run), app, p.Query, 4, now)
-	for i := range found {
-		found[i].Text = clip(found[i].Text, 700)
-	}
-	raw, _ := json.Marshal(found)
-	return raw
+	return a.host.AgentKnowledge(a.reader(run), app, p.Query, 4, now)
 }
 
 // due collects the running runs' next turns, under the tenant's lock.
-func (a *Agents) due(now time.Time) []turn {
-	t := a.t
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	c := t.automation(AgentApp, false)
-	var out []turn
+func (a *Agents) DueAgentTurns(now time.Time) []AgentTurn {
+	h := a.host
+	endRead := h.BeginAgentRead()
+	defer endRead()
+	c := a.automation(AgentApp, false)
+	var out []AgentTurn
 	for _, run := range a.runs(c, "running") {
 		if a.busy[run.ID] {
 			continue
 		}
-		x := turn{run: run}
+		x := AgentTurn{Run: run}
 		d := a.def(run.Agent)
 		reader := a.reader(run)
-		name := t.setting(c, SettingAgentModel)
+		name := c.Setting(SettingAgentModel)
 		switch {
 		case d == nil:
-			x.stop = "the agent is no longer declared"
+			x.Stop = "the agent is no longer declared"
 		case a.changedDefinition(run, d):
-			x.stop = "the agent definition changed; start a new run"
-		case run.OnBehalf != "" && (reader.Tenant != t.ID || reader.Roles[d.app] == ""):
-			x.stop = "the person no longer has access to this agent's app"
+			x.Stop = "the agent definition changed; start a new run"
+		case run.OnBehalf != "" && (reader.Tenant != a.tenant || reader.Roles[d.app] == ""):
+			x.Stop = "the person no longer has access to this agent's app"
 		case name == "":
-			x.stop = "no model is set for agents"
+			x.Stop = "no model is set for agents"
 		case d.spentOut(run):
 			// A run at its budget is not given another model call: the reply
 			// that crossed the budget already happened, and one more would
 			// only spend more (ADR-0050 D6, review AI-05).
-			x.stop = d.budgetReason(run)
-		case t.suspended("agent:" + run.Agent): // the off switch (ADR-0029 D4)
-			sw, _ := t.Held(SwitchType + "/agent:" + run.Agent)
-			x.stop = "suspended by " + sw.(Switch).By
+			x.Stop = d.budgetReason(run)
+		case h.AgentSuspended("agent:" + run.Agent): // the off switch (ADR-0029 D4)
+			sw, _ := h.Record(SwitchType + "/agent:" + run.Agent)
+			x.Stop = "suspended by " + sw.(Switch).By
 		default:
-			model, pv, err := t.ai.Model(name)
+			model, pv, err := h.AgentModel(name)
 			if err != nil {
-				x.stop = "the model " + name + " is not enabled"
+				x.Stop = "the model " + name + " is not enabled"
 				break
 			}
-			if why := t.reserve(a.member(run.Agent), model, now); why != "" { // the door every call passes (ADR-0029 D1)
-				x.stop = why
+			if why := h.ReserveAgentModel(a.AgentPrincipal(run.Agent), model, now); why != "" { // the door every call passes (ADR-0029 D1)
+				x.Stop = why
 				break
 			}
-			if !t.breakers.allow("ai:"+pv.ID, now) {
+			if !h.AgentProviderAvailable(pv.ID, now) {
 				continue // its provider's breaker is open: the run waits
 			}
-			x.model, x.pv, x.req = model, pv, a.prompt(c, d, run, name, now)
-			x.req.run = run.ID
+			x.Model, x.Provider, x.Request = model, pv, a.prompt(c, d, run, name, now)
+			x.Request.Run = run.ID
 		}
 		a.busy[run.ID] = true
 		out = append(out, x)
@@ -223,19 +215,18 @@ func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, mode
 	// call grounds itself through today's reader, including after ADR-0050
 	// narrowed an old flow agent's scope or a member's grants changed.
 	if typ, id, ok := strings.Cut(run.Ref, "/"); ok {
-		if view, err := a.t.Context(a.readsAs(run), typ, id, now); err == nil {
-			raw, _ := json.Marshal(view)
-			goal += "\nAbout " + run.Ref + ":\n" + clip(string(raw), 6000)
+		if view, err := a.host.AgentContext(a.readsAs(run), typ, id, now); err == nil {
+			goal += "\nAbout " + run.Ref + ":\n" + clip(string(view.Body), 6000)
 		}
 	}
 	system := preamble + "\n\n" + d.Instructions
-	if meaning := a.t.meaning(d.app); meaning != "" {
+	if meaning := a.host.AgentMeaning(d.app); meaning != "" {
 		system += "\n\nWhat the records of your app mean:\n" + meaning
 	}
-	if terms := a.t.glossary(d.app); terms != "" {
+	if terms := a.host.AgentGlossary(d.app); terms != "" {
 		system += "\n\nThis organisation's own words (its glossary; the records above keep their meaning):\n" + terms
 	}
-	if name := languageNames[run.Language]; name != "" {
+	if name := a.host.AgentLanguage(run.Language); name != "" {
 		system += "\n\nWrite your rationale, questions, drafts' free text and result in " + name + ", the language of the person you work for; keep IDs, codes and field names as they are."
 	}
 	if ms := a.memories(c, run, now); len(ms) > 0 {
@@ -277,7 +268,7 @@ func clip(s string, n int) string {
 // automation, and an app's automation drafts nothing.
 func (a *Agents) reader(run AgentRunRecord) *platform.Member {
 	if run.OnBehalf != "" {
-		if m, ok := a.t.member(run.OnBehalf); ok {
+		if m, ok := a.host.Member(run.OnBehalf); ok {
 			return &m
 		}
 		return &platform.Member{ID: run.OnBehalf} // no tenant or grants: derived reads refuse it
@@ -298,9 +289,9 @@ func (a *Agents) readsAs(run AgentRunRecord) *platform.Member {
 		app = d.app
 	}
 	if app == "" {
-		return &platform.Member{ID: "app:" + AgentApp, Tenant: a.t.ID} // no grants: nothing is readable
+		return &platform.Member{ID: "app:" + AgentApp, Tenant: a.tenant} // no grants: nothing is readable
 	}
-	return a.t.appReader(app)
+	return a.host.AgentAppReader(app)
 }
 
 // agentStep journals a step, then applies it.
@@ -316,7 +307,7 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 	if t.Record != nil {
 		now = now.Truncate(time.Microsecond)
 	}
-	t.agents.idle(b.Run)
+	t.agents.IdleAgentTurn(b.Run)
 	run, known := platform.Get[AgentRunRecord](t.automation(AgentApp, false), b.Run)
 	if b.Evaluation != nil {
 		// A report is applied only while its evaluation still waits for one;
@@ -333,8 +324,7 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 		return
 	}
 	if b.Stop == "" && run.OnBehalf != "" {
-		reader, definition := t.agents.reader(run), t.agents.def(run.Agent)
-		if definition == nil || reader.Tenant != t.ID || reader.Roles[definition.app] == "" {
+		if !t.agents.AllowsAgentRun(run) {
 			b.Stop = "the person no longer has access to this agent's app"
 			b.Tool, b.Arguments, b.Observation = "", nil, nil
 		}
@@ -356,14 +346,14 @@ func normalizedStepJSON(raw json.RawMessage) (json.RawMessage, error) {
 }
 
 // apply takes one journaled step as a decision of the agent app.
-func (a *Agents) apply(b stepBody, now time.Time, replaying bool) *kernel.Error {
-	return a.applyCaller(a.t.automation(AgentApp, replaying), b, now)
+func (a *Agents) ApplyAgentStep(b stepBody, now time.Time, replaying bool) *kernel.Error {
+	return a.ApplyAgentStepCaller(a.automation(AgentApp, replaying), b, now)
 }
 
-func (a *Agents) applyCaller(c platform.Caller, b stepBody, now time.Time) *kernel.Error {
-	t := a.t
+func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b stepBody, now time.Time) *kernel.Error {
+	h := a.host
 	if ev := b.Evaluation; ev != nil {
-		s := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: ev.ID + ":report",
+		s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: ev.ID + ":report",
 			Target: &pb.EntityRef{Type: EvaluationType, Id: ev.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 			if _, known := platform.Get[Evaluation](c, ev.ID); !known {
@@ -377,10 +367,10 @@ func (a *Agents) applyCaller(c platform.Caller, b stepBody, now time.Time) *kern
 	if !known {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if !c.Staging() && t.ai != nil && b.Usage.Model != "" {
-		t.ai.Meter(b.Usage)
+	if !c.Staging() {
+		h.ReplayAgentUsage(b.Usage)
 	}
-	s := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
+	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 		Target: &pb.EntityRef{Type: RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 	_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		return a.take(c, run, b, now), nil
@@ -481,7 +471,7 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 
 // use runs one tool; it may return what the decision does besides storing the run.
 func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool agentTool, args map[string]any, raw json.RawMessage, step *RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
-	t := a.t
+	h := a.host
 	str := func(k string) string { s, _ := args[k].(string); return s }
 	switch tool.kind {
 	case "finish":
@@ -504,57 +494,46 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 				Ref: RunType + "/" + run.ID, To: to, Key: key, Answers: answers})
 		}
 	case "context":
-		view, err := t.Context(a.readsAs(*run), str("type"), str("id"), now)
+		view, err := h.AgentContext(a.readsAs(*run), str("type"), str("id"), now)
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
-		step.Sources = append([]string{str("type") + "/" + str("id")}, t.refsIn(view)...)
-		out, _ := json.Marshal(view)
-		return string(out), nil
+		step.Sources = append([]string{str("type") + "/" + str("id")}, view.Sources...)
+		return string(view.Body), nil
 	case "search":
-		found := t.Search(a.readsAs(*run), str("query"), now)
-		for _, hit := range found {
-			step.Sources = append(step.Sources, hit.Type+"/"+hit.ID)
-		}
-		out, _ := json.Marshal(found)
-		return string(out), nil
+		view := h.AgentSearch(a.readsAs(*run), str("query"), now)
+		step.Sources = append(step.Sources, view.Sources...)
+		return string(view.Body), nil
 	case "query":
 		reader := a.reader(*run)
 		if reader == nil {
 			return "refused: a query reads as a member", nil
 		}
-		page, err := t.RunQuery(*reader, d.app, tool.schema, str("for"), now)
+		view, err := h.AgentQuery(*reader, d.app, tool.schema, str("for"), now)
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
-		q, _ := t.namedQuery(d.app, tool.schema)
-		raw, _ := json.Marshal(page.Records)
-		var ids []struct{ ID string }
-		_ = json.Unmarshal(raw, &ids)
-		for _, x := range ids {
-			step.Sources = append(step.Sources, q.Object+"/"+x.ID)
-		}
-		out, _ := json.Marshal(page)
-		return string(out), nil
+		step.Sources = append(step.Sources, view.Sources...)
+		return string(view.Body), nil
 	case "remember":
 		about, _ := args["about_person"].(bool)
 		return a.remember(c, run, str("fact"), about && run.OnBehalf != "", now)
 	case "read":
-		var out any
+		var view host.AgentObservation
 		var err *kernel.Error
 		if m := a.reader(*run); m != nil {
-			out, err = t.Read(*m, tool.schema)
+			view, err = h.AgentRead(*m, tool.schema)
 		} else {
-			out, err = t.app(d.app).Read(t.automated(c, d.app), tool.schema)
+			var out any
+			out, err = h.App(d.app).Read(h.Automation(c, d.app), tool.schema)
+			view.Body, _ = json.Marshal(out)
+			view.Sources = h.AgentSources(out)
 		}
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
-		// The read's own authority is a source too: what it answers with is not
-		// always records to check one by one (ADR-0033 D1).
-		step.Sources = append(t.refsIn(out), "read:"+tool.schema)
-		raw, _ := json.Marshal(out)
-		return string(raw), nil
+		step.Sources = append(view.Sources, "read:"+tool.schema)
+		return string(view.Body), nil
 	}
 	// An action: the declared tool, the person's own grants when it runs for one, the guard, the budget.
 	if run.ActionsUsed >= d.Budget.Actions {
@@ -562,10 +541,10 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	}
 	if tool.kind == "effect" { // sent to the endpoints bound to it, an external agent's answer awaited (ADR-0022 D7)
 		key := fmt.Sprintf("%s:%d", run.ID, len(run.Steps)+1)
-		sender := platform.ActingCaller(c, a.member(run.Agent), d.app, true)
-		t.agentRun = run.ID
+		sender := platform.ActingCaller(c, a.AgentPrincipal(run.Agent), d.app, true)
+		endRun := h.ScopeAgentRun(run.ID)
 		n, err := sender.Emit(tool.schema, key, cmp.Or(run.Ref, RunType+"/"+run.ID), map[string]string{"message": str("message"), "run": run.ID, "agent": run.Agent}, now)
-		t.agentRun = ""
+		endRun()
 		switch {
 		case err != nil:
 			return "refused: " + err.Error(), nil
@@ -586,12 +565,12 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	delete(payload, "rationale")
 	body, _ := json.Marshal(payload)
 	if d.Guard != nil {
-		if err := d.Guard(t.automated(c, d.app), a.run(*run), tool.schema, target, body); err != nil {
+		if err := d.Guard(h.Automation(c, d.app), a.run(*run), tool.schema, target, body); err != nil {
 			return "refused by its guard: " + err.Error(), nil
 		}
 	}
 	key := fmt.Sprintf("agent:%s:%d", run.ID, len(run.Steps)+1)
-	agent := platform.ActingCaller(c, a.member(run.Agent), d.app, true)
+	agent := platform.ActingCaller(c, a.AgentPrincipal(run.Agent), d.app, true)
 	person := a.reader(*run)
 	// For a person, it drafts and the person confirms (D6); a flow's agent acts itself.
 	draft := func(typ string) (string, func(*pb.ChangeRecord)) {
@@ -606,7 +585,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	if tool.kind == "protocol" {
 		protocol, schema, _ := strings.Cut(tool.schema, "#")
 		if person != nil {
-			owner, provided, ok := t.provider(tool.schema)
+			owner, provided, ok := h.ProtocolProvider(tool.schema)
 			if !ok || !owner.Manifest().Actions.PermitsAny(person.RolesIn(owner.Manifest().ID), provided) {
 				return "refused: " + person.ID + " may not " + schema + " at the provider", nil
 			}
@@ -614,20 +593,20 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 				return draft("")
 			}
 		}
-		t.agentRun = run.ID // effects it causes name the run (discarded, a signal)
+		endRun := h.ScopeAgentRun(run.ID) // effects retain their originating run
 		_, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
-			_, record, err := t.invoke(agent, protocol, schema, target, body, key, run.ID, now)
+			_, record, err := h.InvokeDecision(agent, protocol, schema, target, body, key, run.ID, now)
 			return record, err
 		})
-		t.agentRun = ""
+		endRun()
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
 		run.ActionsUsed++
 		return "done: " + schema + " " + target, nil
 	}
-	app := t.app(d.app)
-	s := &pb.Submission{TenantId: t.ID, PrincipalId: agent.ID, Authority: t.authorityOf(tool.target), IdempotencyKey: key,
+	app := h.App(d.app)
+	s := &pb.Submission{TenantId: a.tenant, PrincipalId: agent.ID, Authority: a.authorityOf(tool.target), IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: tool.target, Id: target}, Schema: &pb.SchemaRef{Name: tool.schema, Version: 1}, Payload: body, CorrelationId: run.ID}
 	if person != nil { // D2: never more than the person it runs for
 		request := proto.Clone(s).(*pb.Submission)
@@ -644,11 +623,11 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 			return draft(tool.target)
 		}
 	}
-	t.agentRun = run.ID
+	endRun := h.ScopeAgentRun(run.ID)
 	record, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
 		return platform.Decide(agent, app, s, now)
 	})
-	t.agentRun = ""
+	endRun()
 	if err != nil {
 		return "refused: " + err.Error(), nil
 	}
@@ -661,7 +640,7 @@ func (a *Agents) recipients(c platform.Caller, d *agentDef, run AgentRunRecord) 
 		return []platform.Recipient{{Member: run.OnBehalf}}
 	}
 	if d != nil && d.To != nil {
-		return d.To(a.t.automated(c, d.app), a.run(run))
+		return d.To(a.host.Automation(c, d.app), a.run(run))
 	}
 	return nil
 }
@@ -671,7 +650,7 @@ func (a *Agents) recipients(c platform.Caller, d *agentDef, run AgentRunRecord) 
 func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord, why string, now time.Time) {
 	run.State, run.Stopped, run.Draft = "stopped", why, nil
 	if run.Task != "" {
-		a.t.closeTask(c, r, run.Task)
+		a.host.AgentTasks().Close(c, r, run.Task)
 		run.Task = ""
 	}
 	if run.Flow != "" {
@@ -684,10 +663,7 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord
 
 // ended hands a flow's run back to its flow.
 func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run AgentRunRecord, now time.Time) {
-	processes := a.t.procs
-	if a.host != nil {
-		processes = a.host.Processes()
-	}
+	processes := a.host.AgentFlows()
 	if run.Flow != "" && processes != nil {
 		processes.RunEnded(c, host.RunEnd{ID: run.ID, Agent: run.Agent, Flow: run.Flow, State: run.State, Result: run.Result, Stopped: run.Stopped, Token: run.Token}, now)
 	}
@@ -695,11 +671,11 @@ func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run AgentRunRecord
 
 // Start, Signal and Finished serve flows' agent steps (internal/host.Runs).
 func (a *Agents) Start(c platform.Caller, r *pb.ChangeRecord, s host.RunStart, now time.Time) {
-	a.t.automated(c, AgentApp).Put(r, a.create(s.ID, s.Agent, s.Goal, s.Ref, "", s.Flow, s.Step, s.Token, now, !c.Replaying && (a.t.Record == nil || c.Staging())))
+	a.host.Automation(c, AgentApp).Put(r, a.create(s.ID, s.Agent, s.Goal, s.Ref, "", s.Flow, s.Step, s.Token, now, !c.Replaying && (c.Staging())))
 }
 
 func (a *Agents) Signal(c platform.Caller, r *pb.ChangeRecord, run string, s host.RunSignal, now time.Time) {
-	a.signal(c, r, run, Signal{At: s.At, Kind: s.Kind, By: s.By, Detail: s.Detail}, now)
+	a.RecordAgentSignal(c, r, run, Signal{At: s.At, Kind: s.Kind, By: s.By, Detail: s.Detail}, now)
 }
 
 func (a *Agents) Finished(c platform.Caller, flow, step string) []string {
@@ -708,7 +684,7 @@ func (a *Agents) Finished(c platform.Caller, flow, step string) []string {
 		where = append(where, []any{"step", "=", step})
 	}
 	domain, _ := json.Marshal(where)
-	runs, _, _ := platform.Find[AgentRunRecord](a.t.automated(c, AgentApp), platform.Query{Domain: domain, Sort: []string{"created", "id"}})
+	runs, _, _ := platform.Find[AgentRunRecord](a.host.Automation(c, AgentApp), platform.Query{Domain: domain, Sort: []string{"created", "id"}})
 	var out []string
 	for _, run := range runs {
 		out = append(out, run.ID)
@@ -726,7 +702,7 @@ func (a *Agents) Listen(c platform.Caller, e platform.Event, _ []string, now tim
 // interested: an answer to a run's question.
 func (a *Agents) interested(e platform.Event) bool {
 	s := e.Record.GetSubmission()
-	return e.App == work.ID && s.GetSchema().GetName() == "work.task.complete" && strings.HasPrefix(s.GetTarget().GetId(), AgentApp+":")
+	return e.App == platform.WorkApp && s.GetSchema().GetName() == "work.task.complete" && strings.HasPrefix(s.GetTarget().GetId(), AgentApp+":")
 }
 
 // handle resumes the run a person answered.
@@ -736,8 +712,8 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *ker
 		if run.Task != id {
 			continue
 		}
-		task, _ := platform.Get[work.WorkTask](a.t.automated(c, work.ID), id)
-		s := &pb.Submission{TenantId: a.t.ID, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
+		task, _ := platform.Get[platform.WorkTask](a.host.Automation(c, platform.WorkApp), id)
+		s := &pb.Submission{TenantId: a.tenant, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 			Target: &pb.EntityRef{Type: RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 			last := &run.Steps[len(run.Steps)-1]
@@ -753,9 +729,9 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *ker
 // effectEnded resumes the run that sent an effect, with what came of it: the
 // receiver's answer, its refusal, or a person discarding it. r is the decision
 // it happens in, or nil for one of its own.
-func (a *Agents) effectEnded(c platform.Caller, r *pb.ChangeRecord, x platform.Effect, o platform.Outcome, now time.Time) {
+func (a *Agents) AgentEffectEnded(c platform.Caller, r *pb.ChangeRecord, x platform.Effect, o platform.Outcome, now time.Time) {
 	task := "effect:" + x.Event + ":" + x.Key
-	for _, run := range a.runs(a.t.automated(c, AgentApp), "waiting") {
+	for _, run := range a.runs(a.host.Automation(c, AgentApp), "waiting") {
 		if run.Task != task {
 			continue
 		}
@@ -770,11 +746,11 @@ func (a *Agents) effectEnded(c platform.Caller, r *pb.ChangeRecord, x platform.E
 		}
 		run.State, run.Task = "running", ""
 		if r != nil {
-			a.t.automated(c, AgentApp).Put(r, run)
+			a.host.Automation(c, AgentApp).Put(r, run)
 			return
 		}
-		ac := a.t.automated(c, AgentApp)
-		s := &pb.Submission{TenantId: a.t.ID, PrincipalId: ac.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
+		ac := a.host.Automation(c, AgentApp)
+		s := &pb.Submission{TenantId: a.tenant, PrincipalId: ac.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 			Target: &pb.EntityRef{Type: RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 		a.ledger.Receive(ac, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 			return func(r *pb.ChangeRecord) { ac.Put(r, run) }, nil

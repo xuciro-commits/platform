@@ -26,7 +26,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -324,7 +323,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	return append(sends, t.operationDispatches(now)...)
 }
 
-func (t *Tenant) sendWithUsage(ep Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *ai.Usage) {
+func (t *Tenant) sendWithUsage(ep Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
 	if ep.Kind == modelEndpoint {
 		return t.sendModel(x, now)
 	}
@@ -429,7 +428,7 @@ func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
 	t.settleWithUsage(effect, o, nil, now)
 }
 
-func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *ai.Usage, now time.Time) {
+func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *platform.AIUsage, now time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
@@ -476,7 +475,7 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 			t.enqueue(at)
 		}
 		if t.agents != nil { // an agent that sent it waits for the answer (ADR-0022 D7)
-			t.agents.effectEnded(t.automation(AgentApp, replaying), nil, x, o, at)
+			t.agents.AgentEffectEnded(t.automation(AgentApp, replaying), nil, x, o, at)
 			t.enqueue(at)
 		}
 	}
@@ -664,7 +663,7 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 			x.State, x.Due = "pending", now
 			t.opsMu.Unlock()
 			if x.Run != "" && t.agents != nil {
-				t.agents.signal(c, r, x.Run, Signal{At: now, Kind: "approved", By: c.ID, Detail: x.Event}, now)
+				t.agents.RecordAgentSignal(c, r, x.Run, Signal{At: now, Kind: "approved", By: c.ID, Detail: x.Event}, now)
 			}
 		}, nil
 	}
@@ -678,10 +677,10 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 			x.State = "discarded"
 			t.opsMu.Unlock()
 			if held && x.Run != "" && t.agents != nil { // a person refused what the agent caused (ADR-0022 D9)
-				t.agents.signal(c, r, x.Run, Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
+				t.agents.RecordAgentSignal(c, r, x.Run, Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
 			}
 			if t.agents != nil {
-				t.agents.effectEnded(c, r, x.Effect, platform.Outcome{Result: "discarded", Detail: "discarded by " + c.ID}, now)
+				t.agents.AgentEffectEnded(c, r, x.Effect, platform.Outcome{Result: "discarded", Detail: "discarded by " + c.ID}, now)
 			}
 			t.told(x.Effect, platform.Outcome{Effect: x.ID, Result: "discarded", Detail: "discarded by " + c.ID}, now, c.Replaying)
 		}, nil

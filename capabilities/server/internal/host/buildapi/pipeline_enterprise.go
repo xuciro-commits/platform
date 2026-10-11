@@ -1,11 +1,11 @@
-package build
+package buildapi
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
 
-	"platformserver/apps/enterprise"
+	enterprise "platformserver/internal/host/enterpriseapi"
 )
 
 // EnterpriseTarget (ADR-0073) lands a pipeline's rows in the enterprise model
@@ -34,11 +34,11 @@ type EnterpriseTarget struct {
 	Properties []string `json:"properties,omitempty"` // columns copied as tagged values
 }
 
-var sourceName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+var ValueSourceName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-func (e EnterpriseTarget) check() error {
+func (e EnterpriseTarget) Check() error {
 	switch {
-	case !sourceName.MatchString(e.Source):
+	case !ValueSourceName.MatchString(e.Source):
 		return fmt.Errorf("the source system is lower-case letters, digits and dashes, such as sap-hr")
 	case e.Stereotype == "" || e.ID == "" || e.Name == "":
 		return fmt.Errorf("an enterprise target names the stereotype, the id column and the name column")
@@ -48,17 +48,17 @@ func (e EnterpriseTarget) check() error {
 	return nil
 }
 
-func (e EnterpriseTarget) value(row map[string]any, column string) string {
+func (e EnterpriseTarget) Value(row map[string]any, column string) string {
 	if strings.HasPrefix(column, "=") {
 		return column[1:]
 	}
 	if column == "" {
 		return ""
 	}
-	return scalar(row[column])
+	return ValueScalar(row[column])
 }
 
-func (e EnterpriseTarget) elementID(raw string) string {
+func (e EnterpriseTarget) ElementID(raw string) string {
 	if strings.HasPrefix(raw, "=") {
 		return raw[1:]
 	}
@@ -73,13 +73,13 @@ func (e EnterpriseTarget) Slice(rows []map[string]any) ([]enterprise.Element, []
 	skipped := 0
 	ids := map[string]bool{}
 	for _, row := range rows {
-		raw, name := e.value(row, e.ID), e.value(row, e.Name)
+		raw, name := e.Value(row, e.ID), e.Value(row, e.Name)
 		if raw == "" || name == "" || ids[raw] {
 			skipped++
 			continue
 		}
 		ids[raw] = true
-		el := enterprise.Element{ID: e.elementID(raw), Stereotype: e.Stereotype, Name: name, ShortName: e.value(row, e.ShortName), Kind: e.value(row, e.Kind), From: e.value(row, e.From), Until: e.value(row, e.Until)}
+		el := enterprise.Element{ID: e.ElementID(raw), Stereotype: e.Stereotype, Name: name, ShortName: e.Value(row, e.ShortName), Kind: e.Value(row, e.Kind), From: e.Value(row, e.From), Until: e.Value(row, e.Until)}
 		bag := map[string]any{}
 		for _, c := range e.Properties {
 			if v, ok := row[c]; ok && v != nil {
@@ -90,19 +90,19 @@ func (e EnterpriseTarget) Slice(rows []map[string]any) ([]enterprise.Element, []
 			el.Properties = map[string]any{"source:" + e.Source: bag}
 		}
 		elements = append(elements, el)
-		if parent := e.value(row, e.Parent); e.Parent != "" && parent != "" && parent != raw {
-			rels = append(rels, enterprise.Relationship{ID: "pl:" + raw, Stereotype: enterprise.Placement, Kind: e.In, Source: el.ID, Target: e.elementID(parent), Relation: e.Relation, From: el.From, Until: el.Until})
+		if parent := e.Value(row, e.Parent); e.Parent != "" && parent != "" && parent != raw {
+			rels = append(rels, enterprise.Relationship{ID: "pl:" + raw, Stereotype: enterprise.Placement, Kind: e.In, Source: el.ID, Target: e.ElementID(parent), Relation: e.Relation, From: el.From, Until: el.Until})
 		} else if e.Root != "" && e.In != "" {
 			rels = append(rels, enterprise.Relationship{ID: "pl:" + raw, Stereotype: enterprise.Placement, Kind: e.In, Source: el.ID, Target: e.Root, Relation: e.Relation, From: el.From, Until: el.Until})
 		}
-		if at := e.value(row, e.At); e.At != "" && at != "" {
+		if at := e.Value(row, e.At); e.At != "" && at != "" {
 			kind := e.AtKind
 			if kind == "" {
 				kind = enterprise.Owns
 			}
-			src, dst := e.elementID(at), el.ID
+			src, dst := e.ElementID(at), el.ID
 			if kind == enterprise.FillsPost || kind == enterprise.Membership || kind == enterprise.Performs {
-				src, dst = el.ID, e.elementID(at) // the row's element is the one that fills, belongs or performs
+				src, dst = el.ID, e.ElementID(at) // the row's element is the one that fills, belongs or performs
 			}
 			rels = append(rels, enterprise.Relationship{ID: "at:" + raw, Stereotype: kind, Source: src, Target: dst, From: el.From, Until: el.Until})
 		}

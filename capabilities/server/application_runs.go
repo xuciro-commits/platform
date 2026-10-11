@@ -9,7 +9,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/flow"
 	"platformserver/platform"
 )
 
@@ -130,12 +129,12 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 	operationNodes := map[string]string{}
 	if len(flows) > 0 {
 		domain, _ := json.Marshal([]any{[]any{"flow", "in", flows}})
-		rows, err := records(flow.InstanceType, domain)
+		rows, err := records(platform.FlowInstanceType, domain)
 		if err != nil {
 			return out, err
 		}
 		for _, row := range rows {
-			var x flow.FlowInstance
+			var x platform.FlowInstance
 			raw, _ := json.Marshal(row)
 			if json.Unmarshal(raw, &x) != nil {
 				continue
@@ -232,14 +231,14 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 		association := "resource"
 		parentType, parentID, _ := strings.Cut(effect.Target, "/")
 		_, hasParent := relatedFlows[parentID]
-		if parentType == flow.InstanceType && hasParent {
+		if parentType == platform.FlowInstanceType && hasParent {
 			association = "flow"
 		}
 		if !graphFor(binding.Call.Release)[resource] && association != "flow" {
 			association = ""
 			for _, source := range binding.Call.Sources {
 				typ, id, _ := strings.Cut(source, "/")
-				if typ == flow.InstanceType {
+				if typ == platform.FlowInstanceType {
 					if _, ok := relatedFlows[id]; ok {
 						association = "flow"
 						break

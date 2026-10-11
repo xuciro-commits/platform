@@ -12,8 +12,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
 	"platformserver/internal/host"
+
 	"platformserver/platform"
 )
 
@@ -134,9 +134,9 @@ type agentDef struct {
 
 // Agents is a tenant's agent app.
 type Agents struct {
-	host   host.Host
+	host   host.AgentHost
 	mu     sync.Mutex
-	t      *Tenant
+	tenant string
 	ledger *platform.Ledger
 	defs   map[string]*agentDef // "<app>.<name>"
 	// buildStamp is the builder's agent stamp the defs were last read at.
@@ -144,7 +144,7 @@ type Agents struct {
 	busy       map[string]bool // runs whose model is being called
 }
 
-func (a *Agents) Attach(h host.Host) { a.host = h }
+func (a *Agents) AttachAgent(h host.AgentHost) { a.host = h }
 
 func NewAgents(tenant string) *Agents {
 	var actions []platform.Action
@@ -174,7 +174,7 @@ func NewAgents(tenant string) *Agents {
 				{Name: "model", Type: "string", Required: true, Description: "The candidate, an enabled model <provider>/<model>"},
 				{Name: "suite", Type: "boolean", Description: "Run the agent's declared cases, three times each, instead of its past runs"}}})
 	actions = append(actions, switchActions()...)
-	return &Agents{ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType, EvaluationType, MemoryType, SwitchType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
+	return &Agents{tenant: tenant, ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType, EvaluationType, MemoryType, SwitchType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
 }
 
 func agentEntities() []platform.Entity {
@@ -233,7 +233,7 @@ func (a *Agents) def(id string) *agentDef {
 }
 
 // idle forgets that run's model is being called.
-func (a *Agents) idle(run string) { delete(a.busy, run) }
+func (a *Agents) IdleAgentTurn(run string) { delete(a.busy, run) }
 
 // each visits the declared agents, by ID.
 func (a *Agents) each(fn func(id string, d *agentDef)) {
@@ -243,27 +243,38 @@ func (a *Agents) each(fn func(id string, d *agentDef)) {
 }
 
 func (a *Agents) refresh() {
-	app := a.t.app(build.ID)
-	if app == nil {
-		return
+	var stamps []string
+	for _, app := range a.host.Apps() {
+		if owner, ok := app.(host.DynamicAgentDefinitions); ok {
+			stamps = append(stamps, app.Manifest().ID+":"+owner.AgentStamp())
+		}
 	}
-	b, ok := app.(*build.Build)
-	if !ok || b.AgentStamp() == a.buildStamp {
+	slices.Sort(stamps)
+	stamp := strings.Join(stamps, "\n")
+	if stamp == a.buildStamp {
 		return
 	}
 	for id, d := range a.defs {
-		if d.app == build.ID {
+		if _, ok := a.host.App(d.app).(host.DynamicAgentDefinitions); ok {
 			delete(a.defs, id)
 		}
 	}
-	a.buildStamp = b.AgentStamp()
-	// A builder agent that no longer compiles (an object unpublished under it)
-	// is simply absent until it is published again.
-	_ = a.declare(app)
+	a.buildStamp = stamp
+	for _, app := range a.host.Apps() {
+		if _, ok := app.(host.DynamicAgentDefinitions); ok {
+			_ = a.DeclareAgentApp(app)
+		}
+	}
 }
+func (a *Agents) automation(app string, replaying bool) platform.Caller {
+	c := a.host.Automation(platform.Caller{}, app)
+	c.Replaying = replaying
+	return c
+}
+func (a *Agents) authorityOf(typ string) string { app, _ := a.host.OwnerOf(typ); return app }
 
 // declare registers an app's agents and their tools (NewTenant).
-func (a *Agents) declare(app platform.App) error {
+func (a *Agents) DeclareAgentApp(app platform.App) error {
 	m := app.Manifest()
 	for _, ag := range m.Agents {
 		id := m.ID + "." + ag.Name
@@ -320,7 +331,7 @@ func (a *Agents) declare(app platform.App) error {
 						return fmt.Errorf("agent %s uses %s of a protocol %s does not consume", id, name, m.ID)
 					}
 					provided, found := platform.Action{}, false
-					for _, x := range a.t.protocolActions(protocol) {
+					for _, x := range a.host.ProtocolActions(protocol) {
 						if x.Schema == schema {
 							provided, found = x, true
 						}
@@ -373,8 +384,8 @@ func (a *Agents) declare(app platform.App) error {
 }
 
 // agentMember is the principal an agent signs as.
-func (a *Agents) member(agent string) platform.Member {
-	return platform.Member{ID: "agent:" + agent, Tenant: a.t.ID, Roles: map[string]string{}, Agent: true}
+func (a *Agents) AgentPrincipal(agent string) platform.Member {
+	return platform.Member{ID: "agent:" + agent, Tenant: a.tenant, Roles: map[string]string{}, Agent: true}
 }
 
 func (a *Agents) run(r AgentRunRecord) platform.AgentRun {
@@ -412,7 +423,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 	json.Unmarshal(s.GetPayload(), &p)
 	d := a.def(p.Agent)
 	id := s.GetTarget().GetId()
-	run, known := platform.Get[AgentRunRecord](a.t.automated(c, AgentApp), id)
+	run, known := platform.Get[AgentRunRecord](a.host.Automation(c, AgentApp), id)
 	allowed := func() bool {
 		switch s.GetSchema().GetName() {
 		case SchemaRunStart:
@@ -433,12 +444,12 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			if d == nil || strings.TrimSpace(p.Goal) == "" {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
-			if a.t.suspended("agent:"+p.Agent) && !c.Replaying {
+			if a.host.AgentSuspended("agent:"+p.Agent) && !c.Replaying {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", p.Agent)
 			}
-			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0, now, !c.Replaying && (a.t.Record == nil || c.Staging()))
+			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0, now, !c.Replaying && (c.Staging()))
 			run.Acts, run.Language = p.Act, p.Language
-			return func(r *pb.ChangeRecord) { a.t.automated(c, AgentApp).Put(r, run) }, nil
+			return func(r *pb.ChangeRecord) { a.host.Automation(c, AgentApp).Put(r, run) }, nil
 		case SchemaEvalStart:
 			return a.startEvaluation(c, id, struct {
 				Agent, Model string
@@ -452,7 +463,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			}
 			return func(r *pb.ChangeRecord) {
 				a.stop(c, r, &run, "stopped by "+c.ID, now)
-				a.t.automated(c, AgentApp).Put(r, run)
+				a.host.Automation(c, AgentApp).Put(r, run)
 			}, nil
 		case SchemaRunConfirm, SchemaRunReject:
 			if len(run.Draft) == 0 || run.State != "waiting" {
@@ -486,7 +497,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			}
 			run.Draft, run.State, run.Task = nil, "running", ""
 			return func(r *pb.ChangeRecord) {
-				a.t.automated(c, AgentApp).Put(r, run)
+				a.host.Automation(c, AgentApp).Put(r, run)
 				if proposed != nil {
 					a.propose(c, r, run, *proposed, now)
 				}
@@ -501,21 +512,21 @@ func (a *Agents) confirm(c platform.Caller, run AgentRunRecord, d Draft, payload
 	if a.changedDefinition(run, a.def(run.Agent)) {
 		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The agent definition changed; start a new run")
 	}
-	t := a.t
+	h := a.host
 	key := fmt.Sprintf("agent:%s:%d:confirm", run.ID, d.Step+1)
 	if d.Kind == "protocol" {
 		protocol, schema, _ := strings.Cut(d.Action, "#")
-		_, _, err := t.invoke(platform.ActingCaller(c, c.Member, a.def(run.Agent).app, false), protocol, schema, d.Target, []byte(payload), key, run.ID, now)
+		_, _, err := h.InvokeDecision(platform.ActingCaller(c, c.Member, a.def(run.Agent).app, false), protocol, schema, d.Target, []byte(payload), key, run.ID, now)
 		if err != nil {
 			return "", err
 		}
 		return "done: " + schema + " " + d.Target, nil
 	}
-	app := t.app(t.authorityOf(d.Type))
+	app := h.App(a.authorityOf(d.Type))
 	if app == nil {
 		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	record, err := platform.Decide(c, app, &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: app.Manifest().ID, IdempotencyKey: key,
+	record, err := platform.Decide(c, app, &pb.Submission{TenantId: a.tenant, PrincipalId: c.ID, Authority: app.Manifest().ID, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: d.Type, Id: d.Target}, Schema: &pb.SchemaRef{Name: d.Action, Version: 1}, Payload: []byte(payload), CorrelationId: run.ID}, now)
 	if err != nil {
 		return "", err
@@ -529,8 +540,8 @@ func sameJSON(x, y []byte) bool {
 }
 
 // signal records what a person made of a run's work, in another app's decision.
-func (a *Agents) signal(c platform.Caller, r *pb.ChangeRecord, id string, sig Signal, now time.Time) {
-	c = a.t.automated(c, AgentApp)
+func (a *Agents) RecordAgentSignal(c platform.Caller, r *pb.ChangeRecord, id string, sig Signal, now time.Time) {
+	c = a.host.Automation(c, AgentApp)
 	if run, ok := platform.Get[AgentRunRecord](c, id); ok {
 		run.Signals = append(run.Signals, sig)
 		c.Put(r, run)
@@ -547,13 +558,13 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 		State: "running", Steps: []RunStep{}}
 	recorded := captureBinding
 	if recorded {
-		run.Release = a.t.releases.active
+		run.Release = a.host.ActiveRelease()
 	}
 	if d := a.def(agent); d != nil && recorded {
 		run.DefinitionVersion = a.definitionVersion(d)
 	}
 	if flow != "" && recorded {
-		if row, ok := a.t.Held("flow.instance/" + flow); ok {
+		if row, ok := a.host.Record("flow.instance/" + flow); ok {
 			raw, _ := json.Marshal(row)
 			var parent struct {
 				Release string `json:"release"`
@@ -564,9 +575,8 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 		}
 	}
 	if typ, rid, ok := strings.Cut(ref, "/"); ok {
-		if view, err := a.t.Context(a.readsAs(run), typ, rid, now); err == nil {
-			raw, _ := json.Marshal(view)
-			run.Seen = clip(string(raw), 6000)
+		if view, err := a.host.AgentContext(a.readsAs(run), typ, rid, now); err == nil {
+			run.Seen = clip(string(view.Body), 6000)
 		}
 	}
 	return run
@@ -577,18 +587,18 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	if name == "memories" { // what agents remember about the caller
 		about, _ := json.Marshal([]any{[]any{"for", "=", c.ID}, []any{"state", "!=", "forgotten"}})
-		out, _, _ := platform.Find[Memory](a.t.automated(c, AgentApp), platform.Query{Domain: about, Sort: []string{"-created"}, Limit: 100})
+		out, _, _ := platform.Find[Memory](a.host.Automation(c, AgentApp), platform.Query{Domain: about, Sort: []string{"-created"}, Limit: 100})
 		return out, nil
 	}
 	if name == "agent-overview" {
 		if c.Roles[AgentApp] != AgentAdmin {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
-		return a.t.AgentsOverview(), nil
+		return a.AgentOverview(), nil
 	}
 	if name == "runs" {
 		mine, _ := json.Marshal([]any{[]any{"onBehalf", "=", c.ID}})
-		out, _, _ := platform.Find[AgentRunRecord](a.t.automated(c, AgentApp), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
+		out, _, _ := platform.Find[AgentRunRecord](a.host.Automation(c, AgentApp), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
 		out = slices.DeleteFunc(out, func(run AgentRunRecord) bool {
 			d := a.def(run.Agent)
 			return d == nil || c.Roles[d.app] == ""
@@ -636,22 +646,26 @@ type AgentInfo struct {
 
 func (a *Agents) definitionVersion(d *agentDef) string {
 	version := ""
-	if owner := a.t.app(d.app); owner != nil {
+	if owner := a.host.App(d.app); owner != nil {
 		version = owner.Manifest().Version
 	}
 	parts := []any{d.app, version, d.Name, d.Title, d.Instructions, d.Tools, d.Budget}
-	if b, ok := a.t.app(d.app).(*build.Build); ok {
+	if b, ok := a.host.App(d.app).(host.DynamicAgentDefinitions); ok {
 		parts = append(parts, b.AgentVersion(d.Name))
 	}
 	digest, _ := canonicalDigest(parts)
 	return "agent.sha256." + digest
 }
 func (a *Agents) changedDefinition(run AgentRunRecord, d *agentDef) bool {
-	return d != nil && d.app == build.ID && run.DefinitionVersion != "" && run.DefinitionVersion != a.definitionVersion(d)
+	if d == nil {
+		return false
+	}
+	_, dynamic := a.host.App(d.app).(host.DynamicAgentDefinitions)
+	return dynamic && run.DefinitionVersion != "" && run.DefinitionVersion != a.definitionVersion(d)
 }
 
 func visibleAgentInstructions(c platform.Caller, d *agentDef) string {
-	if d.app == build.ID && !c.Holds(AgentApp, AgentAdmin) && !c.Holds(build.ID, build.Builder) {
+	if d.app == "build" && !c.Holds(AgentApp, AgentAdmin) && !c.Holds("build", "builder") {
 		return ""
 	}
 	return d.Instructions
@@ -663,8 +677,28 @@ func visibleAgentInstructions(c platform.Caller, d *agentDef) string {
 func (a *Agents) ForkDecision() (platform.App, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return &Agents{t: a.t, host: a.host, ledger: a.ledger, defs: maps.Clone(a.defs),
+	return &Agents{tenant: a.tenant, host: a.host, ledger: a.ledger, defs: maps.Clone(a.defs),
 		buildStamp: a.buildStamp, busy: maps.Clone(a.busy)}, nil
 }
 
 var _ platform.DecisionForkApp = (*Agents)(nil)
+
+// AllowsAgentRun rechecks the current principal against its declared app.
+func (a *Agents) AllowsAgentRun(run AgentRunRecord) bool {
+	d := a.def(run.Agent)
+	if d == nil {
+		return false
+	}
+	if run.OnBehalf == "" {
+		return true
+	}
+	reader := a.reader(run)
+	return reader != nil && reader.Tenant == a.tenant && reader.Roles[d.app] != ""
+}
+func (a *Agents) AgentDeclaration(id string) (AgentCardDeclaration, bool) {
+	d := a.def(id)
+	if d == nil {
+		return AgentCardDeclaration{}, false
+	}
+	return AgentCardDeclaration{App: d.app, Title: d.Title, Description: d.Description}, true
+}

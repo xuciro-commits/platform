@@ -13,7 +13,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -75,7 +74,10 @@ func (m a2aMessage) text() string {
 
 // published says whether an administrator published the agent over A2A.
 func (t *Tenant) published(agent string) bool {
-	if t.agents == nil || t.agents.def(agent) == nil {
+	if t.agents == nil {
+		return false
+	}
+	if _, ok := t.agents.AgentDeclaration(agent); !ok {
 		return false
 	}
 	list := strings.Split(t.setting(t.automation(AgentApp, false), SettingPublished), ",")
@@ -84,7 +86,7 @@ func (t *Tenant) published(agent string) bool {
 
 // agentCard is the agent's A2A card.
 func (h *Host) agentCard(r *http.Request, t *Tenant, agent string) map[string]any {
-	d := t.agents.def(agent)
+	d, _ := t.agents.AgentDeclaration(agent)
 	scheme := "http"
 	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 		scheme = "https"
@@ -99,7 +101,7 @@ func (h *Host) agentCard(r *http.Request, t *Tenant, agent string) map[string]an
 			"openIdConnectUrl": strings.TrimSuffix(h.Issuer, "/") + "/.well-known/openid-configuration",
 			"description":      "An access token of a member of the tenant (a service account for machines); the agent acts within their grants."}}}
 	}
-	description := cmp.Or(d.Description, d.Title+", an agent of the "+d.app+" app.")
+	description := cmp.Or(d.Description, d.Title+", an agent of the "+d.App+" app.")
 	return map[string]any{
 		"name": d.Title, "description": description, "version": "1",
 		"supportedInterfaces":  []map[string]any{{"url": url, "protocolBinding": "JSONRPC", "protocolVersion": A2AVersion}},
@@ -109,7 +111,7 @@ func (h *Host) agentCard(r *http.Request, t *Tenant, agent string) map[string]an
 		"securityRequirements": []map[string]any{{"schemes": map[string]any{name: map[string]any{"list": []string{}}}}},
 		"defaultInputModes":    []string{"text/plain", "application/json"},
 		"defaultOutputModes":   []string{"text/plain", "application/json"},
-		"skills": []map[string]any{{"id": agent, "name": d.Title, "description": description, "tags": []string{d.app},
+		"skills": []map[string]any{{"id": agent, "name": d.Title, "description": description, "tags": []string{d.App},
 			"inputModes": []string{"text/plain"}, "outputModes": []string{"text/plain", "application/json"}}},
 	}
 }
@@ -201,8 +203,8 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 	decide := func(schema, typ, id, key string, payload any) error {
 		raw, _ := json.Marshal(payload)
 		app := AgentApp
-		if typ == work.TaskType {
-			app = work.ID
+		if typ == platform.WorkTaskType {
+			app = platform.WorkApp
 		}
 		_, err := t.Submit(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: app, IdempotencyKey: key,
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, h.Now())
@@ -230,11 +232,11 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 				reply(nil, -32001, "task not found")
 				return
 			}
-			if x.State != "waiting" || !strings.HasPrefix(x.Task, work.ID+":") && !strings.HasPrefix(x.Task, AgentApp+":") {
+			if x.State != "waiting" || !strings.HasPrefix(x.Task, platform.WorkApp+":") && !strings.HasPrefix(x.Task, AgentApp+":") {
 				reply(nil, -32004, "the task is not waiting for input")
 				return
 			}
-			if err := decide("work.task.complete", work.TaskType, x.Task, "a2a:"+p.Message.MessageID, map[string]string{"answer": p.Message.text()}); err != nil {
+			if err := decide("work.task.complete", platform.WorkTaskType, x.Task, "a2a:"+p.Message.MessageID, map[string]string{"answer": p.Message.text()}); err != nil {
 				reply(nil, -32603, err.Error())
 				return
 			}

@@ -10,7 +10,7 @@
 
 | 块 | 内容 | 入口 |
 |---|---|---|
-| W4-A 元模型 | `go:embed` UAF 1.3 Profile/Measurements XMI → `uaf.Metamodel`（272 构造型、枚举、泛化、UML 基类）；`Is`（沿泛化）、`Relationship`（沿泛化看 UML 关系基类）；`Releases()/Current()` 为多版本并行预留。 | `apps/enterprise/uaf` |
+| W4-A 元模型 | `go:embed` UAF 1.3 Profile/Measurements XMI → `uaf.Metamodel`（272 构造型、枚举、泛化、UML 基类）；`Is`（沿泛化）、`Relationship`（沿泛化看 UML 关系基类）；`Releases()/Current()` 为多版本并行预留。 | `internal/host/enterpriseapi/uaf` |
 | W4-A 存储 | `Model{Kinds, Elements, Relationships, Views}`；决策 `enterprise.element.add/edit/close`、`enterprise.relationship.add/end`、`enterprise.kind.add`、`enterprise.view.save`、`enterprise.model.seed`；提交时校验构造型存在、非抽象、非关系；标记值按构造型属性与枚举字面量校验；关系两端按构造型校验。 | `enterprise.go` |
 | W4-A 收编 org | `apps/org` 删除。`GET /v1/organization` 保留，由模型投影（`Model.OrgSeed()`）；`New(tenant, platform.OrgSeed)` 仍接受旧种子（`FromOrgSeed`）；宿主 `Directory`（Units/Holders/Calendar）由模型回答；企业模型、元模型与发布切片的可见读取沿原获权 SSE 订阅，变化由 enterprise owner 失效；当前角色投影 `org` → `enterprise`；历史目录/接受结果保留原字节与哈希。升级启动目录触发前置不符时，仅把当前 `enterprise` 角色还原为 `org` 后完整哈希精确匹配历史前置才允许恢复；其他目录漂移仍隔离。授权读取映射旧角色，新的 `enterprise` 授权/撤权同时清除旧键。 | `model.go` |
 | W4-B 模板 | `Template(SeedParams)` 按人数定规模 S/M/L/XL，由 §5 的模式组合：公司/集团、场地、职能、团队及岗位；行业选择酒店、仓库、办公点或工厂场地模式，酒店不带制造车间。向导 3–5 问。 | `seeds.go` |
@@ -45,7 +45,7 @@
 规模模板（S/M/L/XL）只在空租户第一次有用；"示例"若做成另一套整模型预览，就成了第二条路径。改为：
 
 - **四层骨架**：1 Enterprise（集团/公司）、2 Site（工厂/酒店/配送中心/办公点）、3 Function（部门/共享服务/产线）、4 Team（班组/岗位组）。层级只是模式的"根落在哪一层"，模型本身仍是 UAF 元素与关系，不新增类型。
-- **模式（Pattern）**＝一个带整数旋钮的子树构造器：group、company、plant、hotel、warehouse、office、department、shared-services、line、team（`apps/enterprise/seeds.go: Patterns()`）。每个模式有 `Preview`（元素/关系/组织/岗位/位置/资源计数 + 两层大纲），不改模型即可看。
+- **模式（Pattern）**＝一个带整数旋钮的子树构造器：group、company、plant、hotel、warehouse、office、department、shared-services、line、team（`internal/host/enterpriseapi/seeds.go: Patterns()`）。每个模式有 `Preview`（元素/关系/组织/岗位/位置/资源计数 + 两层大纲），不改模型即可看。
 - **嫁接**：`enterprise.pattern.apply {pattern, name, under?, params?}` 把模式根放到任一组织之下（management 置放；根为法人时另加 legal），ID 与现有模型避撞。读 `enterprise-patterns` 给出目录与默认预览。
 - **规模模板＝模式的组合**：`Template(SeedParams)` 现在用同一批模式搭建（行业决定场地模式：hospitality→hotel、logistics/trade→warehouse、services/other→office、其余→plant）。向导与模式共用一套代码，没有第二份种子数据。
 - Web：建模器左栏新增 Patterns 页签（按层分组，选中组织时默认嫁接其下），空模型页提供"从一个单元开始"。

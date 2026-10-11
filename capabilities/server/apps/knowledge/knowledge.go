@@ -24,35 +24,16 @@ const (
 	SettingEmbeddingModel = "embedding-model"
 )
 
-// Document is a text people upload for agents and members to find.
-type Document struct {
-	platform.Record
-	Title  string   `json:"title" field:"required,search"`
-	Text   string   `json:"text" field:"required" type:"longtext"`
-	Source string   `json:"source,omitempty" title:"Where it comes from"`
-	Apps   []string `json:"apps,omitempty" title:"Read by members of"` // the apps whose members may read it; none: every member
-}
-
-// Term is a word of the tenant's own glossary (ADR-0023 D1): what it means
-// here, other words for it, and the declaration it refers to. It is layered on
-// top of the model: agents read it and search expands by it, but it never
-// renames, retitles or redefines a declaration.
-type Term struct {
-	platform.Record
-	Term     string   `json:"term" field:"required,search" help:"The word people here use" example:"PO"`
-	Meaning  string   `json:"meaning" field:"required" type:"longtext" help:"What it means in this organisation"`
-	Synonyms string   `json:"synonyms,omitempty" help:"Other words for it, comma-separated"`
-	RefersTo string   `json:"refersTo,omitempty" title:"Refers to" help:"The declaration it names: an entity type, <type>.<field> or an action" example:"mes.order"`
-	Apps     []string `json:"apps,omitempty" title:"Read by members of"`
-}
+type Document = platform.KnowledgeDocument
+type Term = platform.KnowledgeTerm
 
 type Knowledge struct {
-	host   host.Host // the tenant running it, once composed
+	host   host.KnowledgeHost // the tenant running it, once composed
 	ledger *platform.Ledger
 }
 
 // Attach is called by the host when a tenant is composed.
-func (k *Knowledge) Attach(h host.Host) { k.host = h }
+func (k *Knowledge) AttachKnowledge(h host.KnowledgeHost) { k.host = h }
 
 // New is a tenant's knowledge app.
 func New(tenant string) *Knowledge {

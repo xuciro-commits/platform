@@ -226,10 +226,8 @@ func (h *Host) tenantView(t *Tenant) HostTenantView {
 		view.Apps = append(view.Apps, a.ID)
 	}
 	slices.Sort(view.Apps)
-	if d := consoleOf(t); d != nil {
-		d.mu.Lock()
-		view.Members = len(d.members)
-		d.mu.Unlock()
+	if d, ok := t.app(PlatformApp).(IdentityCounts); ok {
+		view.Members = d.MemberCount()
 	}
 	view.Audit = len(t.Audit())
 	if fault := t.fault.Load(); fault != nil {

@@ -117,7 +117,7 @@ func TestNotificationsByEmail(t *testing.T) {
 	}
 	tn := build()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
+	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
 	ana, gw := member("ana"), member("gw")
 	now := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
 	keys := 0

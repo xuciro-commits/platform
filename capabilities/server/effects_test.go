@@ -72,8 +72,8 @@ func TestOutboundEffects(t *testing.T) {
 		json.Unmarshal(raw, &stored)
 		journal = append(journal, stored)
 	}
-	ana, _ := tn.app(PlatformApp).(*Console).Member("ana")
-	bo, _ := tn.app(PlatformApp).(*Console).Member("bo")
+	ana, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
+	bo, _ := tn.app(PlatformApp).(*Console).MemberBySubject("bo")
 	t0 := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	keys := 0
 	decide := func(tn *Tenant, m platform.Member, schema, typ, id string, payload any) string {

@@ -251,7 +251,7 @@ func TestOwnedWorkPanicIsTenantLocal(t *testing.T) {
 func TestQuarantinedTenantCannotRecordLateWorkOrSnapshot(t *testing.T) {
 	tn := isolatedStock(t, "t-1")
 	now := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
-	tn.agents = &Agents{t: tn}
+	tn.agents = &Agents{host: hostView{t: tn}}
 	tn.quarantine(fmt.Errorf("damaged accepted result"))
 	tn.Record = func(Entry) { t.Error("quarantined tenant wrote to its journal") }
 	tn.settle("missing-effect", platform.Outcome{Effect: "missing-effect"}, now)

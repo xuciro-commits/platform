@@ -112,8 +112,8 @@ func TestAcceptedNestedAttemptOwnsPreparedComputeAndPrivateState(t *testing.T) {
 				wantQty, wantEvents, wantNotices, wantPending, wantIssues = 99, 4, 2, 0, 2
 			}
 			item, _ := platform.Get[Item](stockCaller, "I1")
-			_, hasChild := draft.states[PlatformApp].(*Console).Member("user:child@example.test")
-			_, hasParent := draft.states[PlatformApp].(*Console).Member("user:parent@example.test")
+			_, hasChild := draft.states[PlatformApp].(*Console).MemberBySubject("user:child@example.test")
+			_, hasParent := draft.states[PlatformApp].(*Console).MemberBySubject("user:parent@example.test")
 			if item.Qty != wantQty || len(draft.events) != wantEvents || len(draft.notices) != wantNotices || !hasParent || hasChild != accepted || len(draft.inputIssues) != wantIssues || pendingOperationInputs(draft.operationInputs) != wantPending || snapshot(tn) != liveBefore {
 				t.Fatalf("child escaped or lost its savepoint: qty=%d events=%d notices=%d child=%t parent=%t issues=%d inputs=%d", item.Qty, len(draft.events), len(draft.notices), hasChild, hasParent, len(draft.inputIssues), pendingOperationInputs(draft.operationInputs))
 			}
@@ -155,7 +155,7 @@ func newNestedIssuer(tenant string) *nestedIssuer {
 		Capability: "documents", Roles: []string{"clerk"}})
 	return &nestedIssuer{ledger: platform.NewLedger(tenant, "nested", catalog, "nested.document")}
 }
-func (n *nestedIssuer) Attach(h host.Host) { n.host = h }
+func (n *nestedIssuer) AttachBuild(h host.BuildHost) { n.host = h.(host.Host) }
 func (n *nestedIssuer) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "nested", Title: "Nested", Version: "1", Actions: n.ledger.Catalog,
 		Sequences: []platform.Sequence{{Name: "document", Pattern: "D/{n}"}},

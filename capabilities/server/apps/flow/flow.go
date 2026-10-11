@@ -12,7 +12,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/work"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
@@ -24,8 +23,8 @@ import (
 // takes it again. Acts are submitted as the declaring app's automation
 // principal; people are asked through that app's tasks (ADR-0017).
 const (
-	ID                        = "flow"
-	InstanceType              = "flow.instance"
+	ID                        = platform.FlowApp
+	InstanceType              = platform.FlowInstanceType
 	Admin                     = "admin"
 	SchemaFlowStart           = "flow.instance.start"
 	SchemaFlowStep            = "flow.instance.step"
@@ -41,89 +40,21 @@ const (
 )
 
 // FlowInstance is one run of a flow.
-type FlowInstance struct {
-	platform.Record
-	Flow         string                     `json:"flow" field:"readonly,search"` // "<app>.<name>"
-	Title        string                     `json:"title" field:"readonly,search"`
-	Version      int                        `json:"version" field:"readonly"`
-	Dependencies string                     `json:"dependencies,omitempty" field:"readonly" title:"Dependency release"`
-	Release      string                     `json:"release,omitempty" field:"readonly" title:"Active release"`
-	Key          string                     `json:"key" field:"readonly,search"`
-	Subject      string                     `json:"subject,omitempty" field:"readonly"` // "<type>/<key>" when the flow declares its subject
-	State        string                     `json:"state" field:"readonly" choices:"running,waiting,done,compensating,compensated,canceled,stuck"`
-	OnBehalf     string                     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
-	Data         string                     `json:"data,omitempty" field:"readonly" type:"longtext"`
-	Outputs      map[string]json.RawMessage `json:"outputs,omitempty" field:"readonly" type:"json"`
-	Sources      []string                   `json:"sources,omitempty" field:"readonly"`
-	Withheld     bool                       `json:"withheld,omitempty" field:"readonly"`
-	Answer       string                     `json:"answer,omitempty" field:"readonly"`
-	Parent       string                     `json:"parent,omitempty" field:"readonly"` // the instance that called it
-	Tokens       []Token                    `json:"tokens" field:"readonly" title:"Where it stands"`
-	// Batch is the continuous instance's frame (ADR-0047 §13): the cursor it
-	// consumed through, its watermark, node state and dead letters.
-	Batch *BatchFrame `json:"batch,omitempty" field:"readonly" type:"json"`
-	// ArtifactCleanup is a durable retirement intent for already-superseded
-	// frame/checkpoint objects. The host deletes and acknowledges it idempotently.
-	ArtifactCleanup []platform.FlowStateArtifact `json:"artifactCleanup,omitempty" field:"readonly" type:"json"`
-	CleanupPending  bool                         `json:"cleanupPending,omitempty" field:"readonly"`
-	Undo            []UndoEntry                  `json:"undo" field:"readonly" title:"To undo"`
-	Trace           []TraceLine                  `json:"trace" field:"readonly"`
-	Seq             int                          `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
-}
+type FlowInstance = platform.FlowInstance
 
 // Token is where a path of the instance stands (BPMN's token): a step it is at
 // or waits in. Parallel branches have one each.
-type Token struct {
-	ID       int              `json:"id"`
-	Step     string           `json:"step"`
-	Branch   string           `json:"branch,omitempty"` // the All or Any step it runs in
-	Waits    string           `json:"waits,omitempty"`  // ready, retry, wait, ask, call, join, undo, stuck
-	Attempts int              `json:"attempts,omitempty"`
-	Due      time.Time        `json:"due,omitzero"` // a retry, a timeout, or a wait's time
-	Task     string           `json:"task,omitempty"`
-	Child    string           `json:"child,omitempty"`
-	Error    string           `json:"error,omitempty"`
-	Parent   int              `json:"parent,omitempty"`
-	Frames   []platform.Frame `json:"frames,omitempty"`
-	// Input is token-local data supplied for one step. Prepared continuous
-	// windows use it only while the retained entry Compute request is built;
-	// the host clears it before the accepted Flow record is persisted.
-	Input     json.RawMessage            `json:"input,omitempty"`
-	Outputs   map[string]json.RawMessage `json:"outputs,omitempty"`
-	Operation string                     `json:"operation,omitempty"`
-	Loop      *LoopFrame                 `json:"loop,omitempty"`
-	Results   map[string]json.RawMessage `json:"results,omitempty"`
-}
+type Token = platform.FlowToken
 
 // LoopFrame belongs to the existing durable token, not a separate graph run.
 // Frozen items, assigned cursor and indexed results survive suspended bodies.
-type LoopFrame struct {
-	Items   []json.RawMessage       `json:"items,omitempty"`
-	Outer   []string                `json:"outer,omitempty"`
-	Next    int                     `json:"next"`
-	Results map[int]json.RawMessage `json:"results,omitempty"`
-	State   json.RawMessage         `json:"state,omitempty"`
-	While   bool                    `json:"while,omitempty"`
-}
+type LoopFrame = platform.FlowLoopFrame
 
 // UndoEntry is a completed act's compensation, built when it completed.
-type UndoEntry struct {
-	Step     string          `json:"step"`
-	App      string          `json:"app"`
-	Protocol string          `json:"protocol,omitempty"`
-	Action   string          `json:"action"`
-	Target   string          `json:"target"`
-	Payload  json.RawMessage `json:"payload"`
-}
+type UndoEntry = platform.FlowUndoEntry
 
 // TraceLine is why the instance moved (ADR-0020 D8).
-type TraceLine struct {
-	At     time.Time `json:"at"`
-	Step   string    `json:"step,omitempty"`
-	What   string    `json:"what"`
-	Detail string    `json:"detail,omitempty"`
-	By     string    `json:"by,omitempty"`
-}
+type TraceLine = platform.FlowTraceLine
 
 type flowDef struct {
 	app string
@@ -134,13 +65,16 @@ type flowDef struct {
 // Flows is a tenant's flow app.
 type Flows struct {
 	mu     sync.Mutex
-	host   host.Host // the tenant running it, once composed
+	host   host.FlowHost // the tenant running it, once composed
 	ledger *platform.Ledger
 	defs   map[string][]*flowDef // "<app>.<name>" → versions, ascending
 	// chosen are the versions new instances took during the input being
 	// handled, journaled with it; pins are those of the entry being replayed.
 	chosen, pins map[string]int
 }
+
+var _ platform.ContinuousFlowOwner = (*Flows)(nil)
+var _ host.AttachedFlow = (*Flows)(nil)
 
 // version is the one a new instance of flow takes: the highest declared, or
 // in a replay the one the journal says it took.
@@ -165,7 +99,7 @@ func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *kernel.Error
 }
 
 // Attach is called by the host when a tenant is composed.
-func (f *Flows) Attach(h host.Host) { f.host = h }
+func (f *Flows) AttachFlow(h host.FlowHost) { f.host = h }
 
 // New is a tenant's flow app.
 func New(tenant string) *Flows {
@@ -514,7 +448,7 @@ func (f *Flows) Interested(names []string, e platform.Event) bool {
 		}
 	}
 	s := e.Record.GetSubmission()
-	return s.GetSchema().GetName() == "work.task.complete" && e.App == work.ID
+	return s.GetSchema().GetName() == "work.task.complete" && e.App == platform.WorkApp
 }
 
 // Listen takes an event delivered to the flow app: it starts flows and ends
@@ -591,7 +525,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 					return err
 				}
 			case tok.Waits == "ask" && s.GetSchema().GetName() == "work.task.complete" && s.GetTarget().GetId() == tok.Task:
-				task, _ := platform.Get[work.WorkTask](f.host.Automation(c, work.ID), tok.Task)
+				task, _ := platform.Get[platform.WorkTask](f.host.Automation(c, platform.WorkApp), tok.Task)
 				answer := cmp.Or(task.Answer, "done")
 				if err := f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					in.Answer = answer
@@ -694,23 +628,9 @@ func (f *Flows) run(x *FlowInstance) *platform.Run {
 
 // Read "flows": the declared flows, for the workspace to draw.
 // FlowDefinition is a declared flow as people see it: its steps and where each may go.
-type FlowDefinition struct {
-	ID      string     `json:"id"`
-	App     string     `json:"app"`
-	Title   string     `json:"title"`
-	Version int        `json:"version"`
-	Start   []string   `json:"start"`
-	Steps   []FlowStep `json:"steps"`
-}
+type FlowDefinition = platform.FlowDefinition
 
-type FlowStep struct {
-	Name  string   `json:"name"`
-	Title string   `json:"title"`
-	Kind  string   `json:"kind" enum:"action,wait,ask,subflow,fork,agent,transform,branch,foreach,compute,ai,end,break,continue"`
-	Next  []string `json:"next"`
-	// Chooses: the step's code picks the next one as the instance runs.
-	Chooses bool `json:"chooses,omitempty"`
-}
+type FlowStep = platform.FlowStep
 
 func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
 	out := []FlowDefinition{}
@@ -828,7 +748,7 @@ func (f *Flows) resumeInvocation(c platform.Caller, id string, token int, now ti
 			output = result.Output
 		}
 	} else if tok.Waits == "approval" {
-		approval, ok := platform.Get[work.ApprovalRequest](f.host.Automation(c, work.ID), tok.Child)
+		approval, ok := platform.Get[platform.ApprovalRequest](f.host.Automation(c, platform.WorkApp), tok.Child)
 		if !ok || approval.State == "pending" {
 			return nil
 		}
@@ -906,3 +826,5 @@ func (f *Flows) ForkDecision() (platform.App, error) {
 }
 
 var _ platform.DecisionForkApp = (*Flows)(nil)
+
+func (a *Flows) NewSimulationApp(tenant string) platform.App { return New(tenant) }

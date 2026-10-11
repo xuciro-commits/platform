@@ -7,8 +7,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
 	"platformserver/internal/host"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -78,9 +78,7 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 		}
 		private := decision.stateApp(app)
 		view.apps[i] = private
-		if attached, ok := private.(host.Attached); ok {
-			attached.Attach(hostView{t: view, app: private})
-		}
+		host.Attach(private, hostView{t: view, app: private})
 	}
 	for key, app := range view.owner {
 		view.owner[key] = view.app(app.Manifest().ID)
@@ -179,9 +177,7 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 				view.apps[i] = private
 			}
 		}
-		if attached, ok := private.(host.Attached); ok {
-			attached.Attach(hostView{t: view, app: private})
-		}
+		host.Attach(private, hostView{t: view, app: private})
 		registry, err = view.assetRegistryLocked()
 		if err != nil {
 			return nil, nil, err

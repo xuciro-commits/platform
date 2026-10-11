@@ -12,9 +12,9 @@ import (
 )
 
 func propertyTypeReleaseAsset(f PropertyType, sourceVersion string) (platform.ReleaseAsset, error) {
-	body, err := json.Marshal(f.definition())
+	body, err := json.Marshal(f.Definition())
 	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: f.Name}, ContractVersion: 1,
-		SourceVersion: sourceVersion + ".property-" + strconv.Itoa(f.Version), Requires: propertyTypeRequires(f.definition()), Body: body}, err
+		SourceVersion: sourceVersion + ".property-" + strconv.Itoa(f.Version), Requires: propertyTypeRequires(f.Definition()), Body: body}, err
 }
 
 // PropertyTypeReleaseAsset resolves only a retained version from this owner.

@@ -58,8 +58,8 @@ func TestCreateTenantFromTemplate(t *testing.T) {
 	if admin.Roles[PlatformApp] != Admin {
 		t.Fatalf("admin roles %v", admin.Roles)
 	}
-	console := consoleOf(tn)
-	record := console.tenantRecord()
+	console := testConsoleOf(tn)
+	record := console.TenantRecord()
 	if record.Name != "Acme Ltd" || record.Settings[SettingTimezone] != "Asia/Shanghai" || record.Settings[SettingCurrency] != "USD" || record.Members != 1 {
 		t.Fatalf("tenant record %+v", record)
 	}
@@ -186,7 +186,7 @@ func TestGrantsAddUpAndExpire(t *testing.T) {
 	if m, _ = tn.member("admin"); m.Roles["a"] != "" || m.Roles[PlatformApp] != Admin {
 		t.Fatalf("after revoke %v", m.Roles)
 	}
-	snap, _ := consoleOf(tn).Snapshot()
+	snap, _ := testConsoleOf(tn).Snapshot()
 	if !strings.Contains(string(snap), `"grants"`) {
 		t.Fatal("grants not in the directory snapshot")
 	}
@@ -296,12 +296,12 @@ func TestAccessConfiguration(t *testing.T) {
 		t.Fatalf("delegation: %+v", cy.Grants)
 	}
 	// Survives a snapshot and restore, custom role included.
-	snap, _ := consoleOf(tn).Snapshot()
+	snap, _ := testConsoleOf(tn).Snapshot()
 	restored, _ := NewTenant("x", NewConsole("x", seats...), newNotes("x", "a"))
-	if err := consoleOf(restored).Restore(snap); err != nil {
+	if err := testConsoleOf(restored).Restore(snap); err != nil {
 		t.Fatal(err)
 	}
-	if access := consoleOf(restored).Access(); len(access.Roles) != 1 || !restored.app("a").Manifest().Actions.PermitsAny([]string{"scribe"}, "a.note") {
+	if access := testConsoleOf(restored).Access(); len(access.Roles) != 1 || !restored.app("a").Manifest().Actions.PermitsAny([]string{"scribe"}, "a.note") {
 		t.Fatalf("custom role not restored: %+v", access)
 	}
 }
@@ -339,7 +339,7 @@ func TestLifecycleTokensAndSessions(t *testing.T) {
 		m, _ := tn.member(who)
 		return submitAs(m, app, schema, typ, id, payload)
 	}
-	d := consoleOf(tn)
+	d := testConsoleOf(tn)
 	// Invite: stands invited, may be granted, becomes active on first sign-in.
 	if got := decide("admin", PlatformApp, SchemaInvite, MemberType, "cy", `{"subject":"user:cy@example.test"}`); got != "ok" {
 		t.Fatal(got)
@@ -350,7 +350,7 @@ func TestLifecycleTokensAndSessions(t *testing.T) {
 	if cy, _ := tn.member("cy"); cy.Status != platform.MemberInvited || !cy.Holds("a", "writer") {
 		t.Fatalf("invited: %+v", cy)
 	}
-	d.seen("cy", now)
+	d.SeenMember("cy", now)
 	if cy, _ := tn.member("cy"); cy.Status != "" {
 		t.Fatal("first sign-in did not accept the invitation")
 	}
@@ -407,12 +407,12 @@ func TestLifecycleTokensAndSessions(t *testing.T) {
 		t.Fatalf("token views: %+v", views)
 	}
 	// Sessions: two credentials seen, end the other, it is refused.
-	d.noticed("bo", "cred-1", "Mozilla/5.0 Chrome/130.0", "sign-in", now)
-	d.noticed("bo", "cred-2", "curl/8.0", "sign-in", now.Add(time.Minute))
+	d.NoticeSession("bo", "cred-1", "Mozilla/5.0 Chrome/130.0", "sign-in", now)
+	d.NoticeSession("bo", "cred-2", "curl/8.0", "sign-in", now.Add(time.Minute))
 	if ss := d.Sessions("bo", "cred-1", now); len(ss) != 2 || ss[0].Agent != "curl 8" || ss[1].Current != true {
 		t.Fatalf("sessions: %+v", ss)
 	}
-	if n := d.EndOtherSessions("bo", "cred-1", now); n != 1 || d.noticed("bo", "cred-2", "", "sign-in", now) || !d.noticed("bo", "cred-1", "", "sign-in", now) {
+	if n := d.EndOtherSessions("bo", "cred-1", now); n != 1 || d.NoticeSession("bo", "cred-2", "", "sign-in", now) || !d.NoticeSession("bo", "cred-1", "", "sign-in", now) {
 		t.Fatal("ending other sessions")
 	}
 	// The ended session stays listed, marked, for a day; then it is gone.
@@ -432,7 +432,7 @@ func TestLifecycleTokensAndSessions(t *testing.T) {
 	if got := decide("admin", PlatformApp, SchemaOffboard, MemberType, "bo", `{"reason":"left"}`); got != "ok" {
 		t.Fatal(got)
 	}
-	if _, ok := d.Member("bo"); ok {
+	if _, ok := d.MemberBySubject("bo"); ok {
 		t.Fatal("one who left still signs in")
 	}
 	if bo, ok := tn.member("bo"); !ok || bo.Status != platform.MemberLeft || len(bo.Grants) != 0 {

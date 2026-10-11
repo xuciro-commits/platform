@@ -94,8 +94,8 @@ func TestTenantComposition(t *testing.T) {
 	}
 	var journal []Entry
 	tn, a, b := setup(t, func(e Entry) { journal = append(journal, e) })
-	ana, _ := tn.app(PlatformApp).(*Console).Member("ana")
-	bo, _ := tn.app(PlatformApp).(*Console).Member("bo")
+	ana, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
+	bo, _ := tn.app(PlatformApp).(*Console).MemberBySubject("bo")
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 
 	// Each submission reaches the app declaring its action, with the member's role there.

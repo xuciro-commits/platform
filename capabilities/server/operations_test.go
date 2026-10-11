@@ -76,7 +76,7 @@ func TestOperations(t *testing.T) {
 	}
 	tn := build()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
+	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
 	ana, sup, op, gw := member("ana"), member("sup"), member("op"), member("gw")
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	n := 0

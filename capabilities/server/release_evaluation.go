@@ -11,8 +11,7 @@ import (
 	"unicode/utf8"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/ai"
-	"platformserver/apps/build"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -76,7 +75,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if definition.Model != "" && definition.Model != plan.Model {
 		return "", fmt.Errorf("the plan model differs from the function's bound model")
 	}
-	if definition.Model == "" && plan.Model != t.setting(t.automation(ai.ID, false), ai.SettingAppModel) {
+	if definition.Model == "" && plan.Model != t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel) {
 		return "", fmt.Errorf("the plan model differs from the current app model")
 	}
 	if t.ai == nil {
@@ -233,7 +232,7 @@ func (t *Tenant) evaluationsReadyLocked(candidateID string, raw []byte) error {
 			}
 			modelName := definition.Model
 			if modelName == "" {
-				modelName = t.setting(t.automation(ai.ID, false), ai.SettingAppModel)
+				modelName = t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel)
 			}
 			if t.ai == nil || report.Model != modelName {
 				continue

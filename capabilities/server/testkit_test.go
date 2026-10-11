@@ -100,3 +100,5 @@ func publishObject(t *testing.T, tn *Tenant, who, id string, object map[string]a
 	decide(t, tn, who, build.ID, "build.object.publish", build.ObjectType, id, map[string]any{}, at)
 	return build.ID + "." + object["name"].(string)
 }
+
+func testConsoleOf(t *Tenant) *Console { c, _ := t.app(PlatformApp).(*Console); return c }

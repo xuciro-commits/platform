@@ -208,7 +208,7 @@ func TestRecords(t *testing.T) {
 	var journal []Entry
 	tn := stockTenant(t)
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
+	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
 	now := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
 	keys := 0
 	do := func(who, schema, typ, id string, payload any) string {

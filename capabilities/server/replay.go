@@ -8,7 +8,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/ai"
 	"platformserver/journal"
 	"platformserver/platform"
 )
@@ -39,7 +38,7 @@ func (t *Tenant) Replay(entries []Entry) error {
 			continue
 		}
 		if e.Kind == "usage" && t.ai != nil { // a model call's usage: applied, the call never made again
-			var u ai.Usage
+			var u platform.AIUsage
 			if json.Unmarshal(e.Body, &u) != nil {
 				return fmt.Errorf("entry %d: bad usage", i+1)
 			}
@@ -51,7 +50,7 @@ func (t *Tenant) Replay(entries []Entry) error {
 			if json.Unmarshal(e.Body, &b) != nil {
 				return fmt.Errorf("entry %d: bad agent step", i+1)
 			}
-			if err := t.agents.apply(b, e.At, true); err != nil {
+			if err := t.agents.ApplyAgentStep(b, e.At, true); err != nil {
 				return fmt.Errorf("entry %d: agent step: %v", i+1, err)
 			}
 			t.enqueue(e.At)

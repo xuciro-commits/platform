@@ -10,8 +10,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/ai"
-	"platformserver/apps/build"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -29,13 +28,13 @@ func configureFunctionFixtureModel(t *Tenant, model string, at time.Time) error 
 	if !ok || provider == "" || name == "" {
 		return fmt.Errorf("fixture model must identify provider/model")
 	}
-	admin := platform.Member{ID: "app:candidate-test", Tenant: t.ID, Roles: map[string]string{PlatformApp: Admin, ai.ID: ai.Admin}}
+	admin := platform.Member{ID: "app:candidate-test", Tenant: t.ID, Roles: map[string]string{PlatformApp: Admin, platform.AIApp: platform.AIAdmin}}
 	settings := []struct {
 		app, schema, kind, id string
 		payload               any
 	}{
-		{ai.ID, ai.SchemaProviderAdd, ai.ProviderType, provider, map[string]string{"kind": "local", "baseUrl": "http://candidate.invalid", "wire": "openai"}},
-		{ai.ID, ai.SchemaModelEnable, ai.ModelType, model, map[string]string{"access": "users"}},
+		{platform.AIApp, platform.AISchemaProviderAdd, platform.AIProviderType, provider, map[string]string{"kind": "local", "baseUrl": "http://candidate.invalid", "wire": "openai"}},
+		{platform.AIApp, platform.AISchemaModelEnable, platform.AIModelType, model, map[string]string{"access": "users"}},
 		{PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": model}},
 	}
 	for i, setting := range settings {

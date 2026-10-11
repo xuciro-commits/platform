@@ -1,11 +1,11 @@
-package enterprise
+package enterpriseapi
 
 import "encoding/json"
 
 // Historical view payloads and snapshots used the eight UAF grid cells.
 // Decode them into the current viewpoints; never rewrite journal bytes or
 // restore the retired grid field in the live write contract (ADR-0093).
-func legacyViewpoint(grid string) string {
+func LegacyViewpoint(grid string) string {
 	switch grid {
 	case "Pr-Sr", "Pr-Cn", "Rs-Sr":
 		return "organization"
@@ -30,7 +30,7 @@ func (v *View) UnmarshalJSON(raw []byte) error {
 	}
 	*v = View(saved.current)
 	if v.Viewpoint == "" {
-		v.Viewpoint = legacyViewpoint(saved.Grid)
+		v.Viewpoint = LegacyViewpoint(saved.Grid)
 	}
 	return nil
 }

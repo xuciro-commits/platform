@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
 	"slices"
 	"strings"
@@ -25,7 +26,7 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	if len(contentVersion) > 1 || len(contentVersion) == 1 && ref.Kind != platform.AssetPage {
 		return platform.ReleaseAsset{}, fmt.Errorf("content pins only identify one retained page")
 	}
-	if integrationKind(ref.Kind) {
+	if buildapi.ValueIntegrationKind(ref.Kind) {
 		rows, err := b.integrationInventory(ref.Kind)
 		if err != nil {
 			return platform.ReleaseAsset{}, err
@@ -40,7 +41,7 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 					continue
 				}
 				var a platform.ReleaseAsset
-				if err := decodeIntegration([]byte(raw), &a); err != nil {
+				if err := buildapi.ValueDecodeIntegration([]byte(raw), &a); err != nil {
 					return a, err
 				}
 				if a.Ref == ref && a.SourceVersion == version {
@@ -89,14 +90,14 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	return platform.ReleaseAsset{}, fmt.Errorf("asset version %s@%s is unavailable", ref, version)
 }
 func (b *Build) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]platform.AssetEnvironmentRequirement, error) {
-	if !integrationKind(asset.Ref.Kind) {
+	if !buildapi.ValueIntegrationKind(asset.Ref.Kind) {
 		return nil, nil
 	}
 	var req platform.AssetEnvironmentRequirement
 	switch asset.Ref.Kind {
 	case platform.AssetConnection:
 		var d ConnectionDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return nil, err
 		}
 		if d.Name != asset.Ref.Name || !slices.Contains(ConnectionKinds, d.Kind) {
@@ -105,7 +106,7 @@ func (b *Build) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]pla
 		req = platform.AssetEnvironmentRequirement{Ref: asset.Ref, Profile: d.Kind, Credential: d.Credential}
 	case platform.AssetSource:
 		var d SourceDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return nil, err
 		}
 		kind := "http"
@@ -121,7 +122,7 @@ func (b *Build) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]pla
 		req = platform.AssetEnvironmentRequirement{Ref: platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: d.Connection}, Profile: kind}
 	case platform.AssetWriteback:
 		var d WritebackDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return nil, err
 		}
 		if d.Connection == "" {
@@ -142,7 +143,7 @@ func (b *Build) integrationTargets(assets []platform.ReleaseAsset, ctx platform.
 	}
 	restore := func() { b.releaseDraftIDs = saved }
 	for _, asset := range assets {
-		if asset.Ref.App != ID || !integrationKind(asset.Ref.Kind) {
+		if asset.Ref.App != ID || !buildapi.ValueIntegrationKind(asset.Ref.Kind) {
 			continue
 		}
 		if asset.Ref.Kind == platform.AssetConnection {
@@ -158,7 +159,7 @@ func (b *Build) integrationTargets(assets []platform.ReleaseAsset, ctx platform.
 			}
 			conn, ok := platform.Get[Connection](b.host.Automation(platform.Caller{}, ID), target)
 			var d ConnectionDefinition
-			if target == "" || !ok || decodeIntegration(asset.Body, &d) != nil || conn.Name != asset.Ref.Name || conn.Kind != d.Kind || conn.State != "ready" || conn.Archived || d.Credential && conn.Secret == "" {
+			if target == "" || !ok || buildapi.ValueDecodeIntegration(asset.Body, &d) != nil || conn.Name != asset.Ref.Name || conn.Kind != d.Kind || conn.State != "ready" || conn.Archived || d.Credential && conn.Secret == "" {
 				restore()
 				return nil, fmt.Errorf("connection %s needs a ready target binding with matching kind and credential", asset.Ref)
 			}
@@ -193,7 +194,7 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.Asset
 		return nil, err
 	}
 	defer restore()
-	old, err := releaseDraftsOf(platform.ReleaseCandidate{Assets: assets})
+	old, err := b.releaseDraftsOf(platform.ReleaseCandidate{Assets: assets})
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +207,7 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.Asset
 		out = append(out, platform.AssetDraft{Ref: ref, Type: draft.Type, Name: draft.Name, Schema: draft.Type + ".create", Image: draft.Image})
 	}
 	for _, asset := range assets {
-		if asset.Ref.App != ID || !integrationKind(asset.Ref.Kind) || asset.Ref.Kind == platform.AssetConnection {
+		if asset.Ref.App != ID || !buildapi.ValueIntegrationKind(asset.Ref.Kind) || asset.Ref.Kind == platform.AssetConnection {
 			continue
 		}
 		record, err := b.integrationConfiguration(asset)
@@ -280,7 +281,7 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 		out = append(out, plan)
 	}
 	for _, asset := range assets {
-		if asset.Ref.App != ID || !integrationKind(asset.Ref.Kind) {
+		if asset.Ref.App != ID || !buildapi.ValueIntegrationKind(asset.Ref.Kind) {
 			continue
 		}
 		rows, err := b.integrationInventory(asset.Ref.Kind)
@@ -307,7 +308,7 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 			prior := current.(Source)
 			if prior.Published != r.Published || prior.State != "published" {
 				var d SourceDefinition
-				if err := decodeIntegration(asset.Body, &d); err != nil {
+				if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 					return nil, err
 				}
 				if !d.Stream {
@@ -362,7 +363,7 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		case platform.AssetMatching:
 			record = new(Match)
 		}
-		if err := decodeIntegration(image, record); err != nil {
+		if err := buildapi.ValueDecodeIntegration(image, record); err != nil {
 			return platform.AssetInstallation{}, err
 		}
 		switch r := record.(type) {
@@ -381,18 +382,18 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		}
 		name, version, raw, _ := integrationMetadata(record)
 		var asset platform.ReleaseAsset
-		if integrationRecord(record).ID == "" || version < 1 || decodeIntegration([]byte(raw), &asset) != nil || asset.Ref != (platform.AssetRef{App: ID, Kind: kind, Name: name}) {
+		if integrationRecord(record).ID == "" || version < 1 || buildapi.ValueDecodeIntegration([]byte(raw), &asset) != nil || asset.Ref != (platform.AssetRef{App: ID, Kind: kind, Name: name}) {
 			return platform.AssetInstallation{}, fmt.Errorf("invalid integration installation")
 		}
 		if err := validateIntegrationFamily(record, asset); err != nil {
 			return platform.AssetInstallation{}, err
 		}
-		if err := validateIntegrationDescriptor(asset); err != nil {
+		if err := buildapi.ValueValidateIntegrationDescriptor(asset); err != nil {
 			return platform.AssetInstallation{}, err
 		}
 		return platform.AssetInstallation{Ref: asset.Ref, Schema: schema, Record: typ + "/" + integrationRecord(record).ID, Image: slices.Clone(image)}, nil
 	}
-	typ, id, err := publicationRecord(ReleasePublication{schema, image})
+	typ, id, err := publicationRecord(ReleasePublication{Schema: schema, Image: image})
 	if err != nil {
 		return platform.AssetInstallation{}, err
 	}
@@ -401,7 +402,7 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 	case SchemaPublish:
 		var r Object
 		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: TypeOf(r.Name)}
+		ref = platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: buildapi.TypeOf(r.Name)}
 	case SchemaRelease:
 		var r Page
 		_ = json.Unmarshal(image, &r)
@@ -413,7 +414,7 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 	case SchemaProcess:
 		var r Process
 		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: TypeOf(r.Name)}
+		ref = platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: buildapi.TypeOf(r.Name)}
 	case SchemaPropertyType:
 		var r PropertyType
 		_ = json.Unmarshal(image, &r)
@@ -450,7 +451,7 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 	if decoded.Ref != plan.Ref || decoded.Record != plan.Record {
 		return fmt.Errorf("installation identity differs from its saved image")
 	}
-	if !integrationKind(plan.Ref.Kind) {
+	if !buildapi.ValueIntegrationKind(plan.Ref.Kind) {
 		return b.ValidateAcceptedPublication(plan.Schema, plan.Image)
 	}
 	record, err := integrationInstallationRecord(plan.Ref.Kind, plan.Image)
@@ -558,7 +559,7 @@ func integrationInstallationRecord(kind platform.AssetKind, raw []byte) (any, er
 	default:
 		return nil, fmt.Errorf("unknown integration kind")
 	}
-	if err := decodeIntegration(raw, ptr); err != nil {
+	if err := buildapi.ValueDecodeIntegration(raw, ptr); err != nil {
 		return nil, err
 	}
 	return reflect.ValueOf(ptr).Elem().Interface(), nil
@@ -571,7 +572,7 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 			}
 		}
 	}
-	if integrationKind(plan.Ref.Kind) {
+	if buildapi.ValueIntegrationKind(plan.Ref.Kind) {
 		_, err := b.DecodeAssetInstallation(plan.Schema, plan.Image)
 		return err
 	}
@@ -583,7 +584,7 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 	return b.ApplyAcceptedPublication(plan.Schema, plan.Image)
 }
 func (b *Build) validateIntegrationUpgrade(plan platform.AssetInstallation) error {
-	if !integrationKind(plan.Ref.Kind) {
+	if !buildapi.ValueIntegrationKind(plan.Ref.Kind) {
 		return nil
 	}
 	proposed, err := integrationInstallationRecord(plan.Ref.Kind, plan.Image)
@@ -719,13 +720,13 @@ func (b *Build) validateReleaseMember(assets []platform.ReleaseAsset, member pla
 		return nil
 	}
 	for _, asset := range assets {
-		if asset.Ref.App != ID || !integrationKind(asset.Ref.Kind) {
+		if asset.Ref.App != ID || !buildapi.ValueIntegrationKind(asset.Ref.Kind) {
 			continue
 		}
 		switch asset.Ref.Kind {
 		case platform.AssetSource:
 			var d SourceDefinition
-			if err := decodeIntegration(asset.Body, &d); err != nil {
+			if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 				return err
 			}
 			if err := permission(SourceType + ".publish"); err != nil {
@@ -743,7 +744,7 @@ func (b *Build) validateReleaseMember(assets []platform.ReleaseAsset, member pla
 			}
 		case platform.AssetPipeline:
 			var d PipelineDefinition
-			if err := decodeIntegration(asset.Body, &d); err != nil {
+			if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 				return err
 			}
 			if err := permission(PipelineType + ".publish"); err != nil {
@@ -761,7 +762,7 @@ func (b *Build) validateReleaseMember(assets []platform.ReleaseAsset, member pla
 			}
 		case platform.AssetWriteback:
 			var d WritebackDefinition
-			if err := decodeIntegration(asset.Body, &d); err != nil {
+			if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 				return err
 			}
 			if err := permission(WritebackType + ".publish"); err != nil {
@@ -788,7 +789,7 @@ func draftAssetRef(typ, name string) (platform.AssetRef, error) {
 		return platform.AssetRef{}, fmt.Errorf("unknown native release draft %s", typ)
 	}
 	if kind == platform.AssetObject || kind == platform.AssetFlow {
-		name = TypeOf(name)
+		name = buildapi.TypeOf(name)
 	}
 	return platform.AssetRef{App: ID, Kind: kind, Name: name}, nil
 }
@@ -796,25 +797,25 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 	switch asset.Ref.Kind {
 	case platform.AssetPropertyType:
 		var d platform.PropertyType
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return "", nil, err
 		}
 		return PropertyTypeType, propertyTypeFromDeclaration(d), nil
 	case platform.AssetLinkType:
 		var d platform.LinkType
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return "", nil, err
 		}
 		return LinkTypeType, linkTypeFromDeclaration(d), nil
 	case platform.AssetQuery:
 		var d Query
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return "", nil, err
 		}
 		return QueryType, d, nil
 	case platform.AssetFunction:
 		var d Function
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return "", nil, err
 		}
 		return FunctionType, d, nil
@@ -847,7 +848,7 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 			continue
 		}
 		var object Object
-		if err := json.Unmarshal(asset.Body, &object); err != nil || TypeOf(object.Name) != asset.Ref.Name {
+		if err := json.Unmarshal(asset.Body, &object); err != nil || buildapi.TypeOf(object.Name) != asset.Ref.Name {
 			return nil, fmt.Errorf("invalid bootstrap object shape %s", asset.Ref)
 		}
 		shape, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })

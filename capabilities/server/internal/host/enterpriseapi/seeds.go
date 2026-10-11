@@ -1,4 +1,4 @@
-package enterprise
+package enterpriseapi
 
 import (
 	"fmt"
@@ -103,7 +103,7 @@ func PatternPreview(id, name string, params Params) (Preview, bool) {
 		return Preview{}, false
 	}
 	b := newBuilder("", "2000-01-01", nil)
-	b.kind("management", "Management", "management", false)
+	b.KindOf("management", "Management", "management", false)
 	if name == "" {
 		name = pat.Title
 	}
@@ -126,7 +126,7 @@ func PatternPreview(id, name string, params Params) (Preview, bool) {
 		if depth > 2 || len(pv.Outline) > 40 {
 			return
 		}
-		el := b.m.element(id)
+		el := b.m.ElementOf(id)
 		pv.Outline = append(pv.Outline, strings.Repeat("  ", depth)+el.Name)
 		for _, c := range b.m.children(id, "management") {
 			walk(c, depth+1)
@@ -158,25 +158,25 @@ func (m *Model) Apply(id, under, name string, params Params, day Date) (string, 
 		return "", fmt.Errorf("the %s needs a name", strings.ToLower(pat.Title))
 	}
 	if under != "" {
-		parent := m.element(under)
+		parent := m.ElementOf(under)
 		if parent == nil || parent.Stereotype != Organization {
 			return "", fmt.Errorf("%q is not an organisation to place the %s under", under, strings.ToLower(pat.Title))
 		}
 	}
 	b := newBuilder(m.Scale, day, m)
-	if m.kind("management") == nil {
-		b.kind("management", "Management", "management", false)
+	if m.KindOf("management") == nil {
+		b.KindOf("management", "Management", "management", false)
 	}
-	if m.kind("site") == nil {
-		b.kind("site", "Sites", "site", false)
+	if m.KindOf("site") == nil {
+		b.KindOf("site", "Sites", "site", false)
 	}
-	if pat.Level == 1 && m.kind("legal") == nil {
-		b.kind("legal", "Legal", "legal", false)
+	if pat.Level == 1 && m.KindOf("legal") == nil {
+		b.KindOf("legal", "Legal", "legal", false)
 	}
 	root := pat.build(b, under, name, params)
 	if under != "" {
 		b.under("management", root, under)
-		if m.element(under).Legal && b.m.element(root).Legal {
+		if m.ElementOf(under).Legal && b.m.ElementOf(root).Legal {
 			b.under("legal", root, under)
 		}
 	}
@@ -235,9 +235,9 @@ func Template(p SeedParams) (Model, error) {
 		p.LegalEntities = map[string]int{"S": 1, "M": 1, "L": 1, "XL": 4}[p.Scale]
 	}
 	b := newBuilder(p.Scale, p.Day, nil)
-	b.kind("management", "Management", "management", false)
-	b.kind("site", "Sites", "site", false)
-	b.kind("legal", "Legal", "legal", false)
+	b.KindOf("management", "Management", "management", false)
+	b.KindOf("site", "Sites", "site", false)
+	b.KindOf("legal", "Legal", "legal", false)
 	site := sitePattern(p.Industry)
 	build := func(id, under, name string, params Params) string {
 		pat, _ := PatternByID(id)
@@ -258,37 +258,37 @@ func Template(p SeedParams) (Model, error) {
 		co := build("company", "", p.Name, nil)
 		build(site, co, p.Name+" "+siteWord(site), nil)
 		for _, s := range []string{"ERP", "MES", "WMS"} {
-			b.relate(Owns, "", co, b.element("System", s, s))
+			b.relate(Owns, "", co, b.ElementOf("System", s, s))
 		}
 		for _, g := range []string{"On-time delivery above 95%", "First-pass yield above 98%", "Zero lost-time accidents"} {
 			b.goal(co, g)
 		}
 	case "L":
-		b.kind("finance", "Cost centres", "finance", false)
-		b.kind("project", "Projects", "project", true)
+		b.KindOf("finance", "Cost centres", "finance", false)
+		b.KindOf("project", "Projects", "project", true)
 		co := build("company", "", p.Name, nil)
 		hq := build("shared-services", co, "Shared services", nil)
 		b.under("finance", hq, co)
 		for i := 1; i <= p.Sites; i++ {
-			bu := b.element(Organization, fmt.Sprintf("Business unit %c", 'A'+i-1), "business unit")
+			bu := b.ElementOf(Organization, fmt.Sprintf("Business unit %c", 'A'+i-1), "business unit")
 			b.under("management", bu, co)
 			b.under("finance", bu, co)
 			b.post(bu, "Business unit director", "executive")
 			build(site, bu, fmt.Sprintf("%s %c %s", p.Name, 'A'+i-1, siteWord(site)), nil)
 		}
 		for _, s := range []string{"ERP", "MES", "WMS", "PLM", "CRM"} {
-			b.relate(Owns, "", hq, b.element("System", s, s))
+			b.relate(Owns, "", hq, b.ElementOf("System", s, s))
 		}
 		for _, pr := range []string{"Digital factory programme", "New product line launch"} {
-			b.relate(Owns, "", co, b.element(Project, pr, "improvement"))
+			b.relate(Owns, "", co, b.ElementOf(Project, pr, "improvement"))
 		}
 		for _, g := range []string{"Double revenue in five years", "Operating margin above 12%", "Employee engagement above 80%"} {
 			b.goal(co, g)
 		}
 	case "XL":
-		b.kind("finance", "Cost centres", "finance", false)
-		b.kind("governance", "Governance", "governance", false)
-		b.kind("project", "Projects", "project", true)
+		b.KindOf("finance", "Cost centres", "finance", false)
+		b.KindOf("governance", "Governance", "governance", false)
+		b.KindOf("project", "Projects", "project", true)
 		grp := build("group", "", p.Name, Params{"subsidiaries": p.LegalEntities})
 		regions := []string{"North", "South", "East", "West", "Overseas"}
 		subs := b.m.children(grp, "legal")
@@ -296,7 +296,7 @@ func Template(p SeedParams) (Model, error) {
 			region := b.location(regions[i%len(regions)]+" region", "region", "", sub)
 			for j := 1; j <= max(1, p.Sites/len(subs)); j++ {
 				before := len(b.m.Elements)
-				build(site, sub, fmt.Sprintf("%s %d %s", b.m.element(sub).Name, j, siteWord(site)), nil)
+				build(site, sub, fmt.Sprintf("%s %d %s", b.m.ElementOf(sub).Name, j, siteWord(site)), nil)
 				for _, e := range b.m.Elements[before:] {
 					if e.Stereotype == Location && e.Kind == siteWord(site) {
 						b.under("site", e.ID, region)
@@ -313,11 +313,11 @@ func Template(p SeedParams) (Model, error) {
 	for _, c := range capabilitiesFor(p.Scale, p.Industry) {
 		b.capability(b.m.Elements[0].ID, c, "business")
 	}
-	b.view("Organisation", "organization", b.org("")...)
-	b.view("Capabilities", "function", b.ofStereotype(Capability)...)
-	b.view("Sites and resources", "organization", append(b.ofStereotype(Location), b.ofStereotype(Resource)...)...)
+	b.ViewOf("Organisation", "organization", b.org("")...)
+	b.ViewOf("Capabilities", "function", b.ofStereotype(Capability)...)
+	b.ViewOf("Sites and resources", "organization", append(b.ofStereotype(Location), b.ofStereotype(Resource)...)...)
 	if projects := b.ofStereotype(Project); len(projects) > 0 {
-		b.view("Projects", "control", projects...)
+		b.ViewOf("Projects", "control", projects...)
 	}
 	return b.m, nil
 }
@@ -400,11 +400,11 @@ func (b *builder) id(prefix, name string) string {
 	}
 }
 
-func (b *builder) kind(id, name, kind string, matrix bool) {
+func (b *builder) KindOf(id, name, kind string, matrix bool) {
 	b.m.Kinds = append(b.m.Kinds, Kind{ID: id, Name: name, Kind: kind, Matrix: matrix})
 }
 
-func (b *builder) element(stereotype, name, kind string) string {
+func (b *builder) ElementOf(stereotype, name, kind string) string {
 	prefix := map[string]string{Organization: "org", Post: "post", Person: "person", Location: "loc", Resource: "res", Capability: "cap", Goal: "goal", Project: "prj", "System": "sys", "Responsibility": "resp"}[stereotype]
 	if prefix == "" {
 		prefix = slug(stereotype)
@@ -415,7 +415,7 @@ func (b *builder) element(stereotype, name, kind string) string {
 }
 
 func (b *builder) legal(name, kind string) string {
-	id := b.element(Organization, name, kind)
+	id := b.ElementOf(Organization, name, kind)
 	b.m.Elements[len(b.m.Elements)-1].Legal = true
 	return id
 }
@@ -430,7 +430,7 @@ func (b *builder) under(kind, child, parent string) { b.relate(Placement, kind, 
 
 // unit adds an organisation under a parent in management.
 func (b *builder) unit(parent, name, kind string) string {
-	id := b.element(Organization, name, kind)
+	id := b.ElementOf(Organization, name, kind)
 	if parent != "" {
 		b.under("management", id, parent)
 	}
@@ -438,23 +438,23 @@ func (b *builder) unit(parent, name, kind string) string {
 }
 
 func (b *builder) post(org, name, kind string) string {
-	p := b.element(Post, name, kind)
+	p := b.ElementOf(Post, name, kind)
 	b.relate(Owns, "", org, p)
 	return p
 }
 
 func (b *builder) capability(org, name, kind string) string {
-	c := b.element(Capability, name, kind)
+	c := b.ElementOf(Capability, name, kind)
 	b.relate(Exhibits, "", org, c)
 	return c
 }
 
 func (b *builder) goal(org, name string) {
-	b.relate(Owns, "", org, b.element(Goal, name, ""))
+	b.relate(Owns, "", org, b.ElementOf(Goal, name, ""))
 }
 
 func (b *builder) location(name, kind, parent, owner string) string {
-	l := b.element(Location, name, kind)
+	l := b.ElementOf(Location, name, kind)
 	if parent != "" {
 		b.under("site", l, parent)
 	}
@@ -464,7 +464,7 @@ func (b *builder) location(name, kind, parent, owner string) string {
 	return l
 }
 
-func (b *builder) view(name, viewpoint string, elements ...string) {
+func (b *builder) ViewOf(name, viewpoint string, elements ...string) {
 	b.m.Views = append(b.m.Views, View{ID: b.id("view", name), Name: name, Viewpoint: viewpoint, Elements: elements})
 }
 
@@ -493,13 +493,13 @@ func (b *builder) ofStereotype(st string) []string {
 func buildGroup(b *builder, _ string, name string, p Params) string {
 	grp := b.legal(name, "group")
 	b.post(grp, "Group chief executive", "executive")
-	board := b.element(Organization, "Board of directors", "committee")
-	if b.m.kind("governance") == nil {
-		b.kind("governance", "Governance", "governance", false)
+	board := b.ElementOf(Organization, "Board of directors", "committee")
+	if b.m.KindOf("governance") == nil {
+		b.KindOf("governance", "Governance", "governance", false)
 	}
 	b.under("governance", grp, board)
 	for _, c := range []string{"Audit committee", "Remuneration committee"} {
-		b.under("governance", b.element(Organization, c, "committee"), board)
+		b.under("governance", b.ElementOf(Organization, c, "committee"), board)
 	}
 	hq := b.unit(grp, "Group headquarters", "division")
 	for _, f := range []string{"Group finance", "Group HR", "Group IT", "Strategy & M&A", "Legal & compliance", "Internal audit"} {
@@ -509,7 +509,7 @@ func buildGroup(b *builder, _ string, name string, p Params) string {
 	kinds := []string{"Industrial", "Technology", "Trading", "Services", "Energy", "Logistics"}
 	for i := 1; i <= p.get("subsidiaries", 3); i++ {
 		sub := buildCompany(b, grp, fmt.Sprintf("%s %s", name, kinds[(i-1)%len(kinds)]), Params{"functions": 4})
-		b.m.element(sub).Kind = "subsidiary"
+		b.m.ElementOf(sub).Kind = "subsidiary"
 		b.under("management", sub, grp)
 		b.under("legal", sub, grp)
 		b.m.Relationships[len(b.m.Relationships)-1].Share = 1
@@ -536,7 +536,7 @@ func buildCompany(b *builder, _ string, name string, p Params) string {
 // --- Level 2: sites.
 
 func buildPlant(b *builder, _ string, name string, p Params) string {
-	plant := b.element(Organization, name, "factory")
+	plant := b.ElementOf(Organization, name, "factory")
 	b.post(plant, "Plant manager", "executive")
 	loc := b.location(name, "plant", "", plant)
 	var production string
@@ -562,7 +562,7 @@ func buildPlant(b *builder, _ string, name string, p Params) string {
 }
 
 func buildHotel(b *builder, _ string, name string, p Params) string {
-	hotel := b.element(Organization, name, "hotel")
+	hotel := b.ElementOf(Organization, name, "hotel")
 	b.post(hotel, "General manager", "executive")
 	loc := b.location(name, "property", "", hotel)
 	for _, d := range []string{"Front office", "Housekeeping", "Food & beverage", "Engineering", "Sales & marketing"} {
@@ -583,7 +583,7 @@ func buildHotel(b *builder, _ string, name string, p Params) string {
 }
 
 func buildWarehouse(b *builder, _ string, name string, p Params) string {
-	wh := b.element(Organization, name, "warehouse")
+	wh := b.ElementOf(Organization, name, "warehouse")
 	b.post(wh, "Warehouse manager", "executive")
 	loc := b.location(name, "warehouse", "", wh)
 	for _, d := range []string{"Inbound", "Outbound", "Inventory control"} {
@@ -607,7 +607,7 @@ func buildWarehouse(b *builder, _ string, name string, p Params) string {
 }
 
 func buildOffice(b *builder, _ string, name string, p Params) string {
-	office := b.element(Organization, name, "branch")
+	office := b.ElementOf(Organization, name, "branch")
 	b.post(office, "Branch manager", "manager")
 	b.location(name, "office", "", office)
 	for i := 1; i <= p.get("teams", 2); i++ {
@@ -619,7 +619,7 @@ func buildOffice(b *builder, _ string, name string, p Params) string {
 // --- Level 3: functions.
 
 func buildDepartment(b *builder, _ string, name string, p Params) string {
-	d := b.element(Organization, name, "department")
+	d := b.ElementOf(Organization, name, "department")
 	b.post(d, name+" manager", "manager")
 	b.post(d, name+" staff", "staff")
 	for i := 1; i <= p.get("teams", 0); i++ {
@@ -629,7 +629,7 @@ func buildDepartment(b *builder, _ string, name string, p Params) string {
 }
 
 func buildSharedServices(b *builder, _ string, name string, _ Params) string {
-	ssc := b.element(Organization, name, "division")
+	ssc := b.ElementOf(Organization, name, "division")
 	b.post(ssc, "Head of shared services", "executive")
 	for _, f := range []string{"Finance", "Human resources", "IT"} {
 		d := b.unit(ssc, f, "department")
@@ -646,7 +646,7 @@ func buildLine(b *builder, under string, name string, p Params) string {
 	if under != "" {
 		if locs := b.m.Of(under, Owns, true, b.day); len(locs) > 0 {
 			for _, l := range locs {
-				if e := b.m.element(l); e != nil && e.Stereotype == Location {
+				if e := b.m.ElementOf(l); e != nil && e.Stereotype == Location {
 					at = l
 					break
 				}
@@ -657,7 +657,7 @@ func buildLine(b *builder, under string, name string, p Params) string {
 }
 
 func buildLineAt(b *builder, shop, shopLoc, name string, stations int) string {
-	line := b.element(Organization, name, "line")
+	line := b.ElementOf(Organization, name, "line")
 	if shop != "" {
 		b.under("management", line, shop)
 	}
@@ -666,7 +666,7 @@ func buildLineAt(b *builder, shop, shopLoc, name string, stations int) string {
 	lineLoc := b.location(name, "line", shopLoc, line)
 	for s := 1; s <= stations; s++ {
 		st := b.location(fmt.Sprintf("%s station %d", name, s), "station", lineLoc, line)
-		mach := b.element(Resource, fmt.Sprintf("%s machine %d", name, s), "machine")
+		mach := b.ElementOf(Resource, fmt.Sprintf("%s machine %d", name, s), "machine")
 		b.relate(Owns, "", line, mach)
 		b.relate(Placement, "site", mach, st)
 	}
@@ -674,7 +674,7 @@ func buildLineAt(b *builder, shop, shopLoc, name string, stations int) string {
 }
 
 func buildTeam(b *builder, under string, name string, _ Params) string {
-	team := b.element(Organization, name, "team")
+	team := b.ElementOf(Organization, name, "team")
 	if under != "" {
 		b.under("management", team, under)
 	}

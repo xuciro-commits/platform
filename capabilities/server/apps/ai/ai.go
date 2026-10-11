@@ -21,94 +21,45 @@ import (
 // Providers and models are its decisions; calls are made by the host
 // (aicall.go) and each call's usage is journaled; prompts and answers are not.
 const (
-	ID                   = "ai"
-	ProviderType         = "ai.provider"
-	ModelType            = "ai.model"
-	SchemaProviderAdd    = "ai.provider.add"
-	SchemaProviderRemove = "ai.provider.remove"
-	SchemaModelEnable    = "ai.model.enable"
-	SchemaModelDisable   = "ai.model.disable"
-	LimitType            = "ai.limit"
-	SchemaLimitSet       = "ai.limit.set"
-	SchemaLimitRemove    = "ai.limit.remove"
+	ID                   = platform.AIApp
+	ProviderType         = platform.AIProviderType
+	ModelType            = platform.AIModelType
+	SchemaProviderAdd    = platform.AISchemaProviderAdd
+	SchemaProviderRemove = platform.AISchemaProviderRemove
+	SchemaModelEnable    = platform.AISchemaModelEnable
+	SchemaModelDisable   = platform.AISchemaModelDisable
+	LimitType            = platform.AILimitType
+	SchemaLimitSet       = platform.AISchemaLimitSet
+	SchemaLimitRemove    = platform.AISchemaLimitRemove
 	// Settings of the defaults a limit overrides (ADR-0029 D1).
-	SettingDailyTokens = "daily-tokens"     // tokens per person per day; 0: none
-	SettingPerMinute   = "calls-per-minute" // calls per person or agent per minute; 0: none
-	SettingAppModel    = "app-model"        // the model apps ask when they name none (ADR-0029 D3)
-	SettingMaxTokens   = "max-tokens"       // the most tokens one answer may ask for; 0: the provider's default
-	Admin              = "admin"
-	User               = "user" // may call models open to users
+	SettingDailyTokens = platform.AISettingDailyTokens // tokens per person per day; 0: none
+	SettingPerMinute   = platform.AISettingPerMinute   // calls per person or agent per minute; 0: none
+	SettingAppModel    = platform.AISettingAppModel    // the model apps ask when they name none (ADR-0029 D3)
+	SettingMaxTokens   = platform.AISettingMaxTokens   // the most tokens one answer may ask for; 0: the provider's default
+	Admin              = platform.AIAdmin
+	User               = platform.AIUser // may call models open to users
 )
 
 // Vendor is a provider with a fixed base URL and wire.
-type Vendor struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	BaseURL string `json:"baseUrl"`
-	Wire    string `json:"wire"` // openai, anthropic
-}
+type Vendor = platform.AIVendor
 
 // Vendors are the fixed providers. Anthropic speaks its own Messages API
 // through its official SDK (anthropic.go); the others speak the OpenAI wire.
-var Vendors = []Vendor{
-	{"anthropic", "Anthropic (Claude)", "https://api.anthropic.com", "anthropic"},
-	{"openai", "OpenAI", "https://api.openai.com/v1", "openai"},
-	{"gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "openai"},
-	{"moonshot", "Moonshot AI (Kimi)", "https://api.moonshot.cn/v1", "openai"},
-	{"deepseek", "DeepSeek", "https://api.deepseek.com/v1", "openai"},
-	{"qwen", "Alibaba Qwen (DashScope)", "https://dashscope.aliyuncs.com/compatible-mode/v1", "openai"},
-	{"zhipu", "Zhipu GLM", "https://open.bigmodel.cn/api/paas/v4", "openai"},
-	{"openrouter", "OpenRouter", "https://openrouter.ai/api/v1", "openai"},
-}
+var Vendors = platform.AIVendors
 
 // Provider is a source of models the tenant uses.
-type Provider struct {
-	ID      string `json:"id"`
-	Kind    string `json:"kind"`             // vendor, compatible, local
-	Vendor  string `json:"vendor,omitempty"` // for kind vendor
-	BaseURL string `json:"baseUrl"`
-	Secret  string `json:"secret,omitempty"` // the key's name in the secret store, never the key
-	Wire    string `json:"wire"`
-}
+type Provider = platform.AIProvider
 
 // Model is an enabled model and who may call it.
-type Model struct {
-	Provider string `json:"provider"`
-	Model    string `json:"model"`  // the provider's model ID
-	Access   string `json:"access"` // everyone, users
-	// DailyTokens caps the tokens the whole tenant spends on the model a day; 0: none.
-	DailyTokens int `json:"dailyTokens,omitempty"`
-}
+type Model = platform.AIModel
 
 // Limit overrides the defaults for one member, agent or app (ADR-0029 D1); 0 keeps the default.
-type Limit struct {
-	Member      string `json:"member"`
-	DailyTokens int    `json:"dailyTokens,omitempty"`
-	PerMinute   int    `json:"perMinute,omitempty"`
-}
+type Limit = platform.AILimit
 
 // Name is how callers name the model: "<provider>/<model>".
-func (m Model) Name() string { return m.Provider + "/" + m.Model }
 
 // Usage is one call's meter reading.
-type Usage struct {
-	At             time.Time `json:"at"`
-	Member         string    `json:"member"`
-	Agent          bool      `json:"agent,omitempty"`
-	Model          string    `json:"model"`            // "<provider>/<model>"
-	Served         string    `json:"served,omitempty"` // the model that answered, when the provider routes
-	Input          int       `json:"input"`
-	Output         int       `json:"output"`
-	TokensReported bool      `json:"tokensReported,omitempty"`
-	// TokensEstimated marks usage the provider did not report: the numbers are
-	// the platform's conservative estimate, so an unknown call is never booked
-	// as a free one (ADR-0050 D7, review AI-05).
-	TokensEstimated bool    `json:"tokensEstimated,omitempty"`
-	Cost            float64 `json:"cost,omitempty"` // USD, when the provider reports it
-	CostReported    bool    `json:"costReported,omitempty"`
-	Millis          int64   `json:"millis"`
-	Outcome         string  `json:"outcome"` // ok, or why it failed
-}
+type Usage = platform.AIUsage
 
 const usageKept = 5000
 
@@ -364,7 +315,7 @@ func (a *AI) Usage() []Usage {
 
 // Defaults are the limits a member without its own takes (ADR-0029 D1):
 // tokens a day for people and for agents, and calls a minute; 0: none.
-type Defaults struct{ People, Agents, PerMinute int }
+type Defaults = platform.AIDefaults
 
 // allowLocked says why m may not call model now, or "" when it may: the
 // model's daily cap for the tenant, then m's tokens today and calls this
@@ -433,23 +384,7 @@ func (a *AI) pruneInflightLocked(now time.Time) {
 }
 
 // Total is usage summed per day, member and model.
-type Total struct {
-	Day    string  `json:"day"`
-	Member string  `json:"member"`
-	Model  string  `json:"model"`
-	Calls  int     `json:"calls"`
-	Failed int     `json:"failed"`
-	Input  int     `json:"input"`
-	Output int     `json:"output"`
-	Cost   float64 `json:"cost"`
-	// Reported and Estimated split Input+Output into what the provider said
-	// and what the platform had to estimate; CostUnknown counts the calls
-	// whose cost no provider reported, so a cost of 0 is never read as free
-	// when it was simply not said (ADR-0050 D7, review AI-05).
-	Reported    int `json:"reported"`
-	Estimated   int `json:"estimated"`
-	CostUnknown int `json:"costUnknown"`
-}
+type Total = platform.AITotal
 
 // Read "ai-providers" (administrators), "ai-models" (what the caller may call;
 // administrators see every enabled model), "ai-usage" (the caller's own;
@@ -513,10 +448,7 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 }
 
 // AIUsage is model calls metered from the journal, and their totals per day, member and model.
-type AIUsage struct {
-	Calls  []Usage `json:"calls"`
-	Totals []Total `json:"totals"`
-}
+type AIUsage = platform.AIUsageReport
 
 // Model is an enabled model by name, whatever the caller's access: agents call
 // the model the tenant set for them (ADR-0021).
@@ -537,3 +469,5 @@ func (a *AI) Spent(member string, now time.Time) int {
 	defer a.mu.Unlock()
 	return a.daily[now.UTC().Format(time.DateOnly)+"|"+member]
 }
+
+func (a *AI) NewSimulationApp(tenant string) platform.App { return New(tenant) }

@@ -29,7 +29,7 @@ func TestTraceFollowsWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	tn.Secrets = func(string) ([]byte, bool) { return []byte("s3cret"), true }
-	ana, _ := dir.Member("ana")
+	ana, _ := dir.MemberBySubject("ana")
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	decide := func(app, schema, typ, id string, payload any) {
 		t.Helper()

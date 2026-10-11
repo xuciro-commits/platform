@@ -59,7 +59,7 @@ func TestIOLane(t *testing.T) {
 		t.Fatal(err)
 	}
 	tn.Secrets = func(string) ([]byte, bool) { return []byte("s3cret"), true }
-	ana, _ := dir.Member("ana")
+	ana, _ := dir.MemberBySubject("ana")
 	keys := 0
 	submit := func(s *pb.Submission) {
 		t.Helper()

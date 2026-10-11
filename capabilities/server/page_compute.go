@@ -18,13 +18,11 @@ func (t *Tenant) pageOperation(binding *platform.AssetBinding) (platform.Operati
 			return op, 0, nil
 		}
 	}
-	owner, ok := app.(interface {
-		OperationReleaseAsset(string, string) (platform.ReleaseAsset, error)
-	})
-	if !ok {
-		return platform.Operation{}, 0, fmt.Errorf("compute has no retained owner")
+	registry, err := t.assetRegistryLocked()
+	if err != nil {
+		return platform.Operation{}, 0, err
 	}
-	asset, err := owner.OperationReleaseAsset(binding.Ref.Name, binding.SourceVersion)
+	asset, err := registry.ResolvePinned(binding.Ref, binding.SourceVersion)
 	var op platform.Operation
 	version := 0
 	_, ordinal, retained := strings.Cut(binding.SourceVersion, ".compute-")

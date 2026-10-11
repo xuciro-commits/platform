@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+
 	"slices"
 	"time"
 
@@ -10,9 +11,6 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
-
-const LinkTypeType = "build.linktype"
-const SchemaLinkType = LinkTypeType + ".publish"
 
 // LinkType owns one bounded declaration and its retained publications. Draft
 // edits never replace what callers use until the publication result commits.
@@ -35,7 +33,7 @@ type LinkType struct {
 	Versions     []string `json:"versions,omitempty" field:"readonly"`
 }
 
-func (f LinkType) definition() platform.LinkType {
+func (f LinkType) Definition() platform.LinkType {
 	policy := f.DeletePolicy
 	if policy == "" {
 		policy = "owner"
@@ -47,7 +45,7 @@ func (f LinkType) definition() platform.LinkType {
 	return platform.LinkType{Name: f.Name, Title: f.Title, Description: f.Description, Parent: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Parent}, Child: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Child}, Via: f.Via, Forward: f.Forward, Reverse: f.Reverse, Required: f.Required, Storage: "reference", Cardinality: cardinality, DeletePolicy: policy}
 }
 
-func (f LinkType) Declaration() platform.LinkType { return f.definition() }
+func (f LinkType) Declaration() platform.LinkType { return f.Definition() }
 
 func (b *Build) linkTypeEntity() platform.Entity {
 	return platform.Entity{Type: LinkTypeType, Title: "Link type", Plural: "Link types", Model: LinkType{}, Display: "title",
@@ -77,7 +75,7 @@ func (b *Build) checkLinkType(f *LinkType) error {
 		return fmt.Errorf("Link reference is unavailable")
 	}
 	f.Required = field.Required
-	if err := b.host.ValidateInstallLinkType(f.definition()); err != nil {
+	if err := b.host.ValidateInstallLinkType(f.Definition()); err != nil {
 		return err
 	}
 	list, err := b.linkTypeInventory()
@@ -130,7 +128,7 @@ func linkTypeImage(image []byte) (LinkType, error) {
 	var latest LinkType
 	for i, raw := range record.Versions {
 		f, ok := wasPublished[LinkType](raw)
-		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Parent != latest.Parent || f.Child != latest.Child || f.Via != latest.Via || f.Required != latest.Required || !linkKeepsGuarantees(latest, f)) {
+		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Parent != latest.Parent || f.Child != latest.Child || f.Via != latest.Via || f.Required != latest.Required || !linkKeepsGuarantees(latest, f)) {
 			return LinkType{}, fmt.Errorf("accepted link type has a malformed version %d", i+1)
 		}
 		latest = f
@@ -144,7 +142,7 @@ func (b *Build) linkTypeInventory() ([]LinkType, error) {
 
 func (b *Build) installLinkType(c platform.Caller, f LinkType) error {
 
-	if err := b.host.InstallLinkType(c, f.definition(), f.Version); err != nil {
+	if err := b.host.InstallLinkType(c, f.Definition(), f.Version); err != nil {
 		return err
 	}
 	b.linkTypes[f.Name] = f
@@ -154,7 +152,7 @@ func (b *Build) installLinkType(c platform.Caller, f LinkType) error {
 func (b *Build) LinkTypeDefinition(name string, version int) (platform.LinkType, int, bool) {
 	installed, ok := b.linkTypes[name]
 	if ok && (version == 0 || version == installed.Version) {
-		return installed.definition(), installed.Version, true
+		return installed.Definition(), installed.Version, true
 	}
 	if version == 0 {
 		return platform.LinkType{}, 0, false
@@ -174,7 +172,7 @@ func (b *Build) LinkTypeDefinition(name string, version int) (platform.LinkType,
 		}
 		f, ok := wasPublished[LinkType](record.Versions[version-1])
 		if ok && f.Version == version {
-			return f.definition(), version, true
+			return f.Definition(), version, true
 		}
 	}
 	return platform.LinkType{}, 0, false
@@ -188,22 +186,22 @@ func (b *Build) linkTypeDeclarations() []platform.LinkType {
 	slices.Sort(names)
 	out := make([]platform.LinkType, 0, len(names))
 	for _, name := range names {
-		out = append(out, b.linkTypes[name].definition())
+		out = append(out, b.linkTypes[name].Definition())
 	}
 	return out
 }
 
 func linkKeepsGuarantees(old, next LinkType) bool {
-	before, after := old.definition(), next.definition()
+	before, after := old.Definition(), next.Definition()
 	return !(before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
 }
 
-// LinkTypePublication decodes the original accepted owner image without a
+// LinkPublication decodes the original accepted owner image without a
 // new publication decision or a generic release declaration union.
-func LinkTypePublication(image []byte) (platform.LinkType, error) {
+func (b *Build) LinkPublication(image []byte) (platform.LinkType, error) {
 	saved, err := linkTypeImage(image)
 	if err != nil {
 		return platform.LinkType{}, err
 	}
-	return saved.definition(), nil
+	return saved.Definition(), nil
 }

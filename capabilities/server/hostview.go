@@ -34,7 +34,7 @@ func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platfo
 // record store; a failed or refused publication cannot change live metadata.
 func (h hostView) installationDraft() *Tenant {
 	draft := &Tenant{ID: h.t.ID, apps: h.t.apps, owner: maps.Clone(h.t.owner),
-		records: h.t.records.forkRecords(), definitions: slices.Clone(h.t.definitions), Files: h.t.files(), procs: h.t.procs}
+		identity: h.t.identity, records: h.t.records.forkRecords(), definitions: slices.Clone(h.t.definitions), Files: h.t.files(), procs: h.t.procs}
 	return draft
 }
 
@@ -159,27 +159,24 @@ func (h hostView) Automation(parent platform.Caller, app string) platform.Caller
 	return h.t.automated(parent, app)
 }
 
-func (h hostView) Member(id string) (platform.Member, bool) {
-	if h.decision != nil {
-		if owner, ok := h.decision.stateApp(h.t.app(PlatformApp)).(*Console); ok {
-			owner.mu.Lock()
-			defer owner.mu.Unlock()
-			m := owner.members[id]
-			if m == nil {
-				return platform.Member{}, false
-			}
-			return owner.currentMember(m), true
+func (h hostView) identity() host.IdentityDirectory {
+	owner := h.t.identity
+	if owner != nil && h.decision != nil {
+		if private, ok := h.decision.stateApp(owner).(host.IdentityDirectory); ok {
+			return private
 		}
 	}
-	return h.t.member(id)
+	return owner
 }
-
+func (h hostView) Member(id string) (platform.Member, bool) {
+	if owner := h.identity(); owner != nil {
+		return owner.MemberByID(id)
+	}
+	return platform.Member{}, false
+}
 func (h hostView) Holding(app, role string) []string {
-	if d, ok := h.t.app(PlatformApp).(*Console); ok {
-		if h.decision != nil {
-			d = h.decision.stateApp(d).(*Console)
-		}
-		return d.holding(app, role)
+	if owner := h.identity(); owner != nil {
+		return owner.Holding(app, role)
 	}
 	return nil
 }
@@ -338,4 +335,24 @@ func (h hostView) Record(ref string) (any, bool) {
 		return (&Tenant{records: h.decision.records}).Held(ref)
 	}
 	return h.t.Held(ref)
+}
+
+func (h hostView) BuildProcesses() host.ProcessDefinitions { return h.Processes() }
+func (h hostView) Calendar(party string, day platform.Date) platform.Calendar {
+	if directory := h.Directory(); directory != nil {
+		return directory.Calendar(party, day)
+	}
+	return platform.Calendar{}
+}
+func (h hostView) Units(party, structure string, day platform.Date) []string {
+	if directory := h.Directory(); directory != nil {
+		return directory.Units(party, structure, day)
+	}
+	return nil
+}
+func (h hostView) Holders(structure, unit, role string, day platform.Date) []string {
+	if directory := h.Directory(); directory != nil {
+		return directory.Holders(structure, unit, role, day)
+	}
+	return nil
 }

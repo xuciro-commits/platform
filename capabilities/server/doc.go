@@ -22,6 +22,28 @@
 //	i18n             translator.go         dictionaries and patterns
 //	memStore         journal/memory.go     the Store without one
 //
+// W3 consumer boundaries (ADR-0097): internal/host names the role each
+// compiled owner receives; Host is only the composition aggregate. Console
+// and Agents own their state and receive ConsoleHost/AgentHost, never Tenant.
+// Construction and enterprise value contracts live in internal/host/buildapi
+// and enterpriseapi; runtime code imports no compiled apps. Public DTOs retain
+// the original host API schema names and journal encodings.
+//
+// Lock obligations: mu owns the tenant decision lane, installed definitions,
+// agent-run capture and accepted-result application. opsMu protects queues,
+// connectors, settings, notices and effects; mu may enter opsMu for a bounded
+// capture/application, but opsMu must be released before acquiring mu. The
+// source runner uses streamMu.TryLock before mu; the decision lane never waits
+// for streamMu. Record, ledger, identity, file and projection owners retain
+// their component locks. Already-held decision callbacks do not retake mu;
+// Agent BeginAgentRead is reserved for outside-lane observations.
+//
+// Source/Compute/effect I/O captures fixed identity and versions under the
+// decision lane, runs outside it, then revalidates authority and predecessor
+// before acceptance. File handles keep digest/ticket/version bounds. Each
+// owner keeps its original execution/recovery rules; there is no common I/O
+// executor. Race tests do not prove freedom from deadlock.
+//
 // The pipeline is Tenant.Submit (host.go) → accepted_*.go (one file per result kind) →
 // replay.go; snapshot.go carries every component's state. Routes live in
 // routes.go and routes_*.go, one file per API area. Sub-packages: platform/

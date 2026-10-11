@@ -100,8 +100,8 @@ func (h *Host) currentTenants() []*Tenant {
 	return h.tenants
 }
 
-func consoleOf(t *Tenant) *Console {
-	d, _ := t.app(PlatformApp).(*Console)
+func consoleOf(t *Tenant) IdentitySessions {
+	d, _ := t.app(PlatformApp).(IdentitySessions)
 	return d
 }
 
@@ -120,7 +120,7 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	if strings.HasPrefix(credential, tokenPrefix) { // a personal token (ADR-0079 §5)
 		for _, t := range h.currentTenants() {
 			if d := consoleOf(t); d != nil && (want == "" || t.ID == want) {
-				if m, ok := d.MemberByToken(credential, now); ok && d.noticed(m.ID, credential, r.UserAgent(), "token", now) {
+				if m, ok := d.MemberByToken(credential, now); ok && d.NoticeSession(m.ID, credential, r.UserAgent(), "token", now) {
 					return m, t, true
 				}
 			}
@@ -134,19 +134,19 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	for _, t := range h.currentTenants() {
 		if d := consoleOf(t); d == nil || want != "" && t.ID != want {
 			continue
-		} else if m, ok := d.Member(subject); ok {
+		} else if m, ok := d.MemberBySubject(subject); ok {
 			if d.SecondFactorRequired() && (h.SecondFactor == nil || !h.SecondFactor(credential)) {
 				return platform.Member{}, nil, false // the tenant asks a second factor this credential does not show
 			}
-			if !d.noticed(m.ID, credential, r.UserAgent(), "sign-in", now) {
+			if !d.NoticeSession(m.ID, credential, r.UserAgent(), "sign-in", now) {
 				return platform.Member{}, nil, false // a session the member ended, or whose hours are up
 			}
-			d.seen(m.ID, now)
+			d.SeenMember(m.ID, now)
 			return m, t, true
 		}
 	}
 	for _, t := range h.currentTenants() { // nobody's member: a tenant's sign-in domain may seat them (ADR-0079 §4)
-		if d := consoleOf(t); d != nil && (want == "" || t.ID == want) && (!d.SecondFactorRequired() || h.SecondFactor != nil && h.SecondFactor(credential)) && d.joins(subject) && h.join(t, d, subject, now) {
+		if d := consoleOf(t); d != nil && (want == "" || t.ID == want) && (!d.SecondFactorRequired() || h.SecondFactor != nil && h.SecondFactor(credential)) && d.JoinsSubject(subject) && h.join(t, d, subject, now) {
 			return h.member(r)
 		}
 	}
@@ -155,16 +155,16 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 
 // join seats subject in t by its sign-in domain: the host records the
 // decision as the platform's automation; the newcomer holds nothing until granted.
-func (h *Host) join(t *Tenant, d *Console, subject string, now time.Time) bool {
+func (h *Host) join(t *Tenant, d IdentitySessions, subject string, now time.Time) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
 		return false
 	}
-	if _, ok := d.Member(subject); ok {
+	if _, ok := d.MemberBySubject(subject); ok {
 		return true
 	}
-	if !d.joinable(subject) || !d.joins(subject) {
+	if !d.JoinableSubject(subject) || !d.JoinsSubject(subject) {
 		return false
 	}
 	id := d.JoinID(subject)
@@ -183,7 +183,7 @@ func (h *Host) tenantsOf(r *http.Request) []string {
 	out := []string{}
 	for _, t := range h.currentTenants() {
 		if d := consoleOf(t); d != nil {
-			if _, ok := d.Member(subject); ok {
+			if _, ok := d.MemberBySubject(subject); ok {
 				out = append(out, t.ID)
 			}
 		}

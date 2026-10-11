@@ -101,7 +101,7 @@ func TestAIProviders(t *testing.T) {
 	}
 	tn := build()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
+	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
 	ana, bo, cy, bot := member("ana"), member("bo"), member("cy"), member("bot")
 	now := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
 	keys := 0
@@ -254,7 +254,7 @@ func TestAnthropicProvider(t *testing.T) {
 		r.URL.Scheme, r.URL.Host = target.Scheme, target.Host
 		return http.DefaultTransport.RoundTrip(r)
 	}
-	ana, _ := console.Member("ana")
+	ana, _ := console.MemberBySubject("ana")
 	now := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
 	decide := func(schema, typ, id, payload, key string) {
 		t.Helper()

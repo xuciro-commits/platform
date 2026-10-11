@@ -14,7 +14,7 @@ func TestGeneratedDecisionStaysPrivate(t *testing.T) {
 	tn := stockTenant(t)
 	app := tn.app("stock").(*stock)
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-	member, _ := tn.app(PlatformApp).(*Console).Member("ana")
+	member, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
 	submission := func(key, schema, typ, id, payload string) *pb.Submission {
 		return &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: "stock",
 			IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id},

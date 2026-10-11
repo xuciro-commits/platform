@@ -111,7 +111,7 @@ func (h *Host) routesCore(rt *routes) {
 		} else if h.Development {
 			out.Identities = []Identity{}
 			for _, t := range h.currentTenants() {
-				if d := consoleOf(t); d != nil {
+				if d, ok := t.app(PlatformApp).(HostIdentities); ok {
 					out.Identities = append(out.Identities, d.Identities()...)
 				}
 			}

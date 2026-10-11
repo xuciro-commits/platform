@@ -147,7 +147,7 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		if s.GetSchema().GetName() == SchemaJoin {
-			if !c.Automation || !c.Replaying && !d.joins(p.Subject) {
+			if !c.Automation || !c.Replaying && !d.JoinsSubject(p.Subject) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{subject} is not of a sign-in domain of this tenant", p.Subject)
 			}
 			return func(*pb.ChangeRecord) {
@@ -286,7 +286,7 @@ const mintWindow = 10 * time.Minute
 
 // A recovered token remains usable, but its one-time delivery window belongs
 // to the issuing process. Restarting must not reopen a collected secret.
-func (d *Console) closeTokenSecretWindows() {
+func (d *Console) CloseTokenSecretWindows() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for id := range d.tokens {
@@ -363,10 +363,10 @@ func sessionID(credential string) string { return tokenHash(credential)[:16] }
 
 // noticed records that a credential acted as member now; false when the
 // member ended that session, which the host then refuses.
-func (d *Console) noticed(member, credential, agent string, kind string, now time.Time) bool {
+func (d *Console) NoticeSession(member, credential, agent string, kind string, now time.Time) bool {
 	id := sessionID(credential)
 	hours := 0
-	if d.t != nil {
+	if d.host != nil {
 		hours, _ = strconv.Atoi(d.tenantDefault(SettingSessionHours))
 	}
 	token := ""
@@ -475,8 +475,8 @@ func summarize(ua string) string {
 
 // joins reports whether subject may take a seat by its mail domain alone: a
 // person of one of the tenant's sign-in domains (ADR-0078 §2, ADR-0079 §4).
-func (d *Console) joins(subject string) bool {
-	if d.t == nil {
+func (d *Console) JoinsSubject(subject string) bool {
+	if d.host == nil {
 		return false
 	}
 	email, ok := strings.CutPrefix(subject, "user:")
@@ -495,7 +495,7 @@ func (d *Console) joins(subject string) bool {
 // SecondFactorRequired reports whether every sign-in to this tenant must be
 // attested with a second factor by the identity provider.
 func (d *Console) SecondFactorRequired() bool {
-	return d.t != nil && d.tenantDefault(SettingMFA) == "true"
+	return d.host != nil && d.tenantDefault(SettingMFA) == "true"
 }
 
 // JoinID is the member id a self-joining subject takes: the local part of the
@@ -539,7 +539,7 @@ func (d *Console) handOver(c platform.Caller, left, successor, reason string, no
 
 // joinable excludes existing identities, including denial bindings to members
 // who left. It is checked again under the tenant lock before recording a join.
-func (d *Console) joinable(subject string) bool {
+func (d *Console) JoinableSubject(subject string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.subjects[subject] == ""

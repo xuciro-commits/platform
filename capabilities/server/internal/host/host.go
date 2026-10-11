@@ -14,100 +14,17 @@ import (
 	"platformserver/platform"
 )
 
-// Host is the tenant as its own apps see it.
+// Host is the composition aggregate used only by Attach. Owners receive their
+// named consumer roles and cannot retain or request this aggregate.
 type Host interface {
-	// OwnerOf is the app that declares a data class ("crm.opportunity").
-	OwnerOf(dataClass string) (app string, ok bool)
-	// ProtocolEvent is a protocol event's declaration, by "<protocol id>#<event>".
-	ProtocolEvent(name string) (platform.ProtocolEvent, bool)
-	// As is c acting in app: the same member, replay and automation, with the
-	// roles it holds there (a platform app deciding for a caller of another app).
-	As(c platform.Caller, app string) platform.Caller
-	// Caller is member m acting in app; Automation is app acting as itself.
-	Caller(parent platform.Caller, m platform.Member, app string) platform.Caller
-	Automation(parent platform.Caller, app string) platform.Caller
-	// Member is a member of the tenant by ID, with its roles now; Holding are
-	// the members holding role in app.
-	Member(id string) (platform.Member, bool)
-	Holding(app, role string) []string
-	// Action is an action's declaration and the app declaring it.
-	Action(schema string) (app string, a platform.Action, ok bool)
-	// Submit routes s to the app declaring its action, as c's member, inside
-	// the input being handled: it is not journaled apart, the input replays it.
-	Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
-	// Attempt isolates an optional nested decision. A refusal discards its
-	// changes, allowing the parent to record the refused business outcome.
-	Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
-	// Recipients resolves recipients to members on now's day.
-	Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string
-	// Directory is the organisation, or nil when the tenant runs none.
-	Directory() Directory
-	// Readable reports whether m may read the record ref ("<type>/<id>") now.
-	Readable(m platform.Member, ref string, now time.Time) bool
-	// Stored reports whether the tenant's file store holds the bytes with this sha256 (ADR-0028).
-	Stored(tenant, hash string) bool
-	// Record is a record by "<type>/<id>" as its app holds it (an event's Changed ones, ADR-0028 D8).
-	Record(ref string) (any, bool)
-	// Install declares an entity the app composed at runtime — an object someone
-	// defined in this tenant (ADR-0034) — with the actions generated for it and
-	// the pages people open it through. Installed again, the type takes its new
-	// fields and its records come with them. The app teaches its own ledger the
-	// data class and schemas first (Ledger.Extend).
-	Install(c platform.Caller, e platform.Entity, actions []platform.Action, pages ...platform.Page) error
-	ValidateInstall(e platform.Entity, actions []platform.Action, pages ...platform.Page) error
-	// The named automatic page may be replaced; other installed pages must
-	// still validate against this object's new fields and actions.
-	ValidateInstallDependents(e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error
-	// InstallPage offers a page someone composed in this tenant (ADR-0034): the
-	// same descriptor a manifest declares, checked against what is installed and
-	// served to the members who may read its object. Composed again, it replaces
-	// the one before it.
-	InstallPage(c platform.Caller, p platform.Page) error
-	ValidateInstallPage(p platform.Page) error
-	// InstallApplication offers an application someone in this tenant handed to
-	// its people (ADR-0036): a name, an icon and the pages it holds, checked
-	// against what is installed. Handed over again, it replaces the one before.
-	InstallApplication(c platform.Caller, a platform.Application) error
-	ValidateInstallApplication(a platform.Application) error
-	// Function installation updates only the definition registry. The owner
-	// retains its publication family; inference still uses the model effect.
-	ResolvePropertyType(binding platform.AssetBinding) (platform.PropertyType, bool)
-	ValidateInstallPropertyType(p platform.PropertyType) error
-	InstallPropertyType(c platform.Caller, p platform.PropertyType, version int) error
-	ValidateInstallLinkType(l platform.LinkType) error
-	InstallLinkType(c platform.Caller, l platform.LinkType, version int) error
-	ValidateInstallQuery(q platform.NamedQuery) error
-	InstallQuery(c platform.Caller, q platform.NamedQuery, version int) error
-	ValidateInstallFunction(f platform.AIFunction) error
-	InstallFunction(c platform.Caller, f platform.AIFunction, version int) error
-	ValidateInstallOperation(o platform.Operation) error
-	InstallOperation(c platform.Caller, o platform.Operation, version int) error
-	// Function resolves an owner's retained AI function through its existing registry.
-	Function(app, name string, version int) (platform.AIFunction, int, bool)
-	Operation(app, name string, version int) (platform.Operation, int, bool)
-	// Entity is an entity type's declaration, for an app composing over it.
-	Entity(typ string) (platform.EntityInfo, bool)
-	// Declares says whether an entity type, a field (<type>.<field>) or an action exists.
-	Declares(name string) bool
-	// Interfaces are the shapes declared across the tenant's apps (ADR-0058 A2).
-	Interfaces() []platform.Interface
-	// BindInterfaceQuery freezes the owner's interface and installed implementers.
-	BindInterfaceQuery(platform.NamedQuery, ...platform.EntityInfo) (platform.NamedQuery, error)
-	// Seen marks an app's notifications with any of keys read for everyone.
-	Seen(c platform.Caller, keys ...string)
-	// Invoke submits a protocol action to the tenant's provider for c's app,
-	// inside the input being handled (a flow's step, ADR-0020).
-	Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *kernel.Error)
-	// The roles other platform apps take in this tenant, or nil.
-	Tasks() Tasks
-	Runs() Runs
-	Processes() Processes
-	// ActiveRelease is the tenant's active release ID, empty before any
-	// activation; the caller already holds the tenant (ADR-0039 D4).
-	ActiveRelease() string
-	// BindFlow closes the exact native version over current owner assets. A
-	// prior binding must still match; an empty prior captures a new run.
-	BindFlow(app, name string, version int, prior FlowBinding) (FlowBinding, error)
+	BuildHost
+	FileHost
+	KnowledgeHost
+	RelationsHost
+	FlowHost
+	WorkHost
+	AgentHost
+	ConsoleHost
 }
 
 // FlowBinding exposes hashes and asset paths, never private definition bytes.
@@ -116,14 +33,6 @@ type FlowBinding struct {
 	Dependencies string
 	Release      string
 	Assets       []platform.AssetRef
-}
-
-// FlowFrameStore uses the original artifact owner on the outside I/O lane.
-// Preparing a frame is not accepting it. Accepted rows carry only its handle.
-type FlowFrameStore interface {
-	Read(platform.FlowStateArtifact) ([]byte, error)
-	Seal(instance string, version int, raw []byte, budget int) (platform.FlowStateArtifact, error)
-	Discard(platform.FlowStateArtifact) error
 }
 
 // Listener is a platform app delivered other apps' events as owned work, with
@@ -191,11 +100,6 @@ type RunEnd struct {
 type Tasks interface {
 	Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *kernel.Error
 	Close(c platform.Caller, r *pb.ChangeRecord, id string)
-}
-
-// Attached is an app the host hands itself to when a tenant is composed.
-type Attached interface {
-	Attach(Host)
 }
 
 // Observer sees each accepted input's events inside the input, before any

@@ -9,7 +9,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -152,21 +151,21 @@ func (t *Tenant) Evaluate(now time.Time) {
 		if len(evals) == 0 {
 			return
 		}
-		report := t.agents.evaluate(evals[0], now)
+		report := t.agents.EvaluateAgent(evals[0], now)
 		t.agentStep(stepBody{Run: evals[0].ID, Evaluation: &report}, now)
 	}
 }
 
-func (a *Agents) evaluate(ev Evaluation, now time.Time) Evaluation {
-	t := a.t
-	t.mu.Lock()
-	c := t.automation(AgentApp, false)
+func (a *Agents) EvaluateAgent(ev Evaluation, now time.Time) Evaluation {
+	h := a.host
+	endRead := h.BeginAgentRead()
+	c := a.automation(AgentApp, false)
 	d := a.def(ev.Agent)
 	domain, _ := json.Marshal([]any{[]any{"agent", "=", ev.Agent}, []any{"state", "=", "done"}})
 	past, _, _ := platform.Find[AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 200})
-	model, pv, err := t.ai.Model(ev.Model)
-	who, _ := t.member(ev.Created.By)
-	t.mu.Unlock()
+	model, pv, err := h.AgentModel(ev.Model)
+	who, _ := h.Member(ev.Created.By)
+	endRead()
 	ev.State = "done"
 	if d != nil && err == nil && ev.Suite {
 		return a.suite(ev, d, model, pv, who, now)
@@ -210,7 +209,7 @@ func (a *Agents) evaluate(ev Evaluation, now time.Time) Evaluation {
 }
 
 // rerun runs one past run's goal dry with the candidate and judges it.
-func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Provider, who platform.Member, now time.Time) EvalCase {
+func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) EvalCase {
 	last := run.Signals[len(run.Signals)-1]
 	x := EvalCase{Run: run.ID, Signal: last.Kind}
 	changed := func(i int) string {
@@ -268,7 +267,7 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Pr
 // suite runs each of the agent's declared cases three times, dry, and counts
 // the runs that pass (ADR-0029 D6): a case passes when every run does, varies
 // when some do, and fails when none does. The score is the runs that pass.
-func (a *Agents) suite(ev Evaluation, d *agentDef, model ai.Model, pv ai.Provider, who platform.Member, now time.Time) Evaluation {
+func (a *Agents) suite(ev Evaluation, d *agentDef, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) Evaluation {
 	// The whole evaluation has a ceiling too: each case runs suiteRuns times,
 	// so it may spend the definition's budget that many times over, checked
 	// before each run is started rather than after it spent
@@ -333,19 +332,19 @@ func (a *Agents) suite(ev Evaluation, d *agentDef, model ai.Model, pv ai.Provide
 // dryRun runs a goal with the candidate, dry: reads the run made answer as
 // then, other reads read now, actions are probed and never taken. failed says
 // why the model could not go on; an asked run's question is its Result.
-func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Provider, who platform.Member, now time.Time, room platform.Budget) (AgentRunRecord, string) {
-	t := a.t
+func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, room platform.Budget) (AgentRunRecord, string) {
+	h := a.host
 	dry := AgentRunRecord{Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []RunStep{}}
 	for dry.StepsUsed < room.Steps && dry.TokensUsed < room.Tokens {
-		t.mu.Lock()
-		req := a.prompt(t.automation(AgentApp, false), d, dry, model.Name(), now)
-		t.mu.Unlock()
-		req.run = run.ID + ":evaluation"
-		if why := t.reserve(who, model, now); why != "" {
+		endRead := h.BeginAgentRead()
+		req := a.prompt(a.automation(AgentApp, false), d, dry, model.Name(), now)
+		endRead()
+		req.Run = run.ID + ":evaluation"
+		if why := h.ReserveAgentModel(who, model, now); why != "" {
 			return dry, why
 		}
-		answer, failure := t.call(pv, model, who, req, now)
-		if err := t.meter(who, answer.Usage); err != nil {
+		answer, failure := h.CallAgentModel(pv, model, who, req, now)
+		if err := h.MeterAgentUsage(who, answer.Usage); err != nil {
 			return dry, "the model usage was not accepted: " + err.Error()
 		}
 		dry.StepsUsed++
@@ -402,12 +401,12 @@ func (a *Agents) dryUse(d *agentDef, run, dry AgentRunRecord, tool agentTool, ar
 		}
 	}
 	if tool.kind == "knowledge" { // a new question: searched now, outside the lock
-		return string(a.look(dry, raw, now))
+		return string(a.ObserveAgentKnowledge(dry, raw, now))
 	}
-	t := a.t
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	c := t.automation(AgentApp, true) // replaying: no decision is made
+	h := a.host
+	endRead := h.BeginAgentRead()
+	defer endRead()
+	c := a.automation(AgentApp, true) // replaying: no decision is made
 	if tool.kind == "read" || tool.kind == "context" || tool.kind == "search" {
 		out, _ := a.use(c, d, &dry, tool, args, raw, &RunStep{}, now)
 		return out
@@ -419,17 +418,17 @@ func (a *Agents) dryUse(d *agentDef, run, dry AgentRunRecord, tool agentTool, ar
 	delete(payload, "rationale")
 	body, _ := json.Marshal(payload)
 	if d.Guard != nil {
-		if err := d.Guard(t.automation(d.app, true), a.run(dry), tool.schema, target, body); err != nil {
+		if err := d.Guard(a.automation(d.app, true), a.run(dry), tool.schema, target, body); err != nil {
 			return "refused by its guard: " + err.Error()
 		}
 	}
 	if tool.kind == "action" {
-		app := t.app(d.app)
-		s := &pb.Submission{TenantId: t.ID, Authority: t.authorityOf(tool.target), IdempotencyKey: "eval:" + run.ID,
+		app := h.App(d.app)
+		s := &pb.Submission{TenantId: a.tenant, Authority: a.authorityOf(tool.target), IdempotencyKey: "eval:" + run.ID,
 			Target: &pb.EntityRef{Type: tool.target, Id: target}, Schema: &pb.SchemaRef{Name: tool.schema, Version: 1}, Payload: body}
-		as := []platform.Caller{platform.NewCaller(runtime{t}, a.member(run.Agent), d.app, false, true)}
+		as := []platform.Caller{platform.ActingCaller(c, a.AgentPrincipal(run.Agent), d.app, true)}
 		if m := a.reader(run); m != nil {
-			as = append(as, t.caller(*m, app, false))
+			as = append(as, h.Caller(platform.Caller{}, *m, app.Manifest().ID))
 		}
 		for _, who := range as {
 			s.PrincipalId = who.ID
@@ -460,5 +459,5 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The agent {agent} declares no cases", p.Agent)
 	}
 	ev := Evaluation{Record: platform.Record{ID: id}, Agent: p.Agent, Model: p.Model, State: "queued", Cases: []EvalCase{}, Suite: p.Suite}
-	return func(r *pb.ChangeRecord) { a.t.automated(c, AgentApp).Put(r, ev) }, nil
+	return func(r *pb.ChangeRecord) { a.host.Automation(c, AgentApp).Put(r, ev) }, nil
 }

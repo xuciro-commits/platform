@@ -225,7 +225,7 @@ func TestAcceptedGeneratedArchivePreservesReceiptAndHistory(t *testing.T) {
 
 func TestAcceptedSubmitCommitFailureRetryAndReplay(t *testing.T) {
 	live := stockTenant(t)
-	member, _ := live.app(PlatformApp).(*Console).Member("ana")
+	member, _ := live.app(PlatformApp).(*Console).MemberBySubject("ana")
 	now := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
 	sub := func(key, verb, body string) *pb.Submission {
 		return &pb.Submission{TenantId: live.ID, PrincipalId: member.ID, Authority: "stock",
@@ -466,7 +466,7 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	source := stockTenant(t)
 	app := source.app("stock").(*stock)
-	member, _ := source.app(PlatformApp).(*Console).Member("ana")
+	member, _ := source.app(PlatformApp).(*Console).MemberBySubject("ana")
 	now := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
 	submit := func(key, verb, payload string) *pb.Submission {
 		return &pb.Submission{TenantId: source.ID, PrincipalId: member.ID, Authority: "stock",
@@ -547,7 +547,7 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 func TestAcceptedResultRejectsMalformedOrIncompatibleBytes(t *testing.T) {
 	source := stockTenant(t)
 	app := source.app("stock").(*stock)
-	member, _ := source.app(PlatformApp).(*Console).Member("ana")
+	member, _ := source.app(PlatformApp).(*Console).MemberBySubject("ana")
 	draft := source.newStagedDecision()
 	c := platform.NewCaller(draft, member, "stock", false, false)
 	sub := &pb.Submission{TenantId: source.ID, PrincipalId: member.ID, Authority: "stock", IdempotencyKey: "k1",

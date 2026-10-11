@@ -3,10 +3,11 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/host"
 	"slices"
 	"time"
 
-	"platformserver/apps/build"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -250,7 +251,7 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	if m.Roles[build.ID] != build.Builder {
 		return ReleaseDraftClosure{}, fmt.Errorf("builder role required")
 	}
-	owner, ok := t.app(build.ID).(*build.Build)
+	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
 	if !ok {
 		return ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
 	}
@@ -315,7 +316,15 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 		// A function/flow candidate retains its source object, but may not
 		// retain its create/edit action assets. Ask the original owner for
 		// those test inputs using that exact object image, not the live model.
-		for _, action := range platform.EntityActions(build.Entity(object)) {
+		owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+		if !ok {
+			return reply, fmt.Errorf("construction owner is unavailable")
+		}
+		actions, err := owner.CandidateActions(asset)
+		if err != nil {
+			return reply, err
+		}
+		for _, action := range actions {
 			if action.Payload == nil {
 				action.Payload = []platform.Field{}
 			}
@@ -329,7 +338,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 // comparison. A later save must recompute it under the tenant lock and reject
 // a stale candidate ID rather than trusting bytes supplied by the browser.
 func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef, members ...platform.Member) (ReleasePreview, platform.ReleaseCandidate, error) {
-	owner, ok := t.app(build.ID).(*build.Build)
+	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
 	if !ok {
 		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
 	}

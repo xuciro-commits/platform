@@ -9,7 +9,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"platformserver/apps/files"
 	"reflect"
 	"slices"
 	"strings"
@@ -17,8 +16,6 @@ import (
 	"time"
 	"unicode"
 
-	"platformserver/apps/ai"
-	"platformserver/apps/knowledge"
 	"platformserver/platform"
 )
 
@@ -52,12 +49,6 @@ const (
 	passageChars = 3200 // about 800 tokens
 	embedBatch   = 32
 )
-
-// glossary is the knowledge app as search and agents read it (ADR-0023 D1).
-type glossary interface {
-	Terms(app string) []knowledge.Term
-	TermsFor(declaration string) []string
-}
 
 // index is the passages cut from the tenant's documents and knowledge fields.
 type index struct {
@@ -129,7 +120,7 @@ type source struct {
 // sources are the tenant's documents and the fields apps declare as knowledge.
 func (t *Tenant) sources() []source {
 	var out []source
-	docs, _, _ := platform.Find[knowledge.Document](t.automation(knowledge.ID, false), platform.Query{Limit: 100000})
+	docs, _, _ := platform.Find[platform.KnowledgeDocument](t.automation(platform.KnowledgeApp, false), platform.Query{Limit: 100000})
 	for _, d := range docs {
 		out = append(out, documentSource(d))
 	}
@@ -187,8 +178,8 @@ func fingerprint(title, text string) string {
 }
 
 // documentSource is a knowledge document as one source.
-func documentSource(d knowledge.Document) source {
-	return source{key: knowledge.DocumentType + "/" + d.ID, title: d.Title, text: d.Text, revision: fingerprint(d.Title, d.Text) + "/" + strings.Join(d.Apps, ","), apps: d.Apps}
+func documentSource(d platform.KnowledgeDocument) source {
+	return source{key: platform.KnowledgeDocumentType + "/" + d.ID, title: d.Title, text: d.Text, revision: fingerprint(d.Title, d.Text) + "/" + strings.Join(d.Apps, ","), apps: d.Apps}
 }
 
 // sourcesOf are the sources of the records that changed since the last sync:
@@ -198,19 +189,19 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []source {
 	for ref := range changed {
 		typ, id, _ := strings.Cut(ref, "/")
 		switch typ {
-		case knowledge.DocumentType:
-			if d, known := platform.Get[knowledge.Document](t.automation(knowledge.ID, false), id); known && !d.Archived {
+		case platform.KnowledgeDocumentType:
+			if d, known := platform.Get[platform.KnowledgeDocument](t.automation(platform.KnowledgeApp, false), id); known && !d.Archived {
 				out = append(out, documentSource(d))
 			}
 			about, _ := json.Marshal([]any{[]any{"target", "=", ref}}) // its attached files carry its grant
-			attached, _, _ := platform.Find[files.File](t.automation(files.ID, false), platform.Query{Domain: about, Limit: 200})
+			attached, _, _ := platform.Find[platform.File](t.automation(platform.FileApp, false), platform.Query{Domain: about, Limit: 200})
 			for _, f := range attached {
 				if s, ok := t.fileSource(f); ok {
 					out = append(out, s)
 				}
 			}
-		case files.FileType:
-			if f, known := platform.Get[files.File](t.automation(files.ID, false), id); known && !f.Archived {
+		case platform.FileType:
+			if f, known := platform.Get[platform.File](t.automation(platform.FileApp, false), id); known && !f.Archived {
 				if s, ok := t.fileSource(f); ok {
 					out = append(out, s)
 				}
@@ -404,7 +395,7 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 	}
 	t.sync()
 	asked := slices.Compact(slices.Sorted(slices.Values(words(q))))
-	model := t.setting(t.automation(knowledge.ID, false), knowledge.SettingEmbeddingModel)
+	model := t.setting(t.automation(platform.KnowledgeApp, false), platform.SettingKnowledgeEmbeddingModel)
 	k.mu.Lock()
 	// The passages holding a word of the question, and the corpus totals BM25
 	// needs; with an embedding model every passage is a candidate, because
@@ -562,7 +553,7 @@ func (t *Tenant) Embed(now time.Time) {
 	if t.knowledge == nil || t.ai == nil {
 		return
 	}
-	model := t.setting(t.automation(knowledge.ID, false), knowledge.SettingEmbeddingModel)
+	model := t.setting(t.automation(platform.KnowledgeApp, false), platform.SettingKnowledgeEmbeddingModel)
 	if model == "" {
 		return
 	}
@@ -620,7 +611,7 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	if !t.breakers.allow("ai:"+pv.ID, now) {
 		return nil, fmt.Errorf("the provider %s failed repeatedly; embedding waits", pv.ID)
 	}
-	if why := t.reserve(platform.Member{ID: "app:" + knowledge.ID, Tenant: t.ID}, model, now); why != "" {
+	if why := t.reserve(platform.Member{ID: "app:" + platform.KnowledgeApp, Tenant: t.ID}, model, now); why != "" {
 		return nil, fmt.Errorf("%s", why)
 	}
 	body, _ := json.Marshal(map[string]any{"model": model.Model, "input": input})
@@ -639,7 +630,7 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 			Prompt *int `json:"prompt_tokens"`
 		} `json:"usage"`
 	}
-	u := ai.Usage{At: now, Member: "app:" + knowledge.ID, Model: name, Millis: time.Since(started).Milliseconds(), Outcome: "ok"}
+	u := platform.AIUsage{At: now, Member: "app:" + platform.KnowledgeApp, Model: name, Millis: time.Since(started).Milliseconds(), Outcome: "ok"}
 	switch {
 	case failure != nil:
 		u.Outcome = failure.Detail
@@ -674,10 +665,10 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 // records of types whose files are knowledge (ADR-0028 D3), read from the
 // store once per content.
 func (t *Tenant) fileSources() []source {
-	if t.app(files.ID) == nil {
+	if t.app(platform.FileApp) == nil {
 		return nil
 	}
-	attached, _, _ := platform.Find[files.File](t.automation(files.ID, false), platform.Query{Limit: 100000})
+	attached, _, _ := platform.Find[platform.File](t.automation(platform.FileApp, false), platform.Query{Limit: 100000})
 	var out []source
 	for _, f := range attached {
 		if s, ok := t.fileSource(f); ok {
@@ -690,16 +681,16 @@ func (t *Tenant) fileSources() []source {
 // fileSource is one attached text file as a source, if it is one: text within a
 // megabyte, attached to a knowledge document or to a record of a type whose
 // files are knowledge. Its text is read from the store once per content.
-func (t *Tenant) fileSource(f files.File) (source, bool) {
-	if t.app(files.ID) == nil || f.Archived || !strings.HasPrefix(f.ContentType, "text/") || f.Size > 1<<20 {
+func (t *Tenant) fileSource(f platform.File) (source, bool) {
+	if t.app(platform.FileApp) == nil || f.Archived || !strings.HasPrefix(f.ContentType, "text/") || f.Size > 1<<20 {
 		return source{}, false
 	}
 	{
 		typ, id, _ := strings.Cut(f.Target, "/")
 		var apps []string
 		switch {
-		case typ == knowledge.DocumentType:
-			d, known := platform.Get[knowledge.Document](t.automation(knowledge.ID, false), id)
+		case typ == platform.KnowledgeDocumentType:
+			d, known := platform.Get[platform.KnowledgeDocument](t.automation(platform.KnowledgeApp, false), id)
 			if !known || d.Archived {
 				return source{}, false
 			}
@@ -728,10 +719,10 @@ func (t *Tenant) fileSource(f files.File) (source, bool) {
 			t.index.texts[f.Hash] = text
 		}
 		scope := f.Target
-		if typ == knowledge.DocumentType { // the document's Apps grant also covers its attached files
+		if typ == platform.KnowledgeDocumentType { // the document's Apps grant also covers its attached files
 			scope = ""
 		}
-		return source{key: files.FileType + "/" + f.ID, title: f.Name, text: text,
+		return source{key: platform.FileType + "/" + f.ID, title: f.Name, text: text,
 			revision: f.Hash + "/" + f.Target + "/" + strings.Join(apps, ","), scope: scope, apps: apps}, true
 	}
 }

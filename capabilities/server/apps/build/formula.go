@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
-	"strconv"
-	"strings"
-	"unicode"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -20,163 +18,6 @@ import (
 // record is decided, never set by hand. Grammar: numbers, field names,
 // + - * /, parentheses, unary minus; a missing operand counts as zero; a
 // division by zero yields zero.
-
-type formulaNode struct {
-	op          byte // 'n' number, 'f' field, or + - * / ~ (negate)
-	value       float64
-	field       string
-	left, right *formulaNode
-}
-
-func parseFormula(text string) (*formulaNode, error) {
-	p := &formulaParser{src: strings.TrimSpace(text)}
-	if p.src == "" {
-		return nil, fmt.Errorf("the formula is empty")
-	}
-	node, err := p.expr()
-	if err != nil {
-		return nil, err
-	}
-	p.skip()
-	if p.pos != len(p.src) {
-		return nil, fmt.Errorf("unexpected %q in the formula", p.src[p.pos:])
-	}
-	return node, nil
-}
-
-type formulaParser struct {
-	src string
-	pos int
-}
-
-func (p *formulaParser) skip() {
-	for p.pos < len(p.src) && p.src[p.pos] == ' ' {
-		p.pos++
-	}
-}
-
-func (p *formulaParser) peek() byte {
-	p.skip()
-	if p.pos < len(p.src) {
-		return p.src[p.pos]
-	}
-	return 0
-}
-
-func (p *formulaParser) expr() (*formulaNode, error) {
-	left, err := p.term()
-	if err != nil {
-		return nil, err
-	}
-	for {
-		op := p.peek()
-		if op != '+' && op != '-' {
-			return left, nil
-		}
-		p.pos++
-		right, err := p.term()
-		if err != nil {
-			return nil, err
-		}
-		left = &formulaNode{op: op, left: left, right: right}
-	}
-}
-
-func (p *formulaParser) term() (*formulaNode, error) {
-	left, err := p.factor()
-	if err != nil {
-		return nil, err
-	}
-	for {
-		op := p.peek()
-		if op != '*' && op != '/' {
-			return left, nil
-		}
-		p.pos++
-		right, err := p.factor()
-		if err != nil {
-			return nil, err
-		}
-		left = &formulaNode{op: op, left: left, right: right}
-	}
-}
-
-func (p *formulaParser) factor() (*formulaNode, error) {
-	switch c := p.peek(); {
-	case c == '(':
-		p.pos++
-		node, err := p.expr()
-		if err != nil {
-			return nil, err
-		}
-		if p.peek() != ')' {
-			return nil, fmt.Errorf("a parenthesis is not closed")
-		}
-		p.pos++
-		return node, nil
-	case c == '-':
-		p.pos++
-		node, err := p.factor()
-		if err != nil {
-			return nil, err
-		}
-		return &formulaNode{op: '~', left: node}, nil
-	case c >= '0' && c <= '9' || c == '.':
-		start := p.pos
-		for p.pos < len(p.src) && (p.src[p.pos] >= '0' && p.src[p.pos] <= '9' || p.src[p.pos] == '.') {
-			p.pos++
-		}
-		n, err := strconv.ParseFloat(p.src[start:p.pos], 64)
-		if err != nil {
-			return nil, fmt.Errorf("%q is not a number", p.src[start:p.pos])
-		}
-		return &formulaNode{op: 'n', value: n}, nil
-	case c >= 'a' && c <= 'z':
-		start := p.pos
-		for p.pos < len(p.src) && (unicode.IsLower(rune(p.src[p.pos])) || unicode.IsDigit(rune(p.src[p.pos]))) {
-			p.pos++
-		}
-		return &formulaNode{op: 'f', field: p.src[start:p.pos]}, nil
-	case c == 0:
-		return nil, fmt.Errorf("the formula ends too early")
-	}
-	return nil, fmt.Errorf("unexpected %q in the formula", string(p.src[p.pos]))
-}
-
-func (n *formulaNode) fields(into map[string]bool) {
-	if n == nil {
-		return
-	}
-	if n.op == 'f' {
-		into[n.field] = true
-	}
-	n.left.fields(into)
-	n.right.fields(into)
-}
-
-func (n *formulaNode) eval(value func(string) float64) float64 {
-	switch n.op {
-	case 'n':
-		return n.value
-	case 'f':
-		return value(n.field)
-	case '~':
-		return -n.left.eval(value)
-	case '+':
-		return n.left.eval(value) + n.right.eval(value)
-	case '-':
-		return n.left.eval(value) - n.right.eval(value)
-	case '*':
-		return n.left.eval(value) * n.right.eval(value)
-	case '/':
-		d := n.right.eval(value)
-		if d == 0 {
-			return 0
-		}
-		return n.left.eval(value) / d
-	}
-	return 0
-}
 
 // checkFormulas: a formula sits on an integer or decimal field and names only
 // the object's other plain number fields.
@@ -194,12 +35,12 @@ func checkFormulas(fields []Field) error {
 		if f.Type != "integer" && f.Type != "decimal" {
 			return fmt.Errorf("the field %q has a formula, which only an integer or decimal field may", f.Name)
 		}
-		node, err := parseFormula(f.Formula)
+		node, err := buildapi.ValueParseFormula(f.Formula)
 		if err != nil {
 			return fmt.Errorf("the field %q: %v", f.Name, err)
 		}
 		used := map[string]bool{}
-		node.fields(used)
+		node.Fields(used)
 		for name := range used {
 			if !numbers[name] {
 				return fmt.Errorf("the field %q computes from %q, which is not a number field of this object set by hand", f.Name, name)
@@ -219,7 +60,7 @@ func computeOf(o Object) func(record any) {
 	var list []computed
 	for _, f := range o.Fields {
 		if f.Formula != "" {
-			if node, err := parseFormula(f.Formula); err == nil {
+			if node, err := buildapi.ValueParseFormula(f.Formula); err == nil {
 				list = append(list, computed{f.Name, f.Type, node})
 			}
 		}
@@ -257,7 +98,7 @@ func computeOf(o Object) func(record any) {
 			return 0
 		}
 		for _, c := range list {
-			result := c.node.eval(read)
+			result := c.node.Eval(read)
 			if math.IsNaN(result) || math.IsInf(result, 0) {
 				result = 0
 			}

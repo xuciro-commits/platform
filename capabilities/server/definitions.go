@@ -873,9 +873,7 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 				continue
 			}
 			if section.Function != nil {
-				owner, ok := t.app(section.Function.Ref.App).(interface {
-					FunctionDefinition(string, int) (platform.AIFunction, int, bool)
-				})
+				owner, ok := t.app(section.Function.Ref.App).(platform.FunctionDefinitions)
 				if !ok {
 					continue
 				}

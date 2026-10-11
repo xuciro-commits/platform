@@ -52,8 +52,8 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 		d.notices = append(d.notices, x)
 		d.noticeChanged = true
 		out = append(out, member)
-		console, _ := d.tenant.app(PlatformApp).(*Console)
-		if private, ok := d.states[PlatformApp].(*Console); ok {
+		console, _ := d.tenant.app(PlatformApp).(IdentityProfile)
+		if private, ok := d.states[PlatformApp].(IdentityProfile); ok {
 			console = private // invitation recipients exist in the accepted directory fork
 		}
 		if console != nil {
@@ -307,9 +307,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		if d.active[id] || d.receiving[app.AcceptedLedger()] {
 			continue
 		}
-		if attached, ok := app.(host.Attached); ok {
-			attached.Attach(hostView{t: d.tenant, app: app, decision: &fork})
-		}
+		host.Attach(app, hostView{t: d.tenant, app: app, decision: &fork})
 	}
 	fork.forkControlDecision(d.control)
 	for ledger := range fork.logs {

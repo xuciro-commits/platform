@@ -71,7 +71,7 @@ func TestAcceptedResultManufacturingProbe(t *testing.T) {
 	}{{"draft-batch", build.ObjectType + ".create", build.ObjectType, "O1",
 		`{"name":"batch","title":"Batch","fields":[{"name":"lot","title":"Lot","type":"text"}]}`},
 		{"publish-batch", build.SchemaPublish, build.ObjectType, "O1", `{}`},
-		{"batch-lot", build.TypeOf("batch") + ".create", build.TypeOf("batch"), "B1", `{"lot":"L1"}`}} {
+		{"batch-lot", "build.batch" + ".create", "build.batch", "B1", `{"lot":"L1"}`}} {
 		request := &pb.Submission{TenantId: tn.ID, PrincipalId: m.ID, Authority: build.ID,
 			IdempotencyKey: action.key, Target: &pb.EntityRef{Type: action.typ, Id: action.target},
 			Schema: &pb.SchemaRef{Name: action.schema, Version: 1}, Payload: []byte(action.payload)}
@@ -101,7 +101,7 @@ func TestAcceptedResultManufacturingProbe(t *testing.T) {
 
 	// The same fixed-plan record and isolated runtime work in either composition.
 	planPayload, _ := json.Marshal(map[string]any{"title": "Fixed sample", "object": "O1", "as": m.ID, "at": now, "steps": []build.TestStep{
-		{Type: build.TypeOf("batch"), ID: "SAMPLE", Action: build.TypeOf("batch") + ".create", Payload: `{"lot":"SAMPLE"}`, Expect: "accepted"},
+		{Type: "build.batch", ID: "SAMPLE", Action: "build.batch" + ".create", Payload: `{"lot":"SAMPLE"}`, Expect: "accepted"},
 	}})
 	if _, err := tn.Submit(m, &pb.Submission{TenantId: tn.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: "save-plan",
 		Target: &pb.EntityRef{Type: build.TestPlanType, Id: "PLAN"}, Schema: &pb.SchemaRef{Name: build.TestPlanType + ".create", Version: 1}, Payload: planPayload}, now); err != nil {

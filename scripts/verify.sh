@@ -66,7 +66,7 @@ web() {
 
 # Go code is gofmt-formatted (generated code aside), new files included.
 format() {
-  step go-format bash -c 'fmt=$(cd capabilities/server && go env GOROOT)/bin/gofmt; files=$("$fmt" -l $(git ls-files --cached --others --exclude-standard "*.go" | grep -vE "/(gen|vendor)/")); [ -z "$files" ] || { echo "not gofmt-formatted:"; echo "$files"; exit 1; }'
+  step go-format bash -c 'fmt=$(cd capabilities/server && go env GOROOT)/bin/gofmt; files=$("$fmt" -l $(git ls-files --cached --others --exclude-standard "*.go" | grep -vE "/(gen|vendor)/" | while IFS= read -r path; do [ ! -f "$path" ] || printf "%s\n" "$path"; done)); [ -z "$files" ] || { echo "not gofmt-formatted:"; echo "$files"; exit 1; }'
 }
 
 capabilities() {

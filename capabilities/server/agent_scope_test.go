@@ -19,9 +19,9 @@ import (
 func TestAgentTraceScope(t *testing.T) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	tn := stockTenant(t, NewAgents("t-1"))
-	tn.agents.defs["stock.guide"] = &agentDef{app: "stock"}
+	tn.agents.(*Agents).defs["stock.guide"] = &agentDef{app: "stock"}
 	member := func(id string) platform.Member {
-		m, _ := tn.app(PlatformApp).(*Console).Member(id)
+		m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id)
 		return m
 	}
 	body, _ := json.Marshal(map[string]any{"name": "Press", "line": "L1", "note": "hydraulic inspection due"})

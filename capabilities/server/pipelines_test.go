@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	buildapi "platformserver/internal/host/buildapi"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func TestPipelineRunsOnNewDatasetVersion(t *testing.T) {
 	if !ok || out.Version != 1 || out.Last.Rows != 1 {
 		t.Fatalf("output dataset %+v", out)
 	}
-	rows, _, _ := build.DatasetRows(c, "clean", 0)
+	rows, _, _ := buildapi.DatasetRows(c, "clean", 0)
 	if len(rows) != 1 || rows[0]["sku"] != "A" || rows[0]["qty"] != 3.0 {
 		t.Fatalf("rows %+v", rows)
 	}
@@ -63,7 +64,7 @@ func TestPipelineRunsOnNewDatasetVersion(t *testing.T) {
 	if in.Version != 3 || len(in.Schema) != 3 {
 		t.Fatalf("input %+v", in)
 	}
-	if _, _, err := build.DatasetRows(c, "raw", 1); err != nil {
+	if _, _, err := buildapi.DatasetRows(c, "raw", 1); err != nil {
 		t.Fatalf("version 1 should still be kept with default keep 3: %v", err)
 	}
 }

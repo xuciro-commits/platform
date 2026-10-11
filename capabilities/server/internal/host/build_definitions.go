@@ -1,0 +1,59 @@
+package host
+
+import (
+	"time"
+
+	"platformkernel/kernel"
+	build "platformserver/internal/host/buildapi"
+	"platformserver/platform"
+)
+
+// ConstructionDrafts is the authoring consumer of the existing asset owner.
+// Candidate bytes and lifecycle acceptance still belong to AssetRegistry.
+type ConstructionDrafts interface {
+	platform.App
+	ReferencedDrafts(platform.AssetKind, string) ([]build.JointDraftRef, error)
+	DraftReleaseAssetsMulti([]build.JointDraftRef) (build.JointDraftAssets, error)
+	CandidateActions(platform.ReleaseAsset) ([]platform.Action, error)
+	CheckProcess(build.Process) *kernel.Error
+}
+
+// IntegrationDefinitions resolves accepted typed configuration. It owns no
+// transport or host lock; consumers capture values before outside I/O.
+type IntegrationDefinitions interface {
+	ExecutionSource(build.Source) (build.Source, error)
+	ExecutionConnection(build.Connection) (build.Connection, error)
+	ExecutionDataset(build.Dataset) (build.Dataset, error)
+	ExecutionPipeline(build.Pipeline) (build.Pipeline, error)
+	ExecutionWriteback(build.Writeback) (build.Writeback, error)
+	ExecutionMatching(build.Match) (build.Match, error)
+}
+
+type ConstructionSandbox interface {
+	platform.App
+	Reinstall() error
+	ProcessFromAsset(platform.ReleaseAsset) (build.Process, error)
+	InstallPropertyTypeAsset(platform.ReleaseAsset) error
+	InstallFunctionAsset(platform.ReleaseAsset) error
+	InstallOperationAsset(platform.ReleaseAsset) error
+	InstallLinkTypeAsset(platform.ReleaseAsset) error
+	InstallQueryAsset(platform.ReleaseAsset) error
+}
+
+type LinkPublicationReader interface {
+	LinkPublication([]byte) (platform.LinkType, error)
+}
+
+type FlowReleaseOwner interface {
+	FlowReleaseAsset(string, int) (platform.ReleaseAsset, error)
+}
+
+type OperationDefinitions interface {
+	OperationDefinition(string, int) (platform.Operation, int, bool)
+}
+type FlowDefinitionPresence interface {
+	HasDefinition(string, string, int) bool
+}
+type OperationCompletion interface {
+	OperationEnded(platform.Caller, string, time.Time) *kernel.Error
+}

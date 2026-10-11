@@ -15,7 +15,6 @@ import (
 	"platformserver/platform"
 )
 
-const CodeType = "build.code"
 const SchemaCodeCompile = CodeType + ".compile"
 const SchemaCodePublish = CodeType + ".publish"
 const SchemaCodeCompiled = CodeType + ".compiled"
@@ -51,7 +50,7 @@ type Code struct {
 	Versions      []string                 `json:"versions,omitempty" field:"readonly"`
 }
 
-func (c Code) definition() platform.Operation {
+func (c Code) Definition() platform.Operation {
 	abi := c.ABI
 	if abi == "" {
 		abi = platform.WasmCommandABI
@@ -84,7 +83,7 @@ func (b *Build) compileCode(c platform.Caller, record any, _ json.RawMessage, _ 
 	if !ok || code.Language != "go" && code.Language != "tinygo" || code.Input.Check() != nil || code.Output.Check() != nil || len(code.Source) == 0 || len(code.Source) > 256<<10 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Code requires Go/TinyGo source and bounded input/output schemas")
 	}
-	declaration := code.definition()
+	declaration := code.Definition()
 	declaration.Binding.Module = strings.Repeat("0", 64)
 	if err := declaration.Check(); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -179,7 +178,7 @@ func (b *Build) checkCode(code Code) error {
 	if code.Module == "" || code.SourceHash != code.sourceHash() || code.BuildHash != code.buildHash() || code.Language != "go" && code.Language != "tinygo" || code.Toolchain == "" {
 		return fmt.Errorf("code %s needs an unchanged isolated build", code.Name)
 	}
-	if err := b.host.ValidateInstallOperation(code.definition()); err != nil {
+	if err := b.host.ValidateInstallOperation(code.Definition()); err != nil {
 		return err
 	}
 	list, err := b.codeInventory()
@@ -205,7 +204,7 @@ func (b *Build) installCode(c platform.Caller, code Code) error {
 		}
 		code = published
 	}
-	if err := b.host.InstallOperation(c, code.definition(), code.Version); err != nil {
+	if err := b.host.InstallOperation(c, code.Definition(), code.Version); err != nil {
 		return err
 	}
 	b.codes[code.Name] = code
@@ -213,10 +212,10 @@ func (b *Build) installCode(c platform.Caller, code Code) error {
 }
 func (b *Build) OperationDefinition(name string, version int) (platform.Operation, int, bool) {
 	if current, ok := b.codes[name]; ok && (version == 0 || version == current.Version) {
-		return current.definition(), current.Version, true
+		return current.Definition(), current.Version, true
 	}
 	if tb, ok := b.tables[name]; ok && (version == 0 || version == tb.Version) {
-		return tb.definition(), tb.Version, true
+		return tb.Definition(), tb.Version, true
 	}
 	list, err := b.codeInventory()
 	if err != nil {
@@ -228,7 +227,7 @@ func (b *Build) OperationDefinition(name string, version int) (platform.Operatio
 		}
 		prior, ok := wasPublished[Code](record.Versions[version-1])
 		if ok && prior.Name == name && prior.Version == version {
-			return prior.definition(), version, true
+			return prior.Definition(), version, true
 		}
 	}
 	return platform.Operation{}, 0, false
@@ -241,7 +240,7 @@ func (b *Build) operationDeclarations() []platform.Operation {
 	slices.Sort(names)
 	out := []platform.Operation{}
 	for _, name := range names {
-		out = append(out, b.codes[name].definition())
+		out = append(out, b.codes[name].Definition())
 	}
 	tables := make([]string, 0, len(b.tables))
 	for name := range b.tables {
@@ -249,7 +248,7 @@ func (b *Build) operationDeclarations() []platform.Operation {
 	}
 	slices.Sort(tables)
 	for _, name := range tables {
-		out = append(out, b.tables[name].definition())
+		out = append(out, b.tables[name].Definition())
 	}
 	return out
 }
@@ -260,14 +259,14 @@ func codeImage(image []byte) (Code, error) {
 	}
 	for i, raw := range code.Versions {
 		prior, ok := wasPublished[Code](raw)
-		if !ok || prior.ID != code.ID || prior.Name != code.Name || prior.Version != i+1 || prior.definition().Check() != nil || prior.SourceHash != prior.sourceHash() || prior.Published != "" || len(prior.Versions) > 0 {
+		if !ok || prior.ID != code.ID || prior.Name != code.Name || prior.Version != i+1 || prior.Definition().Check() != nil || prior.SourceHash != prior.sourceHash() || prior.Published != "" || len(prior.Versions) > 0 {
 			return code, fmt.Errorf("invalid retained compute version")
 		}
 	}
 	return code, nil
 }
 func codeReleaseAsset(code Code, manifest string) (platform.ReleaseAsset, error) {
-	raw, err := json.Marshal(code.definition())
+	raw, err := json.Marshal(code.Definition())
 	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(code.Version), Requires: []platform.AssetRef{}, Body: raw}, err
 }
 func (b *Build) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {

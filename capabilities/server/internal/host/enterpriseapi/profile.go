@@ -1,6 +1,6 @@
-package enterprise
+package enterpriseapi
 
-import "platformserver/apps/enterprise/uaf"
+import "platformserver/internal/host/enterpriseapi/uaf"
 
 // The Enterprise Core Profile (ADR-0067 D1): the UAF stereotypes a tenant
 // meets first, with the words people use for them and the description views
@@ -61,7 +61,7 @@ func Profile() []ProfileEntry {
 // processes and projects actually joins. Every other UAF relationship stays
 // available through the contracts, and a model may hold one; it is just not
 // offered by a view.
-var vocabulary = map[string]bool{
+var Vocabulary = map[string]bool{
 	Placement: true, Membership: true, FillsPost: true, Performs: true, Exhibits: true,
 	Owns: true, "OwnsProcess": true, "Enables": true, "MotivatedBy": true,
 	"MilestoneDependency": true, "ProjectSequence": true,
@@ -76,7 +76,7 @@ func Views(mm *uaf.Metamodel) []Viewpoint {
 	drawable := func(elements []string) []string {
 		var out []string
 		for _, c := range contracts {
-			if !vocabulary[c.Stereotype] {
+			if !Vocabulary[c.Stereotype] {
 				continue
 			}
 			for _, pair := range EndsFor(c) {

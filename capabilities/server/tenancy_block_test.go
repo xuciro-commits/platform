@@ -34,7 +34,7 @@ func TestTenancyBlock(t *testing.T) {
 	h := NewHost(Tokens(map[string]string{"ana-token": "ana", "bo-token": "bo", "bo-fresh": "bo", "new-token": "user:new@acme.test", "out-token": "user:x@other.test"}), tn)
 	now := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
 	h.Now = func() time.Time { return now }
-	d := consoleOf(tn)
+	d := testConsoleOf(tn)
 	seq := 0
 	submit := func(who platform.Member, app, schema, typ, id string, payload any) string {
 		t.Helper()
@@ -121,7 +121,7 @@ func TestTenancyBlock(t *testing.T) {
 		}
 	}
 	count := func(id string) int {
-		newcomer, _ := d.Member("user:new@acme.test")
+		newcomer, _ := d.MemberBySubject("user:new@acme.test")
 		page, err := tn.Records(newcomer, "stock.item", platform.Query{}, now)
 		if err != nil {
 			t.Fatalf("%s reads: %s", id, err.Error())

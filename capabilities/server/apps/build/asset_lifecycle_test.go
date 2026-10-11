@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
 	"slices"
 	"strings"
@@ -337,7 +338,7 @@ func TestBootstrapObjectShapesAreCompleteScopedAndPrivate(t *testing.T) {
 	var assets []platform.ReleaseAsset
 	for _, object := range objects {
 		raw, _ := json.Marshal(object)
-		assets = append(assets, platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: TypeOf(object.Name)}, Body: raw})
+		assets = append(assets, platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: buildapi.TypeOf(object.Name)}, Body: raw})
 	}
 	catalogSize := len(b.ledger.Catalog.All())
 	release, err := b.BeginAssetBootstrap(assets)

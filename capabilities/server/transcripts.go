@@ -6,7 +6,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -81,7 +80,7 @@ func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now ti
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	if m.Roles[AgentApp] != AgentAdmin && m.Roles[ai.ID] != ai.Admin {
+	if m.Roles[AgentApp] != AgentAdmin && m.Roles[platform.AIApp] != platform.AIAdmin {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: "only an administrator of the agent or AI app reads transcripts"}
 	}
 	found := t.Transcripts(run, limit)

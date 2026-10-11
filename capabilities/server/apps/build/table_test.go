@@ -1,6 +1,9 @@
 package build
 
-import "testing"
+import (
+	buildapi "platformserver/internal/host/buildapi"
+	"testing"
+)
 
 func TestTableDecide(t *testing.T) {
 	tb := Table{Name: "discount", Title: "Discount",
@@ -39,7 +42,7 @@ func TestTableDecide(t *testing.T) {
 	if _, err := tb.Decide(map[string]any{"tier": "silver", "amount": 10.0, "rush": false}); err == nil {
 		t.Fatal("no default: expected a refusal")
 	}
-	if _, err := parseCondition("> 3", "text"); err == nil {
+	if _, err := buildapi.ValueParseCondition("> 3", "text"); err == nil {
 		t.Fatal("comparison on text must be refused")
 	}
 }

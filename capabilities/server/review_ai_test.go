@@ -240,7 +240,7 @@ func TestLateModelAnswerCannotActAfterCancel(t *testing.T) {
 	if spent := tn.ai.Spent("agent:desk.triage", now.Add(time.Second)); spent != 15 {
 		t.Fatalf("late usage metered: %d", spent)
 	}
-	if tn.agents.busy["R1"] {
+	if tn.agents.(*Agents).busy["R1"] {
 		t.Fatal("the cancelled run stayed busy")
 	}
 }
@@ -404,8 +404,8 @@ func TestUnreportedUsageIsEstimatedAndZeroIsZero(t *testing.T) {
 func TestRunBudgetCountsUnreportedUsageAndCost(t *testing.T) {
 	now := time.Date(2026, 10, 5, 13, 0, 0, 0, time.UTC)
 	tenant, _ := reviewTenant(t)
-	def := *tenant.agents.defs["desk.triage"]
-	tenant.agents.defs["desk.triage"] = &def
+	def := *tenant.agents.(*Agents).defs["desk.triage"]
+	tenant.agents.(*Agents).defs["desk.triage"] = &def
 	seed := func(id string) {
 		t.Helper()
 		if err := tenant.automation(AgentApp, false).PutAt(now, "test.run"+id, AgentRunRecord{Record: platform.Record{ID: "R" + id},

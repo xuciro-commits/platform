@@ -24,8 +24,11 @@ import (
 // entire resulting directory to match the exact saved predecessor digest.
 // The accepted image remains authoritative; this does not grant a new role.
 func (t *Tenant) legacyCoreSeedPredecessor(saved acceptedState, prior json.RawMessage) bool {
-	_, ok := t.app(saved.App).(*Console)
-	if !ok || t.app("core") == nil {
+	owner, ok := t.app(saved.App).(HistoricalIdentity)
+	return ok && owner.LegacyCoreSeedPredecessor(saved, prior)
+}
+func (d *Console) LegacyCoreSeedPredecessor(saved acceptedState, prior json.RawMessage) bool {
+	if d.host == nil || d.host.App("core") == nil {
 		return false
 	}
 	var current consoleState
@@ -46,15 +49,18 @@ func (t *Tenant) legacyCoreSeedPredecessor(saved acceptedState, prior json.RawMe
 // ADR-0068 renamed the org owner. Keep accepted directory bytes unchanged:
 // historical hashes describe the stored roles, not their current projection.
 func (d *Console) enterpriseRoles() bool {
-	return d.t != nil && d.t.app("enterprise") != nil && d.t.app("org") == nil
+	return d.host != nil && d.host.App("enterprise") != nil && d.host.App("org") == nil
 }
 
 // A changed bootstrap may contain enterprise instead of org before the first
 // saved directory image. Accept only the exact historical predecessor, never
 // arbitrary directory drift or a mixed-role state. This does not mutate state.
 func (t *Tenant) legacyConsolePredecessor(saved acceptedState, prior json.RawMessage) bool {
-	d, ok := t.app(saved.App).(*Console)
-	if !ok || !d.enterpriseRoles() {
+	owner, ok := t.app(saved.App).(HistoricalIdentity)
+	return ok && owner.LegacyConsolePredecessor(saved, prior)
+}
+func (d *Console) LegacyConsolePredecessor(saved acceptedState, prior json.RawMessage) bool {
+	if !d.enterpriseRoles() {
 		return false
 	}
 	var current, image consoleState

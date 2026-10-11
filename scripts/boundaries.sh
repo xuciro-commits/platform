@@ -18,6 +18,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 fail() { echo "boundary: $*" >&2; exit 1; }
 
+# ADR-0097 W3: AST inspection covers all production source, including files
+# omitted by current OS/build tags. No count allowance or migration exception.
+(cd capabilities/server && go run ./cmd/check-boundaries -root ../..)
+
 # Every Go module under apps/ and protocols/, named by its module path.
 modules() { for m in "$@"; do [[ ! -f $m/go.mod ]] || echo "$m:$(awk '/^module /{print $2}' "$m/go.mod")"; done; }
 apps=($(modules apps/*/server))   # macOS bash 3.2 has no mapfile

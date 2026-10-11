@@ -8,9 +8,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/flow"
-	"platformserver/apps/relations"
-	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -34,10 +31,10 @@ type ContextView struct {
 }
 
 type FlowSummary struct {
-	ID    string           `json:"id"`
-	Flow  string           `json:"flow"`
-	State string           `json:"state"`
-	Trace []flow.TraceLine `json:"trace"` // the last lines: why it moved
+	ID    string                   `json:"id"`
+	Flow  string                   `json:"flow"`
+	State string                   `json:"state"`
+	Trace []platform.FlowTraceLine `json:"trace"` // the last lines: why it moved
 }
 
 type TaskSummary struct {
@@ -106,10 +103,10 @@ func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time)
 	}
 	if t.procs != nil {
 		key, _ := json.Marshal([]any{[]any{"key", "=", id}})
-		instances, err := t.Records(m, flow.InstanceType, platform.Query{Domain: key, Sort: []string{"id"}}, now)
+		instances, err := t.Records(m, platform.FlowInstanceType, platform.Query{Domain: key, Sort: []string{"id"}}, now)
 		if err == nil {
 			for _, record := range instances.Records {
-				x := record.(flow.FlowInstance)
+				x := record.(platform.FlowInstance)
 				trace := x.Trace
 				if len(trace) > 8 {
 					trace = trace[len(trace)-8:]
@@ -120,10 +117,10 @@ func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time)
 	}
 	if t.tasks != nil {
 		about, _ := json.Marshal([]any{[]any{"ref", "=", typ + "/" + id}})
-		tasks, err := t.Records(m, work.TaskType, platform.Query{Domain: about, Sort: []string{"id"}}, now)
+		tasks, err := t.Records(m, platform.WorkTaskType, platform.Query{Domain: about, Sort: []string{"id"}}, now)
 		if err == nil {
 			for _, record := range tasks.Records {
-				x := record.(work.WorkTask)
+				x := record.(platform.WorkTask)
 				out.Tasks = append(out.Tasks, TaskSummary{ID: x.ID, Title: x.Title, State: x.State, Answer: x.Answer})
 			}
 		}
@@ -151,7 +148,7 @@ func (t *Tenant) Search(reader *platform.Member, q string, now time.Time) []Hit 
 		return out
 	}
 	for _, info := range t.Entities(m) {
-		if info.Type == relations.FollowType { // who follows what is no answer to a search
+		if info.Type == platform.FollowType { // who follows what is no answer to a search
 			continue
 		}
 		query := platform.Query{Search: q, Limit: 5}

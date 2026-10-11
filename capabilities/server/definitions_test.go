@@ -21,8 +21,8 @@ func (s definitionStock) Manifest() platform.Manifest { return s.manifest }
 func TestDefinitions(t *testing.T) {
 	tn := stockTenant(t)
 	console := tn.app(PlatformApp).(*Console)
-	clerk, _ := console.Member("ana")
-	line, _ := console.Member("op")
+	clerk, _ := console.MemberBySubject("ana")
+	line, _ := console.MemberBySubject("op")
 	find := func(defs []platform.Definition, ref platform.AssetRef) *platform.Definition {
 		for i := range defs {
 			if defs[i].Ref == ref {
@@ -262,8 +262,8 @@ func TestPageDefinitions(t *testing.T) {
 		t.Fatal(err)
 	}
 	console := tn.app(PlatformApp).(*Console)
-	clerk, _ := console.Member("ana")
-	line, _ := console.Member("op")
+	clerk, _ := console.MemberBySubject("ana")
+	line, _ := console.MemberBySubject("op")
 	pageFor := func(m platform.Member) *platform.Page {
 		for _, d := range tn.Definitions(m) {
 			if d.Ref == (platform.AssetRef{App: "stock", Kind: platform.AssetPage, Name: "items"}) {

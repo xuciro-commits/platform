@@ -6,29 +6,19 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"platformserver/platform"
 	"strings"
 	"unicode/utf8"
 )
 
 const (
-	MaxImageRegions          = 64
-	MaxImageRegionLabelBytes = 256
-	MaxImageRegionIDBytes    = 128
+	MaxImageRegions          = platform.MaxImageRegions
+	MaxImageRegionLabelBytes = platform.MaxImageRegionLabelBytes
+	MaxImageRegionIDBytes    = platform.MaxImageRegionIDBytes
 )
 
-// A rectangle refers to immutable original raster bytes, in normalized image coordinates.
-type ImageRegion struct {
-	ID     string  `json:"id"`
-	Label  string  `json:"label"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	Width  float64 `json:"width"`
-	Height float64 `json:"height"`
-}
-type ImageRegionsRequest struct {
-	Hash    string        `json:"hash"`
-	Regions []ImageRegion `json:"regions"`
-}
+type ImageRegion = platform.ImageRegion
+type ImageRegionsRequest = platform.ImageRegionsRequest
 
 func imageRegionsPayload(raw []byte) (ImageRegionsRequest, error) {
 	var p ImageRegionsRequest

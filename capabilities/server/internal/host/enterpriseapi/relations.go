@@ -1,4 +1,4 @@
-package enterprise
+package enterpriseapi
 
 // The relationship contracts of the Enterprise Core Profile (ADR-0085 D2).
 //
@@ -32,7 +32,7 @@ import (
 	"sort"
 	"strings"
 
-	"platformserver/apps/enterprise/uaf"
+	"platformserver/internal/host/enterpriseapi/uaf"
 )
 
 // Pair is one end combination, by stereotype name; "*" is any element.

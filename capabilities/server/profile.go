@@ -141,27 +141,26 @@ type TenantRecord struct {
 	Since    time.Time         `json:"since,omitempty"`
 }
 
-func (d *Console) tenantRecord() TenantRecord {
-	t := d.t
+func (d *Console) TenantRecord() TenantRecord {
+	h := d.host
 	out := TenantRecord{ID: d.tenant, Settings: map[string]string{}, Apps: []string{}, Status: "active"}
-	if t == nil {
+	if h == nil {
 		return out
 	}
-	auto := t.automation(PlatformApp, false)
 	for _, s := range tenantSettings() {
-		out.Settings[s.Name] = t.setting(auto, s.Name)
+		out.Settings[s.Name] = h.ConsoleSetting(s.Name)
 	}
 	out.Name = out.Settings[SettingName]
 	if out.Name == "" {
 		out.Name = d.tenant
 	}
-	for _, a := range t.apps {
+	for _, a := range h.Apps() {
 		out.Apps = append(out.Apps, a.Manifest().ID)
 	}
 	d.mu.Lock()
 	out.Members = len(d.members)
 	d.mu.Unlock()
-	if t.console.suspended() {
+	if h.TenantSuspended() {
 		out.Status = "suspended"
 	}
 	return out
@@ -169,10 +168,10 @@ func (d *Console) tenantRecord() TenantRecord {
 
 // tenantDefault is a tenant-wide setting, "" without a composed tenant.
 func (d *Console) tenantDefault(name string) string {
-	if d.t == nil {
+	if d.host == nil {
 		return ""
 	}
-	return d.t.setting(d.t.automation(PlatformApp, false), name)
+	return d.host.ConsoleSetting(name)
 }
 
 // defaults are the tenant-wide settings a profile inherits. Read without d.mu.
@@ -264,7 +263,7 @@ func (d *Console) decideProfile(c platform.Caller, s *pb.Submission) (func(*pb.C
 	if !c.Replaying {
 		oneOf := func(v string, choices ...string) bool { return v == "" || slices.Contains(choices, v) }
 		switch {
-		case p.Language != "" && p.Language != "en" && (d.t == nil || !slices.Contains(d.t.i18n.languages(), p.Language)):
+		case p.Language != "" && p.Language != "en" && (d.host == nil || !slices.Contains(d.host.Languages(), p.Language)):
 			return nil, invalid
 		case p.Timezone != "" && !validZone(p.Timezone):
 			return nil, invalid
@@ -334,7 +333,7 @@ func validClock(v string) bool {
 
 // seen notes a member's activity, at most once a minute (not journaled: a
 // restart loses the last minute, nothing more).
-func (d *Console) seen(member string, now time.Time) {
+func (d *Console) SeenMember(member string, now time.Time) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.members[member] == nil {
@@ -360,7 +359,7 @@ type Reach struct {
 // Reach is member's notification preferences over the tenant's defaults.
 func (d *Console) Reach(member string) Reach {
 	a := d.Account(member)
-	out := Reach{InApp: true, Mail: true, Address: a.Effective.Email, Language: d.language(member), Digest: a.Effective.Digest,
+	out := Reach{InApp: true, Mail: true, Address: a.Effective.Email, Language: d.Language(member), Digest: a.Effective.Digest,
 		QuietFrom: a.QuietFrom, QuietTo: a.QuietTo, Location: d.Location(member)}
 	if a.InApp != nil {
 		out.InApp = *a.InApp

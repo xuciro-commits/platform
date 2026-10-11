@@ -8,7 +8,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/flow"
 	"platformserver/platform"
 )
 
@@ -43,18 +42,18 @@ type Chain struct {
 // ChainOf is the chain of ref, an agent run or a flow instance, as m may read it.
 func (t *Tenant) ChainOf(m platform.Member, ref string, now time.Time) (Chain, *kernel.Error) {
 	typ, id, _ := strings.Cut(ref, "/")
-	if typ != RunType && typ != flow.InstanceType {
+	if typ != RunType && typ != platform.FlowInstanceType {
 		return Chain{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if _, err := t.RecordOf(m, typ, id, now); err != nil {
 		return Chain{}, err
 	}
-	instance := func(id string) (flow.FlowInstance, bool) {
-		v, err := t.RecordOf(m, flow.InstanceType, id, now)
+	instance := func(id string) (platform.FlowInstance, bool) {
+		v, err := t.RecordOf(m, platform.FlowInstanceType, id, now)
 		if err != nil {
-			return flow.FlowInstance{}, false
+			return platform.FlowInstance{}, false
 		}
-		x, ok := v.Record.(flow.FlowInstance)
+		x, ok := v.Record.(platform.FlowInstance)
 		return x, ok
 	}
 	find := func(typ, field, value string) []any {
@@ -103,7 +102,7 @@ func (t *Tenant) ChainOf(m platform.Member, ref string, now time.Time) (Chain, *
 		if !ok {
 			return
 		}
-		ref := flow.InstanceType + "/" + id
+		ref := platform.FlowInstanceType + "/" + id
 		add(ChainNode{Ref: ref, Kind: "flow", Title: x.Title, State: x.State, Detail: x.Flow})
 		if x.Subject != "" && x.Parent == "" {
 			add(ChainNode{Ref: x.Subject, Kind: "record", Title: x.Subject})
@@ -114,9 +113,9 @@ func (t *Tenant) ChainOf(m platform.Member, ref string, now time.Time) (Chain, *
 			link(ref, RunType+"/"+run.ID)
 			t.chainRun(m, run, add, link, now)
 		}
-		for _, c := range find(flow.InstanceType, "parent", id) {
-			child := c.(flow.FlowInstance)
-			link(ref, flow.InstanceType+"/"+child.ID)
+		for _, c := range find(platform.FlowInstanceType, "parent", id) {
+			child := c.(platform.FlowInstance)
+			link(ref, platform.FlowInstanceType+"/"+child.ID)
 			walk(child.ID)
 		}
 	}

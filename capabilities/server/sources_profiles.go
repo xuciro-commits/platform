@@ -13,7 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 

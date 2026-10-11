@@ -7,7 +7,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -73,8 +72,8 @@ func (h *Host) routesAI(rt *routes) {
 			WriteJSON(w, http.StatusOK, models)
 		}
 	})
-	rt.handle(Route{Pattern: "GET /v1/ai/vendors", Summary: "The vendors a provider may be", Answer: []ai.Vendor{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, _ *Tenant) {
-		WriteJSON(w, http.StatusOK, ai.Vendors)
+	rt.handle(Route{Pattern: "GET /v1/ai/vendors", Summary: "The vendors a provider may be", Answer: []platform.AIVendor{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, _ *Tenant) {
+		WriteJSON(w, http.StatusOK, platform.AIVendors)
 	})
 	rt.handle(Route{Pattern: "GET /v1/capabilities/calls/ai/{id}", Summary: "Read the original typed AI call result after member and source checks", Answer: platform.OperationResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.ReadCapabilityAI(m, r.PathValue("id"), h.Now())

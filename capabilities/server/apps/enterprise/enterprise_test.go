@@ -2,19 +2,20 @@ package enterprise
 
 import (
 	"encoding/json"
+	"platformserver/internal/host/enterpriseapi"
 	"testing"
 	"time"
 
 	"platformkernel/kernel"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/enterprise/uaf"
+	"platformserver/internal/host/enterpriseapi/uaf"
 	"platformserver/platform"
 )
 
 func TestTemplates(t *testing.T) {
 	for _, scale := range []string{"S", "M", "L", "XL"} {
-		m, err := Template(SeedParams{Scale: scale, Name: "Acme", Day: "2026-01-01"})
+		m, err := enterpriseapi.Template(SeedParams{Scale: scale, Name: "Acme", Day: "2026-01-01"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,7 +36,7 @@ func TestTemplates(t *testing.T) {
 		}
 		t.Logf("%s: %d elements, %d relationships", scale, len(m.Elements), len(m.Relationships))
 	}
-	if m, _ := Template(SeedParams{Scale: "M", Name: "Acme", Day: "2026-01-01"}); len(m.units("org-line-1-1", "management", "2026-02-01")) != 0 {
+	if m, _ := enterpriseapi.Template(SeedParams{Scale: "M", Name: "Acme", Day: "2026-01-01"}); len(m.UnitsIn("org-line-1-1", "management", "2026-02-01")) != 0 {
 		// a line has nothing below it in management
 		t.Fatal("line has children")
 	}
@@ -139,7 +140,7 @@ func TestFederation(t *testing.T) {
 	if got := grp.Units("", "legal", "2026-02-01"); len(got) != 0 {
 		t.Fatalf("units %v", got)
 	}
-	if !grp.Model().below("legal", "group", "co", "2026-02-01") {
+	if !grp.Model().BelowIn("legal", "group", "co", "2026-02-01") {
 		t.Fatal("the subsidiary is not below the group in the legal kind")
 	}
 	// a second import with the capability unpublished drops it, keeps the group's own ownership edge
@@ -152,7 +153,7 @@ func TestFederation(t *testing.T) {
 }
 
 func TestPatternsGraft(t *testing.T) {
-	m, err := Template(SeedParams{Scale: "M", Industry: "manufacturing", Name: "Acme"})
+	m, err := enterpriseapi.Template(SeedParams{Scale: "M", Industry: "manufacturing", Name: "Acme"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +167,7 @@ func TestPatternsGraft(t *testing.T) {
 		t.Fatal("template has no root organisation")
 	}
 	before := len(m.Elements)
-	for _, p := range Patterns() {
+	for _, p := range enterpriseapi.Patterns() {
 		if p.Params == nil {
 			t.Fatalf("%s: catalogue must encode params as an array for the modeler", p.ID)
 		}
@@ -180,7 +181,7 @@ func TestPatternsGraft(t *testing.T) {
 	if _, err := m.Apply("nope", "", "x", nil, ""); err == nil {
 		t.Fatal("unknown pattern accepted")
 	}
-	if pv, ok := PatternPreview("hotel", "", Params{"floors": 12}); !ok || len(pv.Outline) == 0 {
+	if pv, ok := enterpriseapi.PatternPreview("hotel", "", Params{"floors": 12}); !ok || len(pv.Outline) == 0 {
 		t.Fatal("hotel preview empty")
 	}
 }
@@ -190,7 +191,7 @@ func TestPatternsGraft(t *testing.T) {
 // relationships the contracts admit among its own elements.
 func TestViews(t *testing.T) {
 	mm := uaf.Current()
-	views := Views(mm)
+	views := enterpriseapi.Views(mm)
 	if len(views) != 5 {
 		t.Fatalf("got %d views, want 5", len(views))
 	}
@@ -209,12 +210,12 @@ func TestViews(t *testing.T) {
 			t.Fatalf("%s derives no relationships", v.ID)
 		}
 		for _, rel := range v.Relationships {
-			if !vocabulary[rel] {
+			if !enterpriseapi.Vocabulary[rel] {
 				t.Fatalf("%s offers %s outside the profile's vocabulary", v.ID, rel)
 			}
 		}
 	}
-	for _, p := range Profile() {
+	for _, p := range enterpriseapi.Profile() {
 		if _, ok := seen[p.Stereotype]; !ok {
 			t.Fatalf("%s answers to no view", p.Stereotype)
 		}

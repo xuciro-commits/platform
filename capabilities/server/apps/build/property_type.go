@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+
 	"slices"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"platformserver/platform"
 )
 
-const PropertyTypeType = "build.propertytype"
 const SchemaPropertyType = PropertyTypeType + ".publish"
 
 // PropertyType owns one bounded declaration and its retained publications. Draft
@@ -28,7 +28,7 @@ type PropertyType struct {
 	Versions    []string `json:"versions,omitempty" field:"readonly"`
 }
 
-func (f PropertyType) definition() platform.PropertyType {
+func (f PropertyType) Definition() platform.PropertyType {
 	return platform.PropertyType{Name: f.Name, Title: f.Title, Description: f.Description, Type: f.Type}
 }
 
@@ -45,7 +45,7 @@ func (b *Build) checkPropertyType(f *PropertyType) error {
 	if !named(f.Name) {
 		return fmt.Errorf("Property name must use lower-case letters and digits")
 	}
-	if err := f.definition().Check(); err != nil {
+	if err := f.Definition().Check(); err != nil {
 		return err
 	}
 	list, err := b.propertyTypeInventory()
@@ -98,7 +98,7 @@ func propertyTypeImage(image []byte) (PropertyType, error) {
 	var latest PropertyType
 	for i, raw := range record.Versions {
 		f, ok := wasPublished[PropertyType](raw)
-		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Type != latest.Type) {
+		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Type != latest.Type) {
 			return PropertyType{}, fmt.Errorf("accepted property type has a malformed version %d", i+1)
 		}
 		latest = f
@@ -112,7 +112,7 @@ func (b *Build) propertyTypeInventory() ([]PropertyType, error) {
 
 func (b *Build) installPropertyType(c platform.Caller, f PropertyType) error {
 
-	if err := b.host.InstallPropertyType(c, f.definition(), f.Version); err != nil {
+	if err := b.host.InstallPropertyType(c, f.Definition(), f.Version); err != nil {
 		return err
 	}
 	b.propertyTypes[f.Name] = f
@@ -122,7 +122,7 @@ func (b *Build) installPropertyType(c platform.Caller, f PropertyType) error {
 func (b *Build) PropertyTypeDefinition(name string, version int) (platform.PropertyType, int, bool) {
 	installed, ok := b.propertyTypes[name]
 	if ok && (version == 0 || version == installed.Version) {
-		return installed.definition(), installed.Version, true
+		return installed.Definition(), installed.Version, true
 	}
 	if version == 0 {
 		return platform.PropertyType{}, 0, false
@@ -142,7 +142,7 @@ func (b *Build) PropertyTypeDefinition(name string, version int) (platform.Prope
 		}
 		f, ok := wasPublished[PropertyType](record.Versions[version-1])
 		if ok && f.Version == version {
-			return f.definition(), version, true
+			return f.Definition(), version, true
 		}
 	}
 	return platform.PropertyType{}, 0, false
@@ -156,7 +156,7 @@ func (b *Build) propertyTypeDeclarations() []platform.PropertyType {
 	slices.Sort(names)
 	out := make([]platform.PropertyType, 0, len(names))
 	for _, name := range names {
-		out = append(out, b.propertyTypes[name].definition())
+		out = append(out, b.propertyTypes[name].Definition())
 	}
 	return out
 }

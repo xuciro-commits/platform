@@ -23,7 +23,7 @@ import (
 // remains the only instance owner; the source keeps no second runtime state.
 type frameSource struct {
 	ledger          *platform.Ledger
-	host            host.Host
+	host            hostView
 	stateBytes      int
 	checkpointEvery int
 	compute         bool
@@ -77,7 +77,7 @@ func (w *frameDataWorker) Execute(_ context.Context, request WasmRequest) (WasmR
 	return WasmResponse{Output: platform.Raw(map[string]int{"bytes": len(request.Data.Bytes)})}, nil
 }
 
-func (s *frameSource) Attach(h host.Host) { s.host = h }
+func (s *frameSource) AttachBuild(h host.BuildHost) { s.host = h.(hostView) }
 func (s *frameSource) Manifest() platform.Manifest {
 	continuous := &platform.Continuous{
 		Source: "frames.source", Batch: 512, State: s.stateBytes, FrameBytes: 2 * s.stateBytes, CheckpointEvery: s.checkpointEvery, DeadLetter: true,
@@ -1004,7 +1004,7 @@ func TestFlows(t *testing.T) {
 	}
 	tn := build(fulfil(1))
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
+	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	keys := 0
 	do := func(who, authority, schema, typ, id string, payload any) string {

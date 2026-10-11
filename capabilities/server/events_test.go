@@ -94,7 +94,7 @@ func TestEventsAreOwnedWork(t *testing.T) {
 		json.Unmarshal(raw, &stored)
 		journal = append(journal, stored)
 	}
-	ana, _ := tn.app(PlatformApp).(*Console).Member("ana")
+	ana, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
 	start := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	at := func(s int) time.Time { return start.Add(time.Duration(s) * time.Second) }
 	submit := func(key, topic, text string, s int) {
@@ -224,7 +224,7 @@ func TestSubscriptionCycleStops(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ana, _ := dir.Member("ana")
+	ana, _ := dir.MemberBySubject("ana")
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	if _, err := tn.Submit(ana, note("t-1", "ana", "e", "k", "x", "go"), now); err != nil {
 		t.Fatal(err)

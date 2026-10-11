@@ -94,17 +94,17 @@ func TestContinuousCheckpointIntervalCountsAcceptedSourceBatches(t *testing.T) {
 	if _, _, err := foldBatch(frame, declared, first, now); err != nil {
 		t.Fatal(err)
 	}
-	if frame.CheckpointEvery != 2 || frame.BatchesSinceCheckpoint != 1 || frame.CheckpointCursor != "" || frame.checkpointDue {
+	if frame.CheckpointEvery != 2 || frame.BatchesSinceCheckpoint != 1 || frame.CheckpointCursor != "" {
 		t.Fatalf("the first batch did not wait for the declared interval: %+v", frame)
 	}
-	if _, _, err := foldBatch(frame, declared, first, now); err != nil || frame.BatchesSinceCheckpoint != 1 || frame.checkpointDue {
+	if _, _, err := foldBatch(frame, declared, first, now); err != nil || frame.BatchesSinceCheckpoint != 1 || frame.CheckpointCursor != "" {
 		t.Fatalf("an idempotent retry advanced the checkpoint schedule: %+v %v", frame, err)
 	}
 	second := Batch{ID: "two", Predecessor: "one", Signals: []Signal{{Key: "two", At: now.Add(time.Second), Value: json.RawMessage(`2`)}}}
 	if _, _, err := foldBatch(frame, declared, second, now.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if frame.CheckpointCursor != "two" || frame.BatchesSinceCheckpoint != 0 || !frame.checkpointDue {
+	if frame.CheckpointCursor != "two" || frame.BatchesSinceCheckpoint != 0 || frame.CheckpointCursor != frame.Cursor {
 		t.Fatalf("the interval did not mark its exact accepted cursor: %+v", frame)
 	}
 	before := platform.Raw(frame)

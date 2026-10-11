@@ -4,19 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
 	"slices"
 	"strings"
 
 	"platformserver/platform"
 )
-
-// ReleasePublication changes only publication metadata beside the mutable draft.
-// The host commits these images with the release pointer in one release-result.
-type ReleasePublication struct {
-	Schema string          `json:"schema"`
-	Image  json.RawMessage `json:"image"`
-}
 
 // prepareReleasePublications compiles frozen owner descriptors. It neither
 // installs definitions nor edits drafts. Renaming an owning draft is not yet
@@ -34,7 +28,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 	add := func(schema string, record any) error {
 		raw, err := json.Marshal(record)
 		if err == nil {
-			publications = append(publications, ReleasePublication{schema, raw})
+			publications = append(publications, ReleasePublication{Schema: schema, Image: raw})
 		}
 		return err
 	}
@@ -48,7 +42,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 				continue // immutable code-owned metadata, not a tenant-authored object
 			}
 			var frozen Object
-			if err := json.Unmarshal(asset.Body, &frozen); err != nil || TypeOf(frozen.Name) != asset.Ref.Name {
+			if err := json.Unmarshal(asset.Body, &frozen); err != nil || buildapi.TypeOf(frozen.Name) != asset.Ref.Name {
 				return nil, fmt.Errorf("invalid saved object %s", asset.Ref)
 			}
 			i := slices.IndexFunc(objects, func(o Object) bool { return !o.Archived && o.Name == frozen.Name })
@@ -56,7 +50,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 				return nil, fmt.Errorf("saved object %s has no matching draft; renamed or archived definitions need an upgrade plan", asset.Ref)
 			}
 			frozen.Record = objects[i].Record
-			objects[i].State, objects[i].Installed = "published", TypeOf(frozen.Name)
+			objects[i].State, objects[i].Installed = "published", buildapi.TypeOf(frozen.Name)
 			objects[i].Published = published(frozen)
 			if err := add(SchemaPublish, objects[i]); err != nil {
 				return nil, err
@@ -102,11 +96,11 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 				return nil, err
 			}
 		case platform.AssetFlow:
-			i := slices.IndexFunc(processes, func(p Process) bool { return !p.Archived && TypeOf(p.Name) == asset.Ref.Name })
+			i := slices.IndexFunc(processes, func(p Process) bool { return !p.Archived && buildapi.TypeOf(p.Name) == asset.Ref.Name })
 			if i < 0 {
 				return nil, fmt.Errorf("saved flow %s has no matching owner", asset.Ref)
 			}
-			frozen, err := ProcessFromReleaseAsset(asset)
+			frozen, err := b.ProcessFromAsset(asset)
 			if err != nil {
 				return nil, err
 			}
@@ -213,7 +207,7 @@ type Draft struct {
 // objects, authored pages (an object's generated page has no draft), applications
 // and flows. Promotion into an environment that never authored them creates each
 // missing one through the builder's own create action (ADR-0047 §11).
-func releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, error) {
+func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, error) {
 	generated := map[string]bool{}
 	for _, asset := range candidate.Assets {
 		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetObject {
@@ -269,7 +263,7 @@ func releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, error) {
 				return nil, err
 			}
 		case platform.AssetFlow:
-			p, err := ProcessFromReleaseAsset(asset)
+			p, err := b.ProcessFromAsset(asset)
 			if err != nil {
 				return nil, err
 			}

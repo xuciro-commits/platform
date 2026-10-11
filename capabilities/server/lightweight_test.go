@@ -250,7 +250,7 @@ func TestLightweightProfileRestartsAndContinues(t *testing.T) {
 	if failure != nil {
 		t.Fatal(failure)
 	}
-	if _, known := live.app(PlatformApp).(*Console).Member("user:ana@example.com"); !known {
+	if _, known := live.app(PlatformApp).(*Console).MemberBySubject("user:ana@example.com"); !known {
 		t.Fatal("the first decision was not applied")
 	}
 	if err := files.Put(ctx, "t-lite/9f2c0b", []byte("a picture"), "image/png"); err != nil {
@@ -286,7 +286,7 @@ func TestLightweightProfileRestartsAndContinues(t *testing.T) {
 		t.Fatalf("the restart took the snapshot at %d, not %d", restoredAt, seq)
 	}
 	for _, subject := range []string{"user:ana@example.com", "user:bo@example.com"} {
-		if _, known := again.app(PlatformApp).(*Console).Member(subject); !known {
+		if _, known := again.app(PlatformApp).(*Console).MemberBySubject(subject); !known {
 			t.Fatalf("%s is missing after the restart", subject)
 		}
 	}

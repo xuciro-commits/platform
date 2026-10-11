@@ -6,7 +6,6 @@ import (
 	"maps"
 	"slices"
 
-	"platformserver/apps/flow"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
@@ -43,9 +42,7 @@ func (d *stagedDecision) stateApp(app platform.App) platform.App {
 		d.privateApps = map[string]platform.App{}
 	}
 	d.privateApps[id] = fork
-	if attached, ok := fork.(host.Attached); ok {
-		attached.Attach(hostView{t: d.tenant, app: fork, decision: d})
-	}
+	host.Attach(fork, hostView{t: d.tenant, app: fork, decision: d})
 	if ownsState {
 		copy, ok := fork.(platform.AcceptedStateApp)
 		if !ok {
@@ -62,16 +59,14 @@ func (d *stagedDecision) stateApp(app platform.App) platform.App {
 
 func (d *stagedDecision) attachPrivateHosts() {
 	for _, app := range d.privateApps {
-		if attached, ok := app.(host.Attached); ok {
-			attached.Attach(hostView{t: d.tenant, app: app, decision: d})
-		}
+		host.Attach(app, hostView{t: d.tenant, app: app, decision: d})
 	}
 }
 
 // Version choices belong to the private Flow instance that actually decided.
 // They are saved with the result before the live registry is changed.
 func (d *stagedDecision) flowVersions() map[string]int {
-	if private, ok := d.privateApps[flow.ID].(host.Processes); ok {
+	if private, ok := d.privateApps[platform.FlowApp].(host.Processes); ok {
 		return private.Versions()
 	}
 	return nil

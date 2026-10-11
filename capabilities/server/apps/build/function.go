@@ -11,39 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-const FunctionType = "build.function"
 const SchemaFunction = FunctionType + ".publish"
-
-// Function owns one bounded declaration and its retained publications. Draft
-// edits never replace what callers use until the publication result commits.
-type Function struct {
-	platform.Record
-	Conversation   bool             `json:"conversation,omitempty" field:"aside" title:"Conversation input"`
-	Name           string           `json:"name" field:"required,search"`
-	Title          string           `json:"title" field:"required,search"`
-	Description    string           `json:"description" field:"required" type:"longtext"`
-	Object         string           `json:"object" field:"required" title:"Source object"`
-	Fields         []string         `json:"fields" field:"aside" title:"Input fields"`
-	Instructions   string           `json:"instructions" field:"required" type:"longtext"`
-	Output         []platform.Field `json:"output" field:"aside" title:"Output fields"`
-	Model          string           `json:"model,omitempty"`
-	MaxInputBytes  int              `json:"maxInputBytes" field:"required" title:"Maximum input bytes"`
-	MaxOutputBytes int              `json:"maxOutputBytes" field:"required" title:"Maximum output bytes"`
-	MaxTokens      int              `json:"maxTokens" field:"required" title:"Maximum tokens"`
-	Roles          []string         `json:"roles" field:"aside" title:"Callable by"`
-	State          string           `json:"state" field:"readonly" choices:"draft,published"`
-	Version        int              `json:"version,omitempty" field:"readonly"`
-	Published      string           `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions       []string         `json:"versions,omitempty" field:"readonly" title:"Published versions"`
-}
-
-// definition projects the stored fields into the shared runtime declaration;
-// validation and execution remain owned by platform.AIFunction.
-func (f Function) definition() platform.AIFunction {
-	return platform.AIFunction{Conversation: f.Conversation, Name: f.Name, Title: f.Title, Description: f.Description, Object: f.Object,
-		Fields: f.Fields, Instructions: f.Instructions, Output: f.Output, Model: f.Model,
-		MaxInputBytes: f.MaxInputBytes, MaxOutputBytes: f.MaxOutputBytes, MaxTokens: f.MaxTokens, Roles: f.Roles}
-}
 
 func (b *Build) functionEntity() platform.Entity {
 	return platform.Entity{Type: FunctionType, Title: "AI function", Plural: "AI functions", Model: Function{}, Display: "title",
@@ -61,7 +29,7 @@ func (b *Build) checkFunction(f Function) error {
 	if _, ok := b.installed[f.Object]; !ok {
 		return fmt.Errorf("Function %s needs a published object of this builder", f.Name)
 	}
-	if err := b.host.ValidateInstallFunction(f.definition()); err != nil {
+	if err := b.host.ValidateInstallFunction(f.Definition()); err != nil {
 		return err
 	}
 	list, err := b.functionInventory()
@@ -114,7 +82,7 @@ func functionImage(image []byte) (Function, error) {
 	var latest Function
 	for i, raw := range record.Versions {
 		f, ok := wasPublished[Function](raw)
-		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Object != latest.Object) {
+		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Object != latest.Object) {
 			return Function{}, fmt.Errorf("accepted function has a malformed version %d", i+1)
 		}
 		latest = f
@@ -128,7 +96,7 @@ func (b *Build) functionInventory() ([]Function, error) {
 
 func (b *Build) installFunction(c platform.Caller, f Function) error {
 	b.ledger.Catalog.Add(functionCallActions(b.Manifest().AllRoles())...)
-	if err := b.host.InstallFunction(c, f.definition(), f.Version); err != nil {
+	if err := b.host.InstallFunction(c, f.Definition(), f.Version); err != nil {
 		return err
 	}
 	b.functions[f.Name] = f
@@ -138,7 +106,7 @@ func (b *Build) installFunction(c platform.Caller, f Function) error {
 func (b *Build) FunctionDefinition(name string, version int) (platform.AIFunction, int, bool) {
 	installed, ok := b.functions[name]
 	if ok && (version == 0 || version == installed.Version) {
-		return installed.definition(), installed.Version, true
+		return installed.Definition(), installed.Version, true
 	}
 	if version == 0 {
 		return platform.AIFunction{}, 0, false
@@ -158,7 +126,7 @@ func (b *Build) FunctionDefinition(name string, version int) (platform.AIFunctio
 		}
 		f, ok := wasPublished[Function](record.Versions[version-1])
 		if ok && f.Version == version {
-			return f.definition(), version, true
+			return f.Definition(), version, true
 		}
 	}
 	return platform.AIFunction{}, 0, false
@@ -172,7 +140,7 @@ func (b *Build) functionDeclarations() []platform.AIFunction {
 	slices.Sort(names)
 	out := make([]platform.AIFunction, 0, len(names))
 	for _, name := range names {
-		out = append(out, b.functions[name].definition())
+		out = append(out, b.functions[name].Definition())
 	}
 	return out
 }

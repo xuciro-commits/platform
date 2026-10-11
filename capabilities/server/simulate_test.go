@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	buildapi "platformserver/internal/host/buildapi"
 	"strings"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func TestSimulateIsDiscarded(t *testing.T) {
 		"actions": []map[string]any{{"name": "close", "title": "Close", "from": []string{"open"}, "to": "done",
 			"conditions": []map[string]any{{"field": "guest", "operator": "not empty", "message": "A visit needs its guest"}}}}}))
 	must("dana", sub("dana", build.SchemaPublish, build.ObjectType, "O1", map[string]any{}))
-	visit := build.TypeOf("visit")
+	visit := buildapi.TypeOf("visit")
 	must("eli", sub("eli", visit+".create", visit, "V1", map[string]any{"guest": "Ada"}))
 	must("eli", sub("eli", visit+".create", visit, "V2", map[string]any{}))
 	before, entries := snapshot(tn), len(journal)

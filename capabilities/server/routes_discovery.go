@@ -19,8 +19,8 @@ func (h *Host) routesDiscovery(rt *routes) {
 		lang := t.Language(m, r)
 		view := MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
 			Language: lang, Languages: t.i18n.languages(), Preferred: m.Language, Currency: t.setting(t.automation(PlatformApp, false), SettingCurrency)}
-		if d, ok := t.app(PlatformApp).(*Console); ok {
-			view.Account, view.Tenant = d.Account(m.ID), d.tenantRecord()
+		if d, ok := t.app(PlatformApp).(IdentityProfile); ok {
+			view.Account, view.Tenant = d.Account(m.ID), d.TenantRecord()
 		}
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(view, lang))
 	})

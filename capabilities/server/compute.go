@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"platformserver/internal/host"
 	"slices"
 	"strings"
 	"time"
@@ -178,9 +179,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	return call, platform.Effect{ID: id, Endpoint: operationEndpoint, Event: owner + "/operation", App: owner, Key: q.Key, Target: target, At: at, Due: at, State: "pending", Body: string(body)}, nil
 }
 func operationDefinition(app platform.App, name string, version int) (platform.Operation, int, bool) {
-	if owner, ok := app.(interface {
-		OperationDefinition(string, int) (platform.Operation, int, bool)
-	}); ok {
+	if owner, ok := app.(host.OperationDefinitions); ok {
 		return owner.OperationDefinition(name, version)
 	}
 	if version == 0 {

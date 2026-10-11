@@ -136,7 +136,7 @@ func TestJournalsKeepTheSameContract(t *testing.T) {
 			if failure != nil {
 				t.Fatalf("submit: %v", failure)
 			}
-			if _, known := live.app(PlatformApp).(*Console).Member("user:ana@example.com"); !known {
+			if _, known := live.app(PlatformApp).(*Console).MemberBySubject("user:ana@example.com"); !known {
 				t.Fatal("the committed decision was not applied")
 			}
 			if j.Position(tenant) != 1 {
@@ -206,7 +206,7 @@ func TestJournalsKeepTheSameContract(t *testing.T) {
 			if err := restored.Replay(entries); err != nil {
 				t.Fatalf("replay: %v", err)
 			}
-			if _, known := restored.app(PlatformApp).(*Console).Member("user:ana@example.com"); !known {
+			if _, known := restored.app(PlatformApp).(*Console).MemberBySubject("user:ana@example.com"); !known {
 				t.Fatal("the replayed decision did not apply")
 			}
 			restored.attachJournal(ctx, reopened)

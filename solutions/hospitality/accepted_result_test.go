@@ -56,7 +56,7 @@ func TestAcceptedResultHospitalityProbe(t *testing.T) {
 	}{{"draft-visit", build.ObjectType + ".create", build.ObjectType, "O1",
 		`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`},
 		{"publish-visit", build.SchemaPublish, build.ObjectType, "O1", `{}`},
-		{"visit-guest", build.TypeOf("visit") + ".create", build.TypeOf("visit"), "V1", `{"guest":"Ada"}`}} {
+		{"visit-guest", "build.visit" + ".create", "build.visit", "V1", `{"guest":"Ada"}`}} {
 		request := &pb.Submission{TenantId: tn.ID, PrincipalId: m.ID, Authority: build.ID,
 			IdempotencyKey: action.key, Target: &pb.EntityRef{Type: action.typ, Id: action.target},
 			Schema: &pb.SchemaRef{Name: action.schema, Version: 1}, Payload: []byte(action.payload)}
@@ -86,7 +86,7 @@ func TestAcceptedResultHospitalityProbe(t *testing.T) {
 
 	// The same fixed-plan record and isolated runtime work in either composition.
 	planPayload, _ := json.Marshal(map[string]any{"title": "Fixed sample", "object": "O1", "as": m.ID, "at": now, "steps": []build.TestStep{
-		{Type: build.TypeOf("visit"), ID: "SAMPLE", Action: build.TypeOf("visit") + ".create", Payload: `{"guest":"Sample Ada"}`, Expect: "accepted"},
+		{Type: "build.visit", ID: "SAMPLE", Action: "build.visit" + ".create", Payload: `{"guest":"Sample Ada"}`, Expect: "accepted"},
 	}})
 	if _, err := tn.Submit(m, &pb.Submission{TenantId: tn.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: "save-plan",
 		Target: &pb.EntityRef{Type: build.TestPlanType, Id: "PLAN"}, Schema: &pb.SchemaRef{Name: build.TestPlanType + ".create", Version: 1}, Payload: planPayload}, now); err != nil {

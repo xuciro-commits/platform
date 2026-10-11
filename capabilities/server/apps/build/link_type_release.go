@@ -12,9 +12,9 @@ import (
 )
 
 func linkTypeReleaseAsset(f LinkType, sourceVersion string) (platform.ReleaseAsset, error) {
-	body, err := json.Marshal(f.definition())
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: f.Name}, ContractVersion: f.definition().Contract(),
-		SourceVersion: sourceVersion + ".link-" + strconv.Itoa(f.Version), Requires: linkTypeRequires(f.definition()), Body: body}, err
+	body, err := json.Marshal(f.Definition())
+	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: f.Name}, ContractVersion: f.Definition().Contract(),
+		SourceVersion: sourceVersion + ".link-" + strconv.Itoa(f.Version), Requires: linkTypeRequires(f.Definition()), Body: body}, err
 }
 
 // LinkTypeReleaseAsset resolves only a retained version from this owner.

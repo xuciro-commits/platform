@@ -13,6 +13,12 @@ import (
 	"platformkernel/kernel"
 )
 
+// FunctionDefinitions resolves a trusted owner's retained inference definition.
+// Code-only apps continue to expose their immutable manifest declarations.
+type FunctionDefinitions interface {
+	FunctionDefinition(name string, version int) (AIFunction, int, bool)
+}
+
 // AIFunction is a bounded, declarative inference over explicit scalar fields
 // of one object (ADR-0043). It has no tools, code or business writes; the
 // application's ordinary Reply action decides whether to adopt the answer.
@@ -220,4 +226,9 @@ func RecordAdviceFunction(object string, fields, roles []string) AIFunction {
 		Output: []Field{{Name: "summary", Type: "string", Required: true, Description: "A short factual summary"},
 			{Name: "category", Type: "string", Required: true, Description: "Routine or needs review", Choices: []string{"routine", "review"}},
 			{Name: "review", Type: "boolean", Required: true, Description: "Whether a person should review it"}}}
+}
+
+// RetainedFunctionAssets resolves a versioned published inference asset.
+type RetainedFunctionAssets interface {
+	FunctionReleaseAsset(string, string) (ReleaseAsset, error)
 }

@@ -12,9 +12,9 @@ import (
 )
 
 func queryReleaseAsset(f Query, sourceVersion string) (platform.ReleaseAsset, error) {
-	body, err := json.Marshal(f.definition())
+	body, err := json.Marshal(f.Definition())
 	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: f.Name}, ContractVersion: 1,
-		SourceVersion: sourceVersion + ".query-" + strconv.Itoa(f.Version), Requires: f.definition().Dependencies(), Body: body}, err
+		SourceVersion: sourceVersion + ".query-" + strconv.Itoa(f.Version), Requires: f.Definition().Dependencies(), Body: body}, err
 }
 
 // QueryReleaseAsset resolves only a retained version from this owner.
@@ -59,7 +59,7 @@ func (b *Build) InstallQueryAsset(asset platform.ReleaseAsset) error {
 	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal ||
 		asset.ContractVersion != 1 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetQuery ||
 		json.Unmarshal(asset.Body, &f) != nil || f.Name != asset.Ref.Name ||
-		f.definition().Check() != nil || !slices.Equal(asset.Requires, f.definition().Dependencies()) {
+		f.Definition().Check() != nil || !slices.Equal(asset.Requires, f.Definition().Dependencies()) {
 		return fmt.Errorf("invalid builder query asset %s", asset.Ref)
 	}
 	if _, exists := b.queries[f.Name]; exists {

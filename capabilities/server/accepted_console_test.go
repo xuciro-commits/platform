@@ -56,7 +56,7 @@ func TestAcceptedConsoleMemberStateCommitsWithReceipt(t *testing.T) {
 	if decodeErr != nil || len(batch.States) != 1 || batch.States[0].App != PlatformApp || len(batch.Rows) != 0 {
 		t.Fatalf("directory was not saved as a single owned state: %+v %v", batch, decodeErr)
 	}
-	if operator, ok := tn.app(PlatformApp).(*Console).Member("user:operator@example.com"); !ok || operator.ID != "operator" {
+	if operator, ok := tn.app(PlatformApp).(*Console).MemberBySubject("user:operator@example.com"); !ok || operator.ID != "operator" {
 		t.Fatal("accepted member was not installed")
 	}
 	retry, err := tn.Submit(admin, sub, now.Add(time.Hour))
@@ -137,7 +137,7 @@ func TestJournalAcceptedConsoleCrashAfterCommit(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if member, ok := recovered.app(PlatformApp).(*Console).Member("user:new@example.com"); !ok || member.ID != "new-member" {
+	if member, ok := recovered.app(PlatformApp).(*Console).MemberBySubject("user:new@example.com"); !ok || member.ID != "new-member" {
 		t.Fatal("recovery did not install the persisted directory image")
 	}
 	recovered.AcceptResult = func(entry Entry, key, hash string) ([]byte, error) {
@@ -163,7 +163,7 @@ func TestAcceptedConsoleAccessIsolation(t *testing.T) {
 		return tn
 	}
 	tn := compose()
-	d := consoleOf(tn)
+	d := testConsoleOf(tn)
 	var entries []Entry
 	seq := 0
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
@@ -176,7 +176,7 @@ func TestAcceptedConsoleAccessIsolation(t *testing.T) {
 		permitted := tn.app("a").Manifest().Actions.PermitsAny([]string{"scribe"}, "a.note")
 		tn.AcceptResult = func(Entry, string, string) ([]byte, error) {
 			got, _ := d.AcceptedState()
-			if schema == SchemaMemberSuspend && !d.noticed("bo", "old-session", "", "sign-in", now) {
+			if schema == SchemaMemberSuspend && !d.NoticeSession("bo", "old-session", "", "sign-in", now) {
 				t.Fatal("failed append ended a session")
 			}
 			if string(got) != string(before) {
@@ -212,25 +212,25 @@ func TestAcceptedConsoleAccessIsolation(t *testing.T) {
 	if a := d.Account("bo"); a.Mail == nil || *a.Mail || a.DisplayName != "After" {
 		t.Fatal("profile not committed")
 	}
-	d.noticed("bo", "old-session", "", "sign-in", now)
+	d.NoticeSession("bo", "old-session", "", "sign-in", now)
 	decide(SchemaTokenIssue, TokenType, "ci", `{"label":"CI"}`)
 	secret, ok := d.Minted("ci", "admin", now)
 	if !ok {
 		t.Fatal("token secret unavailable")
 	}
-	if !d.noticed("admin", secret, "", "token", now) {
+	if !d.NoticeSession("admin", secret, "", "token", now) {
 		t.Fatal("token session refused")
 	}
 	if sessions := d.Sessions("admin", secret, now); len(sessions) != 1 || sessions[0].Token != "ci" {
 		t.Fatal("token session lacks owning token")
 	}
 	decide(SchemaTokenRevoke, TokenType, "ci", `{}`)
-	if ss := d.Sessions("admin", secret, now); len(ss) != 1 || ss[0].Ended.IsZero() || d.noticed("admin", secret, "", "token", now) {
+	if ss := d.Sessions("admin", secret, now); len(ss) != 1 || ss[0].Ended.IsZero() || d.NoticeSession("admin", secret, "", "token", now) {
 		t.Fatal("revoked token session survived")
 	}
 	decide(SchemaMemberSuspend, MemberType, "bo", `{}`)
 	decide(SchemaMemberResume, MemberType, "bo", `{}`)
-	if d.noticed("bo", "old-session", "", "sign-in", now) {
+	if d.NoticeSession("bo", "old-session", "", "sign-in", now) {
 		t.Fatal("resume revived a suspended session")
 	}
 	decide(SchemaRoleRemove, RoleType, "scribe", `{}`)

@@ -221,7 +221,7 @@ func testAgents(t *testing.T, accepted bool) {
 			return e.Body, nil
 		}
 	}
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
+	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	keys := 0
 	do := func(who, authority, schema, typ, id string, payload any) string {
@@ -353,7 +353,7 @@ func testAgents(t *testing.T, accepted bool) {
 	think(3)
 	expect("remembered", memory("R7:m1").State+" "+memory("R7:m1").For+" "+fmt.Sprint(memory("R7:m1").Expires.Sub(now) > 80*24*time.Hour), "active ana true")
 	prompt := func(who string) string {
-		return tn.agents.prompt(tn.automation(AgentApp, false), tn.agents.defs["desk.triage"], AgentRunRecord{Agent: "desk.triage", Goal: "reply to ana", OnBehalf: who}, "m", now).Messages[0].Content
+		return tn.agents.(*Agents).prompt(tn.automation(AgentApp, false), tn.agents.(*Agents).defs["desk.triage"], AgentRunRecord{Agent: "desk.triage", Goal: "reply to ana", OnBehalf: who}, "m", now).Messages[0].Content
 	}
 	expect("ana's prompt", fmt.Sprint(strings.Contains(prompt("ana"), "- ana signs replies"), strings.Contains(prompt("ana"), "it works again")), "true true")
 	expect("bo's prompt", fmt.Sprint(strings.Contains(prompt("bo"), "What you remember")), "false")
@@ -398,7 +398,7 @@ func testAgents(t *testing.T, accepted bool) {
 	// The overview (ADR-0029 D5): each agent, declared or outside, with what
 	// it did and what people made of it.
 	overview := func(member string) AgentOverview {
-		for _, o := range tn.AgentsOverview() {
+		for _, o := range tn.agents.AgentOverview() {
 			if o.Member == member {
 				return o
 			}

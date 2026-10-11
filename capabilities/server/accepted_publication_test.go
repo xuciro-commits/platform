@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	buildapi "platformserver/internal/host/buildapi"
 	"slices"
 	"strings"
 	"testing"
@@ -102,7 +103,7 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if _, installed := recovered.entity(build.TypeOf("visit")); !installed ||
+	if _, installed := recovered.entity(buildapi.TypeOf("visit")); !installed ||
 		!slices.ContainsFunc(recovered.definitions, func(d platform.Definition) bool {
 			return d.Ref.Kind == platform.AssetPage && d.Ref.Name == "visits"
 		}) ||
@@ -285,10 +286,10 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 	if err := submit("o-publish", build.SchemaPublish, build.ObjectType, "O1", map[string]any{}); err == nil {
 		t.Fatal("object publication did not fail before the journal append")
 	}
-	if _, installed := live.entity(build.TypeOf("visit")); installed ||
-		has(platform.AssetObject, build.TypeOf("visit")) ||
+	if _, installed := live.entity(buildapi.TypeOf("visit")); installed ||
+		has(platform.AssetObject, buildapi.TypeOf("visit")) ||
 		slices.ContainsFunc(live.app(build.ID).Declarations(), func(d *pb.AuthorityDeclaration) bool {
-			return d.GetDataClass() == build.TypeOf("visit")
+			return d.GetDataClass() == buildapi.TypeOf("visit")
 		}) {
 		t.Fatal("failed object publication installed a definition or authority")
 	}
@@ -298,12 +299,12 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 	}
 	fail = false
 	must("o-publish", build.SchemaPublish, build.ObjectType, "O1", map[string]any{})
-	if _, installed := live.entity(build.TypeOf("visit")); !installed ||
-		!has(platform.AssetObject, build.TypeOf("visit")) {
+	if _, installed := live.entity(buildapi.TypeOf("visit")); !installed ||
+		!has(platform.AssetObject, buildapi.TypeOf("visit")) {
 		t.Fatal("committed object was not installed")
 	}
 	must("p-create", build.PageType+".create", build.PageType, "P1", map[string]any{
-		"name": "visits", "title": "Visits", "object": build.TypeOf("visit"),
+		"name": "visits", "title": "Visits", "object": buildapi.TypeOf("visit"),
 		"list": []string{"guest"}, "detail": []string{"guest"}})
 	fail = true
 	if err := submit("p-publish", build.SchemaRelease, build.PageType, "P1", map[string]any{}); err == nil {
@@ -381,7 +382,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 	if recoveredID := releaseID(afterCrash); recoveredID != publishedID {
 		t.Fatalf("saved publication changed identity after code-free recovery: %s -> %s", publishedID, recoveredID)
 	}
-	if _, ok := afterCrash.entity(build.TypeOf("visit")); !ok ||
+	if _, ok := afterCrash.entity(buildapi.TypeOf("visit")); !ok ||
 		!slices.ContainsFunc(afterCrash.definitions, func(d platform.Definition) bool {
 			return d.Ref.Kind == platform.AssetApp && d.Ref.Name == "frontdesk"
 		}) {
@@ -428,7 +429,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		kind                           platform.AssetKind
 		asset                          string
 	}{
-		{"object", "o-publish", build.SchemaPublish, build.ObjectType, "O1", 1, platform.AssetObject, build.TypeOf("visit")},
+		{"object", "o-publish", build.SchemaPublish, build.ObjectType, "O1", 1, platform.AssetObject, buildapi.TypeOf("visit")},
 		{"page", "p-publish", build.SchemaRelease, build.PageType, "P1", 3, platform.AssetPage, "visits"},
 		{"application", "a-publish", build.SchemaHandOver, build.AppType, "A1", 5, platform.AssetApp, "frontdesk"},
 	} {

@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
+	buildapi "platformserver/internal/host/buildapi"
+
 	"reflect"
 	"slices"
 	"strconv"
@@ -13,76 +14,6 @@ import (
 	"platformserver/platform"
 )
 
-// Portable definitions are typed owner contracts. Local identities, addresses,
-// credentials and mutable data/execution observations never enter these shapes.
-type ConnectionDefinition struct {
-	Name       string `json:"name"`
-	Title      string `json:"title"`
-	Kind       string `json:"kind"`
-	Marking    string `json:"marking,omitempty"`
-	Credential bool   `json:"credential,omitempty"`
-}
-type SourceDefinition struct {
-	Name       string        `json:"name"`
-	Title      string        `json:"title"`
-	Connection string        `json:"connection"`
-	Profile    string        `json:"profile,omitempty"`
-	URL        string        `json:"url,omitempty"`
-	Entity     string        `json:"entity,omitempty"`
-	Filter     string        `json:"filter,omitempty"`
-	Since      string        `json:"since,omitempty"`
-	Path       string        `json:"path,omitempty"`
-	Dataset    string        `json:"dataset,omitempty"`
-	Object     string        `json:"object,omitempty"`
-	Key        string        `json:"key,omitempty"`
-	Mapping    []SourceField `json:"mapping,omitempty"`
-	Stream     bool          `json:"stream,omitempty"`
-	Every      string        `json:"every,omitempty"`
-}
-type DatasetDefinition struct {
-	Name    string `json:"name"`
-	Title   string `json:"title"`
-	Keep    int    `json:"keep,omitempty"`
-	Marking string `json:"marking,omitempty"`
-}
-type PipelineDefinition struct {
-	Name             string            `json:"name"`
-	Title            string            `json:"title"`
-	Input            string            `json:"input"`
-	Steps            []Step            `json:"steps"`
-	Expectations     []Expectation     `json:"expectations,omitempty"`
-	OutputDataset    string            `json:"outputDataset,omitempty"`
-	OutputObject     string            `json:"outputObject,omitempty"`
-	OutputEnterprise *EnterpriseTarget `json:"outputEnterprise,omitempty"`
-	Key              string            `json:"key,omitempty"`
-	Every            string            `json:"every,omitempty"`
-}
-type WritebackDefinition struct {
-	Name       string        `json:"name"`
-	Title      string        `json:"title"`
-	Connection string        `json:"connection"`
-	Object     string        `json:"object"`
-	On         string        `json:"on"`
-	Method     string        `json:"method,omitempty"`
-	Path       string        `json:"path,omitempty"`
-	Mapping    []SourceField `json:"mapping,omitempty"`
-	Result     []SourceField `json:"result,omitempty"`
-}
-type MatchingDefinition struct {
-	Name   string       `json:"name"`
-	Title  string       `json:"title"`
-	Object string       `json:"object"`
-	Keys   []MatchKey   `json:"keys"`
-	Prefer []Preference `json:"prefer,omitempty"`
-}
-
-func integrationKind(kind platform.AssetKind) bool {
-	switch kind {
-	case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching:
-		return true
-	}
-	return false
-}
 func integrationType(kind platform.AssetKind) string {
 	switch kind {
 	case platform.AssetConnection:
@@ -108,29 +39,11 @@ func integrationKindOf(typ string) platform.AssetKind {
 	}
 	return ""
 }
-func decodeIntegration(raw []byte, value any) error {
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(value); err != nil {
-		return err
-	}
-	if err := dec.Decode(new(any)); err != io.EOF {
-		return fmt.Errorf("integration descriptor has trailing data")
-	}
-	return nil
-}
+
 func integrationVersion(version int, kind platform.AssetKind) string {
 	return definitionVersion + "." + string(kind) + "-" + strconv.Itoa(version)
 }
-func integrationOrdinal(asset platform.ReleaseAsset) (int, error) {
-	prefix := definitionVersion + "." + string(asset.Ref.Kind) + "-"
-	ordinal, found := strings.CutPrefix(asset.SourceVersion, prefix)
-	v, err := strconv.Atoi(ordinal)
-	if !found || err != nil || v < 1 || v > 64 || strconv.Itoa(v) != ordinal {
-		return 0, fmt.Errorf("unsupported integration version %s", asset.SourceVersion)
-	}
-	return v, nil
-}
+
 func integrationMetadata(record any) (name string, version int, published string, versions []string) {
 	switch r := record.(type) {
 	case Connection:
@@ -154,7 +67,7 @@ func retainIntegration(record any, asset platform.ReleaseAsset) (any, error) {
 		return nil, err
 	}
 	name, version, prior, versions := integrationMetadata(record)
-	ordinal, err := integrationOrdinal(asset)
+	ordinal, err := buildapi.ValueIntegrationOrdinal(asset)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +79,7 @@ func retainIntegration(record any, asset platform.ReleaseAsset) (any, error) {
 	}
 	for _, old := range versions {
 		var accepted platform.ReleaseAsset
-		if decodeIntegration([]byte(old), &accepted) != nil {
+		if buildapi.ValueDecodeIntegration([]byte(old), &accepted) != nil {
 			return nil, fmt.Errorf("invalid retained integration version")
 		}
 		if accepted.SourceVersion == asset.SourceVersion {
@@ -356,7 +269,7 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 	}
 	switch r := record.(type) {
 	case Connection:
-		body = ConnectionDefinition{r.Name, r.Title, r.Kind, r.Marking, r.Secret != ""}
+		body = ConnectionDefinition{Name: r.Name, Title: r.Title, Kind: r.Kind, Marking: r.Marking, Credential: r.Secret != ""}
 	case Source:
 		if r.Connection == "" || r.Header != "" || strings.Contains(r.URL, "://") || r.AllowPrivate {
 			return asset, fmt.Errorf("portable source %s needs a connection and relative address without inline headers", r.Name)
@@ -369,12 +282,12 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 		if err != nil {
 			return asset, err
 		}
-		body = SourceDefinition{r.Name, r.Title, conn, r.Profile, r.URL, r.Entity, r.Filter, r.Since, r.Path, dataset, r.Object, r.Key, r.Mapping, r.Stream, r.Every}
+		body = SourceDefinition{Name: r.Name, Title: r.Title, Connection: conn, Profile: r.Profile, URL: r.URL, Entity: r.Entity, Filter: r.Filter, Since: r.Since, Path: r.Path, Dataset: dataset, Object: r.Object, Key: r.Key, Mapping: r.Mapping, Stream: r.Stream, Every: r.Every}
 		add(platform.AssetConnection, conn)
 		add(platform.AssetDataset, dataset)
 		object(r.Object)
 	case Dataset:
-		body = DatasetDefinition{r.Name, r.Title, r.Keep, r.Marking}
+		body = DatasetDefinition{Name: r.Name, Title: r.Title, Keep: r.Keep, Marking: r.Marking}
 	case Pipeline:
 		input, err := b.integrationName(platform.AssetDataset, r.Input)
 		if err != nil {
@@ -394,7 +307,7 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 				add(platform.AssetDataset, steps[i].Dataset)
 			}
 		}
-		body = PipelineDefinition{r.Name, r.Title, input, steps, r.Expectations, output, r.OutputObject, r.OutputEnterprise, r.Key, r.Every}
+		body = PipelineDefinition{Name: r.Name, Title: r.Title, Input: input, Steps: steps, Expectations: r.Expectations, OutputDataset: output, OutputObject: r.OutputObject, OutputEnterprise: r.OutputEnterprise, Key: r.Key, Every: r.Every}
 		add(platform.AssetDataset, input)
 		add(platform.AssetDataset, output)
 		object(r.OutputObject)
@@ -406,12 +319,12 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 		if err != nil {
 			return asset, err
 		}
-		body = WritebackDefinition{r.Name, r.Title, conn, r.Object, r.On, r.Method, r.Path, r.Mapping, r.Result}
+		body = WritebackDefinition{Name: r.Name, Title: r.Title, Connection: conn, Object: r.Object, On: r.On, Method: r.Method, Path: r.Path, Mapping: r.Mapping, Result: r.Result}
 		add(platform.AssetConnection, conn)
 		object(r.Object)
 		add(platform.AssetAction, r.Object+"."+r.On)
 	case Match:
-		body = MatchingDefinition{r.Name, r.Title, r.Object, r.Keys, r.Prefer}
+		body = MatchingDefinition{Name: r.Name, Title: r.Title, Object: r.Object, Keys: r.Keys, Prefer: r.Prefer}
 		object(r.Object)
 		for _, preference := range r.Prefer {
 			ref, err := b.matchingProducer(preference.Producer)
@@ -441,7 +354,7 @@ func (b *Build) integrationAssets() ([]platform.ReleaseAsset, error) {
 			_, version, published, _ := integrationMetadata(record)
 			if published != "" {
 				var asset platform.ReleaseAsset
-				if err := decodeIntegration([]byte(published), &asset); err != nil {
+				if err := buildapi.ValueDecodeIntegration([]byte(published), &asset); err != nil {
 					return nil, err
 				}
 				out = append(out, asset)
@@ -503,7 +416,7 @@ func (b *Build) integrationDraftAssets(kind platform.AssetKind, id string) (befo
 	_, version, published, _ := integrationMetadata(record)
 	if published != "" {
 		var old platform.ReleaseAsset
-		if err = decodeIntegration([]byte(published), &old); err != nil {
+		if err = buildapi.ValueDecodeIntegration([]byte(published), &old); err != nil {
 			return
 		}
 		prior, had = old.Ref, true
@@ -530,20 +443,20 @@ func (b *Build) integrationDraftAssets(kind platform.AssetKind, id string) (befo
 }
 
 func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, error) {
-	if asset.Ref.App != ID || !integrationKind(asset.Ref.Kind) || asset.ContractVersion != 1 {
+	if asset.Ref.App != ID || !buildapi.ValueIntegrationKind(asset.Ref.Kind) || asset.ContractVersion != 1 {
 		return nil, fmt.Errorf("unknown integration asset %s", asset.Ref)
 	}
-	if _, err := integrationOrdinal(asset); err != nil {
+	if _, err := buildapi.ValueIntegrationOrdinal(asset); err != nil {
 		return nil, err
 	}
-	if err := b.validateIntegrationDependencies(asset); err != nil {
+	if err := buildapi.ValueValidateIntegrationDependencies(asset); err != nil {
 		return nil, err
 	}
 	var record any
 	switch asset.Ref.Kind {
 	case platform.AssetConnection:
 		var d ConnectionDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return nil, err
 		}
 		if d.Name != asset.Ref.Name || !slices.Contains(ConnectionKinds, d.Kind) {
@@ -552,7 +465,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		record = Connection{Name: d.Name, Title: d.Title, Kind: d.Kind, Marking: d.Marking}
 	case platform.AssetSource:
 		var d SourceDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return nil, err
 		}
 		if d.Name != asset.Ref.Name || d.Connection == "" || strings.Contains(d.URL, "://") {
@@ -569,7 +482,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		record = Source{Name: d.Name, Title: d.Title, Connection: conn, Profile: d.Profile, URL: d.URL, Entity: d.Entity, Filter: d.Filter, Since: d.Since, Path: d.Path, Dataset: dataset, Object: d.Object, Key: d.Key, Mapping: d.Mapping, Stream: d.Stream, Every: d.Every}
 	case platform.AssetDataset:
 		var d DatasetDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return nil, err
 		}
 		if d.Name != asset.Ref.Name || d.Keep < 0 {
@@ -578,7 +491,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		record = Dataset{Name: d.Name, Title: d.Title, Keep: d.Keep, Marking: d.Marking}
 	case platform.AssetPipeline:
 		var d PipelineDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return nil, err
 		}
 		if d.Name != asset.Ref.Name || d.Input == "" || d.OutputEnterprise != nil {
@@ -603,7 +516,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		record = Pipeline{Name: d.Name, Title: d.Title, Input: input, Steps: d.Steps, Expectations: d.Expectations, OutputDataset: output, OutputObject: d.OutputObject, Key: d.Key, Every: d.Every}
 	case platform.AssetWriteback:
 		var d WritebackDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return nil, err
 		}
 		if d.Name != asset.Ref.Name || d.Connection == "" || d.Object == "" || d.On == "" {
@@ -616,7 +529,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		record = Writeback{Name: d.Name, Title: d.Title, Connection: conn, Object: d.Object, On: d.On, Method: d.Method, Path: d.Path, Mapping: d.Mapping, Result: d.Result}
 	case platform.AssetMatching:
 		var d MatchingDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return nil, err
 		}
 		if d.Name != asset.Ref.Name || d.Object == "" {
@@ -636,7 +549,7 @@ func (b *Build) acceptedIntegration(record any, kind platform.AssetKind) (any, e
 		return nil, fmt.Errorf("accepted integration definition is missing")
 	}
 	var asset platform.ReleaseAsset
-	if err := decodeIntegration([]byte(raw), &asset); err != nil {
+	if err := buildapi.ValueDecodeIntegration([]byte(raw), &asset); err != nil {
 		return nil, err
 	}
 	if asset.Ref.Kind != kind {
@@ -670,7 +583,7 @@ func (b *Build) ExecutionConnection(live Connection) (Connection, error) {
 		var a platform.ReleaseAsset
 		var d ConnectionDefinition
 		_ = json.Unmarshal([]byte(live.Published), &a)
-		if err := decodeIntegration(a.Body, &d); err != nil {
+		if err := buildapi.ValueDecodeIntegration(a.Body, &d); err != nil {
 			return Connection{}, err
 		}
 		if d.Credential && live.Secret == "" {
@@ -678,7 +591,7 @@ func (b *Build) ExecutionConnection(live Connection) (Connection, error) {
 		}
 	}
 	r.Record, r.Address, r.Secret, r.AllowPrivate, r.State, r.Requested, r.Last = live.Record, live.Address, live.Secret, live.AllowPrivate, live.State, live.Requested, live.Last
-	r.Marking = HigherMarking(r.Marking, live.Marking)
+	r.Marking = buildapi.HigherMarking(r.Marking, live.Marking)
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
 }
@@ -689,7 +602,7 @@ func (b *Build) ExecutionDataset(live Dataset) (Dataset, error) {
 	}
 	r := fixed.(Dataset)
 	r.Record, r.Producer, r.Schema, r.Version, r.Last = live.Record, live.Producer, live.Schema, live.Version, live.Last
-	r.Marking = HigherMarking(r.Marking, live.Marking)
+	r.Marking = buildapi.HigherMarking(r.Marking, live.Marking)
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
 }
@@ -724,18 +637,6 @@ func (b *Build) ExecutionMatching(live Match) (Match, error) {
 	return r, nil
 }
 
-// ExecutionVersion identifies the accepted definition itself, including
-// activating a previously retained version rather than the largest ordinal.
-func integrationExecutionVersion(raw string) string {
-	var asset platform.ReleaseAsset
-	if json.Unmarshal([]byte(raw), &asset) != nil {
-		return ""
-	}
-	return asset.SourceVersion
-}
-func (s Source) ExecutionVersion() string   { return integrationExecutionVersion(s.Published) }
-func (p Pipeline) ExecutionVersion() string { return integrationExecutionVersion(p.Published) }
-
 func (b *Build) matchingProducer(name string) (platform.AssetRef, error) {
 	var matches []platform.AssetRef
 	for _, kind := range []platform.AssetKind{platform.AssetSource, platform.AssetPipeline} {
@@ -755,77 +656,6 @@ func (b *Build) matchingProducer(name string) (platform.AssetRef, error) {
 	}
 	return matches[0], nil
 }
-func (b *Build) validateIntegrationDependencies(asset platform.ReleaseAsset) error {
-	var expected []platform.AssetRef
-	add := func(kind platform.AssetKind, name string) {
-		if name != "" {
-			expected = append(expected, platform.AssetRef{App: ID, Kind: kind, Name: name})
-		}
-	}
-	object := func(name string) {
-		if name == "" {
-			return
-		}
-		owner := ID
-		if prefix, _, ok := strings.Cut(name, "."); ok {
-			owner = prefix
-		}
-		expected = append(expected, platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: name})
-	}
-	switch asset.Ref.Kind {
-	case platform.AssetSource:
-		var d SourceDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
-			return err
-		}
-		add(platform.AssetConnection, d.Connection)
-		add(platform.AssetDataset, d.Dataset)
-		object(d.Object)
-	case platform.AssetPipeline:
-		var d PipelineDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
-			return err
-		}
-		add(platform.AssetDataset, d.Input)
-		add(platform.AssetDataset, d.OutputDataset)
-		for _, s := range d.Steps {
-			add(platform.AssetDataset, s.Dataset)
-		}
-		object(d.OutputObject)
-	case platform.AssetWriteback:
-		var d WritebackDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
-			return err
-		}
-		add(platform.AssetConnection, d.Connection)
-		object(d.Object)
-		add(platform.AssetAction, d.Object+"."+d.On)
-	case platform.AssetMatching:
-		var d MatchingDefinition
-		if err := decodeIntegration(asset.Body, &d); err != nil {
-			return err
-		}
-		object(d.Object)
-		for _, preference := range d.Prefer {
-			var producers []platform.AssetRef
-			for _, ref := range asset.Requires {
-				if ref.App == ID && (ref.Kind == platform.AssetSource || ref.Kind == platform.AssetPipeline) && ref.Name == preference.Producer {
-					producers = append(producers, ref)
-				}
-			}
-			if len(producers) != 1 {
-				return fmt.Errorf("matching producer lacks its exact release dependency")
-			}
-			expected = append(expected, producers[0])
-		}
-	}
-	slices.SortFunc(expected, func(a, z platform.AssetRef) int { return strings.Compare(a.String(), z.String()) })
-	expected = slices.Compact(expected)
-	if !slices.Equal(expected, asset.Requires) {
-		return fmt.Errorf("integration descriptor dependencies differ from its release closure")
-	}
-	return nil
-}
 
 func validateIntegrationFamily(record any, current platform.ReleaseAsset) error {
 	_, version, raw, history := integrationMetadata(record)
@@ -837,14 +667,14 @@ func validateIntegrationFamily(record any, current platform.ReleaseAsset) error 
 	found := false
 	for _, image := range history {
 		var asset platform.ReleaseAsset
-		if err := decodeIntegration([]byte(image), &asset); err != nil {
+		if err := buildapi.ValueDecodeIntegration([]byte(image), &asset); err != nil {
 			return err
 		}
-		ordinal, err := integrationOrdinal(asset)
+		ordinal, err := buildapi.ValueIntegrationOrdinal(asset)
 		if err != nil {
 			return err
 		}
-		if err := validateIntegrationDescriptor(asset); err != nil {
+		if err := buildapi.ValueValidateIntegrationDescriptor(asset); err != nil {
 			return err
 		}
 		if asset.Ref != current.Ref || asset.ContractVersion != 1 {
@@ -876,7 +706,7 @@ func (b *Build) freezeDirectIntegration(kind platform.AssetKind, record any) (an
 	}
 	if raw != "" {
 		var prior platform.ReleaseAsset
-		if err := decodeIntegration([]byte(raw), &prior); err != nil {
+		if err := buildapi.ValueDecodeIntegration([]byte(raw), &prior); err != nil {
 			return nil, err
 		}
 		prior.SourceVersion = asset.SourceVersion
@@ -896,64 +726,6 @@ func (b *Build) freezeDirectIntegration(kind platform.AssetKind, record any) (an
 		return nil, err
 	}
 	return fixed, nil
-}
-
-func validateIntegrationDescriptor(asset platform.ReleaseAsset) error {
-	if asset.Ref.App != ID || !integrationKind(asset.Ref.Kind) || asset.ContractVersion != 1 {
-		return fmt.Errorf("unsupported integration descriptor")
-	}
-	if _, err := integrationOrdinal(asset); err != nil {
-		return err
-	}
-	var record any
-	switch asset.Ref.Kind {
-	case platform.AssetConnection:
-		record = new(ConnectionDefinition)
-	case platform.AssetSource:
-		record = new(SourceDefinition)
-	case platform.AssetDataset:
-		record = new(DatasetDefinition)
-	case platform.AssetPipeline:
-		record = new(PipelineDefinition)
-	case platform.AssetWriteback:
-		record = new(WritebackDefinition)
-	case platform.AssetMatching:
-		record = new(MatchingDefinition)
-	}
-	if err := decodeIntegration(asset.Body, record); err != nil {
-		return err
-	}
-	value := reflect.ValueOf(record).Elem()
-	if value.FieldByName("Name").String() != asset.Ref.Name || asset.Ref.Check() != nil || value.FieldByName("Title").String() == "" {
-		return fmt.Errorf("integration descriptor identity or title is invalid")
-	}
-	switch d := record.(type) {
-	case *ConnectionDefinition:
-		if !slices.Contains(ConnectionKinds, d.Kind) || !slices.Contains([]string{"", "internal", "confidential", "restricted"}, d.Marking) {
-			return fmt.Errorf("unknown connection kind")
-		}
-	case *SourceDefinition:
-		if d.Connection == "" || strings.Contains(d.URL, "://") || !slices.Contains([]string{"", "json", "csv", "odata", "table"}, d.Profile) {
-			return fmt.Errorf("invalid portable source")
-		}
-	case *DatasetDefinition:
-		if d.Keep < 0 || !slices.Contains([]string{"", "internal", "confidential", "restricted"}, d.Marking) {
-			return fmt.Errorf("invalid dataset retention or marking")
-		}
-	case *PipelineDefinition:
-		if d.Input == "" || d.OutputEnterprise != nil || (d.OutputDataset == "") == (d.OutputObject == "") {
-			return fmt.Errorf("invalid portable pipeline")
-		}
-	case *WritebackDefinition:
-		if d.Connection == "" || d.Object == "" || d.On == "" || strings.ContainsAny(d.On, "./ ") || strings.Contains(d.Path, "://") {
-			return fmt.Errorf("invalid portable writeback")
-		}
-	case *MatchingDefinition:
-		if d.Object == "" || len(d.Keys) == 0 && len(d.Prefer) == 0 {
-			return fmt.Errorf("invalid matching rule")
-		}
-	}
-	return (&Build{}).validateIntegrationDependencies(asset)
 }
 
 func equalIntegrationAsset(a, z platform.ReleaseAsset) bool {
@@ -977,7 +749,7 @@ func retainedExecutionEquivalent(record any, issuedVersion string) (bool, error)
 		return false, nil
 	}
 	var current platform.ReleaseAsset
-	if err := decodeIntegration([]byte(accepted), &current); err != nil {
+	if err := buildapi.ValueDecodeIntegration([]byte(accepted), &current); err != nil {
 		return false, err
 	}
 	if err := validateIntegrationFamily(record, current); err != nil {
@@ -991,7 +763,7 @@ func retainedExecutionEquivalent(record any, issuedVersion string) (bool, error)
 	}
 	for _, raw := range history {
 		var issued platform.ReleaseAsset
-		if err := decodeIntegration([]byte(raw), &issued); err != nil {
+		if err := buildapi.ValueDecodeIntegration([]byte(raw), &issued); err != nil {
 			return false, err
 		}
 		if issued.SourceVersion != issuedVersion {
@@ -1016,14 +788,14 @@ func canonicalIntegrationExecution(asset platform.ReleaseAsset) ([]byte, error) 
 	switch asset.Ref.Kind {
 	case platform.AssetSource:
 		var definition SourceDefinition
-		if err := decodeIntegration(asset.Body, &definition); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &definition); err != nil {
 			return nil, err
 		}
 		definition.Title = ""
 		return json.Marshal(definition)
 	case platform.AssetPipeline:
 		var definition PipelineDefinition
-		if err := decodeIntegration(asset.Body, &definition); err != nil {
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &definition); err != nil {
 			return nil, err
 		}
 		definition.Title = ""

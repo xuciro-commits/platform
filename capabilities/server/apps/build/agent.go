@@ -170,12 +170,12 @@ func (b *Build) agentDeclarations() []platform.Agent {
 	slices.Sort(names)
 	out := make([]platform.Agent, 0, len(names))
 	for _, name := range names {
-		out = append(out, b.agents[name].definition())
+		out = append(out, b.agents[name].Definition())
 	}
 	return out
 }
 
-func (a Agent) definition() platform.Agent {
+func (a Agent) Definition() platform.Agent {
 	checkpoints := slices.Clone(a.Checkpoints)
 	role := a.HandoffRole
 	d := platform.Agent{Name: a.Name, Title: a.Title, Description: a.Description, Instructions: a.Instructions, Tools: slices.Clone(a.Tools),

@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
 	"slices"
 	"strconv"
@@ -160,23 +161,23 @@ func (b *Build) PublishedPage(name string) (bool, error) {
 }
 
 func (b *Build) validateObjectInstallation(record Object) error {
-	if processes := b.host.Processes(); processes != nil {
+	if processes := b.host.BuildProcesses(); processes != nil {
 		current, exists := platform.Get[Object](b.host.Automation(platform.Caller{}, ID), record.ID)
 		if previous, ok := wasPublished[Object](current.Published); exists && ok {
-			oldBody, err := definitionBody(previous, TypeOf(previous.Name))
+			oldBody, err := definitionBody(previous, buildapi.TypeOf(previous.Name))
 			if err != nil {
 				return err
 			}
-			newBody, err := definitionBody(record, TypeOf(record.Name))
+			newBody, err := definitionBody(record, buildapi.TypeOf(record.Name))
 			if err != nil {
 				return err
 			}
 			if string(oldBody) != string(newBody) {
-				running, err := processes.HasRunningDependency(TypeOf(previous.Name))
+				running, err := processes.HasRunningDependency(buildapi.TypeOf(previous.Name))
 				if err != nil {
 					return err
 				}
-				if running && !CompatibleObjectExpansion(previous, record) {
+				if running && !buildapi.CompatibleObjectExpansion(previous, record) {
 					return fmt.Errorf("finish the running processes before changing their object definition")
 				}
 			}
@@ -198,7 +199,7 @@ func (b *Build) validateObjectInstallation(record Object) error {
 		if err != nil {
 			return err
 		}
-		if installed.Object != entity.Type && installed.Object != TypeOf(previous.Name) {
+		if installed.Object != entity.Type && installed.Object != buildapi.TypeOf(previous.Name) {
 			continue
 		}
 		if problem := b.checkFlowOn(installed, entity); problem != nil {
@@ -210,52 +211,6 @@ func (b *Build) validateObjectInstallation(record Object) error {
 		return err
 	}
 	return b.host.ValidateInstallDependents(entity, platform.EntityActions(entity), generated, pages...)
-}
-
-// Adding an optional scalar cannot change the meaning of an existing process:
-// every old field, state, access rule and action remains exactly as declared.
-// New actions may consume the new field; host activation still needs a plan
-// when the object already stores rows.
-func CompatibleObjectExpansion(previous, next Object) bool {
-	if previous.Name != next.Name || len(next.Fields) <= len(previous.Fields) || len(previous.States) != len(next.States) || len(previous.Access) != len(next.Access) {
-		return false
-	}
-	for i, state := range previous.States {
-		if !reflect.DeepEqual(state, next.States[i]) {
-			return false
-		}
-	}
-	for i, access := range previous.Access {
-		if !reflect.DeepEqual(access, next.Access[i]) {
-			return false
-		}
-	}
-	equal := func(a, b any) bool {
-		x, xe := json.Marshal(a)
-		y, ye := json.Marshal(b)
-		return xe == nil && ye == nil && string(x) == string(y)
-	}
-	for _, field := range previous.Fields {
-		index := slices.IndexFunc(next.Fields, func(other Field) bool { return other.Name == field.Name })
-		if index < 0 || !equal(field, next.Fields[index]) {
-			return false
-		}
-	}
-	for _, action := range previous.Actions {
-		index := slices.IndexFunc(next.Actions, func(other Action) bool { return other.Name == action.Name })
-		if index < 0 || !equal(action, next.Actions[index]) {
-			return false
-		}
-	}
-	for _, field := range next.Fields {
-		if slices.ContainsFunc(previous.Fields, func(old Field) bool { return old.Name == field.Name }) {
-			continue
-		}
-		if field.Required || field.Ref != "" || field.Property != nil || field.Choices != "" || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {
-			return false
-		}
-	}
-	return true
 }
 
 // An explicitly published page owns its name after it replaces an object's
@@ -302,7 +257,7 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 		if saved.ID != record.ID {
 			return nil, fmt.Errorf("published object %s belongs to another record", record.ID)
 		}
-		ref := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: TypeOf(saved.Name)}
+		ref := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: buildapi.TypeOf(saved.Name)}
 		body, err := definitionBody(saved, ref.Name)
 		if err != nil {
 			return nil, err
@@ -417,7 +372,7 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 
 func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseAsset, error) {
 	fl := platform.Flow{Name: saved.Name, Subject: saved.Object}
-	ref := platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: TypeOf(fl.Name)}
+	ref := platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: buildapi.TypeOf(fl.Name)}
 	var subject platform.AssetRef
 	if fl.Subject != "" {
 		owner, _, _ := strings.Cut(fl.Subject, ".")
@@ -478,7 +433,7 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 		if step.Flow != "" {
 			name := step.Flow
 			if !strings.HasPrefix(name, ID+".") {
-				name = TypeOf(name)
+				name = buildapi.TypeOf(name)
 			}
 			dependencies = append(dependencies, platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: name})
 		}
@@ -524,11 +479,11 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 		Requires: requires, Body: body}, err
 }
 
-// ProcessFromReleaseAsset reconstructs the bounded owner definition, checking
+// ProcessFromAsset reconstructs the bounded owner definition, checking
 // that its compiled bindings are exactly the ones in the release envelope.
 // A sandbox assigns its own native version ordinal; that counter is not the
 // semantic content identity or a dependency version.
-func ProcessFromReleaseAsset(asset platform.ReleaseAsset) (Process, error) {
+func (b *Build) ProcessFromAsset(asset platform.ReleaseAsset) (Process, error) {
 	var envelope platform.FlowReleaseDescriptor
 	var p Process
 	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetFlow || asset.ContractVersion != 1 {

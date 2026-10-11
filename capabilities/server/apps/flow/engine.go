@@ -11,7 +11,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/work"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
@@ -478,7 +477,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 			return
 		}
 		x.Seq++
-		if ref.GetType() == work.ApprovalType {
+		if ref.GetType() == platform.WorkApprovalType {
 			tok.Waits, tok.Child = "approval", ref.GetId()
 			if due, ok := ss.timeout(x, step); ok {
 				tok.Due = due
@@ -1133,14 +1132,11 @@ func target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.
 // days in the calendar of whom the instance runs for, else the tenant's (ADR-0028 D7).
 func (ss *session) timeout(x *FlowInstance, step *platform.Step) (time.Time, bool) {
 	if step.WorkingDays > 0 {
-		cal := platform.Calendar{}
-		if d := ss.f.host.Directory(); d != nil {
-			party := ""
-			if x.OnBehalf != "" {
-				party = "member:" + x.OnBehalf
-			}
-			cal = d.Calendar(party, ss.now.UTC().Format(time.DateOnly))
+		party := ""
+		if x.OnBehalf != "" {
+			party = "member:" + x.OnBehalf
 		}
+		cal := ss.f.host.Calendar(party, ss.now.UTC().Format(time.DateOnly))
 		return cal.After(ss.now, step.WorkingDays), true
 	}
 	return ss.now.Add(step.Timeout), step.Timeout > 0

@@ -20,6 +20,8 @@ type SimulationSample struct {
 }
 
 type simulationEnvironment struct {
+	Factories map[string]platform.SimulationFactory
+	Identity  platform.SimulationIdentityFactory
 	Modules   map[string][]byte
 	Manifests []platform.Manifest
 	Samples   []SimulationSample
@@ -55,7 +57,15 @@ func (a *sampleOwner) Input(platform.Caller, string, []byte, time.Time) (any, *k
 }
 
 func (t *Tenant) simulationEnvironment(candidate platform.ReleaseCandidate, samples []SimulationSample) (simulationEnvironment, error) {
-	environment := simulationEnvironment{Modules: map[string][]byte{}, Samples: samples}
+	environment := simulationEnvironment{Modules: map[string][]byte{}, Samples: samples, Factories: map[string]platform.SimulationFactory{}}
+	for _, app := range t.apps {
+		if factory, ok := app.(platform.SimulationIdentityFactory); ok {
+			environment.Identity = factory
+		}
+		if factory, ok := app.(platform.SimulationFactory); ok {
+			environment.Factories[app.Manifest().ID] = factory
+		}
+	}
 	selected := map[platform.AssetRef]bool{}
 	owners := map[string]bool{}
 	for _, asset := range candidate.Assets {

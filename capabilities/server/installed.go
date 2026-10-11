@@ -316,9 +316,7 @@ func (t *Tenant) checkSection(p platform.Page, page platform.EntityInfo, i int, 
 		return fmt.Errorf("%s: width %q is neither full nor half", where, s.Width)
 	}
 	if s.Widget == "ai-assistant" {
-		owner, ok := t.app(s.Function.Ref.App).(interface {
-			FunctionReleaseAsset(string, string) (platform.ReleaseAsset, error)
-		})
+		owner, ok := t.app(s.Function.Ref.App).(platform.RetainedFunctionAssets)
 		if !ok {
 			return fmt.Errorf("AI function owner is unavailable")
 		}
@@ -344,9 +342,7 @@ func (t *Tenant) checkSection(p platform.Page, page platform.EntityInfo, i int, 
 			s.Object.Name != "" && s.Object != p.Object || len(s.Fields) != 0 || len(s.Actions) != 0 || s.Query.Name != "" || s.Relation != "" {
 			return fmt.Errorf("%s: a function must bind one retained version on this page's object", where)
 		}
-		owner, ok := t.app(s.Function.Ref.App).(interface {
-			FunctionReleaseAsset(string, string) (platform.ReleaseAsset, error)
-		})
+		owner, ok := t.app(s.Function.Ref.App).(platform.RetainedFunctionAssets)
 		if !ok {
 			return fmt.Errorf("%s: the function has no published call owner", where)
 		}

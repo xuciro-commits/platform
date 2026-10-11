@@ -19,7 +19,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -32,59 +31,24 @@ const aiTimeout = 120 * time.Second
 
 // Message is one turn of a conversation, as the OpenAI wire has it: a
 // system, user or assistant turn, an assistant's tool calls, or a tool's result.
-type Message struct {
-	Role       string     `json:"role"` // system, user, assistant, tool
-	Content    string     `json:"content"`
-	ToolCalls  []ToolCall `json:"toolCalls,omitempty"`
-	ToolCallID string     `json:"toolCallId,omitempty"` // a tool turn: the call it answers
-}
+type Message = platform.Message
 
 // Tool is a function the model may call (ADR-0021): a name, what it does, and
 // its parameters as JSON Schema properties.
-type Tool struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Properties  map[string]any `json:"properties"`
-	Required    []string       `json:"required,omitempty"`
-}
+type Tool = platform.Tool
 
 // ToolCall is a model's call of a tool, with its arguments as JSON.
-type ToolCall struct {
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
-	Arguments json.RawMessage `json:"arguments"`
-}
+type ToolCall = platform.ToolCall
 
 // ChatRequest is a member's call: a model by name ("<provider>/<model>") and the conversation.
-type ChatRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Tools       []Tool    `json:"tools,omitempty"`
-	MaxTokens   int       `json:"maxTokens,omitempty"`
-	Temperature *float64  `json:"temperature,omitempty"`
-	// Stream answers token by token as server-sent events (ADR-0029 D2);
-	// usage is journaled once, when the call ends.
-	Stream bool         `json:"stream,omitempty"`
-	run    string       // the agent run or evaluation the call is for, on its transcript
-	delta  func(string) // where a streamed call's tokens go
-}
+type ChatRequest = platform.ChatRequest
 
 // ChatAnswer is what the model answered, with the call's usage.
-type ChatAnswer struct {
-	Content   string     `json:"content"`
-	ToolCalls []ToolCall `json:"toolCalls,omitempty"`
-	Usage     ai.Usage   `json:"usage"`
-}
+type ChatAnswer = platform.ChatAnswer
 
 // AIError is a call the provider did not answer or refused, or one a limit
 // kept from the provider (Quota, ADR-0029 D1).
-type AIError struct {
-	Status int    `json:"status,omitempty"` // the provider's HTTP status
-	Detail string `json:"detail"`
-	Quota  bool   `json:"quota,omitempty"`
-}
-
-func (e *AIError) Error() string { return e.Detail }
+type AIError = platform.AIError
 
 // unavailable is a failure that says the provider is down or overloaded, not
 // that the request was wrong: no answer, a rate limit or a server error.
@@ -97,23 +61,23 @@ func unavailable(e *AIError) bool {
 type models interface {
 	platform.App
 	Snapshot() (json.RawMessage, error)
-	Callable(m platform.Member, name string) (ai.Model, ai.Provider, *kernel.Error)
-	Model(name string) (ai.Model, ai.Provider, *kernel.Error)
-	Provider(id string) (ai.Provider, bool)
-	Meter(u ai.Usage)
+	Callable(m platform.Member, name string) (platform.AIModel, platform.AIProvider, *kernel.Error)
+	Model(name string) (platform.AIModel, platform.AIProvider, *kernel.Error)
+	Provider(id string) (platform.AIProvider, bool)
+	Meter(u platform.AIUsage)
 	Spent(member string, now time.Time) int
-	Reserve(m platform.Member, model ai.Model, d ai.Defaults, now time.Time) string
-	Usage() []ai.Usage
+	Reserve(m platform.Member, model platform.AIModel, d platform.AIDefaults, now time.Time) string
+	Usage() []platform.AIUsage
 }
 
 // limits are the defaults a member without its own takes (ADR-0029 D1).
-func (t *Tenant) limits() ai.Defaults {
+func (t *Tenant) limits() platform.AIDefaults {
 	number := func(app, name string) int {
 		n, _ := strconv.Atoi(t.setting(t.automation(app, false), name))
 		return n
 	}
-	return ai.Defaults{People: number(ai.ID, ai.SettingDailyTokens), Agents: number(AgentApp, SettingAgentDaily),
-		PerMinute: number(ai.ID, ai.SettingPerMinute)}
+	return platform.AIDefaults{People: number(platform.AIApp, platform.AISettingDailyTokens), Agents: number(AgentApp, SettingAgentDaily),
+		PerMinute: number(platform.AIApp, platform.AISettingPerMinute)}
 }
 
 // reserve takes the door every model call passes — members', agents',
@@ -121,7 +85,7 @@ func (t *Tenant) limits() ai.Defaults {
 // and counts it in flight until its usage is metered, both under one lock.
 // Calls that start together would each pass the same limit without it
 // (ADR-0050 D4, review AI-03).
-func (t *Tenant) reserve(m platform.Member, model ai.Model, now time.Time) string {
+func (t *Tenant) reserve(m platform.Member, model platform.AIModel, now time.Time) string {
 	if t.ai == nil {
 		return ""
 	}
@@ -131,7 +95,7 @@ func (t *Tenant) reserve(m platform.Member, model ai.Model, now time.Time) strin
 // mostTokens is the most tokens one answer may ask for (platform setting); 0:
 // the provider's own default. An answer a caller asks to be longer is capped.
 func (t *Tenant) mostTokens() int {
-	n, _ := strconv.Atoi(t.setting(t.automation(ai.ID, false), ai.SettingMaxTokens))
+	n, _ := strconv.Atoi(t.setting(t.automation(platform.AIApp, false), platform.AISettingMaxTokens))
 	return n
 }
 
@@ -159,7 +123,7 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time, delta .
 		return ChatAnswer{}, nil, &AIError{Status: http.StatusTooManyRequests, Detail: why, Quota: true}
 	}
 	if len(delta) > 0 && len(req.Tools) == 0 {
-		req.delta = delta[0]
+		req.Delta = delta[0]
 	}
 	answer, failure := t.call(pv, model, m, req, now)
 	if err := t.meter(m, answer.Usage); err != nil {
@@ -169,7 +133,7 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time, delta .
 }
 
 // call calls a model once, outside the tenant's lock; the caller meters it.
-func (t *Tenant) call(pv ai.Provider, model ai.Model, m platform.Member, req ChatRequest, now time.Time) (ChatAnswer, *AIError) {
+func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform.Member, req ChatRequest, now time.Time) (ChatAnswer, *AIError) {
 	// The platform's ceiling on one answer, at the one place every call passes:
 	// a caller may ask for less, never for more; asking for nothing takes the
 	// ceiling, so no adapter's own default outgrows the tenant's setting
@@ -197,8 +161,8 @@ func (t *Tenant) call(pv ai.Provider, model ai.Model, m platform.Member, req Cha
 		}
 		u.Input, u.Output, u.TokensEstimated = estimateTokens(string(request)), estimateTokens(said), true
 	}
-	if req.delta != nil && failure == nil && pv.Wire == "anthropic" { // no stream on this wire yet: the answer at once
-		req.delta(answer.Content)
+	if req.Delta != nil && failure == nil && pv.Wire == "anthropic" { // no stream on this wire yet: the answer at once
+		req.Delta(answer.Content)
 	}
 	span.SetAttributes(attribute.Int("gen_ai.usage.input_tokens", u.Input), attribute.Int("gen_ai.usage.output_tokens", u.Output))
 	if failure != nil {
@@ -217,7 +181,7 @@ func (t *Tenant) call(pv ai.Provider, model ai.Model, m platform.Member, req Cha
 	answer.Usage = u
 	request, _ := json.Marshal(req)
 	reply, _ := json.Marshal(answer)
-	t.transcribe(Transcript{At: now, Member: m.ID, Model: model.Name(), Run: req.run, Request: request, Answer: reply, Outcome: u.Outcome})
+	t.transcribe(Transcript{At: now, Member: m.ID, Model: model.Name(), Run: req.Run, Request: request, Answer: reply, Outcome: u.Outcome})
 	return answer, failure
 }
 
@@ -232,7 +196,7 @@ func estimateTokens(text string) int {
 }
 
 // meter journals a call's usage, then applies it.
-func (t *Tenant) meter(m platform.Member, u ai.Usage) *kernel.Error {
+func (t *Tenant) meter(m platform.Member, u platform.AIUsage) *kernel.Error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
@@ -263,7 +227,7 @@ func openAIMessages(ms []Message) []map[string]any {
 }
 
 // complete makes one call on the OpenAI Chat Completions wire.
-func (t *Tenant) complete(pv ai.Provider, model string, req ChatRequest) (ChatAnswer, ai.Usage, *AIError) {
+func (t *Tenant) complete(pv platform.AIProvider, model string, req ChatRequest) (ChatAnswer, platform.AIUsage, *AIError) {
 	body := map[string]any{"model": model, "messages": openAIMessages(req.Messages)}
 	if len(req.Tools) > 0 {
 		tools := []map[string]any{}
@@ -279,19 +243,19 @@ func (t *Tenant) complete(pv ai.Provider, model string, req ChatRequest) (ChatAn
 	if req.Temperature != nil {
 		body["temperature"] = *req.Temperature
 	}
-	if req.delta != nil && pv.Wire != "anthropic" {
-		return t.completeStream(pv, model, body, req.delta)
+	if req.Delta != nil && pv.Wire != "anthropic" {
+		return t.completeStream(pv, model, body, req.Delta)
 	}
 	raw, _ := json.Marshal(body)
 	status, answer, failure := t.aiRequest(pv, http.MethodPost, "/chat/completions", raw, aiTimeout)
 	if failure != nil {
-		return ChatAnswer{}, ai.Usage{}, failure
+		return ChatAnswer{}, platform.AIUsage{}, failure
 	}
 	return completion(status, answer, model)
 }
 
 // completion reads a chat completion's answer on the OpenAI wire.
-func completion(status int, answer []byte, model string) (ChatAnswer, ai.Usage, *AIError) {
+func completion(status int, answer []byte, model string) (ChatAnswer, platform.AIUsage, *AIError) {
 	var out struct {
 		Model   string `json:"model"`
 		Choices []struct {
@@ -316,21 +280,21 @@ func completion(status int, answer []byte, model string) (ChatAnswer, ai.Usage, 
 		} `json:"error"`
 	}
 	if json.Unmarshal(answer, &out) != nil {
-		return ChatAnswer{}, ai.Usage{}, &AIError{Status: status, Detail: "unreadable answer"}
+		return ChatAnswer{}, platform.AIUsage{}, &AIError{Status: status, Detail: "unreadable answer"}
 	}
 	if out.Error != nil || status >= 300 || len(out.Choices) == 0 {
 		detail := http.StatusText(status)
 		if out.Error != nil {
 			detail = out.Error.Message
 		}
-		return ChatAnswer{}, ai.Usage{}, &AIError{Status: status, Detail: detail}
+		return ChatAnswer{}, platform.AIUsage{}, &AIError{Status: status, Detail: detail}
 	}
 	if out.Usage != nil && (out.Usage.Prompt != nil && *out.Usage.Prompt < 0 ||
 		out.Usage.Completion != nil && *out.Usage.Completion < 0 ||
 		out.Usage.Cost != nil && *out.Usage.Cost < 0) {
-		return ChatAnswer{}, ai.Usage{}, &AIError{Status: http.StatusBadGateway, Detail: "the provider reported invalid model usage"}
+		return ChatAnswer{}, platform.AIUsage{}, &AIError{Status: http.StatusBadGateway, Detail: "the provider reported invalid model usage"}
 	}
-	u := ai.Usage{}
+	u := platform.AIUsage{}
 	if out.Usage != nil {
 		if out.Usage.Prompt != nil && out.Usage.Completion != nil {
 			u.Input, u.Output, u.TokensReported = *out.Usage.Prompt, *out.Usage.Completion, true
@@ -353,14 +317,14 @@ func completion(status int, answer []byte, model string) (ChatAnswer, ai.Usage, 
 // completeStream asks for the answer as server-sent events on the OpenAI
 // wire, hands each piece of content to delta, and reads the usage the last
 // event carries (stream_options.include_usage).
-func (t *Tenant) completeStream(pv ai.Provider, model string, body map[string]any, delta func(string)) (ChatAnswer, ai.Usage, *AIError) {
+func (t *Tenant) completeStream(pv platform.AIProvider, model string, body map[string]any, delta func(string)) (ChatAnswer, platform.AIUsage, *AIError) {
 	body["stream"], body["stream_options"] = true, map[string]any{"include_usage": true}
 	raw, _ := json.Marshal(body)
 	ctx, cancel := context.WithTimeout(context.Background(), aiTimeout)
 	defer cancel()
 	resp, failure := t.aiSend(ctx, pv, http.MethodPost, "/chat/completions", raw)
 	if failure != nil {
-		return ChatAnswer{}, ai.Usage{}, failure
+		return ChatAnswer{}, platform.AIUsage{}, failure
 	}
 	defer resp.Body.Close()
 	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") { // a server that does not stream: the answer at once
@@ -372,7 +336,7 @@ func (t *Tenant) completeStream(pv ai.Provider, model string, body map[string]an
 		return reply, u, failure
 	}
 	var content strings.Builder
-	var u ai.Usage
+	var u platform.AIUsage
 	lines := bufio.NewScanner(resp.Body)
 	lines.Buffer(make([]byte, 64<<10), 1<<20)
 	for lines.Scan() {
@@ -404,7 +368,7 @@ func (t *Tenant) completeStream(pv ai.Provider, model string, body map[string]an
 			if chunk.Usage.Prompt != nil && *chunk.Usage.Prompt < 0 ||
 				chunk.Usage.Completion != nil && *chunk.Usage.Completion < 0 ||
 				chunk.Usage.Cost != nil && *chunk.Usage.Cost < 0 {
-				return ChatAnswer{Content: content.String()}, ai.Usage{}, &AIError{Status: http.StatusBadGateway, Detail: "the provider reported invalid model usage"}
+				return ChatAnswer{Content: content.String()}, platform.AIUsage{}, &AIError{Status: http.StatusBadGateway, Detail: "the provider reported invalid model usage"}
 			}
 			if chunk.Usage.Prompt != nil && chunk.Usage.Completion != nil {
 				u.Input, u.Output, u.TokensReported = *chunk.Usage.Prompt, *chunk.Usage.Completion, true
@@ -425,7 +389,7 @@ func (t *Tenant) completeStream(pv ai.Provider, model string, body map[string]an
 
 // aiRequest sends one request to a provider with its key, through the dialer
 // that refuses private addresses unless the provider is local.
-func (t *Tenant) aiRequest(pv ai.Provider, method, path string, body []byte, timeout time.Duration) (int, []byte, *AIError) {
+func (t *Tenant) aiRequest(pv platform.AIProvider, method, path string, body []byte, timeout time.Duration) (int, []byte, *AIError) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	resp, failure := t.aiSend(ctx, pv, method, path, body)
@@ -438,7 +402,7 @@ func (t *Tenant) aiRequest(pv ai.Provider, method, path string, body []byte, tim
 }
 
 // aiSend sends a request to a provider with its key; the caller reads and closes the answer.
-func (t *Tenant) aiSend(ctx context.Context, pv ai.Provider, method, path string, body []byte) (*http.Response, *AIError) {
+func (t *Tenant) aiSend(ctx context.Context, pv platform.AIProvider, method, path string, body []byte) (*http.Response, *AIError) {
 	req, _ := http.NewRequestWithContext(ctx, method, pv.BaseURL+path, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if pv.Secret != "" {
@@ -460,7 +424,7 @@ func (t *Tenant) aiSend(ctx context.Context, pv ai.Provider, method, path string
 
 // aiHTTP is the client model calls go through: the test's, or one whose dialer
 // refuses private addresses unless the provider is local.
-func (t *Tenant) aiHTTP(pv ai.Provider) interface {
+func (t *Tenant) aiHTTP(pv platform.AIProvider) interface {
 	Do(*http.Request) (*http.Response, error)
 } {
 	if t.AIClient != nil {
@@ -499,7 +463,7 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 	if t.ai == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
 	}
-	if m.Roles[ai.ID] != ai.Admin {
+	if m.Roles[platform.AIApp] != platform.AIAdmin {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}, nil
 	}
 	pv, ok := t.ai.Provider(provider)
@@ -593,7 +557,7 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 	// Resolve the administrator's default in the accepted decision. A queued
 	// request must not switch models when settings change before dispatch or
 	// retry. An empty binding stays empty and is refused without provider I/O.
-	model := cmp.Or(q.Model, t.setting(t.automation(ai.ID, false), ai.SettingAppModel))
+	model := cmp.Or(q.Model, t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel))
 	body, _ := json.Marshal(modelAsk{Model: model, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target, Evaluation: q.Evaluation, EvaluationConfig: q.EvaluationConfig, EvaluationFunction: q.EvaluationFunction})
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
@@ -615,7 +579,7 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 
 // sendModel makes one attempt of a model request: delivered with the answer,
 // retried while the provider or a limit keeps it, rejected when it cannot be asked.
-func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, *ai.Usage) {
+func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
 	out := platform.Outcome{Effect: x.ID}
 	var ask modelAsk
 	if json.Unmarshal([]byte(x.Body), &ask) != nil {
@@ -670,7 +634,7 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 		out.Result, out.Detail = "retry", why
 		return out, nil
 	}
-	answer, failure := t.call(pv, enabled, m, ChatRequest{Model: model, Messages: messages, MaxTokens: ask.Prompt.MaxTokens, run: x.ID}, now)
+	answer, failure := t.call(pv, enabled, m, ChatRequest{Model: model, Messages: messages, MaxTokens: ask.Prompt.MaxTokens, Run: x.ID}, now)
 	switch {
 	case failure != nil && unavailable(failure):
 		out.Result, out.Detail = "retry", failure.Detail
@@ -690,7 +654,7 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 	return out, &answer.Usage
 }
 
-func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome, usage *ai.Usage) (platform.App, *pb.Submission) {
+func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome, usage *platform.AIUsage) (platform.App, *pb.Submission) {
 	var ask modelAsk
 	json.Unmarshal([]byte(x.Body), &ask)
 	app := t.app(x.App)

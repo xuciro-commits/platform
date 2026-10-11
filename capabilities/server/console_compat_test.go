@@ -75,13 +75,13 @@ func TestAcceptedConsoleEnterpriseRenameReplay(t *testing.T) {
 		t.Fatal("recovery rewrote the historical directory image")
 	}
 	byID, _ := restored.Member("admin")
-	bySubject, _ := d.Member("user:admin@example.test")
+	bySubject, _ := d.MemberBySubject("user:admin@example.test")
 	for _, member := range []platform.Member{byID, bySubject} {
 		if member.Roles["enterprise"] != "admin" || member.Roles["org"] != "" {
 			t.Fatal("legacy role not projected to current owner")
 		}
 	}
-	if got := d.holding("enterprise", "admin"); len(got) != 1 || d.Identities()[0].Roles["enterprise"] != "admin" {
+	if got := d.Holding("enterprise", "admin"); len(got) != 1 || d.Identities()[0].Roles["enterprise"] != "admin" {
 		t.Fatal("identity/role-holder paths missed the projection")
 	}
 	attach(restored)
@@ -124,11 +124,11 @@ func TestRetiredMemberLanguageReplaysWithoutReopeningAction(t *testing.T) {
 	if err := tn.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	d := consoleOf(tn)
+	d := testConsoleOf(tn)
 	if got := d.Account("admin").Effective.Language; got != "zh-CN" {
 		t.Fatalf("legacy preference lost: %q", got)
 	}
-	if got := d.language("admin"); got != "zh-CN" {
+	if got := d.Language("admin"); got != "zh-CN" {
 		t.Fatal("legacy notification language lost")
 	}
 	for _, action := range tn.Catalog(admin) {

@@ -8,13 +8,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"platformserver/internal/host"
 	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -76,7 +77,7 @@ func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
 	c := t.automation(build.ID, false)
 	writebacks, _, _ := platform.Find[build.Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	var planned []platform.Effect
-	owner := t.app(build.ID).(*build.Build)
+	owner := t.app(build.ID).(host.IntegrationDefinitions)
 	for _, w := range writebacks {
 		w, err := owner.ExecutionWriteback(w)
 		if err != nil {

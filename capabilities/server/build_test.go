@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	buildapi "platformserver/internal/host/buildapi"
 	"slices"
 	"strings"
 	"testing"
@@ -37,7 +38,7 @@ func TestTenantDefinedObject(t *testing.T) {
 		return e.Body, nil
 	}
 	member := func(id string) platform.Member {
-		m, _ := tn.app(PlatformApp).(*Console).Member(id)
+		m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id)
 		return m
 	}
 	keys := 0
@@ -73,7 +74,7 @@ func TestTenantDefinedObject(t *testing.T) {
 		map[string]any{"name": "visit", "title": "Visit", "plural": "Visits", "description": "A guest's visit.", "fields": fields}); got != "ok" {
 		t.Fatalf("draft: %s", got)
 	}
-	if _, err := tn.Records(member("eli"), build.TypeOf("visit"), platform.Query{}, now); err == nil {
+	if _, err := tn.Records(member("eli"), buildapi.TypeOf("visit"), platform.Query{}, now); err == nil {
 		t.Error("a draft was already installed")
 	}
 	if got := do("eli", build.SchemaPublish, build.ObjectType, "O-1", map[string]any{}); got == "ok" {
@@ -84,7 +85,7 @@ func TestTenantDefinedObject(t *testing.T) {
 	}
 
 	// It is now an ordinary type: declared, in the member's entities and catalog.
-	visit := build.TypeOf("visit")
+	visit := buildapi.TypeOf("visit")
 	if !slices.ContainsFunc(tn.Entities(member("eli")), func(info platform.EntityInfo) bool { return info.Type == visit }) {
 		t.Fatalf("the published object is not among eli's entities: %+v", tn.Entities(member("eli")))
 	}

@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"platformserver/platform"
 	"strings"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
-
-	"platformserver/apps/ai"
 )
 
 // Anthropic's Messages API through its official Go SDK (ADR-0015 point 3).
@@ -20,7 +19,7 @@ import (
 
 const anthropicMaxTokens = 16000 // when the caller names no limit (a non-streaming call)
 
-func (t *Tenant) anthropicClient(pv ai.Provider) (anthropic.Client, *AIError) {
+func (t *Tenant) anthropicClient(pv platform.AIProvider) (anthropic.Client, *AIError) {
 	key, ok := t.secret(pv.Secret)
 	if !ok {
 		return anthropic.Client{}, &AIError{Detail: "secret " + pv.Secret + " missing"}
@@ -29,10 +28,10 @@ func (t *Tenant) anthropicClient(pv ai.Provider) (anthropic.Client, *AIError) {
 		option.WithHTTPClient(t.aiHTTP(pv)), option.WithMaxRetries(0), option.WithRequestTimeout(aiTimeout)), nil
 }
 
-func (t *Tenant) completeAnthropic(pv ai.Provider, model string, req ChatRequest) (ChatAnswer, ai.Usage, *AIError) {
+func (t *Tenant) completeAnthropic(pv platform.AIProvider, model string, req ChatRequest) (ChatAnswer, platform.AIUsage, *AIError) {
 	client, failure := t.anthropicClient(pv)
 	if failure != nil {
-		return ChatAnswer{}, ai.Usage{}, failure
+		return ChatAnswer{}, platform.AIUsage{}, failure
 	}
 	params := anthropic.MessageNewParams{Model: model, MaxTokens: anthropicMaxTokens}
 	if req.MaxTokens > 0 {
@@ -77,9 +76,9 @@ func (t *Tenant) completeAnthropic(pv ai.Provider, model string, req ChatRequest
 	flush()
 	resp, err := client.Messages.New(context.Background(), params)
 	if err != nil {
-		return ChatAnswer{}, ai.Usage{}, anthropicFailure(err)
+		return ChatAnswer{}, platform.AIUsage{}, anthropicFailure(err)
 	}
-	u := ai.Usage{Input: int(resp.Usage.InputTokens), Output: int(resp.Usage.OutputTokens), TokensReported: true}
+	u := platform.AIUsage{Input: int(resp.Usage.InputTokens), Output: int(resp.Usage.OutputTokens), TokensReported: true}
 	if string(resp.Model) != model {
 		u.Served = string(resp.Model)
 	}
@@ -100,7 +99,7 @@ func (t *Tenant) completeAnthropic(pv ai.Provider, model string, req ChatRequest
 	return answer, u, nil
 }
 
-func (t *Tenant) anthropicModels(pv ai.Provider) ([]CatalogModel, *AIError) {
+func (t *Tenant) anthropicModels(pv platform.AIProvider) ([]CatalogModel, *AIError) {
 	client, failure := t.anthropicClient(pv)
 	if failure != nil {
 		return nil, failure

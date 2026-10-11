@@ -32,7 +32,7 @@ func TestFiles(t *testing.T) {
 	}
 	tn := build()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
+	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
 	ana, bo := member("ana"), member("bo")
 	n := 0
 	decide := func(m platform.Member, app, schema, typ, id string, payload any) string {

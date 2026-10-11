@@ -96,7 +96,7 @@ func accessActions() []platform.Action {
 func (d *Console) decideAccess(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
-	if id == "" || d.t == nil {
+	if id == "" || d.host == nil {
 		return nil, invalid
 	}
 	day := func(v string) bool { _, err := time.Parse(time.DateOnly, v); return v == "" || err == nil }
@@ -106,7 +106,7 @@ func (d *Console) decideAccess(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		if json.Unmarshal(s.GetPayload(), &p) != nil || len(p.Actions) == 0 {
 			return nil, invalid
 		}
-		app := d.t.app(p.App)
+		app := d.host.App(p.App)
 		if app == nil || !c.Replaying && slices.Contains(app.Manifest().Actions.Roles(), id) && !app.Manifest().Actions.Custom(id) {
 			return nil, invalid // not over a role the app itself declares
 		}
@@ -129,7 +129,7 @@ func (d *Console) decideAccess(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		}
 		return func(*pb.ChangeRecord) {
 			delete(d.roles, id)
-			if app := d.t.app(r.App); app != nil && !c.Staging() {
+			if app := d.host.App(r.App); app != nil && !c.Staging() {
 				app.Manifest().Actions.DefineRole(id, nil)
 			}
 		}, nil
@@ -161,7 +161,7 @@ func (d *Console) decideAccess(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 			}
 		}
 		for i, g := range p.Grants {
-			app := d.t.app(g.App)
+			app := d.host.App(g.App)
 			if app == nil || !slices.Contains(app.Manifest().AllRoles(), g.Role) || !day(g.From) || !day(g.Until) {
 				return nil, invalid
 			}
@@ -190,7 +190,7 @@ func (d *Console) decideDelegate(c platform.Caller, s *pb.Submission) (func(*pb.
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct{ App, Until, Reason string }
 	to := d.members[s.GetTarget().GetId()]
-	if json.Unmarshal(s.GetPayload(), &p) != nil || to == nil || to.ID == c.ID || d.t == nil || d.t.app(p.App) == nil {
+	if json.Unmarshal(s.GetPayload(), &p) != nil || to == nil || to.ID == c.ID || d.host == nil || d.host.App(p.App) == nil {
 		return nil, invalid
 	}
 	if _, err := time.Parse(time.DateOnly, p.Until); err != nil {
@@ -248,14 +248,14 @@ func (d *Console) activePolicies() []authz.Policy {
 // applyAccess puts the custom roles on the apps' catalogs and the policies in
 // their hands, after composition or a restore.
 func (d *Console) applyAccess() {
-	if d.t == nil {
+	if d.host == nil {
 		return
 	}
-	for _, a := range d.t.apps {
+	for _, a := range d.host.Apps() {
 		a.Manifest().Actions.UsePolicies(d.activePolicies)
 	}
 	for _, r := range d.roles {
-		if app := d.t.app(r.App); app != nil {
+		if app := d.host.App(r.App); app != nil {
 			app.Manifest().Actions.DefineRole(r.ID, r.Actions)
 		}
 	}

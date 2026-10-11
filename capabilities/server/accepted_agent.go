@@ -69,14 +69,14 @@ func (t *Tenant) acceptAgentStep(b stepBody, at time.Time) {
 	}()
 	draft := t.newStagedDecision()
 	draft.at = at
-	agent := draft.stateApp(t.agents).(*Agents)
+	agent := draft.stateApp(t.agents).(AgentRuntime)
 	// Authorization and source fences have been rechecked by agentStep while
 	// holding the tenant lock, after the outside model call has completed.
 	run, _ := platform.Get[AgentRunRecord](t.automation(AgentApp, false), b.Run)
 	if b.Evaluation != nil {
 		run.Agent = b.Evaluation.Agent
 	}
-	member := agent.member(run.Agent)
+	member := agent.AgentPrincipal(run.Agent)
 	c := platform.NewCaller(draft, member, AgentApp, false, true)
 	r := acceptedAgent{Version: 1, Kind: "agent-result", Tenant: t.ID, App: AgentApp, Member: member.ID, At: at.UTC(), Step: b}
 	var err error
@@ -87,7 +87,7 @@ func (t *Tenant) acceptAgentStep(b stepBody, at time.Time) {
 			return
 		}
 	}
-	refusal := agent.applyCaller(c, b, at)
+	refusal := agent.ApplyAgentStepCaller(c, b, at)
 	if refusal == nil {
 		refusal = draft.failure
 	}

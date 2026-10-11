@@ -59,7 +59,7 @@ func TestTheHotelDefinesItsOwnObject(t *testing.T) {
 	}
 	w.expect(w.submit("manager", build.ID, build.SchemaPublish, build.ObjectType, "O-LOST", "lf-3", map[string]any{}), "ok")
 
-	lost := build.TypeOf("lostitem")
+	lost := "build.lostitem"
 	w.expect(w.submit("desk", build.ID, lost+".create", lost, "L-1", "lf-4",
 		map[string]any{"guest": "Ada Lovelace", "room": "101", "left": "umbrella"}), "ok")
 	page, err := w.tenant.Records(w.members["desk"], lost, platform.Query{Search: "Ada"}, t0)

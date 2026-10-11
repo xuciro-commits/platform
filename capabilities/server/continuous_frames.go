@@ -9,14 +9,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"platformserver/internal/host"
 	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
-	"platformserver/apps/flow"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -92,31 +92,34 @@ func (s flowFrameStore) Discard(ref platform.FlowStateArtifact) error {
 	return nil
 }
 
-func (t *Tenant) continuousSnapshot(m platform.Member, id string, now time.Time) (*flow.Flows, flow.FlowInstance, platform.Member, *kernel.Error) {
+func (t *Tenant) continuousSnapshot(m platform.Member, id string, now time.Time) (platform.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *kernel.Error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.continuousSnapshotLocked(m, id, now)
 }
 
-func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time.Time) (*flow.Flows, flow.FlowInstance, platform.Member, *kernel.Error) {
+func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time.Time) (platform.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *kernel.Error) {
 	if t.quarantined() || m.Tenant != t.ID {
-		return nil, flow.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
+		return nil, platform.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
 	}
 	current, ok := t.Member(m.ID)
+	// Token scope is part of the original caller, not directory state. Refresh
+	// current grants without widening the read/preparation/acceptance scope.
+	current.Scopes = slices.Clone(m.Scopes)
 	if !ok || t.admits(current) != nil {
-		return nil, flow.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
+		return nil, platform.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
 	}
-	f, ok := t.procs.(*flow.Flows)
+	f, ok := t.procs.(platform.ContinuousFlowOwner)
 	if !ok {
-		return nil, flow.FlowInstance{}, current, unknown()
+		return nil, platform.FlowInstance{}, current, unknown()
 	}
-	v, refusal := t.RecordOf(current, flow.InstanceType, id, now)
+	v, refusal := t.RecordOf(current, platform.FlowInstanceType, id, now)
 	if refusal != nil {
-		return nil, flow.FlowInstance{}, current, refusal
+		return nil, platform.FlowInstance{}, current, refusal
 	}
-	x, ok := v.Record.(flow.FlowInstance)
+	x, ok := v.Record.(platform.FlowInstance)
 	if !ok || x.Withheld || x.OnBehalf != current.ID {
-		return nil, flow.FlowInstance{}, current, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A source batch acts only for its original Flow member")
+		return nil, platform.FlowInstance{}, current, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A source batch acts only for its original Flow member")
 	}
 	return f, x, current, nil
 }
@@ -143,48 +146,48 @@ func (t *Tenant) cleanupFlowArtifactsFor(m platform.Member, id string, now time.
 // ConsumeFlowBatch is the native source's outside-lane ingress. It prepares
 // immutable bytes without the tenant lock, then commits through the existing
 // accepted-result pipeline. HTTP submissions cannot construct the opaque plan.
-func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch, now time.Time) (flow.BatchOutcome, *kernel.Error) {
+func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.FlowBatch, now time.Time) (platform.FlowBatchOutcome, *kernel.Error) {
 	t.mu.Lock()
 	f, before, _, refusal := t.continuousSnapshotLocked(m, id, now)
 	t.mu.Unlock()
 	if refusal != nil {
-		return flow.BatchOutcome{}, refusal
+		return platform.FlowBatchOutcome{}, refusal
 	}
 	digest, err := json.Marshal(batch)
 	if err != nil {
-		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A batch needs valid JSON signal values")
+		return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A batch needs valid JSON signal values")
 	}
 	batchDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(digest))
-	key := flow.BatchKey(id, before.Version, batch.ID)
+	key := platform.FlowBatchKey(id, before.Version, batch.ID)
 	// Native retries can arrive after later batches. The original accepted
 	// ledger, not a second deduplication map, owns their stable identity.
 	if prior := f.AcceptedLedger().AcceptedFor(t.ID, key); prior != nil {
 		var saved struct{ Batch, Digest string }
 		if json.Unmarshal(prior.GetSubmission().GetPayload(), &saved) != nil || saved.Batch != batch.ID || saved.Digest != batchDigest {
-			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT, "The batch identity was reused with different content")
+			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT, "The batch identity was reused with different content")
 		}
-		return flow.BatchOutcome{Cursor: batch.ID}, nil
+		return platform.FlowBatchOutcome{Cursor: batch.ID}, nil
 	}
 	if before.CleanupPending {
 		if refusal := t.cleanupFlowArtifactsFor(m, id, now); refusal != nil {
-			return flow.BatchOutcome{}, refusal
+			return platform.FlowBatchOutcome{}, refusal
 		}
 	}
 	var current platform.Member
-	var plan *flow.BatchPreparation
+	var plan platform.FlowBatchPreparation
 	t.mu.Lock()
 	f, before, current, refusal = t.continuousSnapshotLocked(m, id, now)
 	if refusal == nil {
-		plan, refusal = f.PlanBatch(before, t.automation(flow.ID, false))
+		plan, refusal = f.PlanBatch(before, t.automation(platform.FlowApp, false))
 	}
 	t.mu.Unlock()
 	if refusal != nil {
-		return flow.BatchOutcome{}, refusal
+		return platform.FlowBatchOutcome{}, refusal
 	}
 	store := flowFrameStore{tenant: t.ID, files: t.files()}
 	prepared, refusal := plan.Prepare(batch, now, store)
 	if refusal != nil {
-		return flow.BatchOutcome{}, refusal
+		return platform.FlowBatchOutcome{}, refusal
 	}
 	var preparedInput *preparedOperationInput
 	if request, ok := prepared.OperationRequest(); ok {
@@ -193,7 +196,7 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 			for _, artifact := range prepared.Artifacts() {
 				_ = store.Discard(artifact)
 			}
-			return flow.BatchOutcome{}, refusal
+			return platform.FlowBatchOutcome{}, refusal
 		}
 	}
 	retained, inputRetained := false, false
@@ -211,34 +214,34 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch flow.Batch
 	defer t.mu.Unlock()
 	_, latest, current, refusal := t.continuousSnapshotLocked(current, id, now)
 	if refusal != nil {
-		return flow.BatchOutcome{}, refusal
+		return platform.FlowBatchOutcome{}, refusal
 	}
 	if !prepared.Matches(latest) {
-		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
+		return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
 	}
 	if batch.Source != nil {
 		if refusal := t.checkStreamSourceLocked(current, plan, latest, *batch.Source, batch.Tick, now); refusal != nil {
-			return flow.BatchOutcome{}, refusal
+			return platform.FlowBatchOutcome{}, refusal
 		}
 	}
-	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + flow.ID, Tenant: t.ID}, prepared.Submission(t.ID), now, true, preparedInput); refusal != nil {
+	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}, prepared.Submission(t.ID), now, true, preparedInput); refusal != nil {
 		// An append error may have committed despite losing its response.
 		// Retain its bytes until the original journal resolves that outcome.
 		retained, inputRetained = true, true
-		return flow.BatchOutcome{}, refusal
+		return platform.FlowBatchOutcome{}, refusal
 	}
 	t.enqueue(now)
-	x, _ := platform.Get[flow.FlowInstance](t.automation(flow.ID, false), id)
+	x, _ := platform.Get[platform.FlowInstance](t.automation(platform.FlowApp, false), id)
 	retained = x.Batch.Sealed != nil && x.Batch.Sealed.Ticket == prepared.Artifact().Ticket
 	inputRetained = preparedInput != nil
-	return flow.BatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
+	return platform.FlowBatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
 }
 
 // retireContinuousArtifacts deletes only refs named by an already-accepted
 // cleanup intent. The intent is acknowledged through the ordinary Flow result
 // ledger after every delete succeeds, so process restarts safely retry partial
 // object-store failures without a second queue or cursor.
-func (t *Tenant) retireContinuousArtifacts(plan *flow.ArtifactCleanupPreparation, now time.Time) *kernel.Error {
+func (t *Tenant) retireContinuousArtifacts(plan platform.FlowArtifactCleanupPreparation, now time.Time) *kernel.Error {
 	if plan == nil || plan.Instance() == "" || now.IsZero() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Flow artifact cleanup is unavailable")
 	}
@@ -258,7 +261,7 @@ func (t *Tenant) retireContinuousArtifacts(plan *flow.ArtifactCleanupPreparation
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	latest, ok := platform.Get[flow.FlowInstance](t.automation(flow.ID, false), plan.Instance())
+	latest, ok := platform.Get[platform.FlowInstance](t.automation(platform.FlowApp, false), plan.Instance())
 	if !ok {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow artifact cleanup owner is unavailable")
 	}
@@ -267,14 +270,14 @@ func (t *Tenant) retireContinuousArtifacts(plan *flow.ArtifactCleanupPreparation
 		// idempotent deletes ran. The artifact bytes are already safe to discard.
 		return nil
 	}
-	if _, refusal := t.submitAccepted(plan.Decision(), platform.Member{ID: "app:" + flow.ID, Tenant: t.ID}, plan.Submission(t.ID), now, true); refusal != nil {
+	if _, refusal := t.submitAccepted(plan.Decision(), platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}, plan.Submission(t.ID), now, true); refusal != nil {
 		return refusal
 	}
 	t.enqueue(now)
 	return nil
 }
 
-func (t *Tenant) retryContinuousCompute(member platform.Member, plan *flow.ComputeRetryPreparation, now time.Time) {
+func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.FlowComputeRetryPreparation, now time.Time) {
 	prepared, refusal := plan.Prepare(now, flowFrameStore{tenant: t.ID, files: t.files()})
 	if refusal != nil {
 		log.Printf("continuous Compute retry %s refused: %s", plan.Instance(), refusal.Code)
@@ -303,7 +306,7 @@ func (t *Tenant) retryContinuousCompute(member platform.Member, plan *flow.Compu
 		log.Printf("continuous Compute retry %s refused: %s", instance, refusal.Code)
 		return
 	}
-	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + flow.ID, Tenant: t.ID}, prepared.Submission(t.ID), now, true, preparedInput); refusal != nil {
+	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}, prepared.Submission(t.ID), now, true, preparedInput); refusal != nil {
 		// Preserve a possibly committed call input until the accepted journal
 		// resolves whether the retry decision was durable.
 		inputRetained = true
@@ -322,7 +325,7 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 	refuse := func(code pb.ErrorCode, message string) (*preparedOperationInput, *kernel.Error) {
 		return nil, platform.Refuse(code, message)
 	}
-	if request.App == "" || request.Name == "" || request.Key == "" || request.OnBehalf != member.ID || request.Target != flow.InstanceType+"/"+instance {
+	if request.App == "" || request.Name == "" || request.Key == "" || request.OnBehalf != member.ID || request.Target != platform.FlowInstanceType+"/"+instance {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The prepared window names an invalid Compute operation")
 	}
 	t.mu.Lock()
@@ -369,12 +372,12 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 
 // ReadFlowFrame resolves only a currently readable original instance. A role
 // change during artifact I/O cannot disclose its previously captured contents.
-func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*flow.BatchFrame, *kernel.Error) {
-	_, before, current, refusal := t.continuousSnapshot(m, id, now)
+func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*platform.FlowBatchFrame, *kernel.Error) {
+	owner, before, current, refusal := t.continuousSnapshot(m, id, now)
 	if refusal != nil {
 		return nil, refusal
 	}
-	frame, err := flow.ExpandFrame(before, flowFrameStore{tenant: t.ID, files: t.files()})
+	frame, err := owner.ExpandFrame(before, flowFrameStore{tenant: t.ID, files: t.files()})
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
@@ -404,7 +407,7 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	source, ok := view.Record.(build.Source)
 	if ok {
 		var err error
-		source, err = t.app(build.ID).(*build.Build).ExecutionSource(source)
+		source, err = t.app(build.ID).(host.IntegrationDefinitions).ExecutionSource(source)
 		if err != nil {
 			ok = false
 		}
@@ -419,7 +422,7 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	connection, ok := view.Record.(build.Connection)
 	if ok {
 		var err error
-		connection, err = t.app(build.ID).(*build.Build).ExecutionConnection(connection)
+		connection, err = t.app(build.ID).(host.IntegrationDefinitions).ExecutionConnection(connection)
 		if err != nil {
 			ok = false
 		}
@@ -444,19 +447,19 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 // ConsumeFlowSource reads an incremental registered Source on the I/O lane.
 // Its consumer offset is accepted with the original window frame. No raw
 // source rows enter an import record or a second cursor/queue database.
-func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) (flow.BatchOutcome, *kernel.Error) {
+func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) (platform.FlowBatchOutcome, *kernel.Error) {
 	if refusal := t.cleanupFlowArtifactsFor(m, id, now); refusal != nil {
-		return flow.BatchOutcome{}, refusal
+		return platform.FlowBatchOutcome{}, refusal
 	}
 	t.mu.Lock()
 	f, before, current, refusal := t.continuousSnapshotLocked(m, id, now)
-	var plan *flow.BatchPreparation
+	var plan platform.FlowBatchPreparation
 	if refusal == nil {
-		plan, refusal = f.PlanBatch(before, t.automation(flow.ID, false))
+		plan, refusal = f.PlanBatch(before, t.automation(platform.FlowApp, false))
 	}
 	if refusal != nil {
 		t.mu.Unlock()
-		return flow.BatchOutcome{}, refusal
+		return platform.FlowBatchOutcome{}, refusal
 	}
 	name, intake, budget := plan.Intake()
 	source, connection, hash, refusal := t.streamSourceLocked(current, name, intake, now)
@@ -471,12 +474,12 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	}
 	t.mu.Unlock()
 	if refusal != nil {
-		return flow.BatchOutcome{}, refusal
+		return platform.FlowBatchOutcome{}, refusal
 	}
 	if latestBootstrap {
 		cursor, cursorErr := t.latestTableCursor(source, connection)
 		if cursorErr != nil {
-			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, cursorErr.Error())
+			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, cursorErr.Error())
 		}
 		source.Cursor = cursor
 	}
@@ -484,16 +487,16 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	rows, err := t.readTable(source, connection, columns...)
 	if err != nil {
 		if tick, due, tickErr := plan.WindowTick(now, flowFrameStore{tenant: t.ID, files: t.files()}); tickErr != nil {
-			return flow.BatchOutcome{}, tickErr
+			return platform.FlowBatchOutcome{}, tickErr
 		} else if due {
 			return t.ConsumeFlowBatch(current, id, tick, now)
 		}
-		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+		return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
 	if len(rows) > budget {
 		left, right := source.Advance(rows[:budget]), source.Advance(rows[:budget+1])
 		if left == right {
-			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source cursor group exceeds the Flow batch budget")
+			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source cursor group exceeds the Flow batch budget")
 		}
 		// The remaining rows stay behind the accepted incremental position.
 		rows = rows[:budget]
@@ -501,19 +504,19 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	if len(rows) == 0 {
 		if !latestBootstrap {
 			if tick, due, tickErr := plan.WindowTick(now, flowFrameStore{tenant: t.ID, files: t.files()}); tickErr != nil {
-				return flow.BatchOutcome{}, tickErr
+				return platform.FlowBatchOutcome{}, tickErr
 			} else if due {
 				return t.ConsumeFlowBatch(current, id, tick, now)
 			}
-			return flow.BatchOutcome{}, nil
+			return platform.FlowBatchOutcome{}, nil
 		}
-		batch := flow.Batch{Bootstrap: true, Source: &flow.SourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Cursor, Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
+		batch := platform.FlowBatch{Bootstrap: true, Source: &platform.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Cursor, Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
 		if before.Batch != nil {
 			batch.Predecessor = before.Batch.Cursor
 		}
 		fingerprint, fingerprintErr := canonicalDigest([]any{batch.Predecessor, batch.Source, batch.Bootstrap, batch.Signals})
 		if fingerprintErr != nil {
-			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source bootstrap cannot be bound")
+			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source bootstrap cannot be bound")
 		}
 		batch.ID = "source:" + fingerprint
 		return t.ConsumeFlowBatch(current, id, batch, now)
@@ -522,11 +525,11 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	for _, row := range rows {
 		next := position.Advance([]map[string]any{row})
 		if next == position.Cursor {
-			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Stream rows need unique increasing incremental positions")
+			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Stream rows need unique increasing incremental positions")
 		}
 		position.Cursor = next
 	}
-	batch := flow.Batch{Source: &flow.SourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Advance(rows), Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
+	batch := platform.FlowBatch{Source: &platform.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Advance(rows), Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
 	if before.Batch != nil {
 		batch.Predecessor = before.Batch.Cursor
 	}
@@ -538,29 +541,29 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		for _, field := range intake.Partition {
 			value, ok := row[field].(string)
 			if !ok || value == "" {
-				return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source partition field needs a nonempty string")
+				return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source partition field needs a nonempty string")
 			}
 			partition = append(partition, value)
 		}
 		input, exists := row[intake.Value]
 		if !exists {
-			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source signal column is missing")
+			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source signal column is missing")
 		}
 		value, encodeErr := json.Marshal(input)
 		if encodeErr != nil {
-			return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source signal needs a JSON value")
+			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source signal needs a JSON value")
 		}
-		batch.Signals = append(batch.Signals, flow.Signal{Key: key, Partition: string(platform.Raw(partition)), At: at, Value: value})
+		batch.Signals = append(batch.Signals, platform.FlowSignal{Key: key, Partition: string(platform.Raw(partition)), At: at, Value: value})
 	}
 	fingerprint, err := canonicalDigest([]any{batch.Predecessor, batch.Source, batch.Bootstrap, batch.Signals})
 	if err != nil {
-		return flow.BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source batch cannot be bound")
+		return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source batch cannot be bound")
 	}
 	batch.ID = "source:" + fingerprint
 	return t.ConsumeFlowBatch(current, id, batch, now)
 }
 
-func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan *flow.BatchPreparation, x flow.FlowInstance, checkpoint flow.SourceCheckpoint, tick bool, now time.Time) *kernel.Error {
+func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan platform.FlowBatchPreparation, x platform.FlowInstance, checkpoint platform.FlowSourceCheckpoint, tick bool, now time.Time) *kernel.Error {
 	name, intake, _ := plan.Intake()
 	source, connection, hash, refusal := t.streamSourceLocked(m, name, intake, now)
 	if refusal != nil {
@@ -574,7 +577,7 @@ func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan *flow.BatchPrep
 		source.Cursor = x.Batch.Source.Cursor
 	}
 	if tick {
-		var prior *flow.SourceCheckpoint
+		var prior *platform.FlowSourceCheckpoint
 		if x.Batch != nil {
 			prior = x.Batch.Source
 		}
@@ -621,15 +624,15 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 		return
 	}
 	t.mu.Lock()
-	instances, _, _ := platform.Find[flow.FlowInstance](t.automation(flow.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","waiting"]]`), Sort: []string{"id"}})
-	f, ok := t.procs.(*flow.Flows)
-	var pending []flow.FlowInstance
+	instances, _, _ := platform.Find[platform.FlowInstance](t.automation(platform.FlowApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","waiting"]]`), Sort: []string{"id"}})
+	f, ok := t.procs.(platform.ContinuousFlowOwner)
+	var pending []platform.FlowInstance
 	type retry struct {
-		plan   *flow.ComputeRetryPreparation
+		plan   platform.FlowComputeRetryPreparation
 		member platform.Member
 	}
 	type cleanup struct {
-		plan     *flow.ArtifactCleanupPreparation
+		plan     platform.FlowArtifactCleanupPreparation
 		instance string
 		refusal  *kernel.Error
 	}
@@ -652,16 +655,16 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 			if !exists {
 				continue
 			}
-			if plan, err := f.PlanComputeRetry(instance, t.automation(flow.ID, false), now); err == nil {
+			if plan, err := f.PlanComputeRetry(instance, t.automation(platform.FlowApp, false), now); err == nil {
 				retries = append(retries, retry{plan: plan, member: member})
 				continue
 			}
-			if plan, err := f.PlanBatch(instance, t.automation(flow.ID, false)); err == nil {
+			if plan, err := f.PlanBatch(instance, t.automation(platform.FlowApp, false)); err == nil {
 				if _, intake, _ := plan.Intake(); intake != nil {
 					source, exists := platform.Get[build.Source](t.automation(build.ID, false), intake.SourceRecord)
 					if exists {
 						var err error
-						source, err = t.app(build.ID).(*build.Build).ExecutionSource(source)
+						source, err = t.app(build.ID).(host.IntegrationDefinitions).ExecutionSource(source)
 						if err != nil {
 							exists = false
 						}

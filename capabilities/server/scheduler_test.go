@@ -27,7 +27,7 @@ func TestScheduler(t *testing.T) {
 	}
 	submit := func(tn *Tenant, key, topic, text string) {
 		t.Helper()
-		ana, _ := tn.app(PlatformApp).(*Console).Member("ana")
+		ana, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
 		if _, err := tn.Submit(ana, note(tn.ID, "ana", "a", key, topic, text), start); err != nil {
 			t.Fatal(err)
 		}

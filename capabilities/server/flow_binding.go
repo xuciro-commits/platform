@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"slices"
 
-	"platformserver/apps/build"
 	"platformserver/internal/host"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -94,9 +94,7 @@ func compatibleFlowStorageExpansion(before, after platform.ReleaseCandidate) boo
 }
 
 func (h hostView) flowClosure(app, name string, version int) (platform.ReleaseCandidate, platform.AssetRef, error) {
-	owner, ok := h.t.app(app).(interface {
-		FlowReleaseAsset(string, int) (platform.ReleaseAsset, error)
-	})
+	owner, ok := h.t.app(app).(host.FlowReleaseOwner)
 	if !ok { // Code flows outside the bounded builder release descriptor scope.
 		return platform.ReleaseCandidate{}, platform.AssetRef{}, nil
 	}

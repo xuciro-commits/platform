@@ -24,7 +24,7 @@ func TestKnowledgeAndContextScope(t *testing.T) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	tn := stockTenant(t, knowledge.New("t-1"), work.New("t-1"), flow.New("t-1"), files.New("t-1"), relations.New("t-1"))
 	member := func(id string) platform.Member {
-		m, _ := tn.app(PlatformApp).(*Console).Member(id)
+		m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id)
 		return m
 	}
 	for i, x := range []struct{ who, id, line string }{{"ana", "I1", "L1"}, {"bo", "I2", "L2"}} {
@@ -127,7 +127,7 @@ func TestKnowledgeIndexesPastFirstPage(t *testing.T) {
 	if got := len(tn.sources()); got != 501 {
 		t.Fatalf("indexed %d of 501 knowledge fields", got)
 	}
-	ana, _ := tn.app(PlatformApp).(*Console).Member("ana")
+	ana, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
 	found := tn.Knowledge(&ana, "", "inspection needle I500", 3, now)
 	if len(found) == 0 || found[0].Document != "stock.item/I500#note" {
 		t.Fatalf("last page was not searchable: %+v", found)

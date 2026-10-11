@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+
 	"slices"
 	"strings"
 	"time"
@@ -16,11 +17,6 @@ import (
 // fields its list and its detail carry, and the actions it offers. It is the
 // same descriptor a code page declares, so the workspace renders it with the
 // same component, and every read and action on it is still the member's own.
-
-const (
-	PageType      = "build.page"
-	SchemaRelease = PageType + ".publish"
-)
 
 // Page is a list and detail page this organisation composed.
 type Page struct {

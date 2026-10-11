@@ -3,7 +3,8 @@ package enterprise
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/enterprise/uaf"
+	"platformserver/internal/host/enterpriseapi"
+	"platformserver/internal/host/enterpriseapi/uaf"
 	"platformserver/platform"
 	"strings"
 )
@@ -19,18 +20,18 @@ func decideRelationship(m *Model, mm *uaf.Metamodel, id string, p payload) (func
 	switch {
 	case st == nil || !mm.Relationship(p.Stereotype) && p.Stereotype != Typed && p.Stereotype != Membership: // a role is a slot in UAF, not a UML relationship; it still joins two elements here
 		return nil, invalid("{stereotype} is not a UAF relationship stereotype", p.Stereotype)
-	case m.relationship(id) != nil:
+	case m.RelationshipOf(id) != nil:
 		return nil, conflict
 	case p.Source == "" || p.Target == "":
 		return nil, invalid("a relationship needs a source and a target")
 	case p.Until != "" && p.Until <= p.From:
 		return nil, invalid("the relationship would end before it starts")
 	}
-	target := m.element(p.Target)
+	target := m.ElementOf(p.Target)
 	if target == nil {
 		return nil, notFound
 	}
-	source := m.element(p.Source)
+	source := m.ElementOf(p.Source)
 	if source == nil && !(p.Stereotype == Membership && strings.HasPrefix(p.Source, "member:")) {
 		return nil, notFound
 	}
@@ -45,23 +46,23 @@ func decideRelationship(m *Model, mm *uaf.Metamodel, id string, p payload) (func
 		sourceEnd = &Element{Stereotype: Person} // an account stands where a person stands
 	}
 	if sourceEnd != nil {
-		if ok, why := Allowed(Contracts(mm), mm, p.Stereotype, sourceEnd.Stereotype, target.Stereotype); !ok {
+		if ok, why := enterpriseapi.Allowed(enterpriseapi.Contracts(mm), mm, p.Stereotype, sourceEnd.Stereotype, target.Stereotype); !ok {
 			return nil, invalid(why)
 		}
 	}
 	var ends func()
 	switch p.Stereotype {
 	case Placement:
-		k := m.kind(p.Kind)
+		k := m.KindOf(p.Kind)
 		if k == nil {
 			return nil, invalid("a placement needs a relationship kind")
 		}
-		if m.below(p.Kind, p.Source, p.Target, p.From) {
+		if m.BelowIn(p.Kind, p.Source, p.Target, p.From) {
 			return nil, invalid("{target} already sits under {source}; an organisation cannot sit under itself", target.Name, source.Name)
 		}
 		ends = func() { // a tree keeps one current parent
 			for i, r := range m.Relationships {
-				if r.Stereotype == Placement && r.Kind == p.Kind && r.Source == p.Source && (!k.Matrix || r.Target == p.Target) && activeOn(r.From, r.Until, p.From) {
+				if r.Stereotype == Placement && r.Kind == p.Kind && r.Source == p.Source && (!k.Matrix || r.Target == p.Target) && enterpriseapi.ActiveOn(r.From, r.Until, p.From) {
 					m.Relationships[i].Until = p.From
 				}
 			}

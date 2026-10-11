@@ -48,7 +48,7 @@ func (a *Agents) switchDecision(c platform.Caller, s *pb.Submission, p struct{ R
 	if id == "" {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	app := a.t.automated(c, AgentApp)
+	app := a.host.Automation(c, AgentApp)
 	sw, _ := platform.Get[Switch](app, id)
 	suspend := s.GetSchema().GetName() == SchemaSuspend
 	if sw.Suspended == suspend {
@@ -81,19 +81,18 @@ type AgentOverview struct {
 }
 
 // AgentsOverview is every agent, declared and outside, for the agent app's administrators.
-func (t *Tenant) AgentsOverview() []AgentOverview {
-	c := t.automation(AgentApp, false)
+func (a *Agents) AgentOverview() []AgentOverview {
+	c := a.automation(AgentApp, false)
 	rows := map[string]*AgentOverview{}
-	t.agents.each(func(id string, d *agentDef) {
+	a.each(func(id string, d *agentDef) {
 		rows["agent:"+id] = &AgentOverview{Member: "agent:" + id, Title: d.Title, Judged: map[string]int{}}
 	})
-	if console, ok := t.app(PlatformApp).(*Console); ok {
-		for _, x := range console.Identities() {
-			if m, ok := console.Member(x.Token); ok && m.Agent && rows[m.ID] == nil {
-				rows[m.ID] = &AgentOverview{Member: m.ID, Title: m.ID, Outside: true, Judged: map[string]int{}}
-			}
+	for _, m := range a.host.ExternalAgentMembers() {
+		if rows[m.ID] == nil {
+			rows[m.ID] = &AgentOverview{Member: m.ID, Title: m.ID, Outside: true, Judged: map[string]int{}}
 		}
 	}
+
 	runs, _, _ := platform.Find[AgentRunRecord](c, platform.Query{})
 	for _, r := range runs {
 		row := rows["agent:"+r.Agent]
@@ -109,13 +108,13 @@ func (t *Tenant) AgentsOverview() []AgentOverview {
 			row.Judged[s.Kind]++
 		}
 	}
-	for _, e := range t.Audit() {
-		if row := rows[e.Member]; row != nil && row.Outside {
+	for _, member := range a.host.AgentDecisionMembers() {
+		if row := rows[member]; row != nil && row.Outside {
 			row.Actions++
 		}
 	}
-	if t.ai != nil {
-		for _, u := range t.ai.Usage() {
+	{
+		for _, u := range a.host.AgentUsage() {
 			if row := rows[u.Member]; row != nil {
 				row.Calls, row.Tokens, row.Cost = row.Calls+1, row.Tokens+u.Input+u.Output, row.Cost+u.Cost
 			}
@@ -124,7 +123,7 @@ func (t *Tenant) AgentsOverview() []AgentOverview {
 	out := []AgentOverview{}
 	for _, id := range slices.Sorted(maps.Keys(rows)) {
 		row := rows[id]
-		row.Suspended = t.suspended(id)
+		row.Suspended = a.host.AgentSuspended(id)
 		out = append(out, *row)
 	}
 	return out

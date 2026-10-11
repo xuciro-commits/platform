@@ -19,7 +19,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/work"
+
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
@@ -40,6 +40,7 @@ type Delivery struct {
 type Tenant struct {
 	// Private control views route callbacks back into their owning decision.
 	controlAnswer func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
+	identity      host.IdentityDirectory
 	ID            string
 	// Record, when set, makes each accepted input durable before it is answered;
 	// a failure must stop the server (ADR-0007).
@@ -51,7 +52,7 @@ type Tenant struct {
 	// (ADR-0022); without one they stay in memory.
 	Store       Store
 	memStore    journal.Memory // the Store without one
-	knowledge   glossary       // the knowledge app: documents are searched, terms read (ADR-0022)
+	knowledge   host.Glossary  // the knowledge app: documents are searched, terms read (ADR-0022)
 	index       index          // passages cut from documents and knowledge fields
 	i18n        translator     // says declarations and messages in a language (ADR-0023)
 	agentRun    string         // the run whose agent is submitting, under mu: its effects name it
@@ -105,7 +106,7 @@ type Tenant struct {
 	tasks     host.Tasks      // serves Caller.Assign: the work app (ADR-0017)
 	procs     host.Processes  // the flow app (ADR-0020)
 	listeners []string        // platform apps given other apps' events as owned work (host.Listener)
-	agents    *Agents         // AI agents (ADR-0021)
+	agents    AgentRuntime    // AI agents (ADR-0021)
 	ctx       context.Context // the span of the work being done under mu (telemetry.go)
 	// Files keeps file bytes (ADR-0028 D1); nil: memory, for development and tests.
 	Files         FileStore
@@ -151,9 +152,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			return nil, err
 		}
 		// Roles the host's own apps take (ADR-0025 D4), by the interfaces they implement.
-		if x, ok := a.(host.Attached); ok {
-			x.Attach(hostView{t: t, app: a})
-		}
+		host.Attach(a, hostView{t: t, app: a})
 		if x, ok := a.(host.Observer); ok {
 			t.observers = append(t.observers, x)
 		}
@@ -163,9 +162,11 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if x, ok := a.(host.Directory); ok {
 			t.directory = x
 		}
-		if d, ok := a.(*Console); ok {
-			d.t = t
-			defer d.applyAccess() // once every app is known
+		if identity, ok := a.(host.IdentityDirectory); ok {
+			if t.identity != nil {
+				return nil, fmt.Errorf("tenant %s has two identity owners", id)
+			}
+			t.identity = identity
 		}
 		if x, ok := a.(models); ok {
 			t.ai = x
@@ -179,10 +180,13 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if _, ok := a.(host.Listener); ok {
 			t.listeners = append(t.listeners, m.ID)
 		}
-		if x, ok := a.(*Agents); ok {
-			t.agents, x.t = x, t
+		if x, ok := a.(AgentRuntime); ok {
+			if t.agents != nil {
+				return nil, fmt.Errorf("tenant %s has two agent owners", id)
+			}
+			t.agents = x
 		}
-		if x, ok := a.(glossary); ok {
+		if x, ok := a.(host.Glossary); ok {
 			t.knowledge = x
 		}
 		for _, action := range m.Subscribes {
@@ -231,7 +235,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if t.agents == nil {
 			return nil, fmt.Errorf("tenant %s: %s declares agents, and the tenant runs no agent app", id, a.Manifest().ID)
 		}
-		if err := t.agents.declare(a); err != nil {
+		if err := t.agents.DeclareAgentApp(a); err != nil {
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
@@ -271,6 +275,14 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	if _, err := platform.NewAssetRegistry(assetOwners...); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
+	for _, app := range apps {
+		if ready, ok := app.(host.CompositionReady); ok {
+			if err := ready.Ready(); err != nil {
+				return nil, fmt.Errorf("tenant %s owner %s readiness: %w", id, app.Manifest().ID, err)
+			}
+		}
+	}
+
 	return t, nil
 }
 
@@ -544,7 +556,7 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 		}
 	}()
 	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil &&
-		draft.tenant.owner["action:"+work.SchemaRequest] != nil {
+		draft.tenant.owner["action:"+platform.WorkApprovalRequestSchema] != nil {
 		record, refusal = draft.requestApproval(a, m, s, now)
 	} else {
 		record, refusal = platform.Decide(platform.NewCaller(draft, m, a.Manifest().ID, false, automation), a, s, now)
@@ -861,15 +873,8 @@ func checkManifest(a platform.App) error {
 // Member is a member of the tenant's directory, as the console holds it now:
 // for tests and tools that act as a member.
 func (t *Tenant) Member(id string) (platform.Member, bool) {
-	d, ok := t.app(PlatformApp).(*Console)
-	if !ok {
+	if t.identity == nil {
 		return platform.Member{}, false
 	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	m := d.members[id] // by ID, not by a subject it signs in as
-	if m == nil {
-		return platform.Member{}, false
-	}
-	return d.currentMember(m), true
+	return t.identity.MemberByID(id)
 }

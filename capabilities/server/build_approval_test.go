@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"errors"
+	buildapi "platformserver/internal/host/buildapi"
 
 	"fmt"
 	"google.golang.org/protobuf/proto"
@@ -53,7 +54,7 @@ func testTenantDefinedApproval(t *testing.T, accepted bool) {
 		}
 	}
 	var retried []*pb.Submission
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
+	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
 	keys := 0
 	do := func(who, schema, typ, id string, payload any) string {
 		keys++
@@ -130,7 +131,7 @@ func testTenantDefinedApproval(t *testing.T, accepted bool) {
 	if got := do("dana", build.SchemaPublish, build.ObjectType, "O-1", map[string]any{}); got != "ok" {
 		t.Fatal(got)
 	}
-	lost := build.TypeOf("lost")
+	lost := buildapi.TypeOf("lost")
 	declared, found := tn.app(build.ID).Manifest().Actions.Action(lost + ".handback")
 	if !found || !declared.NeedsApproval {
 		t.Fatal("the action is not offered as an approval")

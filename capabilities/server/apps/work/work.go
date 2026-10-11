@@ -22,58 +22,31 @@ import (
 // Approval requests and tasks are entity types (ADR-0016) with lifecycles, so
 // they get lists, record pages and history, and replay like any records.
 const (
-	ID           = "work"
-	ApprovalType = "work.approval"
-	TaskType     = "work.task"
+	ID           = platform.WorkApp
+	ApprovalType = platform.WorkApprovalType
+	TaskType     = platform.WorkTaskType
 	Admin        = "admin"
 	// SchemaRequest holds a submission for approval; the host submits it for the requester.
-	SchemaRequest = "work.approval.request"
+	SchemaRequest = platform.WorkApprovalRequestSchema
 	// A member's saved views of a list (ADR-0019 D4): their data, not configuration.
 	DelegationType   = "work.delegation"
 	SchemaDelegate   = "work.delegation.add"
 	SchemaUndelegate = "work.delegation.end"
-	ViewType         = "work.view"
+	ViewType         = platform.WorkViewType
 	SchemaViewSave   = "work.view.save"
 	SchemaViewRemove = "work.view.remove"
 )
 
 // ApprovalRequest is a held submission and its chain of approvers.
-type ApprovalRequest struct {
-	platform.Record
-	Action     string         `json:"action" field:"readonly,search"`
-	Title      string         `json:"title" field:"readonly,search"`
-	App        string         `json:"app" field:"readonly"`
-	Target     string         `json:"target" field:"readonly,search"` // "<type>/<id>"
-	Requester  string         `json:"requester" field:"readonly"`
-	Submission string         `json:"submission" field:"readonly" type:"longtext"` // the held submission, as protojson
-	Level      int            `json:"level" field:"readonly"`                      // the level deciding now
-	Levels     []ApprovalStep `json:"levels" field:"readonly"`
-	State      string         `json:"state" field:"readonly" choices:"pending,approved,rejected,refused,withdrawn"`
-	Outcome    string         `json:"outcome,omitempty" field:"readonly"` // why a request was refused when it ran, or rejected
-	RejectedBy string         `json:"rejectedBy,omitempty" field:"readonly" title:"Rejected by"`
-	// Release is the tenant's active release when the request opened; a later
-	// activation may not change the held action under it (ADR-0039 D4).
-	Release string `json:"release,omitempty" field:"readonly"`
-}
+type ApprovalRequest = platform.ApprovalRequest
 
 // ApprovalStep is one level: who may approve, and who did. Count is how many
 // distinct approvals close the level (ADR-0047 §11): 0 keeps the level's own
 // rule of one, or all when All is set.
-type ApprovalStep struct {
-	Title     string    `json:"title"`
-	Approvers []string  `json:"approvers"`
-	All       bool      `json:"all,omitempty"`
-	Count     int       `json:"count,omitempty"`
-	Approved  []string  `json:"approved"`
-	Due       time.Time `json:"due,omitzero"`
-	// Delegates may decide for an approver away on the request's day
-	// (delegate → approver); DecidedBy says who did (approver → delegate) (ADR-0028 D11).
-	Delegates map[string]string `json:"delegates,omitempty"`
-	DecidedBy map[string]string `json:"decidedBy,omitempty"`
-}
+type ApprovalStep = platform.ApprovalStep
 
 // required is the number of distinct approvals this level closes at.
-func (s ApprovalStep) required() int {
+func approvalRequired(s ApprovalStep) int {
 	if s.All {
 		return len(s.Approvers)
 	}
@@ -84,48 +57,48 @@ func (s ApprovalStep) required() int {
 }
 
 // Delegation hands a member's approvals and tasks to another for some days.
-type Delegation struct {
-	platform.Record
-	From  string        `json:"from" field:"readonly" title:"Delegated by"`
-	To    string        `json:"to" field:"required" title:"Delegate"`
-	Start platform.Date `json:"start" field:"required" type:"date" title:"First day"`
-	End   platform.Date `json:"end" field:"required" type:"date" title:"Last day"`
-}
+type Delegation = platform.WorkDelegation
 
 // WorkTask is work for people: who may take it, by when, and whether it is done.
-type WorkTask struct {
-	platform.Record
-	Title      string    `json:"title" field:"readonly,search"`
-	Body       string    `json:"body,omitempty" field:"readonly" type:"longtext"`
-	Ref        string    `json:"ref,omitempty" field:"readonly"`
-	App        string    `json:"app" field:"readonly"`
-	Key        string    `json:"key,omitempty" field:"readonly"`
-	Candidates []string  `json:"candidates" field:"readonly"`
-	Assignee   string    `json:"assignee,omitempty" field:"readonly"`
-	Due        time.Time `json:"due,omitzero" field:"readonly"`
-	State      string    `json:"state" field:"readonly" choices:"open,done,canceled"`
-	Answers    []string  `json:"answers,omitempty" field:"readonly"` // what the person may answer (a flow's Ask)
-	Answer     string    `json:"answer,omitempty" field:"readonly"`
-}
+type WorkTask = platform.WorkTask
 
 // SavedView is a member's view of an entity type's list: its search, grouping,
 // pivot or chart (ADR-0019 D4), kept as the kit's state. Only its owner sees it.
-type SavedView struct {
-	platform.Record
-	Title  string `json:"title" field:"required,search"`
-	Entity string `json:"entity" field:"required,readonly"`
-	State  string `json:"state" type:"longtext"`
-	Owner  string `json:"owner" field:"readonly"`
-}
+type SavedView = platform.SavedView
 
 type Work struct {
 	mu     sync.Mutex
-	host   host.Host // the tenant running it, once composed
+	host   host.WorkHost // the tenant running it, once composed
 	ledger *platform.Ledger
 }
 
+var _ platform.ApprovalOwner = (*Work)(nil)
+var _ host.AttachedWork = (*Work)(nil)
+
 // Attach is called by the host when a tenant is composed.
-func (w *Work) Attach(h host.Host) { w.host = h }
+func (w *Work) AttachWork(h host.WorkHost) { w.host = h }
+
+// RequestApproval retains the original held-submission format and identity.
+// It is a nested decision in the host's existing staged transaction.
+func (w *Work) RequestApproval(c platform.Caller, held *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if c.Automation || c.Tenant == "" || held.GetTenantId() != c.Tenant || held.GetPrincipalId() != c.ID || held.GetAuthority() != c.App {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval needs its original authorised member")
+	}
+	raw, err := protojson.Marshal(held)
+	if err != nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	payload, err := json.Marshal(map[string]any{"requester": c.ID, "submission": json.RawMessage(raw)})
+	if err != nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	id := c.App + "." + held.GetIdempotencyKey()
+	automation := w.host.Automation(c, ID)
+	request := &pb.Submission{TenantId: c.Tenant, PrincipalId: automation.ID, Authority: ID,
+		IdempotencyKey: "approval:" + id, Target: &pb.EntityRef{Type: ApprovalType, Id: id},
+		Schema: &pb.SchemaRef{Name: SchemaRequest, Version: 1}, Payload: payload}
+	return platform.Decide(automation, w, request, now)
+}
 
 // New is a tenant's work app. Every member uses it through two reads, the
 // inbox and their requests; the records themselves (lists, pages, history) are
@@ -164,7 +137,7 @@ func (w *Work) entities() []platform.Entity {
 				a := record.(ApprovalRequest)
 				out := []string{a.Requester}
 				for _, l := range a.Levels {
-					out = append(out, l.candidates()...)
+					out = append(out, approvalCandidates(l)...)
 				}
 				return out
 			}},
@@ -284,10 +257,7 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 			step.Due = now.Add(level.Due)
 		}
 		if level.WorkingDays > 0 { // in the requester's working days (ADR-0028 D7)
-			cal := platform.Calendar{}
-			if d := w.host.Directory(); d != nil {
-				cal = d.Calendar("member:"+requester.ID, now.UTC().Format(time.DateOnly))
-			}
+			cal := w.host.Calendar("member:"+requester.ID, now.UTC().Format(time.DateOnly))
 			step.Due = cal.After(now, level.WorkingDays)
 		}
 		steps = append(steps, step)
@@ -325,11 +295,11 @@ func (w *Work) approvers(level platform.ApprovalLevel, requester platform.Member
 	if level.AppRole != "" {
 		add(w.host.Holding(app, level.AppRole)...)
 	}
-	if d := w.host.Directory(); level.Role != "" && d != nil {
+	if level.Role != "" {
 		day := now.UTC().Format(time.DateOnly)
-		units := d.Units("member:"+requester.ID, "", day) // the requester's own units
+		units := w.host.Units("member:"+requester.ID, "", day) // the requester's own units
 		for _, u := range units {
-			add(d.Holders(level.Structure, u, level.Role, day)...)
+			add(w.host.Holders(level.Structure, u, level.Role, day)...)
 		}
 	}
 	slices.Sort(out)
@@ -341,7 +311,7 @@ func (w *Work) offer(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, n
 	step := a.Levels[a.Level]
 	task := WorkTask{Record: platform.Record{ID: fmt.Sprintf("%s#%d", a.ID, a.Level+1)}, Title: "Approve: " + a.Title + " " + a.Target,
 		Body: fmt.Sprintf("%s asks, level %d of %d: %s.", a.Requester, a.Level+1, len(a.Levels), step.Title), Ref: ApprovalType + "/" + a.ID,
-		App: a.App, Candidates: step.candidates(), Due: step.Due, State: "open"}
+		App: a.App, Candidates: approvalCandidates(step), Due: step.Due, State: "open"}
 	c.Put(r, task)
 	var to []platform.Recipient
 	for _, m := range task.Candidates {
@@ -364,7 +334,7 @@ func (w *Work) close(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, l
 func (w *Work) decider(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	a := record.(*ApprovalRequest)
 	step := a.Levels[a.Level]
-	who := step.actingFor(c.ID)
+	who := approvalActingFor(step, c.ID)
 	if c.Agent || c.ID == a.Requester || who == "" || slices.Contains(step.Approved, who) {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
@@ -380,7 +350,7 @@ func (w *Work) approve(c platform.Caller, record any, payload json.RawMessage, n
 	}
 	a := record.(*ApprovalRequest)
 	step := &a.Levels[a.Level]
-	who := step.actingFor(c.ID)
+	who := approvalActingFor(*step, c.ID)
 	step.Approved = append(step.Approved, who)
 	if who != c.ID {
 		if step.DecidedBy == nil {
@@ -388,7 +358,7 @@ func (w *Work) approve(c platform.Caller, record any, payload json.RawMessage, n
 		}
 		step.DecidedBy[who] = c.ID
 	}
-	if len(step.Approved) < step.required() {
+	if len(step.Approved) < approvalRequired(*step) {
 		return nil // stays pending at this level until the required approvals
 	}
 	if a.Level+1 < len(a.Levels) {
@@ -632,7 +602,7 @@ func (w *Work) Close(c platform.Caller, r *pb.ChangeRecord, id string) {
 func (w *Work) closed(c platform.Caller, id string) { w.host.Seen(c, "task:"+id, "overdue:"+id) }
 
 // candidates are the level's approvers and their delegates.
-func (s ApprovalStep) candidates() []string {
+func approvalCandidates(s ApprovalStep) []string {
 	out := slices.Clone(s.Approvers)
 	for d := range s.Delegates {
 		if !slices.Contains(out, d) {
@@ -644,7 +614,7 @@ func (s ApprovalStep) candidates() []string {
 }
 
 // actingFor is the approver member decides as: themselves, or whom they stand in for; "" when neither.
-func (s ApprovalStep) actingFor(member string) string {
+func approvalActingFor(s ApprovalStep, member string) string {
 	if slices.Contains(s.Approvers, member) {
 		return member
 	}
@@ -702,3 +672,5 @@ func (w *Work) ForkDecision() (platform.App, error) {
 }
 
 var _ platform.DecisionForkApp = (*Work)(nil)
+
+func (a *Work) NewSimulationApp(tenant string) platform.App { return New(tenant) }

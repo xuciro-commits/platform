@@ -61,7 +61,7 @@ func testA2A(t *testing.T, storage string) {
 		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { journal = append(journal, e); return e.Body, nil }
 	}
 	tn.Secrets = func(string) ([]byte, bool) { return []byte("partner-token"), true }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
+	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	h := NewHost(Tokens(map[string]string{"ana-token": "ana", "bo-token": "bo"}), tn)
 	h.Now = func() time.Time { return now }

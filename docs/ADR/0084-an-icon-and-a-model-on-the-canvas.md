@@ -8,7 +8,7 @@
 
 核对现状后的结论（这才是本 ADR 的起点）：
 
-- UAF 本身是真的：`capabilities/server/apps/enterprise/uaf/uaf.go` 内嵌 OMG 1.3 元模型（Domain/Aspect/Bases、关系分类），`profile.go` 的 `Grid()` 是 8 格（域 × 方面），宿主实施了部分关系校验，并给出拒绝原因；加载元模型不等于完整实现 UAF 端点、基数和约束。**弱的是呈现与命名**：元素来源叫\"调色板\"，格子被静默过滤，人看不到\"为什么这个元素在这里不可用\"。
+- UAF 本身是真的：`capabilities/server/internal/host/enterpriseapi/uaf/uaf.go` 内嵌 OMG 1.3 元模型（Domain/Aspect/Bases、关系分类），`profile.go` 的 `Grid()` 是 8 格（域 × 方面），宿主实施了部分关系校验，并给出拒绝原因；加载元模型不等于完整实现 UAF 端点、基数和约束。**弱的是呈现与命名**：元素来源叫\"调色板\"，格子被静默过滤，人看不到\"为什么这个元素在这里不可用\"。
 - 画布缺的是**边**：Flow（`ui/src/graph/BlockCanvas.tsx`）早就有节点/连线操作，企业画布（`DiagramCanvas`）只有节点拖动。企业关系只能在右侧检查器的列表里改——图上点不中。
 - 业务侧引用机制存在且是真的：载荷字段标 `ref:"enterprise.element" stereo:"…"`，宿主在提交时校验**当天有效且 stereotype 相符**（`platform/ledger.go` `checked`），选择器只列当天有效的元素（`app/src/actions/actions.tsx` `ElementPicker`）。缺的是反向：企业元素上看不到\"谁引用我\"，且被关闭的元素在记录上显示成空。
 - 工厂/仓库/WMS：`core.site`（kind = plant/warehouse/office）有 `place` → ActualLocation、`unit` → ActualOrganization，`core.location` 在站点内嵌套（库区/货位/工位），`erp.production` 的 `plant` → ActualLocation。没有独立的 WMS 参考代码模块；工作台仍可创建受控 WMS 应用，本轮未验证这类应用的建仓关联路线。

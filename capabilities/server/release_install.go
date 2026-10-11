@@ -3,8 +3,8 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/apps/build"
 	"platformserver/internal/host"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -110,10 +110,8 @@ func (t *Tenant) assetInstallationView(records *recordStore) (*Tenant, error) {
 	draft.apps = slices.Clone(t.apps)
 	if t.procs != nil {
 		draft.procs = t.procs.InstallationDraft()
-		if attached, ok := draft.procs.(host.Attached); ok {
-			if app, ok := draft.procs.(platform.App); ok {
-				attached.Attach(hostView{t: draft, app: app})
-			}
+		if app, ok := draft.procs.(platform.App); ok {
+			host.Attach(app, hostView{t: draft, app: app})
 		}
 	}
 	for i, app := range draft.apps {
@@ -133,9 +131,7 @@ func (t *Tenant) assetInstallationView(records *recordStore) (*Tenant, error) {
 			return nil, fmt.Errorf("asset owner %s cannot fork: %v", app.Manifest().ID, err)
 		}
 		draft.apps[i] = fork
-		if attached, ok := fork.(host.Attached); ok {
-			attached.Attach(hostView{t: draft, app: fork})
-		}
+		host.Attach(fork, hostView{t: draft, app: fork})
 	}
 	if err := draft.registerOwnedAssetMetadata(); err != nil {
 		return nil, err

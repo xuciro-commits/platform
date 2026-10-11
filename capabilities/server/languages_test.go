@@ -109,7 +109,7 @@ func TestLanguages(t *testing.T) {
 	keys := 0
 	decide := func(who, schema, typ, id string, payload any) string {
 		keys++
-		m, _ := tn.app(PlatformApp).(*Console).Member(who)
+		m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(who)
 		raw, _ := json.Marshal(payload)
 		if _, err := tn.Submit(m, &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: PlatformApp, IdempotencyKey: fmt.Sprint("l", keys),
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); err != nil {

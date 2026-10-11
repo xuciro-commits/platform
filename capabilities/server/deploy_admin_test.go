@@ -97,7 +97,7 @@ func TestRecoveredPersonalTokenDoesNotReopenSecretWindow(t *testing.T) {
 	if _, err := live.Submit(admin, sub, now); err != nil {
 		t.Fatal(err)
 	}
-	secret, ok := consoleOf(live).Minted("ci", "admin", now)
+	secret, ok := testConsoleOf(live).Minted("ci", "admin", now)
 	if !ok {
 		t.Fatal("issuing process did not deliver secret")
 	}
@@ -106,10 +106,10 @@ func TestRecoveredPersonalTokenDoesNotReopenSecretWindow(t *testing.T) {
 	if err := d.restoreTenants(ctx, journal, "", []*Tenant{recovered}, map[string]int64{}, map[string]bool{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := consoleOf(recovered).MemberByToken(secret, now.Add(time.Minute)); !ok {
+	if _, ok := testConsoleOf(recovered).MemberByToken(secret, now.Add(time.Minute)); !ok {
 		t.Fatal("token failed after recovery")
 	}
-	if _, ok := consoleOf(recovered).Minted("ci", "admin", now.Add(time.Minute)); ok {
+	if _, ok := testConsoleOf(recovered).Minted("ci", "admin", now.Add(time.Minute)); ok {
 		t.Fatal("recovery reopened one-time secret")
 	}
 	sub.Target.Id = "new-ci"
@@ -117,7 +117,7 @@ func TestRecoveredPersonalTokenDoesNotReopenSecretWindow(t *testing.T) {
 	if _, err := recovered.Submit(admin, sub, now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := consoleOf(recovered).Minted("new-ci", "admin", now.Add(time.Minute)); !ok {
+	if _, ok := testConsoleOf(recovered).Minted("new-ci", "admin", now.Add(time.Minute)); !ok {
 		t.Fatal("new token cannot deliver secret after restart")
 	}
 }

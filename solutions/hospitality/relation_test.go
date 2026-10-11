@@ -18,7 +18,7 @@ import (
 func TestNamedRelationFromAnotherApp(t *testing.T) {
 	w := newWorld(t, hotelProvider)
 	w.setup()
-	visit := build.TypeOf("visit")
+	visit := "build.visit"
 	w.expect(w.submit("manager", build.ID, build.ObjectType+".create", build.ObjectType, "O-VISIT", "rel-1",
 		map[string]any{"name": "visit", "title": "Visit", "plural": "Visits", "fields": []map[string]any{
 			{"name": "guest", "title": "Guest", "type": "text"},

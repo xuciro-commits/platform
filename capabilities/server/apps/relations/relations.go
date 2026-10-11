@@ -36,26 +36,8 @@ const (
 	SchemaUnfollow = "platform.follow.remove"
 )
 
-// Comment is a member's comment on a record; @member mentions notify them.
-type Comment struct {
-	platform.Record
-	Target   string   `json:"target" field:"readonly" title:"On"`
-	Text     string   `json:"text" field:"required,search" type:"longtext"`
-	By       string   `json:"by" field:"readonly"`
-	Mentions []string `json:"mentions,omitempty" field:"readonly"`
-}
-
-// Follow is a member following a record: they hear of its decisions and comments.
-type Follow struct {
-	platform.Record
-	Member string `json:"member" field:"readonly"`
-	Target string `json:"target" field:"readonly" title:"Follows"`
-}
-
-// FollowID is the one follow of member on target.
-func FollowID(member, target string) string {
-	return member + "@" + strings.ReplaceAll(target, "/", "~")
-}
+type Comment = platform.RecordComment
+type Follow = platform.RecordFollow
 
 var mention = regexp.MustCompile(`@([A-Za-z0-9][A-Za-z0-9._-]*)`)
 
@@ -68,24 +50,11 @@ func entities() []platform.Entity {
 	}
 }
 
-type Link struct {
-	From string    `json:"from"` // "<type>/<id>"
-	To   string    `json:"to"`
-	By   string    `json:"by"`
-	At   time.Time `json:"at"`
-}
-
-// Note is one protocol event on an entity's timeline, told by the app that decided it.
-type Note struct {
-	Entity string    `json:"entity"`
-	By     string    `json:"by"`
-	At     time.Time `json:"at"`
-	Title  string    `json:"title,omitempty"` // a protocol event's title, said in the reader's language (F-37)
-	Text   string    `json:"text"`
-}
+type Link = platform.RelationLink
+type Note = platform.RelationNote
 
 type Relations struct {
-	host   host.Host // the tenant running it, once composed
+	host   host.RelationsHost // the tenant running it, once composed
 	mu     sync.Mutex
 	links  []Link
 	notes  []Note
@@ -198,7 +167,7 @@ func (r *Relations) sees(c platform.Caller, entity string) bool {
 }
 
 // Attach is the host handing itself to the app (host.Attached).
-func (r *Relations) Attach(h host.Host) { r.host = h }
+func (r *Relations) AttachRelations(h host.RelationsHost) { r.host = h }
 
 func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	switch s.GetSchema().GetName() {
@@ -368,7 +337,7 @@ func (r *Relations) collaborate(c platform.Caller, s *pb.Submission, now time.Ti
 		if !strings.Contains(p.Target, "/") || !c.Replaying && !r.host.Readable(c.Member, p.Target, now) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
-		follow := Follow{Record: platform.Record{ID: FollowID(c.ID, p.Target)}, Member: c.ID, Target: p.Target}
+		follow := Follow{Record: platform.Record{ID: platform.FollowID(c.ID, p.Target)}, Member: c.ID, Target: p.Target}
 		existing, following := platform.Get[Follow](c, follow.ID)
 		following = following && !existing.Archived
 		if s.GetSchema().GetName() == SchemaFollow {

@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"platformserver/internal/host"
 	"slices"
 	"strings"
 
@@ -35,7 +36,7 @@ type AppPermissions struct {
 
 // Permissions is the tenant's catalog: every app it runs, every role, every action.
 func (t *Tenant) Permissions() []AppPermissions {
-	d, _ := t.app(PlatformApp).(*Console)
+	d, _ := t.app(PlatformApp).(host.IdentityDirectory)
 	out := []AppPermissions{}
 	for _, a := range t.apps {
 		m := a.Manifest()
@@ -46,7 +47,7 @@ func (t *Tenant) Permissions() []AppPermissions {
 		for _, role := range m.AllRoles() {
 			rp := RolePermissions{Role: role, Actions: []PermissionAction{}}
 			if d != nil {
-				rp.Holders = len(d.holding(m.ID, role))
+				rp.Holders = len(d.Holding(m.ID, role))
 			}
 			for _, act := range m.Actions.For(role) {
 				rp.Actions = append(rp.Actions, PermissionAction{ID: act.Schema, Title: act.Title, Scope: act.Target})

@@ -12,7 +12,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -37,7 +36,7 @@ type PreparedBatch struct {
 
 // ExpandFrame reads a frozen original frame on the I/O lane. Its summary,
 // owner and native version must agree with the accepted instance projection.
-func ExpandFrame(x FlowInstance, store host.FlowFrameStore) (*BatchFrame, error) {
+func (f *Flows) ExpandFrame(x FlowInstance, store platform.FlowFrameStore) (*BatchFrame, error) {
 	if x.Batch == nil {
 		return &BatchFrame{State: map[string]json.RawMessage{}}, nil
 	}
@@ -101,7 +100,7 @@ type BatchPreparation struct {
 
 // PlanBatch captures the retained definition and binding under the tenant
 // lock. The later I/O lane never reads the mutable definition registry.
-func (f *Flows) PlanBatch(x FlowInstance, c platform.Caller) (*BatchPreparation, *kernel.Error) {
+func (f *Flows) PlanBatch(x FlowInstance, c platform.Caller) (platform.FlowBatchPreparation, *kernel.Error) {
 	d := f.def(x.Flow, x.Version)
 	if d == nil || d.Continuous == nil || ended(x.State) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The continuous instance is unavailable")
@@ -156,11 +155,11 @@ func (plan *BatchPreparation) Intake() (string, *platform.StreamIntake, int) {
 
 // WindowTick creates an idempotent timer batch when the event-time grace has
 // closed a new slide. Its source checkpoint is byte-for-byte unchanged.
-func (plan *BatchPreparation) WindowTick(now time.Time, store host.FlowFrameStore) (Batch, bool, *kernel.Error) {
+func (plan *BatchPreparation) WindowTick(now time.Time, store platform.FlowFrameStore) (Batch, bool, *kernel.Error) {
 	if plan == nil || plan.rule.Intake == nil || plan.rule.Window == nil || plan.before.Batch == nil || plan.before.Batch.Source == nil || now.IsZero() {
 		return Batch{}, false, nil
 	}
-	frame, err := ExpandFrame(plan.before, store)
+	frame, err := plan.owner.ExpandFrame(plan.before, store)
 	if err != nil {
 		return Batch{}, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
@@ -206,7 +205,7 @@ type ComputeRetryPreparation struct {
 
 // PlanComputeRetry captures only a due entry retry. Its original rows are
 // rebuilt from the accepted sealed frame on the outside I/O lane.
-func (f *Flows) PlanComputeRetry(x FlowInstance, c platform.Caller, now time.Time) (*ComputeRetryPreparation, *kernel.Error) {
+func (f *Flows) PlanComputeRetry(x FlowInstance, c platform.Caller, now time.Time) (platform.FlowComputeRetryPreparation, *kernel.Error) {
 	d := f.def(x.Flow, x.Version)
 	if d == nil || d.Continuous == nil || d.Continuous.Entry == "" || d.Continuous.Window == nil || ended(x.State) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The continuous Compute retry is unavailable")
@@ -250,9 +249,9 @@ func (plan *ComputeRetryPreparation) Instance() string { return plan.before.ID }
 
 // Prepare recomputes only the retained operation request from the immutable
 // accepted frame; it does not reread the source or advance the batch cursor.
-func (plan *ComputeRetryPreparation) Prepare(now time.Time, store host.FlowFrameStore) (*PreparedComputeRetry, *kernel.Error) {
+func (plan *ComputeRetryPreparation) Prepare(now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedComputeRetry, *kernel.Error) {
 	x := plan.before
-	frame, err := ExpandFrame(x, store)
+	frame, err := plan.owner.ExpandFrame(x, store)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
@@ -374,7 +373,7 @@ func (d preparedComputeRetryDecision) Submit(c platform.Caller, sub *pb.Submissi
 
 // Prepare uses the original folding rule outside the tenant lock. No file
 // I/O or mutable registry read occurs in the accepted ledger callback.
-func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.FlowFrameStore) (*PreparedBatch, *kernel.Error) {
+func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *kernel.Error) {
 	x := plan.before
 	if err := validateArtifactCleanup(x); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
@@ -382,10 +381,11 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 	if x.CleanupPending {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Superseded Flow artifacts must be retired before another source batch is accepted")
 	}
-	frame, err := ExpandFrame(x, store)
+	frame, err := plan.owner.ExpandFrame(x, store)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
+	priorCursor := frame.Cursor
 	_, _, refusal := foldBatch(frame, plan.rule, batch, now)
 	if refusal != nil {
 		return nil, refusal
@@ -458,7 +458,7 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 	if x.Batch != nil && x.Batch.Sealed != nil {
 		retired = append(retired, *x.Batch.Sealed)
 	}
-	if frame.checkpointDue {
+	if frame.Cursor != priorCursor && frame.CheckpointEvery > 0 && frame.CheckpointCursor == frame.Cursor && !batch.Bootstrap && !batch.Tick {
 		if frame.CheckpointEvery < 1 || frame.CheckpointCursor == "" || frame.CheckpointCursor != frame.Cursor || frame.BatchesSinceCheckpoint != 0 {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared periodic checkpoint has an invalid cursor")
 		}
@@ -466,7 +466,6 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 		checkpoint.State = maps.Clone(frame.State)
 		checkpoint.DeadLetters = slices.Clone(frame.DeadLetters)
 		checkpoint.CheckpointArtifact, checkpoint.Sealed = nil, nil
-		checkpoint.checkpointDue = false
 		checkpointRef, checkpointErr := store.Seal(x.ID, x.Version, platform.Raw(checkpoint), plan.rule.FrameBytes)
 		if checkpointErr != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, checkpointErr.Error())
@@ -477,7 +476,6 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 		frame.CheckpointArtifact = &checkpointRef
 		artifacts = append(artifacts, checkpointRef)
 	}
-	frame.checkpointDue = false
 	ref, err := store.Seal(x.ID, x.Version, platform.Raw(frame), plan.rule.FrameBytes)
 	if err != nil {
 		for _, artifact := range artifacts {
@@ -493,9 +491,6 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 
 // BatchKey is stable across preparation races and process recovery. Content
 // is separately bound in the original submission payload and accepted frame.
-func BatchKey(instance string, version int, batch string) string {
-	return fmt.Sprintf("flow-batch:%x", sha256.Sum256(platform.Raw([]any{instance, version, batch})))
-}
 
 // Decision wraps the original app only for this native delivery. It has no
 // ledger, record store or executor of its own and is never registered as an app.
@@ -505,7 +500,7 @@ func (p *PreparedBatch) Decision() platform.App {
 
 func (p *PreparedBatch) Submission(tenant string) *pb.Submission {
 	return &pb.Submission{TenantId: tenant, Authority: ID, PrincipalId: "app:" + ID,
-		IdempotencyKey: BatchKey(p.before.ID, p.before.Version, p.batch.ID),
+		IdempotencyKey: platform.FlowBatchKey(p.before.ID, p.before.Version, p.batch.ID),
 		Target:         &pb.EntityRef{Type: InstanceType, Id: p.before.ID}, Schema: &pb.SchemaRef{Name: SchemaFlowBatch, Version: 1},
 		Payload: platform.Raw(map[string]string{"batch": p.batch.ID, "digest": p.frame.Fingerprint})}
 }

@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"platformserver/apps/ai"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
@@ -34,7 +33,7 @@ type acceptedEffect struct {
 	RequestHash   string             `json:"requestHash"`
 	Digest        string             `json:"digest"`
 	Outcome       platform.Outcome   `json:"outcome"`
-	Usage         *ai.Usage          `json:"usage,omitempty"`
+	Usage         *platform.AIUsage  `json:"usage,omitempty"`
 	UsageBefore   string             `json:"usageBefore,omitempty"`
 	CallbackError string             `json:"callbackError,omitempty"`
 	Before        effectState        `json:"before"`
@@ -264,7 +263,7 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 // settleAccepted stages the observed outcome and its callbacks before one
 // append. A failed append releases the transient in-flight flag so the same
 // outbound ID can be retried; neither the outcome nor callback becomes visible.
-func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *ai.Usage, at time.Time) {
+func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform.AIUsage, at time.Time) {
 	t.opsMu.Lock()
 	var pending *effect
 	for _, x := range t.outbound {
@@ -453,7 +452,7 @@ func captureDirectEffectRows(d *stagedDecision, owner string, eventRows map[stri
 	return rows, nil
 }
 
-func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out platform.Outcome, usage *ai.Usage, at time.Time) (err error) {
+func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out platform.Outcome, usage *platform.AIUsage, at time.Time) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			// An unsupported staged effect must never masquerade as a durable
@@ -483,9 +482,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		if app, ok := t.procs.(platform.App); ok {
 			processesOwner = draft.stateApp(app).(host.Processes)
 		}
-		if processes, ok := processesOwner.(interface {
-			OperationEnded(platform.Caller, string, time.Time) *kernel.Error
-		}); ok {
+		if processes, ok := processesOwner.(host.OperationCompletion); ok {
 			c := platform.NewCaller(draft, platform.Member{ID: "app:" + "flow", Tenant: t.ID}, "flow", false, true)
 			if err := processes.OperationEnded(c, x.ID, at); err != nil {
 				return err
@@ -517,7 +514,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		}
 	}
 	if t.agents != nil {
-		draft.stateApp(t.agents).(*Agents).effectEnded(t.automated(c, AgentApp), nil, x, out, at)
+		draft.stateApp(t.agents).(AgentRuntime).AgentEffectEnded(t.automated(c, AgentApp), nil, x, out, at)
 	}
 	if draft.failure != nil {
 		return draft.failure

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-jose/go-jose/v4"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-jose/go-jose/v4"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
 	"platformserver/apps/enterprise"
@@ -380,7 +380,7 @@ func TestDomainJoinConcurrentRequestsShareOneSeat(t *testing.T) {
 			t.Fatalf("concurrent admission: %s", id)
 		}
 	}
-	d := consoleOf(tn)
+	d := testConsoleOf(tn)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if len(d.members) != 2 || d.subjects["user:same@allowed.test"] != "same" {
@@ -393,7 +393,7 @@ func TestAcceptedProjectAndPackageState(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			compose := func() *Tenant {
 				tn, _, _ := upgradeTenant(t, "accepted-"+kind)
-				consoleOf(tn).index = &PackageIndex{Packages: []PackageDescriptor{{ID: "review.base", Version: "1.0.0", Namespace: "review", Title: "Review"}}}
+				testConsoleOf(tn).index = &PackageIndex{Packages: []PackageDescriptor{{ID: "review.base", Version: "1.0.0", Namespace: "review", Title: "Review"}}}
 				return tn
 			}
 			tn := compose()
@@ -417,7 +417,7 @@ func TestAcceptedProjectAndPackageState(t *testing.T) {
 			if _, err := tn.Submit(admin, sub, now); err == nil {
 				t.Fatal("failed append accepted state")
 			}
-			d := consoleOf(tn)
+			d := testConsoleOf(tn)
 			if len(d.projects) != 0 || len(d.packages) != 0 {
 				t.Fatal("failed append leaked state")
 			}
@@ -463,11 +463,11 @@ func TestDeploymentPackageIndexSurvivesTenantRebuild(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if views := consoleOf(fresh).PackageViews(); len(views) != 1 || views[0].Descriptor.ID != "review.base" {
+		if views := testConsoleOf(fresh).PackageViews(); len(views) != 1 || views[0].Descriptor.ID != "review.base" {
 			t.Fatalf("%s lost package catalogue: %+v", id, views)
 		}
 	}
-	if len(consoleOf(tn).PackageViews()) != 1 {
+	if len(testConsoleOf(tn).PackageViews()) != 1 {
 		t.Fatal("startup omitted package index")
 	}
 	deployment.Packages = filepath.Join(dir, "missing")

@@ -31,94 +31,30 @@ import (
 // BatchFrame is the continuous instance's own bookkeeping (ADR-0047 §13.3):
 // what has been consumed, the watermark, per-node state and what could not be
 // accepted. It is committed with the accepted result and replayed with it.
-type BatchFrame struct {
-	Cursor                 string                      `json:"cursor,omitempty"` // the batch identity consumed last
-	Predecessor            string                      `json:"predecessor,omitempty"`
-	Fingerprint            string                      `json:"fingerprint,omitempty"` // binds that cursor to the accepted batch bytes
-	Watermark              time.Time                   `json:"watermark,omitzero"`    // event time through which signals were folded
-	Consumed               int                         `json:"consumed"`              // signals folded, ever
-	Rejected               int                         `json:"rejected"`              // signals the flow refused, ever
-	State                  map[string]json.RawMessage  `json:"state,omitempty"`       // node name → its state
-	DeadLetters            []DeadLetter                `json:"deadLetters,omitempty"` // what could not be folded, and why
-	DeadLetterDropped      int                         `json:"deadLetterDropped,omitempty"`
-	StateBytes             int                         `json:"stateBytes,omitempty"`
-	CheckpointEvery        int                         `json:"checkpointEvery,omitempty"`
-	BatchesSinceCheckpoint int                         `json:"batchesSinceCheckpoint,omitempty"`
-	CheckpointCursor       string                      `json:"checkpointCursor,omitempty"`
-	CheckpointArtifact     *platform.FlowStateArtifact `json:"checkpointArtifact,omitempty"`
-	Sealed                 *platform.FlowStateArtifact `json:"sealed,omitempty"`
-	Source                 *SourceCheckpoint           `json:"source,omitempty"`
-	checkpointDue          bool
-}
+type BatchFrame = platform.FlowBatchFrame
 
 // SourceCheckpoint is the instance's own incremental position; it is accepted
 // with its window state, rather than written onto the import source's cursor.
-type SourceCheckpoint struct {
-	Record      string   `json:"record"`
-	Config      string   `json:"config"`
-	Cursor      string   `json:"cursor"`
-	Sources     []string `json:"sources"`
-	Offset      string   `json:"offset,omitempty"`
-	Initialized bool     `json:"initialized,omitempty"`
-}
+type SourceCheckpoint = platform.FlowSourceCheckpoint
 
 // DeadLetter keeps one signal that could not be folded, with its cause, so it
 // can be inspected and replayed under the original authorization (ADR-0047 §13.3).
-type DeadLetter struct {
-	Batch      string    `json:"batch"`
-	Partition  string    `json:"partition,omitempty"`
-	Key        string    `json:"key,omitempty"`
-	At         time.Time `json:"at,omitzero"`
-	RecordedAt time.Time `json:"recordedAt,omitzero"`
-	Reason     string    `json:"reason"`
-	Value      string    `json:"value,omitempty"`
-}
+type DeadLetter = platform.FlowDeadLetter
 
 // Batch is one accepted batch of a real source: its identity, its predecessor,
 // and the signals it carries with their event times.
-type Batch struct {
-	ID          string
-	Predecessor string
-	Signals     []Signal
-	Bootstrap   bool              `json:"bootstrap,omitempty"`
-	Tick        bool              `json:"tick,omitempty"` // host slide tick; never advances the source checkpoint
-	Source      *SourceCheckpoint `json:"Source,omitempty"`
-}
+type Batch = platform.FlowBatch
 
 // Signal is one arriving measurement.
-type Signal struct {
-	Key       string
-	Partition string
-	At        time.Time
-	Value     json.RawMessage
-}
+type Signal = platform.FlowSignal
 
 // BatchOutcome is what the flow did with a batch.
-type BatchOutcome struct {
-	Cursor    string    `json:"cursor"`
-	Watermark time.Time `json:"watermark,omitzero"`
-	Consumed  int       `json:"consumed"`
-	Rejected  int       `json:"rejected"`
-	StateSize int       `json:"stateSize"`
-}
+type BatchOutcome = platform.FlowBatchOutcome
 
 // ContinuousWindowInput is the token-local projection passed to the retained
 // Compute entry for one ready window. The full frame remains in its original
 // sealed artifact; only operation inputs may temporarily hold these bytes.
-type ContinuousWindowInput struct {
-	Source      string                     `json:"source"`
-	Batch       string                     `json:"batch"`
-	Predecessor string                     `json:"predecessor,omitempty"`
-	Cursor      string                     `json:"cursor"`
-	Watermark   time.Time                  `json:"watermark"`
-	WindowStart time.Time                  `json:"windowStart"`
-	WindowEnd   time.Time                  `json:"windowEnd"`
-	EmittedAt   time.Time                  `json:"emittedAt"`
-	Consumed    int                        `json:"consumed"`
-	Rejected    int                        `json:"rejected"`
-	Signals     []Signal                   `json:"signals"`
-	Outputs     map[string]json.RawMessage `json:"outputs"` // the previous accepted Flow outputs, for stateful Compute steps
-}
+type ContinuousWindowInput = platform.FlowWindowInput
 
 // ConsumeBatch folds one batch into a continuous instance as one decision.
 func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time.Time) (BatchOutcome, *kernel.Error) {
@@ -204,12 +140,7 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 
 // BatchStateReference names original instance state, not an arbitrary file or
 // URL. A consumer must read that instance as its member and verify the digest.
-type BatchStateReference struct {
-	Instance string `json:"instance"`
-	Node     string `json:"node"`
-	Digest   string `json:"digest"`
-	Size     int    `json:"size"`
-}
+type BatchStateReference = platform.FlowBatchStateReference
 
 // admitBatch is the batch's admission rule, apart from any tenant state: a batch
 // over the declared budget, or one whose predecessor is not the frame's cursor,
@@ -282,7 +213,6 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 	// No cursor, watermark, counter or dead letter is committed before the
 	// whole successor fits its declaration. Original state bytes stay intact.
 	next := *frame
-	next.checkpointDue = false
 	next.CheckpointEvery = declared.CheckpointEvery
 	next.State = maps.Clone(frame.State)
 	next.DeadLetters = slices.Clone(frame.DeadLetters)
@@ -344,7 +274,6 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 		if next.BatchesSinceCheckpoint >= declared.CheckpointEvery {
 			next.BatchesSinceCheckpoint = 0
 			next.CheckpointCursor = next.Cursor
-			next.checkpointDue = true
 		}
 	}
 	raw, err := json.Marshal(next)

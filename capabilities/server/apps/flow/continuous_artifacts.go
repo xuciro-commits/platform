@@ -68,7 +68,7 @@ type ArtifactCleanupPreparation struct {
 	tenant string
 }
 
-func (f *Flows) PlanArtifactCleanup(x FlowInstance, at time.Time) (*ArtifactCleanupPreparation, *kernel.Error) {
+func (f *Flows) PlanArtifactCleanup(x FlowInstance, at time.Time) (platform.FlowArtifactCleanupPreparation, *kernel.Error) {
 	if !x.CleanupPending || len(x.ArtifactCleanup) == 0 || at.IsZero() {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow has no due artifact cleanup")
 	}

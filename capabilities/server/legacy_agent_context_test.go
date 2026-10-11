@@ -56,9 +56,9 @@ func TestLegacyFlowAgentContextPreservesExactAcceptedPredecessor(t *testing.T) {
 func TestRecoveredContextDoesNotGrantANewModelRead(t *testing.T) {
 	tn := stockTenant(t, NewAgents("t-1"))
 	definition := &agentDef{app: "stock"}
-	tn.agents.defs["stock.guide"] = definition
+	tn.agents.(*Agents).defs["stock.guide"] = definition
 	run := AgentRunRecord{Agent: "stock.guide", Ref: "foreign.record/I1", Seen: "private historical context"}
-	request := tn.agents.prompt(tn.automation(AgentApp, false), definition, run, "test", time.Now())
+	request := tn.agents.(*Agents).prompt(tn.automation(AgentApp, false), definition, run, "test", time.Now())
 	for _, message := range request.Messages {
 		if strings.Contains(message.Content, run.Seen) {
 			t.Fatal("a historical context bypassed the current reader")

@@ -16,12 +16,6 @@ import (
 // offered to whoever may read what it shows — and the workspace turns it into
 // an entry in the launcher beside the apps that came as code.
 
-const (
-	AppType        = "build.app"
-	SchemaHandOver = AppType + ".publish"
-	pagesHelp      = "The pages it holds, by their name, in the order people see them"
-)
-
 // Application is an application this organisation hands to its people.
 type Application struct {
 	platform.Record
@@ -42,12 +36,6 @@ type Application struct {
 	// Published is the application as it was last handed over: what people open,
 	// and what a restore puts back.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-}
-
-// Group is one heading in an application's navigation.
-type Group struct {
-	Title string   `json:"title" field:"required" title:"Heading"`
-	Pages []string `json:"pages" title:"Pages" help:"Pages of the application, by their name, in their order"`
 }
 
 func (b *Build) applicationEntity() platform.Entity {

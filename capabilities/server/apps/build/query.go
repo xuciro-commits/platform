@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+
 	"slices"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"platformserver/platform"
 )
 
-const QueryType = "build.query"
 const SchemaQuery = QueryType + ".publish"
 
 // Query owns one bounded declaration and its retained publications. Draft
@@ -37,7 +37,7 @@ type Query struct {
 
 // definition projects the stored fields into the shared runtime declaration;
 // field validation and execution remain owned by the original record reader.
-func (f Query) definition() platform.NamedQuery {
+func (f Query) Definition() platform.NamedQuery {
 	return platform.NamedQuery{Name: f.Name, Title: f.Title, Description: f.Description, Object: f.Object, Interface: f.Interface, InterfaceShape: f.InterfaceShape, Implementations: f.Implementations, By: f.By, Domain: f.Domain, Sort: f.Sort, Limit: f.Limit}
 }
 
@@ -59,9 +59,9 @@ func (b *Build) checkQuery(f Query) error {
 	}
 	var validation error
 	if f.Interface != "" && b.jointMode {
-		_, validation = b.host.BindInterfaceQuery(f.definition(), b.queryDraftObjects()...)
+		_, validation = b.host.BindInterfaceQuery(f.Definition(), b.queryDraftObjects()...)
 	} else {
-		validation = b.host.ValidateInstallQuery(f.definition())
+		validation = b.host.ValidateInstallQuery(f.Definition())
 	}
 	if validation != nil {
 		return validation
@@ -84,7 +84,7 @@ func (b *Build) checkQuery(f Query) error {
 
 func (b *Build) bindQuery(f Query) (Query, error) {
 	if f.Interface != "" {
-		q := f.definition()
+		q := f.Definition()
 		q.InterfaceShape, q.Implementations = nil, nil
 		bound, err := b.host.BindInterfaceQuery(q, b.queryDraftObjects()...)
 		if err != nil {
@@ -139,7 +139,7 @@ func queryImage(image []byte) (Query, error) {
 	var latest Query
 	for i, raw := range record.Versions {
 		f, ok := wasPublished[Query](raw)
-		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Object != latest.Object || f.Interface != latest.Interface) {
+		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Object != latest.Object || f.Interface != latest.Interface) {
 			return Query{}, fmt.Errorf("accepted query has a malformed version %d", i+1)
 		}
 		latest = f
@@ -153,7 +153,7 @@ func (b *Build) queryInventory() ([]Query, error) {
 
 func (b *Build) installQuery(c platform.Caller, f Query) error {
 
-	if err := b.host.InstallQuery(c, f.definition(), f.Version); err != nil {
+	if err := b.host.InstallQuery(c, f.Definition(), f.Version); err != nil {
 		return err
 	}
 	b.queries[f.Name] = f
@@ -163,7 +163,7 @@ func (b *Build) installQuery(c platform.Caller, f Query) error {
 func (b *Build) QueryDefinition(name string, version int) (platform.NamedQuery, int, bool) {
 	installed, ok := b.queries[name]
 	if ok && (version == 0 || version == installed.Version) {
-		return installed.definition(), installed.Version, true
+		return installed.Definition(), installed.Version, true
 	}
 	if version == 0 {
 		return platform.NamedQuery{}, 0, false
@@ -183,7 +183,7 @@ func (b *Build) QueryDefinition(name string, version int) (platform.NamedQuery, 
 		}
 		f, ok := wasPublished[Query](record.Versions[version-1])
 		if ok && f.Version == version {
-			return f.definition(), version, true
+			return f.Definition(), version, true
 		}
 	}
 	return platform.NamedQuery{}, 0, false
@@ -197,7 +197,7 @@ func (b *Build) queryDeclarations() []platform.NamedQuery {
 	slices.Sort(names)
 	out := make([]platform.NamedQuery, 0, len(names))
 	for _, name := range names {
-		out = append(out, b.queries[name].definition())
+		out = append(out, b.queries[name].Definition())
 	}
 	return out
 }

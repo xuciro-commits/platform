@@ -1697,5 +1697,8 @@
   "Compilation requests require a private decision": "编译请求需要私有决定",
   "Function requests require a private decision": "函数请求需要私有决定",
   "The decision cannot re-enter its held ledger": "决定不能重复进入正在执行的账本",
-  "The decision cannot re-enter its held owner": "决定不能重复进入正在执行的归属方"
+  "The decision cannot re-enter its held owner": "决定不能重复进入正在执行的归属方",
+  "AI capability unavailable": "AI 能力不可用",
+  "Books owner does not provide posting checks": "账簿所属应用未提供过账检查",
+  "The approval owner is unavailable": "审批所属应用不可用"
 }

@@ -96,7 +96,7 @@ func decodeControl(raw []byte, v any) error {
 }
 
 func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
-	view := &Tenant{ID: t.ID, apps: t.apps, owner: t.owner, definitions: t.definitions, records: t.records, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
+	view := &Tenant{ID: t.ID, identity: t.identity, apps: t.apps, owner: t.owner, definitions: t.definitions, records: t.records, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
 		bindings: maps.Clone(t.bindings), connectors: newConnectorRoster(), work: newWorkBoard(), works: t.forkWorkState()}
 	for _, j := range t.work.jobs {
 		copy := *j
@@ -299,7 +299,7 @@ func (d *stagedDecision) controlHost() *Tenant {
 		return d.failure
 	}
 	if d.tenant.agents != nil {
-		view.agents = d.stateApp(d.tenant.agents).(*Agents)
+		view.agents = d.stateApp(d.tenant.agents).(AgentRuntime)
 	}
 	d.control = &controlDecision{view, base}
 	return view
@@ -563,7 +563,7 @@ func (d *stagedDecision) forkControlDecision(original *controlDecision) {
 		return d.failure
 	}
 	if d.tenant.agents != nil {
-		view.agents = d.stateApp(d.tenant.agents).(*Agents)
+		view.agents = d.stateApp(d.tenant.agents).(AgentRuntime)
 	}
 	d.control = &controlDecision{view, maps.Clone(original.base)}
 }

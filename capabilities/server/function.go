@@ -259,9 +259,7 @@ func functionDefinition(app platform.App, name string, version int) (platform.AI
 	if app == nil {
 		return platform.AIFunction{}, 0, false
 	}
-	if owner, ok := app.(interface {
-		FunctionDefinition(string, int) (platform.AIFunction, int, bool)
-	}); ok {
+	if owner, ok := app.(platform.FunctionDefinitions); ok {
 		return owner.FunctionDefinition(name, version)
 	}
 	if version != 0 {

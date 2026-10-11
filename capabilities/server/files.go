@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"platformserver/apps/files"
 	"platformserver/platform"
 )
 
@@ -31,10 +30,10 @@ type Upload struct {
 
 // Upload keeps the bytes the member sent, when the tenant runs the files app.
 func (t *Tenant) Upload(m platform.Member, name, contentType string, body io.Reader, now time.Time) (Upload, int, error) {
-	if t.app(files.ID) == nil {
+	if t.app(platform.FileApp) == nil {
 		return Upload{}, http.StatusNotFound, fmt.Errorf("the tenant runs no files app")
 	}
-	limit := files.Max(t.automation(files.ID, false))
+	limit := platform.MaxFileSize(t.automation(platform.FileApp, false))
 	data, err := io.ReadAll(io.LimitReader(body, int64(limit)+1))
 	if err != nil {
 		return Upload{}, http.StatusBadRequest, err
@@ -60,10 +59,10 @@ func (t *Tenant) SweepUploads(now time.Time) {
 	if len(old) == 0 {
 		return
 	}
-	c := t.automation(files.ID, false)
-	attached, _, _ := platform.Find[files.File](c, platform.Query{Limit: 100000, Archived: true})
+	c := t.automation(platform.FileApp, false)
+	attached, _, _ := platform.Find[platform.File](c, platform.Query{Limit: 100000, Archived: true})
 	for _, hash := range old {
-		if !slices.ContainsFunc(attached, func(f files.File) bool { return f.Hash == hash }) {
+		if !slices.ContainsFunc(attached, func(f platform.File) bool { return f.Hash == hash }) {
 			t.files().Delete(context.Background(), t.ID+"/"+hash)
 		}
 		t.uploads.forget(hash)
@@ -72,12 +71,12 @@ func (t *Tenant) SweepUploads(now time.Time) {
 
 // Download writes a file m may read, as an attachment the browser never renders in place.
 func (t *Tenant) Download(w http.ResponseWriter, m platform.Member, id string, now time.Time) {
-	v, err := t.RecordOf(m, files.FileType, id, now)
+	v, err := t.RecordOf(m, platform.FileType, id, now)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	f := v.Record.(files.File)
+	f := v.Record.(platform.File)
 	body, size, gerr := t.files().Get(context.Background(), t.ID+"/"+f.Hash)
 	if gerr != nil {
 		http.Error(w, "the file's bytes are not in the store", http.StatusServiceUnavailable)

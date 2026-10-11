@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	buildapi "platformserver/internal/host/buildapi"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,7 +12,7 @@ import (
 )
 
 func functionReleaseAsset(f Function, sourceVersion string) (platform.ReleaseAsset, error) {
-	body, err := json.Marshal(f.definition())
+	body, err := json.Marshal(f.Definition())
 	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: f.Name}, ContractVersion: 1,
 		SourceVersion: sourceVersion + ".function-" + strconv.Itoa(f.Version), Requires: []platform.AssetRef{{App: ID, Kind: platform.AssetObject, Name: f.Object}}, Body: body}, err
 }
@@ -58,7 +59,7 @@ func (b *Build) InstallFunctionAsset(asset platform.ReleaseAsset) error {
 	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal ||
 		asset.ContractVersion != 1 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetFunction ||
 		json.Unmarshal(asset.Body, &f) != nil || f.Name != asset.Ref.Name ||
-		f.definition().Check() != nil || len(asset.Requires) != 1 || asset.Requires[0] != (platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Object}) {
+		f.Definition().Check() != nil || len(asset.Requires) != 1 || asset.Requires[0] != (platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Object}) {
 		return fmt.Errorf("invalid builder function asset %s", asset.Ref)
 	}
 	if _, exists := b.functions[f.Name]; exists {
@@ -138,7 +139,7 @@ func (b *Build) prepareFunctionReleasePublications(assets []platform.ReleaseAsse
 			continue
 		}
 		var frozen Function
-		if version != record.Version+1 || decodeIntegration(asset.Body, &frozen) != nil || frozen.definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
+		if version != record.Version+1 || buildapi.ValueDecodeIntegration(asset.Body, &frozen) != nil || frozen.Definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
 			return nil, fmt.Errorf("function version requires its retained predecessors and matching target definition")
 		}
 		expected, err := functionReleaseAsset(Function{Name: frozen.Name, Object: frozen.Object, Version: version}, b.Manifest().Version)

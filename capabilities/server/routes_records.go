@@ -10,14 +10,15 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/enterprise"
+	"platformserver/internal/host"
+	enterprise "platformserver/internal/host/enterpriseapi"
 	"platformserver/platform"
 )
 
 // enterpriseApp is the tenant's enterprise modeling app, when one is mounted:
 // the typed query and resolve reads (ADR-0094) dispatch into it.
-func enterpriseApp(t *Tenant) *enterprise.Enterprise {
-	d, _ := t.app(enterprise.ID).(*enterprise.Enterprise)
+func enterpriseApp(t *Tenant) host.EnterpriseQueries {
+	d, _ := t.app(enterprise.ID).(host.EnterpriseQueries)
 	return d
 }
 

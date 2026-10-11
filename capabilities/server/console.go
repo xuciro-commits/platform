@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -69,7 +70,7 @@ type Console struct {
 	packages map[string]*InstalledPackage
 	index    *PackageIndex
 	ledger   *platform.Ledger
-	t        *Tenant // the tenant running it, once composed (NewTenant)
+	host     host.ConsoleHost // only governance capabilities, attached at composition
 }
 
 func ConsoleActions() *platform.Catalog {
@@ -216,11 +217,11 @@ func (d *Console) restoreAccess(s consoleState) {
 	if d.packages == nil {
 		d.packages = map[string]*InstalledPackage{}
 	}
-	if d.t != nil {
+	if d.host != nil {
 		for id, role := range d.roles {
 			next := s.Roles[id]
 			if next == nil || next.App != role.App {
-				if app := d.t.app(role.App); app != nil {
+				if app := d.host.App(role.App); app != nil {
 					app.Manifest().Actions.DefineRole(id, nil)
 				}
 			}
@@ -243,7 +244,7 @@ func (d *Console) restoreAccess(s consoleState) {
 }
 
 // Member is the member a subject signs in as, with its current roles.
-func (d *Console) Member(subject string) (platform.Member, bool) {
+func (d *Console) MemberBySubject(subject string) (platform.Member, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	m := d.members[d.subjects[subject]]
@@ -254,7 +255,7 @@ func (d *Console) Member(subject string) (platform.Member, bool) {
 }
 
 // holding are the members with role in app, sorted.
-func (d *Console) holding(app, role string) []string {
+func (d *Console) Holding(app, role string) []string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var out []string
@@ -320,7 +321,7 @@ func (d *Console) ForkAcceptedState() (platform.App, error) {
 	}
 	// Every mutable slice, pointer and map belongs to this private decision.
 	fork := NewConsole(d.tenant)
-	fork.ledger, fork.index, fork.t = d.ledger, d.index, d.t
+	fork.ledger, fork.index, fork.host = d.ledger, d.index, d.host
 	fork.members, fork.subjects = state.Members, state.Subjects
 	if state.Profiles != nil {
 		fork.profiles = state.Profiles
@@ -471,7 +472,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				apply(r)
 			}, err
 		}
-		if d.t == nil { // not composed: a tenant's operations need one
+		if d.host == nil { // not composed: a tenant's operations need one
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		return platform.ControlDecision(c, s, now)
@@ -523,10 +524,10 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		}, nil
 	}
 	// SchemaGrant: only a role the app defines, in an app the tenant runs.
-	if d.t == nil {
+	if d.host == nil {
 		return nil, invalid
 	}
-	if app := d.t.app(p.App); app == nil || !slices.Contains(app.Manifest().AllRoles(), p.Role) {
+	if app := d.host.App(p.App); app == nil || !slices.Contains(app.Manifest().AllRoles(), p.Role) {
 		return nil, invalid
 	}
 	if p.Unit != "" && p.Structure == "" {
@@ -559,43 +560,25 @@ type MemberView struct {
 // Read "notifications": the caller's own. Every other read is for the tenant's
 // administrators only.
 func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
-	t := d.t
-	if t != nil && name == "notifications" {
-		return t.notificationsFor(c.ID), nil
+	h := d.host
+	if h != nil && name == "notifications" {
+		return h.GovernanceRead(c, name)
 	}
 	if name == "contributions" {
 		return d.Contributions(), nil
 	}
 	if name == "tenant" {
-		return d.tenantRecord(), nil
+		return d.TenantRecord(), nil
 	}
 	if name == "account" {
 		return d.Account(c.ID), nil
 	}
-	if t == nil || !c.Holds(PlatformApp, Admin) && (!c.Holds(PlatformApp, Auditor) || !auditorMayRead(name)) {
+	if h == nil || !c.Holds(PlatformApp, Admin) && (!c.Holds(PlatformApp, Auditor) || !auditorMayRead(name)) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	switch name {
-	case "audit":
-		return t.Audit(), nil
-	case "deliveries":
-		return t.Deliveries(), nil
-	case "work":
-		return t.Tasks(), nil
-	case "connectors":
-		return t.Connectors(time.Now()), nil
-	case "settings":
-		return t.Settings(), nil
-	case "endpoints":
-		return t.Endpoints(), nil
-	case "effects":
-		return t.Effects(time.Now()), nil
-	case "health":
-		return t.Health(time.Now()), nil
-	case "personal-reads":
-		return t.PersonalReads(), nil
-	case "permissions":
-		return t.Permissions(), nil
+	case "audit", "deliveries", "work", "connectors", "settings", "endpoints", "effects", "health", "personal-reads", "permissions":
+		return h.GovernanceRead(c, name)
 	case "access":
 		return d.Access(), nil
 	case "projects":
@@ -624,17 +607,15 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 // Input "heartbeat": a connector reports it is alive (not journaled; health
 // reads stale after a restart until the next one).
 func (d *Console) Input(c platform.Caller, name string, _ []byte, now time.Time) (any, *kernel.Error) {
-	if name != "heartbeat" || d.t == nil {
+	if name != "heartbeat" || d.host == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
-	d.t.opsMu.Lock()
-	defer d.t.opsMu.Unlock()
-	return nil, d.t.connectors.kernel.Heartbeat(c.Tenant, c.ID, now)
+	return nil, d.host.ConnectorHeartbeat(c, now)
 }
 
 // language is the language a member reads (ADR-0023 6b): their own choice,
 // else the tenant's default; "" is English, or what the browser asks for.
-func (d *Console) language(member string) string {
+func (d *Console) Language(member string) string {
 	d.mu.Lock()
 	preferred := ""
 	if p := d.profiles[member]; p != nil {
@@ -651,15 +632,8 @@ func (d *Console) language(member string) string {
 
 // member is a member of the tenant by ID, with its current roles.
 func (t *Tenant) member(id string) (platform.Member, bool) {
-	d, ok := t.app(PlatformApp).(*Console)
-	if !ok {
+	if t.identity == nil {
 		return platform.Member{}, false
 	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	m := d.members[id]
-	if m == nil {
-		return platform.Member{}, false
-	}
-	return d.currentMember(m), true
+	return t.identity.MemberByID(id)
 }

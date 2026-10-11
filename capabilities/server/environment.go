@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"platformserver/apps/build"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 

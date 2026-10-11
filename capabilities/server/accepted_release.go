@@ -11,8 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"platformserver/apps/build"
-	"platformserver/apps/work"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -428,7 +427,7 @@ func (t *Tenant) runningReleaseLocked(saved platform.ReleaseCandidate) (platform
 // pending approval holds: the approval must run under the release it opened
 // in (ADR-0039 D4). There is no migration; decide or withdraw it first.
 func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
-	if t.app(work.ID) == nil {
+	if t.app(platform.WorkApp) == nil {
 		return nil
 	}
 	candidate, err := platform.ReadCandidate(candidateID, raw)
@@ -444,7 +443,7 @@ func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
 		}
 		return nil
 	}
-	pending, _, _ := platform.Find[work.ApprovalRequest](t.automation(work.ID, false),
+	pending, _, _ := platform.Find[platform.ApprovalRequest](t.automation(platform.WorkApp, false),
 		platform.Query{Domain: json.RawMessage(`[["state","=","pending"]]`), Sort: []string{"id"}})
 	for _, request := range pending {
 		next := actionIn(candidate, request.Action)

@@ -13,11 +13,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/files"
-	"platformserver/apps/flow"
-	"platformserver/apps/knowledge"
-	"platformserver/apps/relations"
-	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -314,7 +309,7 @@ func (s *recordStore) declare(a platform.App) error {
 // a knowledge field of its own, the knowledge app's document, or a file that
 // may be attached to either (ADR-0022 D1). The index re-cuts only these.
 func knowledgeBearing(info platform.EntityInfo) bool {
-	return info.Type == knowledge.DocumentType || info.Type == files.FileType || info.KnowledgeFiles ||
+	return info.Type == platform.KnowledgeDocumentType || info.Type == platform.FileType || info.KnowledgeFiles ||
 		slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Knowledge })
 }
 
@@ -1496,7 +1491,7 @@ type RecordView struct {
 	Comments    []any             `json:"comments"`  // on it, oldest first (ADR-0028 D6)
 	Following   bool              `json:"following"` // the member follows it
 	Linked      []Related         `json:"linked"`    // records of any app linked to it (the relations app), by type, that the member may read
-	Activity    []any             `json:"activity"`  // what apps told about it through protocols (relations.Note), oldest first
+	Activity    []any             `json:"activity"`  // what apps told about it through protocols (platform.RelationNote), oldest first
 }
 
 type Related struct {
@@ -1540,38 +1535,38 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	}
 	values, valueErrors := propertyValues(seen.info, record)
 	view := RecordView{Values: values, ValueErrors: valueErrors, Record: record, History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
-	if c := t.app(relations.ID); c != nil && typ != relations.CommentType && typ != relations.FollowType {
+	if c := t.app(platform.RelationsApp); c != nil && typ != platform.CommentType && typ != platform.FollowType {
 		about, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
-		if page, err := t.Records(m, relations.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {
+		if page, err := t.Records(m, platform.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {
 			view.Comments = page.Records
 		}
-		if f, ok := platform.Get[relations.Follow](t.automation(relations.ID, false), relations.FollowID(m.ID, typ+"/"+id)); ok && !f.Archived {
+		if f, ok := platform.Get[platform.RecordFollow](t.automation(platform.RelationsApp, false), platform.FollowID(m.ID, typ+"/"+id)); ok && !f.Archived {
 			view.Following = true
 		}
 		view.Linked, view.Activity = t.linked(m, c, typ+"/"+id, now)
 	}
 	t.readPersonal(m, seen, []string{id}, now)
-	if typ != files.FileType && t.app(files.ID) != nil {
+	if typ != platform.FileType && t.app(platform.FileApp) != nil {
 		domain, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
-		if page, err := t.Records(m, files.FileType, platform.Query{Domain: domain, Sort: []string{"id"}, Limit: 100}, now); err == nil {
+		if page, err := t.Records(m, platform.FileType, platform.Query{Domain: domain, Sort: []string{"id"}, Limit: 100}, now); err == nil {
 			view.Files = page.Records
 		}
 	}
 	if t.procs != nil {
 		domain, _ := json.Marshal([]any{[]any{"subject", "=", typ + "/" + id}})
-		if page, err := t.Records(m, flow.InstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
+		if page, err := t.Records(m, platform.FlowInstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
 			view.Processes = page.Records
 		}
 	}
-	if typ != work.TaskType && t.app(work.ID) != nil {
+	if typ != platform.WorkTaskType && t.app(platform.WorkApp) != nil {
 		domain, _ := json.Marshal([]any{[]any{"ref", "=", typ + "/" + id}, []any{"state", "=", "open"}})
-		if page, err := t.Records(m, work.TaskType, platform.Query{Domain: domain, Sort: []string{"due"}, Limit: 20}, now); err == nil {
+		if page, err := t.Records(m, platform.WorkTaskType, platform.Query{Domain: domain, Sort: []string{"due"}, Limit: 20}, now); err == nil {
 			view.Tasks = page.Records
 		}
 	}
-	if typ != work.ApprovalType && t.app(work.ID) != nil {
+	if typ != platform.WorkApprovalType && t.app(platform.WorkApp) != nil {
 		domain, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
-		if page, err := t.Records(m, work.ApprovalType, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 20}, now); err == nil {
+		if page, err := t.Records(m, platform.WorkApprovalType, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 20}, now); err == nil {
 			view.Approvals = page.Records
 		}
 	}
@@ -1638,7 +1633,7 @@ func (t *Tenant) linked(m platform.Member, rel platform.App, entity string, now 
 		out[i].Total++
 	}
 	if notes, err := rel.Read(c, "timeline"); err == nil {
-		for _, n := range notes.([]relations.Note) {
+		for _, n := range notes.([]platform.RelationNote) {
 			if n.Entity == entity {
 				activity = append(activity, n)
 			}

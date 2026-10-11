@@ -8,7 +8,6 @@ package files
 import (
 	"encoding/json"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,28 +27,18 @@ const (
 	SettingMax     = "max-size-mb"
 )
 
-// File is a file attached to a record.
-type File struct {
-	platform.Record
-	Name        string        `json:"name" field:"required,search" help:"The file's name as it was uploaded"`
-	ContentType string        `json:"contentType" field:"readonly" title:"Type"`
-	Size        int           `json:"size" field:"readonly" help:"Bytes"`
-	Hash        string        `json:"hash" field:"readonly" help:"The SHA-256 of its bytes: where the store keeps them"`
-	Target      string        `json:"target" field:"readonly" title:"Attached to" help:"<type>/<id> of the record"`
-	By          string        `json:"by" field:"readonly" title:"Attached by"`
-	Regions     []ImageRegion `json:"regions,omitempty" field:"readonly,aside" type:"json" title:"Image regions"`
-}
+type File = platform.File
 
 var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type Files struct {
 	mu     sync.Mutex
-	host   host.Host
+	host   host.FileHost
 	ledger *platform.Ledger
 }
 
 // Attach is called by the host when a tenant is composed.
-func (f *Files) Attach(h host.Host) { f.host = h }
+func (f *Files) AttachFiles(h host.FileHost) { f.host = h }
 
 // New is a tenant's files app.
 func New(tenant string) *Files {
@@ -92,15 +81,6 @@ func (f *Files) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-// Max is the largest file the tenant accepts, in bytes.
-func Max(c platform.Caller) int {
-	mb, err := strconv.Atoi(c.Setting(SettingMax))
-	if err != nil || mb <= 0 {
-		mb = 25
-	}
-	return mb << 20
-}
-
 func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -125,7 +105,7 @@ func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				if !f.host.Readable(c.Member, p.Target, now) {
 					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 				}
-				if p.Size > Max(c) || !f.host.Stored(c.Tenant, p.Hash) {
+				if p.Size > platform.MaxFileSize(c) || !f.host.Stored(c.Tenant, p.Hash) {
 					return nil, invalid
 				}
 			}

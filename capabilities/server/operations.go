@@ -442,7 +442,7 @@ const noticesKept = 2000
 func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
 	members := t.recipients(c, now, to)
 	delivery := map[string]Reach{} // how each member wants to be told (ADR-0079 §3)
-	if d, ok := t.app(PlatformApp).(*Console); ok {
+	if d, ok := t.app(PlatformApp).(IdentityProfile); ok {
 		for _, m := range members {
 			delivery[m] = d.Reach(m)
 		}
@@ -458,8 +458,8 @@ func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Reci
 			members = append(members, r.Member)
 		}
 		if r.AppRole != "" {
-			if d, ok := t.app(PlatformApp).(*Console); ok {
-				for _, m := range d.holding(c.App, r.AppRole) {
+			if d, ok := t.app(PlatformApp).(host.IdentityDirectory); ok {
+				for _, m := range d.Holding(c.App, r.AppRole) {
 					if !slices.Contains(members, m) {
 						members = append(members, m)
 					}

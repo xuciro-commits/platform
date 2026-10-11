@@ -8,8 +8,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
-	"platformserver/apps/core"
+	"platformserver/internal/host"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -21,7 +21,7 @@ import (
 
 // journalEffects plans the entry of one accepted decision.
 func (t *Tenant) journalEffects(e platform.Event) []platform.Effect {
-	if e.App != build.ID || t.app(core.ID) == nil {
+	if e.App != build.ID || t.app(platform.BooksApp) == nil {
 		return nil
 	}
 	s := e.Record.GetSubmission()
@@ -65,7 +65,7 @@ func (t *Tenant) journalEffects(e platform.Event) []platform.Effect {
 // entry itself is rejected and stays visible in the effect log.
 func (t *Tenant) sendBooks(x platform.Effect, now time.Time) platform.Outcome {
 	out := platform.Outcome{Effect: x.ID}
-	app := t.app(core.ID)
+	app := t.app(platform.BooksApp)
 	if app == nil {
 		out.Result, out.Detail = "retry", "the books are not installed"
 		return out
@@ -79,17 +79,17 @@ func (t *Tenant) sendBooks(x platform.Effect, now time.Time) platform.Outcome {
 		out.Result, out.Detail = "rejected", reverse.Error
 		return out
 	}
-	var entry core.Journal
+	var entry platform.Journal
 	if json.Unmarshal([]byte(x.Body), &entry) != nil || len(entry.Lines) == 0 && reverse.ID == "" {
 		out.Result, out.Detail = "rejected", "nothing to book"
 		return out
 	}
 	payload, _ := json.Marshal(map[string]any{"date": entry.Date, "text": entry.Text, "currency": entry.Currency, "lines": entry.Lines, "source": entry.Source})
-	sub := &pb.Submission{TenantId: t.ID, Authority: core.ID, IdempotencyKey: "books:" + x.Key,
-		Target: &pb.EntityRef{Type: core.JournalType, Id: entry.ID}, Schema: &pb.SchemaRef{Name: core.JournalType + ".create", Version: 1}, Payload: payload}
+	sub := &pb.Submission{TenantId: t.ID, Authority: platform.BooksApp, IdempotencyKey: "books:" + x.Key,
+		Target: &pb.EntityRef{Type: platform.JournalType, Id: entry.ID}, Schema: &pb.SchemaRef{Name: platform.JournalType + ".create", Version: 1}, Payload: payload}
 	if reverse.ID != "" {
 		sub.Target.Id = reverse.ID
-		sub.Schema.Name = core.JournalType + ".reverse"
+		sub.Schema.Name = platform.JournalType + ".reverse"
 		sub.Payload, _ = json.Marshal(map[string]any{"date": entry.Date})
 	}
 	err := t.submitBooks(app, sub, now)
@@ -112,27 +112,31 @@ func booksEndpoint() *Endpoint { return &Endpoint{ID: build.BooksEndpoint, Kind:
 
 // submitBooks uses the same accepted-result boundary as other host-owned decisions.
 func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time) *kernel.Error {
+	checks, ok := app.(host.BooksChecks)
+	if !ok {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Books owner does not provide posting checks")
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	caller := t.automation(core.ID, false)
+	caller := t.automation(platform.BooksApp, false)
 	sub.PrincipalId = caller.ID
-	if sub.GetSchema().GetName() == core.JournalType+".create" {
-		if _, exists := platform.Get[core.Journal](caller, sub.GetTarget().GetId()); !exists {
-			var entry core.Journal
+	if sub.GetSchema().GetName() == platform.JournalType+".create" {
+		if _, exists := platform.Get[platform.Journal](caller, sub.GetTarget().GetId()); !exists {
+			var entry platform.Journal
 			json.Unmarshal(sub.GetPayload(), &entry)
-			if err := core.CheckPosting(caller, entry); err != nil {
+			if err := checks.CheckPosting(caller, entry); err != nil {
 				return err
 			}
 		}
 	} else {
 		// A committed reversal may be retried after losing the effect answer.
 		// Its original receipt owns idempotency; only a fresh reversal needs preflight.
-		original, exists := platform.Get[core.Journal](caller, sub.GetTarget().GetId())
+		original, exists := platform.Get[platform.Journal](caller, sub.GetTarget().GetId())
 		if !exists || original.State != "reversed" {
-			if err := core.CheckReversal(caller, sub.GetTarget().GetId(), sub.GetPayload(), now); err != nil {
+			if err := checks.CheckReversal(caller, sub.GetTarget().GetId(), sub.GetPayload(), now); err != nil {
 				return err
 			}
 		}

@@ -10,9 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
-	"platformserver/apps/flow"
-	"platformserver/apps/work"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -25,7 +23,7 @@ type Simulation struct {
 	Changes         []SimulatedChange   `json:"changes"`
 	Matched         *bool               `json:"matched,omitempty"`
 	Flows           []SimulatedFlow     `json:"flows,omitempty"`
-	Tasks           []work.WorkTask     `json:"tasks,omitempty"`
+	Tasks           []platform.WorkTask `json:"tasks,omitempty"`
 	Functions       []build.FunctionRun `json:"functions,omitempty"`
 	ComputeMatched  *bool               `json:"computeMatched,omitempty"`
 	FunctionMatched *bool               `json:"functionMatched,omitempty"`
@@ -39,8 +37,8 @@ type SimulatedFlow struct {
 	Dependencies string                     `json:"dependencies,omitempty"`
 	Release      string                     `json:"release,omitempty"`
 	State        string                     `json:"state"`
-	Tokens       []flow.Token               `json:"tokens"`
-	Trace        []flow.TraceLine           `json:"trace"`
+	Tokens       []platform.FlowToken       `json:"tokens"`
+	Trace        []platform.FlowTraceLine   `json:"trace"`
 	Outputs      map[string]json.RawMessage `json:"outputs,omitempty"`
 }
 
@@ -95,7 +93,7 @@ func (t *Tenant) Simulate(builder platform.Member, as string, s *pb.Submission, 
 	// Use the member-facing read contract on the private records, so scope,
 	// field masks and source-derived restrictions all apply to the builder.
 	// Privacy read auditing is private to this view and is discarded too.
-	view := &Tenant{ID: t.ID, apps: t.apps, owner: t.owner, records: draft.records, directory: t.directory}
+	view := &Tenant{ID: t.ID, identity: t.identity, apps: t.apps, owner: t.owner, records: draft.records, directory: t.directory}
 	for _, ref := range slices.Sorted(func(yield func(string) bool) {
 		for k := range draft.records.writes {
 			if !yield(k) {

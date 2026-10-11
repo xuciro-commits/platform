@@ -2,27 +2,17 @@ package build
 
 import (
 	"fmt"
+	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
 	"slices"
 
 	"platformserver/platform"
 )
 
-// JointDraftRef names one saved draft in a joint candidate (ADR-0048 D1).
-type JointDraftRef struct {
-	Kind platform.AssetKind `json:"kind"`
-	ID   string             `json:"id"`
-}
-
 // JointDraftAssets is one candidate image built from several saved drafts at
 // once: what is installed today, and what the tenant would run if this exact
 // selection were saved and activated.
-type JointDraftAssets struct {
-	Before []platform.ReleaseAsset `json:"-"`
-	After  []platform.ReleaseAsset `json:"-"`
-	Priors []platform.AssetRef     `json:"-"`
-	Nexts  []platform.AssetRef     `json:"-"`
-}
+type JointDraftAssets = buildapi.JointDraftAssets
 
 // recordKind reports whether a draft is substituted in the shared definition
 // inventories (objects, pages, applications, flows) rather than in its own
@@ -208,19 +198,19 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		}
 		record := inv.processes[i]
 		if was, ok := wasPublished[Process](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(was.Name)}
+			prior = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(was.Name)}
 			hadPrior = true
 		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(record.Name)}
+		next = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(record.Name)}
 		if problem := b.checkFlow(record); problem != nil {
 			err = fmt.Errorf("%s", problem.Message)
 		} else if record.Version >= 64 {
 			err = fmt.Errorf("a process may retain at most 64 published versions")
-		} else if b.host.Processes() == nil {
+		} else if b.host.BuildProcesses() == nil {
 			err = fmt.Errorf("this tenant runs no processes")
 		} else {
 			record.Version++
-			err = b.host.Processes().Validate(b, b.flowOf(record))
+			err = b.host.BuildProcesses().Validate(b, b.flowOf(record))
 			if err == nil {
 				record.Published = published(record)
 				record.Versions = append(slices.Clone(record.Versions), record.Published)
@@ -235,11 +225,11 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		}
 		record := inv.objects[i]
 		if was, ok := wasPublished[Object](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(was.Name)}
+			prior = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(was.Name)}
 			hadPrior = true
 		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(record.Name)}
-		if err = b.check(record, record.ID); err == nil {
+		next = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(record.Name)}
+		if err = b.Check(record, record.ID); err == nil {
 			err = b.validateObjectInstallation(record)
 		}
 		if err == nil {
@@ -289,7 +279,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 // singleDraftAssets is the owner's original one-draft comparison, unchanged for
 // simple kinds and routed through the shared record substitution otherwise.
 func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	if integrationKind(kind) {
+	if buildapi.ValueIntegrationKind(kind) {
 		return b.integrationDraftAssets(kind, id)
 	}
 	if kind == platform.AssetPropertyType {
@@ -348,19 +338,19 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDra
 		switch want {
 		case platform.AssetObject:
 			for _, o := range objects {
-				if o.Published == "" && (o.Name == name || TypeOf(o.Name) == name) {
+				if o.Published == "" && (o.Name == name || buildapi.TypeOf(o.Name) == name) {
 					return JointDraftRef{Kind: want, ID: o.ID}, true
 				}
 			}
 		case platform.AssetPage:
 			for _, p := range pages {
-				if p.Published == "" && (p.Name == name || TypeOf(p.Name) == name) {
+				if p.Published == "" && (p.Name == name || buildapi.TypeOf(p.Name) == name) {
 					return JointDraftRef{Kind: want, ID: p.ID}, true
 				}
 			}
 		case platform.AssetFlow:
 			for _, p := range processes {
-				if p.Published == "" && (p.Name == name || TypeOf(p.Name) == name) {
+				if p.Published == "" && (p.Name == name || buildapi.TypeOf(p.Name) == name) {
 					return JointDraftRef{Kind: want, ID: p.ID}, true
 				}
 			}

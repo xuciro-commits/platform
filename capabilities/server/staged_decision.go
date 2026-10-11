@@ -304,18 +304,14 @@ func (d *stagedDecision) Links(c platform.Caller, entity string) []string {
 	if d.tenant.linker == nil {
 		return nil
 	}
-	return d.stateApp(d.tenant.linker.(platform.App)).(interface {
-		Links(platform.Caller, string) []string
-	}).Links(c, entity)
+	return d.stateApp(d.tenant.linker.(platform.App)).(host.Linker).Links(c, entity)
 }
 func (d *stagedDecision) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
 	if d.tenant.linker == nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	owner := d.stateApp(d.tenant.linker.(platform.App))
-	err := owner.(interface {
-		Link(platform.Caller, *pb.EntityRef, *pb.EntityRef, string, time.Time) *kernel.Error
-	}).Link(c, from, to, key, now)
+	err := owner.(host.Linker).Link(c, from, to, key, now)
 	if err != nil && d.failure == nil {
 		d.failure = err
 	}

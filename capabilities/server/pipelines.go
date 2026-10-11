@@ -3,12 +3,13 @@ package platformserver
 import (
 	"encoding/json"
 	"log"
+	"platformserver/internal/host"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
-	"platformserver/apps/enterprise"
+	build "platformserver/internal/host/buildapi"
+	enterprise "platformserver/internal/host/enterpriseapi"
 	"platformserver/platform"
 )
 
@@ -27,7 +28,7 @@ func (t *Tenant) RunPipelines(now time.Time) {
 	c := t.automation(build.ID, false)
 	pipelines, _, _ := platform.Find[build.Pipeline](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	versions := map[string]int{}
-	owner := t.app(build.ID).(*build.Build)
+	owner := t.app(build.ID).(host.IntegrationDefinitions)
 	var fixed []build.Pipeline
 	for _, p := range pipelines {
 		p, err := owner.ExecutionPipeline(p)
@@ -66,7 +67,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 		}
 		for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
 			if ds, ok := platform.Get[build.Dataset](c, id); ok {
-				fixed, definitionErr := t.app(build.ID).(*build.Build).ExecutionDataset(ds)
+				fixed, definitionErr := t.app(build.ID).(host.IntegrationDefinitions).ExecutionDataset(ds)
 				if definitionErr != nil {
 					err = definitionErr
 					break

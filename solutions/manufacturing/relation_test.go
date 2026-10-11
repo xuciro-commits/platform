@@ -116,8 +116,8 @@ func TestInspectionActionCreatesFinding(t *testing.T) {
 		}
 	}
 
-	inspectionType := build.TypeOf("inspection")
-	findingType := build.TypeOf("finding")
+	inspectionType := "build.inspection"
+	findingType := "build.finding"
 
 	// 1. Create and publish Inspection object referencing mes.order
 	must(do(sup, build.ObjectType+".create", build.ObjectType, "O-INSP", map[string]any{

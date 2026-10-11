@@ -43,8 +43,8 @@ func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 	if lang, asked := t.asked(r); asked {
 		return lang
 	}
-	if d, ok := t.app(PlatformApp).(*Console); ok {
-		return d.language("")
+	if d, ok := t.app(PlatformApp).(IdentityProfile); ok {
+		return d.Language("")
 	}
 	return ""
 }

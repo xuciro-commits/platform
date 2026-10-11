@@ -1,14 +1,10 @@
 package platformserver
 
 import (
-	"encoding/json"
 	"time"
-
-	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -33,18 +29,9 @@ func (d *stagedDecision) requestApproval(a platform.App, m platform.Member, s *p
 	}); err != nil {
 		return nil, err
 	}
-	id := a.Manifest().ID + "." + s.GetIdempotencyKey()
-	held, err := protojson.Marshal(s)
-	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	owner, ok := d.tenant.app(platform.WorkApp).(platform.ApprovalOwner)
+	if !ok {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The approval owner is unavailable")
 	}
-	payload, err := json.Marshal(map[string]any{"requester": m.ID, "submission": json.RawMessage(held)})
-	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	c = platform.NewCaller(d, platform.Member{ID: "app:" + work.ID, Tenant: d.tenant.ID}, work.ID, false, true)
-	request := &pb.Submission{TenantId: d.tenant.ID, PrincipalId: c.ID, Authority: work.ID,
-		IdempotencyKey: "approval:" + id, Target: &pb.EntityRef{Type: work.ApprovalType, Id: id},
-		Schema: &pb.SchemaRef{Name: work.SchemaRequest, Version: 1}, Payload: payload}
-	return platform.Decide(c, d.tenant.app(work.ID), request, now)
+	return owner.RequestApproval(c, s, now)
 }

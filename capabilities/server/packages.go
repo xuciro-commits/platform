@@ -1,8 +1,6 @@
 package platformserver
 
 import (
-	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -297,15 +295,15 @@ func packageArtifactKey(tenant, id, version string) string {
 // same bytes. The sealed artifact is what an upgrade verifies before it
 // replaces the version, and what a retained version keeps.
 func (d *Console) sealPackageBytes(descriptor PackageDescriptor) (string, error) {
-	if d.t == nil {
+	if d.host == nil {
 		return "", fmt.Errorf("the console is not composed with a tenant")
 	}
 	raw, err := json.Marshal(descriptor)
 	if err != nil {
 		return "", err
 	}
-	key := packageArtifactKey(d.t.ID, descriptor.ID, descriptor.Version)
-	if err := d.t.files().Put(context.Background(), key, raw, "application/json"); err != nil {
+	key := packageArtifactKey(d.tenant, descriptor.ID, descriptor.Version)
+	if err := d.host.PutPackageArtifact(key, raw); err != nil {
 		return "", fmt.Errorf("seal %s@%s: %w", descriptor.ID, descriptor.Version, err)
 	}
 	sum := sha256.Sum256(raw)
@@ -320,17 +318,12 @@ func (d *Console) verifySealedPackage(held InstalledPackage) error {
 	if held.Artifact == "" {
 		return nil // installed before sealing existed: nothing to verify
 	}
-	key := packageArtifactKey(d.t.ID, held.ID, held.Version)
-	reader, _, err := d.t.files().Get(context.Background(), key)
+	key := packageArtifactKey(d.tenant, held.ID, held.Version)
+	raw, err := d.host.GetPackageArtifact(key)
 	if err != nil {
 		return fmt.Errorf("sealed artifact of %s@%s is missing: %w", held.ID, held.Version, err)
 	}
-	defer reader.Close()
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(reader); err != nil {
-		return fmt.Errorf("sealed artifact of %s@%s: %w", held.ID, held.Version, err)
-	}
-	sum := sha256.Sum256(buf.Bytes())
+	sum := sha256.Sum256(raw)
 	if got := "sha256:" + hex.EncodeToString(sum[:]); got != held.Artifact {
 		return fmt.Errorf("sealed artifact of %s@%s changed", held.ID, held.Version)
 	}
@@ -431,8 +424,8 @@ func (d *Console) PackageViews() []PackageView {
 // declared views and every active package's.
 func (d *Console) Contributions() []Contribution {
 	out := []Contribution{}
-	if d.t != nil {
-		for _, app := range d.t.apps {
+	if d.host != nil {
+		for _, app := range d.host.Apps() {
 			manifest := app.Manifest()
 			for _, page := range manifest.Pages {
 				out = append(out, Contribution{Key: manifest.ID + "." + page.Name, View: page.Name, Title: page.Title,

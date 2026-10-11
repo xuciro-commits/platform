@@ -3,7 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/apps/build"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 	"strings"
 	"unicode/utf8"

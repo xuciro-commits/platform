@@ -15,13 +15,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/ai"
-	"platformserver/apps/build"
-	"platformserver/apps/enterprise"
-	"platformserver/apps/files"
-	"platformserver/apps/flow"
-	"platformserver/apps/relations"
-	"platformserver/apps/work"
+	build "platformserver/internal/host/buildapi"
+	enterprise "platformserver/internal/host/enterpriseapi"
 	"platformserver/platform"
 )
 
@@ -67,29 +62,29 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/personal-reads", Summary: "Who read which records' personal data, newest first (administrators, ADR-0028)", Answer: []PersonalRead{}},
 	{Pattern: "GET /v1/health", Summary: "How the tenant's work stands: queues, failed work, deferral, breakers, failing connectors and endpoints (administrators)", Answer: TenantHealth{}},
 	{Pattern: "GET /v1/inbox", Summary: "Tasks offered to the caller, overdue first, in their language", Answer: []InboxTask{}},
-	{Pattern: "GET /v1/requests", Summary: "The caller's approval requests", Answer: []work.ApprovalRequest{}},
-	{Pattern: "GET /v1/views", Summary: "The caller's saved views", Answer: []work.SavedView{}},
+	{Pattern: "GET /v1/requests", Summary: "The caller's approval requests", Answer: []platform.ApprovalRequest{}},
+	{Pattern: "GET /v1/views", Summary: "The caller's saved views", Answer: []platform.SavedView{}},
 	{Pattern: "GET /v1/agents", Summary: "The agents the apps declare", Answer: []AgentInfo{}},
 	{Pattern: "GET /v1/agent-overview", Summary: "Every agent, declared and outside, with what it did, what it cost, what people made of it and whether it is suspended (ADR-0029)", Answer: []AgentOverview{}},
-	{Pattern: "GET /v1/ai-limits", Summary: "Members', agents' and apps' own AI limits (ADR-0029)", Answer: []ai.Limit{}},
+	{Pattern: "GET /v1/ai-limits", Summary: "Members', agents' and apps' own AI limits (ADR-0029)", Answer: []platform.AILimit{}},
 	{Pattern: "GET /v1/runs", Summary: "Agent runs on the caller's behalf", Answer: []AgentRunRecord{}},
 	{Pattern: "GET /v1/memories", Summary: "What agents remember about the caller", Answer: []Memory{}},
-	{Pattern: "GET /v1/ai-providers", Summary: "AI providers (AI administrators)", Answer: []ai.Provider{}},
-	{Pattern: "GET /v1/ai-models", Summary: "Models the caller may call, or all for AI administrators", Answer: []ai.Model{}},
-	{Pattern: "GET /v1/ai-usage", Summary: "Model calls and their totals", Answer: ai.AIUsage{}},
+	{Pattern: "GET /v1/ai-providers", Summary: "AI providers (AI administrators)", Answer: []platform.AIProvider{}},
+	{Pattern: "GET /v1/ai-models", Summary: "Models the caller may call, or all for AI administrators", Answer: []platform.AIModel{}},
+	{Pattern: "GET /v1/ai-usage", Summary: "Model calls and their totals", Answer: platform.AIUsageReport{}},
 	{Pattern: "GET /v1/organization", Summary: "The organisation's structures, units, edges and memberships (a projection of the enterprise model)", Answer: platform.OrgSeed{}},
 	{Pattern: "GET /v1/enterprise-patterns", Summary: "Reusable pieces of enterprise on the four-level backbone, with previews", Answer: []enterprise.PatternInfo{}},
 	{Pattern: "GET /v1/enterprise", Summary: "The tenant's enterprise model: kinds, elements, relationships and views", Answer: enterprise.Model{}},
 	{Pattern: "GET /v1/enterprise-metamodel", Summary: "The UAF metamodel, Enterprise Core profile and grid cells the modeler draws from", Answer: enterprise.Metamodel{}},
-	{Pattern: "GET /v1/flows", Summary: "The flows the apps declare, in the caller's language", Answer: []flow.FlowDefinition{}},
-	{Pattern: "GET /v1/links", Summary: "Links between entities", Answer: []relations.Link{}},
-	{Pattern: "GET /v1/timeline", Summary: "Notes on entities' timelines", Answer: []relations.Note{}},
+	{Pattern: "GET /v1/flows", Summary: "The flows the apps declare, in the caller's language", Answer: []platform.FlowDefinition{}},
+	{Pattern: "GET /v1/links", Summary: "Links between entities", Answer: []platform.RelationLink{}},
+	{Pattern: "GET /v1/timeline", Summary: "Notes on entities' timelines", Answer: []platform.RelationNote{}},
 }
 
 // InboxTask is a task as the inbox serves it: with its answers in the
 // reader's language, beside the values submitted.
 type InboxTask struct {
-	work.WorkTask
+	platform.WorkTask
 	AnswerTitles []string `json:"answerTitles,omitempty"`
 }
 
@@ -145,7 +140,7 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	// Original page call values also belong to the generated application API.
 	s.of(reflect.TypeFor[platform.PageCollectionInput]())
 	s.of(reflect.TypeFor[platform.InputOptions]())
-	s.of(reflect.TypeFor[files.ImageRegionsRequest]())
+	s.of(reflect.TypeFor[platform.ImageRegionsRequest]())
 	s.of(reflect.TypeFor[build.Table]())
 	s.of(reflect.TypeFor[build.Source]())
 	s.of(reflect.TypeFor[build.Connection]())
@@ -280,6 +275,23 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 	name, ok := s.names[t]
 	if !ok {
 		name = t.Name()
+		// Public schema names are part of the host API. Moving an owner value
+		// into its canonical contract package must not rename client types.
+		switch t.PkgPath() {
+		case "platformserver/platform":
+			if public := map[string]string{
+				"AIVendor": "Vendor", "AIProvider": "Provider", "AIModel": "Model", "AILimit": "Limit",
+				"AIUsage": "Usage", "AITotal": "Total", "AIUsageReport": "AIUsage",
+				"FlowToken": "Token", "FlowLoopFrame": "LoopFrame", "FlowTraceLine": "TraceLine",
+				"RelationLink": "Link", "RelationNote": "Note",
+			}[name]; public != "" {
+				name = public
+			}
+		case "platformserver/internal/host/enterpriseapi":
+			if name == "Model" {
+				name = "EnterpriseModel"
+			}
+		}
 		if name == "" || strings.Contains(name, "[") {
 			return s.object(t)
 		}
@@ -477,7 +489,7 @@ func TypeScript(doc map[string]any, kernelModules map[string]string) string {
 		fmt.Fprintf(&b, "\nexport type %s = %s;\n", name, tsOf(d, 0))
 	}
 	fmt.Fprintf(&b, "\n/** Shared build-time page UI contracts (ADR-0046). */\nexport const pageUIManifest = %s as const;\n", strings.TrimSpace(platform.PageUIManifest()))
-	limits, _ := json.Marshal(map[string]int{"maxRegions": files.MaxImageRegions, "maxLabelBytes": files.MaxImageRegionLabelBytes, "maxIDBytes": files.MaxImageRegionIDBytes})
+	limits, _ := json.Marshal(map[string]int{"maxRegions": platform.MaxImageRegions, "maxLabelBytes": platform.MaxImageRegionLabelBytes, "maxIDBytes": platform.MaxImageRegionIDBytes})
 	fmt.Fprintf(&b, "\n/** Files owns normalized raster region bounds (ADR-0046). */\nexport const imageRegionLimits = %s as const;\n", limits)
 	return b.String()
 }

@@ -418,7 +418,7 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 		t.Fatal(err)
 	}
 	console.index = index
-	if err := console.t.files().Put(context.Background(), packageArtifactKey(tn.ID, "acme.base", "1.1.0"), []byte(`{"id":"acme.base"}`), "application/json"); err != nil {
+	if err := tn.files().Put(context.Background(), packageArtifactKey(tn.ID, "acme.base", "1.1.0"), []byte(`{"id":"acme.base"}`), "application/json"); err != nil {
 		t.Fatal(err)
 	}
 	if got := submit("dana", SchemaPackageUpgrade, PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.2.0"}); got == "ok" {

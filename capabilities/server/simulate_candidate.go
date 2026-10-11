@@ -6,16 +6,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/host"
 	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/ai"
-	"platformserver/apps/build"
-	"platformserver/apps/flow"
-	"platformserver/apps/work"
+
+	build "platformserver/internal/host/buildapi"
+
 	"platformserver/platform"
 )
 
@@ -272,7 +272,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 		if !found {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The answer must belong to a flow and object in this r.candidate")
 		}
-		instance, exists := platform.Get[flow.FlowInstance](r.sandbox.automation(flow.ID, false), step.Flow+":"+step.ID)
+		instance, exists := platform.Get[platform.FlowInstance](r.sandbox.automation(platform.FlowApp, false), step.Flow+":"+step.ID)
 		taskID := ""
 		if exists {
 			for _, token := range instance.Tokens {
@@ -285,7 +285,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This test record has no waiting task at that step")
 		} else {
 			payload, _ := json.Marshal(map[string]string{"answer": step.Answer})
-			sub = &pb.Submission{Authority: work.ID, Target: &pb.EntityRef{Type: work.TaskType, Id: taskID}, Schema: &pb.SchemaRef{Name: "work.task.complete", Version: 1}, Payload: payload}
+			sub = &pb.Submission{Authority: platform.WorkApp, Target: &pb.EntityRef{Type: platform.WorkTaskType, Id: taskID}, Schema: &pb.SchemaRef{Name: "work.task.complete", Version: 1}, Payload: payload}
 		}
 	} else if step.Type == build.ProcessType && step.Action == build.SchemaProcessRun && step.ID == r.request.ProcessID {
 		processID := ""
@@ -304,7 +304,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 			if asset.Ref.Kind == platform.AssetFlow {
 				var definition platform.FlowReleaseDescriptor
 				json.Unmarshal(asset.Body, &definition)
-				if _, ok := platform.Get[flow.FlowInstance](r.sandbox.automation(flow.ID, false), definition.Name+":"+step.ID); ok {
+				if _, ok := platform.Get[platform.FlowInstance](r.sandbox.automation(platform.FlowApp, false), definition.Name+":"+step.ID); ok {
 					instanceExists = true
 				}
 			}
@@ -395,16 +395,16 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 			}
 		}
 	}
-	if r.sandbox.app(flow.ID) != nil {
-		page, _ := r.sandbox.Records(actor, flow.InstanceType, platform.Query{Limit: 100}, r.now)
+	if r.sandbox.app(platform.FlowApp) != nil {
+		page, _ := r.sandbox.Records(actor, platform.FlowInstanceType, platform.Query{Limit: 100}, r.now)
 		for _, record := range page.Records {
 			raw, _ := json.Marshal(record)
-			var instance flow.FlowInstance
+			var instance platform.FlowInstance
 			_ = json.Unmarshal(raw, &instance)
 			result.Flows = append(result.Flows, SimulatedFlow{ID: instance.ID, Flow: instance.Flow, Version: instance.Version, Dependencies: instance.Dependencies, Release: instance.Release, State: instance.State, Tokens: instance.Tokens, Trace: instance.Trace, Outputs: instance.Outputs})
 		}
 		if inbox, err := r.sandbox.Read(actor, "inbox"); err == nil {
-			result.Tasks = inbox.([]work.WorkTask)
+			result.Tasks = inbox.([]platform.WorkTask)
 		}
 	}
 	r.out.Steps = append(r.out.Steps, result)
@@ -412,20 +412,51 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 }
 
 func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, member platform.Member, environment simulationEnvironment, others ...platform.Member) (*Tenant, error) {
-	b := build.New(member.Tenant)
-	member.Roles = maps.Clone(member.Roles)
-	seats := []Seat{{Subjects: []string{member.ID}, Member: member}}
-	for _, other := range others {
-		other.Roles = maps.Clone(other.Roles)
-		seats = append(seats, Seat{Subjects: []string{other.ID}, Member: other})
+	fresh := func(id string) (platform.App, error) {
+		factory := environment.Factories[id]
+		if factory == nil {
+			return nil, fmt.Errorf("simulation owner %s is not available", id)
+		}
+		app := factory.NewSimulationApp(member.Tenant)
+		if app == nil || app.Manifest().ID != id {
+			return nil, fmt.Errorf("simulation owner identity differs")
+		}
+		return app, nil
 	}
-	apps := []platform.App{NewConsole(member.Tenant, seats...)}
+	construction, err := fresh(build.ID)
+	if err != nil {
+		return nil, err
+	}
+	b, ok := construction.(host.ConstructionSandbox)
+	if !ok {
+		return nil, fmt.Errorf("construction owner has no isolated asset installer")
+	}
+	member.Roles = maps.Clone(member.Roles)
+	if environment.Identity == nil {
+		return nil, fmt.Errorf("candidate identity factory is unavailable")
+	}
+	principals := append([]platform.Member{member}, others...)
+	identity := environment.Identity.NewSimulationIdentity(member.Tenant, principals)
+	if identity == nil || identity.Manifest().ID != PlatformApp {
+		return nil, fmt.Errorf("candidate identity factory changed its owner")
+	}
+	apps := []platform.App{identity}
 	hasFunctions := slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetFunction })
 	if hasFunctions {
-		apps = append(apps, ai.New(member.Tenant))
+		app, err := fresh(platform.AIApp)
+		if err != nil {
+			return nil, err
+		}
+		apps = append(apps, app)
 	}
 	if slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetFlow }) {
-		apps = append(apps, work.New(member.Tenant), flow.New(member.Tenant))
+		for _, id := range []string{platform.WorkApp, platform.FlowApp} {
+			app, err := fresh(id)
+			if err != nil {
+				return nil, err
+			}
+			apps = append(apps, app)
+		}
 	}
 	for _, manifest := range environment.Manifests {
 		apps = append(apps, newSampleOwner(member.Tenant, manifest))
@@ -461,7 +492,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			return nil, fmt.Errorf("unsupported test dependency or compiler version %s", asset.Ref)
 		}
 		if asset.Ref.Kind == platform.AssetFlow {
-			process, err := build.ProcessFromReleaseAsset(asset)
+			process, err := b.ProcessFromAsset(asset)
 			if err != nil {
 				return nil, err
 			}
