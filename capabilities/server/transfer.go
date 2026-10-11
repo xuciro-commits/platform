@@ -127,11 +127,10 @@ func (t *Tenant) probe1(m platform.Member, s *pb.Submission, now time.Time) *ker
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	was := t.probing
-	t.probing = true
-	defer func() { t.probing = was }()
-	_, err := a.Submit(t.caller(m, a, false), s, now)
-	return err
+	return platform.ProbeDecision(t.caller(m, a, false), func(probe platform.Caller) *kernel.Error {
+		_, err := platform.Decide(probe, a, s, now)
+		return err
+	})
 }
 
 // fromCSV reads one cell as the field's type.

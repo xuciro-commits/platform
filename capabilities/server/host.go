@@ -113,7 +113,6 @@ type Tenant struct {
 	cancels       cancels // running operations' cancel handles
 	memFiles      memoryFiles
 	uploads       uploads   // hashes uploaded and not yet attached (uploads.go)
-	probing       bool      // a submission for approval is being checked, not applied
 	requests      []request // accepted decisions' requests of other apps, run with their events (ADR-0026)
 }
 
@@ -708,9 +707,10 @@ func (t *Tenant) request(m platform.Member, a platform.App, s *pb.Submission, no
 	approvals := t.owner["action:"+work.SchemaRequest] // the work app
 	c := t.automation(work.ID, false)
 	if _, known := platform.Get[work.ApprovalRequest](c, id); !known {
-		t.probing = true
-		_, err := a.Submit(t.caller(m, a, false), s, now)
-		t.probing = false
+		err := platform.ProbeDecision(t.caller(m, a, false), func(probe platform.Caller) *kernel.Error {
+			_, err := platform.Decide(probe, a, s, now)
+			return err
+		})
 		if err != nil {
 			return nil, err
 		}

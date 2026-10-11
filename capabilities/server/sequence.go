@@ -13,7 +13,7 @@ import (
 // Next is the next number of c's app's sequence for the accepted decision r.
 func (r runtime) Next(c platform.Caller, rec *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error) {
 	t := r.t
-	if rec.GetChangeId() == "" || t.probing {
+	if rec.GetChangeId() == "" {
 		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	app := t.app(c.App)

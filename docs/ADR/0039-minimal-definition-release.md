@@ -2,6 +2,8 @@
 
 **状态：** 已接受 (2026-09-28, #136 与 #131 13c)。项目负责人按推荐方案接受了 D1–D4。ADR-0031 已经接受了独立版本化的定义发布与环境绑定。本阶段准入关卡确定使构建器发布具备持久性与可审查性的最小契约；不可变候选、激活、运行绑定、同宿主晋级与有界升级已实施；准确范围见下方 As built。客户扩展的通用升级仍未完成。
 
+**生命周期接续：** [ADR-0097](0097-submission-assets-and-host-boundaries.md) 在既有 AssetKind/AssetRef/ReleaseAsset/Candidate 上收敛 owner 生命周期协调并补完整集成依赖；本 ADR 的规范内容字节、不可变候选、整体原子激活、运行版本及环境解耦语义保留。新的 kind/迁移能力尚未实施，当前 As built 的覆盖边界仍有效；定义回退不等于数据/外部效果可逆。
+
 ## 背景
 
 `platform.AssetRef`（`capabilities/server/platform/definition.go`）提供了稳定的限定名称，但未提供不可变修订版。`Definition.Version` 目前是已安装应用的版本或常量 `"1"`，而非内容版本。`build` 应用在对象/页面/应用记录上保留可变草稿与最新发布的 JSON 字符串；再次发布会调用 `Install`、`InstallPage` 或 `InstallApplication` 并替换正在运行的描述符（`apps/build`，`installed.go`）。页面的 `Requires` 仅指明裸资产。当前的预览机制虚构了本地样例且无法执行实时动作，但它不是有状态的隔离测试环境。运行中的流转版本是单独固定的；而租户构建的动作和审批定义则不然。在本 ADR 能够承诺原子级持久晋级之前，#135 必须首先建立已提交结果的激活边界。

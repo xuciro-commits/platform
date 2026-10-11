@@ -15,10 +15,7 @@ type runtime struct{ t *Tenant }
 var _ platform.Runtime = runtime{}
 
 func (r runtime) ProbeDecision(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
-	was := r.t.probing
-	r.t.probing = true
-	defer func() { r.t.probing = was }()
-	return decide(c)
+	return r.t.newStagedDecision().runProbe(c, decide)
 }
 
 func (r runtime) Publish(c platform.Caller, record *pb.ChangeRecord) {
@@ -109,7 +106,7 @@ func (r runtime) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assi
 	return r.t.tasks.Assign(c, rec, a)
 }
 
-func (r runtime) Probing() bool { return r.t.probing }
+func (runtime) Probing() bool { return false }
 
 // closeTask cancels a task a platform app no longer waits for, when the tenant runs the work app.
 func (t *Tenant) closeTask(c platform.Caller, r *pb.ChangeRecord, id string) {

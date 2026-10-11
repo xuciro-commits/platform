@@ -6,6 +6,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -69,6 +70,80 @@ func TestGeneratedDecisionStaysPrivate(t *testing.T) {
 	if current.(Item).Qty != 2 || proposed.(Item).Qty != 7 ||
 		len(app.ledger.RecordsFor(tn.ID)) != 1 || len(draft.logs[app.ledger].Records(tn.ID)) != 2 {
 		t.Fatalf("staged edit leaked: live=%+v draft=%+v", current, proposed)
+	}
+}
+
+func TestPrivateProbeDoesNotChangeLiveOrParentState(t *testing.T) {
+	for _, staged := range []bool{false, true} {
+		for _, outcome := range []string{"accepted", "refused", "unsupported", "panic"} {
+			name := outcome
+			if staged {
+				name = "parent/" + name
+			}
+			t.Run(name, func(t *testing.T) {
+				tn := composeTenant(t, "probe", []Seat{seatOf("ana", "stock:clerk")}, newStock("probe"))
+				at := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
+				receipt := decide(t, tn, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 2}, at)
+				member := memberOf(t, tn, "ana")
+				app := tn.app("stock")
+				caller := tn.caller(member, app, false)
+				var parent *stagedDecision
+				wantQty := 2
+				if staged {
+					parent = tn.newStagedDecision()
+					caller = platform.NewCaller(parent, member, "stock", false, false)
+					var err *kernel.Error
+					receipt, err = platform.Decide(caller, app, submission(tn, member, "stock", "stock.item.edit", "stock.item", "I1", map[string]any{"qty": 7}), at)
+					if err != nil {
+						t.Fatal(err)
+					}
+					wantQty = 7
+				}
+				before := snapshot(tn)
+				check := func() *kernel.Error {
+					return platform.ProbeDecision(caller, func(probe platform.Caller) *kernel.Error {
+						item, ok := platform.Get[Item](probe, "I1")
+						if !ok || item.Qty != wantQty {
+							t.Fatalf("probe lost its parent's record: %+v", item)
+						}
+						item.Qty = 99
+						if err := probe.Put(receipt, item); err != nil {
+							t.Fatal(err)
+						}
+						probe.Notify(platform.Notification{Title: "Probe", Key: "probe"}, at, platform.Recipient{Member: member.ID})
+						switch outcome {
+						case "refused":
+							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+						case "unsupported":
+							returnError := (hostView{t: tn, app: app}).Install(probe, platform.Entity{}, nil)
+							t.Fatalf("unsupported live installation returned: %v", returnError)
+						case "panic":
+							panic("rule panic")
+						}
+						return nil
+					})
+				}
+				if outcome == "panic" {
+					func() {
+						defer func() {
+							if got := recover(); got != "rule panic" {
+								t.Fatalf("unexpected rule panic: %v", got)
+							}
+						}()
+						check()
+					}()
+				} else if err := check(); (err == nil) != (outcome == "accepted") {
+					t.Fatalf("probe outcome %s: %v", outcome, err)
+				}
+				item, _ := platform.Get[Item](caller, "I1")
+				if item.Qty != wantQty || snapshot(tn) != before || caller.Staging() != staged || (runtime{tn}).Probing() {
+					t.Fatal("probe changed the live tenant, parent record or caller mode")
+				}
+				if parent != nil && (parent.noticeChanged || len(parent.notices) != 0 || parent.failure != nil) {
+					t.Fatal("probe left notices or a refusal in its parent decision")
+				}
+			})
+		}
 	}
 }
 

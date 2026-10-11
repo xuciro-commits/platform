@@ -217,9 +217,26 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 }
 
 func (d *stagedDecision) ProbeDecision(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
-	probe := d.privateFork()
-	probe.probing = true
-	return decide(platform.NewCaller(probe, c.Member, c.App, c.Replaying, c.Automation))
+	return d.privateFork().runProbe(c, decide)
+}
+
+// runProbe owns its mode and all host-managed writes. No live tenant or
+// parent decision is switched into a different mode while rules run.
+func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller) *kernel.Error) (err *kernel.Error) {
+	defer func() {
+		if failure := recover(); failure != nil {
+			if _, ok := failure.(stagedEffectPanic); !ok {
+				panic(failure)
+			}
+			err = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action uses an effect outside the accepted-result boundary")
+		}
+	}()
+	d.probing = true
+	err = decide(platform.NewCaller(d, c.Member, c.App, c.Replaying, c.Automation))
+	if err == nil {
+		err = d.failure
+	}
+	return err
 }
 
 func cloneLists(src map[string][]string) map[string][]string {

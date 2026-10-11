@@ -603,7 +603,13 @@ func TestContinuousComputeRemainsWithinAcceptedResultBudget(t *testing.T) {
 		if _, refusal := tn.ConsumeFlowBatch(member, id, batch, now); refusal != nil {
 			t.Fatalf("batch %d refused: %v", n+1, refusal)
 		}
-		runs := tn.operationDispatches(now)
+		// Completion uses wall time; later receipts cannot go backwards. The
+		// fixed event-time fixture may therefore precede a queued call's Due.
+		dispatchAt := time.Now().UTC()
+		if dispatchAt.Before(now) {
+			dispatchAt = now
+		}
+		runs := tn.operationDispatches(dispatchAt)
 		if len(runs) != 1 {
 			t.Fatalf("batch %d dispatches=%d", n+1, len(runs))
 		}

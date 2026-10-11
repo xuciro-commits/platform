@@ -17,15 +17,20 @@ func (d *stagedDecision) RequestApproval(c platform.Caller, app string, s *pb.Su
 	if !ok || c.Automation || c.Tenant != d.tenant.ID || s.GetAuthority() != app || s.GetPrincipalId() != c.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval needs its original authorised member")
 	}
+	if d.probing {
+		return d.Decide(c, a, s, now)
+	}
 	return d.requestApproval(a, c.Member, s, now)
 }
 
 func (d *stagedDecision) requestApproval(a platform.ResultApp, m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	// Permission/attribute/rule checks occur privately. Even a rule that uses
 	// another app cannot leave anything in the actual request transaction.
-	probe := d.tenant.newStagedDecision()
-	probe.probing = true
-	if _, err := platform.Decide(platform.NewCaller(probe, m, a.Manifest().ID, false, false), a, s, now); err != nil {
+	c := platform.NewCaller(d, m, a.Manifest().ID, false, false)
+	if err := d.ProbeDecision(c, func(probe platform.Caller) *kernel.Error {
+		_, err := platform.Decide(probe, a, s, now)
+		return err
+	}); err != nil {
 		return nil, err
 	}
 	id := a.Manifest().ID + "." + s.GetIdempotencyKey()
@@ -37,7 +42,7 @@ func (d *stagedDecision) requestApproval(a platform.ResultApp, m platform.Member
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	c := platform.NewCaller(d, platform.Member{ID: "app:" + work.ID, Tenant: d.tenant.ID}, work.ID, false, true)
+	c = platform.NewCaller(d, platform.Member{ID: "app:" + work.ID, Tenant: d.tenant.ID}, work.ID, false, true)
 	request := &pb.Submission{TenantId: d.tenant.ID, PrincipalId: c.ID, Authority: work.ID,
 		IdempotencyKey: "approval:" + id, Target: &pb.EntityRef{Type: work.ApprovalType, Id: id},
 		Schema: &pb.SchemaRef{Name: work.SchemaRequest, Version: 1}, Payload: payload}

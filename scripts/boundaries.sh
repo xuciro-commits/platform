@@ -49,5 +49,9 @@ hits=$(cd capabilities/server && go list -f '{{.ImportPath}}: {{join .Imports " 
 leaks=$(grep -rnE '\.(Changes|changes)\.' --include="*.go" apps/ protocols/ capabilities/server/ --exclude-dir=platform --exclude-dir=vendor || true)
 [[ -z $leaks ]] || fail "code outside platform touches change log directly without ledger lock:"$'\n'"$leaks"
 
+# ADR-0097: probing is a private decision mode, never a tenant-wide switch.
+probe=$(sed -n '/^type Tenant struct {$/,/^}$/p' capabilities/server/host.go | grep -E '^[[:space:]]+probing[[:space:]]' || true)
+[[ -z $probe ]] || fail "Tenant has a shared probing mode; use platform.Runtime.ProbeDecision"
+
 platformapps=$(cd capabilities/server && go list ./apps/... 2>/dev/null | wc -l | tr -d ' ')
 echo "boundaries ok: ${#apps[@]} apps, ${#protocols[@]} protocols, $platformapps platform apps as packages"

@@ -234,12 +234,10 @@ func MarkSeen(c Caller, keys ...string) {
 // ProbeDecision checks rules against a private parent view, applying nothing.
 // It cannot temporarily switch a shared tenant's runtime into probing mode.
 func ProbeDecision(c Caller, decide func(Caller) *kernel.Error) *kernel.Error {
-	if owner, ok := c.rt.(interface {
-		ProbeDecision(Caller, func(Caller) *kernel.Error) *kernel.Error
-	}); ok {
-		return owner.ProbeDecision(c, decide)
+	if c.rt == nil {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	return decide(c)
+	return c.rt.ProbeDecision(c, decide)
 }
 
 // Decide routes through the existing decision runtime, if it owns nested
@@ -257,6 +255,9 @@ func Decide(c Caller, app App, s *pb.Submission, at time.Time) (*pb.ChangeRecord
 // Runtime is what the host does for a caller; package platformserver implements
 // it. Each method acts as c, for c's app, within the input being handled.
 type Runtime interface {
+	// ProbeDecision evaluates against a private view of the current decision.
+	// It discards writes and intents even if checking refuses or panics.
+	ProbeDecision(Caller, func(Caller) *kernel.Error) *kernel.Error
 	Publish(c Caller, record *pb.ChangeRecord)
 	Probe(c Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error
 	Request(c Caller, r *pb.ChangeRecord, q Request)

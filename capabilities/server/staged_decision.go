@@ -82,8 +82,12 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 }
 
 func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	if _, ok := app.(platform.ResultApp); !ok || !d.tenant.acceptsGenerated(app, s) {
-		unsupportedStagedEffect()
+	// A probe also checks legacy actions, but can never commit them: the
+	// ledger validates against a private log and skips its apply callback.
+	if !d.probing {
+		if _, ok := app.(platform.ResultApp); !ok || !d.tenant.acceptsGenerated(app, s) {
+			unsupportedStagedEffect()
+		}
 	}
 	id := app.Manifest().ID
 	if d.active[id] || len(d.active) >= maxHops {
