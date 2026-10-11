@@ -156,10 +156,11 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	changes := l.changes
 	// ADR-0038 19a: a host-owned decision view may use a private change log.
 	// Ordinary callers and replay retain the existing authoritative path.
-	if draft, ok := c.rt.(interface {
-		DraftChanges(*Ledger, func() *kernel.ChangeLog) *kernel.ChangeLog
-	}); ok {
+	if draft, ok := c.rt.(StagedRuntime); ok {
 		changes = draft.DraftChanges(l, l.changes.Fork)
+		if changes == nil || changes == l.changes {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
 	}
 	if probing {
 		// Probes validate kernel identity, key conflicts and expected revisions

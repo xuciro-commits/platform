@@ -15,9 +15,124 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/build"
+	"platformserver/apps/flow"
+	"platformserver/apps/work"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
+
+func TestAcceptedNestedAttemptOwnsPreparedComputeAndPrivateState(t *testing.T) {
+	for _, outcome := range []string{"accepted", "refused", "panic", "probe"} {
+		t.Run(outcome, func(t *testing.T) {
+			const id = "nested-compute-savepoint"
+			source := newFrameDataComputeSource(id, 256<<10)
+			tn := composeTenant(t, id, []Seat{seatOf("admin", PlatformApp+":"+Admin, "stock:clerk", "frames:operator")},
+				work.New(id), flow.New(id), newStock(id), source)
+			tn.Files = &memoryFiles{}
+			if err := tn.files().Put(context.Background(), artifactKey(id, source.moduleDigest), source.module, "application/wasm"); err != nil {
+				t.Fatal(err)
+			}
+			at := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
+			member := memberOf(t, tn, "admin")
+			draft := tn.newStagedDecision()
+			caller := platform.NewCaller(draft, member, PlatformApp, false, false)
+			stockCaller := platform.NewCaller(draft, member, "stock", false, false)
+			if _, err := draft.Decide(stockCaller, tn.app("stock"), submission(tn, member, "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 2}), at); err != nil {
+				t.Fatal(err)
+			}
+			receipt, err := draft.Decide(caller, tn.app(PlatformApp), submission(tn, member, PlatformApp, SchemaAdd, MemberType, "parent", map[string]any{"subject": "user:parent@example.test"}), at)
+			if err != nil {
+				t.Fatal(err)
+			}
+			caller.Notify(platform.Notification{Title: "Parent", Key: "parent"}, at, platform.Recipient{Member: member.ID})
+			q := platform.OperationRequest{App: "frames", Name: "aggregate", Key: "prepared", Inputs: platform.Raw(map[string]string{"payload": "retained parent input"})}
+			op, version, ok := operationDefinition(source, q.Name, 0)
+			if !ok {
+				t.Fatal("Compute definition is missing")
+			}
+			definition, _ := canonicalDigest([]any{q.App, op, version})
+			inputHash, _ := canonicalDigest(q.Inputs)
+			ref, sealErr := tn.staged.sealInput(id+":frames:operation:"+q.Key+":"+operationEndpoint, member.ID, definition, inputHash, q.Inputs, op.Limits.DataInputBytes)
+			if sealErr != nil {
+				t.Fatal(sealErr)
+			}
+			t.Cleanup(func() { tn.staged.discardInput(ref) })
+			requestHash, _ := canonicalDigest(q)
+			draft.operationInputs = map[string][]*preparedOperationInput{requestHash: {{ref: ref, requestHash: requestHash}}}
+			draft.operationAnswers = map[string]platform.OperationResult{"prior": {ID: "prior", Output: []byte(`[1]`), Ref: &platform.AssetRef{App: "frames", Kind: platform.AssetCompute, Name: "aggregate"}}}
+			parentRefusal := platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Parent issue")
+			draft.InputRefused(parentRefusal, []platform.FieldIssue{{Code: "required", Path: []string{"parent"}}})
+			liveBefore := snapshot(tn)
+			child := func(c platform.Caller) *kernel.Error {
+				stockChild := platform.RouteCaller(c, "stock")
+				if _, err := platform.Decide(stockChild, tn.app("stock"), submission(tn, member, "stock", "stock.item.edit", "stock.item", "I1", map[string]any{"qty": 99}), at); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := platform.Decide(c, tn.app(PlatformApp), submission(tn, member, PlatformApp, SchemaAdd, MemberType, "child", map[string]any{"subject": "user:child@example.test"}), at); err != nil {
+					t.Fatal(err)
+				}
+				c.Notify(platform.Notification{Title: "Child", Key: "child"}, at, platform.Recipient{Member: member.ID})
+				answer, err := c.OperationResult("prior")
+				if err != nil {
+					t.Fatal(err)
+				}
+				answer.Output[1], answer.Ref.Name = '2', "child"
+				childRefusal := c.RefuseFields([]platform.FieldIssue{{Code: "required", Path: []string{"child"}}})
+				if _, err := c.RequestOperation(receipt, q); err != nil {
+					t.Fatal(err)
+				}
+				switch outcome {
+				case "refused":
+					return childRefusal
+				case "panic":
+					panic("child rule panic")
+				}
+				return nil
+			}
+			if outcome == "probe" {
+				if err := platform.ProbeDecision(caller, child); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				func() {
+					defer func() {
+						if got := recover(); outcome == "panic" && got != "child rule panic" || outcome != "panic" && got != nil {
+							t.Fatalf("child panic: %v", got)
+						}
+					}()
+					_, err := draft.Attempt(func() (*pb.ChangeRecord, *kernel.Error) { return nil, child(caller) })
+					if (err != nil) != (outcome == "refused") {
+						t.Fatalf("child refusal: %v", err)
+					}
+				}()
+			}
+			accepted := outcome == "accepted"
+			wantQty, wantEvents, wantNotices, wantPending, wantIssues := 2, 2, 1, 1, 1
+			if accepted {
+				wantQty, wantEvents, wantNotices, wantPending, wantIssues = 99, 4, 2, 0, 2
+			}
+			item, _ := platform.Get[Item](stockCaller, "I1")
+			_, hasChild := draft.states[PlatformApp].(*Console).Member("user:child@example.test")
+			_, hasParent := draft.states[PlatformApp].(*Console).Member("user:parent@example.test")
+			if item.Qty != wantQty || len(draft.events) != wantEvents || len(draft.notices) != wantNotices || !hasParent || hasChild != accepted || len(draft.inputIssues) != wantIssues || pendingOperationInputs(draft.operationInputs) != wantPending || snapshot(tn) != liveBefore {
+				t.Fatalf("child escaped or lost its savepoint: qty=%d events=%d notices=%d child=%t parent=%t issues=%d inputs=%d", item.Qty, len(draft.events), len(draft.notices), hasChild, hasParent, len(draft.inputIssues), pendingOperationInputs(draft.operationInputs))
+			}
+			if !accepted {
+				answer, _ := caller.OperationResult("prior")
+				if string(answer.Output) != `[1]` || answer.Ref.Name != "aggregate" || len(draft.intents) != 0 || draft.failure != nil {
+					t.Fatal("discarded child changed a parent answer, intent or failure")
+				}
+				if _, err := caller.RequestOperation(receipt, q); err != nil {
+					t.Fatalf("parent cannot consume its prepared input after %s: %v", outcome, err)
+				}
+			}
+			var binding operationBinding
+			if len(draft.intents) != 1 || pendingOperationInputs(draft.operationInputs) != 0 || json.Unmarshal([]byte(draft.intents[0].Body), &binding) != nil || binding.SealedInput == nil || *binding.SealedInput != ref {
+				t.Fatal("successful parent/child did not consume exactly its prepared artifact once")
+			}
+		})
+	}
+}
 
 type nestedDocument struct {
 	platform.Record

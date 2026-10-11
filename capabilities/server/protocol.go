@@ -124,7 +124,7 @@ func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload 
 		if c.Staging() {
 			record, err = (hostView{t: t}).Submit(called, sub, now)
 		} else {
-			record, err = b.provider.Submit(called, sub, now)
+			record, err = platform.Decide(called, b.provider, sub, now)
 		}
 		return target, record, explained(err, b.provider, schema, target.GetType()+"/"+id)
 	}

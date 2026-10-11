@@ -149,7 +149,7 @@ func (c Caller) RolesHere() []string { return c.RolesIn(c.App) }
 // Staging reports that this decision is still private. An app may validate
 // a definition now, but must not install it until the accepted result commits.
 func (c Caller) Staging() bool {
-	_, ok := c.rt.(interface{ StagedDecision() })
+	_, ok := c.rt.(StagedRuntime)
 	return ok
 }
 
@@ -213,15 +213,14 @@ func ActingCaller(parent Caller, m Member, app string, automation bool) Caller {
 	return NewCaller(parent.rt, m, app, parent.Replaying, automation)
 }
 
-// Attempt allows a parent to explicitly handle a nested business refusal.
-// Only a runtime with savepoints may isolate writes made by that attempt.
+// Attempt delegates the handling of a nested business refusal to the decision
+// owner. Staged runtimes roll back private writes; legacy runtimes preserve
+// historical direct execution. A caller made by As has no host savepoint.
 func Attempt(c Caller, decide func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
-	if owner, ok := c.rt.(interface {
-		Attempt(func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error)
-	}); ok {
-		return owner.Attempt(decide)
+	if c.rt == nil {
+		return decide()
 	}
-	return decide()
+	return c.rt.Attempt(decide)
 }
 
 // MarkSeen stays within the calling decision's notification view.
@@ -240,24 +239,40 @@ func ProbeDecision(c Caller, decide func(Caller) *kernel.Error) *kernel.Error {
 	return c.rt.ProbeDecision(c, decide)
 }
 
-// Decide routes through the existing decision runtime, if it owns nested
-// calls. It never replaces a staged runtime with a live one.
+// Decide uses the caller's decision owner. A host must explicitly handle or
+// refuse nested decisions; only callers made by As run without a host.
 func Decide(c Caller, app App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	c = RouteCaller(c, app.Manifest().ID)
-	if owner, ok := c.rt.(interface {
-		Decide(Caller, App, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
-	}); ok {
-		return owner.Decide(c, app, s, at)
+	if c.rt == nil {
+		return app.Submit(c, s, at)
 	}
-	return app.Submit(c, s, at)
+	return c.rt.Decide(c, app, s, at)
+}
+
+// DecisionRuntime owns nested decisions, handled business refusals and private
+// rule checks. A staged owner keeps nested calls within its private result and
+// rolls back refused attempts. A legacy owner must explicitly retain its
+// direct semantics; implementing this contract alone does not promise atomic
+// acceptance or savepoints.
+type DecisionRuntime interface {
+	Decide(Caller, App, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
+	Attempt(func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error)
+	// ProbeDecision discards private writes and intents on refusal or panic.
+	ProbeDecision(Caller, func(Caller) *kernel.Error) *kernel.Error
+}
+
+// StagedRuntime is a complete private decision view. DraftChanges is called
+// with the ledger lock held; it must return the same private log for that
+// ledger throughout the decision and must never return the live log.
+type StagedRuntime interface {
+	Runtime
+	DraftChanges(*Ledger, func() *kernel.ChangeLog) *kernel.ChangeLog
 }
 
 // Runtime is what the host does for a caller; package platformserver implements
 // it. Each method acts as c, for c's app, within the input being handled.
 type Runtime interface {
-	// ProbeDecision evaluates against a private view of the current decision.
-	// It discards writes and intents even if checking refuses or panics.
-	ProbeDecision(Caller, func(Caller) *kernel.Error) *kernel.Error
+	DecisionRuntime
 	Publish(c Caller, record *pb.ChangeRecord)
 	Probe(c Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error
 	Request(c Caller, r *pb.ChangeRecord, q Request)

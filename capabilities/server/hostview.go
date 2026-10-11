@@ -197,10 +197,7 @@ func (h hostView) Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*
 		}
 		return platform.Decide(c, a, s, now)
 	}
-	if c.Staging() {
-		return platform.Attempt(c, decide)
-	}
-	return decide()
+	return platform.Attempt(c, decide)
 }
 
 func (h hostView) Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {

@@ -179,6 +179,32 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	fork := *d
 	fork.operationCancels = maps.Clone(d.operationCancels)
 	fork.operationAnswers = maps.Clone(d.operationAnswers)
+	for id, answer := range fork.operationAnswers {
+		answer.Output = slices.Clone(answer.Output)
+		if answer.Ref != nil {
+			ref := *answer.Ref
+			answer.Ref = &ref
+		}
+		fork.operationAnswers[id] = answer
+	}
+	// Prepared artifacts are immutable, but consuming a queue belongs to this
+	// attempt. A refused child or probe must leave its parent's queue intact.
+	fork.operationInputs = maps.Clone(d.operationInputs)
+	for hash, pending := range fork.operationInputs {
+		fork.operationInputs[hash] = slices.Clone(pending)
+	}
+	fork.inputIssues = maps.Clone(d.inputIssues)
+	for refusal, issues := range fork.inputIssues {
+		issues = slices.Clone(issues)
+		for i := range issues {
+			issues[i].Path = slices.Clone(issues[i].Path)
+			issues[i].RelatedPaths = slices.Clone(issues[i].RelatedPaths)
+			for j := range issues[i].RelatedPaths {
+				issues[i].RelatedPaths[j] = slices.Clone(issues[i].RelatedPaths[j])
+			}
+		}
+		fork.inputIssues[refusal] = issues
+	}
 	fork.records = d.records.forkRecords()
 	fork.records.parent, fork.records.baseGeneration = d.records.parent, d.records.baseGeneration
 	fork.records.writes = maps.Clone(d.records.writes)

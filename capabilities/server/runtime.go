@@ -14,6 +14,18 @@ type runtime struct{ t *Tenant }
 
 var _ platform.Runtime = runtime{}
 
+// Decide and Attempt explicitly retain the legacy caller's direct semantics,
+// including historical input replay and entries not yet migrated to results.
+// They offer no savepoint or atomic-result guarantee. Accepted entry points
+// supply stagedDecision instead; nested calls never switch back to runtime.
+func (runtime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return app.Submit(c, s, at)
+}
+
+func (runtime) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
+	return decide()
+}
+
 func (r runtime) ProbeDecision(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
 	return r.t.newStagedDecision().runProbe(c, decide)
 }
