@@ -2,11 +2,32 @@ package build
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
+
+type processStartRuntime struct {
+	platform.Runtime
+	current Process
+}
+
+func (r *processStartRuntime) Get(_ platform.Caller, typ reflect.Type, id string) (any, bool) {
+	if typ == reflect.TypeFor[Process]() && id == r.current.ID {
+		return r.current, true
+	}
+	return nil, false
+}
+
+type processStartHost struct {
+	host.Host
+	caller platform.Caller
+}
+
+func (h processStartHost) Automation(platform.Caller, string) platform.Caller { return h.caller }
 
 func TestCompilerRejectsBranchOnlyAndEscapedIterationBindings(t *testing.T) {
 	branchOnly := Process{Steps: []ProcessStep{{Name: "branch", Kind: "branch", Cases: map[string]string{"true": "yes", "false": "no"}}, {Name: "yes", Kind: "transform", Next: "merge"}, {Name: "no", Kind: "transform", Next: "merge"}, {Name: "merge", Kind: "end", Value: &platform.Binding{Source: "step", Step: "yes"}}}}
@@ -63,5 +84,44 @@ func TestAutomationShape(t *testing.T) {
 		if checkAutomation(p) == nil {
 			t.Fatalf("%s: refused", name)
 		}
+	}
+}
+
+func TestContinuousProcessUsesPublishedSourceStartInsteadOfManualEntry(t *testing.T) {
+	p := Process{
+		Record: platform.Record{ID: "continuous"}, Name: "telemetry", Title: "Telemetry", State: "published", Version: 1, Scheduler: "builder",
+		Continuous: &platform.Continuous{
+			Source: "planttelemetry", Batch: 512, State: 16 << 20, FrameBytes: 64 << 20, DeadLetter: true,
+			Window: &platform.StreamWindow{Node: "windowstate", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 10000, LateEvents: "sideOutput"},
+			Intake: &platform.StreamIntake{SourceRecord: "source-1", Key: "eventId", Partition: []string{"plantId", "deviceId"}, EventTime: "eventTime", Value: "reading", Offset: "latest"},
+		},
+		Steps: []ProcessStep{{Name: "finish", Kind: "end"}},
+	}
+	runtime := &processStartRuntime{current: p}
+	caller := platform.NewCaller(runtime, platform.Member{ID: "builder"}, ID, false, true)
+	b := &Build{host: processStartHost{caller: caller}}
+	if err := b.checkFlowOn(p, platform.Entity{}); err != nil {
+		t.Fatalf("an automatically started continuous process is valid: %v", err)
+	}
+	compiled := b.flowOf(p)
+	if compiled.Start.Manual || !compiled.Start.Continuous || compiled.Start.OnBehalf != "builder" || compiled.Start.Enabled == nil || !compiled.Start.Enabled(platform.Caller{}) {
+		t.Fatalf("the compiled Process lost its published-source lifecycle or active-owner guard: %+v", compiled.Start)
+	}
+	runtime.current.State = "draft"
+	if compiled.Start.Enabled(platform.Caller{}) {
+		t.Fatal("a draft Process kept its continuous start enabled")
+	}
+	runtime.current.State, runtime.current.Version = "published", 2
+	if compiled.Start.Enabled(platform.Caller{}) {
+		t.Fatal("a newer Process version kept an old continuous Flow start enabled")
+	}
+	runtime.current.Version, runtime.current.Name = 1, "replacement"
+	if compiled.Start.Enabled(platform.Caller{}) {
+		t.Fatal("a renamed Process kept an obsolete continuous Flow start enabled")
+	}
+	manual := p
+	manual.Manual = true
+	if err := b.checkFlowOn(manual, platform.Entity{}); err == nil {
+		t.Fatal("a controlled continuous Process must not be downgraded to manual start")
 	}
 }

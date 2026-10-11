@@ -35,6 +35,9 @@ type Action struct {
 	// Automation marks an action only the platform's own apps take, as
 	// automation: it has no roles and is in no member's catalog.
 	Automation bool `json:"automation,omitempty"`
+	// DeferRequired lets a lifecycle owner return its own business-language
+	// message for missing required inputs after the generic type checks.
+	DeferRequired bool `json:"-"`
 }
 
 // Approval is the chain of approvers an action waits for (ADR-0017 D2–D4):

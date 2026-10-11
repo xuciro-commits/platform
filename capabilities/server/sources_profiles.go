@@ -106,6 +106,38 @@ func odataLiteral(v string) string {
 }
 
 // readTable selects a database table past the cursor, read-only, bounded.
+func (t *Tenant) latestTableCursor(s build.Source, c build.Connection) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	conn, err := t.openPostgres(ctx, c)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close(ctx)
+	column := pgx.Identifier{s.Since}.Sanitize()
+	query := "select " + column + " from " + pgx.Identifier(strings.Split(s.Entity, ".")).Sanitize()
+	if s.Filter != "" {
+		query += " where " + s.Filter
+	}
+	query += " order by " + column + " desc limit 1"
+	rows, err := conn.Query(ctx, query)
+	if err != nil {
+		return "", fmt.Errorf("the latest source cursor could not be read: %v", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return "", fmt.Errorf("the latest source cursor could not be read: %v", err)
+		}
+		return "", nil
+	}
+	values, err := rows.Values()
+	if err != nil || len(values) != 1 {
+		return "", fmt.Errorf("the latest source cursor could not be decoded")
+	}
+	return s.Advance([]map[string]any{{s.Since: plain(values[0])}}), nil
+}
+
 func (t *Tenant) readTable(s build.Source, c build.Connection, columns ...string) ([]map[string]any, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

@@ -24,17 +24,18 @@ import (
 // takes it again. Acts are submitted as the declaring app's automation
 // principal; people are asked through that app's tasks (ADR-0017).
 const (
-	ID              = "flow"
-	InstanceType    = "flow.instance"
-	Admin           = "admin"
-	SchemaFlowStart = "flow.instance.start"
-	SchemaFlowStep  = "flow.instance.step"
-	SchemaFlowBatch = "flow.instance.batch"
-	SchemaFlowRetry = "flow.instance.retry"
-	SchemaFlowSkip  = "flow.instance.skip"
-	SchemaFlowStop  = "flow.instance.cancel"
-	SchemaFlowMove  = "flow.instance.move"
-	stepAttempts    = 5
+	ID                        = "flow"
+	InstanceType              = "flow.instance"
+	Admin                     = "admin"
+	SchemaFlowStart           = "flow.instance.start"
+	SchemaFlowStep            = "flow.instance.step"
+	SchemaFlowBatch           = "flow.instance.batch"
+	SchemaFlowRetry           = "flow.instance.retry"
+	SchemaFlowSkip            = "flow.instance.skip"
+	SchemaFlowStop            = "flow.instance.cancel"
+	SchemaFlowMove            = "flow.instance.move"
+	SchemaFlowArtifactCleanup = "flow.instance.artifact-cleanup"
+	stepAttempts              = 5
 	// Compensate as a next step undoes the completed acts, newest first.
 	Compensate = platform.Compensate
 )
@@ -61,25 +62,33 @@ type FlowInstance struct {
 	// Batch is the continuous instance's frame (ADR-0047 §13): the cursor it
 	// consumed through, its watermark, node state and dead letters.
 	Batch *BatchFrame `json:"batch,omitempty" field:"readonly" type:"json"`
-	Undo  []UndoEntry `json:"undo" field:"readonly" title:"To undo"`
-	Trace []TraceLine `json:"trace" field:"readonly"`
-	Seq   int         `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
+	// ArtifactCleanup is a durable retirement intent for already-superseded
+	// frame/checkpoint objects. The host deletes and acknowledges it idempotently.
+	ArtifactCleanup []platform.FlowStateArtifact `json:"artifactCleanup,omitempty" field:"readonly" type:"json"`
+	CleanupPending  bool                         `json:"cleanupPending,omitempty" field:"readonly"`
+	Undo            []UndoEntry                  `json:"undo" field:"readonly" title:"To undo"`
+	Trace           []TraceLine                  `json:"trace" field:"readonly"`
+	Seq             int                          `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
 }
 
 // Token is where a path of the instance stands (BPMN's token): a step it is at
 // or waits in. Parallel branches have one each.
 type Token struct {
-	ID        int                        `json:"id"`
-	Step      string                     `json:"step"`
-	Branch    string                     `json:"branch,omitempty"` // the All or Any step it runs in
-	Waits     string                     `json:"waits,omitempty"`  // ready, retry, wait, ask, call, join, undo, stuck
-	Attempts  int                        `json:"attempts,omitempty"`
-	Due       time.Time                  `json:"due,omitzero"` // a retry, a timeout, or a wait's time
-	Task      string                     `json:"task,omitempty"`
-	Child     string                     `json:"child,omitempty"`
-	Error     string                     `json:"error,omitempty"`
-	Parent    int                        `json:"parent,omitempty"`
-	Frames    []platform.Frame           `json:"frames,omitempty"`
+	ID       int              `json:"id"`
+	Step     string           `json:"step"`
+	Branch   string           `json:"branch,omitempty"` // the All or Any step it runs in
+	Waits    string           `json:"waits,omitempty"`  // ready, retry, wait, ask, call, join, undo, stuck
+	Attempts int              `json:"attempts,omitempty"`
+	Due      time.Time        `json:"due,omitzero"` // a retry, a timeout, or a wait's time
+	Task     string           `json:"task,omitempty"`
+	Child    string           `json:"child,omitempty"`
+	Error    string           `json:"error,omitempty"`
+	Parent   int              `json:"parent,omitempty"`
+	Frames   []platform.Frame `json:"frames,omitempty"`
+	// Input is token-local data supplied for one step. Prepared continuous
+	// windows use it only while the retained entry Compute request is built;
+	// the host clears it before the accepted Flow record is persisted.
+	Input     json.RawMessage            `json:"input,omitempty"`
 	Outputs   map[string]json.RawMessage `json:"outputs,omitempty"`
 	Operation string                     `json:"operation,omitempty"`
 	Loop      *LoopFrame                 `json:"loop,omitempty"`
@@ -178,7 +187,9 @@ func New(tenant string) *Flows {
 		platform.Action{Schema: SchemaFlowStop, Target: InstanceType, Capability: "flows", Title: "Cancel", Payload: []platform.Field{}, Roles: admin,
 			Description: "Stop a running instance; its open tasks close. Nothing is undone."},
 		platform.Action{Schema: SchemaFlowMove, Target: InstanceType, Capability: "flows", Title: "Move to the next version", Payload: []platform.Field{}, Roles: admin,
-			Description: "Move a running instance to its flow's next version, as that version's mapping says."})
+			Description: "Move a running instance to its flow's next version, as that version's mapping says."},
+		platform.Action{Schema: SchemaFlowArtifactCleanup, Target: InstanceType, Capability: "flows", Title: "Retire superseded Flow artifacts", Payload: []platform.Field{{Name: "digest", Type: "text", Required: true}}, Automation: true,
+			Description: "Acknowledge host deletion of already-superseded frame and checkpoint artifacts."})
 	return &Flows{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), InstanceType), defs: map[string][]*flowDef{}}
 }
 
@@ -258,9 +269,15 @@ func (f *Flows) InstallationDraft() host.Processes {
 func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 	id := m.ID + "." + fl.Name
 	d := &flowDef{app: m.ID, Flow: fl, steps: map[string]*platform.Step{}}
-	byEvent, byState, byClock := len(fl.Start.On) > 0 && fl.Start.Begin != nil, fl.Start.Type != "" && fl.Start.When != nil, fl.Start.Every > 0
-	if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || boolCount(byEvent, byState, fl.Start.Manual, byClock) != 1 {
-		return nil, fmt.Errorf("flow %s: name, title, version, steps and one start — on events, on a record's state, by hand or on a schedule — are required", id)
+	byEvent, byState, byClock, byContinuous := len(fl.Start.On) > 0 && fl.Start.Begin != nil, fl.Start.Type != "" && fl.Start.When != nil, fl.Start.Every > 0, fl.Start.Continuous
+	if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || boolCount(byEvent, byState, fl.Start.Manual, byClock, byContinuous) != 1 {
+		return nil, fmt.Errorf("flow %s: name, title, version, steps and one start — on events, on a record state, by hand, on a schedule or from a continuous source — are required", id)
+	}
+	if byContinuous && (fl.Continuous == nil || fl.Continuous.Intake == nil || fl.Start.OnBehalf == "" || fl.Start.Enabled == nil) {
+		return nil, fmt.Errorf("flow %s: an automatic continuous start needs a controlled intake, publisher and active-owner check", id)
+	}
+	if !byContinuous && fl.Start.Enabled != nil {
+		return nil, fmt.Errorf("flow %s: an active-owner check is only valid for a continuous start", id)
 	}
 	if byClock && fl.Start.Every < time.Minute {
 		return nil, fmt.Errorf("flow %s: a schedule repeats at least every minute", id)
@@ -269,8 +286,8 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 		return nil, fmt.Errorf("flow %s starts on the state of %s, not an entity type of %s", id, fl.Start.Type, m.ID)
 	}
 	if fl.Continuous != nil {
-		if fl.Continuous.Source == "" || fl.Continuous.Batch < 0 || fl.Continuous.State < 0 || fl.Continuous.FrameBytes < 0 || !fl.Continuous.DeadLetter {
-			return nil, fmt.Errorf("flow %s: a continuous flow names its source, a batch budget of zero or more, and keeps dead letters", id)
+		if fl.Continuous.Source == "" || fl.Continuous.Batch < 0 || fl.Continuous.State < 0 || fl.Continuous.FrameBytes < 0 || fl.Continuous.CheckpointEvery < 0 || fl.Continuous.CheckpointEvery > 1_000_000 || fl.Continuous.DeadLetterMaxRecords < 0 || fl.Continuous.DeadLetterMaxRecords > 1_000_000 || fl.Continuous.DeadLetterTTLMs < 0 || fl.Continuous.DeadLetterTTLMs > int((366*24*time.Hour)/time.Millisecond) || !fl.Continuous.DeadLetter {
+			return nil, fmt.Errorf("flow %s: a continuous flow names its source, bounded budgets and dead-letter retention", id)
 		}
 		if fl.Continuous.Window != nil {
 			if err := checkWindow(*fl.Continuous.Window); err != nil {
@@ -278,7 +295,7 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 			}
 		}
 		if intake := fl.Continuous.Intake; intake != nil {
-			if intake.SourceRecord == "" || intake.Key == "" || len(intake.Partition) < 1 || len(intake.Partition) > 8 || intake.EventTime == "" || intake.Value == "" || fl.Continuous.Window == nil || fl.Continuous.Batch < 1 {
+			if intake.SourceRecord == "" || intake.Key == "" || len(intake.Partition) < 1 || len(intake.Partition) > 8 || intake.EventTime == "" || intake.Value == "" || fl.Continuous.Window == nil || fl.Continuous.Batch < 1 || intake.Offset != "" && intake.Offset != "latest" && intake.Offset != "earliest" {
 				return nil, fmt.Errorf("flow %s: an intake needs a source record, event columns, window and positive batch budget", id)
 			}
 			columns := append([]string{intake.Key, intake.EventTime, intake.Value}, intake.Partition...)
@@ -323,6 +340,15 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 		}
 		if kinds != 1 {
 			return nil, fmt.Errorf("flow %s: step %s must be exactly one kind", id, s.Name)
+		}
+		if s.Retry != nil && (s.Retry.Attempts < 0 || s.Retry.Attempts > 20 || s.Retry.Backoff < 0 || s.Retry.Backoff > 5*time.Minute) {
+			return nil, fmt.Errorf("flow %s: step %s has a retry schedule outside its bounds", id, s.Name)
+		}
+	}
+	if fl.Continuous != nil && fl.Continuous.Entry != "" {
+		step := d.steps[fl.Continuous.Entry]
+		if (!fl.Start.Manual && !fl.Start.Continuous) || fl.Continuous.Window == nil || fl.Steps[0].Name != fl.Continuous.Entry || step == nil || step.Operation == nil {
+			return nil, fmt.Errorf("flow %s: a window Compute entry is the first step of a manually or source-started event-time flow", id)
 		}
 	}
 	for _, s := range fl.Steps {
@@ -621,6 +647,9 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 			run.Outputs = maps.Clone(tok.Outputs)
 			run.Frames = slices.Clone(tok.Frames)
 			step := d.steps[tok.Step]
+			if d.Continuous != nil && d.Continuous.Entry != "" && tok.Step == d.Continuous.Entry && tok.Waits == "retry" {
+				continue // the outside source lane reconstructs this step from its sealed window
+			}
 			due := !tok.Due.IsZero() && !tok.Due.After(now)
 			holds := tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.Until != nil && step.Wait.Until(f.host.Automation(c, d.app), run)
 			if tok.Waits == "operation" || tok.Waits == "invocation" || tok.Waits == "approval" {
@@ -698,6 +727,9 @@ func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
 			v := FlowDefinition{ID: id, App: d.app, Title: d.Title, Version: d.Version, Start: append([]string{}, d.Start.On...), Steps: []FlowStep{}}
 			if d.Start.Type != "" { // started by a record's state, not an event (ADR-0028 D8)
 				v.Start = append(v.Start, "state of "+d.Start.Type)
+			}
+			if d.Start.Continuous {
+				v.Start = append(v.Start, "continuous source")
 			}
 			for _, s := range d.Steps {
 				sv := FlowStep{Name: s.Name, Title: cmp.Or(s.Title, s.Name), Kind: kindOf(s), Next: []string{}, Chooses: s.Choose != nil}
@@ -790,6 +822,7 @@ func (f *Flows) resumeInvocation(c platform.Caller, id string, token int, now ti
 	var output json.RawMessage
 	var failure string
 	var sources []string
+	var retryable bool
 	if tok.Waits == "operation" {
 		result, err := c.OperationResult(tok.Operation)
 		if err != nil {
@@ -798,6 +831,7 @@ func (f *Flows) resumeInvocation(c platform.Caller, id string, token int, now ti
 			return nil
 		} else if result.State != "completed" {
 			failure = cmp.Or(result.Error, "Operation "+result.State)
+			retryable = result.State == "failed"
 		} else {
 			output = result.Output
 		}
@@ -831,9 +865,11 @@ func (f *Flows) resumeInvocation(c platform.Caller, id string, token int, now ti
 	}
 	return f.step(c, id, now, func(ss *session, in *FlowInstance) {
 		if failure != "" {
-			// An accepted refusal is terminal for this call; retrying the block with
-			// the same identity must not masquerade as a new model/compute request.
-			ss.token(in, token).Attempts = stepAttempts
+			// A terminal host refusal is not a failed execution attempt. Worker
+			// failures are retryable under the retained step policy.
+			if !retryable {
+				ss.token(in, token).Attempts = stepAttempts
+			}
 			ss.failed(in, token, step, failure)
 			return
 		}

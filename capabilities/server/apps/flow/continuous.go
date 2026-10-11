@@ -32,36 +32,46 @@ import (
 // what has been consumed, the watermark, per-node state and what could not be
 // accepted. It is committed with the accepted result and replayed with it.
 type BatchFrame struct {
-	Cursor      string                      `json:"cursor,omitempty"`      // the batch identity consumed last
-	Fingerprint string                      `json:"fingerprint,omitempty"` // binds that cursor to the accepted batch bytes
-	Watermark   time.Time                   `json:"watermark,omitzero"`    // event time through which signals were folded
-	Consumed    int                         `json:"consumed"`              // signals folded, ever
-	Rejected    int                         `json:"rejected"`              // signals the flow refused, ever
-	State       map[string]json.RawMessage  `json:"state,omitempty"`       // node name → its state
-	DeadLetters []DeadLetter                `json:"deadLetters,omitempty"` // what could not be folded, and why
-	StateBytes  int                         `json:"stateBytes,omitempty"`
-	Sealed      *platform.FlowStateArtifact `json:"sealed,omitempty"`
-	Source      *SourceCheckpoint           `json:"source,omitempty"`
+	Cursor                 string                      `json:"cursor,omitempty"` // the batch identity consumed last
+	Predecessor            string                      `json:"predecessor,omitempty"`
+	Fingerprint            string                      `json:"fingerprint,omitempty"` // binds that cursor to the accepted batch bytes
+	Watermark              time.Time                   `json:"watermark,omitzero"`    // event time through which signals were folded
+	Consumed               int                         `json:"consumed"`              // signals folded, ever
+	Rejected               int                         `json:"rejected"`              // signals the flow refused, ever
+	State                  map[string]json.RawMessage  `json:"state,omitempty"`       // node name → its state
+	DeadLetters            []DeadLetter                `json:"deadLetters,omitempty"` // what could not be folded, and why
+	DeadLetterDropped      int                         `json:"deadLetterDropped,omitempty"`
+	StateBytes             int                         `json:"stateBytes,omitempty"`
+	CheckpointEvery        int                         `json:"checkpointEvery,omitempty"`
+	BatchesSinceCheckpoint int                         `json:"batchesSinceCheckpoint,omitempty"`
+	CheckpointCursor       string                      `json:"checkpointCursor,omitempty"`
+	CheckpointArtifact     *platform.FlowStateArtifact `json:"checkpointArtifact,omitempty"`
+	Sealed                 *platform.FlowStateArtifact `json:"sealed,omitempty"`
+	Source                 *SourceCheckpoint           `json:"source,omitempty"`
+	checkpointDue          bool
 }
 
 // SourceCheckpoint is the instance's own incremental position; it is accepted
 // with its window state, rather than written onto the import source's cursor.
 type SourceCheckpoint struct {
-	Record  string   `json:"record"`
-	Config  string   `json:"config"`
-	Cursor  string   `json:"cursor"`
-	Sources []string `json:"sources"`
+	Record      string   `json:"record"`
+	Config      string   `json:"config"`
+	Cursor      string   `json:"cursor"`
+	Sources     []string `json:"sources"`
+	Offset      string   `json:"offset,omitempty"`
+	Initialized bool     `json:"initialized,omitempty"`
 }
 
 // DeadLetter keeps one signal that could not be folded, with its cause, so it
 // can be inspected and replayed under the original authorization (ADR-0047 §13.3).
 type DeadLetter struct {
-	Batch     string    `json:"batch"`
-	Partition string    `json:"partition,omitempty"`
-	Key       string    `json:"key,omitempty"`
-	At        time.Time `json:"at,omitzero"`
-	Reason    string    `json:"reason"`
-	Value     string    `json:"value,omitempty"`
+	Batch      string    `json:"batch"`
+	Partition  string    `json:"partition,omitempty"`
+	Key        string    `json:"key,omitempty"`
+	At         time.Time `json:"at,omitzero"`
+	RecordedAt time.Time `json:"recordedAt,omitzero"`
+	Reason     string    `json:"reason"`
+	Value      string    `json:"value,omitempty"`
 }
 
 // Batch is one accepted batch of a real source: its identity, its predecessor,
@@ -70,6 +80,8 @@ type Batch struct {
 	ID          string
 	Predecessor string
 	Signals     []Signal
+	Bootstrap   bool              `json:"bootstrap,omitempty"`
+	Tick        bool              `json:"tick,omitempty"` // host slide tick; never advances the source checkpoint
 	Source      *SourceCheckpoint `json:"Source,omitempty"`
 }
 
@@ -90,6 +102,24 @@ type BatchOutcome struct {
 	StateSize int       `json:"stateSize"`
 }
 
+// ContinuousWindowInput is the token-local projection passed to the retained
+// Compute entry for one ready window. The full frame remains in its original
+// sealed artifact; only operation inputs may temporarily hold these bytes.
+type ContinuousWindowInput struct {
+	Source      string                     `json:"source"`
+	Batch       string                     `json:"batch"`
+	Predecessor string                     `json:"predecessor,omitempty"`
+	Cursor      string                     `json:"cursor"`
+	Watermark   time.Time                  `json:"watermark"`
+	WindowStart time.Time                  `json:"windowStart"`
+	WindowEnd   time.Time                  `json:"windowEnd"`
+	EmittedAt   time.Time                  `json:"emittedAt"`
+	Consumed    int                        `json:"consumed"`
+	Rejected    int                        `json:"rejected"`
+	Signals     []Signal                   `json:"signals"`
+	Outputs     map[string]json.RawMessage `json:"outputs"` // the previous accepted Flow outputs, for stateful Compute steps
+}
+
 // ConsumeBatch folds one batch into a continuous instance as one decision.
 func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time.Time) (BatchOutcome, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -104,6 +134,12 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 	if d == nil || d.Continuous == nil {
 		return BatchOutcome{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA,
 			Message: "this instance's flow is not continuous"}
+	}
+	if d.Continuous.Entry != "" {
+		return BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A window Compute entry requires the host-prepared source acceptance path")
+	}
+	if d.Continuous.CheckpointEvery > 0 {
+		return BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Periodic checkpoints require the host-prepared Flow frame path")
 	}
 	if ended(x.State) {
 		return BatchOutcome{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: "the instance has ended"}
@@ -182,6 +218,20 @@ func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *k
 	if declared.Intake != nil && batch.Source == nil || declared.Intake == nil && batch.Source != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source checkpoint must match the declared intake")
 	}
+	if declared.Intake != nil && batch.Source != nil && (batch.Source.Initialized && batch.Source.Offset != declared.Intake.Offset || declared.Intake.Offset == "latest" && !batch.Source.Initialized) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source checkpoint's initial offset must match the declared intake")
+	}
+	if batch.Bootstrap && (declared.Intake == nil || declared.Intake.Offset != "latest" || len(batch.Signals) != 0 || batch.Source == nil || !batch.Source.Initialized || batch.Source.Offset != "latest" || batch.Tick) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A latest-offset bootstrap must be an empty controlled-source checkpoint")
+	}
+	if batch.Tick {
+		if declared.Intake == nil || declared.Window == nil || batch.Source == nil || batch.Bootstrap || len(batch.Signals) != 0 {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A slide tick needs an empty controlled-source window batch")
+		}
+		if frame == nil || frame.Source == nil || !sameSourceCheckpoint(frame.Source, batch.Source) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A slide tick must preserve the accepted source checkpoint")
+		}
+	}
 	if batch.ID == "" {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: "the batch has no identity"}
 	}
@@ -189,8 +239,8 @@ func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *k
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT,
 			Message: fmt.Sprintf("the batch carries %d signals, the flow accepts %d", len(batch.Signals), declared.Batch)}
 	}
-	if declared.Batch < 0 || declared.State < 0 || declared.FrameBytes < 0 {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Continuous batch budgets are non-negative")
+	if declared.Batch < 0 || declared.State < 0 || declared.FrameBytes < 0 || declared.CheckpointEvery < 0 || declared.CheckpointEvery > 1_000_000 {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Continuous batch budgets and checkpoint intervals must be within their bounds")
 	}
 	digest, err := batchFingerprint(batch)
 	if err != nil {
@@ -209,6 +259,14 @@ func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *k
 	return nil
 }
 
+func sameSourceCheckpoint(a, b *SourceCheckpoint) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Record == b.Record && a.Config == b.Config && a.Cursor == b.Cursor &&
+		a.Offset == b.Offset && a.Initialized == b.Initialized && slices.Equal(a.Sources, b.Sources)
+}
+
 // foldBatch folds every signal of a batch into the frame's state, keeping late
 // and timeless signals as dead letters instead of dropping them silently.
 func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acceptedAt ...time.Time) (folded, rejected int, refusal *kernel.Error) {
@@ -218,44 +276,60 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 	if frame.Cursor == batch.ID {
 		return 0, 0, nil
 	}
+	if frame.CheckpointEvery != 0 && frame.CheckpointEvery != declared.CheckpointEvery {
+		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained checkpoint interval differs from this Flow version")
+	}
 	// No cursor, watermark, counter or dead letter is committed before the
 	// whole successor fits its declaration. Original state bytes stay intact.
 	next := *frame
+	next.checkpointDue = false
+	next.CheckpointEvery = declared.CheckpointEvery
 	next.State = maps.Clone(frame.State)
 	next.DeadLetters = slices.Clone(frame.DeadLetters)
 	if next.State == nil {
 		next.State = map[string]json.RawMessage{}
 	}
-	if declared.Window != nil {
-		if len(acceptedAt) != 1 || acceptedAt[0].IsZero() {
-			return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An event-time batch needs its accepted decision time")
-		}
-		var err *kernel.Error
-		folded, rejected, err = foldWindow(&next, declared, batch, acceptedAt[0])
-		if err != nil {
-			return 0, 0, err
-		}
-	} else {
-		for _, signal := range batch.Signals {
-			switch {
-			case signal.At.IsZero():
-				next.DeadLetters = append(next.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, Reason: "no event time", Value: string(signal.Value)})
-				rejected++
-			case !next.Watermark.IsZero() && signal.At.Before(next.Watermark):
-				next.DeadLetters = append(next.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, At: signal.At, Reason: "late: before the watermark", Value: string(signal.Value)})
-				rejected++
-			default:
-				if err := fold(&next, declared, signal); err != nil {
-					return 0, 0, err
-				}
-				folded++
+	if !batch.Bootstrap {
+		if declared.Window != nil {
+			if len(acceptedAt) != 1 || acceptedAt[0].IsZero() {
+				return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An event-time batch needs its accepted decision time")
 			}
-			if signal.At.After(next.Watermark) {
-				next.Watermark = signal.At
+			var err *kernel.Error
+			folded, rejected, err = foldWindow(&next, declared, batch, acceptedAt[0])
+			if err != nil {
+				return 0, 0, err
+			}
+		} else {
+			var recordedAt time.Time
+			if len(acceptedAt) == 1 {
+				recordedAt = acceptedAt[0]
+			}
+			for _, signal := range batch.Signals {
+				switch {
+				case signal.At.IsZero():
+					next.DeadLetters = append(next.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, RecordedAt: recordedAt, Reason: "no event time", Value: string(signal.Value)})
+					rejected++
+				case !next.Watermark.IsZero() && signal.At.Before(next.Watermark):
+					next.DeadLetters = append(next.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, At: signal.At, RecordedAt: recordedAt, Reason: "late: before the watermark", Value: string(signal.Value)})
+					rejected++
+				default:
+					if err := fold(&next, declared, signal); err != nil {
+						return 0, 0, err
+					}
+					folded++
+				}
+				if signal.At.After(next.Watermark) {
+					next.Watermark = signal.At
+				}
 			}
 		}
 	}
-	next.Cursor = batch.ID
+	var retainedAt time.Time
+	if len(acceptedAt) == 1 {
+		retainedAt = acceptedAt[0]
+	}
+	pruneDeadLetters(&next, declared, retainedAt)
+	next.Cursor, next.Predecessor = batch.ID, batch.Predecessor
 	if batch.Source != nil {
 		checkpoint := *batch.Source
 		checkpoint.Sources = slices.Clone(batch.Source.Sources)
@@ -265,6 +339,14 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 	next.Consumed += folded
 	next.Rejected += rejected
 	next.StateBytes = stateSize(next.State)
+	if declared.CheckpointEvery > 0 && !batch.Bootstrap && !batch.Tick {
+		next.BatchesSinceCheckpoint++
+		if next.BatchesSinceCheckpoint >= declared.CheckpointEvery {
+			next.BatchesSinceCheckpoint = 0
+			next.CheckpointCursor = next.Cursor
+			next.checkpointDue = true
+		}
+	}
 	raw, err := json.Marshal(next)
 	if err != nil {
 		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch frame cannot be encoded")
@@ -274,6 +356,32 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 	}
 	*frame = next
 	return folded, rejected, nil
+}
+
+// pruneDeadLetters applies explicit retention only as part of an accepted
+// successor frame. Cumulative rejection counters remain even when details age out.
+func pruneDeadLetters(frame *BatchFrame, declared platform.Continuous, now time.Time) {
+	if declared.DeadLetterTTLMs > 0 && !now.IsZero() {
+		cutoff := now.Add(-time.Duration(declared.DeadLetterTTLMs) * time.Millisecond)
+		kept := frame.DeadLetters[:0]
+		for _, letter := range frame.DeadLetters {
+			recorded := letter.RecordedAt
+			if recorded.IsZero() {
+				recorded = letter.At
+			}
+			if !recorded.IsZero() && recorded.Before(cutoff) {
+				frame.DeadLetterDropped++
+				continue
+			}
+			kept = append(kept, letter)
+		}
+		frame.DeadLetters = kept
+	}
+	if limit := declared.DeadLetterMaxRecords; limit > 0 && len(frame.DeadLetters) > limit {
+		dropped := len(frame.DeadLetters) - limit
+		frame.DeadLetterDropped += dropped
+		frame.DeadLetters = slices.Clone(frame.DeadLetters[dropped:])
+	}
 }
 
 // fold preserves the historical scalar count/sum/last profile. It is not the

@@ -43,8 +43,15 @@ func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, no
 	for _, signal := range batch.Signals {
 		watermark = maxTime(watermark, signal.At)
 	}
-	oldest := watermark.Add(-time.Duration(w.WindowMS) * time.Millisecond)
-	late := oldest.Add(-time.Duration(w.WatermarkMS) * time.Millisecond)
+	boundary := windowBoundary(w, watermark, now)
+	retentionBoundary := boundary
+	if !boundary.After(state.EmittedAt) {
+		retentionBoundary = state.EmittedAt.Add(time.Duration(w.SlideMS) * time.Millisecond)
+		if w.LateEvents == "accept" {
+			retentionBoundary = state.EmittedAt
+		}
+	}
+	oldest := retentionBoundary.Add(-time.Duration(w.WindowMS) * time.Millisecond)
 	// Identity is (source partition, event key), not device or arrival order.
 	seen := map[signalIdentity]Signal{}
 	for _, row := range state.Rows {
@@ -53,9 +60,10 @@ func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, no
 	added := map[signalIdentity]bool{}
 	state.Rows = slices.DeleteFunc(slices.Clone(state.Rows), func(s Signal) bool { return s.At.Before(oldest) })
 	appendDead := func(signal Signal, reason string) {
-		frame.DeadLetters = append(frame.DeadLetters, DeadLetter{Batch: batch.ID, Partition: signal.Partition, Key: signal.Key, At: signal.At, Reason: reason, Value: string(signal.Value)})
+		frame.DeadLetters = append(frame.DeadLetters, DeadLetter{Batch: batch.ID, Partition: signal.Partition, Key: signal.Key, At: signal.At, RecordedAt: now, Reason: reason, Value: string(signal.Value)})
 		rejected++
 	}
+	lateAccepted := false
 	for _, signal := range batch.Signals {
 		if signal.At.IsZero() || signal.Key == "" {
 			appendDead(signal, "missing event identity or time")
@@ -70,12 +78,18 @@ func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, no
 			continue
 		}
 		seen[key] = signal
-		if signal.At.Before(late) || signal.At.Before(oldest) && w.LateEvents != "accept" {
-			if w.LateEvents == "reject" {
-				return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An event is outside the declared window")
+		if signal.At.Before(oldest) {
+			switch w.LateEvents {
+			case "reject":
+				return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An event is outside the declared window and watermark grace")
+			case "sideOutput":
+				appendDead(signal, "late: outside the event-time window and watermark grace")
+				continue
+			case "accept":
+				// Explicit accept re-emits the retained window with the late
+				// value; sideOutput/reject never reopen an emitted slide.
+				lateAccepted = true
 			}
-			appendDead(signal, "late: outside the event-time window")
-			continue
 		}
 		signal.Value = slices.Clone(signal.Value)
 		state.Rows = append(state.Rows, signal)
@@ -111,10 +125,14 @@ func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, no
 		}
 		state.Rows = slices.Clone(state.Rows[overflow:])
 	}
-	boundary := now.UTC().Truncate(time.Duration(w.SlideMS) * time.Millisecond)
-	state.Ready = state.EmittedAt.IsZero() || boundary.After(state.EmittedAt)
-	if state.Ready {
+	pruneDeadLetters(frame, declared, now)
+	newSlide := state.EmittedAt.IsZero() || boundary.After(state.EmittedAt)
+	state.Ready = false
+	if newSlide {
 		state.EmittedAt = boundary
+		state.Ready = len(windowSignals(state, w)) > 0 || declared.Entry != ""
+	} else if lateAccepted {
+		state.Ready = true
 	}
 	raw, err := json.Marshal(state)
 	if err != nil || declared.State > 0 && len(raw) > declared.State {
@@ -122,6 +140,31 @@ func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, no
 	}
 	frame.State[w.Node], frame.Watermark = raw, watermark
 	return folded, rejected, nil
+}
+
+func windowBoundary(w platform.StreamWindow, watermark, now time.Time) time.Time {
+	high := maxTime(watermark, now)
+	grace := time.Duration(w.WatermarkMS) * time.Millisecond
+	return high.Add(-grace).UTC().Truncate(time.Duration(w.SlideMS) * time.Millisecond)
+}
+
+// windowSignals gives a retained Compute exactly the event-time interval for
+// its emitted slide. Explicit "accept" keeps older late rows visible by design.
+func windowSignals(state WindowState, w platform.StreamWindow) []Signal {
+	if w.LateEvents == "accept" {
+		return slices.Clone(state.Rows)
+	}
+	if state.EmittedAt.IsZero() {
+		return nil
+	}
+	start := state.EmittedAt.Add(-time.Duration(w.WindowMS) * time.Millisecond)
+	rows := make([]Signal, 0, len(state.Rows))
+	for _, signal := range state.Rows {
+		if !signal.At.Before(start) && signal.At.Before(state.EmittedAt) {
+			rows = append(rows, signal)
+		}
+	}
+	return rows
 }
 
 type signalIdentity struct{ partition, key string }
