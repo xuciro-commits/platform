@@ -110,6 +110,6 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 
 `web/e2e/tests/integration-fabric.spec.ts` 在酒店与制造两个实际开发宿主中运行：从界面保存数据集/数据源/管道，验证转换、坏行隔离、行预览与血缘跳转，再用实际 HTTP 替身验证 503 排队、稳定幂等键、201 后凭证号回填和租户未隔离。先跑 `scripts/verify.sh web-check`，再在 `web/e2e` 运行 `PLATFORM_SCREENSHOTS=1 pnpm exec playwright test tests/integration-fabric.spec.ts`。企业模型同步、匹配、标记传播和受限导出分别由根包 `matches_test.go`、`markings_test.go` 与应用级管道回归 覆盖；它们不代替上表的负责人完整探针走查。
 
-设置 `PLATFORM_TEST_DATABASE` 指向专用测试 PostgreSQL 后，根包 `TestPostgresTableProfilePullAndReplay` 检查真实只读表接入、数字增量游标和重放；`TestJournalWritebackCallbackAndReplay` 检查真实接受结果落盘及快照恢复；`TestJournalBooksFromBuilderActions` 检查账簿待过账恢复及冲销落盘后丢应答的重试；`TestJournalConcurrentOpen` 检查四个宿主同时初始化同一个测试库。测试地址不含密码，凭据仍通过受控密钥提供。
+设置 `PLATFORM_TEST_DATABASE` 指向专用测试 PostgreSQL 后，根包 `TestPostgresTableProfilePullAndReplay` 检查真实只读表接入、数字增量游标和重放；`TestPostgresSevenNodeContinuousGraph` 以真实 PostgreSQL 流驱动七节点持续 Flow（窗口、聚合、阈值、告警循环、只读输出、死信、周期检查点、显式停止与续接），告警动作为探测应用的真实动作；`TestJournalWritebackCallbackAndReplay` 检查真实接受结果落盘及快照恢复；`TestJournalBooksFromBuilderActions` 检查账簿待过账恢复及冲销落盘后丢应答的重试；`TestJournalConcurrentOpen` 检查四个宿主同时初始化同一个测试库。测试地址不含密码，凭据仍通过受控密钥提供。
 
 全量 `make e2e` 现在就是上面 8 条路线；哪条过时就修哪条，不再有"遗留路线"。
