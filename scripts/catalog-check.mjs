@@ -137,24 +137,28 @@ export function inspectImports(file, text, packages, entries) {
           const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), module));
           const directory = ownerDirectory(owner);
           if (target.startsWith(directory + "/src/") && !file.startsWith(directory + "/")) errors.push(`${file}: private relative import ${module}`);
-          if (ts.isImportDeclaration(node) && node.importClause?.namedBindings) {
-            const bindings = node.importClause.namedBindings;
-            if (ts.isNamedImports(bindings)) {
-              const names = new Set(bindings.elements.filter((item) => !item.isTypeOnly).map((item) => item.propertyName?.text ?? item.name.text));
-              for (const entry of entries) {
-                const entrySourceNorm = entry.source.replace(/\.[cm]?[jt]sx?$/, "");
-                if (target === entrySourceNorm || target.endsWith("/" + path.posix.basename(entrySourceNorm))) {
-                  if (entry.exports?.some((name) => names.has(name.split(".")[0]))) consumers.push(entry.id);
-                }
-              }
-            }
-          }
         }
         if (module === pkg.name && ts.isImportDeclaration(node) && node.importClause?.namedBindings) {
           const bindings = node.importClause.namedBindings;
           if (ts.isNamedImports(bindings)) {
             const names = new Set(bindings.elements.filter((item) => !item.isTypeOnly).map((item) => item.propertyName?.text ?? item.name.text));
             for (const entry of entries.filter((entry) => entry.owner === ownerPackage(owner))) {
+              if (entry.exports?.some((name) => names.has(name.split(".")[0]))) consumers.push(entry.id);
+            }
+          }
+        }
+      }
+
+      // Check relative imports with exact normalized file target matching (no fuzzy basename match)
+      if (module.startsWith(".") && ts.isImportDeclaration(node) && node.importClause?.namedBindings) {
+        const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), module));
+        const targetNorm = target.replace(/\.[cm]?[jt]sx?$/, "");
+        const bindings = node.importClause.namedBindings;
+        if (ts.isNamedImports(bindings)) {
+          const names = new Set(bindings.elements.filter((item) => !item.isTypeOnly).map((item) => item.propertyName?.text ?? item.name.text));
+          for (const entry of entries) {
+            const entrySourceNorm = entry.source.replace(/\.[cm]?[jt]sx?$/, "");
+            if (targetNorm === entrySourceNorm) {
               if (entry.exports?.some((name) => names.has(name.split(".")[0]))) consumers.push(entry.id);
             }
           }
@@ -175,13 +179,49 @@ export function extractComponentApi(entry, text, allEntries = []) {
   const composed = new Set();
   const relatedTypes = [];
 
-  const candidates = [];
-  if (entry.type) candidates.push(entry.type);
-  for (const exp of entry.exports || []) {
-    const base = exp.split(".")[0];
-    candidates.push(`${base}Props`, `${base}Options`, `${base}Config`);
+  // 1. Build import map to verify exact symbol origins
+  const importsByLocalName = new Map();
+  for (const stmt of source.statements) {
+    if (ts.isImportDeclaration(stmt) && stmt.moduleSpecifier && ts.isStringLiteral(stmt.moduleSpecifier)) {
+      const module = stmt.moduleSpecifier.text;
+      const clause = stmt.importClause;
+      if (clause) {
+        if (clause.name) {
+          importsByLocalName.set(clause.name.text, { module, importedName: "default" });
+        }
+        if (clause.namedBindings) {
+          if (ts.isNamedImports(clause.namedBindings)) {
+            for (const el of clause.namedBindings.elements) {
+              const localName = el.name.text;
+              const importedName = el.propertyName ? el.propertyName.text : localName;
+              importsByLocalName.set(localName, { module, importedName });
+            }
+          } else if (ts.isNamespaceImport(clause.namedBindings)) {
+            importsByLocalName.set(clause.namedBindings.name.text, { module, importedName: "*" });
+          }
+        }
+      }
+    }
   }
-  candidates.push("Props");
+
+  // 2. Identify the target component(s) belonging to this catalog entry
+  const entryExports = entry.exports || [];
+  const idSlug = (entry.id.split("/")[1] || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const entryNameNorm = (entry.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  let primaryExport = entryExports.find((exp) => {
+    const norm = exp.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return norm === idSlug || norm === entryNameNorm;
+  });
+
+  if (!primaryExport && entry.type) {
+    primaryExport = entryExports.find((exp) => entry.type.startsWith(exp));
+  }
+  if (!primaryExport) {
+    primaryExport = entryExports.find((exp) => /^[A-Z]/.test(exp)) || entryExports[0];
+  }
+
+  const targetExports = primaryExport ? [primaryExport] : entryExports.filter((exp) => /^[A-Z]/.test(exp));
 
   function extractPropFromMember(member, sourceFile, defaultValues = new Map()) {
     if (!member.name) return null;
@@ -217,26 +257,18 @@ export function extractComponentApi(entry, text, allEntries = []) {
 
   const propMap = new Map();
   const defaultValues = new Map();
+  const targetComponentNodes = [];
 
-  // 扫描 cva 调用以提取组件变体属性 (如 Button, StatusTag 等)
-  for (const stmt of source.statements) {
-    if (ts.isVariableStatement(stmt)) {
-      for (const decl of stmt.declarationList.declarations) {
-        if (decl.initializer && ts.isCallExpression(decl.initializer) && decl.initializer.expression.getText(source) === "cva") {
-          const config = decl.initializer.arguments?.[1];
-          if (config && ts.isObjectLiteralExpression(config)) {
-            for (const prop of config.properties) {
-              if (prop.name?.getText(source) === "variants" && prop.initializer && ts.isObjectLiteralExpression(prop.initializer)) {
-                for (const v of prop.initializer.properties) {
-                  const vName = v.name?.getText(source);
-                  if (vName && v.initializer && ts.isObjectLiteralExpression(v.initializer)) {
-                    const options = v.initializer.properties.map((p) => `"${p.name?.getText(source)}"`).join(" | ");
-                    if (!propMap.has(vName)) {
-                      propMap.set(vName, { name: vName, type: options || "string", optional: true, isCallback: false, isSlot: false });
-                    }
-                  }
-                }
-              }
+  // 3. Find component function/variable nodes belonging strictly to target component(s)
+  for (const targetComp of targetExports) {
+    for (const stmt of source.statements) {
+      if (ts.isFunctionDeclaration(stmt) && stmt.name?.text === targetComp) {
+        targetComponentNodes.push(stmt);
+      } else if (ts.isVariableStatement(stmt)) {
+        for (const decl of stmt.declarationList.declarations) {
+          if (decl.name?.getText(source) === targetComp && decl.initializer) {
+            if (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer)) {
+              targetComponentNodes.push(decl.initializer);
             }
           }
         }
@@ -244,29 +276,44 @@ export function extractComponentApi(entry, text, allEntries = []) {
     }
   }
 
-  for (const stmt of source.statements) {
-    let fnNode = null;
-    if (ts.isFunctionDeclaration(stmt)) {
-      const fnName = stmt.name?.text;
-      if (entry.exports?.some((e) => e.split(".")[0] === fnName) || (fnName && entry.id.endsWith(fnName.toLowerCase()))) {
-        fnNode = stmt;
-      }
-    } else if (ts.isVariableStatement(stmt)) {
-      for (const decl of stmt.declarationList.declarations) {
-        const declName = decl.name?.getText(source);
-        if (entry.exports?.some((e) => e.split(".")[0] === declName) && decl.initializer) {
-          if (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer)) {
-            fnNode = decl.initializer;
+  // 4. Collect default parameter values from target component functions
+  for (const fnNode of targetComponentNodes) {
+    if (fnNode.parameters?.length > 0) {
+      const firstParam = fnNode.parameters[0];
+      const paramDefaults = extractDefaults(firstParam, source);
+      for (const [k, v] of paramDefaults) defaultValues.set(k, v);
+    }
+  }
+
+  // 5. Build candidate type names to search
+  const candidateTypeNames = new Set();
+  if (entry.type) candidateTypeNames.add(entry.type);
+  for (const targetComp of targetExports) {
+    candidateTypeNames.add(`${targetComp}Props`);
+    candidateTypeNames.add(`${targetComp}Options`);
+    candidateTypeNames.add(`${targetComp}Config`);
+  }
+  candidateTypeNames.add("Props");
+
+  for (const fnNode of targetComponentNodes) {
+    if (fnNode.parameters?.length > 0) {
+      const firstParam = fnNode.parameters[0];
+      if (firstParam.type) {
+        if (ts.isTypeReferenceNode(firstParam.type)) {
+          candidateTypeNames.add(firstParam.type.typeName.getText(source));
+        } else if (ts.isIntersectionTypeNode(firstParam.type)) {
+          for (const sub of firstParam.type.types) {
+            if (ts.isTypeReferenceNode(sub)) candidateTypeNames.add(sub.typeName.getText(source));
           }
         }
       }
     }
+  }
 
-    if (fnNode && fnNode.parameters?.length > 0) {
+  // 6. Extract props from inline type literals on parameters
+  for (const fnNode of targetComponentNodes) {
+    if (fnNode.parameters?.length > 0) {
       const firstParam = fnNode.parameters[0];
-      const paramDefaults = extractDefaults(firstParam, source);
-      for (const [k, v] of paramDefaults) defaultValues.set(k, v);
-
       if (firstParam.type && ts.isTypeLiteralNode(firstParam.type)) {
         for (const m of firstParam.type.members) {
           const prop = extractPropFromMember(m, source, defaultValues);
@@ -274,36 +321,14 @@ export function extractComponentApi(entry, text, allEntries = []) {
             propMap.set(prop.name, prop);
           }
         }
-      } else if (ts.isObjectBindingPattern(firstParam.name)) {
-        // 解构参数回退提取
-        for (const element of firstParam.name.elements) {
-          const pName = element.name?.getText(source);
-          if (pName && !pName.startsWith("...") && pName !== "props" && !propMap.has(pName)) {
-            let guessType = "any";
-            if (pName === "className") guessType = "string";
-            else if (pName === "type") guessType = '"button" | "submit" | "reset"';
-            else if (pName === "children") guessType = "ReactNode";
-            else if (pName.startsWith("on")) guessType = "() => void";
-            else if (pName === "disabled") guessType = "boolean";
-            const isCallback = pName.startsWith("on");
-            const isSlot = pName === "children";
-            propMap.set(pName, {
-              name: pName,
-              type: guessType,
-              optional: true,
-              isCallback,
-              isSlot,
-              defaultValue: defaultValues.get(pName),
-            });
-          }
-        }
       }
     }
   }
 
+  // 7. Resolve interface or type alias declarations matching candidate types (REAL TYPES FIRST)
   for (const stmt of source.statements) {
     const stmtName = stmt.name?.text;
-    if (stmtName && candidates.includes(stmtName)) {
+    if (stmtName && candidateTypeNames.has(stmtName)) {
       if (ts.isInterfaceDeclaration(stmt)) {
         for (const m of stmt.members) {
           const prop = extractPropFromMember(m, source, defaultValues);
@@ -333,43 +358,159 @@ export function extractComponentApi(entry, text, allEntries = []) {
         }
       }
     }
+  }
 
+  // 8. CVA variants scanning (e.g. Button, RetroButton, StatusTag)
+  for (const stmt of source.statements) {
+    if (ts.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (decl.initializer && ts.isCallExpression(decl.initializer) && decl.initializer.expression.getText(source) === "cva") {
+          const config = decl.initializer.arguments?.[1];
+          if (config && ts.isObjectLiteralExpression(config)) {
+            for (const prop of config.properties) {
+              if (prop.name?.getText(source) === "variants" && prop.initializer && ts.isObjectLiteralExpression(prop.initializer)) {
+                for (const v of prop.initializer.properties) {
+                  const vName = v.name?.getText(source);
+                  if (vName && v.initializer && ts.isObjectLiteralExpression(v.initializer)) {
+                    const options = v.initializer.properties.map((p) => `"${p.name?.getText(source)}"`).join(" | ");
+                    if (!propMap.has(vName)) {
+                      propMap.set(vName, { name: vName, type: options || "string", optional: true, isCallback: false, isSlot: false });
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 9. Destructured parameters fallback (DO NOT GUESS TYPES, only use initializer or "unknown")
+  for (const fnNode of targetComponentNodes) {
+    if (fnNode.parameters?.length > 0) {
+      const firstParam = fnNode.parameters[0];
+      if (firstParam && ts.isObjectBindingPattern(firstParam.name)) {
+        for (const element of firstParam.name.elements) {
+          const pName = element.name?.getText(source);
+          if (pName && !pName.startsWith("...") && pName !== "props" && !propMap.has(pName)) {
+            let actualType = "unknown";
+            if (element.initializer) {
+              if (ts.isStringLiteral(element.initializer)) actualType = "string";
+              else if (ts.isNumericLiteral(element.initializer)) actualType = "number";
+              else if (element.initializer.kind === ts.SyntaxKind.TrueKeyword || element.initializer.kind === ts.SyntaxKind.FalseKeyword) actualType = "boolean";
+            }
+            const isCallback = pName.startsWith("on") && pName.length > 2 && /^[A-Z]/.test(pName[2]);
+            const isSlot = pName === "children" || pName.toLowerCase().includes("slot");
+            propMap.set(pName, {
+              name: pName,
+              type: actualType,
+              optional: true,
+              isCallback,
+              isSlot,
+              defaultValue: defaultValues.get(pName),
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 10. Extract Related Types (keep full signature without truncation)
+  for (const stmt of source.statements) {
     if (exported(stmt) && (ts.isTypeAliasDeclaration(stmt) || ts.isInterfaceDeclaration(stmt) || ts.isEnumDeclaration(stmt))) {
       const name = stmt.name.text;
       relatedTypes.push({
         name,
         kind: ts.isInterfaceDeclaration(stmt) ? "interface" : ts.isEnumDeclaration(stmt) ? "enum" : "type",
-        signature: stmt.getText(source).slice(0, 160).trim().replace(/\s+/g, " "),
+        signature: stmt.getText(source).trim(),
       });
     }
   }
 
+  // 11. Populate props and slots (with explicit optional boolean)
   for (const prop of propMap.values()) {
     props.push(prop);
     if (prop.isSlot) {
-      slots.push({ name: prop.name, type: prop.type });
+      slots.push({ name: prop.name, type: prop.type, optional: prop.optional });
     }
   }
 
-  function visitJsx(node) {
+  // 12. Scoped JSX composition with verified import origin
+  function visitJsxNode(node) {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tagText = node.tagName.getText(source);
       if (/^[A-Z]/.test(tagText)) {
-        for (const other of allEntries) {
-          if (other.id !== entry.id && other.exports?.some((e) => e.split(".")[0] === tagText)) {
-            composed.add(other.id);
+        const tagBase = tagText.split(".")[0];
+        if (importsByLocalName.has(tagBase)) {
+          const { module, importedName } = importsByLocalName.get(tagBase);
+          if (module.startsWith("@platform/") || module.startsWith("@pkg/")) {
+            for (const other of allEntries) {
+              if (other.id !== entry.id && other.owner === module) {
+                if (other.exports?.some((e) => e.split(".")[0] === importedName)) {
+                  composed.add(other.id);
+                }
+              }
+            }
+          } else if (module.startsWith(".")) {
+            const fromDir = path.posix.dirname(entry.source);
+            const resolvedTarget = path.posix.normalize(path.posix.join(fromDir, module));
+            for (const other of allEntries) {
+              if (other.id !== entry.id) {
+                const otherSourceNorm = other.source.replace(/\.[cm]?[jt]sx?$/, "");
+                if (resolvedTarget === otherSourceNorm) {
+                  if (other.exports?.some((e) => e.split(".")[0] === importedName)) {
+                    composed.add(other.id);
+                  }
+                }
+              }
+            }
+          }
+          // External libraries (e.g. lucide-react, react, @tanstack/...) are ignored!
+        } else {
+          // Local declaration in the same file
+          for (const other of allEntries) {
+            if (other.id !== entry.id && other.source === entry.source) {
+              if (other.exports?.some((e) => e.split(".")[0] === tagBase)) {
+                composed.add(other.id);
+              }
+            }
           }
         }
       }
     }
-    ts.forEachChild(node, visitJsx);
+    ts.forEachChild(node, visitJsxNode);
   }
-  visitJsx(source);
+
+  // Traverse JSX only inside target component nodes and local subcomponents called by them
+  const localRenderedTags = new Set();
+  function findLocalTags(node) {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const tagText = node.tagName.getText(source);
+      if (/^[A-Z]/.test(tagText)) {
+        const tagBase = tagText.split(".")[0];
+        if (!importsByLocalName.has(tagBase)) localRenderedTags.add(tagBase);
+      }
+    }
+    ts.forEachChild(node, findLocalTags);
+  }
+  for (const node of targetComponentNodes) findLocalTags(node);
+
+  for (const node of targetComponentNodes) visitJsxNode(node);
+
+  for (const localTag of localRenderedTags) {
+    for (const stmt of source.statements) {
+      if ((ts.isFunctionDeclaration(stmt) && stmt.name?.text === localTag) ||
+          (ts.isVariableStatement(stmt) && stmt.declarationList.declarations.some(d => d.name?.getText(source) === localTag))) {
+        visitJsxNode(stmt);
+      }
+    }
+  }
 
   return {
     props: props.length ? props : undefined,
     slots: slots.length ? slots : undefined,
     composed: composed.size ? [...composed].sort() : undefined,
-    relatedTypes: relatedTypes.length ? relatedTypes.slice(0, 6) : undefined,
+    relatedTypes: relatedTypes.length ? relatedTypes : undefined,
   };
 }

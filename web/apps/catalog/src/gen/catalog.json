@@ -41,15 +41,12 @@
       ],
       "composed": [
         "app/agent-run",
-        "app/record-actions",
         "ui/button",
         "ui/disclosure",
-        "ui/flow-steps",
         "ui/form",
         "ui/input",
         "ui/page-header",
         "ui/panels",
-        "ui/relation-canvas",
         "ui/status"
       ],
       "relatedTypes": [
@@ -82,6 +79,16 @@
           "name": "Passage",
           "kind": "type",
           "signature": "export type Passage = Api.Passage;"
+        },
+        {
+          "name": "Memory",
+          "kind": "type",
+          "signature": "export type Memory = Api.Memory;"
+        },
+        {
+          "name": "AgentInfo",
+          "kind": "type",
+          "signature": "export type AgentInfo = Api.AgentInfo;"
         }
       ]
     },
@@ -140,21 +147,6 @@
           "optional": true,
           "isCallback": false,
           "isSlot": false
-        },
-        {
-          "name": "of",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "title",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "t(\"Chain\")"
         }
       ],
       "composed": [
@@ -162,7 +154,6 @@
         "ui/button",
         "ui/disclosure",
         "ui/flow-steps",
-        "ui/form",
         "ui/input",
         "ui/page-header",
         "ui/panels",
@@ -199,6 +190,16 @@
           "name": "Passage",
           "kind": "type",
           "signature": "export type Passage = Api.Passage;"
+        },
+        {
+          "name": "Memory",
+          "kind": "type",
+          "signature": "export type Memory = Api.Memory;"
+        },
+        {
+          "name": "AgentInfo",
+          "kind": "type",
+          "signature": "export type AgentInfo = Api.AgentInfo;"
         }
       ]
     },
@@ -306,13 +307,6 @@
       ],
       "props": [
         {
-          "name": "children",
-          "type": "ReactNode",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
           "name": "pageRef",
           "type": "Api.AssetRef",
           "optional": false,
@@ -333,12 +327,20 @@
           "isCallback": false,
           "isSlot": false,
           "defaultValue": "false"
+        },
+        {
+          "name": "children",
+          "type": "ReactNode",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": true
         }
       ],
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": false
         }
       ],
       "composed": [
@@ -455,7 +457,8 @@
       "slots": [
         {
           "name": "notice",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "composed": [
@@ -550,21 +553,8 @@
         }
       ],
       "composed": [
-        "app/generated-form",
-        "app/record-actions",
-        "ui/button",
         "ui/chart",
-        "ui/dialog",
-        "ui/entity-card",
-        "ui/file-picker",
-        "ui/form",
-        "ui/input",
-        "ui/input-drafts",
-        "ui/page-header",
-        "ui/panels",
-        "ui/record-form",
-        "ui/record-list",
-        "ui/record-page"
+        "ui/page-header"
       ],
       "relatedTypes": [
         {
@@ -590,12 +580,37 @@
         {
           "name": "Decision",
           "kind": "type",
-          "signature": "export type Decision = { evidence?: string[]; expectedRevision?: number; quiet?: boolean; /** Told why the host refused, for a screen that keeps the reason"
+          "signature": "export type Decision = {\n  evidence?: string[]; expectedRevision?: number; quiet?: boolean;\n  /** Told why the host refused, for a screen that keeps the reason in front of\n   *  the person instead of letting a notice pass by. */\n  onRefused?: (reason: string) => void;\n  /** This request's outbox state, including an unknown answer awaiting a same-key retry. */\n  onOutcome?: (entry: Entry) => void;\n};"
         },
         {
           "name": "Host",
           "kind": "type",
-          "signature": "export type Host = { client: EdgeClient; me: Me; /** The member's role in an app, or undefined. */ role: (app: string) => string | undefined; /** Whet"
+          "signature": "export type Host = {\n  client: EdgeClient;\n  me: Me;\n  /** The member's role in an app, or undefined. */\n  role: (app: string) => string | undefined;\n  /** Whether the member's catalog offers the action: render from it, never re-check roles. */\n  can: (schema: string) => boolean;\n  action: (schema: string) => ActionDeclaration | undefined;\n  /** Every action the member's catalog offers. */\n  catalog: ActionDeclaration[];\n  /** Submits one decision through the outbox and tells the member the answer; true when confirmed. */\n  decide: (schema: string, target: { type: string; id: string }, payload: unknown, options?: Decision) => Promise<boolean>;\n  /** Decisions not yet answered by the host (K5). */\n  outbox: Entry[];\n  /** Sends what waits in the outbox again. */\n  resend: () => Promise<void>;\n  entities: EntityInfo[];\n  /** The installed assets the member may discover, for navigation built from\n   *  pages — a code page or one composed in this tenant (ADR-0032, ADR-0034). */\n  definitions: Definition[];\n  source: RecordSource;\n  /** Refresh original reads without submitting business actions or replacing drafts. */\n  refresh?:()=>Promise<void>;\n  /** Entity type → the view that shows one record of it, from every app's `opens`. */\n  opens: Map<string, string>;\n};"
+        },
+        {
+          "name": "Dashboard",
+          "kind": "type",
+          "signature": "export type Dashboard = { id: string; title: string; description?: string; for?: (host: Host) => boolean; charts: ChartSpec[] };"
+        },
+        {
+          "name": "WorkspaceSurface",
+          "kind": "type",
+          "signature": "export type WorkspaceSurface = \"work\" | \"studio\" | \"tenant\" | \"developer\";"
+        },
+        {
+          "name": "PlatformAppCategory",
+          "kind": "type",
+          "signature": "export type PlatformAppCategory = \"business\" | \"ontology\" | \"build\" | \"operate\" | \"govern\" | \"developer\";"
+        },
+        {
+          "name": "AppUI",
+          "kind": "type",
+          "signature": "export type AppUI = {\n  /** Stable UI contribution identity; existing native app ids are retained. */\n  id: string;\n  surface?: WorkspaceSurface;\n  /** Portal category (ADR-0052); defaults from `surface`, then `business`. */\n  category?: PlatformAppCategory;\n  /** One line under the title in the portal and on Home. */\n  description?: string;\n  /** Explicit owner bindings, independent of the contribution's display name. */\n  serves?: string[];\n  /** Navigation projection only; every read/action still checks its owner. */\n  for?: (host: Host) => boolean;\n  title: string;\n  icon: ReactNode;\n  /** View ids are unique across the workspace. */\n  views: View[];\n  nav: (host: Host) => NavSection[];\n  home: Route;\n  /** Entity type → the id of the view that shows one record, given `{ id }`. */\n  opens?: Record<string, string>;\n  commands?: (host: Host) => ShellCommand[];\n  dashboards?: Dashboard[];\n};"
+        },
+        {
+          "name": "SavedView",
+          "kind": "type",
+          "signature": "export type SavedView = Api.SavedView;"
         }
       ]
     },
@@ -682,7 +697,6 @@
         }
       ],
       "composed": [
-        "app/agent-run",
         "ui/button",
         "ui/flow"
       ]
@@ -784,20 +798,7 @@
         }
       ],
       "composed": [
-        "app/record-actions",
-        "ui/button",
-        "ui/chart",
-        "ui/dialog",
-        "ui/entity-card",
-        "ui/file-picker",
-        "ui/form",
-        "ui/input",
-        "ui/input-drafts",
-        "ui/page-header",
-        "ui/panels",
-        "ui/record-form",
-        "ui/record-list",
-        "ui/record-page"
+        "ui/record-form"
       ],
       "relatedTypes": [
         {
@@ -823,12 +824,37 @@
         {
           "name": "Decision",
           "kind": "type",
-          "signature": "export type Decision = { evidence?: string[]; expectedRevision?: number; quiet?: boolean; /** Told why the host refused, for a screen that keeps the reason"
+          "signature": "export type Decision = {\n  evidence?: string[]; expectedRevision?: number; quiet?: boolean;\n  /** Told why the host refused, for a screen that keeps the reason in front of\n   *  the person instead of letting a notice pass by. */\n  onRefused?: (reason: string) => void;\n  /** This request's outbox state, including an unknown answer awaiting a same-key retry. */\n  onOutcome?: (entry: Entry) => void;\n};"
         },
         {
           "name": "Host",
           "kind": "type",
-          "signature": "export type Host = { client: EdgeClient; me: Me; /** The member's role in an app, or undefined. */ role: (app: string) => string | undefined; /** Whet"
+          "signature": "export type Host = {\n  client: EdgeClient;\n  me: Me;\n  /** The member's role in an app, or undefined. */\n  role: (app: string) => string | undefined;\n  /** Whether the member's catalog offers the action: render from it, never re-check roles. */\n  can: (schema: string) => boolean;\n  action: (schema: string) => ActionDeclaration | undefined;\n  /** Every action the member's catalog offers. */\n  catalog: ActionDeclaration[];\n  /** Submits one decision through the outbox and tells the member the answer; true when confirmed. */\n  decide: (schema: string, target: { type: string; id: string }, payload: unknown, options?: Decision) => Promise<boolean>;\n  /** Decisions not yet answered by the host (K5). */\n  outbox: Entry[];\n  /** Sends what waits in the outbox again. */\n  resend: () => Promise<void>;\n  entities: EntityInfo[];\n  /** The installed assets the member may discover, for navigation built from\n   *  pages — a code page or one composed in this tenant (ADR-0032, ADR-0034). */\n  definitions: Definition[];\n  source: RecordSource;\n  /** Refresh original reads without submitting business actions or replacing drafts. */\n  refresh?:()=>Promise<void>;\n  /** Entity type → the view that shows one record of it, from every app's `opens`. */\n  opens: Map<string, string>;\n};"
+        },
+        {
+          "name": "Dashboard",
+          "kind": "type",
+          "signature": "export type Dashboard = { id: string; title: string; description?: string; for?: (host: Host) => boolean; charts: ChartSpec[] };"
+        },
+        {
+          "name": "WorkspaceSurface",
+          "kind": "type",
+          "signature": "export type WorkspaceSurface = \"work\" | \"studio\" | \"tenant\" | \"developer\";"
+        },
+        {
+          "name": "PlatformAppCategory",
+          "kind": "type",
+          "signature": "export type PlatformAppCategory = \"business\" | \"ontology\" | \"build\" | \"operate\" | \"govern\" | \"developer\";"
+        },
+        {
+          "name": "AppUI",
+          "kind": "type",
+          "signature": "export type AppUI = {\n  /** Stable UI contribution identity; existing native app ids are retained. */\n  id: string;\n  surface?: WorkspaceSurface;\n  /** Portal category (ADR-0052); defaults from `surface`, then `business`. */\n  category?: PlatformAppCategory;\n  /** One line under the title in the portal and on Home. */\n  description?: string;\n  /** Explicit owner bindings, independent of the contribution's display name. */\n  serves?: string[];\n  /** Navigation projection only; every read/action still checks its owner. */\n  for?: (host: Host) => boolean;\n  title: string;\n  icon: ReactNode;\n  /** View ids are unique across the workspace. */\n  views: View[];\n  nav: (host: Host) => NavSection[];\n  home: Route;\n  /** Entity type → the id of the view that shows one record, given `{ id }`. */\n  opens?: Record<string, string>;\n  commands?: (host: Host) => ShellCommand[];\n  dashboards?: Dashboard[];\n};"
+        },
+        {
+          "name": "SavedView",
+          "kind": "type",
+          "signature": "export type SavedView = Api.SavedView;"
         }
       ]
     },
@@ -873,17 +899,11 @@
         }
       ],
       "composed": [
-        "app/agent-run",
-        "app/record-actions",
         "ui/button",
-        "ui/disclosure",
-        "ui/flow-steps",
         "ui/form",
         "ui/input",
         "ui/page-header",
-        "ui/panels",
-        "ui/relation-canvas",
-        "ui/status"
+        "ui/panels"
       ],
       "relatedTypes": [
         {
@@ -915,6 +935,16 @@
           "name": "Passage",
           "kind": "type",
           "signature": "export type Passage = Api.Passage;"
+        },
+        {
+          "name": "Memory",
+          "kind": "type",
+          "signature": "export type Memory = Api.Memory;"
+        },
+        {
+          "name": "AgentInfo",
+          "kind": "type",
+          "signature": "export type AgentInfo = Api.AgentInfo;"
         }
       ]
     },
@@ -1043,13 +1073,8 @@
         }
       ],
       "composed": [
-        "app/agent-run",
-        "app/flow-instance",
         "ui/button",
-        "ui/data-table",
-        "ui/page-header",
-        "ui/panels",
-        "ui/status"
+        "ui/panels"
       ]
     },
     {
@@ -1091,13 +1116,6 @@
           "optional": false,
           "isCallback": false,
           "isSlot": false
-        },
-        {
-          "name": "definitions",
-          "type": "Definition[]",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
         }
       ],
       "composed": [
@@ -1105,10 +1123,7 @@
         "app/record-actions",
         "app/record-detail",
         "ui/button",
-        "ui/dialog",
         "ui/page-header",
-        "ui/panels",
-        "ui/record-page",
         "ui/record-workspace"
       ]
     },
@@ -1158,66 +1173,7 @@
       "snippet": "import { RecordActions } from \"@platform/app\";\n<RecordActions type=\"your.object\" record={record} steps />",
       "props": [
         {
-          "name": "fields",
-          "type": "Field[]",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "values",
-          "type": "Record<string, unknown>",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "onChange",
-          "type": "(v: Record<string, unknown>) => void",
-          "optional": false,
-          "isCallback": true,
-          "isSlot": false
-        },
-        {
-          "name": "preview",
-          "type": "boolean",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "false"
-        },
-        {
-          "name": "submitted",
-          "type": "boolean",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "false"
-        },
-        {
-          "name": "onInvalid",
-          "type": "(name: string, invalid: boolean) => void",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": false
-        },
-        {
-          "name": "issues",
-          "type": "Api.FieldIssue[]",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "[]"
-        },
-        {
           "name": "type",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "schema",
           "type": "string",
           "optional": false,
           "isCallback": false,
@@ -1226,48 +1182,9 @@
         {
           "name": "record",
           "type": "EntityRecord",
-          "optional": true,
+          "optional": false,
           "isCallback": false,
           "isSlot": false
-        },
-        {
-          "name": "live",
-          "type": "boolean",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "true"
-        },
-        {
-          "name": "scope",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "defaults",
-          "type": "Api.PageActionParameter[]",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "[]"
-        },
-        {
-          "name": "ready",
-          "type": "boolean",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "true"
-        },
-        {
-          "name": "covers",
-          "type": "string[]",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "[]"
         },
         {
           "name": "allowed",
@@ -1277,39 +1194,26 @@
           "isSlot": false
         },
         {
-          "name": "disabled",
-          "type": "boolean",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "false"
-        },
-        {
-          "name": "onCreated",
-          "type": "(target: { type: string; id: string }) => void",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": false
-        },
-        {
           "name": "steps",
           "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false
+        },
+        {
+          "name": "withSteps",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "false"
         }
       ],
       "composed": [
         "app/generated-form",
         "ui/button",
-        "ui/checkbox",
-        "ui/date-input",
-        "ui/datetime-input",
         "ui/dialog",
-        "ui/form",
-        "ui/input",
-        "ui/panels",
-        "ui/record-lookup"
+        "ui/input"
       ]
     },
     {
@@ -1459,17 +1363,10 @@
         "app/generated-form",
         "app/record-actions",
         "ui/button",
-        "ui/chart",
         "ui/dialog",
         "ui/entity-card",
-        "ui/file-picker",
-        "ui/form",
-        "ui/input",
-        "ui/input-drafts",
-        "ui/page-header",
         "ui/panels",
         "ui/record-form",
-        "ui/record-list",
         "ui/record-page"
       ],
       "relatedTypes": [
@@ -1496,12 +1393,37 @@
         {
           "name": "Decision",
           "kind": "type",
-          "signature": "export type Decision = { evidence?: string[]; expectedRevision?: number; quiet?: boolean; /** Told why the host refused, for a screen that keeps the reason"
+          "signature": "export type Decision = {\n  evidence?: string[]; expectedRevision?: number; quiet?: boolean;\n  /** Told why the host refused, for a screen that keeps the reason in front of\n   *  the person instead of letting a notice pass by. */\n  onRefused?: (reason: string) => void;\n  /** This request's outbox state, including an unknown answer awaiting a same-key retry. */\n  onOutcome?: (entry: Entry) => void;\n};"
         },
         {
           "name": "Host",
           "kind": "type",
-          "signature": "export type Host = { client: EdgeClient; me: Me; /** The member's role in an app, or undefined. */ role: (app: string) => string | undefined; /** Whet"
+          "signature": "export type Host = {\n  client: EdgeClient;\n  me: Me;\n  /** The member's role in an app, or undefined. */\n  role: (app: string) => string | undefined;\n  /** Whether the member's catalog offers the action: render from it, never re-check roles. */\n  can: (schema: string) => boolean;\n  action: (schema: string) => ActionDeclaration | undefined;\n  /** Every action the member's catalog offers. */\n  catalog: ActionDeclaration[];\n  /** Submits one decision through the outbox and tells the member the answer; true when confirmed. */\n  decide: (schema: string, target: { type: string; id: string }, payload: unknown, options?: Decision) => Promise<boolean>;\n  /** Decisions not yet answered by the host (K5). */\n  outbox: Entry[];\n  /** Sends what waits in the outbox again. */\n  resend: () => Promise<void>;\n  entities: EntityInfo[];\n  /** The installed assets the member may discover, for navigation built from\n   *  pages — a code page or one composed in this tenant (ADR-0032, ADR-0034). */\n  definitions: Definition[];\n  source: RecordSource;\n  /** Refresh original reads without submitting business actions or replacing drafts. */\n  refresh?:()=>Promise<void>;\n  /** Entity type → the view that shows one record of it, from every app's `opens`. */\n  opens: Map<string, string>;\n};"
+        },
+        {
+          "name": "Dashboard",
+          "kind": "type",
+          "signature": "export type Dashboard = { id: string; title: string; description?: string; for?: (host: Host) => boolean; charts: ChartSpec[] };"
+        },
+        {
+          "name": "WorkspaceSurface",
+          "kind": "type",
+          "signature": "export type WorkspaceSurface = \"work\" | \"studio\" | \"tenant\" | \"developer\";"
+        },
+        {
+          "name": "PlatformAppCategory",
+          "kind": "type",
+          "signature": "export type PlatformAppCategory = \"business\" | \"ontology\" | \"build\" | \"operate\" | \"govern\" | \"developer\";"
+        },
+        {
+          "name": "AppUI",
+          "kind": "type",
+          "signature": "export type AppUI = {\n  /** Stable UI contribution identity; existing native app ids are retained. */\n  id: string;\n  surface?: WorkspaceSurface;\n  /** Portal category (ADR-0052); defaults from `surface`, then `business`. */\n  category?: PlatformAppCategory;\n  /** One line under the title in the portal and on Home. */\n  description?: string;\n  /** Explicit owner bindings, independent of the contribution's display name. */\n  serves?: string[];\n  /** Navigation projection only; every read/action still checks its owner. */\n  for?: (host: Host) => boolean;\n  title: string;\n  icon: ReactNode;\n  /** View ids are unique across the workspace. */\n  views: View[];\n  nav: (host: Host) => NavSection[];\n  home: Route;\n  /** Entity type → the id of the view that shows one record, given `{ id }`. */\n  opens?: Record<string, string>;\n  commands?: (host: Host) => ShellCommand[];\n  dashboards?: Dashboard[];\n};"
+        },
+        {
+          "name": "SavedView",
+          "kind": "type",
+          "signature": "export type SavedView = Api.SavedView;"
         }
       ]
     },
@@ -1702,25 +1624,19 @@
       "slots": [
         {
           "name": "actions",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "composed": [
-        "app/generated-form",
         "app/record-actions",
         "ui/button",
-        "ui/chart",
         "ui/dialog",
-        "ui/entity-card",
         "ui/file-picker",
         "ui/form",
         "ui/input",
-        "ui/input-drafts",
         "ui/page-header",
-        "ui/panels",
-        "ui/record-form",
-        "ui/record-list",
-        "ui/record-page"
+        "ui/record-list"
       ],
       "relatedTypes": [
         {
@@ -1746,12 +1662,37 @@
         {
           "name": "Decision",
           "kind": "type",
-          "signature": "export type Decision = { evidence?: string[]; expectedRevision?: number; quiet?: boolean; /** Told why the host refused, for a screen that keeps the reason"
+          "signature": "export type Decision = {\n  evidence?: string[]; expectedRevision?: number; quiet?: boolean;\n  /** Told why the host refused, for a screen that keeps the reason in front of\n   *  the person instead of letting a notice pass by. */\n  onRefused?: (reason: string) => void;\n  /** This request's outbox state, including an unknown answer awaiting a same-key retry. */\n  onOutcome?: (entry: Entry) => void;\n};"
         },
         {
           "name": "Host",
           "kind": "type",
-          "signature": "export type Host = { client: EdgeClient; me: Me; /** The member's role in an app, or undefined. */ role: (app: string) => string | undefined; /** Whet"
+          "signature": "export type Host = {\n  client: EdgeClient;\n  me: Me;\n  /** The member's role in an app, or undefined. */\n  role: (app: string) => string | undefined;\n  /** Whether the member's catalog offers the action: render from it, never re-check roles. */\n  can: (schema: string) => boolean;\n  action: (schema: string) => ActionDeclaration | undefined;\n  /** Every action the member's catalog offers. */\n  catalog: ActionDeclaration[];\n  /** Submits one decision through the outbox and tells the member the answer; true when confirmed. */\n  decide: (schema: string, target: { type: string; id: string }, payload: unknown, options?: Decision) => Promise<boolean>;\n  /** Decisions not yet answered by the host (K5). */\n  outbox: Entry[];\n  /** Sends what waits in the outbox again. */\n  resend: () => Promise<void>;\n  entities: EntityInfo[];\n  /** The installed assets the member may discover, for navigation built from\n   *  pages — a code page or one composed in this tenant (ADR-0032, ADR-0034). */\n  definitions: Definition[];\n  source: RecordSource;\n  /** Refresh original reads without submitting business actions or replacing drafts. */\n  refresh?:()=>Promise<void>;\n  /** Entity type → the view that shows one record of it, from every app's `opens`. */\n  opens: Map<string, string>;\n};"
+        },
+        {
+          "name": "Dashboard",
+          "kind": "type",
+          "signature": "export type Dashboard = { id: string; title: string; description?: string; for?: (host: Host) => boolean; charts: ChartSpec[] };"
+        },
+        {
+          "name": "WorkspaceSurface",
+          "kind": "type",
+          "signature": "export type WorkspaceSurface = \"work\" | \"studio\" | \"tenant\" | \"developer\";"
+        },
+        {
+          "name": "PlatformAppCategory",
+          "kind": "type",
+          "signature": "export type PlatformAppCategory = \"business\" | \"ontology\" | \"build\" | \"operate\" | \"govern\" | \"developer\";"
+        },
+        {
+          "name": "AppUI",
+          "kind": "type",
+          "signature": "export type AppUI = {\n  /** Stable UI contribution identity; existing native app ids are retained. */\n  id: string;\n  surface?: WorkspaceSurface;\n  /** Portal category (ADR-0052); defaults from `surface`, then `business`. */\n  category?: PlatformAppCategory;\n  /** One line under the title in the portal and on Home. */\n  description?: string;\n  /** Explicit owner bindings, independent of the contribution's display name. */\n  serves?: string[];\n  /** Navigation projection only; every read/action still checks its owner. */\n  for?: (host: Host) => boolean;\n  title: string;\n  icon: ReactNode;\n  /** View ids are unique across the workspace. */\n  views: View[];\n  nav: (host: Host) => NavSection[];\n  home: Route;\n  /** Entity type → the id of the view that shows one record, given `{ id }`. */\n  opens?: Record<string, string>;\n  commands?: (host: Host) => ShellCommand[];\n  dashboards?: Dashboard[];\n};"
+        },
+        {
+          "name": "SavedView",
+          "kind": "type",
+          "signature": "export type SavedView = Api.SavedView;"
         }
       ]
     },
@@ -1826,13 +1767,6 @@
           "name": "drafts",
           "type": "{ name: string; title?: string }[]",
           "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "object",
-          "type": "Api.AssetRef",
-          "optional": false,
           "isCallback": false,
           "isSlot": false
         }
@@ -1918,20 +1852,6 @@
         {
           "name": "label",
           "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "app",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "agents",
-          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -2044,9 +1964,6 @@
           "isSlot": false
         }
       ],
-      "composed": [
-        "ui/button"
-      ],
       "relatedTypes": [
         {
           "name": "LayoutSize",
@@ -2090,18 +2007,7 @@
         "List selection is shared by details and actions. The object contract and current member’s read scope remain authoritative.",
         "This pattern recommends a composition; it does not grant widget eligibility or permissions."
       ],
-      "snippet": "import { PageWorkspace } from \"@platform/app\";\n<PageWorkspace definition={installedListDetailPage} />",
-      "composed": [
-        "app/composed-page",
-        "app/record-actions",
-        "app/record-detail",
-        "ui/button",
-        "ui/dialog",
-        "ui/page-header",
-        "ui/panels",
-        "ui/record-page",
-        "ui/record-workspace"
-      ]
+      "snippet": "import { PageWorkspace } from \"@platform/app\";\n<PageWorkspace definition={installedListDetailPage} />"
     },
     {
       "id": "pattern/workspace",
@@ -2263,15 +2169,16 @@
       "slots": [
         {
           "name": "productIcon",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         },
         {
           "name": "status",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "composed": [
-        "app/knowledge-search",
         "ui/button",
         "ui/dialog"
       ],
@@ -2279,7 +2186,7 @@
         {
           "name": "View",
           "kind": "type",
-          "signature": "export type View = { id: string; /** Tab title for a route of this view, e.g. the entity's code. */ title: (params: Record<string, string>) => string; i"
+          "signature": "export type View = {\n  id: string;\n  /** Tab title for a route of this view, e.g. the entity's code. */\n  title: (params: Record<string, string>) => string;\n  icon?: ReactNode;\n  render: (params: Record<string, string>) => ReactNode;\n};"
         },
         {
           "name": "NavSection",
@@ -2304,7 +2211,32 @@
         {
           "name": "Session",
           "kind": "type",
-          "signature": "export type Session = { tenant: string; principal: string; detail?: string; /** The member's display name (ADR-0079), shown over the principal when set. */"
+          "signature": "export type Session = {\n  tenant: string; principal: string; detail?: string;\n  /** The member's display name (ADR-0079), shown over the principal when set. */\n  name?: string;\n  options: { id: string; label: string }[]; current: string; onSwitch: (id: string) => void;\n  /** Opens the member's own account page, when the host has one. */\n  onAccount?: () => void;\n};"
+        },
+        {
+          "name": "PlatformApplication",
+          "kind": "type",
+          "signature": "export type PlatformApplication = { id: string; title: string; icon?: ReactNode; description?: string; category: string; home: Route };"
+        },
+        {
+          "name": "Applications",
+          "kind": "type",
+          "signature": "export type Applications = { apps: PlatformApplication[]; categories: { id: string; label: string }[]; current?: string; onSelect: (id: string) => void };"
+        },
+        {
+          "name": "Workspaces",
+          "kind": "type",
+          "signature": "export type Workspaces = { options: { id: string; title: string; icon?: ReactNode }[]; current: string; onSelect: (id: string) => void };"
+        },
+        {
+          "name": "Rail",
+          "kind": "type",
+          "signature": "export type Rail = { home: Route; applications: Route; notifications?: { route: Route; unread?: number }; assist?: Route };"
+        },
+        {
+          "name": "RecentEntry",
+          "kind": "type",
+          "signature": "export type RecentEntry = { route: Route; title: string; app?: string; at: number };"
         }
       ]
     },
@@ -2337,20 +2269,11 @@
         "The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.",
         "Application resources refer to original owners; membership does not grant access. Release review freezes published dependencies using the existing candidate path."
       ],
-      "composed": [
-        "ui/application-header",
-        "ui/button",
-        "ui/checkbox",
-        "ui/icon-picker",
-        "ui/input",
-        "ui/input-drafts",
-        "ui/workbench"
-      ],
       "relatedTypes": [
         {
           "name": "ModuleContext",
           "kind": "type",
-          "signature": "export type ModuleContext = { project: Project; pages: { name: string; title: string; id?: string; state?: string }[]; currentPage?: string; openPage: (id:"
+          "signature": "export type ModuleContext = {\n  project: Project; pages: { name: string; title: string; id?: string; state?: string }[]; currentPage?: string;\n  openPage: (id: string) => void; openModule: (focus?: ModuleFocus) => void; addPage: () => void; canEdit: boolean;\n};"
         }
       ]
     },
@@ -2383,16 +2306,6 @@
       "constraints": [
         "The local example demonstrates a payload and result flow in the flow workbench; it does not execute a process.",
         "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs."
-      ],
-      "composed": [
-        "app/knowledge-search",
-        "ui/button",
-        "ui/command-menu",
-        "ui/flow-canvas",
-        "ui/input",
-        "ui/page-header",
-        "ui/panels",
-        "ui/workbench"
       ]
     },
     {
@@ -2424,18 +2337,6 @@
         "This is the object type workbench with synthetic local data. Save and publish are refused in Catalog.",
         "A tenant object must be created, tested and published in the connected Application Studio.",
         "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions."
-      ],
-      "composed": [
-        "app/record-actions",
-        "app/semantic-selection",
-        "app/tenant-references",
-        "ui/button",
-        "ui/checkbox",
-        "ui/flow-canvas",
-        "ui/input",
-        "ui/lifecycle",
-        "ui/panels",
-        "ui/workbench"
       ]
     },
     {
@@ -2463,20 +2364,6 @@
       ],
       "constraints": [
         "The local example uses the production PageEditor with synthetic records. Host writes, save and publication are refused in Catalog."
-      ],
-      "composed": [
-        "app/application-sessions",
-        "app/composed-page",
-        "app/semantic-selection",
-        "ui/button",
-        "ui/canvas-editor",
-        "ui/command-menu",
-        "ui/input",
-        "ui/input-drafts",
-        "ui/markdown",
-        "ui/panels",
-        "ui/toggles",
-        "ui/workbench"
       ]
     },
     {
@@ -2506,15 +2393,6 @@
       "constraints": [
         "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.",
         "Queries use the original record reader and member permissions. Pages explicitly choose a retained source version; later drafts and publications do not replace it."
-      ],
-      "composed": [
-        "app/semantic-selection",
-        "ui/button",
-        "ui/checkbox",
-        "ui/input",
-        "ui/page-header",
-        "ui/panels",
-        "ui/record-lookup"
       ]
     },
     {
@@ -2568,7 +2446,7 @@
         {
           "name": "TemplateBindings",
           "kind": "type",
-          "signature": "export type TemplateBindings = { object: EntityInfo; name: string; title: string; fields: string[]; actions: string[]; description: string; child?: EntityInfo;"
+          "signature": "export type TemplateBindings = { object: EntityInfo; name: string; title: string; fields: string[]; actions: string[]; description: string; child?: EntityInfo; relation?: string };"
         }
       ]
     },
@@ -2614,7 +2492,7 @@
         {
           "name": "SourceModule",
           "kind": "type",
-          "signature": "export type SourceModule=Obj&{id:string;name:string;description:string;pages:{id:string;name:string;rootSectionId:string}[];sections:Record<string,SourceSection"
+          "signature": "export type SourceModule=Obj&{id:string;name:string;description:string;pages:{id:string;name:string;rootSectionId:string}[];sections:Record<string,SourceSection>;widgets:Record<string,SourceWidget>;variables:SourceVariable[];overlays:(Obj&{id:string;name:string;kind:string;rootSectionId:string;openVariableId?:string})[];unusedWidgetIds:string[]};"
         },
         {
           "name": "ImportDiagnostic",
@@ -2624,7 +2502,7 @@
         {
           "name": "ImportBindings",
           "kind": "type",
-          "signature": "export type ImportBindings={computations?:Record<string,{operation:Api.AssetBinding;inputs:Record<string,Api.Binding>;outputField?:string}>;unusedConfigurations"
+          "signature": "export type ImportBindings={computations?:Record<string,{operation:Api.AssetBinding;inputs:Record<string,Api.Binding>;outputField?:string}>;unusedConfigurations?:Record<string,UnusedImportBinding>;regions?:Record<string,{maxHeight:number}>;actionDefaults?:Record<string,Api.PageActionParameter[]>;metricAnnotations?:Record<string,{interpretation:\"static-note\"|\"\"}>;application?:ApplicationImportBinding;builders?:Record<string,{migration:\"complete-predicate\"|\"\";fields:string[]}>;spatial?:Record<string,SpatialImportBinding>;ai?:Record<string,AIImportBinding>;embeddings?:Record<string,EmbeddingImportBinding>;externalFrames?:Record<string,ExternalFrameImportBinding>;observations?:Record<string,ObservationImportBinding>;actionTables?:Record<string,Api.PageActionParameter[]>;notepads?:Record<string,{initial:string}>;analysis?:Record<string,{unit:string}>;resources?:Record<string,Api.PageResourceList>;directories?:Record<string,Api.AssetBinding[]>;graphs?:Record<string,{relations:Api.AssetBinding[];labelFields:Record<string,string>;outputMigration?:\"graph-ports\";outputObject?:Api.AssetRef}>;vertices?:Record<string,{groups:Api.AssetBinding[]}>;breadcrumbs?:Record<string,{homePage:Api.AssetRef;interfaceVersion:number;labelField?:string}>;avatars?:Record<string,{allQuery:Api.AssetBinding;contextQuery?:Api.AssetBinding;labelField:string;detailFields?:string[]}>;work?:Record<string,{kind:\"caller-approvals\"|\"caller-notifications\"|\"record-history\";recordVarId?:string}>;collaboration?:Record<string,{recordVarId:string;fileID?:string}>;comparisons?:Record<string,{labelField:string;fields:string[]}>;cards?:Record<string,{labelField:string;fields:string[];tone:string}>;scatters?:Record<string,{labelField:string}>;explorations?:Record<string,Record<string,string>>;users?:Record<string,{object:string;labelField:string;query?:Api.AssetBinding}>;datetimes?:Record<string,{offset:string}>;pickers?:Record<string,{labelField:string}>;leaderboards?:Record<string,{labelField:string}>;gantts?:Record<string,Api.PageRecordGantt>;calendars?:Record<string,{labelField:string;initialMonth:string}>;events?:Record<string,Api.PageRecordEvents>;boards?:Record<string,{label:string;fields:string[];moves:string[]}>;lists?:Record<string,{label:string;fields:string[]}>;aggregates?:Record<string,{measure:string;conditions?:Api.PageQueryCondition[]}>;states?:Record<string,Record<string,string>>;links?:Record<string,Api.PageRecordLink[]>;edits?:Record<string,{action:string;fields:string[]}>;objects:Record<string,string>;fields:Record<string,Record<string,string>>;actions:Record<string,string>;queries:Record<string,Api.AssetBinding|undefined>};"
         },
         {
           "name": "ImportEntity",
@@ -2634,12 +2512,12 @@
         {
           "name": "ImportTarget",
           "kind": "type",
-          "signature": "export type ImportTarget={object:string;profile:string;entities:ImportEntity[];actions:{schema:string;target:string;new?:boolean;needsApproval?:boolean;automati"
+          "signature": "export type ImportTarget={object:string;profile:string;entities:ImportEntity[];actions:{schema:string;target:string;new?:boolean;needsApproval?:boolean;automation?:boolean;title?:string;payload?:{name:string;type?:string;required?:boolean;description?:string;choices?:string[];ref?:string;from?:string}[]}[];definitions?:Api.Definition[]};"
         },
         {
           "name": "ImportReport",
           "kind": "type",
-          "signature": "export type ImportReport={formatVersion:1;source:string;sourceModule:string;selectedPage:string;inventoryRevision:string;diagnostics:ImportDiagnostic[];ids:{nod"
+          "signature": "export type ImportReport={formatVersion:1;source:string;sourceModule:string;selectedPage:string;inventoryRevision:string;diagnostics:ImportDiagnostic[];ids:{nodes:Record<string,string>;widgets:Record<string,string>;variables:Record<string,string>;overlays:Record<string,string>};draft?:PageDraft};"
         }
       ]
     },
@@ -2672,77 +2550,77 @@
       "props": [
         {
           "name": "kind",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "turns",
-          "type": "any",
-          "optional": true,
+          "type": "AIResultTurn[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "question",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "suggestions",
-          "type": "any",
-          "optional": true,
+          "type": "string[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "disabled",
           "type": "boolean",
-          "optional": true,
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "busy",
-          "type": "any",
-          "optional": true,
+          "type": "boolean",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "error",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onQuestion",
-          "type": "() => void",
-          "optional": true,
+          "type": "(value:string)=>void",
+          "optional": false,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onRun",
-          "type": "() => void",
-          "optional": true,
+          "type": "(question?:string)=>void",
+          "optional": false,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onReset",
-          "type": "() => void",
-          "optional": true,
+          "type": "()=>void",
+          "optional": false,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onRetry",
-          "type": "() => void",
+          "type": "()=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
@@ -2762,7 +2640,7 @@
         {
           "name": "AIResultProps",
           "kind": "type",
-          "signature": "export type AIResultProps={kind:string;turns:AIResultTurn[];question:string;suggestions:string[];disabled:boolean;busy:boolean;error?:string;onQuestion:(value:s"
+          "signature": "export type AIResultProps={kind:string;turns:AIResultTurn[];question:string;suggestions:string[];disabled:boolean;busy:boolean;error?:string;onQuestion:(value:string)=>void;onRun:(question?:string)=>void;onReset:()=>void;onRetry?:()=>void};"
         }
       ]
     },
@@ -2847,16 +2725,25 @@
           "optional": true,
           "isCallback": true,
           "isSlot": false
+        },
+        {
+          "name": "controlledCollapsed",
+          "type": "unknown",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
         }
       ],
       "slots": [
         {
           "name": "header",
-          "type": "Api.ApplicationHeader"
+          "type": "Api.ApplicationHeader",
+          "optional": false
         },
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": false
         }
       ],
       "composed": [
@@ -2898,28 +2785,28 @@
       "props": [
         {
           "name": "rows",
-          "type": "any",
-          "optional": true,
+          "type": "readonly ApprovalInboxRow[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "title",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "total",
-          "type": "any",
+          "type": "number",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "loadedCount",
-          "type": "any",
+          "type": "number",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -2927,7 +2814,7 @@
         },
         {
           "name": "enabled",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -2935,7 +2822,7 @@
         },
         {
           "name": "busyIDs",
-          "type": "any",
+          "type": "readonly string[]",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -2943,7 +2830,7 @@
         },
         {
           "name": "errors",
-          "type": "any",
+          "type": "Readonly<Record<string,string>>",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -2951,28 +2838,28 @@
         },
         {
           "name": "onApprove",
-          "type": "() => void",
+          "type": "(request:Api.ApprovalRequest,task:Api.InboxTask)=>void|Promise<void>",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onReject",
-          "type": "() => void",
+          "type": "(request:Api.ApprovalRequest,task:Api.InboxTask)=>void|Promise<void>",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onOpenRequest",
-          "type": "() => void",
+          "type": "(request:Api.ApprovalRequest,task:Api.InboxTask)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onOpenRelated",
-          "type": "() => void",
+          "type": "(request:Api.ApprovalRequest,task:Api.InboxTask)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
@@ -2991,7 +2878,7 @@
         {
           "name": "ApprovalInboxProps",
           "kind": "type",
-          "signature": "export type ApprovalInboxProps={rows:readonly ApprovalInboxRow[];title?:string;total?:number;loadedCount?:number;enabled?:boolean;busyIDs?:readonly string[];err"
+          "signature": "export type ApprovalInboxProps={rows:readonly ApprovalInboxRow[];title?:string;total?:number;loadedCount?:number;enabled?:boolean;busyIDs?:readonly string[];errors?:Readonly<Record<string,string>>;onApprove?:(request:Api.ApprovalRequest,task:Api.InboxTask)=>void|Promise<void>;onReject?:(request:Api.ApprovalRequest,task:Api.InboxTask)=>void|Promise<void>;onOpenRequest?:(request:Api.ApprovalRequest,task:Api.InboxTask)=>void;onOpenRelated?:(request:Api.ApprovalRequest,task:Api.InboxTask)=>void};"
         }
       ]
     },
@@ -3028,28 +2915,28 @@
       "props": [
         {
           "name": "items",
-          "type": "any",
-          "optional": true,
+          "type": "readonly AssetDirectoryItem[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onOpen",
-          "type": "() => void",
+          "type": "(item:AssetDirectoryItem)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "canOpen",
-          "type": "any",
+          "type": "(item:AssetDirectoryItem)=>boolean",
           "optional": true,
-          "isCallback": false,
+          "isCallback": true,
           "isSlot": false
         },
         {
           "name": "enabled",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -3057,7 +2944,7 @@
         },
         {
           "name": "label",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -3075,7 +2962,7 @@
         {
           "name": "AssetDirectoryProps",
           "kind": "type",
-          "signature": "export type AssetDirectoryProps={items:readonly AssetDirectoryItem[];onOpen?:(item:AssetDirectoryItem)=>void;canOpen?:(item:AssetDirectoryItem)=>boolean;enabled"
+          "signature": "export type AssetDirectoryProps={items:readonly AssetDirectoryItem[];onOpen?:(item:AssetDirectoryItem)=>void;canOpen?:(item:AssetDirectoryItem)=>boolean;enabled?:boolean;label?:string};"
         }
       ]
     },
@@ -3112,35 +2999,35 @@
       "props": [
         {
           "name": "items",
-          "type": "any",
-          "optional": true,
+          "type": "readonly BreadcrumbTrailItem[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "currentID",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onActivate",
-          "type": "() => void",
+          "type": "(item:BreadcrumbTrailItem)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onCurrentActivate",
-          "type": "() => void",
+          "type": "()=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "enabled",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -3148,7 +3035,7 @@
         },
         {
           "name": "label",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -3166,7 +3053,7 @@
         {
           "name": "BreadcrumbTrailProps",
           "kind": "type",
-          "signature": "export type BreadcrumbTrailProps={items:readonly BreadcrumbTrailItem[];currentID:string;onActivate?:(item:BreadcrumbTrailItem)=>void;onCurrentActivate?:()=>void"
+          "signature": "export type BreadcrumbTrailProps={items:readonly BreadcrumbTrailItem[];currentID:string;onActivate?:(item:BreadcrumbTrailItem)=>void;onCurrentActivate?:()=>void;enabled?:boolean;label?:string};"
         }
       ]
     },
@@ -3215,14 +3102,14 @@
         },
         {
           "name": "className",
-          "type": "string",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "type",
-          "type": "\"button\" | \"submit\" | \"reset\"",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -3338,20 +3225,6 @@
       ],
       "props": [
         {
-          "name": "id",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "children",
-          "type": "ReactNode",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
           "name": "model",
           "type": "CanvasModel",
           "optional": false,
@@ -3408,6 +3281,13 @@
           "isSlot": false
         },
         {
+          "name": "children",
+          "type": "ReactNode",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
           "name": "commands",
           "type": "CanvasCommand[]",
           "optional": true,
@@ -3449,11 +3329,13 @@
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": false
         },
         {
           "name": "icon",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "relatedTypes": [
@@ -3465,7 +3347,7 @@
         {
           "name": "CanvasModel",
           "kind": "type",
-          "signature": "export type CanvasModel=Record<string,{label:string;kind:'widget'|'container';layout?:string;parent?:string;children:string[];horizontal:boolean;fixed?:boolean}"
+          "signature": "export type CanvasModel=Record<string,{label:string;kind:'widget'|'container';layout?:string;parent?:string;children:string[];horizontal:boolean;fixed?:boolean}>;"
         },
         {
           "name": "CanvasPayload",
@@ -3475,7 +3357,7 @@
         {
           "name": "CanvasDrop",
           "kind": "type",
-          "signature": "export type CanvasDrop={kind:'insert';parent:string;index:number}|{kind:'into';parent:string}|{kind:'swap';target:string}|{kind:'wrap';target:string;side:'left'"
+          "signature": "export type CanvasDrop={kind:'insert';parent:string;index:number}|{kind:'into';parent:string}|{kind:'swap';target:string}|{kind:'wrap';target:string;side:'left'|'right'|'top'|'bottom'};"
         }
       ]
     },
@@ -3544,7 +3426,7 @@
         {
           "name": "ChartSource",
           "kind": "type",
-          "signature": "export type ChartSource = { aggregate: (type: string, query: AggregateQuery) => Promise<AggregateData>; revision?: number; scope?:string; watchAggregate?: (type"
+          "signature": "export type ChartSource = { aggregate: (type: string, query: AggregateQuery) => Promise<AggregateData>; revision?: number; scope?:string; watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void };"
         }
       ]
     },
@@ -3618,12 +3500,9 @@
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
-      ],
-      "composed": [
-        "ui/button",
-        "ui/input-drafts"
       ]
     },
     {
@@ -3718,8 +3597,7 @@
         }
       ],
       "composed": [
-        "ui/input",
-        "ui/inspector-controls"
+        "ui/input"
       ]
     },
     {
@@ -3898,7 +3776,8 @@
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": false
         }
       ],
       "composed": [
@@ -3970,7 +3849,8 @@
       "slots": [
         {
           "name": "items",
-          "type": "{ id: string; title: string; content: ReactNode }[]"
+          "type": "{ id: string; title: string; content: ReactNode }[]",
+          "optional": false
         }
       ],
       "composed": [
@@ -4175,28 +4055,28 @@
       "props": [
         {
           "name": "data",
-          "type": "any",
-          "optional": true,
+          "type": "T[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "columns",
-          "type": "any",
-          "optional": true,
+          "type": "ColumnDef<T, any>[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "getRowId",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
+          "type": "(row: T) => string",
+          "optional": false,
+          "isCallback": true,
           "isSlot": false
         },
         {
           "name": "height",
-          "type": "any",
+          "type": "number | string",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -4204,7 +4084,7 @@
         },
         {
           "name": "rowHeight",
-          "type": "any",
+          "type": "number",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -4212,21 +4092,28 @@
         },
         {
           "name": "onRowClick",
-          "type": "() => void",
+          "type": "(row:T,modifiers?:{shift:boolean;toggle:boolean})=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
+          "name": "selectedIds",
+          "type": "readonly string[]",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
           "name": "selectedId",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "searchable",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -4234,29 +4121,22 @@
         },
         {
           "name": "toolbar",
-          "type": "any",
+          "type": "ReactNode",
           "optional": true,
           "isCallback": false,
-          "isSlot": false
+          "isSlot": true
         },
         {
           "name": "empty",
-          "type": "any",
+          "type": "ReactNode",
           "optional": true,
           "isCallback": false,
-          "isSlot": false,
+          "isSlot": true,
           "defaultValue": "t(\"No rows\")"
         },
         {
-          "name": "selectedIds",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
           "name": "loading",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -4264,21 +4144,21 @@
         },
         {
           "name": "loadingText",
-          "type": "any",
+          "type": "ReactNode",
           "optional": true,
           "isCallback": false,
-          "isSlot": false
+          "isSlot": true
         },
         {
           "name": "onCellEdit",
-          "type": "() => void",
+          "type": "(row: T, column: string, value: unknown) => void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "resizable",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -4286,7 +4166,7 @@
         },
         {
           "name": "virtualColumns",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -4294,21 +4174,37 @@
         },
         {
           "name": "onRowContextMenu",
-          "type": "() => void",
+          "type": "(row: T) => void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         }
       ],
+      "slots": [
+        {
+          "name": "toolbar",
+          "type": "ReactNode",
+          "optional": true
+        },
+        {
+          "name": "empty",
+          "type": "ReactNode",
+          "optional": true
+        },
+        {
+          "name": "loadingText",
+          "type": "ReactNode",
+          "optional": true
+        }
+      ],
       "composed": [
-        "app/knowledge-search",
         "ui/input"
       ],
       "relatedTypes": [
         {
           "name": "DataTableProps",
           "kind": "type",
-          "signature": "export type DataTableProps<T> = { data: T[]; columns: ColumnDef<T, any>[]; getRowId: (row: T) => string; /** Viewport height; rows outside it are not re"
+          "signature": "export type DataTableProps<T> = {\n  data: T[];\n  columns: ColumnDef<T, any>[];\n  getRowId: (row: T) => string;\n  /** Viewport height; rows outside it are not rendered, so 100k rows stay fast. */\n  height?: number | string;\n  rowHeight?: number;\n  onRowClick?: (row:T,modifiers?:{shift:boolean;toggle:boolean})=>void;\n  selectedIds?:readonly string[];\n  selectedId?: string;\n  searchable?: boolean;\n  toolbar?: ReactNode;\n  empty?: ReactNode;\n  /** Shows a loading state when rows are being fetched. */\n  loading?: boolean;\n  loadingText?: ReactNode;\n  /** Makes cells of editable field types (columnsFor) editable in place: double-click or Enter. */\n  onCellEdit?: (row: T, column: string, value: unknown) => void;\n  /** Drag header edges to resize. Default on; set false to lock layout. */\n  resizable?: boolean;\n  /** Virtualize flat leaf columns as well as rows; pinned metadata stays mounted. */\n  virtualColumns?: boolean;\n  /** Right-click a data row (browser menu is suppressed when provided). */\n  onRowContextMenu?: (row: T) => void;\n};"
         }
       ]
     },
@@ -4373,6 +4269,13 @@
           "type": "(value:string)=>void",
           "optional": false,
           "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "source",
+          "type": "unknown",
+          "optional": true,
+          "isCallback": false,
           "isSlot": false
         }
       ],
@@ -4452,6 +4355,13 @@
           "type": "(value:string)=>void",
           "optional": false,
           "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "source",
+          "type": "unknown",
+          "optional": true,
+          "isCallback": false,
           "isSlot": false
         }
       ],
@@ -4544,56 +4454,56 @@
       "props": [
         {
           "name": "open",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onOpenChange",
-          "type": "() => void",
+          "type": "unknown",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "title",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "children",
-          "type": "ReactNode",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": true
         },
         {
           "name": "wide",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "returnFocus",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "fallbackFocus",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "suspended",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -4601,7 +4511,7 @@
         },
         {
           "name": "backdrop",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -4609,7 +4519,7 @@
         },
         {
           "name": "closeOnBackdrop",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -4617,7 +4527,7 @@
         },
         {
           "name": "closeOnEsc",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -4625,7 +4535,7 @@
         },
         {
           "name": "width",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -4634,7 +4544,8 @@
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "unknown",
+          "optional": true
         }
       ],
       "composed": [
@@ -4711,16 +4622,14 @@
       "slots": [
         {
           "name": "summary",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": false
         },
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": false
         }
-      ],
-      "composed": [
-        "ui/button",
-        "ui/input-drafts"
       ]
     },
     {
@@ -4804,15 +4713,18 @@
       "slots": [
         {
           "name": "left",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         },
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": false
         },
         {
           "name": "right",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ]
     },
@@ -4842,28 +4754,6 @@
         "ui/status"
       ],
       "props": [
-        {
-          "name": "itemKeys",
-          "type": "string[]",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "items",
-          "type": "[label: string, value: ReactNode][]",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
-          "name": "columns",
-          "type": "1|2|3|4",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "1"
-        },
         {
           "name": "tone",
           "type": "\"neutral\"|\"info\"|\"success\"|\"warning\"|\"danger\"",
@@ -4916,28 +4806,29 @@
       ],
       "slots": [
         {
-          "name": "items",
-          "type": "[label: string, value: ReactNode][]"
-        },
-        {
           "name": "title",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": false
         },
         {
           "name": "subtitle",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         },
         {
           "name": "status",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         },
         {
           "name": "properties",
-          "type": "[string, ReactNode][]"
+          "type": "[string, ReactNode][]",
+          "optional": false
         },
         {
           "name": "actions",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "composed": [
@@ -4976,22 +4867,15 @@
       "props": [
         {
           "name": "schema",
-          "type": "any",
-          "optional": true,
+          "type": "S",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "fields",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "rest",
-          "type": "any",
-          "optional": true,
+          "type": "Field<z.infer<S>>[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
@@ -5029,18 +4913,24 @@
           "optional": true,
           "isCallback": true,
           "isSlot": false
+        },
+        {
+          "name": "rest",
+          "type": "unknown",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
         }
       ],
       "composed": [
         "ui/button",
-        "ui/date-input",
         "ui/input-drafts"
       ],
       "relatedTypes": [
         {
           "name": "Field",
           "kind": "type",
-          "signature": "export type Field<T> = { name: Path<T>; label: string; kind?: \"text\" | \"longText\" | \"textarea\" | \"markdown\" | \"number\" | \"date\" | \"datetime\" | \"select\" |"
+          "signature": "export type Field<T> = {\n  name: Path<T>;\n  label: string;\n  kind?: \"text\" | \"longText\" | \"textarea\" | \"markdown\" | \"number\" | \"date\" | \"datetime\" | \"select\" | \"checkbox\";\n  options?: { value: string; label: string }[];\n  placeholder?: string;\n  help?: string;\n  required?: boolean;\n  readOnly?: boolean;\n};"
         }
       ]
     },
@@ -5074,21 +4964,21 @@
       "props": [
         {
           "name": "config",
-          "type": "any",
-          "optional": true,
+          "type": "ExternalFrameConfig",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "title",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "active",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -5359,24 +5249,20 @@
       "slots": [
         {
           "name": "display",
-          "type": "(value: V | undefined, row: R) => ReactNode"
+          "type": "(value: V | undefined, row: R) => ReactNode",
+          "optional": false
         },
         {
           "name": "editor",
-          "type": "(props: EditorProps<V>) => ReactNode"
+          "type": "(props: EditorProps<V>) => ReactNode",
+          "optional": true
         }
-      ],
-      "composed": [
-        "ui/input",
-        "ui/markdown",
-        "ui/status",
-        "ui/toggles"
       ],
       "relatedTypes": [
         {
           "name": "EditorProps",
           "kind": "type",
-          "signature": "export type EditorProps<V> = { id?: string; value: V | undefined; onChange: (value: V | undefined) => void; invalid?: boolean; autoFocus?: boolean; describedBy?"
+          "signature": "export type EditorProps<V> = { id?: string; value: V | undefined; onChange: (value: V | undefined) => void; invalid?: boolean; autoFocus?: boolean; describedBy?: string };"
         },
         {
           "name": "Operator",
@@ -5386,7 +5272,7 @@
         {
           "name": "FieldType",
           "kind": "type",
-          "signature": "export type FieldType<V = any, R = any> = { input?: Api.Field; type: string; label: string; /** What the field holds, from its declaration (ADR-0023 D1):"
+          "signature": "export type FieldType<V = any, R = any> = {\n input?: Api.Field;\n  type: string;\n  label: string;\n  /** What the field holds, from its declaration (ADR-0023 D1): shown under the label of forms. */\n  help?: string;\n  required?: boolean;\n  readOnly?: boolean;\n  /** The field applies only while another field holds one of these values (#138): forms hide it otherwise and send nothing for it. */\n  when?: FieldCondition;\n  align?: \"left\" | \"right\";\n  width?: number;\n  /** Computed fields (formula, created time) read their value from the row. */\n  compute?: (row: R) => V | undefined;\n  display: (value: V | undefined, row: R) => ReactNode;\n  editor?: (props: EditorProps<V>) => ReactNode;\n  /** Validates a present value; `required` decides whether it may be absent. */\n  schema: z.ZodType<V>;\n  compare: (a: V, b: V) => number;\n  operators: Operator<V>[];\n  text: (value: V | undefined) => string;\n};"
         },
         {
           "name": "FieldCondition",
@@ -5432,28 +5318,28 @@
       "props": [
         {
           "name": "accept",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onFile",
-          "type": "() => void",
+          "type": "unknown",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "children",
-          "type": "ReactNode",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": true
         },
         {
           "name": "button",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -5462,12 +5348,12 @@
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "unknown",
+          "optional": true
         }
       ],
       "composed": [
-        "ui/button",
-        "ui/input-drafts"
+        "ui/button"
       ]
     },
     {
@@ -5593,20 +5479,6 @@
       ],
       "props": [
         {
-          "name": "dependencies",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "release",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
           "name": "definition",
           "type": "FlowDefinition",
           "optional": false,
@@ -5627,20 +5499,6 @@
           "isCallback": false,
           "isSlot": false,
           "defaultValue": "260"
-        },
-        {
-          "name": "actions",
-          "type": "(token: FlowToken) => React.ReactNode",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": true
-        },
-        {
-          "name": "onStepSelect",
-          "type": "(step: string) => void",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": false
         },
         {
           "name": "id",
@@ -5713,6 +5571,20 @@
           "isSlot": false
         },
         {
+          "name": "dependencies",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "release",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
           "name": "tokens",
           "type": "FlowToken[] | null",
           "optional": false,
@@ -5734,15 +5606,8 @@
           "isSlot": false
         }
       ],
-      "slots": [
-        {
-          "name": "actions",
-          "type": "(token: FlowToken) => React.ReactNode"
-        }
-      ],
       "composed": [
-        "ui/flow-steps",
-        "ui/status"
+        "ui/flow-steps"
       ],
       "relatedTypes": [
         {
@@ -5753,7 +5618,7 @@
         {
           "name": "FlowToken",
           "kind": "type",
-          "signature": "export type FlowToken = { id: number; step: string; branch?: string; waits?: string; attempts?: number; due?: string; task?: string; child?: string; error?: str"
+          "signature": "export type FlowToken = { id: number; step: string; branch?: string; waits?: string; attempts?: number; due?: string; task?: string; child?: string; error?: string };"
         },
         {
           "name": "FlowTrace",
@@ -5763,7 +5628,7 @@
         {
           "name": "FlowInstanceData",
           "kind": "type",
-          "signature": "export type FlowInstanceData = { id: string; flow: string; title: string; version: number; key: string; state: string; subject?: string; onBehalf?: string; an"
+          "signature": "export type FlowInstanceData = {\n  id: string; flow: string; title: string; version: number; key: string; state: string; subject?: string; onBehalf?: string; answer?: string; parent?: string;\n  dependencies?: string; release?: string;\n  tokens: FlowToken[] | null; undo: { step: string; action: string; target: string }[] | null; trace: FlowTrace[] | null;\n};"
         }
       ]
     },
@@ -5974,14 +5839,15 @@
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "relatedTypes": [
         {
           "name": "FlowCanvasProps",
           "kind": "type",
-          "signature": "export type FlowCanvasProps = { catalog: FlowCatalog; nodes: FlowNode[]; edges: FlowEdge[]; selected?: string; label?: string; height?: number | string; mod"
+          "signature": "export type FlowCanvasProps = {\n  catalog: FlowCatalog; nodes: FlowNode[]; edges: FlowEdge[]; selected?: string;\n  label?: string; height?: number | string; mode?: \"edit\" | \"view\"; direction?: CanvasDirection; children?: ReactNode;\n  onSelect?: (id: string) => void; onOpen?: (id: string) => void;\n  onConnect?: (connection: Connection) => void; onDisconnect?: (edges: FlowEdge[]) => void;\n  canConnect?: (connection: Connection) => boolean;\n  onAdd?: (kind: string, context: FlowAddContext) => void;\n  /** The owner inserts and reconnects atomically; the canvas never guesses branch semantics. */\n  onInsert?: (edge: FlowEdge, kind: string, context: FlowAddContext) => void;\n  onPositionsChange?: (positions: Record<string, CanvasPosition>) => void;\n  onLayout?: (positions: Record<string, CanvasPosition>) => void;\n  onDelete?: (nodes: FlowNode[], edges: FlowEdge[]) => void;\n  onDuplicate?: (nodes: FlowNode[], edges: FlowEdge[]) => void;\n  /** BPMN lanes: the responsibilities this process is drawn across (ADR-0087 D1).\n   * The owner declares them and says which step sits in which; the canvas draws the\n   * bands, arranges inside them, and reports a step dropped into another one. */\n  lanes?: FlowLane[];\n  onLaneChange?: (id: string, lane: string) => void;\n  history?: FlowHistory;\n  /** The reader's own arrangement is kept on this device for this drawing\n   * (ADR-0092): nodes become draggable even in view mode, and the arrangement\n   * survives a reload until the reader tidies it up again. */\n  storeKey?: string;\n};"
         },
         {
           "name": "FlowCanvasNode",
@@ -6049,11 +5915,13 @@
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": false
         },
         {
           "name": "toolbar",
-          "type": "boolean"
+          "type": "boolean",
+          "optional": true
         }
       ]
     },
@@ -6227,7 +6095,8 @@
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "composed": [
@@ -6237,7 +6106,7 @@
         {
           "name": "FlowStepNode",
           "kind": "type",
-          "signature": "export type FlowStepNode = { id: string; label: string; detail?: string; tone?: Tone; current?: boolean; /** Its BPMN reading; without it, the step's own ki"
+          "signature": "export type FlowStepNode = {\n  id: string; label: string; detail?: string; tone?: Tone; current?: boolean;\n  /** Its BPMN reading; without it, the step's own kind name decides. */\n  notation?: FlowNotation; kind?: string; loop?: boolean;\n  /** What the step is, from the one class vocabulary (ADR-0092): declared, else\n   * derived from the BPMN reading, else the plain step. */\n  class?: string;\n  /** The lane responsible for it, when the owner drew this process across lanes. */\n  lane?: string;\n};"
         },
         {
           "name": "FlowStepEdge",
@@ -6271,14 +6140,13 @@
       "props": [
         {
           "name": "onSubmit",
-          "type": "() => void",
+          "type": "unknown",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         }
       ],
       "composed": [
-        "ui/button",
         "ui/input-drafts"
       ]
     },
@@ -6466,15 +6334,18 @@
       "slots": [
         {
           "name": "row",
-          "type": "(item: T) => ReactNode"
+          "type": "(item: T) => ReactNode",
+          "optional": false
         },
         {
           "name": "toolbar",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         },
         {
           "name": "empty",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "composed": [
@@ -6556,20 +6427,6 @@
       ],
       "props": [
         {
-          "name": "name",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "className",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
           "name": "value",
           "type": "string",
           "optional": true,
@@ -6604,11 +6461,6 @@
           "isCallback": false,
           "isSlot": false
         }
-      ],
-      "composed": [
-        "app/knowledge-search",
-        "ui/gauge",
-        "ui/status"
       ],
       "relatedTypes": [
         {
@@ -6710,28 +6562,28 @@
       "props": [
         {
           "name": "options",
-          "type": "any",
-          "optional": true,
+          "type": "readonly ChoiceOption[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "value",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "label",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "enabled",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -6739,7 +6591,7 @@
         },
         {
           "name": "onChange",
-          "type": "() => void",
+          "type": "(value:string)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
@@ -6777,15 +6629,6 @@
         "Enabled",
         "Disabled",
         "Invalid"
-      ],
-      "props": [
-        {
-          "name": "className",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        }
       ]
     },
     {
@@ -6815,44 +6658,6 @@
       "dependencies": [
         "ui/field-types"
       ],
-      "props": [
-        {
-          "name": "children",
-          "type": "ReactNode",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
-          "name": "scope",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "\"\""
-        },
-        {
-          "name": "isolated",
-          "type": "boolean",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "false"
-        },
-        {
-          "name": "reveal",
-          "type": "(path?:string) => void",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": false
-        }
-      ],
-      "slots": [
-        {
-          "name": "children",
-          "type": "ReactNode"
-        }
-      ],
       "relatedTypes": [
         {
           "name": "InputDraft",
@@ -6862,7 +6667,7 @@
         {
           "name": "InputBuffers",
           "kind": "type",
-          "signature": "export type InputBuffers = { scope: string; values: Record<string, InputDraft>; set: (key: string, value?: InputDraft) => boolean; clear: (prefix?: string)"
+          "signature": "export type InputBuffers = {\n  scope: string; values: Record<string, InputDraft>; set: (key: string, value?: InputDraft) => boolean;\n  clear: (prefix?: string) => void; dirty: boolean; invalid: boolean; limit?: string;\n  busy: boolean; failure?: string; reject: (message?: string) => void; pending: (change: number) => void;\n  reveal?: (path?:string) => void; problemsShown?:boolean;\n};"
         }
       ]
     },
@@ -6897,69 +6702,38 @@
       "props": [
         {
           "name": "label",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "prefix",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "unit",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "className",
-          "type": "string",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "input",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
-        },
-        {
-          "name": "title",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "actions",
-          "type": "ReactNode",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
-          "name": "children",
-          "type": "ReactNode",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": true
-        }
-      ],
-      "slots": [
-        {
-          "name": "actions",
-          "type": "ReactNode"
-        },
-        {
-          "name": "children",
-          "type": "ReactNode"
         }
       ],
       "composed": [
@@ -7002,20 +6776,6 @@
           "isSlot": true
         },
         {
-          "name": "presentation",
-          "type": "Api.PageRegionPresentation",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "title",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
           "name": "size",
           "type": "LayoutSize",
           "optional": true,
@@ -7049,31 +6809,14 @@
           "optional": true,
           "isCallback": false,
           "isSlot": false
-        },
-        {
-          "name": "direction",
-          "type": "\"rows\"|\"columns\"",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "gap",
-          "type": "number",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "12"
         }
       ],
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": false
         }
-      ],
-      "composed": [
-        "ui/button"
       ],
       "relatedTypes": [
         {
@@ -7145,55 +6888,10 @@
           "optional": true,
           "isCallback": true,
           "isSlot": false
-        },
-        {
-          "name": "source",
-          "type": "RecordSource",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "type",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "id",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "config",
-          "type": "Api.PageStatusTracker",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
         }
       ],
       "composed": [
-        "ui/button",
-        "ui/chart",
-        "ui/content-tabs",
-        "ui/data-table",
-        "ui/datetime-input",
-        "ui/entity-card",
-        "ui/flow-steps",
-        "ui/input",
-        "ui/pivot",
-        "ui/record-cards",
-        "ui/record-comments",
-        "ui/record-history",
-        "ui/record-kanban",
-        "ui/record-lookup",
-        "ui/record-page",
-        "ui/record-uploader",
-        "ui/status",
-        "ui/tasks"
+        "ui/button"
       ],
       "relatedTypes": [
         {
@@ -7225,6 +6923,81 @@
           "name": "EntityRecord",
           "kind": "type",
           "signature": "export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;"
+        },
+        {
+          "name": "RecordQuery",
+          "kind": "type",
+          "signature": "export type RecordQuery = Omit<Api.Query,\"domain\"> & {domain?:unknown[]};"
+        },
+        {
+          "name": "RecordPageData",
+          "kind": "type",
+          "signature": "export type RecordPageData = Omit<Api.RecordPage, \"records\"> & { records: EntityRecord[] };"
+        },
+        {
+          "name": "InterfaceRecordIdentity",
+          "kind": "type",
+          "signature": "export type InterfaceRecordIdentity = Pick<Api.InterfaceRecord, \"type\" | \"id\">;"
+        },
+        {
+          "name": "InterfaceRecordData",
+          "kind": "type",
+          "signature": "export type InterfaceRecordData = Omit<Api.InterfaceRecord, \"record\"> & { record: EntityRecord };"
+        },
+        {
+          "name": "InterfaceRecordPageData",
+          "kind": "type",
+          "signature": "export type InterfaceRecordPageData = Omit<Api.InterfaceRecordPage, \"records\"> & { records: InterfaceRecordData[] };"
+        },
+        {
+          "name": "RecordChange",
+          "kind": "type",
+          "signature": "export type RecordChange = Api.RecordChange;"
+        },
+        {
+          "name": "AttachedFile",
+          "kind": "type",
+          "signature": "export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string; regions?:Api.ImageRegion[] };"
+        },
+        {
+          "name": "RecordComment",
+          "kind": "type",
+          "signature": "export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };"
+        },
+        {
+          "name": "RecordView",
+          "kind": "type",
+          "signature": "export type RecordView = Omit<Api.RecordView, \"record\" | \"related\" | \"linked\" | \"activity\" | \"processes\" | \"approvals\" | \"tasks\" | \"files\" | \"comments\"> & {\n  /** Open tasks about the record the member may take (a flow's question, a correction to make). */\n  tasks: Api.InboxTask[];\n  /** The approval requests to move the record, newest first (F-38). */\n  approvals: Api.ApprovalRequest[];\n  files: AttachedFile[];\n  comments: RecordComment[];\n  record: EntityRecord; related: RelatedRecords[];\n  /** Records of any app linked to it (the relations app), by type. */\n  linked: RelatedRecords[];\n  /** What apps told about it through protocols, oldest first. */\n  activity: Api.Note[];\n  /** The flow instances about the record (ADR-0026 D4). */\n  processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];\n};"
+        },
+        {
+          "name": "Money",
+          "kind": "type",
+          "signature": "export type Money = { amount: number; currency: string };"
+        },
+        {
+          "name": "RecordSource",
+          "kind": "type",
+          "signature": "export type RecordSource = {\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
+        },
+        {
+          "name": "Options",
+          "kind": "type",
+          "signature": "export type Options = Record<string, { value: string; label: string }[]>;"
+        },
+        {
+          "name": "ListState",
+          "kind": "type",
+          "signature": "export type ListState = {\n  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];\n  group?: string; columns?: string; measure?: string; mark?: Mark;\n};"
+        },
+        {
+          "name": "RecordHistoryProps",
+          "kind": "type",
+          "signature": "export type RecordHistoryProps={info:EntityInfo;history?:readonly RecordChange[];heading?:boolean;label?:string;limit?:number;total?:number;loadedCount?:number;recordID?:string;recordRevision?:number};"
+        },
+        {
+          "name": "InboxTask",
+          "kind": "type",
+          "signature": "export type InboxTask = Api.InboxTask;"
         }
       ]
     },
@@ -7265,57 +7038,6 @@
           "optional": true,
           "isCallback": false,
           "isSlot": false
-        },
-        {
-          "name": "id",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "value",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "\"\""
-        },
-        {
-          "name": "onChange",
-          "type": "() => void",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": false
-        },
-        {
-          "name": "invalid",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "autoFocus",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "placeholder",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "rows",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "8"
         }
       ]
     },
@@ -7352,35 +7074,35 @@
       "props": [
         {
           "name": "attachment",
-          "type": "any",
-          "optional": true,
+          "type": "AttachedFile",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "blob",
-          "type": "any",
-          "optional": true,
+          "type": "Blob",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "label",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "scope",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onDownload",
-          "type": "() => void",
+          "type": "()=>void|Promise<void>",
           "optional": true,
           "isCallback": true,
           "isSlot": false
@@ -7431,7 +7153,7 @@
       "props": [
         {
           "name": "variant",
-          "type": "\"default\" | \"destructive\" | \"cool\" | \"outline\" | \"secondary\" | \"ghost\" | \"link\"",
+          "type": "ColorVariant",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -7442,41 +7164,13 @@
           "optional": true,
           "isCallback": false,
           "isSlot": false
-        },
-        {
-          "name": "className",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "asChild",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "false"
-        },
-        {
-          "name": "children",
-          "type": "ReactNode",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": true
-        }
-      ],
-      "slots": [
-        {
-          "name": "children",
-          "type": "ReactNode"
         }
       ],
       "relatedTypes": [
         {
           "name": "ButtonProps",
           "kind": "interface",
-          "signature": "export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> { asChild?: boolean }"
+          "signature": "export interface ButtonProps\n    extends React.ButtonHTMLAttributes<HTMLButtonElement>,\n    VariantProps<typeof buttonVariants> {\n    asChild?: boolean\n}"
         }
       ]
     },
@@ -7663,88 +7357,6 @@
       ],
       "props": [
         {
-          "name": "items",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "onRead",
-          "type": "() => void",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": false
-        },
-        {
-          "name": "onOpen",
-          "type": "() => void",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": false
-        },
-        {
-          "name": "empty",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "t(\"Nothing new\")"
-        },
-        {
-          "name": "label",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "enabled",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "true"
-        },
-        {
-          "name": "busyIDs",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "[]"
-        },
-        {
-          "name": "errors",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "{}"
-        },
-        {
-          "name": "total",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "loadedCount",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "items.length"
-        },
-        {
-          "name": "limit",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
           "name": "id",
           "type": "string",
           "optional": false,
@@ -7792,6 +7404,88 @@
           "optional": true,
           "isCallback": false,
           "isSlot": false
+        },
+        {
+          "name": "items",
+          "type": "readonly T[]",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "onRead",
+          "type": "(notice:T)=>void|Promise<void>",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "onOpen",
+          "type": "(notice:T)=>void",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "empty",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "t(\"Nothing new\")"
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "enabled",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "busyIDs",
+          "type": "readonly string[]",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "[]"
+        },
+        {
+          "name": "errors",
+          "type": "Readonly<Record<string,string>>",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "{}"
+        },
+        {
+          "name": "total",
+          "type": "number",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "loadedCount",
+          "type": "number",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "items.length"
+        },
+        {
+          "name": "limit",
+          "type": "number",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
         }
       ],
       "composed": [
@@ -7806,7 +7500,7 @@
         {
           "name": "NotificationListProps",
           "kind": "type",
-          "signature": "export type NotificationListProps<T extends NotificationItem>={items:readonly T[];onRead?:(notice:T)=>void|Promise<void>;onOpen?:(notice:T)=>void;empty?:string;"
+          "signature": "export type NotificationListProps<T extends NotificationItem>={items:readonly T[];onRead?:(notice:T)=>void|Promise<void>;onOpen?:(notice:T)=>void;empty?:string;label?:string;enabled?:boolean;busyIDs?:readonly string[];errors?:Readonly<Record<string,string>>;total?:number;loadedCount?:number;limit?:number};"
         }
       ]
     },
@@ -7843,35 +7537,35 @@
       "props": [
         {
           "name": "signal",
-          "type": "any",
-          "optional": true,
+          "type": "ObservationSignal",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "slo",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "summary",
-          "type": "any",
-          "optional": true,
+          "type": "number",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "averageInfo",
-          "type": "any",
+          "type": "EntityInfo",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "averageField",
-          "type": "any",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "summary",
+          "type": "{scope:string;field:string;average?:number;count:string}",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -7884,12 +7578,12 @@
         {
           "name": "ObservationTimeSeriesProps",
           "kind": "type",
-          "signature": "export type ObservationTimeSeriesProps={scope:string;window?:ObservationWindow;info:EntityInfo;timeField:string;signals:ObservationSignal[];label:string;loading"
+          "signature": "export type ObservationTimeSeriesProps={scope:string;window?:ObservationWindow;info:EntityInfo;timeField:string;signals:ObservationSignal[];label:string;loading?:boolean;error?:string;readCurrent?:boolean;reference?:number};"
         },
         {
           "name": "ObservationAvailabilityProps",
           "kind": "type",
-          "signature": "export type ObservationAvailabilityProps=Omit<ObservationTimeSeriesProps,\"signals\"|\"reference\">&{signal:ObservationSignal;slo:number;averageInfo?:EntityInfo;ave"
+          "signature": "export type ObservationAvailabilityProps=Omit<ObservationTimeSeriesProps,\"signals\"|\"reference\">&{signal:ObservationSignal;slo:number;averageInfo?:EntityInfo;averageField?:string;summary?:{scope:string;field:string;average?:number;count:string}};"
         }
       ]
     },
@@ -8039,7 +7733,7 @@
         {
           "name": "ObservationStatisticsProps",
           "kind": "type",
-          "signature": "export type ObservationStatisticsProps={scope:string;info:EntityInfo;signals:ObservationSignal[];timeField:string;signal:string;threshold:number;windowRows:numb"
+          "signature": "export type ObservationStatisticsProps={scope:string;info:EntityInfo;signals:ObservationSignal[];timeField:string;signal:string;threshold:number;windowRows:number;windowOptions:number[];value?:ObservationStatisticsValue;latest?:{scope:string;signal:string;record:EntityRecord};history?:ObservationWindow;enabled?:boolean;readCurrent?:boolean;error?:string;onChange?:(value:{signal:string;threshold:number;windowRows:number})=>void};"
         }
       ]
     },
@@ -8184,7 +7878,7 @@
         {
           "name": "ObservationTableProps",
           "kind": "type",
-          "signature": "export type ObservationTableProps={scope:string;window?:ObservationWindow;info:EntityInfo;signals:ObservationSignal[];metadata:ObservationMetadata;selectedId?:s"
+          "signature": "export type ObservationTableProps={scope:string;window?:ObservationWindow;info:EntityInfo;signals:ObservationSignal[];metadata:ObservationMetadata;selectedId?:string;selectedAssetId?:string;rowHeight?:number;enabled?:boolean;readCurrent?:boolean;loading?:boolean;error?:string;onSelect?:(record:EntityRecord)=>void;onExport?:(window:ObservationWindow,fields:string[])=>void};"
         }
       ]
     },
@@ -8291,12 +7985,12 @@
         {
           "name": "ObservationTimeSeriesProps",
           "kind": "type",
-          "signature": "export type ObservationTimeSeriesProps={scope:string;window?:ObservationWindow;info:EntityInfo;timeField:string;signals:ObservationSignal[];label:string;loading"
+          "signature": "export type ObservationTimeSeriesProps={scope:string;window?:ObservationWindow;info:EntityInfo;timeField:string;signals:ObservationSignal[];label:string;loading?:boolean;error?:string;readCurrent?:boolean;reference?:number};"
         },
         {
           "name": "ObservationAvailabilityProps",
           "kind": "type",
-          "signature": "export type ObservationAvailabilityProps=Omit<ObservationTimeSeriesProps,\"signals\"|\"reference\">&{signal:ObservationSignal;slo:number;averageInfo?:EntityInfo;ave"
+          "signature": "export type ObservationAvailabilityProps=Omit<ObservationTimeSeriesProps,\"signals\"|\"reference\">&{signal:ObservationSignal;slo:number;averageInfo?:EntityInfo;averageField?:string;summary?:{scope:string;field:string;average?:number;count:string}};"
         }
       ]
     },
@@ -8362,7 +8056,8 @@
       "slots": [
         {
           "name": "actions",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ]
     },
@@ -8395,44 +8090,10 @@
       "props": [
         {
           "name": "className",
-          "type": "string",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
-        },
-        {
-          "name": "title",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "description",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "actions",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "children",
-          "type": "ReactNode",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": true
-        }
-      ],
-      "slots": [
-        {
-          "name": "children",
-          "type": "ReactNode"
         }
       ]
     },
@@ -8469,50 +8130,50 @@
       ],
       "props": [
         {
+          "name": "page",
+          "type": "string",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "onPage",
+          "type": "(page:string)=>void",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
           "name": "attachment",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "blob",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "label",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "scope",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onDownload",
-          "type": "() => void",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": false
-        },
-        {
-          "name": "page",
-          "type": "any",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "onPage",
-          "type": "() => void",
+          "type": "unknown",
           "optional": true,
           "isCallback": true,
           "isSlot": false
@@ -8898,28 +8559,28 @@
       "props": [
         {
           "name": "records",
-          "type": "any",
-          "optional": true,
+          "type": "readonly EntityRecord[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "info",
-          "type": "any",
-          "optional": true,
+          "type": "EntityInfo",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "labelField",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "detailFields",
-          "type": "any",
+          "type": "readonly string[]",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -8927,14 +8588,14 @@
         },
         {
           "name": "total",
-          "type": "any",
-          "optional": true,
+          "type": "number",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "label",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -8944,7 +8605,7 @@
         {
           "name": "RecordAvatarStackProps",
           "kind": "type",
-          "signature": "export type RecordAvatarStackProps={records:readonly EntityRecord[];info:EntityInfo;labelField:string;detailFields?:readonly string[];total:number;label?:string"
+          "signature": "export type RecordAvatarStackProps={records:readonly EntityRecord[];info:EntityInfo;labelField:string;detailFields?:readonly string[];total:number;label?:string};"
         }
       ]
     },
@@ -9301,21 +8962,21 @@
       "props": [
         {
           "name": "list",
-          "type": "any",
-          "optional": true,
+          "type": "readonly RecordComment[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "total",
-          "type": "any",
+          "type": "number",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "loadedCount",
-          "type": "any",
+          "type": "number",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -9323,35 +8984,35 @@
         },
         {
           "name": "label",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "text",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onText",
-          "type": "() => void",
+          "type": "(text:string)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onAdd",
-          "type": "() => void",
+          "type": "()=>void|Promise<void>",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "busy",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -9359,28 +9020,28 @@
         },
         {
           "name": "error",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "following",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onFollow",
-          "type": "() => void",
+          "type": "(on:boolean)=>void|Promise<void>",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "followBusy",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -9394,7 +9055,7 @@
         {
           "name": "RecordCommentsProps",
           "kind": "type",
-          "signature": "export type RecordCommentsProps={list:readonly RecordComment[];total?:number;loadedCount?:number;label?:string;text:string;onText?:(text:string)=>void;onAdd?:()"
+          "signature": "export type RecordCommentsProps={list:readonly RecordComment[];total?:number;loadedCount?:number;label?:string;text:string;onText?:(text:string)=>void;onAdd?:()=>void|Promise<void>;busy?:boolean;error?:string;following?:boolean;onFollow?:(on:boolean)=>void|Promise<void>;followBusy?:boolean};"
         }
       ]
     },
@@ -9622,14 +9283,13 @@
       ],
       "composed": [
         "ui/button",
-        "ui/date-input",
         "ui/input-drafts"
       ],
       "relatedTypes": [
         {
           "name": "Field",
           "kind": "type",
-          "signature": "export type Field<T> = { name: Path<T>; label: string; kind?: \"text\" | \"longText\" | \"textarea\" | \"markdown\" | \"number\" | \"date\" | \"datetime\" | \"select\" |"
+          "signature": "export type Field<T> = {\n  name: Path<T>;\n  label: string;\n  kind?: \"text\" | \"longText\" | \"textarea\" | \"markdown\" | \"number\" | \"date\" | \"datetime\" | \"select\" | \"checkbox\";\n  options?: { value: string; label: string }[];\n  placeholder?: string;\n  help?: string;\n  required?: boolean;\n  readOnly?: boolean;\n};"
         }
       ]
     },
@@ -9725,14 +9385,14 @@
       "props": [
         {
           "name": "info",
-          "type": "any",
-          "optional": true,
+          "type": "EntityInfo",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "history",
-          "type": "any",
+          "type": "readonly RecordChange[]",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -9740,7 +9400,7 @@
         },
         {
           "name": "heading",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -9748,28 +9408,28 @@
         },
         {
           "name": "label",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "limit",
-          "type": "any",
+          "type": "number",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "total",
-          "type": "any",
+          "type": "number",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "loadedCount",
-          "type": "any",
+          "type": "number",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -9777,38 +9437,18 @@
         },
         {
           "name": "recordID",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "recordRevision",
-          "type": "any",
+          "type": "number",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         }
-      ],
-      "composed": [
-        "ui/button",
-        "ui/chart",
-        "ui/content-tabs",
-        "ui/data-table",
-        "ui/datetime-input",
-        "ui/entity-card",
-        "ui/flow-steps",
-        "ui/input",
-        "ui/lifecycle",
-        "ui/pivot",
-        "ui/record-cards",
-        "ui/record-comments",
-        "ui/record-kanban",
-        "ui/record-lookup",
-        "ui/record-page",
-        "ui/record-uploader",
-        "ui/status",
-        "ui/tasks"
       ],
       "relatedTypes": [
         {
@@ -9840,6 +9480,81 @@
           "name": "EntityRecord",
           "kind": "type",
           "signature": "export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;"
+        },
+        {
+          "name": "RecordQuery",
+          "kind": "type",
+          "signature": "export type RecordQuery = Omit<Api.Query,\"domain\"> & {domain?:unknown[]};"
+        },
+        {
+          "name": "RecordPageData",
+          "kind": "type",
+          "signature": "export type RecordPageData = Omit<Api.RecordPage, \"records\"> & { records: EntityRecord[] };"
+        },
+        {
+          "name": "InterfaceRecordIdentity",
+          "kind": "type",
+          "signature": "export type InterfaceRecordIdentity = Pick<Api.InterfaceRecord, \"type\" | \"id\">;"
+        },
+        {
+          "name": "InterfaceRecordData",
+          "kind": "type",
+          "signature": "export type InterfaceRecordData = Omit<Api.InterfaceRecord, \"record\"> & { record: EntityRecord };"
+        },
+        {
+          "name": "InterfaceRecordPageData",
+          "kind": "type",
+          "signature": "export type InterfaceRecordPageData = Omit<Api.InterfaceRecordPage, \"records\"> & { records: InterfaceRecordData[] };"
+        },
+        {
+          "name": "RecordChange",
+          "kind": "type",
+          "signature": "export type RecordChange = Api.RecordChange;"
+        },
+        {
+          "name": "AttachedFile",
+          "kind": "type",
+          "signature": "export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string; regions?:Api.ImageRegion[] };"
+        },
+        {
+          "name": "RecordComment",
+          "kind": "type",
+          "signature": "export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };"
+        },
+        {
+          "name": "RecordView",
+          "kind": "type",
+          "signature": "export type RecordView = Omit<Api.RecordView, \"record\" | \"related\" | \"linked\" | \"activity\" | \"processes\" | \"approvals\" | \"tasks\" | \"files\" | \"comments\"> & {\n  /** Open tasks about the record the member may take (a flow's question, a correction to make). */\n  tasks: Api.InboxTask[];\n  /** The approval requests to move the record, newest first (F-38). */\n  approvals: Api.ApprovalRequest[];\n  files: AttachedFile[];\n  comments: RecordComment[];\n  record: EntityRecord; related: RelatedRecords[];\n  /** Records of any app linked to it (the relations app), by type. */\n  linked: RelatedRecords[];\n  /** What apps told about it through protocols, oldest first. */\n  activity: Api.Note[];\n  /** The flow instances about the record (ADR-0026 D4). */\n  processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];\n};"
+        },
+        {
+          "name": "Money",
+          "kind": "type",
+          "signature": "export type Money = { amount: number; currency: string };"
+        },
+        {
+          "name": "RecordSource",
+          "kind": "type",
+          "signature": "export type RecordSource = {\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
+        },
+        {
+          "name": "Options",
+          "kind": "type",
+          "signature": "export type Options = Record<string, { value: string; label: string }[]>;"
+        },
+        {
+          "name": "ListState",
+          "kind": "type",
+          "signature": "export type ListState = {\n  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];\n  group?: string; columns?: string; measure?: string; mark?: Mark;\n};"
+        },
+        {
+          "name": "RecordHistoryProps",
+          "kind": "type",
+          "signature": "export type RecordHistoryProps={info:EntityInfo;history?:readonly RecordChange[];heading?:boolean;label?:string;limit?:number;total?:number;loadedCount?:number;recordID?:string;recordRevision?:number};"
+        },
+        {
+          "name": "InboxTask",
+          "kind": "type",
+          "signature": "export type InboxTask = Api.InboxTask;"
         }
       ]
     },
@@ -9955,7 +9670,8 @@
       "slots": [
         {
           "name": "properties",
-          "type": "(record:EntityRecord)=>[string,ReactNode][]"
+          "type": "(record:EntityRecord)=>[string,ReactNode][]",
+          "optional": true
         }
       ],
       "composed": [
@@ -10335,38 +10051,34 @@
           "optional": true,
           "isCallback": true,
           "isSlot": false
+        },
+        {
+          "name": "fixed",
+          "type": "unknown",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
         }
       ],
       "slots": [
         {
           "name": "toolbar",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         },
         {
           "name": "kanban",
-          "type": "{ lanes?: KanbanLane[]; stateField?: string; labelField?: string; properties?: (record: EntityRecord) => [string, ReactNode][] }"
+          "type": "{ lanes?: KanbanLane[]; stateField?: string; labelField?: string; properties?: (record: EntityRecord) => [string, ReactNode][] }",
+          "optional": true
         }
       ],
       "composed": [
         "ui/button",
         "ui/chart",
-        "ui/content-tabs",
-        "ui/data-table",
-        "ui/datetime-input",
-        "ui/entity-card",
-        "ui/flow-steps",
         "ui/input",
-        "ui/lifecycle",
         "ui/pivot",
         "ui/record-cards",
-        "ui/record-comments",
-        "ui/record-history",
-        "ui/record-kanban",
-        "ui/record-lookup",
-        "ui/record-page",
-        "ui/record-uploader",
-        "ui/status",
-        "ui/tasks"
+        "ui/record-kanban"
       ],
       "relatedTypes": [
         {
@@ -10398,6 +10110,81 @@
           "name": "EntityRecord",
           "kind": "type",
           "signature": "export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;"
+        },
+        {
+          "name": "RecordQuery",
+          "kind": "type",
+          "signature": "export type RecordQuery = Omit<Api.Query,\"domain\"> & {domain?:unknown[]};"
+        },
+        {
+          "name": "RecordPageData",
+          "kind": "type",
+          "signature": "export type RecordPageData = Omit<Api.RecordPage, \"records\"> & { records: EntityRecord[] };"
+        },
+        {
+          "name": "InterfaceRecordIdentity",
+          "kind": "type",
+          "signature": "export type InterfaceRecordIdentity = Pick<Api.InterfaceRecord, \"type\" | \"id\">;"
+        },
+        {
+          "name": "InterfaceRecordData",
+          "kind": "type",
+          "signature": "export type InterfaceRecordData = Omit<Api.InterfaceRecord, \"record\"> & { record: EntityRecord };"
+        },
+        {
+          "name": "InterfaceRecordPageData",
+          "kind": "type",
+          "signature": "export type InterfaceRecordPageData = Omit<Api.InterfaceRecordPage, \"records\"> & { records: InterfaceRecordData[] };"
+        },
+        {
+          "name": "RecordChange",
+          "kind": "type",
+          "signature": "export type RecordChange = Api.RecordChange;"
+        },
+        {
+          "name": "AttachedFile",
+          "kind": "type",
+          "signature": "export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string; regions?:Api.ImageRegion[] };"
+        },
+        {
+          "name": "RecordComment",
+          "kind": "type",
+          "signature": "export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };"
+        },
+        {
+          "name": "RecordView",
+          "kind": "type",
+          "signature": "export type RecordView = Omit<Api.RecordView, \"record\" | \"related\" | \"linked\" | \"activity\" | \"processes\" | \"approvals\" | \"tasks\" | \"files\" | \"comments\"> & {\n  /** Open tasks about the record the member may take (a flow's question, a correction to make). */\n  tasks: Api.InboxTask[];\n  /** The approval requests to move the record, newest first (F-38). */\n  approvals: Api.ApprovalRequest[];\n  files: AttachedFile[];\n  comments: RecordComment[];\n  record: EntityRecord; related: RelatedRecords[];\n  /** Records of any app linked to it (the relations app), by type. */\n  linked: RelatedRecords[];\n  /** What apps told about it through protocols, oldest first. */\n  activity: Api.Note[];\n  /** The flow instances about the record (ADR-0026 D4). */\n  processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];\n};"
+        },
+        {
+          "name": "Money",
+          "kind": "type",
+          "signature": "export type Money = { amount: number; currency: string };"
+        },
+        {
+          "name": "RecordSource",
+          "kind": "type",
+          "signature": "export type RecordSource = {\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
+        },
+        {
+          "name": "Options",
+          "kind": "type",
+          "signature": "export type Options = Record<string, { value: string; label: string }[]>;"
+        },
+        {
+          "name": "ListState",
+          "kind": "type",
+          "signature": "export type ListState = {\n  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];\n  group?: string; columns?: string; measure?: string; mark?: Mark;\n};"
+        },
+        {
+          "name": "RecordHistoryProps",
+          "kind": "type",
+          "signature": "export type RecordHistoryProps={info:EntityInfo;history?:readonly RecordChange[];heading?:boolean;label?:string;limit?:number;total?:number;loadedCount?:number;recordID?:string;recordRevision?:number};"
+        },
+        {
+          "name": "InboxTask",
+          "kind": "type",
+          "signature": "export type InboxTask = Api.InboxTask;"
         }
       ]
     },
@@ -10442,38 +10229,17 @@
           "isSlot": false
         },
         {
-          "name": "scope",
-          "type": "unknown",
+          "name": "source",
+          "type": "RecordSource",
           "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
-          "name": "target",
+          "name": "type",
           "type": "string",
           "optional": false,
           "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "revision",
-          "type": "number",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "read",
-          "type": "(search: string, offset: number) => Promise<{ records: T[]; total: number }>",
-          "optional": false,
-          "isCallback": true,
-          "isSlot": false
-        },
-        {
-          "name": "watch",
-          "type": "(search: string, offset: number, changed: () => void) => () => void",
-          "optional": true,
-          "isCallback": true,
           "isSlot": false
         },
         {
@@ -10484,50 +10250,29 @@
           "isSlot": false
         },
         {
-          "name": "valueLabel",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "initialSearch",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
           "name": "onChange",
-          "type": "(record?: T) => void",
+          "type": "(id?: string) => void",
           "optional": false,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "window",
-          "type": "LookupWindow<T>",
+          "type": "NonNullable<Parameters<typeof RecordList>[0][\"window\"]>",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
-          "name": "label",
-          "type": "(record: T) => string",
-          "optional": false,
-          "isCallback": true,
-          "isSlot": false
-        },
-        {
-          "name": "keyOf",
-          "type": "(record: T) => string",
-          "optional": false,
-          "isCallback": true,
+          "name": "labelField",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
           "isSlot": false
         },
         {
           "name": "selectedRecord",
-          "type": "T",
+          "type": "EntityRecord",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -10543,34 +10288,6 @@
           "name": "disabled",
           "type": "boolean",
           "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "source",
-          "type": "RecordSource",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "type",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "labelField",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "name",
-          "type": "string",
-          "optional": false,
           "isCallback": false,
           "isSlot": false
         }
@@ -10677,7 +10394,7 @@
         {
           "name": "RecordMapProps",
           "kind": "type",
-          "signature": "export type RecordMapProps={records:EntityRecord[];info:EntityInfo;fields:RecordMapFields;scope?:string;selected?:string;enabled?:boolean;clusterEnabled?:boolea"
+          "signature": "export type RecordMapProps={records:EntityRecord[];info:EntityInfo;fields:RecordMapFields;scope?:string;selected?:string;enabled?:boolean;clusterEnabled?:boolean;onSelect?:(record:EntityRecord)=>void};"
         }
       ]
     },
@@ -10714,35 +10431,35 @@
       "props": [
         {
           "name": "root",
-          "type": "any",
-          "optional": true,
+          "type": "OriginalRecordTitle",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "groups",
-          "type": "any",
-          "optional": true,
+          "type": "readonly RecordNeighborhoodGroup[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "label",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onOpen",
-          "type": "() => void",
+          "type": "(object:string,record:EntityRecord)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "enabled",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -10756,12 +10473,12 @@
         {
           "name": "RecordNeighborhoodGroup",
           "kind": "type",
-          "signature": "export type RecordNeighborhoodGroup={id:string;records:readonly EntityRecord[];info:EntityInfo;bindingTitle:string;badge:string;tone:Tone;total:number;limit:num"
+          "signature": "export type RecordNeighborhoodGroup={id:string;records:readonly EntityRecord[];info:EntityInfo;bindingTitle:string;badge:string;tone:Tone;total:number;limit:number;labelField?:string};"
         },
         {
           "name": "RecordNeighborhoodProps",
           "kind": "type",
-          "signature": "export type RecordNeighborhoodProps={root:OriginalRecordTitle;groups:readonly RecordNeighborhoodGroup[];label?:string;onOpen?:(object:string,record:EntityRecord"
+          "signature": "export type RecordNeighborhoodProps={root:OriginalRecordTitle;groups:readonly RecordNeighborhoodGroup[];label?:string;onOpen?:(object:string,record:EntityRecord)=>void;enabled?:boolean};"
         }
       ]
     },
@@ -10945,13 +10662,6 @@
           "isSlot": false
         },
         {
-          "name": "groups",
-          "type": "readonly Api.PageRecordLink[]",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
           "name": "approvals",
           "type": "Api.ApprovalRequest[]",
           "optional": false,
@@ -10997,29 +10707,24 @@
       "slots": [
         {
           "name": "work",
-          "type": "(view: RecordView) => ReactNode"
+          "type": "(view: RecordView) => ReactNode",
+          "optional": true
         },
         {
           "name": "actions",
-          "type": "(r: EntityRecord) => ReactNode"
+          "type": "(r: EntityRecord) => ReactNode",
+          "optional": true
         }
       ],
       "composed": [
         "ui/button",
-        "ui/chart",
         "ui/content-tabs",
         "ui/data-table",
-        "ui/datetime-input",
         "ui/entity-card",
         "ui/flow-steps",
-        "ui/input",
         "ui/lifecycle",
-        "ui/pivot",
-        "ui/record-cards",
         "ui/record-comments",
         "ui/record-history",
-        "ui/record-kanban",
-        "ui/record-lookup",
         "ui/record-uploader",
         "ui/status",
         "ui/tasks"
@@ -11054,6 +10759,81 @@
           "name": "EntityRecord",
           "kind": "type",
           "signature": "export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;"
+        },
+        {
+          "name": "RecordQuery",
+          "kind": "type",
+          "signature": "export type RecordQuery = Omit<Api.Query,\"domain\"> & {domain?:unknown[]};"
+        },
+        {
+          "name": "RecordPageData",
+          "kind": "type",
+          "signature": "export type RecordPageData = Omit<Api.RecordPage, \"records\"> & { records: EntityRecord[] };"
+        },
+        {
+          "name": "InterfaceRecordIdentity",
+          "kind": "type",
+          "signature": "export type InterfaceRecordIdentity = Pick<Api.InterfaceRecord, \"type\" | \"id\">;"
+        },
+        {
+          "name": "InterfaceRecordData",
+          "kind": "type",
+          "signature": "export type InterfaceRecordData = Omit<Api.InterfaceRecord, \"record\"> & { record: EntityRecord };"
+        },
+        {
+          "name": "InterfaceRecordPageData",
+          "kind": "type",
+          "signature": "export type InterfaceRecordPageData = Omit<Api.InterfaceRecordPage, \"records\"> & { records: InterfaceRecordData[] };"
+        },
+        {
+          "name": "RecordChange",
+          "kind": "type",
+          "signature": "export type RecordChange = Api.RecordChange;"
+        },
+        {
+          "name": "AttachedFile",
+          "kind": "type",
+          "signature": "export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string; regions?:Api.ImageRegion[] };"
+        },
+        {
+          "name": "RecordComment",
+          "kind": "type",
+          "signature": "export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };"
+        },
+        {
+          "name": "RecordView",
+          "kind": "type",
+          "signature": "export type RecordView = Omit<Api.RecordView, \"record\" | \"related\" | \"linked\" | \"activity\" | \"processes\" | \"approvals\" | \"tasks\" | \"files\" | \"comments\"> & {\n  /** Open tasks about the record the member may take (a flow's question, a correction to make). */\n  tasks: Api.InboxTask[];\n  /** The approval requests to move the record, newest first (F-38). */\n  approvals: Api.ApprovalRequest[];\n  files: AttachedFile[];\n  comments: RecordComment[];\n  record: EntityRecord; related: RelatedRecords[];\n  /** Records of any app linked to it (the relations app), by type. */\n  linked: RelatedRecords[];\n  /** What apps told about it through protocols, oldest first. */\n  activity: Api.Note[];\n  /** The flow instances about the record (ADR-0026 D4). */\n  processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];\n};"
+        },
+        {
+          "name": "Money",
+          "kind": "type",
+          "signature": "export type Money = { amount: number; currency: string };"
+        },
+        {
+          "name": "RecordSource",
+          "kind": "type",
+          "signature": "export type RecordSource = {\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
+        },
+        {
+          "name": "Options",
+          "kind": "type",
+          "signature": "export type Options = Record<string, { value: string; label: string }[]>;"
+        },
+        {
+          "name": "ListState",
+          "kind": "type",
+          "signature": "export type ListState = {\n  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];\n  group?: string; columns?: string; measure?: string; mark?: Mark;\n};"
+        },
+        {
+          "name": "RecordHistoryProps",
+          "kind": "type",
+          "signature": "export type RecordHistoryProps={info:EntityInfo;history?:readonly RecordChange[];heading?:boolean;label?:string;limit?:number;total?:number;loadedCount?:number;recordID?:string;recordRevision?:number};"
+        },
+        {
+          "name": "InboxTask",
+          "kind": "type",
+          "signature": "export type InboxTask = Api.InboxTask;"
         }
       ]
     },
@@ -11357,28 +11137,28 @@
       "props": [
         {
           "name": "label",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "file",
-          "type": "any",
+          "type": "File",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "currentFile",
-          "type": "any",
+          "type": "Pick<AttachedFile,\"id\"|\"name\"|\"size\"|\"contentType\">",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "busy",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -11386,14 +11166,14 @@
         },
         {
           "name": "error",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "enabled",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -11401,21 +11181,21 @@
         },
         {
           "name": "onFile",
-          "type": "() => void",
+          "type": "(file:File)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onUpload",
-          "type": "() => void",
+          "type": "()=>void|Promise<void>",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onClear",
-          "type": "() => void",
+          "type": "()=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
@@ -11429,7 +11209,7 @@
         {
           "name": "RecordUploaderProps",
           "kind": "type",
-          "signature": "export type RecordUploaderProps={label:string;file?:File;currentFile?:Pick<AttachedFile,\"id\"|\"name\"|\"size\"|\"contentType\">;busy?:boolean;error?:string;enabled?:b"
+          "signature": "export type RecordUploaderProps={label:string;file?:File;currentFile?:Pick<AttachedFile,\"id\"|\"name\"|\"size\"|\"contentType\">;busy?:boolean;error?:string;enabled?:boolean;onFile?:(file:File)=>void;onUpload?:()=>void|Promise<void>;onClear?:()=>void};"
         }
       ]
     },
@@ -11538,15 +11318,18 @@
       "slots": [
         {
           "name": "detail",
-          "type": "(id: string) => ReactNode"
+          "type": "(id: string) => ReactNode",
+          "optional": false
         },
         {
           "name": "actions",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         },
         {
           "name": "notice",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "composed": [
@@ -11746,14 +11529,15 @@
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "relatedTypes": [
         {
           "name": "RelationCanvasProps",
           "kind": "type",
-          "signature": "export type RelationCanvasProps = { nodes: RelationNode[]; edges: RelationEdge[]; /** Where each element sits. A reader's view may leave this out and let th"
+          "signature": "export type RelationCanvasProps = {\n  nodes: RelationNode[]; edges: RelationEdge[];\n  /** Where each element sits. A reader's view may leave this out and let the canvas\n   * arrange what it is given; an owner that persists a drawing supplies it. */\n  positions?: Readonly<Record<string, CanvasPosition>>;\n  selected?: string; editable?: boolean; linking?: boolean; label?: string; height?: number | string; layout?: RelationLayout;\n  /** The dataTransfer type the owner's palette sets; its payload arrives in onDrop with the drop point. */\n  dropType?: string; children?: ReactNode; viewportKey?: string;\n  onSelect?: (id?: string) => void; onOpen?: (id: string) => void;\n  /** The selected element's operations, shown on the canvas beside it. */\n  nodeActions?: (id: string) => CanvasAction[];\n  /** A relationship can be chosen, and chosen relationships have operations. */\n  edgeActions?: (id: string) => CanvasAction[];\n  onReconnect?: (id: string, source: string, target: string) => void;\n  onLayoutReady?: (positions: Record<string, CanvasPosition>) => void;\n  onPositionsChange?: (positions: Record<string, CanvasPosition>) => void;\n  onLink?: (source: string, target: string) => void;\n  onDrop?: (payload: string, at: CanvasPosition) => void;\n  /** The reader's own arrangement is kept on this device for this drawing\n   * (ADR-0092): even a read-only view may be dragged, and the arrangement\n   * survives a reload until the reader chooses a layout again. */\n  storeKey?: string;\n};"
         }
       ]
     },
@@ -11791,35 +11575,35 @@
       "props": [
         {
           "name": "records",
-          "type": "any",
-          "optional": true,
+          "type": "readonly EntityRecord[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "info",
-          "type": "any",
-          "optional": true,
+          "type": "EntityInfo",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "labelField",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "statusField",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "statusTones",
-          "type": "any",
+          "type": "readonly ResourceStatusTone[]",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -11827,28 +11611,28 @@
         },
         {
           "name": "total",
-          "type": "any",
-          "optional": true,
+          "type": "number",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "selected",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onSelect",
-          "type": "() => void",
+          "type": "(record:EntityRecord)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "enabled",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -11856,7 +11640,7 @@
         },
         {
           "name": "label",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -11875,7 +11659,7 @@
         {
           "name": "RecordResourceListProps",
           "kind": "type",
-          "signature": "export type RecordResourceListProps={records:readonly EntityRecord[];info:EntityInfo;labelField:string;statusField:string;statusTones?:readonly ResourceStatusTo"
+          "signature": "export type RecordResourceListProps={records:readonly EntityRecord[];info:EntityInfo;labelField:string;statusField:string;statusTones?:readonly ResourceStatusTone[];total:number;selected?:string;onSelect?:(record:EntityRecord)=>void;enabled?:boolean;label?:string};"
         }
       ]
     },
@@ -11912,31 +11696,32 @@
       "snippet": "import { RetroButton } from \"@platform/ui\";\n<RetroButton variant=\"default\">RUN</RetroButton>",
       "props": [
         {
-          "name": "variant",
-          "type": "\"default\" | \"darkGray\" | \"white\" | \"lightGray\" | \"gray\"",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
           "name": "children",
           "type": "React.ReactNode",
           "optional": true,
           "isCallback": false,
           "isSlot": true
+        },
+        {
+          "name": "variant",
+          "type": "\"default\" | \"darkGray\" | \"white\" | \"lightGray\" | \"gray\"",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
         }
       ],
       "slots": [
         {
           "name": "children",
-          "type": "React.ReactNode"
+          "type": "React.ReactNode",
+          "optional": true
         }
       ],
       "relatedTypes": [
         {
           "name": "RetroButtonProps",
           "kind": "interface",
-          "signature": "export interface RetroButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof retroButtonVariants> { children?: React.Rea"
+          "signature": "export interface RetroButtonProps\n  extends React.ButtonHTMLAttributes<HTMLButtonElement>,\n    VariantProps<typeof retroButtonVariants> {\n  children?: React.ReactNode;\n}"
         }
       ]
     },
@@ -12028,7 +11813,7 @@
         {
           "name": "Scene3DProps",
           "kind": "type",
-          "signature": "export type Scene3DProps=AttachmentPreviewProps&{scope:string;asset:SceneInput;sample?:SceneInput;config:SceneConfig;enabled?:boolean;selected?:string;onSelect?"
+          "signature": "export type Scene3DProps=AttachmentPreviewProps&{scope:string;asset:SceneInput;sample?:SceneInput;config:SceneConfig;enabled?:boolean;selected?:string;onSelect?:(part:string)=>void};"
         }
       ]
     },
@@ -12070,63 +11855,63 @@
       "props": [
         {
           "name": "path",
-          "type": "any",
-          "optional": true,
+          "type": "readonly SearchAroundPathEntry[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "relations",
-          "type": "any",
-          "optional": true,
+          "type": "readonly SearchAroundRelation[]",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "activeRelation",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "window",
-          "type": "any",
+          "type": "SearchAroundWindow",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onBack",
-          "type": "() => void",
+          "type": "(index:number)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onRelation",
-          "type": "() => void",
+          "type": "(id:string)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onTraverse",
-          "type": "() => void",
+          "type": "(object:string,record:EntityRecord)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "onSelect",
-          "type": "() => void",
+          "type": "(object:string,record:EntityRecord)=>void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "selectionEnabled",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -12134,28 +11919,28 @@
         },
         {
           "name": "selected",
-          "type": "any",
+          "type": "{object:string;id:string}",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "selectionPending",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "selectionError",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "enabled",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -12163,21 +11948,21 @@
         },
         {
           "name": "pending",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "error",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "label",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -12205,7 +11990,7 @@
         {
           "name": "SearchAroundProps",
           "kind": "type",
-          "signature": "export type SearchAroundProps={path:readonly SearchAroundPathEntry[];relations:readonly SearchAroundRelation[];activeRelation?:string;window?:SearchAroundWindow"
+          "signature": "export type SearchAroundProps={path:readonly SearchAroundPathEntry[];relations:readonly SearchAroundRelation[];activeRelation?:string;window?:SearchAroundWindow;onBack?:(index:number)=>void;onRelation?:(id:string)=>void;onTraverse?:(object:string,record:EntityRecord)=>void;onSelect?:(object:string,record:EntityRecord)=>void;selectionEnabled?:boolean;selected?:{object:string;id:string};selectionPending?:boolean;selectionError?:string;enabled?:boolean;pending?:boolean;error?:string;label?:string};"
         }
       ]
     },
@@ -12240,28 +12025,27 @@
       "props": [
         {
           "name": "value",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onChange",
-          "type": "() => void",
+          "type": "unknown",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "scope",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         }
       ],
       "composed": [
-        "app/knowledge-search",
         "ui/input"
       ]
     },
@@ -12335,35 +12119,35 @@
       "props": [
         {
           "name": "open",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "onOpenChange",
-          "type": "() => void",
+          "type": "unknown",
           "optional": true,
           "isCallback": true,
           "isSlot": false
         },
         {
           "name": "title",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "children",
-          "type": "ReactNode",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": true
         },
         {
           "name": "width",
-          "type": "any",
+          "type": "number",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -12371,21 +12155,21 @@
         },
         {
           "name": "returnFocus",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "fallbackFocus",
-          "type": "any",
+          "type": "unknown",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "suspended",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -12393,7 +12177,7 @@
         },
         {
           "name": "backdrop",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -12401,7 +12185,7 @@
         },
         {
           "name": "closeOnBackdrop",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -12409,7 +12193,7 @@
         },
         {
           "name": "closeOnEsc",
-          "type": "any",
+          "type": "boolean",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -12417,7 +12201,7 @@
         },
         {
           "name": "side",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false,
@@ -12427,7 +12211,8 @@
       "slots": [
         {
           "name": "children",
-          "type": "ReactNode"
+          "type": "unknown",
+          "optional": true
         }
       ]
     },
@@ -12467,28 +12252,28 @@
       "props": [
         {
           "name": "src",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "alt",
-          "type": "any",
-          "optional": true,
+          "type": "string",
+          "optional": false,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "caption",
-          "type": "any",
+          "type": "string",
           "optional": true,
           "isCallback": false,
           "isSlot": false
         },
         {
           "name": "height",
-          "type": "any",
+          "type": "number",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -12533,28 +12318,6 @@
       ],
       "props": [
         {
-          "name": "label",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "tone",
-          "type": "Tone",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "\"neutral\""
-        },
-        {
-          "name": "className",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
           "name": "status",
           "type": "string",
           "optional": false,
@@ -12565,6 +12328,13 @@
           "name": "registry",
           "type": "StatusRegistry",
           "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "className",
+          "type": "string",
+          "optional": true,
           "isCallback": false,
           "isSlot": false
         }
@@ -12704,10 +12474,6 @@
           "isCallback": false,
           "isSlot": false
         }
-      ],
-      "composed": [
-        "ui/button",
-        "ui/input-drafts"
       ]
     },
     {
@@ -12831,55 +12597,10 @@
           "optional": true,
           "isCallback": true,
           "isSlot": false
-        },
-        {
-          "name": "onOpen",
-          "type": "(task: InboxTask) => void",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": false
-        },
-        {
-          "name": "actions",
-          "type": "(task: InboxTask) => ReactNode",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": true
-        },
-        {
-          "name": "empty",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "t(\"Nothing for you\")"
-        }
-      ],
-      "slots": [
-        {
-          "name": "actions",
-          "type": "(task: InboxTask) => ReactNode"
         }
       ],
       "composed": [
-        "ui/button",
-        "ui/chart",
-        "ui/content-tabs",
-        "ui/data-table",
-        "ui/datetime-input",
-        "ui/entity-card",
-        "ui/flow-steps",
-        "ui/input",
-        "ui/lifecycle",
-        "ui/pivot",
-        "ui/record-cards",
-        "ui/record-comments",
-        "ui/record-history",
-        "ui/record-kanban",
-        "ui/record-lookup",
-        "ui/record-page",
-        "ui/record-uploader",
-        "ui/status"
+        "ui/button"
       ],
       "relatedTypes": [
         {
@@ -12911,6 +12632,81 @@
           "name": "EntityRecord",
           "kind": "type",
           "signature": "export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;"
+        },
+        {
+          "name": "RecordQuery",
+          "kind": "type",
+          "signature": "export type RecordQuery = Omit<Api.Query,\"domain\"> & {domain?:unknown[]};"
+        },
+        {
+          "name": "RecordPageData",
+          "kind": "type",
+          "signature": "export type RecordPageData = Omit<Api.RecordPage, \"records\"> & { records: EntityRecord[] };"
+        },
+        {
+          "name": "InterfaceRecordIdentity",
+          "kind": "type",
+          "signature": "export type InterfaceRecordIdentity = Pick<Api.InterfaceRecord, \"type\" | \"id\">;"
+        },
+        {
+          "name": "InterfaceRecordData",
+          "kind": "type",
+          "signature": "export type InterfaceRecordData = Omit<Api.InterfaceRecord, \"record\"> & { record: EntityRecord };"
+        },
+        {
+          "name": "InterfaceRecordPageData",
+          "kind": "type",
+          "signature": "export type InterfaceRecordPageData = Omit<Api.InterfaceRecordPage, \"records\"> & { records: InterfaceRecordData[] };"
+        },
+        {
+          "name": "RecordChange",
+          "kind": "type",
+          "signature": "export type RecordChange = Api.RecordChange;"
+        },
+        {
+          "name": "AttachedFile",
+          "kind": "type",
+          "signature": "export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string; regions?:Api.ImageRegion[] };"
+        },
+        {
+          "name": "RecordComment",
+          "kind": "type",
+          "signature": "export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };"
+        },
+        {
+          "name": "RecordView",
+          "kind": "type",
+          "signature": "export type RecordView = Omit<Api.RecordView, \"record\" | \"related\" | \"linked\" | \"activity\" | \"processes\" | \"approvals\" | \"tasks\" | \"files\" | \"comments\"> & {\n  /** Open tasks about the record the member may take (a flow's question, a correction to make). */\n  tasks: Api.InboxTask[];\n  /** The approval requests to move the record, newest first (F-38). */\n  approvals: Api.ApprovalRequest[];\n  files: AttachedFile[];\n  comments: RecordComment[];\n  record: EntityRecord; related: RelatedRecords[];\n  /** Records of any app linked to it (the relations app), by type. */\n  linked: RelatedRecords[];\n  /** What apps told about it through protocols, oldest first. */\n  activity: Api.Note[];\n  /** The flow instances about the record (ADR-0026 D4). */\n  processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];\n};"
+        },
+        {
+          "name": "Money",
+          "kind": "type",
+          "signature": "export type Money = { amount: number; currency: string };"
+        },
+        {
+          "name": "RecordSource",
+          "kind": "type",
+          "signature": "export type RecordSource = {\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
+        },
+        {
+          "name": "Options",
+          "kind": "type",
+          "signature": "export type Options = Record<string, { value: string; label: string }[]>;"
+        },
+        {
+          "name": "ListState",
+          "kind": "type",
+          "signature": "export type ListState = {\n  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];\n  group?: string; columns?: string; measure?: string; mark?: Mark;\n};"
+        },
+        {
+          "name": "RecordHistoryProps",
+          "kind": "type",
+          "signature": "export type RecordHistoryProps={info:EntityInfo;history?:readonly RecordChange[];heading?:boolean;label?:string;limit?:number;total?:number;loadedCount?:number;recordID?:string;recordRevision?:number};"
+        },
+        {
+          "name": "InboxTask",
+          "kind": "type",
+          "signature": "export type InboxTask = Api.InboxTask;"
         }
       ]
     },
@@ -13050,10 +12846,6 @@
           "isCallback": true,
           "isSlot": false
         }
-      ],
-      "composed": [
-        "ui/button",
-        "ui/input-drafts"
       ]
     },
     {
@@ -13127,16 +12919,14 @@
       "slots": [
         {
           "name": "children",
-          "type": "(node: T) => T[]"
+          "type": "(node: T) => T[]",
+          "optional": false
         },
         {
           "name": "row",
-          "type": "(node: T) => ReactNode"
+          "type": "(node: T) => ReactNode",
+          "optional": false
         }
-      ],
-      "composed": [
-        "ui/button",
-        "ui/input-drafts"
       ]
     },
     {
@@ -13205,7 +12995,8 @@
       "slots": [
         {
           "name": "renderItem",
-          "type": "(item: T, index: number) => ReactNode"
+          "type": "(item: T, index: number) => ReactNode",
+          "optional": false
         }
       ]
     },
@@ -13339,101 +13130,33 @@
           "optional": true,
           "isCallback": true,
           "isSlot": false
-        },
-        {
-          "name": "problems",
-          "type": "WorkbenchProblem[]",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "empty",
-          "type": "ReactNode",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
-          "name": "icon",
-          "type": "ReactNode",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
-          "name": "label",
-          "type": "ReactNode",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
-          "name": "meta",
-          "type": "ReactNode",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
-          "name": "selected",
-          "type": "boolean",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "depth",
-          "type": "number",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "0"
-        },
-        {
-          "name": "onClick",
-          "type": "() => void",
-          "optional": true,
-          "isCallback": true,
-          "isSlot": false
         }
       ],
       "slots": [
         {
           "name": "title",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         },
         {
           "name": "status",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         },
         {
           "name": "actions",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": true
         },
         {
           "name": "dock",
-          "type": "WorkbenchPanel"
+          "type": "WorkbenchPanel",
+          "optional": true
         },
         {
           "name": "children",
-          "type": "ReactNode"
-        },
-        {
-          "name": "empty",
-          "type": "ReactNode"
-        },
-        {
-          "name": "icon",
-          "type": "ReactNode"
-        },
-        {
-          "name": "label",
-          "type": "ReactNode"
-        },
-        {
-          "name": "meta",
-          "type": "ReactNode"
+          "type": "ReactNode",
+          "optional": false
         }
       ],
       "composed": [
@@ -13454,7 +13177,7 @@
         {
           "name": "WorkbenchPanel",
           "kind": "type",
-          "signature": "export type WorkbenchPanel = { label: string; scope?:string; locate?:(path?:string)=>void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => voi"
+          "signature": "export type WorkbenchPanel = { label: string; scope?:string; locate?:(path?:string)=>void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };"
         },
         {
           "name": "WorkbenchHistory",

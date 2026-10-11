@@ -57,8 +57,8 @@ async function generate(check) {
       if (apiInfo.slots) entry.slots = apiInfo.slots;
       if (apiInfo.composed) entry.composed = apiInfo.composed;
       if (apiInfo.relatedTypes) entry.relatedTypes = apiInfo.relatedTypes;
-    } catch {
-      // Non-fatal if source fails extraction
+    } catch (err) {
+      process.stderr.write(`[catalog] API extraction warning for ${entry.id}: ${err.message}\n`);
     }
   }
   const ids = new Set();
