@@ -475,7 +475,20 @@ func TestContinuousSealedOperatorsAndRecovery(t *testing.T) {
 	if alerts := alertsOf(tn); len(alerts) != 0 {
 		t.Fatalf("hysteresis band alarmed: %+v", alerts)
 	}
+	// A refused source read stays visible while the frame's state is sealed:
+	// the observation lands on the record, the live frame read reports it up
+	// to the batch that clears it, and the accepted position does not move.
+	settled, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	tn.recordIntakePressure(id, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow connection is not ready"), at.Add(12*time.Second))
+	observed, failure := tn.ReadFlowFrame(memberOf(t, tn, "member"), id, at.Add(12*time.Second))
+	if failure != nil || observed.Pressure == nil || observed.Pressure.Code != "ERROR_CODE_CONFLICT" ||
+		observed.Pressure.Position != settled.Batch.Cursor || observed.Cursor != settled.Batch.Cursor {
+		t.Fatalf("a sealed frame hid the stuck read: %+v (%v)", observed.Pressure, failure)
+	}
 	feed(tn, "b3", at.Add(10*time.Second), flow.Signal{Key: "m5", Partition: "plant-a", At: at.Add(11 * time.Second), Value: measurement("d1", 8)})
+	if cleared, failure := tn.ReadFlowFrame(memberOf(t, tn, "member"), id, at.Add(13*time.Second)); failure != nil || cleared.Pressure != nil {
+		t.Fatalf("the accepted batch kept a stuck-read record: %+v (%v)", cleared.Pressure, failure)
+	}
 	if alerts := alertsOf(tn); len(alerts) != 1 || alerts[0].State != "cleared" {
 		t.Fatalf("cleared alert: %+v", alerts)
 	}
@@ -540,6 +553,106 @@ func TestContinuousDeclaredPartitionWorkersAreMeasured(t *testing.T) {
 	if raw := x.Outputs["stats"]; len(raw) == 0 || json.Unmarshal(raw, &stats) != nil || len(stats) != 4 {
 		t.Fatalf("the merged aggregate lost its groups: %s", x.Outputs["stats"])
 	}
+}
+
+// A source read the host's I/O lane had to refuse stays visible on the
+// instance's own frame (ADR-0047 §13.5): one journaled observation decision per
+// changed cause and position, nothing submitted for an unchanged one, and the
+// record cleared by the same action once the source answers. The accepted
+// position never moves for a refused read, so backpressure adds no queue.
+func TestContinuousIntakePressureIsRecordedAndCleared(t *testing.T) {
+	const tenant = "intake-pressure"
+	compose := func() *Tenant {
+		return composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameSource(tenant, 1<<20))
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	at := time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	const id = "frames.window:source"
+	read := func() flow.FlowInstance {
+		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		if !ok {
+			t.Fatal("no continuous instance")
+		}
+		return x
+	}
+	unavailable := platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow connection is not ready")
+	started := read()
+	tn.recordIntakePressure(id, unavailable, at)
+	x := read()
+	if x.Revision != started.Revision+1 || x.Batch == nil || x.Batch.Pressure == nil ||
+		x.Batch.Pressure.Code != "ERROR_CODE_CONFLICT" || x.Batch.Pressure.Message != "The Flow connection is not ready" ||
+		x.Batch.Pressure.Position != "" || !x.Batch.Pressure.Since.Equal(at) {
+		t.Fatalf("the stuck read is not visible on the frame: %+v", x.Batch)
+	}
+	if x.Batch.Cursor != "" || x.Batch.Consumed != 0 {
+		t.Fatal("recording a refused read moved the accepted position")
+	}
+	// The tenant reads it on the instance, through the record read the API
+	// serves as the member the flow runs for.
+	raw, refusal := tn.readRecordFrom(tn.records, tn.caller(memberOf(t, tn, "member"), tn.app(flow.ID), false), flow.InstanceType, id, at)
+	if refusal != nil {
+		t.Fatalf("the member cannot read the instance: %v", refusal)
+	}
+	var record struct {
+		Batch struct {
+			Pressure flow.IntakePressure `json:"pressure"`
+			Cursor   string              `json:"cursor"`
+		} `json:"batch"`
+	}
+	if json.Unmarshal(raw, &record) != nil || record.Batch.Pressure.Code != "ERROR_CODE_CONFLICT" || record.Batch.Cursor != "" {
+		t.Fatalf("the member does not see the stuck read: %s", raw)
+	}
+	// The same cause observed again is the same record: no decision, no
+	// revision, and the first-seen time stands.
+	before := len(entries)
+	tn.recordIntakePressure(id, unavailable, at.Add(time.Second))
+	if again := read(); again.Revision != x.Revision || !again.Batch.Pressure.Since.Equal(at) || len(entries) != before {
+		t.Fatalf("an unchanged cause submitted again: %+v", again.Batch.Pressure)
+	}
+	// A different cause replaces it, naming when that cause was first seen.
+	missing := platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source table is missing")
+	tn.recordIntakePressure(id, missing, at.Add(2*time.Second))
+	changed := read()
+	if changed.Batch.Pressure.Message != "The source table is missing" || !changed.Batch.Pressure.Since.Equal(at.Add(2*time.Second)) {
+		t.Fatalf("the changed cause is not the record: %+v", changed.Batch.Pressure)
+	}
+	// The owner refuses an unbounded record instead of storing it.
+	owner, _ := tn.owner["action:"+flow.SchemaFlowIntake].(platform.ResultApp)
+	member := platform.Member{ID: "app:" + flow.ID, Tenant: tn.ID}
+	long := &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: flow.ID, IdempotencyKey: "flow-intake:too-long",
+		Target: &pb.EntityRef{Type: flow.InstanceType, Id: id}, Schema: &pb.SchemaRef{Name: flow.SchemaFlowIntake, Version: 1},
+		Payload: platform.Raw(map[string]string{"code": "ERROR_CODE_CONFLICT", "message": strings.Repeat("x", 600), "position": "", "since": at.Format(time.RFC3339Nano)})}
+	if _, refusal := tn.submitAccepted(owner, member, long, at, true); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+		t.Fatalf("an unbounded intake record answered %v", refusal)
+	}
+	if unchanged := read(); unchanged.Revision != changed.Revision {
+		t.Fatal("the refused record changed the instance")
+	}
+	// A refusal whose message is longer than the record's bound is clipped
+	// rather than costing the whole record.
+	tn.recordIntakePressure(id, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, strings.Repeat("v", 600)), at.Add(2100*time.Millisecond))
+	if clipped := read(); clipped.Batch.Pressure == nil || len([]rune(clipped.Batch.Pressure.Message)) != 512 ||
+		!clipped.Batch.Pressure.Since.Equal(at.Add(2100*time.Millisecond)) {
+		t.Fatalf("a long refusal message was not bounded: %+v", clipped.Batch.Pressure)
+	}
+	// A source that answers again clears the record through the same action.
+	tn.recordIntakePressure(id, nil, at.Add(3*time.Second))
+	if cleared := read(); cleared.Batch.Pressure != nil {
+		t.Fatalf("the answered source kept a stuck-read record: %+v", cleared.Batch.Pressure)
+	}
+	// An accepted batch clears it too, in the decision that advances the
+	// cursor: the slot is not a second history.
+	tn.recordIntakePressure(id, missing, at.Add(4*time.Second))
+	batch := flow.Batch{ID: "one", Signals: []flow.Signal{{Key: "A", Partition: "plant", At: at.Add(4 * time.Second), Value: platform.Raw(4)}}}
+	decide(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": batch}, at.Add(4*time.Second))
+	if folded := read(); folded.Batch.Pressure != nil || folded.Batch.Cursor != "one" || folded.Batch.Consumed != 1 {
+		t.Fatalf("the accepted batch kept a stuck-read record: %+v", folded.Batch)
+	}
+	CheckReplay(t, tn, entries, compose)
 }
 
 // A threshold effect is delivered through the declaring app's own action, as

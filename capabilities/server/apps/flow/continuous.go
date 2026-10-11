@@ -54,6 +54,37 @@ type BatchFrame struct {
 	// of work records one. Zero keeps the historical frame of a fold that ran
 	// as a single sequence.
 	Workers int `json:"workers,omitempty"`
+	// Pressure names why the host's own source read is stuck (ADR-0047 §13.5):
+	// one slot, written by the flow's intake observation action and cleared by
+	// the next accepted batch. It never carries the cursor, watermark or state
+	// forward, so a refused read still changes no position.
+	Pressure *IntakePressure `json:"pressure,omitempty"`
+}
+
+// IntakePressure is one refused source-intake attempt: the refusal the host's
+// I/O lane got, the accepted position it was reading on (empty before the
+// first batch) and when that cause was first seen. A permanent refusal keeps
+// the position and stays visible here; it is not a second queue, and one
+// changed cause is one journaled decision rather than a record per attempt.
+type IntakePressure struct {
+	Code     string    `json:"code"`
+	Message  string    `json:"message,omitempty"`
+	Position string    `json:"position,omitempty"`
+	Since    time.Time `json:"since,omitzero"`
+}
+
+// PressureIs reports whether the frame already names this exact pressure: the
+// same refusal and the same accepted position, so the host does not submit a
+// second record for an unchanged cause. A nil frame holds none, and a nil want
+// means the record is to be cleared.
+func (f *BatchFrame) PressureIs(want *IntakePressure) bool {
+	if f == nil || f.Pressure == nil {
+		return want == nil
+	}
+	if want == nil {
+		return false
+	}
+	return f.Pressure.Code == want.Code && f.Pressure.Message == want.Message && f.Pressure.Position == want.Position
 }
 
 // SourceCheckpoint is the instance's own incremental position; it is accepted
@@ -117,8 +148,8 @@ func (f *BatchFrame) commitCheckpoint(declared platform.Continuous, now time.Tim
 // checkpointDigest hashes the position a checkpoint names: the accepted
 // ordinals, cursor, watermark and counters, the bound source checkpoint and
 // each node state's own digest. What changes after the batch — dead letters,
-// pending effects, marks — is deliberately outside it, so the digest keeps
-// naming the batch that wrote it.
+// pending effects, marks, the source's intake pressure — is deliberately
+// outside it, so the digest keeps naming the batch that wrote it.
 func checkpointDigest(f *BatchFrame) string {
 	state := map[string]string{}
 	for node, raw := range f.State {
@@ -368,6 +399,9 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 	next := *frame
 	next.State = maps.Clone(frame.State)
 	next.DeadLetters = slices.Clone(frame.DeadLetters)
+	// An accepted batch means the source answered: the recorded intake
+	// pressure clears with the same decision that advances the position.
+	next.Pressure = nil
 	if next.State == nil {
 		next.State = map[string]json.RawMessage{}
 	}

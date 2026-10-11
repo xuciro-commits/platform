@@ -1026,7 +1026,10 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		if ended(x.State) && !(schema == SchemaFlowResume && x.State == "canceled") {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
-		if schema != SchemaFlowStop {
+		// Recording what the host observed about its own source read is not
+		// executing the flow's steps, so it needs no step binding; a refusal
+		// the binding itself causes is exactly what has to stay visible.
+		if schema != SchemaFlowStop && schema != SchemaFlowIntake {
 			if err := f.checkBinding(*x); err != nil {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
 			}
@@ -1125,6 +1128,43 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				}
 			}
 			ss.trace(x, "", "replayed", fmt.Sprintf("%d dead letters", len(in.Seqs)), c.ID)
+		case SchemaFlowIntake:
+			// The instance's own frame names why its source read is stuck
+			// (ADR-0047 §13.5). The host submits one decision per changed
+			// cause; an empty code clears the record once the source answers.
+			var in struct {
+				Code     string `json:"code"`
+				Message  string `json:"message"`
+				Position string `json:"position"`
+				Since    string `json:"since"`
+			}
+			if json.Unmarshal(s.GetPayload(), &in) != nil || len([]rune(in.Code)) > 64 || len([]rune(in.Message)) > 512 || len([]rune(in.Position)) > 512 {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An intake record names a bounded code, message and position")
+			}
+			d := f.def(x.Flow, x.Version)
+			if d == nil || d.Continuous == nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "This instance's flow is not continuous")
+			}
+			if in.Code == "" {
+				if x.Batch != nil {
+					x.Batch.Pressure = nil
+				}
+				return ss.apply, nil
+			}
+			since, err := time.Parse(time.RFC3339Nano, in.Since)
+			if err != nil || since.IsZero() {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An intake record carries when its cause was first seen")
+			}
+			if x.Batch == nil {
+				x.Batch = &BatchFrame{State: map[string]json.RawMessage{}}
+			}
+			if prior := x.Batch.Pressure; prior != nil && prior.Code == in.Code && prior.Message == in.Message && prior.Position == in.Position {
+				// The same stuck cause, recorded again after a restart: keep
+				// when it was first seen rather than moving it forward.
+				since = prior.Since
+			}
+			x.Batch.Pressure = &IntakePressure{Code: in.Code, Message: in.Message, Position: in.Position, Since: since}
+			return ss.apply, nil
 		case SchemaFlowMove:
 			versions := f.defs[x.Flow]
 			i := slices.IndexFunc(versions, func(d *flowDef) bool { return d.Version == x.Version })

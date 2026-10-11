@@ -36,6 +36,7 @@ const (
 	SchemaFlowMove   = "flow.instance.move"
 	SchemaFlowResume = "flow.instance.resume"
 	SchemaFlowReplay = "flow.instance.replay"
+	SchemaFlowIntake = "flow.instance.intake"
 	stepAttempts     = 5
 	// Compensate as a next step undoes the completed acts, newest first.
 	Compensate = platform.Compensate
@@ -183,6 +184,8 @@ func New(tenant string) *Flows {
 			Description: "Move a running instance to its flow's next version, as that version's mapping says."},
 		platform.Action{Schema: SchemaFlowResume, Target: InstanceType, Capability: "flows", Title: "Resume continuous run", Payload: []platform.Field{}, Roles: admin,
 			Description: "Resume a canceled continuous instance at its accepted cursor, with its original flow version and frame."},
+		platform.Action{Schema: SchemaFlowIntake, Target: InstanceType, Capability: "flows", Title: "Record source intake pressure", Description: byHost, Automation: true,
+			Payload: []platform.Field{{Name: "code", Type: "text", Description: "The refusal code; empty clears the record"}, {Name: "message", Type: "text", Description: "Why the source read was refused"}, {Name: "position", Type: "text", Description: "The accepted position it was reading on"}, {Name: "since", Type: "text", Description: "When the cause was first seen"}}},
 		platform.Action{Schema: SchemaFlowReplay, Target: InstanceType, Capability: "flows", Title: "Replay dead letters", Roles: admin,
 			Description: "Deliver the named dead letters' signals again under the original authorization; the letters keep their numbers.",
 			Payload:     []platform.Field{{Name: "seqs", Type: "json", Required: true, Description: "The dead-letter numbers to deliver again"}}})

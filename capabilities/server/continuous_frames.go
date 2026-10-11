@@ -323,6 +323,15 @@ func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*fl
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
+	// The instance's own summary owns the intake observation the host last
+	// wrote (ADR-0047 §13.5): a sealed artifact is written by the batch that
+	// clears it, so a read refused afterwards lives only on the summary. The
+	// returned frame is a detached copy either way.
+	frame.Pressure = nil
+	if before.Batch != nil && before.Batch.Pressure != nil {
+		pressure := *before.Batch.Pressure
+		frame.Pressure = &pressure
+	}
 	// The live frame may have moved past its last checkpoint, but it can never
 	// claim one it has not reached.
 	if err := flow.VerifyCheckpointAhead(*frame); err != nil {
@@ -501,6 +510,15 @@ func (t *Tenant) continuousSources(now time.Time) []func() {
 	}}
 }
 
+// clipText bounds one part of a recorded refusal by runes, the way the flow
+// app's own intake action checks it.
+func clipText(s string, n int) string {
+	if runes := []rune(s); len(runes) > n {
+		return string(runes[:n])
+	}
+	return s
+}
+
 func (t *Tenant) pullContinuousSources(now time.Time) {
 	if t.quarantined() {
 		return
@@ -525,17 +543,76 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 	for _, instance := range pending {
 		member, exists := t.Member(instance.OnBehalf)
 		if !exists {
+			t.recordIntakePressure(instance.ID, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable"), now)
 			continue
 		}
 		for round := 0; round < 8; round++ {
 			outcome, refusal := t.ConsumeFlowSource(member, instance.ID, now)
 			if refusal != nil {
 				log.Printf("continuous source intake %s refused: %s", instance.ID, refusal.Code)
+				t.recordIntakePressure(instance.ID, refusal, now)
 				break
 			}
 			if outcome.Cursor == "" {
+				// The source answered again: the record of a stuck read is
+				// cleared by the same observation action, not by a timer.
+				t.recordIntakePressure(instance.ID, nil, now)
 				break
 			}
 		}
 	}
+}
+
+// recordIntakePressure keeps the instance's own frame naming why its source
+// read is stuck (ADR-0047 §13.5). The read is refused and the accepted
+// position stays; the reason is one journaled observation decision per changed
+// cause, a second identical tick submits nothing, and clearing it is the same
+// action with no code. Backpressure therefore stays bounded and visible on the
+// instance an administrator already reads, rather than in a host-side queue.
+func (t *Tenant) recordIntakePressure(id string, cause *kernel.Error, now time.Time) {
+	if t.quarantined() {
+		return
+	}
+	x, ok := platform.Get[flow.FlowInstance](t.automation(flow.ID, false), id)
+	if !ok || x.Withheld {
+		return
+	}
+	want := &flow.IntakePressure{Since: now}
+	if cause != nil {
+		// The recorded words are bounded like the record itself: a refusal
+		// with a longer message must not cost the whole record.
+		want.Code, want.Message = cause.Code.String(), clipText(cause.Message, 512)
+		if x.Batch != nil {
+			want.Position = clipText(x.Batch.Cursor, 512)
+		}
+	} else {
+		want = nil
+	}
+	if x.Batch.PressureIs(want) {
+		return
+	}
+	owner, _ := t.owner["action:"+flow.SchemaFlowIntake].(platform.ResultApp)
+	if owner == nil {
+		return
+	}
+	payload := map[string]string{}
+	if want != nil {
+		payload = map[string]string{"code": want.Code, "message": want.Message, "position": want.Position, "since": now.UTC().Format(time.RFC3339Nano)}
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	// The key names the whole record, first-seen time included: the same cause
+	// seen again after it cleared is a new decision, while a repeat of the
+	// same cause and time is the same one and does not write twice.
+	key := fmt.Sprintf("flow-intake:%s:%x", id, sha256.Sum256(platform.Raw([]string{payload["code"], payload["message"], payload["position"], payload["since"]})))
+	member := platform.Member{ID: "app:" + flow.ID, Tenant: t.ID}
+	sub := &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: flow.ID, IdempotencyKey: key,
+		Target: &pb.EntityRef{Type: flow.InstanceType, Id: id}, Schema: &pb.SchemaRef{Name: flow.SchemaFlowIntake, Version: 1}, Payload: raw}
+	if _, answer := t.submitAccepted(owner, member, sub, now, true); answer != nil {
+		log.Printf("continuous source intake pressure %s not recorded: %s", id, answer.Code)
+		return
+	}
+	t.enqueue(now)
 }

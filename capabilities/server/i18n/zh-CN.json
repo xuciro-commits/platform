@@ -1675,5 +1675,10 @@
   "The prepared input belongs to another operation request": "预备输入属于另一计算请求",
   "The operation changed while its input was prepared": "准备输入期间计算发生了变化",
   "The accepted input artifact belongs to another operation": "已接受的输入制品属于另一计算",
-  "Operation permission or generation changed while its input was read": "读取输入期间计算权限或执行轮次发生了变化"
+  "Operation permission or generation changed while its input was read": "读取输入期间计算权限或执行轮次发生了变化",
+  "Record source intake pressure": "记录连续数据源接入压力",
+  "The refusal code; empty clears the record": "拒绝的错误码；留空则清除该记录",
+  "Why the source read was refused": "来源读取被拒绝的原因",
+  "The accepted position it was reading on": "读取时所在的已接受位置",
+  "When the cause was first seen": "该原因首次出现的时间"
 }
