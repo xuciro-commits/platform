@@ -70,7 +70,7 @@ Connection/Source/Dataset/Pipeline 的**定义描述符**及选定任务必需�
 
 消除根包生产实现对具体平台应用包、类型与私有状态的依赖；组合入口和测试可导入实现，但不应嵌入提交/恢复管线。先盘点所有反向边，再迁消费者与原状态/历史；组合的 Attach→全部声明就绪→Ready 时序须明确并可验证，替代 Console 的 defer 初始化，不改变权限装载时机。
 
-`boundaries.sh` 在原 Makefile/check 路径调用 AST 守门，扫描全部生产 Go 源码（包括当前系统不编译的 build tag 文件），阻断根包具体应用导入、Console/Agents 具体状态断言、owner 间依赖、公共 API 匿名 runtime 探测和平台 owner 接收组合 Host。消费者已迁完，不保留迁移例外、数量抵扣或宽 Attach 入口。当前仅标签 CI 运行，规则必须首先进入本地 `make check`，不把常规推送当 CI 验证。
+`boundaries.sh` 在原 Makefile/check 路径调用 AST 守门，扫描全部生产 Go 源码（包括当前系统不编译的 build tag 文件），阻断根包具体应用导入、Console/Agents 具体状态断言、owner 间依赖、公共 API 匿名 runtime 探测和平台 owner 接收组合 Host。只读源码的规则（AST、应用形状与 grep）先执行，需要解析模块依赖的传递检查后执行；独立 `apps/`、`protocols/` 模块在本机解析不了时逐名列为未检查，不让解析失败把后续规则静默带走，也不把该跳过写成通过。消费者已迁完，不保留迁移例外、数量抵扣或宽 Attach 入口。当前仅标签 CI 运行，规则必须首先进入本地 `make check`，不把常规推送当 CI 验证。
 
 **保留每租户单写者。** 逐调用核对并记录哪些状态受 mu、opsMu、streamMu 和组件锁保护，哪些组合禁止同持、哪些短时嵌套合法，以及谁能调用已持锁的方法。不得直接照搬评审锁层级。锁外 I/O 是共同的 prepare→revalidate→accept 规则：只捕获固定定义、主体、来源和 generation/ticket；锁外读写有界不可变字节；回锁复核当前权限、版本、实例和前驱后接受；过期结果拒绝/回收，提交不明保留。来源读取、Compute、外部投递及制品清理按各自语义遵守规则，不强制经过唯一串行 I/O 执行器。沿现有 owner 测试加入必要的 race 检查、锁边界/撤权时序断言；race 无报告不等于已证明不存在死锁。
 
