@@ -499,6 +499,49 @@ func TestContinuousSealedOperatorsAndRecovery(t *testing.T) {
 	}
 }
 
+// The declared concurrency reaches the host's sealed lane and is measured
+// there (ADR-0047 §13.3): a source batch with several partitions is folded by
+// real workers, and the accepted frame records the peak they reached. The
+// merged operators stay the sequential ones.
+func TestContinuousDeclaredPartitionWorkersAreMeasured(t *testing.T) {
+	const tenant, id = "worker-partitions", "frames.window:source"
+	store := &memoryFiles{}
+	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant),
+		newFrameSource(tenant, 1<<20, func(c *platform.Continuous) {
+			c.Batch = 4096
+			c.Concurrency = 8
+			c.Aggregate = &platform.StreamAggregate{Node: "stats", Signal: "vibration", Group: []string{"deviceId"}, Measures: []string{"count", "mean"}}
+		}))
+	tn.Files = store
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	at := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	signals := make([]flow.Signal, 0, 2048)
+	for p := range 4 {
+		device := fmt.Sprintf("d%d", p)
+		for i := range 512 {
+			stamp := at.Add(time.Duration(i) * time.Millisecond)
+			signals = append(signals, flow.Signal{Key: fmt.Sprintf("%s-%d", device, i), Partition: device, At: stamp,
+				Value: json.RawMessage(fmt.Sprintf(`{"deviceId":%q,"vibration":%g,"at":%q,"note":"partition worker payload"}`, device, 10+float64(i%10)/4, stamp.Format(time.RFC3339Nano)))})
+		}
+	}
+	if _, err := tn.ConsumeFlowBatch(memberOf(t, tn, "member"), id, flow.Batch{ID: "source:workers", Signals: signals}, at); err != nil {
+		t.Fatalf("the multi-partition batch was refused: %s", err.Message)
+	}
+	x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	if !ok || x.Batch == nil || x.Batch.Workers <= 1 || x.Batch.Workers > 8 {
+		t.Fatalf("the declared partition workers did not fold the batch: %+v", x.Batch)
+	}
+	frame, err := tn.ReadFlowFrame(memberOf(t, tn, "member"), id, at)
+	if err != nil || frame.Workers != x.Batch.Workers {
+		t.Fatalf("the accepted frame lost its measured occupancy: %+v %v", frame, err)
+	}
+	var stats []flow.AggregateRecord
+	if raw := x.Outputs["stats"]; len(raw) == 0 || json.Unmarshal(raw, &stats) != nil || len(stats) != 4 {
+		t.Fatalf("the merged aggregate lost its groups: %s", x.Outputs["stats"])
+	}
+}
+
 // A threshold effect is delivered through the declaring app's own action, as
 // its automation principal, under a stable key (ADR-0047 §13.3): the intent is
 // durable on the frame until the effect is accepted, and replaying the journal

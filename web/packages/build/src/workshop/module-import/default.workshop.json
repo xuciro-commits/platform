@@ -3814,7 +3814,7 @@
       ],
       "execution": {
         "mode": "stream",
-        "maxConcurrency": 1,
+        "maxConcurrency": 8,
         "checkpointEvery": 5000,
         "errorPolicy": "deadLetter",
         "scheduleMs": 1000

@@ -21,7 +21,7 @@ test("the default continuous graph declares its own window, operators, effect an
   Aggregate:{node:"flow-wasm",signal:"vibration",group:["plantId","deviceId"],measures:["count","mean"]},
   Threshold:{node:"flow-threshold",field:"mean",high:11.5,low:9.5,debounceMs:3000,severity:"High"},
   Output:{node:"flow-output",name:"liveTelemetryStats",mode:"replace"},
-  DeadLetter:{node:"flow-dlq",maxRecords:10000,ttlMs:86400000},CheckpointEvery:5000,ErrorPolicy:"deadLetter",
+  DeadLetter:{node:"flow-dlq",maxRecords:10000,ttlMs:86400000},CheckpointEvery:5000,ErrorPolicy:"deadLetter",Concurrency:8,
   Effects:[{node:"flow-threshold",action:"build.telemetryalert.record"}]});
  const {continuous,steps,object,when,manual}=report.draft;
  assert.equal(object,"");
@@ -72,7 +72,15 @@ test("ports, bounds and owners are refused instead of approximated",()=>{
  assert.deepEqual(codes(compile(reservedOutput)),["flow-continuous-output"]);
  const parallel=graph();
  parallel.execution.maxConcurrency=8;
- assert.deepEqual(codes(compile(parallel)),["flow-concurrency-owner"]);
+ assert.deepEqual(codes(compile(parallel)),[]);
+ assert.equal(compile(parallel).continuous.Concurrency,8);
+ const tooMany=graph();
+ tooMany.execution.maxConcurrency=9;
+ assert.deepEqual(codes(compile(tooMany)),["flow-concurrency-owner"]);
+ const single=graph();
+ single.execution.maxConcurrency=1;
+ assert.deepEqual(codes(compile(single)),[]);
+ assert.equal(compile(single).continuous.Concurrency,undefined);
  const scheduled=graph();
  scheduled.execution.scheduleMs=250;
  assert.deepEqual(codes(compile(scheduled)),["flow-schedule-owner"]);

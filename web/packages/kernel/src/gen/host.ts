@@ -599,6 +599,7 @@ export type ContextView = {
 export type Continuous = {
   Source: string;
   Batch: number;
+  Concurrency?: number;
   State: number;
   FrameBytes: number;
   Window: StreamWindow;

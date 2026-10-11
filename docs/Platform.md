@@ -191,7 +191,7 @@
 | 内核契约 K1–K9、宿主运行时、应用 API、协议、共享 UI | 有界实现 | 保留 | §2.4 各条目；`make check`、`verify.sh capabilities composition` |
 | 记录、动作、生命周期、审批、任务、查询与联合候选 | 有界实现 | 保留 | ADR-0016/0017/0037/0039；根包与各平台应用测试 |
 | 共享输入与 Inspector 编辑（ADR-0096 A–D） | 有界实现 | 保留 + 补全走查（S-05） | 工程已收口（`platform/input.go`、FieldIssue/ErrorBody、DateRangeInput）；负责人体验走查未做 |
-| 持续 Flow（ADR-0047 §13 方案 A） | 补全中 | 补全（S-03） | 已接：批次 frame/窗口、受控 PostgreSQL 表消费游标/窗口、窗口→聚合→滞回算子（两条批次通道同一决策、声明不合即拒绝）、编号死信资产（按声明条数/年龄裁剪）与管理员按编号重放、显式运行检查点（`CheckpointEvery`，读取时按位置摘要核对）、阈值效果投递（`Continuous.Effects` 绑定声明应用自己的动作，接受即清意图、拒绝按平台退避重试、用尽转为编号死信）、默认图到原生 `Continuous` 声明的编译接线及 `Continuous.Output` 命名只读 Flow-instance 变量、封存帧制品的实例侧生命周期（新帧接受即回收被替换帧，存量扫描回收孤儿）；缺：真实 PostgreSQL 部署演练、真实并发 8 与完整浏览器路线；取消后沿原 cursor/版本续接已接入 `flow.instance.resume`，外部验收待演练 |
+| 持续 Flow（ADR-0047 §13 方案 A） | 补全中 | 补全（S-03） | 已接：批次 frame/窗口、受控 PostgreSQL 表消费游标/窗口、窗口→聚合→滞回算子（两条批次通道同一决策、声明不合即拒绝）、编号死信资产（按声明条数/年龄裁剪）与管理员按编号重放、显式运行检查点（`CheckpointEvery`，读取时按位置摘要核对）、阈值效果投递（`Continuous.Effects` 绑定声明应用自己的动作，接受即清意图、拒绝按平台退避重试、用尽转为编号死信）、默认图到原生 `Continuous` 声明的编译接线及 `Continuous.Output` 命名只读 Flow-instance 变量、封存帧制品的实例侧生命周期（新帧接受即回收被替换帧，存量扫描回收孤儿）；缺：真实 PostgreSQL 部署演练与完整浏览器路线；声明的 1–8 分区工作线程已在两条批次通道的窗口/聚合折入中落地（`Continuous.Concurrency`，实测峰值随封存帧记录，越界声明在保存/安装时拒绝）；取消后沿原 cursor/版本续接已接入 `flow.instance.resume`，外部验收待演练 |
 | 集成织物 Connection/Source/Dataset/Pipeline/Matching/Writeback | 有界实现 | 补全（S-01、S-02 的候选覆盖、追踪、核对与恢复） | ADR-0069/0070–0077；集成记录不在候选封存/晋级范围（ADR-0047 §14） |
 | 应用、环境与包生命周期 | 有界实现 | 保留 + 补全（AR-10 的依赖、客户扩展保留与在途任务） | `packages.go`、环境生命周期测试、Host Console |
 | AI 模型、函数、智能体、预算与评测 | 有界实现 | 保留 + 补全真实任务质量验收（S-04） | `agent_eval.go`、`quota.go`、`aicall.go`；替身不构成质量证据 |

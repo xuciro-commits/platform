@@ -21,7 +21,7 @@ const alertFields=["group","node","field","severity","state","batch"];
 /** The keys the Flow settings own: the real Source record and its columns. The
  * graph owns the runtime chain below, so a settings copy of it is refused. */
 const settingsKeys=["Source","State","FrameBytes","Intake"] as const;
-const graphKeys=["Batch","Window","Aggregate","Threshold","Output","Effects","DeadLetter","CheckpointEvery","ErrorPolicy"] as const;
+const graphKeys=["Batch","Concurrency","Window","Aggregate","Threshold","Output","Effects","DeadLetter","CheckpointEvery","ErrorPolicy"] as const;
 const bounded=(v:unknown,low:number,high:number)=>Number.isSafeInteger(v)&&(v as number)>=low&&(v as number)<=high;
 const count=(v:unknown):v is number=>Number.isFinite(v);
 
@@ -127,7 +127,11 @@ export function compileContinuousGraph(flow:SourceFlow,settings:Partial<Api.Cont
  if(alert)wired(threshold,"triggered",alert,"in");
  const execution=flow.execution;
  if(execution.mode!=="stream")issue(`${root}/execution/mode`,"flow-mode-owner");
- if(execution.maxConcurrency!==1)issue(`${root}/execution/maxConcurrency`,"flow-concurrency-owner");
+ // The graph's declared partition workers run for real: the host folds the
+ // batch's partitions with at most this many workers at once (ADR-0047 §13.3),
+ // so only a bounded declaration is a declaration the platform can keep.
+ const concurrency=execution.maxConcurrency;
+ if(!bounded(concurrency,1,8))issue(`${root}/execution/maxConcurrency`,"flow-concurrency-owner");
  if(execution.errorPolicy!=="deadLetter")issue(`${root}/execution/errorPolicy`,"flow-error-owner");
  // The stream is pulled by the host's own one-second tick; a graph asking for
  // another rate has no owner for it here.
@@ -141,6 +145,7 @@ export function compileContinuousGraph(flow:SourceFlow,settings:Partial<Api.Cont
   Threshold:{node:threshold!.id,field:threshold!.config.field as string,high:threshold!.config.high as number,low:threshold!.config.low as number,debounceMs:threshold!.config.debounceMs as number,...(threshold!.config.severity?{severity:threshold!.config.severity as string}:{})},
   DeadLetter:{node:dlq!.id,maxRecords:dlq!.config.maxRecords as number,...(dlq!.config.ttlMs!==undefined?{ttlMs:dlq!.config.ttlMs as number}:{})}};
  if(execution.checkpointEvery>0)declared.CheckpointEvery=execution.checkpointEvery;
+ if(concurrency>1)declared.Concurrency=concurrency;
  if(effects)declared.Effects=effects;
  return {continuous:declared,outputs,diagnostics};
 }

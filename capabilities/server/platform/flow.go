@@ -45,6 +45,13 @@ type Continuous struct {
 	// Batch is the most signals one batch may carry; 0 keeps the flow's own
 	// budget. A batch over it is refused, never trimmed.
 	Batch int
+	// Concurrency bounds the partition workers one batch may fold with
+	// (ADR-0047 §13.3): 0 or 1 folds the batch as one sequence, at most 8.
+	// A partition's state is read and folded by one worker at a time and the
+	// merge that follows is the only writer of the accepted frame, so the
+	// committed bytes never depend on how the workers were scheduled. The
+	// frame records the peak workers that really overlapped.
+	Concurrency int `json:"Concurrency,omitempty"`
 	// State is the most bytes one node's state may hold; 0: no extra bound.
 	State int
 	// FrameBytes bounds the complete accepted frame, including dead letters

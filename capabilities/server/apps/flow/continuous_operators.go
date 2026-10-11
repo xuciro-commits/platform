@@ -89,6 +89,15 @@ func streamOutputName(name string) bool {
 // refused instead of silently never firing.
 func checkOperators(declared platform.Continuous) error {
 	a, t := declared.Aggregate, declared.Threshold
+	// The declared partition workers are part of the same whole-declaration
+	// check: the fold runs at most 8 of them, and more than one needs the
+	// event-time window whose partitions they fold (ADR-0047 §13.3).
+	if declared.Concurrency < 0 || declared.Concurrency > 8 {
+		return fmt.Errorf("a stream fold runs with 1 to 8 partition workers")
+	}
+	if declared.Concurrency > 1 && declared.Window == nil {
+		return fmt.Errorf("a stream fold with more than one partition worker needs the declared event-time window")
+	}
 	if output := declared.Output; output != nil {
 		if a == nil || output.Node == "" || !streamOutputName(output.Name) || output.Name == "batch" || output.Name == "alerts" || output.Mode != "replace" {
 			return fmt.Errorf("a stream output needs an aggregate, a safe variable name, and replace mode")
@@ -222,19 +231,30 @@ func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batc
 	// Group the retained rows under the declared measure contract. A row whose
 	// value or group fields do not fit becomes a dead letter and leaves the
 	// window; the batch itself still succeeds, as the graph's error policy says.
+	//
+	// Reading every retained row's value is the fold's heaviest per-row work,
+	// so a declaration of concurrency classifies per source partition with
+	// real workers. The merge below then walks the rows in their own order, so
+	// sums, records, letters and hysteresis stay exactly the sequential ones.
+	classes, peak, refusal := classifyAggregateRows(a, window.Rows, declared)
+	if refusal != nil {
+		return stats, alerts, refusal
+	}
+	if declared.Concurrency > 1 && peak > frame.Workers {
+		frame.Workers = peak
+	}
 	kept := make([]Signal, 0, len(window.Rows))
 	byGroup := map[string][]float64{}
 	order := []string{}
-	for _, row := range window.Rows {
-		group, value, why := aggregateRow(*a, row)
-		if why != "" {
-			frame.DeadLetters = append(frame.DeadLetters, frame.letter(batchID, now, row, why))
+	for i, row := range window.Rows {
+		if classes[i].why != "" {
+			frame.DeadLetters = append(frame.DeadLetters, frame.letter(batchID, now, row, classes[i].why))
 			continue
 		}
-		if _, seen := byGroup[group]; !seen {
-			order = append(order, group)
+		if _, seen := byGroup[classes[i].group]; !seen {
+			order = append(order, classes[i].group)
 		}
-		byGroup[group] = append(byGroup[group], value)
+		byGroup[classes[i].group] = append(byGroup[classes[i].group], classes[i].value)
 		kept = append(kept, row)
 	}
 	if len(kept) != len(window.Rows) {
@@ -338,6 +358,53 @@ func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batc
 	// make every later read of the artifact disagree with its record.
 	frame.StateBytes = stateSize(frame.State)
 	return stats, alerts, nil
+}
+
+// rowClass is one retained row's classification: the group and numeric value
+// the aggregate takes from it, or why it cannot be aggregated.
+type rowClass struct {
+	group string
+	value float64
+	why   string
+}
+
+// classifyAggregateRows reads every retained row under the declared measure
+// contract. A declaration of concurrency classifies per source partition with
+// real workers — each worker owns its partition's rows alone — and the
+// returned peak is the number of workers that really overlapped. Reading a
+// row's value is where the fold spends its time, so the workers do the fold's
+// real work, not a bookkeeping pass over it.
+func classifyAggregateRows(a *platform.StreamAggregate, rows []Signal, declared platform.Continuous) ([]rowClass, int, *kernel.Error) {
+	classes := make([]rowClass, len(rows))
+	if declared.Concurrency <= 1 {
+		for i, row := range rows {
+			group, value, why := aggregateRow(*a, row)
+			classes[i] = rowClass{group: group, value: value, why: why}
+		}
+		return classes, 1, nil
+	}
+	partitions := []string{}
+	byPartition := map[string][]int{}
+	for i, row := range rows {
+		if _, known := byPartition[row.Partition]; !known {
+			partitions = append(partitions, row.Partition)
+		}
+		byPartition[row.Partition] = append(byPartition[row.Partition], i)
+	}
+	peak, refusal := (foldPool{limit: declared.Concurrency}).run(len(partitions), func(g int, cancelled func() bool) *kernel.Error {
+		for _, i := range byPartition[partitions[g]] {
+			if cancelled() {
+				return nil // a sibling refused the batch; its merge never runs
+			}
+			group, value, why := aggregateRow(*a, rows[i])
+			classes[i] = rowClass{group: group, value: value, why: why}
+		}
+		return nil
+	})
+	if refusal != nil {
+		return nil, 0, refusal
+	}
+	return classes, peak, nil
 }
 
 // aggregateRow takes one retained row's group and numeric value, or says why it

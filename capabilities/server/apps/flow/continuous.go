@@ -48,6 +48,12 @@ type BatchFrame struct {
 	StateBytes  int                         `json:"stateBytes,omitempty"`
 	Sealed      *platform.FlowStateArtifact `json:"sealed,omitempty"`
 	Source      *SourceCheckpoint           `json:"source,omitempty"`
+	// Workers is how many partition workers really overlapped while the last
+	// accepted batch was folded (ADR-0047 §13.3). It is the measured peak, not
+	// the declaration: a fold that asked for concurrency but had one partition
+	// of work records one. Zero keeps the historical frame of a fold that ran
+	// as a single sequence.
+	Workers int `json:"workers,omitempty"`
 }
 
 // SourceCheckpoint is the instance's own incremental position; it is accepted
