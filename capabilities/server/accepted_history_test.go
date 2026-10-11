@@ -1,9 +1,12 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"slices"
 	"testing"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
@@ -55,8 +58,53 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	if len(entries) != 2 {
 		t.Fatalf("expected two accepted inputs, got %d", len(entries))
 	}
-	if result, _, err := decodeAcceptedBatch(entries[1].Body); err != nil || len(result.Rows) != 1 {
+	result, _, err := decodeAcceptedBatch(entries[1].Body)
+	if err != nil || len(result.Rows) != 1 {
 		t.Fatalf("count did not save its canonical batch: %+v, %v", result, err)
+	}
+	if result.Version != 2 || result.Rows[0].HistoryBase != 1 || len(result.Rows[0].History) != 1 || len(tn.records.types["stock.item"].rows["I1"].history) != 2 {
+		t.Fatal("a new result must append one change without discarding its history")
+	}
+	encode := func(batch acceptedBatch) []byte {
+		t.Helper()
+		batch.Digest, err = digestAcceptedBatch(batch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(batch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	legacy := result
+	legacy.Rows = slices.Clone(result.Rows)
+	legacy.Version, legacy.Rows[0].HistoryBase = 1, 0
+	legacy.Rows[0].History = copyHistory(tn.records.types["stock.item"].rows["I1"].history)
+	legacySecond := entries[1]
+	legacySecond.Body = encode(legacy)
+	next := proto.Clone(count).(*pb.Submission)
+	next.IdempotencyKey, next.Payload = "count-again", []byte(`{"qty":6}`)
+	if _, err := tn.Submit(ana, next, now.Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	recovered := build()
+	if err := recovered.Replay([]Entry{entries[0], legacySecond, entries[2]}); err != nil || len(recovered.records.types["stock.item"].rows["I1"].history) != 3 {
+		t.Fatalf("old history followed by a new suffix failed to recover: %v", err)
+	}
+	result, _, err = decodeAcceptedBatch(entries[2].Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result.Rows[0].HistoryBase = 3
+	wrong := entries[2]
+	wrong.Body = encode(result)
+	refused := build()
+	if err := refused.Replay([]Entry{entries[0], legacySecond, wrong}); err == nil || len(refused.records.types["stock.item"].rows["I1"].history) != 2 {
+		t.Fatal("an incorrect history predecessor was accepted or partly applied")
+	}
+	if err := build().Replay([]Entry{entries[0], legacySecond}); err != nil {
+		t.Fatalf("old complete-history results no longer recover: %v", err)
 	}
 }
 

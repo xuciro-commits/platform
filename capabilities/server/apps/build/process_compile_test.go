@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"platformserver/apps/flow"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
@@ -123,5 +124,13 @@ func TestContinuousProcessUsesPublishedSourceStartInsteadOfManualEntry(t *testin
 	manual.Manual = true
 	if err := b.checkFlowOn(manual, platform.Entity{}); err == nil {
 		t.Fatal("a controlled continuous Process must not be downgraded to manual start")
+	}
+	manual.Scheduler = ""
+	retained := b.flowOf(manual)
+	if !retained.Start.Manual || retained.Start.Continuous || retained.Start.OnBehalf != "" {
+		t.Fatal("a retained manual version changed its start semantics")
+	}
+	if err := flow.New("retained-process").Validate(New("retained-process"), retained); err != nil {
+		t.Fatalf("a retained manual continuous version cannot reinstall: %v", err)
 	}
 }

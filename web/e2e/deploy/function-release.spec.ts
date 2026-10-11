@@ -84,7 +84,13 @@ for (const fixture of fixtures) {
       const release = retained?.record.release ?? active.id;
       expect(release).toMatch(/^sha256-v1:/);
       await page.goto(`/#/page?app=build&kind=page&name=advicepage${fixture.suffix}`);
-      await page.getByRole("table").first().getByRole("row").filter({ hasText: source }).click();
+      const sourceRow = page.getByRole("table").first().getByRole("row").filter({ hasText: source });
+      const refreshAdvice = page.getByRole("button", { name: "Refresh advice", exact: true });
+      const adviceHeading = page.getByText(`advice${fixture.suffix} · Version 1`, { exact: true });
+      await expect(sourceRow).toBeVisible();
+      await expect(adviceHeading).toBeVisible();
+      if (!(await refreshAdvice.isVisible())) await sourceRow.click();
+      await expect(refreshAdvice).toBeVisible();
       if (phase === "before") await page.getByRole("button", { name: "Request advice" }).click();
       await expect.poll(async () => {
         const calls = await (await request.get("/v1/records/build.function-call?limit=500", { headers })).json() as {
@@ -94,9 +100,15 @@ for (const fixture of fixtures) {
           call.version === 1 && call.state === "ready" && call.costReported).length;
       }).toBe(2);
       await page.reload();
-      await page.getByRole("table").first().getByRole("row").filter({ hasText: source }).click();
-      await page.getByRole("button", { name: "Refresh advice" }).click();
-      await page.getByRole("table").last().getByRole("row").filter({ hasText: `${fixture.type}/${source}` }).last().click();
+      // The original page session restores selection on reload. Clicking the
+      // same row again toggles it off; select only when it was not restored.
+      await expect(sourceRow).toBeVisible();
+      await expect(adviceHeading).toBeVisible();
+      if (!(await refreshAdvice.isVisible())) await sourceRow.click();
+      await expect(refreshAdvice).toBeVisible();
+      await refreshAdvice.click();
+      const advicePanel = adviceHeading.locator("..");
+      await advicePanel.getByRole("table").first().getByRole("row").filter({ hasText: `${fixture.type}/${source}` }).last().click();
       await expect(page.getByText("Measured model call")).toBeVisible();
       await expect(page.getByText("$0.010000")).toBeVisible();
       const instance = await (await request.get(instanceURL, { headers })).json() as { record: { release: string; version: number; state: string } };

@@ -164,6 +164,11 @@ func (f *Flows) RunEnded(c platform.Caller, run host.RunEnd, now time.Time) {
 
 func (ss *session) trace(x *FlowInstance, step, what, detail, by string) {
 	x.Trace = append(x.Trace, TraceLine{At: ss.now, Step: step, What: what, Detail: detail, By: by})
+	if x.Batch != nil && len(x.Trace) > 128 {
+		// A continuous record shows recent progress; the accepted record history
+		// retains earlier trace changes without copying them into every result.
+		x.Trace = slices.Clone(x.Trace[len(x.Trace)-128:])
+	}
 }
 
 func (ss *session) token(x *FlowInstance, id int) *Token {

@@ -597,7 +597,9 @@ func (b *Build) flowOf(p Process) platform.Flow {
 	if p.Every != "" {
 		fl.Start.Every, _ = time.ParseDuration(p.Every)
 		fl.Start.OnBehalf = p.Scheduler
-	} else if p.Continuous != nil && p.Continuous.Intake != nil {
+	} else if p.Continuous != nil && p.Continuous.Intake != nil && !p.Manual {
+		// Retained manual versions keep their original start semantics. New
+		// continuous publishes reject Manual and record their publishing member.
 		processID, processName, processVersion := p.ID, p.Name, p.Version
 		fl.Start.Manual, fl.Start.Continuous, fl.Start.OnBehalf = false, true, p.Scheduler
 		fl.Start.Enabled = func(c platform.Caller) bool {

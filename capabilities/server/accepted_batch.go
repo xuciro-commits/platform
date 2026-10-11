@@ -50,6 +50,7 @@ type acceptedBatchRow struct {
 	App         string   `json:"app"`
 	Before      string   `json:"before,omitempty"`
 	Authorities []string `json:"authorities,omitempty"` // receipt authority for each new history entry
+	HistoryBase int      `json:"historyBase,omitempty"` // format 2: retained prefix length; History carries only this input's suffix
 }
 
 type acceptedDecision struct {
@@ -94,7 +95,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	if err := d.records.validateLinkConstraints(); err != nil {
 		return nil, err
 	}
-	result := acceptedBatch{Version: 1, Kind: "record-batch", Tenant: d.tenant.ID,
+	result := acceptedBatch{Version: 2, Kind: "record-batch", Tenant: d.tenant.ID,
 		App: app, At: at.UTC(), Sequences: maps.Clone(d.allocated), SequenceBases: maps.Clone(d.sequenceBases),
 		Notices: d.savedNotices(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations),
 		Deliveries: slices.Clone(d.deliveries)}
@@ -183,6 +184,11 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 			if err != nil {
 				return nil, err
 			}
+			row.HistoryBase = len(before.History)
+			if len(row.History) <= row.HistoryBase {
+				return nil, fmt.Errorf("record batch does not extend its history")
+			}
+			row.History = copyHistory(row.History[row.HistoryBase:])
 		}
 		result.Rows = append(result.Rows, row)
 	}
@@ -225,7 +231,7 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if result.Version != 1 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
+	if (result.Version != 1 && result.Version != 2) || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || sub == nil || sub.GetTenantId() != result.Tenant ||
 		sub.GetAuthority() != result.App || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || receipt.GetChangeId() == "" ||
@@ -286,7 +292,7 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	for _, row := range result.Rows {
 		ref := row.Type + "/" + row.ID
 		if row.Type == "" || row.ID == "" || row.App == "" || len(row.Value) == 0 ||
-			len(row.History) == 0 || seen[ref] || !written[ref] {
+			len(row.History) == 0 || row.HistoryBase < 0 || result.Version == 1 && row.HistoryBase != 0 || seen[ref] || !written[ref] {
 			return result, nil, fmt.Errorf("record batch omits or duplicates a row")
 		}
 		seen[ref] = true
@@ -510,35 +516,41 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		if ledger == nil || !slices.ContainsFunc(ledger.Declarations(), func(d *pb.AuthorityDeclaration) bool {
 			return d.GetTenantId() == t.ID && d.GetAuthorityId() == image.App && d.GetDataClass() == image.Type
 		}) {
-			draft.mu.Unlock()
 			return fmt.Errorf("record batch has no authority for %s", image.Type)
 		}
 		et := draft.types[image.Type]
 		if et == nil || et.info.App != image.App {
-			draft.mu.Unlock()
 			return fmt.Errorf("record batch needs installed entity %s", image.Type)
 		}
 		prior := et.rows[image.ID]
-		if restored := legacyAgentContextPredecessor(prior, image); restored != nil {
-			prior = restored
+		if result.Version == 1 {
+			if restored := legacyAgentContextPredecessor(prior, image); restored != nil {
+				prior = restored
+			}
 		}
 		before := ""
 		baseHistory, revision := 0, uint32(0)
 		if prior != nil {
 			row, err := acceptedRowOf(image.Type, image.ID, prior)
 			if err != nil {
-				draft.mu.Unlock()
 				return err
 			}
 			before, err = canonicalDigest(row)
 			if err != nil {
-				draft.mu.Unlock()
 				return err
 			}
 			baseHistory, revision = len(prior.history), recordOf(prior.value).Revision
 		}
+		if result.Version == 2 {
+			if image.HistoryBase != baseHistory {
+				return fmt.Errorf("record batch history predecessor differs for %s/%s", image.Type, image.ID)
+			}
+			if prior != nil {
+				image.History = append(copyHistory(prior.history), image.History...)
+			}
+		}
 		prefixEqual := true
-		if prior != nil && baseHistory > 0 && len(image.History) >= baseHistory {
+		if result.Version == 1 && prior != nil && baseHistory > 0 && len(image.History) >= baseHistory {
 			oldDigest, oldErr := canonicalDigest(prior.history)
 			savedDigest, savedErr := canonicalDigest(image.History[:baseHistory])
 			prefixEqual = oldErr == nil && savedErr == nil && oldDigest == savedDigest
@@ -547,7 +559,6 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		// order/whitespace). The canonical predecessor hash is authoritative;
 		// bytewise DeepEqual would quarantine a sound recovered result.
 		if before != image.Before || len(image.History) <= baseHistory || !prefixEqual {
-			draft.mu.Unlock()
 			return fmt.Errorf("record batch predecessor differs for %s/%s (value=%t history=%d/%d prefix=%t)",
 				image.Type, image.ID, before == image.Before, baseHistory, len(image.History), prefixEqual)
 		}
@@ -555,17 +566,14 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		decoder := json.NewDecoder(bytes.NewReader(image.Value))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(value.Addr().Interface()); err != nil {
-			draft.mu.Unlock()
 			return fmt.Errorf("record batch image: %w", err)
 		}
 		if err := decoder.Decode(new(any)); err != io.EOF {
-			draft.mu.Unlock()
 			return fmt.Errorf("record batch image has trailing data")
 		}
 		rec := recordOf(value)
 		var last *pb.ChangeRecord
 		if len(image.Authorities) > 0 && len(image.Authorities) != len(image.History)-baseHistory {
-			draft.mu.Unlock()
 			return fmt.Errorf("record batch history authorities differ")
 		}
 		for index, change := range image.History[baseHistory:] {
@@ -576,7 +584,6 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 			r := changes[app+"/"+change.Change]
 			if r == nil || change.Schema != r.GetSubmission().GetSchema().GetName() ||
 				change.By != r.GetSubmission().GetPrincipalId() || !change.At.Equal(r.GetRecordedTime().AsTime()) {
-				draft.mu.Unlock()
 				return fmt.Errorf("record batch has a foreign history suffix")
 			}
 			if r.GetSubmission().GetTarget().GetType() == image.Type &&
@@ -591,7 +598,6 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 			prior != nil && !reflect.DeepEqual(rec.Created, recordOf(prior.value).Created) ||
 			prior == nil && (rec.Created.Change != image.History[0].Change ||
 				rec.Created.By != image.History[0].By || !rec.Created.At.Equal(image.History[0].At)) {
-			draft.mu.Unlock()
 			return fmt.Errorf("record batch image differs from its decisions")
 		}
 		recovered := &row{value: value, history: copyHistory(image.History)}

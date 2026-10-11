@@ -528,19 +528,96 @@ func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
 		if len(platform.Raw(x.Outputs)) > 60<<10 {
 			t.Fatal("large state bypassed the existing output budget")
 		}
-		// Compact token outputs do not bypass the host's accepted-result
-		// budget. Large retained histories still need sealed state artifacts.
-		before := platform.Raw(x)
+		// Retained history is checked against its predecessor, but not copied
+		// into each new accepted result. The original result budget still holds.
 		batch := flow.Batch{ID: "ten", Predecessor: cursor, Signals: []flow.Signal{{Key: "ten", Partition: "plant", At: at, Value: platform.Raw(strings.Repeat("x", 6000))}}}
-		if why := refuse(t, live, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": batch}, at); !strings.Contains(why, "bounded accepted result") {
-			t.Fatalf("retained history bypassed the original accepted-result bound: %s", why)
-		}
+		decide(t, live, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": batch}, at)
 		after, ok := platform.Get[flow.FlowInstance](live.automation(flow.ID, false), x.ID)
-		if !ok || string(before) != string(platform.Raw(after)) {
-			t.Fatal("host budget refusal advanced the large accepted window")
+		if !ok || after.Batch.Cursor != "ten" {
+			t.Fatal("history growth blocked a bounded successor")
 		}
 		CheckReplay(t, live, entries, compose)
 	})
+}
+
+func TestContinuousLatestBootstrapWithComputeEntry(t *testing.T) {
+	const tenant = "latest-compute"
+	source := newFrameComputeSource(tenant, 128<<10)
+	source.autoStart, source.autoEnabled = true, true
+	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+	tn.Files = &memoryFiles{}
+	at := time.Date(2026, 10, 11, 10, 0, 0, 0, time.UTC)
+	procs := tn.app(flow.ID).(*flow.Flows)
+	if err := procs.Run(tn.automation(flow.ID, false), "", at); err != nil {
+		t.Fatal(err)
+	}
+	x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "frames.window:continuous-v1")
+	if !ok {
+		t.Fatal("continuous instance did not start")
+	}
+	plan, refusal := procs.PlanBatch(x, tn.automation(flow.ID, false))
+	if refusal != nil {
+		t.Fatal(refusal)
+	}
+	batch := flow.Batch{ID: "bootstrap", Bootstrap: true, Source: &flow.SourceCheckpoint{Record: "stream", Config: "hash", Cursor: "42", Offset: "latest", Initialized: true}}
+	prepared, refusal := plan.Prepare(batch, at, flowFrameStore{tenant: tenant, files: tn.Files})
+	if refusal != nil {
+		t.Fatalf("latest bootstrap was refused: %v", refusal)
+	}
+	if _, invoked := prepared.OperationRequest(); invoked {
+		t.Fatal("bootstrap invoked Compute without an event-time window")
+	}
+	raw, err := (flowFrameStore{tenant: tenant, files: tn.Files}).Read(prepared.Artifact())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var frame flow.BatchFrame
+	if err := json.Unmarshal(raw, &frame); err != nil || frame.Source == nil || frame.Source.Cursor != "42" || frame.Consumed != 0 {
+		t.Fatalf("bootstrap lost the source position: %+v %v", frame, err)
+	}
+}
+
+func TestContinuousComputeRemainsWithinAcceptedResultBudget(t *testing.T) {
+	const tenant, id = "continuous-history", "frames.window:source"
+	compose := func() *Tenant {
+		return composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameComputeSource(tenant, 128<<10))
+	}
+	tn := compose()
+	tn.Files = &memoryFiles{}
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		if len(e.Body) > maxAcceptedResultBytes {
+			t.Fatalf("accepted result exceeded its original budget: %d", len(e.Body))
+		}
+		entries = append(entries, e)
+		return e.Body, nil
+	}
+	at := time.Date(2026, 10, 11, 10, 0, 0, 0, time.UTC)
+	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	member := memberOf(t, tn, "member")
+	cursor := ""
+	for n := 0; n < 64; n++ {
+		now := at.Add(time.Duration(n+1) * 5 * time.Second)
+		batch := flow.Batch{ID: fmt.Sprint(n + 1), Predecessor: cursor, Signals: []flow.Signal{{Key: fmt.Sprint(n + 1), At: now.Add(-3 * time.Second), Value: platform.Raw(1)}}}
+		if _, refusal := tn.ConsumeFlowBatch(member, id, batch, now); refusal != nil {
+			t.Fatalf("batch %d refused: %v", n+1, refusal)
+		}
+		runs := tn.operationDispatches(now)
+		if len(runs) != 1 {
+			t.Fatalf("batch %d dispatches=%d", n+1, len(runs))
+		}
+		runs[0]()
+		x, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		if len(x.Tokens) != 1 || len(x.Trace) > 128 || x.Batch.Cursor != batch.ID {
+			t.Fatalf("batch %d did not settle with a bounded trace", n+1)
+		}
+		cursor = batch.ID
+	}
+	if len(tn.records.types[flow.InstanceType].rows[id].history) <= 128 {
+		t.Fatal("bounding the current trace discarded accepted history")
+	}
+	CheckReplay(t, tn, entries, compose)
 }
 
 type transientDeleteFiles struct {

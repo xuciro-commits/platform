@@ -22,6 +22,7 @@ IDP=http://localhost:$IDP_PORT/auth/v1 MANUFACTURING=http://localhost:$MANUFACTU
 backup=$(mktemp -d)
 cleanup() {
   local result=$?
+  (( result == 0 )) || echo "Rehearsal stopped at script line ${BASH_LINENO[0]}" >&2
   trap - EXIT
   compose down -v --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$backup"
@@ -171,7 +172,7 @@ workflow_state() {
       records/flow.instance/build.review$suffix:WF-NEW \
       records/flow.instance/build.review$suffix:WF-JOINT \
       records/build.connection/STREAM-DB records/build.source/STREAM-SOURCE \
-      records/build.process/STREAM-PROCESS records/flow.instance/build.stream$suffix:pg releases/active; do
+      records/build.process/STREAM-PROCESS records/flow.instance/build.stream$suffix:continuous-v1 releases/active; do
       workflow_get "$actor" "$path" || fail "workflow state $suffix $path"
     done
   done
@@ -712,7 +713,7 @@ sql "create role rehearsal_source login password 'sinkLocalOnly00000000000000000
       "{\"name\":\"telemetry\",\"title\":\"Telemetry\",\"connection\":\"STREAM-DB\",\"profile\":\"table\",\"entity\":\"flow_rehearsal_$suffix\",\"since\":\"seq\",\"stream\":true}"
     workflow_submit "$actor" stream-source-publish build.source.publish build.source STREAM-SOURCE '{}'
     definition=$(jq -n --arg name "stream$suffix" \
-      '{name:$name,title:"PostgreSQL continuous intake",manual:true,
+      '{name:$name,title:"PostgreSQL continuous intake",
         continuous:{Source:"telemetry",Batch:512,State:2097152,FrameBytes:4194304,DeadLetter:true,
           Intake:{sourceRecord:"STREAM-SOURCE",key:"event_id",partition:["plant","device"],eventTime:"at",value:"reading"},
           Window:{node:"window",windowMs:30000,slideMs:5000,watermarkMs:2000,maxRecords:50000,lateEvents:"sideOutput"}},
@@ -722,10 +723,9 @@ sql "create role rehearsal_source login password 'sinkLocalOnly00000000000000000
     candidate=$(workflow_post "$actor" releases/preview '{"kind":"flow","id":"STREAM-PROCESS"}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "stream flow preview"
     workflow_post "$actor" releases/candidates "{\"kind\":\"flow\",\"id\":\"STREAM-PROCESS\",\"candidateId\":\"$candidate\",\"key\":\"stream-save\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "stream flow save"
     workflow_post "$actor" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"stream-active\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "stream flow activation"
-    workflow_submit "$actor" stream-run build.process.run build.process STREAM-PROCESS '{"key":"pg"}'
     sql "insert into flow_rehearsal_$suffix select n,'event-'||n,'P','D',now(),12 from generate_series(1,1025) n" >/dev/null
     for _ in $(seq 30); do
-      result=$(workflow_get "$actor" "records/flow.instance/build.stream$suffix:pg")
+      result=$(workflow_get "$actor" "records/flow.instance/build.stream$suffix:continuous-v1" || true)
       jq -e '.record.batch | .source.cursor == "1025" and .consumed == 1025 and .rejected == 0 and .sealed.size > 65536' <<<"$result" >/dev/null && break
       sleep 1
     done
@@ -751,7 +751,7 @@ same_state "$before" || fail "state after restart differs"
     workflow_submit "$actor" stream-resume build.source.publish build.source STREAM-SOURCE '{}'
     sql "insert into flow_rehearsal_$suffix values (1026,'after-restart','P','D',now(),13)" >/dev/null
     for _ in $(seq 30); do
-      result=$(workflow_get "$actor" "records/flow.instance/build.stream$suffix:pg")
+      result=$(workflow_get "$actor" "records/flow.instance/build.stream$suffix:continuous-v1" || true)
       jq -e '.record.batch | .source.cursor == "1026" and .consumed == 1026' <<<"$result" >/dev/null && break
       sleep 1
     done
@@ -814,8 +814,8 @@ echo "ok   the edge outbox resends what the backup missed; state matches again"
 
 compose exec -T postgres createdb -U platform journal_test
 (cd ../../capabilities/server && PLATFORM_TEST_DATABASE=postgres://platform:platform-local-only@localhost:$PG_PORT/journal_test \
-  go test -count=1 -run 'TestJournal|TestJournalAcceptedResult' . 2>&1) >"$backup/journal-test.log" || { cat "$backup/journal-test.log" >&2; fail "journal test"; }
-echo "ok   journal numbering and accepted result retry/recovery (capabilities/server)"
+  go test -count=1 -run 'TestJournal|TestPostgresTableProfilePullAndReplay' . 2>&1) >"$backup/journal-test.log" || { cat "$backup/journal-test.log" >&2; fail "journal test"; }
+echo "ok   journal numbering, accepted result recovery and PostgreSQL continuous profile (capabilities/server)"
 for app in mes pms; do
   (cd "../../apps/$app/server" && PLATFORM_TEST_DATABASE=postgres://platform:platform-local-only@localhost:$PG_PORT/journal_test \
     go test -count=1 -run 'TestJournalAccepted' . 2>&1) >"$backup/$app-accepted-test.log" ||

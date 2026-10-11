@@ -405,7 +405,7 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store host.Flo
 	}
 	var windowInput, resumeInput json.RawMessage
 	var operationRequest *platform.OperationRequest
-	if plan.entry != "" {
+	if plan.entry != "" && !batch.Bootstrap {
 		var state WindowState
 		if raw := frame.State[plan.rule.Window.Node]; len(raw) == 0 || json.Unmarshal(raw, &state) != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared event-time window cannot be decoded")

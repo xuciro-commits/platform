@@ -125,11 +125,11 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	continuous := &platform.Continuous{Source: "telemetry", Batch: 512, State: 2 << 20, FrameBytes: 4 << 20, DeadLetter: true,
 		Intake: &platform.StreamIntake{SourceRecord: "stream", Key: "sku", Partition: []string{"plant", "device"}, EventTime: "at", Value: "reading"},
 		Window: &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"}}
-	submit(build.ProcessType, "consumer", "create", map[string]any{"name": "telemetry", "title": "Telemetry consumer", "manual": true, "continuous": continuous,
+	submit(build.ProcessType, "consumer", "create", map[string]any{"name": "telemetry", "title": "Telemetry consumer", "continuous": continuous,
 		"steps": []build.ProcessStep{{Name: "intake", Kind: "wait", Condition: &platform.Predicate{Op: "eq", Left: &platform.Binding{Source: "literal", Value: platform.Raw(false)}, Right: &platform.Binding{Source: "literal", Value: platform.Raw(true)}}}}})
 	submit(build.ProcessType, "consumer", "publish", map[string]any{})
-	submit(build.ProcessType, "consumer", "run", map[string]any{"key": "pg"})
-	const instance = "build.telemetry:pg"
+	tn.Work(at)
+	const instance = "build.telemetry:continuous-v1"
 	tn.PullContinuousSources(at)
 	frame, failure := tn.ReadFlowFrame(member, instance, at)
 	if failure != nil || frame.Consumed != 1025 || frame.Source == nil || frame.Source.Cursor != "1025" || frame.Source.Record != "stream" {
@@ -149,13 +149,14 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 		tn.Work(at.Add(time.Duration(tick) * time.Second))
 	}
 	running, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), instance)
-	if running.State != "waiting" || len(running.Tokens) != 1 || running.Tokens[0].Waits != "wait" || !running.Tokens[0].Due.IsZero() {
-		t.Fatal("the original timer mistook the initial yield deadline for a wait timeout")
+	if running.State != "waiting" || len(running.Tokens) != 1 || running.Tokens[0].Waits != "stream" || !running.Tokens[0].Due.IsZero() {
+		t.Fatal("the automatic source wait acquired an execution deadline")
 	}
 	stream, _ := platform.Get[build.Source](tn.automation(build.ID, false), "stream")
 	if stream.Cursor != "" || stream.Last != nil || stream.Requested || stream.Due(at) {
 		t.Fatal("the stream also scheduled an import or kept a second cursor")
 	}
+	tn.PullContinuousSources(at) // acknowledge pending retirement before testing a quiet read
 	count := len(entries)
 	tn.PullContinuousSources(at)
 	if len(entries) != count {
@@ -195,7 +196,10 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 		t.Fatal("a changed source silently rebound its consumer")
 	}
 	decide(t, restored, "builder", build.ID, "build.source.edit", build.SourceType, "stream", map[string]any{"filter": ""}, at)
-	decide(t, restored, "builder", build.ID, build.SchemaProcessRun, build.ProcessType, "consumer", map[string]any{"key": "revoked"}, at)
+	restored.PullContinuousSources(at) // settle superseded artifacts before the I/O refusal
+	if _, err := db.Exec(ctx, "insert into "+table+"(seq,sku,at) values (1028,'during-revocation','2026-10-06T09:00:01Z')"); err != nil {
+		t.Fatal(err)
+	}
 	// Revoke the source role after the outside read captured its member,
 	// before its prepared frame is accepted; the old grant cannot carry it.
 	secrets, revoked := restored.Secrets, false
@@ -209,7 +213,7 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	files.mu.Lock()
 	beforeFiles := len(files.m)
 	files.mu.Unlock()
-	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), "build.telemetry:revoked", at); err == nil || !revoked {
+	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err == nil || !revoked {
 		t.Fatalf("a captured source grant survived its revocation during I/O (revoked=%v, refusal=%v, role=%s)", revoked, err, memberOf(t, restored, "builder").Roles[build.ID])
 	}
 	files.mu.Lock()
