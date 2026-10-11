@@ -20,6 +20,33 @@ export type CatalogEntry = {
   states?: string[];
   widgets?: string[];
   template?: string;
+  props?: CatalogProp[];
+  slots?: CatalogSlot[];
+  composed?: string[];
+  relatedTypes?: CatalogRelatedType[];
+};
+
+export type CatalogProp = {
+  name: string;
+  type: string;
+  optional: boolean;
+  defaultValue?: string;
+  comment?: string;
+  isCallback?: boolean;
+  isSlot?: boolean;
+};
+
+export type CatalogSlot = {
+  name: string;
+  type: string;
+  optional?: boolean;
+  description?: string;
+};
+
+export type CatalogRelatedType = {
+  name: string;
+  kind?: "interface" | "type" | "enum";
+  signature?: string;
 };
 
 export type CatalogIndex = {

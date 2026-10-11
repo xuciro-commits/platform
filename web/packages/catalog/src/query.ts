@@ -67,7 +67,7 @@ export function getCatalogEntry(index: CatalogIndex, id: string, options: { lang
   const result: { revision: string; entry: CatalogSummary & Partial<CatalogEntry> & { api?: CatalogApi }; omittedFields?: string[]; nextFieldOffsets?: Record<string, number> } = {
     revision: index.revision, entry: summary(entry),
   };
-  const fields = options.fields ?? ["exports", "type", "constraints", "states", "dependencies", "widgets", "template"];
+  const fields = options.fields ?? ["exports", "type", "constraints", "states", "dependencies", "widgets", "template", "props", "slots", "composed", "relatedTypes"];
   for (const field of fields) {
     if (field === "api") {
       const api = index.api?.[entry.owner];

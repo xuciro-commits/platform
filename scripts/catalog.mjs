@@ -11,7 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const indexPath = path.join(root, "web/apps/catalog/src/gen/catalog.json");
 
 async function generate(check) {
-  const { owners, ownerPackage, ownerDirectory, dictionaryFile, publicExports, publicTypes, readDictionary, validateOwner, sourceFiles, inspectImports } = await import("./catalog-check.mjs");
+  const { owners, ownerPackage, ownerDirectory, dictionaryFile, publicExports, publicTypes, readDictionary, validateOwner, sourceFiles, inspectImports, extractComponentApi } = await import("./catalog-check.mjs");
   // Metadata can share pure owner descriptors; only relative TS files are resolved.
   const hook = registerHooks({ resolve(specifier, context, nextResolve) {
     if (specifier.startsWith(".") && context.parentURL?.startsWith(pathToFileURL(path.join(root, "web/packages/")).href)) {
@@ -48,6 +48,18 @@ async function generate(check) {
       try { await read(entry.source); } catch { errors.push(`${entry.id}: missing source ${entry.source}`); }
     }
     entries.push(...owned);
+  }
+  for (const entry of entries) {
+    try {
+      const sourceText = await read(entry.source);
+      const apiInfo = extractComponentApi(entry, sourceText, entries);
+      if (apiInfo.props) entry.props = apiInfo.props;
+      if (apiInfo.slots) entry.slots = apiInfo.slots;
+      if (apiInfo.composed) entry.composed = apiInfo.composed;
+      if (apiInfo.relatedTypes) entry.relatedTypes = apiInfo.relatedTypes;
+    } catch {
+      // Non-fatal if source fails extraction
+    }
   }
   const ids = new Set();
   for (const entry of entries) {

@@ -7,9 +7,10 @@ import "./i18n";
 import { HostContext, useCapabilities } from "@platform/app";
 import { localizeEntry, type CatalogEntry, type CatalogIndex } from "@platform/catalog";
 import { Button, Input, PanelSection, Select, StructureRow, Tag, Workbench, language, t, useWorkspace } from "@platform/ui";
-import { Box, Copy, Hammer, Maximize2, Minimize2 } from "lucide-react";
+import { Box, Maximize2, Minimize2 } from "lucide-react";
 import { useContext, useEffect, useMemo, useState } from "react";
 import data from "./gen/catalog.json";
+import { StructureTab, ApiTab, RelationsTab, UsageTab } from "./Inspector";
 import { CatalogPreview } from "./Preview";
 
 export { CatalogPreview };
@@ -46,8 +47,8 @@ export function Catalog({ initialID, initialLayer, initialExpand = false }: { in
   const [use, setUse] = useState("");
   const [selected, setSelected] = useState<string | undefined>(initialID ?? "ui/button");
   const [expanded, setExpanded] = useState(initialExpand);
+  const [inspectorTab, setInspectorTab] = useState("structure");
   const [dock, setDock] = useState("health");
-  const [copied, setCopied] = useState("");
   useEffect(() => { if (initialID) setSelected(initialID); setExpanded(initialExpand); }, [initialID, initialExpand]);
   const terms = query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
   const tree = useMemo(() => catalogLayers.map((label, layer) => ({ label, layer,
@@ -56,10 +57,6 @@ export function Catalog({ initialID, initialLayer, initialExpand = false }: { in
   const total = tree.reduce((n, group) => n + group.entries.length, 0);
   const entry = index.entries.find((e) => e.id === selected);
   const shown = entry && localizeEntry(index, entry, language());
-  const snippet = entry?.snippet ?? (entry?.exports?.length ? `import { ${[...new Set(entry.exports.map((name) => name.split(".")[0]))].join(", ")} } from "${entry.owner}";` : undefined);
-  const copy = async (text: string, label: string) => {
-    try { await navigator.clipboard.writeText(text); setCopied(label); setTimeout(() => setCopied(""), 1500); } catch { setCopied(t("Clipboard unavailable. Select and copy the code below.")); }
-  };
   const canBuild = !!entry && entry.uses.some((u) => ["template", "widget", "block"].includes(u));
   const builderOnly = !!host && host.role("build") !== "builder";
   const health = useMemo(() => {
@@ -70,6 +67,9 @@ export function Catalog({ initialID, initialLayer, initialExpand = false }: { in
       deprecated: index.entries.filter((e) => e.maturity === "deprecated"), experimental: index.entries.filter((e) => e.maturity === "experimental") };
   }, []);
   const pick = (id: string) => <Button key={id} size="sm" variant="ghost" onClick={() => { setSelected(id); setExpanded(false); }}>{catalogTitle(id)}</Button>;
+
+  const upstreamCount = entry ? (index.entries.filter((e) => e.dependencies?.includes(entry.id) || e.composed?.includes(entry.id)).length + (index.consumers?.[entry.id]?.length || 0)) : 0;
+  const downstreamCount = entry ? ((entry.dependencies?.length || 0) + (entry.composed?.length || 0)) : 0;
 
   return <Workbench storageKey="asset-library" mainLabel={t("Asset")} crumbs={[{ label: t("Asset Library"), onClick: () => setExpanded(false) }, ...(shown ? [{ label: shown.name }] : [])]}
     status={<span className="text-xs text-muted">{t("Source revision")} <code>{index.revision.slice(0, 12)}</code></span>}
@@ -86,33 +86,44 @@ export function Catalog({ initialID, initialLayer, initialExpand = false }: { in
       </PanelSection>)}
       {total === 0 && <p className="p-2 text-sm text-muted">{t("No matching assets. Try another task or remove a filter.")}</p>}
     </div> }}
-    right={entry && shown && !expanded ? { label: t("Use it"), content: <div className="grid content-start gap-3 p-3 text-xs">
-      {canBuild && <div className="grid gap-1">
-        <Button variant="primary" size="sm" disabled={builderOnly} title={builderOnly ? t("Only builders can open Projects.") : undefined} onClick={() => open(builderRoute(entry))}><Hammer />{t(entry.template ? "Create in Builder" : "Open in Builder")}</Button>
-        <span className="text-muted">{t("Creates or edits a controlled draft; nothing is published automatically.")}</span>
-      </div>}
-      {snippet && <div className="grid gap-1">
-        <div className="flex items-center justify-between"><span className="font-medium">{t("Import")}</span><Button size="sm" variant="ghost" onClick={() => void copy(snippet, t("Copied"))}><Copy />{t("Copy")}</Button></div>
-        <pre className="max-h-48 overflow-auto rounded-sm bg-background p-2"><code>{snippet}</code></pre>
-        {copied && <p role="status" className="text-muted">{copied}</p>}
-      </div>}
-      <div className="grid gap-1">
-        <span className="font-medium">{t("Source")}</span>
-        <code className="break-all text-muted">{entry.source}</code>
-        {entry.type && <p>{t("Source type reference")}: <code>{entry.type}</code></p>}
-      </div>
-      {index.api?.[entry.owner] && <div className="grid gap-1">
-        <span className="font-medium">{t("Owner API")}</span>
-        <p className="break-all font-mono text-muted">{index.api[entry.owner]!.source}</p>
-        <p className="break-all">{index.api[entry.owner]!.symbols.join(" · ")}</p>
-      </div>}
-      {entry.dependencies?.length ? <div className="grid gap-1"><span className="font-medium">{t("Composed from")}</span><div className="flex flex-wrap gap-1">{entry.dependencies.map(pick)}</div></div> : null}
-      <div className="grid gap-1">
-        <span className="font-medium">{t("Used by")}</span>
-        <div className="flex flex-wrap gap-1">{index.entries.filter((e) => e.dependencies?.includes(entry.id)).map((e) => pick(e.id))}</div>
-        {index.consumers?.[entry.id]?.length ? <ul className="max-h-40 overflow-auto text-muted">{index.consumers[entry.id]!.map((file) => <li key={file} className="break-all font-mono">{file}</li>)}</ul> : <p className="text-muted">{t("Declared references are not a complete consumer graph.")}</p>}
-      </div>
-    </div> } : undefined}
+    right={entry && shown && !expanded ? {
+      label: t("Asset Inspector"),
+      tabs: [
+        {
+          id: "structure",
+          title: t("Structure"),
+          badge: (entry.slots?.length || 0) + (entry.composed?.length || 0) || undefined,
+          content: <StructureTab entry={entry} index={index} onSelect={(id) => { setSelected(id); setExpanded(false); }} />,
+        },
+        {
+          id: "api",
+          title: t("API"),
+          badge: entry.props?.length || undefined,
+          content: <ApiTab entry={entry} index={index} />,
+        },
+        {
+          id: "relations",
+          title: t("Relations"),
+          badge: (upstreamCount + downstreamCount) || undefined,
+          content: <RelationsTab entry={entry} index={index} onSelect={(id) => { setSelected(id); setExpanded(false); }} />,
+        },
+        {
+          id: "usage",
+          title: t("Usage"),
+          content: (
+            <UsageTab
+              entry={entry}
+              shown={shown}
+              canBuild={canBuild}
+              builderOnly={builderOnly}
+              onOpenBuilder={() => open(builderRoute(entry))}
+            />
+          ),
+        },
+      ],
+      value: inspectorTab,
+      onChange: setInspectorTab,
+    } : undefined}
     dock={{ label: t("Library dock"), value: dock, onChange: setDock, tabs: [
       { id: "health", title: t("Health"), badge: health.deprecated.length || undefined, content: <div className="grid gap-3 p-3 text-xs sm:grid-cols-3">
         <div><p className="text-muted">{t("Assets")}</p><p className="text-2xl font-semibold">{index.entries.length}</p>
