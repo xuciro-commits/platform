@@ -30,7 +30,7 @@ names=$(for x in "${apps[@]}"; do echo "${x#*:}"; done)
 
 for x in "${apps[@]}" "${protocols[@]}"; do
   dir=${x%%:*} self=${x#*:}
-  deps=$(cd "$dir" && go list -deps ./... 2>/dev/null)
+  deps=$(cd "$dir" && go list -deps ./... 2>/dev/null) || fail "cannot list the dependencies of $self; run go mod download in $dir"
   for other in $names; do
     [[ $other == "$self" ]] && continue
     grep -qx "$other" <<<"$deps" && fail "$self depends on the app $other"

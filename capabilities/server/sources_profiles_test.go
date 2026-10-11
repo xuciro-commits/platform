@@ -58,11 +58,15 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	params := address.Query()
 	params.Del("password")
 	address.RawQuery = params.Encode()
-	tn.Secrets = func(name string) ([]byte, bool) { return []byte(config.Password), name == "profile-password" }
-	secret := ""
-	if config.Password != "" {
-		secret = "profile-password"
+	// The connection always names a non-empty secret, so the revocation hook
+	// below is reached whether or not the test database requires a password.
+	// A trust-authenticated database ignores the placeholder.
+	password := config.Password
+	if password == "" {
+		password = "trust-placeholder"
 	}
+	tn.Secrets = func(name string) ([]byte, bool) { return []byte(password), name == "profile-password" }
+	secret := "profile-password"
 	var entries []Entry
 	tn.Record = func(e Entry) { entries = append(entries, e) }
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
