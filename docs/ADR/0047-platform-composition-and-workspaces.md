@@ -515,7 +515,7 @@ PostgreSQL 接入由原 `TestPostgresTableProfilePullAndReplay` 扩展检查：�
 
 ## 14. 当前实现边界
 
-持续运行的当前实例轨迹保留最近 128 条，较早轨迹仍在记录历史和原接受结果中。共享 `record-batch` 格式 2 以经过前驱校验的新增历史接续，避免连续实例在第 31 批因重复封装全部历史超过原 1 MiB 上限；64 批真实原 Operation 接线、接受结果重放与快照由 `TestContinuousComputeRemainsWithinAcceptedResultBudget` 覆盖。`latest` 首次 bootstrap 只保存来源位置，不要求尚未形成的窗口或发起 Compute；历史 `Manual` Process 版本保留原启动语义，新发布连续定义仍按原 owner/版本自动启动。这些修复不代表完整七节点或生产容量验收。
+持续运行的当前实例轨迹保留最近 128 条，较早轨迹仍在记录历史和原接受结果中。共享 `record-batch` 格式 2 以经过前驱校验的新增历史接续，避免连续实例在第 31 批因重复封装全部历史超过原 1 MiB 上限；64 批真实原 Operation 接线、接受结果重放与快照由 `TestContinuousComputeRemainsWithinAcceptedResultBudget` 覆盖。`latest` 首次 bootstrap 只保存来源位置，不要求尚未形成的窗口或发起 Compute；历史 `Manual` Process 版本保留原启动语义，新发布连续定义仍按原 owner/版本自动启动。真实 PostgreSQL owner 测试已运行，并按自动来源与持久清理语义核对 1025 行、多批游标、空闲窗口、快照/重放和 I/O 期间撤权。部署演练在酒店与制造两宿主核对自动来源、Go/TinyGo 隔离调用、RustFS、重启、备份及全日志恢复，以及前后 OIDC 浏览器路线；原连续探针不再手动启动。Compute 通道与连续来源在该演练中分别验证，尚不是默认七节点联合执行。负责人手感及生产吞吐/容量仍待各自验收。
 
 - **入口与身份：** 现行结构归 ADR-0052，一个 Shell / Home / Applications 门户投影业务、构建与治理应用。原生 PMS/MES/ERP 与租户 Application 保持各自任务导航；Build、Control Panel、Runs、Data Connection、Knowledge 和 Host Console 复用原 owner，不按后端包数增加业务入口。前端可信贡献是构建期装配，不是租户在线插件安装。
 - **应用构建与联合候选：** 同一应用上下文包含页面、对象/关系/属性/查询、Flow/函数/代码和测试/发布。创建资源用原动作关联草稿，失败保留已创建资源并提供重试；未安装对象只提供草稿预览。显式草稿集合与服务端依赖闭包、差异、候选保存/封存与激活沿 ADR-0048；production profile 拒绝单项直接安装旁路。编辑器现状归 ADR-0053。
