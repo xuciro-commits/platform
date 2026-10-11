@@ -45,12 +45,43 @@ test("notices freeze literal text and optional titles; page and overlay gates st
   await expect(editor.inspector.getByRole("textbox", { name: "Notice title", exact: true })).toHaveValue("Before starting");
   await expect(editor.inspector.getByRole("combobox", { name: "Notice tone", exact: true })).toHaveValue("info");
   const text = editor.inspector.getByRole("textbox", { name: "Notice text", exact: true });
+  // Unparsed inspector text belongs to the page, even when another widget is selected.
+  await editor.inspector.getByRole("tab", { name: "Appearance", exact: true }).click();
+  const width = editor.inspector.getByRole("textbox", { name: "Width (px)", exact: true });
+  await width.fill("-");
+  await editor.select("Completion note");
+  await expect(editor.publish).toBeDisabled();
+  await editor.save();
+  await editor.select("Operator instructions");
+  await expect(width).toHaveValue("-");
+  await width.fill("");
+  await editor.inspector.getByRole("tab", { name: "Properties", exact: true }).click();
+
   const oversized = "中".repeat(1366);
   await text.fill(oversized);
   await expect(editor.publish).toBeDisabled();
   await editor.save();
   const refusedDraft = await builder.record("build.page", id);
   expect(refusedDraft.sections.some((s: any) => s.notice?.message === oversized)).toBe(false);
+  await text.fill(literal);
+  const retained = `${literal}\nRetained after a refused save.`;
+  await page.route("**/v1/submissions", async route => {
+    const submission = route.request().postDataJSON();
+    if (submission.schema?.name !== "build.page.edit" || submission.target?.id !== id) return route.continue();
+    await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: {
+      code: "ERROR_CODE_INVALID_ARGUMENT", message: "Inspector save refused",
+    } }) });
+  });
+  await text.fill(retained);
+  await editor.save();
+  await expect(page.getByRole("alert").filter({ hasText: "Inspector save refused" })).toBeVisible();
+  await editor.select("Completion note");
+  await editor.select("Operator instructions");
+  await expect(text).toHaveValue(retained);
+  await page.unroute("**/v1/submissions");
+  await editor.save();
+  await expect.poll(async () => (await builder.record("build.page", id)).sections
+    .find((section: any) => section.title === "Operator instructions")?.notice?.message).toBe(retained);
   await text.fill(literal);
   await editor.select("Completion note");
   await expect(editor.inspector.getByRole("checkbox", { name: "Show notice title", exact: true })).not.toBeChecked();

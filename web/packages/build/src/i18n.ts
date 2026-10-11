@@ -3797,4 +3797,9 @@ register("zh-CN", {
   "Bind values from the current triggered item with source item and a field path, or provide an explicit literal. Required action fields are checked before import.": "使用源项目及字段路径绑定当前触发项目的值，或提供明确的字面量。导入前会检查动作必填字段。",
   "Preview only: blocking issues prevent applying or saving this workflow. No draft has been written.": "仅预览：阻断问题会阻止应用或保存此工作流。尚未写入草稿。",
   "Native output mapping": "原生输出映射",
+  "Remove the old Compute binding. This node uses the retained native f32 kernel and threshold state.": "请移除旧 Compute 绑定。此节点使用保留的原生 f32 内核和阈值状态。",
+  "The native telemetry threshold reads the original mean or its reading projection.": "原生遥测阈值读取原 mean 或其 reading 投影。",
+  "This native Flow supports bounded partition workers; unsupported concurrency is refused.": "此原生 Flow 支持有界分区工作者；不支持的并发明确拒绝。",
+  "Additional source fields": "额外来源字段",
+  "Retained telemetry computation": "保留版本的遥测计算",
 });

@@ -50,7 +50,7 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 
 网络只通 GitHub、npm、PyPI；Go 模块代理全封。仓库自带离线所需，照做即可：
 
-1. **Go**：`cd /home/user/platform && bash scripts/sandbox-go.sh`，然后 `export PATH=/home/user/.go-toolchain/go/bin:$PATH GOFLAGS=-mod=vendor GOTOOLCHAIN=local GOPATH=/home/user/.gopath GOCACHE=/home/user/.gocache`（脚本会打印这一行）。工具链来自 `tools/go/`（找不到则 `pip download go-bin`），依赖来自 `capabilities/server/vendor/`（已提交，别跑 `go mod tidy`/`go mod vendor`）。`go build ./...`、`go vet`、`go test` 都在 `capabilities/server/` 目录下跑；`apps/*/server`、`solutions/*` 是独立模块、依赖未 vendor，只能 `gofmt`，编译交给本地。
+1. **Go**：`cd /home/user/platform && bash scripts/sandbox-go.sh`，然后 `export PATH=/home/user/.go-toolchain/go/bin:$PATH GOFLAGS=-mod=vendor GOTOOLCHAIN=local GOPATH=/home/user/.gopath GOCACHE=/home/user/.gocache`（脚本会打印这一行）。工具链来自 `tools/go/`（找不到则 `pip download go-bin`），依赖来自 `capabilities/server/vendor/`（已提交，别跑 `go mod tidy`/`go mod vendor`）。`go build ./...`、`go vet`、`go test` 都在 `capabilities/server/` 目录下跑；`apps/*/server`，还需工具自行想其他办法，例如GitHub，PyPI
 2. **Web**：`cd web && corepack pnpm install --frozen-lockfile`（npm 可达，约 5 秒），检查按包跑 `corepack pnpm exec tsc -p web/packages/<pkg>`；`pnpm -r typecheck` 会 OOM（2 核）。无浏览器：Playwright 不可用，UI 只能 tsc + 代码走查，报告时写明"未在浏览器观察"。
 3. **宿主类型变了**：`go run ./cmd/api-types`（在 `capabilities/server/`）再生成 `web/packages/kernel/src/gen/host.ts`，否则 `TestAPIContract` 失败。文案变了：补 `i18n/zh-CN.json` / 包内 `i18n.ts`，否则 `TestLanguages` 失败。
 4. **轻量验证**：`make check-go` 不可用时（无 pnpm/buf）直接 `go build ./... && go vet ./...`；`go test ./apps/<改动包>/... ./platform/...` + 根包按名跑 `go test . -run 'TestLanguages|TestAPIContract'`；根包全量仅保留长期不变量测试（ADR-0082）；计时规模测试已删除。
@@ -62,8 +62,6 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
    - **集成（main 上）**：集成代理按路径合成——仅一边变化的文件逐字节取该边，两边都变的文件以 B 为 base 三方合成（`git merge-file`），生成物（`host.ts`、Catalog json 等）用工具重生成而不是手拷。不删除任何一边的业务修复。回执写明：main 提交 SHA、冲突文件及解法、测试边界。
    - **取回（main → 分支，常态）**：回执到达时分支通常已有新提交——分支代理不停工等回执。分支代理先核对 main 确实含自己冻结 HEAD 的全部路径，然后同样按路径三方取回：M = `git diff --name-only B <main-SHA>`，S = `git diff --name-only B HEAD`；M∖S 直接 `git checkout <main-SHA> -- <路径>`，M∩S 三方合成，生成物重生成；提交并推送。
    - **同步确认不是 tree 相同**，而是：`git diff --name-only <main-SHA> HEAD` **恰好等于**本轮新工作的路径清单（分支回执里列出这份清单与新的冻结 HEAD）。只有分支没有任何新工作时，才退化为 tree SHA 相同（此时也可以用 `git restore --source=<main-SHA> --staged --worktree -- .` 整树复制再提交；有新工作时**不做整树覆盖**）。
-   - **下一轮基点**：取回后，该 main SHA 成为新的 B；分支在此之上的提交就是下一次交接的内容。
-   - **大扫除期间（ADR-0080，直到其 §3 各波全部关闭）的补充**：结构调整只在分支上做。集成代理在 main 上发现的修复，**不改已搬家的文件**，而是把修复以"路径 + 补丁"形式随回执发给分支代理，由分支代理落到新位置；每波结束分支代理交接一次，取回后基点 B 前进到该 main SHA。回执里的 M∩S 若含被搬家的文件，以分支侧（新路径）为准，main 侧改动由分支代理手工落位。
    - **本地集成交付必须更新运行环境**：每次 main 代码更新后运行 `deploy/local/update.sh`，重建并核对酒店 `8495`、制造 `8490` 两台宿主的 Git 版本、健康和页面资源，再给回执。工作台创建的 WMS 等应用共用所属宿主入口，不另建应用专用容器或固定端口；保留原数据卷。
    - 注意 fetch/pull 只把对象拉进仓库，不等于工作树已同步；沙箱重置后先 `git fetch && git reset --hard origin/<会话分支>` 恢复自己的分支，再按上面取回。
 7. **写文件**：编辑工具的相对路径以仓库根为准；拿不准就用绝对路径。

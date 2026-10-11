@@ -120,6 +120,9 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 				in.Outputs["state:"+node] = platform.Raw(BatchStateReference{Instance: in.ID, Node: node, Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(state)), Size: len(state)})
 			}
 		}
+		for node, raw := range frame.OperatorOutputs {
+			in.Outputs[node] = slices.Clone(raw)
+		}
 		in.Outputs["batch"] = json.RawMessage(fmt.Sprintf(`{"cursor":%q,"consumed":%d,"rejected":%d}`, frame.Cursor, frame.Consumed, frame.Rejected))
 		encoded, err := json.Marshal(in.Outputs)
 		if err != nil || len(encoded) > 60<<10 {
@@ -204,6 +207,9 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 	if err := admitBatch(frame, declared, batch); err != nil {
 		return 0, 0, err
 	}
+	if err := checkOperators(declared); err != nil {
+		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
 	if frame.Cursor == batch.ID {
 		return 0, 0, nil
 	}
@@ -215,6 +221,7 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 	next := *frame
 	next.CheckpointEvery = declared.CheckpointEvery
 	next.State = maps.Clone(frame.State)
+	next.OperatorOutputs = maps.Clone(frame.OperatorOutputs)
 	next.DeadLetters = slices.Clone(frame.DeadLetters)
 	if next.State == nil {
 		next.State = map[string]json.RawMessage{}
@@ -258,7 +265,32 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 	if len(acceptedAt) == 1 {
 		retainedAt = acceptedAt[0]
 	}
+	if !batch.Bootstrap && declared.Aggregate != nil {
+		stats, alerts, err := foldDeclaredOperators(&next, declared, batch.ID, retainedAt)
+		if err != nil {
+			return 0, 0, err
+		}
+		if next.OperatorOutputs == nil {
+			next.OperatorOutputs = map[string]json.RawMessage{}
+		}
+		next.OperatorOutputs[declared.Aggregate.Node] = platform.Raw(stats)
+		if declared.Threshold != nil {
+			next.OperatorOutputs[declared.Threshold.Node] = platform.Raw(alerts)
+		}
+		if declared.Output != nil {
+			next.OperatorOutputs[declared.Output.Name] = platform.Raw(aggregateOutput(stats))
+		}
+	}
 	pruneDeadLetters(&next, declared, retainedAt)
+	for i := range next.DeadLetters {
+		if next.DeadLetters[i].Seq == 0 {
+			next.DeadLetterSequence++
+			next.DeadLetters[i].Seq = next.DeadLetterSequence
+			if declared.Window != nil {
+				next.DeadLetters[i].Node = declared.Window.Node
+			}
+		}
+	}
 	next.Cursor, next.Predecessor = batch.ID, batch.Predecessor
 	if batch.Source != nil {
 		checkpoint := *batch.Source

@@ -9,6 +9,16 @@ import { t, type EntityInfo } from "@platform/ui";
 export type Field = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; formula?: string; when?: string; ref?: string; inverse?: string; read?: string[]; write?: string[] };
 export type State = { name: string; title: string; tone?: string; description?: string };
 export type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean;ref?:string;minLength?:number;constraints?:Api.InputConstraints;range?:Api.DateRange;group?:string };
+/** Preview the same complete input contract in both object and action workbenches. */
+export function actionInputFields(inputs: Input_[]): Api.Field[] {
+  return inputs.map(input => ({
+    name: input.name,
+    type: input.type === "integer" ? "integer" : input.type === "decimal" ? "number" : input.type === "date" || input.type === "datetime" ? input.type : input.type === "boolean" ? "boolean" : "string",
+    ref: input.ref, constraints: {...input.constraints, minLength: input.minLength ?? input.constraints?.minLength},
+    range: input.range, group: input.group, required: input.required, description: input.title,
+    choices: input.type === "choice" ? (input.choices ?? "").split(",").map(value => value.trim()).filter(Boolean) : undefined,
+  }));
+}
 export type Set_ = { field: string; from: string };
 export type Condition = { field: string; operator: string; value?: string; valueField?: string; message: string;when?:Condition };
 export type ApproverLevel = { title: string; role: string; all?: boolean };

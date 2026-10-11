@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -26,8 +27,9 @@ type FileStore interface {
 
 // memoryFiles is the development store: bytes in the process.
 type memoryFiles struct {
-	mu sync.Mutex
-	m  map[string][]byte
+	mu       sync.Mutex
+	m        map[string][]byte
+	modified map[string]time.Time
 }
 
 func (s *memoryFiles) Put(_ context.Context, key string, data []byte, _ string) error {
@@ -36,7 +38,11 @@ func (s *memoryFiles) Put(_ context.Context, key string, data []byte, _ string) 
 	if s.m == nil {
 		s.m = map[string][]byte{}
 	}
+	if s.modified == nil {
+		s.modified = map[string]time.Time{}
+	}
 	s.m[key] = bytes.Clone(data)
+	s.modified[key] = time.Now().UTC()
 	return nil
 }
 
@@ -61,6 +67,7 @@ func (s *memoryFiles) Delete(_ context.Context, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.m, key)
+	delete(s.modified, key)
 	return nil
 }
 

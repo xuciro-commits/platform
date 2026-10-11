@@ -147,6 +147,8 @@ func (t *Tenant) cleanupFlowArtifactsFor(m platform.Member, id string, now time.
 // immutable bytes without the tenant lock, then commits through the existing
 // accepted-result pipeline. HTTP submissions cannot construct the opaque plan.
 func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.FlowBatch, now time.Time) (platform.FlowBatchOutcome, *kernel.Error) {
+	releasePreparation := t.beginFlowArtifactPreparation()
+	defer releasePreparation()
 	t.mu.Lock()
 	f, before, _, refusal := t.continuousSnapshotLocked(m, id, now)
 	t.mu.Unlock()
@@ -235,6 +237,93 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 	retained = x.Batch.Sealed != nil && x.Batch.Sealed.Ticket == prepared.Artifact().Ticket
 	inputRetained = preparedInput != nil
 	return platform.FlowBatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
+}
+
+// prepareContinuousDeadLetterReplay recognizes only signal replay. Business
+// action replay stays inside the original Flow decision without outside I/O.
+func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, bool) {
+	releasePreparation := t.beginFlowArtifactPreparation()
+	defer releasePreparation()
+	t.mu.Lock()
+	if owner, ok := t.procs.(platform.ContinuousFlowOwner); ok && owner.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
+		record, err := t.submitAccepted(owner, m, sub, now, false)
+		t.mu.Unlock()
+		return record, err, true
+	}
+	view, err := t.RecordOf(m, "flow.dead-letter", sub.GetTarget().GetId(), now)
+	if err != nil {
+		t.mu.Unlock()
+		return nil, err, true
+	}
+	asset, ok := view.Record.(platform.FlowDeadLetterAsset)
+	if !ok || asset.Withheld {
+		t.mu.Unlock()
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The dead letter's protected source is unavailable"), true
+	}
+	if asset.Action != "" {
+		t.mu.Unlock()
+		return nil, nil, false
+	}
+	f, before, current, err := t.continuousSnapshotLocked(m, asset.Instance, now)
+	var plan platform.FlowDeadLetterReplayPreparation
+	if err == nil {
+		plan, err = f.PlanDeadLetterReplay(before, t.automation(platform.FlowApp, false), asset)
+	}
+	t.mu.Unlock()
+	if err != nil {
+		return nil, err, true
+	}
+	if before.CleanupPending {
+		if err := t.cleanupFlowArtifactsFor(current, before.ID, now); err != nil {
+			return nil, err, true
+		}
+		t.mu.Lock()
+		f, before, current, err = t.continuousSnapshotLocked(current, before.ID, now)
+		if err == nil {
+			plan, err = f.PlanDeadLetterReplay(before, t.automation(platform.FlowApp, false), asset)
+		}
+		t.mu.Unlock()
+		if err != nil {
+			return nil, err, true
+		}
+	}
+	store := flowFrameStore{tenant: t.ID, files: t.files()}
+	prepared, err := plan.Prepare(sub, now, store)
+	if err != nil {
+		return nil, err, true
+	}
+	retained := false
+	defer func() {
+		if !retained {
+			for _, artifact := range prepared.Artifacts() {
+				_ = store.Discard(artifact)
+			}
+		}
+	}()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, latest, current, err := t.continuousSnapshotLocked(current, before.ID, now)
+	if err != nil {
+		return nil, err, true
+	}
+	if !prepared.Matches(latest) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original Flow changed while dead-letter replay was prepared"), true
+	}
+	if latest.Batch.Source != nil {
+		batchPlan, refusal := f.PlanBatch(latest, t.automation(platform.FlowApp, false))
+		if refusal != nil {
+			return nil, refusal, true
+		}
+		if refusal := t.checkStreamSourceLocked(current, batchPlan, latest, *latest.Batch.Source, true, now); refusal != nil {
+			return nil, refusal, true
+		}
+	}
+	record, err := t.submitAccepted(prepared.Decision(), current, sub, now, false)
+	retained = true // an uncertain append is resolved by the original accepted journal
+	if err == nil {
+		t.enqueue(now)
+	}
+	return record, err, true
 }
 
 // retireContinuousArtifacts deletes only refs named by an already-accepted
@@ -484,6 +573,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		source.Cursor = cursor
 	}
 	columns := append([]string{source.Since, intake.Key, intake.EventTime, intake.Value}, intake.Partition...)
+	columns = slices.Compact(slices.Sorted(slices.Values(append(columns, intake.Fields...))))
 	rows, err := t.readTable(source, connection, columns...)
 	if err != nil {
 		if tick, due, tickErr := plan.WindowTick(now, flowFrameStore{tenant: t.ID, files: t.files()}); tickErr != nil {
@@ -548,6 +638,17 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		input, exists := row[intake.Value]
 		if !exists {
 			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source signal column is missing")
+		}
+		if len(intake.Fields) > 0 {
+			projected := map[string]any{intake.Value: input}
+			for _, field := range append(slices.Clone(intake.Partition), intake.Fields...) {
+				value, exists := row[field]
+				if !exists {
+					return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A declared source metadata field is missing")
+				}
+				projected[field] = value
+			}
+			input = projected
 		}
 		value, encodeErr := json.Marshal(input)
 		if encodeErr != nil {
@@ -624,7 +725,12 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 		return
 	}
 	t.mu.Lock()
-	instances, _, _ := platform.Find[platform.FlowInstance](t.automation(platform.FlowApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","waiting"]]`), Sort: []string{"id"}})
+	instances, total, queryErr := platform.Find[platform.FlowInstance](t.automation(platform.FlowApp, false), platform.Query{Sort: []string{"id"}})
+	if queryErr != nil || total != len(instances) {
+		t.mu.Unlock()
+		log.Printf("continuous Flow inventory unavailable; no artifacts retired")
+		return
+	}
 	f, ok := t.procs.(platform.ContinuousFlowOwner)
 	var pending []platform.FlowInstance
 	type retry struct {
@@ -649,6 +755,9 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 				}
 				// Cleanup is independent host work. Do not prepare a source batch
 				// against an instance whose prior retirement intent is unresolved.
+				continue
+			}
+			if instance.State != "waiting" {
 				continue
 			}
 			member, exists := t.Member(instance.OnBehalf)
@@ -704,5 +813,8 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 				break
 			}
 		}
+	}
+	if err := t.collectUnacceptedFlowArtifacts(context.Background(), now); err != nil {
+		log.Printf("continuous Flow artifact collection deferred: %v", err)
 	}
 }

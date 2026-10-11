@@ -15,7 +15,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 import { assignmentInputFits } from "./process-rules";
 import { Label } from "./process";
-import { comparisonFits, conditionSubjects, inputTypes, nameOf, operators, type Action, type ApproverLevel, type Condition, type Create_, type Input_, type JournalLine_, type Post_, type Set_ } from "./object-model";
+import { actionInputFields, comparisonFits, conditionSubjects, inputTypes, nameOf, operators, type Action, type ApproverLevel, type Condition, type Create_, type Input_, type JournalLine_, type Post_, type Set_ } from "./object-model";
 import { useObjectDraft } from "./object-draft";
 
 type Section = "overview" | "parameters" | "form" | "rules" | "criteria" | "effects" | "approval" | "permissions";
@@ -236,11 +236,7 @@ function RowCard({ title, children, onRemove }: { title: string; children: React
 
 function FormPreview({ inputs }: { inputs: Input_[] }) {
   const [values, setValues] = useState<Record<string, unknown>>({});
-  return <PayloadFields preview values={values} onChange={setValues} fields={inputs.map((i) => ({
-    name: i.name, type: i.type === "integer" ? "integer" : i.type === "decimal" ? "number" : i.type === "date"||i.type === "datetime" ? i.type : i.type === "boolean" ? "boolean" : "string",
-    ref:i.ref,constraints:{...i.constraints,minLength:i.minLength??i.constraints?.minLength},range:i.range,group:i.group,
-    required: i.required, description: i.title, choices: i.type === "choice" ? (i.choices ?? "").split(",").map((c) => c.trim()).filter(Boolean) : undefined,
-  }))} />;
+  return <PayloadFields preview values={values} onChange={setValues} fields={actionInputFields(inputs)} />;
 }
 
 function ParameterEditor({ input, inputs, entities, onChange }: { input: Input_; inputs:Input_[]; entities: EntityInfo[]; onChange: (patch: Partial<Input_>) => void }) {

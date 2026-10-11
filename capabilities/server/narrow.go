@@ -53,7 +53,12 @@ func (t *Tenant) mayReadIn(store *recordStore, m platform.Member, now time.Time,
 		if !held {
 			store.mu.Lock()
 		}
-		ok = t.readableIn(store, m, record, now)
+		typ, id, _ := strings.Cut(record, "/")
+		if typ == platform.KnowledgeDocumentType {
+			ok = t.knowledgeSourceReadable(store, m, id, field)
+		} else {
+			ok = t.readableIn(store, m, record, now)
+		}
 		if ok && field != "" {
 			typ, _, _ := strings.Cut(record, "/")
 			et := store.types[typ]

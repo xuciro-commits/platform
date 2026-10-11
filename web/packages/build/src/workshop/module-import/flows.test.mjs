@@ -37,46 +37,54 @@ function fixture({source=originalFlow,concurrency=1,deadLetterRetry=false,preser
 }
 const blocking=(report)=>report.diagnostics.filter(issue=>issue.blocking!==false);
 
-test('recognizes the full default seven-node stream graph without rewriting its source bytes',()=>{
- const text=JSON.stringify(originalFlow),parsed=parseFlowSource(text);
- assert.equal(parsed.diagnostics.length,0);assert.equal(parsed.flows.length,1);assert.equal(parsed.flows[0].nodes.length,7);assert.equal(parsed.flows[0].edges.length,6);
- const input=fixture({source:originalFlow,concurrency:8,deadLetterRetry:true,preserveDefaults:true}),report=compileFlowSource(input.source,input.flow.id,input.bindings,input.target);
- assert.equal(report.source,input.source);assert.ok(report.draft);assert.equal(report.ready,false);
- assert.ok(blocking(report).some(issue=>issue.code==='flow-concurrency-owner'));
- assert.ok(!report.diagnostics.some(issue=>issue.code==='flow-start-owner'));assert.ok(blocking(report).some(issue=>issue.code==='flow-output-owner'));assert.ok(blocking(report).some(issue=>issue.code==='flow-deadletter-owner'));
- assert.ok(blocking(report).some(issue=>issue.code==='flow-deadletter-replay'));
- assert.equal(report.draft.continuous.checkpointEvery,5000);assert.ok(!blocking(report).some(issue=>issue.code==='flow-checkpoint-owner'));assert.ok(blocking(report).some(issue=>issue.code==='flow-error-owner'));assert.ok(blocking(report).some(issue=>issue.code==='flow-retry-owner'));
- assert.ok(!blocking(report).some(issue=>issue.code==='flow-continuous-topology'));
+test('compiles the original seven-node stream with f32 kernel, eight workers and retained output',()=>{
+ const input=fixture({concurrency:8,deadLetterRetry:true,preserveDefaults:true});
+ delete input.bindings['flow-wasm'];delete input.bindings['flow-threshold'];
+ const report=compileFlowSource(input.source,input.flow.id,input.bindings,input.target);
+ assert.equal(report.source,input.source);assert.equal(report.ready,true,JSON.stringify(report.diagnostics));
+ const c=report.draft.continuous;
+ assert.equal(report.draft.manual,false);assert.equal(c.entry,'alertsloop');assert.equal(c.concurrency,8);
+ assert.equal(c.checkpointEvery,5000);assert.equal(c.Batch,512);assert.equal(c.Window.windowMs,30000);
+ assert.equal(c.Window.slideMs,5000);assert.equal(c.Window.watermarkMs,2000);
+ assert.equal(c.aggregate.kernel,'wasm:f32-window-stats');assert.equal(c.aggregate.above,11.5);
+ assert.deepEqual(c.aggregate.group,['plantId','deviceId']);assert.ok(c.aggregate.measures.includes('above'));
+ assert.equal(c.threshold.field,'mean');assert.equal(c.threshold.high,11.5);assert.equal(c.threshold.low,9.5);
+ assert.equal(c.threshold.debounceMs,3000);assert.equal(c.output.name,'liveTelemetryStats');
+ assert.equal(c.DeadLetter,true);assert.equal(c.deadLetterMaxRecords,10000);assert.equal(c.deadLetterTtlMs,86400000);
+ const steps=new Map(report.draft.steps.map(step=>[step.name,step]));
+ assert.deepEqual(steps.get('alertsloop').collection,{source:'input',path:['triggered']});
+ assert.equal(steps.get('emitalert').act,'alerts.acknowledgeAlert');
+ assert.deepEqual(steps.get('emitalert').target,{source:'item',path:['alertId']});
+ assert.ok(report.diagnostics.some(issue=>issue.code==='flow-threshold-mean-reading'&&issue.blocking===false));
 });
 
-test('previews the complete automatically started graph while blocking unsupported output and dead-letter owners',()=>{
+function nativeFixture(){const input=fixture();delete input.bindings['flow-wasm'];delete input.bindings['flow-threshold'];return input;}
+
+test('refuses private source, wrong kernel, stale action and incomplete action payload',()=>{
+ const input=nativeFixture();
+ const stale=structuredClone(input.target);stale.sources[0].state='draft';
+ let report=compileFlowSource(input.source,input.flow.id,input.bindings,stale);
+ assert.equal(report.ready,false);assert.ok(blocking(report).some(issue=>issue.code==='flow-source-record'));
+ const invalid=structuredClone(input.flow);invalid.nodes.find(n=>n.type==='aggregate').config.kernel='javascript:approximate';
+ report=compileFlowSource(JSON.stringify(invalid),invalid.id,input.bindings,input.target);
+ assert.ok(blocking(report).some(issue=>issue.code==='flow-aggregate-kernel'));
+ const changed=structuredClone(input.bindings);changed['flow-alert'].sourceVersion='old';
+ report=compileFlowSource(input.source,input.flow.id,changed,input.target);assert.equal(report.ready,false);
+ const missing=structuredClone(input.bindings);delete missing['flow-alert'].inputs.severity;
+ report=compileFlowSource(input.source,input.flow.id,missing,input.target);assert.ok(blocking(report).some(issue=>issue.code==='flow-action-input-required'));
+});
+
+test('rejects old Compute bindings rather than silently substituting a native operator',()=>{
  const input=fixture(),report=compileFlowSource(input.source,input.flow.id,input.bindings,input.target);
- assert.ok(report.draft,JSON.stringify(report.diagnostics));assert.equal(report.ready,false);assert.ok(!report.diagnostics.some(issue=>issue.code==='flow-start-owner'));assert.ok(blocking(report).some(issue=>issue.code==='flow-output-owner'));assert.ok(blocking(report).some(issue=>issue.code==='flow-deadletter-owner'));assert.ok(blocking(report).length>0);
- const draft=report.draft,continuous=draft.continuous,steps=new Map(draft.steps.map(step=>[step.name,step]));
- assert.equal(draft.manual,false);assert.equal(continuous.Source,'planttelemetry');assert.equal(continuous.entry,'aggregate');assert.equal(continuous.Batch,512);assert.equal(continuous.checkpointEvery,0);
- assert.equal(continuous.Window.windowMs,30000);assert.equal(continuous.Window.slideMs,5000);assert.equal(continuous.Window.watermarkMs,2000);assert.equal(continuous.Window.maxRecords,10000);assert.equal(continuous.Window.lateEvents,'sideOutput');
- assert.deepEqual(continuous.Intake,{sourceRecord:'source-telemetry',key:'eventId',partition:['plantId','deviceId'],eventTime:'eventTime',value:'vibration',offset:'latest'});
- assert.equal(continuous.DeadLetter,true);assert.equal(continuous.deadLetterMaxRecords,10000);assert.equal(continuous.deadLetterTtlMs,86400000);
- assert.equal(steps.get('aggregate').kind,'compute');assert.equal(steps.get('aggregate').operation.app,'analytics');assert.deepEqual(steps.get('aggregate').inputs.in,{source:'input',path:['signals']});assert.equal(steps.get('aggregate').retryAttempts,3);assert.equal(steps.get('aggregate').retryBackoffMs,250);
- assert.equal(steps.get('threshold').inputs.config.value.field,'reading');assert.deepEqual(steps.get('threshold').inputs.in,{source:'step',step:'aggregate',path:['alerts']});
- assert.equal(steps.get('routeoutputs').kind,'fork');assert.deepEqual(steps.get('routeoutputs').branches,['publishlivetelemetrystats','threshold']);
- assert.deepEqual(steps.get('publishlivetelemetrystats').value,{source:'step',step:'aggregate',path:['stats']});
- assert.equal(steps.get('alertsloop').kind,'foreach');assert.equal(steps.get('alertsloop').maxIterations,10000);assert.deepEqual(steps.get('alertsloop').collection,{source:'step',step:'threshold',path:['triggered']});
- assert.equal(steps.get('emitalert').act,'alerts.acknowledgeAlert');assert.deepEqual(steps.get('emitalert').target,{source:'item',path:['alertId']});assert.deepEqual(steps.get('emitalert').inputs.reading,{source:'item',path:['reading']});
- assert.equal(report.outputs.liveTelemetryStats,'publishlivetelemetrystats');
- assert.ok(report.diagnostics.some(issue=>issue.code==='flow-threshold-mean-reading'&&!issue.blocking));
+ assert.equal(report.ready,false);assert.equal(blocking(report).filter(i=>i.code==='flow-native-kernel-binding').length,2);
 });
 
-test('rejects a stale or private intake source, cross-version Compute, and an incomplete action mapping',()=>{
- const input=fixture();
- const stale=structuredClone(input.target);stale.sources[0].state='draft';let report=compileFlowSource(input.source,input.flow.id,input.bindings,stale);assert.ok(report.draft);assert.equal(report.ready,false);assert.ok(blocking(report).some(issue=>issue.code==='flow-source-record'));
- const changed=structuredClone(input.bindings);changed['flow-wasm'].sourceVersion='3.1';report=compileFlowSource(input.source,input.flow.id,changed,input.target);assert.ok(report.draft);assert.equal(report.ready,false);assert.ok(blocking(report).some(issue=>issue.code==='flow-capability-version'));
- const missing=structuredClone(input.bindings);delete missing['flow-alert'].inputs.severity;report=compileFlowSource(input.source,input.flow.id,missing,input.target);assert.ok(report.draft);assert.equal(report.ready,false);assert.ok(blocking(report).some(issue=>issue.code==='flow-action-input-required'));
-});
-
-test('refuses topology, source-column, and graph-concurrency changes rather than silently dropping semantics',()=>{
- const input=fixture();
- const changed=structuredClone(input.flow);changed.edges.pop();let report=compileFlowSource(JSON.stringify(changed),changed.id,input.bindings,input.target);assert.ok(report.draft);assert.equal(report.ready,false);assert.ok(blocking(report).some(issue=>issue.code==='flow-continuous-topology'));
- const sourceMismatch=structuredClone(input.bindings);sourceMismatch['flow-stream'].value='temperature';report=compileFlowSource(input.source,input.flow.id,sourceMismatch,input.target);assert.ok(report.draft);assert.equal(report.ready,false);assert.ok(blocking(report).some(issue=>issue.code==='flow-signal-source-mismatch'));
- const parallel=fixture({concurrency:8});report=compileFlowSource(parallel.source,parallel.flow.id,parallel.bindings,parallel.target);assert.ok(report.draft);assert.equal(report.ready,false);assert.ok(blocking(report).some(issue=>issue.code==='flow-concurrency-owner'));
+test('refuses broken topology, field mismatch and excessive concurrency before applying',()=>{
+ const input=nativeFixture();
+ const invalid=structuredClone(input.flow);invalid.edges.pop();invalid.execution.maxConcurrency=9;
+ invalid.nodes.find(n=>n.type==='threshold').config.field='nonexistent';
+ const report=compileFlowSource(JSON.stringify(invalid),invalid.id,input.bindings,input.target);
+ assert.equal(report.ready,false);assert.ok(blocking(report).some(i=>i.code==='flow-continuous-topology'));
+ assert.ok(blocking(report).some(i=>i.code==='flow-concurrency-invalid'));
+ assert.ok(blocking(report).some(i=>i.code==='flow-threshold-field'));
 });

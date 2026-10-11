@@ -43,6 +43,23 @@ type FlowInstance struct {
 	Undo            []FlowUndoEntry     `json:"undo" field:"readonly" title:"To undo"`
 	Trace           []FlowTraceLine     `json:"trace" field:"readonly"`
 	Seq             int                 `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
+	Resumable       bool                `json:"resumable,omitempty" field:"readonly"`
+}
+
+// FlowOutput is an application-bound read-only asset published by the original
+// Flow decision. Record history retains each accepted batch version.
+type FlowOutput struct {
+	Record
+	App      string          `json:"app" field:"readonly"`
+	Instance string          `json:"instance" field:"readonly"`
+	Flow     string          `json:"flow" field:"readonly"`
+	Version  int             `json:"version" field:"readonly"`
+	Name     string          `json:"name" field:"readonly"`
+	Batch    string          `json:"batch" field:"readonly"`
+	OnBehalf string          `json:"onBehalf" field:"readonly"`
+	Sources  []string        `json:"sources,omitempty" field:"readonly"`
+	Value    json.RawMessage `json:"value" field:"readonly" type:"json"`
+	Withheld bool            `json:"withheld,omitempty" field:"readonly"`
 }
 
 type FlowToken struct {
@@ -121,6 +138,9 @@ type FlowBatchFrame struct {
 	State                  map[string]json.RawMessage `json:"state,omitempty"`       // node name → its state
 	DeadLetters            []FlowDeadLetter           `json:"deadLetters,omitempty"` // what could not be folded, and why
 	DeadLetterDropped      int                        `json:"deadLetterDropped,omitempty"`
+	DeadLetterSequence     int64                      `json:"deadLetterSequence,omitempty"`
+	Workers                int                        `json:"workers,omitempty"`
+	OperatorOutputs        map[string]json.RawMessage `json:"operatorOutputs,omitempty"`
 	StateBytes             int                        `json:"stateBytes,omitempty"`
 	CheckpointEvery        int                        `json:"checkpointEvery,omitempty"`
 	BatchesSinceCheckpoint int                        `json:"batchesSinceCheckpoint,omitempty"`
@@ -140,6 +160,8 @@ type FlowSourceCheckpoint struct {
 }
 
 type FlowDeadLetter struct {
+	Seq        int64     `json:"seq,omitempty"`
+	Node       string    `json:"node,omitempty"`
 	Batch      string    `json:"batch"`
 	Partition  string    `json:"partition,omitempty"`
 	Key        string    `json:"key,omitempty"`
@@ -147,6 +169,25 @@ type FlowDeadLetter struct {
 	RecordedAt time.Time `json:"recordedAt,omitzero"`
 	Reason     string    `json:"reason"`
 	Value      string    `json:"value,omitempty"`
+}
+
+type FlowDeadLetterAsset struct {
+	Record
+	App      string          `json:"app" field:"readonly"`
+	Instance string          `json:"instance" field:"readonly"`
+	Flow     string          `json:"flow" field:"readonly"`
+	Version  int             `json:"version" field:"readonly"`
+	OnBehalf string          `json:"onBehalf" field:"readonly"`
+	Sources  []string        `json:"sources,omitempty" field:"readonly"`
+	Letter   FlowDeadLetter  `json:"letter" field:"readonly" type:"json"`
+	Action   string          `json:"action,omitempty" field:"readonly"`
+	Protocol string          `json:"protocol,omitempty" field:"readonly"`
+	Target   string          `json:"target,omitempty" field:"readonly"`
+	Payload  json.RawMessage `json:"payload,omitempty" field:"readonly" type:"json"`
+	Key      string          `json:"key,omitempty" field:"readonly"`
+	AsMember bool            `json:"asMember,omitempty" field:"readonly"`
+	Replayed bool            `json:"replayed,omitempty" field:"readonly"`
+	Withheld bool            `json:"withheld,omitempty" field:"readonly"`
 }
 
 type FlowBatch struct {
@@ -241,7 +282,11 @@ type ContinuousFlowOwner interface {
 	PlanBatch(FlowInstance, Caller) (FlowBatchPreparation, *kernel.Error)
 	PlanComputeRetry(FlowInstance, Caller, time.Time) (FlowComputeRetryPreparation, *kernel.Error)
 	PlanArtifactCleanup(FlowInstance, time.Time) (FlowArtifactCleanupPreparation, *kernel.Error)
+	PlanDeadLetterReplay(FlowInstance, Caller, FlowDeadLetterAsset) (FlowDeadLetterReplayPreparation, *kernel.Error)
 	ExpandFrame(FlowInstance, FlowFrameStore) (*FlowBatchFrame, error)
+}
+type FlowDeadLetterReplayPreparation interface {
+	Prepare(*pb.Submission,time.Time,FlowFrameStore)(FlowPreparedBatch,*kernel.Error)
 }
 type FlowBatchPreparation interface {
 	Intake() (string, *StreamIntake, int)

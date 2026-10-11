@@ -6,9 +6,18 @@ import { decide, fresh, open } from "./host";
 const value = (page: Page, text: string) => page.getByRole("definition").filter({ hasText: new RegExp(`^${text}$`, "i") });
 
 test("route 17: every action has an entry, pages follow changes", async ({ browser, page, request }) => {
+  test.setTimeout(90_000);
   const account = fresh("ACC"), opp = fresh("OPP");
   await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Acme " + account, kind: "company" });
-  await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Board offsite" });
+  await open(page, "sales", "/page?app=crm&kind=page&name=opportunities");
+  await page.getByRole("button", { name: "Open opportunity", exact: true }).click();
+  const opening = page.getByRole("dialog");
+  await opening.getByRole("textbox", { name: "ID *", exact: true }).fill(opp);
+  await opening.getByRole("combobox", { name: /^Account/ }).fill(account);
+  await opening.getByRole("option").filter({ hasText: account }).click();
+  await opening.getByRole("textbox", { name: /^What is being sold/ }).fill("Board offsite");
+  await opening.getByRole("button", { name: "Open opportunity", exact: true }).click();
+  await expect(opening).toHaveCount(0);
   await open(page, "sales", `/record?type=crm.opportunity&id=${opp}`);
   for (const action of ["Close opportunity", "Plan group stay", "Book stay"]) {
     await expect(page.getByRole("button", { name: action })).toBeVisible();
@@ -68,7 +77,34 @@ test("route 17: every action has an entry, pages follow changes", async ({ brows
   // Bound creation uses the shared capability route. A lost reply retains its
   // request key; an explicit refusal permits a corrected proposal.
   const builder=new Builder(request,"manager");
-  const boundObject=await builder.object({title:"Bound input records",fields:[{name:"note",title:"Note",type:"text",required:true},{name:"quantity",title:"Quantity",type:"integer",required:true}]});
+  const boundObject = await builder.object({
+    title: "Bound input records",
+    fields: [{ name: "note", title: "Note", type: "text", required: true }, { name: "quantity", title: "Quantity", type: "integer", required: true }],
+    states: [{ name: "open", title: "Open" }],
+    actions: [{ name: "schedule", title: "Schedule input", from: ["open"], inputs: [
+      { name: "account", title: "Account", type: "reference", ref: "crm.account", required: true },
+      { name: "arrive", title: "First night", type: "date", required: true, range: { end: "depart" } },
+      { name: "depart", title: "Departure", type: "date", required: true, constraints: { after: "arrive" } },
+    ] }],
+  });
+  // The builder configures the same references and date contract used by business actions.
+  await builder.open(page, `/action-type?id=${boundObject.id}&action=schedule`);
+  const structure = page.getByRole("region", { name: "Action structure", exact: true });
+  const inspector = page.getByRole("region", { name: "Action inspector", exact: true });
+  await structure.getByRole("button", { name: "Form", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await inspector.getByRole("combobox", { name: "Reference object", exact: true }).selectOption("crm.account");
+  await page.getByRole("button", { name: "First night", exact: true }).click();
+  await expect(inspector.getByRole("combobox", { name: "Date range end", exact: true })).toHaveValue("depart");
+  await page.getByRole("button", { name: /^First night \*/ }).click();
+  const previewRange = page.getByRole("group", { name: "Choose a date range", exact: true });
+  await previewRange.getByRole("textbox", { name: "First night", exact: true }).fill("2030-01-30");
+  await previewRange.getByRole("textbox", { name: "Departure", exact: true }).fill("2030-02-30");
+  await expect(previewRange.getByRole("textbox", { name: "Departure", exact: true })).toHaveValue("2030-02-30");
+  await expect(previewRange.getByRole("textbox", { name: "Departure", exact: true })).toHaveAttribute("aria-invalid", "true");
+  await previewRange.getByRole("textbox", { name: "Departure", exact: true }).fill("2030-02-02");
+  await previewRange.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.getByText("3 nights", { exact: true })).toBeVisible();
   const boundPage=await builder.page({title:"Bound input form",object:boundObject.type,
     sections:[{id:"create",widget:"form",configVersion:1,fields:["note"],inputs:{quantity:{source:"literal",value:3}}}],
     document:{formatVersion:2,uiProfile:pageUIProfile,root:"root",nodes:{root:{kind:"rows",children:["create"]},create:{kind:"widget",section:"create"}}},
@@ -100,7 +136,7 @@ test("route 17: every action has an entry, pages follow changes", async ({ brows
   }finally{await bound.close();}
 });
 
-test("route 4: an approval reaches the requester's page", async ({ page, request }) => {
+test("route 4: an approval reaches the requester's page", async ({ page }) => {
   const leave = fresh("LEA");
   const day = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10);
   await open(page, "sales", "/definitions");

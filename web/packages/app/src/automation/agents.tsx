@@ -39,19 +39,27 @@ function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
   const { decide, action } = useHost();
   const declared = action(draft.action.includes("#") ? draft.action.split("#")[1]! : draft.action);
   const [values, setValues] = useState<Record<string, unknown>>(() => { try { return JSON.parse(draft.payload) as Record<string, unknown>; } catch { return {}; } });
-  const [reason, setReason] = useState(""),[submitted,setSubmitted]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[invalidJSON,setInvalidJSON]=useState<Record<string,boolean>>({});
+  const [reason, setReason] = useState(""),[submitted,setSubmitted]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const target = { type: "agent.run", id: run.id };
   const fields = declared?.payload ?? Object.keys(values).map((name) => ({ name, type: "string", description: name }));
   return (
     <Card className="grid gap-2 border-[var(--tone-warning)] p-3">
+      <Form className="grid gap-2" onSubmit={async () => {
+        setSubmitted(true);
+        if (busy || !payloadSchema(fields).safeParse(values).success || inputIssues(fields, values).length) return;
+        setError(""); setBusy(true);
+        try { await decide("agent.run.confirm", target, { payload: values }, { onRefused: setError }); }
+        finally { setBusy(false); }
+      }}>
       <div className="text-sm font-semibold">{declared?.title ?? draft.action} <span className="font-mono text-xs text-muted">{draft.target}</span></div>
       {draft.rationale && <p className="text-sm text-muted">{draft.rationale}</p>}
-      <fieldset disabled={busy}><PayloadFields fields={fields} values={values} onChange={setValues} submitted={submitted} onInvalid={(name,invalid)=>setInvalidJSON(old=>({...old,[name]:invalid}))}/></fieldset>{error&&<p role="alert" className="text-xs text-danger">{error}</p>}
+      <fieldset disabled={busy}><PayloadFields fields={fields} values={values} onChange={setValues} submitted={submitted}/></fieldset>{error&&<p role="alert" className="text-xs text-danger">{error}</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="primary" disabled={busy} onClick={async()=>{setSubmitted(true);if(busy||Object.values(invalidJSON).some(Boolean)||!payloadSchema(fields).safeParse(values).success||inputIssues(fields,values).length)return;setBusy(true);try{await decide("agent.run.confirm",target,{payload:values},{onRefused:setError});}finally{setBusy(false);}}}>{t("Confirm")}</Button>
+        <Button type="submit" size="sm" variant="primary" disabled={busy}>{t("Confirm")}</Button>
         <Input className="w-64" placeholder={t("Why not, for the agent")} value={reason} onChange={(e) => setReason(e.target.value)} />
         <Button size="sm" variant="danger" onClick={() => void decide("agent.run.reject", target, { reason })}>{t("Reject")}</Button>
       </div>
+      </Form>
     </Card>
   );
 }

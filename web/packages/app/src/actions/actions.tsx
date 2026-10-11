@@ -27,7 +27,7 @@ export function payloadSchema(fields: Field[]) {
 }
 
 /** Inputs for an action's declared payload fields. */
-export function PayloadFields({ fields, values, onChange, preview = false, submitted = false, onInvalid, issues = [] }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; preview?: boolean; submitted?: boolean; onInvalid?: (name: string, invalid: boolean) => void; issues?:Api.FieldIssue[] }) {
+export function PayloadFields({ fields, values, onChange, preview = false, submitted = false, issues = [] }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; preview?: boolean; submitted?: boolean; issues?:Api.FieldIssue[] }) {
   const prefix = useId(), [touched, setTouched] = useState<Record<string, boolean>>({}),[units,setUnits]=useState<Record<string,string>>({});
   const knownUnit=Object.values(units).find(Boolean),hourly=knownUnit?knownUnit==="hour":fields.some(f=>f.constraints?.dateTime&&String(values[f.name]??"").includes("T"));
   const parsed = payloadSchema(fields).safeParse(values);
@@ -45,7 +45,7 @@ export function PayloadFields({ fields, values, onChange, preview = false, submi
     return (
       <div key={f.name} className="grid gap-1 text-xs text-muted" onBlurCapture={() => setTouched(old => ({ ...old, [f.name]: true }))}><label htmlFor={id}>{label}</label>
         {f.group&&fields[index-1]?.group!==f.group&&<span className="text-xs font-medium">{f.group}</span>}
-        {range?<DateRangeInput id={id} start={String(value??"")} end={String(values[end!.name]??"")} startLabel={f.description||f.name} endLabel={end!.description||end!.name} inclusive={f.range?.inclusive} invalid={!!error||!!endError} describedBy={error?`${id}-error`:undefined} onChange={(start,finish)=>{setTouched(old=>({...old,[f.name]:true,[end!.name]:!!finish||old[end!.name]===true}));onChange({...values,[f.name]:start,[end!.name]:finish});}}/>:f.choices?.length ? <Select id={id} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} value={String(value ?? "")} onChange={(e) => set(e.target.value || undefined)}>
+        {range?<DateRangeInput id={id} start={String(value??"")} end={String(values[end!.name]??"")} startLabel={f.description||f.name} endLabel={end!.description||end!.name} inclusive={f.range?.inclusive} invalid={!!error||!!endError} describedBy={[error?`${id}-error`:undefined,endError?`${id}-end-error`:undefined].filter(Boolean).join(" ")||undefined} onChange={(start,finish)=>{setTouched(old=>({...old,[f.name]:true,[end!.name]:!!finish||old[end!.name]===true}));onChange({...values,[f.name]:start,[end!.name]:finish});}}/>:f.choices?.length ? <Select id={id} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} value={String(value ?? "")} onChange={(e) => set(e.target.value || undefined)}>
             <option value="">—</option>{f.choices.map((c) => <option key={c} value={c}>{t(c)}</option>)}</Select>
           : f.ref ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
             : f.ref === "enterprise.element" ? <ElementPicker id={id} stereotype={f.stereotype} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
@@ -53,12 +53,12 @@ export function PayloadFields({ fields, values, onChange, preview = false, submi
           : f.from ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
             : <ReadPicker id={id} field={f} value={String(value ?? "")} onChange={(v) => set(v || undefined)} onUnit={unit=>setUnits(old=>({...old,[f.name]:unit}))} />
           : f.type === "datetime" ? <DateTimeInput title={f.description||f.name} value={String(value??"")} offset="Z" onChange={set}/>
-          : f.type === "json" ? <JsonInput id={id} value={value} onChange={set} onInvalid={invalid => onInvalid?.(f.name, invalid)} />
+          : f.type === "json" ? <JsonInput id={id} value={value} onChange={set} />
           : f.type === "string" && String(value ?? "").length > 60 ? <Textarea id={id} rows={4} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
           : <Input id={id} type={f.type === "integer" || f.type === "number" ? "number" : f.type === "date" ? hourly&&f.constraints?.dateTime?"datetime-local":"date" : f.type === "datetime" ? "datetime-local" : "text"} value={value === undefined ? "" : String(value)}
               aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined}
               onChange={(e) => set(f.type === "integer" || f.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value)} />}
-        {endError&&<p role="alert" className="text-danger">{end?.description}: {endError}</p>}
+        {endError&&<p id={`${id}-end-error`} role="alert" className="text-danger">{end?.description}: {endError}</p>}
         {error && <p id={`${id}-error`} role="alert" className="text-danger">{error}</p>}
       </div>
     );
@@ -67,20 +67,18 @@ export function PayloadFields({ fields, values, onChange, preview = false, submi
 
 /** A structured payload field (type json, e.g. a dataset load's rows): typed as text, submitted
  * as the parsed value once it parses; until then the text stays and the field reads as invalid (UX-07). */
-function JsonInput({ id, value, onChange, onInvalid }: { id: string; value: unknown; onChange: (v: unknown) => void; onInvalid?: (invalid: boolean) => void }) {
-  const [text, setText] = useState(() => value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value, null, 2));
-  const [invalid, setInvalid] = useState(false);
-  return <Textarea parse="json" id={id} rows={6} className="font-mono" aria-invalid={invalid} value={text} placeholder='[{"id": 1}]' onChange={(e) => {
+function JsonInput({ id, value, onChange }: { id: string; value: unknown; onChange: (v: unknown) => void }) {
+  const [text, setText] = useState(() => value === undefined ? "" : JSON.stringify(value, null, 2));
+  return <Textarea parse="json" id={id} rows={6} className="font-mono" value={text} placeholder='[{"id": 1}]' onChange={(e) => {
     const next = e.target.value; setText(next);
-    if (!next.trim()) { setInvalid(false); onInvalid?.(false); onChange(undefined); return; }
-    try { onChange(JSON.parse(next)); setInvalid(false); onInvalid?.(false); } catch { setInvalid(true); onInvalid?.(true); onChange(next); }
+    onChange(next.trim() ? JSON.parse(next) : undefined);
   }} />;
 }
 
 /** A list of the items of an app's read, for a payload field whose values are not records here (#129). */
 function ReadPicker({ id, field, value, onChange, onUnit }: { id: string; field: Field; value: string; onChange: (key: string) => void; onUnit?:(unit:string)=>void }) {
  const {client,source}=useHost();
- const query=useQuery({queryKey:[source.scope,"read",field.from],queryFn:()=>client.get<Record<string,unknown>[]|Api.InputOptions>(`/v1/${field.from}`)});
+ const query=useQuery({queryKey:[client.connection.token,client.connection.tenant,source.scope,"read",field.from],queryFn:()=>client.get<Record<string,unknown>[]|Api.InputOptions>(`/v1/${field.from}`)});
  if(query.isError)return <p role="alert">{t("The options could not be loaded. Try again.")} <Button size="sm" onClick={()=>void query.refetch()}>{t("Retry")}</Button></p>;
  if(query.isPending)return <p role="status">{t("Loading…")}</p>;
  if(!Array.isArray(query.data)&&query.data.manual&&field.manual)return <label className="grid gap-1">{t("Manual source: no room-type directory is connected.")}<Input id={id} value={value} onChange={e=>onChange(e.target.value)}/></label>;
@@ -93,25 +91,31 @@ function ReadPicker({ id, field, value, onChange, onUnit }: { id: string; field:
  * field tagged ref:"enterprise.element" (ADR-0067 D8) — read through the typed query and
  * resolve contracts (ADR-0094), never the whole graph. The model is every member's to read. */
 function ElementPicker({ id, stereotype, value, onChange }: { id: string; stereotype?: string; value: string; onChange: (id: string) => void }) {
-  const { client } = useHost();
-  const items = useQuery({
-    queryKey: ["enterprise", "query", stereotype ?? ""],
+  const { client, source } = useHost();
+  const query = useQuery({
+    queryKey: [client.connection.token, client.connection.tenant, source.scope, "enterprise", "query", stereotype ?? ""],
     queryFn: () => queryElements(client.get, stereotype ? { stereotype: stereotype as EnterpriseStereotype } : {}),
-  }).data?.elements ?? [];
+  });
+  const items = query.isError ? [] : query.data?.elements ?? [];
   // A record keeps naming what it named: an element that has since been closed
   // (or sits beyond the read page) is resolved by id and stays visible, marked,
   // instead of the value silently reading as empty.
-  const kept = useQuery({
-    queryKey: ["enterprise", "resolve", value],
+  const resolved = useQuery({
+    queryKey: [client.connection.token, client.connection.tenant, source.scope, "enterprise", "resolve", value],
     enabled: !!value && !items.some((e) => e.id === value),
     queryFn: () => resolveElements(client.get, [value]),
-  }).data?.elements[0];
+  });
+  const kept = resolved.isError ? undefined : resolved.data?.elements[0];
   return (
+    <>
     <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">—</option>
       {items.map((e) => <option key={e.id} value={e.id}>{e.name}{e.kind ? ` · ${e.kind}` : ""}</option>)}
+      {value&&!items.some(item=>item.id===value)&&!kept&&<option value={value}>{query.isPending||resolved.isPending?`${value} · ${t("Loading…")}`:t("{value} · unavailable",{value})}</option>}
       {kept && <option value={kept.id}>{kept.closed ? t("{name} · closed {until}", { name: kept.name, until: kept.until ?? "" }) : `${kept.name}${kept.kind ? ` · ${kept.kind}` : ""}`}</option>}
     </Select>
+    {query.isError&&<p role="alert">{t("The options could not be loaded. Try again.")} <Button size="sm" onClick={()=>void query.refetch()}>{t("Retry")}</Button></p>}
+    </>
   );
 }
 
@@ -127,14 +131,14 @@ export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(
 /** The original action submission form, shared by dialogs and inline hosts. */
 function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy,initial={},enabled=true}:{declared:ActionDeclaration;target:{type:string;id:string};revision:number;onCancel:()=>void;onCompleted:()=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean}) {
  const {decide}=useHost(),lock=useRef(false);
- const [values,setValues]=useState<Record<string,unknown>>(initial),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(false),[invalidJSON,setInvalidJSON]=useState<Record<string,boolean>>({}),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>([]);
- const submit=async()=>{if(!enabled||preview||lock.current||!target.id)return;setSubmitted(true);if(Object.values(invalidJSON).some(Boolean)||!payloadSchema(declared.payload).safeParse(values).success||inputIssues(declared.payload,values).length>0)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal,onOutcome:entry=>{setOwnerIssues(entry.issues??[]);setPending(entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN");}}))onCompleted();}catch{setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
+ const [values,setValues]=useState<Record<string,unknown>>(initial),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(false),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>([]);
+ const submit=async()=>{if(!enabled||preview||lock.current||!target.id)return;setSubmitted(true);if(!payloadSchema(declared.payload).safeParse(values).success||inputIssues(declared.payload,values).length>0)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal,onOutcome:entry=>{setOwnerIssues(entry.issues??[]);setPending(entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN");}}))onCompleted();}catch{setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
  return <Form className="grid gap-3" noValidate onSubmit={()=>submit()}>
  {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
  {refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}
  {preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}
- <fieldset disabled={submitting||pending||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload} values={values} onChange={next=>{setOwnerIssues(old=>old.filter(issue=>[...issue.path,...(issue.relatedPaths??[]).flat()].every(name=>next[name]===values[name])));setValues(next);}} preview={preview} submitted={submitted} issues={ownerIssues} onInvalid={(name,invalid)=>setInvalidJSON(old=>({...old,[name]:invalid}))}/></fieldset>
+ <fieldset disabled={submitting||pending||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload} values={values} onChange={next=>{setOwnerIssues(old=>old.filter(issue=>[...issue.path,...(issue.relatedPaths??[]).flat()].every(name=>next[name]===values[name])));setValues(next);}} preview={preview} submitted={submitted} issues={ownerIssues}/></fieldset>
  <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{pending?t("Close"):t("Cancel")}</Button><Button type="submit" variant="primary" disabled={!enabled||preview||!target.id||submitting}>{submitting?t("Executing…"):pending?t("Retry confirmation"):declared.title}</Button></div>
  </Form>;
 }

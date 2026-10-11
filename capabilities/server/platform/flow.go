@@ -67,6 +67,38 @@ type Continuous struct {
 	// DeadLetterMaxRecords and DeadLetterTTLMs bound the retained replay view.
 	DeadLetterMaxRecords int `json:"deadLetterMaxRecords,omitempty"`
 	DeadLetterTTLMs      int `json:"deadLetterTtlMs,omitempty"`
+	// Concurrency bounds actual partition work on the outside preparation lane.
+	// Zero preserves sequential historical declarations; at most eight workers.
+	Concurrency     int              `json:"concurrency,omitempty"`
+	Aggregate       *StreamAggregate `json:"aggregate,omitempty"`
+	Threshold       *StreamThreshold `json:"threshold,omitempty"`
+	Output          *StreamOutput    `json:"output,omitempty"`
+	ErrorPolicy     string           `json:"errorPolicy,omitempty"`
+	DeadLetterRetry bool             `json:"deadLetterRetry,omitempty"`
+}
+
+type StreamAggregate struct {
+	Node     string   `json:"node"`
+	Kernel   string   `json:"kernel,omitempty"`
+	Above    float64  `json:"above,omitempty"`
+	Signal   string   `json:"signal,omitempty"`
+	Group    []string `json:"group,omitempty"`
+	Measures []string `json:"measures"`
+}
+
+type StreamThreshold struct {
+	Node       string  `json:"node"`
+	Field      string  `json:"field"`
+	High       float64 `json:"high"`
+	Low        float64 `json:"low"`
+	DebounceMS int     `json:"debounceMs"`
+	Severity   string  `json:"severity,omitempty"`
+}
+
+type StreamOutput struct {
+	Node string `json:"node"`
+	Name string `json:"name"`
+	Mode string `json:"mode"`
 }
 
 type StreamIntake struct {
@@ -76,6 +108,7 @@ type StreamIntake struct {
 	EventTime    string   `json:"eventTime"`
 	Value        string   `json:"value"`
 	Offset       string   `json:"offset,omitempty" enum:"latest,earliest"`
+	Fields       []string `json:"fields,omitempty"`
 }
 
 // StreamWindow is a bounded state rule owned by the existing Flow frame.

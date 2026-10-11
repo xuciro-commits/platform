@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/protobuf/proto"
 	"io"
 	"maps"
 	"slices"
@@ -19,19 +20,22 @@ import (
 // which can construct one: a native source prepares outside the tenant lock,
 // then the original accepted-decision pipeline validates its predecessor.
 type PreparedBatch struct {
-	owner       *Flows
-	before      FlowInstance
-	frame       *BatchFrame
-	artifacts   []platform.FlowStateArtifact
-	retired     []platform.FlowStateArtifact
-	outputs     map[string]json.RawMessage
-	sources     []string
-	batch       Batch
-	at          time.Time
-	entry       string
-	windowInput json.RawMessage
-	resumeInput json.RawMessage
-	operation   *platform.OperationRequest
+	owner            *Flows
+	before           FlowInstance
+	frame            *BatchFrame
+	artifacts        []platform.FlowStateArtifact
+	retired          []platform.FlowStateArtifact
+	outputs          map[string]json.RawMessage
+	sources          []string
+	batch            Batch
+	at               time.Time
+	entry            string
+	windowInput      json.RawMessage
+	resumeInput      json.RawMessage
+	operation        *platform.OperationRequest
+	assets           []any
+	replayAsset      *platform.FlowDeadLetterAsset
+	replaySubmission *pb.Submission
 }
 
 // ExpandFrame reads a frozen original frame on the I/O lane. Its summary,
@@ -129,16 +133,20 @@ func (f *Flows) PlanBatch(x FlowInstance, c platform.Caller) (platform.FlowBatch
 	if rule.Intake != nil {
 		intake := *rule.Intake
 		intake.Partition = slices.Clone(intake.Partition)
+		intake.Fields = slices.Clone(intake.Fields)
 		rule.Intake = &intake
 	}
-	plan := &BatchPreparation{owner: f, before: x, rule: rule}
+	plan := &BatchPreparation{owner: f, before: x, rule: rule, caller: f.host.Automation(c, d.app)}
 	if rule.Entry != "" {
 		dstep := d.steps[rule.Entry]
-		if dstep == nil || dstep.Operation == nil {
+		if dstep == nil || dstep.Operation == nil && (rule.Aggregate == nil || dstep.Evaluate == nil && dstep.Loop == nil) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained Compute entry is unavailable")
 		}
-		operation := *dstep.Operation
-		plan.entry, plan.operation = rule.Entry, &operation
+		plan.entry = rule.Entry
+		if dstep.Operation != nil {
+			operation := *dstep.Operation
+			plan.operation = &operation
+		}
 		plan.caller = f.host.Automation(c, d.app)
 	}
 	return plan, nil
@@ -150,6 +158,7 @@ func (plan *BatchPreparation) Intake() (string, *platform.StreamIntake, int) {
 	}
 	intake := *plan.rule.Intake
 	intake.Partition = slices.Clone(intake.Partition)
+	intake.Fields = slices.Clone(intake.Fields)
 	return plan.rule.Source, &intake, plan.rule.Batch
 }
 
@@ -399,9 +408,32 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform
 		// when one window happens to fit inline on its first iteration.
 		outputs["state:"+node] = platform.Raw(BatchStateReference{Instance: x.ID, Node: node, Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(raw)), Size: len(raw)})
 	}
+	for node, raw := range frame.OperatorOutputs {
+		outputs[node] = slices.Clone(raw)
+	}
 	outputs["batch"] = platform.Raw(map[string]any{"cursor": frame.Cursor, "consumed": frame.Consumed, "rejected": frame.Rejected})
 	if len(platform.Raw(outputs)) > 60<<10 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch outputs exceed the Flow output budget")
+	}
+	var assets []any
+	for _, letter := range frame.DeadLetters {
+		if x.Batch != nil && letter.Seq <= x.Batch.DeadLetterSequence {
+			continue
+		}
+		assetID := fmt.Sprintf("flow-dead-letter:%x", sha256.Sum256(platform.Raw([]any{x.ID, x.Version, letter.Seq})))
+		assets = append(assets, platform.FlowDeadLetterAsset{Record: platform.Record{ID: assetID}, App: plan.caller.App, Instance: x.ID, Flow: x.Flow, Version: x.Version,
+			OnBehalf: x.OnBehalf, Sources: slices.Clone(x.Sources), Letter: letter})
+	}
+	if output := plan.rule.Output; output != nil && !batch.Bootstrap {
+		value := frame.OperatorOutputs[output.Name]
+		if len(value) > 48<<10 {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read-only Flow output exceeds its asset budget")
+		}
+		if len(value) > 0 {
+			assetID := fmt.Sprintf("flow-output:%x", sha256.Sum256(platform.Raw([]any{x.ID, output.Name})))
+			assets = append(assets, platform.FlowOutput{Record: platform.Record{ID: assetID}, App: plan.caller.App, Instance: x.ID, Flow: x.Flow, Version: x.Version,
+				Name: output.Name, Batch: frame.Cursor, OnBehalf: x.OnBehalf, Sources: slices.Clone(x.Sources), Value: slices.Clone(value)})
+		}
 	}
 	sources := append([]string(nil), x.Sources...)
 	if batch.Source != nil {
@@ -409,6 +441,16 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform
 			if !slices.Contains(sources, source) {
 				sources = append(sources, source)
 			}
+		}
+	}
+	for i, asset := range assets {
+		switch value := asset.(type) {
+		case platform.FlowOutput:
+			value.Sources = slices.Clone(sources)
+			assets[i] = value
+		case platform.FlowDeadLetterAsset:
+			value.Sources = slices.Clone(sources)
+			assets[i] = value
 		}
 	}
 	var windowInput, resumeInput json.RawMessage
@@ -421,6 +463,9 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform
 		if state.Ready {
 			w := plan.rule.Window
 			previousOutputs := maps.Clone(x.Outputs)
+			if plan.operation == nil {
+				previousOutputs = maps.Clone(outputs)
+			}
 			if previousOutputs == nil {
 				previousOutputs = map[string]json.RawMessage{}
 			}
@@ -439,19 +484,38 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform
 			}
 			run := plan.owner.run(&x)
 			run.Now, run.Data, run.Sources = now, slices.Clone(windowInput), slices.Clone(sources)
-			request, requestErr := plan.operation.Request(plan.caller, run)
-			if requestErr != nil {
-				return nil, requestErr
+			if plan.operation != nil {
+				request, requestErr := plan.operation.Request(plan.caller, run)
+				if requestErr != nil {
+					return nil, requestErr
+				}
+				request.Key = fmt.Sprintf("flow:%s:%s:%d", x.ID, plan.entry, x.Seq)
+				request.OnBehalf = x.OnBehalf
+				request.Release = &x.Release
+				request.Target = InstanceType + "/" + x.ID
+				request.Sources = slices.Compact(slices.Sorted(slices.Values(append(append(slices.Clone(x.Sources), run.Sources...), request.Sources...))))
+				if request.App == "" || request.Name == "" || request.OnBehalf != x.OnBehalf {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The retained Compute entry must name its operation and member")
+				}
+				operationRequest = &request
+			} else {
+				var stats []AggregateRecord
+				var alerts []Alert
+				json.Unmarshal(frame.OperatorOutputs[plan.rule.Aggregate.Node], &stats)
+				if plan.rule.Threshold != nil {
+					json.Unmarshal(frame.OperatorOutputs[plan.rule.Threshold.Node], &alerts)
+				}
+				triggered, normal := []Alert{}, []Alert{}
+				for _, alert := range alerts {
+					if alert.State == "triggered" {
+						triggered = append(triggered, alert)
+					} else {
+						normal = append(normal, alert)
+					}
+				}
+				windowInput = platform.Raw(map[string]any{"outputs": previousOutputs, "signals": projection.Signals, "stats": aggregateOutput(stats), "alerts": alertOutput(alerts), "triggered": alertOutput(triggered), "normal": alertOutput(normal)})
+				resumeInput = slices.Clone(windowInput)
 			}
-			request.Key = fmt.Sprintf("flow:%s:%s:%d", x.ID, plan.entry, x.Seq)
-			request.OnBehalf = x.OnBehalf
-			request.Release = &x.Release
-			request.Target = InstanceType + "/" + x.ID
-			request.Sources = slices.Compact(slices.Sorted(slices.Values(append(append(slices.Clone(x.Sources), run.Sources...), request.Sources...))))
-			if request.App == "" || request.Name == "" || request.OnBehalf != x.OnBehalf {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The retained Compute entry must name its operation and member")
-			}
-			operationRequest = &request
 		}
 	}
 	var artifacts, retired []platform.FlowStateArtifact
@@ -486,7 +550,7 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform
 	artifacts = append(artifacts, ref)
 	frame.State, frame.DeadLetters, frame.Sealed = nil, nil, &ref
 	return &PreparedBatch{owner: plan.owner, before: x, frame: frame, artifacts: artifacts, retired: retired, outputs: outputs, sources: sources, batch: batch, at: now,
-		entry: plan.entry, windowInput: windowInput, resumeInput: resumeInput, operation: operationRequest}, nil
+		entry: plan.entry, windowInput: windowInput, resumeInput: resumeInput, operation: operationRequest, assets: assets}, nil
 }
 
 // BatchKey is stable across preparation races and process recovery. Content
@@ -499,6 +563,9 @@ func (p *PreparedBatch) Decision() platform.App {
 }
 
 func (p *PreparedBatch) Submission(tenant string) *pb.Submission {
+	if p.replaySubmission != nil {
+		return proto.Clone(p.replaySubmission).(*pb.Submission)
+	}
 	return &pb.Submission{TenantId: tenant, Authority: ID, PrincipalId: "app:" + ID,
 		IdempotencyKey: platform.FlowBatchKey(p.before.ID, p.before.Version, p.batch.ID),
 		Target:         &pb.EntityRef{Type: InstanceType, Id: p.before.ID}, Schema: &pb.SchemaRef{Name: SchemaFlowBatch, Version: 1},
@@ -549,11 +616,23 @@ func (d preparedDecision) ForkDecision() (platform.App, error) {
 
 func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	p := d.prepared
-	if !c.Automation || c.ID != "app:"+ID || c.Tenant != p.frame.Sealed.Tenant || sub.GetSchema().GetName() != SchemaFlowBatch || sub.GetTarget().GetId() != p.before.ID || !bytes.Equal(sub.GetPayload(), p.Submission(c.Tenant).GetPayload()) || !now.Equal(p.at) {
+	validPrincipal := c.Automation && c.ID == "app:"+ID
+	if p.replaySubmission != nil {
+		validPrincipal = !c.Automation && c.ID == p.before.OnBehalf && proto.Equal(sub, p.replaySubmission)
+	}
+	if !validPrincipal || c.Tenant != p.frame.Sealed.Tenant || !proto.Equal(sub, p.Submission(c.Tenant)) || !now.Equal(p.at) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the host can accept a prepared Flow batch")
 	}
 	return d.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		ss := d.session(c, now)
+		if p.replayAsset != nil {
+			asset, ok := platform.Get[platform.FlowDeadLetterAsset](c, p.replayAsset.ID)
+			if !ok || !bytes.Equal(platform.Raw(asset), platform.Raw(p.replayAsset)) || asset.Replayed {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dead letter changed while its replay was prepared")
+			}
+			asset.Replayed = true
+			ss.assets = append(ss.assets, asset)
+		}
 		x := ss.load(p.before.ID)
 		if x == nil || !p.Matches(*x) || ended(x.State) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
@@ -562,6 +641,7 @@ func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 		}
 		x.Batch, x.Outputs, x.Sources = p.frame, p.outputs, p.sources
+		ss.assets = append(ss.assets, p.assets...)
 		if len(p.retired) > 0 {
 			if x.CleanupPending || len(x.ArtifactCleanup) != 0 {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A previous Flow artifact cleanup is still pending")
@@ -572,15 +652,17 @@ func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 			}
 		}
-		if p.operation != nil {
+		if len(p.windowInput) > 0 {
 			if len(p.windowInput) == 0 || p.entry == "" {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute input is incomplete")
 			}
 			token := Token{ID: ss.tokenID(x), Step: p.entry, Waits: "ready", Input: slices.Clone(p.windowInput), Outputs: maps.Clone(x.Outputs)}
 			x.Tokens = append(x.Tokens, token)
-			ss.preparedOperations[token.ID] = *p.operation
+			if p.operation != nil {
+				ss.preparedOperations[token.ID] = *p.operation
+			}
 			ss.advance(x)
-			if len(ss.operations) != 1 || ss.operations[0].instance != x.ID || ss.operations[0].token != token.ID || !bytes.Equal(platform.Raw(ss.operations[0].request), platform.Raw(*p.operation)) {
+			if p.operation != nil && (len(ss.operations) != 1 || ss.operations[0].instance != x.ID || ss.operations[0].token != token.ID || !bytes.Equal(platform.Raw(ss.operations[0].request), platform.Raw(*p.operation))) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained Compute entry did not produce its prepared request")
 			}
 			ss.token(x, token.ID).Input = slices.Clone(p.resumeInput)

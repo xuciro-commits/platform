@@ -372,15 +372,34 @@ func words(s string) []string {
 
 // readable says whether reader (or, for none, the agent's app) may read a passage.
 func readable(c *chunk, reader *platform.Member, app string) bool {
-	if len(c.apps) == 0 {
+	return knowledgeAppsReadable(c.apps, reader, app)
+}
+
+func knowledgeAppsReadable(apps []string, reader *platform.Member, app string) bool {
+	if len(apps) == 0 {
 		return true
 	}
-	return slices.ContainsFunc(c.apps, func(a string) bool {
+	return slices.ContainsFunc(apps, func(a string) bool {
 		if reader != nil {
 			return reader.Roles[a] != ""
 		}
 		return a == app
 	})
+}
+
+// knowledgeSourceReadable checks the content grant used by knowledge search,
+// not the editor's permission to inspect document metadata. The record lock
+// is held by the derived-source reader; no index or cached grant is consulted.
+func (t *Tenant) knowledgeSourceReadable(store *recordStore, m platform.Member, id, field string) bool {
+	if m.Tenant != t.ID || field != "" && field != "title" && field != "text" {
+		return false
+	}
+	et := store.types[platform.KnowledgeDocumentType]
+	if et == nil || et.rows[id] == nil {
+		return false
+	}
+	d, ok := et.rows[id].value.Interface().(platform.KnowledgeDocument)
+	return ok && !d.Archived && knowledgeAppsReadable(d.Apps, &m, "")
 }
 
 // Knowledge finds the passages reader may read (for no reader: those of app,

@@ -33,6 +33,7 @@ type session struct {
 	preparedOperations map[int]platform.OperationRequest
 	cancelOperations   []string
 	withdrawals        []approvalWithdrawal
+	assets             []any
 }
 
 type approvalWithdrawal struct{ app, id, member string }
@@ -106,6 +107,9 @@ func (ss *session) apply(r *pb.ChangeRecord) {
 	}
 	for _, id := range ss.order {
 		ss.c.Put(r, *ss.changed[id])
+	}
+	for _, asset := range ss.assets {
+		ss.c.Put(r, asset)
 	}
 	if tasks := ss.f.host.Tasks(); tasks != nil {
 		for _, id := range ss.close {
@@ -448,7 +452,10 @@ func (ss *session) take(x *FlowInstance, token int) {
 		tok.Child = ref.GetId()
 		ss.trace(x, tok.Step, "requested", a.Action, "")
 	case step.Act != nil:
-		target := step.Act.Target(app, run)
+		var target string
+		if step.Act.Target != nil {
+			target = step.Act.Target(app, run)
+		}
 		payload := payloadOf(step.Act.Payload, app, run)
 		if step.Act.TargetValue != nil {
 			value, err := step.Act.TargetValue(app, run)
@@ -473,6 +480,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		}
 		ref, err := ss.act(d.app, step.Act.Protocol, step.Act.Action, target, payload, fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq), member)
 		if err != nil {
+			ss.deadLetterAct(x, tok, step, target, payload, err.Error())
 			ss.failed(x, token, step, err.Error())
 			return
 		}
@@ -672,6 +680,10 @@ func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why s
 		}
 		tok.Waits, tok.Due = "retry", ss.now.Add(delay)
 		ss.trace(x, tok.Step, "retry", why, "")
+	case step.Act != nil && ss.def(x).Continuous != nil && ss.def(x).Continuous.ErrorPolicy == "deadLetter":
+		ss.output(x, token, platform.Raw(map[string]string{"error": why}))
+		ss.trace(x, tok.Step, "dead letter", why, "")
+		ss.next(x, token, "")
 	case step.Fault != "":
 		ss.output(x, token, platform.Raw(map[string]string{"error": why}))
 		ss.trace(x, tok.Step, "fault", why, "")
@@ -1027,16 +1039,19 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	}
 	var p struct{ Token int }
 	json.Unmarshal(s.GetPayload(), &p)
+	if schema == SchemaFlowReplay {
+		return f.replayDeadLetter(c, s, now)
+	}
 	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		ss := f.session(f.host.Automation(c, ID), now)
 		x := ss.load(id)
 		if x == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
-		if ended(x.State) {
+		if ended(x.State) && schema != SchemaFlowResume && schema != SchemaFlowRetire {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
-		if schema != SchemaFlowStop {
+		if schema != SchemaFlowStop && schema != SchemaFlowRetire {
 			if err := f.checkBinding(*x); err != nil {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
 			}
@@ -1084,9 +1099,34 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				}
 			}
 		case SchemaFlowStop:
+			x.Resumable = ss.def(x) != nil && ss.def(x).Continuous != nil && len(x.Tokens) == 1 && x.Tokens[0].Waits == "stream"
 			ss.stopPaths(x)
 			x.State, x.Tokens = "canceled", nil
 			ss.trace(x, "", "canceled", "", c.ID)
+			return ss.apply, nil
+		case SchemaFlowResume:
+			d := ss.def(x)
+			if x.State != "canceled" || !x.Resumable || d == nil || d.Continuous == nil || d.Start.Enabled != nil && !d.Start.Enabled(ss.c) {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Only a stopped continuous Flow without canceled in-flight work can resume its retained version")
+			}
+			x.Resumable, x.State = false, "waiting"
+			x.Tokens = []Token{{ID: ss.tokenID(x), Step: d.Steps[0].Name, Waits: "stream"}}
+			ss.trace(x, "", "resumed", "accepted source checkpoint retained", c.ID)
+			return ss.apply, nil
+		case SchemaFlowRetire:
+			if !ended(x.State) || x.CleanupPending || x.Batch == nil || x.Batch.Sealed == nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Only a terminal continuous frame without pending cleanup can be retired")
+			}
+			refs := []platform.FlowStateArtifact{*x.Batch.Sealed}
+			if x.Batch.CheckpointArtifact != nil {
+				refs = append(refs, *x.Batch.CheckpointArtifact)
+			}
+			x.Batch, x.Outputs, x.Resumable = nil, nil, false
+			x.ArtifactCleanup, x.CleanupPending = refs, true
+			if err := validateArtifactCleanup(*x); err != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+			}
+			ss.trace(x, "", "state retired", "terminal frame and checkpoint released", c.ID)
 			return ss.apply, nil
 		case SchemaFlowMove:
 			versions := f.defs[x.Flow]

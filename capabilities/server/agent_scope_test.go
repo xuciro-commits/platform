@@ -8,8 +8,74 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/knowledge"
 	"platformserver/platform"
 )
+
+func TestAgentKnowledgeCitationUsesCurrentDocumentGrant(t *testing.T) {
+	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	tn := stockTenant(t, knowledge.New("t-1"), NewAgents("t-1"))
+	tn.agents.(*Agents).defs["stock.guide"] = &agentDef{app: "stock"}
+	reader := memberOf(t, tn, "ana") // stock member, not a knowledge editor
+	doc := platform.KnowledgeDocument{Record: platform.Record{ID: "D1"}, Title: "Inspection policy", Text: "Hydraulic inspection policy", Apps: []string{"stock"}}
+	put := func() {
+		t.Helper()
+		if err := tn.automation(platform.KnowledgeApp, false).PutAt(now, "test.policy", doc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put()
+	run := AgentRunRecord{Record: platform.Record{ID: "R1"}, Agent: "stock.guide", OnBehalf: reader.ID, State: "done",
+		Steps:     []RunStep{{Tool: "knowledge", Sources: []string{"knowledge.document/D1"}, Outcome: doc.Text}},
+		Citations: []Citation{{Document: "knowledge.document/D1", Title: doc.Title}}, Result: "Use the inspection policy"}
+	if err := tn.automation(AgentApp, false).PutAt(now, "test.run", run); err != nil {
+		t.Fatal(err)
+	}
+	check := func(visible bool) {
+		t.Helper()
+		found := tn.Knowledge(&reader, "", "Hydraulic inspection", 5, now)
+		if (len(found) == 1) != visible {
+			t.Fatalf("knowledge passages: %+v, want visible=%t", found, visible)
+		}
+		out, err := tn.Read(reader, "runs")
+		if err != nil || len(out.([]AgentRunRecord)) != 1 {
+			t.Fatalf("runs: %+v, %v", out, err)
+		}
+		r := out.([]AgentRunRecord)[0]
+		if visible {
+			if r.Withheld || r.Steps[0].Outcome != doc.Text || len(r.Citations) != 1 || r.Result == "" {
+				t.Fatalf("readable policy lost from trace: %+v", r)
+			}
+		} else if !r.Withheld || r.Steps[0].Outcome != "" || len(r.Citations) != 0 || r.Result != "" {
+			t.Fatalf("hidden policy escaped through trace: %+v", r)
+		}
+	}
+	check(true)
+	// Content citations do not grant the document editor's metadata endpoint.
+	if _, err := tn.RecordOf(reader, platform.KnowledgeDocumentType, doc.ID, now); err == nil {
+		t.Fatal("content grant opened generic document metadata")
+	}
+	may := tn.mayRead(reader, now, false)
+	if !may("knowledge.document/D1#text") || may("knowledge.document/D1#apps") || may("knowledge.document/missing") {
+		t.Fatal("content source grant escaped its field or identity boundary")
+	}
+	foreign := reader
+	foreign.Tenant = "other"
+	if tn.mayRead(foreign, now, false)("knowledge.document/D1") {
+		t.Fatal("another tenant read policy provenance")
+	}
+	// Editing the sharing grant revokes historical citations immediately.
+	doc.Apps = []string{"other"}
+	put()
+	check(false)
+	// Public content remains usable without an editor role, until archived.
+	doc.Apps = nil
+	put()
+	check(true)
+	doc.Archived = true
+	put()
+	check(false)
+}
 
 // What an agent read, cited, drafted and concluded is journaled once and read
 // many times. Authority changes in between, so every read checks the trace

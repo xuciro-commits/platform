@@ -98,7 +98,8 @@ state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500
   curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/protocols" | jq -c '[.[] | {id, bound}]'
   curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/ai-usage" | jq -c '.totals'
   workflow_state
-  function_state; } |
+  function_state
+  industry_source_state; native_stream_state; } |
   jq -cS 'walk(if type == "object" then del(.changed, .created) | if (.profile | type) == "object" then del(.profile.lastSeen) else . end else . end)'; } # record clocks and login presence are not durable business state
 same_state() {
   local expected=$1 actual
@@ -163,6 +164,57 @@ workflow_submit() {
     fail "workflow decision: $3"
   fi
 }
+# The original seven-node stream runs on real PostgreSQL and RustFS. The
+# window/threshold state belongs to Flow; the original supplied f32 Wasm kernel
+# prepares statistics outside its decision lane. Actions are ordinary writes.
+native_stream_setup() {
+  local SERVER=$1 TENANT=$2 AUTHORITY=build actor=$3 suffix=$4
+  local typ=build.telemetry$suffix definition candidate result instance=build.nativestream$suffix:continuous-v1
+  sql "create table native_stream_$suffix(seq bigint primary key,event_id text,plant text,device text,at timestamptz,reading double precision,target text); grant select on native_stream_$suffix to rehearsal_source" >/dev/null
+  workflow_submit "$actor" native-object build.object.create build.object NATIVE-O \
+    "{\"name\":\"telemetry$suffix\",\"title\":\"Accepted telemetry results\",\"fields\":[{\"name\":\"reading\",\"title\":\"Reading\",\"type\":\"decimal\"}]}"
+  workflow_submit "$actor" native-object-publish build.object.publish build.object NATIVE-O '{}'
+  for n in $(seq 0 7); do
+    workflow_submit "$actor" "native-row-$n" "$typ.create" "$typ" "SENSOR-$n" '{"reading":0}'
+  done
+  workflow_submit "$actor" native-source build.source.create build.source NATIVE-SOURCE \
+    "{\"name\":\"nativetelemetry\",\"title\":\"Seven-node telemetry\",\"connection\":\"STREAM-DB\",\"profile\":\"table\",\"entity\":\"native_stream_$suffix\",\"since\":\"seq\",\"stream\":true}"
+  workflow_submit "$actor" native-source-publish build.source.publish build.source NATIVE-SOURCE '{}'
+  definition=$(jq -n --arg name "nativestream$suffix" --arg action "$typ.edit" \
+    '{name:$name,title:"Seven-node retained telemetry",continuous:{Source:"nativetelemetry",Batch:512,State:16777216,FrameBytes:67108864,checkpointEvery:5000,DeadLetter:true,deadLetterMaxRecords:10000,deadLetterTtlMs:86400000,errorPolicy:"deadLetter",deadLetterRetry:true,concurrency:8,entry:"alertsloop",
+      Intake:{sourceRecord:"NATIVE-SOURCE",key:"event_id",partition:["plant","device"],eventTime:"at",value:"reading",fields:["plant","device","target"]},
+      Window:{node:"windowstate",windowMs:30000,slideMs:5000,watermarkMs:2000,maxRecords:10000,lateEvents:"sideOutput"},
+      aggregate:{node:"aggregate",kernel:"wasm:f32-window-stats",signal:"reading",group:["plant","device"],measures:["count","sum","mean","min","max","above"],above:11.5},
+      threshold:{node:"threshold",field:"mean",high:11.5,low:9.5,debounceMs:3000,severity:"High"},output:{node:"publishstats",name:"liveTelemetryStats",mode:"replace"}},
+      steps:[{name:"alertsloop",kind:"foreach",collection:{source:"input",path:["triggered"]},body:"emitalert",maxIterations:10000,concurrency:1,next:"completed"},
+        {name:"emitalert",kind:"action",act:$action,target:{source:"item",path:["target"]},inputs:{reading:{source:"item",path:["reading"]}},retryAttempts:3,retryBackoffMs:250},
+        {name:"completed",kind:"end"}]}')
+  workflow_submit "$actor" native-process build.process.create build.process NATIVE-P "$definition"
+  workflow_submit "$actor" native-process-publish build.process.publish build.process NATIVE-P '{}'
+  candidate=$(workflow_post "$actor" releases/preview '{"kind":"flow","id":"NATIVE-P"}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "native stream preview"
+  workflow_post "$actor" releases/candidates "{\"kind\":\"flow\",\"id\":\"NATIVE-P\",\"candidateId\":\"$candidate\",\"key\":\"native-save\"}" | jq -e '.id' >/dev/null || fail "native stream save"
+  workflow_post "$actor" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"native-activate\"}" | jq -e '.id' >/dev/null || fail "native stream activate"
+  sql "insert into native_stream_$suffix select n,'native-'||n,'P','D'||(n-1),now()-interval '3 seconds',13,'SENSOR-'||(n-1) from generate_series(1,8) n" >/dev/null
+  for _ in $(seq 60); do
+    result=$(workflow_get "$actor" "records/$typ?limit=50")
+    jq -e '.records | length == 8 and all(.[]; .reading == 13)' <<<"$result" >/dev/null && break
+    sleep 1
+  done
+  jq -e '.records | length == 8 and all(.[]; .reading == 13)' <<<"$result" >/dev/null || fail "native stream did not apply all eight original actions"
+  workflow_get "$actor" 'records/flow.output?limit=50' | jq -e --arg id "$instance" '.records | any(.[]; .instance == $id and .name == "liveTelemetryStats" and (.value | length) == 8)' >/dev/null || fail "native read-only output unavailable"
+  workflow_submit "$actor" native-source-pause build.source.pause build.source NATIVE-SOURCE '{}'
+  AUTHORITY=flow workflow_submit "$actor" native-stop flow.instance.cancel flow.instance "$instance" '{}'
+  workflow_get "$actor" "records/flow.instance/$instance" | jq -e '.record | .state == "canceled" and .resumable' >/dev/null || fail "native stream lost same-version continuation"
+}
+native_stream_state() {
+  local SERVER actor suffix path
+  for suffix in plant hotel; do
+    if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING; actor=$SUP; else SERVER=$HOSPITALITY; actor=$MGR; fi
+    for path in records/build.source/NATIVE-SOURCE records/build.process/NATIVE-P records/build.telemetry$suffix 'records/flow.output?limit=50' "records/flow.instance/build.nativestream$suffix:continuous-v1"; do
+      curl -s -H "Authorization: Bearer $actor" "$SERVER/v1/$path"
+    done
+  done
+}
 workflow_state() {
   local SERVER actor suffix path
   for suffix in plant hotel; do
@@ -185,6 +237,23 @@ function_state() {
       records/build.code/CODE-DATA "capabilities/calls/compute/$tenant:build:operation:compute-$suffix:operation"; do
       workflow_get "$actor" "$path" || fail "function state $suffix $path"
     done
+  done
+}
+industry_source_state() {
+  # Keep these records in every restart, backup and full-replay comparison.
+  # Before the S-01 probe they are absent; no existing section index changes.
+  local SERVER actor suffix path
+  for suffix in plant hotel; do
+    if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING; actor=$SUP; else SERVER=$HOSPITALITY; actor=$MGR; fi
+    for path in records/build.source/S01-SOURCE; do
+      curl -s -H "Authorization: Bearer $actor" "$SERVER/v1/$path"
+    done
+  done
+  for path in records/crm.account/S01-CUSTOMER records/crm.opportunity/S01-STAY records/pms.reservation/S01-STAY-B1; do
+    curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/$path"
+  done
+  for path in records/erp.production/S01-PLAN records/mes.order/S01-WO records/mes.sfc/S01-WO-001; do
+    curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/$path"
   done
 }
 workflow_wait() {
@@ -737,8 +806,71 @@ sql "create role rehearsal_source login password 'sinkLocalOnly00000000000000000
 )
 echo "ok   Go/TinyGo data ABI: real isolated compilation, call-owned RustFS input/output and PostgreSQL result; retries keep the original call"
 echo "ok   PostgreSQL continuous sources: both hosts accept 1025 real rows in 512-row batches, with one consumer cursor and sealed RustFS window state"
+native_stream_setup "$MANUFACTURING" plant-sz "$SUP" plant
+native_stream_setup "$HOSPITALITY" hotel-a "$MGR" hotel
+echo "ok   complete native telemetry: exact f32 Wasm, eight partitions, hysteresis, eight original actions, read-only output and durable stop"
 before=$(settled_state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
+
+# S-01 uses different native business meanings, not the same receiving sample
+# with two titles. Reuse the controlled PostgreSQL reader and the original
+# source/submit owners; only these disposable source tables are external rows.
+sql "create table s01_hotel_customer(id text primary key, name text, kind text); insert into s01_hotel_customer values ('S01-CUSTOMER','Source customer','company'); grant select on s01_hotel_customer to rehearsal_source" >/dev/null
+sql "create table s01_plant_production(id text primary key, product text, quantity double precision); insert into s01_plant_production values ('S01-PLAN','P-100',2); grant select on s01_plant_production to rehearsal_source" >/dev/null
+(
+  for suffix in plant hotel; do
+    if [[ $suffix == plant ]]; then
+      SERVER=$MANUFACTURING TENANT=plant-sz actor=$SUP table=s01_plant_production object=erp.production
+      mapping='[{"from":"product","to":"product"},{"from":"quantity","to":"quantity","convert":"number"}]'
+    else
+      SERVER=$HOSPITALITY TENANT=hotel-a actor=$MGR table=s01_hotel_customer object=crm.account
+      mapping='[{"from":"name","to":"name"},{"from":"kind","to":"kind"}]'
+    fi
+    AUTHORITY=build
+    definition=$(jq -n --arg name "industry$suffix" --arg table "$table" --arg object "$object" --argjson mapping "$mapping" \
+      '{name:$name,title:"Native industry input",connection:"STREAM-DB",profile:"table",entity:$table,object:$object,key:"id",mapping:$mapping}')
+    workflow_submit "$actor" s01-source build.source.create build.source S01-SOURCE "$definition"
+    workflow_submit "$actor" s01-source-publish build.source.publish build.source S01-SOURCE '{}'
+    for _ in $(seq 30); do
+      result=$(workflow_get "$actor" records/build.source/S01-SOURCE)
+      jq -e '.record.last | .rows == 1 and .applied == 1 and .failed == 0 and (.error // "") == ""' <<<"$result" >/dev/null && break
+      sleep 1
+    done
+    jq -e '.record.last | .rows == 1 and .applied == 1 and .failed == 0 and (.error // "") == ""' <<<"$result" >/dev/null || fail "native $suffix source did not accept its business row"
+    workflow_submit "$actor" s01-source-pause build.source.pause build.source S01-SOURCE '{}'
+  done
+)
+records "$MGR" crm.account/S01-CUSTOMER | jq -e '.record | .name == "Source customer" and .kind == "company"' >/dev/null || fail "source customer missing"
+# The existing front-desk member gains only CRM sales. The sales-1 PMS
+# revocation remains in force, and the original chosen provider is restored.
+DESK=$(token desk@hotel.test)
+hosp platform "$MGR" s01-desk-crm platform.member.grant platform.member desk-1 '{"app":"crm","role":"sales"}' | jq -e .record >/dev/null || fail "front desk CRM grant"
+original_provider=$(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/protocols" | jq -er '.[] | select(.id == "lodging.booking/1") | .bound') || fail "original lodging provider missing"
+hosp platform "$MGR" s01-provider-pms platform.protocol.bind platform.protocol lodging.booking/1 '{"provider":"pms"}' | jq -e .record >/dev/null || fail "native PMS binding"
+hosp crm "$DESK" s01-opportunity crm.opportunity.open crm.opportunity S01-STAY '{"account":"S01-CUSTOMER","title":"Source customer stay"}' | jq -e .record >/dev/null || fail "source customer opportunity"
+hosp crm "$DESK" s01-book crm.opportunity.book crm.opportunity S01-STAY '{"roomType":"standard","checkIn":"2027-01-06","checkOut":"2027-01-07","guest":"Source customer"}' | jq -e .record >/dev/null || fail "source customer stay"
+for _ in $(seq 30); do
+  result=$(records "$DESK" crm.opportunity/S01-STAY)
+  jq -e '.record | .account == "S01-CUSTOMER" and .owner == "desk-1" and .stays[0].booking == "S01-STAY-B1" and .stays[0].status == "booked"' <<<"$result" >/dev/null && break
+  sleep 1
+done
+jq -e '.record | .account == "S01-CUSTOMER" and .owner == "desk-1" and .stays[0].status == "booked"' <<<"$result" >/dev/null || fail "native lodging answer missing"
+records "$DESK" pms.reservation/S01-STAY-B1 | jq -e '.record | .roomType == "standard" and .guest == "Source customer"' >/dev/null || fail "source stay missing in PMS"
+hosp platform "$MGR" s01-provider-restore platform.protocol.bind platform.protocol lodging.booking/1 "$(jq -n --arg provider "$original_provider" '{provider:$provider}')" | jq -e .record >/dev/null || fail "restore lodging provider"
+erp s01-plan-release erp.production.release erp.production S01-PLAN '{}'
+submit "$SUP" s01-shop-release mes.order.release mes.order S01-WO '{"product":"P-100","quantity":2,"sfcs":1,"planned":"S01-PLAN"}' | jq -e .record >/dev/null || fail "source production shop order"
+rev=0
+for resource in FURNACE-1 CNC-11 CMM-1; do
+  submit "$OP1" "s01-start-$rev" mes.sfc.start mes.sfc S01-WO-001 "{\"resource\":\"$resource\"}" "$rev" | jq -e .record >/dev/null || fail "source production start"
+  submit "$OP1" "s01-complete-$rev" mes.sfc.complete mes.sfc S01-WO-001 '{}' "$((rev + 1))" | jq -e .record >/dev/null || fail "source production complete"
+  rev=$((rev + 2))
+done
+for _ in $(seq 30); do [[ $(wo S01-WO) == confirmed* ]] && break; sleep 1; done
+[[ $(wo S01-WO) == confirmed*" S01-PLAN" ]] || fail "source production confirmation missing"
+curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/erp.production/S01-PLAN" |
+  jq -e '.record | .product == "P-100" and .quantity == 2 and .state == "confirmed" and .shopOrder == "S01-WO" and .yield == 2' >/dev/null || fail "source production not confirmed in ERP"
+echo "ok   native industry tasks: real source customer became an ordinary member's CRM/PMS stay; real production row became ERP release, operator SFC work and protocol confirmation"
+before=$(settled_state)
 
 compose restart manufacturing-server hospitality-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/me") == 200 ]] && break; sleep 1; done

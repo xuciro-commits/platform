@@ -130,7 +130,7 @@ func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, no
 	state.Ready = false
 	if newSlide {
 		state.EmittedAt = boundary
-		state.Ready = len(windowSignals(state, w)) > 0 || declared.Entry != ""
+		state.Ready = len(windowSignals(state, w)) > 0 || declared.Entry != "" || declared.Aggregate != nil
 	} else if lateAccepted {
 		state.Ready = true
 	}

@@ -611,6 +611,12 @@ export type Continuous = {
   DeadLetter: boolean;
   deadLetterMaxRecords?: number;
   deadLetterTtlMs?: number;
+  concurrency?: number;
+  aggregate?: StreamAggregate;
+  threshold?: StreamThreshold;
+  output?: StreamOutput;
+  errorPolicy?: string;
+  deadLetterRetry?: boolean;
 };
 
 export type Contract = {
@@ -2897,6 +2903,15 @@ export type Stereotype = {
   supplier?: string[];
 };
 
+export type StreamAggregate = {
+  node: string;
+  kernel?: string;
+  above?: number;
+  signal?: string;
+  group?: string[];
+  measures: string[];
+};
+
 export type StreamIntake = {
   sourceRecord: string;
   key: string;
@@ -2904,6 +2919,22 @@ export type StreamIntake = {
   eventTime: string;
   value: string;
   offset?: "latest" | "earliest";
+  fields?: string[];
+};
+
+export type StreamOutput = {
+  node: string;
+  name: string;
+  mode: string;
+};
+
+export type StreamThreshold = {
+  node: string;
+  field: string;
+  high: number;
+  low: number;
+  debounceMs: number;
+  severity?: string;
 };
 
 export type StreamWindow = {

@@ -10,6 +10,22 @@
 
 在工作区顶部点“Last activated release / 租户最后激活的发布”，或打开“Search and commands / 搜索和命令”选择同一命令，可查看完整发布 ID 并刷新；窄屏保留搜索图标。它标识最后激活的候选；直接安装可能在其之外改变定义（production profile 已停用），已有流程仍保留自己的启动发布。尚未激活与读取失败分别显示，失败时不继续展示旧 ID。此入口不开放构建者候选目录。
 
+## 两行业交付与接手操作
+
+本节沿现有业务和交付入口操作；本地账户及登录方法见 [部署说明](../deploy/local/README.md)，不把开发令牌用于生产入口。酒店使用 `http://localhost:8495`，制造使用 `http://localhost:8490`；先确认 `/healthz`、工作区的当前租户、自己的应用角色和最后激活发布。运行环境更新只用 `make docker`，保留已有数据卷。隔离复核用 `make rehearse`；它创建并清除自己的演练环境，不在负责人租户重置数据或撤销角色。
+
+**酒店业务。** 销售从 CRM 创建客户和商机，在商机记录选择 Book stay / 预订住宿或 Plan group stay / 计划团队住宿，填写原房型、入住和离店日期。绑定住宿提供方时，结果沿 `lodging.booking/1` 返回并关联真实住宿记录；请求被接受不表示已订到房。没有提供方时由有权人员记录电话/邮件答复。管理员在 Protocols / 协议核对当前提供方，在 PMS 取消住宿后回到商机查看来源记录和活动；改变提供方只影响新请求，旧住宿继续属于原提供方。销售丢失提供方角色后，新预订应拒绝，不以销售角色替代 PMS 权限。相关动作分别是 `crm.opportunity.book/plan/answer`、`pms.reservation.cancel`、`platform.protocol.bind`，跨应用双方独立授权。
+
+**制造业务。** 主管在 MES 下达订单，明确产品、数量、批次数和受支持的计划订单；普通操作员在 SFC 按已固定工艺版本选择当前工序可用设备，依次 Start / 开工和 Complete / 完工。订单完成后的生产确认沿原生产协议发送到 ERP，不能把 SFC 完工等同 ERP 已接受。没有计划订单时确认被拒绝；主管核对拒绝原因和目标计划后执行 `mes.order.reconfirm`，读取订单确认状态及 ERP 原生产记录。质量/返工沿原 MES 动作，不直接改 SFC 索引；不新增工艺主数据或排产范围。可执行的原动作是 `mes.order.release`、`mes.sfc.start/complete` 和 `mes.order.reconfirm`，使用该租户实际目录中的产品、设备与计划订单，不照抄其他租户 ID。
+
+**构建、外部数据与发布。** 构建者在 Data Connection 建立并 Check 连接，配置 Source 写入原 Dataset；Pipeline 明确类型转换、数据质量规则及目标业务对象，先查看有效行和拒绝行，再在 Workshop 组合记录窗口与原动作。Automate 的流程和 Writeback 固定依赖版本；回写结果字段只接外部实际回执。Projects 的应用资源须包含 Connection、Source、Dataset、Pipeline、Matching、Writeback 以及所需对象、页面、流程。Releases 选择应用和依赖草稿，Check joint candidate / 检查联合候选，查看问题定位、测试和完整封存资产，保存候选后激活；后续草稿编辑不修改该候选。普通成员从 Home 的已发布应用进入，操作收到的数据行，不进入定义编辑器。`make e2e SPEC=integration-fabric` 在两行业隔离宿主复核这条共同收货链；其中外部 HTTP 服务使用受控真实请求与合成行，两个宿主采用同一收货语义，不能用这条路线代替上面的不同原生行业任务或生产客户验收。
+
+**目标环境及受支持升级。** 有权宿主管理员在 Host Console 选择封存候选和目标租户，核对完整依赖与目标主体/scope，显式设置目标环境的连接/来源绑定；凭据、数据行、消费游标和投递回执不随候选移植。先晋级不激活，查看目标环境升级计划后激活。只改显示或兼容逻辑的版本可沿同一路径升级；已存在记录的存储字段变化在没有受支持迁移计划时会拒绝。旧等待流程继续启动时的版本和发布；定义回退不回滚已发生业务事实。`TestIntegrationReleaseAcrossEnvironments` 与配置真实 PostgreSQL 后的 `TestJournalIntegrationReleaseAcrossEnvironments` 复核两环境绑定、v2、旧在途工作、晚期拒绝和故障恢复；独立接手人员仍须在所交付环境完成实际操作。
+
+**失败定位与恢复。** 从业务记录的“此记录的相关工作”进入原流程/审批/AI 运行，核对发起成员、原定义版本、启动发布和错误；集成管理员从 Integration health / 集成健康打开原 Source、Pipeline 或 Writeback 及对应连接，核对队列、失败行和投递状态。外部 503 时业务接受与投递成功分别显示，修复端点后按原重试恢复，保持原幂等键；结果未知时不能自行报告成功。集成角色只能看获权元数据，不能读宿主效果载荷。进程问题查 `/healthz`，租户问题由管理员查 `/v1/health`；quarantined 时沿 [恢复与原地修复方法](../deploy/local/README.md) 处理，不删历史日志使健康变绿。受支持故障、重启、备份恢复和全日志重建由 `make rehearse` 集中复核。
+
+**AI 接手前提。** AI → Providers and models / 供应商与模型先配置真实供应商、宿主受控密钥与已启用模型，并核对应用/Agent 的模型设置、成员授权和预算，再执行建议、检索与人工确认任务。`GET /v1/ai-providers`、`GET /v1/ai-models` 只说明目录和许可，不证明外部可达或质量；`local/echo` 演练只验证协议和治理。模型未配置时仍可执行以上非 AI 业务，不把无回答或替身回答当成真实质量验收。
+
 ## 构建者路径与当前边界
 
 应用入口（ADR-0052）：在 Projects 创建并保存应用后，可在 Projects（项目）应用左侧 nav 的“Projects”分组直接切换，包括尚未交付的 WMS 等草稿；对象类型、关系、页面、流程、函数分别在 Ontology、Workshop、Automate、AI Functions、Code 应用中编辑，发布在 Releases 应用中完成（ADR-0052 §11）。应用工作区按页面、数据与语义、逻辑与 AI 提供原创建动作；资源保存后加入当前应用草稿并打开原编辑器，关联失败保留资源并提示重新选择。页面与资源选择器接受已保存草稿，无需先单独发布页面。资源区默认显示本应用的成员，“Choose existing resources / 选择已有资源”展开获权资源清单；Build 的管理页不作为业务页面提供。页面、对象、模型、逻辑、测试及发布审查保留返回应用路径；未安装对象的页面只提供草稿字段提示，数据读取仍由原宿主检查。

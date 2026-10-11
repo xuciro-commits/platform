@@ -1,7 +1,7 @@
 import { mixedNames } from "../editor/names";
 import { ObjectLineage } from "./lineage";
 import {actionDestinations,actionResultEdges} from "./process-rules";
-import { fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type Numbering_, type ObjectScope, type Process, type State } from "./object-model";
+import { actionInputFields, fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type Numbering_, type ObjectScope, type Process, type State } from "./object-model";
 import { ShapeEditor } from "./shape";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 // The object's process editor (ADR-0037): its states and the actions people
@@ -293,10 +293,7 @@ function Preview({ object, process, action }: { object: ObjectRecord; process: P
           state: process.states.find((s) => s.name === action.approval?.pending)?.title ?? action.approval.pending,
           levels: action.approval.levels.map((level) => `${level.title} (${level.role})`).join(" → "),
         })}</p>}
-        <PayloadFields preview values={values} onChange={setValues} fields={(action.inputs ?? []).map((i) => ({
-          name: i.name, type: i.type === "integer" ? "integer" : i.type === "decimal" ? "number" : i.type === "date" ? "date" : i.type === "boolean" ? "boolean" : "string",
-          required: i.required, description: i.title, choices: i.type === "choice" ? (i.choices ?? "").split(",").map((c) => c.trim()).filter(Boolean) : undefined,
-        }))} />
+        <PayloadFields preview values={values} onChange={setValues} fields={actionInputFields(action.inputs ?? [])} />
         {(action.conditions ?? []).length > 0 && <ul className="grid gap-1 text-xs text-muted">
           {action.conditions!.map((c, i) => <li key={i}>{t("Needs {field} {operator} {value}; otherwise: “{message}”", { field: c.field, operator: c.operator, value: c.valueField ?? c.value ?? "", message: c.message })}</li>)}
         </ul>}
