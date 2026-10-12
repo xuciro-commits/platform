@@ -36,6 +36,8 @@ make setup
 make lite                          # 默认启动酒店业工作台 (http://localhost:8495)
 # 或
 make lite SOLUTION=manufacturing   # 启动制造业工作台 (http://localhost:8490)
+# 或（容器/沙箱里要对外监听时）
+make lite ADDR=0.0.0.0:8495
 ```
 
 > **运行机制说明**：
