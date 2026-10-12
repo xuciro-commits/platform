@@ -123,7 +123,8 @@ export function ProjectHome({ id }: { id: string }) {
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
   const project = query.data?.record;
-  const { owned, available, shared, loading } = useProjectResources(project);
+  const { inventories, owned, available, shared, loading } = useProjectResources(project);
+  const resourcesUnavailable = owned.some(resource => !resource.installed && inventories[resource.kind.kind]?.isError);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string>();
   const [tab, setTab] = useState<"resources" | "runs" | "roles" | "settings">("resources");
@@ -294,11 +295,12 @@ export function ProjectHome({ id }: { id: string }) {
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
         {builder && <NewResourceMenu disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)} />}
-        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || !!pendingPatch || !!createdResource || !project.pages?.length} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
+        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || resourcesUnavailable || !!pendingPatch || !!createdResource || !project.pages?.length} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
       </>}
       left={{ label: t("Project resources"), content: tree }}
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+        {resourcesUnavailable && <Notice tone="warning" role="alert" message={t("Some project assets are unreadable. Membership and release selection must not be inferred from an empty inventory.")} />}
         {error && tab !== "settings" && <p role="alert" className="p-3 text-sm text-danger">{error}</p>}
         {pendingPatch && <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("An application update may already have been accepted. Retry its original payload; leaving does not undo accepted changes.")} />
           <div><Button disabled={saving} onClick={() => void retryPatch()}>{t("Retry original application update")}</Button></div></div>}

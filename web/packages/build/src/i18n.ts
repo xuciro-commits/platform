@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Project ownership is unavailable": "无法读取项目归属",
+  "Reading project ownership…": "正在读取项目归属…",
+  "Shared by {projects}": "由 {projects} 共同引用",
+  "The resource inventory is unavailable. This does not mean the application has no assets.": "资源目录不可用；这不表示应用没有资产。",
+  "Some project assets are unreadable. Membership and release selection must not be inferred from an empty inventory.": "部分项目资产无法读取；不能根据空目录推断归属或发布选择。",
+
   "The release selection is invalid or exceeds its budget. Reopen review from the application.": "发布选择无效或超过预算，请从应用重新打开审阅。",
   "The release selection exceeds the original 4096-byte request budget. No drafts were dropped.": "发布选择超过原 4096 字节请求预算；未裁掉任何草稿。",
 

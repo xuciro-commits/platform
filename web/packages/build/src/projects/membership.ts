@@ -9,7 +9,7 @@ import { useMemo } from "react";
 import { kindOfType, refKey, resourceRef } from "./resources";
 
 type ProjectRecord = Api.Application & { id: string; archived?: boolean };
-export type ProjectIndex = { byRef: Map<string, { id: string; title: string }[]>; loaded: boolean };
+export type ProjectIndex = { byRef: Map<string, { id: string; title: string }[]>; loaded: boolean; failed?: boolean };
 
 export function useProjectIndex(): ProjectIndex {
   const projects = useRecordInventory<ProjectRecord>("build.app");
@@ -21,14 +21,20 @@ export function useProjectIndex(): ProjectIndex {
       for (const ref of p.resources ?? []) (byRef.get(refKey(ref)) ?? byRef.set(refKey(ref), []).get(refKey(ref))!).push(entry);
       for (const name of p.pages ?? []) { const k = refKey({ app: "build", kind: "page", name }); (byRef.get(k) ?? byRef.set(k, []).get(k)!).push(entry); }
     }
-    return { byRef, loaded: !!projects.data };
-  }, [projects.data]);
+    return { byRef, loaded: projects.isSuccess, failed: projects.isError };
+  }, [projects.data, projects.isSuccess, projects.isError]);
 }
 
 /** The group a resource falls in when grouped by project. */
 export function projectGroup(index: ProjectIndex, ref: Api.AssetRef): { id: string; label: string; order?: number } {
+  if (!index.loaded) return { id: "_unknown", label: index.failed ? t("Project ownership is unavailable") : t("Reading project ownership…"), order: 8 };
   const held = index.byRef.get(refKey(ref));
-  if (held?.length) return { id: held[0]!.id, label: held[0]!.title };
+  if (held?.length === 1) return { id: held[0]!.id, label: held[0]!.title };
+  if (held && held.length > 1) {
+    const projects = [...new Map(held.map(project => [project.id, project])).values()].sort((a, b) => a.id.localeCompare(b.id));
+    if (projects.length === 1) return { id: projects[0]!.id, label: projects[0]!.title };
+    return { id: `shared:${JSON.stringify(projects.map(project => project.id))}`, label: t("Shared by {projects}", { projects: projects.map(project => project.title).join(", ") }), order: 4 };
+  }
   return { id: "_none", label: t("Not in a project"), order: 9 };
 }
 

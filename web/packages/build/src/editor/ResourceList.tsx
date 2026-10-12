@@ -4,7 +4,7 @@
 // paging. The signature is RecordList's, so an inventory page swaps one for
 // the other and nothing else changes.
 import { useHost, useRecordInventory } from "@platform/app";
-import { Button, GroupedList, RecordList, Tag, t, type EntityRecord, type RecordSource } from "@platform/ui";
+import { Button, GroupedList, RecordList, Tag, Panel, t, type EntityRecord, type RecordSource } from "@platform/ui";
 import { ListTree, Table2 } from "lucide-react";
 import { useState } from "react";
 import { kindOfType } from "../projects/resources";
@@ -38,6 +38,8 @@ export function ResourceList({ source, type, fields = [], onOpen }: { source: Re
     <Button size="sm" variant={mode === "table" ? "primary" : "ghost"} aria-pressed={mode === "table"} onClick={() => setMode("table")}><Table2 />{t("Table")}</Button>
   </span>;
   if (mode === "table") return <div className="grid gap-2"><div className="flex">{toggle}</div><RecordList source={source} type={type} fields={fields} onOpen={onOpen} /></div>;
+  if (inventory.isError) return <Panel role="alert" className="grid gap-2 text-sm"><p>{t("The resource inventory is unavailable. This does not mean the application has no assets.")}</p>
+    <div>{toggle}<Button size="sm" onClick={() => void inventory.refetch()}>{t("Refresh")}</Button></div></Panel>;
   return <GroupedList<Row> items={rows} id={(r) => r.id} text={(r) => `${r.title ?? ""} ${r.name ?? ""} ${r.object ?? ""} ${extras.map((f) => String((r as Record<string, unknown>)[f] ?? "")).join(" ")}`}
     onSelect={onOpen} groupings={groupings} toolbar={toggle}
     row={(r) => <>
