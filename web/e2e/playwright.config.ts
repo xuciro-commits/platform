@@ -5,6 +5,7 @@ import process from "node:process";
 import { defineConfig } from "@playwright/test";
 
 const port = 18496;
+const browser = process.env.PLATFORM_CHROMIUM;
 
 export default defineConfig({
   testDir: "tests",
@@ -12,7 +13,8 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
   // On a Mac the installed Google Chrome runs the tests; CI installs Playwright's Chromium.
-  use: { baseURL: `http://127.0.0.1:${port}`, locale: "en-US", trace: "retain-on-failure", screenshot: process.env.PLATFORM_SCREENSHOTS ? "on" : "only-on-failure", channel: process.env.CI ? undefined : "chrome" },
+  // A machine with neither runs the Chromium named by PLATFORM_CHROMIUM instead (AGENTS.md).
+  use: { baseURL: `http://127.0.0.1:${port}`, locale: "en-US", trace: "retain-on-failure", screenshot: process.env.PLATFORM_SCREENSHOTS ? "on" : "only-on-failure", channel: browser ? undefined : process.env.CI ? undefined : "chrome", launchOptions: browser ? { executablePath: browser, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] } : undefined },
   webServer: [{
     command: `go run ./cmd/hospitality-server -addr 127.0.0.1:${port} -web ../../web/apps/workspace/dist`,
     cwd: "../../solutions/hospitality",
