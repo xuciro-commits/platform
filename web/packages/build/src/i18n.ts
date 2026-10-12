@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Save or discard project settings before changing resource membership.": "更改资源归属前，请先保存或放弃项目设置。",
+  "Reload current project settings": "重新读取当前项目设置",
+  "Some draft inventories are unavailable. An empty list does not mean every draft is live.": "部分草稿目录无法读取；列表为空不表示所有草稿都已发布。",
+  "Project runs are unavailable. This does not mean there are no running tasks.": "无法读取项目运行；这不表示没有正在执行的任务。",
   "The release request was accepted, but its refreshed review is unavailable.": "发布请求已被接收，但暂时无法读取更新后的审阅。",
   "Active release is unavailable.": "无法读取当前活跃发布。",
   "A joint candidate accepts at most 32 drafts. Select a supported application closure.": "联合候选最多接收 32 份草稿，请选择受支持的应用依赖闭包。",

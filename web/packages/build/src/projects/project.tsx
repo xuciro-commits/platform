@@ -5,9 +5,9 @@ import { releaseDraftsValue } from "../releases/release";
 // existing` brings one in, and its pages, navigation and header are its interface.
 import { pageUIProfile, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, notify, t, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, notify, t, useUnsavedChanges, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { Boxes, Braces, Database, FolderKanban, Layers, LayoutTemplate, Link2, Plus, Search, Sparkles, Tags, Workflow } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApplicationImport";
 import type { ApplicationImportDependency } from "../workshop/module-import/application-import";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
@@ -137,26 +137,44 @@ export function ProjectHome({ id }: { id: string }) {
   // otherwise "save" the old values back and the two would overwrite each
   // other once a second.
   const [edited, setEdited] = useState(false);
+  const lock = useRef(false);
+  const baseline = useRef<{ values: NonNullable<typeof settings>; revision: number } | undefined>(undefined);
   const fromRecord = (p: Project) => ({ title: p.title, name: p.name, description: p.description ?? "", icon: p.icon ?? "boxes" });
   useEffect(() => { if (project && !edited) setSettings(fromRecord(project)); }, [project, edited]);
   const changedSettings = useMemo(() => {
-    if (!project || !settings || !edited) return {} as Partial<Api.Application>;
-    const current = fromRecord(project), out: Partial<Api.Application> = {};
+    if (!settings || !edited) return {} as Partial<Api.Application>;
+    const current = baseline.current?.values;
+    if (!current) return {} as Partial<Api.Application>;
+    const out: Partial<Api.Application> = {};
     for (const key of ["title", "name", "description", "icon"] as const) if (settings[key] !== current[key]) out[key] = settings[key];
     return out;
   }, [project, settings, edited]);
   const dirty = Object.keys(changedSettings).length > 0;
-  const patch = async (changes: Partial<Api.Application>) => {
-    if (!project) return false;
-    setSaving(true); setError(undefined);
+  const { markSaved, confirmDiscard } = useUnsavedChanges(dirty, () => {
+    baseline.current = undefined; setEdited(false); if (project) setSettings(fromRecord(project)); setError(undefined);
+  }, saving);
+  const patch = async (changes: Partial<Api.Application>, revision = project?.revision, settingsSave = false) => {
+    if (!project || lock.current) return false;
+    if (dirty && !settingsSave) { setError(t("Save or discard project settings before changing resource membership.")); return false; }
+    lock.current = true; setSaving(true); setError(undefined);
     try {
-      const ok = await decide("build.app.edit", { type: "build.app", id: project.id }, changes, { expectedRevision: project.revision, quiet: true, onRefused: setError });
+      const ok = await decide("build.app.edit", { type: "build.app", id: project.id }, changes, { expectedRevision: revision, quiet: true, onRefused: setError });
       if (ok) await query.refetch();
       return ok;
-    } catch { setError(t("The project could not be saved.")); return false; } finally { setSaving(false); }
+    } catch { setError(t("The project could not be saved.")); return false; } finally { lock.current = false; setSaving(false); }
   };
-  const editSettings = (next: NonNullable<typeof settings>) => { setEdited(true); setSettings(next); };
-  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, busy: saving, save: async () => { if (await patch(changedSettings)) setEdited(false); } });
+  const editSettings = (next: NonNullable<typeof settings>) => {
+    if (lock.current || !project) return;
+    if (!edited) baseline.current = { values: fromRecord(project), revision: project.revision };
+    setEdited(true); setSettings(next);
+  };
+  const saveSettings = async () => {
+    if (!dirty || !baseline.current) return !dirty;
+    const confirmed = await patch(changedSettings, baseline.current.revision, true);
+    if (confirmed) { baseline.current = undefined; setEdited(false); markSaved(); }
+    return confirmed;
+  };
+  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, busy: saving, save: saveSettings });
   const addCreated = async (kind: ResourceKindInfo, target: { type: string; id: string }) => {
     if (!project) return;
     const record = await fetchRecord(target);
@@ -207,8 +225,8 @@ export function ProjectHome({ id }: { id: string }) {
       status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
       actions={<>
         {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
-        {builder && installed?.application && <Button size="sm" onClick={() => setImporting(true)}>{t("Import Workshop module")}</Button>}
-        {builder && <Button size="sm" onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{unpublished.length}</span>}</Button>}
+        {builder && installed?.application && <Button size="sm" disabled={saving || dirty} onClick={() => setImporting(true)}>{t("Import Workshop module")}</Button>}
+        {builder && <Button size="sm" disabled={saving || dirty} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{unpublished.length}</span>}</Button>}
         {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" onChange={(event) => {
           const [kind, id] = event.target.value.split(":");
           if (kind === "shared") { const found = shared.find((item) => refKey(item.ref) === id); if (found) void patch({ resources: [...(project!.resources ?? []), found.ref] }); return; }
@@ -217,8 +235,8 @@ export function ProjectHome({ id }: { id: string }) {
           {shared.length > 0 && <optgroup label={t("Shared object types (platform and other apps)")}>{shared.map((item) => <option key={refKey(item.ref)} value={`shared:${refKey(item.ref)}`}>{item.title} · {item.app}</option>)}</optgroup>}
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={`${kind.kind}:${item.record.id}`}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
-        {builder && <NewResourceMenu onCreated={(kind, target) => void addCreated(kind, target)} />}
-        {builder && <Button size="sm" variant="primary" disabled={!project.pages?.length} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
+        {builder && <NewResourceMenu disabled={saving || dirty} onCreated={(kind, target) => void addCreated(kind, target)} />}
+        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || !project.pages?.length} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
       </>}
       left={{ label: t("Project resources"), content: tree }}
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
@@ -237,7 +255,7 @@ export function ProjectHome({ id }: { id: string }) {
               <div className="mt-3 flex flex-wrap gap-2">
                 {current.record && <Button size="sm" variant="primary" onClick={() => open(resourceRoute(current.kind, current.record!.id, project.id))}>{t("Open")}</Button>}
                 {!current.record && current.installed && current.kind.kind === "object" && <Button size="sm" variant="primary" onClick={() => open({ view: "object-type", params: { object: current.ref.name, application: project.id } })}>{t("Open in object model")}</Button>}
-                {builder && current.missing && <NewResourceMenu onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
+                {builder && current.missing && <NewResourceMenu disabled={saving || dirty} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
                 {builder && <Button size="sm" onClick={() => { remove(current.ref); setSelected(undefined); }}>{t("Remove from project")}</Button>}
               </div>
             </div> : <div className="rounded-md border border-dashed border-border p-6 text-sm text-muted">
@@ -268,16 +286,20 @@ export function ProjectHome({ id }: { id: string }) {
             </div>
           </aside>
         </div>}
-        {tab === "runs" && <ProjectRuns owned={owned} />}
+        {tab === "runs" && <ProjectRuns owned={owned} project={project.id} />}
         {tab === "roles" && <ProjectRoles owned={owned} />}
-        {tab === "settings" && settings && <div className="grid max-w-xl gap-3 p-4">
+        {tab === "settings" && settings && <fieldset disabled={saving} className="grid max-w-xl gap-3 p-4">
           <label className="grid gap-1 text-xs">{t("Title")}<Input value={settings.title} disabled={!builder} onChange={(event) => editSettings({ ...settings, title: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Name")}<Input value={settings.name} disabled={!builder} onChange={(event) => editSettings({ ...settings, name: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Icon")}<IconPicker value={settings.icon} disabled={!builder} onChange={(icon) => editSettings({ ...settings, icon })} /></label>
           <label className="grid gap-1 text-xs">{t("Description")}<Textarea rows={3} value={settings.description} disabled={!builder} onChange={(event) => editSettings({ ...settings, description: event.target.value })} /></label>
           {error && <p role="alert" className="text-xs text-danger">{error}</p>}
           <p className="text-xs text-muted">{t("Changes save automatically.")}</p>
-        </div>}
+          <div className="flex gap-2">
+            <Button size="sm" disabled={!dirty || saving} onClick={() => void saveSettings()}>{t("Save")}</Button>
+            <Button size="sm" variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => { baseline.current = undefined; setEdited(false); if (project) setSettings(fromRecord(project)); void query.refetch(); })}>{t("Reload current project settings")}</Button>
+          </div>
+        </fieldset>}
       </div>
     </Workbench>
     {installed?.application && <WorkshopApplicationImport key={JSON.stringify([project.id, me])} open={importing} onClose={() => setImporting(false)} application={{ ref: installed.ref, sourceVersion: installed.version }}

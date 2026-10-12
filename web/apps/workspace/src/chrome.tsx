@@ -225,7 +225,7 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "application-runs", title: () => t("Application runs"), render: (p) => <ApplicationRuns key={`${p.app}:${p.name}`} owner={p.app ?? ""} name={p.name ?? ""} /> },
   { id: "operation-run", title: (p) => p.id ?? t("Run"), render: (p) => <OperationRunView id={p.id ?? ""} application={p.application} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} application={p.application} /> },
-  { id: "flow-instance", title: (p) => p.id ?? t("Flow"), render: (p) => <FlowInstanceView id={p.id ?? ""} /> },
+  { id: "flow-instance", title: (p) => p.id ?? t("Flow"), render: (p) => <FlowInstanceView id={p.id ?? ""} application={p.application} project={p.project} /> },
   { id: "assistant", title: (p) => p.about ? `${t("Assistant")}: ${p.about}` : t("Assistant"), render: (p) => <Assistant about={p.about} /> },
   { id: "search", title: () => t("Search"), render: () => <Search /> },
 ];

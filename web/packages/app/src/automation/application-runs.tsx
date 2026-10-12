@@ -48,7 +48,7 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
    <RunBinding run={selected}/>
    {selected.error&&<p role="alert">{selected.node?`${t("Failed node")}: ${selected.node} · `:""}{selected.error}</p>}
    {!!selected.shared.length&&<p role="status" className="text-xs text-muted">{t("Also referenced by: {applications}",{applications:selected.shared.join(", ")})}</p>}
-   {selected.kind==="flow"?<FlowInstanceView id={selected.id}/>:selected.kind==="agent"?<RunView id={selected.id} application={application}/>:<OperationRunView id={selected.id} application={application}/>}
+   {selected.kind==="flow"?<FlowInstanceView id={selected.id} application={application}/>:selected.kind==="agent"?<RunView id={selected.id} application={application}/>:<OperationRunView id={selected.id} application={application}/>}
   </Panel>}
  </div>;
 }
