@@ -22,7 +22,7 @@ const messages:Record<string,string>={
  'application-import-scope-changed':'The member, application or definition changed. Further import writes stopped.',
 };
 /** Application authoring orchestration; execution and release remain with their owners. */
-export function WorkshopApplicationImport({open,onClose,application,onPrepared}:{open:boolean;onClose:()=>void;application:Api.AssetBinding;onPrepared:(prepared:ApplicationImportPrepared)=>boolean|Promise<boolean>}){
+export function WorkshopApplicationImport({open,onClose,application,onPrepared,onReviewMembership}:{open:boolean;onClose:()=>void;application:Api.AssetBinding;onPrepared:(prepared:ApplicationImportPrepared)=>boolean|Promise<boolean>;onReviewMembership?:()=>Promise<boolean>}){
  const host=useHost(),inventory=useRecordInventory<PageRecord>('build.page'),objects=useRecordInventory<ObjectRecord>('build.object'),directInstall=useDirectInstall();
  // The pages may bind to objects this tenant has saved but not installed: the
  // import offers them as candidate inputs and reports them to the release.
@@ -79,7 +79,10 @@ export function WorkshopApplicationImport({open,onClose,application,onPrepared}:
   </div>)}</fieldset>
   {error&&<p role="alert">{error}</p>}{done&&<p role="status">{t('Imported pages are ready in the application draft. Save the application, then review its release.')}</p>}
   {done&&!directInstall&&<p className="text-xs text-muted">{t('Review the application release and add the drafts it depends on; the candidate installs the pages with the application.')}{!!prepared.current?.dependencies.length&&<> {t('{count} saved object drafts are candidate inputs and are added to the review.',{count:prepared.current.dependencies.length})}</>}</p>}
-  {!!writes&&!done&&<Button disabled={busy} onClick={()=>void prepare()}>{t('Continue page import')}</Button>}
+  {!!writes&&!done&&<div className="grid gap-2"><Button disabled={busy} onClick={()=>void prepare()}>{t('Continue page import')}</Button>
+    {onReviewMembership&&<><p className="text-xs text-muted">{t('After an explicit revision refusal, review the current application before retrying. Confirmed pages remain; the imported header replaces the current header only when one was reviewed.')}</p>
+      <Button variant="ghost" disabled={busy} onClick={async()=>{if(!await onReviewMembership())return;await prepare();}}>{t('Review current application and retry membership')}</Button></>}
+  </div>}
  </Panel>;
  return <ModuleImportDialog open={open} onClose={onClose} profile={pageUIProfile} object={destinations[0]?.object??''} draftObjects={preRelease} onApply={()=>{}} application={{destinations,onSource:sourceChanged,controls,busy:busy||inventory.isLoading||inventory.isError,locked:!!writes,onApply:report=>void prepare(report)}}/>;
 }

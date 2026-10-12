@@ -369,6 +369,17 @@ export function ProjectHome({ id }: { id: string }) {
       </div>
     </Workbench>
     {installed?.application && <WorkshopApplicationImport key={JSON.stringify([project.id, me])} open={importing} onClose={() => setImporting(false)} application={{ ref: installed.ref, sourceVersion: installed.version }}
+      onReviewMembership={async () => {
+        if (pendingRef.current || lock.current) { setError(t("An earlier application update is unconfirmed. Retry its original payload before changing membership.")); return false; }
+        if (dirty) { setError(t("Save or discard project settings before changing resource membership.")); return false; }
+        const fresh = await query.refetch();
+        if (!fresh.isSuccess || !fresh.data?.record) return false;
+        latestProject.current = fresh.data.record;
+        // Only this explicit operator choice can adopt a new revision after
+        // refusal. Background updates cannot replace the original request.
+        importRequest.current = undefined;
+        return true;
+      }}
       onPrepared={async ({ pages, header, dependencies }) => {
         if (!importRequest.current) {
           const current = latestProject.current;
