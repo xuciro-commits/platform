@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Creation is awaiting confirmation. Retry the original target and values; editing the ID could create another record.": "创建尚未确认，请重试原目标与原值；更改 ID 可能创建另一个记录。",
   "Enter a whole number.": "请输入整数。",
   "Retry confirmation": "重试确认",
   "Awaiting confirmation. Retry sends the same request.": "正在等待确认，重试会发送同一请求。",
