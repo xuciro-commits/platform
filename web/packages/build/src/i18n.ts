@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "The resource was saved, but its current record could not be reloaded.": "资源已保存，但暂时无法重新读取当前记录。",
+  "The resource was installed, but its current record could not be reloaded.": "资源已安装，但暂时无法重新读取当前记录。",
+
   "The code function was saved, but its current record could not be reloaded.": "代码函数已保存，但暂时无法重新读取当前记录。",
   "Compilation was accepted. Reload the function to read its result.": "编译请求已被接收，请重新读取函数以查看结果。",
 
