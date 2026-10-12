@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -446,6 +447,10 @@ func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submiss
 		raw, err = draft.sealResult(a.Manifest().ID, s, record, now)
 		if err != nil {
 			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
+			var budget *acceptedResultBudgetError
+			if errors.As(err, &budget) {
+				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Accepted result needs {bytes} bytes; limit is {limit} bytes / 接受结果超出字节预算", budget.Bytes, budget.Limit)
+			}
 			raw, err = encodeRefusedResult(s, now, refusal)
 		}
 	}

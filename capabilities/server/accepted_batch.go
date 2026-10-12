@@ -55,6 +55,12 @@ type acceptedBatchRow struct {
 	HistoryBase int      `json:"historyBase,omitempty"` // format 2: retained prefix length; History carries only this input's suffix
 }
 
+type acceptedResultBudgetError struct{ Bytes, Limit int }
+
+func (e *acceptedResultBudgetError) Error() string {
+	return fmt.Sprintf("record batch is %d bytes; limit is %d bytes", e.Bytes, e.Limit)
+}
+
 type acceptedDecision struct {
 	Receipt     json.RawMessage      `json:"receipt"`
 	Event       acceptedEvent        `json:"event"`
@@ -227,8 +233,11 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 
 func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	var result acceptedBatch
-	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
-		return result, nil, fmt.Errorf("record batch is empty or exceeds %d bytes", maxAcceptedResultBytes)
+	if len(raw) > maxAcceptedResultBytes {
+		return result, nil, &acceptedResultBudgetError{len(raw), maxAcceptedResultBytes}
+	}
+	if len(raw) == 0 {
+		return result, nil, fmt.Errorf("record batch is empty")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()

@@ -140,7 +140,7 @@ func (b *Build) Manifest() platform.Manifest {
 		}
 	}
 	slices.Sort(roles)
-	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Settings: b.settings(), Reads: []string{ReadReleaseProfile}, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
+	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Sequences: b.transactionSequences(), Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Settings: b.settings(), Reads: []string{ReadReleaseProfile}, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -663,6 +663,9 @@ func (b *Build) Check(o Object, id string) error {
 		return err
 	}
 	if err := checkProcess(o, b.conditionLookup); err != nil {
+		return err
+	}
+	if err := b.checkTransactions(o); err != nil {
 		return err
 	}
 	if err := b.checkCreates(o); err != nil {

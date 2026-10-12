@@ -276,6 +276,13 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 			}
 		}
 		for _, action := range saved.Actions {
+			if action.Transaction != nil {
+				for _, step := range action.Transaction.Steps {
+					if step.Target.Type != "" && step.Target.Type != ref.Name {
+						requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: step.Target.Type})
+					}
+				}
+			}
 			for _, create := range action.Creates {
 				requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: create.Object})
 			}

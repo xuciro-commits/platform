@@ -292,9 +292,27 @@ func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed fu
 			continue
 		}
 		if i := slices.IndexFunc(e.Lifecycle.Transitions, func(t Transition) bool { return t.Name == verb }); i >= 0 {
+			tr := e.Lifecycle.Transitions[i]
+			var failure *kernel.Error
+			if tr.Txn != nil {
+				if !c.Staging() || c.Replaying || c.rt.Probing() || tr.ApplyTxn == nil || tr.After != nil {
+					return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions require a private accepted decision / 业务事务须经私有接受决策"), true
+				}
+				// A transaction always acts as its applicant. Service automation
+				// must not turn its initiation or individual steps into a bypass.
+				c.Automation = false
+				apply := tr.ApplyTxn
+				tr.ApplyTxn = func(c Caller, r *pb.ChangeRecord, at time.Time) *kernel.Error {
+					failure = apply(c, r, at)
+					return failure
+				}
+			}
 			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
-				return transition(c, e, e.Lifecycle.Transitions[i], s, now)
+				return transition(c, e, tr, s, now)
 			})
+			if err == nil && failure != nil {
+				return nil, failure, true
+			}
 			return record, err, true
 		}
 		for _, suffix := range []string{ApprovalHeld, ApprovalRejected, ApprovalReturned} {
@@ -380,6 +398,10 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 		return nil, err
 	}
 	return func(r *pb.ChangeRecord) {
+		if t.Txn != nil {
+			t.ApplyTxn(c, r, now)
+			return
+		}
 		c.rt.Put(c, r, value)
 		if t.After != nil {
 			after := reflect.New(typ)

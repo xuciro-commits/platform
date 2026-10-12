@@ -21,16 +21,20 @@ type State struct {
 }
 
 // Action is a step people take on one of its records.
+// Sets/Creates/Posts/Journal/Reverses are frozen legacy expressions (ADR-0100).
+// New multi-record capabilities use Transaction exclusively; historical
+// definitions retain their original bytes and execution during migration.
 type Action struct {
-	Name        string      `json:"name" field:"required" help:"Lower-case letters and digits" example:"return"`
-	Title       string      `json:"title" field:"required" title:"What people call it" example:"Hand it back"`
-	Description string      `json:"description,omitempty" help:"What it does, for people and agents"`
-	From        []string    `json:"from" title:"Taken from" help:"The states it takes a record from"`
-	ToInput     string      `json:"toInput,omitempty" title:"State from input"`
-	To          string      `json:"to,omitempty" title:"Leaves it in" help:"The state it leaves the record in; empty: where it was"`
-	Inputs      []Input     `json:"inputs,omitempty" title:"What people give"`
-	Sets        []Set       `json:"sets,omitempty" title:"What it sets"`
-	Conditions  []Condition `json:"conditions,omitempty" title:"What it needs"`
+	Name        string                `json:"name" field:"required" help:"Lower-case letters and digits" example:"return"`
+	Title       string                `json:"title" field:"required" title:"What people call it" example:"Hand it back"`
+	Description string                `json:"description,omitempty" help:"What it does, for people and agents"`
+	From        []string              `json:"from" title:"Taken from" help:"The states it takes a record from"`
+	ToInput     string                `json:"toInput,omitempty" title:"State from input"`
+	To          string                `json:"to,omitempty" title:"Leaves it in" help:"The state it leaves the record in; empty: where it was"`
+	Inputs      []Input               `json:"inputs,omitempty" title:"What people give"`
+	Transaction *platform.BusinessTxn `json:"transaction,omitempty"`
+	Sets        []Set                 `json:"sets,omitempty" title:"What it sets"`
+	Conditions  []Condition           `json:"conditions,omitempty" title:"What it needs"`
 	// Roles are who may take it (ADR-0037 18b); empty: every role of the object.
 	Roles    []string        `json:"roles,omitempty" title:"Taken by"`
 	Approval *ActionApproval `json:"approval,omitempty" title:"Approval"`
@@ -98,10 +102,7 @@ func (in Input) Field() platform.Field {
 
 // Set is a field of the record an action sets, from an input, a fixed value,
 // the person taking it ($me) or the moment it is taken ($now).
-type Set struct {
-	Field string `json:"field" field:"required" help:"A field of the object"`
-	From  string `json:"from" field:"required" help:"An input's name, $me, $now, or =<a fixed value>" example:"to"`
-}
+type Set = platform.TxnSet
 
 // Condition is what must hold for the action to be taken, and what a person
 // reads when it does not (Foundry's submission criteria, as data).

@@ -27,6 +27,7 @@ import (
 type creator interface {
 	create(c platform.Caller, cr Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error)
 	post(c platform.Caller, p Post, inputs map[string]any, record any, now time.Time) (any, *kernel.Error)
+	transact(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) *kernel.Error
 }
 
 // Operators are the comparisons a condition may make.
@@ -376,6 +377,16 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
 				return take(o, action, c, record, raw, now, creates, lookup)
 			}, After: stored(o, action, creates)})
+		if a.Transaction != nil {
+			t := &l.Transitions[len(l.Transitions)-1]
+			t.Txn, t.After = a.Transaction, nil
+			t.ApplyTxn = func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *kernel.Error {
+				if creates == nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions need their original owner")
+				}
+				return creates.transact(c, r, action.Transaction, now)
+			}
+		}
 	}
 	return l
 }
@@ -519,25 +530,14 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		types[f.Name] = f.Type
 	}
 	for _, set := range a.Sets {
-		var x any
-		switch {
-		case set.From == "$me":
-			x = c.ID
-		case set.From == "$now":
-			if types[set.Field] == "date" {
-				x = c.Today(now)
-			} else {
-				x = now.UTC()
-			}
-		case strings.HasPrefix(set.From, "="):
-			x, _ = literal(types[set.Field], strings.TrimPrefix(set.From, "="))
-		default:
-			given, ok := inputs[set.From]
-			if !ok || given == nil {
-				continue // an input left out leaves the field as it was
-			}
-			x = given
+		x, present, err := setSource(c, types[set.Field], set.From, inputs, now)
+		if err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid assignment source")
 		}
+		if !present {
+			continue
+		}
+
 		if err := assign(v.FieldByName(goName(set.Field)), x); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} cannot set {field}: {why}", a.Title, set.Field, err.Error())
 		}

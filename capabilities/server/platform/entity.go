@@ -166,6 +166,10 @@ type Transition struct {
 	// After runs once the transition is accepted and the record stored: what
 	// follows from it elsewhere (another record, a notification, an effect).
 	After func(c Caller, r *pb.ChangeRecord, record any, now time.Time)
+	// Txn replaces the single-record write. ApplyTxn runs only in a private
+	// decision and may refuse the entire staged result, including earlier steps.
+	Txn      *BusinessTxn                                                    `json:"-"`
+	ApplyTxn func(c Caller, r *pb.ChangeRecord, now time.Time) *kernel.Error `json:"-"`
 }
 
 // LifecycleInfo is a lifecycle as the UI sees it.
