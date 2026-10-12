@@ -316,7 +316,7 @@ AR-01–AR-17 必须逐项有“实际交付内容、适用边界、交付版本
 
 | 场景 | 有效证据及可执行复核 | 当前验收结论 |
 |---|---|---|
-| S-01 | 两宿主 integration-fabric 的外部输入→清洗→对象→页面/Flow→动作→回写；deploy 演练的 CRM/PMS 与 MES/ERP 原生业务；[Apps 两行业接手步骤](Apps.md#两行业交付与接手操作) | 内部共同交付与不同原生协作有证据；同一数据输入到完整行业任务的连续结果、独立接手操作尚未整体验收。 |
+| S-01 | 两宿主 integration-fabric 的外部输入→清洗→对象→页面/Flow→动作→回写；原 deploy S-01 区块另在两行业 `make lite`/真实 SELECT-only PostgreSQL 执行：来源客户→普通前台成员 CRM/PMS 住宿，来源生产计划→ERP release→操作员按原固定工艺完成 SFC→协议确认；签名业务视图在桌面/390px 读取，原目录重启后记录/修订/历史保持；[Apps 两行业接手步骤](Apps.md#两行业交付与接手操作) | 受控合成来源到不同原生行业任务的连续结果及本地文件持久恢复已观察，不再只以共同收货/遥测样例证明行业语义；这不等于现场数据、完整 OIDC/RustFS 部署、独立人员扩展交付或负责人验收。 |
 | S-02 | `TestIntegrationReleaseAcrossEnvironments` / `TestJournalIntegrationReleaseAcrossEnvironments` 的目标绑定、v2、旧工作、拒绝/崩溃/重新打开；integration-fabric 的 503/原键重试；deploy 的备份/全日志恢复 | 自动交付/升级及故障证据有效；独立人员目标环境交付与日常失败处置尚未观察。 |
 | S-03 | 原生 f32/滞回/8-worker、版本化死信/停止续接/制品与原预算沿 ADR-0047 §13.5；100 信号 Go/race 检查与两行业原 `make lite` 的认证 PostgreSQL→原应用 Action/输出→冻结 v1 重启续接分别有证据；历史动作/迟到信号死信在同目录重启后恢复、原 key 单次重放及新后继不重复旧行/修订也已观察；维护中的 native rehearsal 原函数按 100 信号在两 lite 宿主执行通过 | 本地文件持久原生联合路线已观察；配置保留 5000 checkpoint，但未运行到该长期边界，目标对象存储故障/完整工作量/吞吐容量及负责人验收仍保持未整体验收。 |
 | S-04 | 原建议/Agent/知识权限、预算、人工确认及回调恢复测试，deploy 使用 `local/echo` | 2026-10-11 当前 8495/8490 管理员只读目录均无 provider/model；真实供应商、可用模型与受控凭据未配置，真实质量保持未验收。未发真实模型调用。 |
