@@ -74,16 +74,22 @@ OPENROUTER_API_KEY=sk-or-...
 同一套语义可以在小设备上用一个二进制加一个数据目录跑起来：没有 Docker、没有 PostgreSQL、没有对象存储、没有外部身份服务。profile 是**声明**的，缺依赖就失败退出，不会悄悄回退到另一个 profile 的存储或身份。
 
 ```bash
-go build -o /tmp/hospitality-server ./solutions/hospitality/cmd/hospitality-server
+# 一条命令就够了（推荐）：构建工作区与宿主、备好密钥与 token，起酒店 8495
+make lite                       # 制造：make lite SOLUTION=manufacturing（8490）；ADDR=0.0.0.0:8495 改绑定地址
+
+# 等价的手工路径。仓库根不是 Go 模块，构建在解决方案模块里做：
+(cd solutions/hospitality && go build -o /tmp/hospitality-server ./cmd/hospitality-server)
 
 # 1. 第一次启动前生成签名密钥（数据目录里只做一次，之后绝不替换）
 /tmp/hospitality-server -profile lightweight -data /var/lib/platform -idp-new-key
 
-# 2. 给一个席位签发 token（token 从 stdout 输出，日志走 stderr；<user:email> 或 <client:id>）
-TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mint-token user:ops@example.com)
+# 2. 给一个席位签发 token（token 从 stdout 输出，日志走 stderr）。主体按席位自己的名字写：
+#    交接租户是 <user:email>/<client:id>，两行业演示席位是 manager、supervisor 这类短令牌。
+TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mint-token manager)
 
-# 3. 启动；工作台（可选）用 -web 指向 web/apps/workspace 的构建
-/tmp/hospitality-server -profile lightweight -data /var/lib/platform -addr 127.0.0.1:8496
+# 3. 启动；工作台用 -web 指向 web/apps/workspace 的构建
+/tmp/hospitality-server -profile lightweight -data /var/lib/platform -addr 127.0.0.1:8496 \
+  -templates deploy/templates -web web/apps/workspace/dist
 ```
 
 - `-data` 就是**全部**持久状态：`journal/journal.jsonl`（条目）、`journal/snapshots/`（本代码最新的两份快照）、`journal/derived/`（向量与转写）、`files/<tenant>/<hash>`（文件字节，内容寻址）、`idp.key`（签名密钥，0600）。备份和迁移就是复制这一个目录。

@@ -39,12 +39,17 @@
 - 真实二进制：`hospitality-server`（`-profile lightweight -data <dir>`）在同一台沙箱上完成两次启动的走查，日志给出 `restored hotel-a from the snapshot at N, then replayed M entries`，`/v1/me` 的 `preferred` 与决策身份跨重启不变。
 - 轻量 profile 的操作路径（`deploy/local/README.md` 有完整段落）：
   ```bash
-  go build -o /tmp/hospitality-server ./solutions/hospitality/cmd/hospitality-server
+  make lite                          # 构建工作区与宿主，起酒店 8495；ADDR 可改绑定地址
+  make lite SOLUTION=manufacturing   # 制造 8490
+  # 等价的手工路径（现状）：在解决方案模块内构建，数据目录自持密钥与日志
+  (cd solutions/hospitality && go build -o /tmp/hospitality-server ./cmd/hospitality-server)
   /tmp/hospitality-server -profile lightweight -data /var/lib/platform -idp-new-key   # 只做一次
-  TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mint-token user:ops@example.com)
+  TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mint-token manager)
   /tmp/hospitality-server -profile lightweight -data /var/lib/platform -addr 127.0.0.1:8496
   ```
+  `-mint-token` 的主体是**席位自己的名字**（交接宿主是 `user:<email>`/`client:<id>`；两行业示例宿主的席位是 `manager`、`supervisor`、`sales-only` 这样的短令牌），给错形式会签出一个任何座位都不认的 token。
 - 检查按 WorkQueue：编码中只查类型/构建；整块完成后一次 Go 检查与重启走查；不把 CI 作为门槛。
+- **两行业交接任务在轻量宿主上的实际执行（2026-10-12，本沙箱）**：按 [Apps 的两行业接手步骤](../Apps.md#两行业交付与接手操作)，用 `make lite` 起的两台宿主（酒店 8495、制造 8490，均零 Docker）逐条执行并观察 HTTP 结果——酒店：CRM 建档→开商机→`crm.opportunity.book`（席位有 pms 角色）落地真实 `pms.reservation`→只有 crm 角色的席位复投被拒（`holds no role in pms`）→`pms.reservation.cancel` 后提供方记录转 canceled、商机保留原答复与来源 ID→`platform.protocol.bind` 改绑后新请求落新提供方而旧住宿留在原提供方；制造：`erp.production.create/release` 下达计划订单→车间 `/v1/planned-orders` 读到→`mes.order.release` 绑定该计划订单开单→`mes.sfc.start/complete` 走完 RT-100 三道工序（FURNACE-1→CNC-11→CMM-1）→`mes.order.confirm` 得到 ERP `confirmed` 回执；无计划订单的订单确认记 `refused: no planned order to confirm against`，补计划订单后 `mes.order.reconfirm` 转 confirmed。整条路线随后在**全新数据目录**上从零重跑一遍（酒店与制造各一台新宿主、各自签名密钥与席位 token），逐步结果与上面一致。检查方法记入 [Testing](../Testing.md)。**未在浏览器观察**（本沙箱无浏览器）：界面层仍需一次真实走查；交付 Profile、Docker、外部来源与外部 ERP 链路不在这次执行内。
 
 ## 5. 实施中发现并修掉的问题（供后续 profile 边界参考）
 

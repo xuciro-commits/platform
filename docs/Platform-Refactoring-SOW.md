@@ -316,8 +316,8 @@ AR-01–AR-17 必须逐项有“实际交付内容、适用边界、交付版本
 
 | 场景 | 有效证据及可执行复核 | 当前验收结论 |
 |---|---|---|
-| S-01 | 两宿主 integration-fabric 的外部输入→清洗→对象→页面/Flow→动作→回写；deploy 演练的 CRM/PMS 与 MES/ERP 原生业务；[Apps 两行业接手步骤](Apps.md#两行业交付与接手操作) | 内部共同交付与不同原生协作有证据；同一数据输入到完整行业任务的连续结果、独立接手操作尚未整体验收。 |
-| S-02 | `TestIntegrationReleaseAcrossEnvironments` / `TestJournalIntegrationReleaseAcrossEnvironments` 的目标绑定、v2、旧工作、拒绝/崩溃/重新打开；integration-fabric 的 503/原键重试；deploy 的备份/全日志恢复 | 自动交付/升级及故障证据有效；独立人员目标环境交付与日常失败处置尚未观察。 |
+| S-01 | 两宿主 integration-fabric 的外部输入→清洗→对象→页面/Flow→动作→回写；deploy 演练的 CRM/PMS 与 MES/ERP 原生业务；[Apps 两行业接手步骤](Apps.md#两行业交付与接手操作) | 内部共同交付与不同原生协作有证据；独立接手操作尚未整体验收。2026-10-12 追加：轻量宿主（`make lite`，零 Docker）上按 Apps 步骤实际执行了两行业原生任务（酒店建档→开商机→预订落地 `pms.reservation`→无提供方角色复投被拒→PMS 取消→改绑提供方后新请求落新提供方；制造 ERP 计划订单→车间开单→SFC 逐工序完工→ERP 确认与回执），HTTP 证据见 [ADR-0049 §4](ADR/0049-delivery-and-lightweight-profiles.md)；外部来源接入、交付 Profile 与浏览器未在本次内。 |
+| S-02 | `TestIntegrationReleaseAcrossEnvironments` / `TestJournalIntegrationReleaseAcrossEnvironments` 的目标绑定、v2、旧工作、拒绝/崩溃/重新打开；integration-fabric 的 503/原键重试；deploy 的备份/全日志恢复 | 自动交付/升级及故障证据有效；独立人员目标环境交付尚未观察。2026-10-12 追加：轻量宿主上实际处置了一次失败业务任务（制造订单确认被 ERP 拒绝、按原协议改计划订单后重发成功），见 [ADR-0049 §4](ADR/0049-delivery-and-lightweight-profiles.md)。 |
 | S-03 | 原 PostgreSQL 输入、checkpoint/暂停续接及恢复证据沿 ADR-0047/0097；完整七节点、并发 8、版本化死信、制品保留和原预算仍按原接受条件核对 | 保持未整体验收，不以输入接通或手动流程代替完整持续路线。 |
 | S-04 | 原建议/Agent/知识权限、预算、人工确认及回调恢复测试，deploy 使用 `local/echo` | 2026-10-11 当前 8495/8490 管理员只读目录均无 provider/model；真实供应商、可用模型与受控凭据未配置，真实质量保持未验收。未发真实模型调用。 |
 | S-05 | 共享关联选择、日期/区间输入、原表单拒绝后保留与重试，以及受控定义版本交付；原浏览器/组件回归 | 现有工程证据保留；完整跨入口任务和扩展演进仍需本块实际核对，不由结构收敛直接判定通过。 |
