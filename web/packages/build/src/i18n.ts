@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "The code function was saved, but its current record could not be reloaded.": "代码函数已保存，但暂时无法重新读取当前记录。",
+  "Compilation was accepted. Reload the function to read its result.": "编译请求已被接收，请重新读取函数以查看结果。",
+
   "Module ownership could not be read. Open the page from its project after reloading.": "无法读取模块归属，请重新读取后从项目打开该页面。",
   "Modules are unavailable. This does not mean no applications exist.": "模块目录不可用；这不表示没有应用。",
   "The module was saved, but its current record could not be reloaded.": "模块已保存，但暂时无法重新读取当前记录。",

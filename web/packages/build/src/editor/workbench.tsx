@@ -39,7 +39,7 @@ export function PublishMenu({ type, record, dirty, busy = false, invalid = false
   type: string; record?: { id?: string; revision?: number; archived?: boolean; state?: string }; dirty: boolean; busy?: boolean; invalid?: boolean; empty?: boolean;
   onReview: () => void; onInstall?: () => void; onSave?: () => void; onDiscard?: () => void; route?: Route; extra?: ContextCommand[];
 }) {
-  const inputs=useInputDrafts();invalid ||=!!inputs?.invalid;
+  const inputs=useInputDrafts();invalid ||=!!inputs?.invalid;busy ||=!!inputs?.busy;
   const { open, close } = useWorkspace();
   const application = useApplicationScope();
   const directInstall = useDirectInstall();
@@ -49,10 +49,10 @@ export function PublishMenu({ type, record, dirty, busy = false, invalid = false
   const leave = () => { open(home); if (tab) close(tab); };
   const commands: ContextCommand[] = [
     { id: "review", label: t("Review and publish…"), icon: <Rocket />, disabled: busy || invalid || empty, run: onReview },
-    ...(directInstall && onInstall ? [{ id: "install", label: t("Install directly (no release)"), disabled: busy || invalid || empty, run: onInstall }] : []),
+    ...(directInstall && onInstall ? [{ id: "install", label: t("Install directly (no release)"), disabled: dirty || busy || invalid || empty, run: onInstall }] : []),
     ...extra,
     ...(onDiscard ? [{ id: "discard", label: t("Discard unsaved changes"), disabled: !dirty || busy, separatorBefore: true, run: onDiscard }] : []),
-    ...(record?.id && !record.archived && archive.available ? [{ id: "archive", label: t("Archive…"), danger: true, disabled: busy, run: () => archive.take({ id: record.id!, revision: record.revision ?? 0 }, leave) }] : []),
+    ...(record?.id && !record.archived && archive.available ? [{ id: "archive", label: t("Archive…"), danger: true, disabled: dirty || busy, run: () => archive.take({ id: record.id!, revision: record.revision ?? 0 }, leave) }] : []),
   ];
   return <>
     {onSave && <Button size="sm" disabled={busy || !dirty||invalid} onClick={onSave}>{t("Save")}</Button>}

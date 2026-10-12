@@ -290,6 +290,12 @@ export function FlowEditor({ id }: { id: string }) {
     }
   };
   const perform=async(action:()=>Promise<unknown>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError("");try{await action();}catch{setError(t("The workflow request could not be completed."));}finally{lock.current=false;setBusy(false);}};
+  const review = async () => {
+    const target = dirty || !draft.id ? await save() : draft.id;
+    if (!target) return;
+    if (target !== draft.id) open({ view: "release-review", params: { kind: "flow", id: target } });
+    else setDock("release");
+  };
   const start = async () => {
     if(runInputs.invalid)return;
     const key = runKey || crypto.randomUUID(); setRunKey(key);
@@ -345,7 +351,7 @@ export function FlowEditor({ id }: { id: string }) {
           { id: "import", label: t("Import Workshop flow…"), disabled: busy || !!draft.id, run: () => setImportingFlow(true) },
           ...(draft.id ? [{ id: "reload", label: t("Reload saved flow"), disabled: busy, run: () => confirmDiscard(() => void perform(async () => { const fresh = await query.refetch(); if (fresh.isSuccess && fresh.data?.record) { markSaved(); session.load(fresh.data.record); baseRevision.current = fresh.data.record.revision; loaded.current = `${fresh.data.record.id}:${fresh.data.record.revision}`; setError(""); setValidation(undefined); } })) }] : []),
         ]} />
-        <PublishMenu type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onReview={() => setDock("release")} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "flow", params: { id } }} />
+        <PublishMenu type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "flow", params: { id } }} />
       </>}
       onKeyDown={(event) => { if (!(event.metaKey || event.ctrlKey)) return; if (event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy && !importingFlow && !brokenForm.length) void perform(save); } }}
       left={{ label: t("Flow structure"), tabs: [
