@@ -4,9 +4,13 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 
 ## 项目
 
-面向 FDE 与客户构建者的 AI 业务应用平台，产品形态对标 Palantir Foundry/AIP：语言中立的内核契约（`contract/`）、Go 宿主（`capabilities/server/`）、Web 工作区（`web/`）、验证应用（`apps/`、`solutions/`）。
+面向 FDE 与客户构建者的**业务应用构建平台**：交付的是**构建业务系统的能力**，不是我们预先写好的应用。语言中立的内核契约（`contract/`）、Go 宿主（`capabilities/server/`）、Web 工作区（`web/`）、验证应用（`apps/`、`solutions/`）。
 
-读什么：[Intent](docs/Intent.md)（宗旨）→ [WorkQueue](docs/WorkQueue.md)（当前要做的事）→ 与任务相关的 [Platform](docs/Platform.md) 章节、[ADR](docs/ADR/) 与 [Apps](docs/Apps.md)。产品结构（Shell、应用门户、功能块）以 [ADR-0052（Shell/门户/投影）与 ADR-0053（构建者编辑器）](docs/ADR/0052-foundry-aligned-platform-experience.md) 为唯一现行版本。不要求通读全部 ADR。
+## 读什么
+
+**[ADR-0098](docs/ADR/0098-build-the-capability-to-build.md)（产品口径、§8 依赖、§9 不可动的边界、§12 交付指引）→ [WorkQueue](docs/WorkQueue.md)（当前要做的事）→ [Intent](docs/Intent.md)（宗旨）→ 与任务相关的 [Platform](docs/Platform.md) 章节、[ADR](docs/ADR/) 与 [Apps](docs/Apps.md)。**
+
+产品结构（Shell、应用门户）与构建者编辑器组织以 [ADR-0052 与 ADR-0053](docs/ADR/0052-foundry-aligned-platform-experience.md) 为准——它们只管**界面如何组织**，不定义产品方向。**不要求通读全部 ADR。**
 
 ## 工作方式
 
@@ -17,15 +21,16 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 
 ## 硬规则
 
-1. **内核是契约。** `contract/` 不含领域词汇；Protobuf 不定义业务含义（ADR-0002）。内核变更先改规范与向量，再改 Go 及 Rust/TypeScript 边缘；`v1` 变更须 ADR。
+1. **内核是契约。** `contract/` 不含领域词汇；Protobuf 不定义业务含义（ADR-0002）。内核变更先改规范与向量，再改 Go 及 Rust/TypeScript 边缘；`v1` 变更须 ADR。**内核的权威边界不动**：一项决策只改一个权威，跨权威原子性已被 ADR-0026 否决（ADR-0098 §9.1）。
 2. **生成文件不手改**：`contract/go/gen`、`web/packages/kernel/src/gen/host.ts`（宿主 API 类型变化后在 `capabilities/server` 运行 `go run ./cmd/api-types`）、`web/apps/catalog/src/gen`（`node scripts/catalog.mjs generate`）。
 3. **单一归属，先复用。** 应用只导入 `platformserver/platform`，跨应用走 `protocols/`；客户端只用 `@platform/ui` 与 `@platform/app`；缺的能力在归属方扩展，不在应用里自造表格/面板/审批/文件/外部调用。`scripts/boundaries.sh` 与 `scripts/escapes.sh` 守这条线，已知逃逸只减不增。UI 变更前 `node scripts/catalog.mjs search <关键词>` 查已有组件。
-4. **应用不为自己改内核。** 参考应用用来证明平台能力，行业深度只取当前任务必需的最小变更；摩擦记入 WorkQueue。
+4. **参考应用是临时验证载体，不是产品；撞墙必须登记通用缺口。** `apps/*` 的行业实现用于证明平台能力，**最终按 [ADR-0114](docs/ADR/0114-retiring-native-apps.md) 退出**。构建过程中撞墙时按顺序走：① 查已有能力是否可用 → ② 确认是通用能力缺口则**登记到对应 ADR 的 As built 并在归属方补齐** → ③ 确认需新原语则立 ADR。**不允许在探针里绕过并把它当"行业特殊性"留下**——这正是 `apps/mes` 的 `canDo`、`apps/erp` 的过账链产生的方式。
 5. **租户扩展只走受控路径**：受控定义、隔离编译/执行与版本化制品（ADR-0044），不在宿主直接执行租户脚本。
-6. **最简代码。** 不保留永久重复路径或临时垫片；替代旧路径时删除旧路径及其文档。
+6. **最简代码。** 不保留永久重复路径或临时垫片（[ADR-0100 §1.5](docs/ADR/0100-business-transaction.md) 的档位是**替换不是增量**，一个语义只有一个实现）；替代旧路径时删除旧路径及其文档。
 7. **双语文案。** 产品界面文字英文原文 + 简体中文：应用 `i18n/zh-CN.json`，Web `t()` + 包内 `i18n.ts`。业务数据不翻译。
 8. **文档各司其职，只写现状。** Intent 管宗旨；Platform 管架构与能力摘要；ADR 管决策与"As built"边界（合并更新，不追加日志）；WorkQueue 管顺序（完成即移除）；Testing 管检查方法；Apps 管可执行用法。不新增总结文档、第二队列或检查点日记。被取代的 ADR 在状态行写明被谁取代。
-9. **提交信息**单句祈使句，注明 ADR/工作号。提交、推送、部署遵循已有授权。
+9. **ADR 的现行版本以编号最大者为准**：冲突时先看状态行是否注明被取代、再看编号更大的一方；[ADR-0098 §9 的 16 条边界](docs/ADR/0098-build-the-capability-to-build.md#9-不可动的边界)**优先于任何"顺手优化"**。
+10. **提交信息**单句祈使句，注明 ADR/工作号。提交、推送、部署遵循已有授权。
 
 ## 代码导航
 
