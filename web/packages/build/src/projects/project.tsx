@@ -4,7 +4,7 @@
 // existing` brings one in, and its pages, navigation and header are its interface.
 import { pageUIProfile, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, notify, t, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, notify, t, tabStop, tabStripKeyDown, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { Boxes, Braces, Database, FolderKanban, Layers, LayoutTemplate, Link2, Plus, Search, Sparkles, Tags, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApplicationImport";
@@ -223,7 +223,7 @@ export function ProjectHome({ id }: { id: string }) {
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         <div role="tablist" aria-label={t("Project sections")} className="flex gap-1 border-b border-border px-3 pt-2">
-          {(["resources", "runs", "roles", "settings"] as const).map((item) => <Button variant="row" key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)}
+          {(["resources", "runs", "roles", "settings"] as const).map((item, index) => <Button variant="row" key={item} type="button" role="tab" aria-selected={tab === item} tabIndex={tabStop(tab === item)} onKeyDown={(event) => tabStripKeyDown(event, index, 4, (target) => setTab((["resources", "runs", "roles", "settings"] as const)[target]!))} onClick={() => setTab(item)}
             className={"rounded-t border-b-2 px-3 py-1.5 text-sm " + (tab === item ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}>{t(item === "resources" ? "Overview" : item === "runs" ? "Runs" : item === "roles" ? "Roles" : "Settings")}</Button>)}
         </div>
         {tab === "resources" && <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_20rem]">

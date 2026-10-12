@@ -2,7 +2,7 @@ import {useState} from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod";
-import {Button,Form,Input,InputDraftProvider,Textarea,useInputDrafts, DataTable, EntityForm, Markdown, MarkdownEditor, NotificationList, RecordLookup, RecordPage, StatusTag, humanizeKernelError, setLanguage, submissionStatuses, type ColumnDef, type RecordSource } from "../index";
+import {Button,Form,Input,InputDraftProvider,Textarea,useInputDrafts, ContentTabs, DataTable, EntityForm, Markdown, MarkdownEditor, NotificationList, RecordLookup, RecordPage, StatusTag, Workbench, humanizeKernelError, setLanguage, submissionStatuses, type ColumnDef, type RecordSource } from "../index";
 
 afterEach(cleanup);
 
@@ -368,4 +368,87 @@ test("a JSON form waits for its request and retains the rejected input", async (
   await act(async()=>refuse(new Error("Owner refused")));
   expect(screen.getByText("Owner refused")).toBeTruthy();
   expect((screen.getByRole("textbox",{name:"Payload"}) as HTMLTextAreaElement).value).toBe('{"quantity":2}');
+});
+
+// Tab strips move the same way everywhere (ADR-0053 §4): the chosen tab is the
+// only tab stop, arrows step around it, Home and End jump to its ends, and the
+// tab that takes focus is also chosen.
+test("tab strips answer arrows, Home and End, and keep one tab stop", () => {
+  const items = [
+    { id: "one", title: "One", content: <p>First panel</p> },
+    { id: "two", title: "Two", content: <p>Second panel</p> },
+    { id: "three", title: "Three", content: <p>Third panel</p> },
+  ];
+  function Host() {
+    const [value, setValue] = useState("one");
+    return <ContentTabs label="Probe tabs" items={items} value={value} onChange={setValue} />;
+  }
+  render(<Host />);
+  const strip = screen.getByRole("tablist", { name: "Probe tabs" });
+  const tabs = screen.getAllByRole("tab");
+  expect(tabs.map((tab) => tab.tabIndex)).toEqual([0, -1, -1]);
+  (tabs[0] as HTMLElement).focus();
+  fireEvent.keyDown(tabs[0]!, { key: "ArrowRight" });
+  expect(screen.getByRole("tab", { name: "Two" }).getAttribute("aria-selected")).toBe("true");
+  expect(document.activeElement).toBe(screen.getByRole("tab", { name: "Two" }));
+  expect(screen.getByText("Second panel")).toBeTruthy();
+  fireEvent.keyDown(document.activeElement!, { key: "End" });
+  expect(screen.getByRole("tab", { name: "Three" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
+  expect(screen.getByRole("tab", { name: "One" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+  expect(screen.getByRole("tab", { name: "Three" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.keyDown(document.activeElement!, { key: "Home" });
+  expect(screen.getByRole("tab", { name: "One" }).getAttribute("aria-selected")).toBe("true");
+  expect(strip).toBeTruthy();
+  expect(screen.getAllByRole("tab").map((tab) => tab.tabIndex)).toEqual([0, -1, -1]);
+});
+
+test("the Markdown editor's Write and Preview tabs answer the arrow keys", () => {
+  function Host() {
+    const [value, setValue] = useState("Hello **there**");
+    return <MarkdownEditor value={value} onChange={setValue} />;
+  }
+  render(<Host />);
+  const write = screen.getByRole("tab", { name: "Write" });
+  expect(write.getAttribute("aria-selected")).toBe("true");
+  fireEvent.keyDown(write, { key: "ArrowRight" });
+  const preview = screen.getByRole("tab", { name: "Preview" });
+  expect(preview.getAttribute("aria-selected")).toBe("true");
+  expect(document.activeElement).toBe(preview);
+  fireEvent.keyDown(preview, { key: "ArrowLeft" });
+  expect(screen.getByRole("tab", { name: "Write" }).getAttribute("aria-selected")).toBe("true");
+});
+
+test("the workbench dock opens on its tabs, keeps one tab stop, and collapses from its own handle", () => {
+  function Host() {
+    const [tab, setTab] = useState("problems");
+    return <Workbench storageKey="probe-dock" title="Probe" dock={{ label: "Probe dock", value: tab, onChange: setTab, tabs: [
+      { id: "problems", title: "Problems", content: <p>Nothing to fix</p> },
+      { id: "runs", title: "Runs", content: <p>No runs yet</p> },
+    ] }}><p>Editor body</p></Workbench>;
+  }
+  render(<Host />);
+  const problems = screen.getByRole("tab", { name: "Problems" }), runs = screen.getByRole("tab", { name: "Runs" });
+  // The chosen tab stays reachable while the dock is closed; the other opens it.
+  expect([problems.tabIndex, runs.tabIndex]).toEqual([0, -1]);
+  expect(screen.queryByText("Nothing to fix")).toBeNull();
+  fireEvent.click(runs);
+  expect(screen.getByText("No runs yet")).toBeTruthy();
+  // Choosing the tab already shown keeps the dock open; arrows move it.
+  fireEvent.click(runs);
+  expect(screen.getByText("No runs yet")).toBeTruthy();
+  fireEvent.keyDown(runs, { key: "ArrowRight" });
+  expect(problems.getAttribute("aria-selected")).toBe("true");
+  expect(document.activeElement).toBe(problems);
+  expect(screen.getByText("Nothing to fix")).toBeTruthy();
+  expect([problems.tabIndex, runs.tabIndex]).toEqual([0, -1]);
+  fireEvent.keyDown(problems, { key: "ArrowLeft" });
+  expect(screen.getByRole("tab", { name: "Runs" }).getAttribute("aria-selected")).toBe("true");
+  // The dock's own handle collapses and restores it; the editor keeps its place.
+  fireEvent.click(screen.getByRole("button", { name: "Hide dock" }));
+  expect(screen.queryByText("No runs yet")).toBeNull();
+  expect(screen.getByText("Editor body")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Show dock" }));
+  expect(screen.getByText("No runs yet")).toBeTruthy();
 });

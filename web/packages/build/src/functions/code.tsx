@@ -5,7 +5,7 @@ import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, Select, Textarea, Workbench, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, Select, Textarea, Workbench, t, tabStop, tabStripKeyDown, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { JSONEditor, SchemaEditor, schemaDefault } from "../automate/workflow-binding";
 import type { ValueSchema } from "../automate/workflow-model";
@@ -91,7 +91,7 @@ export function CodeEditor({ id }: { id: string }) {
     <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="grid min-w-0 content-start gap-3 p-4">
         <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("Code function editor")}>
-          {(["source", "contract", "sdk", "test"] as const).map((key) => <Button key={key} role="tab" aria-selected={tab === key} variant={tab === key ? "primary" : "ghost"} onClick={() => setTab(key)}>{t(({ source: "Source code", contract: "Input and output", sdk: "Generated SDK", test: "Test published version" })[key])}</Button>)}
+          {(["source", "contract", "sdk", "test"] as const).map((key, index) => <Button key={key} role="tab" aria-selected={tab === key} tabIndex={tabStop(tab === key)} variant={tab === key ? "primary" : "ghost"} onKeyDown={(event) => tabStripKeyDown(event, index, 4, (target) => setTab((["source", "contract", "sdk", "test"] as const)[target]!))} onClick={() => setTab(key)}>{t(({ source: "Source code", contract: "Input and output", sdk: "Generated SDK", test: "Test published version" })[key])}</Button>)}
         </div>
         {tab === "source" && <>
           <p className="text-xs text-muted">{t("Implement Run(input Input) (Output, error). The SDK generates the command wrapper from your schema.")}</p>

@@ -1,7 +1,8 @@
 import {InputDraftProvider,InputProblems,useInputDrafts} from "../fields/draft";
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronRight, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Redo2, Undo2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Redo2, Undo2 } from "lucide-react";
 import { t } from "../i18n";
+import { tabStop, tabStripKeyDown } from "../lib/tablist";
 import { cn } from "../lib/cn";
 import { Button } from "../primitives/button";
 import { useViewTitle } from "../shell/Workspace";
@@ -86,7 +87,8 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
       <div role="region" aria-label={mainLabel ?? t("Editor")} className="flex min-h-0 min-w-0 flex-col overflow-hidden">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
         {dock && <DockBar dock={dock} open={layout.dockOpen} height={layout.dock} tab={dock.value ?? layout.dockTab} splitter={showDock ? splitter("dock") : null}
-          onOpen={(id) => { dock.onChange?.(id); patch({ dockOpen: !(layout.dockOpen && (dock.value ?? layout.dockTab) === id), dockTab: id }); }} />}
+          onOpen={(id) => { dock.onChange?.(id); patch({ dockOpen: true, dockTab: id }); }}
+          onToggle={() => patch({ dockOpen: !layout.dockOpen })} />}
       </div>
       {showRight && <>{splitter("right")}<aside role="region" aria-label={right.label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-l border-border"><InputDraftProvider scope={right.scope??"inspector"} reveal={path=>{patch({rightOpen:true});right.locate?.(path);}}><PanelBody panel={right} /></InputDraftProvider></aside></>}
     </fieldset>
@@ -102,25 +104,29 @@ function PanelBody({ panel }: { panel: WorkbenchPanel }) {
   const current = panel.tabs.find((tab) => tab.id === active) ?? panel.tabs[0]!;
   return <>
     <div role="tablist" aria-label={panel.label} className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border px-1 pt-1">
-      {panel.tabs.map((tab) => <button key={tab.id} type="button" role="tab" id={`${prefix}-${tab.id}`} aria-selected={tab.id === current.id}
+      {panel.tabs.map((tab, index) => <button key={tab.id} type="button" role="tab" id={`${prefix}-${tab.id}`} aria-selected={tab.id === current.id} aria-controls={`${prefix}-panel-${tab.id}`} tabIndex={tabStop(tab.id === current.id)}
         className={cn("flex shrink-0 items-center gap-1 whitespace-nowrap rounded-t border-b-2 px-2 py-1 text-xs", tab.id === current.id ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}
-        onClick={() => choose(tab.id)}>{tab.title}{tab.badge !== undefined && tab.badge !== 0 && <span className="rounded-full bg-row-selected px-1.5 text-[10px]">{tab.badge}</span>}</button>)}
+        onClick={() => choose(tab.id)} onKeyDown={(event) => tabStripKeyDown(event, index, panel.tabs!.length, (target) => choose(panel.tabs![target]!.id))}>{tab.title}{tab.badge !== undefined && tab.badge !== 0 && <span className="rounded-full bg-row-selected px-1.5 text-[10px]">{tab.badge}</span>}</button>)}
     </div>
-    <div role="tabpanel" aria-labelledby={`${prefix}-${current.id}`} className="min-h-0 flex-1 overflow-auto"><InputDraftProvider scope={current.id} reveal={path=>{panel.onChange?.(current.id);setOwn(current.id);panel.locate?.(path);}}>{current.content}</InputDraftProvider></div>
+    <div role="tabpanel" id={`${prefix}-panel-${current.id}`} aria-labelledby={`${prefix}-${current.id}`} className="min-h-0 flex-1 overflow-auto"><InputDraftProvider scope={current.id} reveal={path=>{panel.onChange?.(current.id);setOwn(current.id);panel.locate?.(path);}}>{current.content}</InputDraftProvider></div>
   </>;
 }
 
-function DockBar({ dock, open, height, tab, splitter, onOpen }: { dock: WorkbenchPanel; open: boolean; height: number; tab?: string; splitter: ReactNode; onOpen: (id: string) => void }) {
+function DockBar({ dock, open, height, tab, splitter, onOpen, onToggle }: { dock: WorkbenchPanel; open: boolean; height: number; tab?: string; splitter: ReactNode; onOpen: (id: string) => void; onToggle: () => void }) {
   const tabs = dock.tabs ?? [];
   const current = tabs.find((item) => item.id === tab) ?? tabs[0];
+  const panelID = useId();
   return <div className="flex shrink-0 flex-col border-t border-border">
     {open && splitter}
-    <div role="tablist" aria-label={dock.label} className="flex items-center gap-0.5 px-1 py-0.5">
-      {tabs.map((item) => <button key={item.id} type="button" role="tab" aria-selected={open && item.id === current?.id}
-        className={cn("flex items-center gap-1 rounded px-2 py-0.5 text-xs", open && item.id === current?.id ? "bg-row-selected font-semibold" : "text-muted hover:text-foreground")}
-        onClick={() => onOpen(item.id)}>{item.title}{item.badge !== undefined && item.badge !== 0 && <span className="rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{item.badge}</span>}</button>)}
+    <div className="flex items-center gap-1 px-1 py-0.5">
+      <div role="tablist" aria-label={dock.label} className="flex items-center gap-0.5">
+        {tabs.map((item, index) => <button key={item.id} type="button" role="tab" aria-selected={item.id === current?.id} aria-controls={panelID} tabIndex={tabStop(item.id === current?.id)}
+          className={cn("flex items-center gap-1 rounded px-2 py-0.5 text-xs", open && item.id === current?.id ? "bg-row-selected font-semibold" : "text-muted hover:text-foreground")}
+          onClick={() => onOpen(item.id)} onKeyDown={(event) => tabStripKeyDown(event, index, tabs.length, (target) => onOpen(tabs[target]!.id))}>{item.title}{item.badge !== undefined && item.badge !== 0 && <span className="rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{item.badge}</span>}</button>)}
+      </div>
+      <Button variant="ghost" size="sm" className="ml-auto" aria-label={t(open ? "Hide dock" : "Show dock")} aria-expanded={open} aria-controls={panelID} onClick={onToggle}>{open ? <ChevronDown /> : <ChevronUp />}</Button>
     </div>
-    {open && current && <div role="tabpanel" className="min-h-0 overflow-auto border-t border-border" style={{ height }}>{current.content}</div>}
+    {open && current && <div role="tabpanel" id={panelID} className="min-h-0 overflow-auto border-t border-border" style={{ height }}>{current.content}</div>}
   </div>;
 }
 

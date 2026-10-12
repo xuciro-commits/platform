@@ -1300,6 +1300,8 @@ export default {
   "Not saved": "未保存",
   "Toggle structure panel": "切换结构面板",
   "Toggle dock": "切换底栏",
+  "Hide dock": "收起底部面板",
+  "Show dock": "展开底部面板",
   "Toggle inspector panel": "切换检查器面板",
   "Editor": "编辑器",
   "No problems.": "没有问题。",

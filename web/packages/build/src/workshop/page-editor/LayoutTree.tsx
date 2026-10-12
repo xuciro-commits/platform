@@ -58,7 +58,7 @@ export function LayoutTree({document,sections,chosen,container,title,widgetTitle
     <div className="grid min-w-0 gap-2 border-t border-border pt-3">
       <div className="text-xs font-semibold text-muted">{t("Layout")}</div>
       <ul className="grid min-w-0 gap-1">{renderNode(document.root)}</ul>
-      <Card role="region" aria-label={t("Unused widgets")} className="grid gap-2 p-2"><strong className="text-xs text-muted">{t("Unused widgets")}</strong><p className="text-xs text-muted">{t("Stored widgets keep their settings and do not run until placed.")}</p><ul className="grid gap-1">{document.unusedWidgets?.map(entry=>renderNode(entry.node,new Set()))}</ul></Card>
+      {(document.unusedWidgets?.length ?? 0) > 0 && <Card role="region" aria-label={t("Unused widgets")} className="grid gap-2 p-2"><strong className="text-xs text-muted">{t("Unused widgets")}</strong><p className="text-xs text-muted">{t("Stored widgets keep their settings and do not run until placed.")}</p><ul className="grid gap-1">{document.unusedWidgets?.map(entry=>renderNode(entry.node,new Set()))}</ul></Card>}
       <div className="grid gap-2">
         <strong className="text-xs text-muted">{t("Overlays")}</strong>
         {Object.entries(document.overlays ?? {}).map(([id, overlay]) => <div key={id} className="grid gap-1"><span className="truncate text-xs">{overlay.title} · {t(overlay.kind === "drawer" ? "Drawer" : "Modal")}</span><ul>{renderNode(overlay.root)}</ul></div>)}

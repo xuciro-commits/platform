@@ -1,4 +1,4 @@
-import { Button, Checkbox, Disclosure, Input, Select, Tag, Textarea, t } from "@platform/ui";
+import { Button, Checkbox, Disclosure, Input, Select, Tag, Textarea, t, tabStop, tabStripKeyDown } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { ArrowDownToLine, Braces, Plus, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -96,7 +96,7 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
   return <div role="region" aria-label={t("Workflow properties")} className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface">
     <div className="flex items-center gap-2 border-b border-border px-3 py-3"><span className="rounded-md bg-row-selected p-1.5 text-primary"><Braces className="size-4" /></span><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{step.title || step.name}</div><div className="truncate font-mono text-[10px] text-muted">{step.name}</div></div>
       <Button variant="ghost" type="button" onClick={onClose} aria-label={t("Close inspector")}><X className="size-4 text-muted" /></Button></div>
-    <div className="flex border-b border-border p-1" role="tablist" aria-label={t("Block inspector")}>{(["settings", "input", "output"] as const).map((name) => <Button variant="ghost" type="button" key={name} role="tab" aria-selected={tab === name} className={`flex-1 rounded px-2 py-1.5 text-xs ${tab === name ? "bg-row-selected font-medium text-primary" : "text-muted hover:bg-row-hover"}`} onClick={() => setTab(name)}>{t(name === "settings" ? "Settings" : name === "input" ? "Input" : "Output")}</Button>)}</div>
+    <div className="flex border-b border-border p-1" role="tablist" aria-label={t("Block inspector")}>{(["settings", "input", "output"] as const).map((name, index) => <Button variant="ghost" type="button" key={name} role="tab" aria-selected={tab === name} tabIndex={tabStop(tab === name)} onKeyDown={(event) => tabStripKeyDown(event, index, 3, (target) => setTab((["settings", "input", "output"] as const)[target]!))} className={`flex-1 rounded px-2 py-1.5 text-xs ${tab === name ? "bg-row-selected font-medium text-primary" : "text-muted hover:bg-row-hover"}`} onClick={() => setTab(name)}>{t(name === "settings" ? "Settings" : name === "input" ? "Input" : "Output")}</Button>)}</div>
     <div className="grid gap-3 overflow-auto p-3">
       {tab === "settings" && <>
         {field("Step title", <Input value={step.title ?? ""} onChange={(event) => onChange({ title: event.target.value })} />)}

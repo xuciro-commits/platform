@@ -9,6 +9,7 @@ export {TagCounts} from "./components/TagCounts";
 export {SearchInput} from "./components/SearchInput";
 export { t, language, languages, setLanguage, register, type Dictionary } from "./i18n";
 export { cn } from "./lib/cn";
+export { tabTarget, tabStripKeyDown, tabStop } from "./lib/tablist";
 export { Button, type ButtonProps } from "./primitives/button";
 export { MetalButton, LiquidButton } from "./primitives/metalButton";
 export { RetroButton, type RetroButtonProps } from "./primitives/retroButton";

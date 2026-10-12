@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { cn } from "../lib/cn";
+import { tabStop, tabStripKeyDown } from "../lib/tablist";
 import { t } from "../i18n";
 import type { EditorProps } from "../fields/types";
 
@@ -166,6 +167,8 @@ export function MarkdownEditor({
             type="button"
             role="tab"
             aria-selected={tab === "write"}
+            tabIndex={tabStop(tab === "write")}
+            onKeyDown={(event) => tabStripKeyDown(event, 0, 2, (target) => setTab(target === 0 ? "write" : "preview"))}
             onClick={() => setTab("write")}
             className={cn(
               "rounded px-2 py-0.5 text-xs font-medium transition-colors",
@@ -178,6 +181,8 @@ export function MarkdownEditor({
             type="button"
             role="tab"
             aria-selected={tab === "preview"}
+            tabIndex={tabStop(tab === "preview")}
+            onKeyDown={(event) => tabStripKeyDown(event, 1, 2, (target) => setTab(target === 0 ? "write" : "preview"))}
             onClick={() => setTab("preview")}
             className={cn(
               "rounded px-2 py-0.5 text-xs font-medium transition-colors",

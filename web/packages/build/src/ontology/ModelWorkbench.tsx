@@ -3,7 +3,7 @@ import { ResourceControls as AssetControls } from "../editor/workbench";
 import { NewActions, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
   type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, PropertyList, RecordList, RelationCanvas, Select, Tag,
-  t, type ColumnDef, type RelationEdge, type RelationNode } from "@platform/ui";
+  t, tabStop, tabStripKeyDown, type ColumnDef, type RelationEdge, type RelationNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { Boxes, Database, GitBranch, Layers, Link2 } from "lucide-react";
 import { useInterfaces } from "./shape";
@@ -156,7 +156,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
         {view === "detail" && resource && <div className="grid gap-3">
           <div className="flex items-center gap-3"><Database className="size-6 text-primary" /><div className="min-w-0 flex-1"><h2 className="text-base font-semibold">{resource.title}</h2><p className="font-mono text-xs text-muted">{resource.ref.name}{resource.installed?.entity?.implements?.length ? <> · {t("implements")} {resource.installed.entity.implements.join(", ")}</> : null}{resource.draft?.extends ? <> · {t("extends")} {resource.draft.extends}</> : null}</p></div><Tag label={t(resource.installed ? "Published" : "Draft")} /></div>
           <div role="tablist" aria-label={t("Object resource views")} className="flex flex-wrap gap-1 border-b border-border pb-2">
-            {[["overview", "Overview"], ["properties", "Properties"], ["links", "Relationships"], ["actions", "Actions"], ["data", "Data"], ["usage", "Usage"], ["access", "Access"]].map(([key, label]) => <Button key={key} size="sm" variant={tab === key ? "primary" : "ghost"} role="tab" aria-selected={tab === key} onClick={() => { setTab(key!); select(undefined); }}>{t(label!)}</Button>)}
+            {[["overview", "Overview"], ["properties", "Properties"], ["links", "Relationships"], ["actions", "Actions"], ["data", "Data"], ["usage", "Usage"], ["access", "Access"]].map(([key, label], index) => <Button key={key} size="sm" variant={tab === key ? "primary" : "ghost"} role="tab" aria-selected={tab === key} tabIndex={tabStop(tab === key)} onKeyDown={(event) => tabStripKeyDown(event, index, 7, (target) => setTab((["overview", "properties", "links", "actions", "data", "usage", "access"] as const)[target]!))} onClick={() => { setTab(key!); select(undefined); }}>{t(label!)}</Button>)}
           </div>
           {tab === "overview" && <><PropertyList items={[[t("Identity"), resource.ref.name], [t("Owner"), resource.ref.app], [t("Source"), t(resource.source === "code" ? "Native code" : "Tenant definition")], [t("Version"), resource.installed?.version ?? t("Draft")], [t("Title property"), resource.installed?.entity?.display ?? "—"]]} />
             <p className="text-sm text-muted">{resource.installed?.entity?.description ?? t("Define fields, relationships, actions and access.")}</p></>}

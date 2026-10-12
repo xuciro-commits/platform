@@ -13,6 +13,7 @@ import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSe
 import {
   Button, Card, Checkbox, Input, FlowCanvas, Panel, PanelSection, ProblemList, Select, StatusBar, StructureRow, Textarea, Workbench, useFlowArrangement, cn, notify, t, type WorkbenchProblem,
   type FlowEdge, type FlowNode, type FlowCatalog,
+  tabStop, tabStripKeyDown,
 } from "@platform/ui";
 import { Boxes, Link2, Plus, Shield, Tags, Trash2, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -152,7 +153,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
     <div role="tablist" aria-label={t("Object sections")} className="flex shrink-0 gap-1 overflow-x-auto border-b border-border px-3 pt-2">
-      {tabs.map((item) => <Button variant="row" key={item.id} type="button" role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}
+      {tabs.map((item, index) => <Button variant="row" key={item.id} type="button" role="tab" aria-selected={tab === item.id} tabIndex={tabStop(tab === item.id)} onKeyDown={(event) => tabStripKeyDown(event, index, tabs.length, (target) => setTab(tabs[target]!.id))} onClick={() => setTab(item.id)}
         className={cn("whitespace-nowrap rounded-t border-b-2 px-3 py-1.5 text-sm", tab === item.id ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}>{item.title}</Button>)}
     </div>
     <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[tab]}</fieldset>
