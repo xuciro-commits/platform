@@ -5,10 +5,10 @@
 //
 // The builder reads it from its own app, not from the platform's settings read:
 // a builder without a platform role must still know which entry it may offer.
-import { useRead } from "@platform/app";
+import { useReadQuery } from "@platform/app";
 
 /** Whether this tenant still offers the direct install. */
 export function useDirectInstall(): boolean {
-  const profile = useRead<{ profile: string; directInstall: boolean }>("/v1/release-profile");
-  return profile ? profile.directInstall : true;
+  const profile = useReadQuery<{ profile: string; directInstall: boolean }>("/v1/release-profile");
+  return !profile.isError && profile.data?.directInstall === true;
 }

@@ -1,16 +1,16 @@
 // Builder release workbench: saved candidates come from committed bytes.
 // Evaluation and activation retain the host's existing gates.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, Disclosure, PageHeader, Select, StatusTag, t, useWorkspace } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, PageHeader, Select, StatusTag, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope } from "../projects/application-scope";
 import { resourceKinds, type ResourceKind } from "../projects/resources";
 import { diagnose } from "./diagnostics";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 // One selected saved draft in a joint candidate (ADR-0048 D1). The selection is
 // what the builder checked; the server recomputes the candidate from it.
-type JointChoice = { kind: ReleaseKind; id: string };
+export type JointChoice = { kind: ReleaseKind; id: string };
 const jointKey = (choice: JointChoice) => `${choice.kind}/${choice.id}`;
 const merged = (current: JointChoice[], incoming: JointChoice[]): JointChoice[] => {
   const seen = new Set(current.map(jointKey));
@@ -29,13 +29,32 @@ export type ReleaseKind = Exclude<ResourceKind, "action" | "automation"> | "app"
  * dependencies, so its review opens with them selected). */
 export function releaseDraftsParam(value: string | undefined, kinds: readonly string[]): JointChoice[] {
   if (!value) return [];
+  let selected: unknown;
+  if (value.trimStart().startsWith("[")) {
+    try { selected = JSON.parse(value); } catch { return []; }
+  } else {
+    // Incoming-only compatibility. A record ID may itself contain colons.
+    selected = value.split(",").map((item) => {
+      const separator = item.indexOf(":");
+      return { kind: item.slice(0, separator), id: separator < 0 ? "" : item.slice(separator + 1) };
+    });
+  }
+  if (!Array.isArray(selected) || selected.length > 32) return [];
   const out: JointChoice[] = [];
-  for (const item of value.split(",")) {
-    const [kind, id] = item.split(":") as [ReleaseKind, string];
-    if (kinds.includes(kind) && id && !out.some((choice) => jointKey(choice) === `${kind}/${id}`)) out.push({ kind, id });
+  for (const item of selected) {
+    if (!item || typeof item !== "object" || typeof item.kind !== "string" || typeof item.id !== "string"
+      || !kinds.includes(item.kind) || !item.id) return [];
+    if (!out.some((choice) => jointKey(choice) === `${item.kind}/${item.id}`)) out.push({ kind: item.kind as ReleaseKind, id: item.id });
   }
   return out;
 }
+/** New links carry lossless JSON, not punctuation-delimited record identities. */
+export const releaseDraftsValue = (drafts: readonly JointChoice[]): string => JSON.stringify(drafts.map(({ kind, id }) => ({ kind, id })));
+
+type ReleaseRequest = { kind: "save"; body: Api.ReleaseSaveRequest }
+  | { kind: "evaluate"; body: Api.ReleaseEvaluationRequest }
+  | { kind: "activate"; body: Api.ReleaseActivateRequest };
+
 type Record = { id: string; title: string; name: string; state: string };
 type EvaluationPlan = { id: string; title: string; function?: string; evaluation?: unknown[] };
 type EvaluationReport = { id: string; candidate: string; function: string; state: string; quality: number; costUsd: number; costComplete: boolean; peakLatencyMillis: number; attempts: unknown[] };
@@ -72,141 +91,142 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [reportID, setReportID] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [joint, setJoint] = useState<JointChoice[]>(initialDrafts);
+  const lock = useRef(false);
+  const [pending, setPending] = useState<ReleaseRequest>();
+  const pendingRef = useRef(pending); pendingRef.current = pending;
+  const rememberRequest = (request?: ReleaseRequest) => { pendingRef.current = request; setPending(request); };
+  const { confirmDiscard } = useUnsavedChanges(!!pending, () => rememberRequest(), busy);
+  const locked = busy || !!pending;
+  // One existing task view owns the captured HTTP request. No new outbox or
+  // release authority: a retry sends exactly its original key and payload.
+  const perform = async (job: () => Promise<void>) => {
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setError("");
+    try { await job(); }
+    finally { lock.current = false; setBusy(false); }
+  };
+  const [joint, setJoint] = useState<JointChoice[]>(() => initialDrafts.length && initialID ? merged([{ kind: initialKind, id: initialID }], initialDrafts) : initialDrafts);
   const [jointNote, setJointNote] = useState("");
   const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20`, undefined, mayRelease);
   const hostAdmin = useReadQuery<{ subject: string; tenants: string[] }>("/v1/host/me", undefined, mayRelease).isSuccess; // the host console answers only host administrators
-  const activeID = inventory.data?.activeId ?? "";
+  const activeID = inventory.isError ? "" : inventory.data?.activeId ?? "";
   // What another environment promoted here and nobody activated yet: the
   // release holder's inbox, ahead of the full saved inventory.
-  const promoted = (inventory.data?.candidates ?? []).filter((candidate) => candidate.from && candidate.id !== activeID);
+  const promoted = (inventory.isError ? [] : inventory.data?.candidates ?? []).filter((candidate) => candidate.from && candidate.id !== activeID);
   const selected = kinds.find((item) => item.kind === kind)!;
   const query = useRecordInventory<Record>(selected.type, 1000, builder);
   const functions = useRecordInventory<Record>("build.function", 1000, builder);
   const plans = useRecordInventory<EvaluationPlan>("build.testplan", 1000, builder);
   const applications = useRecordInventory<Record>("build.app", 1000, builder);
   const reports = useRecordInventory<EvaluationReport>("build.evaluation", 1000, mayRelease);
-  const records = query.data?.records ?? [];
+  const records = query.isError ? [] : query.data?.records ?? [];
   const functionNames = (review?.included ?? []).filter((ref) => ref.app === "build" && ref.kind === "function").map((ref) => ref.name);
-  const eligiblePlans = (plans.data?.records ?? []).filter((plan) => plan.evaluation?.length && functions.data?.records.some((fn) => fn.id === plan.function && functionNames.includes(fn.name)));
-  const report = reports.data?.records.find((item) => item.id === reportID);
+  const eligiblePlans = (plans.isError || functions.isError ? [] : plans.data?.records ?? []).filter((plan) => plan.evaluation?.length && functions.data?.records.some((fn) => fn.id === plan.function && functionNames.includes(fn.name)));
+  const report = reports.isError ? undefined : reports.data?.records.find((item) => item.id === reportID);
   // The application a release review was opened from is the natural root of a
   // joint selection (ADR-0048 D1): its pages come before its own draft.
   const scopedApplication = scope ? applications.data?.records.find((item) => item.id === scope) : undefined;
-  const passedFunctions = (reports.data?.records ?? []).filter((item) => item.candidate === savedID && item.state === "passed").map((item) => item.function);
+  const passedFunctions = (reports.isError ? [] : reports.data?.records ?? []).filter((item) => item.candidate === savedID && item.state === "passed").map((item) => item.function);
   const evaluated = functionNames.every((name) => passedFunctions.includes(name));
   if (!mayRelease) {
     return <PageHeader title={t("Release review")} description={t("A builder or publisher role is required to review releases.")} />;
   }
-  const loadSaved = async (candidateID: string) => {
-    if (!candidateID) return;
-    setBusy(true); setError(""); setReview(undefined); setPlanID(""); setReportID("");
+  const clearReview = () => {
+    setReview(undefined); setAssets([]); setSavedReview(false); setRunningMatches(undefined); setRunningDiagnostic("");
+    setCanActivate(false); setActivationDiagnostic(""); setUpgradePlan(undefined); setOrigin(undefined); setPromotedTo([]);
+    setPlanID(""); setReportID("");
+  };
+  const readSaved = async (candidateID: string) => {
+    clearReview(); setSavedID(candidateID);
     try {
       const result = await client.call<Api.SavedReleaseReview>("GET", `/v1/releases/candidates/${encodeURIComponent(candidateID)}`);
-      if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Saved releases could not be loaded."));
-      else {
-        setReview(result.body.preview); setSavedID(candidateID); setSavedReview(true);
-        setAssets(result.body.assets ?? []);
-        setRunningMatches(result.body.runningMatches); setRunningDiagnostic(result.body.runningDiagnostic ?? "");
-        setCanActivate(result.body.canActivate); setActivationDiagnostic(result.body.activationDiagnostic ?? "");
-        setUpgradePlan(result.body.upgradePlan);
-        setOrigin(result.body.from ? { from: result.body.from, at: result.body.promotedAt } : undefined);
-        setPromotedTo(result.body.promotedTo ?? []);
-        setConfirmedUpgrade(current => current === result.body.upgradePlan?.id ? current : "");
-        await reports.refetch();
+      if (!result.ok || result.body.preview?.candidateId !== candidateID) {
+        setError(apiErrorMessage(result.body) ?? t("Saved releases could not be loaded.")); return;
       }
+      setReview(result.body.preview); setSavedReview(true); setAssets(result.body.assets ?? []);
+      setRunningMatches(result.body.runningMatches); setRunningDiagnostic(result.body.runningDiagnostic ?? "");
+      setCanActivate(result.body.canActivate); setActivationDiagnostic(result.body.activationDiagnostic ?? "");
+      setUpgradePlan(result.body.upgradePlan);
+      setOrigin(result.body.from ? { from: result.body.from, at: result.body.promotedAt } : undefined);
+      setPromotedTo(result.body.promotedTo ?? []);
+      setConfirmedUpgrade(current => current === result.body.upgradePlan?.id ? current : "");
+      await reports.refetch();
     } catch { setError(t("Saved releases could not be loaded.")); }
-    finally { setBusy(false); }
   };
-  const inspect = async (drafts?: JointChoice[]) => {
-    setBusy(true);
-    setError("");
-    setReview(undefined);
-    setSavedID("");
-    setSavedReview(false); setRunningMatches(undefined); setRunningDiagnostic(""); setOrigin(undefined); setPromotedTo([]);
-    setPlanID(""); setReportID("");
-    try {
-      const result = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview",
-        drafts?.length ? { drafts } satisfies Api.ReleasePreviewRequest : { kind, id } satisfies Api.ReleasePreviewRequest);
-      if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Release review could not be loaded."));
-      else {
-        setReview(result.body);
-        setCandidateKey(crypto.randomUUID());
-      }
-    } catch {
-      setError(t("Release review could not be loaded."));
-    } finally {
-      setBusy(false);
+  const loadSaved = (candidateID: string) => {
+    if (!candidateID || pendingRef.current) return;
+    return perform(() => readSaved(candidateID));
+  };
+  const inspect = (drafts?: JointChoice[]) => {
+    if (pendingRef.current) return;
+    const request: Api.ReleasePreviewRequest = drafts?.length ? { drafts: drafts.map(choice => ({ ...choice })) } : { kind, id };
+    return perform(async () => {
+      clearReview(); setSavedID(""); setConfirmedUpgrade(""); setCandidateKey("");
+      try {
+        const result = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", request);
+        if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Release review could not be loaded."));
+        else { setReview(result.body); setCandidateKey(crypto.randomUUID()); }
+      } catch { setError(t("Release review could not be loaded.")); }
+    });
+  };
+  // The original server owner computes dependencies. The view never invents
+  // a closure from cached browser inventories or truncates it to fit a budget.
+  const addReferenced = (from: JointChoice) => {
+    if (!from.id || pendingRef.current) return;
+    return perform(async () => {
+      setJointNote("");
+      try {
+        const result = await client.call<Api.ReleaseDraftClosure>("POST", "/v1/releases/drafts/referenced", from satisfies Api.ReleaseDraftsRequest);
+        if (!result.ok) setJointNote(apiErrorMessage(result.body) ?? t("Draft dependencies could not be read."));
+        else {
+          const found = result.body.drafts.map(draft => ({ kind: draft.kind as ReleaseKind, id: draft.id }));
+          const selection = merged(joint, [from, ...found]);
+          if (selection.length > 32) { setJointNote(t("A joint candidate accepts at most 32 drafts. Select a supported application closure.")); return; }
+          setJoint(selection);
+          setJointNote(found.length ? t("Added {count} dependent drafts.", { count: found.length }) : t("Nothing to add: every dependency is installed or already selected."));
+        }
+      } catch { setJointNote(t("Draft dependencies could not be read.")); }
+    });
+  };
+  const send = (request: ReleaseRequest) => perform(async () => {
+    const current = pendingRef.current;
+    if (current && current !== request) return; // an unconfirmed request cannot be replaced
+    rememberRequest(request);
+    const path = request.kind === "save" ? "/v1/releases/candidates" : request.kind === "evaluate" ? "/v1/releases/evaluations" : "/v1/releases/active";
+    let answer: { ok: boolean; status: number; body: { id: string } };
+    try { answer = await client.call<{ id: string }>("POST", path, request.body); }
+    catch { setError(t("The release request was not confirmed. Retry the original request.")); return; }
+    if (!answer.ok || typeof answer.body?.id !== "string" || !answer.body.id
+      || request.kind !== "evaluate" && answer.body.id !== request.body.candidateId) {
+      // Candidate saving can stand even if sealing reports 409. Any unclear
+      // answer retains the original request; a new key is not a safe retry.
+      const message = apiErrorMessage(answer.body) ?? t("The release request was not confirmed. Retry the original request.");
+      if (request.kind === "activate") await readSaved(request.body.candidateId);
+      setError(message); return;
     }
-  };
-  // The graph is the server's knowledge, not the builder's: ask which saved
-  // record drafts the chosen draft needs, then let the builder check them.
-  const addReferenced = async (from: JointChoice) => {
-    if (!from.id) return;
-    setBusy(true);
-    setJointNote("");
-    setError("");
+    rememberRequest();
     try {
-      const result = await client.call<Api.ReleaseDraftClosure>("POST", "/v1/releases/drafts/referenced", from satisfies Api.ReleaseDraftsRequest);
-      if (!result.ok) setJointNote(apiErrorMessage(result.body) ?? t("Draft dependencies could not be read."));
-      else {
-        const found = result.body.drafts.map((draft) => ({ kind: draft.kind as ReleaseKind, id: draft.id }));
-        setJoint((current) => merged(current, [from, ...found]));
-        setJointNote(found.length ? t("Added {count} dependent drafts.", { count: found.length }) : t("Nothing to add: every dependency is installed or already selected."));
-      }
-    } catch { setJointNote(t("Draft dependencies could not be read.")); }
-    finally { setBusy(false); }
+      if (request.kind === "evaluate") { setReportID(answer.body.id); await reports.refetch(); }
+      else { setSavedID(answer.body.id); await inventory.refetch(); await readSaved(answer.body.id); }
+    } catch { setError(t("The release request was accepted, but its refreshed review is unavailable.")); }
+
+  });
+  const evaluate = () => {
+    if (pendingRef.current) return pendingRef.current.kind === "evaluate" ? send(pendingRef.current) : undefined;
+    if (!savedReview || !savedID || !planID) return;
+    return send({ kind: "evaluate", body: { candidateId: savedID, planId: planID, key: crypto.randomUUID() } });
   };
-  const evaluate = async () => {
-    if (!savedID || !planID) return;
-    setBusy(true); setError(""); setReportID("");
-    try {
-      const result = await client.call<Api.ReleaseEvaluationStarted>("POST", "/v1/releases/evaluations",
-        { candidateId: savedID, planId: planID, key: crypto.randomUUID() } satisfies Api.ReleaseEvaluationRequest);
-      if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Function evaluation could not be started."));
-      else { setReportID(result.body.id); await reports.refetch(); }
-    } catch { setError(t("Function evaluation could not be started.")); }
-    finally { setBusy(false); }
+  const save = () => {
+    if (pendingRef.current) return pendingRef.current.kind === "save" ? send(pendingRef.current) : undefined;
+    if (!review?.candidateId || !candidateKey || savedReview) return;
+    const selection = review.drafts ?? [];
+    return send({ kind: "save", body: { ...(selection.length ? { drafts: selection.map(choice => ({ ...choice })) } : { kind, id }), candidateId: review.candidateId, key: candidateKey } });
   };
-  const save = async () => {
-    if (!review?.candidateId || !candidateKey) return;
-    setBusy(true);
-    setError("");
-    try {
-      const selection = review.drafts ?? [];
-      const result = await client.call<Api.ReleaseSaved>("POST", "/v1/releases/candidates",
-        (selection.length
-          ? { drafts: selection, candidateId: review.candidateId, key: candidateKey }
-          : { kind, id, candidateId: review.candidateId, key: candidateKey }) satisfies Api.ReleaseSaveRequest);
-      if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Candidate could not be saved."));
-      else { setSavedID(result.body.id); await inventory.refetch(); await loadSaved(result.body.id); }
-    } catch {
-      setError(t("Candidate could not be saved."));
-    } finally {
-      setBusy(false);
-    }
-  };
-  // The host stages the saved closure and commits installation with its pointer.
-  const activate = async () => {
-    if (!savedID) return;
-    setBusy(true);
-    setError("");
-    try {
-      const result = await client.call<Api.ReleaseActive>("POST", "/v1/releases/active",
-        { candidateId: savedID, key: crypto.randomUUID(), ...(confirmedUpgrade && confirmedUpgrade === upgradePlan?.id ? { upgradeId: confirmedUpgrade } : {}) } satisfies Api.ReleaseActivateRequest);
-      if (!result.ok) {
-        // A refused activation usually means the environment moved under the
-        // plan (rows added, running definitions changed): re-read the saved
-        // review so the fresh plan is on screen next to the refusal.
-        const message = apiErrorMessage(result.body) ?? t("Release could not be activated.");
-        if (savedReview) await loadSaved(savedID);
-        setError(message);
-      } else { await inventory.refetch(); await loadSaved(result.body.id); }
-    } catch {
-      setError(t("Release could not be activated."));
-    } finally {
-      setBusy(false);
-    }
+  const activate = () => {
+    if (pendingRef.current) return pendingRef.current.kind === "activate" ? send(pendingRef.current) : undefined;
+    if (!savedReview || !savedID || review?.candidateId !== savedID || runningDiagnostic || !evaluated
+      || (!canActivate && (!upgradePlan || confirmedUpgrade !== upgradePlan.id))) return;
+    return send({ kind: "activate", body: { candidateId: savedID, key: crypto.randomUUID(), ...(confirmedUpgrade && confirmedUpgrade === upgradePlan?.id ? { upgradeId: confirmedUpgrade } : {}) } });
   };
   const changed = (label: string, refs?: Api.AssetRef[]) => (
     <div>
@@ -222,11 +242,11 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     <Card className="grid gap-3 p-3" aria-label={t("Saved releases")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{t("Saved releases")}</h2>
-        <Button size="sm" disabled={busy} onClick={async () => { await inventory.refetch(); if (savedReview && savedID) await loadSaved(savedID); }}>{t("Refresh releases")}</Button>
+        <Button size="sm" disabled={locked} onClick={() => void perform(async () => { await inventory.refetch(); if (savedID) await readSaved(savedID); })}>{t("Refresh releases")}</Button>
       </div>
-      <p className="break-all text-xs text-muted">{activeID ? <>{t("Current active release")}: <code>{activeID}</code></> : t("No active release yet.")}</p>
+      <p className="break-all text-xs text-muted">{inventory.isError ? t("Active release is unavailable.") : inventory.isPending ? t("Loading…") : activeID ? <>{t("Current active release")}: <code>{activeID}</code></> : t("No active release yet.")}</p>
       {inventory.isError ? <p role="alert" className="text-sm text-danger">{t("Saved releases could not be loaded.")}</p> : <label className="grid gap-1 text-xs">{t("Saved candidate")}
-        <Select aria-label={t("Saved candidate")} disabled={busy || inventory.isLoading} value={savedReview ? savedID : ""} onChange={(event) => void loadSaved(event.target.value)}>
+        <Select aria-label={t("Saved candidate")} disabled={locked || inventory.isLoading} value={savedReview ? savedID : ""} onChange={(event) => void loadSaved(event.target.value)}>
           <option value="">{t("Choose a saved candidate")}</option>
           {inventory.data?.candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title} · {candidate.assets} {t("assets")} · {candidate.id.slice(-8)}{candidate.id === activeID ? ` · ${t("Active")}` : ""}{candidate.promotedTo?.length ? ` · ${t("promoted to {targets}", { targets: wentTo(candidate.promotedTo) })}` : ""}</option>)}
           {savedReview && !inventory.data?.candidates.some((candidate) => candidate.id === savedID) && <option value={savedID}>{savedID}</option>}
@@ -240,31 +260,31 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         <ul className="grid gap-1">
           {promoted.map((candidate) => <li key={candidate.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className="break-all">{candidate.title} · {t("from {tenant}", { tenant: candidate.from! })}{candidate.promotedAt ? ` · ${new Date(candidate.promotedAt).toLocaleString()}` : ""} · <code>{candidate.id.slice(-8)}</code></span>
-            <Button size="sm" disabled={busy} onClick={() => void loadSaved(candidate.id)}>{t("Review and activate")}</Button>
+            <Button size="sm" disabled={locked} onClick={() => void loadSaved(candidate.id)}>{t("Review and activate")}</Button>
           </li>)}
         </ul>
       </div>}
-      {inventory.data && <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+      {!inventory.isError && inventory.data && <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         <span>{t("Showing {shown} of {total} candidates", { shown: inventory.data.candidates.length, total: inventory.data.total })}</span>
-        <Button size="sm" disabled={busy || offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>{t("Previous")}</Button>
-        <Button size="sm" disabled={busy || offset + 20 >= inventory.data.total} onClick={() => setOffset(offset + 20)}>{t("Next")}</Button>
-        {activeID && <Button size="sm" disabled={busy} onClick={() => void loadSaved(activeID)}>{t("Review active release")}</Button>}
+        <Button size="sm" disabled={locked || offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>{t("Previous")}</Button>
+        <Button size="sm" disabled={locked || offset + 20 >= inventory.data.total} onClick={() => setOffset(offset + 20)}>{t("Next")}</Button>
+        {activeID && <Button size="sm" disabled={locked} onClick={() => void loadSaved(activeID)}>{t("Review active release")}</Button>}
       </div>}
     </Card>
     {builder && <><Card className="grid gap-3 p-3">
       {!embedded && <label className="grid gap-1 text-xs">{t("Definition kind")}
-        <Select value={kind} onChange={(event) => { setKind(event.target.value as ReleaseKind); setId(""); setReview(undefined); setSavedID(""); setSavedReview(false); setPlanID(""); setReportID(""); setError(""); setJoint([]); setJointNote(""); }}>
+        <Select disabled={locked} value={kind} onChange={(event) => { setKind(event.target.value as ReleaseKind); setId(""); setReview(undefined); setSavedID(""); setSavedReview(false); setPlanID(""); setReportID(""); setError(""); setJoint([]); setJointNote(""); }}>
           {kinds.map((item) => <option key={item.kind} value={item.kind}>{t(item.label)}</option>)}
         </Select>
       </label>}
       {!embedded && <label className="grid gap-1 text-xs">{t("Saved draft")}
-        <Select value={id} onChange={(event) => { setId(event.target.value); setReview(undefined); setSavedID(""); setSavedReview(false); setPlanID(""); setReportID(""); setError(""); setJoint([]); setJointNote(""); }}>
+        <Select disabled={locked} value={id} onChange={(event) => { setId(event.target.value); setReview(undefined); setSavedID(""); setSavedReview(false); setPlanID(""); setReportID(""); setError(""); setJoint([]); setJointNote(""); }}>
           <option value="">{t("Choose a saved draft")}</option>
           {records.map((record) => <option key={record.id} value={record.id}>{record.title || record.name} · {record.state}</option>)}
         </Select>
       </label>}
       {query.isError && <p role="alert" className="text-sm text-danger">{t("Release review could not be loaded.")}</p>}
-      <Button disabled={!id || busy} onClick={() => void inspect()}>{busy ? t("Checking…") : t("Check draft and dependencies")}</Button>
+      <Button disabled={!id || locked} onClick={() => void inspect()}>{busy ? t("Checking…") : t("Check draft and dependencies")}</Button>
     </Card>
     <Card className="grid gap-3 p-3" aria-label={t("Deliver drafts together")}>
       <div>
@@ -272,22 +292,35 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         <p className="text-xs text-muted">{t("An object, the page over it and the application holding the page can be delivered as one candidate; nothing has to be published first.")}</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" disabled={!id || busy} onClick={() => { setJoint((current) => merged(current, [{ kind, id }])); setJointNote(""); }}>{t("Add selected draft")}</Button>
-        <Button size="sm" disabled={!id || busy} onClick={() => void addReferenced({ kind, id })}>{t("Add the drafts it depends on")}</Button>
-        {scopedApplication && <Button size="sm" disabled={busy} onClick={() => void addReferenced({ kind: "app", id: scopedApplication.id })}>{t("Add the drafts of {title}", { title: scopedApplication.title || scopedApplication.name })}</Button>}
-        <Button size="sm" disabled={!joint.length || busy} onClick={() => { setJoint([]); setJointNote(""); }}>{t("Clear selection")}</Button>
+        <Button size="sm" disabled={!id || locked} onClick={() => {
+          const selection = merged(joint, [{ kind, id }]);
+          if (selection.length > 32) { setJointNote(t("A joint candidate accepts at most 32 drafts. Select a supported application closure.")); return; }
+          setJoint(selection); setJointNote("");
+        }}>{t("Add selected draft")}</Button>
+        <Button size="sm" disabled={!id || locked} onClick={() => void addReferenced({ kind, id })}>{t("Add the drafts it depends on")}</Button>
+        {scopedApplication && <Button size="sm" disabled={locked} onClick={() => void addReferenced({ kind: "app", id: scopedApplication.id })}>{t("Add the drafts of {title}", { title: scopedApplication.title || scopedApplication.name })}</Button>}
+        <Button size="sm" disabled={!joint.length || joint.length > 32 || locked} onClick={() => { setJoint([]); setJointNote(""); }}>{t("Clear selection")}</Button>
       </div>
       {joint.length ? <ul className="grid gap-1" aria-label={t("Joint selection")}>
         {joint.map((choice) => <li className="flex items-center justify-between gap-2 text-xs" key={jointKey(choice)}>
           <span>{t(kinds.find((item) => item.kind === choice.kind)?.label ?? choice.kind)} · <code>{choice.id}</code></span>
-          <Button size="sm" onClick={() => setJoint((current) => current.filter((item) => jointKey(item) !== jointKey(choice)))}>{t("Remove")}</Button>
+          <Button size="sm" disabled={locked} onClick={() => setJoint((current) => current.filter((item) => jointKey(item) !== jointKey(choice)))}>{t("Remove")}</Button>
         </li>)}
       </ul> : <p className="text-xs text-muted">{t("No drafts selected yet.")}</p>}
+      {joint.length > 32 && <p role="alert" className="text-xs text-warning">{t("A joint candidate accepts at most 32 drafts. Select a supported application closure.")}</p>}
       {jointNote && <p className="text-xs text-muted" role="status">{jointNote}</p>}
-      <Button disabled={!joint.length || busy} onClick={() => void inspect(joint)}>{busy ? t("Checking…") : t("Check joint candidate")}</Button>
+      <Button disabled={!joint.length || joint.length > 32 || locked} onClick={() => void inspect(joint)}>{busy ? t("Checking…") : t("Check joint candidate")}</Button>
     </Card>
     </>}
     {error && <Card className="p-3 text-sm text-danger" role="alert">{error}</Card>}
+    {pending && <Card role="alert" className="grid gap-2 p-3 text-sm">
+      <p>{t("A release request is unconfirmed. It may already have been accepted. Retry its original key and payload; leaving does not cancel accepted work.")}</p>
+      <code className="break-all text-xs">{pending.kind} · {pending.body.candidateId} · {pending.body.key}</code>
+      <div className="flex gap-2">
+        <Button disabled={busy} onClick={() => void send(pending)}>{t("Retry original release request")}</Button>
+        <Button variant="ghost" disabled={busy} onClick={() => confirmDiscard(() => rememberRequest())}>{t("Forget local request")}</Button>
+      </div>
+    </Card>}
     {review && <Card className="grid gap-3 p-3" aria-live="polite">
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold">{savedReview ? t("Saved candidate review") : review.diagnostic ? t("Candidate rejected") : (review.drafts?.length ?? 0) > 1 ? t("Joint candidate ready for review") : t("Candidate ready for review")}</span>
         {savedReview && <StatusTag status={activeID === savedID ? "active" : "saved"} registry={{ active: { label: t("Active"), tone: "success" }, saved: { label: t("Saved"), tone: "info" } }} />}
@@ -300,7 +333,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       {savedReview && origin && activeID !== savedID && <p className="text-xs text-muted" role="status">{t("This candidate was promoted from {tenant}{when}. It is not active here: review the differences and the storage upgrade plan below, then activate it.", { tenant: origin.from, when: origin.at ? ` · ${new Date(origin.at).toLocaleString()}` : "" })}</p>}
       {review.currentId && <p className="break-all text-xs">{t("Installed candidate")}: <code>{review.currentId}</code></p>}
       {review.candidateId && <p className="break-all text-xs">{savedReview ? t("Saved candidate") : t("Draft candidate")}: <code>{review.candidateId}</code></p>}
-      {savedReview && hostAdmin && <div className="flex flex-wrap items-center gap-2"><Button size="sm" onClick={() => open({ view: "host-promotions", params: { from: client.connection.tenant, candidate: savedID } })}>{t("Promote to another environment…")}</Button><span className="text-xs text-muted">{t("Development → test → production: the sealed bytes of this candidate move into another tenant through the host console.")}</span></div>}
+      {savedReview && hostAdmin && <div className="flex flex-wrap items-center gap-2"><Button size="sm" disabled={locked} onClick={() => open({ view: "host-promotions", params: { from: client.connection.tenant, candidate: savedID } })}>{t("Promote to another environment…")}</Button><span className="text-xs text-muted">{t("Development → test → production: the sealed bytes of this candidate move into another tenant through the host console.")}</span></div>}
       {savedReview && <Disclosure className="rounded border border-border p-3" summary={<span className="text-sm font-semibold">{t("Sealed definitions")} · {assets.length}</span>}>
         <p className="my-2 text-xs text-muted">{t("These definitions come from this immutable candidate, including its original versions and dependencies.")}</p>
         {assets.map(asset => <Disclosure key={`${asset.ref.app}/${asset.ref.kind}/${asset.ref.name}`} className="my-2" summary={<span className="font-mono text-xs">{asset.ref.app}/{asset.ref.kind}/{asset.ref.name}</span>}><pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(asset, null, 2)}</pre></Disclosure>)}
@@ -311,8 +344,8 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       {savedReview && upgradePlan && <Card role="group" className="grid gap-2 p-3" aria-label={t("Storage upgrade plan")}>
         <h3 className="text-sm font-semibold">{t("Storage upgrade plan")}</h3>
         <p className="text-xs text-muted">{t("Add optional fields without changing existing values or record history. Required fields, type changes and removals are refused.")}</p>
-        <ul className="grid gap-1 text-xs">{upgradePlan.additions.map(addition => <li key={addition.type}>{addition.type} · {addition.field} · {t(addition.kind)} · {t("{count} existing records", { count: addition.records })}</li>)}</ul>
-        <Checkbox checked={confirmedUpgrade === upgradePlan.id} onChange={checked => setConfirmedUpgrade(checked ? upgradePlan.id : "")}>{t("Confirm this optional field upgrade plan")}</Checkbox>
+        <ul className="grid gap-1 text-xs">{upgradePlan.additions.map(addition => <li key={`${addition.type}/${addition.field}`}>{addition.type} · {addition.field} · {t(addition.kind)} · {t("{count} existing records", { count: addition.records })}</li>)}</ul>
+        <Checkbox disabled={locked} checked={confirmedUpgrade === upgradePlan.id} onChange={checked => setConfirmedUpgrade(checked ? upgradePlan.id : "")}>{t("Confirm this optional field upgrade plan")}</Checkbox>
       </Card>}
       {savedReview && runningDiagnostic && <p className="break-words text-xs text-warning">{runningDiagnostic}</p>}
       {review.diagnostic && (() => { const d = diagnose(review.diagnostic, { application: scope || (kind === "app" ? id : undefined) }); return <div className="grid gap-2">
@@ -339,27 +372,28 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         </ul>
       </div>}
       {!review.diagnostic && review.candidateId && <div className="grid gap-2">
-        {!savedReview && <Button disabled={busy || Boolean(savedID)} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>}
+        {!savedReview && <Button disabled={locked || Boolean(savedID)} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>}
         {savedID && activeID !== savedID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
         {builder && savedID && functionNames.length > 0 && <div className="grid gap-2 rounded border border-border p-3">
           <div className="text-sm font-semibold">{t("Measured function evaluation")}</div>
           <p className="text-xs text-muted">{t("A saved synthetic plan runs real model calls. A passing report for each included function is required before activation.")}</p>
           <label className="grid gap-1 text-xs">{t("Evaluation plan")}
-            <Select value={planID} onChange={(event) => { setPlanID(event.target.value); setReportID(""); }}>
+            <Select disabled={locked} value={planID} onChange={(event) => { setPlanID(event.target.value); setReportID(""); }}>
               <option value="">{t("Choose an evaluation plan")}</option>
               {eligiblePlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}
             </Select>
           </label>
           <div className="flex flex-wrap gap-2">
-            <Button disabled={!planID || busy} onClick={evaluate}>{busy ? t("Starting evaluation…") : t("Run measured evaluation")}</Button>
-            <Button disabled={busy} onClick={() => { void reports.refetch(); }}>{t("Refresh evaluation reports")}</Button>
+            <Button disabled={!planID || locked} onClick={evaluate}>{busy ? t("Starting evaluation…") : t("Run measured evaluation")}</Button>
+            <Button disabled={locked} onClick={() => { void reports.refetch(); }}>{t("Refresh evaluation reports")}</Button>
           </div>
+          {reports.isError && <p role="alert" className="text-xs text-warning">{t("Evaluation reports are unavailable. Cached results do not grant activation.")}</p>}
           {reportID && <p className="break-all text-xs">{t("Evaluation report")}: <code>{reportID}</code></p>}
           {report && <p className="text-sm" role="status">{t("Report state")}: {t(report.state)} · {t("Quality")}: {Math.round(report.quality * 100)}% · {t("Reported USD cost")}: {report.costComplete ? report.costUsd : t("Unknown")} · {t("Peak latency (ms)")}: {report.peakLatencyMillis} · {t("Calls")}: {report.attempts.length}</p>}
           {!eligiblePlans.length && <p className="text-xs text-warning">{t("Save a function test plan with evaluation cases before running the release evaluation.")}</p>}
         </div>}
         {!builder && functionNames.length > 0 && !evaluated && <p role="status" className="text-sm text-warning">{t("Required function evaluations are missing. Ask a builder to complete them before activation.")}</p>}
-        {savedID && <Button variant="default" disabled={busy || activeID === savedID || !evaluated || savedReview && !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
+        {savedID && <Button variant="default" disabled={locked || !savedReview || review.candidateId !== savedID || !!runningDiagnostic || activeID === savedID || !evaluated || !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
         {activeID === savedID && savedID && <p className="break-all text-sm" role="status">{savedReview && !runningMatches ? t("Active release differs from running definitions.") : t("Release active for operators.")} <code>{activeID}</code></p>}
       </div>}
     </Card>}

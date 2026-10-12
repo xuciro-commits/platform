@@ -43,7 +43,7 @@
 
 W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Playwright 或重型套件；必要语法/类型/小型逻辑命令使用 8 秒截止加 1 秒强制退出，每条总时长不超过 10 秒。整包类型检查超限不计通过，不反复重试；原已完成且未受影响的证据直接复用。Shell 归属/别名的 Node 检查与既有 Workspace 的 jsdom/Dockview 逻辑仅证明其政策，不替代真实弹窗、原七节点体验、真实 AI、目标存储或独立交接。
 
-本地接手先在 `capabilities/server` 执行原 `go run ./cmd/api-types`，再走现有 Web/API 检查：当前源码取回了 main 的 `StreamPreparationRetry` 与 Intake/Window retry 字段，但本沙箱生成器两次达到截止、随后环境未保留 Go 工具链，宿主 SDK 快照未重新生成；不手写 DTO 或建立替代生成器。该项是明确的生成物交接缺口，不计通过，也不把 main 的旧生成结果冒充本分支已生成。其他验证仍用原 Makefile/Testing 入口在本地完成。
+本地接手先在 `capabilities/server` 执行原 `go run ./cmd/api-types`，再走现有 Web/API 检查：当前源码取回了 main 的 `StreamPreparationRetry` 与 Intake/Window retry 字段，但本沙箱生成器两次达到截止、随后环境未保留 Go 工具链，宿主 SDK 快照未重新生成；不手写 DTO 或建立替代生成器。该项是明确的生成物交接缺口，不计通过，也不把 main 的旧生成结果冒充本分支已生成。Catalog 在新沙箱因原 `typescript-syntax` 依赖未提供而无法生成（未安装替代依赖）；本地用原 `node scripts/catalog.mjs generate` 更新后再检查。其他验证仍用原 Makefile/Testing 入口在本地完成。
 
 ## 自动检查的归属
 

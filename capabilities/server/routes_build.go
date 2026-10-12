@@ -193,9 +193,12 @@ func (h *Host) routesBuild(rt *routes) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		answer, err := t.PreviewRelease(m, request.Kind, request.ID)
+		var answer ReleasePreview
+		var err error
 		if len(request.Drafts) > 0 {
 			answer, err = t.PreviewReleaseDrafts(m, request.Drafts)
+		} else {
+			answer, err = t.PreviewRelease(m, request.Kind, request.ID)
 		}
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})

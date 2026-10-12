@@ -2,6 +2,15 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "The release request was accepted, but its refreshed review is unavailable.": "发布请求已被接收，但暂时无法读取更新后的审阅。",
+  "Active release is unavailable.": "无法读取当前活跃发布。",
+  "A joint candidate accepts at most 32 drafts. Select a supported application closure.": "联合候选最多接收 32 份草稿，请选择受支持的应用依赖闭包。",
+  "The release request was not confirmed. Retry the original request.": "发布请求尚未确认，请重试原请求。",
+  "A release request is unconfirmed. It may already have been accepted. Retry its original key and payload; leaving does not cancel accepted work.": "发布请求尚未确认，但可能已经被接收。请用原幂等键与载荷重试；离开页面不会取消已接收的工作。",
+  "Retry original release request": "重试原发布请求",
+  "Forget local request": "放弃本地请求记录",
+  "Evaluation reports are unavailable. Cached results do not grant activation.": "无法读取评测报告，缓存的结果不授予激活资格。",
+
   "Link types": "关系类型",
   "Logic flows": "逻辑流程",
   "Group": "分组",
@@ -2865,6 +2874,7 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+
  "Record card": "记录卡片",
  "Card accent tone": "卡片强调色调",
  "Map object card {widget}": "映射对象卡片{widget}",

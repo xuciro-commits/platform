@@ -1,3 +1,4 @@
+import { releaseDraftsValue } from "../releases/release";
 // Projects (ADR-0053 §5.1, ADR-0055 §2): the container of everything a builder
 // makes. A project is the host's Application (`build.app`); its tree lists what
 // it owns by the host's asset kinds, `+ New` creates a resource inside it, `Add
@@ -217,7 +218,7 @@ export function ProjectHome({ id }: { id: string }) {
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={`${kind.kind}:${item.record.id}`}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
         {builder && <NewResourceMenu onCreated={(kind, target) => void addCreated(kind, target)} />}
-        {builder && <Button size="sm" variant="primary" disabled={!project.pages?.length} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: importedDependencies.map((dependency) => `${dependency.kind}:${dependency.id}`).join(",") } : {}) } })}>{t("Publish")}</Button>}
+        {builder && <Button size="sm" variant="primary" disabled={!project.pages?.length} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
       </>}
       left={{ label: t("Project resources"), content: tree }}
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>

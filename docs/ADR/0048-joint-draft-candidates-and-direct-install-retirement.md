@@ -54,3 +54,5 @@
 - **证据**：Go 测试 `TestJointDraftsDeliverNewObjectPageAndApplication`（新对象＋新页面＋新 Flow＋应用的联合交付、来源、陈旧 ID/遗漏 Flow 拒绝、试装不泄漏声明、激活后可见及回放）、`TestProductionProfileRefusesDirectInstallAndKeepsDelivery`（development 直装仍在、production 拒绝且草稿未变、联合候选在 production 仍交付、回放一致）；现行 e2e `integration-fabric.spec.ts` 在两个行业宿主维护页面/Flow/应用联合交付与普通成员操作，`workspaces.spec.ts` 维护发布拒绝定位及原生任务入口。旧 `joint-draft-release.spec.ts` 已按 ADR-0082 删除。
 - **D6 完成**：完整 Module 导入改生成联合草稿（第一批）与 `WorkshopApplicationImport` 预发布依赖改候选输入（第二批）均已落地，见上。
 - **持久部署边界**：内存日志的联合交付/恢复测试不能代替 PostgreSQL、Rauthy、文件字节或 worker 验证。影响这些边界时使用 [deploy/local/rehearse.sh](../../deploy/local/rehearse.sh)；旧 `rehearse-lite.sh` 已按 ADR-0081 删除，不再作为现行检查入口。运维界面免走查的既有决定不扩大机制或生产验收范围。
+
+发布工作区沿原 ReleasePreview/Save/Evaluation/Activate 契约：联合路由选择以 JSON 保留完整身份并包含应用根，旧冒号书签只在输入解码；复用原 32 草稿预算，不静默裁切闭包。当前任务内串行化读取/提交，未确认写保留同一 key/payload 与离开保护；已确认写之后的刷新失败不伪称写失败。候选/升级计划未重读或评测读取失败时不开放激活，未知 release profile 不提供直接安装。此增量只完成源码与差异检查，浏览器/完整编译和既有发布/环境生命周期路线留给本地集成。
