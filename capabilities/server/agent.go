@@ -182,7 +182,9 @@ func agentEntities() []platform.Entity {
 		// What the agent saw, read, cited, drafted and concluded came from other
 		// records, so each reader reads it only while they may read those (ADR-0033).
 		Derived: []platform.Derivation{
-			{From: "ref", Fields: []string{"seen"}},
+			// Even a public document's association with this business task is
+			// derived from its record; reading the document is not that grant.
+			{From: "ref", Fields: []string{"seen", "citations"}},
 			{From: "steps.sources", Fields: []string{"arguments", "outcome"}},
 			{From: "citations.document", Element: true},
 			{From: "draft.type/target", Element: true},

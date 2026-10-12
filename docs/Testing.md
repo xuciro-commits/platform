@@ -12,6 +12,7 @@
 | 内核规范/向量/实现 | `make verify`（含 `scripts/verify.sh contract`）；受影响的 Rust/TypeScript 边缘检查 |
 | Lean 模型/工具链 | `scripts/verify.sh formal`（`make verify` 包含）；映射与可信前提见 [Lean README](../contract/lean/README.md) |
 | Go 宿主 | `make check` + `make test-go PKG=<改动包> RUN=<owner 测试>`；改变应用 API/组合时加 `scripts/verify.sh composition` |
+| 轻量启动与恢复（ADR-0049 / W4） | 原 `make lite` 与 `make lite SOLUTION=manufacturing`；两行业 `/healthz`、签名角色卡 `/v1/me`、拒绝未签名开发 token，浏览器打开对应工作台并检查错误。通过原业务动作创建记录，停止宿主后从同一数据目录重启，核对原签名身份、记录修订与原 key 幂等结果；不得重置 `journal/files/idp.key`。`make test-go PKG=. RUN=TestLightweight` 守恢复与身份；存储沿 `TestLocalFilesKeepsTheSameContract`、`TestFileJournalRefusesADamagedJournal` 与 `TestJournalsKeepTheSameContract`。后者的 PostgreSQL 分支必须配置真实 `PLATFORM_TEST_DATABASE`。这不等于 Docker/RustFS/隔离 Compute 或生产恢复验收 |
 | 应用/协议 | `scripts/verify.sh composition format`（`make verify` 包含）；MES 规则加 `mes`，PMS 桌面/离线链加 `pms` |
 | Web 日常编码与同类组件批次 | `make check-web`：生成一致性、Catalog、全部包 tsc；`make test` 加单元测试；开发中按问题选择原 owner 的 `go test` 和单元测试 |
 | 成组交付、重要集成或发布节点 | 按影响面选择一条联合浏览器路线；按影响面 `make e2e SPEC=<spec>`；需要全量验收时 `make e2e` 共用一次完整 Playwright，不按每个组件重复 |
