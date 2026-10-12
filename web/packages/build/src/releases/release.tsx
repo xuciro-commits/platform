@@ -24,14 +24,14 @@ const merged = (current: JointChoice[], incoming: JointChoice[]): JointChoice[] 
 };
 
 export type ReleaseKind = Exclude<ResourceKind, "action" | "automation"> | "app";
-/** A route carries the already-known candidate inputs as "kind:id,kind:id"
- * (ADR-0048 D6: the import's saved draft objects are the application's
- * dependencies, so its review opens with them selected). */
-export function releaseDraftsParam(value: string | undefined, kinds: readonly string[]): JointChoice[] {
-  if (!value) return [];
+/** Decode incoming candidate selections without silently discarding a bad
+ * joint closure and delivering only its application root (ADR-0048 D6). */
+export function releaseDraftsSelection(value: string | undefined, kinds: readonly string[]): { drafts: JointChoice[]; error?: string } {
+  if (!value) return { drafts: [] };
+  const invalid = () => ({ drafts: [], error: "The release selection is invalid or exceeds its budget. Reopen review from the application." });
   let selected: unknown;
   if (value.trimStart().startsWith("[")) {
-    try { selected = JSON.parse(value); } catch { return []; }
+    try { selected = JSON.parse(value); } catch { return invalid(); }
   } else {
     // Incoming-only compatibility. A record ID may itself contain colons.
     selected = value.split(",").map((item) => {
@@ -39,15 +39,18 @@ export function releaseDraftsParam(value: string | undefined, kinds: readonly st
       return { kind: item.slice(0, separator), id: separator < 0 ? "" : item.slice(separator + 1) };
     });
   }
-  if (!Array.isArray(selected) || selected.length > 32) return [];
+  if (!Array.isArray(selected) || selected.length > 32) return invalid();
   const out: JointChoice[] = [];
   for (const item of selected) {
     if (!item || typeof item !== "object" || typeof item.kind !== "string" || typeof item.id !== "string"
-      || !kinds.includes(item.kind) || !item.id) return [];
+      || !kinds.includes(item.kind) || !item.id) return invalid();
     if (!out.some((choice) => jointKey(choice) === `${item.kind}/${item.id}`)) out.push({ kind: item.kind as ReleaseKind, id: item.id });
   }
-  return out;
+  return { drafts: out };
 }
+/** Source compatibility for consumers that only need the decoded list. */
+export const releaseDraftsParam = (value: string | undefined, kinds: readonly string[]): JointChoice[] => releaseDraftsSelection(value, kinds).drafts;
+
 /** New links carry lossless JSON, not punctuation-delimited record identities. */
 export const releaseDraftsValue = (drafts: readonly JointChoice[]): string => JSON.stringify(drafts.map(({ kind, id }) => ({ kind, id })));
 
@@ -64,7 +67,7 @@ const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
 ];
 export const releaseKinds: ReleaseKind[] = kinds.map((item) => item.kind);
 
-export function ReleaseReview({ initialKind = "object", initialID = "", initialDrafts = [], embedded = false }: { initialKind?: ReleaseKind; initialID?: string; initialDrafts?: JointChoice[]; embedded?: boolean } = {}) {
+export function ReleaseReview({ initialKind = "object", initialID = "", initialDrafts = [], selectionError, embedded = false }: { initialKind?: ReleaseKind; initialID?: string; initialDrafts?: JointChoice[]; selectionError?: string; embedded?: boolean } = {}) {
   const { client, role } = useHost();
   const builder = role("build") === "builder";
   const mayRelease = builder || role("build") === "publisher";
@@ -89,7 +92,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [confirmedUpgrade, setConfirmedUpgrade] = useState("");
   const [planID, setPlanID] = useState("");
   const [reportID, setReportID] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(selectionError ? t(selectionError) : "");
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [pending, setPending] = useState<ReleaseRequest>();
@@ -158,8 +161,9 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     return perform(() => readSaved(candidateID));
   };
   const inspect = (drafts?: JointChoice[]) => {
-    if (pendingRef.current) return;
+    if (pendingRef.current || selectionError) return;
     const request: Api.ReleasePreviewRequest = drafts?.length ? { drafts: drafts.map(choice => ({ ...choice })) } : { kind, id };
+    if (new TextEncoder().encode(JSON.stringify(request)).length > 4096) { setError(t("The release selection exceeds the original 4096-byte request budget. No drafts were dropped.")); return; }
     return perform(async () => {
       clearReview(); setSavedID(""); setConfirmedUpgrade(""); setCandidateKey("");
       try {
@@ -191,6 +195,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const send = (request: ReleaseRequest) => perform(async () => {
     const current = pendingRef.current;
     if (current && current !== request) return; // an unconfirmed request cannot be replaced
+    if (new TextEncoder().encode(JSON.stringify(request.body)).length > 4096) { setError(t("The release selection exceeds the original 4096-byte request budget. No drafts were dropped.")); return; }
     rememberRequest(request);
     const path = request.kind === "save" ? "/v1/releases/candidates" : request.kind === "evaluate" ? "/v1/releases/evaluations" : "/v1/releases/active";
     let answer: { ok: boolean; status: number; body: { id: string } };
@@ -284,7 +289,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         </Select>
       </label>}
       {query.isError && <p role="alert" className="text-sm text-danger">{t("Release review could not be loaded.")}</p>}
-      <Button disabled={!id || locked} onClick={() => void inspect()}>{busy ? t("Checking…") : t("Check draft and dependencies")}</Button>
+      <Button disabled={!!selectionError || !id || locked} onClick={() => void inspect()}>{busy ? t("Checking…") : t("Check draft and dependencies")}</Button>
     </Card>
     <Card className="grid gap-3 p-3" aria-label={t("Deliver drafts together")}>
       <div>
@@ -309,7 +314,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       </ul> : <p className="text-xs text-muted">{t("No drafts selected yet.")}</p>}
       {joint.length > 32 && <p role="alert" className="text-xs text-warning">{t("A joint candidate accepts at most 32 drafts. Select a supported application closure.")}</p>}
       {jointNote && <p className="text-xs text-muted" role="status">{jointNote}</p>}
-      <Button disabled={!joint.length || joint.length > 32 || locked} onClick={() => void inspect(joint)}>{busy ? t("Checking…") : t("Check joint candidate")}</Button>
+      <Button disabled={!!selectionError || !joint.length || joint.length > 32 || locked} onClick={() => void inspect(joint)}>{busy ? t("Checking…") : t("Check joint candidate")}</Button>
     </Card>
     </>}
     {error && <Card className="p-3 text-sm text-danger" role="alert">{error}</Card>}

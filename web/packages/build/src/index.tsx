@@ -29,7 +29,7 @@ import { FunctionEditor, Functions } from "./functions/function";
 import { CodeEditor, CodeFunctions } from "./functions/code";
 import { AgentEditor, Agents } from "./functions/agent";
 import { AlertEditor, Alerts } from "./functions/alert";
-import { ReleaseReview, releaseDraftsParam, releaseKinds, type ReleaseKind } from "./releases/release";
+import { ReleaseReview, releaseDraftsSelection, releaseKinds, type ReleaseKind } from "./releases/release";
 import { Changes } from "./releases/changes";
 import { ProjectHome, ProjectsList } from "./projects/project";
 import { StudioTemplates } from "./workshop/template-ui";
@@ -83,7 +83,10 @@ const views: View[] = [
   { id: "alert", title: () => t("Alert rules"), render: (p) => p.id ? <ApplicationScope key={p.id} application={p.application}><AlertEditor id={p.id} /></ApplicationScope> : <Alerts /> },
   // Releases
   { id: "changes", title: () => t("Changes"), render: (p) => scoped(p, <Changes key={`${p.kind ?? ""}:${p.id ?? ""}`} initialKind={p.kind} initialID={p.id} />) },
-  { id: "release-review", title: () => t("Release review"), render: (p) => <ApplicationScope application={p.application}><ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={releaseDraftsParam(p.drafts, releaseKinds)} /></ApplicationScope> },
+  { id: "release-review", title: () => t("Release review"), render: (p) => {
+    const selection = releaseDraftsSelection(p.drafts, releaseKinds);
+    return <ApplicationScope application={p.application}><ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={selection.drafts} selectionError={selection.error} /></ApplicationScope>;
+  } },
   { id: "release-history", title: () => t("Release history"), render: (p) => scoped(p, <ReleaseReview key="history" />) },
 ];
 

@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "The release selection is invalid or exceeds its budget. Reopen review from the application.": "发布选择无效或超过预算，请从应用重新打开审阅。",
+  "The release selection exceeds the original 4096-byte request budget. No drafts were dropped.": "发布选择超过原 4096 字节请求预算；未裁掉任何草稿。",
+
   "An earlier application update is unconfirmed. Retry its original payload before changing membership.": "此前的应用更新尚未确认；更改归属前，请重试其原载荷。",
   "The application update is unconfirmed. Retry the original request.": "应用更新尚未确认，请重试原请求。",
   "The application was saved, but its current record could not be reloaded.": "应用已保存，但暂时无法重新读取当前记录。",
