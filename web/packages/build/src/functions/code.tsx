@@ -39,19 +39,19 @@ export function CodeEditor({ id }: { id: string }) {
   const [tab, setTab] = useState<"source" | "contract" | "sdk" | "test">("source"), [sdk, setSDK] = useState("");
   const testInputs=useInputBuffers();
   const [input, setInput] = useState<unknown>({}), [executedInput, setExecutedInput] = useState<unknown>(), [call, setCall] = useState("");
-  const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0);
+  const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0), confirmedDraft = useRef<CodeDraft>(empty());
   const query = useReadQuery<{ record?: CodeDraft }>(`/v1/records/build.code/${encodeURIComponent(id)}`, draft.state === "compiling" ? 1000 : undefined);
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     const saved = query.data?.record;
-    if (saved && saved.revision >= baseRevision.current) { baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; setDraft(saved); }
-    else if (!draft.id) setDraft(empty());
+    if (saved && saved.revision >= baseRevision.current) { baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; confirmedDraft.current = structuredClone(saved); setDraft(saved); }
+    else setDraft(structuredClone(confirmedDraft.current));
     setDirty(false); setError(""); setSDK("");
   }, busy);
   const result = useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`, 1000, !!call && tab === "test");
   useEffect(() => {
     const saved = query.data?.record;
     if (saved && !dirty && !busy && saved.revision >= baseRevision.current && loaded.current !== `${saved.id}:${saved.revision}`) {
-      baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; setDraft(saved);
+      baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; confirmedDraft.current = structuredClone(saved); setDraft(saved);
     }
   }, [query.data, dirty, busy]);
   const testSchemaKey = JSON.stringify((() => { try { return JSON.parse(draft.published ?? "").input; } catch { return draft.input; } })());
@@ -69,11 +69,11 @@ export function CodeEditor({ id }: { id: string }) {
     // A code edit must be recompiled; the old module is not evidence that the
     // current draft can be delivered. The retained publication remains separate.
     const accepted = { ...submitted, id: target, revision, state: "draft", module: undefined, builtSource: undefined, buildHash: undefined };
-    setDraft(accepted); markSaved(); setDirty(false);
+    confirmedDraft.current = structuredClone(accepted); setDraft(accepted); markSaved(); setDirty(false);
     if (!submitted.id) { open({ view: "code", params: { id: target } }); close({ view: "code", params: { id } }); return revision; }
     try {
       const fresh = await query.refetch();
-      if (fresh.isSuccess && fresh.data?.record?.revision === revision) setDraft(fresh.data.record);
+      if (fresh.isSuccess && fresh.data?.record?.revision === revision) { confirmedDraft.current = structuredClone(fresh.data.record); setDraft(fresh.data.record); }
       else setError(t("The code function was saved, but its current record could not be reloaded."));
     } catch { setError(t("The code function was saved, but its current record could not be reloaded.")); }
     return revision;
@@ -85,7 +85,8 @@ export function CodeEditor({ id }: { id: string }) {
     if (revision === undefined) return;
     if (!await decide("build.code.compile", { type: "build.code", id: target }, {}, { expectedRevision: revision, quiet: true, onRefused: setError })) return;
     baseRevision.current = revision + 1; loaded.current = `${target}:${revision + 1}`;
-    setDraft(current => ({ ...current, revision: revision + 1, state: "compiling", module: undefined }));
+    confirmedDraft.current = { ...confirmedDraft.current, revision: revision + 1, state: "compiling", module: undefined };
+    setDraft(structuredClone(confirmedDraft.current));
     try { await query.refetch(); }
     catch { setError(t("Compilation was accepted. Reload the function to read its result.")); }
   };

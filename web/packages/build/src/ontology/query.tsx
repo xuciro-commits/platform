@@ -27,9 +27,9 @@ export function QueryEditor({id}:{id:string}) {
  const [draft,setDraft]=useState<Draft>(empty),[edited,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [createID]=useState(()=>crypto.randomUUID());
  const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
- const lock=useRef(false),baseRevision=useRef(0),loaded=useRef("");
- const load=(record:Draft)=>{setDraft(hydrate(record));baseRevision.current=record.revision;loaded.current=`${record.id}:${record.revision}`;};
- const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{if(query.data?.record&&query.data.record.revision>=baseRevision.current)load(query.data.record);else if(!draft.id)setDraft(empty());setDirty(false);setError("");}, busy);
+ const lock=useRef(false),baseRevision=useRef(0),loaded=useRef(""),confirmedDraft=useRef<Draft>(empty());
+ const load=(record:Draft)=>{confirmedDraft.current=hydrate(record);setDraft(confirmedDraft.current);baseRevision.current=record.revision;loaded.current=`${record.id}:${record.revision}`;};
+ const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{if(query.data?.record&&query.data.record.revision>=baseRevision.current)load(query.data.record);else setDraft(structuredClone(confirmedDraft.current));setDirty(false);setError("");}, busy);
  useEffect(()=>{const record=query.data?.record;if(record&&!dirty&&!busy&&record.revision>=baseRevision.current&&loaded.current!==`${record.id}:${record.revision}`)load(record);},[query.data,dirty,busy]);
  const object={app:"build",kind:"object" as const,name:draft.object??""},info=definitions.find((d)=>d.ref.kind==="object"&&d.ref.name===draft.object)?.entity;
  const currentShape=interfaces.find(item=>item.name===draft.interface)??draft.interfaceShape,fields=draft.interface?currentShape?.fields:info?.fields;
