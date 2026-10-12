@@ -140,7 +140,13 @@ export function ProjectHome({ id }: { id: string }) {
   const lock = useRef(false);
   const baseline = useRef<{ values: NonNullable<typeof settings>; revision: number } | undefined>(undefined);
   const fromRecord = (p: Project) => ({ title: p.title, name: p.name, description: p.description ?? "", icon: p.icon ?? "boxes" });
-  useEffect(() => { if (project && !edited) setSettings(fromRecord(project)); }, [project, edited]);
+  useEffect(() => {
+    if (project && !edited) {
+      const values = fromRecord(project);
+      baseline.current = { values, revision: project.revision };
+      setSettings(values);
+    }
+  }, [project, edited]);
   const changedSettings = useMemo(() => {
     if (!settings || !edited) return {} as Partial<Api.Application>;
     const current = baseline.current?.values;
@@ -165,7 +171,9 @@ export function ProjectHome({ id }: { id: string }) {
   };
   const editSettings = (next: NonNullable<typeof settings>) => {
     if (lock.current || !project) return;
-    if (!edited) baseline.current = { values: fromRecord(project), revision: project.revision };
+    // Diff against the snapshot actually displayed, not a newer read that
+    // arrived before this event. The owner's revision gate decides conflicts.
+    if (!baseline.current) baseline.current = { values: settings ?? fromRecord(project), revision: project.revision };
     setEdited(true); setSettings(next);
   };
   const saveSettings = async () => {
