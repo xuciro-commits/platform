@@ -113,6 +113,8 @@ Build
 - **Inspector**：按选中元素显示页签（如 widget：`Properties · Data · Events · Appearance · Advanced`）；空选中时显示资源级设置（页面设置 / 对象类型设置）。
 - **Dock**：Problems（诊断，点击定位到元素）、Variables（Preview 时的变量实时值）、Runs（自动化/流程的最近运行）。可收起。
 - 面板宽度可拖，状态存 `localStorage`（按编辑器类型）；`⌘\` 切左栏、`⌥⌘\` 切右栏、`⌘J` 切 Dock。
+- **Dock 的交互（2026-10-12 补齐）**：点任一页签都是"打开并切到该页签"，不会因为再点一次已显示的页签就收起；收合由三处一致的动作负责——Dock 条右端的收合柄、标题栏的 `⌘J` 开关、以及该柄与标题栏按钮共享的 `aria-expanded` 状态。页签是唯一的 Tab 停靠点（roving tabindex），左右方向键循环、`Home`/`End` 到两端，选中的页签同时获得焦点。
+- **所有页签条同一套键盘行为**：结构面板、检查器、Dock、`ContentTabs`、Markdown 编辑器、对象/流程/项目页签都走 `@platform/ui` 的 `tabStripKeyDown`/`tabStop`（`packages/ui/src/lib/tablist.ts`）。拖拽手柄只在三栏并排（`lg`）时出现：窄屏把三栏堆叠后，拖动手柄改不了任何东西，故不再进入 Tab 序。
 
 这是**唯一**的编辑器容器。`CanvasEditor`、`ProcessGraph`、流程画布都只是 Main 的内容。
 

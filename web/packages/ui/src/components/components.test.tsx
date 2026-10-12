@@ -407,7 +407,7 @@ test("tab strips answer arrows, Home and End, and keep one tab stop", () => {
 test("the Markdown editor's Write and Preview tabs answer the arrow keys", () => {
   function Host() {
     const [value, setValue] = useState("Hello **there**");
-    return <MarkdownEditor value={value} onChange={setValue} />;
+    return <MarkdownEditor value={value} onChange={(next) => setValue(next ?? "")} />;
   }
   render(<Host />);
   const write = screen.getByRole("tab", { name: "Write" });

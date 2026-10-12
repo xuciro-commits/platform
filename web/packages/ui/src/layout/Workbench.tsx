@@ -46,7 +46,7 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
   };
   const splitter = (side: "left" | "right" | "dock") => <div role="separator" tabIndex={0} aria-orientation={side === "dock" ? "horizontal" : "vertical"}
     aria-label={t(side === "left" ? "Resize structure panel" : side === "right" ? "Resize inspector panel" : "Resize dock")}
-    className={cn("touch-none rounded hover:bg-primary/20 focus-visible:bg-primary/20 focus-visible:outline-ring", side === "dock" ? "h-1.5 w-full cursor-row-resize" : "w-1.5 cursor-col-resize")}
+    className={cn("hidden touch-none rounded hover:bg-primary/20 focus-visible:bg-primary/20 focus-visible:outline-ring lg:block", side === "dock" ? "h-1.5 w-full cursor-row-resize" : "w-1.5 cursor-col-resize")}
     onPointerDown={(event) => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); setDrag({ side, at: side === "dock" ? event.clientY : event.clientX, size: layout[side] }); }}
     onPointerMove={(event) => { if (drag?.side !== side) return; const delta = side === "dock" ? drag.at - event.clientY : (event.clientX - drag.at) * (side === "left" ? 1 : -1); patch({ [side]: clamp(side, drag.size + delta) } as Partial<Layout>); }}
     onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setDrag(undefined); }}
