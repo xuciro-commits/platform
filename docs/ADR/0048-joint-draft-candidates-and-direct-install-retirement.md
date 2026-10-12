@@ -56,3 +56,5 @@
 - **持久部署边界**：内存日志的联合交付/恢复测试不能代替 PostgreSQL、Rauthy、文件字节或 worker 验证。影响这些边界时使用 [deploy/local/rehearse.sh](../../deploy/local/rehearse.sh)；旧 `rehearse-lite.sh` 已按 ADR-0081 删除，不再作为现行检查入口。运维界面免走查的既有决定不扩大机制或生产验收范围。
 
 发布工作区沿原 ReleasePreview/Save/Evaluation/Activate 契约：联合路由选择以 JSON 保留完整身份并包含应用根，旧冒号书签只在输入解码；复用原 32 草稿预算，不静默裁切闭包。当前任务内串行化读取/提交，未确认写保留同一 key/payload 与离开保护；已确认写之后的刷新失败不伪称写失败。候选/升级计划未重读或评测读取失败时不开放激活，未知 release profile 不提供直接安装。此增量只完成源码与差异检查，浏览器/完整编译和既有发布/环境生命周期路线留给本地集成。
+
+环境交接继续使用原 Host Console/PromotionResult/MigrationResult 和两侧支持会话。前端捕获一次操作的源、目标、候选或类型与授权会话；未确认晋级复用原 key，迁移仍由原 owner 处理当前导出行/导入收据，不新增跨环境事务。控制台确认与投影刷新分离，缺少 AppInputView 的宿主壳仍有错误反馈。此增量未在沙箱运行环境或浏览器路线，接手时沿原 environment 生命周期与 Host Console 主路线复核。

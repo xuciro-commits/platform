@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "The host request was not confirmed. Retry the original request.": "宿主请求尚未确认，请重试原请求。",
+  "The host accepted the request, but the console could not refresh.": "宿主已接收请求，但控制台暂时无法刷新。",
+  "Environment, artifact or support-session reads are unavailable. Promotion is not enabled from cached data.": "无法读取环境、制品或支持会话；不会根据缓存数据开放晋级。",
+  "Promotion is unconfirmed. Retry the captured candidate and support session with the same key. Leaving does not undo a promotion already accepted by the target.": "晋级尚未确认，请用相同幂等键重试已捕获的候选与支持会话。离开不会撤销目标已接收的晋级。",
+  "Retry original promotion": "重试原晋级请求",
+  "Forget local request": "放弃本地请求记录",
+  "Environment or support-session reads are unavailable. Migration is not enabled from cached data.": "无法读取环境或支持会话；不会根据缓存数据开放迁移。",
+  "Migration is unconfirmed. Retry the original environments, types and support sessions. The owner re-reads source rows and preserves their original import receipts; this is not a cross-environment rollback.": "迁移尚未确认，请重试原环境、类型与支持会话。归属方会重新读取来源行并保留原导入收据；这不是跨环境回滚。",
+  "Retry original migration": "重试原迁移请求",
+
  "Documents and the glossary of your organisation.": "组织的文档与术语表。",
  "Try models and functions, and see usage.": "试用模型与函数，查看用量。",
  "Members, organisation, packages, connections, models, runs and audit.": "成员、组织、能力包、连接、模型、运行与审计。",
