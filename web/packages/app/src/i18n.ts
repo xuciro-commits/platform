@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "An earlier runtime decision is unconfirmed. Retry it before changing the operation.": "此前的运行决策尚未确认，请先重试，再更改操作。",
+  "The runtime decision is unconfirmed. Retry the original operation.": "运行决策尚未确认，请重试原操作。",
+  "A runtime decision is unconfirmed. Retry the original operation; leaving does not cancel accepted work.": "运行决策尚未确认，请重试原操作；离开不会取消已接收的工作。",
+  "Retry original operation": "重试原操作",
+  "This runtime control is unavailable for the original target.": "原目标不可使用此运行控制。",
+
   "Creation is awaiting confirmation. Retry the original target and values; editing the ID could create another record.": "创建尚未确认，请重试原目标与原值；更改 ID 可能创建另一个记录。",
   "Enter a whole number.": "请输入整数。",
   "Retry confirmation": "重试确认",

@@ -41,22 +41,27 @@ export function originalNotifications(items:readonly Api.Notification[],member:s
 /** Reads and decisions retain their original Work/Console owner and caller scope. */
 export function createWorkViews(host:WorkViewsHost,active:()=>boolean) {
  const requireActive=()=>{if(!active())throw Error("The original work view scope has ended.");};
- const answer=async(schema:string,type:string,id:string,revision?:number)=>{
-  requireActive();if(!host.can(schema))throw Error("This work decision is unavailable to this member.");
+ const answer=async(schema:string,type:string,id:string,revision?:number,payload:Record<string,unknown>={})=>{
+  requireActive();if(!host.can(schema))throw Error("This work decision is unavailable to this member.",{cause:"rejected"});
   let targets=flights.get(host.client);if(!targets){targets=new Map();flights.set(host.client,targets);}
-  const key=JSON.stringify([host.client.connection.tenant,host.client.connection.principal,type,id]),signature=JSON.stringify([schema,revision]),prior=targets.get(key);
-  if(prior){if(prior.signature!==signature)throw Error("Another decision for this request is already being confirmed.");return await prior.promise&&active();}
+  const key=JSON.stringify([host.client.connection.tenant,host.client.connection.principal,type,id]),signature=JSON.stringify([schema,revision,payload]),prior=targets.get(key);
+  if(prior){if(prior.signature!==signature)throw Error("Another decision for this request is already being confirmed.",{cause:"busy"});return await prior.promise&&active();}
   const flight:Flight={signature,promise:Promise.resolve(false)};targets.set(key,flight);
   flight.promise=Promise.resolve().then(async()=>{
    requireActive();const unanswered=host.client.authorities.outbox.filter(entry=>entry.submission.tenantId===host.client.connection.tenant&&entry.submission.principalId===host.client.connection.principal&&entry.submission.target?.type===type&&entry.submission.target.id===id&&waiting(entry.state));
-   if(unanswered.some(entry=>entry.submission.schema?.name!==schema||entry.submission.expectedRevision!==revision||entry.submission.payload!==btoa("{}")||entry.submission.evidenceFactIds?.length))throw Error("An earlier decision for this record is unanswered. Send unanswered decisions again before creating another.");
-   const entry=unanswered.at(-1);if(entry){await host.resend();return confirmedDecision(host.client.authorities.outbox,host.client.connection.tenant,entry.submission.idempotencyKey??"");}
+   if(unanswered.some(entry=>entry.submission.schema?.name!==schema||entry.submission.expectedRevision!==revision||entry.submission.payload!==btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(payload))))||entry.submission.evidenceFactIds?.length))throw Error("An earlier decision for this record is unanswered. Send unanswered decisions again before creating another.",{cause:"blocked"});
+   const entry=unanswered.at(-1);if(entry){await host.resend();const key=entry.submission.idempotencyKey??"",accepted=confirmedDecision(host.client.authorities.outbox,host.client.connection.tenant,key);if(accepted)return true;const current=host.client.authorities.outbox.find(item=>item.submission.tenantId===host.client.connection.tenant&&item.submission.idempotencyKey===key);if(current?.state==="SUBMISSION_STATE_REJECTED")throw Error(current.reason??current.outcome??"The work decision was not confirmed.",{cause:"rejected"});return false;}
    let refusal="The work decision was not confirmed.";
-   const accepted=await host.decide(schema,{type,id},{},{expectedRevision:revision,onRefused:reason=>refusal=reason});if(!accepted)throw Error(refusal);return true;
+   const accepted=await host.decide(schema,{type,id},payload,{expectedRevision:revision,onRefused:reason=>refusal=reason});if(!accepted){const unanswered=host.client.authorities.outbox.some(entry=>entry.submission.tenantId===host.client.connection.tenant&&entry.submission.target?.type===type&&entry.submission.target.id===id&&waiting(entry.state));throw Error(refusal,{cause:unanswered?"unconfirmed":"rejected"});}return true;
   }).finally(()=>{if(targets!.get(key)===flight)targets!.delete(key);});
   return await flight.promise&&active();
  };
  return {
+  async controlRun(schema:string,target:{type:string;id:string},payload:Record<string,unknown>={}){
+   const offered=target.type==="flow.instance"?["flow.instance.retry","flow.instance.move","flow.instance.cancel","flow.instance.skip","flow.instance.resume","flow.instance.retire"]:target.type==="agent.run"?["agent.run.cancel"]:target.type==="platform.effect"?["platform.effect.retry"]:[];
+   if(!validID(target.id)||!offered.includes(schema))throw Error("This runtime control is unavailable for the original target.",{cause:"rejected"});
+   return answer(schema,target.type,target.id,undefined,payload);
+  },
   async approval(task:Api.InboxTask){requireActive();const id=approvalTaskID(task);if(!id)throw Error("This task is not an original approval request.");const view=await host.source.get("work.approval",id);requireActive();const request=originalApproval(task,view.record),offered=await host.source.get("work.task",task.id);requireActive();const confirmed=approvalTasks([offered.record as Api.InboxTask],host.me.principalId);if(confirmed.length!==1||confirmed[0]!.id!==task.id||confirmed[0]!.ref!==task.ref)throw Error("The offered approval task is no longer available to this member.");return request;},
   async decideApproval(task:Api.InboxTask,request:Api.ApprovalRequest,decision:"approve"|"reject"){
    requireActive();originalApproval(task,request);

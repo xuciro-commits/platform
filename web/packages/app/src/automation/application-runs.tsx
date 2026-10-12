@@ -1,3 +1,4 @@
+import { useRunControl } from "./use-run-control";
 import type { Api } from "@platform/kernel";
 import { Button, DataTable, PageHeader, Panel, Tag, t, useWorkspace, type ColumnDef } from "@platform/ui";
 import { useState } from "react";
@@ -64,17 +65,20 @@ function RunBinding({run}:{run:Pick<Run,"release"|"version"|"dependencies"|"modu
 
 /** The original compute read and effect retry action, including source checks. */
 export function OperationRunView({id,application}:{id:string;application?:string}) {
- const {can,decide}=useHost(),{open}=useWorkspace();
+ const {can}=useHost(),{open}=useWorkspace();
+ const control=useRunControl("platform.effect",id);
  const query=useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(id)}`),answer=query.data;
  if(query.isError)return <Panel role="alert">{t("This calculation run is unavailable to you.")}</Panel>;
  if(!answer)return <p role="status">{t("Loading…")}</p>;
  return <div className="grid min-w-0 gap-3">
   {application&&<Button variant="ghost" onClick={()=>open({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":"),application}})}>{t("Back to application runs")}</Button>}
+  {control.error&&<Panel role="alert" className="text-sm text-danger">{control.error}</Panel>}
+  {control.pending&&<Panel role="status" className="grid gap-2 text-sm"><p>{t("A runtime decision is unconfirmed. Retry the original operation; leaving does not cancel accepted work.")}</p><Button disabled={control.busy} onClick={()=>void control.retry()}>{t("Retry original operation")}</Button></Panel>}
   <p>{stateName(answer.state)}</p>
   <RunBinding run={{version:answer.version?String(answer.version):answer.ownerVersion?`code:${answer.ownerVersion}`:undefined,release:answer.release,dependencies:answer.dependencies,module:answer.module}}/>
   {answer.definition&&<p className="break-all font-mono text-xs">{t("Startup definition")}: {answer.definition}</p>}
   {answer.error&&<Panel role="alert">{answer.error}</Panel>}
-  {answer.state==="failed"&&can("platform.effect.retry")&&<Button onClick={()=>void decide("platform.effect.retry",{type:"platform.effect",id},{})}>{t("Retry")}</Button>}
+  {answer.state==="failed"&&can("platform.effect.retry")&&<Button disabled={control.busy||!!control.pending} onClick={()=>void control.control("platform.effect.retry")}>{t("Retry")}</Button>}
   {answer.output!==undefined&&<pre className="max-h-80 overflow-auto text-xs">{JSON.stringify(answer.output,null,2)}</pre>}
   <ChainGraph of={`platform.effect/${id}`}/>
  </div>;
