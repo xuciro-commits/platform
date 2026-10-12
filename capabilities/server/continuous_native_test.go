@@ -214,9 +214,46 @@ func TestContinuousNativeChainAssetsReplayResumeAndRetire(t *testing.T) {
 		t.Fatal("same-version resume lost the original checkpoint")
 	}
 	tn.PullContinuousSources(at)
+	// Explicit signal replay reopens the original late value under the same
+	// retained definition; it neither grants another member the source nor
+	// redelivers accepted actions from the already-completed window.
+	var signalLetter platform.FlowDeadLetterAsset
+	for _, letter := range letters {
+		if letter.Action == "" && letter.Letter.Key == "late" {
+			signalLetter = letter
+		}
+	}
+	if signalLetter.ID == "" {
+		t.Fatal("the original late signal has no replayable asset")
+	}
+	if got := refuse(t, tn, "other", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", signalLetter.ID, map[string]any{}, at.Add(5*time.Second)); got == "ok" {
+		t.Fatal("another Flow administrator replayed the member's protected signal")
+	}
+	decide(t, tn, "member", "frames", "frames.probe.create", "frames.probe", "late", map[string]any{}, at.Add(5*time.Second))
+	decide(t, tn, "member", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", signalLetter.ID, map[string]any{}, at.Add(5*time.Second))
+	if probe, _ := platform.Get[nativeProbeRecord](tn.automation("frames", false), "late"); probe.Applied != 1 || probe.Reading != 13 {
+		t.Fatalf("explicit signal replay did not deliver the original native reading: %+v", probe)
+	}
+	for i := range 8 {
+		if probe, _ := platform.Get[nativeProbeRecord](tn.automation("frames", false), fmt.Sprint(i)); probe.Applied != 1 {
+			t.Fatalf("signal replay repeated an accepted action: %+v", probe)
+		}
+	}
+	if got := refuse(t, tn, "member", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", signalLetter.ID, map[string]any{}, at.Add(5*time.Second)); got == "ok" {
+		t.Fatal("a new replay command delivered the original signal twice")
+	}
+	frame, err = tn.ReadFlowFrame(member, id, at.Add(5*time.Second))
+	if err != nil || frame.Cursor != "replay:"+signalLetter.ID {
+		t.Fatalf("signal replay did not retain its exact logical batch: %+v %v", frame, err)
+	}
+	replayedLetter, _ := platform.Get[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), signalLetter.ID)
+	if !replayedLetter.Replayed || replayedLetter.Version != 1 {
+		t.Fatal("signal replay did not preserve its versioned accepted outcome")
+	}
+	tn.PullContinuousSources(at.Add(5 * time.Second))
 	// Conversely, a completed slide with no retained rows really replaces the
 	// application value. Keeping the previous result forever is not a fix.
-	empty := platform.FlowBatch{ID: "empty-window", Predecessor: "two"}
+	empty := platform.FlowBatch{ID: "empty-window", Predecessor: frame.Cursor}
 	if _, err := tn.ConsumeFlowBatch(member, id, empty, at.Add(40*time.Second)); err != nil {
 		t.Fatal(err)
 	}

@@ -74,6 +74,10 @@ func (ss *session) deadLetterAct(x *FlowInstance, token *Token, step *platform.S
 		Letter: platform.FlowDeadLetter{Batch: batch, Node: step.Name, Key: target, RecordedAt: ss.now, Reason: reason, Value: string(payload)},
 		Action: step.Act.Action, Protocol: step.Act.Protocol, Target: target, Payload: slices.Clone(payload), Key: key, AsMember: step.Act.AsMember}
 	ss.assets = append(ss.assets, asset)
+	// The rejected request owns this logical key just as an accepted act does.
+	// Reserve its sequence before the path continues; otherwise the next alert
+	// would reuse the same key with different content, including after replay.
+	x.Seq++
 }
 
 func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -106,6 +110,11 @@ func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time
 		}
 		asset.Replayed = true
 		ss.assets = append(ss.assets, asset)
+		// Historical dead letters could retain the instance's next sequence.
+		// Keep their exact replay key, then reserve it for future native acts.
+		if asset.Key == fmt.Sprintf("flow:%s:%s:%d", x.ID, asset.Letter.Node, x.Seq) {
+			x.Seq++
+		}
 		ss.trace(x, asset.Letter.Node, "dead letter replayed", asset.ID, c.ID)
 		return ss.apply, nil
 	})
