@@ -242,6 +242,7 @@ export type Application = {
   pages: string[];
   groups?: AppGroup[];
   resources?: AssetRef[];
+  opens?: Record<string, string>;
 };
 
 export type ApplicationHeader = {
@@ -874,6 +875,9 @@ export type Field = {
   constraints?: InputConstraints;
   range?: DateRange;
   group?: string;
+  when?: FieldCondition;
+  defaultFrom?: string;
+  filter?: FieldFilter[];
   manual?: boolean;
 };
 
@@ -886,6 +890,13 @@ export type FieldChange = {
 export type FieldCondition = {
   field: string;
   in: string[];
+};
+
+export type FieldFilter = {
+  field: string;
+  operator: string;
+  value?: string;
+  valueField?: string;
 };
 
 export type FieldInfo = {
@@ -3156,6 +3167,7 @@ export type Transcript = {
 };
 
 export type TransitionInfo = {
+  new?: boolean;
   toInput?: string;
   name: string;
   schema: string;

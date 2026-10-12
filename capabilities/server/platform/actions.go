@@ -103,8 +103,19 @@ type Field struct {
 	Constraints *InputConstraints `json:"constraints,omitempty"`
 	Range       *DateRange        `json:"range,omitempty"`
 	Group       string            `json:"group,omitempty"`
+	When        *FieldCondition   `json:"when,omitempty"`
+	DefaultFrom string            `json:"defaultFrom,omitempty"`
+	Filter      []FieldFilter     `json:"filter,omitempty"`
 	// Manual allows explicit unbound protocol sources, never read failures.
 	Manual bool `json:"manual,omitempty"`
+}
+
+// FieldFilter narrows a reference input's candidate records relative to the target record and other inputs.
+type FieldFilter struct {
+	Field      string `json:"field"`
+	Operator   string `json:"operator"`
+	Value      string `json:"value,omitempty"`
+	ValueField string `json:"valueField,omitempty"`
 }
 
 // InputConstraints are pure input checks, applied after authorization (ADR-0096).

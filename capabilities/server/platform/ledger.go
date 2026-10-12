@@ -334,33 +334,50 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 		return nil, notFound()
 	}
 	typ := reflect.TypeOf(e.Model)
-	existing, known := c.rt.Get(c, typ, s.GetTarget().GetId())
-	if !known || !inScope(c, e.Type, s.GetTarget().GetId()) {
-		return nil, notFound()
-	}
+	id := s.GetTarget().GetId()
+	existing, known := c.rt.Get(c, typ, id)
 	info, _ := Describe("", e, func(reflect.Type) string { return "?" })
 	f, _ := info.Field(e.Lifecycle.Field)
 	v := reflect.New(typ)
-	v.Elem().Set(reflect.ValueOf(existing))
-	status := v.Elem().FieldByIndex(f.Index)
-	from := status.String()
-	pending := t.Approval != nil && t.Approval.Pending != "" && from == t.Approval.Pending && !c.Automation && !c.rt.Probing() // run by its approval, not asked again
-	id := s.GetTarget().GetId()
-	if v.Elem().Field(0).Interface().(Record).Archived {
-		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", id)
-	}
-	if !slices.Contains(t.From, from) && !pending { // not in a state the transition leaves
-		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is {state}; {transition} takes it only from {states}", id, from, t.Name, strings.Join(t.From, ", "))
-	}
-	if t.Do != nil {
-		if err := t.Do(c, v.Interface(), s.GetPayload(), now); err != nil {
-			return nil, err
+	if t.New {
+		if known {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
-	}
-	if to := status.String(); to == from && !slices.Contains(t.To, from) {
+		v.Elem().Field(0).Addr().Interface().(*Record).ID = id
+		status := v.Elem().FieldByIndex(f.Index)
 		status.SetString(t.To[0])
-	} else if !slices.Contains(t.To, to) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT} // Do chose a status the transition does not reach
+		if t.Do != nil {
+			if err := t.Do(c, v.Interface(), s.GetPayload(), now); err != nil {
+				return nil, err
+			}
+		}
+		if to := status.String(); !slices.Contains(t.To, to) {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		}
+	} else {
+		if !known || !inScope(c, e.Type, id) {
+			return nil, notFound()
+		}
+		v.Elem().Set(reflect.ValueOf(existing))
+		status := v.Elem().FieldByIndex(f.Index)
+		from := status.String()
+		pending := t.Approval != nil && t.Approval.Pending != "" && from == t.Approval.Pending && !c.Automation && !c.rt.Probing() // run by its approval, not asked again
+		if v.Elem().Field(0).Interface().(Record).Archived {
+			return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", id)
+		}
+		if !slices.Contains(t.From, from) && !pending { // not in a state the transition leaves
+			return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is {state}; {transition} takes it only from {states}", id, from, t.Name, strings.Join(t.From, ", "))
+		}
+		if t.Do != nil {
+			if err := t.Do(c, v.Interface(), s.GetPayload(), now); err != nil {
+				return nil, err
+			}
+		}
+		if to := status.String(); to == from && !slices.Contains(t.To, from) {
+			status.SetString(t.To[0])
+		} else if !slices.Contains(t.To, to) {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT} // Do chose a status the transition does not reach
+		}
 	}
 	if e.Compute != nil {
 		e.Compute(v.Interface())

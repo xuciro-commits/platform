@@ -26,11 +26,15 @@ import (
 // validation), which refuses a Create or a Post.
 type creator interface {
 	create(c platform.Caller, cr Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error)
+	createBatch(c platform.Caller, o Object, a Action, cr Create, ruleIdx int, inputs map[string]any, record any, overlay []any, now time.Time) ([]any, *kernel.Error)
+	updateRelated(c platform.Caller, o Object, a Action, u UpdateEffect, inputs map[string]any, record any, overlay []any, now time.Time) (any, bool, *kernel.Error)
 	post(c platform.Caller, p Post, inputs map[string]any, record any, now time.Time) (any, *kernel.Error)
+	evalSource(c platform.Caller, o Object, a Action, targetField Field, from string, inputs map[string]any, record any, overlay []any, loopIdx, loopCount int, loopItem map[string]any, now time.Time) (any, bool, *kernel.Error)
+	evalQuantifier(c platform.Caller, o Object, a Action, cond Condition, inputs map[string]any, record any, overlay []any, now time.Time) (bool, *kernel.Error)
 }
 
 // Operators are the comparisons a condition may make.
-var Operators = []string{"=", "!=", "<", "<=", ">", ">=", "empty", "not empty"}
+var Operators = []string{"=", "!=", "<", "<=", ">", ">=", "in", "not in", "contains all", "contains any", "empty", "not empty"}
 
 // checkProcess refuses states and actions people could not take: names that are
 // not names, an action from or to a state the object has not, an input or a
@@ -67,8 +71,12 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 			return fmt.Errorf("%s is the platform's own", where)
 		case a.Title == "":
 			return fmt.Errorf("%s has no title", where)
-		case len(a.From) == 0:
+		case !a.New && len(a.From) == 0:
 			return fmt.Errorf("%s says no state it is taken from", where)
+		case a.New && len(a.From) > 0:
+			return fmt.Errorf("%s creates a new record and cannot name starting states", where)
+		case a.New && (a.Approval != nil || a.Reverses != ""):
+			return fmt.Errorf("%s creates a new record and cannot wait for approval or reverse another action", where)
 		case a.ToInput != "" && (a.To != "" || a.Approval != nil):
 			return fmt.Errorf("%s cannot combine input-selected state with a fixed state or approval", where)
 		case a.To != "" && !states[a.To]:
@@ -100,7 +108,7 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 				}
 			}
 		}
-		if a.To == "" && len(a.From) == 0 {
+		if !a.New && a.To == "" && len(a.From) == 0 {
 			return fmt.Errorf("%s leaves nothing to stay in", where)
 		}
 		inputs := map[string]Input{}
@@ -155,37 +163,22 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 			}
 		}
 		for _, set := range a.Sets {
-			f, ok := fields[set.Field]
-			if !ok {
-				return fmt.Errorf("%s sets %q, which is not a field of the object", where, set.Field)
+			if err := checkActionSet(where, o, a, fields, inputs, set, lookup); err != nil {
+				return err
 			}
-			switch {
-			case set.From == "$me":
-				if f.Type != "text" {
-					return fmt.Errorf("%s sets %q to the person taking it, but it is a %s field", where, f.Name, f.Type)
+		}
+		for _, br := range a.Branches {
+			if br.To != "" && !states[br.To] {
+				return fmt.Errorf("%s branch leaves records in %q, which is not a state of the object", where, br.To)
+			}
+			for _, w := range br.When {
+				if err := checkActionCondition(o, a, w, lookup, false); err != nil {
+					return err
 				}
-			case set.From == "$now":
-				if f.Type != "date" && f.Type != "datetime" {
-					return fmt.Errorf("%s sets %q to now, but it is a %s field", where, f.Name, f.Type)
-				}
-			case strings.HasPrefix(set.From, "="):
-				if _, err := literal(f.Type, strings.TrimPrefix(set.From, "=")); err != nil {
-					return fmt.Errorf("%s sets %q to %q: %v", where, f.Name, strings.TrimPrefix(set.From, "="), err)
-				}
-			default:
-				in := inputs[set.From]
-				if in.Name == "" {
-					return fmt.Errorf("%s sets %q from %q, which is not one of its inputs, $me, $now or =<value>", where, f.Name, set.From)
-				}
-				if !inputFits(in.Type, f.Type) || in.Type == "reference" && in.Ref != f.Ref {
-					return fmt.Errorf("%s sets %q (%s) from %q (%s), which does not fit", where, f.Name, f.Type, in.Name, in.Type)
-				}
-				if f.Type == "choice" {
-					for _, option := range buildapi.ValueChoices(in.Choices) {
-						if !slices.Contains(buildapi.ValueChoices(f.Choices), option) {
-							return fmt.Errorf("%s sets %q from %q, whose value %q is not one of the field's choices", where, f.Name, in.Name, option)
-						}
-					}
+			}
+			for _, set := range br.Sets {
+				if err := checkActionSet(where, o, a, fields, inputs, set, lookup); err != nil {
+					return err
 				}
 			}
 		}
@@ -206,7 +199,114 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 	return nil
 }
 
+func checkActionSet(where string, o Object, a Action, fields map[string]Field, inputs map[string]Input, set Set, lookup func(string) (platform.EntityInfo, bool)) error {
+	f, ok := fields[set.Field]
+	if !ok {
+		return fmt.Errorf("%s sets %q, which is not a field of the object", where, set.Field)
+	}
+	switch {
+	case set.From == "$me":
+		if f.Type != "text" {
+			return fmt.Errorf("%s sets %q to the person taking it, but it is a %s field", where, f.Name, f.Type)
+		}
+	case set.From == "$now":
+		if f.Type != "date" && f.Type != "datetime" {
+			return fmt.Errorf("%s sets %q to now, but it is a %s field", where, f.Name, f.Type)
+		}
+	case set.From == "=":
+		return nil
+	case strings.HasPrefix(set.From, "="):
+		if f.Type == "tags" {
+			return nil
+		}
+		if _, err := literal(f.Type, strings.TrimPrefix(set.From, "=")); err != nil {
+			return fmt.Errorf("%s sets %q to %q: %v", where, f.Name, strings.TrimPrefix(set.From, "="), err)
+		}
+	case strings.HasPrefix(set.From, "append:"):
+		if f.Type != "lines" && f.Type != "tags" {
+			return fmt.Errorf("%s appends to %q, which is not a lines or tags field", where, f.Name)
+		}
+	case strings.HasPrefix(set.From, "formula:"):
+		if f.Type != "integer" && f.Type != "decimal" {
+			return fmt.Errorf("%s sets %q from a formula, which requires an integer or decimal field", where, f.Name)
+		}
+		if _, err := buildapi.ValueParseFormula(strings.TrimPrefix(set.From, "formula:")); err != nil {
+			return fmt.Errorf("%s sets %q: %v", where, f.Name, err)
+		}
+	case strings.HasPrefix(set.From, "table:"):
+		rest := strings.TrimPrefix(set.From, "table:")
+		if tbName, colName, ok := strings.Cut(rest, "."); !ok || !named(tbName) || !named(colName) {
+			return fmt.Errorf("%s sets %q from invalid table reference %q", where, f.Name, set.From)
+		}
+	case strings.HasPrefix(set.From, "step:"):
+		if _, _, _, _, ok := parseStepExpr(set.From); !ok {
+			return fmt.Errorf("%s sets %q from invalid step expression %q", where, f.Name, set.From)
+		}
+	case strings.HasPrefix(set.From, "rollup:"):
+		if f.Type != "integer" && f.Type != "decimal" {
+			return fmt.Errorf("%s sets %q from a rollup, which requires an integer or decimal field", where, f.Name)
+		}
+	case strings.HasPrefix(set.From, "record.") || strings.HasPrefix(set.From, "input.") && strings.Count(set.From, ".") >= 2:
+		srcInfo, err := conditionField(o, a, set.From, lookup)
+		if err != nil {
+			return fmt.Errorf("%s sets %q from %q: %w", where, f.Name, set.From, err)
+		}
+		if srcInfo.Type != "" && !inputFits(srcInfo.Type, f.Type) && !(srcInfo.Type == "text" && f.Type == "reference") {
+			return fmt.Errorf("%s sets %q (%s) from %q (%s), which does not fit", where, f.Name, f.Type, set.From, srcInfo.Type)
+		}
+	default:
+		inName := strings.TrimPrefix(set.From, "input.")
+		in := inputs[inName]
+		if in.Name == "" {
+			return fmt.Errorf("%s sets %q from %q, which is not one of its inputs, $me, $now or =<value>", where, f.Name, set.From)
+		}
+		if !inputFits(in.Type, f.Type) || in.Type == "reference" && in.Ref != f.Ref {
+			return fmt.Errorf("%s sets %q (%s) from %q (%s), which does not fit", where, f.Name, f.Type, in.Name, in.Type)
+		}
+		if f.Type == "choice" {
+			for _, option := range buildapi.ValueChoices(in.Choices) {
+				if !slices.Contains(buildapi.ValueChoices(f.Choices), option) {
+					return fmt.Errorf("%s sets %q from %q, whose value %q is not one of the field's choices", where, f.Name, in.Name, option)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func checkActionCondition(o Object, a Action, cond Condition, lookup func(string) (platform.EntityInfo, bool), requireMessage bool) error {
+	if cond.Quantifier != "" {
+		if !slices.Contains([]string{"all", "none", "any", "count"}, cond.Quantifier) {
+			return fmt.Errorf("unsupported condition quantifier %q", cond.Quantifier)
+		}
+		if strings.TrimSpace(cond.Collection) == "" {
+			return fmt.Errorf("quantified condition needs a collection")
+		}
+		if cond.Quantifier == "count" {
+			if !slices.Contains([]string{"=", "!=", "<", "<=", ">", ">="}, cond.Operator) {
+				return fmt.Errorf("count condition needs a comparison operator")
+			}
+			if _, err := strconv.Atoi(cond.Value); err != nil {
+				return fmt.Errorf("count condition value %q is not an integer", cond.Value)
+			}
+		}
+		if requireMessage && strings.TrimSpace(cond.Message) == "" {
+			return fmt.Errorf("the condition on %s says nothing to a person it stops", cond.Collection)
+		}
+		return nil
+	}
+	if strings.HasPrefix(cond.Field, "step:") {
+		if _, _, _, _, ok := parseStepExpr(cond.Field); !ok {
+			return fmt.Errorf("invalid step expression %q", cond.Field)
+		}
+		if !slices.Contains(Operators, cond.Operator) {
+			return fmt.Errorf("unsupported condition operator %q", cond.Operator)
+		}
+		if requireMessage && strings.TrimSpace(cond.Message) == "" {
+			return fmt.Errorf("the condition on %s says nothing to a person it stops", cond.Field)
+		}
+		return nil
+	}
 	left, err := conditionField(o, a, cond.Field, lookup)
 	if err != nil {
 		return fmt.Errorf("action condition: %w", err)
@@ -241,22 +341,14 @@ func checkActionCondition(o Object, a Action, cond Condition, lookup func(string
 // conditionField resolves a typed operand against this draft and installed
 // related objects. It never infers a field from an arbitrary JSON expression.
 func conditionField(o Object, a Action, name string, lookup func(string) (platform.EntityInfo, bool)) (platform.FieldInfo, error) {
-	if input, ok := strings.CutPrefix(name, "input."); ok {
-		for _, in := range a.Inputs {
-			if in.Name == input {
-				return platform.FieldInfo{Name: name, Type: in.Type, Ref: in.Ref, Choices: buildapi.ValueChoices(in.Choices)}, nil
-			}
-		}
-		return platform.FieldInfo{}, fmt.Errorf("condition input %q is not declared", input)
-	}
-	return platform.RecordPathField(buildapi.TypeOf(o.Name), strings.Split(name, "."), func(typ string) (platform.EntityInfo, bool) {
+	entityLookup := func(typ string) (platform.EntityInfo, bool) {
 		if typ != buildapi.TypeOf(o.Name) {
 			if lookup == nil {
 				return platform.EntityInfo{}, false
 			}
 			return lookup(typ)
 		}
-		info := platform.EntityInfo{Type: typ}
+		info := platform.EntityInfo{Type: typ, Fields: []platform.FieldInfo{{Name: "id", Type: "text"}}}
 		for _, f := range o.Fields {
 			info.Fields = append(info.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type, Ref: f.Ref, Choices: buildapi.ValueChoices(f.Choices)})
 		}
@@ -268,12 +360,38 @@ func conditionField(o Object, a Action, name string, lookup func(string) (platfo
 			info.Fields = append(info.Fields, state)
 		}
 		return info, true
-	})
+	}
+	if input, ok := strings.CutPrefix(name, "input."); ok {
+		inName, rest, hasPath := strings.Cut(input, ".")
+		for _, in := range a.Inputs {
+			if in.Name == inName {
+				if !hasPath {
+					return platform.FieldInfo{Name: name, Type: in.Type, Ref: in.Ref, Choices: buildapi.ValueChoices(in.Choices)}, nil
+				}
+				if in.Type != "reference" || in.Ref == "" {
+					return platform.FieldInfo{}, fmt.Errorf("condition input %q is not a reference", inName)
+				}
+				if lookup == nil {
+					return platform.FieldInfo{Name: name, Type: "text"}, nil
+				}
+				return platform.RecordPathField(in.Ref, strings.Split(rest, "."), entityLookup)
+			}
+		}
+		return platform.FieldInfo{}, fmt.Errorf("condition input %q is not declared", inName)
+	}
+	clean := strings.TrimPrefix(name, "record.")
+	if clean == "id" {
+		return platform.FieldInfo{Name: "id", Type: "text"}, nil
+	}
+	return platform.RecordPathField(buildapi.TypeOf(o.Name), strings.Split(clean, "."), entityLookup)
 }
 
 func checkConditionFields(left, right platform.FieldInfo, op string) error {
 	if left.Type == "money" || right.Type == "money" {
 		return fmt.Errorf("money needs a currency-aware comparison rule")
+	}
+	if op == "contains all" || op == "contains any" || op == "in" || op == "not in" {
+		return nil
 	}
 	numeric := func(kind string) bool { return kind == "integer" || kind == "decimal" }
 	if left.Type != right.Type && !(numeric(left.Type) && numeric(right.Type)) || left.Type == "reference" && left.Ref != right.Ref {
@@ -295,7 +413,7 @@ func inputFits(input, field string) bool {
 	case "decimal":
 		return input == "decimal" || input == "integer"
 	case "choice":
-		return input == "choice"
+		return input == "choice" || input == "text"
 	default:
 		return input == field
 	}
@@ -309,6 +427,18 @@ func checkCondition(kind string, options []string, c Condition) error {
 	}
 	if kind == "money" {
 		return fmt.Errorf("money needs a currency-aware comparison rule")
+	}
+	if c.Operator == "in" || c.Operator == "not in" || c.Operator == "contains all" || c.Operator == "contains any" {
+		if c.Operator == "in" || c.Operator == "not in" {
+			if kind == "choice" {
+				for _, item := range buildapi.ValueChoices(c.Value) {
+					if !slices.Contains(options, item) {
+						return fmt.Errorf("%q is not one of this field's choices", item)
+					}
+				}
+			}
+		}
+		return nil
 	}
 	if c.Value == "$me" {
 		if kind != "text" && kind != "longtext" {
@@ -342,11 +472,20 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 	for _, a := range o.Actions {
 		to := a.To
 		if to == "" {
-			to = a.From[0] // it stays where it was: Do keeps the status, and it must be among To
+			if a.New {
+				to = o.States[0].Name
+			} else if len(a.From) > 0 {
+				to = a.From[0] // it stays where it was: Do keeps the status, and it must be among To
+			}
 		}
 		reach := []string{to}
-		if a.To == "" {
+		if a.To == "" && !a.New {
 			reach = slices.Clone(a.From)
+		}
+		for _, br := range a.Branches {
+			if br.To != "" && !slices.Contains(reach, br.To) {
+				reach = append(reach, br.To)
+			}
 		}
 		if a.ToInput != "" {
 			for _, in := range a.Inputs {
@@ -371,7 +510,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 				approval.Levels = append(approval.Levels, platform.ApprovalLevel{Title: level.Title, AppRole: level.Role, All: level.All})
 			}
 		}
-		l.Transitions = append(l.Transitions, platform.Transition{Name: a.Name, Title: a.Title, Description: a.Description,
+		l.Transitions = append(l.Transitions, platform.Transition{New: a.New, Name: a.Name, Title: a.Title, Description: a.Description,
 			From: slices.Clone(a.From), To: reach, ToInput: a.ToInput, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval, DeferRequired: true,
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
 				return take(o, action, c, record, raw, now, creates, lookup)
@@ -383,22 +522,54 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 // stored puts an action's related records under the change that took it, as
 // Do built and checked them from the same inputs (ADR-0040 21c).
 func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.ChangeRecord, any, time.Time) {
-	if len(a.Creates) == 0 && len(a.Posts) == 0 || creates == nil {
+	if len(a.Creates) == 0 && len(a.Updates) == 0 && len(a.Posts) == 0 || creates == nil {
 		return nil
 	}
 	return func(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
 		var inputs map[string]any
 		_ = json.Unmarshal(r.GetSubmission().GetPayload(), &inputs)
-		rec := reflect.ValueOf(record).Elem().Field(0).Interface().(platform.Record)
+		if inputs == nil {
+			inputs = map[string]any{}
+		}
+		applyInputDefaults(o, a, c, inputs, record, creates, now)
+		overlay := []any{record}
 		for i, cr := range a.Creates {
-			if value, err := creates.create(c, cr, inputs, buildapi.TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err == nil {
-				c.Put(r, value)
+			if values, err := creates.createBatch(c, o, a, cr, i, inputs, record, overlay, now); err == nil {
+				for _, value := range values {
+					c.Put(r, value)
+					overlay = append(overlay, value)
+				}
+			}
+		}
+		for _, u := range a.Updates {
+			if updated, ok, err := creates.updateRelated(c, o, a, u, inputs, record, overlay, now); err == nil && ok {
+				c.Put(r, updated)
+				overlay = append(overlay, updated)
 			}
 		}
 		for _, p := range a.Posts {
 			if value, err := creates.post(c, p, inputs, record, now); err == nil {
 				c.Put(r, value)
 			}
+		}
+	}
+}
+
+func applyInputDefaults(o Object, a Action, c platform.Caller, inputs map[string]any, record any, creates creator, now time.Time) {
+	eval := (*Build)(nil).evalSource
+	if creates != nil {
+		eval = creates.evalSource
+	}
+	for _, in := range a.Inputs {
+		if in.DefaultFrom == "" {
+			continue
+		}
+		if cur, exists := inputs[in.Name]; exists && cur != nil && buildapi.ValueTextOf(cur) != "" {
+			continue
+		}
+		val, present, err := eval(c, o, a, Field{Name: in.Name, Type: in.Type, Ref: in.Ref, Choices: in.Choices}, in.DefaultFrom, inputs, record, nil, 1, 1, nil, now)
+		if err == nil && present {
+			inputs[in.Name] = val
 		}
 	}
 }
@@ -410,6 +581,10 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 	if len(raw) > 0 && json.Unmarshal(raw, &inputs) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} takes an object of inputs", a.Title)
 	}
+	if inputs == nil {
+		inputs = map[string]any{}
+	}
+	applyInputDefaults(o, a, c, inputs, record, creates, now)
 	if !c.Replaying {
 		fields := make([]platform.Field, 0, len(a.Inputs))
 		for _, in := range a.Inputs {
@@ -428,71 +603,54 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 			return refusal
 		}
 	}
+	b, _ := creates.(*Build)
 	v := reflect.ValueOf(record).Elem()
-	value := func(name string) (any, *kernel.Error) {
-		if in, ok := strings.CutPrefix(name, "input."); ok {
-			return inputs[in], nil
-		}
-		if strings.Contains(name, ".") {
-			rec := v.Field(0).Interface().(platform.Record)
-			raw, _, refusal := c.ReadRecordPath(buildapi.TypeOf(o.Name), rec.ID, strings.Split(name, "."), now)
-			if refusal != nil {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A related condition source is unavailable / 关联条件来源不可读")
-			}
-			var result any
-			if json.Unmarshal(raw, &result) != nil {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid condition source")
-			}
-			return result, nil
-		}
-		f := v.FieldByName(goName(name))
-		if !f.IsValid() {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition field is unavailable")
-		}
-		return f.Interface(), nil
-	}
-	evaluate := func(cond Condition) (bool, *kernel.Error) {
-		field, err := conditionField(o, a, cond.Field, lookup)
-		if err != nil {
-			return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition field is unavailable")
-		}
-		got, refusal := value(cond.Field)
+	// Action-level organizational unit path check (ADR-0098 D2).
+	if a.UnitField != "" && !c.Replaying && !c.Automation && !c.Holds(c.App, Builder) {
+		unitVal, refusal := operandValue(c, b, o, a, a.UnitField, inputs, record, nil, lookup, now)
 		if refusal != nil {
-			return false, refusal
+			return refusal
 		}
-		kind, want := field.Type, cond.Value
-		if cond.ValueField != "" {
-			right, err := conditionField(o, a, cond.ValueField, lookup)
-			if err != nil || checkConditionFields(field, right, cond.Operator) != nil {
-				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition comparison field is unavailable or incompatible")
-			}
-			other, refusal := value(cond.ValueField)
-			if refusal != nil {
-				return false, refusal
-			}
-			want = buildapi.ValueTextOf(other)
-			if want == "" {
-				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", cond.Message)
-			}
-			if right.Type == "decimal" {
-				kind = "decimal"
-			}
-		} else if want == "$me" {
-			want = c.ID
+		unit := buildapi.ValueTextOf(unitVal)
+		structure := "site"
+		if o.Scope != nil && o.Scope.Structure != "" {
+			structure = o.Scope.Structure
 		}
-		return buildapi.ValueHolds(got, kind, cond.Operator, want), nil
+		if unit == "" || !slices.Contains(c.Units(structure, now), unit) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} is not assigned to the unit for {action}", c.ID, a.Title)
+		}
 	}
-	for _, cond := range a.Conditions {
-		if cond.When != nil {
-			held, err := evaluate(*cond.When)
-			if err != nil {
-				return err
-			}
-			if !held {
+	// Check input candidate filters on reference parameters (ADR-0098 D3).
+	if !c.Replaying && b != nil && b.host != nil {
+		for _, in := range a.Inputs {
+			if in.Type != "reference" || len(in.Filter) == 0 {
 				continue
 			}
+			refID := buildapi.ValueTextOf(inputs[in.Name])
+			if refID == "" {
+				continue
+			}
+			for _, fCond := range in.Filter {
+				checkCond := fCond
+				if !strings.HasPrefix(checkCond.Field, "input.") && !strings.HasPrefix(checkCond.Field, "record.") {
+					checkCond.Field = "input." + in.Name + "." + strings.TrimPrefix(checkCond.Field, "item.")
+				}
+				held, refusal := evaluateConditionOnRecord(c, b, o, a, checkCond, inputs, record, nil, lookup, now)
+				if refusal != nil {
+					return refusal
+				}
+				if !held {
+					msg := fCond.Message
+					if msg == "" {
+						msg = fmt.Sprintf("%s does not satisfy %s filter", refID, in.Title)
+					}
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{message}", msg)
+				}
+			}
 		}
-		held, err := evaluate(cond)
+	}
+	for _, cond := range a.Conditions {
+		held, err := evaluateConditionOnRecord(c, b, o, a, cond, inputs, record, []any{record}, lookup, now)
 		if err != nil {
 			return err
 		}
@@ -514,44 +672,85 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		v.FieldByName("State").SetString(state)
 	}
 
-	types := map[string]string{}
+	fieldMap := map[string]Field{}
 	for _, f := range o.Fields {
-		types[f.Name] = f.Type
+		fieldMap[f.Name] = f
 	}
-	for _, set := range a.Sets {
-		var x any
-		switch {
-		case set.From == "$me":
-			x = c.ID
-		case set.From == "$now":
-			if types[set.Field] == "date" {
-				x = c.Today(now)
-			} else {
-				x = now.UTC()
+	eval := (*Build)(nil).evalSource
+	if creates != nil {
+		eval = creates.evalSource
+	}
+	applySets := func(sets []Set, overlay []any) *kernel.Error {
+		for _, set := range sets {
+			targetField := fieldMap[set.Field]
+			x, present, refusal := eval(c, o, a, targetField, set.From, inputs, record, overlay, 1, 1, nil, now)
+			if refusal != nil {
+				return refusal
 			}
-		case strings.HasPrefix(set.From, "="):
-			x, _ = literal(types[set.Field], strings.TrimPrefix(set.From, "="))
-		default:
-			given, ok := inputs[set.From]
-			if !ok || given == nil {
+			if !present {
 				continue // an input left out leaves the field as it was
 			}
-			x = given
+			if err := assign(v.FieldByName(goName(set.Field)), x); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} cannot set {field}: {why}", a.Title, set.Field, err.Error())
+			}
 		}
-		if err := assign(v.FieldByName(goName(set.Field)), x); err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} cannot set {field}: {why}", a.Title, set.Field, err.Error())
-		}
+		return nil
 	}
-	// Related records last: conditions and sets have already held. Each is
-	// built and checked now (its required fields and create roles apply); the
-	// transition's After stores it under the same change.
-	rec := v.Field(0).Interface().(platform.Record)
+	if err := applySets(a.Sets, []any{record}); err != nil {
+		return err
+	}
+	// Validate and stage related record creations so branches and parent updates
+	// can observe newly created child records in the same decision.
+	overlay := []any{record}
 	for i, cr := range a.Creates {
 		if creates == nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{action} cannot create records here", a.Title)
 		}
-		if _, err := creates.create(c, cr, inputs, buildapi.TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err != nil {
+		created, err := creates.createBatch(c, o, a, cr, i, inputs, record, overlay, now)
+		if err != nil {
 			return err
+		}
+		overlay = append(overlay, created...)
+	}
+	// Evaluate conditional branches (first matching branch wins, ADR-0098 D2).
+	branched := false
+	for _, br := range a.Branches {
+		matched := true
+		for _, w := range br.When {
+			held, err := evaluateConditionOnRecord(c, b, o, a, w, inputs, record, overlay, lookup, now)
+			if err != nil {
+				return err
+			}
+			if !held {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			branched = true
+			if err := applySets(br.Sets, overlay); err != nil {
+				return err
+			}
+			if br.To != "" {
+				v.FieldByName("State").SetString(br.To)
+			}
+			break
+		}
+	}
+	if !branched && a.To != "" && a.ToInput == "" {
+		v.FieldByName("State").SetString(a.To)
+	}
+	// Validate related parent/target record updates with the final record state overlaid.
+	for _, u := range a.Updates {
+		if creates == nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{action} cannot update related records here", a.Title)
+		}
+		updated, ok, err := creates.updateRelated(c, o, a, u, inputs, record, overlay, now)
+		if err != nil {
+			return err
+		}
+		if ok {
+			overlay = append(overlay, updated)
 		}
 	}
 	for _, p := range o.EffectivePosts(a) {

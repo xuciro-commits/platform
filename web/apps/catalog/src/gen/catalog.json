@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:dc0fb692688f92fb",
+  "revision": "sha256:46f306cb34d70d71",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -931,6 +931,13 @@
           "name": "definition",
           "type": "PageDefinition",
           "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "initialRecordId",
+          "type": "string",
+          "optional": true,
           "isCallback": false,
           "isSlot": false
         }
@@ -9087,6 +9094,13 @@
           "type": "boolean",
           "optional": true,
           "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "predicate",
+          "type": "(record: EntityRecord) => boolean",
+          "optional": true,
+          "isCallback": true,
           "isSlot": false
         }
       ]

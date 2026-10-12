@@ -244,8 +244,19 @@ function FieldProperties({ field, others, onChange, onRemove }: { field: Field; 
     {field.property&&<><p className="break-all text-xs text-muted">{field.property.ref.name}@{field.property.sourceVersion}</p><p className="text-xs text-muted">{t("The shared source controls type and title. Local names, required values and access stay with this object.")}</p>{!bound&&<p role="alert" className="text-xs text-danger">{t("The bound shared property version is unavailable.")}</p>}</>}
     <Label text={t("What people call it")}><Input disabled={!!field.property} value={field.title} onChange={(e) => onChange({ title: e.target.value })} /></Label>
     <Label text={t("Name")}><Input className="font-mono" value={field.name} onChange={(e) => onChange({ name: e.target.value })} /></Label>
-    <Label text={t("Type")}><Select disabled={!!field.property} value={field.type} onChange={(e) => onChange({ type: e.target.value })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
+    <Label text={t("Type")}><Select disabled={!!field.property} value={field.type} onChange={(e) => onChange({ type: e.target.value, ...(e.target.value === "lines" && !field.columns?.length ? { columns: [{ name: "name", title: t("Name"), type: "text" }] } : e.target.value !== "lines" ? { columns: undefined } : {}) })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
     {field.type === "choice" && <Label text={t("Choices")}><Input value={field.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
+    {field.type === "lines" && <div className="grid gap-2 rounded border border-border p-2 text-xs">
+      <div className="flex items-center justify-between"><span className="font-semibold text-muted">{t("Line columns")}</span>
+        <Button size="sm" variant="ghost" onClick={() => onChange({ columns: [...(field.columns ?? []), { name: nameOf("col", (field.columns ?? []).map((c) => c.name)), title: t("Column"), type: "text" }] })}><Plus className="size-3" /></Button></div>
+      {(field.columns ?? []).map((col, idx) => <div key={idx} className="grid gap-1 border-t border-border pt-1">
+        <Input placeholder={t("Title")} value={col.title} onChange={(e) => onChange({ columns: (field.columns ?? []).map((c, i) => i === idx ? { ...c, title: e.target.value } : c) })} />
+        <Input className="font-mono" placeholder="name" value={col.name} onChange={(e) => onChange({ columns: (field.columns ?? []).map((c, i) => i === idx ? { ...c, name: e.target.value } : c) })} />
+        <Select value={col.type} onChange={(e) => onChange({ columns: (field.columns ?? []).map((c, i) => i === idx ? { ...c, type: e.target.value } : c) })}>
+          {["text", "integer", "decimal", "date", "boolean", "choice"].map((k) => <option key={k} value={k}>{t(k)}</option>)}
+        </Select>
+      </div>)}
+    </div>}
     {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect label={t("Reference object")} value={field.ref} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined })} /></Label>}
     {field.type === "reference" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
     {(field.type === "integer" || field.type === "decimal") && <Label text={t("Computed by formula")}><Input className="font-mono" placeholder="price * qty" value={field.formula ?? ""} onChange={(e) => onChange({ formula: e.target.value || undefined })} /></Label>}

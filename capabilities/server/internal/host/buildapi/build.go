@@ -58,8 +58,9 @@ type Field struct {
 	Property *platform.AssetBinding `json:"property,omitempty" type:"json" field:"aside"`
 	Name     string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
 	Title    string                 `json:"title" field:"required" title:"Label" example:"Visited on"`
-	Type     string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
+	Type     string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,tags,lines" example:"date"`
 	Choices  string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
+	Columns  []LineColumn           `json:"columns,omitempty" title:"Line columns" help:"For lines: the columns of each embedded row"`
 	Ref      string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
 	// Inverse names the relation seen from the referenced record (ADR-0040 21b).
 	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
@@ -76,6 +77,15 @@ type Field struct {
 	// Read and Write, when set, are the roles that read and set it (ADR-0028 D3).
 	Read  []string `json:"read,omitempty" title:"Read by" help:"Roles that read it; empty: every role that reads the object"`
 	Write []string `json:"write,omitempty" title:"Set by" help:"Roles that set it; empty: every role that edits the object"`
+}
+
+// LineColumn is one column of an embedded lines field (ADR-0098 D1).
+type LineColumn struct {
+	Name     string `json:"name" field:"required" help:"Lower-case letters and digits" example:"target"`
+	Title    string `json:"title" field:"required" title:"Label" example:"Target"`
+	Type     string `json:"type" field:"required" choices:"text,integer,decimal,date,boolean,choice" example:"decimal"`
+	Choices  string `json:"choices,omitempty" help:"For a choice column: the values, comma-separated"`
+	Required bool   `json:"required,omitempty"`
 }
 
 // Installed reports the entity type an object is installed as.

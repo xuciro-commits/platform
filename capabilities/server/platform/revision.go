@@ -1075,12 +1075,16 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		Lifecycle  *LifecycleInfo               `json:"lifecycle"`
 		States     []State                      `json:"states"`
 		Actions    []struct {
-			Name    string   `json:"name"`
-			Title   string   `json:"title"`
-			From    []string `json:"from"`
-			To      string   `json:"to"`
-			ToInput string   `json:"toInput"`
-			Inputs  []struct {
+			New      bool     `json:"new"`
+			Name     string   `json:"name"`
+			Title    string   `json:"title"`
+			From     []string `json:"from"`
+			To       string   `json:"to"`
+			ToInput  string   `json:"toInput"`
+			Branches []struct {
+				To string `json:"to"`
+			} `json:"branches"`
+			Inputs []struct {
 				Name     string `json:"name"`
 				Type     string `json:"type"`
 				Required bool   `json:"required"`
@@ -1150,6 +1154,11 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 			if a.To != "" {
 				to = append(to, a.To)
 			}
+			for _, br := range a.Branches {
+				if br.To != "" && !slices.Contains(to, br.To) {
+					to = append(to, br.To)
+				}
+			}
 			if a.ToInput != "" {
 				to = nil
 				valid := false
@@ -1167,10 +1176,14 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 				if !valid || a.To != "" || len(to) == 0 || slices.ContainsFunc(to, func(state string) bool { return !slices.Contains(choices, state) }) {
 					return EntityInfo{}, fmt.Errorf("frozen object destination input differs")
 				}
-			} else if a.To == "" {
-				to = slices.Clone(a.From)
+			} else if len(to) == 0 {
+				if a.New && len(choices) > 0 {
+					to = []string{choices[0]}
+				} else {
+					to = slices.Clone(a.From)
+				}
 			}
-			l.Transitions = append(l.Transitions, TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: to, ToInput: a.ToInput})
+			l.Transitions = append(l.Transitions, TransitionInfo{New: a.New, Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: to, ToInput: a.ToInput})
 		}
 		shape.Lifecycle = &l
 	}

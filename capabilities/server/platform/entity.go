@@ -154,6 +154,7 @@ type Transition struct {
 	Name        string
 	Title       string
 	Description string
+	New         bool
 	From, To    []string
 	// ToInput names the required choice payload that the original action uses as its destination.
 	ToInput       string
@@ -177,6 +178,7 @@ type LifecycleInfo struct {
 }
 
 type TransitionInfo struct {
+	New     bool     `json:"new,omitempty"`
 	ToInput string   `json:"toInput,omitempty"`
 	Name    string   `json:"name"`
 	Schema  string   `json:"schema"`
@@ -484,7 +486,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		info.Lifecycle = &LifecycleInfo{Field: l.Field, Initial: l.Initial, States: l.States, Transitions: []TransitionInfo{}}
 		for i, t := range l.Transitions {
 			ends := append(slices.Clone(t.From), t.To...)
-			if t.Name == "" || len(t.From) == 0 || len(t.To) == 0 || slices.ContainsFunc(ends, func(s string) bool { return !states[s] }) ||
+			if t.Name == "" || (!t.New && len(t.From) == 0) || (t.New && (len(t.From) > 0 || t.Approval != nil)) || len(t.To) == 0 || slices.ContainsFunc(ends, func(s string) bool { return !states[s] }) ||
 				slices.ContainsFunc(l.Transitions[:i], func(x Transition) bool { return x.Name == t.Name }) || t.Name == "create" || t.Name == "edit" || t.Name == "archive" {
 				return EntityInfo{}, fmt.Errorf("entity %s: transition %q needs a unique name and states of the lifecycle", e.Type, t.Name)
 			}
@@ -502,7 +504,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 			if title == "" {
 				title = strings.ToUpper(t.Name[:1]) + t.Name[1:]
 			}
-			info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: t.From, To: t.To, ToInput: t.ToInput})
+			info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{New: t.New, Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: t.From, To: t.To, ToInput: t.ToInput})
 		}
 	}
 	for _, x := range [][2]any{{e.Standard.Create, ".create"}, {e.Standard.Edit, ".edit"}, {e.Standard.Archive, ".archive"}} {
@@ -580,9 +582,13 @@ func EntityActions(e Entity) []Action {
 			}
 			description := t.Description
 			if description == "" {
-				description = fmt.Sprintf("Move %s from %s to %s.", article(info.Title), strings.Join(t.From, " or "), strings.Join(t.To, " or "))
+				if t.New {
+					description = fmt.Sprintf("Create %s in %s.", article(info.Title), strings.Join(t.To, " or "))
+				} else {
+					description = fmt.Sprintf("Move %s from %s to %s.", article(info.Title), strings.Join(t.From, " or "), strings.Join(t.To, " or "))
+				}
 			}
-			out = append(out, Action{Schema: e.Type + "." + t.Name, Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
+			out = append(out, Action{Schema: e.Type + "." + t.Name, Target: e.Type, New: t.New, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
 				Description: description, Payload: payload, Roles: t.Roles, Approval: t.Approval, DeferRequired: t.DeferRequired})
 			if t.Approval != nil && t.Approval.Pending != "" { // the work app's alone: no role holds them
 				for _, m := range [][2]string{{ApprovalHeld, "Hold for approval"}, {ApprovalRejected, "Mark rejected"}, {ApprovalReturned, "Return from approval"}} {

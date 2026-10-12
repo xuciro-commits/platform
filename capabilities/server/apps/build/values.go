@@ -51,6 +51,7 @@ const SchemaPublish = buildapi.SchemaPublish
 
 type Object = buildapi.Object
 type Field = buildapi.Field
+type LineColumn = buildapi.LineColumn
 
 const ConnectionType = buildapi.ConnectionType
 const SchemaConnectionChecked = buildapi.SchemaConnectionChecked
@@ -104,7 +105,9 @@ type WritebackAns = buildapi.WritebackAns
 type WritebackRequest = buildapi.WritebackRequest
 type State = buildapi.State
 type Action = buildapi.Action
+type ActionBranch = buildapi.ActionBranch
 type Create = buildapi.Create
+type UpdateEffect = buildapi.UpdateEffect
 type ActionApproval = buildapi.ActionApproval
 type ApproverLevel = buildapi.ApproverLevel
 type Input = buildapi.Input

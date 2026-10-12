@@ -790,6 +790,28 @@ func checkFields(fields []Field, known func(string) bool) error {
 			return fmt.Errorf("the field %q names how it is seen from elsewhere but refers to nothing", f.Name)
 		case f.Inverse != "" && !named(f.Inverse):
 			return fmt.Errorf("the relation name %q of field %q is not lower-case letters and digits", f.Inverse, f.Name)
+		case f.Type == "lines" && len(f.Columns) == 0:
+			return fmt.Errorf("the lines field %q needs at least one column", f.Name)
+		case f.Type != "lines" && len(f.Columns) > 0:
+			return fmt.Errorf("the field %q defines columns but is not a lines field", f.Name)
+		}
+		if f.Type == "lines" {
+			colSeen := map[string]bool{}
+			for _, col := range f.Columns {
+				switch {
+				case !named(col.Name):
+					return fmt.Errorf("the column name %q on %q is not lower-case letters and digits", col.Name, f.Name)
+				case colSeen[col.Name]:
+					return fmt.Errorf("the column %q on %q is declared twice", col.Name, f.Name)
+				case col.Title == "":
+					return fmt.Errorf("the column %q on %q has no label", col.Name, f.Name)
+				case !slices.Contains([]string{"text", "integer", "decimal", "date", "boolean", "choice"}, col.Type):
+					return fmt.Errorf("the column %q on %q has unsupported type %q", col.Name, f.Name, col.Type)
+				case col.Type == "choice" && strings.TrimSpace(col.Choices) == "":
+					return fmt.Errorf("the choice column %q on %q has no values", col.Name, f.Name)
+				}
+				colSeen[col.Name] = true
+			}
 		}
 		seen[f.Name] = true
 	}
@@ -830,7 +852,7 @@ func checkConditions(fields []Field) error {
 	return nil
 }
 
-var fieldTypes = []string{"text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference"}
+var fieldTypes = []string{"text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "tags", "lines"}
 
 // taken says whether another object, or an app's own type, holds the name.
 func (b *Build) taken(name, id string) (string, bool, error) {
@@ -1142,6 +1164,22 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 			tag += fmt.Sprintf(` write:"%s"`, strings.Join(append([]string{Builder}, f.Write...), ","))
 		}
 		fieldType := goType(f.Type)
+		if f.Type == "lines" {
+			lineFields := make([]reflect.StructField, 0, len(f.Columns))
+			for _, col := range f.Columns {
+				colTag := fmt.Sprintf(`json:"%s,omitempty" title:"%s"`, col.Name, col.Title)
+				if col.Type == "date" {
+					colTag += ` type:"date"`
+				} else if col.Type == "choice" {
+					colTag += fmt.Sprintf(` choices:"%s"`, strings.Join(buildapi.ValueChoices(col.Choices), ","))
+				}
+				if col.Required {
+					colTag += ` field:"required"`
+				}
+				lineFields = append(lineFields, reflect.StructField{Name: goName(col.Name), Type: goType(col.Type), Tag: reflect.StructTag(colTag)})
+			}
+			fieldType = reflect.SliceOf(reflect.StructOf(lineFields))
+		}
 		// Optional scalar values need a nil state. Otherwise an omitted number
 		// or boolean is indistinguishable from an explicitly supplied zero.
 		if !f.Required && (f.Type == "integer" || f.Type == "decimal" || f.Type == "boolean" || f.Type == "datetime" || f.Type == "money") {
@@ -1208,6 +1246,8 @@ func goType(kind string) reflect.Type {
 		return reflect.TypeFor[time.Time]()
 	case "boolean":
 		return reflect.TypeFor[bool]()
+	case "tags":
+		return reflect.TypeFor[[]string]()
 	}
 	return reflect.TypeFor[string]()
 }

@@ -15,11 +15,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 import { assignmentInputFits } from "./process-rules";
 import { Label } from "./process";
-import { actionInputFields, comparisonFits, conditionSubjects, inputTypes, nameOf, operators, type Action, type ApproverLevel, type Condition, type Create_, type Input_, type JournalLine_, type Post_, type Set_ } from "./object-model";
+import { actionInputFields, comparisonFits, conditionSubjects, inputTypes, nameOf, operators, type Action, type ActionBranch_, type ApproverLevel, type Condition, type Create_, type Input_, type JournalLine_, type Post_, type Set_, type UpdateEffect_ } from "./object-model";
 import { useObjectDraft } from "./object-draft";
 
 type Section = "overview" | "parameters" | "form" | "rules" | "criteria" | "effects" | "approval" | "permissions";
-type Pick = { kind: "parameter" | "rule" | "criterion" | "effect" | "posting"; at: number } | undefined;
+type Pick = { kind: "parameter" | "rule" | "branch" | "criterion" | "effect" | "update" | "posting"; at: number } | undefined;
 const sections: { id: Section; title: () => string; icon: ReactNode }[] = [
   { id: "overview", title: () => t("Overview"), icon: <Zap /> },
   { id: "parameters", title: () => t("Parameters"), icon: <FileInput /> },
@@ -105,11 +105,11 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
   };
   const issues = action ? draft.issuesOf(action.name) : [];
   const problems: WorkbenchProblem[] = issues.map((text, i) => ({ id: `issue:${i}`, text }));
-  const inputs = action?.inputs ?? [], sets = action?.sets ?? [], conditions = action?.conditions ?? [], creates = action?.creates ?? [], posts = action?.posts ?? [];
+  const inputs = action?.inputs ?? [], sets = action?.sets ?? [], branches = action?.branches ?? [], conditions = action?.conditions ?? [], creates = action?.creates ?? [], updates = action?.updates ?? [], posts = action?.posts ?? [];
   const balances = entities.filter((e) => e.type.startsWith("build.") && e.type !== parent && e.fields.some((f) => !f.readOnly && ["integer", "decimal", "money"].includes(f.type)));
-  const sources = [...inputs.map((i) => ({ value: i.name, label: t("Input: {name}", { name: i.title }) })), { value: "$me", label: t("The person taking it") }, { value: "$now", label: t("Now") }];
-  const postSources = [...sources.filter((s) => s.value !== "$now"), ...process.fields.map((f) => ({ value: `record.${f.name}`, label: t("This record: {name}", { name: f.title || f.name }) }))];
   const subjects = action ? conditionSubjects(process, action, parent, entities) : [];
+  const sources = [...inputs.map((i) => ({ value: i.name, label: t("Input: {name}", { name: i.title }) })), ...subjects.filter((s) => !s.value.startsWith("input.") || s.value.split(".").length > 2).map((s) => ({ value: s.value.startsWith("input.") ? s.value : `record.${s.value}`, label: s.label })), { value: "$me", label: t("The person taking it") }, { value: "$now", label: t("Now") }];
+  const postSources = [...sources.filter((s) => s.value !== "$now"), ...process.fields.map((f) => ({ value: `record.${f.name}`, label: t("This record: {name}", { name: f.title || f.name }) }))];
   const stateTitle = (s?: string) => process.states.find((x) => x.name === s)?.title ?? s ?? "";
   const go = (next: Section, picked?: Pick) => { setSection(next); setPick(picked); };
   const list = <T,>(items: T[], kind: NonNullable<Pick>["kind"], onChange: (next: T[]) => void, add: { label: string; make: () => T; disabled?: boolean }, row: (item: T, i: number) => ReactNode, empty: string) => <div className="grid content-start gap-2 p-4">
@@ -125,20 +125,22 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
       <Label text={t("What people call it")}><Input value={action.title} onChange={(e) => patch({ title: e.target.value })} /></Label>
       <Label text={t("Name")}><Input value={action.name} className="font-mono" onChange={(e) => { patch({ name: e.target.value }); setName(e.target.value); }} /></Label>
       <Label text={t("What it does")}><Textarea rows={2} value={action.description ?? ""} onChange={(e) => patch({ description: e.target.value })} /></Label>
-      <fieldset className="grid gap-1 text-xs"><legend className="mb-1">{t("Taken from")}</legend>
-        <Toggles options={process.states.map((s) => ({ value: s.name, label: s.title }))} value={action.from} onChange={(from) => patch({ from })} /></fieldset>
+      <Checkbox checked={!!action.new} onChange={(isNew) => patch({ new: isNew || undefined, from: isNew ? [] : process.states[0] ? [process.states[0].name] : [], to: isNew ? (action.to || process.states[0]?.name) : action.to, approval: isNew ? undefined : action.approval })}>{t("Creates a new record")}</Checkbox>
+      {!action.new && <fieldset className="grid gap-1 text-xs"><legend className="mb-1">{t("Taken from")}</legend>
+        <Toggles options={process.states.map((s) => ({ value: s.name, label: s.title }))} value={action.from} onChange={(from) => patch({ from })} /></fieldset>}
       <Label text={t("Leaves it in")}>
         <Select value={action.to ?? ""} onChange={(e) => patch({ to: e.target.value || undefined, toInput: undefined })}>
-          <option value="">{t("Where it was")}</option>{process.states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}
+          <option value="">{action.new ? t("Initial state") : t("Where it was")}</option>{process.states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}
         </Select></Label>
       <Label text={t("State from input")}><Select value={action.toInput ?? ""} disabled={!!action.approval && !action.toInput} onChange={(e) => patch({ toInput: e.target.value || undefined, to: undefined })}>
         <option value="">{t("Use a fixed state or keep the current state")}</option>
         {inputs.filter((i) => i.type === "choice" && i.required).map((i) => <option key={i.name} value={i.name}>{i.title}</option>)}
       </Select></Label>
       <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-        {([["parameters", inputs.length], ["rules", sets.length], ["criteria", conditions.length], ["effects", creates.length]] as const).map(([s, n]) => <Button key={s} variant="row" type="button" className="rounded-md border border-border p-3 text-left hover:border-primary" onClick={() => go(s)}>
+        {([["parameters", inputs.length], ["rules", sets.length + branches.length], ["criteria", conditions.length], ["effects", creates.length + updates.length]] as const).map(([s, n]) => <Button key={s} variant="row" type="button" className="rounded-md border border-border p-3 text-left hover:border-primary" onClick={() => go(s)}>
           <dt className="text-xs text-muted">{sections.find((x) => x.id === s)!.title()}</dt><dd className="text-lg font-semibold">{n}</dd></Button>)}
       </dl>
+      <DecisionRecipes action={action} process={process} targets={targets} patch={patch} />
     </div>,
     parameters: list<Input_>(inputs, "parameter", (next) => patch({ inputs: next }), { label: t("Add a parameter"), make: () => ({ name: nameOf("input", inputs.map((i) => i.name)), title: t("Input"), type: "text" }) },
       (i) => <><span className="min-w-0 flex-1 truncate font-medium">{i.title}</span><code className="text-xs text-muted">{i.name}</code><span className="text-xs text-muted">{t(i.type)}{i.required ? " *" : ""}</span></>, t("No parameters. People take the action with no form.")),
@@ -153,13 +155,17 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
         <Button variant="primary" size="sm" className="w-fit" disabled>{action.title}</Button>
       </Card>
     </div>,
-    rules: list<Set_>(sets, "rule", (next) => patch({ sets: next }), { label: t("Set a field"), make: () => ({ field: process.fields[0]?.name ?? "", from: sources[0]?.value ?? "" }), disabled: !process.fields.length },
-      (s) => <><span className="min-w-0 flex-1 truncate font-medium">{process.fields.find((f) => f.name === s.field)?.title ?? s.field}</span><span className="text-xs text-muted">← {s.from.startsWith("=") ? `"${s.from.slice(1)}"` : sources.find((x) => x.value === s.from)?.label ?? s.from}</span></>, t("No rules. The action changes only the state.")),
+    rules: <>{list<Set_>(sets, "rule", (next) => patch({ sets: next }), { label: t("Set a field"), make: () => ({ field: process.fields[0]?.name ?? "", from: sources[0]?.value ?? "" }), disabled: !process.fields.length },
+      (s) => <><span className="min-w-0 flex-1 truncate font-medium">{process.fields.find((f) => f.name === s.field)?.title ?? s.field}</span><span className="text-xs text-muted">← {s.from.startsWith("=") ? `"${s.from.slice(1)}"` : sources.find((x) => x.value === s.from)?.label ?? s.from}</span></>, t("No rules. The action changes only the state."))}
+      {list<ActionBranch_>(branches, "branch", (next) => patch({ branches: next }), { label: t("Add a conditional branch"), make: () => ({ to: process.states[0]?.name, when: [], sets: [] }) },
+        (b, i) => <><span className="min-w-0 flex-1 truncate font-medium">{t("Branch {n} → {state}", { n: i + 1, state: stateTitle(b.to) })}</span><span className="text-xs text-muted">{t("{conditions} criteria · {rules} rules", { conditions: b.when?.length ?? 0, rules: b.sets?.length ?? 0 })}</span></>, t("No conditional branches."))}</>,
     criteria: list<Condition>(conditions, "criterion", (next) => patch({ conditions: next }), { label: t("Add a criterion"), make: () => ({ field: subjects[0]?.value ?? "", operator: "=", value: "", message: "" }) },
-      (c) => <><span className="min-w-0 flex-1 truncate font-medium">{subjects.find((s) => s.value === c.field)?.label ?? c.field} {t(c.operator)} {c.valueField ? subjects.find((s) => s.value === c.valueField)?.label : c.value}</span><span className="truncate text-xs text-muted">{c.message}</span></>, t("No criteria. The action can always be submitted from its starting states.")),
+      (c) => <><span className="min-w-0 flex-1 truncate font-medium">{c.quantifier ? `${c.quantifier} (${c.collection ?? ""})` : `${subjects.find((s) => s.value === c.field)?.label ?? c.field} ${t(c.operator)} ${c.valueField ? subjects.find((s) => s.value === c.valueField)?.label ?? c.valueField : c.value ?? ""}`}</span><span className="truncate text-xs text-muted">{c.message}</span></>, t("No criteria. The action can always be submitted from its starting states.")),
     effects: <>{list<Create_>(creates, "effect", (next) => patch({ creates: next }), { label: t("Create a related record"), make: () => relatedCreate(targets[0]?.type ?? "", undefined, targets, parent, inputs), disabled: !targets.length },
-      (c) => <><span className="min-w-0 flex-1 truncate font-medium">{t("Create {object}", { object: targets.find((x) => x.type === c.object)?.title ?? c.object })}</span><span className="text-xs text-muted">{t("via {field}", { field: c.via })}</span></>, targets.length ? t("No side effects. Related records can be created when the action commits.") : t("Publish a related object with a reference to this object first."))}
+      (c) => <><span className="min-w-0 flex-1 truncate font-medium">{t("Create {object}", { object: targets.find((x) => x.type === c.object)?.title ?? c.object })}{c.count ? ` × ${c.count}` : ""}</span><span className="text-xs text-muted">{t("via {field}", { field: c.via })}</span></>, targets.length ? t("No side effects. Related records can be created when the action commits.") : t("Publish a related object with a reference to this object first."))}
       <p className="px-4 text-xs text-muted">{t("Related records commit with this action. The target object's create permissions still apply.")}</p>
+      {list<UpdateEffect_>(updates, "update", (next) => patch({ updates: next }), { label: t("Update a referenced record"), make: () => ({ via: process.fields.find((f) => f.type === "reference")?.name ?? "", to: "", when: [], sets: [] }), disabled: !process.fields.some((f) => f.type === "reference") },
+        (u) => <><span className="min-w-0 flex-1 truncate font-medium">{t("Update {field}", { field: u.via })}{u.to ? ` → ${u.to}` : ""}</span><span className="text-xs text-muted">{t("{rules} rules", { rules: u.sets?.length ?? 0 })}</span></>, t("No referenced record updates."))}
       {list<Post_>(posts, "posting", (next) => patch({ posts: next }), { label: t("Post to a balance"), make: () => ({ object: balances[0]?.type ?? "", match: [], field: balances[0]?.fields.find((f) => ["integer", "decimal", "money"].includes(f.type))?.name ?? "", amount: inputs[0]?.name ?? "=1" }), disabled: !balances.length },
         (p) => <><span className="min-w-0 flex-1 truncate font-medium">{t("{sign} {amount} to {object}.{field}", { sign: p.subtract ? "−" : "+", amount: p.amount.startsWith("=") ? p.amount.slice(1) : postSources.find((x) => x.value === p.amount)?.label ?? p.amount, object: balances.find((x) => x.type === p.object)?.title ?? p.object, field: p.field })}</span><span className="text-xs text-muted">{p.match.map((m) => m.field).join(", ")}</span></>, balances.length ? t("No postings. Quantities and amounts can accumulate on a balance object when the action commits.") : t("Publish an object with an integer, decimal or money field to keep balances."))}
       <p className="px-4 text-xs text-muted">{t("A balance is one record per distinct set of match values; it is created on the first posting. Reverse with a posting of the other sign.")}</p>
@@ -195,10 +201,14 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
       <ParameterEditor input={inputs[pick.at]!} inputs={inputs} entities={entities} onChange={(p) => patch({ inputs: inputs.map((x, i) => i === pick.at ? { ...x, ...p } : x) })} /></RowCard>}
     {pick.kind === "rule" && sets[pick.at] && <RowCard title={t("Rule")} onRemove={() => { patch({ sets: sets.filter((_, i) => i !== pick.at) }); setPick(undefined); }}>
       <AssignmentEditor fields={process.fields} sources={sources} set={sets[pick.at]!} onChange={(p) => patch({ sets: sets.map((x, i) => i === pick.at ? { ...x, ...p } : x) })} /></RowCard>}
+    {pick.kind === "branch" && branches[pick.at] && <RowCard title={t("Conditional branch")} onRemove={() => { patch({ branches: branches.filter((_, i) => i !== pick.at) }); setPick(undefined); }}>
+      <BranchEditor branch={branches[pick.at]!} states={process.states} fields={process.fields} sources={sources} subjects={subjects} onChange={(next) => patch({ branches: branches.map((x, i) => i === pick.at ? next : x) })} /></RowCard>}
     {pick.kind === "criterion" && conditions[pick.at] && <RowCard title={t("Submission criterion")} onRemove={() => { patch({ conditions: conditions.filter((_, i) => i !== pick.at) }); setPick(undefined); }}>
       <ConditionEditor condition={conditions[pick.at]!} subjects={subjects} onChange={(p) => patch({ conditions: conditions.map((x, i) => i === pick.at ? { ...x, ...p } : x) })} /></RowCard>}
     {pick.kind === "effect" && creates[pick.at] && <RowCard title={t("Side effect")} onRemove={() => { patch({ creates: creates.filter((_, i) => i !== pick.at) }); setPick(undefined); }}>
       <CreateEditor create={creates[pick.at]!} inputs={inputs} sources={sources} parent={parent} targets={targets} onChange={(next) => patch({ creates: creates.map((x, i) => i === pick.at ? next : x) })} /></RowCard>}
+    {pick.kind === "update" && updates[pick.at] && <RowCard title={t("Update referenced record")} onRemove={() => { patch({ updates: updates.filter((_, i) => i !== pick.at) }); setPick(undefined); }}>
+      <UpdateEditor update={updates[pick.at]!} fields={process.fields} entities={entities} sources={sources} subjects={subjects} onChange={(next) => patch({ updates: updates.map((x, i) => i === pick.at ? next : x) })} /></RowCard>}
     {pick.kind === "posting" && posts[pick.at] && <RowCard title={t("Posting")} onRemove={() => { patch({ posts: posts.filter((_, i) => i !== pick.at) }); setPick(undefined); }}>
       <PostEditor post={posts[pick.at]!} sources={postSources} balances={balances} onChange={(next) => patch({ posts: posts.map((x, i) => i === pick.at ? next : x) })} /></RowCard>}
   </div> : <p className="p-3 text-xs text-muted">{t("Select a row to edit it here.")}</p>;
@@ -239,6 +249,48 @@ function FormPreview({ inputs }: { inputs: Input_[] }) {
   return <PayloadFields preview values={values} onChange={setValues} fields={actionInputFields(inputs)} />;
 }
 
+function DecisionRecipes({ action, process, targets, patch }: { action: Action; process: { fields: { name: string; title: string; type: string; ref?: string }[]; states: { name: string; title: string }[] }; targets: EntityInfo[]; patch: (next: Partial<Action>) => void }) {
+  return <Card className="grid gap-2 p-3 text-xs">
+    <div className="font-semibold text-muted">{t("Decision recipes")}</div>
+    <p className="text-muted">{t("Apply a pre-built business rule pattern and adjust its fields.")}</p>
+    <div className="flex flex-wrap gap-1.5">
+      <Button size="sm" onClick={() => patch({
+        new: true, from: [], to: process.states[0]?.name,
+        inputs: [...(action.inputs ?? []), { name: "quantity", title: t("Quantity"), type: "integer", required: true }, { name: "sfcs", title: t("Lots"), type: "integer", required: true }],
+        creates: targets[0] ? [...(action.creates ?? []), { object: targets[0].type, via: targets[0].fields.find((f) => f.type === "reference")?.name ?? "", count: "input.sfcs", sets: [{ field: "quantity", from: "split:input.quantity:input.sfcs" }] }] : action.creates,
+      })}>{t("Split & release lots")}</Button>
+      <Button size="sm" onClick={() => patch({
+        conditions: [...(action.conditions ?? []), { field: "input.resource.capabilities", operator: "contains all", valueField: "operation.requires", message: t("The selected resource lacks the required capabilities.") }],
+      })}>{t("Capability match guard")}</Button>
+      <Button size="sm" onClick={() => patch({
+        branches: [...(action.branches ?? []), {
+          when: [{ field: "step:next(routing.operations,number,operation)", operator: "not empty", message: "" }],
+          to: process.states[0]?.name,
+          sets: [{ field: "operation", from: "step:next(routing.operations,number,operation)" }],
+        }],
+        updates: process.fields.some((f) => f.type === "reference") ? [...(action.updates ?? []), {
+          via: process.fields.find((f) => f.type === "reference")!.name,
+          when: [{ quantifier: "all", collection: "sfcs", where: [{ field: "state", operator: "in", value: "done,scrapped", message: "" }], field: "", operator: "=", message: "" }],
+          to: "completed",
+          sets: [{ field: "yield", from: "rollup:sum(sfcs.quantity?state=done)" }, { field: "scrap", from: "rollup:sum(sfcs.quantity?state=scrapped)" }],
+        }] : action.updates,
+      })}>{t("Step progression & parent rollup")}</Button>
+      <Button size="sm" onClick={() => patch({
+        conditions: [...(action.conditions ?? []),
+          { quantifier: "none", collection: "signatures", where: [{ field: "by", operator: "=", value: "$me", message: "" }], field: "", operator: "=", message: t("Each person may sign only once.") },
+          { quantifier: "none", collection: "signatures", where: [{ field: "action", operator: "=", valueField: "input.action", message: "" }, { field: "meaning", operator: "=", valueField: "input.meaning", message: "" }], field: "", operator: "=", message: t("This signature meaning was already recorded.") },
+        ],
+        sets: [...(action.sets ?? []), { field: "signatures", from: "append:action=input.action,meaning=input.meaning,by=$me" }],
+        branches: [...(action.branches ?? []), {
+          when: [{ quantifier: "count", collection: "signatures", where: [{ field: "action", operator: "=", valueField: "input.action", message: "" }], field: "", operator: ">=", value: "2", message: "" }],
+          to: process.states[0]?.name,
+          sets: [{ field: "signatures", from: "=" }],
+        }],
+      })}>{t("Dual-signature quorum")}</Button>
+    </div>
+  </Card>;
+}
+
 function ParameterEditor({ input, inputs, entities, onChange }: { input: Input_; inputs:Input_[]; entities: EntityInfo[]; onChange: (patch: Partial<Input_>) => void }) {
   return <>
     <Label text={t("Label")}><Input value={input.title} onChange={(e) => onChange({ title: e.target.value })} /></Label>
@@ -248,6 +300,8 @@ function ParameterEditor({ input, inputs, entities, onChange }: { input: Input_;
     {input.type === "reference" && <Label text={t("Reference object")}><Select value={input.ref ?? ""} onChange={(e) => onChange({ ref: e.target.value || undefined })}><option value="">{t("Choose an object")}</option>{entities.map((e) => <option key={e.type} value={e.type}>{e.title} · {e.type}</option>)}</Select></Label>}
     {["text", "longtext"].includes(input.type) && <Label text={t("Minimum length")}><Input type="number" min={0} max={4096} value={input.minLength ?? ""} onChange={(e) => onChange({ minLength: e.target.value === "" ? undefined : e.target.valueAsNumber })} /></Label>}
     <Label text={t("Group")}><Input value={input.group??""} onChange={e=>onChange({group:e.target.value||undefined})}/></Label>
+    <Label text={t("Only when")}><Input className="font-mono" placeholder="action=rework" value={input.when ?? ""} onChange={(e) => onChange({ when: e.target.value || undefined })} /></Label>
+    <Label text={t("Default value source")}><Input className="font-mono" placeholder="=rework or record.operation" value={input.defaultFrom ?? ""} onChange={(e) => onChange({ defaultFrom: e.target.value || undefined })} /></Label>
     {["integer","decimal"].includes(input.type)&&(["min","max"] as const).map(bound=><Label key={bound} text={bound==="min"?t("Minimum"):t("Maximum")}><Input type="number" value={input.constraints?.[bound]??""} onChange={e=>onChange({constraints:{...input.constraints,[bound]:e.target.value===""?undefined:e.target.valueAsNumber}})}/><Checkbox checked={!!input.constraints?.[bound==="min"?"exclusiveMin":"exclusiveMax"]} onChange={exclusive=>onChange({constraints:{...input.constraints,[bound==="min"?"exclusiveMin":"exclusiveMax"]:exclusive}})}>{t("Exclusive bound")}</Checkbox></Label>)}
     {["text","longtext"].includes(input.type)&&<Label text={t("Maximum length")}><Input type="number" min={0} max={4096} value={input.constraints?.maxLength??""} onChange={e=>onChange({constraints:{...input.constraints,maxLength:e.target.value===""?undefined:e.target.valueAsNumber}})}/></Label>}
     {["date","datetime","integer","decimal"].includes(input.type)&&(["before","after"] as const).map(relation=><Label key={relation} text={relation==="before"?t("Before parameter"):t("After parameter")}><Select value={input.constraints?.[relation]??""} onChange={e=>onChange({constraints:{...input.constraints,[relation]:e.target.value||undefined}})}><option value="">—</option>{inputs.filter(other=>other.name!==input.name&&other.type===input.type).map(other=><option key={other.name} value={other.name}>{other.title}</option>)}</Select></Label>)}
@@ -257,13 +311,17 @@ function ParameterEditor({ input, inputs, entities, onChange }: { input: Input_;
   </>;
 }
 
+const expressionPrefixes = ["formula:", "table:", "step:", "split:", "rollup:", "append:"];
 function AssignmentEditor({ fields, sources, set, onChange }: { fields: { name: string; title: string }[]; sources: { value: string; label: string }[]; set: Set_; onChange: (patch: Partial<Set_>) => void }) {
+  const isExpr = expressionPrefixes.some((p) => set.from.startsWith(p));
+  const selectVal = set.from.startsWith("=") ? "=" : isExpr ? "expr:" : set.from;
   return <>
     <Label text={t("Field")}><Select value={set.field} onChange={(event) => onChange({ field: event.target.value })}>
       <option value="">{t("Choose a field")}</option>{fields.map((field) => <option key={field.name} value={field.name}>{field.title}</option>)}</Select></Label>
-    <Label text={t("From")}><Select value={set.from.startsWith("=") ? "=" : set.from} onChange={(event) => onChange({ from: event.target.value })}>
-      <option value="">{t("Choose a source")}</option>{sources.map((source) => <option key={source.value} value={source.value}>{source.label}</option>)}<option value="=">{t("A fixed value")}</option></Select></Label>
+    <Label text={t("From")}><Select value={selectVal} onChange={(event) => onChange({ from: event.target.value === "expr:" ? "formula:" : event.target.value })}>
+      <option value="">{t("Choose a source")}</option>{sources.map((source) => <option key={source.value} value={source.value}>{source.label}</option>)}<option value="=">{t("A fixed value")}</option><option value="expr:">{t("Formula, step, split or rollup")}</option></Select></Label>
     {set.from.startsWith("=") && <Label text={t("Value")}><Input value={set.from.slice(1)} onChange={(event) => onChange({ from: `=${event.target.value}` })} /></Label>}
+    {isExpr && <Label text={t("Expression")}><Input className="font-mono" placeholder="formula:qty * 2 or step:next(...)" value={set.from} onChange={(event) => onChange({ from: event.target.value })} /></Label>}
   </>;
 }
 
@@ -271,15 +329,30 @@ type Subject = { value: string; label: string; type: string; ref?: string };
 function ConditionEditor({ condition: c, subjects, onChange: patch, guard = false }: { condition: Condition; subjects: Subject[]; onChange: (patch: Partial<Condition>) => void; guard?: boolean }) {
   const current = subjects.find((s) => s.value === c.field) ?? { type: "" };
   return <>
-    <Label text={t("Field")}><Select value={c.field} onChange={(e) => patch({ field: e.target.value, valueField: undefined })}>{subjects.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</Select></Label>
-    <Label text={t("Operator")}><Select value={c.operator} onChange={(e) => patch({ operator: e.target.value, ...(e.target.value.includes("empty") ? { value: undefined, valueField: undefined } : {}) })}>{operators.map((o) => <option key={o} value={o}>{t(o)}</option>)}</Select></Label>
-    {c.operator !== "empty" && c.operator !== "not empty" && <>
-      <Label text={t("Compare with")}><Select value={c.valueField ? "field" : "literal"} onChange={(e) => patch(e.target.value === "field"
-        ? { value: undefined, valueField: subjects.find((s) => s.value !== c.field && comparisonFits(current, s))?.value ?? c.field } : { value: "", valueField: undefined })}>
-        <option value="literal">{t("A fixed value")}</option><option value="field">{t("Another field")}</option></Select></Label>
-      {c.valueField ? <Label text={t("Comparison field")}><Select value={c.valueField} onChange={(e) => patch({ valueField: e.target.value })}>
-        {subjects.filter((s) => comparisonFits(current, s)).map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</Select></Label>
-        : <Label text={t("Value")}><Input placeholder={t("a value, or $me")} value={c.value ?? ""} onChange={(e) => patch({ value: e.target.value })} /></Label>}
+    <Label text={t("Quantifier")}><Select value={c.quantifier ?? ""} onChange={(e) => patch({ quantifier: (e.target.value || undefined) as Condition["quantifier"] })}>
+      <option value="">{t("Single field or path")}</option>
+      <option value="none">{t("None in collection")}</option>
+      <option value="all">{t("All in collection")}</option>
+      <option value="any">{t("Any in collection")}</option>
+      <option value="count">{t("Count in collection")}</option>
+    </Select></Label>
+    {c.quantifier ? <>
+      <Label text={t("Collection or relation")}><Input className="font-mono" placeholder="sfcs or build.order" value={c.collection ?? ""} onChange={(e) => patch({ collection: e.target.value })} /></Label>
+      {c.quantifier === "count" && <>
+        <Label text={t("Operator")}><Select value={c.operator || ">="} onChange={(e) => patch({ operator: e.target.value })}>{["=", "!=", "<", "<=", ">", ">="].map((o) => <option key={o} value={o}>{t(o)}</option>)}</Select></Label>
+        <Label text={t("Value")}><Input type="number" value={c.value ?? ""} onChange={(e) => patch({ value: e.target.value })} /></Label>
+      </>}
+    </> : <>
+      <Label text={t("Field")}><Select value={c.field} onChange={(e) => patch({ field: e.target.value, valueField: undefined })}>{subjects.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</Select></Label>
+      <Label text={t("Operator")}><Select value={c.operator} onChange={(e) => patch({ operator: e.target.value, ...(e.target.value.includes("empty") ? { value: undefined, valueField: undefined } : {}) })}>{operators.map((o) => <option key={o} value={o}>{t(o)}</option>)}</Select></Label>
+      {c.operator !== "empty" && c.operator !== "not empty" && <>
+        <Label text={t("Compare with")}><Select value={c.valueField ? "field" : "literal"} onChange={(e) => patch(e.target.value === "field"
+          ? { value: undefined, valueField: subjects.find((s) => s.value !== c.field && comparisonFits(current, s))?.value ?? c.field } : { value: "", valueField: undefined })}>
+          <option value="literal">{t("A fixed value")}</option><option value="field">{t("Another field")}</option></Select></Label>
+        {c.valueField ? <Label text={t("Comparison field")}><Select value={c.valueField} onChange={(e) => patch({ valueField: e.target.value })}>
+          {subjects.filter((s) => comparisonFits(current, s)).map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</Select></Label>
+          : <Label text={t("Value")}><Input placeholder={t("a value, or $me")} value={c.value ?? ""} onChange={(e) => patch({ value: e.target.value })} /></Label>}
+      </>}
     </>}
     {!guard && <>
       <Label text={t("Message when it does not hold")}><Input placeholder={t("What a person reads when it does not hold")} value={c.message} onChange={(e) => patch({ message: e.target.value })} /></Label>
@@ -287,6 +360,35 @@ function ConditionEditor({ condition: c, subjects, onChange: patch, guard = fals
       {c.when && <div role="group" aria-label={t("Condition guard")} className="grid gap-1 rounded border border-border p-2">
         <ConditionEditor guard condition={c.when} subjects={subjects} onChange={(p) => patch({ when: { ...c.when!, ...p } })} /></div>}
     </>}
+  </>;
+}
+
+function BranchEditor({ branch, states, fields, sources, subjects, onChange }: { branch: ActionBranch_; states: { name: string; title: string }[]; fields: { name: string; title: string }[]; sources: { value: string; label: string }[]; subjects: Subject[]; onChange: (next: ActionBranch_) => void }) {
+  return <>
+    <Label text={t("Leaves it in")}><Select value={branch.to ?? ""} onChange={(e) => onChange({ ...branch, to: e.target.value || undefined })}>
+      <option value="">{t("Where it was")}</option>{states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}</Select></Label>
+    <Rows<Condition> title={t("When conditions hold")} add={t("Add a condition")} items={branch.when ?? []} make={() => ({ field: subjects[0]?.value ?? "", operator: "=", value: "", message: "" })}
+      onChange={(when) => onChange({ ...branch, when })} row={(c, patch) => <ConditionEditor guard condition={c} subjects={subjects} onChange={patch} />} />
+    <Rows<Set_> title={t("What it sets")} add={t("Set a field")} items={branch.sets ?? []} make={() => ({ field: fields[0]?.name ?? "", from: sources[0]?.value ?? "" })}
+      onChange={(sets) => onChange({ ...branch, sets })} row={(s, patch) => <AssignmentEditor fields={fields} sources={sources} set={s} onChange={patch} />} />
+  </>;
+}
+
+function UpdateEditor({ update, fields, entities, sources, subjects, onChange }: { update: UpdateEffect_; fields: { name: string; title: string; type: string; ref?: string }[]; entities: EntityInfo[]; sources: { value: string; label: string }[]; subjects: Subject[]; onChange: (next: UpdateEffect_) => void }) {
+  const refFields = fields.filter((f) => f.type === "reference");
+  const targetRef = refFields.find((f) => f.name === update.via)?.ref;
+  const targetEntity = entities.find((e) => e.type === targetRef);
+  const targetFields = (targetEntity?.fields.filter((f) => !f.readOnly) ?? []).map((f) => ({ name: f.name, title: f.title }));
+  const targetStates = targetEntity?.lifecycle?.states ?? [];
+  return <>
+    <Label text={t("Reference field")}><Select value={update.via} onChange={(e) => onChange({ ...update, via: e.target.value })}>
+      <option value="">{t("Choose a field")}</option>{refFields.map((f) => <option key={f.name} value={f.name}>{f.title} · {f.name}</option>)}</Select></Label>
+    <Label text={t("Leaves target in")}><Select value={update.to ?? ""} onChange={(e) => onChange({ ...update, to: e.target.value || undefined })}>
+      <option value="">{t("Where it was")}</option>{targetStates.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}</Select></Label>
+    <Rows<Condition> title={t("Only when")} add={t("Add a condition")} items={update.when ?? []} make={() => ({ field: subjects[0]?.value ?? "", operator: "=", value: "", message: "" })}
+      onChange={(when) => onChange({ ...update, when })} row={(c, patch) => <ConditionEditor guard condition={c} subjects={subjects} onChange={patch} />} />
+    <Rows<Set_> title={t("What it sets")} add={t("Set a field")} items={update.sets ?? []} make={() => ({ field: targetFields[0]?.name ?? "", from: sources[0]?.value ?? "" })}
+      onChange={(sets) => onChange({ ...update, sets })} row={(s, patch) => <AssignmentEditor fields={targetFields} sources={sources} set={s} onChange={patch} />} />
   </>;
 }
 
@@ -307,6 +409,7 @@ function CreateEditor({ create, inputs, sources, parent, targets, onChange }: { 
       <option value="">{t("Choose an object")}</option>{targets.map((item) => <option key={item.type} value={item.type}>{item.title} · {item.type}</option>)}</Select></Label>
     <Label text={t("Parent reference")}><Select value={create.via} onChange={(event) => onChange(relatedCreate(create.object, event.target.value, targets, parent, inputs))}>
       <option value="">{t("Choose a field")}</option>{references.map((field) => <option key={field.name} value={field.name}>{field.title} · {field.name}</option>)}</Select></Label>
+    <Label text={t("How many to create")}><Input className="font-mono" placeholder="1, =3, or input.sfcs" value={create.count ?? ""} onChange={(e) => onChange({ ...create, count: e.target.value || undefined })} /></Label>
     <p className="text-xs text-muted">{t("The parent reference is filled automatically. Required target fields need a mapping.")}</p>
     <Rows<Set_> title={t("Fields of the new record")} add={t("Map a field")} items={sets} make={() => ({ field: fields[0]?.name ?? "", from: sources[0]?.value ?? "" })} onChange={(next) => onChange({ ...create, sets: next })}
       row={(set, patch) => <AssignmentEditor fields={fields} sources={sources} set={set} onChange={patch} />} />

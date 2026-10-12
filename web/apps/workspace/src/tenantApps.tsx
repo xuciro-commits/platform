@@ -33,11 +33,14 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
     const grouped = new Set(groups.flatMap((g) => g.pages));
     const sections = [{ label: application.title, pages: held.filter((name) => !grouped.has(name)) }, ...groups].filter((g) => g.pages.length > 0);
     const nav = (): NavSection[] => [...sections.map((g) => ({ label: g.label, items: g.pages.map(item) })),{label:t("Run and diagnose"),items:[{label:t("Application runs"),icon:<BarChart3/>,route:{view:"application-runs",params:{app:definition.ref.app,name:application.name,application:id}}}]}];
+    const opens = application.opens ? Object.fromEntries(Object.entries(application.opens).filter(([, pageName]) => held.includes(pageName))) : undefined;
     return [{
       id,
+      serves: [definition.ref.app],
       title: application.title,
       icon,
       home: route(sections[0]!.pages[0]!), // the first page people see in its navigation
+      opens,
       views: [], // its pages are the workspace's own page view (ADR-0032)
       nav,
     }];

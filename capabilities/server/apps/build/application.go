@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -31,6 +32,7 @@ type Application struct {
 	// Groups are the headings of its navigation (17b); a page in none of them
 	// sits under the application's own name.
 	Resources []platform.AssetRef `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
+	Opens     map[string]string   `json:"opens,omitempty" field:"aside" type:"json" title:"Record pages by object type"`
 	Groups    []Group             `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
 	State     string              `json:"state" field:"readonly" choices:"draft,published"`
 	// Published is the application as it was last handed over: what people open,
@@ -86,7 +88,14 @@ func applicationDescriptor(a Application) platform.Application {
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Pages: slices.Clone(g.Pages)})
 	}
-	return platform.Application{Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}
+	var opens map[string]string
+	if len(a.Opens) > 0 {
+		opens = make(map[string]string, len(a.Opens))
+		for k, v := range a.Opens {
+			opens[k] = v
+		}
+	}
+	return platform.Application{Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), Opens: opens, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}
 }
 
 // checkApplication refuses an application people could not open: a name that is
@@ -107,6 +116,11 @@ func (b *Build) checkApplication(a Application) error {
 			return fmt.Errorf("the page %q is in it twice", name)
 		}
 		seen[name] = true
+	}
+	for obj, pageName := range a.Opens {
+		if strings.TrimSpace(obj) == "" || !seen[pageName] {
+			return fmt.Errorf("application opens %q with %q, which is not one of its pages", obj, pageName)
+		}
 	}
 	if err := applicationDescriptor(a).CheckResources(); err != nil {
 		return err

@@ -179,7 +179,17 @@ function PageDefinitionView({ ref, preview, params }: { ref: AssetRef; preview: 
   if (isPending) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const definition = findDefinition(data ?? [], ref);
   if (!isPageDefinition(definition)) return <ClosedPage />;
-  return <ApplicationPage pageRef={definition.ref} route={{ view: preview ? "page-preview" : "page", params }} preview={preview}>{preview ? <PagePreview definition={definition} definitions={data ?? []} /> : <PageWorkspace definition={definition} />}</ApplicationPage>;
+  return <ApplicationPage pageRef={definition.ref} route={{ view: preview ? "page-preview" : "page", params }} preview={preview}>{preview ? <PagePreview definition={definition} definitions={data ?? []} /> : <PageWorkspace definition={definition} initialRecordId={params.id} />}</ApplicationPage>;
+}
+
+function RecordOrApplicationPage({ type, id, definitions }: { type: string; id: string; definitions: Definition[] }) {
+  const appDef = definitions.find((d) => d.ref.kind === "app" && d.application?.opens?.[type] && definitions.some((p) => p.ref.kind === "page" && p.ref.app === d.ref.app && p.ref.name === d.application!.opens![type]));
+  if (appDef?.application?.opens?.[type]) {
+    const pageName = appDef.application.opens[type]!;
+    const appId = `${appDef.ref.app}:${appDef.application.name}`;
+    return <PageDefinitionView ref={{ app: appDef.ref.app, kind: "page", name: pageName }} preview={false} params={{ app: appDef.ref.app, kind: "page", name: pageName, application: appId, id }} />;
+  }
+  return <RecordDetail type={type} id={id} />;
 }
 
 // A page this member may not open, reached by a link, a remembered place or an
@@ -221,7 +231,7 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /></StudioReference> },
   { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title || p.name || t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} params={p} /> },
   { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview params={p} /></StudioReference> },
-  { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
+  { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <RecordOrApplicationPage type={p.type ?? ""} id={p.id ?? ""} definitions={definitions()} /> },
   { id: "application-runs", title: () => t("Application runs"), render: (p) => <ApplicationRuns key={`${p.app}:${p.name}`} owner={p.app ?? ""} name={p.name ?? ""} /> },
   { id: "operation-run", title: (p) => p.id ?? t("Run"), render: (p) => <OperationRunView id={p.id ?? ""} application={p.application} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} application={p.application} /> },

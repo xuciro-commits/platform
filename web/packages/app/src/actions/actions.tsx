@@ -13,9 +13,10 @@ import { GeneratedForm, newId, useHost } from "../index";
 
 type Field = ActionDeclaration["payload"][number];
 
-export function payloadSchema(fields: Field[]) {
+export function payloadSchema(fields: Field[], values?: Record<string, unknown>) {
+  const fieldActive = (f: Field) => !f.when || f.when.in.includes(String(values?.[f.when.field] ?? ""));
   return recordSchema({ name: "action", primary: "id", fields: Object.fromEntries(fields.map(f => {
-    const common = { input:f, label: f.description || f.name, required: f.required };
+    const common = { input:f, label: f.description || f.name, required: f.required && fieldActive(f) };
     const type: FieldType = f.choices?.length ? field.singleSelect({ ...common, options: f.choices.map(value => ({ value, label: value })) })
       : f.type === "integer" || f.type === "number" ? field.number(common)
       : f.type === "boolean" ? field.checkbox(common) : f.type === "date" ? field.date(common)
@@ -26,13 +27,62 @@ export function payloadSchema(fields: Field[]) {
   })) });
 }
 
+function resolveActionInitialValues(fields: Field[], initial: Record<string, unknown>, record?: EntityRecord): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...initial };
+  for (const f of fields) {
+    if (out[f.name] !== undefined && out[f.name] !== "") continue;
+    if (!f.defaultFrom) continue;
+    if (f.defaultFrom.startsWith("=")) {
+      const raw = f.defaultFrom.slice(1);
+      out[f.name] = f.type === "integer" || f.type === "number" ? Number(raw) : f.type === "boolean" ? raw === "true" : raw;
+    } else if (f.defaultFrom.startsWith("record.") && record) {
+      const key = f.defaultFrom.slice("record.".length);
+      if (record[key] !== undefined) out[f.name] = record[key];
+    }
+  }
+  return out;
+}
+
+function matchesFieldFilter(candidate: EntityRecord, filters: Api.FieldFilter[] | undefined, values: Record<string, unknown>, record?: EntityRecord): boolean {
+  if (!filters?.length) return true;
+  const toItems = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map(s => s.trim()).filter(Boolean) : v !== undefined && v !== null ? [String(v)] : [];
+  for (const cond of filters) {
+    const fieldName = cond.field.replace(/^item\./, "");
+    const got = candidate[fieldName];
+    let want: unknown = cond.value;
+    if (cond.valueField) {
+      if (cond.valueField.startsWith("input.")) want = values[cond.valueField.slice("input.".length)];
+      else if (record) want = record[cond.valueField.replace(/^record\./, "")];
+    }
+    const gotStr = got === undefined || got === null ? "" : String(got);
+    const wantStr = want === undefined || want === null ? "" : String(want);
+    switch (cond.operator) {
+      case "=": if (gotStr !== wantStr) return false; break;
+      case "!=": if (gotStr === wantStr) return false; break;
+      case "<": if (!(Number(got) < Number(want))) return false; break;
+      case "<=": if (!(Number(got) <= Number(want))) return false; break;
+      case ">": if (!(Number(got) > Number(want))) return false; break;
+      case ">=": if (!(Number(got) >= Number(want))) return false; break;
+      case "in": if (!toItems(want).includes(gotStr)) return false; break;
+      case "not in": if (toItems(want).includes(gotStr)) return false; break;
+      case "contains all": { const g = toItems(got); if (!toItems(want).every(w => g.includes(w))) return false; break; }
+      case "contains any": { const g = toItems(got); if (!toItems(want).some(w => g.includes(w))) return false; break; }
+      case "empty": if (gotStr !== "") return false; break;
+      case "not empty": if (gotStr === "") return false; break;
+    }
+  }
+  return true;
+}
+
 /** Inputs for an action's declared payload fields. */
-export function PayloadFields({ fields, values, onChange, preview = false, submitted = false, issues = [] }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; preview?: boolean; submitted?: boolean; issues?:Api.FieldIssue[] }) {
+export function PayloadFields({ fields, values, onChange, preview = false, submitted = false, issues = [], record }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; preview?: boolean; submitted?: boolean; issues?:Api.FieldIssue[]; record?: EntityRecord }) {
   const prefix = useId(), [touched, setTouched] = useState<Record<string, boolean>>({}),[units,setUnits]=useState<Record<string,string>>({});
   const knownUnit=Object.values(units).find(Boolean),hourly=knownUnit?knownUnit==="hour":fields.some(f=>f.constraints?.dateTime&&String(values[f.name]??"").includes("T"));
-  const parsed = payloadSchema(fields).safeParse(values);
-  const errors = {...(parsed.success ? {} : Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0]), issue.message]))),...Object.fromEntries([...inputIssues(fields,values),...issues].map(issue=>[issue.path[0]!,issue.message]))};
+  const activeFields = fields.filter(f => !f.when || f.when.in.includes(String(values[f.when.field] ?? "")));
+  const parsed = payloadSchema(fields, values).safeParse(values);
+  const errors = {...(parsed.success ? {} : Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0]), issue.message]))),...Object.fromEntries([...inputIssues(activeFields,values),...issues].map(issue=>[issue.path[0]!,issue.message]))};
   return <>{fields.map((f,index) => {
+    if(f.when && !f.when.in.includes(String(values[f.when.field] ?? ""))) return null;
     if(fields.some(other=>other.range?.end===f.name&&(!other.constraints?.dateTime||!hourly)))return null;
     const value = values[f.name],end=f.range&&fields.find(other=>other.name===f.range?.end);
     const range=!!end&&(!f.constraints?.dateTime||!hourly),endError=range&&(submitted||touched[end!.name])?errors[end!.name]:undefined;
@@ -49,7 +99,7 @@ export function PayloadFields({ fields, values, onChange, preview = false, submi
             <option value="">—</option>{f.choices.map((c) => <option key={c} value={c}>{t(c)}</option>)}</Select>
           : f.ref ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
             : f.ref === "enterprise.element" ? <ElementPicker id={id} stereotype={f.stereotype} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
-            : <RecordPicker id={id} type={f.ref} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
+            : <RecordPicker id={id} type={f.ref} value={String(value ?? "")} onChange={(v) => set(v || undefined)} filter={f.filter} values={values} record={record} />
           : f.from ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
             : <ReadPicker id={id} field={f} value={String(value ?? "")} onChange={(v) => set(v || undefined)} onUnit={unit=>setUnits(old=>({...old,[f.name]:unit}))} />
           : f.type === "datetime" ? <DateTimeInput title={f.description||f.name} value={String(value??"")} offset="Z" onChange={set}/>
@@ -120,25 +170,26 @@ function ElementPicker({ id, stereotype, value, onChange }: { id: string; stereo
 }
 
 /** A list of the records of a type the member may read, for a payload field that names one (ADR-0028 D5). */
-function RecordPicker({ id, type, value, onChange }: { id: string; type: string; value: string; onChange: (id: string) => void }) {
+function RecordPicker({ id, type, value, onChange, filter, values = {}, record }: { id: string; type: string; value: string; onChange: (id: string) => void; filter?: Api.FieldFilter[]; values?: Record<string, unknown>; record?: EntityRecord }) {
   const { source } = useHost();
-  return <RecordLookup id={id} source={source} type={type} value={value} onChange={(selected) => onChange(selected ?? "")} />;
+  const predicate = filter?.length ? (candidate: EntityRecord) => matchesFieldFilter(candidate, filter, values, record) : undefined;
+  return <RecordLookup id={id} source={source} type={type} value={value} onChange={(selected) => onChange(selected ?? "")} predicate={predicate} />;
 }
 
 /** A short ID prefix from a type's name, never its translated title: "crm.account" → ACC, "hcm.leave" → LEA. */
 export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
 
 /** The original action submission form, shared by dialogs and inline hosts. */
-function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true}:{declared:ActionDeclaration;target:{type:string;id:string};revision:number;onCancel:()=>void;onCompleted:()=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean}) {
+function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true,record}:{declared:ActionDeclaration;target:{type:string;id:string};revision:number;onCancel:()=>void;onCompleted:()=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;record?:EntityRecord}) {
  const {decide}=useHost(),lock=useRef(false);
- const [values,setValues]=useState<Record<string,unknown>>(initial),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(false),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>([]);
- const submit=async()=>{if(!enabled||preview||lock.current||!target.id)return;setSubmitted(true);if(!payloadSchema(declared.payload).safeParse(values).success||inputIssues(declared.payload,values).length>0)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal,onOutcome:entry=>{setOwnerIssues(entry.issues??[]);const waiting=entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN";setPending(waiting);onPending?.(waiting);}}))onCompleted();}catch{setPending(true);onPending?.(true);setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
+ const [values,setValues]=useState<Record<string,unknown>>(()=>resolveActionInitialValues(declared.payload,initial,record)),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(false),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>([]);
+ const submit=async()=>{if(!enabled||preview||lock.current||!target.id)return;setSubmitted(true);const activeFields=declared.payload.filter(f=>!f.when||f.when.in.includes(String(values[f.when.field]??"")));if(!payloadSchema(declared.payload,values).safeParse(values).success||inputIssues(activeFields,values).length>0)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal,onOutcome:entry=>{setOwnerIssues(entry.issues??[]);const waiting=entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN";setPending(waiting);onPending?.(waiting);}}))onCompleted();}catch{setPending(true);onPending?.(true);setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
  return <Form className="grid gap-3" noValidate onSubmit={()=>submit()}>
  {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
  {refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}
  {preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}
- <fieldset disabled={submitting||pending||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload} values={values} onChange={next=>{setOwnerIssues(old=>old.filter(issue=>[...issue.path,...(issue.relatedPaths??[]).flat()].every(name=>next[name]===values[name])));setValues(next);}} preview={preview} submitted={submitted} issues={ownerIssues}/></fieldset>
+ <fieldset disabled={submitting||pending||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload} values={values} record={record} onChange={next=>{setOwnerIssues(old=>old.filter(issue=>[...issue.path,...(issue.relatedPaths??[]).flat()].every(name=>next[name]===values[name])));setValues(next);}} preview={preview} submitted={submitted} issues={ownerIssues}/></fieldset>
  <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{pending?t("Close"):t("Cancel")}</Button><Button type="submit" variant="primary" disabled={!enabled||preview||!target.id||submitting}>{submitting?t("Executing…"):pending?t("Retry confirmation"):declared.title}</Button></div>
  </Form>;
 }
@@ -164,7 +215,7 @@ function ActionDialog({ declared, type, record, onClose, onCompleted, initial={}
    const ok=!!submitted.target.id&&await decide(declared.schema,submitted.target,submitted.values,{...options,expectedRevision:submitted.revision,onRefused:message=>{reason=message;}});
    if(!ok)throw new Error(reason||t("The request was not confirmed. Your input is retained."));
    request.current=undefined;setPending(false);return done(ok,submitted.target);
- }}/></>:<DeclaredActionForm declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={()=>done(true)} onBusy={setSubmitting} onPending={setPending} initial={initial}/>}
+ }}/></>:<DeclaredActionForm declared={declared} target={target} revision={baseline?.revision??0} record={baseline as EntityRecord | undefined} onCancel={onClose} onCompleted={()=>done(true)} onBusy={setSubmitting} onPending={setPending} initial={initial}/>}
  </div></Dialog>;
 }
 
@@ -186,7 +237,7 @@ function InlineActionRound({type,record,declared,info,live,reset,defaults,ready}
  if(initial===undefined)return <Panel role="alert">{t("The inline action defaults are unavailable.")}</Panel>;
  if(live&&(!baseline||baseline.archived||transition&&!transition.from.includes(String(baseline[info!.lifecycle!.field]))))return <p role="status">{t("This action is unavailable for the selected record.")}</p>;
  if(submitted)return <div className="grid gap-2"><p role="status">{t("Request submitted. Check the record or My requests for its result.")}</p><Button onClick={reset} disabled={!ready||record?.revision===baseline?.revision}>{t("Prepare another action")}</Button></div>;
- return <DeclaredActionForm declared={declared} target={{type,id:baseline?.id??""}} revision={baseline?.revision??0} preview={!live} initial={initial} enabled={ready} onCancel={reset} onCompleted={()=>setSubmitted(true)}/>;
+ return <DeclaredActionForm declared={declared} target={{type,id:baseline?.id??""}} revision={baseline?.revision??0} record={baseline} preview={!live} initial={initial} enabled={ready} onCancel={reset} onCompleted={()=>setSubmitted(true)}/>;
 }
 
 /** The type's actions that make a new record, except those a hand-written view already offers (`covers`). */

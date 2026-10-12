@@ -18,10 +18,10 @@ export function isPageDefinition(definition: Definition | undefined): definition
 }
 
 /** A code page operates through the current member's record/action contracts. */
-export function PageWorkspace({ definition }: { definition: PageDefinition }) {
+export function PageWorkspace({ definition, initialRecordId }: { definition: PageDefinition; initialRecordId?: string }) {
   const { source, opens } = useHost();
   const openRecord = useOpenRecord();
-  const [selected, setSelected] = useState<string>();
+  const [selected, setSelected] = useState<string | undefined>(initialRecordId);
   const page = definition.page;
   const allowed = page.actions.map((ref) => ref.name);
   if (isComposed(page)) { // laid out from sections someone composed (ADR-0035)

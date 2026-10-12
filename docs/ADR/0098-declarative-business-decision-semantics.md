@@ -2,7 +2,7 @@
 
 **意图：** 让 Platform 从“运行预先用 Go 和 React 编写好的原生业务应用的系统”，进化为“根据可版本化、可验证的应用定义，从数据模型、后端业务决定、动态交互表单到前端领域操作台与流程可视化，全栈自动构造并执行正确业务行为的系统”。把业务规则与操作界面逻辑的定义权从原生源码转移到平台一等资产上，让 FDE 乃至零代码背景的业务玩家，在不接触任何后端 Go 代码或前端 React 代码的前提下，从头到尾构建出完整的企业级应用，并以**全栈零代码等价重建原生 MES（`apps/mes/server` + `web/packages/mes`）**作为唯一终极证明。
 
-**状态：** 已接受（2026-10-12）；按 WorkQueue 分六块（B1 本体扩展与动作决定核 → B2 多记录原子副作用与会签范围 → B3 动态上下文动作表单与带参触发 → B4 声明式业务操作台与工序泳道可视化 → B5 应用记录视图路由、AI 绑定与创作配方 → B6 全栈零代码 MES 等价重建证明）推进实施。
+**状态：** 已落地（2026-10-12，B1–B6 核心全栈语义与 `TestBuilderMESEquivalence` 等价重建证明已实施并通过验证；边界见 §5 As built）。
 
 **基线：** `8f602ac515e6a7bacabc4f0bf7e04bc347d12e22`（ADR-0097 W4 收口后）。
 
@@ -243,3 +243,23 @@ flowchart TB
 | **B4** | **声明式业务操作台与工序泳道可视化**<br>（Declarative Operational UI & Process Flow） | D4 | ① 新增声明式 `ProcessFlow`（工序与流程泳道图）页面组件（底层复用 `<FlowSteps>`），支持绑定步骤集合、工作中心泳道与当前活动记录在途位置/状态/异常叠加；<br>② `Table` 支持跨引用路径列（Lookup Columns）与顶栏预设状态视图切换器（`ViewPresets`）；<br>③ 新增/扩展内嵌明细行展示（`RecordLines`，含工艺参数 `setpoint/range/limit/note` 格式化）与基于当前记录引用字段的动态关联面板；通过页面契约测试与 `make check`。 |
 | **B5** | **应用专属记录视图路由、AI 绑定与创作配方**<br>（App Routing, AI Advice & Authoring Recipes） | D5 + D6 | ① `build.app` 支持声明 `opens`（点击记录引用自动打开应用内装配的专属 Workshop 操作台页面），在 `tenantApps.tsx` 与 `useOpenRecord` 接通；`build.object` 支持声明 `advice`；<br>② 在 `ActionTypeEditor` 与 `Workshop` 中内置面向业余玩家的四大业务决定配方（拆批下达、能力匹配开工、工序步进与父单上卷、双人会签放行）与操作台页面模板；通过 `make check`。 |
 | **B6** | **全栈零代码 MES 等价重建与端到端证明**<br>（Full-Stack Zero-Code MES Equivalence Proof） | §3 全栈闭环 | 不写一行 Go 或 React 业务代码，完全用 `build` 定义构造并发布完整 MES 应用（涵盖后端全部领域不变量 + 前端工艺泳道页、计划单对账转单页、批次列表页、SFC 执行操作台、动态开工/返工弹窗、双人签名处置与 ERP 确认闭环），通过 `TestBuilderMESEquivalence`（含 `CheckReplay`、候选激活与恢复）与前端路线验证。 |
+
+---
+
+## 5. As built（2026-10-12）
+
+1. **领域本体与创建建模扩展（D1）**：
+   - `buildapi.Field` 与 `apps/build` 已支持 `tags`（多值字符串切片 `[]string`）与 `lines`（结构化内嵌明细行 `Columns []LineColumn`，动态生成子结构体切片并通过 `platform.Describe` 投影 `FieldInfo.Fields`）；`process.tsx` 提供内嵌明细行字段列编辑器。
+   - `buildapi.Action` 与 `platform.Transition` 已支持 `New: true`（`len(From) == 0` 的语义化业务创建动作），在 `platform/ledger.go` 与 `platform/entity.go` 中作为一等创建动作生成并校验冲突、执行 `Do` 守卫与字段推导、并在 `After` 同批次创建关联子记录。
+2. **声明式业务决定执行引擎（D2）**：
+   - **关系、集合包含与量词守卫（`apps/build/actions.go`、`decision.go`）**：`Operators` 扩展支持 `in`、`not in`、`contains all`、`contains any`；`Condition` 支持多跳路径 `record.<path>` 与引用参数路径 `input.<ref>.<path>`，以及关联集合/内嵌明细集合量词 `Quantifier`（`all`、`none`、`any`、`count`）与动作级组织单元路径范围 `UnitField`。
+   - **统一富值源与条件分支流转**：`evalSource` 统一支持 `input.<name>`、`input.<ref>.<path>`、`record.<path>`、`$me`、`$now`、`$index`、`$count`、`$item.<field>`、`=<literal>`（含 `=` 清空字符串/切片/明细行）、`append:<k=v,...>`（向 `lines`/`tags` 追加记录）、`formula:<expr>`、`table:<name>.<col>`、`step:first(...)`、`step:next(...)`、`split:<total>:<count>`（整数余数前置均摊）与 `rollup:sum/count`；`Action.Branches` 按顺序匹配首个满足 `When` 的分支决定目标状态 `To` 与附加赋值 `Sets`。
+   - **多记录原子副作用（`apps/build/creates.go`）**：`Create` 支持动态条数 `Count` 与集合遍历 `Foreach`（确定性编号 `{parent}-{001..N}`）；新增 `Action.Updates`（`UpdateEffect`）在同一决策内按量词守卫（叠加当前记录与新建子记录的最新内存状态）更新关联父/目标记录的状态与 `rollup:sum/count` 汇总字段。
+3. **动态上下文动作表单、工序泳道流转图与应用专属记录路由（D3–D6）**：
+   - `buildapi.Input` 与 `platform.Field` 新增 `When`（参数条件显隐与条件必填）、`DefaultFrom`（基于字面量或 `record.<field>` 的动态初值）与 `Filter`（引用参数相对于当前记录与输入的动态候选过滤）；`@platform/app` 的 `PayloadFields` / `DeclaredActionForm` 与 `@platform/ui` 的 `RecordLookup`（`predicate`）已接通前后端同源过滤与显隐。
+   - `@platform/ui` 的 `RecordPage` 新增 `RecordStepFlow`（复用 `<FlowSteps>`），对含关联有序步骤的工艺路线记录（如 `build.routing`）或含 `routing` + `operation` 的在途执行记录（如 `build.sfc`）自动按工作中心泳道绘制工序流转图，实时高亮当前工步、已完成工步、挂起/报废状态与 `NC` 异常标记。
+   - `buildapi.Application`、`platform.Application`、`tenantApps.tsx` 与 `chrome.tsx` 已接通 `Opens`（按对象类型路由到应用内定制页面）；`ActionTypeEditor`（`action-type.tsx`）新增条件分支、量词守卫、关联父记录更新及四大预置业务决定配方（拆批生单下达、能力匹配守卫、工序步进与父单汇总完结、双人职责分离会签）。
+4. **验证证据**：
+   - `capabilities/server/apps/build`: `TestActionDecisionCoreTagsLinesBranchesAndFormulas` 及全包测试通过；
+   - `capabilities/server`: `TestBuilderMESEquivalence`（零 Go 业务代码完整构建并验证 MES 主数据、计划单唯一占用 `fits`、10 拆 3 批余数均摊 `4,3,3`、`canDo` 工作中心与 `contains all` 设备能力匹配、`step:next` 工序步进、NC 挂起、21 CFR Part 11 双人异义电子签名返工与报废、末件完结自动触发父工单 `completed` 与 `yield=7, scrap=3` 汇总、以及四快照点 `CheckReplay`）、`TestAPIContract`、`TestLanguages` 全部通过；
+   - `web`: `host.ts` 与 `catalog` 同步生成，16 个工作区包 `tsc` 类型检查、i18n 扫描测试、`boundaries.sh` 与 `escapes.sh` 全部通过。未在浏览器观察。

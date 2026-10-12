@@ -292,6 +292,9 @@ type Application struct {
 	// Resources are shared owner references included in the release closure.
 	// Pages remain the sole navigation list; membership grants no permissions.
 	Resources []AssetRef `json:"resources,omitempty"`
+	// Opens maps an object type (e.g. "build.sfc") to the page name in this
+	// application that opens a single record of that object (ADR-0098 D5).
+	Opens map[string]string `json:"opens,omitempty"`
 }
 
 // CheckResources checks explicit non-navigation resource membership. Assets

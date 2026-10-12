@@ -125,6 +125,15 @@ func InputIssues(fields []Field, values map[string]any) []FieldIssue {
 		issues = append(issues, issue)
 	}
 	for _, f := range fields {
+		if f.When != nil {
+			condVal := ""
+			if raw, exists := values[f.When.Field]; exists && raw != nil {
+				condVal = fmt.Sprint(raw)
+			}
+			if !f.When.Holds(condVal) {
+				continue
+			}
+		}
 		v, ok := values[f.Name]
 		c := f.Constraints
 		// Existing unannotated owner contracts keep their original checks.

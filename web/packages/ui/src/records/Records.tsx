@@ -593,6 +593,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         {work?.(view)}
       </section>}
       {!detailOnly && info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
+      {!detailOnly && <RecordStepFlow source={source} info={info} view={view} />}
       {properties}
       {!detailOnly && (view.files.length > 0 || files) && <Files key={JSON.stringify(["files",source.scope,type,id])} attached={view.files} files={files} />}
       {!detailOnly && (view.comments.length > 0 || comments) && <Comments key={JSON.stringify(["comments",source.scope,type,id])} list={view.comments} following={view.following} comments={comments} />}
@@ -769,6 +770,60 @@ function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
     tone: a.state === "approved" ? "success" : a.state === "rejected" || a.state === "refused" ? "danger" : a.state === "withdrawn" ? "neutral" : undefined });
   edges.push({ from: previous, to: "outcome", dashed: !ended });
   return <FlowSteps nodes={nodes} edges={edges} height={150} label={t("Approvals")} storeKey={`approvals:${a.id}`} />;
+}
+
+/** Ordered step flow for a routing record (showing its operations across work-center lanes)
+ * or an in-flight execution record (highlighting its current step, state and nonconformances). */
+function RecordStepFlow({ source, info, view }: { source: RecordSource; info: EntityInfo; view: RecordView }) {
+  const r = view.record;
+  const routingField = info.fields.find((f) => f.name === "routing" && f.type === "reference" && f.ref);
+  const opField = info.fields.find((f) => f.name === "operation");
+  const routingId = routingField ? String(r.routing ?? "") : "";
+  const [routingView, setRoutingView] = useState<RecordView>();
+  useEffect(() => {
+    if (!routingField?.ref || !routingId) { setRoutingView(undefined); return; }
+    let active = true;
+    source.get(routingField.ref, routingId).then((v) => { if (active) setRoutingView(v); }, () => { if (active) setRoutingView(undefined); });
+    return () => { active = false; };
+  }, [source, routingField?.ref, routingId]);
+
+  const stepRel = (routingView ?? view).related?.find((rel) => {
+    const relInfo = source.entity(rel.type);
+    return relInfo?.fields.some((f) => f.name === "number" && (f.type === "integer" || f.type === "decimal"));
+  });
+  if (!stepRel || stepRel.records.length === 0) return null;
+  const steps = [...stepRel.records].sort((a, b) => Number(a.number ?? 0) - Number(b.number ?? 0));
+  const lanes = [...new Set(steps.map((s) => String(s.workcenter ?? s.workCenter ?? "")).filter(Boolean))].map((id) => ({ id, title: id }));
+  const currentOp = opField ? String(r.operation ?? "") : "";
+  const state = String(r.state ?? "");
+  const ended = !opField || state === "done" || state === "scrapped";
+  const curIdx = steps.findIndex((s) => s.id === currentOp || String(s.number ?? "") === currentOp);
+  const ncs = Array.isArray(r.ncs) ? (r.ncs as Record<string, unknown>[]) : [];
+  const nodes: FlowStepNode[] = steps.map((s, idx) => {
+    const num = String(s.number ?? s.id);
+    const name = String(s.name ?? s.title ?? s.id);
+    const wc = String(s.workcenter ?? s.workCenter ?? "");
+    const stepNcs = ncs.filter((n) => String(n.operation ?? "") === s.id || String(n.operation ?? "") === num).map((n) => String(n.code ?? "")).filter(Boolean);
+    const here = !!opField && idx === curIdx && !ended;
+    const past = !!opField && (curIdx > idx || state === "done");
+    return {
+      id: s.id, lane: wc || undefined, label: `${num} ${name}`, current: here, notation: "service-task",
+      detail: [wc, ...(here && state ? [state] : []), ...(stepNcs.length ? [`NC ${stepNcs.join(", ")}`] : [])].filter(Boolean).join(" · ") || undefined,
+      tone: here ? (state === "hold" ? "warning" : "info") : past ? "success" : state === "scrapped" && idx === curIdx ? "danger" : stepNcs.length ? "warning" : undefined,
+    };
+  });
+  nodes.push({
+    id: "end", label: state === "scrapped" ? "Scrapped" : t("Done"),
+    notation: state === "scrapped" ? "event-terminate" : "event-end",
+    tone: state === "done" ? "success" : state === "scrapped" ? "danger" : undefined,
+  });
+  const edges: FlowStepEdge[] = steps.map((s, i) => ({ from: s.id, to: i + 1 < steps.length ? steps[i + 1]!.id : "end" }));
+  if (state === "scrapped" && curIdx >= 0) edges.push({ from: steps[curIdx]!.id, to: "end", tone: "danger", dashed: true });
+  return (
+    <section className="rounded-md border border-border bg-surface p-3">
+      <FlowSteps nodes={nodes} edges={edges} lanes={lanes.length ? lanes : undefined} height={Math.max(180, lanes.length * 88)} label={t("Processes")} storeKey={`step-flow:${info.type}:${r.id}`} />
+    </section>
+  );
 }
 
 /** The processes about a record: each flow, its state, and the steps it stands at. */

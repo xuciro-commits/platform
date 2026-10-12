@@ -66,6 +66,7 @@
   "Application variables": "应用变量",
   "An application this organisation hands to its people: a name, an icon, its pages and shared resource references. It gives nobody new access; each page is offered to whoever may read what it shows.": "本组织交付给成员的应用：名称、图标、页面及共享资源引用。应用不授予额外权限，各页面仅向有权读取其内容的人提供。",
   "Application resources": "应用资源",
+  "Record pages by object type": "按对象类型的记录页面",
   "Published objects, workflows and functions included in its release; ownership and permissions stay with each resource": "纳入发布的已发布对象、流程和函数；归属和权限仍由各资源管理",
   "A declared record path through references, or input.<name>": "穿过已声明引用的记录路径，或 input.<name>",
   "Compare with another declared record path or input; excludes value": "与另一个已声明记录路径或输入比较，不能同时填写固定值",
