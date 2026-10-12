@@ -50,7 +50,7 @@ export type RecentEntry = { route: Route; title: string; app?: string; at: numbe
 type OpenOptions = { window?: "tab" | "beside" | "popout" };
 type Unsaved = {
   register: (panel: string, owner: symbol, discard?: () => void, busy?: boolean) => void;
-  ask: (panels: string[], run: () => void) => void;
+  ask: (panels: string[], run: () => void, owner?: symbol) => void;
 };
 type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; closeAll: () => void; notify: typeof toast; unsaved?: Unsaved;
   /** Names a panel's tab after what it shows ("Object type · Visit") once the view knows it; the view's static title stays the category. */
@@ -106,6 +106,8 @@ export function useUnsavedChanges(dirty: boolean, discard: () => void, busy = fa
     markSaved: () => { if(inputs?.dirty)return;if (panel) unsaved?.register(panel, owner.current); },
     discardChanges: () => { if (panel) unsaved?.register(panel, owner.current); reset.current(); },
     confirmDiscard: (run: () => void) => panel && unsaved ? unsaved.ask([panel], run) : run(),
+    /** Cancel one local editor without discarding sibling documents in its tab. */
+    confirmOwnDiscard: (run: () => void) => panel && unsaved ? unsaved.ask([panel], run, owner.current) : run(),
   };
 }
 
@@ -161,7 +163,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const dock = useRef<DockviewApi>(null);
   const drafts = useRef(new Map<string, Map<symbol, { discard: () => void; busy: boolean }>>());
   const transfers = useRef(new ViewTransfers());
-  const [pending, setPending] = useState<{ panels: string[]; run: () => void }>();
+  const [pending, setPending] = useState<{ panels: string[]; run: () => void; owner?: symbol }>();
   const unsaved = useMemo<Unsaved>(() => ({
     register: (panel, owner, discard, busy = false) => {
       if ((discard || busy) && dock.current?.getPanel(panel)) {
@@ -173,12 +175,13 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         if (!entries?.size) drafts.current.delete(panel);
       }
     },
-    ask: (panels, run) => {
-      if (panels.some((id) => [...(drafts.current.get(id)?.values() ?? [])].some((owner) => owner.busy))) {
+    ask: (panels, run, selected) => {
+      const owners = (id: string) => selected === undefined ? [...(drafts.current.get(id)?.values() ?? [])] : [drafts.current.get(id)?.get(selected)].filter(Boolean);
+      if (panels.some((id) => owners(id).some((owner) => owner?.busy))) {
         toast.error(t("An operation is in progress. Wait for its result before leaving.")); return;
       }
-      const dirty = panels.filter((id) => dock.current?.getPanel(id) && drafts.current.has(id));
-      if (dirty.length) setPending({ panels: dirty, run });
+      const dirty = panels.filter((id) => dock.current?.getPanel(id) && owners(id).length > 0);
+      if (dirty.length) setPending({ panels: dirty, run, owner: selected });
       else run();
     },
   }), []);
@@ -728,10 +731,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
             <Button onClick={() => { const id = pending?.panels[0]; setPending(undefined); if (id) dock.current?.getPanel(id)?.api.setActive(); }}>{t("Keep editing")}</Button>
             <Button variant="danger" onClick={() => {
               if (!pending) return;
-              if (pending.panels.some((id) => [...(drafts.current.get(id)?.values() ?? [])].some((owner) => owner.busy))) {
+              if (pending.panels.some((id) => [...(drafts.current.get(id)?.entries() ?? [])].some(([key, owner]) => (pending.owner === undefined || key === pending.owner) && owner.busy))) {
                 toast.error(t("An operation is in progress. Wait for its result before leaving.")); return;
               }
-              for (const id of pending.panels) for (const owner of [...(drafts.current.get(id)?.values() ?? [])]) owner.discard();
+              for (const id of pending.panels) for (const [key, owner] of [...(drafts.current.get(id)?.entries() ?? [])]) if (pending.owner === undefined || key === pending.owner) owner.discard();
               const run = pending.run; setPending(undefined); run();
             }}>{t("Discard changes")}</Button>
           </div>

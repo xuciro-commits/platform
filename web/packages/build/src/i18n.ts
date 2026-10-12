@@ -2,6 +2,21 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Module ownership could not be read. Open the page from its project after reloading.": "无法读取模块归属，请重新读取后从项目打开该页面。",
+  "Modules are unavailable. This does not mean no applications exist.": "模块目录不可用；这不表示没有应用。",
+  "The module was saved, but its current record could not be reloaded.": "模块已保存，但暂时无法重新读取当前记录。",
+  "The created page is unavailable. Its record was not replaced or recreated.": "已创建的页面暂时不可用，原记录未被替换或重新创建。",
+  "The page was created but could not be added to this module. Retry adding the same page.": "页面已创建，但无法加入该模块；请重试加入同一个页面。",
+  "A page was created but its module membership is unconfirmed. Retry the same page; creating another page would duplicate the work.": "页面已创建，但模块归属尚未确认。请重试同一页面；再次新建会重复工作。",
+  "Retry adding created page": "重试加入已创建的页面",
+  "Keep page without module membership": "保留页面，不加入模块",
+  "Reload current module": "重新读取当前模块",
+  "The draft could not be created. Retry its original request.": "草稿创建尚未确认，请重试原请求。",
+  "Retry original page creation": "重试原页面创建请求",
+  "Page creation is unconfirmed. Its original ID and payload are retained; retry does not create a second page.": "页面创建尚未确认；已保留原 ID 与载荷，重试不会创建第二个页面。",
+  "The page draft was created. It is not published.": "页面草稿已创建，尚未发布。",
+  "Open created page": "打开已创建的页面",
+
   "Save or discard project settings before changing resource membership.": "更改资源归属前，请先保存或放弃项目设置。",
   "Reload current project settings": "重新读取当前项目设置",
   "Some draft inventories are unavailable. An empty list does not mean every draft is live.": "部分草稿目录无法读取；列表为空不表示所有草稿都已发布。",
