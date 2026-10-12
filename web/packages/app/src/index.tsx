@@ -232,8 +232,8 @@ export const defineApp = (app: AppUI): AppUI => ({...app,views:app.views.map(vie
 // Generated pages (ADR-0016), for any app's entity types.
 
 /** A form generated from an entity's declaration; submits only editable fields. */
-export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submitLabel, onBusy, issues }: {
-  issues?:Api.FieldIssue[]; type: string; record?: EntityRecord; onSubmit: (values: object) => void | boolean | Promise<void | boolean>; onCancel: () => void; submitLabel: string; onBusy?: (busy: boolean) => void;
+export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submitLabel, onBusy, issues, locked }: {
+  issues?:Api.FieldIssue[]; type: string; record?: EntityRecord; onSubmit: (values: object) => void | boolean | Promise<void | boolean>; onCancel: () => void; submitLabel: string; onBusy?: (busy: boolean) => void; locked?: boolean;
   /** Presentation subset, in this order: a composed page's form asks for these (ADR-0035 16b). */
   fields?: string[];
 }) {
@@ -244,7 +244,7 @@ export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submit
   // A field a purpose-built editor owns (`aside`) is not asked for here (ADR-0035).
   const inputs = new Set(action.payload.map((field) => field.name));
   const editable = info.fields.filter((f) => inputs.has(f.name) && !f.readOnly && !f.aside && (!fields || fields.includes(f.name))).map((f) => f.name);
-  return <RecordForm entity={entityFrom({...info,fields:info.fields.map(f=>{const input=action.payload.find(i=>i.name===f.name);return input?{...f,constraints:input.constraints??f.constraints,range:input.range??f.range,group:input.group??f.group}:f;})}, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel} onBusy={onBusy} issues={issues}
+  return <RecordForm entity={entityFrom({...info,fields:info.fields.map(f=>{const input=action.payload.find(i=>i.name===f.name);return input?{...f,constraints:input.constraints??f.constraints,range:input.range??f.range,group:input.group??f.group}:f;})}, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
     onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
 }
 
@@ -399,6 +399,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
+  const editingBusy = useRef(false);
   const archive = useRecordArchive(type);
   const transition = useTransition(type);
   // Files (ADR-0028): upload the bytes, then attach them to this record by a decision.
@@ -419,7 +420,9 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
     download:collaboration.download.bind(collaboration),
   };
   const act = async (schema: string, r: EntityRecord, payload: object) => {
-    if (await decide(schema, { type, id: r.id }, payload, { expectedRevision: r.revision })) setEditing(undefined);
+    const confirmed = await decide(schema, { type, id: r.id }, payload, { expectedRevision: r.revision });
+    if (confirmed) setEditing(undefined);
+    return confirmed;
   };
   return (
     <>
@@ -439,8 +442,8 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
         </>} />
       {archive.dialog}
       {transition.dialog}
-      <Dialog wide={source.entity(type)?.fields.some((f) => f.type === "lines")} open={!!editing} onOpenChange={(o) => !o && setEditing(undefined)} title={t("Edit {id}", { id: editing?.id ?? "" })}>
-        {editing && <GeneratedForm type={type} record={editing} submitLabel={t("Save")} onCancel={() => setEditing(undefined)}
+      <Dialog wide={source.entity(type)?.fields.some((f) => f.type === "lines")} open={!!editing} onOpenChange={(o) => !o && !editingBusy.current && setEditing(undefined)} title={t("Edit {id}", { id: editing?.id ?? "" })}>
+        {editing && <GeneratedForm type={type} record={editing} submitLabel={t("Save")} onBusy={(busy) => { editingBusy.current = busy; }} onCancel={() => setEditing(undefined)}
           onSubmit={(v) => act(`${type}.edit`, editing, v)} />}
       </Dialog>
     </>

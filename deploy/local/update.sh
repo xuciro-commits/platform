@@ -2,7 +2,7 @@
 # Rebuild and verify the two owner-facing solution hosts without clearing data.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
-if [[ -n $(git status --porcelain -- capabilities/server apps solutions protocols contract web/packages web/apps/workspace/src) ]]; then
+if [[ -n $(git status --porcelain -- capabilities/server apps solutions protocols contract web) ]]; then
   echo 'Commit source changes before updating the local hosts, so their revision is unambiguous.' >&2
   exit 1
 fi
@@ -19,7 +19,7 @@ root = Path.cwd()
 revision = os.environ['PLATFORM_REVISION']
 dist = root / 'web/apps/workspace/dist'
 html = (dist / 'index.html').read_bytes()
-assets = sorted(set(re.findall(r'(?:src|href)="(/assets/[^"]+)"', html.decode())))
+assets = sorted(set(re.findall(r'(?:src|href)="(/assets/[^"]+)"', html.decode())) | {'/popout.html'})
 compose = ['docker', 'compose', '-f', 'deploy/local/compose.yaml']
 hosts = []
 for service, port in [('hospitality-server', 8495), ('manufacturing-server', 8490)]:

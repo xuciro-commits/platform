@@ -31,7 +31,3 @@ export function availableProjections(apps: AppUI[]): Projection[] {
 /** The portal entry of an app the workspace loaded. */
 export const portalEntry = (app: AppUI): PlatformApplication =>
   ({ id: app.id, title: app.title, icon: app.icon, description: app.description, category: categoryOf(app), home: app.home });
-
-/** The legacy `surface` of a route or an entry point, as a projection (ADR-0052 §6: decoded, never produced). */
-export const projectionOfSurface = (surface?: string): Projection | undefined =>
-  surface === "studio" || surface === "developer" ? "build" : surface === "tenant" ? "admin" : surface === "work" ? "operations" : undefined;

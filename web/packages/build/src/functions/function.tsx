@@ -50,8 +50,8 @@ export function FunctionEditor({ id }: { id: string }) {
   const [error, setError] = useState("");
   const { markSaved, confirmDiscard, discardChanges } = useUnsavedChanges(dirty, () => {
     setDraft(query.data?.record ? loaded(query.data.record) : empty); setDirty(false); setError(""); setChosen("settings");
-  });
-  useEffect(() => { if (query.data?.record && !dirty) setDraft(loaded(query.data.record)); }, [query.data, dirty]);
+  }, busy);
+  useEffect(() => { if (query.data?.record && !dirty && !busy) setDraft(loaded(query.data.record)); }, [query.data, dirty, busy]);
   const source = objects.find((object) => `build.${object.name}` === draft.object);
   const fields = source?.fields?.filter((field) => scalarTypes.includes(field.type)) ?? [];
   const roles = [...new Set(["builder", ...(source?.access?.length ? source.access.filter((access) => access.read !== "none").map((access) => access.role) : ["user"])])];

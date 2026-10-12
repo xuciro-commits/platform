@@ -6,7 +6,7 @@ for (const fixture of [
 ]) {
   test.describe(fixture.industry, () => {
     test.use({ baseURL: fixture.baseURL });
-    test("a tested native flow binds its release and only its operator answers", async ({ browser, page, request }) => {
+    test("a tested native flow binds its release and only its operator answers", async ({ browser, page, request }, testInfo) => {
       const builder = new Builder(request, fixture.builder);
       const operator = new Member(request, fixture.operator);
       const { type } = await builder.object({ title: "Review sample", fields: [{ name: "note", title: "Note", type: "text" }],
@@ -35,6 +35,17 @@ for (const fixture of [
       await expect(timeout).toHaveValue("0");
       await history.getByRole("button",{name:"Redo",exact:true}).click();
       await expect(timeout).toHaveValue("-");
+      // The shared frame closes without deselecting the block or its input draft.
+      await page.getByRole("button", { name: "Close inspector panel", exact: true }).click();
+      await expect(properties).not.toBeVisible();
+      await page.getByRole("button", { name: "Toggle inspector panel", exact: true }).click();
+      await expect(properties.getByRole("tab", { name: "Settings", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(timeout).toHaveValue("-");
+      await properties.getByRole("tab", { name: "Settings", exact: true }).focus();
+      await page.keyboard.press("ArrowRight");
+      await expect(properties.getByRole("tab", { name: "Input", exact: true })).toBeFocused();
+      await page.keyboard.press("ArrowLeft");
+      await expect(timeout).toHaveValue("-");
       await structure.getByRole("button", { name: "Native review", exact: true }).click();
       await expect(properties.getByLabel("Default workflow input", { exact: false })).toHaveValue("{");
       await properties.getByLabel("Default workflow input", { exact: false }).fill("{}");
@@ -52,6 +63,20 @@ for (const fixture of [
       await page.getByRole("textbox", { name: "Member ID (empty: you)", exact: true }).fill(fixture.operatorID);
       await page.getByRole("group", { name: "Test step 1", exact: true }).getByRole("textbox", { name: "Note", exact: true }).fill("SYNTHETIC");
       await page.getByRole("group", { name: "Test step 2", exact: true }).getByRole("combobox", { name: "Human answer", exact: true }).selectOption(fixture.answer);
+      // Active tabs select; only an explicit close collapses the dock. Neither
+      // tab changes nor collapse may destroy the isolated test setup.
+      const testTab = page.getByRole("tab", { name: "Test", exact: true });
+      const note = page.getByRole("group", { name: "Test step 1", exact: true }).getByRole("textbox", { name: "Note", exact: true });
+      await testTab.click();
+      await expect(note).toHaveValue("SYNTHETIC");
+      await page.getByRole("tab", { name: "Problems", exact: true }).click();
+      await testTab.click();
+      await expect(note).toHaveValue("SYNTHETIC");
+      await page.getByRole("button", { name: "Close dock", exact: true }).click();
+      await expect(note).not.toBeVisible();
+      await testTab.focus();
+      await page.keyboard.press("ControlOrMeta+j");
+      await expect(note).toHaveValue("SYNTHETIC");
       await page.getByRole("button", { name: "Run isolated test", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: "All expected outcomes matched." })).toBeVisible();
       await expect(page.getByRole("status").filter({ hasText: "Test state recovered exactly." })).toBeVisible();
@@ -60,11 +85,31 @@ for (const fixture of [
 
       // Release the tested bytes; actual work must retain that candidate binding.
       await page.getByRole("button", { name: "Publish", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Check draft and dependencies", exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Close dock", exact: true }).click();
+      await page.getByRole("button", { name: "Publish", exact: true }).click();
       await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
       await expect(page.getByText("Draft candidate:").locator("code")).toHaveText(candidate);
       await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
       await page.getByRole("button", { name: "Activate release", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
+      if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("flow-workbench.png"), fullPage: true });
+      // The same editor remains usable at a narrow container: no stacked,
+      // unreachable inspector beneath a clipped canvas.
+      await page.setViewportSize({ width: 390, height: 844 });
+      const inspectorToggle = page.getByRole("button", { name: "Toggle inspector panel", exact: true });
+      await expect(inspectorToggle).toHaveAttribute("aria-expanded", "false");
+      await inspectorToggle.click();
+      await expect(properties.getByRole("textbox", { name: "Workflow title", exact: true })).toHaveValue("Reviewed native flow");
+      await expect(structure).not.toBeVisible();
+      if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("flow-inspector-narrow.png"), fullPage: true });
+      await page.getByRole("button", { name: "Close inspector panel", exact: true }).click();
+      await expect(properties).not.toBeVisible();
+      await expect(inspectorToggle).toBeFocused();
+      await page.getByRole("button", { name: "Toggle structure panel", exact: true }).click();
+      await expect(structure.getByRole("button", { name: /^Review sample/ })).toBeVisible();
+      await page.getByRole("button", { name: "Close structure panel", exact: true }).click();
+      await page.setViewportSize({ width: 1280, height: 720 });
       const real = fresh("REAL");
       await operator.decide(`${type}.create`, { type, id: real }, { note: "OPERATOR RECORD" });
       const context = await browser.newContext({ baseURL: fixture.baseURL });

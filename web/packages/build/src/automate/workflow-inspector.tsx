@@ -1,6 +1,6 @@
-import { Button, Checkbox, Disclosure, Input, Select, Tag, Textarea, t } from "@platform/ui";
+import { Button, Checkbox, ContentTabs, Disclosure, Input, Select, Tag, Textarea, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
-import { ArrowDownToLine, Braces, Plus, X } from "lucide-react";
+import { ArrowDownToLine, Plus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { BindingEditor, JSONEditor, PredicateEditor, SchemaEditor } from "./workflow-binding";
 import { PERIODS, parameterSchema, periodLabel, sourceCapability, type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
@@ -34,10 +34,9 @@ function NamedInputs({ inputs = {}, schema, parameters = [], steps, onChange, ed
   </div>;
 }
 
-export function WorkflowSettings({ draft, onChange, objects, onClose }: { draft: WorkflowDraft; onChange: (patch: Partial<WorkflowDraft>) => void; objects: { type: string; title: string; states: { name: string; title: string }[] }[]; onClose: () => void }) {
+export function WorkflowSettings({ draft, onChange, objects }: { draft: WorkflowDraft; onChange: (patch: Partial<WorkflowDraft>) => void; objects: { type: string; title: string; states: { name: string; title: string }[] }[] }) {
   const object = objects.find((item) => item.type === draft.object);
-  return <div role="region" aria-label={t("Workflow properties")} className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface">
-    <div className="flex items-center justify-between border-b border-border px-3 py-3"><h3 className="text-sm font-semibold">{t("Workflow settings")}</h3><Button variant="ghost" type="button" onClick={onClose} aria-label={t("Close inspector")}><X className="size-4 text-muted" /></Button></div>
+  return <div role="region" aria-label={t("Workflow properties")} className="min-h-0">
     <div className="grid gap-3 overflow-auto p-3">
       <label className={fieldClass}>{t("Workflow name")}<Input disabled={!!draft.published} value={draft.name} placeholder="stockallocation" onChange={(event) => onChange({ name: event.target.value })} /></label>
       <label className={fieldClass}>{t("Workflow title")}<Input value={draft.title} onChange={(event) => onChange({ title: event.target.value })} /></label>
@@ -71,9 +70,9 @@ export function WorkflowSettings({ draft, onChange, objects, onClose }: { draft:
   </div>;
 }
 
-export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, onRename, onMakeEntry, onClose, flows, output }: {
+export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, onRename, onMakeEntry, flows, output }: {
   step: WorkflowStep; steps: WorkflowStep[]; lanes: Api.ProcessLane[]; capabilities: Capability[]; onChange: (patch: Partial<WorkflowStep>) => void; onRename: (name: string) => void;
-  onMakeEntry: () => void; onClose: () => void; flows: { id: string; title: string; version: number }[]; output?: unknown;
+  onMakeEntry: () => void; flows: { id: string; title: string; version: number }[]; output?: unknown;
 }) {
   const [tab, setTab] = useState<"settings" | "input" | "output">("input");
   const capability = sourceCapability(step, capabilities);
@@ -93,12 +92,9 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
     {!["end", "join", "break", "continue", "fail", "branch"].includes(step.kind) && field(step.kind === "switch" ? "Default path" : "Next path", <Select value={step.next ?? ""} onChange={(event) => onChange({ next: event.target.value || undefined })}><option value="">{t("Connect on canvas")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>)}
     {field("Error path", <Select value={step.error ?? ""} onChange={(event) => onChange({ error: event.target.value || undefined })}><option value="">{t("Stop with an error")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>)}
   </div>;
-  return <div role="region" aria-label={t("Workflow properties")} className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface">
-    <div className="flex items-center gap-2 border-b border-border px-3 py-3"><span className="rounded-md bg-row-selected p-1.5 text-primary"><Braces className="size-4" /></span><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{step.title || step.name}</div><div className="truncate font-mono text-[10px] text-muted">{step.name}</div></div>
-      <Button variant="ghost" type="button" onClick={onClose} aria-label={t("Close inspector")}><X className="size-4 text-muted" /></Button></div>
-    <div className="flex border-b border-border p-1" role="tablist" aria-label={t("Block inspector")}>{(["settings", "input", "output"] as const).map((name) => <Button variant="ghost" type="button" key={name} role="tab" aria-selected={tab === name} className={`flex-1 rounded px-2 py-1.5 text-xs ${tab === name ? "bg-row-selected font-medium text-primary" : "text-muted hover:bg-row-hover"}`} onClick={() => setTab(name)}>{t(name === "settings" ? "Settings" : name === "input" ? "Input" : "Output")}</Button>)}</div>
-    <div className="grid gap-3 overflow-auto p-3">
-      {tab === "settings" && <>
+  return <div role="region" aria-label={t("Workflow properties")} className="flex min-h-0 flex-1 flex-col">
+    <ContentTabs key={step.name} compact label={t("Block inspector")} value={tab} onChange={next => setTab(next as typeof tab)} items={[
+      { id: "settings", title: t("Settings"), content: <div className="grid content-start gap-3 p-3">
         {field("Step title", <Input value={step.title ?? ""} onChange={(event) => onChange({ title: event.target.value })} />)}
         {field("Step name", <IdentifierInput label={t("Step name")} value={step.name} onCommit={onRename} invalid={(name) => !/^[a-z][a-z0-9]*$/.test(name) || others.some((item) => item.name === name)} />)}
         {lanes.length > 0 && field("Lane", <Select value={step.lane ?? ""} onChange={(event) => onChange({ lane: event.target.value || undefined })}>
@@ -108,8 +104,8 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
         {steps[0]?.name !== step.name && <Button onClick={onMakeEntry}><ArrowDownToLine className="mr-1 size-3" />{t("Make entry")}</Button>}
         {field("Timeout (seconds)", <Input type="number" min={0} max={2592000} value={step.timeoutSeconds ?? 0} onChange={(event) => onChange({ timeoutSeconds: Number(event.target.value) })} />)}
         <Disclosure summary={<span className="text-xs font-medium">{t("Control paths")}</span>}><div className="mt-2">{paths}</div></Disclosure>
-      </>}
-      {tab === "input" && <>
+      </div> },
+      { id: "input", title: t("Input"), content: <div className="grid content-start gap-3 p-3">
         {step.kind==="query"&&step.app==="build"&&<>{field("Retained query version",<Select aria-label={t("Retained query version")} value={step.queryVersion??0} onChange={event=>onChange({queryVersion:Number(event.target.value)})}><option value={0}>{t("Choose a retained query version")}</option>{step.queryVersion&&!queryVersions.some(v=>v.ordinal===step.queryVersion)&&<option value={step.queryVersion}>{t("Unavailable query version")}: {step.queryVersion}</option>}{queryVersions.map(v=><option key={v.source} value={v.ordinal}>{v.source}</option>)}</Select>)}<p className="text-xs text-muted">{t("Query versions keep their fixed conditions. Reads use the initiating member's current permissions.")}</p>{!capability&&<p role="alert" className="text-xs text-danger">{t("The retained query source could not be loaded.")}</p>}</>}
         {(step.kind === "query" || step.kind === "action" || step.kind === "compute") && <>
           {step.kind === "compute" && capability?.input?.type === "object" && !capability.input.nullable && <Checkbox checked={!!step.value} onChange={(whole) => onChange({ value: whole ? { source: "input" } : undefined, inputs: undefined })}>{t("Bind the whole input value")}</Checkbox>}
@@ -147,11 +143,11 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
         {["end", "join", "continue"].includes(step.kind) && binding("Return value", "value", undefined, true)}
         {["break", "continue"].includes(step.kind) && <p className="text-[11px] leading-5 text-muted">{t("This control exits or continues the innermost loop scope. Accepted actions remain accepted.")}</p>}
         {step.kind === "fail" && <p className="text-xs text-muted">{t("The block title becomes the explicit failure message.")}</p>}
-      </>}
-      {tab === "output" && <>
+      </div> },
+      { id: "output", title: t("Output"), content: <div className="grid content-start gap-3 p-3">
         <h4 className="text-xs font-medium">{t("Output schema")}</h4><pre className="max-h-60 overflow-auto rounded bg-background p-2 text-[10px]">{JSON.stringify(capability?.output ?? { type: "value", description: t("Derived from this block's bindings.") }, null, 2)}</pre>
         <h4 className="text-xs font-medium">{t("Last accepted output")}</h4>{output !== undefined ? <pre className="max-h-72 overflow-auto rounded bg-background p-2 text-[11px]">{JSON.stringify(output, null, 2)}</pre> : <p className="text-[11px] text-muted">{t("Select a run to inspect this block's accepted output.")}</p>}
-      </>}
-    </div>
+      </div> },
+    ]} />
   </div>;
 }

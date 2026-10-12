@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:fb47592e8fe6cae1",
+  "revision": "sha256:dc0fb692688f92fb",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -611,11 +611,26 @@
           "optional": false,
           "isCallback": false,
           "isSlot": false
+        },
+        {
+          "name": "application",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "project",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
         }
       ],
       "composed": [
         "ui/button",
-        "ui/flow"
+        "ui/flow",
+        "ui/panels"
       ]
     },
     {
@@ -704,6 +719,13 @@
           "type": "(busy: boolean) => void",
           "optional": true,
           "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "locked",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
           "isSlot": false
         },
         {
@@ -1748,6 +1770,13 @@
           "isSlot": false
         },
         {
+          "name": "resolveRoute",
+          "type": "(route: Route, layout?: string) => Route | Promise<Route>",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
           "name": "menus",
           "type": "Menu[]",
           "optional": true,
@@ -1801,6 +1830,13 @@
         {
           "name": "onActiveRoute",
           "type": "(route: Route) => void",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "onEmpty",
+          "type": "() => void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
@@ -3395,7 +3431,7 @@
         },
         {
           "name": "items",
-          "type": "{ id: string; title: string; content: ReactNode }[]",
+          "type": "{ id: string; title: ReactNode; content: ReactNode }[]",
           "optional": false,
           "isCallback": false,
           "isSlot": true
@@ -3413,13 +3449,48 @@
           "optional": false,
           "isCallback": true,
           "isSlot": false
+        },
+        {
+          "name": "compact",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "open",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "actions",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
+          "name": "className",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
         }
       ],
       "slots": [
         {
           "name": "items",
-          "type": "{ id: string; title: string; content: ReactNode }[]",
+          "type": "{ id: string; title: ReactNode; content: ReactNode }[]",
           "optional": false
+        },
+        {
+          "name": "actions",
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "composed": [
@@ -4470,6 +4541,13 @@
           "isSlot": false
         },
         {
+          "name": "locked",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
           "name": "submitLabel",
           "type": "string",
           "optional": true,
@@ -4491,7 +4569,7 @@
         {
           "name": "Props",
           "kind": "type",
-          "signature": "type Props<S extends z.ZodType<FieldValues, FieldValues>> = {\n  schema: S;\n  fields: Field<z.infer<S>>[];\n  defaultValues?: DefaultValues<z.infer<S>>;\n  onSubmit: (values: z.infer<S>) => void | boolean | Promise<void | boolean>;\n  onBusy?: (busy: boolean) => void;\n  submitLabel?: string;\n  onCancel?: () => void;\n};"
+          "signature": "type Props<S extends z.ZodType<FieldValues, FieldValues>> = {\n  schema: S;\n  fields: Field<z.infer<S>>[];\n  defaultValues?: DefaultValues<z.infer<S>>;\n  onSubmit: (values: z.infer<S>) => void | boolean | Promise<void | boolean>;\n  onBusy?: (busy: boolean) => void;\n  locked?: boolean;\n  submitLabel?: string;\n  onCancel?: () => void;\n};"
         },
         {
           "name": "Field",
@@ -8256,6 +8334,13 @@
           "isSlot": false
         },
         {
+          "name": "locked",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
           "name": "submitLabel",
           "type": "string",
           "optional": true,
@@ -11548,6 +11633,7 @@
       ],
       "composed": [
         "ui/button",
+        "ui/content-tabs",
         "ui/input-drafts"
       ],
       "relatedTypes": [
@@ -11569,7 +11655,7 @@
         {
           "name": "WorkbenchPanel",
           "kind": "type",
-          "signature": "export type WorkbenchPanel = { label: string; scope?:string; locate?:(path?:string)=>void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };"
+          "signature": "export type WorkbenchPanel = { label: string; heading?: ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void; scope?: string; locate?: (path?: string) => void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };"
         }
       ]
     }
@@ -12420,6 +12506,7 @@
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/automation/capability.tsx",
+      "web/packages/app/src/automation/flows.tsx",
       "web/packages/app/src/catalog.examples.tsx",
       "web/packages/app/src/catalog.fixtures.tsx",
       "web/packages/app/src/index.tsx",
@@ -12474,6 +12561,7 @@
       "web/packages/app/src/widgets/WorkViews.tsx",
       "web/packages/build/src/automate/workflow.tsx",
       "web/packages/build/src/catalog.examples.tsx",
+      "web/packages/build/src/editor/ResourceList.tsx",
       "web/packages/build/src/functions/agent.tsx",
       "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
@@ -12551,6 +12639,7 @@
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages/pages.tsx",
       "web/packages/app/src/pages/sections.tsx",
+      "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/module-import/FlowImportDialog.tsx",
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
@@ -12784,6 +12873,10 @@
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/platform/src/processes.tsx"
     ],
+    "app/work-views": [
+      "web/packages/app/src/automation/use-run-control.ts",
+      "web/packages/app/src/widgets/WorkViews.tsx"
+    ],
     "app/tenant-references": [
       "web/packages/app/src/catalog.examples.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
@@ -12894,6 +12987,8 @@
     ],
     "ui/content-tabs": [
       "web/packages/app/src/pages/sections.tsx",
+      "web/packages/build/src/automate/workflow-inspector.tsx",
+      "web/packages/ui/src/layout/Workbench.tsx",
       "web/packages/ui/src/records/Records.tsx"
     ],
     "ui/sheet": [
@@ -13124,9 +13219,6 @@
       "web/packages/app/src/widgets/WorkViews.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
-    "app/work-views": [
-      "web/packages/app/src/widgets/WorkViews.tsx"
-    ],
     "app/compute-call": [
       "web/packages/app/src/widgets/execution-plugins.ts"
     ],
@@ -13240,6 +13332,12 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/App.tsx",
       "web/apps/workspace/src/HostOnly.tsx"
+    ],
+    "app/application-runs": [
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/operation-run": [
+      "web/apps/workspace/src/chrome.tsx"
     ],
     "app/page-workspace": [
       "web/apps/workspace/src/chrome.tsx"

@@ -1,3 +1,4 @@
+import { useRunControl } from "./use-run-control";
 // Agents in the workspace (ADR-0021): a run's page — its steps with the
 // rationale the model gave, what people made of it, and the draft that waits
 // for the person it runs for — the assistant, which gives an agent a goal
@@ -66,23 +67,27 @@ function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
 
 /** A run's page: goal, state, the draft waiting for the member, each step and why, and what people made of it. */
 export function RunView({ id, compact, application }: { id: string; compact?: boolean; application?: string }) {
-  const { me, can, decide, role } = useHost();
+  const { me, can, role } = useHost();
+  const control = useRunControl("agent.run", id);
   const openRecord = useOpenRecord();
   const {run,error}=useRun(id);
   const {open:openWorkspace}=useWorkspace();
   const [open, setOpen] = useState<number>();
-  if(error&&!run)return <p role="alert">{t("This agent run is unavailable to you.")}</p>;
+  if(error)return <p role="alert">{t("This agent run is unavailable to you.")}</p>;
   if (!run) return <p className="text-sm text-muted">{t("Loading run")} {id}…</p>;
   const mine = run.onBehalf === me.principalId;
   const live = run.state === "running" || run.state === "waiting";
   return (
     <div className="grid max-w-4xl gap-3">
-      {application&&<Button variant="ghost" onClick={()=>openWorkspace({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":")}})}>{t("Back to application runs")}</Button>}
+      {application&&<Button variant="ghost" onClick={()=>openWorkspace({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":"),application}})}>{t("Back to application runs")}</Button>}
+      {control.error && <Panel role="alert" className="text-sm text-danger">{control.error}</Panel>}
+      {control.pending && <Panel role="status" className="grid gap-2 text-sm"><p>{t("A runtime decision is unconfirmed. Retry the original operation; leaving does not cancel accepted work.")}</p>
+        <Button disabled={control.busy} onClick={() => void control.retry()}>{t("Retry original operation")}</Button></Panel>}
       {run.definitionVersion&&<p className="break-all font-mono text-xs">{t("Startup definition")}: {run.definitionVersion}</p>}
       <p className="break-all font-mono text-xs">{t("Startup release")}: {run.release||t("No startup activation recorded")}</p>
       {!compact && <PageHeader title={run.title} description={`${run.agent}${run.onBehalf ? ` for ${run.onBehalf}` : ""}${run.flow ? `, in the flow ${run.flow}` : ""}`}
         actions={live && (mine || role("agent") === "admin") && can("agent.run.cancel")
-          ? <Button size="sm" variant="danger" onClick={() => void decide("agent.run.cancel", { type: "agent.run", id: run.id }, {})}>{t("Stop")}</Button> : undefined} />}
+          ? <Button size="sm" variant="danger" disabled={control.busy || !!control.pending} onClick={() => void control.control("agent.run.cancel")}>{t("Stop")}</Button> : undefined} />}
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         <StatusTag status={run.state} registry={runStates} />
         {run.ref && <Button variant="link" className="font-mono text-xs" onClick={() => openRecord(run.ref!)}>{run.ref}</Button>}
@@ -247,7 +252,7 @@ export function Assistant({ about }: { about?: string }) {
           <div><Button type="submit" variant="primary" disabled={!goal.trim() || !can("agent.run.start")}>{t("Ask")}</Button></div>
         </Form>
       )}
-      {current && <RunView id={current} compact />}
+      {current && <RunView key={current} id={current} compact />}
       <Remembered />
       {earlier.length > 0 && <div className="grid gap-1">
         <div className="text-xs text-muted">{t("Earlier")}{about ? " about this record" : ""}</div>

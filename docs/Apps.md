@@ -4,9 +4,33 @@
 
 业务记录的“此记录的相关工作”区域集中相关任务、审批、流程与应用声明的 AI 建议；流程/审批可打开来源记录，记录可返回收件箱。酒店 CRM 商机与制造 MES 订单的建议由现有原生动作请求；代码应用通过 `RecordDetail` 的 `advice: { action, fields }` 声明绑定，共享组件不解释私有业务字段。
 
+运行详情中的 Flow 重试/跳过/停止、Agent 停止及计算效果重试共用原 Work/Console 决策入口和目标级提交门禁，不能在同一目标上同时发互相冲突的管理命令。未知结果显示原操作重试，原 key/payload 留在既有 outbox；明确拒绝不伪称待执行。刷新、隐藏页签与离开不撤销已接收工作，来源读取与管理权限仍由原宿主核对。
+
 打开关联流程会进入共享运行详情，不要求设置管理角色；读取与管理动作仍由原宿主授权。运行详情和工坊历史中的“启动时的发布”是该实例固定的版本来源，不能当成当前租户活跃发布。保持对象/动作依赖时可以正式发布新的流程路径，旧等待实例继续原版本；已有记录的存储字段变更需要单独迁移计划，当前激活会明确拒绝。
 
-工作区的 Shell 按 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md) 组织：左侧常驻 Rail 提供 Home（我的工作摘要、最近、收藏、业务应用）、搜索（⌘K）、通知、Applications 门户（按业务应用 / 本体与数据 / 构建 / 交付与运维 / 治理 / 开发者分类）、最近与收藏列表、助手、工作区投影（Operations / Build / Admin，仅分组门户，不授予权限）与账户；顶栏的“Switch application / 切换应用”在获权应用间切换并可收藏当前应用；左侧 Context pane 只显示当前应用自己的导航。业务成员在 Home 与门户只见已获权原生/租户应用及知识内容；构建者在门户的“构建”分类进入 Application Studio（Applications、Shared resources 或能力发现进入原编辑器），成员/连接/模型/审计及生产运行从“治理”分类的 Tenant console 进入。`AppUI.category` 决定门户分类（未声明时由 `surface` 推导，默认 business）。原资源深链继续可用，`#/home` 现为 Home、`#/portal` 为门户，入口切换保留编辑标签，切身份/租户仍须处理未保存内容。发布者从 Tenant console 的 Release review 选择已封存候选，展开 Sealed definitions 查看原定义、版本与依赖，沿原评测和激活检查交付；不提供设计视图或草稿编辑。审计者可进入成员、受控包清单与审计；成员角色只读，内置应用依赖图仅为管理员显示。项目按 `platform.project.save` 给出资产编辑委派（只提升编辑、不提升发布），发布与审计角色独立：`build` 的 Publisher 只保存/激活候选不改定义，平台控制台的 Auditor 可读审计、成员与包但不可决策。
+工作区的 Shell 按 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md) 与 [ADR-0054](ADR/0054-ide-workspaces.md) 组织：左侧 Rail 提供 Home、搜索（⌘K）、通知、Applications、最近/收藏、助手、工作区投影与账户；投影只分组，不授予权限。顶栏“Switch application / 切换应用”及门户/收藏/命令入口切换获权应用，左栏只显示当前应用导航。构建侧只有 **Builder / 应用设计台**；治理进入 **Control Panel / 控制面板**，生产运行进入 **Runs / 运行**，发布者使用设计台的发布组而非定义编辑器。应用页签独立记忆；切回来恢复原活动资源，无布局才开主页。切应用、跨应用深链、关闭/关闭其他/关闭全部、身份与语言切换会检查未保存内容，一次列出全部；先在原编辑器保存，或明确放弃，待完成提交须等待结果。Shell 的 Home/门户/通知/搜索等不混入应用记忆。
+
+右键页签或 Window 菜单可在旁边打开或移到新窗口；已有资源移同一个页签，保留本地输入，不复制编辑会话。单独一个页签且无其他分栏时不提供伪分屏。移到新窗口不先放弃草稿；关闭子窗口由原 Dock 归回，浏览器阻止弹窗会提示。关闭全部后可用 Open home / 打开主页或搜索命令重新进入。旧资源深链仍由原 reader 解码：`flow` 是定义编辑器，`flow-instance` 是共享运行详情，运维自动化为 `automation-operations`；不改后台记录身份或权限。已发布应用左栏“Application runs / 应用运行”及其流程/Agent/计算详情沿共享运行读者，返回时保留应用上下文；读取失败不把缓存的旧运行结果继续展示为当前可用。
+
+业务成员只见已获权原生/租户应用及知识内容；`AppUI.category` 决定门户分类。项目按 `platform.project.save` 给出资产编辑委派（只提升编辑、不提升发布），发布与审计角色独立：`build` Publisher 只保存/激活候选不改定义；Auditor 可读审计、成员与包但不可决策。角色投影与导航不替代原宿主授权。
+
+资源树只按成功读取的原项目目录分组，目录不可用显示未知归属，不伪称“未加入项目”；多个应用引用同一资产时显示共同引用，不任意选择第一个。目录读取失败提供重读，不把空列表当作应用无资产。发布门禁只关注当前应用所需且未安装的资产，不因无关可选能力不可读而强制依赖它。
+
+项目归属修改按原 build.app.edit 捕获完整载荷/revision，未知结果先重试原请求，不用新 revision 暗中合并。新资源已创建但加入失败时保留原 type/id，可重试同一记录；添加既有资源使用无损身份选择，不按冒号拆 ID。模块导入在原页面保存/发布阶段完成后还须确认应用归属；应用更新拒绝或未知时保留已确认页面、依赖和原交付策略，继续处理同一批，不重新创建页面。
+
+项目设置在首次编辑时保留原值与 revision，自动保存只提交实际编辑字段；读取刷新不把未编辑字段写回，冲突保留草稿，可显式保存或重新读取。未保存/提交中的设置保护应用切换与资源归属操作，发布/变更入口只接已确认记录。项目运行按真实 Flow 身份关联，点击运行打开该实例并保留返回项目/应用上下文；读取失败不显示“没有运行”或“全部已发布”。变更选择也先处理原发布任务的未确认请求，当前应用只列其页面和资源的草稿。
+
+共享创建表单在结果未知时冻结目标 ID 与原载荷，重试使用原 target/revision/值；明确拒绝后才能纠正输入。生成表单与专用动作表单共用原 Host/outbox，不为重试另建记录。局部取消只处理该表单的输入，不清空同页签的其他编辑文档；关闭整个页签或应用仍检查全部文档。
+
+模块的导航、页头、变量与查询仍由原应用草稿保存。保存只确认捕获快照，已保存后的读取失败不伪称提交失败；关闭或切身份会处理未保存内容。新页和模板页均在原页面创建确认后加入当前模块，归属失败保留原 ID，可重试加入同一页或明确保留为未关联页，不重新创建。模板取消只放弃自身输入，不连带放弃同一页签里的模块/页面草稿。
+
+查询和关系资源保存返回真实 id/revision，后续安装和候选审阅使用该返回值，不再读取创建前的空 id；提交共享锁，拒绝保留编辑，保存/安装确认后的读取失败只标读取不可用。原对象引用、关系存储、归档规则和精确保留版本不变；刷新不采用低于已确认修订的记录。
+
+Flow/Automation 的发布审阅先确认当前草稿，再进入原候选审阅；自动生成的 Automation 名称在原创建请求中保持不变，重试不改载荷。代码函数保存、编译共享锁和原 revision：保存后的读取失败不再次保存，编译只接已确认修订，源码/契约修改不能借旧 module 标识直接进入发布。所有直接安装仍受原 release profile 与后端授权限制，dirty 草稿不提供直接安装或归档路径。
+
+发布深链的联合选择无效或超限时明确拒绝审阅，不静默丢掉依赖再发布应用根；请求沿原 4096 字节/32 草稿预算，浏览器不裁切闭包。保存、评测、激活及宿主管理只接受一个完整的有界 JSON 请求，额外 JSON 值或超限正文不会被截断成成功请求。
+
+应用发布的联合选择包含应用根与所选未安装依赖，新深链以 JSON 保存完整资源 ID，旧书签仍解析。候选保存/评测/激活在当前任务页捕获原请求；未确认的请求可用同一幂等键与载荷重试，离开或放弃本地记录不撤销已接受工作。切换选择先处理该未确认记录，提交中不能切换；激活必须重新读取同一封存候选及当前升级计划，不能凭上一个候选、缓存评测或读取失败后的状态启用。直接安装只在已读取的 release profile 明确允许时出现。
 
 在工作区顶部点“Last activated release / 租户最后激活的发布”，或打开“Search and commands / 搜索和命令”选择同一命令，可查看完整发布 ID 并刷新；窄屏保留搜索图标。它标识最后激活的候选；直接安装可能在其之外改变定义（production profile 已停用），已有流程仍保留自己的启动发布。尚未激活与读取失败分别显示，失败时不继续展示旧 ID。此入口不开放构建者候选目录。
 
@@ -14,13 +38,13 @@
 
 本节沿现有业务和交付入口操作；本地账户及登录方法见 [部署说明](../deploy/local/README.md)，不把开发令牌用于生产入口。酒店使用 `http://localhost:8495`，制造使用 `http://localhost:8490`；先确认 `/healthz`、工作区的当前租户、自己的应用角色和最后激活发布。运行环境更新只用 `make docker`，保留已有数据卷。隔离复核用 `make rehearse`；它创建并清除自己的演练环境，不在负责人租户重置数据或撤销角色。
 
-**酒店业务。** 销售从 CRM 创建客户和商机，在商机记录选择 Book stay / 预订住宿或 Plan group stay / 计划团队住宿，填写原房型、入住和离店日期。绑定住宿提供方时，结果沿 `lodging.booking/1` 返回并关联真实住宿记录；请求被接受不表示已订到房。没有提供方时由有权人员记录电话/邮件答复。管理员在 Protocols / 协议核对当前提供方，在 PMS 取消住宿后回到商机查看来源记录和活动；改变提供方只影响新请求，旧住宿继续属于原提供方。销售丢失提供方角色后，新预订应拒绝，不以销售角色替代 PMS 权限。相关动作分别是 `crm.opportunity.book/plan/answer`、`pms.reservation.cancel`、`platform.protocol.bind`，跨应用双方独立授权。
+**酒店业务。** 销售从 CRM 创建客户和商机，在商机记录选择 Book stay / 预订住宿或 Plan group stay / 计划团队住宿，填写原房型、入住和离店日期。绑定住宿提供方时，结果沿 `lodging.booking/1` 返回并关联真实住宿记录；请求被接受不表示已订到房。没有提供方时由有权人员记录电话/邮件答复。管理员在 Protocols / 协议核对当前提供方，在 PMS 取消住宿后回到商机查看来源记录和活动；改变提供方只影响新请求，旧住宿继续属于原提供方。销售丢失提供方角色后，新预订应拒绝，不以销售角色替代 PMS 权限。相关动作分别是 `crm.opportunity.book/plan/answer`、`pms.reservation.cancel`、`platform.protocol.bind`，跨应用双方独立授权。原 `make rehearse` 的 S-01 区块以受控 PostgreSQL 客户行创建 CRM Account，映射仍由原 Source/原对象动作接收，再由普通前台成员打开商机并通过 PMS 预订；核对 CRM 原 `asked→booked` 答复、链接的 Reservation 和成员可读历史，不以请求已接受代替住宿结果。
 
-**制造业务。** 主管在 MES 下达订单，明确产品、数量、批次数和受支持的计划订单；普通操作员在 SFC 按已固定工艺版本选择当前工序可用设备，依次 Start / 开工和 Complete / 完工。订单完成后的生产确认沿原生产协议发送到 ERP，不能把 SFC 完工等同 ERP 已接受。没有计划订单时确认被拒绝；主管核对拒绝原因和目标计划后执行 `mes.order.reconfirm`，读取订单确认状态及 ERP 原生产记录。质量/返工沿原 MES 动作，不直接改 SFC 索引；不新增工艺主数据或排产范围。可执行的原动作是 `mes.order.release`、`mes.sfc.start/complete` 和 `mes.order.reconfirm`，使用该租户实际目录中的产品、设备与计划订单，不照抄其他租户 ID。
+**制造业务。** 主管在 MES 下达订单，明确产品、数量、批次数和受支持的计划订单；普通操作员在 SFC 按已固定工艺版本选择当前工序可用设备，依次 Start / 开工和 Complete / 完工。订单完成后的生产确认沿原生产协议发送到 ERP，不能把 SFC 完工等同 ERP 已接受。没有计划订单时确认被拒绝；主管核对拒绝原因和目标计划后执行 `mes.order.reconfirm`，读取订单确认状态及 ERP 原生产记录。质量/返工沿原 MES 动作，不直接改 SFC 索引；不新增工艺主数据或排产范围。可执行的原动作是 `mes.order.release`、`mes.sfc.start/complete` 和 `mes.order.reconfirm`，使用该租户实际目录中的产品、设备与计划订单，不照抄其他租户 ID。原 `make rehearse` 的 S-01 区块将受控 PostgreSQL 生产计划行映射到原 ERP Production，先 release，再由主管下达 MES 订单、普通操作员执行已固定工艺，最后核对 ERP 的 `confirmed`、shopOrder 与 yield 以及原 MES 确认状态；重启比较两应用各自的记录、修订及接受历史。
 
 **构建、外部数据与发布。** 构建者在 Data Connection 建立并 Check 连接，配置 Source 写入原 Dataset；Pipeline 明确类型转换、数据质量规则及目标业务对象，先查看有效行和拒绝行，再在 Workshop 组合记录窗口与原动作。Automate 的流程和 Writeback 固定依赖版本；回写结果字段只接外部实际回执。Projects 的应用资源须包含 Connection、Source、Dataset、Pipeline、Matching、Writeback 以及所需对象、页面、流程。Releases 选择应用和依赖草稿，Check joint candidate / 检查联合候选，查看问题定位、测试和完整封存资产，保存候选后激活；后续草稿编辑不修改该候选。普通成员从 Home 的已发布应用进入，操作收到的数据行，不进入定义编辑器。`make e2e SPEC=integration-fabric` 在两行业隔离宿主复核这条共同收货链；其中外部 HTTP 服务使用受控真实请求与合成行，两个宿主采用同一收货语义，不能用这条路线代替上面的不同原生行业任务或生产客户验收。
 
-**目标环境及受支持升级。** 有权宿主管理员在 Host Console 选择封存候选和目标租户，核对完整依赖与目标主体/scope，显式设置目标环境的连接/来源绑定；凭据、数据行、消费游标和投递回执不随候选移植。先晋级不激活，查看目标环境升级计划后激活。只改显示或兼容逻辑的版本可沿同一路径升级；已存在记录的存储字段变化在没有受支持迁移计划时会拒绝。旧等待流程继续启动时的版本和发布；定义回退不回滚已发生业务事实。`TestIntegrationReleaseAcrossEnvironments` 与配置真实 PostgreSQL 后的 `TestJournalIntegrationReleaseAcrossEnvironments` 复核两环境绑定、v2、旧在途工作、晚期拒绝和故障恢复；独立接手人员仍须在所交付环境完成实际操作。
+**目标环境及受支持升级。** 有权宿主管理员在 Host Console 选择封存候选和目标租户，核对完整依赖与目标主体/scope，显式设置目标环境的连接/来源绑定；凭据、数据行、消费游标和投递回执不随候选移植。先晋级不激活，查看目标环境升级计划后激活。只改显示或兼容逻辑的版本可沿同一路径升级；已存在记录的存储字段变化在没有受支持迁移计划时会拒绝。旧等待流程继续启动时的版本和发布；定义回退不回滚已发生业务事实。`TestIntegrationReleaseAcrossEnvironments` 与配置真实 PostgreSQL 后的 `TestJournalIntegrationReleaseAcrossEnvironments` 复核两环境绑定、v2、旧在途工作、晚期拒绝和故障恢复；独立接手人员仍须在所交付环境完成实际操作。 晋级及记录迁移页面只使用当前环境的可读制品和匹配支持会话；读取失败或过期/不匹配的会话不开放提交。提交中冻结源/目标/候选/类型/会话；未确认晋级以原 key 与完整会话重试，迁移保留原选择并沿原行导入收据恢复，源行仍由原 owner 重新读取。已接收请求后的刷新失败不标成提交失败，最后结果保留其原环境/候选；离开不回滚已发生事实。纯宿主管理壳缺少表单输入上下文时也显示原拒绝/连接错误。
 
 **失败定位与恢复。** 从业务记录的“此记录的相关工作”进入原流程/审批/AI 运行，核对发起成员、原定义版本、启动发布和错误；集成管理员从 Integration health / 集成健康打开原 Source、Pipeline 或 Writeback 及对应连接，核对队列、失败行和投递状态。外部 503 时业务接受与投递成功分别显示，修复端点后按原重试恢复，保持原幂等键；结果未知时不能自行报告成功。集成角色只能看获权元数据，不能读宿主效果载荷。进程问题查 `/healthz`，租户问题由管理员查 `/v1/health`；quarantined 时沿 [恢复与原地修复方法](../deploy/local/README.md) 处理，不删历史日志使健康变绿。受支持故障、重启、备份恢复和全日志重建由 `make rehearse` 集中复核。
 
@@ -237,7 +261,7 @@ Ontology 的"Object types"统一展示当前成员可见的原生/租户资源�
 
 选中组件或布局后，画布贴边工具条和布局树共用复制、创建副本、排序、分组、解组、均分、重置、暂存/放回与删除命令，受保护的根/插槽或不适用操作禁用。拖动树节点、组件库条目或画布工具条的抓手，可插入、交换或沿垂直边缘组合成行/列；松手提交一次编辑，Escape 取消。底部/右侧手柄调整高度/宽度，方向键每次调整 8px，双击或 Home 恢复；邻列宽度成对调整，尺寸受原预算限制。Inspector 用成对 W/H、图标布局/对齐组、内边距/间距和折叠尺寸限制组织属性，保留完整提示与键盘入口。当前是结构化布局及尺寸吸附，不提供自由 X/Y/旋转或 24 栏断点配置。
 
-页面设计器的库与检查器可通过分隔条拖动，或聚焦分隔条用左右方向键调整宽度。工具条可收起两侧面板、撤销/重做和复制组件；画布支持桌面/平板/手机宽度及缩放。命令键加 S 保存，非输入框中的命令键加 Z/Shift+Z 撤销/重做，加 D 复制；输入框保留原编辑快捷键。保存期间锁定文档操作，revision 冲突保留草稿。直接安装立即改变当前工作区（仅 development／导入／探针 profile）；正式交付沿“审查发布→检查依赖→保存不可变候选→激活”。
+编辑器的结构、检查器与底栏复用同一 Workbench。点击 Dock 页签选择或打开任务，重复点击不会收起；“Close dock / 关闭底栏”或命令键加 J 收起，已访问的输入和测试设置保留，Run / Publish 能重新打开同一任务。检查器关闭不取消当前选中项，重开保留页签；页签支持左右方向键及 Home / End。库与检查器可拖动分隔条或用方向键调整，双击恢复默认；较窄的容器或分栏中通过工具条切换画布、结构与检查器，关闭或 Escape 返回画布，不把检查器堆在不可达的下方。工具条也可撤销/重做和复制组件；画布支持桌面/平板/手机宽度及缩放。命令键加 S 保存，非输入框中的命令键加 Z/Shift+Z 撤销/重做，加 D 复制；输入框保留原编辑快捷键。保存期间锁定文档操作，revision 冲突保留草稿。直接安装立即改变当前工作区（仅 development／导入／探针 profile）；正式交付沿“审查发布→检查依赖→保存不可变候选→激活”。
 
 页面树可分组为“Flow layout / 流式布局”或“Toolbar / 工具栏”，检查器设置对齐和自动换行。用“Add overlay / 添加浮层”建立独立布局根，设置标题与Modal/Drawer；树中选中浮层根后在画布添加组件，已有组件的“Move widget to / 将组件移至”沿相同作用域限制处理；不允许提升 Loop/Overlay 局部绑定，受拒绝时显示诊断。添加Button后在“On click / 点击时”选择打开/关闭目标浮层，或向类型匹配的页面state写入固定值；写入Tabs时选择稳定子节点。每个浮层需要内容，每个按钮需要事件绑定才能保存。记录资源与present派生布尔可绑定“Enabled when / 启用条件”，实现选中后打开操作面板。业务动作仍放入原Actions组件；预览不提交，正式交付继续走候选。关闭/遮罩/Escape卸载局部表单并返回调用者，页面选择保留；刷新恢复初始关闭状态。删除浮层同时删除其内部组件与触发按钮；仍引用已删来源/变量的其他声明须在诊断处修正。
 
@@ -275,7 +299,7 @@ WMS 是工作台中创建并发布的受控应用，复用所属酒店或制造�
 
 ## Asset Library / 资产库
 
-从 Apps 门户、应用设计台左栏"探索"或应用切换器打开 **Asset Library / 资产库**（[ADR-0054](ADR/0054-ide-workspaces.md) D3）：左栏按层级的资产树（搜索、用法筛选），主区文档 + 可操作示例（可展开占满），右栏"怎么用"（导入片段、来源、归属包 API、组成、被谁使用、在应用设计台中打开/创建），底栏 Health（索引健康，实时算出）与 Runtime（当前宿主已授权能力）。同一应用含 **Sandbox / 代码沙箱**（D4）：片段 · 编辑器 · 预览 · 控制台。离线目录用 `pnpm --dir web/apps/catalog dev`，默认端口 5174，复用同一应用声明与外壳；离线示例只有合成数据。
+从 Apps 门户、应用设计台左栏"探索"或应用切换器打开 **Asset Library / 资产库**（[ADR-0054](ADR/0054-ide-workspaces.md) D3）：左栏按层级的资产树（搜索、用法筛选），主区文档 + 可操作示例（可展开占满），右栏"怎么用"（导入片段、来源、归属包 API、组成、被谁使用、在应用设计台中打开/创建），底栏 Health（索引健康，实时算出）与 Runtime（当前宿主已授权能力）。同一应用含 **Sandbox / 代码沙箱**（D4）：片段 · 编辑器 · 预览 · 控制台。片段切换/新建/删除/重置会保护未保存代码，Run 不等于 Save，预览标出上次运行；再次 Run 总会重新执行，隐藏预览停止其 frame，重开会重启。保存失败或另一个页签修改库时保留编辑代码，重读前先处理草稿。在线片段按租户/主体存于此浏览器，旧浏览器全局片段仍在离线库；不要在片段中放业务原文或凭据；这不是服务端/跨设备保存。离线目录用 `pnpm --dir web/apps/catalog dev`，默认端口 5174，复用同一应用声明与外壳；离线示例只有合成数据。
 
 观测代码组件：在Catalog查“Original observation table / 原观测表”“Original observation statistics / 原观测统计”“Original availability history / 原可用率历史”“Original observation time series / 原观测时间序列”，开发视角可查看`@platform/ui`的ObservationTable、ObservationStatistics、ObservationAvailability及ObservationTimeSeries公共类型。调用方提供原EntityInfo、显式信号/单位和事件datetime字段，窗口为`{scope, records, total}`；scope包含原读取/查询身份，旧窗口不显示。表格列搜索/隐藏、元数据固定和行高只改变已读取窗口，选择/导出回调返回原记录和字段，不读取其他数据。统计调用方提供完整窗口答复与signal/threshold/windowRows/计数；最新样本和历史也需原scope。时间图支持最多500点及三种独立单位，保留缺值、原时间和记录身份；availability摘要默认与原窗口作用域、字段及total一致；提供显式averageInfo/averageField时，原资产数量/均值可独立于样本历史total，仍校验可读数值字段与共同作用域，SLO是明确呈现阈值。Catalog示例仅用固定合成数据，不保存文件或接入遥测。四类Workshop源组件可沿显式真实来源映射导入；原生配置/读取/冻结已接通，边界见[ADR-0046 §6.78](ADR/0046-application-studio-fusion.md#678-业务观测宽表窗口统计与真实时间序列)。
 
@@ -333,7 +357,10 @@ Go 类型内嵌 `platform.Record`，由 `platform.Entity` 声明：
 
 代码使用 `platform.Flow`，租户使用 `build.process`，都由原 Flow/Work 执行。步骤明确 `kind`，数据使用 `Binding{source,path,step,value}`，条件使用结构化 Predicate；`next/error/cases/body` 决定控制路径。ForEach/While 是有界 scope，break/continue 只影响所在循环；fork `all` 等待全部，`any` 等待首个成功路径。保存和发布由同一 owner compiler 校验；布局不决定运行顺序。
 
-持续 PostgreSQL 来源：在 Data sources 中选已 Check 就绪的 PostgreSQL 连接、表与唯一递增的 Incremental column，将 Rows go to 选为 A continuous Flow，保存并 Publish。每个原 Flow 实例独立持有消费位置，Source 不生成对象/数据集行，也不提供 Pull now/Reset cursor；暂停 Source 可停止读取，保持配置不变再 Publish 从原位置继续。Flow 设置的 Continuous source intake 保存 `Source`（来源 name）、`Batch`、`State`、`FrameBytes`、`DeadLetter`、`Window` 及 `Intake:{sourceRecord,key,partition,eventTime,value}`，声明随原 Process 版本/候选保留。分区列为 1–8 个非空字符串列，事件时间为数据库时间戳；修改来源/连接配置后旧实例拒绝换绑。当前接线到原消费游标/事件时间窗口，完整图边界见 [ADR-0047 §13.5](ADR/0047-platform-composition-and-workspaces.md#135-当前边界)。
+持续 PostgreSQL 来源：在 Data sources 中选已 Check 就绪的 PostgreSQL 连接、表与唯一递增的 Incremental column，将 Rows go to 选为 A continuous Flow，保存并 Publish。每个原 Flow 实例独立持有消费位置，Source 不生成对象/数据集行，也不提供 Pull now/Reset cursor；暂停 Source 可停止读取，保持配置不变再 Publish 从原位置继续。Flow 设置的 Continuous source intake 保存 `Source`（来源 name）、`Batch`、`State`、`FrameBytes`、`DeadLetter`、`Window` 及 `Intake:{sourceRecord,key,partition,eventTime,value,fields}`，声明随原 Process 版本/候选保留。分区列为 1–8 个非空字符串列，事件时间为数据库时间戳；`fields` 保留业务 Action 所需的非采样列，修改来源/连接配置后旧实例拒绝换绑。默认原生链以固定 f32 kernel 聚合，`threshold.field`（默认 `mean`）映射到触发项 `reading`，经原 Action 执行；只读结果属于该应用/实例/版本，intake-only 批保留最近完成窗口，完成的空窗口替换为 `[]`。实例中的大算子输出可能是带 `output:true` 的摘要/大小引用，须沿原成员权限读 frame 核对，不能当作数值或任意文件句柄。停止/续接、死信及当前验证层级见 [ADR-0047 §13.5](ADR/0047-platform-composition-and-workspaces.md#135-当前边界)。
+
+默认七节点导入：选择已发布的只读 PostgreSQL Source，明确事件 key、分区列、时间和值列及所需元数据；Aggregate 使用原固定 `wasm:f32-window-stats`，Threshold 使用 mean 的 high/low/debounce，Alert 绑定当前已安装版本的业务动作与目标。来源/窗口 retry 按原有限 attempts/backoff，超预算或权限拒绝不推进游标。保存原 Process，必要的 Source/Connection 和 Workshop 页进入同一候选；只读页的对象选择 `flow.output`，显示 name、instance、version、batch，detail 的 value 是原已接受统计。管理员从原运行详情检查 flow.dead-letter 的原版本、原因与权限后显式重放；已成功项和过期项不能重放。停止后仅无在途执行的原连续实例可 Resume，保持原版本和来源位置；永久退出使用 Retire，删除失败的清理意图留在原运行供重试。完整支持/保留边界见 ADR-0047 §13.5，不能将试运行视为吞吐验收。
+
 
 默认七节点导入：选择已发布的只读 PostgreSQL Source，明确事件 key、分区列、时间和值列及所需元数据；Aggregate 使用原固定 `wasm:f32-window-stats`，Threshold 使用 mean 的 high/low/debounce，Alert 绑定当前已安装版本的业务动作与目标。来源/窗口 retry 按原有限 attempts/backoff，超预算或权限拒绝不推进游标。保存原 Process，必要的 Source/Connection 和 Workshop 页进入同一候选；只读页的对象选择 `flow.output`，显示 name、instance、version、batch，detail 的 value 是原已接受统计。管理员从原运行详情检查 flow.dead-letter 的原版本、原因与权限后显式重放；已成功项和过期项不能重放。停止后仅无在途执行的原连续实例可 Resume，保持原版本和来源位置；永久退出使用 Retire，删除失败的清理意图留在原运行供重试。完整支持/保留边界见 ADR-0047 §13.5，不能将试运行视为吞吐验收。
 

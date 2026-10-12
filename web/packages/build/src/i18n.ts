@@ -2,6 +2,62 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "After an explicit revision refusal, review the current application before retrying. Confirmed pages remain; the imported header replaces the current header only when one was reviewed.": "修订被明确拒绝后，请先审查当前应用再重试。已确认的页面保留；只有已审查的导入页头才替换当前页头。",
+  "Review current application and retry membership": "审查当前应用并重试归属",
+  "Project ownership is unavailable": "无法读取项目归属",
+  "Reading project ownership…": "正在读取项目归属…",
+  "Shared by {projects}": "由 {projects} 共同引用",
+  "The resource inventory is unavailable. This does not mean the application has no assets.": "资源目录不可用；这不表示应用没有资产。",
+  "Some project assets are unreadable. Membership and release selection must not be inferred from an empty inventory.": "部分项目资产无法读取；不能根据空目录推断归属或发布选择。",
+
+  "The release selection is invalid or exceeds its budget. Reopen review from the application.": "发布选择无效或超过预算，请从应用重新打开审阅。",
+  "The release selection exceeds the original 4096-byte request budget. No drafts were dropped.": "发布选择超过原 4096 字节请求预算；未裁掉任何草稿。",
+
+  "An earlier application update is unconfirmed. Retry its original payload before changing membership.": "此前的应用更新尚未确认；更改归属前，请重试其原载荷。",
+  "The application update is unconfirmed. Retry the original request.": "应用更新尚未确认，请重试原请求。",
+  "The application was saved, but its current record could not be reloaded.": "应用已保存，但暂时无法重新读取当前记录。",
+  "The resource exists, but its project membership could not be read. Retry the same resource.": "资源已存在，但暂时无法读取其项目归属。请重试同一资源。",
+  "An application update may already have been accepted. Retry its original payload; leaving does not undo accepted changes.": "应用更新可能已被接收，请重试原载荷；离开不会撤销已接收的变更。",
+  "Retry original application update": "重试原应用更新",
+  "The resource was created but is not confirmed in this project. Retry adding the same record; do not create another.": "资源已创建，但尚未确认加入此项目。请重试加入同一记录，不要重新创建。",
+  "Retry adding created resource": "重试加入已创建的资源",
+  "Keep resource without project membership": "保留资源，不加入项目",
+  "Pages are confirmed, but application membership is not. Continue with the same imported pages; do not import them again.": "页面已确认，但应用归属尚未确认。请继续处理同一批页面，不要重新导入。",
+
+  "The resource was saved, but its current record could not be reloaded.": "资源已保存，但暂时无法重新读取当前记录。",
+  "The resource was installed, but its current record could not be reloaded.": "资源已安装，但暂时无法重新读取当前记录。",
+
+  "The code function was saved, but its current record could not be reloaded.": "代码函数已保存，但暂时无法重新读取当前记录。",
+  "Compilation was accepted. Reload the function to read its result.": "编译请求已被接收，请重新读取函数以查看结果。",
+
+  "Module ownership could not be read. Open the page from its project after reloading.": "无法读取模块归属，请重新读取后从项目打开该页面。",
+  "Modules are unavailable. This does not mean no applications exist.": "模块目录不可用；这不表示没有应用。",
+  "The module was saved, but its current record could not be reloaded.": "模块已保存，但暂时无法重新读取当前记录。",
+  "The created page is unavailable. Its record was not replaced or recreated.": "已创建的页面暂时不可用，原记录未被替换或重新创建。",
+  "The page was created but could not be added to this module. Retry adding the same page.": "页面已创建，但无法加入该模块；请重试加入同一个页面。",
+  "A page was created but its module membership is unconfirmed. Retry the same page; creating another page would duplicate the work.": "页面已创建，但模块归属尚未确认。请重试同一页面；再次新建会重复工作。",
+  "Retry adding created page": "重试加入已创建的页面",
+  "Keep page without module membership": "保留页面，不加入模块",
+  "Reload current module": "重新读取当前模块",
+  "The draft could not be created. Retry its original request.": "草稿创建尚未确认，请重试原请求。",
+  "Retry original page creation": "重试原页面创建请求",
+  "Page creation is unconfirmed. Its original ID and payload are retained; retry does not create a second page.": "页面创建尚未确认；已保留原 ID 与载荷，重试不会创建第二个页面。",
+  "The page draft was created. It is not published.": "页面草稿已创建，尚未发布。",
+  "Open created page": "打开已创建的页面",
+
+  "Save or discard project settings before changing resource membership.": "更改资源归属前，请先保存或放弃项目设置。",
+  "Reload current project settings": "重新读取当前项目设置",
+  "Some draft inventories are unavailable. An empty list does not mean every draft is live.": "部分草稿目录无法读取；列表为空不表示所有草稿都已发布。",
+  "Project runs are unavailable. This does not mean there are no running tasks.": "无法读取项目运行；这不表示没有正在执行的任务。",
+  "The release request was accepted, but its refreshed review is unavailable.": "发布请求已被接收，但暂时无法读取更新后的审阅。",
+  "Active release is unavailable.": "无法读取当前活跃发布。",
+  "A joint candidate accepts at most 32 drafts. Select a supported application closure.": "联合候选最多接收 32 份草稿，请选择受支持的应用依赖闭包。",
+  "The release request was not confirmed. Retry the original request.": "发布请求尚未确认，请重试原请求。",
+  "A release request is unconfirmed. It may already have been accepted. Retry its original key and payload; leaving does not cancel accepted work.": "发布请求尚未确认，但可能已经被接收。请用原幂等键与载荷重试；离开页面不会取消已接收的工作。",
+  "Retry original release request": "重试原发布请求",
+  "Forget local request": "放弃本地请求记录",
+  "Evaluation reports are unavailable. Cached results do not grant activation.": "无法读取评测报告，缓存的结果不授予激活资格。",
+
   "Link types": "关系类型",
   "Logic flows": "逻辑流程",
   "Group": "分组",
@@ -2865,6 +2921,7 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+
  "Record card": "记录卡片",
  "Card accent tone": "卡片强调色调",
  "Map object card {widget}": "映射对象卡片{widget}",

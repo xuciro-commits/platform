@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -174,7 +175,24 @@ func TestContinuousNativeChainAssetsReplayResumeAndRetire(t *testing.T) {
 	if got := refuse(t, tn, "member", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", letters[0].ID, map[string]any{}, at); got == "ok" {
 		t.Fatal("a new replay command delivered the same dead letter twice")
 	}
-	late := platform.FlowBatch{ID: "two", Predecessor: "one", Signals: []platform.FlowSignal{{Key: "late", Partition: "late", At: at.Add(-time.Hour), Value: platform.Raw(map[string]any{"probeId": "late", "reading": 13})}}}
+	// Intake between slide boundaries is accepted, but is not a new output
+	// window. It must not replace the last completed statistics with [] or
+	// claim that another eight-worker aggregate ran.
+	completedOutput := platform.Raw(outputs[0])
+	pending := platform.FlowBatch{ID: "pending", Predecessor: "one", Signals: []platform.FlowSignal{{Key: "pending", Partition: "0", At: at.Add(-6 * time.Second), Value: platform.Raw(map[string]any{"probeId": "0", "reading": 12.5})}}}
+	if _, err := tn.ConsumeFlowBatch(member, id, pending, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	latest, _ := platform.Get[platform.FlowOutput](tn.automation(flow.ID, false), outputs[0].ID)
+	if string(platform.Raw(latest)) != string(completedOutput) {
+		t.Fatalf("unready intake replaced the accepted output: %+v", latest)
+	}
+	waitingFrame, err := tn.ReadFlowFrame(member, id, at)
+	if err != nil || waitingFrame.Cursor != "pending" || waitingFrame.Workers != 0 || waitingFrame.CheckpointCursor != "pending" || waitingFrame.CheckpointArtifact == nil {
+		t.Fatalf("unready intake lost its checkpoint or reused old worker occupancy: %+v %v", waitingFrame, err)
+	}
+	tn.PullContinuousSources(at.Add(time.Second)) // retire the superseded frame through its owner
+	late := platform.FlowBatch{ID: "two", Predecessor: "pending", Signals: []platform.FlowSignal{{Key: "late", Partition: "late", At: at.Add(-time.Hour), Value: platform.Raw(map[string]any{"probeId": "late", "reading": 13})}}}
 	if _, err := tn.ConsumeFlowBatch(member, id, late, at.Add(5*time.Second)); err != nil {
 		t.Fatal(err)
 	}
@@ -196,6 +214,54 @@ func TestContinuousNativeChainAssetsReplayResumeAndRetire(t *testing.T) {
 		t.Fatal("same-version resume lost the original checkpoint")
 	}
 	tn.PullContinuousSources(at)
+	// Explicit signal replay reopens the original late value under the same
+	// retained definition; it neither grants another member the source nor
+	// redelivers accepted actions from the already-completed window.
+	var signalLetter platform.FlowDeadLetterAsset
+	for _, letter := range letters {
+		if letter.Action == "" && letter.Letter.Key == "late" {
+			signalLetter = letter
+		}
+	}
+	if signalLetter.ID == "" {
+		t.Fatal("the original late signal has no replayable asset")
+	}
+	if got := refuse(t, tn, "other", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", signalLetter.ID, map[string]any{}, at.Add(5*time.Second)); got == "ok" {
+		t.Fatal("another Flow administrator replayed the member's protected signal")
+	}
+	decide(t, tn, "member", "frames", "frames.probe.create", "frames.probe", "late", map[string]any{}, at.Add(5*time.Second))
+	decide(t, tn, "member", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", signalLetter.ID, map[string]any{}, at.Add(5*time.Second))
+	if probe, _ := platform.Get[nativeProbeRecord](tn.automation("frames", false), "late"); probe.Applied != 1 || probe.Reading != 13 {
+		t.Fatalf("explicit signal replay did not deliver the original native reading: %+v", probe)
+	}
+	for i := range 8 {
+		if probe, _ := platform.Get[nativeProbeRecord](tn.automation("frames", false), fmt.Sprint(i)); probe.Applied != 1 {
+			t.Fatalf("signal replay repeated an accepted action: %+v", probe)
+		}
+	}
+	if got := refuse(t, tn, "member", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", signalLetter.ID, map[string]any{}, at.Add(5*time.Second)); got == "ok" {
+		t.Fatal("a new replay command delivered the original signal twice")
+	}
+	frame, err = tn.ReadFlowFrame(member, id, at.Add(5*time.Second))
+	if err != nil || frame.Cursor != "replay:"+signalLetter.ID {
+		t.Fatalf("signal replay did not retain its exact logical batch: %+v %v", frame, err)
+	}
+	replayedLetter, _ := platform.Get[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), signalLetter.ID)
+	if !replayedLetter.Replayed || replayedLetter.Version != 1 {
+		t.Fatal("signal replay did not preserve its versioned accepted outcome")
+	}
+	tn.PullContinuousSources(at.Add(5 * time.Second))
+	// Conversely, a completed slide with no retained rows really replaces the
+	// application value. Keeping the previous result forever is not a fix.
+	empty := platform.FlowBatch{ID: "empty-window", Predecessor: frame.Cursor}
+	if _, err := tn.ConsumeFlowBatch(member, id, empty, at.Add(40*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	latest, _ = platform.Get[platform.FlowOutput](tn.automation(flow.ID, false), outputs[0].ID)
+	if latest.Batch != empty.ID || string(latest.Value) != "[]" {
+		t.Fatalf("completed empty window did not replace the application output: %+v", latest)
+	}
+	tn.PullContinuousSources(at.Add(40 * time.Second))
 	decide(t, tn, "member", flow.ID, flow.SchemaFlowStop, flow.InstanceType, id, map[string]any{}, at)
 	decide(t, tn, "member", flow.ID, flow.SchemaFlowRetire, flow.InstanceType, id, map[string]any{}, at)
 	files.failures = 1
@@ -213,4 +279,63 @@ func TestContinuousNativeChainAssetsReplayResumeAndRetire(t *testing.T) {
 		t.Fatal("explicitly retired state was silently recreated")
 	}
 	CheckReplay(t, tn, entries, compose)
+
+	t.Run("original hundred signals fit unchanged output budgets", func(t *testing.T) {
+		full := compose()
+		var history []Entry
+		full.Record = func(e Entry) { history = append(history, e) }
+		full.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { history = append(history, e); return e.Body, nil }
+		batch := platform.FlowBatch{ID: "hundred"}
+		for i := range 100 {
+			probe := fmt.Sprint(i)
+			decide(t, full, "member", "frames", "frames.probe.create", "frames.probe", probe, map[string]any{}, at)
+			batch.Signals = append(batch.Signals, platform.FlowSignal{Key: probe, Partition: probe, At: at.Add(-6 * time.Second), Value: platform.Raw(map[string]any{"probeId": probe, "reading": 12.5000001})})
+		}
+		decide(t, full, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+		if _, err := full.ConsumeFlowBatch(memberOf(t, full, "member"), id, batch, at); err != nil {
+			t.Fatalf("original workload refused: %s: %s", err.Code, err.Message)
+		}
+		for i := range 100 {
+			probe, _ := platform.Get[nativeProbeRecord](full.automation("frames", false), fmt.Sprint(i))
+			if probe.Applied != 1 || probe.Reading != 12.5 {
+				t.Fatalf("original workload lost a native action: %+v", probe)
+			}
+		}
+		frame, err := full.ReadFlowFrame(memberOf(t, full, "member"), id, at)
+		if err != nil || frame.Consumed != 100 || frame.Workers != 8 {
+			t.Fatalf("original workload lost its frame/parallel fold: %+v %v", frame, err)
+		}
+		output, _ := platform.Get[platform.FlowOutput](full.automation(flow.ID, false), outputs[0].ID)
+		var stats []map[string]any
+		if json.Unmarshal(output.Value, &stats) != nil || len(stats) != 100 || len(output.Value) > 48<<10 {
+			t.Fatalf("original read-only output escaped its budget or lost rows: %d", len(output.Value))
+		}
+		instance, _ := platform.Get[flow.FlowInstance](full.automation(flow.ID, false), id)
+		if len(platform.Raw(instance.Outputs)) > 60<<10 {
+			t.Fatal("original Flow output budget was widened")
+		}
+		var reference platform.FlowBatchStateReference
+		original := frame.OperatorOutputs["aggregate"]
+		if json.Unmarshal(instance.Outputs["aggregate"], &reference) != nil || !reference.Output || reference.Instance != id || reference.Node != "aggregate" || reference.Size != len(original) || reference.Digest != fmt.Sprintf("sha256:%x", sha256.Sum256(original)) {
+			t.Fatalf("wide output does not identify the exact authorized frame bytes: %+v", reference)
+		}
+		if _, err := full.ReadFlowFrame(memberOf(t, full, "other"), id, at); err == nil {
+			t.Fatal("wide output reference granted another member frame access")
+		}
+		if _, err := full.ConsumeFlowBatch(memberOf(t, full, "member"), id, batch, at.Add(time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		for i := range 100 {
+			probe, _ := platform.Get[nativeProbeRecord](full.automation("frames", false), fmt.Sprint(i))
+			if probe.Applied != 1 {
+				t.Fatal("wide-output batch retry repeated an accepted native action")
+			}
+		}
+		for _, entry := range history {
+			if len(entry.Body) > 1<<20 {
+				t.Fatal("original accepted-result budget was widened")
+			}
+		}
+		CheckReplay(t, full, history, compose)
+	})
 }

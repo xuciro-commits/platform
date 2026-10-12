@@ -1,11 +1,10 @@
-import {InputDraftProvider} from "@platform/ui";
 // The Workshop module (ADR-0053 §5.3, D1): a project's pages, navigation,
 // header and module-level variables, edited in one Workbench. With a page in
 // hand the main view is that page's canvas (PageEditor); without one it is the
 // module itself — header and navigation as people will see them.
 import { pageUIProfile, pageVariableValues, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import {ApplicationHeader, Button, Checkbox, IconPicker, Input, PanelSection, ProblemList, StructureRow, Textarea, Workbench, t, useWorkspace, type WorkbenchProblem} from "@platform/ui";
+import {ApplicationHeader, InputDraftProvider, Button, Dialog, Checkbox, IconPicker, Input, PanelSection, ProblemList, StructureRow, Textarea, Workbench, t, useUnsavedChanges, useWorkspace, type WorkbenchProblem} from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, LayoutTemplate, Layers, PanelTop, Plus, Settings2, Trash2, Variable } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDraftSession } from "../session/DraftSession";
@@ -23,14 +22,14 @@ type ModuleDraft = Pick<Api.Application, "header" | "uiProfile" | "variables" | 
 /** What a page editor needs to know about the module it belongs to. */
 export type ModuleContext = {
   project: Project; pages: { name: string; title: string; id?: string; state?: string }[]; currentPage?: string;
-  openPage: (id: string) => void; openModule: (focus?: ModuleFocus) => void; addPage: () => void; canEdit: boolean;
+  openPage: (id: string) => void; openModule: (focus?: ModuleFocus) => void; addPage: () => void; canEdit: boolean; busy?: boolean;
 };
 type ModuleFocus = "navigation" | "header" | "variables" | "queries" | "settings";
 
 const hydrate = (project: Project): ModuleDraft => ({ header: project.header, uiProfile: project.uiProfile, variables: project.variables, queries: project.queries, pages: project.pages ?? [], groups: project.groups ?? [], title: project.title, description: project.description, icon: project.icon });
 
 // Omitted fields keep their saved value on edit; null explicitly removes the header.
-const moduleChanges = (draft: ModuleDraft) => ({ ...draft, header: draft.header ?? null });
+const moduleChanges = (draft: ModuleDraft) => ({ ...draft, header: draft.header ?? null, variables: draft.variables ?? null, queries: draft.queries ?? null });
 
 /** Entry for the `module` view: a project's module, optionally with one page in hand. */
 export function ModuleWorkbench({ id, page, focus }: { id?: string; page?: string; focus?: string }) {
@@ -42,6 +41,7 @@ export function ModuleWorkbench({ id, page, focus }: { id?: string; page?: strin
   const projectId = id ?? owner?.id;
   if (!projectId && !page) return <ModulesList />;
   if (!projectId) {
+    if (projects.isError || pageQuery.isError) return <Workbench storageKey="module" title={t("Module")}><WorkbenchMessage>{t("Module ownership could not be read. Open the page from its project after reloading.")}</WorkbenchMessage></Workbench>;
     if (projects.isLoading || pageQuery.isLoading) return <Workbench storageKey="module" title={t("Module")}><WorkbenchMessage>{t("Loading…")}</WorkbenchMessage></Workbench>;
     // A page that belongs to no project is still editable on its own.
     return <PageEditor id={page!} />;
@@ -61,7 +61,8 @@ function ModulesList() {
         <span className="text-xs text-muted">{t("{n} pages", { n: project.pages?.length ?? 0 })}</span>
       </Button></li>)}
     </ul>
-    {!projects.isLoading && !rows.length && <p className="text-sm text-muted">{t("No projects yet. Create one in Projects.")}</p>}
+    {projects.isError && <p role="alert" className="text-sm text-danger">{t("Modules are unavailable. This does not mean no applications exist.")}</p>}
+    {!projects.isError && !projects.isLoading && !rows.length && <p className="text-sm text-muted">{t("No projects yet. Create one in Projects.")}</p>}
   </div>;
 }
 
@@ -75,37 +76,74 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const { draft, dirty } = session;
   const loaded = useRef(""),baseRevision=useRef(0), lock = useRef(false);
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
+  const [createdPage, setCreatedPage] = useState<{ type: string; id: string }>();
+  const latest = useRef(draft); latest.current = draft;
   const [focus, setFocus] = useState<ModuleFocus>(isModuleFocus(initialFocus) ? initialFocus : "navigation");
-  const [templates, setTemplates] = useState(false);
+  const [templates, setTemplates] = useState(false), [templateBusy, setTemplateBusy] = useState(false);
+  const templateClose = useRef<(() => void) | undefined>(undefined);
   useEffect(() => { if (project && !dirty && !saving && loaded.current !== `${project.id}:${project.revision}`) { session.load(hydrate(project));baseRevision.current=project.revision; loaded.current = `${project.id}:${project.revision}`; } }, [project, dirty, saving, session.load]);
   const canEdit = role("build") === "builder";
   const pages = useMemo(() => (draft.pages ?? []).map((name) => { const record = pageRecords.data?.records.find((item) => item.name === name && !item.archived); return { name, title: record?.title ?? name, id: record?.id, state: record?.state }; }), [draft.pages, pageRecords.data]);
+  const invalid = session.inputs.invalid;
+  const { markSaved, confirmDiscard } = useUnsavedChanges(dirty || !!createdPage, () => {
+    if (project) { session.load(hydrate(project)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
+    setCreatedPage(undefined); setError(undefined);
+  }, saving || templateBusy);
+  // Only the captured document is acknowledged. A later edit or failed read
+  // never replaces it with a different revision or repeats an accepted write.
+  const persist = async (submitted: ModuleDraft) => {
+    const expected = baseRevision.current;
+    if (!await decide("build.app.edit", { type: "build.app", id }, moduleChanges(submitted), { expectedRevision: expected, quiet: true, onRefused: setError })) return false;
+    baseRevision.current = expected + 1; loaded.current = `${id}:${expected + 1}`;
+    session.saved(submitted); markSaved();
+    try {
+      const refreshed = await query.refetch();
+      const next = refreshed.isSuccess && refreshed.data?.record?.revision === expected + 1 ? refreshed.data.record : undefined;
+      if (next) session.saved(submitted, hydrate(next));
+      else setError(t("The module was saved, but its current record could not be reloaded."));
+    } catch { setError(t("The module was saved, but its current record could not be reloaded.")); }
+    return true;
+  };
   const save = async () => {
-    if (!project || lock.current) return false;
+    if (!project || !canEdit || lock.current || invalid || createdPage) return false;
+    lock.current = true; setSaving(true); setError(undefined);
+    try { return await persist(structuredClone(latest.current)); }
+    catch { setError(t("The module could not be saved.")); return false; }
+    finally { lock.current = false; setSaving(false); }
+  };
+  useAutoSave({ generation: JSON.stringify(draft), invalid, enabled: canEdit && !createdPage && !templates, dirty, busy: saving || templateBusy, save });
+  const edit = (patch: Partial<ModuleDraft>) => { if (canEdit && !lock.current && !createdPage) session.edit(old => ({ ...old, ...patch })); };
+  const attachCreatedPage = async (target: { type: string; id: string }) => {
+    setCreatedPage(target);
+    if (!project || !canEdit || lock.current || invalid) return;
     lock.current = true; setSaving(true); setError(undefined);
     try {
-      const expected=baseRevision.current;
-      const ok = await decide("build.app.edit", { type: "build.app", id: project.id }, moduleChanges(draft), { expectedRevision: expected, quiet: true, onRefused: setError });
-      if (ok) { const result = await query.refetch(); const next = result.data?.record?.revision===expected+1?result.data.record:undefined;baseRevision.current=expected+1; session.saved(draft, next ? hydrate(next) : undefined); if (next) loaded.current = `${next.id}:${next.revision}`; }
-      return ok;
-    } catch { setError(t("The module could not be saved.")); return false; } finally { lock.current = false; setSaving(false); }
-  };
-  useAutoSave({ generation:JSON.stringify(draft), invalid:Object.values(session.inputProblems).some(Boolean), enabled: canEdit, dirty, busy: saving, save });
-  const edit = (patch: Partial<ModuleDraft>) => { if (canEdit) session.edit((old) => ({ ...old, ...patch })); };
-  const createPage = useNewRecord("build.page", async (target) => {
-    try {
       const { record } = await client.get<{ record: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(target.id)}`);
-      const next = { ...draft, pages: [...new Set([...(draft.pages ?? []), record.name])] };
-      session.edit(next);
-      if (project) {const expected=baseRevision.current;if(!await decide("build.app.edit",{type:"build.app",id:project.id},moduleChanges(next),{expectedRevision:expected,quiet:true,onRefused:setError}))return;baseRevision.current=expected+1;loaded.current=`${project.id}:${expected+1}`;session.saved(next);}
-      await query.refetch();
-      openPage(record.id);
-    } catch { setError(t("The page was created but could not be added to this module. Add it from the project's resources.")); }
+      if (!record || record.id !== target.id || record.archived) { setError(t("The created page is unavailable. Its record was not replaced or recreated.")); return; }
+      const submitted = { ...structuredClone(latest.current), pages: [...new Set([...(latest.current.pages ?? []), record.name])] };
+      session.edit(submitted);
+      if (!await persist(submitted)) return;
+      setCreatedPage(undefined); openPage(record.id);
+    } catch { setError(t("The page was created but could not be added to this module. Retry adding the same page.")); }
+    finally { lock.current = false; setSaving(false); }
+  };
+  const createPage = useNewRecord("build.page", target => { void attachCreatedPage(target); });
+  const addPage = () => { if (!lock.current && !createdPage && !invalid) createPage.take(); };
+  const reload = () => confirmDiscard(() => {
+    if (project) { session.load(hydrate(project)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
+    setError(undefined); void query.refetch();
   });
-  const context: ModuleContext | undefined = project ? { project, pages, currentPage: page, canEdit, openPage, addPage: () => createPage.take(),
+  const pendingPage = createdPage && <div role="alert" className="grid gap-2 border border-warning/30 p-3 text-sm">
+    <p>{t("A page was created but its module membership is unconfirmed. Retry the same page; creating another page would duplicate the work.")}</p>
+    <code className="break-all text-xs">{createdPage.id}</code>
+    {error && <p className="text-danger">{error}</p>}
+    <div className="flex gap-2"><Button disabled={saving || invalid} onClick={() => void attachCreatedPage(createdPage)}>{t("Retry adding created page")}</Button>
+      <Button variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => setCreatedPage(undefined))}>{t("Keep page without module membership")}</Button></div>
+  </div>;
+  const context: ModuleContext | undefined = project ? { project, pages, currentPage: page, canEdit, busy: saving || !!createdPage, openPage, addPage,
     openModule: (next) => { if (next) setFocus(next); if (page) open({ view: "module", params: { id: project.id, application: project.id } }); } } : undefined;
-  if (!project || !context) return <Workbench storageKey="module" title={t("Module")}><WorkbenchMessage>{query.isError ? t("The project could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
-  if (page) return <>{<InputDraftProvider isolated scope={`page:${page}`}><PageEditor key={page} id={page} module={context} /></InputDraftProvider>}{createPage.dialog}</>;
+  if (!project || !context) return <Workbench storageKey="module" title={t("Module")}><WorkbenchMessage>{query.isError ? t("The project could not be loaded.") : t("Loading…")}{pendingPage}</WorkbenchMessage></Workbench>;
+  if (page) return <>{pendingPage}<InputDraftProvider isolated scope={`page:${page}`}><PageEditor key={page} id={page} module={context} /></InputDraftProvider>{createPage.dialog}</>;
   const problems: WorkbenchProblem[] = [
     ...pages.filter((item) => !item.id && pageRecords.data).map((item) => ({ id: `missing:${item.name}`, severity: "warning" as const, text: t("Page {name} is listed but has no saved draft.", { name: item.name }), locate: () => edit({ pages: (draft.pages ?? []).filter((name) => name !== item.name) }) })),
     ...(!pages.length ? [{ id: "empty", severity: "info" as const, text: t("Add at least one page before publishing the module.") }] : []),
@@ -130,7 +168,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
           <Button size="sm" variant="ghost" aria-label={t("Remove page")} disabled={!canEdit} onClick={() => removePage(item.name)}><Trash2 /></Button>
         </div>)}
       </div>
-      <Button size="sm" disabled={!canEdit || !createPage.available} onClick={() => createPage.take()}><Plus />{t("New page")}</Button>
+      <Button size="sm" disabled={!canEdit || saving || !!createdPage || invalid || !createPage.available} onClick={addPage}><Plus />{t("New page")}</Button>
       <Button size="sm" variant="ghost" disabled={!canEdit} onClick={() => setTemplates(true)}>{t("New page from template…")}</Button>
       <fieldset className="grid gap-2 border-t border-border pt-3"><legend className="font-semibold">{t("Groups")}</legend>
         {(draft.groups ?? []).map((group, at) => <div key={at} className="grid gap-1 rounded border border-border p-2">
@@ -157,13 +195,15 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   return <>
     <Workbench storageKey="module" crumbs={[{ label: t("Projects"), onClick: () => open({ view: "projects" }) }, { label: project.title || project.name, onClick: () => open({ view: "project", params: { id: project.id } }) }]} title={t("Module")}
       status={<DraftStatus state={project.state} problems={problems.filter((problem) => problem.severity !== "info").length} />} saving={savingState(dirty, saving, error)}
-      history={{ canUndo: session.canUndo, canRedo: session.canRedo, undo: session.undo, redo: session.redo }}
+      history={{ canUndo: !saving && !createdPage && session.canUndo, canRedo: !saving && !createdPage && session.canRedo, undo: session.undo, redo: session.redo }}
       actions={<>
-        {canEdit && <Button size="sm" disabled={!createPage.available} onClick={() => createPage.take()}><Plus />{t("New page")}</Button>}
-        {canEdit && <Button size="sm" variant="primary" disabled={!pages.length || dirty} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id } })}>{t("Publish")}</Button>}
+        {canEdit && <Button size="sm" disabled={!dirty || saving || !!createdPage || invalid} onClick={() => void save()}>{t("Save")}</Button>}
+        <Button size="sm" variant="ghost" disabled={saving} onClick={reload}>{t("Reload current module")}</Button>
+        {canEdit && <Button size="sm" disabled={saving || !!createdPage || invalid || !createPage.available} onClick={addPage}><Plus />{t("New page")}</Button>}
+        {canEdit && <Button size="sm" variant="primary" disabled={!pages.length || dirty || saving || !!createdPage || invalid} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id } })}>{t("Publish")}</Button>}
       </>}
       left={{ label: t("Module structure"), content: <ModuleTree context={context} focus={focus} onFocus={setFocus} /> }}
-      right={{ label: t("Module inspector"),scope:focus, tabs: tabs.map((tab) => ({ id: tab.id, title: tab.title, content: inspector[tab.id] })), value: focus, onChange: (next) => setFocus(next as ModuleFocus) }}
+      right={{ label: t("Module inspector"),scope:focus, tabs: tabs.map((tab) => ({ id: tab.id, title: tab.title, content: <fieldset disabled={!canEdit || saving || !!createdPage} className="contents">{inspector[tab.id]}</fieldset> })), value: focus, onChange: (next) => setFocus(next as ModuleFocus) }}
       dock={{ label: t("Module dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-canvas p-4">
         <div className="mx-auto w-full max-w-5xl overflow-hidden border border-border bg-surface rounded-md shadow-sm">
@@ -177,13 +217,11 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
         {error && <p role="alert" className="mx-auto mt-3 text-xs text-danger">{error}</p>}
       </div>
     </Workbench>
+    {pendingPage}
     {createPage.dialog}
-    {templates && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-6" onClick={() => setTemplates(false)}>
-      <div className="max-h-full w-full max-w-4xl overflow-auto border border-border bg-surface rounded-md p-4" onClick={(event) => event.stopPropagation()}>
-        <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold">{t("New page from template")}</h2><Button size="sm" variant="ghost" onClick={() => setTemplates(false)}>{t("Close")}</Button></div>
-        <StudioTemplates />
-      </div>
-    </div>}
+    <Dialog open={templates} wide title={t("New page from template")} onOpenChange={next => { if (!saving && !templateBusy) { if (next) setTemplates(true); else templateClose.current?.(); } }}>
+      <StudioTemplates closeGuard={templateClose} onClose={() => setTemplates(false)} onBusy={setTemplateBusy} onCreated={target => { setTemplates(false); void attachCreatedPage(target); }} />
+    </Dialog>
   </>;
 }
 
@@ -197,7 +235,7 @@ function ModulePreviewBody({ context, ungrouped, groups, onHeader }: { context: 
   return <div className="grid gap-4 p-4">
     {!context.pages.length && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">
       <p>{t("This module has no pages yet.")}</p>
-      {context.canEdit && <Button className="mt-3" variant="primary" onClick={context.addPage}><Plus />{t("New page")}</Button>}
+      {context.canEdit && <Button className="mt-3" variant="primary" disabled={context.busy} onClick={context.addPage}><Plus />{t("New page")}</Button>}
     </div>}
     {groups.map((group) => <div key={group.title} className="grid gap-2"><h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{group.title}</h3>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{group.pages.map((name) => context.pages.find((page) => page.name === name)).filter(Boolean).map((page) => card(page!))}</div></div>)}
@@ -215,7 +253,7 @@ export function ModuleTree({ context, focus, onFocus, compact = false }: { conte
   const row = (page: ModuleContext["pages"][number], depth: number) => <StructureRow key={page.name} depth={depth} icon={<LayoutTemplate />} label={page.title} selected={!!page.id && page.id === currentPage}
     meta={page.state === "published" ? undefined : page.id ? t("draft") : t("missing")} onClick={() => page.id ? context.openPage(page.id) : go("navigation")} />;
   return <div className="grid min-w-0 content-start">
-    <PanelSection title={t("Module")} actions={context.canEdit && <Button size="sm" variant="ghost" aria-label={t("New page")} title={t("New page")} onClick={context.addPage}><Plus /></Button>}>
+    <PanelSection title={t("Module")} actions={context.canEdit && <Button size="sm" variant="ghost" aria-label={t("New page")} title={t("New page")} disabled={context.busy} onClick={context.addPage}><Plus /></Button>}>
       <StructureRow icon={<FolderKanban />} label={project.title || project.name} selected={!currentPage && focus === "settings"} onClick={() => go("settings")} />
       <StructureRow depth={1} icon={<PanelTop />} label={t("Header")} meta={project.header ? undefined : t("off")} selected={!currentPage && focus === "header"} onClick={() => go("header")} />
       <StructureRow depth={1} icon={<Layers />} label={t("Navigation")} meta={pages.length} selected={!currentPage && focus === "navigation"} onClick={() => go("navigation")} />

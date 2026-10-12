@@ -50,7 +50,11 @@
 - **D7 权限**：角色边界已按 ADR-0047 / ADR-0078 扩展；Builder 编辑和预览草稿，Publisher 复用候选交付面，不获得定义编辑权。所有发布入口仍由宿主按动作重校验，不以按钮是否可见代替授权。
 - **D8**：未改 Worker/编译契约。
 - **D6 第二批（2026-10-05，本批）**：Module 导入的预发布依赖改为候选输入。导入对话框可把页面绑定到**已保存未安装**的对象草稿（`SemanticObjectSelect` 的 `drafts` 选项、`ModuleImportDialog` 的合并实体集），导入完成后把所用对象草稿作为依赖报给应用编辑器（`importDependencies` 纯函数），`Review application release` 以 `drafts=object:<id>,…` 打开交付台并**预选**这些草稿，页面与对象作为一个候选交付；开发/导入 profile 的逐页发布保持不变。
-- **Flow 联合试装**：候选试装使用 Flow owner 的隔离声明注册表，先在该注册表安装选中 Flow，再检查应用的资源引用。预览与封存不会把新 Flow 发布到实时运行时；遗漏 Flow 仍拒绝，原激活才登记真实版本。不能以提前单项发布 Flow 代替联合交付。
+- **Flow 联合试装**：候选试装使用 Flow owner 的隔离声明注册表，先在该注册表安装选中 Flow，再检查应用的资源引用。预览与封存不会把新 Flow 发布到实时运行时；遗漏 Flow 仍拒绝，原激活才登记真实版本。自动启动的 Flow 在候选编译时明确绑定本次评审/封存主体，首次定时或连续发布无需提前单项发布；测试候选同样传递当前主体，接受后的版本与恢复沿原冻结映像。不能以提前单项发布 Flow 代替联合交付。
 - **证据**：Go 测试 `TestJointDraftsDeliverNewObjectPageAndApplication`（新对象＋新页面＋新 Flow＋应用的联合交付、来源、陈旧 ID/遗漏 Flow 拒绝、试装不泄漏声明、激活后可见及回放）、`TestProductionProfileRefusesDirectInstallAndKeepsDelivery`（development 直装仍在、production 拒绝且草稿未变、联合候选在 production 仍交付、回放一致）；现行 e2e `integration-fabric.spec.ts` 在两个行业宿主维护页面/Flow/应用联合交付与普通成员操作，`workspaces.spec.ts` 维护发布拒绝定位及原生任务入口。旧 `joint-draft-release.spec.ts` 已按 ADR-0082 删除。
 - **D6 完成**：完整 Module 导入改生成联合草稿（第一批）与 `WorkshopApplicationImport` 预发布依赖改候选输入（第二批）均已落地，见上。
 - **持久部署边界**：内存日志的联合交付/恢复测试不能代替 PostgreSQL、Rauthy、文件字节或 worker 验证。影响这些边界时使用 [deploy/local/rehearse.sh](../../deploy/local/rehearse.sh)；旧 `rehearse-lite.sh` 已按 ADR-0081 删除，不再作为现行检查入口。运维界面免走查的既有决定不扩大机制或生产验收范围。
+
+发布工作区沿原 ReleasePreview/Save/Evaluation/Activate 契约：联合路由选择以 JSON 保留完整身份并包含应用根，旧冒号书签只在输入解码；复用原 32 草稿预算，不静默裁切闭包。当前任务内串行化读取/提交，未确认写保留同一 key/payload 与离开保护；已确认写之后的刷新失败不伪称写失败。候选/升级计划未重读或评测读取失败时不开放激活，未知 release profile 不提供直接安装。本地整合后完整编译与 Web 单元通过，原发布/工作区/两行业联合交付浏览器路线有通过证据；独立人员体验仍按 SRS 验收。
+
+环境交接继续使用原 Host Console/PromotionResult/MigrationResult 和两侧支持会话。前端捕获一次操作的源、目标、候选或类型与授权会话；未确认晋级复用原 key，迁移仍由原 owner 处理当前导出行/导入收据，不新增跨环境事务。控制台确认与投影刷新分离，缺少 AppInputView 的宿主壳仍有错误反馈。Host Console 通过类型与单元检查；本次浏览器路线不覆盖全部跨环境支持会话操作，接手时沿原 environment 生命周期与 Host Console 主路线复核。

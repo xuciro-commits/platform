@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -137,6 +138,45 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	}
 	if !sawObject || !sawPage || !sawApplication {
 		t.Fatalf("joint delivery did not install its drafts: object=%v page=%v application=%v", sawObject, sawPage, sawApplication)
+	}
+	CheckReplay(t, tn, entries, compose)
+}
+
+// Automatic starts must retain the candidate reviewer, rather than requiring a
+// separate direct publication before a first joint release can be previewed.
+func TestJointDraftFirstScheduledFlowRetainsPublisher(t *testing.T) {
+	const tenant = "joint-scheduled"
+	at := time.Date(2026, 10, 12, 9, 0, 0, 0, time.UTC)
+	compose := func() *Tenant {
+		return composeTenant(t, tenant, []Seat{seatOf("author", "build:builder"), seatOf("publisher", "build:builder")},
+			work.New(tenant), flow.New(tenant), build.New(tenant))
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	decide(t, tn, "author", build.ID, build.ProcessType+".create", build.ProcessType, "FLOW", map[string]any{
+		"name": "scheduled", "title": "Scheduled", "every": "1h", "steps": []build.ProcessStep{{Name: "done", Kind: "end"}}}, at)
+	member := memberOf(t, tn, "publisher")
+	selection := []build.JointDraftRef{{Kind: platform.AssetFlow, ID: "FLOW"}}
+	preview, err := tn.PreviewReleaseDrafts(member, selection)
+	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
+		t.Fatalf("first scheduled preview: %+v %v", preview, err)
+	}
+	if tn.procs.HasPublishedFlow("build.scheduled") {
+		t.Fatal("preview installed the automatic flow")
+	}
+	saved, err := tn.SaveReleaseCandidates(member, selection, preview.CandidateID, "save", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tn.ActivateRelease(member, saved, "activate", at); err != nil {
+		t.Fatal(err)
+	}
+	p, ok := platform.Get[build.Process](tn.automation(build.ID, false), "FLOW")
+	var accepted build.Process
+	if !ok || json.Unmarshal([]byte(p.Published), &accepted) != nil || accepted.Version != 1 || accepted.Scheduler != member.ID {
+		t.Fatalf("candidate lost its publisher: %+v", accepted)
 	}
 	CheckReplay(t, tn, entries, compose)
 }

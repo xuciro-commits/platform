@@ -2,18 +2,33 @@ package platformserver
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
-	"platformserver/internal/host"
 	"strconv"
 	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/internal/host"
 	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
+
+// The three release commands share the same complete 4 KiB request boundary.
+func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
+	if err := decodeBodyLimit(r, into, 4096); err != nil {
+		var large *http.MaxBytesError
+		if errors.As(err, &large) {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return false
+	}
+	return true
+}
 
 // routesBuild serves the builder: composites, code SDK, process checks, releases, queries and simulation.
 func (h *Host) routesBuild(rt *routes) {
@@ -193,9 +208,12 @@ func (h *Host) routesBuild(rt *routes) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		answer, err := t.PreviewRelease(m, request.Kind, request.ID)
+		var answer ReleasePreview
+		var err error
 		if len(request.Drafts) > 0 {
 			answer, err = t.PreviewReleaseDrafts(m, request.Drafts)
+		} else {
+			answer, err = t.PreviewRelease(m, request.Kind, request.ID)
 		}
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
@@ -216,17 +234,12 @@ func (h *Host) routesBuild(rt *routes) {
 			return
 		}
 		var request ReleaseSaveRequest
-		decoder := json.NewDecoder(io.LimitReader(r.Body, 4097))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil ||
-			(request.ID == "" && len(request.Drafts) == 0) ||
-			(request.ID != "" && len(request.Drafts) > 0) || len(request.Drafts) > 32 ||
-			request.CandidateID == "" || request.Key == "" {
-			w.WriteHeader(http.StatusBadRequest)
+		if !decodeReleaseBody(w, r, &request) {
 			return
 		}
-		var trailing any
-		if err := decoder.Decode(&trailing); err != io.EOF {
+		if (request.ID == "" && len(request.Drafts) == 0) ||
+			(request.ID != "" && len(request.Drafts) > 0) || len(request.Drafts) > 32 ||
+			request.CandidateID == "" || request.Key == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -251,10 +264,10 @@ func (h *Host) routesBuild(rt *routes) {
 			return
 		}
 		var request ReleaseEvaluationRequest
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&request) != nil || decoder.Decode(new(any)) != io.EOF ||
-			request.CandidateID == "" || request.PlanID == "" || request.Key == "" {
+		if !decodeReleaseBody(w, r, &request) {
+			return
+		}
+		if request.CandidateID == "" || request.PlanID == "" || request.Key == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -271,14 +284,10 @@ func (h *Host) routesBuild(rt *routes) {
 			return
 		}
 		var request ReleaseActivateRequest
-		decoder := json.NewDecoder(io.LimitReader(r.Body, 4097))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || request.CandidateID == "" || request.Key == "" {
-			w.WriteHeader(http.StatusBadRequest)
+		if !decodeReleaseBody(w, r, &request) {
 			return
 		}
-		var trailing any
-		if err := decoder.Decode(&trailing); err != io.EOF {
+		if request.CandidateID == "" || request.Key == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}

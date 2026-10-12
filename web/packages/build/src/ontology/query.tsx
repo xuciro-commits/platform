@@ -1,7 +1,7 @@
 import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery, useOpenRecord, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
 import { Button, Card, Checkbox, Input, PageHeader, Panel, Select, Textarea, RecordLookup, InterfaceRecordLookup, t, useUnsavedChanges, type InterfaceRecordIdentity, type InterfaceRecordPageData, type RecordPageData, type RecordSource } from "@platform/ui";
@@ -27,29 +27,39 @@ export function QueryEditor({id}:{id:string}) {
  const [draft,setDraft]=useState<Draft>(empty),[edited,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [createID]=useState(()=>crypto.randomUUID());
  const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
- const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{setDraft(query.data?.record?hydrate(query.data.record):empty());setDirty(false);setError("");});
- useEffect(()=>{if(query.data?.record&&!dirty)setDraft(hydrate(query.data.record));},[query.data,dirty]);
+ const lock=useRef(false),baseRevision=useRef(0),loaded=useRef(""),confirmedDraft=useRef<Draft>(empty());
+ const load=(record:Draft)=>{confirmedDraft.current=hydrate(record);setDraft(confirmedDraft.current);baseRevision.current=record.revision;loaded.current=`${record.id}:${record.revision}`;};
+ const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{if(query.data?.record&&query.data.record.revision>=baseRevision.current)load(query.data.record);else setDraft(structuredClone(confirmedDraft.current));setDirty(false);setError("");}, busy);
+ useEffect(()=>{const record=query.data?.record;if(record&&!dirty&&!busy&&record.revision>=baseRevision.current&&loaded.current!==`${record.id}:${record.revision}`)load(record);},[query.data,dirty,busy]);
  const object={app:"build",kind:"object" as const,name:draft.object??""},info=definitions.find((d)=>d.ref.kind==="object"&&d.ref.name===draft.object)?.entity;
  const currentShape=interfaces.find(item=>item.name===draft.interface)??draft.interfaceShape,fields=draft.interface?currentShape?.fields:info?.fields;
- const patch=(change:Partial<Draft>)=>{setDraft((d)=>({...d,...change}));setDirty(true);setError("");};
+ const patch=(change:Partial<Draft>)=>{if(lock.current)return;setDraft((d)=>({...d,...change}));setDirty(true);setError("");};
  const term=(index:number,value:Term)=>patch({domain:draft.domain.map((c,i)=>i===index?value:c)});
- const perform=async(action:()=>Promise<unknown>)=>{setBusy(true);setError("");try{await action();}catch{setError(t("The query could not be saved or loaded. Your draft is still here."));}finally{setBusy(false);}};
- const reload=async()=>{const r=await query.refetch();if(r.data?.record&&!r.isError){setDraft(hydrate(r.data.record));markSaved();setDirty(false);}else setError(t("Reload the saved query before editing again."));};
- const save=async():Promise<number|undefined>=>{
-  const target=draft.id || createID,{name,title,description,object,interface:interfaceName,by,domain,sort,limit}=draft;
-  if(!await decide(`build.query.${draft.id?"edit":"create"}`,{type:"build.query",id:target},{name,title,description,object:object??"",interface:interfaceName??"",by:by??"",domain,sort,limit},{expectedRevision:draft.id?draft.revision:undefined,quiet:true,onRefused:setError}))return;
-  const revision=draft.id?draft.revision+1:1;
-  if(!draft.id){markSaved();setDirty(false);open({view:"query",params:{id:target}});close({view:"query",params:{id}});}else await reload();
-  return revision;
+ const perform=async(action:()=>Promise<unknown>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError("");try{await action();}catch{setError(t("The query could not be saved or loaded. Your draft is still here."));}finally{lock.current=false;setBusy(false);}};
+ const reload=async()=>{const r=await query.refetch();if(r.data?.record&&!r.isError){load(r.data.record);markSaved();setDirty(false);}else setError(t("Reload the saved query before editing again."));};
+ const save=async():Promise<{id:string;revision:number}|undefined>=>{
+  if(inputs?.invalid)return;
+  const submitted=structuredClone(draft),target=submitted.id||createID,expected=submitted.id?baseRevision.current:0;
+  const {name,title,description,object,interface:interfaceName,by,domain,sort,limit}=submitted;
+  if(!await decide(`build.query.${submitted.id?"edit":"create"}`,{type:"build.query",id:target},{name,title,description,object:object??"",interface:interfaceName??"",by:by??"",domain,sort,limit},{expectedRevision:submitted.id?expected:0,quiet:true,onRefused:setError}))return;
+  const revision=expected+1;load({...submitted,id:target,revision});markSaved();setDirty(false);
+  if(!submitted.id){open({view:"query",params:{id:target}});close({view:"query",params:{id}});}
+  else {try{const fresh=await query.refetch();if(fresh.isSuccess&&fresh.data?.record?.revision===revision)load(fresh.data.record);else setError(t("The resource was saved, but its current record could not be reloaded."));}catch{setError(t("The resource was saved, but its current record could not be reloaded."));}}
+  return {id:target,revision};
  };
  const directInstall = useDirectInstall();
- const publish=async()=>{const revision=dirty?await save():draft.revision;if(revision===undefined)return;if(await decide("build.query.publish",{type:"build.query",id:draft.id},{},{expectedRevision:revision,quiet:true,onRefused:setError}))await reload();};
- const review=async()=>{if(dirty&&await save()===undefined)return;open({view:"release-review",params:{kind:"query",id:draft.id}});};
+ const publish=async()=>{
+  const saved=dirty?await save():{id:draft.id,revision:baseRevision.current};if(!saved?.id)return;
+  if(!await decide("build.query.publish",{type:"build.query",id:saved.id},{},{expectedRevision:saved.revision,quiet:true,onRefused:setError}))return;
+  baseRevision.current=saved.revision+1;loaded.current=`${saved.id}:${baseRevision.current}`;
+  try{const fresh=await query.refetch();if(fresh.isSuccess&&fresh.data?.record?.revision===baseRevision.current){load(fresh.data.record);markSaved();setDirty(false);}else setError(t("The resource was installed, but its current record could not be reloaded."));}catch{setError(t("The resource was installed, but its current record could not be reloaded."));}
+ };
+ const review=async()=>{const saved=dirty?await save():{id:draft.id,revision:baseRevision.current};if(saved?.id)open({view:"release-review",params:{kind:"query",id:saved.id}});};
  const installed=definitions.find((d)=>d.ref.kind==="query"&&d.ref.app==="build"&&d.ref.name===draft.name);
  const versions=Object.keys(installed?.queryVersions??{});
  if(role("build")!=="builder")return <PageHeader title={t("Queries")} description={t("Only a builder can edit queries.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Queries")} description={query.isError?t("The query could not be loaded."):t("Loading…")}/>;
- return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New query")} description={t("Publish reusable record reads and bind pages to an exact version.")} actions={<div className="flex flex-wrap gap-2"><Button onClick={()=>open({view:"query"})}>{t("Queries")}</Button><AssetControls type="build.query" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"query",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved query")}</Button><Button disabled={busy||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save query")}</Button>{directInstall&&<Button disabled={busy||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button>}<Button variant="primary" disabled={busy||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
+ return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New query")} description={t("Publish reusable record reads and bind pages to an exact version.")} actions={<div className="flex flex-wrap gap-2"><Button onClick={()=>open({view:"query"})}>{t("Queries")}</Button><AssetControls type="build.query" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"query",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved query")}</Button><Button disabled={busy||inputs?.invalid||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save query")}</Button>{directInstall&&<Button disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button>}<Button variant="primary" disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
  <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
  {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
  {error&&<Panel role="alert" className="text-danger">{error}</Panel>}

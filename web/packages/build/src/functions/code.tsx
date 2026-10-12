@@ -1,12 +1,10 @@
-import {DraftInputs,useInputBuffers,InputDraftProvider} from "@platform/ui";
-import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, Select, Textarea, Workbench, t, useUnsavedChanges } from "@platform/ui";
-import { useEffect, useState } from "react";
+import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, Select, Textarea, Workbench, DraftInputs, useInputBuffers, InputDraftProvider, useInputDrafts, t, useUnsavedChanges } from "@platform/ui";
+import { useEffect, useRef, useState } from "react";
 import { JSONEditor, SchemaEditor, schemaDefault } from "../automate/workflow-binding";
 import type { ValueSchema } from "../automate/workflow-model";
 
@@ -41,27 +39,56 @@ export function CodeEditor({ id }: { id: string }) {
   const [tab, setTab] = useState<"source" | "contract" | "sdk" | "test">("source"), [sdk, setSDK] = useState("");
   const testInputs=useInputBuffers();
   const [input, setInput] = useState<unknown>({}), [executedInput, setExecutedInput] = useState<unknown>(), [call, setCall] = useState("");
+  const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0), confirmedDraft = useRef<CodeDraft>(empty());
   const query = useReadQuery<{ record?: CodeDraft }>(`/v1/records/build.code/${encodeURIComponent(id)}`, draft.state === "compiling" ? 1000 : undefined);
-  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { setDraft(query.data?.record ?? empty); setDirty(false); setError(""); setSDK(""); });
+  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
+    const saved = query.data?.record;
+    if (saved && saved.revision >= baseRevision.current) { baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; confirmedDraft.current = structuredClone(saved); setDraft(saved); }
+    else setDraft(structuredClone(confirmedDraft.current));
+    setDirty(false); setError(""); setSDK("");
+  }, busy);
   const result = useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`, 1000, !!call && tab === "test");
-  useEffect(() => { if (query.data?.record && !dirty) setDraft(query.data.record); }, [query.data, dirty]);
+  useEffect(() => {
+    const saved = query.data?.record;
+    if (saved && !dirty && !busy && saved.revision >= baseRevision.current && loaded.current !== `${saved.id}:${saved.revision}`) {
+      baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; confirmedDraft.current = structuredClone(saved); setDraft(saved);
+    }
+  }, [query.data, dirty, busy]);
   const testSchemaKey = JSON.stringify((() => { try { return JSON.parse(draft.published ?? "").input; } catch { return draft.input; } })());
   useEffect(() => { setInput(schemaDefault(JSON.parse(testSchemaKey))); setCall(""); setExecutedInput(undefined); }, [testSchemaKey]);
-  const change = (patch: Partial<CodeDraft>) => { setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); setSDK(""); };
-  const perform = async (action: () => Promise<unknown>) => { setBusy(true); setError(""); try { await action(); } catch (failure) { setError(failure instanceof Error ? failure.message : t("The code function could not be saved or loaded.")); } finally { setBusy(false); } };
+  const change = (patch: Partial<CodeDraft>) => { if (lock.current) return; setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); setSDK(""); };
+  const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch (failure) { setError(failure instanceof Error ? failure.message : t("The code function could not be saved or loaded.")); } finally { lock.current = false; setBusy(false); } };
   const save = async (): Promise<number | undefined> => {
-    const target = draft.id || createID, { abi, name, title, description, language, source, input, output, roles, limits } = draft;
-    if (!await decide(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: target }, { abi, name, title, description, language, source, input, output, roles, limits },
-      { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) return;
-    if (!draft.id) { markSaved(); setDirty(false); open({ view: "code", params: { id: target } }); close({ view: "code", params: { id } }); return 1; }
-    const saved = await query.refetch();
-    if (!saved.data?.record) { setError(t("Reload the saved code function before editing again.")); return; }
-    setDraft(saved.data.record); markSaved(); setDirty(false); return saved.data.record.revision;
+    if (inputs?.invalid) return;
+    const submitted = structuredClone(draft), target = submitted.id || createID, expected = submitted.id ? baseRevision.current : 0;
+    const { abi, name, title, description, language, source, input, output, roles, limits } = submitted;
+    if (!await decide(`build.code.${submitted.id ? "edit" : "create"}`, { type: "build.code", id: target }, { abi, name, title, description, language, source, input, output, roles, limits },
+      { expectedRevision: submitted.id ? expected : undefined, quiet: true, onRefused: setError })) return;
+    const revision = expected + 1;
+    baseRevision.current = revision; loaded.current = `${target}:${revision}`;
+    // A code edit must be recompiled; the old module is not evidence that the
+    // current draft can be delivered. The retained publication remains separate.
+    const accepted = { ...submitted, id: target, revision, state: "draft", module: undefined, builtSource: undefined, buildHash: undefined };
+    confirmedDraft.current = structuredClone(accepted); setDraft(accepted); markSaved(); setDirty(false);
+    if (!submitted.id) { open({ view: "code", params: { id: target } }); close({ view: "code", params: { id } }); return revision; }
+    try {
+      const fresh = await query.refetch();
+      if (fresh.isSuccess && fresh.data?.record?.revision === revision) { confirmedDraft.current = structuredClone(fresh.data.record); setDraft(fresh.data.record); }
+      else setError(t("The code function was saved, but its current record could not be reloaded."));
+    } catch { setError(t("The code function was saved, but its current record could not be reloaded.")); }
+    return revision;
   };
   const compile = async () => {
-    const revision = dirty ? await save() : draft.revision;
+    const target = draft.id;
+    if (!target) return;
+    const revision = dirty ? await save() : baseRevision.current;
     if (revision === undefined) return;
-    if (await decide("build.code.compile", { type: "build.code", id: draft.id }, {}, { expectedRevision: revision, quiet: true, onRefused: setError })) await query.refetch();
+    if (!await decide("build.code.compile", { type: "build.code", id: target }, {}, { expectedRevision: revision, quiet: true, onRefused: setError })) return;
+    baseRevision.current = revision + 1; loaded.current = `${target}:${revision + 1}`;
+    confirmedDraft.current = { ...confirmedDraft.current, revision: revision + 1, state: "compiling", module: undefined };
+    setDraft(structuredClone(confirmedDraft.current));
+    try { await query.refetch(); }
+    catch { setError(t("Compilation was accepted. Reload the function to read its result.")); }
   };
   const previewSDK = async () => {
     const answer = await client.call<Api.ComputeSDK>("POST", "/v1/build/code/sdk", { abi: draft.abi, input: draft.input, output: draft.output });
@@ -84,11 +111,11 @@ export function CodeEditor({ id }: { id: string }) {
     actions={<>
         <Button size="sm" disabled={busy || invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
         <Button size="sm" disabled={busy || invalid || !draft.id || draft.state === "compiling"} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
-        <PublishMenu type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || !draft.module || draft.state === "compiling"} onReview={() => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onDiscard={discardChanges} route={{ view: "code", params: { id } }} />
+        <PublishMenu type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || dirty || !draft.module || draft.state === "compiling"} onReview={() => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onDiscard={discardChanges} route={{ view: "code", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
-    <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <fieldset disabled={busy} className="grid min-w-0 gap-3 border-0 p-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="grid min-w-0 content-start gap-3 p-4">
         <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("Code function editor")}>
           {(["source", "contract", "sdk", "test"] as const).map((key) => <Button key={key} role="tab" aria-selected={tab === key} variant={tab === key ? "primary" : "ghost"} onClick={() => setTab(key)}>{t(({ source: "Source code", contract: "Input and output", sdk: "Generated SDK", test: "Test published version" })[key])}</Button>)}
@@ -147,6 +174,6 @@ export function CodeEditor({ id }: { id: string }) {
           {draft.diagnostics && <pre className="whitespace-pre-wrap text-danger">{draft.diagnostics}</pre>}
         </div>
       </Panel>
-    </div>
+    </fieldset>
   </div></Workbench>;
 }

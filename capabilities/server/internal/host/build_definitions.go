@@ -13,7 +13,7 @@ import (
 type ConstructionDrafts interface {
 	platform.App
 	ReferencedDrafts(platform.AssetKind, string) ([]build.JointDraftRef, error)
-	DraftReleaseAssetsMulti([]build.JointDraftRef) (build.JointDraftAssets, error)
+	DraftReleaseAssetsMulti([]build.JointDraftRef, platform.Member) (build.JointDraftAssets, error)
 	CandidateActions(platform.ReleaseAsset) ([]platform.Action, error)
 	CheckProcess(build.Process) *kernel.Error
 }

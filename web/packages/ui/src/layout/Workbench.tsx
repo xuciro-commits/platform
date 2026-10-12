@@ -1,69 +1,173 @@
-import {InputDraftProvider,InputProblems,useInputDrafts} from "../fields/draft";
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronRight, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Redo2, Undo2 } from "lucide-react";
+import { InputDraftProvider, InputProblems, useInputDrafts } from "../fields/draft";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronRight, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Redo2, Undo2, X } from "lucide-react";
 import { t } from "../i18n";
 import { cn } from "../lib/cn";
 import { Button } from "../primitives/button";
 import { useViewTitle } from "../shell/Workspace";
+import { ViewVisibilityContext, useViewVisible } from "../shell/ViewVisibility";
+import { ContentTabs } from "./ContentTabs";
 
-/** The one editor container (ADR-0053 §4): title bar with breadcrumbs,
- * status, history and publish actions; a structure panel on the left; the
- * main view; an inspector on the right; a dock of problems/variables/runs
- * underneath. Panel sizes and visibility are remembered per `storageKey`.
- * Document state, commands and selection belong to the caller.
+/** The one editor container (ADR-0053 §4). Document state, commands and
+ * selection belong to the caller. Closing a pane hides, rather than destroys,
+ * its editing context. Below a useful three-pane width, focus one pane at a
+ * time; desktop preferences remain intact when returning from a split/mobile view.
  */
 export type WorkbenchCrumb = { label: ReactNode; onClick?: () => void };
 export type WorkbenchTab = { id: string; title: ReactNode; badge?: number | string; content: ReactNode };
-export type WorkbenchPanel = { label: string; scope?:string; locate?:(path?:string)=>void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };
+export type WorkbenchPanel = { label: string; heading?: ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void; scope?: string; locate?: (path?: string) => void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };
 export type WorkbenchHistory = { canUndo: boolean; canRedo: boolean; undo: () => void; redo: () => void };
 export type WorkbenchSaving = "idle" | "dirty" | "saving" | "saved" | "error";
 
+type Side = "left" | "right" | "dock";
 type Layout = { left: number; right: number; dock: number; leftOpen: boolean; rightOpen: boolean; dockOpen: boolean; dockTab?: string };
 const defaults: Layout = { left: 264, right: 320, dock: 200, leftOpen: true, rightOpen: true, dockOpen: false };
-const read = (key: string): Layout => { try { const raw = localStorage.getItem(`workbench:${key}`); return raw ? { ...defaults, ...JSON.parse(raw) } : defaults; } catch { return defaults; } };
+const read = (key: string): Layout => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(`workbench:${key}`) ?? "null");
+    if (!raw || typeof raw !== "object") return defaults;
+    return { ...defaults,
+      ...Object.fromEntries((["left", "right", "dock"] as const).filter(side => typeof raw[side] === "number" && Number.isFinite(raw[side]) && raw[side] > 0).map(side => [side, raw[side]])),
+      ...Object.fromEntries((["leftOpen", "rightOpen", "dockOpen"] as const).filter(key => typeof raw[key] === "boolean").map(key => [key, raw[key]])),
+      dockTab: typeof raw.dockTab === "string" ? raw.dockTab : undefined,
+    };
+  } catch { return defaults; }
+};
 
 export function Workbench({ storageKey, crumbs = [], title, status, saving, history, actions, left, right, dock, children, className, onKeyDown, mainLabel }: {
   storageKey: string; crumbs?: WorkbenchCrumb[]; title?: ReactNode; status?: ReactNode; saving?: WorkbenchSaving; history?: WorkbenchHistory; actions?: ReactNode;
-  left?: WorkbenchPanel; right?: WorkbenchPanel; dock?: WorkbenchPanel; children: ReactNode; className?: string; mainLabel?: string;
+  left?: WorkbenchPanel; right?: WorkbenchPanel;
+  dock?: WorkbenchPanel;
+  children: ReactNode; className?: string; mainLabel?: string;
   onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void;
 }) {
-  const inputs=useInputDrafts();if(inputs?.dirty&&saving!=="saving"&&saving!=="error")saving="dirty";
+  const inputs = useInputDrafts(), visible = useViewVisible(), prefix = useId();
+  if (inputs?.dirty && saving !== "saving" && saving !== "error") saving = "dirty";
   useViewTitle(typeof title === "string" ? title : undefined);
+  const root = useRef<HTMLDivElement>(null), main = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<Layout>(() => read(storageKey));
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const compact = dimensions.width > 0 && dimensions.width < 960;
+  const [focusedPane, setFocusedPane] = useState<"left" | "right">();
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (!root.current?.clientWidth) return; // a hidden workspace tab retains its last useful layout
+      const width = root.current.clientWidth, height = main.current?.clientHeight ?? 0;
+      setDimensions(old => old.width === width && (!height || old.height === height) ? old : { width, height: height || old.height });
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    if (root.current) observer.observe(root.current);
+    if (main.current) observer.observe(main.current);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => { if (!compact) setFocusedPane(undefined); }, [compact]);
   const previousDock = useRef(dock?.value);
   useEffect(() => {
     if (previousDock.current === dock?.value) return;
     previousDock.current = dock?.value;
-    if (dock?.value) setLayout((old) => ({ ...old, dockOpen: true, dockTab: dock.value }));
-  }, [dock?.value]);
-  const [drag, setDrag] = useState<{ side: "left" | "right" | "dock"; at: number; size: number }>();
+    if (dock?.value) {
+      setLayout(old => ({ ...old, dockTab: dock.value, dockOpen: dock.open ?? true }));
+      setFocusedPane(undefined);
+    }
+  }, [dock?.value, dock?.open]);
+  useEffect(() => { if (dock?.open) setFocusedPane(undefined); }, [dock?.open]);
   useEffect(() => { try { localStorage.setItem(`workbench:${storageKey}`, JSON.stringify(layout)); } catch { /* private mode */ } }, [layout, storageKey]);
-  const patch = (next: Partial<Layout>) => setLayout((old) => ({ ...old, ...next }));
-  const clamp = (side: "left" | "right" | "dock", size: number) => {
-    const panel = side === "left" ? left : side === "right" ? right : dock;
-    return Math.max(panel?.min ?? (side === "dock" ? 120 : 200), Math.min(panel?.max ?? (side === "dock" ? 520 : 560), size));
+  const patch = (next: Partial<Layout>) => setLayout(old => ({ ...old, ...next }));
+  const showLeft = !!left && (compact ? focusedPane === "left" : left.open ?? layout.leftOpen);
+  const showRight = !!right && (compact ? focusedPane === "right" : right.open ?? layout.rightOpen);
+  const showMain = !compact || !showLeft && !showRight;
+  const showDock = !!dock && (dock.open ?? layout.dockOpen);
+  const reveal = (side: "left" | "right") => {
+    (side === "left" ? left : right)?.onOpenChange?.(true);
+    patch(side === "left" ? { leftOpen: true } : { rightOpen: true });
+    if (compact) { setDockOpen(false); setFocusedPane(side); }
   };
-  const splitter = (side: "left" | "right" | "dock") => <div role="separator" tabIndex={0} aria-orientation={side === "dock" ? "horizontal" : "vertical"}
+  const togglePane = (side: "left" | "right") => {
+    const showing = side === "left" ? showLeft : showRight;
+    (side === "left" ? left : right)?.onOpenChange?.(!showing);
+    if (compact) { if (!showing) setDockOpen(false); setFocusedPane(showing ? undefined : side); }
+    else patch(side === "left" ? { leftOpen: !showing } : { rightOpen: !showing });
+    if (showing) document.getElementById(`${prefix}-toggle-${side}`)?.focus();
+    else requestAnimationFrame(() => { if (root.current) document.getElementById(`${prefix}-${side}`)?.focus(); });
+  };
+  const setDockOpen = (open: boolean) => {
+    dock?.onOpenChange?.(open);
+    patch({ dockOpen: open });
+    if (open) setFocusedPane(undefined);
+    else if (document.getElementById(`${prefix}-dock`)?.contains(document.activeElement)) document.getElementById(`${prefix}-toggle-dock`)?.focus();
+  };
+  const chooseDock = (id: string) => { dock?.onChange?.(id); patch({ dockTab: id }); setDockOpen(true); };
+  const previousInspector = useRef({ scope: right?.scope, value: right?.value, open: right?.open });
+  useEffect(() => {
+    const old = previousInspector.current;
+    previousInspector.current = { scope: right?.scope, value: right?.value, open: right?.open };
+    if (!right) return;
+    if (right.open === false) { setFocusedPane(pane => pane === "right" ? undefined : pane); return; }
+    if (right.open === true && old.open !== right.open || old.scope !== right.scope || old.value !== right.value) {
+      setLayout(layout => ({ ...layout, rightOpen: true }));
+      if (compact) { dock?.onOpenChange?.(false); setLayout(layout => ({ ...layout, dockOpen: false })); setFocusedPane("right"); }
+    }
+  }, [right?.scope, right?.value, right?.open, compact]);
+  const panel = (side: Side) => side === "left" ? left : side === "right" ? right : dock;
+  const limits = (side: Side) => ({ min: panel(side)?.min ?? (side === "dock" ? 120 : 200), max: panel(side)?.max ?? (side === "dock" ? 520 : 560) });
+  const baseSize = (side: Side) => Math.max(limits(side).min, Math.min(limits(side).max, layout[side]));
+  const sizes = { left: baseSize("left"), right: baseSize("right"), dock: baseSize("dock") };
+  // Retain a useful canvas even with a previously saved wide inspector.
+  const paneSpace = dimensions.width - 320 - (showLeft ? 6 : 0) - (showRight ? 6 : 0);
+  const minimum = (showLeft ? limits("left").min : 0) + (showRight ? limits("right").min : 0);
+  const wanted = (showLeft ? sizes.left - limits("left").min : 0) + (showRight ? sizes.right - limits("right").min : 0);
+  if (!compact && dimensions.width && wanted > paneSpace - minimum && wanted > 0) {
+    const scale = Math.max(0, paneSpace - minimum) / wanted;
+    if (showLeft) sizes.left = limits("left").min + (sizes.left - limits("left").min) * scale;
+    if (showRight) sizes.right = limits("right").min + (sizes.right - limits("right").min) * scale;
+  }
+  const bounds = (side: Side) => {
+    const { min, max } = limits(side);
+    const available = side === "dock" ? dimensions.height - 160 : dimensions.width - 320 - (side === "left" && showRight ? sizes.right + 6 : side === "right" && showLeft ? sizes.left + 6 : 0) - 6;
+    return { min, max: Math.max(min, Math.min(max, (side === "dock" ? dimensions.height : dimensions.width) ? available : max)) };
+  };
+  sizes.dock = Math.min(sizes.dock, bounds("dock").max);
+  const resize = (side: Side, size: number) => {
+    const { min, max } = bounds(side);
+    patch(side === "dock" ? { dock: Math.max(min, Math.min(max, size)) } : { left: sizes.left, right: sizes.right, [side]: Math.max(min, Math.min(max, size)) });
+  };
+  const [drag, setDrag] = useState<{ side: Side; at: number; size: number }>();
+  const splitter = (side: Side) => <div role="separator" tabIndex={0} aria-orientation={side === "dock" ? "horizontal" : "vertical"}
     aria-label={t(side === "left" ? "Resize structure panel" : side === "right" ? "Resize inspector panel" : "Resize dock")}
-    className={cn("touch-none rounded hover:bg-primary/20 focus-visible:bg-primary/20 focus-visible:outline-ring", side === "dock" ? "h-1.5 w-full cursor-row-resize" : "w-1.5 cursor-col-resize")}
-    onPointerDown={(event) => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); setDrag({ side, at: side === "dock" ? event.clientY : event.clientX, size: layout[side] }); }}
-    onPointerMove={(event) => { if (drag?.side !== side) return; const delta = side === "dock" ? drag.at - event.clientY : (event.clientX - drag.at) * (side === "left" ? 1 : -1); patch({ [side]: clamp(side, drag.size + delta) } as Partial<Layout>); }}
-    onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setDrag(undefined); }}
+    aria-controls={`${prefix}-${side}`} aria-valuemin={bounds(side).min} aria-valuemax={bounds(side).max} aria-valuenow={sizes[side]}
+    className={cn("shrink-0 touch-none rounded hover:bg-primary/20 focus-visible:bg-primary/20 focus-visible:outline-ring", side === "dock" ? "h-1.5 w-full cursor-row-resize" : "w-1.5 cursor-col-resize")}
+    onDoubleClick={() => resize(side, defaults[side])}
+    onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); setDrag({ side, at: side === "dock" ? event.clientY : event.clientX, size: sizes[side] }); }}
+    onPointerMove={event => { if (drag?.side !== side) return; const delta = side === "dock" ? drag.at - event.clientY : (event.clientX - drag.at) * (side === "left" ? 1 : -1); resize(side, drag.size + delta); }}
+    onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setDrag(undefined); }}
     onPointerCancel={() => setDrag(undefined)} onLostPointerCapture={() => setDrag(undefined)}
-    onKeyDown={(event) => { const keys = side === "dock" ? ["ArrowUp", "ArrowDown"] : ["ArrowLeft", "ArrowRight"]; if (!keys.includes(event.key)) return; event.preventDefault();
-      const grow = event.key === "ArrowRight" && side === "left" || event.key === "ArrowLeft" && side === "right" || event.key === "ArrowUp"; patch({ [side]: clamp(side, layout[side] + (grow ? 16 : -16)) } as Partial<Layout>); }} />;
-  const showLeft = !!left && layout.leftOpen, showRight = !!right && layout.rightOpen, showDock = !!dock && layout.dockOpen;
-  const columns = `${showLeft ? `${layout.left}px 6px ` : ""}minmax(0,1fr)${showRight ? ` 6px ${layout.right}px` : ""}`;
+    onKeyDown={event => {
+      const keys = side === "dock" ? ["ArrowUp", "ArrowDown"] : ["ArrowLeft", "ArrowRight"];
+      if (event.key === "Home" || event.key === "End") { event.preventDefault(); resize(side, event.key === "Home" ? bounds(side).min : bounds(side).max); return; }
+      if (!keys.includes(event.key)) return;
+      event.preventDefault();
+      const grow = event.key === "ArrowRight" && side === "left" || event.key === "ArrowLeft" && side === "right" || event.key === "ArrowUp";
+      resize(side, sizes[side] + (grow ? 16 : -16));
+    }} />;
+  const columns = compact ? "minmax(0,1fr)" : `${showLeft ? `${sizes.left}px 6px ` : ""}minmax(0,1fr)${showRight ? ` 6px ${sizes.right}px` : ""}`;
   const savingLabel = saving === "saving" ? t("Saving…") : saving === "saved" ? t("Saved") : saving === "dirty" ? t("Unsaved changes") : saving === "error" ? t("Not saved") : "";
-  return <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-surface lg:h-[calc(100dvh-6.5rem)]", className)} tabIndex={-1}
-    onKeyDown={(event) => {
+  const paneHeading = (side: "left" | "right", panel: WorkbenchPanel) => (compact || panel.heading) && <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-1">
+    <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{panel.heading ?? panel.label}</h2>
+    <Button variant="ghost" size="sm" aria-label={t(side === "left" ? "Close structure panel" : "Close inspector panel")} onClick={() => togglePane(side)}><X /></Button>
+  </div>;
+  return <div ref={root} className={cn("flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-surface", className)} tabIndex={-1}
+    onKeyDown={event => {
+      if (event.defaultPrevented) return;
       const command = event.metaKey || event.ctrlKey;
-      if (command && event.key === "\\") { event.preventDefault(); if (event.altKey) patch({ rightOpen: !layout.rightOpen }); else patch({ leftOpen: !layout.leftOpen }); return; }
-      if (command && event.key.toLowerCase() === "j" && dock) { event.preventDefault(); patch({ dockOpen: !layout.dockOpen }); return; }
+      if (command && event.key === "\\") { event.preventDefault(); if (event.altKey && right) togglePane("right"); else if (left) togglePane("left"); return; }
+      if (command && event.key.toLowerCase() === "j" && dock) { event.preventDefault(); setDockOpen(!showDock || !showMain); return; }
+      if (event.key === "Escape" && compact && focusedPane) { event.preventDefault(); togglePane(focusedPane); return; }
       onKeyDown?.(event);
     }}>
-    <InputProblems/><header className="flex min-h-10 flex-wrap items-center gap-1 border-b border-border px-2 py-1">
-      {left && <Button variant="ghost" size="sm" aria-label={t("Toggle structure panel")} aria-pressed={layout.leftOpen} title="⌘\\" onClick={() => patch({ leftOpen: !layout.leftOpen })}>{layout.leftOpen ? <PanelLeftClose /> : <PanelLeftOpen />}</Button>}
+    <InputProblems /><header className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-2 py-1">
+      {left && <Button id={`${prefix}-toggle-left`} variant="ghost" size="sm" aria-label={t("Toggle structure panel")} aria-controls={`${prefix}-left`} aria-pressed={showLeft} aria-expanded={showLeft} title="⌘\\" onClick={() => togglePane("left")}>{showLeft ? <PanelLeftClose /> : <PanelLeftOpen />}</Button>}
       <nav aria-label={t("Breadcrumbs")} className="flex min-w-0 items-center gap-1 text-sm">
         {crumbs.map((crumb, index) => <span key={index} className="flex min-w-0 items-center gap-1">
           {index > 0 && <ChevronRight className="size-3 shrink-0 text-muted" />}
@@ -78,50 +182,52 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
       </div>}
       {savingLabel && <span role="status" className={cn("ml-2 text-xs", saving === "error" ? "text-danger" : "text-muted")}>{savingLabel}</span>}
       <fieldset disabled={inputs?.busy} className="ml-auto flex flex-wrap items-center gap-1">{actions}</fieldset>
-      {dock && <Button variant="ghost" size="sm" aria-label={t("Toggle dock")} aria-pressed={layout.dockOpen} title="⌘J" onClick={() => patch({ dockOpen: !layout.dockOpen })}>{layout.dockOpen ? <PanelBottomClose /> : <PanelBottomOpen />}</Button>}
-      {right && <Button variant="ghost" size="sm" aria-label={t("Toggle inspector panel")} aria-pressed={layout.rightOpen} title="⌥⌘\\" onClick={() => patch({ rightOpen: !layout.rightOpen })}>{layout.rightOpen ? <PanelRightClose /> : <PanelRightOpen />}</Button>}
+      {dock && <Button id={`${prefix}-toggle-dock`} variant="ghost" size="sm" aria-label={t("Toggle dock")} aria-controls={`${prefix}-dock`} aria-pressed={showDock && showMain} aria-expanded={showDock && showMain} title="⌘J" onClick={() => setDockOpen(!showDock || !showMain)}>{showDock && showMain ? <PanelBottomClose /> : <PanelBottomOpen />}</Button>}
+      {right && <Button id={`${prefix}-toggle-right`} variant="ghost" size="sm" aria-label={t("Toggle inspector panel")} aria-controls={`${prefix}-right`} aria-pressed={showRight} aria-expanded={showRight} title="⌥⌘\\" onClick={() => togglePane("right")}>{showRight ? <PanelRightClose /> : <PanelRightOpen />}</Button>}
     </header>
-    <fieldset disabled={inputs?.busy||saving==="saving"} className="grid min-h-0 flex-1 lg:grid-cols-[var(--workbench-columns)]" style={{ "--workbench-columns": columns } as CSSProperties}>
-      {showLeft && <><aside role="region" aria-label={left.label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border"><InputDraftProvider scope={left.scope??"structure"} reveal={()=>patch({leftOpen:true})}><PanelBody panel={left} /></InputDraftProvider></aside>{splitter("left")}</>}
-      <div role="region" aria-label={mainLabel ?? t("Editor")} className="flex min-h-0 min-w-0 flex-col overflow-hidden">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
-        {dock && <DockBar dock={dock} open={layout.dockOpen} height={layout.dock} tab={dock.value ?? layout.dockTab} splitter={showDock ? splitter("dock") : null}
-          onOpen={(id) => { dock.onChange?.(id); patch({ dockOpen: !(layout.dockOpen && (dock.value ?? layout.dockTab) === id), dockTab: id }); }} />}
+    <fieldset disabled={inputs?.busy || saving === "saving"} className="grid min-h-0 min-w-0 flex-1 border-0 p-0" style={{ gridTemplateColumns: columns }}>
+      {left && <>
+        <aside id={`${prefix}-left`} role="region" aria-label={left.label} tabIndex={-1} hidden={!showLeft} style={{ display: showLeft ? undefined : "none" }} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border">
+          <ViewVisibilityContext.Provider value={visible && showLeft}>
+            {paneHeading("left", left)}
+            <InputDraftProvider scope={left.scope ?? "structure"} reveal={() => reveal("left")}><PanelBody panel={left} /></InputDraftProvider>
+          </ViewVisibilityContext.Provider>
+        </aside>
+        {!compact && showLeft && splitter("left")}
+      </>}
+      <div ref={main} role="region" aria-label={mainLabel ?? t("Editor")} hidden={!showMain} style={{ display: showMain ? undefined : "none" }} className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+        <ViewVisibilityContext.Provider value={visible && showMain}>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+          {dock && <div id={`${prefix}-dock`} className="flex shrink-0 flex-col border-t border-border" style={{ height: showDock ? sizes.dock + 36 : undefined }}>
+            {showDock && splitter("dock")}
+            <ContentTabs compact label={dock.label} items={tabItems(dock.tabs ?? [])} value={dock.value ?? layout.dockTab} open={showDock} onChange={chooseDock}
+              actions={showDock && <Button variant="ghost" size="sm" aria-label={t("Close dock")} onClick={() => setDockOpen(false)}><X /></Button>} />
+          </div>}
+        </ViewVisibilityContext.Provider>
       </div>
-      {showRight && <>{splitter("right")}<aside role="region" aria-label={right.label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-l border-border"><InputDraftProvider scope={right.scope??"inspector"} reveal={path=>{patch({rightOpen:true});right.locate?.(path);}}><PanelBody panel={right} /></InputDraftProvider></aside></>}
+      {right && <>
+        {!compact && showRight && splitter("right")}
+        <aside id={`${prefix}-right`} role="region" aria-label={right.label} tabIndex={-1} hidden={!showRight} style={{ display: showRight ? undefined : "none" }} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-l border-border">
+          <ViewVisibilityContext.Provider value={visible && showRight}>
+            {paneHeading("right", right)}
+            <InputDraftProvider scope={right.scope ?? "inspector"} reveal={path => { reveal("right"); right.locate?.(path); }}><PanelBody panel={right} /></InputDraftProvider>
+          </ViewVisibilityContext.Provider>
+        </aside>
+      </>}
     </fieldset>
   </div>;
 }
 
-function PanelBody({ panel }: { panel: WorkbenchPanel }) {
-  const prefix = useId();
-  const [own, setOwn] = useState(panel.tabs?.[0]?.id);
-  const active = panel.value ?? own;
-  const choose = (id: string) => { setOwn(id); panel.onChange?.(id); };
-  if (!panel.tabs?.length) return <div className="min-h-0 flex-1 overflow-auto">{panel.content}</div>;
-  const current = panel.tabs.find((tab) => tab.id === active) ?? panel.tabs[0]!;
-  return <>
-    <div role="tablist" aria-label={panel.label} className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border px-1 pt-1">
-      {panel.tabs.map((tab) => <button key={tab.id} type="button" role="tab" id={`${prefix}-${tab.id}`} aria-selected={tab.id === current.id}
-        className={cn("flex shrink-0 items-center gap-1 whitespace-nowrap rounded-t border-b-2 px-2 py-1 text-xs", tab.id === current.id ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}
-        onClick={() => choose(tab.id)}>{tab.title}{tab.badge !== undefined && tab.badge !== 0 && <span className="rounded-full bg-row-selected px-1.5 text-[10px]">{tab.badge}</span>}</button>)}
-    </div>
-    <div role="tabpanel" aria-labelledby={`${prefix}-${current.id}`} className="min-h-0 flex-1 overflow-auto"><InputDraftProvider scope={current.id} reveal={path=>{panel.onChange?.(current.id);setOwn(current.id);panel.locate?.(path);}}>{current.content}</InputDraftProvider></div>
-  </>;
+function tabItems(tabs: WorkbenchTab[]) {
+  return tabs.map(tab => ({ ...tab, title: <>{tab.title}{tab.badge !== undefined && tab.badge !== 0 && <span className="rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{tab.badge}</span>}</> }));
 }
 
-function DockBar({ dock, open, height, tab, splitter, onOpen }: { dock: WorkbenchPanel; open: boolean; height: number; tab?: string; splitter: ReactNode; onOpen: (id: string) => void }) {
-  const tabs = dock.tabs ?? [];
-  const current = tabs.find((item) => item.id === tab) ?? tabs[0];
-  return <div className="flex shrink-0 flex-col border-t border-border">
-    {open && splitter}
-    <div role="tablist" aria-label={dock.label} className="flex items-center gap-0.5 px-1 py-0.5">
-      {tabs.map((item) => <button key={item.id} type="button" role="tab" aria-selected={open && item.id === current?.id}
-        className={cn("flex items-center gap-1 rounded px-2 py-0.5 text-xs", open && item.id === current?.id ? "bg-row-selected font-semibold" : "text-muted hover:text-foreground")}
-        onClick={() => onOpen(item.id)}>{item.title}{item.badge !== undefined && item.badge !== 0 && <span className="rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{item.badge}</span>}</button>)}
-    </div>
-    {open && current && <div role="tabpanel" className="min-h-0 overflow-auto border-t border-border" style={{ height }}>{current.content}</div>}
-  </div>;
+function PanelBody({ panel }: { panel: WorkbenchPanel }) {
+  const [own, setOwn] = useState(panel.tabs?.[0]?.id);
+  const choose = (id: string) => { setOwn(id); panel.onChange?.(id); };
+  if (!panel.tabs?.length) return <div className="min-h-0 flex-1 overflow-auto">{panel.content}</div>;
+  return <ContentTabs key={panel.scope} compact label={panel.label} value={panel.value ?? own} onChange={choose}
+    items={tabItems(panel.tabs.map(tab => ({ ...tab, content: <InputDraftProvider scope={tab.id} reveal={path => { choose(tab.id); panel.locate?.(path); }}>{tab.content}</InputDraftProvider> })))} />;
 }
 
 /** A diagnostics list for the dock: each row can locate its subject. */

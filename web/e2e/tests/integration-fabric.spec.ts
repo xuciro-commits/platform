@@ -224,6 +224,7 @@ for (const fixture of [
             },
           });
           await editor.open(builder, pickerPage.id);
+          if (!(await editor.inspector.isVisible())) await page.getByRole("button", { name: "Toggle inspector panel", exact: true }).click();
           await editor.inspector.getByRole("tab", { name: /^Queries/ }).click();
           await page.getByRole("combobox", { name: "Named query binding", exact: true }).selectOption(`${publishedQuery.ref.app}/${publishedQuery.ref.name}@${publishedQuery.version}`);
           await editor.saveUntil(builder, pickerPage.id, "record-picker", 1);

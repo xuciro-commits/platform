@@ -39,7 +39,7 @@
 - 真实二进制：`hospitality-server`（`-profile lightweight -data <dir>`）在同一台沙箱上完成两次启动的走查，日志给出 `restored hotel-a from the snapshot at N, then replayed M entries`，`/v1/me` 的 `preferred` 与决策身份跨重启不变。
 - 轻量 profile 的操作路径（`deploy/local/README.md` 有完整段落）：
   ```bash
-  go build -o /tmp/hospitality-server ./solutions/hospitality/cmd/hospitality-server
+  (cd solutions/hospitality && go build -o /tmp/hospitality-server ./cmd/hospitality-server)
   /tmp/hospitality-server -profile lightweight -data /var/lib/platform -idp-new-key   # 只做一次
   TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mint-token user:ops@example.com)
   /tmp/hospitality-server -profile lightweight -data /var/lib/platform -addr 127.0.0.1:8496

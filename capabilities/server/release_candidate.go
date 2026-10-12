@@ -337,12 +337,12 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 // The candidate returned here is exactly what the builder saw in the
 // comparison. A later save must recompute it under the tenant lock and reject
 // a stale candidate ID rather than trusting bytes supplied by the browser.
-func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef, members ...platform.Member) (ReleasePreview, platform.ReleaseCandidate, error) {
+func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, platform.ReleaseCandidate, error) {
 	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
 	if !ok {
 		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
 	}
-	assets, diagnostic := owner.DraftReleaseAssetsMulti(drafts)
+	assets, diagnostic := owner.DraftReleaseAssetsMulti(drafts, member)
 	reply := ReleasePreview{CandidateActions: []platform.Action{}, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
 	for _, draft := range drafts {
 		if draft.ID != "" && !slices.Contains(reply.Drafts, draft) {
@@ -409,10 +409,6 @@ func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef, members ...p
 	// the preview as it does for a single draft; activation still demands the
 	// reviewed plan.
 	if len(drafts) > 1 {
-		var member platform.Member
-		if len(members) > 0 {
-			member = members[0]
-		}
 		if _, _, err := t.prepareReleaseLifecycleLocked(candidate, member, time.Now().UTC(), true); err != nil {
 			reply.Diagnostic = err.Error()
 			return reply, platform.ReleaseCandidate{}, nil

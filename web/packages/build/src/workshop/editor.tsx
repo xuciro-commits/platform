@@ -135,7 +135,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     if (page) { session.load(loadDraft(page)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`; }
     select({ kind: "page" }); setRefused(undefined);
-  });
+  }, busy);
   useEffect(() => {
     if (!page || dirty || busy || loaded.current === `${page.id}:${page.revision}`) return;
     session.load(loadDraft(page)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`;
@@ -485,8 +485,8 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         </div> },
         { id: "widgets", title: t("Widgets"), content: <WidgetLibrary widgets={widgets} widgetTitles={widgetTitles} onAdd={(widget) => add(widget)} /> },
       ] }}
-      right={preview ? undefined : { label: t("Inspector"),scope:inspectorKey,locate:()=>select(selection), value: inspectorValue, onChange: (next) => { if (["variables", "queries", "interface"].includes(next) && !canvasSelection && !container) select({ kind: next as "variables" | "queries" | "interface" }); else if (next === "page") select({ kind: "page" }); setInspectorTab((old) => ({ ...old, [inspectorKey.split(":")[0]!]: next })); },
-        tabs: [{ id: "__head", title: <span className="flex items-center gap-1">{canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : container ? <LayoutGlyph kind={document.nodes[container]?.kind ?? "rows"} /> : <Settings2 className="size-3" />}<span className="max-w-24 truncate">{canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}</span></span>, content: null }, ...inspectorTabs].filter((tab) => tab.id !== "__head") }}
+      right={preview ? undefined : { label: t("Inspector"), heading: <span className="flex min-w-0 items-center gap-1.5">{canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : container ? <LayoutGlyph kind={document.nodes[container]?.kind ?? "rows"} /> : <Settings2 className="size-3.5 shrink-0" />}<span className="truncate">{canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}</span></span>, scope:inspectorKey,locate:()=>select(selection), value: inspectorValue, onChange: (next) => { if (["variables", "queries", "interface"].includes(next) && !canvasSelection && !container) select({ kind: next as "variables" | "queries" | "interface" }); else if (next === "page") select({ kind: "page" }); setInspectorTab((old) => ({ ...old, [inspectorKey.split(":")[0]!]: next })); },
+        tabs: inspectorTabs }}
       dock={{ label: t("Page dock"), tabs: [
         { id: "problems", title: t("Problems"), badge: problemList.length, content: <ProblemList problems={problemList} empty={t("No problems. The page can be published.")} /> },
         { id: "variables", title: t("Variables"), badge: liveValues.length || undefined, content: liveValues.length ? <table className="w-full text-xs"><thead><tr className="text-left text-muted"><th className="px-3 py-1 font-medium">{t("Variable")}</th><th className="px-3 py-1 font-medium">{t("Type")}</th><th className="px-3 py-1 font-medium">{t("Current value")}</th></tr></thead>

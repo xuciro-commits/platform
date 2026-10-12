@@ -49,7 +49,12 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
  * deep link can still resolve its owner without a second route or asset copy.
  */
 export function pageApplication(route: Route, definitions: Definition[], current?: string): string | undefined {
-  if (route.view === "application-runs" && route.params?.application) return route.params.application;
+  if (route.view === "application-runs") {
+    const { app, name, application } = route.params ?? {};
+    const definition = definitions.find((item) => item.ref.kind === "app" && item.ref.app === app && item.application?.name === name);
+    const id = definition?.application && `${definition.ref.app}:${definition.application.name}`;
+    return id && (!application || application === id) ? id : undefined;
+  }
   if (route.view !== "page" || route.params?.kind !== "page") return undefined;
   const { app, name, application } = route.params;
   const holders = definitions.filter((d) => d.ref.kind === "app" && d.ref.app === app && d.application?.pages.includes(name ?? ""))

@@ -318,9 +318,9 @@ export function WorkspaceShell() {
     { id: "steps", title: t("Steps"), icon: <AlignLeft />, category: "build", description: t("Process canvas"), home: { view: "catalog-graph" } },
   ];
   const categories = [{ id: "business", label: t("Business applications") }, { id: "build", label: t("Build") }];
-  return <Workspace product={t("Catalog preview")} storageKey="platform.catalog.workspace-preview" views={views} home={{ view: "catalog-home" }}
+  return <Workspace product={t("Catalog preview")} storageKey="platform.catalog.workspace-preview" layoutScope={current} scopeOf={(route) => route.view === "catalog-records" ? "records" : route.view === "catalog-graph" ? "steps" : undefined} views={views} home={{ view: "catalog-home" }}
     rail={{ home: { view: "catalog-home" }, applications: { view: "catalog-portal" }, notifications: { route: { view: "catalog-home" }, unread: 2 } }}
-    applications={{ apps, categories, current, onSelect: (id) => { setCurrent(id); location.hash = `#/${apps.find((a) => a.id === id)!.home.view}`; } }}
+    applications={{ apps, categories, current, onSelect: setCurrent }}
     workspaces={{ options: [{ id: "operations", title: t("Operations") }, { id: "build", title: t("Build") }], current: projection, onSelect: setProjection }}
     session={{ tenant: "demo", principal: "ada", options: [{ id: "ada", label: "ada · demo" }], current: "ada", onSwitch: () => {} }}
     nav={[{ label: current === "records" ? t("Records") : t("Steps"), items: current === "records" ? [{ label: t("Records"), route: { view: "catalog-records" } }] : [{ label: t("Steps"), route: { view: "catalog-graph" } }] }]} />;

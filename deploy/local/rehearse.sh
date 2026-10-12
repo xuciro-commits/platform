@@ -83,7 +83,7 @@ submit() { # token key schema target-type target-id payload [expected-revision]
   local body who
   local server=${SERVER:-$MANUFACTURING}
   who=$(curl -s -H "Authorization: Bearer $1" "$server/v1/me" | jq -r .principalId)
-  body=$(jq -n --arg w "$who" --arg k "$2" --arg s "$3" --arg tt "$4" --arg ti "$5" --arg p "$(printf %s "$6" | base64)" --arg r "${7:-}" \
+  body=$(jq -n --arg w "$who" --arg k "$2" --arg s "$3" --arg tt "$4" --arg ti "$5" --arg p "$(printf %s "$6" | base64 | tr -d '\n')" --arg r "${7:-}" \
     --arg e "${EVIDENCE:-}" --arg tenant "${TENANT:-plant-sz}" --arg authority "${AUTHORITY:-mes}" \
     '{tenantId:$tenant, principalId:$w, authority:$authority, idempotencyKey:$k,
       schema:{name:$s, version:1}, target:{type:$tt, id:$ti}, payload:$p}
@@ -175,7 +175,7 @@ native_stream_setup() {
   workflow_submit "$actor" native-object build.object.create build.object NATIVE-O \
     "{\"name\":\"telemetry$suffix\",\"title\":\"Accepted telemetry results\",\"fields\":[{\"name\":\"reading\",\"title\":\"Reading\",\"type\":\"decimal\"}]}"
   workflow_submit "$actor" native-object-publish build.object.publish build.object NATIVE-O '{}'
-  for n in $(seq 0 7); do
+  for n in $(seq 0 99); do
     workflow_submit "$actor" "native-row-$n" "$typ.create" "$typ" "SENSOR-$n" '{"reading":0}'
   done
   workflow_submit "$actor" native-source build.source.create build.source NATIVE-SOURCE \
@@ -191,25 +191,32 @@ native_stream_setup() {
         {name:"emitalert",kind:"action",act:$action,target:{source:"item",path:["target"]},inputs:{reading:{source:"item",path:["reading"]}},retryAttempts:3,retryBackoffMs:250},
         {name:"completed",kind:"end"}]}')
   workflow_submit "$actor" native-process build.process.create build.process NATIVE-P "$definition"
-  workflow_submit "$actor" native-process-publish build.process.publish build.process NATIVE-P '{}'
   definition=$(jq -n --arg name "nativestats$suffix" \
     '{name:$name,title:"Retained telemetry output",object:"flow.output",sections:[
       {widget:"table",title:"Original output assets",fields:["name","app","instance","flow","version","batch"]},
       {widget:"detail",title:"Accepted window statistics",fields:["instance","version","batch","value"]},
       {widget:"table",title:"Original Flow versions",object:"flow.instance",fields:["flow","version","release","state"]}]}')
   workflow_submit "$actor" native-output-page build.page.create build.page NATIVE-OUTPUT-PAGE "$definition"
-  workflow_submit "$actor" native-output-page-publish build.page.publish build.page NATIVE-OUTPUT-PAGE '{}'
-  candidate=$(workflow_post "$actor" releases/preview '{"drafts":[{"kind":"flow","id":"NATIVE-P"},{"kind":"page","id":"NATIVE-OUTPUT-PAGE"}]}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "native stream/page joint preview"
+  result=$(workflow_post "$actor" releases/preview '{"drafts":[{"kind":"flow","id":"NATIVE-P"},{"kind":"page","id":"NATIVE-OUTPUT-PAGE"}]}')
+  candidate=$(jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId' <<<"$result") || { jq -c '{diagnostic,error}' <<<"$result" >&2; fail "native stream/page joint preview"; }
   workflow_post "$actor" releases/candidates "{\"drafts\":[{\"kind\":\"flow\",\"id\":\"NATIVE-P\"},{\"kind\":\"page\",\"id\":\"NATIVE-OUTPUT-PAGE\"}],\"candidateId\":\"$candidate\",\"key\":\"native-save\"}" | jq -e '.id' >/dev/null || fail "native stream/page joint save"
   workflow_post "$actor" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"native-activate\"}" | jq -e '.id' >/dev/null || fail "native stream activate"
-  sql "insert into native_stream_$suffix select n,'native-'||n,'P','D'||(n-1),now()-interval '3 seconds',13,'SENSOR-'||(n-1) from generate_series(1,8) n" >/dev/null
+  sql "insert into native_stream_$suffix select n,'native-'||n,'P','D'||(n-1),now()-interval '3 seconds',12.5000001,'SENSOR-'||(n-1) from generate_series(1,100) n" >/dev/null
   for _ in $(seq 60); do
-    result=$(workflow_get "$actor" "records/$typ?limit=50")
-    jq -e '.records | length == 8 and all(.[]; .reading == 13)' <<<"$result" >/dev/null && break
+    result=$(workflow_get "$actor" "records/$typ?limit=200")
+    jq -e '.records | length == 100 and all(.[]; .reading == 12.5)' <<<"$result" >/dev/null && break
     sleep 1
   done
-  jq -e '.records | length == 8 and all(.[]; .reading == 13)' <<<"$result" >/dev/null || fail "native stream did not apply all eight original actions"
-  workflow_get "$actor" 'records/flow.output?limit=50' | jq -e --arg id "$instance" '.records | any(.[]; .instance == $id and .name == "liveTelemetryStats" and (.value | length) == 8)' >/dev/null || fail "native read-only output unavailable"
+  jq -e '.records | length == 100 and all(.[]; .reading == 12.5)' <<<"$result" >/dev/null || fail "native stream did not apply all 100 original f32 actions"
+  # A later completed empty window may legitimately replace the current value
+  # while the 100 ordinary actions finish. Check the accepted output history,
+  # not wall-clock timing, without weakening its size or numerical assertions.
+  local output
+  output=$(workflow_get "$actor" 'records/flow.output?limit=50' | jq -er --arg id "$instance" \
+    '.records[] | select(.instance == $id and .name == "liveTelemetryStats") | .id') || fail "native read-only output unavailable"
+  workflow_get "$actor" "records/flow.output/$output" | jq -e \
+    '[.record.value, (.history[]?.fields[]? | select(.field == "value") | .before, .after)] |
+      any(.[] | select(type == "array"); length == 100 and all(.[]; .mean == 12.5 and .count == 1))' >/dev/null || fail "native output history lost the 100 original kernel records"
   workflow_submit "$actor" native-source-pause build.source.pause build.source NATIVE-SOURCE '{}'
   AUTHORITY=flow workflow_submit "$actor" native-stop flow.instance.cancel flow.instance "$instance" '{}'
   workflow_get "$actor" "records/flow.instance/$instance" | jq -e '.record | .state == "canceled" and .resumable' >/dev/null || fail "native stream lost same-version continuation"
@@ -239,7 +246,7 @@ native_stream_state() {
   local SERVER actor suffix path
   for suffix in plant hotel; do
     if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING; actor=$SUP; else SERVER=$HOSPITALITY; actor=$MGR; fi
-    for path in records/build.source/NATIVE-SOURCE records/build.process/NATIVE-P records/build.page/NATIVE-OUTPUT-PAGE records/build.telemetry$suffix 'records/flow.output?limit=50' "records/flow.instance/build.nativestream$suffix:continuous-v1"; do
+    for path in records/build.source/NATIVE-SOURCE records/build.process/NATIVE-P records/build.page/NATIVE-OUTPUT-PAGE "records/build.telemetry$suffix?limit=200" 'records/flow.output?limit=50' "records/flow.instance/build.nativestream$suffix:continuous-v1"; do
       curl -s -H "Authorization: Bearer $actor" "$SERVER/v1/$path"
     done
   done
@@ -837,7 +844,7 @@ echo "ok   Go/TinyGo data ABI: real isolated compilation, call-owned RustFS inpu
 echo "ok   PostgreSQL continuous sources: both hosts accept 1025 real rows in 512-row batches, with one consumer cursor and sealed RustFS window state"
 native_stream_setup "$MANUFACTURING" plant-sz "$SUP" plant
 native_stream_setup "$HOSPITALITY" hotel-a "$MGR" hotel
-echo "ok   complete native telemetry: exact f32 Wasm, eight partitions, hysteresis, eight original actions, read-only output and durable stop"
+echo "ok   complete native telemetry: exact f32 Wasm, 100 signals/partitions/actions, eight workers, hysteresis, accepted read-only output history and durable stop"
 before=$(settled_state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
@@ -904,8 +911,8 @@ before=$(settled_state)
 compose restart manufacturing-server hospitality-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/me") == 200 ]] && break; sleep 1; done
 same_state "$before" || fail "state after restart differs"
-native_stream_resume "$MANUFACTURING" plant-sz "$SUP" plant restart 9
-native_stream_resume "$HOSPITALITY" hotel-a "$MGR" hotel restart 9
+native_stream_resume "$MANUFACTURING" plant-sz "$SUP" plant restart 101
+native_stream_resume "$HOSPITALITY" hotel-a "$MGR" hotel restart 101
 (
   for suffix in plant hotel; do
     if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING TENANT=plant-sz actor=$SUP;
@@ -1042,8 +1049,8 @@ workflow_finish() {
       '.record | .state == "done" and .version == $v and .release == $r' >/dev/null || fail "completed workflow lost its starting release"
   done
 }
-native_stream_resume "$MANUFACTURING" plant-sz "$SUP" plant recovery 10
-native_stream_resume "$HOSPITALITY" hotel-a "$MGR" hotel recovery 10
+native_stream_resume "$MANUFACTURING" plant-sz "$SUP" plant recovery 102
+native_stream_resume "$HOSPITALITY" hotel-a "$MGR" hotel recovery 102
 echo "ok   native seven-node chain: both industries retained Wasm statistics, business actions and read-only outputs through restart, backup and full journal recovery; same-version resume kept source positions"
 workflow_finish "$MANUFACTURING" plant-sz "$SUP" "$OP1" plant
 workflow_finish "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel

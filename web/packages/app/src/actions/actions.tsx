@@ -129,10 +129,10 @@ function RecordPicker({ id, type, value, onChange }: { id: string; type: string;
 export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
 
 /** The original action submission form, shared by dialogs and inline hosts. */
-function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy,initial={},enabled=true}:{declared:ActionDeclaration;target:{type:string;id:string};revision:number;onCancel:()=>void;onCompleted:()=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean}) {
+function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true}:{declared:ActionDeclaration;target:{type:string;id:string};revision:number;onCancel:()=>void;onCompleted:()=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean}) {
  const {decide}=useHost(),lock=useRef(false);
  const [values,setValues]=useState<Record<string,unknown>>(initial),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(false),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>([]);
- const submit=async()=>{if(!enabled||preview||lock.current||!target.id)return;setSubmitted(true);if(!payloadSchema(declared.payload).safeParse(values).success||inputIssues(declared.payload,values).length>0)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal,onOutcome:entry=>{setOwnerIssues(entry.issues??[]);setPending(entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN");}}))onCompleted();}catch{setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
+ const submit=async()=>{if(!enabled||preview||lock.current||!target.id)return;setSubmitted(true);if(!payloadSchema(declared.payload).safeParse(values).success||inputIssues(declared.payload,values).length>0)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal,onOutcome:entry=>{setOwnerIssues(entry.issues??[]);const waiting=entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN";setPending(waiting);onPending?.(waiting);}}))onCompleted();}catch{setPending(true);onPending?.(true);setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
  return <Form className="grid gap-3" noValidate onSubmit={()=>submit()}>
  {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
@@ -147,13 +147,24 @@ function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,previ
 function ActionDialog({ declared, type, record, onClose, onCompleted, initial={} }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown> }) {
  const {decide,source}=useHost(),info=source.entity(type);
  const [baseline]=useState(record);
- const [id,setId]=useState(()=>newId(prefixOf(type))),[submitting,setSubmitting]=useState(false),[issues,setIssues]=useState<Api.FieldIssue[]>([]);
- const target={type,id:baseline?.id??id},options={expectedRevision:baseline?.revision??0,quiet:true,onOutcome:(entry:{issues?:Api.FieldIssue[]})=>setIssues(entry.issues??[])};
- const done=(ok:boolean)=>{if(ok){onClose();onCompleted?.(target);}return ok;},generated=declared.schema===`${type}.create`&&!declared.payload.some(f=>f.from||f.constraints?.dateTime);
+ const [id,setId]=useState(()=>newId(prefixOf(type))),[submitting,setSubmitting]=useState(false),[pending,setPending]=useState(false),[issues,setIssues]=useState<Api.FieldIssue[]>([]);
+ const request=useRef<{target:{type:string;id:string};values:object;revision:number}|undefined>(undefined);
+ const target={type,id:baseline?.id??id},options={expectedRevision:baseline?.revision??0,quiet:true,onOutcome:(entry:{issues?:Api.FieldIssue[];state:string})=>{
+   setIssues(entry.issues??[]);setPending(entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN");
+   if(entry.state==="SUBMISSION_STATE_REJECTED"||entry.state==="SUBMISSION_STATE_CONFLICT")request.current=undefined;
+ }};
+ const done=(ok:boolean,confirmedTarget=target)=>{if(ok){onClose();onCompleted?.(confirmedTarget);}return ok;},generated=declared.schema===`${type}.create`&&!declared.payload.some(f=>f.from||f.constraints?.dateTime);
  return <Dialog open wide={generated&&info?.fields.some(f=>f.type==="lines")} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
  <div className="grid gap-3">
- {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting}/></label>}
- {generated?<>{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}<GeneratedForm type={type} submitLabel={t("Create")} onCancel={onClose} onBusy={setSubmitting} issues={issues} onSubmit={async values=>{let reason="";const ok=!!id&&await decide(declared.schema,target,values,{...options,onRefused:message=>{reason=message;}});if(!ok)throw new Error(reason||t("The request was not confirmed. Your input is retained."));return done(ok);}}/></>:<DeclaredActionForm declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={()=>done(true)} onBusy={setSubmitting} initial={initial}/>}
+ {pending&&<p role="status" className="text-xs text-warning">{t("Creation is awaiting confirmation. Retry the original target and values; editing the ID could create another record.")}</p>}
+ {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting||pending}/></label>}
+ {generated?<>{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}<GeneratedForm type={type} submitLabel={pending?t("Retry confirmation"):t("Create")} locked={pending} onCancel={onClose} onBusy={setSubmitting} issues={issues} onSubmit={async values=>{
+   request.current??={target:{...target},values:structuredClone(values),revision:options.expectedRevision};
+   const submitted=request.current;let reason="";setPending(true);
+   const ok=!!submitted.target.id&&await decide(declared.schema,submitted.target,submitted.values,{...options,expectedRevision:submitted.revision,onRefused:message=>{reason=message;}});
+   if(!ok)throw new Error(reason||t("The request was not confirmed. Your input is retained."));
+   request.current=undefined;setPending(false);return done(ok,submitted.target);
+ }}/></>:<DeclaredActionForm declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={()=>done(true)} onBusy={setSubmitting} onPending={setPending} initial={initial}/>}
  </div></Dialog>;
 }
 

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/knowledge"
 	"platformserver/platform"
 )
@@ -72,6 +71,38 @@ func TestAgentKnowledgeCitationUsesCurrentDocumentGrant(t *testing.T) {
 	doc.Apps = nil
 	put()
 	check(true)
+	admin := platform.Member{ID: "audit", Tenant: tn.ID, Roles: map[string]string{AgentApp: AgentAdmin}}
+	trace := func(who platform.Member) AgentRunRecord {
+		t.Helper()
+		view, err := tn.RecordOf(who, RunType, run.ID, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return view.Record.(AgentRunRecord)
+	}
+	// A standalone public-policy run needs no business-record grant.
+	if r := trace(admin); r.Withheld || len(r.Citations) != 1 || r.Result == "" {
+		t.Fatalf("public policy lost without a business context: %+v", r)
+	}
+	// The policy is public, but its association with a private task is not.
+	// Keep content grants independent of editor metadata, and declare that
+	// association at the agent entity, not in a second host permission filter.
+	decide(t, tn, reader.ID, "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Press", "line": "L1"}, now)
+	run.Ref = "stock.item/I1"
+	if err := tn.automation(AgentApp, false).PutAt(now, "test.context", run); err != nil {
+		t.Fatal(err)
+	}
+	check(true)
+	// A former task reader can retain an agent-audit role, but no task grant.
+	for _, who := range []platform.Member{admin, {ID: reader.ID, Tenant: tn.ID, Roles: map[string]string{AgentApp: AgentAdmin}}} {
+		r := trace(who)
+		if !r.Withheld || len(r.Citations) != 0 || r.Result != "" {
+			t.Fatalf("private task escaped via a public citation for %s: %+v", who.ID, r)
+		}
+		if r.Steps[0].Outcome != doc.Text || !tn.mayRead(who, now, false)("knowledge.document/D1") {
+			t.Fatalf("private task restriction revoked independent public content for %s: %+v", who.ID, r)
+		}
+	}
 	doc.Archived = true
 	put()
 	check(false)
@@ -86,15 +117,8 @@ func TestAgentTraceScope(t *testing.T) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	tn := stockTenant(t, NewAgents("t-1"))
 	tn.agents.(*Agents).defs["stock.guide"] = &agentDef{app: "stock"}
-	member := func(id string) platform.Member {
-		m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id)
-		return m
-	}
-	body, _ := json.Marshal(map[string]any{"name": "Press", "line": "L1", "note": "hydraulic inspection due"})
-	if _, err := tn.Submit(member("ana"), &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: "stock", IdempotencyKey: "trace-1",
-		Target: &pb.EntityRef{Type: "stock.item", Id: "I1"}, Schema: &pb.SchemaRef{Name: "stock.item.create", Version: 1}, Payload: body}, now); err != nil {
-		t.Fatal(err)
-	}
+	member := func(id string) platform.Member { return memberOf(t, tn, id) }
+	decide(t, tn, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Press", "line": "L1", "note": "hydraulic inspection due"}, now)
 	item, _ := platform.Get[Item](tn.automation("stock", false), "I1")
 	item.Secret = "the tolerance is 0.02mm" // only a lead reads it (ADR-0028 D3)
 	if err := tn.automation("stock", false).PutAt(now, "test.tolerance", item); err != nil {

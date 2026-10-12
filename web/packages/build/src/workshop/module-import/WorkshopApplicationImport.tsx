@@ -22,7 +22,7 @@ const messages:Record<string,string>={
  'application-import-scope-changed':'The member, application or definition changed. Further import writes stopped.',
 };
 /** Application authoring orchestration; execution and release remain with their owners. */
-export function WorkshopApplicationImport({open,onClose,application,onPrepared}:{open:boolean;onClose:()=>void;application:Api.AssetBinding;onPrepared:(prepared:ApplicationImportPrepared)=>void}){
+export function WorkshopApplicationImport({open,onClose,application,onPrepared,onReviewMembership}:{open:boolean;onClose:()=>void;application:Api.AssetBinding;onPrepared:(prepared:ApplicationImportPrepared)=>boolean|Promise<boolean>;onReviewMembership?:()=>Promise<boolean>}){
  const host=useHost(),inventory=useRecordInventory<PageRecord>('build.page'),objects=useRecordInventory<ObjectRecord>('build.object'),directInstall=useDirectInstall();
  // The pages may bind to objects this tenant has saved but not installed: the
  // import offers them as candidate inputs and reports them to the release.
@@ -37,6 +37,7 @@ export function WorkshopApplicationImport({open,onClose,application,onPrepared}:
  const draftObjects=useMemo(()=>preRelease.map(({name,title})=>({name,title})),[preRelease]);
  const definition=host.definitions.find(d=>d.ref.app===application.ref.app&&d.ref.kind==='app'&&d.ref.name===application.ref.name&&d.version===application.sourceVersion);
  const [destinations,setDestinations]=useState<ImportPageDestination[]>([]),[busy,setBusy]=useState(false),[writes,setWrites]=useState<ImportPageWrite[]>(),[progress,setProgress]=useState<ImportSaveProgress[]>([]),[error,setError]=useState(''),[done,setDone]=useState(false),[acceptedHeader,setAcceptedHeader]=useState<Api.ApplicationHeader>();
+ const prepared=useRef<ApplicationImportPrepared|undefined>(undefined),deliveryPolicy=useRef<boolean|undefined>(undefined);
  // Page publications change the directory. The captured member, original
  // schemas/actions and application binding must survive our own publications.
  const scope=JSON.stringify([host.me,host.entities,host.catalog,definition?.version,application]),current=useRef({scope,client:host.client,mounted:true}),running=useRef(false);current.current.scope=scope;current.current.client=host.client;
@@ -48,17 +49,20 @@ export function WorkshopApplicationImport({open,onClose,application,onPrepared}:
   if(!writes&&!report?.ready)return;
   if(report?.bindings.application&&(JSON.stringify(report.bindings.application.binding)!==JSON.stringify(application))){setError(t('Map shared ports to this original application before importing.'));return;}
   const captured=current.current.scope,capturedClient=host.client,active=()=>current.current.mounted&&current.current.scope===captured&&current.current.client===capturedClient;
-  const accepted=writes??importedPageWrites(report!);const header=writes?acceptedHeader:report?.header;if(!writes)setAcceptedHeader(header);setWrites(accepted);running.current=true;setBusy(true);setError('');
+  const accepted=writes??importedPageWrites(report!);const header=writes?acceptedHeader:report?.header;if(!writes){deliveryPolicy.current=directInstall;setAcceptedHeader(header);prepared.current={pages:accepted.map(w=>w.destination.name),dependencies:importDependencies(accepted.map(w=>w.destination),preRelease.map(item=>item.dependency)),...(header===undefined?{}:{header})};}setWrites(accepted);running.current=true;setBusy(true);setError('');
   try{
    await saveImportedPages(accepted,{
     active,
     read:async id=>{try{return (await host.client.get<{record:ImportedPageRecord}>(`/v1/records/build.page/${encodeURIComponent(id)}`)).record;}catch(failure){if(failure instanceof Error&&/HTTP 404$/.test(failure.message))return;throw failure;}},
     pending:id=>host.client.authorities.outbox.some(e=>e.submission.tenantId===host.client.connection.tenant&&e.submission.target?.type==='build.page'&&e.submission.target.id===id&&['SUBMISSION_STATE_PENDING','SUBMISSION_STATE_SENDING','SUBMISSION_STATE_UNKNOWN'].includes(e.state)),
     decide:async(schema,id,payload,expectedRevision)=>host.decide(schema,{type:'build.page',id},payload,{expectedRevision,quiet:true,onRefused:reason=>{if(active())setError(reason);}}),
-    directInstall,
+    directInstall:deliveryPolicy.current??directInstall,
     progress:value=>{if(active())setProgress(previous=>[...previous.filter(p=>p.page!==value.page),value]);},
    });
-   if(active()){setDone(true);onPrepared({pages:accepted.map(w=>w.destination.name),dependencies:importDependencies(accepted.map(w=>w.destination),preRelease.map(item=>item.dependency)),...(header===undefined?{}:{header})});}
+   if(active()&&prepared.current){
+    if(!await onPrepared(prepared.current)){if(active())setError(t('Pages are confirmed, but application membership is not. Continue with the same imported pages; do not import them again.'));return;}
+    if(active())setDone(true);
+   }
   }catch(failure){if(active())setError(previous=>previous||t(messages[failure instanceof Error?failure.message:'']??'The module import stopped. Confirmed pages are retained; check the original pending changes and saved pages.'));}
   finally{running.current=false;if(current.current.mounted){setBusy(false);if(!active())setError(t(messages['application-import-scope-changed']!));}}
  };
@@ -74,8 +78,11 @@ export function WorkshopApplicationImport({open,onClose,application,onPrepared}:
    <p role="status" className="text-xs">{progress.find(p=>p.page===d.sourcePage)?.state==='published'?t('Published'):progress.find(p=>p.page===d.sourcePage)?.state==='draft'?t('Saved draft, delivered with the application release'):progress.some(p=>p.page===d.sourcePage)?t('Saved'):t('Not saved')}</p>
   </div>)}</fieldset>
   {error&&<p role="alert">{error}</p>}{done&&<p role="status">{t('Imported pages are ready in the application draft. Save the application, then review its release.')}</p>}
-  {done&&!directInstall&&<p className="text-xs text-muted">{t('Review the application release and add the drafts it depends on; the candidate installs the pages with the application.')}{!!preRelease.length&&<> {t('{count} saved object drafts are candidate inputs and are added to the review.',{count:preRelease.length})}</>}</p>}
-  {!!writes&&!done&&<Button disabled={busy} onClick={()=>void prepare()}>{t('Continue page import')}</Button>}
+  {done&&!directInstall&&<p className="text-xs text-muted">{t('Review the application release and add the drafts it depends on; the candidate installs the pages with the application.')}{!!prepared.current?.dependencies.length&&<> {t('{count} saved object drafts are candidate inputs and are added to the review.',{count:prepared.current.dependencies.length})}</>}</p>}
+  {!!writes&&!done&&<div className="grid gap-2"><Button disabled={busy} onClick={()=>void prepare()}>{t('Continue page import')}</Button>
+    {onReviewMembership&&<><p className="text-xs text-muted">{t('After an explicit revision refusal, review the current application before retrying. Confirmed pages remain; the imported header replaces the current header only when one was reviewed.')}</p>
+      <Button variant="ghost" disabled={busy} onClick={async()=>{if(!await onReviewMembership())return;await prepare();}}>{t('Review current application and retry membership')}</Button></>}
+  </div>}
  </Panel>;
  return <ModuleImportDialog open={open} onClose={onClose} profile={pageUIProfile} object={destinations[0]?.object??''} draftObjects={preRelease} onApply={()=>{}} application={{destinations,onSource:sourceChanged,controls,busy:busy||inventory.isLoading||inventory.isError,locked:!!writes,onApply:report=>void prepare(report)}}/>;
 }

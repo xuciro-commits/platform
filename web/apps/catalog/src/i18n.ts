@@ -1,6 +1,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Stored snippets are unavailable or invalid. Nothing was overwritten.": "保存的片段不可用或格式无效；原数据未被覆盖。",
+  "The snippet library changed in another tab. Reload it before saving.": "另一页签已修改片段库，请重新读取后再保存。",
+  "Could not save snippets in this browser. Your editor changes are still unsaved.": "无法在此浏览器保存片段；编辑器中的修改仍未保存。",
+  "Preview uses the last run. Run again to apply editor changes.": "预览使用上次运行的代码；再次运行以应用编辑器中的修改。",
+  "Preview pauses while hidden and restarts when reopened.": "预览隐藏时暂停，重新打开时从上次运行的代码重新启动。",
+  "Reload snippets": "重新读取片段",
+  "Console message truncated.": "控制台消息已截断。",
+
  "Developer": "开发者",
  "Reusable UI, App API and patterns, with live examples and a sandbox.": "可复用的 UI、应用 API 与模式，附实时示例与沙箱。",
   "Quality and compatibility": "质量与兼容",

@@ -23,8 +23,14 @@ export async function decide(request: APIRequestContext, token: string, app: str
 
 /** Opens the workspace as the member with token, at a route (the part after #). */
 export async function open(page: Page, token: string, route: string) {
-  await page.addInitScript((t) => sessionStorage.setItem("workspace:identity", t), token);
-  await page.goto(`/#${route}`);
+  // A hash-only navigation does not run init scripts. Read the current member
+  // from this document's test URL instead of accumulating token-capturing
+  // scripts that can restore an earlier identity when the same page reloads.
+  await page.addInitScript(() => {
+    const member = new URL(location.href).searchParams.get("workspaceTestMember");
+    if (member) sessionStorage.setItem("workspace:identity", member);
+  });
+  await page.goto(`/?workspaceTestMember=${encodeURIComponent(token)}#${route}`);
 }
 
 /** Task surfaces share the shell and leave existing editor tabs mounted. */

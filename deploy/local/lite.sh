@@ -1,73 +1,62 @@
 #!/usr/bin/env bash
-# 一键启动零 Docker 轻量持久化服务 (ADR-0049 & ADR-0081)
-# 单二进制 + 单数据目录 + 自研本地 IdP + 本地文件存储 + 内置工作台
+# The existing lightweight profile: one data directory, signed local seats,
+# local journal/files and the same workspace (ADR-0049 / ADR-0081).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+root=$(pwd)
 
 solution=${1:-hospitality}
-port=${2:-}
-if [[ -z "$port" ]]; then
-  case "$solution" in
-    hospitality) port=8495 ;;
-    manufacturing) port=8490 ;;
-    *) echo "Unknown solution: $solution" >&2; exit 1 ;;
-  esac
+case "$solution" in
+  hospitality) default_port=8495 ;;
+  manufacturing) default_port=8490 ;;
+  *) echo "Unknown solution: $solution" >&2; exit 1 ;;
+esac
+port=${2:-$default_port}
+if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
+  echo "Invalid port: $port (expected 1–65535)" >&2
+  exit 1
 fi
+bind=${LITE_HOST:-127.0.0.1}
+go=${GO:-go}
+read -r -a pnpm <<< "${PNPM:-pnpm}"
 
 data_dir=".build/lite/$solution"
 bin=".build/lite/$solution-server"
 web_dist="web/apps/workspace/dist"
+mkdir -p "$data_dir"
 
-mkdir -p "$data_dir" .build/lite
+echo "==> Building the workspace / 构建工作台..."
+# Never serve another checkout's stale UI with the new host binary. Corepack
+# must see web/package.json before choosing the pinned pnpm version.
+(cd web && "${pnpm[@]}" --dir apps/workspace build)
 
-# 1. 检查并构建前端工作区（若尚未构建）
-if [[ ! -f "$web_dist/index.html" ]]; then
-  echo "==> 首次运行，正在构建 Web 工作区..."
-  pnpm --dir web/apps/workspace build
-fi
+echo "==> Building $solution / 编译行业宿主..."
+# Each solution is its own Go module; the repository root is not one.
+(cd "solutions/$solution" && "$go" build -o "$root/$bin" "./cmd/$solution-server")
 
-# 2. 编译轻量宿主二进制
-echo "==> 正在编译 $solution 宿主二进制..."
-go build -o "$bin" "./solutions/$solution/cmd/$solution-server"
-
-# 3. 检查并初始化本地 IdP 密钥
 if [[ ! -f "$data_dir/idp.key" ]]; then
-  echo "==> 正在初始化本地 IdP 签名密钥 ($data_dir/idp.key)..."
+  echo "==> Creating the local signing key / 初始化本地签名密钥..."
   "$bin" -profile lightweight -data "$data_dir" -idp-new-key
 fi
 
-# 4. 准备默认管理员账号与签发 Token
-case "$solution" in
-  hospitality) admin="user:manager@hotel.test" ;;
-  manufacturing) admin="user:sup@plant.test" ;;
-esac
+cat <<EOF
 
-token=$("$bin" -profile lightweight -data "$data_dir" -mint-token "$admin" 2>/dev/null || true)
-
-# 5. 检查端口占用
-if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "错误: 端口 $port 已被占用。如果已有其他本地或 Docker 宿主在运行，请先停止（例如 make infra-down 或 docker compose stop）。" >&2
-  exit 1
+Platform · $solution · lightweight / 轻量持久化
+  Workspace / 工作台: http://$bind:$port
+  Data / 数据目录:    $data_dir
+  Sign in with the workspace's signed role cards / 使用工作台签名角色卡登录。
+  Existing journal, files and signing key are preserved / 保留既有日志、文件与密钥。
+EOF
+if [[ "$bind" != "127.0.0.1" && "$bind" != "localhost" ]]; then
+  echo "  Demo seats are exposed on this interface; use only on a trusted network."
+  echo "  此接口开放演示席位；仅在受信任网络使用。"
 fi
 
-echo ""
-echo "================================================================================"
-echo "🚀 Platform 轻量单机服务启动中 (零 Docker · 单二进制 · 本地存储 · 自研 IdP)"
-echo "================================================================================"
-echo "  - 工作台地址 : http://localhost:$port"
-echo "  - 行业方案   : $solution"
-echo "  - 持久化目录 : $data_dir"
-echo "  - 管理员账号 : $admin"
-if [[ -n "$token" ]]; then
-  echo "  - 预签发Token: $token"
-fi
-echo "  - 登录说明   : 浏览器打开工作台即可在界面直接选择角色登录（由轻量 IdP 签名）"
-echo "================================================================================"
-echo ""
-
+# The host owns binding and journal locking: failures are explicit, never a
+# fallback to an in-memory host or a different port/profile.
 exec "$bin" \
   -profile lightweight \
   -data "$data_dir" \
   -templates deploy/templates \
-  -addr "127.0.0.1:$port" \
+  -addr "$bind:$port" \
   -web "$web_dist"

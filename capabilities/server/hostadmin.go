@@ -1,7 +1,10 @@
 package platformserver
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strconv"
@@ -348,10 +351,28 @@ func (h *Host) tenantByID(id string) *Tenant {
 
 // decodeBody reads one JSON request body of the console's own size.
 func decodeBody(r *http.Request, into any) error {
-	body := http.MaxBytesReader(nil, r.Body, 1<<20)
-	decoder := json.NewDecoder(body)
+	return decodeBodyLimit(r, into, 1<<20)
+}
+
+// Decode one complete bounded management request. LimitReader must not make
+// an oversized body or a second JSON value look like an accepted EOF.
+func decodeBodyLimit(r *http.Request, into any, limit int64) error {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(raw)) > limit {
+		return &http.MaxBytesError{Limit: limit}
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	return decoder.Decode(into)
+	if err := decoder.Decode(into); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return fmt.Errorf("one JSON request is required")
+	}
+	return nil
 }
 
 // HostArtifactView is one tenant's release inventory for the console: the

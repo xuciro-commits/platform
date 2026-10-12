@@ -458,12 +458,22 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform
 		// when one window happens to fit inline on its first iteration.
 		outputs["state:"+node] = platform.Raw(BatchStateReference{Instance: x.ID, Node: node, Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(raw)), Size: len(raw)})
 	}
-	for node, raw := range frame.OperatorOutputs {
-		outputs[node] = slices.Clone(raw)
-	}
 	outputs["batch"] = platform.Raw(map[string]any{"cursor": frame.Cursor, "consumed": frame.Consumed, "rejected": frame.Rejected})
+	projectOperatorOutputs(outputs, x.ID, frame)
 	if len(platform.Raw(outputs)) > 60<<10 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch outputs exceed the Flow output budget")
+	}
+	// Batch-local operator outputs are empty between slide boundaries, not a
+	// new completed window. Decode once for both publication and continuation;
+	// an intake-only batch must retain the last application output unchanged.
+	var state WindowState
+	if !batch.Bootstrap && (plan.entry != "" || plan.rule.Output != nil) {
+		if plan.rule.Window == nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared continuous output has no event-time window")
+		}
+		if raw := frame.State[plan.rule.Window.Node]; len(raw) == 0 || json.Unmarshal(raw, &state) != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared event-time window cannot be decoded")
+		}
 	}
 	var assets []any
 	for _, letter := range frame.DeadLetters {
@@ -474,7 +484,7 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform
 		assets = append(assets, platform.FlowDeadLetterAsset{Record: platform.Record{ID: assetID}, App: plan.caller.App, Instance: x.ID, Flow: x.Flow, Version: x.Version,
 			OnBehalf: x.OnBehalf, Sources: slices.Clone(x.Sources), Letter: letter})
 	}
-	if output := plan.rule.Output; output != nil && !batch.Bootstrap {
+	if output := plan.rule.Output; output != nil && !batch.Bootstrap && state.Ready {
 		value := frame.OperatorOutputs[output.Name]
 		if len(value) > 48<<10 {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read-only Flow output exceeds its asset budget")
@@ -505,67 +515,61 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform
 	}
 	var windowInput, resumeInput json.RawMessage
 	var operationRequest *platform.OperationRequest
-	if plan.entry != "" && !batch.Bootstrap {
-		var state WindowState
-		if raw := frame.State[plan.rule.Window.Node]; len(raw) == 0 || json.Unmarshal(raw, &state) != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared event-time window cannot be decoded")
+	if plan.entry != "" && !batch.Bootstrap && state.Ready {
+		w := plan.rule.Window
+		previousOutputs := maps.Clone(x.Outputs)
+		if plan.operation == nil {
+			previousOutputs = maps.Clone(outputs)
 		}
-		if state.Ready {
-			w := plan.rule.Window
-			previousOutputs := maps.Clone(x.Outputs)
-			if plan.operation == nil {
-				previousOutputs = maps.Clone(outputs)
+		if previousOutputs == nil {
+			previousOutputs = map[string]json.RawMessage{}
+		}
+		projection := ContinuousWindowInput{
+			Source: plan.rule.Source, Batch: batch.ID, Predecessor: batch.Predecessor,
+			Cursor: frame.Cursor, Watermark: frame.Watermark,
+			WindowStart: state.EmittedAt.Add(-time.Duration(w.WindowMS) * time.Millisecond),
+			WindowEnd:   state.EmittedAt, EmittedAt: state.EmittedAt,
+			Consumed: frame.Consumed, Rejected: frame.Rejected, Signals: windowSignals(state, *w),
+			Outputs: previousOutputs,
+		}
+		windowInput = platform.Raw(projection)
+		resumeInput = platform.Raw(map[string]any{"outputs": previousOutputs})
+		if len(resumeInput) > 60<<10 {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained window continuation exceeds the Flow input budget")
+		}
+		run := plan.owner.run(&x)
+		run.Now, run.Data, run.Sources = now, slices.Clone(windowInput), slices.Clone(sources)
+		if plan.operation != nil {
+			request, requestErr := plan.operation.Request(plan.caller, run)
+			if requestErr != nil {
+				return nil, requestErr
 			}
-			if previousOutputs == nil {
-				previousOutputs = map[string]json.RawMessage{}
+			request.Key = fmt.Sprintf("flow:%s:%s:%d", x.ID, plan.entry, x.Seq)
+			request.OnBehalf = x.OnBehalf
+			request.Release = &x.Release
+			request.Target = InstanceType + "/" + x.ID
+			request.Sources = slices.Compact(slices.Sorted(slices.Values(append(append(slices.Clone(x.Sources), run.Sources...), request.Sources...))))
+			if request.App == "" || request.Name == "" || request.OnBehalf != x.OnBehalf {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The retained Compute entry must name its operation and member")
 			}
-			projection := ContinuousWindowInput{
-				Source: plan.rule.Source, Batch: batch.ID, Predecessor: batch.Predecessor,
-				Cursor: frame.Cursor, Watermark: frame.Watermark,
-				WindowStart: state.EmittedAt.Add(-time.Duration(w.WindowMS) * time.Millisecond),
-				WindowEnd:   state.EmittedAt, EmittedAt: state.EmittedAt,
-				Consumed: frame.Consumed, Rejected: frame.Rejected, Signals: windowSignals(state, *w),
-				Outputs: previousOutputs,
+			operationRequest = &request
+		} else {
+			var stats []AggregateRecord
+			var alerts []Alert
+			json.Unmarshal(frame.OperatorOutputs[plan.rule.Aggregate.Node], &stats)
+			if plan.rule.Threshold != nil {
+				json.Unmarshal(frame.OperatorOutputs[plan.rule.Threshold.Node], &alerts)
 			}
-			windowInput = platform.Raw(projection)
-			resumeInput = platform.Raw(map[string]any{"outputs": previousOutputs})
-			if len(resumeInput) > 60<<10 {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained window continuation exceeds the Flow input budget")
-			}
-			run := plan.owner.run(&x)
-			run.Now, run.Data, run.Sources = now, slices.Clone(windowInput), slices.Clone(sources)
-			if plan.operation != nil {
-				request, requestErr := plan.operation.Request(plan.caller, run)
-				if requestErr != nil {
-					return nil, requestErr
+			triggered, normal := []Alert{}, []Alert{}
+			for _, alert := range alerts {
+				if alert.State == "triggered" {
+					triggered = append(triggered, alert)
+				} else {
+					normal = append(normal, alert)
 				}
-				request.Key = fmt.Sprintf("flow:%s:%s:%d", x.ID, plan.entry, x.Seq)
-				request.OnBehalf = x.OnBehalf
-				request.Release = &x.Release
-				request.Target = InstanceType + "/" + x.ID
-				request.Sources = slices.Compact(slices.Sorted(slices.Values(append(append(slices.Clone(x.Sources), run.Sources...), request.Sources...))))
-				if request.App == "" || request.Name == "" || request.OnBehalf != x.OnBehalf {
-					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The retained Compute entry must name its operation and member")
-				}
-				operationRequest = &request
-			} else {
-				var stats []AggregateRecord
-				var alerts []Alert
-				json.Unmarshal(frame.OperatorOutputs[plan.rule.Aggregate.Node], &stats)
-				if plan.rule.Threshold != nil {
-					json.Unmarshal(frame.OperatorOutputs[plan.rule.Threshold.Node], &alerts)
-				}
-				triggered, normal := []Alert{}, []Alert{}
-				for _, alert := range alerts {
-					if alert.State == "triggered" {
-						triggered = append(triggered, alert)
-					} else {
-						normal = append(normal, alert)
-					}
-				}
-				windowInput = platform.Raw(map[string]any{"outputs": previousOutputs, "signals": projection.Signals, "stats": aggregateOutput(stats), "alerts": alertOutput(alerts), "triggered": alertOutput(triggered), "normal": alertOutput(normal)})
-				resumeInput = slices.Clone(windowInput)
 			}
+			windowInput = platform.Raw(map[string]any{"outputs": previousOutputs, "signals": projection.Signals, "stats": aggregateOutput(stats), "alerts": alertOutput(alerts), "triggered": alertOutput(triggered), "normal": alertOutput(normal)})
+			resumeInput = slices.Clone(windowInput)
 		}
 	}
 	var artifacts, retired []platform.FlowStateArtifact
@@ -601,6 +605,25 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform
 	frame.State, frame.DeadLetters, frame.Sealed = nil, nil, &ref
 	return &PreparedBatch{owner: plan.owner, before: x, frame: frame, artifacts: artifacts, retired: retired, outputs: outputs, sources: sources, batch: batch, at: now,
 		entry: plan.entry, windowInput: windowInput, resumeInput: resumeInput, operation: operationRequest, assets: assets}, nil
+}
+
+// projectOperatorOutputs keeps small historical projections inline. A wide
+// native graph still keeps every original output in its sealed frame, but does
+// not copy aggregate/alerts/variable values into each token's bounded output
+// map. The reference is inspectable via the same authorized frame read; native
+// actions consume the actual prepared items, never these reference markers.
+func projectOperatorOutputs(outputs map[string]json.RawMessage, instance string, frame *BatchFrame) {
+	wide := false
+	for node, raw := range frame.OperatorOutputs {
+		outputs[node] = slices.Clone(raw)
+		wide = wide || len(raw) > 48<<10
+	}
+	if !wide && len(platform.Raw(outputs)) <= 60<<10 {
+		return
+	}
+	for node, raw := range frame.OperatorOutputs {
+		outputs[node] = platform.Raw(BatchStateReference{Instance: instance, Node: node, Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(raw)), Size: len(raw), Output: true})
+	}
 }
 
 // BatchKey is stable across preparation races and process recovery. Content

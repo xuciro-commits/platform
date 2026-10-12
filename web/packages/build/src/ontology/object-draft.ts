@@ -26,7 +26,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     if (object) { baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`; }
     setRefused(undefined); reset.current?.();
-  });
+  }, busy);
   useEffect(() => {
     if (!object || dirty || busy || loaded.current === `${object.id}:${object.revision}`) return;
     baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`;

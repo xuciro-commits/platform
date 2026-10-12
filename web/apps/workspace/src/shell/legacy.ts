@@ -1,10 +1,10 @@
 // Old entry points (ADR-0052 §6): routes written before the shell had an
 // Applications portal still open. They are decoded here, never produced.
 import type { Route } from "@platform/ui";
-import { projectionOfSurface, type Projection } from "./registry";
+import type { Projection } from "./registry";
 
 /** The views the shell owns; opening one keeps the current application. */
-export const shellViews = ["home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "explorer", "lineage"];
+export const shellViews = ["flow-instance", "home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "explorer", "lineage"];
 
 type Params = Record<string, string>;
 const keep = (params: Params | undefined, ...names: string[]): Params => Object.fromEntries(names.flatMap((name) => params?.[name] ? [[name, params[name]!]] : []));
@@ -34,7 +34,7 @@ const retired: Record<string, Route | ((params?: Params) => Route)> = {
 };
 
 export const legacyRoute = (route: Route): Route | undefined => {
-  const target = retired[route.view];
+  const target = Object.hasOwn(retired, route.view) ? retired[route.view] : undefined;
   return typeof target === "function" ? target(route.params) : target;
 };
 
@@ -42,4 +42,41 @@ export const legacyRoute = (route: Route): Route | undefined => {
 export function legacyProjection(route?: Route): Projection | undefined {
   if (!route) return undefined;
   return projectionOfSurface(route.params?.surface);
+}
+
+/** Only incoming links carry the retired surface projection. */
+export const projectionOfSurface = (surface?: string): Projection | undefined =>
+  surface === "studio" || surface === "developer" ? "build" : surface === "tenant" ? "admin" : surface === "work" ? "operations" : undefined;
+
+/** Decode old links and saved tabs before any view is mounted. The two old
+ * `flow` views named different record types: never guess from an ID's format.
+ * Exact builder records win; a readable runtime record keeps its old identity.
+ * The legacy automation list uses its explicit surface / saved application,
+ * or the operator-only package scope, because it has no entity to resolve. */
+export async function resolveLegacyRoute(route: Route, context: {
+  builder: boolean; application?: string; read: (type: string, id: string) => Promise<unknown>;
+}): Promise<Route> {
+  const retired = legacyRoute(route);
+  if (retired) return retired;
+  const params = route.params;
+  if (route.view === "automation" && !params?.id && !params?.application && params?.surface !== "studio"
+    && (params?.surface === "tenant" || context.application === "runs" || !context.builder)) {
+    return { ...route, view: "automation-operations", params: keep(params, "tab") };
+  }
+  if (route.view !== "flow" || !params?.id || params.id === "new" || params.surface === "studio") return route;
+  const readableRecord = (value: unknown) => {
+    if (!value || typeof value !== "object") return false;
+    const record = (value as { record?: { id?: unknown } }).record;
+    return !!record && record.id === params.id;
+  };
+  if (context.builder) {
+    try { if (readableRecord(await context.read("build.process", params.id))) return route; }
+    catch (error) { if (!/HTTP (401|403|404)\b/.test(String(error))) throw error; }
+  }
+  try {
+    return readableRecord(await context.read("flow.instance", params.id)) ? { ...route, view: "flow-instance" } : route;
+  } catch (error) {
+    if (!/HTTP (401|403|404)\b/.test(String(error))) throw error;
+    return route; // missing or unreadable records keep the original refusal
+  }
 }

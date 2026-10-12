@@ -85,12 +85,12 @@ export function AutomationEditor({ id }: { id: string }) {
   const session = useDraftSession<WorkflowDraft>(empty());
   const [createID]=useState(()=>crypto.randomUUID());
   const { draft, dirty } = session;
-  const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
+  const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false), allocatedName = useRef<string | undefined>(undefined);
   const [chosen, setChosen] = useState<Chosen>("trigger");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     const saved = query.data?.record ?? empty(); session.load(saved); baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; setError("");
-  });
+  }, busy);
   useEffect(() => {
     const saved = query.data?.record;
     if (saved && saved.revision >= baseRevision.current && !dirty && !busy && loaded.current !== `${saved.id}:${saved.revision}`) { session.load(saved); baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; }
@@ -115,7 +115,7 @@ export function AutomationEditor({ id }: { id: string }) {
   const invalid = problems.some((problem) => problem.id !== "host");
   const save = async () => {
     const submitted = structuredClone(draft), target = submitted.id || createID, revision = submitted.id ? baseRevision.current : 0;
-    if (!submitted.name) submitted.name = (submitted.title.toLowerCase().replace(/[^a-z0-9]/g, "") || "automation") + Date.now().toString(36).slice(-4);
+    if (!submitted.name) submitted.name = allocatedName.current ??= (submitted.title.toLowerCase().replace(/[^a-z0-9]/g, "") || "automation") + createID.replace(/-/g, "").slice(0, 8);
     if (!await decide(`build.process.${submitted.id ? "edit" : "create"}`, { type: "build.process", id: target }, { ...workflowInputs(submitted), kind: "automation" }, { expectedRevision: submitted.id ? revision : undefined, quiet: true, onRefused: setError })) return false;
     baseRevision.current = revision + 1; loaded.current = `${target}:${revision + 1}`;
     if (!submitted.id) { session.saved(submitted, { ...submitted, id: target, revision: 1 }); markSaved(); open({ view: "automation", params: { id: target } }); close({ view: "automation", params: { id } }); return true; }
@@ -124,6 +124,11 @@ export function AutomationEditor({ id }: { id: string }) {
   };
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The automation request could not be completed.")); } finally { lock.current = false; setBusy(false); } };
   const publish = async () => { if (dirty && !await save()) return; await decide("build.process.publish", { type: "build.process", id: draft.id }, {}, { onRefused: setError }); await query.refetch(); };
+  const review = async () => {
+    const target = draft.id || createID;
+    if ((dirty || !draft.id) && !await save()) return;
+    open({ view: "release-review", params: { kind: "flow", id: target } });
+  };
   const saveRef = useRef<() => Promise<unknown>>(async () => false); saveRef.current = () => perform(save);
   useAutoSave({ generation:JSON.stringify(draft), dirty, invalid, busy, save: () => saveRef.current() });
   if (role("build") !== "builder") return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{t("Only a builder can edit automations.")}</WorkbenchMessage></Workbench>;
@@ -141,9 +146,9 @@ export function AutomationEditor({ id }: { id: string }) {
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: session.undo, redo: session.redo }}
     actions={<>
       <ActionMenu label={t("More automation commands")} icon={<MoreHorizontal />} commands={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: !draft.id, run: () => open({ view: "flow", params: { id: draft.id } }) }]} />
-      <PublishMenu type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} onReview={() => open({ view: "release-review", params: { kind: "flow", id: draft.id } })} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "automation", params: { id } }} />
+      <PublishMenu type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "automation", params: { id } }} />
     </>}
-    right={{ label: t("Automation inspector"),scope:String(chosen),locate:()=>setChosen(chosen), content: <div className="p-2">
+    right={{ label: t("Automation inspector"), heading: chosenStep?.title || chosenStep?.name || t(chosen === "condition" ? "If" : "When"), scope:String(chosen),locate:()=>setChosen(chosen), content: <div className="p-2">
       {chosen === "trigger" && <div className="grid gap-3">
         <label className="grid gap-1 text-xs">{t("Title")}<Input value={draft.title} onChange={(event) => change({ title: event.target.value })} /></label>
         <label className="grid gap-1 text-xs">{t("Start kind")}<Select value={draft.every ? draft.every : ""} disabled={!!draft.published} onChange={(event) => change(event.target.value ? { every: event.target.value, object: "", when: "" } : { every: undefined })}><option value="">{t("When a record reaches a state")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>
@@ -161,7 +166,7 @@ export function AutomationEditor({ id }: { id: string }) {
       {chosenStep && <WorkflowInspector step={chosenStep} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []}
         onChange={(patch) => setSteps(condition, effects.map((step) => step.name === chosen ? { ...step, ...patch } : step))}
         onRename={(name) => { if (/^[a-z][a-z0-9]*$/.test(name) && !draft.steps.some((step) => step.name === name)) { setSteps(condition, effects.map((step) => step.name === chosen ? { ...step, name } : step)); setChosen(name); } }}
-        onMakeEntry={() => {}} onClose={() => setChosen("trigger")} />}
+        onMakeEntry={() => {}} />}
     </div> }}
     dock={{ label: t("Automation dock"), tabs: [
       { id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} empty={t("No problems. The automation can be published.")} /> },

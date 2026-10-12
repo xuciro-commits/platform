@@ -136,7 +136,7 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", emb
     const savedPlan = (plans.data?.records ?? []).find((plan) => plan.id === planID && matchesAsset(plan));
     if (savedPlan) load(savedPlan);
     else { switchAsset(kind, id); setDirty(false); }
-  });
+  }, busy);
   const inputs = (): Api.CandidateSimulationRequest => ({
     ...(kind === "function" ? { functionId: id, model } : kind === "flow" ? { processId: id, model } : { objectId: id }), as: member, at: new Date(at).toISOString(), steps: steps.map((step) => ({
       ...step, payload: JSON.parse(step.payload),

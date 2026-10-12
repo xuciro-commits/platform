@@ -63,7 +63,7 @@ func (b *Build) jointObjectEntities(objects []Object, drafts []JointDraftRef) ma
 // candidate image. Simple kinds keep their owner's existing single-draft
 // checks; record kinds are substituted through one shared inventory so a page
 // or flow may reference an object that is itself only a draft here.
-func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef) (JointDraftAssets, error) {
+func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.Member) (JointDraftAssets, error) {
 	var result JointDraftAssets
 	if len(drafts) == 0 {
 		return result, fmt.Errorf("select at least one saved draft")
@@ -121,7 +121,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef) (JointDraftAsset
 			result.Nexts = append(result.Nexts, next)
 			continue
 		}
-		prior, next, hadPrior, err := b.applyRecordDraft(&inv, draft.Kind, draft.ID)
+		prior, next, hadPrior, err := b.applyRecordDraft(&inv, draft.Kind, draft.ID, member)
 		// A refused draft still names the asset it would have replaced: the
 		// review can say what is installed now beside why the draft failed.
 		if hadPrior {
@@ -188,7 +188,7 @@ type draftInventories struct {
 // inventories. Validation runs against the joint candidate's entities, and the
 // host's own install checks re-run when the candidate is installed; the
 // builder-level checks that need only the candidate's image run here.
-func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind, id string) (prior, next platform.AssetRef, hadPrior bool, err error) {
+func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind, id string, member platform.Member) (prior, next platform.AssetRef, hadPrior bool, err error) {
 	joint := b.jointMode
 	switch kind {
 	case platform.AssetFlow:
@@ -210,6 +210,11 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 			err = fmt.Errorf("this tenant runs no processes")
 		} else {
 			record.Version++
+			if record.Every != "" || record.Continuous != nil && record.Continuous.Intake != nil {
+				record.Scheduler = member.ID
+			} else {
+				record.Scheduler = ""
+			}
 			err = b.host.BuildProcesses().Validate(b, b.flowOf(record))
 			if err == nil {
 				record.Published = published(record)
@@ -297,7 +302,7 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	if kind == platform.AssetFunction {
 		return b.functionDraftAssets(id)
 	}
-	assets, err := b.DraftReleaseAssetsMulti([]JointDraftRef{{Kind: kind, ID: id}})
+	assets, err := b.DraftReleaseAssetsMulti([]JointDraftRef{{Kind: kind, ID: id}}, platform.Member{})
 	if err != nil {
 		return nil, nil, prior, next, false, err
 	}

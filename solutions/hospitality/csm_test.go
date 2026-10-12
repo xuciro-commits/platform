@@ -171,10 +171,9 @@ func TestCSMTriage(t *testing.T) {
 	bare := platform.Member{ID: "x", Tenant: "hotel-a", Roles: map[string]string{platformserver.AgentApp: platformserver.AgentAdmin}}
 	withheld, _ := w.tenant.Records(bare, platformserver.RunType, platform.Query{Domain: json.RawMessage(`[["goal","like","T-1"]]`)}, now)
 	narrow := withheld.Records[0].(platformserver.AgentRunRecord)
-	// The tenant-wide House rules grant still allows its citation; the
-	// restricted ticket/run content and model transcript remain withheld.
-	w.expect(fmt.Sprint(narrow.Withheld, " ", len(narrow.Citations), " ", narrow.Result, " ", narrow.Steps[0].Outcome), "true 1  ")
-	w.expect(fmt.Sprint(narrow.Citations), "[{knowledge.document/RULES House rules 0 3}]")
+	// The public policy remains readable independently; its association
+	// with this private ticket requires the ticket grant as well.
+	w.expect(fmt.Sprint(narrow.Withheld, " ", len(narrow.Citations), " ", narrow.Result, " ", narrow.Steps[0].Outcome), "true 0  ")
 	if out, err := w.tenant.TranscriptsFor(bare, narrow.ID, 20, now); err == nil || len(out) != 0 {
 		t.Errorf("an administrator of agents alone read the model calls: %+v, %v", out, err)
 	}

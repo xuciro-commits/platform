@@ -9,14 +9,16 @@ import type { OwnedResource } from "./project";
 const ended = ["done", "canceled", "compensated"];
 const trouble = (run: FlowInstanceData) => run.state === "stuck" || run.state === "compensating" || (run.tokens ?? []).some((token) => (token.attempts ?? 0) > 1 || !!token.error);
 
-export function ProjectRuns({ owned }: { owned: OwnedResource[] }) {
+export function ProjectRuns({ owned, project }: { owned: OwnedResource[]; project?: string }) {
   const { open } = useWorkspace();
   const flows = useMemo(() => owned.filter((item) => item.kind.kind === "flow").map((item) => item.ref.name), [owned]);
   const inventory = useRecordInventory<FlowInstanceData>("flow.instance", 1000, flows.length > 0);
-  const runs = useMemo(() => (inventory.data?.records ?? []).filter((run) => flows.includes(run.flow.replace(/^build\./, "")))
+  const runs = useMemo(() => (inventory.data?.records ?? []).filter((run) => flows.includes(run.flow))
     .sort((a, b) => Number(trouble(b)) - Number(trouble(a)) || Number(!ended.includes(b.state)) - Number(!ended.includes(a.state)) || (b.trace?.at(-1)?.at ?? "").localeCompare(a.trace?.at(-1)?.at ?? "")), [inventory.data, flows]);
   const counts = { running: runs.filter((run) => !ended.includes(run.state) && !trouble(run)).length, trouble: runs.filter(trouble).length, done: runs.filter((run) => ended.includes(run.state)).length };
   if (!flows.length) return <p className="p-4 text-sm text-muted">{t("This project has no flows or automations yet; their runs appear here.")}</p>;
+  if (inventory.isError) return <p role="alert" className="p-4 text-sm text-danger">{t("Project runs are unavailable. This does not mean there are no running tasks.")}</p>;
+  if (inventory.isLoading) return <p className="p-4 text-sm text-muted">{t("Loading…")}</p>;
   return <div className="grid content-start gap-4 p-4">
     <div className="grid grid-cols-3 gap-3 text-sm">
       {([["trouble", t("Need attention"), "text-danger"], ["running", t("In progress"), ""], ["done", t("Ended"), "text-muted"]] as const).map(([key, label, cls]) =>
@@ -33,7 +35,7 @@ export function ProjectRuns({ owned }: { owned: OwnedResource[] }) {
               <div className="truncate"><span className="font-medium">{run.title}</span> <span className="text-xs text-muted">· {name} v{run.version}</span></div>
               <div className="truncate text-xs text-muted">{failing ? `${failing.step}: ${failing.error}` : last ? `${last.step ?? ""} ${last.what}${last.detail ? ": " + last.detail : ""}`.trim() : run.key}{last?.at ? ` · ${new Date(last.at).toLocaleString()}` : ""}</div>
             </div>
-            <Button size="sm" onClick={() => open({ view: "runs", params: { name } })}>{t("Open run")}</Button>
+            <Button size="sm" onClick={() => open({ view: "flow-instance", params: { id: run.id, ...(project ? { project } : {}) } }, { window: "beside" })}>{t("Open run")}</Button>
           </li>;
         })}
       </ul>}
