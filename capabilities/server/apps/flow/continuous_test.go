@@ -347,3 +347,22 @@ func TestContinuousEventWindowRetainsTimingPartitionIdentityAndBudget(t *testing
 		t.Fatalf("restored input was refolded: %v", err)
 	}
 }
+
+func TestContinuousExplicitLateAcceptPreservesSlideUpperBound(t *testing.T) {
+	end := time.Date(2026, 10, 11, 12, 0, 5, 0, time.UTC)
+	state := WindowState{EmittedAt: end, Rows: []Signal{
+		{Key: "late", At: end.Add(-time.Hour)},
+		{Key: "ready", At: end.Add(-time.Second)},
+		{Key: "boundary", At: end},
+		{Key: "future", At: end.Add(time.Second)},
+	}}
+	window := platform.StreamWindow{WindowMS: 30000, LateEvents: "accept"}
+	rows := windowSignals(state, window)
+	if len(rows) != 2 || rows[0].Key != "late" || rows[1].Key != "ready" {
+		t.Fatal("explicit replay accepted rows from an unclosed slide", rows)
+	}
+	window.LateEvents = "sideOutput"
+	if rows := windowSignals(state, window); len(rows) != 1 || rows[0].Key != "ready" {
+		t.Fatal("ordinary intake changed its retained interval", rows)
+	}
+}

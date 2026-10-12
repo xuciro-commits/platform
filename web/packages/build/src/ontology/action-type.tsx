@@ -252,15 +252,7 @@ function ParameterEditor({ input, inputs, entities, onChange }: { input: Input_;
     {["text","longtext"].includes(input.type)&&<Label text={t("Maximum length")}><Input type="number" min={0} max={4096} value={input.constraints?.maxLength??""} onChange={e=>onChange({constraints:{...input.constraints,maxLength:e.target.value===""?undefined:e.target.valueAsNumber}})}/></Label>}
     {["date","datetime","integer","decimal"].includes(input.type)&&(["before","after"] as const).map(relation=><Label key={relation} text={relation==="before"?t("Before parameter"):t("After parameter")}><Select value={input.constraints?.[relation]??""} onChange={e=>onChange({constraints:{...input.constraints,[relation]:e.target.value||undefined}})}><option value="">—</option>{inputs.filter(other=>other.name!==input.name&&other.type===input.type).map(other=><option key={other.name} value={other.name}>{other.title}</option>)}</Select></Label>)}
     {(input.constraints?.before||input.constraints?.after)&&<Checkbox checked={!!input.constraints.inclusive} onChange={inclusive=>onChange({constraints:{...input.constraints,inclusive}})}>{t("Allow equal endpoints")}</Checkbox>}
-    {input.type === "date" && <div className="grid gap-2">
-      <Label text={t("Date range end")}>
-        <Select value={input.range?.end ?? ""} onChange={e => onChange({ range: e.target.value ? { end: e.target.value, inclusive: input.range?.inclusive } : undefined })}>
-          <option value="">—</option>
-          {inputs.filter(other => other.name !== input.name && other.type === "date" && !other.range).map(other => <option key={other.name} value={other.name}>{other.title}</option>)}
-        </Select>
-      </Label>
-      {input.range && <Checkbox checked={!!input.range.inclusive} onChange={inclusive => onChange({ range: { ...input.range!, inclusive } })}>{t("Include end date")}</Checkbox>}
-    </div>}
+    {input.type==="date"&&<Label text={t("Date range end")}><Select value={input.range?.end??""} onChange={e=>onChange({range:e.target.value?{end:e.target.value,inclusive:input.range?.inclusive}:undefined})}><option value="">—</option>{inputs.filter(other=>other.name!==input.name&&other.type==="date"&&!other.range).map(other=><option key={other.name} value={other.name}>{other.title}</option>)}</Select>{input.range&&<Checkbox checked={!!input.range.inclusive} onChange={inclusive=>onChange({range:{...input.range!,inclusive}})}>{t("Include end date")}</Checkbox>}</Label>}
     <Checkbox className="text-xs" checked={!!input.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
   </>;
 }

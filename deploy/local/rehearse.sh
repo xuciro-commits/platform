@@ -169,7 +169,8 @@ workflow_submit() {
 # prepares statistics outside its decision lane. Actions are ordinary writes.
 native_stream_setup() {
   local SERVER=$1 TENANT=$2 AUTHORITY=build actor=$3 suffix=$4
-  local typ=build.telemetry$suffix definition candidate result instance=build.nativestream$suffix:continuous-v1
+  local typ=build.telemetry$suffix definition candidate result application_release instance=build.nativestream$suffix:continuous-v1
+  application_release=$(workflow_get "$actor" releases/active | jq -r .id)
   sql "create table native_stream_$suffix(seq bigint primary key,event_id text,plant text,device text,at timestamptz,reading double precision,target text); grant select on native_stream_$suffix to rehearsal_source" >/dev/null
   workflow_submit "$actor" native-object build.object.create build.object NATIVE-O \
     "{\"name\":\"telemetry$suffix\",\"title\":\"Accepted telemetry results\",\"fields\":[{\"name\":\"reading\",\"title\":\"Reading\",\"type\":\"decimal\"}]}"
@@ -191,8 +192,15 @@ native_stream_setup() {
         {name:"completed",kind:"end"}]}')
   workflow_submit "$actor" native-process build.process.create build.process NATIVE-P "$definition"
   workflow_submit "$actor" native-process-publish build.process.publish build.process NATIVE-P '{}'
-  candidate=$(workflow_post "$actor" releases/preview '{"kind":"flow","id":"NATIVE-P"}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "native stream preview"
-  workflow_post "$actor" releases/candidates "{\"kind\":\"flow\",\"id\":\"NATIVE-P\",\"candidateId\":\"$candidate\",\"key\":\"native-save\"}" | jq -e '.id' >/dev/null || fail "native stream save"
+  definition=$(jq -n --arg name "nativestats$suffix" \
+    '{name:$name,title:"Retained telemetry output",object:"flow.output",sections:[
+      {widget:"table",title:"Original output assets",fields:["name","app","instance","flow","version","batch"]},
+      {widget:"detail",title:"Accepted window statistics",fields:["instance","version","batch","value"]},
+      {widget:"table",title:"Original Flow versions",object:"flow.instance",fields:["flow","version","release","state"]}]}')
+  workflow_submit "$actor" native-output-page build.page.create build.page NATIVE-OUTPUT-PAGE "$definition"
+  workflow_submit "$actor" native-output-page-publish build.page.publish build.page NATIVE-OUTPUT-PAGE '{}'
+  candidate=$(workflow_post "$actor" releases/preview '{"drafts":[{"kind":"flow","id":"NATIVE-P"},{"kind":"page","id":"NATIVE-OUTPUT-PAGE"}]}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "native stream/page joint preview"
+  workflow_post "$actor" releases/candidates "{\"drafts\":[{\"kind\":\"flow\",\"id\":\"NATIVE-P\"},{\"kind\":\"page\",\"id\":\"NATIVE-OUTPUT-PAGE\"}],\"candidateId\":\"$candidate\",\"key\":\"native-save\"}" | jq -e '.id' >/dev/null || fail "native stream/page joint save"
   workflow_post "$actor" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"native-activate\"}" | jq -e '.id' >/dev/null || fail "native stream activate"
   sql "insert into native_stream_$suffix select n,'native-'||n,'P','D'||(n-1),now()-interval '3 seconds',12.5000001,'SENSOR-'||(n-1) from generate_series(1,100) n" >/dev/null
   for _ in $(seq 60); do
@@ -213,12 +221,33 @@ native_stream_setup() {
   workflow_submit "$actor" native-source-pause build.source.pause build.source NATIVE-SOURCE '{}'
   AUTHORITY=flow workflow_submit "$actor" native-stop flow.instance.cancel flow.instance "$instance" '{}'
   workflow_get "$actor" "records/flow.instance/$instance" | jq -e '.record | .state == "canceled" and .resumable' >/dev/null || fail "native stream lost same-version continuation"
+  workflow_post "$actor" releases/active "{\"candidateId\":\"$application_release\",\"key\":\"native-restore-application\"}" | jq -e --arg id "$application_release" '.id == $id' >/dev/null || fail "restore application release after native probe"
+}
+# A stopped instance resumes the same accepted version/checkpoint after real
+# persistence recovery; publishing its paused source never creates a new run.
+native_stream_resume() {
+  local SERVER=$1 TENANT=$2 AUTHORITY=flow actor=$3 suffix=$4 phase=$5 seq=$6
+  local instance=build.nativestream$suffix:continuous-v1 before result
+  before=$(workflow_get "$actor" "records/flow.instance/$instance" | jq -c '.record | {version,release,source:.batch.source.cursor}')
+  workflow_submit "$actor" "native-resume-$phase" flow.instance.resume flow.instance "$instance" '{}'
+  AUTHORITY=build workflow_submit "$actor" "native-publish-$phase" build.source.publish build.source NATIVE-SOURCE '{}'
+  sql "insert into native_stream_$suffix values ($seq,'native-$phase','P','D0',now()-interval '3 seconds',13,'SENSOR-0')" >/dev/null
+  for _ in $(seq 30); do
+    result=$(workflow_get "$actor" "records/flow.instance/$instance")
+    if jq -e --arg seq "$seq" --argjson before "$before" '.record | .version == $before.version and .release == $before.release and .batch.source.cursor == $seq and .batch.consumed == ($seq|tonumber)' <<<"$result" >/dev/null &&
+      workflow_get "$actor" 'records/flow.output?limit=50' | jq -e --arg id "$instance" '.records | any(.[]; .instance == $id and .name == "liveTelemetryStats" and (.value | any(.[]; .mean == 13)))' >/dev/null; then break; fi
+    sleep 1
+  done
+  jq -e --arg seq "$seq" --argjson before "$before" '.record | .version == $before.version and .release == $before.release and .batch.source.cursor == $seq and .batch.consumed == ($seq|tonumber)' <<<"$result" >/dev/null || fail "native $phase lost original version/cursor"
+  workflow_get "$actor" 'records/flow.output?limit=50' | jq -e --arg id "$instance" '.records | any(.[]; .instance == $id and .name == "liveTelemetryStats" and (.value | any(.[]; .mean == 13)))' >/dev/null || fail "native $phase did not close its statistics window"
+  AUTHORITY=build workflow_submit "$actor" "native-pause-$phase" build.source.pause build.source NATIVE-SOURCE '{}'
+  workflow_submit "$actor" "native-stop-$phase" flow.instance.cancel flow.instance "$instance" '{}'
 }
 native_stream_state() {
   local SERVER actor suffix path
   for suffix in plant hotel; do
     if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING; actor=$SUP; else SERVER=$HOSPITALITY; actor=$MGR; fi
-    for path in records/build.source/NATIVE-SOURCE records/build.process/NATIVE-P "records/build.telemetry$suffix?limit=200" 'records/flow.output?limit=50' "records/flow.instance/build.nativestream$suffix:continuous-v1"; do
+    for path in records/build.source/NATIVE-SOURCE records/build.process/NATIVE-P records/build.page/NATIVE-OUTPUT-PAGE "records/build.telemetry$suffix?limit=200" 'records/flow.output?limit=50' "records/flow.instance/build.nativestream$suffix:continuous-v1"; do
       curl -s -H "Authorization: Bearer $actor" "$SERVER/v1/$path"
     done
   done
@@ -883,6 +912,8 @@ before=$(settled_state)
 compose restart manufacturing-server hospitality-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/me") == 200 ]] && break; sleep 1; done
 same_state "$before" || fail "state after restart differs"
+native_stream_resume "$MANUFACTURING" plant-sz "$SUP" plant restart 9
+native_stream_resume "$HOSPITALITY" hotel-a "$MGR" hotel restart 9
 (
   for suffix in plant hotel; do
     if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING TENANT=plant-sz actor=$SUP;
@@ -1019,6 +1050,9 @@ workflow_finish() {
       '.record | .state == "done" and .version == $v and .release == $r' >/dev/null || fail "completed workflow lost its starting release"
   done
 }
+native_stream_resume "$MANUFACTURING" plant-sz "$SUP" plant recovery 10
+native_stream_resume "$HOSPITALITY" hotel-a "$MGR" hotel recovery 10
+echo "ok   native seven-node chain: both industries retained Wasm statistics, business actions and read-only outputs through restart, backup and full journal recovery; same-version resume kept source positions"
 workflow_finish "$MANUFACTURING" plant-sz "$SUP" "$OP1" plant
 workflow_finish "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
 echo "ok   workflows: PostgreSQL restart, backup restore and full mixed journal rebuild preserved plans, bindings, versions and inbox tasks; old/new asks continued along their original paths in both industries"

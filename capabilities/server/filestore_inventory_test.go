@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -82,6 +83,53 @@ func TestFileInventoryPagesKeepActualModificationTimes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLocalFileInventoryRefusesIncompleteDirectoryReads(t *testing.T) {
+	ctx := context.Background()
+	for _, ancestor := range []string{"tenant", "tenant/artifacts", "tenant/artifacts/flow"} {
+		t.Run("symlink-"+ancestor, func(t *testing.T) {
+			dir, target := t.TempDir(), t.TempDir()
+			path := filepath.Join(dir, filepath.FromSlash(ancestor))
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, path); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := (&localFiles{dir: dir}).Inventory(ctx, "tenant/artifacts/flow/", "", 1); err == nil {
+				t.Fatal("a skipped directory link was reported as an exhausted prefix")
+			}
+		})
+	}
+	t.Run("missing-store", func(t *testing.T) {
+		if _, err := (&localFiles{dir: filepath.Join(t.TempDir(), "missing")}).Inventory(ctx, "tenant/", "", 1); err == nil {
+			t.Fatal("an unavailable store was reported as an exhausted prefix")
+		}
+	})
+	t.Run("unreadable-prefix", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("root can read directories without permission")
+		}
+		dir := t.TempDir()
+		path := filepath.Join(dir, "tenant")
+		if err := os.Mkdir(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(path, 0); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Chmod(path, 0o700)
+		if _, err := (&localFiles{dir: dir}).Inventory(ctx, "tenant/", "", 1); err == nil {
+			t.Fatal("a failed directory read was reported as an exhausted prefix")
+		}
+	})
+	t.Run("absent-prefix", func(t *testing.T) {
+		page, err := (&localFiles{dir: t.TempDir()}).Inventory(ctx, "tenant/artifacts/flow/", "", 1)
+		if err != nil || len(page.Files) != 0 || page.Next != "" {
+			t.Fatal("a verified absent prefix did not prove exhaustion", err)
+		}
+	})
 }
 
 func TestS3FileInventoryUsesBoundedSortedPages(t *testing.T) {

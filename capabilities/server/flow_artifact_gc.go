@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -62,7 +63,14 @@ func (s *recordStore) flowArtifactReferences(store flowFrameStore) (map[string]b
 		}
 		remaining -= len(raw)
 		var value any
-		if err := json.Unmarshal(raw, &value); err != nil {
+		// Versions participate in the immutable object key. Preserve their
+		// original integers while walking untyped historical JSON images.
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		if !json.Valid(raw) {
+			return fmt.Errorf("Flow artifact reference image is invalid JSON")
+		}
+		if err := decoder.Decode(&value); err != nil {
 			return fmt.Errorf("Flow artifact reference image is invalid: %w", err)
 		}
 		var walk func(any, int) error
