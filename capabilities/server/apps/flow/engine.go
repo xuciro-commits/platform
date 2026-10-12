@@ -212,6 +212,9 @@ func (f *Flows) decide(c platform.Caller, schema, id, key string, now time.Time,
 		if err := build(ss); err != nil {
 			return nil, err
 		}
+		if err := ss.retainDeadLetters(); err != nil {
+			return nil, err
+		}
 		return ss.apply, nil
 	})
 }

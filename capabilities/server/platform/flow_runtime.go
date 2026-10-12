@@ -286,7 +286,7 @@ type ContinuousFlowOwner interface {
 	ExpandFrame(FlowInstance, FlowFrameStore) (*FlowBatchFrame, error)
 }
 type FlowDeadLetterReplayPreparation interface {
-	Prepare(*pb.Submission,time.Time,FlowFrameStore)(FlowPreparedBatch,*kernel.Error)
+	Prepare(*pb.Submission, time.Time, FlowFrameStore) (FlowPreparedBatch, *kernel.Error)
 }
 type FlowBatchPreparation interface {
 	Intake() (string, *StreamIntake, int)

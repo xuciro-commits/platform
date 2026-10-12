@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -292,12 +293,25 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 	if err != nil {
 		return nil, err, true
 	}
-	retained := false
+	var preparedInput *preparedOperationInput
+	if request, ok := prepared.OperationRequest(); ok {
+		preparedInput, err = t.prepareContinuousOperationInput(current, before.ID, request)
+		if err != nil {
+			for _, artifact := range prepared.Artifacts() {
+				_ = store.Discard(artifact)
+			}
+			return nil, err, true
+		}
+	}
+	retained, inputRetained := false, false
 	defer func() {
 		if !retained {
 			for _, artifact := range prepared.Artifacts() {
 				_ = store.Discard(artifact)
 			}
+		}
+		if preparedInput != nil && !inputRetained {
+			t.staged.discardInput(preparedInput.ref)
 		}
 	}()
 	t.mu.Lock()
@@ -318,8 +332,12 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			return nil, refusal, true
 		}
 	}
-	record, err := t.submitAccepted(prepared.Decision(), current, sub, now, false)
-	retained = true // an uncertain append is resolved by the original accepted journal
+	record, err := t.submitAccepted(prepared.Decision(), current, sub, now, false, preparedInput)
+	_, refused := t.committed.refusals[platform.FlowApp+"/"+sub.GetIdempotencyKey()]
+	// A durable refusal names no prepared bytes. An uncertain append must
+	// retain them until the original accepted journal resolves its outcome.
+	retained = err == nil || !refused
+	inputRetained = preparedInput != nil && retained
 	if err == nil {
 		t.enqueue(now)
 	}
@@ -552,7 +570,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	}
 	name, intake, budget := plan.Intake()
 	source, connection, hash, refusal := t.streamSourceLocked(current, name, intake, now)
-	latestBootstrap := intake.Offset == "latest" && (before.Batch == nil || before.Batch.Source == nil)
+	latestBootstrap := refusal == nil && intake.Offset == "latest" && (before.Batch == nil || before.Batch.Source == nil)
 	if refusal == nil && before.Batch != nil && before.Batch.Source != nil {
 		checkpoint := before.Batch.Source
 		if checkpoint.Record != source.ID || checkpoint.Config != hash || checkpoint.Initialized && checkpoint.Offset != intake.Offset || intake.Offset == "latest" && !checkpoint.Initialized {
@@ -565,24 +583,13 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
-	if latestBootstrap {
-		cursor, cursorErr := t.latestTableCursor(source, connection)
-		if cursorErr != nil {
-			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, cursorErr.Error())
-		}
-		source.Cursor = cursor
-	}
 	columns := append([]string{source.Since, intake.Key, intake.EventTime, intake.Value}, intake.Partition...)
 	columns = slices.Compact(slices.Sorted(slices.Values(append(columns, intake.Fields...))))
-	rows, err := t.readTable(source, connection, columns...)
-	if err != nil {
-		if tick, due, tickErr := plan.WindowTick(now, flowFrameStore{tenant: t.ID, files: t.files()}); tickErr != nil {
-			return platform.FlowBatchOutcome{}, tickErr
-		} else if due {
-			return t.ConsumeFlowBatch(current, id, tick, now)
-		}
-		return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+	rows, cursor, refusal := t.readContinuousSource(current, before, name, intake, source, connection, hash, latestBootstrap, columns, now)
+	if refusal != nil {
+		return platform.FlowBatchOutcome{}, refusal
 	}
+	source.Cursor = cursor
 	if len(rows) > budget {
 		left, right := source.Advance(rows[:budget]), source.Advance(rows[:budget+1])
 		if left == right {
@@ -662,6 +669,64 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	}
 	batch.ID = "source:" + fingerprint
 	return t.ConsumeFlowBatch(current, id, batch, now)
+}
+
+// Source retries retain the original instance, definition and source cursor.
+// Backoff and database I/O run outside the writer lock; each attempt refreshes
+// the original member and proves the same retained automation is still allowed.
+func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowInstance, name string, intake *platform.StreamIntake, source build.Source, connection build.Connection, hash string, latestBootstrap bool, columns []string, now time.Time) ([]map[string]any, string, *kernel.Error) {
+	retry := intake.Retry
+	if err := retry.Check(); err != nil {
+		return nil, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	cursor, initialized := source.Cursor, !latestBootstrap
+	checkOriginal := func() *kernel.Error {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		owner, latest, current, refusal := t.continuousSnapshotLocked(m, before.ID, now)
+		if refusal == nil && !bytes.Equal(platform.Raw(latest), platform.Raw(before)) {
+			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
+		}
+		if refusal == nil {
+			_, refusal = owner.PlanBatch(latest, t.automation(platform.FlowApp, false))
+		}
+		if refusal == nil {
+			freshSource, freshConnection, freshHash, err := t.streamSourceLocked(current, name, intake, now)
+			refusal = err
+			if refusal == nil && (freshHash != hash || freshSource.DefinitionVersion != source.DefinitionVersion || freshSource.Published != source.Published || freshConnection.DefinitionVersion != connection.DefinitionVersion || freshConnection.Published != connection.Published) {
+				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source changed after this Flow began consuming it")
+			}
+		}
+		return refusal
+	}
+	var readErr error
+	for attempt := 0; attempt < retry.Tries(); attempt++ {
+		if attempt > 0 && retry.BackoffMS > 0 {
+			time.Sleep(time.Duration(retry.BackoffMS) * time.Millisecond)
+		}
+		if refusal := checkOriginal(); refusal != nil {
+			return nil, "", refusal
+		}
+		// Once latest resolves, retry reads from that exact initial position.
+		// A later latest query would silently skip rows arriving during backoff.
+		if !initialized {
+			cursor, readErr = t.latestTableCursor(source, connection)
+			if readErr != nil {
+				continue
+			}
+			initialized = true
+		}
+		source.Cursor = cursor
+		rows, err := t.readTable(source, connection, columns...)
+		if err == nil {
+			if refusal := checkOriginal(); refusal != nil {
+				return nil, "", refusal
+			}
+			return rows, cursor, nil
+		}
+		readErr = err
+	}
+	return nil, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, readErr.Error())
 }
 
 func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan platform.FlowBatchPreparation, x platform.FlowInstance, checkpoint platform.FlowSourceCheckpoint, tick bool, now time.Time) *kernel.Error {

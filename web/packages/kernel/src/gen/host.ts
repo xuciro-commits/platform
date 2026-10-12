@@ -2920,12 +2920,18 @@ export type StreamIntake = {
   value: string;
   offset?: "latest" | "earliest";
   fields?: string[];
+  retry?: StreamPreparationRetry;
 };
 
 export type StreamOutput = {
   node: string;
   name: string;
   mode: string;
+};
+
+export type StreamPreparationRetry = {
+  attempts: number;
+  backoffMs: number;
 };
 
 export type StreamThreshold = {
@@ -2943,6 +2949,7 @@ export type StreamWindow = {
   slideMs: number;
   watermarkMs: number;
   maxRecords: number;
+  retry?: StreamPreparationRetry;
   lateEvents: string;
 };
 

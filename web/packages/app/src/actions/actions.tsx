@@ -184,7 +184,7 @@ export function NewActions({ type, covers = [], allowed, disabled = false, onCre
   const [taking, setTaking] = useState<ActionDeclaration>();
   const offered = catalog.filter((a) => a.target === type && a.new && !covers.includes(a.schema) && (!allowed || allowed.includes(a.schema)));
   return <>
-    {offered.map((a) => <Button key={a.schema} variant="primary" disabled={disabled} onClick={() => setTaking(a)}>+ {a.title}</Button>)}
+    {offered.map((a) => <Button key={a.schema} variant="primary" disabled={disabled} onClick={() => setTaking(a)}><span aria-hidden="true">+</span> {a.title}</Button>)}
     {taking && <ActionDialog declared={taking} type={type} onClose={() => setTaking(undefined)} onCompleted={onCreated} />}
   </>;
 }

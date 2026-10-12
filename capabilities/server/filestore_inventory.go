@@ -109,6 +109,9 @@ func (s *localFiles) Inventory(ctx context.Context, prefix, after string, limit 
 	if err := checkFileInventory(prefix, after, limit); err != nil {
 		return FileInventoryPage{}, err
 	}
+	if err := ctx.Err(); err != nil {
+		return FileInventoryPage{}, err
+	}
 	var found inventoryHeap
 	root := s.dir
 	if slash := strings.LastIndex(prefix, "/"); slash >= 0 {
@@ -118,11 +121,37 @@ func (s *localFiles) Inventory(ctx context.Context, prefix, after string, limit 
 			return FileInventoryPage{}, err
 		}
 	}
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			if path == root && os.IsNotExist(err) {
-				return nil
+	// WalkDir does not follow directory links. Verify the store and every
+	// prefix ancestor before walking so a skipped link never proves exhaustion.
+	info, err := os.Lstat(s.dir)
+	if err != nil {
+		return FileInventoryPage{}, err
+	}
+	if !info.IsDir() {
+		return FileInventoryPage{}, fmt.Errorf("file inventory store is not a directory")
+	}
+	relative, err := filepath.Rel(s.dir, root)
+	if err != nil {
+		return FileInventoryPage{}, err
+	}
+	current := s.dir
+	if relative != "." {
+		for _, part := range strings.Split(relative, string(filepath.Separator)) {
+			current = filepath.Join(current, part)
+			info, err := os.Lstat(current)
+			if os.IsNotExist(err) {
+				return FileInventoryPage{}, nil // the verified parent has no such prefix
 			}
+			if err != nil {
+				return FileInventoryPage{}, err
+			}
+			if !info.IsDir() {
+				return FileInventoryPage{}, fmt.Errorf("file inventory prefix is not a directory")
+			}
+		}
+	}
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
 			return err
 		}
 		if err := ctx.Err(); err != nil {

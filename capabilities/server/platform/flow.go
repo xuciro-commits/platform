@@ -102,13 +102,14 @@ type StreamOutput struct {
 }
 
 type StreamIntake struct {
-	SourceRecord string   `json:"sourceRecord"`
-	Key          string   `json:"key"`
-	Partition    []string `json:"partition"`
-	EventTime    string   `json:"eventTime"`
-	Value        string   `json:"value"`
-	Offset       string   `json:"offset,omitempty" enum:"latest,earliest"`
-	Fields       []string `json:"fields,omitempty"`
+	SourceRecord string                  `json:"sourceRecord"`
+	Key          string                  `json:"key"`
+	Partition    []string                `json:"partition"`
+	EventTime    string                  `json:"eventTime"`
+	Value        string                  `json:"value"`
+	Offset       string                  `json:"offset,omitempty" enum:"latest,earliest"`
+	Fields       []string                `json:"fields,omitempty"`
+	Retry        *StreamPreparationRetry `json:"retry,omitempty"`
 }
 
 // StreamWindow is a bounded state rule owned by the existing Flow frame.
@@ -119,9 +120,10 @@ type StreamWindow struct {
 	SlideMS  int    `json:"slideMs"`
 	// WatermarkMS is the event-time grace held back from the observed
 	// high-water mark before a slide closes and expired rows are evicted.
-	WatermarkMS int    `json:"watermarkMs"`
-	MaxRecords  int    `json:"maxRecords"`
-	LateEvents  string `json:"lateEvents"` // sideOutput, accept or reject beyond the retained window and grace
+	WatermarkMS int                     `json:"watermarkMs"`
+	MaxRecords  int                     `json:"maxRecords"`
+	Retry       *StreamPreparationRetry `json:"retry,omitempty"`
+	LateEvents  string                  `json:"lateEvents"` // sideOutput, accept or reject beyond the retained window and grace
 }
 
 // FlowStateArtifact identifies a frozen frame in the original file store.

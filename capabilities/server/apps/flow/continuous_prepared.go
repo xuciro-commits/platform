@@ -383,6 +383,56 @@ func (d preparedComputeRetryDecision) Submit(c platform.Caller, sub *pb.Submissi
 // Prepare uses the original folding rule outside the tenant lock. No file
 // I/O or mutable registry read occurs in the accepted ledger callback.
 func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *kernel.Error) {
+	var retry *platform.StreamPreparationRetry
+	if plan.rule.Window != nil {
+		retry = plan.rule.Window.Retry
+	}
+	if err := retry.Check(); err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	var prepared platform.FlowPreparedBatch
+	var refusal *kernel.Error
+	for attempt := 0; attempt < retry.Tries(); attempt++ {
+		if attempt > 0 && retry.BackoffMS > 0 {
+			time.Sleep(time.Duration(retry.BackoffMS) * time.Millisecond)
+		}
+		io := &preparationFrameStore{FlowFrameStore: store}
+		prepared, refusal = plan.prepare(batch, now, io)
+		if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT || !io.failed {
+			return prepared, refusal
+		}
+	}
+	return nil, refusal
+}
+
+// Only failed outside I/O can benefit from repeating the same frozen plan.
+// Budget, malformed history and kernel refusals retain their first answer.
+type preparationFrameStore struct {
+	platform.FlowFrameStore
+	failed bool
+}
+
+func (s *preparationFrameStore) Read(ref platform.FlowStateArtifact) ([]byte, error) {
+	raw, err := s.FlowFrameStore.Read(ref)
+	s.failed = s.failed || err != nil
+	return raw, err
+}
+
+func (s *preparationFrameStore) Seal(instance string, version int, raw []byte, budget int) (platform.FlowStateArtifact, error) {
+	if budget > 0 && len(raw) > budget {
+		return platform.FlowStateArtifact{}, fmt.Errorf("the Flow frame exceeds its sealed JSON budget")
+	}
+	ref, err := s.FlowFrameStore.Seal(instance, version, raw, budget)
+	if err != nil {
+		s.failed = true
+		// A failed Put may have persisted its newly generated ticket. These
+		// bytes cannot have been accepted and must not accumulate per retry.
+		_ = s.FlowFrameStore.Discard(ref)
+	}
+	return ref, err
+}
+
+func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *kernel.Error) {
 	x := plan.before
 	if err := validateArtifactCleanup(x); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
@@ -624,10 +674,10 @@ func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the host can accept a prepared Flow batch")
 	}
 	return d.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		ss := d.session(c, now)
+		ss := d.session(d.host.Automation(c, ID), now)
 		if p.replayAsset != nil {
 			asset, ok := platform.Get[platform.FlowDeadLetterAsset](c, p.replayAsset.ID)
-			if !ok || !bytes.Equal(platform.Raw(asset), platform.Raw(p.replayAsset)) || asset.Replayed {
+			if !ok || !bytes.Equal(platform.Raw(asset), platform.Raw(p.replayAsset)) || !d.deadLetterReplayAllowed(c, asset, now) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dead letter changed while its replay was prepared")
 			}
 			asset.Replayed = true
@@ -668,6 +718,9 @@ func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time
 			ss.token(x, token.ID).Input = slices.Clone(p.resumeInput)
 		} else {
 			ss.advance(x)
+		}
+		if err := ss.retainDeadLetters(); err != nil {
+			return nil, err
 		}
 		return ss.apply, nil
 	})

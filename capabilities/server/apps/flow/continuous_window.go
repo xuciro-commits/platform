@@ -151,16 +151,13 @@ func windowBoundary(w platform.StreamWindow, watermark, now time.Time) time.Time
 // windowSignals gives a retained Compute exactly the event-time interval for
 // its emitted slide. Explicit "accept" keeps older late rows visible by design.
 func windowSignals(state WindowState, w platform.StreamWindow) []Signal {
-	if w.LateEvents == "accept" {
-		return slices.Clone(state.Rows)
-	}
 	if state.EmittedAt.IsZero() {
 		return nil
 	}
 	start := state.EmittedAt.Add(-time.Duration(w.WindowMS) * time.Millisecond)
 	rows := make([]Signal, 0, len(state.Rows))
 	for _, signal := range state.Rows {
-		if !signal.At.Before(start) && signal.At.Before(state.EmittedAt) {
+		if (w.LateEvents == "accept" || !signal.At.Before(start)) && signal.At.Before(state.EmittedAt) {
 			rows = append(rows, signal)
 		}
 	}

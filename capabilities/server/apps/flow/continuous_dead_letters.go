@@ -20,7 +20,7 @@ type deadLetterReplayPreparation struct {
 
 func (f *Flows) PlanDeadLetterReplay(x FlowInstance, c platform.Caller, asset platform.FlowDeadLetterAsset) (platform.FlowDeadLetterReplayPreparation, *kernel.Error) {
 	d := f.def(x.Flow, x.Version)
-	if asset.Instance != x.ID || asset.Flow != x.Flow || asset.Version != x.Version || asset.OnBehalf != x.OnBehalf || asset.Replayed || asset.Archived || asset.Withheld || asset.Action != "" || !json.Valid([]byte(asset.Letter.Value)) || d == nil || d.Continuous == nil || !d.Continuous.DeadLetterRetry || d.Continuous.Window == nil || d.Continuous.Aggregate == nil {
+	if asset.Instance != x.ID || asset.Flow != x.Flow || asset.Version != x.Version || asset.OnBehalf != x.OnBehalf || asset.Replayed || asset.Archived || asset.Withheld || asset.Action != "" || !json.Valid([]byte(asset.Letter.Value)) || d == nil || d.Continuous == nil || !d.Continuous.DeadLetterRetry || d.Continuous.Window == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained signal dead letter is unavailable for replay")
 	}
 	plan, err := f.PlanBatch(x, c)
@@ -35,6 +35,9 @@ func (f *Flows) PlanDeadLetterReplay(x FlowInstance, c platform.Caller, asset pl
 }
 
 func (p *deadLetterReplayPreparation) Prepare(sub *pb.Submission, at time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *kernel.Error) {
+	if !p.batch.owner.deadLetterReplayAllowed(p.batch.caller, p.asset, at) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained signal dead letter is unavailable for replay")
+	}
 	if sub.GetSchema().GetName() != SchemaFlowReplay || sub.GetTarget().GetType() != "flow.dead-letter" || sub.GetTarget().GetId() != p.asset.ID || sub.GetPrincipalId() != p.asset.OnBehalf {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A signal replay requires its original member and dead-letter asset")
 	}
@@ -74,6 +77,9 @@ func (ss *session) deadLetterAct(x *FlowInstance, token *Token, step *platform.S
 		Letter: platform.FlowDeadLetter{Batch: batch, Node: step.Name, Key: target, RecordedAt: ss.now, Reason: reason, Value: string(payload)},
 		Action: step.Act.Action, Protocol: step.Act.Protocol, Target: target, Payload: slices.Clone(payload), Key: key, AsMember: step.Act.AsMember}
 	ss.assets = append(ss.assets, asset)
+	// Terminal failure consumes this logical request identity just like a
+	// successful action. A following loop item must not reuse its refused key.
+	x.Seq++
 }
 
 func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -97,6 +103,9 @@ func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time
 		if d == nil || d.app != asset.App || d.Continuous == nil || !d.Continuous.DeadLetterRetry {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained dead-letter definition is unavailable")
 		}
+		if !f.deadLetterReplayAllowed(ss.c, asset, now) {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained dead-letter definition is unavailable")
+		}
 		member := ""
 		if asset.AsMember {
 			member = asset.OnBehalf
@@ -107,6 +116,9 @@ func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time
 		asset.Replayed = true
 		ss.assets = append(ss.assets, asset)
 		ss.trace(x, asset.Letter.Node, "dead letter replayed", asset.ID, c.ID)
+		if err := ss.retainDeadLetters(); err != nil {
+			return nil, err
+		}
 		return ss.apply, nil
 	})
 }

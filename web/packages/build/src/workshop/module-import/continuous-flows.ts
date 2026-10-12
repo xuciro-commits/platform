@@ -63,7 +63,9 @@ export function compileContinuousFlow(source:string,flow:SourceFlow,bindings:Flo
   keys(node.config,configKeys[type],`${at}/config`);
   if(node.disabled!==undefined&&node.disabled!==false)issue(`${at}/disabled`,"flow-disabled-owner");
   if(node.retry){keys(node.retry,["attempts","backoffMs"],`${at}/retry`);if(!Number.isSafeInteger(node.retry.attempts)||node.retry.attempts<0||node.retry.attempts>20||!Number.isSafeInteger(node.retry.backoffMs)||node.retry.backoffMs<0||node.retry.backoffMs>300000)issue(`${at}/retry`,"flow-retry-invalid");
-   else if(type==="telemetrySource"||type==="window"||type==="deadLetter")note(`${at}/retry`,"flow-retry-hosted");}
+   else if(type==="telemetrySource"||type==="window"){
+    if(node.retry.backoffMs>5000||(node.retry.attempts-1)*node.retry.backoffMs>30000)issue(`${at}/retry`,"flow-retry-invalid");
+   }else if(type==="deadLetter")note(`${at}/retry`,"flow-retry-hosted");}
   if(node.lastStatus!==undefined)note(`${at}/lastStatus`,"flow-status-not-imported");
  }
  for(const type of CONTINUOUS_TYPES)if(!byType.has(type))issue(root,"flow-continuous-topology");
@@ -131,16 +133,16 @@ export function compileContinuousFlow(source:string,flow:SourceFlow,bindings:Flo
  }else if(sourceBinding)issue(`${path(root,stream)}/binding`,"flow-source-binding");
  for(const id of Object.keys(bindings))if(id!==stream.id&&!flow.nodes.some(node=>node.id===id))issue(`${root}/bindings/${pointer(id)}`,"flow-binding-unused");
  const sourceId=sourceRecord?.id??"",sourceName=sourceRecord?.name??"";
- const capabilityFor=(node:SourceFlowNode,kind:"compute"|"action")=>{
+ const actionFor=(node:SourceFlowNode)=>{
   const binding=bindings[node.id];
-  if(!isActionBinding(binding)||binding.kind!==kind){issue(`${path(root,node)}/binding`,kind==="action"?"flow-action-binding":"flow-capability-version");return undefined;}
-  const capability=target.capabilities.find(item=>item.kind===kind&&item.ref.app===binding.app&&item.ref.name===binding.name&&item.version===binding.sourceVersion&&(item.revision??0)===binding.version);
-  const definition=target.definitions.find(item=>item.ref.app===binding.app&&item.ref.name===binding.name&&item.ref.kind===(kind==="action"?"action":"operation")&&item.version===binding.sourceVersion);
-  if(!capability||!definition){issue(`${path(root,node)}/binding`,kind==="action"?"flow-action-version":"flow-capability-version");return undefined;}
+  if(!isActionBinding(binding)||binding.kind!=="action"){issue(`${path(root,node)}/binding`,"flow-action-binding");return undefined;}
+  const capability=target.capabilities.find(item=>item.kind==="action"&&item.ref.app===binding.app&&item.ref.name===binding.name&&item.version===binding.sourceVersion&&(item.revision??0)===binding.version);
+  const definition=target.definitions.find(item=>item.ref.app===binding.app&&item.ref.name===binding.name&&item.ref.kind==="action"&&item.version===binding.sourceVersion);
+  if(!capability||!definition){issue(`${path(root,node)}/binding`,"flow-action-version");return undefined;}
   keys(binding,["app","kind","name","version","sourceVersion","object","inputs","target"],`${path(root,node)}/binding`);
   return {binding,capability,definition};
  };
- const actionTarget=capabilityFor(alert,"action");
+ const actionTarget=actionFor(alert);
  // The retained native owner runs the exact supplied f32 Wasm kernel and
  // owns threshold state. An old arbitrary Compute binding cannot override it.
  for(const node of [aggregate,threshold])if(bindings[node.id])issue(`${path(root,node)}/binding`,"flow-native-kernel-binding");
@@ -192,8 +194,8 @@ export function compileContinuousFlow(source:string,flow:SourceFlow,bindings:Flo
     aggregate:{node:"aggregate",signal,group:Array.isArray(groupBy)?groupBy as string[]:[],measures:["count","sum","mean","min","max","above"],kernel,above:Number(aggregateConfig.threshold)},
     threshold:{node:"threshold",field:"mean",high:Number(high),low:Number(low),debounceMs:Number(thresholdConfig.debounceMs),severity:String(thresholdConfig.severity??alertConfig.severity)},
     output:{node:outputName,name:variableId,mode:"replace"},
-    Window:{node:"windowstate",windowMs,slideMs,watermarkMs,maxRecords:windowMax,lateEvents:"sideOutput"},
-    Intake:{sourceRecord:sourceId,key:intake.key,partition:intake.partition,eventTime:intake.eventTime,value:intake.value,fields:[...extraFields].sort(),offset},DeadLetter:true,errorPolicy:flow.execution.errorPolicy,deadLetterRetry:deadConfig.retry===true,deadLetterMaxRecords,deadLetterTtlMs:ttlMs}};
+    Window:{node:"windowstate",retry:window.retry,windowMs,slideMs,watermarkMs,maxRecords:windowMax,lateEvents:"sideOutput"},
+    Intake:{sourceRecord:sourceId,key:intake.key,partition:intake.partition,eventTime:intake.eventTime,value:intake.value,fields:[...extraFields].sort(),retry:stream.retry,offset},DeadLetter:true,errorPolicy:flow.execution.errorPolicy,deadLetterRetry:deadConfig.retry===true,deadLetterMaxRecords,deadLetterTtlMs:ttlMs}};
  }
  }
  return report;

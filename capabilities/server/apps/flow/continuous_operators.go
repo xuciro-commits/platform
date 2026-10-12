@@ -92,6 +92,16 @@ func streamOutputName(name string) bool {
 // refused instead of silently never firing.
 func checkOperators(declared platform.Continuous) error {
 	a, t := declared.Aggregate, declared.Threshold
+	if declared.Intake != nil {
+		if err := declared.Intake.Retry.Check(); err != nil {
+			return err
+		}
+	}
+	if declared.Window != nil {
+		if err := declared.Window.Retry.Check(); err != nil {
+			return err
+		}
+	}
 	// The declared partition workers are part of the same whole-declaration
 	// check: the fold runs at most 8 of them, and more than one needs the
 	// event-time window whose partitions they fold (ADR-0047 §13.3).

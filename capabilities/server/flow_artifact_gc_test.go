@@ -168,3 +168,52 @@ func TestFlowArtifactReferencesRetainOriginalRecoveryBytes(t *testing.T) {
 		t.Fatal("original recovery bytes lost their artifact root", err)
 	}
 }
+
+func TestContinuousOrphanCollectionPreservesExactLargeVersions(t *testing.T) {
+	if reflect.TypeOf(int(0)).Bits() < 64 {
+		t.Skip("version exceeds the platform's integer width")
+	}
+	const tenant, id = "exact-version", "frames.window:source"
+	now := time.Now().UTC()
+	wideVersion := int64(9007199254740993)
+	version := int(wideVersion)
+	files := &memoryFiles{}
+	live := composeTenant(t, tenant, nil, work.New(tenant), flow.New(tenant), newFrameSource(tenant, 2<<20))
+	live.Files = files
+	store := flowFrameStore{tenant: tenant, files: files}
+	seal := func(label string) platform.FlowStateArtifact {
+		t.Helper()
+		ref, err := store.Seal(id, version, platform.Raw(map[string]any{"label": label}), 1024)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ref
+	}
+	historical, current, orphan := seal("historical"), seal("current"), seal("orphan")
+	x := platform.FlowInstance{Record: platform.Record{ID: id}, Version: version, Batch: &platform.FlowBatchFrame{Sealed: &historical}}
+	if err := live.automation(platform.FlowApp, false).PutAt(now, "test.frame", x); err != nil {
+		t.Fatal(err)
+	}
+	x.Batch.Sealed = &current
+	if err := live.automation(platform.FlowApp, false).PutAt(now, "test.frame", x); err != nil {
+		t.Fatal(err)
+	}
+	files.mu.Lock()
+	for key := range files.m {
+		files.modified[key] = now.Add(-48 * time.Hour)
+	}
+	files.mu.Unlock()
+	live.flowArtifactRecoveryComplete(now.Add(-time.Hour))
+	if err := live.collectUnacceptedFlowArtifacts(context.Background(), now); err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range []platform.FlowStateArtifact{historical, current} {
+		if _, err := store.Read(ref); err != nil {
+			t.Fatal("collector deleted a frame with an exact accepted version", err)
+		}
+	}
+	orphanKey, _ := store.key(orphan)
+	if files.Exists(context.Background(), orphanKey) {
+		t.Fatal("unaccepted frame was not collected")
+	}
+}

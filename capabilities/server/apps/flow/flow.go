@@ -645,7 +645,10 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 			break // one step per instance per run: the next run sees its new state
 		}
 	}
-	return nil
+	// Business timers and resumptions run before the single bounded archive
+	// batch, so a retention backlog cannot occupy every ordinary Flow pass.
+	_, retentionErr := f.retainExpiredDeadLetters(c, now)
+	return retentionErr
 }
 
 func (f *Flows) run(x *FlowInstance) *platform.Run {
