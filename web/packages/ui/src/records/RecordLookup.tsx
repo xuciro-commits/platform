@@ -66,20 +66,21 @@ function Lookup<T>({ id, scope, target, revision, read, watch, value, valueLabel
   </div>;
 }
 
-export function RecordLookup({ id, source, type, value, onChange, window, labelField, selectedRecord, ariaLabel, disabled, predicate }: {
+export function RecordLookup({ id, source, type, value, onChange, window, labelField, selectedRecord, ariaLabel, disabled, domain, predicate }: {
   id?: string; source: RecordSource; type: string; value?: string; onChange: (id?: string) => void;
   window?:NonNullable<Parameters<typeof RecordList>[0]["window"]>;labelField?:string;selectedRecord?:EntityRecord;ariaLabel?:string;disabled?:boolean;
+  domain?: unknown[];
   predicate?: (record: EntityRecord) => boolean;
 }) {
   const title = labelField ?? source.entity(type)?.display;
-  return <Lookup id={id} scope={source.scope ?? source} target={type} revision={source.revision} value={value} onChange={record => onChange(record?.id)}
+  return <Lookup id={id} scope={JSON.stringify([source.scope ?? "", domain ?? null])} target={type} revision={source.revision} value={value} onChange={record => onChange(record?.id)}
     read={async (search,offset) => {
-      const res = await source.list(type,{search,offset,limit:pageSize});
+      const res = await source.list(type,{search,offset,limit:pageSize,...(domain?.length ? { domain } : {})});
       if (!predicate) return res;
       const filtered = res.records.filter(predicate);
       return { records: filtered, total: filtered.length };
     }}
-    watch={source.watchList ? (search,offset,changed) => source.watchList!(type,{search,offset,limit:pageSize},changed) : undefined}
+    watch={source.watchList ? (search,offset,changed) => source.watchList!(type,{search,offset,limit:pageSize,...(domain?.length ? { domain } : {})},changed) : undefined}
     keyOf={record => record.id} label={record => title && title !== "id" && record[title] ? `${record.id} · ${String(record[title])}` : record.id}
     window={window} selectedRecord={selectedRecord} ariaLabel={ariaLabel} disabled={disabled}/>;
 }

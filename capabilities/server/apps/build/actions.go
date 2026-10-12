@@ -510,22 +510,37 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 				approval.Levels = append(approval.Levels, platform.ApprovalLevel{Title: level.Title, AppRole: level.Role, All: level.All})
 			}
 		}
+		stagedByID := map[string][]any{}
 		l.Transitions = append(l.Transitions, platform.Transition{New: a.New, Name: a.Name, Title: a.Title, Description: a.Description,
 			From: slices.Clone(a.From), To: reach, ToInput: a.ToInput, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval, DeferRequired: true,
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
-				return take(o, action, c, record, raw, now, creates, lookup)
-			}, After: stored(o, action, creates)})
+				var staged []any
+				if err := takeWithEffects(o, action, c, record, raw, now, creates, lookup, &staged); err != nil {
+					return err
+				}
+				rec := reflect.ValueOf(record).Elem().Field(0).Interface().(platform.Record)
+				stagedByID[rec.ID] = staged
+				return nil
+			}, After: stored(o, action, creates, stagedByID)})
 	}
 	return l
 }
 
-// stored puts an action's related records under the change that took it, as
-// Do built and checked them from the same inputs (ADR-0040 21c).
-func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.ChangeRecord, any, time.Time) {
+// stored puts an action's related records under the change that took it, using
+// the exact side-effect records sealed by Do so Do and After never diverge.
+func stored(o Object, a Action, creates creator, stagedByID map[string][]any) func(platform.Caller, *pb.ChangeRecord, any, time.Time) {
 	if len(a.Creates) == 0 && len(a.Updates) == 0 && len(a.Posts) == 0 || creates == nil {
 		return nil
 	}
 	return func(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
+		rec := reflect.ValueOf(record).Elem().Field(0).Interface().(platform.Record)
+		if sealed, ok := stagedByID[rec.ID]; ok {
+			delete(stagedByID, rec.ID)
+			for _, value := range sealed {
+				c.Put(r, value)
+			}
+			return
+		}
 		var inputs map[string]any
 		_ = json.Unmarshal(r.GetSubmission().GetPayload(), &inputs)
 		if inputs == nil {
@@ -577,6 +592,10 @@ func applyInputDefaults(o Object, a Action, c platform.Caller, inputs map[string
 // take is one action on a record: its required inputs, its conditions, then
 // the fields it sets. A refusal says what the builder wrote.
 func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage, now time.Time, creates creator, lookup func(string) (platform.EntityInfo, bool)) *kernel.Error {
+	return takeWithEffects(o, a, c, record, raw, now, creates, lookup, nil)
+}
+
+func takeWithEffects(o Object, a Action, c platform.Caller, record any, raw json.RawMessage, now time.Time, creates creator, lookup func(string) (platform.EntityInfo, bool), staged *[]any) *kernel.Error {
 	var inputs map[string]any
 	if len(raw) > 0 && json.Unmarshal(raw, &inputs) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} takes an object of inputs", a.Title)
@@ -702,6 +721,7 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 	// Validate and stage related record creations so branches and parent updates
 	// can observe newly created child records in the same decision.
 	overlay := []any{record}
+	var sealedEffects []any
 	for i, cr := range a.Creates {
 		if creates == nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{action} cannot create records here", a.Title)
@@ -711,6 +731,7 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 			return err
 		}
 		overlay = append(overlay, created...)
+		sealedEffects = append(sealedEffects, created...)
 	}
 	// Evaluate conditional branches (first matching branch wins, ADR-0098 D2).
 	branched := false
@@ -751,15 +772,21 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		}
 		if ok {
 			overlay = append(overlay, updated)
+			sealedEffects = append(sealedEffects, updated)
 		}
 	}
 	for _, p := range o.EffectivePosts(a) {
 		if creates == nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{action} cannot post balances here", a.Title)
 		}
-		if _, err := creates.post(c, p, inputs, v.Addr().Interface(), now); err != nil {
+		posted, err := creates.post(c, p, inputs, v.Addr().Interface(), now)
+		if err != nil {
 			return err
 		}
+		sealedEffects = append(sealedEffects, posted)
+	}
+	if staged != nil {
+		*staged = sealedEffects
 	}
 	return nil
 }
@@ -883,7 +910,11 @@ func checkAccess(o Object) error {
 // generated actions' roles per verb, and its scope (ADR-0037 D4, D5). With no
 // access declared an object keeps the rule of 15a: builder and user do everything.
 func access(o Object) (platform.Standard, platform.Scope, []string) {
+	hasGovernedCreate := slices.ContainsFunc(o.Actions, func(a Action) bool { return a.New })
 	std := platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, User}, Capability: o.Name}
+	if hasGovernedCreate {
+		std.CreateRoles = []string{Builder}
+	}
 	if len(o.Access) == 0 {
 		return std, platform.Scope{}, []string{Builder, User}
 	}
@@ -901,7 +932,7 @@ func access(o Object) (platform.Standard, platform.Scope, []string) {
 	for _, a := range o.Access {
 		roles = append(roles, a.Role)
 		scope.Levels[a.Role] = readLevels[a.Read]
-		if a.Create {
+		if a.Create && !hasGovernedCreate {
 			std.CreateRoles = append(std.CreateRoles, a.Role)
 		}
 		if a.Edit {

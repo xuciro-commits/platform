@@ -72,6 +72,7 @@ func TestBuilderMESEquivalence(t *testing.T) {
 		"name": "operation", "title": "Operation", "access": allAccess,
 		"fields": []map[string]any{
 			{"name": "routing", "title": "Routing", "type": "reference", "ref": rtType, "inverse": "operations", "required": true},
+			{"name": "version", "title": "Routing version", "type": "integer"},
 			{"name": "number", "title": "Number", "type": "integer", "required": true},
 			{"name": "name", "title": "Name", "type": "text", "required": true, "search": true},
 			{"name": "workcenter", "title": "Work center", "type": "reference", "ref": wcType, "required": true},
@@ -123,8 +124,13 @@ func TestBuilderMESEquivalence(t *testing.T) {
 	}
 	orderType := publishObject(t, tn, "builder", "OBJ-ORDER", orderBase, now)
 
+	sfcAccess := []map[string]any{
+		{"role": "supervisor", "read": "all", "create": false, "edit": false},
+		{"role": "operator", "read": "all", "create": false, "edit": false},
+		{"role": "quality", "read": "all", "create": false, "edit": false},
+	}
 	sfcType := publishObject(t, tn, "builder", "OBJ-SFC", map[string]any{
-		"name": "sfc", "title": "SFC", "access": allAccess,
+		"name": "sfc", "title": "SFC", "access": sfcAccess,
 		"states": []map[string]any{
 			{"name": "queued", "title": "Queued", "tone": "info"},
 			{"name": "active", "title": "In work", "tone": "warning"},
@@ -325,22 +331,37 @@ func TestBuilderMESEquivalence(t *testing.T) {
 
 	decide(t, tn, "sup", build.ID, rtType+".create", rtType, "RT-100", map[string]any{"name": "Pump Housing Routing", "version": 1}, now)
 	decide(t, tn, "sup", build.ID, opType+".create", opType, "OP-10", map[string]any{
-		"routing": "RT-100", "number": 10, "name": "Cast", "workcenter": "WC-CAST", "requires": []string{"casting"},
+		"routing": "RT-100", "version": 1, "number": 10, "name": "Cast", "workcenter": "WC-CAST", "requires": []string{"casting"},
 		"parameters": []map[string]any{{"name": "temp", "kind": "range", "unit": "C", "target": 700, "min": 680, "max": 720}},
 	}, now)
 	decide(t, tn, "sup", build.ID, opType+".create", opType, "OP-20", map[string]any{
-		"routing": "RT-100", "number": 20, "name": "Machine", "workcenter": "WC-MACH", "requires": []string{"milling", "drilling"},
+		"routing": "RT-100", "version": 1, "number": 20, "name": "Machine", "workcenter": "WC-MACH", "requires": []string{"milling", "drilling"},
 	}, now)
 	decide(t, tn, "sup", build.ID, opType+".create", opType, "OP-30", map[string]any{
-		"routing": "RT-100", "number": 30, "name": "Assemble", "workcenter": "WC-ASM", "requires": []string{"assembly", "torque"},
+		"routing": "RT-100", "version": 1, "number": 30, "name": "Assemble", "workcenter": "WC-ASM", "requires": []string{"assembly", "torque"},
 	}, now)
 
 	decide(t, tn, "sup", build.ID, prodType+".create", prodType, "P-100", map[string]any{"name": "Pump Housing", "routing": "RT-100"}, now)
 	decide(t, tn, "sup", build.ID, planType+".create", planType, "PO-1", map[string]any{"number": "PO-2026-01", "product": "P-100", "quantity": 10}, now)
 
-	// 4. Supervisor releases Shop Order SO-1 (quantity 10 split into 3 SFCs -> 4, 3, 3) against PO-1.
+	// 4. Bypass protection: neither supervisor nor operator may call raw .create on Order (which has governed `release`) or SFC (created only via `Order.release`).
+	if got := refuse(t, tn, "sup", build.ID, orderType+".create", orderType, "SO-BYPASS", map[string]any{"product": "P-100", "quantity": 10}, now); !strings.Contains(got, "ERROR_CODE_POLICY_DENIED") {
+		t.Fatalf("expected raw order.create bypass to be denied, got %s", got)
+	}
+	if got := refuse(t, tn, "op1", build.ID, sfcType+".create", sfcType, "SFC-BYPASS", map[string]any{"order": "SO-1", "product": "P-100", "routing": "RT-100", "routingversion": 1, "operation": "OP-10", "quantity": 1}, now); !strings.Contains(got, "ERROR_CODE_POLICY_DENIED") {
+		t.Fatalf("expected raw sfc.create bypass to be denied, got %s", got)
+	}
+
+	// Supervisor releases Shop Order SO-1 (quantity 10 split into 3 SFCs -> 4, 3, 3) against PO-1.
 	decide(t, tn, "sup", build.ID, orderType+".release", orderType, "SO-1", map[string]any{
 		"product": "P-100", "quantity": 10, "sfcs": 3, "planned": "PO-1",
+	}, now)
+
+	// Upgrade RT-100 to version 2 and insert a v2 operation OP-15 (Deburr at 15) AFTER SO-1 is already on the floor:
+	// SO-1's SFCs remain pinned to routingversion=1 and must not visit v2's OP-15!
+	decide(t, tn, "sup", build.ID, rtType+".edit", rtType, "RT-100", map[string]any{"version": 2}, now)
+	decide(t, tn, "sup", build.ID, opType+".create", opType, "OP-15-V2", map[string]any{
+		"routing": "RT-100", "version": 2, "number": 15, "name": "Deburr", "workcenter": "WC-MACH",
 	}, now)
 
 	// Releasing a second order against the same planned order PO-1 is refused by the `none` quantifier (`fits` invariant).

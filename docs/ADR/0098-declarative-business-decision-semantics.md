@@ -2,7 +2,7 @@
 
 **意图：** 让 Platform 从“运行预先用 Go 和 React 编写好的原生业务应用的系统”，进化为“根据可版本化、可验证的应用定义，从数据模型、后端业务决定、动态交互表单到前端领域操作台与流程可视化，全栈自动构造并执行正确业务行为的系统”。把业务规则与操作界面逻辑的定义权从原生源码转移到平台一等资产上，让 FDE 乃至零代码背景的业务玩家，在不接触任何后端 Go 代码或前端 React 代码的前提下，从头到尾构建出完整的企业级应用，并以**全栈零代码等价重建原生 MES（`apps/mes/server` + `web/packages/mes`）**作为唯一终极证明。
 
-**状态：** 已落地（2026-10-12，B1–B6 核心全栈语义与 `TestBuilderMESEquivalence` 等价重建证明已实施并通过验证；边界见 §5 As built）。
+**状态：** 工程收口中（2026-10-12；MVP 主干与第一批正确性加固已实施，当前按 §5 的三层工程门槛与 [ADR-0099](0099-intent-driven-application-studio-beyond-palantir.md) 推进完整产品级收口，不以单条 MES 样例测试替代客户长期独立维护验收）。
 
 **基线：** `8f602ac515e6a7bacabc4f0bf7e04bc347d12e22`（ADR-0097 W4 收口后）。
 
@@ -246,20 +246,32 @@ flowchart TB
 
 ---
 
-## 5. As built（2026-10-12）
+## 5. As built 与三层工程收口门槛（2026-10-12）
 
-1. **领域本体与创建建模扩展（D1）**：
-   - `buildapi.Field` 与 `apps/build` 已支持 `tags`（多值字符串切片 `[]string`）与 `lines`（结构化内嵌明细行 `Columns []LineColumn`，动态生成子结构体切片并通过 `platform.Describe` 投影 `FieldInfo.Fields`）；`process.tsx` 提供内嵌明细行字段列编辑器。
-   - `buildapi.Action` 与 `platform.Transition` 已支持 `New: true`（`len(From) == 0` 的语义化业务创建动作），在 `platform/ledger.go` 与 `platform/entity.go` 中作为一等创建动作生成并校验冲突、执行 `Do` 守卫与字段推导、并在 `After` 同批次创建关联子记录。
-2. **声明式业务决定执行引擎（D2）**：
-   - **关系、集合包含与量词守卫（`apps/build/actions.go`、`decision.go`）**：`Operators` 扩展支持 `in`、`not in`、`contains all`、`contains any`；`Condition` 支持多跳路径 `record.<path>` 与引用参数路径 `input.<ref>.<path>`，以及关联集合/内嵌明细集合量词 `Quantifier`（`all`、`none`、`any`、`count`）与动作级组织单元路径范围 `UnitField`。
-   - **统一富值源与条件分支流转**：`evalSource` 统一支持 `input.<name>`、`input.<ref>.<path>`、`record.<path>`、`$me`、`$now`、`$index`、`$count`、`$item.<field>`、`=<literal>`（含 `=` 清空字符串/切片/明细行）、`append:<k=v,...>`（向 `lines`/`tags` 追加记录）、`formula:<expr>`、`table:<name>.<col>`、`step:first(...)`、`step:next(...)`、`split:<total>:<count>`（整数余数前置均摊）与 `rollup:sum/count`；`Action.Branches` 按顺序匹配首个满足 `When` 的分支决定目标状态 `To` 与附加赋值 `Sets`。
-   - **多记录原子副作用（`apps/build/creates.go`）**：`Create` 支持动态条数 `Count` 与集合遍历 `Foreach`（确定性编号 `{parent}-{001..N}`）；新增 `Action.Updates`（`UpdateEffect`）在同一决策内按量词守卫（叠加当前记录与新建子记录的最新内存状态）更新关联父/目标记录的状态与 `rollup:sum/count` 汇总字段。
-3. **动态上下文动作表单、工序泳道流转图与应用专属记录路由（D3–D6）**：
-   - `buildapi.Input` 与 `platform.Field` 新增 `When`（参数条件显隐与条件必填）、`DefaultFrom`（基于字面量或 `record.<field>` 的动态初值）与 `Filter`（引用参数相对于当前记录与输入的动态候选过滤）；`@platform/app` 的 `PayloadFields` / `DeclaredActionForm` 与 `@platform/ui` 的 `RecordLookup`（`predicate`）已接通前后端同源过滤与显隐。
-   - `@platform/ui` 的 `RecordPage` 新增 `RecordStepFlow`（复用 `<FlowSteps>`），对含关联有序步骤的工艺路线记录（如 `build.routing`）或含 `routing` + `operation` 的在途执行记录（如 `build.sfc`）自动按工作中心泳道绘制工序流转图，实时高亮当前工步、已完成工步、挂起/报废状态与 `NC` 异常标记。
-   - `buildapi.Application`、`platform.Application`、`tenantApps.tsx` 与 `chrome.tsx` 已接通 `Opens`（按对象类型路由到应用内定制页面）；`ActionTypeEditor`（`action-type.tsx`）新增条件分支、量词守卫、关联父记录更新及四大预置业务决定配方（拆批生单下达、能力匹配守卫、工序步进与父单汇总完结、双人职责分离会签）。
-4. **验证证据**：
-   - `capabilities/server/apps/build`: `TestActionDecisionCoreTagsLinesBranchesAndFormulas` 及全包测试通过；
-   - `capabilities/server`: `TestBuilderMESEquivalence`（零 Go 业务代码完整构建并验证 MES 主数据、计划单唯一占用 `fits`、10 拆 3 批余数均摊 `4,3,3`、`canDo` 工作中心与 `contains all` 设备能力匹配、`step:next` 工序步进、NC 挂起、21 CFR Part 11 双人异义电子签名返工与报废、末件完结自动触发父工单 `completed` 与 `yield=7, scrap=3` 汇总、以及四快照点 `CheckReplay`）、`TestAPIContract`、`TestLanguages` 全部通过；
-   - `web`: `host.ts` 与 `catalog` 同步生成，16 个工作区包 `tsc` 类型检查、i18n 扫描测试、`boundaries.sh` 与 `escapes.sh` 全部通过。未在浏览器观察。
+“能够用 Builder 定义出一个会拆批、会过站、会返工的 MES 样例”与“客户能够安全、独立、长期维护一套完整 MES”之间隔着严格的工程边界。当前代码已贯通主干能力与第一批正确性守卫，后续必须完整通过以下**三层工程门槛**方可进入生产场景：
+
+### 第一层门槛：业务决定正确性（Business Decision Correctness）
+1. **集合查询完整性与下推（已加固首版，持续核验）**：
+   - `findWithOverlay` 已将关联外键过滤（`viaField = parentID`）与固定版本（`version = pinnedVersion`）下推至 `Query.Domain`，并在 `total > len(found)`（超出 1000 条有界决策扫描上限）时显式报错拒绝，防止 `none` / `all` 量词在截断窗口上静默给出假阳性。
+   - **待继续收口**：将 `Quantifier` 子条件 `Where` 中的更多标量等值/范围谓词完整编译下推为底层存储查询，并为高基数唯一性约束提供声明式唯一索引保证。
+2. **父对象不变量与权限校验（已加固首版，持续核验）**：
+   - `updateRelated` 在更新关联父/目标记录时已执行目标实体的 `Compute`、`Validate`、`ValidateAt` 与 `c.Check`，并在目标已处于 `u.To` 且无附加字段更新时保持幂等；`createBatch` 在 `a.New` 阶段已校验非 `Via` 引用字段的存在性。
+   - **待继续收口**：关联父记录状态跃迁（`u.To`）须完整对齐目标对象自身生命周期声明的合法起始状态（`From`）与字段级写权限边界。
+3. **原子变更封存与确定性重放（已加固）**：
+   - `takeWithEffects` 在 `Do` 阶段一次性计算并封存全部 `Creates`、`Updates` 与 `Posts` 记录切片，交由 `After`（`stored`）直接落盘，消除 `Do` 与 `After` 二次求值可能产生的状态漂移或静默忽略错误。
+4. **默认创建绕过防护（已加固）**：
+   - `access(o Object)` 在对象声明了受控创建动作（`a.New == true`，如 `order.release`）时，自动将默认生成的裸 `build.<obj>.create` 收窄至仅 `builder` 可调用；业务角色（如 `supervisor`、`operator`）调用裸 `order.create` 或 `sfc.create` 均被 `POLICY_DENIED` 拒绝，必须经受控业务动作入账。
+5. **工艺与主数据历史版本冻结（已加固首版，持续核验）**：
+   - 当在途记录持有 `routingversion` 且步骤对象声明 `version` 字段时，`resolveCollectionMaps` 自动按在途记录固定的版本号过滤步骤集合（`TestBuilderMESEquivalence` 已验证在途 `SO-1` 下达后将 `RT-100` 升至 v2 并插入新工序 `OP-15-V2`，在途批次仍严格按 v1 工序流转）。
+   - **待继续收口**：将主数据版本快照从约定字段提升为平台一等的不可变版本化主数据引用契约。
+
+### 第二层门槛：全栈真声明式配置（True Full-Stack Declarative Configuration）
+1. **动态查询与表单联动的共享查询机制**：
+   - `RecordLookup` 与 `RecordPicker` 已支持将 `Input.Filter` 的标量条件编译为服务端 `domain` 查询参数下推至 `source.list`，同时保留集合包含等谓词校验。
+   - **待继续收口**：将跨多跳引用路径的动态候选过滤统一接入服务端参数化查询/能力路由，确保任意分页深度下的候选总数与搜索结果完全由服务端权威给出。
+2. **可声明绑定的 `ProcessFlow` 组件与 Workshop 操作台装配**：
+   - `platform.Section` 已新增 `PageProcessFlow`（显式声明 `stepObject`、`routingField`、`versionField`、`stepField`、`orderField`、`titleField`、`laneField`、`notesField`），`RecordStepFlow` 支持按声明配置渲染泳道流转图。
+   - **待继续收口**：在 Workshop 页面编辑器中完成 `ProcessFlow` 独立 Widget 插件、检查器面板、跨引用表格列与完整 MES 操作台页面的实际装配与候选发布验证，彻底移除通用记录页上的隐式字段名推导。
+
+### 第三层门槛：面向构建者心流的下一代工作台体验（归 [ADR-0099](0099-intent-driven-application-studio-beyond-palantir.md)）
+- 改造现有模仿 Palantir 的 22 菜单孤岛式构建器界面，按用户从零构建应用的**六步真实心流（立骨架 → 定生命 → 立规矩 → 搭界面 → 接协同 → 彩排发布）**重构为统一的意图驱动应用工作台（领域蓝图与实时样本表、状态连线即动作、四段式可视化决定画布与胶囊路径选择器、零变量管道税的岗位操作台生成、多角色故事板彩排沙箱），设计详见 [ADR-0099](0099-intent-driven-application-studio-beyond-palantir.md)。

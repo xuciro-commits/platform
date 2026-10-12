@@ -117,6 +117,18 @@ type PageInlineEdit struct {
 	Fields []string `json:"fields"`
 }
 
+// PageProcessFlow binds an ordered step collection and optional in-flight record progress to FlowSteps (ADR-0098 D4).
+type PageProcessFlow struct {
+	StepObject   string `json:"stepObject,omitempty"`
+	RoutingField string `json:"routingField,omitempty"`
+	VersionField string `json:"versionField,omitempty"`
+	StepField    string `json:"stepField,omitempty"`
+	OrderField   string `json:"orderField,omitempty"`
+	TitleField   string `json:"titleField,omitempty"`
+	LaneField    string `json:"laneField,omitempty"`
+	NotesField   string `json:"notesField,omitempty"`
+}
+
 type Section struct {
 	TablePresentation             *PageTablePresentation `json:"tablePresentation,omitempty"`
 	CollectionBuilder             *PageCollectionBuilder `json:"collectionBuilder,omitempty"`
@@ -210,6 +222,7 @@ type Section struct {
 	CountVariable                string                  `json:"countVariable,omitempty"`
 	MetricPresentation           *PageMetricPresentation `json:"metricPresentation,omitempty"`
 	StatusTracker                *PageStatusTracker      `json:"statusTracker,omitempty"`
+	ProcessFlow                  *PageProcessFlow        `json:"processFlow,omitempty"`
 	RecordLinks                  []PageRecordLink        `json:"recordLinks,omitempty"`
 	Buttons                      []PageButton            `json:"buttons,omitempty"`
 	RecordView                   *PageRecordView         `json:"recordView,omitempty"`

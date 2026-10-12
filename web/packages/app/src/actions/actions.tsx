@@ -169,11 +169,31 @@ function ElementPicker({ id, stereotype, value, onChange }: { id: string; stereo
   );
 }
 
+function buildFilterDomain(filters: Api.FieldFilter[] | undefined, values: Record<string, unknown>, record?: EntityRecord): unknown[] | undefined {
+  if (!filters?.length) return undefined;
+  const clauses: unknown[] = [];
+  for (const cond of filters) {
+    if (!["=", "!=", "<", "<=", ">", ">="].includes(cond.operator)) continue;
+    const fieldName = cond.field.replace(/^item\./, "");
+    if (fieldName.includes(".")) continue;
+    let want: unknown = cond.value;
+    if (cond.valueField) {
+      const refPath = cond.valueField.replace(/^record\./, "");
+      if (cond.valueField.startsWith("input.")) want = values[cond.valueField.slice("input.".length)];
+      else if (record && !refPath.includes(".")) want = record[refPath];
+      else continue;
+    }
+    if (want !== undefined && want !== null && want !== "") clauses.push([fieldName, cond.operator, want]);
+  }
+  return clauses.length ? clauses : undefined;
+}
+
 /** A list of the records of a type the member may read, for a payload field that names one (ADR-0028 D5). */
 function RecordPicker({ id, type, value, onChange, filter, values = {}, record }: { id: string; type: string; value: string; onChange: (id: string) => void; filter?: Api.FieldFilter[]; values?: Record<string, unknown>; record?: EntityRecord }) {
   const { source } = useHost();
+  const domain = buildFilterDomain(filter, values, record);
   const predicate = filter?.length ? (candidate: EntityRecord) => matchesFieldFilter(candidate, filter, values, record) : undefined;
-  return <RecordLookup id={id} source={source} type={type} value={value} onChange={(selected) => onChange(selected ?? "")} predicate={predicate} />;
+  return <RecordLookup id={id} source={source} type={type} value={value} onChange={(selected) => onChange(selected ?? "")} domain={domain} predicate={predicate} />;
 }
 
 /** A short ID prefix from a type's name, never its translated title: "crm.account" → ACC, "hcm.leave" → LEA. */

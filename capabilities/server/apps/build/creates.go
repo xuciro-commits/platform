@@ -181,7 +181,8 @@ func (b *Build) createBatch(c platform.Caller, o Object, a Action, cr Create, ru
 	if creators == nil {
 		creators = related.Standard.Roles
 	}
-	if !related.Standard.Create || !c.Holds(c.App, Builder) && !c.May(c.App, "create", creators).Allow {
+	parentAuthorized := len(a.Roles) > 0 && slices.ContainsFunc(a.Roles, func(role string) bool { return c.Holds(c.App, role) })
+	if !c.Replaying && !c.Automation && !c.Holds(c.App, Builder) && !parentAuthorized && (!related.Standard.Create || !c.May(c.App, "create", creators).Allow) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} may not create {object}", c.ID, cr.Object)
 	}
 	rec := reflect.ValueOf(record).Elem().Field(0).Interface().(platform.Record)
@@ -252,6 +253,11 @@ func (b *Build) createBatch(c platform.Caller, o Object, a Action, cr Create, ru
 				fv := v.FieldByIndex(f.Index)
 				if f.Required && fv.IsZero() {
 					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				}
+				if f.Type == "reference" && f.Name != cr.Via && f.Ref != "" && f.Ref != "enterprise.element" && !fv.IsZero() && !c.Replaying {
+					if _, exists := b.host.Record(f.Ref + "/" + fv.String()); !exists {
+						return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE}
+					}
 				}
 			}
 		}
@@ -333,10 +339,24 @@ func (b *Build) updateRelated(c platform.Caller, o Object, a Action, u UpdateEff
 		}
 	}
 	if u.To != "" && targetEntity.Lifecycle != nil {
+		curState := tv.FieldByName("State").String()
+		if curState == u.To && len(u.Sets) == 0 {
+			return nil, false, nil
+		}
 		tv.FieldByName("State").SetString(u.To)
 	}
 	if targetEntity.Compute != nil {
 		targetEntity.Compute(tv.Addr().Interface())
+	}
+	if targetEntity.Validate != nil {
+		if err := targetEntity.Validate(c, tv.Addr().Interface()); err != nil {
+			return nil, false, err
+		}
+	}
+	if targetEntity.ValidateAt != nil {
+		if err := targetEntity.ValidateAt(c, tv.Addr().Interface(), now); err != nil {
+			return nil, false, err
+		}
 	}
 	updated := tv.Interface()
 	if err := c.Check(updated); err != nil {

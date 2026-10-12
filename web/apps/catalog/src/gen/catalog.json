@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:46f306cb34d70d71",
+  "revision": "sha256:309ce09ce12d70a9",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -9092,6 +9092,13 @@
         {
           "name": "disabled",
           "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "domain",
+          "type": "unknown[]",
           "optional": true,
           "isCallback": false,
           "isSlot": false

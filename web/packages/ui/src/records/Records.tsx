@@ -772,13 +772,14 @@ function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
   return <FlowSteps nodes={nodes} edges={edges} height={150} label={t("Approvals")} storeKey={`approvals:${a.id}`} />;
 }
 
-/** Ordered step flow for a routing record (showing its operations across work-center lanes)
- * or an in-flight execution record (highlighting its current step, state and nonconformances). */
-function RecordStepFlow({ source, info, view }: { source: RecordSource; info: EntityInfo; view: RecordView }) {
+/** Declarative step flow for a record with an ordered step relation or a configured PageProcessFlow binding. */
+export function RecordStepFlow({ source, info, view, config }: { source: RecordSource; info: EntityInfo; view: RecordView; config?: Api.PageProcessFlow }) {
   const r = view.record;
-  const routingField = info.fields.find((f) => f.name === "routing" && f.type === "reference" && f.ref);
-  const opField = info.fields.find((f) => f.name === "operation");
-  const routingId = routingField ? String(r.routing ?? "") : "";
+  const routingFieldName = config?.routingField ?? info.fields.find((f) => f.type === "reference" && f.ref && source.entity(f.ref)?.fields.some((sf) => sf.name === "version"))?.name;
+  const routingField = routingFieldName ? info.fields.find((f) => f.name === routingFieldName && f.type === "reference" && f.ref) : undefined;
+  const stepFieldName = config?.stepField ?? info.fields.find((f) => f.type === "reference" && f.name !== routingFieldName && source.entity(f.ref ?? "")?.fields.some((sf) => sf.type === "integer"))?.name;
+  const opField = stepFieldName ? info.fields.find((f) => f.name === stepFieldName) : undefined;
+  const routingId = routingField ? String(r[routingField.name] ?? "") : "";
   const [routingView, setRoutingView] = useState<RecordView>();
   useEffect(() => {
     if (!routingField?.ref || !routingId) { setRoutingView(undefined); return; }
@@ -787,38 +788,51 @@ function RecordStepFlow({ source, info, view }: { source: RecordSource; info: En
     return () => { active = false; };
   }, [source, routingField?.ref, routingId]);
 
+  const orderField = config?.orderField ?? "number";
   const stepRel = (routingView ?? view).related?.find((rel) => {
+    if (config?.stepObject && rel.type !== config.stepObject) return false;
     const relInfo = source.entity(rel.type);
-    return relInfo?.fields.some((f) => f.name === "number" && (f.type === "integer" || f.type === "decimal"));
+    return relInfo?.fields.some((f) => f.name === orderField && (f.type === "integer" || f.type === "decimal"));
   });
   if (!stepRel || stepRel.records.length === 0) return null;
-  const steps = [...stepRel.records].sort((a, b) => Number(a.number ?? 0) - Number(b.number ?? 0));
-  const lanes = [...new Set(steps.map((s) => String(s.workcenter ?? s.workCenter ?? "")).filter(Boolean))].map((id) => ({ id, title: id }));
-  const currentOp = opField ? String(r.operation ?? "") : "";
-  const state = String(r.state ?? "");
-  const ended = !opField || state === "done" || state === "scrapped";
-  const curIdx = steps.findIndex((s) => s.id === currentOp || String(s.number ?? "") === currentOp);
-  const ncs = Array.isArray(r.ncs) ? (r.ncs as Record<string, unknown>[]) : [];
+  const relInfo = source.entity(stepRel.type);
+  const titleField = config?.titleField ?? relInfo?.display ?? "name";
+  const laneField = config?.laneField ?? relInfo?.fields.find((f) => f.type === "reference" && f.name !== routingField?.name)?.name ?? "";
+  const versionField = config?.versionField ?? "routingversion";
+  const pinnedVer = Number(r[versionField] ?? 0);
+  const filteredSteps = stepRel.records.filter((s) => !pinnedVer || !s.version || Number(s.version) === pinnedVer);
+  const steps = [...(filteredSteps.length ? filteredSteps : stepRel.records)].sort((a, b) => Number(a[orderField] ?? 0) - Number(b[orderField] ?? 0));
+  const lanes = laneField ? [...new Set(steps.map((s) => String(s[laneField] ?? "")).filter(Boolean))].map((id) => ({ id, title: id })) : [];
+  const currentOp = opField ? String(r[opField.name] ?? "") : "";
+  const stateField = info.lifecycle?.field ?? "state";
+  const state = String(r[stateField] ?? "");
+  const terminalTone = info.lifecycle?.states.find((s) => s.name === state)?.tone;
+  const succeeded = terminalTone === "success";
+  const ended = !opField || succeeded || terminalTone === "neutral";
+  const failedEnd = ended && !succeeded;
+  const curIdx = steps.findIndex((s) => s.id === currentOp || String(s[orderField] ?? "") === currentOp);
+  const notesField = config?.notesField ?? info.fields.find((f) => f.type === "lines")?.name ?? "";
+  const notes = notesField && Array.isArray(r[notesField]) ? (r[notesField] as Record<string, unknown>[]) : [];
   const nodes: FlowStepNode[] = steps.map((s, idx) => {
-    const num = String(s.number ?? s.id);
-    const name = String(s.name ?? s.title ?? s.id);
-    const wc = String(s.workcenter ?? s.workCenter ?? "");
-    const stepNcs = ncs.filter((n) => String(n.operation ?? "") === s.id || String(n.operation ?? "") === num).map((n) => String(n.code ?? "")).filter(Boolean);
+    const num = String(s[orderField] ?? s.id);
+    const name = String(s[titleField] ?? s.id);
+    const wc = laneField ? String(s[laneField] ?? "") : "";
+    const stepNotes = opField ? notes.filter((n) => String(n[opField.name] ?? "") === s.id || String(n[opField.name] ?? "") === num).map((n) => String(n.code ?? n.name ?? "")).filter(Boolean) : [];
     const here = !!opField && idx === curIdx && !ended;
-    const past = !!opField && (curIdx > idx || state === "done");
+    const past = !!opField && (curIdx > idx || succeeded);
     return {
       id: s.id, lane: wc || undefined, label: `${num} ${name}`, current: here, notation: "service-task",
-      detail: [wc, ...(here && state ? [state] : []), ...(stepNcs.length ? [`NC ${stepNcs.join(", ")}`] : [])].filter(Boolean).join(" · ") || undefined,
-      tone: here ? (state === "hold" ? "warning" : "info") : past ? "success" : state === "scrapped" && idx === curIdx ? "danger" : stepNcs.length ? "warning" : undefined,
+      detail: [wc, ...(here && state ? [state] : []), ...stepNotes].filter(Boolean).join(" · ") || undefined,
+      tone: here ? (terminalTone === "danger" ? "warning" : "info") : past ? "success" : failedEnd && idx === curIdx ? "danger" : stepNotes.length ? "warning" : undefined,
     };
   });
   nodes.push({
-    id: "end", label: state === "scrapped" ? "Scrapped" : t("Done"),
-    notation: state === "scrapped" ? "event-terminate" : "event-end",
-    tone: state === "done" ? "success" : state === "scrapped" ? "danger" : undefined,
+    id: "end", label: failedEnd ? state : t("Done"),
+    notation: failedEnd ? "event-terminate" : "event-end",
+    tone: succeeded ? "success" : failedEnd ? "danger" : undefined,
   });
   const edges: FlowStepEdge[] = steps.map((s, i) => ({ from: s.id, to: i + 1 < steps.length ? steps[i + 1]!.id : "end" }));
-  if (state === "scrapped" && curIdx >= 0) edges.push({ from: steps[curIdx]!.id, to: "end", tone: "danger", dashed: true });
+  if (failedEnd && curIdx >= 0) edges.push({ from: steps[curIdx]!.id, to: "end", tone: "danger", dashed: true });
   return (
     <section className="rounded-md border border-border bg-surface p-3">
       <FlowSteps nodes={nodes} edges={edges} lanes={lanes.length ? lanes : undefined} height={Math.max(180, lanes.length * 88)} label={t("Processes")} storeKey={`step-flow:${info.type}:${r.id}`} />

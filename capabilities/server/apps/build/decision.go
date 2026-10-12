@@ -194,7 +194,7 @@ func (b *Build) resolveCollectionMaps(c platform.Caller, o Object, a Action, col
 		if !known {
 			return nil, fmt.Errorf("collection object %s is not installed", trimmed)
 		}
-		return b.findWithOverlay(c, trimmed, entity, "", "", overlay)
+		return b.findWithOverlay(c, trimmed, entity, "", "", 0, overlay)
 	}
 
 	// 3. Path ending in an inverse relation or embedded lines field (e.g. "sfcs", "order.sfcs", "routing.operations", "input.product.routing.operations").
@@ -203,6 +203,10 @@ func (b *Build) resolveCollectionMaps(c platform.Caller, o Object, a Action, col
 	parentID := buildapi.ValueTextOf(ownMap["id"])
 	parentRecordMap := ownMap
 	relName := parts[len(parts)-1]
+	pinnedVersion := 0
+	if vNum, err := buildapi.ValueNumber(ownMap["routingversion"]); err == nil && vNum > 0 {
+		pinnedVersion = int(math.Round(vNum))
+	}
 
 	if len(parts) > 1 {
 		prefix := parts[:len(parts)-1]
@@ -224,6 +228,7 @@ func (b *Build) resolveCollectionMaps(c platform.Caller, o Object, a Action, col
 				if err != nil {
 					return nil, err
 				}
+				pinnedVersion = 0
 			} else {
 				val, refusal := resolveRecordPathValue(c, o, record, prefix, b.conditionLookup, now)
 				if refusal != nil {
@@ -240,6 +245,11 @@ func (b *Build) resolveCollectionMaps(c platform.Caller, o Object, a Action, col
 			if b != nil && b.host != nil && parentType != "" && parentID != "" {
 				if rec, ok := b.host.Record(parentType + "/" + parentID); ok {
 					parentRecordMap = recordMap(rec)
+					if pinnedVersion == 0 {
+						if vNum, err := buildapi.ValueNumber(parentRecordMap["version"]); err == nil && vNum > 0 {
+							pinnedVersion = int(math.Round(vNum))
+						}
+					}
 				}
 			}
 		}
@@ -266,7 +276,11 @@ func (b *Build) resolveCollectionMaps(c platform.Caller, o Object, a Action, col
 		}
 		for _, f := range info.Fields {
 			if f.Type == "reference" && f.Ref == parentType && (f.Inverse == relName || strings.TrimPrefix(typ, ID+".")+"s" == relName || strings.TrimPrefix(typ, ID+".") == relName || f.Name == relName) {
-				return b.findWithOverlay(c, typ, entity, f.Name, parentID, overlay)
+				ver := 0
+				if _, hasVer := info.Field("version"); hasVer && pinnedVersion > 0 {
+					ver = pinnedVersion
+				}
+				return b.findWithOverlay(c, typ, entity, f.Name, parentID, ver, overlay)
 			}
 		}
 	}
@@ -345,11 +359,23 @@ func extractLinesSlice(raw any) []map[string]any {
 	return out
 }
 
-func (b *Build) findWithOverlay(c platform.Caller, typ string, entity platform.Entity, viaField, parentID string, overlay []any) ([]map[string]any, error) {
+func (b *Build) findWithOverlay(c platform.Caller, typ string, entity platform.Entity, viaField, parentID string, pinnedVersion int, overlay []any) ([]map[string]any, error) {
 	var records []any
 	if c.Replaying || b.host != nil {
-		found, _, err := c.FindOf(reflect.TypeOf(entity.Model), platform.Query{Limit: 1000})
+		q := platform.Query{Limit: 1000}
+		if viaField != "" && parentID != "" {
+			var clauses [][]any
+			clauses = append(clauses, []any{viaField, "=", parentID})
+			if pinnedVersion > 0 {
+				clauses = append(clauses, []any{"version", "=", pinnedVersion})
+			}
+			q.Domain, _ = json.Marshal(clauses)
+		}
+		found, total, err := c.FindOf(reflect.TypeOf(entity.Model), q)
 		if err == nil {
+			if total > len(found) {
+				return nil, fmt.Errorf("collection %s exceeds bounded decision scan (%d records)", typ, total)
+			}
 			records = found
 		}
 	}
@@ -389,6 +415,11 @@ func (b *Build) findWithOverlay(c platform.Caller, typ string, entity platform.E
 		m := byID[id]
 		if viaField != "" && buildapi.ValueTextOf(m[viaField]) != parentID {
 			continue
+		}
+		if pinnedVersion > 0 {
+			if vNum, err := buildapi.ValueNumber(m["version"]); err == nil && vNum > 0 && int(math.Round(vNum)) != pinnedVersion {
+				continue
+			}
 		}
 		out = append(out, m)
 	}

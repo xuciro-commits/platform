@@ -1874,6 +1874,17 @@ export type PagePort = {
   required?: boolean;
 };
 
+export type PageProcessFlow = {
+  stepObject?: string;
+  routingField?: string;
+  versionField?: string;
+  stepField?: string;
+  orderField?: string;
+  titleField?: string;
+  laneField?: string;
+  notesField?: string;
+};
+
 export type PageQuery = {
   input?: string;
   direction?: string;
@@ -2698,6 +2709,7 @@ export type Section = {
   countVariable?: string;
   metricPresentation?: PageMetricPresentation;
   statusTracker?: PageStatusTracker;
+  processFlow?: PageProcessFlow;
   recordLinks?: PageRecordLink[];
   buttons?: PageButton[];
   recordView?: PageRecordView;
