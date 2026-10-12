@@ -64,7 +64,7 @@ func (ss *session) deadLetterAct(x *FlowInstance, token *Token, step *platform.S
 	if !step.NoRetry && token.Attempts+1 < limit {
 		return
 	}
-	key := fmt.Sprintf("flow:%s:%s:%d", x.ID, token.Step, x.Seq)
+	key := actionRequestKey(x, token.Step, step.Act.Action, target, payload)
 	batch := ""
 	if x.Batch != nil {
 		batch = x.Batch.Cursor

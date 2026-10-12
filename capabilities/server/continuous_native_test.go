@@ -1,8 +1,11 @@
 package platformserver
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -213,4 +216,181 @@ func TestContinuousNativeChainAssetsReplayResumeAndRetire(t *testing.T) {
 		t.Fatal("explicitly retired state was silently recreated")
 	}
 	CheckReplay(t, tn, entries, compose)
+}
+
+// TestJournalContinuousNativeChainRecoversAcceptedState runs the native
+// window/aggregate/threshold/action chain on the real PostgreSQL journal: a
+// restart reads back the accepted cursor, window state, read-only output and
+// versioned dead letter, a result whose response was lost after its commit
+// advances the accepted position exactly once, and no business action runs
+// twice (ADR-0047 §13.5; the same route in memory is
+// TestContinuousNativeChainAssetsReplayResumeAndRetire).
+func TestJournalContinuousNativeChainRecoversAcceptedState(t *testing.T) {
+	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
+	if dsn == "" {
+		t.Skip("PLATFORM_TEST_DATABASE not set")
+	}
+	ctx := context.Background()
+	journal, err := OpenJournal(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer journal.Close()
+	tenant, id := fmt.Sprintf("native-flow-journal-%d", time.Now().UnixNano()), "frames.window:source"
+	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, tenant)
+	files := &transientDeleteFiles{memoryFiles: &memoryFiles{}}
+	compose := func() *Tenant {
+		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newNativeFrameSource(tenant))
+		tn.Files = files
+		return tn
+	}
+	// What a deployed host wires (deploy_recovery.go): ordinary inputs and
+	// accepted results are durable before anything is answered.
+	attach := func(tn *Tenant) {
+		tn.Record = func(e Entry) {
+			if err := journal.Append(ctx, tenant, e); err != nil {
+				t.Fatalf("journal append: %v", err)
+			}
+		}
+		tn.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+			return journal.AppendAccepted(ctx, tenant, e, key, hash)
+		}
+	}
+	live := compose()
+	// Reading the tenant's entries seeds the journal's next position for it.
+	if _, err := journal.Entries(ctx, tenant, 0); err != nil {
+		t.Fatal(err)
+	}
+	attach(live)
+	at := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	for i := range 9 {
+		decide(t, live, "member", "frames", "frames.probe.create", "frames.probe", fmt.Sprint(i), map[string]any{"blocked": i == 7}, at)
+	}
+	decide(t, live, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
+	member := memberOf(t, live, "member")
+	batch := platform.FlowBatch{ID: "one"}
+	for i := range 8 {
+		batch.Signals = append(batch.Signals, platform.FlowSignal{Key: fmt.Sprint(i), Partition: fmt.Sprint(i), At: at.Add(-6 * time.Second), Value: platform.Raw(map[string]any{"probeId": fmt.Sprint(i), "reading": 12.5000001})})
+	}
+	if _, err := live.ConsumeFlowBatch(member, id, batch, at); err != nil {
+		t.Fatal(err)
+	}
+	if journal.Position(tenant) == 0 {
+		t.Fatal("the native chain committed no journal entries")
+	}
+
+	// Restart: the whole tenant comes back from the journal alone.
+	rebuild := func() *Tenant {
+		entries, err := journal.Entries(ctx, tenant, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		again := compose()
+		if err := again.Replay(entries); err != nil {
+			t.Fatalf("replay: %v", err)
+		}
+		return again
+	}
+	restarted := rebuild()
+	frame, refusal := restarted.ReadFlowFrame(memberOf(t, restarted, "member"), id, at)
+	if refusal != nil || frame.Cursor != "one" || frame.Consumed != 8 {
+		t.Fatalf("the accepted native frame did not recover: cursor=%q consumed=%d refusal=%v", frame.Cursor, frame.Consumed, refusal)
+	}
+	outputs, _, findErr := platform.Find[platform.FlowOutput](restarted.automation(flow.ID, false), platform.Query{})
+	if findErr != nil {
+		t.Fatalf("reading recovered outputs: %v (%T)", findErr, findErr)
+	}
+	if len(outputs) != 1 {
+		t.Fatalf("recovered %d read-only outputs, want 1", len(outputs))
+	}
+	if outputs[0].App != "frames" || outputs[0].Instance != id || outputs[0].Version != 1 || outputs[0].Batch != "one" || outputs[0].Name != "stats" {
+		t.Fatalf("the recovered read-only output is not the accepted one: %+v", outputs[0])
+	}
+	var stats []map[string]any
+	if json.Unmarshal(outputs[0].Value, &stats) != nil || len(stats) != 8 || stats[0]["mean"] != 12.5 {
+		t.Fatal("the recovered output lost its original kernel records")
+	}
+	letters, _, lettersErr := platform.Find[platform.FlowDeadLetterAsset](restarted.automation(flow.ID, false), platform.Query{})
+	if lettersErr != nil || len(letters) != 1 {
+		t.Fatalf("recovered %d dead letters (err=%v)", len(letters), lettersErr)
+	}
+	if letters[0].Target != "7" || letters[0].Action != "frames.probe.accept" || letters[0].Letter.Batch != "one" || letters[0].Version != 1 {
+		t.Fatalf("the recovered dead letter is not the rejected action: target=%q action=%q batch=%q version=%d", letters[0].Target, letters[0].Action, letters[0].Letter.Batch, letters[0].Version)
+	}
+	for i := range 8 {
+		probe, _ := platform.Get[nativeProbeRecord](restarted.automation("frames", false), fmt.Sprint(i))
+		if want := 1; i == 7 && probe.Applied != 0 || i != 7 && (probe.Applied != want || probe.Reading != 12.5) {
+			t.Fatalf("replay re-ran or lost the action of probe %d: %+v", i, probe)
+		}
+	}
+
+	// The recovered process writes ordinary accepted results again. The
+	// versioned dead letter replays on the same durable position first, so its
+	// accepted action is already durable when the next process takes over.
+	restarted.Record = func(e Entry) {
+		if err := journal.Append(ctx, tenant, e); err != nil {
+			t.Fatalf("journal append: %v", err)
+		}
+	}
+	restarted.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+		return journal.AppendAccepted(ctx, tenant, e, key, hash)
+	}
+	decide(t, restarted, "member", "frames", "frames.probe.unblock", "frames.probe", "7", map[string]any{}, at.Add(2*time.Second))
+	decide(t, restarted, "member", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", letters[0].ID, map[string]any{}, at.Add(2*time.Second))
+	if probe, _ := platform.Get[nativeProbeRecord](restarted.automation("frames", false), "7"); probe.Applied != 1 || probe.Reading != 12.5 {
+		t.Fatalf("dead-letter replay did not submit the original rejected action: %+v", probe)
+	}
+	if got := refuse(t, restarted, "member", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", letters[0].ID, map[string]any{}, at.Add(2*time.Second)); got == "ok" {
+		t.Fatal("a new replay command delivered the same dead letter twice")
+	}
+
+	// The next batch commits its accepted position and the host then stops
+	// before applying it. deploy_recovery.go stops the process outright, so
+	// nothing unwinds and the committed bytes stay exactly as written.
+	crashed := make(chan struct{})
+	restarted.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+		raw, err := journal.AppendAccepted(ctx, tenant, e, key, hash)
+		if err != nil || e.App != flow.ID || !bytes.Contains(e.Body, []byte(`"cursor":"two"`)) {
+			return raw, err
+		}
+		close(crashed)
+		select {} // the dead process never returns, so no deferred cleanup runs
+	}
+	// The new probe crosses the high mark for the first time, and the watermark
+	// slide advanced past the first batch's emission.
+	second := platform.FlowBatch{ID: "two", Predecessor: "one", Signals: []platform.FlowSignal{{Key: "eight", Partition: "eight", At: at.Add(-4 * time.Second), Value: platform.Raw(map[string]any{"probeId": "8", "reading": 13.75})}}}
+	crashMember := memberOf(t, restarted, "member")
+	go func() {
+		_, _ = restarted.ConsumeFlowBatch(crashMember, id, second, at.Add(7*time.Second))
+	}()
+	select {
+	case <-crashed:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the second batch never accepted its position")
+	}
+	continued := rebuild()
+	continued.Record = func(e Entry) {
+		if err := journal.Append(ctx, tenant, e); err != nil {
+			t.Fatalf("journal append: %v", err)
+		}
+	}
+	continued.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+		return journal.AppendAccepted(ctx, tenant, e, key, hash)
+	}
+	frame, refusal = continued.ReadFlowFrame(memberOf(t, continued, "member"), id, at)
+	if refusal != nil || frame.Cursor != "two" || frame.Predecessor != "one" || frame.Consumed != 9 || frame.CheckpointArtifact == nil {
+		t.Fatalf("the lost response did not leave exactly one accepted position with its checkpoint: frame=%+v refusal=%v", frame, refusal.Message)
+	}
+	probe, _ := platform.Get[nativeProbeRecord](continued.automation("frames", false), "8")
+	if probe.Applied != 1 || probe.Reading != 13.75 {
+		t.Fatalf("the committed result was not applied exactly once after the restart: %+v", probe)
+	}
+	if probe, _ := platform.Get[nativeProbeRecord](continued.automation("frames", false), "7"); probe.Applied != 1 || probe.Reading != 12.5 {
+		t.Fatalf("the recovered process delivered the replayed dead letter again: %+v", probe)
+	}
+	entries, err := journal.Entries(ctx, tenant, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	CheckReplay(t, continued, entries, compose)
 }

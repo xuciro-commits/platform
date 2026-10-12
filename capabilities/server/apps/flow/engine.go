@@ -2,6 +2,7 @@ package flow
 
 import (
 	"cmp"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -478,7 +479,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		if step.Act.AsMember {
 			member = x.OnBehalf
 		}
-		ref, err := ss.act(d.app, step.Act.Protocol, step.Act.Action, target, payload, fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq), member)
+		ref, err := ss.act(d.app, step.Act.Protocol, step.Act.Action, target, payload, actionRequestKey(x, tok.Step, step.Act.Action, target, payload), member)
 		if err != nil {
 			ss.deadLetterAct(x, tok, step, target, payload, err.Error())
 			ss.failed(x, token, step, err.Error())
@@ -630,6 +631,16 @@ func payloadOf(build func(platform.Caller, *platform.Run) any, c platform.Caller
 }
 
 // act submits an action as the app: its own, or a protocol's through the host.
+// actionRequestKey names one logical action request. The attempt, its retry and
+// the dead letter captured for it agree, while a different action at the same
+// sequence keeps its own key: a refused attempt does not consume a sequence
+// number, so "flow:<instance>:<step>:<seq>" alone would let the next attempt
+// take the captured key (ADR-0097 §7).
+func actionRequestKey(x *FlowInstance, step, action, target string, payload json.RawMessage) string {
+	sum := sha256.Sum256([]byte(action + "\x00" + target + "\x00" + string(payload)))
+	return fmt.Sprintf("flow:%s:%s:%d:%x", x.ID, step, x.Seq, sum[:6])
+}
+
 func (ss *session) act(appID, protocol, action, target string, payload json.RawMessage, key string, onBehalf ...string) (*pb.EntityRef, *kernel.Error) {
 	h := ss.f.host
 	c := h.Automation(ss.c, appID)
