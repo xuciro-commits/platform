@@ -43,6 +43,17 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await expect(page.getByRole("tab", { name: "Navigation", exact: true })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Toggle dock", exact: true }).click();
   await expect(page.getByRole("button", { name: "The group “Empty receiving group” holds no page. Put a page under it or remove the group.", exact: true })).toBeVisible();
+  // The dock's own strip moves with the keyboard, keeps the open panel on a
+  // repeat click, and collapses and restores from its handle.
+  const dockStrip = page.getByRole("tablist", { name: "Module dock", exact: true });
+  const dockPanel = page.locator(`[id="${await dockStrip.getByRole("tab").first().getAttribute("aria-controls")}"]`);
+  await expect(dockPanel).toBeVisible();
+  await dockStrip.getByRole("tab").first().click();
+  await expect(dockPanel).toBeVisible();
+  await page.getByRole("button", { name: "Hide dock", exact: true }).click();
+  await expect(dockPanel).toHaveCount(0);
+  await page.getByRole("button", { name: "Show dock", exact: true }).click();
+  await expect(dockPanel).toBeVisible();
   await expect(page.getByRole("button", { name: `The page “${pageName}” is under two groups: “Receiving” and “Receiving”.`, exact: true })).toBeVisible();
   for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Remove group", exact: true }).first().click();
   await expect.poll(async () => (await (await request.get(`/v1/records/build.app/${appID}`, { headers: { Authorization: "Bearer manager" } })).json()).record.groups ?? []).toEqual([]);

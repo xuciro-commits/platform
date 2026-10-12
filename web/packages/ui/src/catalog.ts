@@ -193,7 +193,7 @@ export const entries: CatalogEntry[] = [
 /** Public nonvisual API, classified explicitly rather than pretending to be UI. */
 export const api = [
   "iconGlyphs", "iconGroups",
-  "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
+  "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "tabTarget", "tabStripKeyDown", "tabStop", "defineStatuses", "submissionStatuses", "parseInline",
   "useDraftInput", "useInputBuffers", "useInputDrafts", "defineEntity", "columnsFor", "recordSchema", "inputIssues", "activeValues", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useViewTitle", "useUnsavedChanges", "notify",
   "routeKey", "routeToHash", "routeFromHash", "layeredLayout", "laneBands", "relationLayout", "relationLayouts", "neighborhoodPositions", "relationNodeSize",
   "arrangeFlow", "useFlowArrangement", "useCanvasLayout",

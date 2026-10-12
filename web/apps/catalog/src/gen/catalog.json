@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:1460e5bc38c793a6",
+  "revision": "sha256:5a1c76510b3bdf7b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -13313,6 +13313,9 @@
         "setLanguage",
         "submissionStatuses",
         "t",
+        "tabStop",
+        "tabStripKeyDown",
+        "tabTarget",
         "useCanvasLayout",
         "useChartData",
         "useDraftInput",
