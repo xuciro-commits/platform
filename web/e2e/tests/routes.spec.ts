@@ -95,7 +95,7 @@ test("route 17: every action has an entry, pages follow changes", async ({ brows
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await inspector.getByRole("combobox", { name: "Reference object", exact: true }).selectOption("crm.account");
   await page.getByRole("button", { name: "First night", exact: true }).click();
-  await expect(inspector.getByRole("combobox", { name: "Date range end", exact: true })).toHaveValue("depart");
+  await expect(inspector.getByRole("combobox", { name: /^Date range end/ })).toHaveValue("depart");
   await page.getByRole("button", { name: /^First night \*/ }).click();
   const previewRange = page.getByRole("group", { name: "Choose a date range", exact: true });
   await previewRange.getByRole("textbox", { name: "First night", exact: true }).fill("2030-01-30");

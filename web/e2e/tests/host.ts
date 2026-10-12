@@ -25,6 +25,13 @@ export async function decide(request: APIRequestContext, token: string, app: str
 export async function open(page: Page, token: string, route: string) {
   await page.addInitScript((t) => sessionStorage.setItem("workspace:identity", t), token);
   await page.goto(`/#${route}`);
+  // A hash-only navigation keeps the previous document, so the previous member
+  // and its applications: load once more before a route of another application
+  // is resolved against them.
+  if (await page.evaluate(() => sessionStorage.getItem("workspace:identity")) !== token) {
+    await page.evaluate((t) => sessionStorage.setItem("workspace:identity", t), token);
+    await page.reload();
+  }
 }
 
 /** Task surfaces share the shell and leave existing editor tabs mounted. */
