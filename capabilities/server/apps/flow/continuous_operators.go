@@ -153,8 +153,10 @@ func checkOperators(declared platform.Continuous) error {
 func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batchID string, now time.Time) (stats []AggregateRecord, alerts []Alert, refusal *kernel.Error) {
 	// Empty, never nil: a batch that produced no records says so, and the
 	// accepted result replaces the previous batch's operator outputs instead
-	// of leaving stale ones in place.
+	// of leaving stale ones in place. Application output assets, in contrast,
+	// are replaced only by an emitted window, not an intake-only batch.
 	stats, alerts = []AggregateRecord{}, []Alert{}
+	frame.Workers = 0
 	if err := checkOperators(declared); err != nil {
 		return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}

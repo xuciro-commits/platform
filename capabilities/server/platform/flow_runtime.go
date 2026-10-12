@@ -229,11 +229,15 @@ type FlowWindowInput struct {
 	Outputs     map[string]json.RawMessage `json:"outputs"` // the previous accepted Flow outputs, for stateful Compute steps
 }
 
+// FlowBatchStateReference identifies exact bytes in the member-authorized
+// frame. Output selects OperatorOutputs instead of State; absent/false retains
+// the historical state-reference shape. It never grants file access.
 type FlowBatchStateReference struct {
 	Instance string `json:"instance"`
 	Node     string `json:"node"`
 	Digest   string `json:"digest"`
 	Size     int    `json:"size"`
+	Output   bool   `json:"output,omitempty"`
 }
 
 // UnmarshalJSON maps old durable token positions into the same current

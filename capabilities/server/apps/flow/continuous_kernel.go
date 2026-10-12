@@ -18,6 +18,22 @@ import (
 //go:embed kernel/telemetry_stats.wasm
 var telemetryStatsKernel []byte
 
+// Compile the one fixed kernel during serialized package initialization. The
+// vendored compiler lazily caches its version without synchronization; allowing
+// the first eight runtimes to initialize it concurrently races. This also avoids
+// recompiling identical trusted bytes for every partition. Only immutable code
+// is shared: every worker below still owns a runtime, instance and memory.
+var telemetryRuntimeConfig = func() wazero.RuntimeConfig {
+	config := wazero.NewRuntimeConfig().WithMemoryLimitPages(128).WithCloseOnContextDone(true).WithCompilationCache(wazero.NewCompilationCache())
+	ctx := context.Background()
+	runtime := wazero.NewRuntimeWithConfig(ctx, config)
+	defer runtime.Close(ctx)
+	if _, err := runtime.CompileModule(ctx, telemetryStatsKernel); err != nil {
+		panic(fmt.Sprintf("fixed telemetry kernel cannot be compiled: %v", err))
+	}
+	return config
+}()
+
 // windowF32Stats runs only on the outside preparation lane. Each worker owns
 // its bounded memory; cancellation/timeout closes the module. Errors refuse
 // the whole prepared batch rather than switching to a different numeric rule.
@@ -27,7 +43,7 @@ func windowF32Stats(values []float64, threshold float64) (map[string]float64, er
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().WithMemoryLimitPages(128).WithCloseOnContextDone(true))
+	runtime := wazero.NewRuntimeWithConfig(ctx, telemetryRuntimeConfig)
 	defer runtime.Close(ctx)
 	module, err := runtime.Instantiate(ctx, telemetryStatsKernel)
 	if err != nil {
