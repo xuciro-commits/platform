@@ -194,6 +194,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.Widget == "status-tracker" || s.StatusTracker != nil {
 				return fmt.Errorf("status tracker requires a document")
 			}
+			if s.Widget == "process-flow" || s.ProcessFlow != nil {
+				return fmt.Errorf("process flow requires a document")
+			}
 			if s.Widget == "record-links" || len(s.RecordLinks) > 0 {
 				return fmt.Errorf("record links require a document")
 			}
@@ -416,6 +419,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkStatusTracker(section); err != nil {
+			return err
+		}
+		if err := d.checkProcessFlow(section); err != nil {
 			return err
 		}
 		if err := d.checkRecordLinks(section); err != nil {

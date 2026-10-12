@@ -60,6 +60,7 @@ const HeadingInspector=lazyInspector(()=>import("./TitleInspectors").then(module
 const CollectionTitleInspector=lazyInspector(()=>import("./TitleInspectors").then(module=>module.CollectionTitleInspector));
 const MetricInspector=lazyInspector(()=>import("./MetricInspector").then(module=>module.MetricInspector));
 const StatusTrackerInspector=lazyInspector(()=>import("./StatusTrackerInspector").then(module=>module.StatusTrackerInspector));
+const ProcessFlowInspector=lazyInspector(()=>import("./ProcessFlowInspector").then(module=>module.ProcessFlowInspector));
 const RecordLinksInspector=lazyInspector(()=>import("./RecordLinksInspector").then(module=>module.RecordLinksInspector));
 const FilterInspector=lazyInspector(()=>import("./FilterInspector").then(module=>module.FilterInspector));
 const ButtonGroupInspector=lazyInspector(()=>import("./ButtonGroupInspector").then(module=>module.ButtonGroupInspector));
@@ -139,6 +140,7 @@ const inspectors = createWidgetDefinitions({
  "collection-title":{configVersion:1,bindings:CollectionTitleInspector},
  metric:{configVersion:1,bindings:MetricInspector},
  "status-tracker":{configVersion:1,bindings:StatusTrackerInspector},
+ "process-flow":{configVersion:1,bindings:ProcessFlowInspector},
  "record-links":{configVersion:1,bindings:RecordLinksInspector},
  "button-group":{configVersion:1,events:ButtonGroupInspector},
  "record-view":{configVersion:1,bindings:RecordViewInspector},

@@ -61,7 +61,7 @@ func TestBuilderMESEquivalence(t *testing.T) {
 	}, now)
 
 	rtType := publishObject(t, tn, "builder", "OBJ-RT", map[string]any{
-		"name": "routing", "title": "Routing", "access": allAccess,
+		"name": "routing", "title": "Routing", "access": allAccess, "versionField": "version",
 		"fields": []map[string]any{
 			{"name": "name", "title": "Name", "type": "text", "required": true, "search": true},
 			{"name": "version", "title": "Version", "type": "integer", "required": true},
@@ -71,7 +71,7 @@ func TestBuilderMESEquivalence(t *testing.T) {
 	opType := publishObject(t, tn, "builder", "OBJ-OP", map[string]any{
 		"name": "operation", "title": "Operation", "access": allAccess,
 		"fields": []map[string]any{
-			{"name": "routing", "title": "Routing", "type": "reference", "ref": rtType, "inverse": "operations", "required": true},
+			{"name": "routing", "title": "Routing", "type": "reference", "ref": rtType, "inverse": "operations", "required": true, "pins": "version"},
 			{"name": "version", "title": "Routing version", "type": "integer"},
 			{"name": "number", "title": "Number", "type": "integer", "required": true},
 			{"name": "name", "title": "Name", "type": "text", "required": true, "search": true},
@@ -114,7 +114,7 @@ func TestBuilderMESEquivalence(t *testing.T) {
 		},
 		"fields": []map[string]any{
 			{"name": "product", "title": "Product", "type": "reference", "ref": prodType, "required": true},
-			{"name": "routing", "title": "Routing", "type": "reference", "ref": rtType},
+			{"name": "routing", "title": "Routing", "type": "reference", "ref": rtType, "pins": "routingversion"},
 			{"name": "routingversion", "title": "Routing version", "type": "integer"},
 			{"name": "quantity", "title": "Quantity", "type": "integer", "required": true},
 			{"name": "planned", "title": "Planned order", "type": "reference", "ref": planType},
@@ -141,7 +141,7 @@ func TestBuilderMESEquivalence(t *testing.T) {
 		"fields": []map[string]any{
 			{"name": "order", "title": "Order", "type": "reference", "ref": orderType, "inverse": "sfcs", "required": true},
 			{"name": "product", "title": "Product", "type": "reference", "ref": prodType, "required": true},
-			{"name": "routing", "title": "Routing", "type": "reference", "ref": rtType, "required": true},
+			{"name": "routing", "title": "Routing", "type": "reference", "ref": rtType, "required": true, "pins": "routingversion"},
 			{"name": "routingversion", "title": "Routing version", "type": "integer", "required": true},
 			{"name": "operation", "title": "Operation", "type": "reference", "ref": opType, "required": true},
 			{"name": "quantity", "title": "Quantity", "type": "integer", "required": true},
@@ -307,15 +307,53 @@ func TestBuilderMESEquivalence(t *testing.T) {
 					},
 				},
 			},
+			{
+				"name": "complete", "title": "Complete shop order", "from": []string{"released"}, "to": "completed", "roles": []string{"supervisor"},
+				"conditions": []map[string]any{
+					{"quantifier": "all", "collection": "sfcs", "where": []map[string]any{{"field": "state", "operator": "in", "value": "done,scrapped"}}, "message": "Every SFC is done or scrapped"},
+				},
+				"sets": []map[string]any{
+					{"field": "yield", "from": "rollup:sum(sfcs.quantity?state=done)"},
+					{"field": "scrap", "from": "rollup:sum(sfcs.quantity?state=scrapped)"},
+				},
+			},
 		},
 	}, now)
 	decide(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "OBJ-ORDER", map[string]any{}, now)
 
+	// The shop-floor console (ADR-0099 G2): a page declared over the SFC object whose
+	// process flow binds the routing, pinned version, current step, step order and
+	// step version by name, with the record's detail beside it and the operator's
+	// actions. Publishing it runs the page's own checks against the installed objects.
+	decide(t, tn, "builder", build.ID, build.PageType+".create", build.PageType, "PAGE-CONSOLE", map[string]any{
+		"name": "sfcconsole", "title": "Batch console", "object": sfcType,
+		"list": []string{"order", "operation", "state", "quantity"}, "detail": []string{"order", "product", "routing", "routingversion", "operation", "quantity", "resource", "state"},
+		"actions": []string{sfcType + ".start", sfcType + ".complete", sfcType + ".nc", sfcType + ".sign"},
+		"sections": []map[string]any{
+			{"id": "flow", "widget": "process-flow", "configVersion": 1, "recordVariable": "record", "processFlow": map[string]any{
+				"stepObject": opType, "routingField": "routing", "versionField": "routingversion", "stepVersionField": "version",
+				"stepField": "operation", "orderField": "number", "titleField": "name", "laneField": "workcenter", "notesField": "ncs"}},
+			{"id": "detail", "widget": "detail", "configVersion": 1, "recordVariable": "record", "fields": []string{"order", "product", "routing", "routingversion", "operation", "quantity", "resource", "state"}},
+		},
+		"document": map[string]any{
+			"formatVersion": 2, "uiProfile": "platform.page.v2.110", "root": "root",
+			"nodes": map[string]any{
+				"root":   map[string]any{"kind": "rows", "children": []string{"flow", "detail"}},
+				"flow":   map[string]any{"kind": "widget", "section": "flow"},
+				"detail": map[string]any{"kind": "widget", "section": "detail"},
+			},
+			"variables": map[string]any{"record": map[string]any{"scope": "page", "type": "record", "mode": "input"}},
+			"interface": map[string]any{"version": 1, "inputs": map[string]any{
+				"record": map[string]any{"variable": "record", "type": "record", "object": map[string]any{"app": build.ID, "kind": "object", "name": sfcType}, "required": true}}},
+		},
+	}, now)
+	decide(t, tn, "builder", build.ID, build.SchemaRelease, build.PageType, "PAGE-CONSOLE", map[string]any{}, now)
+
 	// Publish application with `opens` mapping for custom record view routing (ADR-0098 D5).
 	decide(t, tn, "builder", build.ID, "build.app.create", build.AppType, "APP-MES", map[string]any{
 		"name": "mesapp", "title": "Zero-Code MES", "icon": "factory",
-		"pages": []string{"order", "sfc"},
-		"opens": map[string]string{sfcType: "sfc", orderType: "order"},
+		"pages": []string{"order", "sfcconsole"},
+		"opens": map[string]string{sfcType: "sfcconsole", orderType: "order"},
 	}, now)
 	decide(t, tn, "builder", build.ID, "build.app.publish", build.AppType, "APP-MES", map[string]any{}, now)
 

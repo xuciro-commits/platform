@@ -122,11 +122,14 @@ type PageProcessFlow struct {
 	StepObject   string `json:"stepObject,omitempty"`
 	RoutingField string `json:"routingField,omitempty"`
 	VersionField string `json:"versionField,omitempty"`
-	StepField    string `json:"stepField,omitempty"`
-	OrderField   string `json:"orderField,omitempty"`
-	TitleField   string `json:"titleField,omitempty"`
-	LaneField    string `json:"laneField,omitempty"`
-	NotesField   string `json:"notesField,omitempty"`
+	// StepVersionField is the integer field of a step that holds the routing
+	// version it belongs to; only the steps of the record's pinned version show.
+	StepVersionField string `json:"stepVersionField,omitempty"`
+	StepField        string `json:"stepField,omitempty"`
+	OrderField       string `json:"orderField,omitempty"`
+	TitleField       string `json:"titleField,omitempty"`
+	LaneField        string `json:"laneField,omitempty"`
+	NotesField       string `json:"notesField,omitempty"`
 }
 
 type Section struct {

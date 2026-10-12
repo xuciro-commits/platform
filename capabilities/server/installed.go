@@ -713,6 +713,10 @@ func (t *Tenant) checkWidget(p platform.Page, s platform.Section, info platform.
 		if err := s.CheckStatusTracker(info); err != nil {
 			return err
 		}
+	case "process-flow":
+		if err := s.CheckProcessFlow(info, t.entity); err != nil {
+			return err
+		}
 	case "record-links":
 		if p.Document == nil {
 			return fmt.Errorf("record links require a document")

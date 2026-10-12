@@ -107,6 +107,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
           <td className="px-2 py-1.5">{f.title || f.name}</td><td className="px-2 py-1.5 font-mono text-xs">{f.name}</td><td className="px-2 py-1.5">{t(f.type)}{f.type === "reference" && f.ref ? ` → ${f.ref}` : ""}</td><td className="px-2 py-1.5">{f.required ? "✓" : ""}</td><td className="px-2 py-1.5 text-xs text-muted">{f.property ? assetBindingKey(f.property) : ""}</td>
         </tr>)}</tbody></table>
       {!process.fields.length && <p className="text-sm text-muted">{t("No properties yet. Add one to describe the record.")}</p>}
+      {process.fields.some((f) => f.type === "integer") && <Label text={t("Version field")}><Select value={process.versionField ?? ""} onChange={(e) => change({ ...process, versionField: e.target.value || undefined })}><option value="">{t("Not versioned")}</option>{process.fields.filter((f) => f.type === "integer").map((f) => <option key={f.name} value={f.name}>{f.title || f.name}</option>)}</Select></Label>}
       {process.fields.some((f) => f.type === "text") && <NumberingFields process={process} onChange={(numbering) => change({ ...process, numbering })} />}
     </div>,
     links: <div className="grid content-start gap-4 p-4">
@@ -259,6 +260,7 @@ function FieldProperties({ field, others, onChange, onRemove }: { field: Field; 
     </div>}
     {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect label={t("Reference object")} value={field.ref} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined })} /></Label>}
     {field.type === "reference" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
+    {field.type === "reference" && <Label text={t("Pinned version field")}><Input className="font-mono" placeholder="routingversion" value={field.pins ?? ""} onChange={(e) => onChange({ pins: e.target.value || undefined })} /><span className="text-xs text-muted">{t("Records refer to the version of the referenced record held in this integer field.")}</span></Label>}
     {(field.type === "integer" || field.type === "decimal") && <Label text={t("Computed by formula")}><Input className="font-mono" placeholder="price * qty" value={field.formula ?? ""} onChange={(e) => onChange({ formula: e.target.value || undefined })} /></Label>}
     {field.formula && <p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>

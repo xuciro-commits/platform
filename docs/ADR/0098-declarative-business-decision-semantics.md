@@ -248,30 +248,35 @@ flowchart TB
 
 ## 5. As built 与三层工程收口门槛（2026-10-12）
 
-“能够用 Builder 定义出一个会拆批、会过站、会返工的 MES 样例”与“客户能够安全、独立、长期维护一套完整 MES”之间隔着严格的工程边界。当前代码已贯通主干能力与第一批正确性守卫，后续必须完整通过以下**三层工程门槛**方可进入生产场景：
+“能够用 Builder 定义出一个会拆批、会过站、会返工的 MES 样例”与“客户能够安全、独立、长期维护一套完整 MES”之间的差距，按三层门槛收口。下列条目记录代码中已经成立的事实；未完成的只列在“仍待收口”里。
 
 ### 第一层门槛：业务决定正确性（Business Decision Correctness）
-1. **集合查询完整性与下推（已加固首版，持续核验）**：
-   - `findWithOverlay` 已将关联外键过滤（`viaField = parentID`）与固定版本（`version = pinnedVersion`）下推至 `Query.Domain`，并在 `total > len(found)`（超出 1000 条有界决策扫描上限）时显式报错拒绝，防止 `none` / `all` 量词在截断窗口上静默给出假阳性。
-   - **待继续收口**：将 `Quantifier` 子条件 `Where` 中的更多标量等值/范围谓词完整编译下推为底层存储查询，并为高基数唯一性约束提供声明式唯一索引保证。
-2. **父对象不变量与权限校验（已加固首版，持续核验）**：
-   - `updateRelated` 在更新关联父/目标记录时已执行目标实体的 `Compute`、`Validate`、`ValidateAt` 与 `c.Check`，并在目标已处于 `u.To` 且无附加字段更新时保持幂等；`createBatch` 在 `a.New` 阶段已校验非 `Via` 引用字段的存在性。
-   - **待继续收口**：关联父记录状态跃迁（`u.To`）须完整对齐目标对象自身生命周期声明的合法起始状态（`From`）与字段级写权限边界。
-3. **原子变更封存与确定性重放（已加固）**：
-   - `takeWithEffects` 在 `Do` 阶段一次性计算并封存全部 `Creates`、`Updates` 与 `Posts` 记录切片，交由 `After`（`stored`）直接落盘，消除 `Do` 与 `After` 二次求值可能产生的状态漂移或静默忽略错误。
-4. **默认创建绕过防护（已加固）**：
-   - `access(o Object)` 在对象声明了受控创建动作（`a.New == true`，如 `order.release`）时，自动将默认生成的裸 `build.<obj>.create` 收窄至仅 `builder` 可调用；业务角色（如 `supervisor`、`operator`）调用裸 `order.create` 或 `sfc.create` 均被 `POLICY_DENIED` 拒绝，必须经受控业务动作入账。
-5. **工艺与主数据历史版本冻结（已加固首版，持续核验）**：
-   - 当在途记录持有 `routingversion` 且步骤对象声明 `version` 字段时，`resolveCollectionMaps` 自动按在途记录固定的版本号过滤步骤集合（`TestBuilderMESEquivalence` 已验证在途 `SO-1` 下达后将 `RT-100` 升至 v2 并插入新工序 `OP-15-V2`，在途批次仍严格按 v1 工序流转）。
-   - **待继续收口**：将主数据版本快照从约定字段提升为平台一等的不可变版本化主数据引用契约。
+1. **集合查询完整性与下推（已完成）**：
+   - `findWithOverlay` 将关联外键（`viaField = parentID`）、固定版本（`pinField = pinned`）与 `none`/`any`/`count` 的 `where` 中可精确判定的文本、选择、引用等值条件下推至 `Query.Domain`；`all` 不下推 `where`，始终在全集合上判断。下推只缩小存储查询，逐项在内存中复核，并把 overlay 中本次决定产生的记录原样并入。
+   - 存储返回的 `total` 超过已取回条数（超出 1000 条有界决策扫描）时显式拒绝，不做静默截断。
+2. **父对象不变量与字段写权限（已完成）**：
+   - `updateRelated` 仅能让目标记录沿目标对象自身声明的动作迁移：当前状态须在某个非审批、非创建动作的 `From` 中，且 `u.To` 为其 `To`、分支或输入选项之一；该动作的条件须在目标记录上成立，否则拒绝并给出条件消息。
+   - 关联写入的每个字段都要求调用者持有该字段的写权限（复制、回放、自动化与构建者除外），关联更新不能成为越权通道。
+   - 关联更新由父动作授权，目标动作的角色不作为授权依据；例如订单的 `complete` 动作由 SFC 完工的父动作触发。
+3. **原子变更封存与确定性重放（已完成）**：`takeWithEffects` 在 `Do` 阶段一次性计算并封存全部 `Creates`、`Updates` 与 `Posts` 记录切片，交由 `After`（`stored`）原样落盘，`Do` 与 `After` 不会二次求值。
+4. **默认创建绕过防护（已完成）**：对象声明了受控创建动作（`new`）后，默认生成的裸 `build.<obj>.create` 仅 `builder` 可调用，业务角色即使持有对象的创建权限也会被 `POLICY_DENIED` 拒绝。
+5. **工艺与主数据历史版本冻结（已完成）**：版本由声明而非约定字段名决定。对象声明 `versionField`（如工艺路线的 `version`），引用字段声明 `pins`（如在途订单的 `routing` 固定在 `routingversion`）；在途记录读取步骤时按其固定版本过滤，工艺路线升版后不影响在途批次。`TestBuilderMESEquivalence` 验证 SO-1 在 RT-100 升至 v2 后仍只走 v1 工序。
 
 ### 第二层门槛：全栈真声明式配置（True Full-Stack Declarative Configuration）
-1. **动态查询与表单联动的共享查询机制**：
-   - `RecordLookup` 与 `RecordPicker` 已支持将 `Input.Filter` 的标量条件编译为服务端 `domain` 查询参数下推至 `source.list`，同时保留集合包含等谓词校验。
-   - **待继续收口**：将跨多跳引用路径的动态候选过滤统一接入服务端参数化查询/能力路由，确保任意分页深度下的候选总数与搜索结果完全由服务端权威给出。
-2. **可声明绑定的 `ProcessFlow` 组件与 Workshop 操作台装配**：
-   - `platform.Section` 已新增 `PageProcessFlow`（显式声明 `stepObject`、`routingField`、`versionField`、`stepField`、`orderField`、`titleField`、`laneField`、`notesField`），`RecordStepFlow` 支持按声明配置渲染泳道流转图。
-   - **待继续收口**：在 Workshop 页面编辑器中完成 `ProcessFlow` 独立 Widget 插件、检查器面板、跨引用表格列与完整 MES 操作台页面的实际装配与候选发布验证，彻底移除通用记录页上的隐式字段名推导。
+1. **动态查询与表单联动（部分完成）**：
+   - `RecordLookup` 与 `RecordPicker` 将 `Input.Filter` 中的单跳标量条件编译为服务端 `domain` 下推至 `source.list`，客户端再逐条复核。
+   - **仍待收口**：跨多跳引用路径（`input.<ref>.<path>`）的候选过滤尚未进入服务端参数化查询，目前只在客户端校验。
+2. **可声明绑定的 `process-flow` Widget（已完成）**：
+   - 新增页面组件 `process-flow`（UI 档位 `platform.page.v2.110`），绑定全部由页面声明：`stepObject`、`routingField`、`versionField`（记录固定的版本）、`stepVersionField`（工序所属版本）、`stepField`（当前工序）、`orderField`、可选的 `titleField`、`laneField`、`notesField`。
+   - Go 侧在页面发布与安装时对照对象定义逐项校验（引用类型、整数版本、步骤对象存在、步骤引用同一工艺路线等）；前端不再从字段类型推断任何绑定。
+   - 通用记录页不再无条件渲染工艺图；只有页面声明了该 Widget 时才显示。
+3. **Workshop 操作台的真实装配（已完成，MES 样例）**：`TestBuilderMESEquivalence` 发布了一个 SFC 操作台页面（`process-flow` + 明细 + 开工/完工/不良/签字动作），并由应用的 `opens` 将 SFC 记录路由到该页面；页面与应用均经过正式发布校验。
 
 ### 第三层门槛：面向构建者心流的下一代工作台体验（归 [ADR-0099](0099-intent-driven-application-studio-beyond-palantir.md)）
-- 改造现有模仿 Palantir 的 22 菜单孤岛式构建器界面，按用户从零构建应用的**六步真实心流（立骨架 → 定生命 → 立规矩 → 搭界面 → 接协同 → 彩排发布）**重构为统一的意图驱动应用工作台（领域蓝图与实时样本表、状态连线即动作、四段式可视化决定画布与胶囊路径选择器、零变量管道税的岗位操作台生成、多角色故事板彩排沙箱），设计详见 [ADR-0099](0099-intent-driven-application-studio-beyond-palantir.md)。
+- **Wave 1（已完成首版）**：构建器左侧导航按六步心流分组（领域蓝图、生命周期、业务决定与规则、岗位操作台、外部协同与 AI、彩排与发布），映射到既有视图，不新增页面。
+- **仍待**：Wave 2 四段式业务决定画布与实时试跑台、Wave 3 语义直绑操作台与多角色彩排沙箱。
+
+### 仍待收口（Not yet）
+- 跨多跳引用路径的候选下推（第二层 1）。
+- ADR-0099 Wave 2、Wave 3。
+- 浏览器内的实际观感未在本轮核验，本轮证据来自类型检查、单元测试与 Go 端到端发布测试。

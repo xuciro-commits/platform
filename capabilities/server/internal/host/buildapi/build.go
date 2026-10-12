@@ -28,6 +28,10 @@ type Object struct {
 	Plural      string  `json:"plural,omitempty" title:"What people call several" example:"Visits"`
 	Description string  `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
 	Fields      []Field `json:"fields" title:"Fields"`
+	// VersionField names the integer field that numbers this object's versions
+	// (ADR-0098 B5): a reference pinned to a version (Field.Pins) reads the
+	// version current when the pin was taken; empty: the object is not versioned.
+	VersionField string `json:"versionField,omitempty" field:"aside" title:"Version field" help:"The integer field that numbers this object's versions, e.g. version on a routing"`
 	// States and Actions make its records a small process (ADR-0037): the
 	// object editor owns them, so generated forms do not ask for them.
 	States  []State  `json:"states,omitempty" field:"aside" title:"States"`
@@ -63,7 +67,11 @@ type Field struct {
 	Columns  []LineColumn           `json:"columns,omitempty" title:"Line columns" help:"For lines: the columns of each embedded row"`
 	Ref      string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
 	// Inverse names the relation seen from the referenced record (ADR-0040 21b).
-	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
+	Inverse string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
+	// Pins, for a reference, names the integer field of this record that holds
+	// the version of the referenced record this record is bound to (ADR-0098 B5).
+	// Records that refer back through a pinned reference are read at that version.
+	Pins     string `json:"pins,omitempty" title:"Pinned version field" help:"For a reference: the integer field of this record that holds the referenced record's version" example:"routingversion"`
 	Required bool   `json:"required,omitempty"`
 	Search   bool   `json:"search,omitempty" title:"Searchable"`
 	// When bounds the field to another field's value (WorkQueue #138/#132):

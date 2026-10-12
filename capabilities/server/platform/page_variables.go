@@ -269,6 +269,9 @@ type pageRuntimeContract struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 		MaxStages         int    `json:"maxStages"`
 	} `json:"statusTracker"`
+	ProcessFlow struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+	} `json:"processFlow"`
 	RecordLinks struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 		MaxGroups         int    `json:"maxGroups"`

@@ -174,6 +174,45 @@ func parseStepExpr(expr string) (mode, collection, orderField, currentSource str
 
 // resolveCollectionMaps resolves a collection specification against the current record/inputs and builder state.
 func (b *Build) resolveCollectionMaps(c platform.Caller, o Object, a Action, collection string, inputs map[string]any, record any, overlay []any, now time.Time) ([]map[string]any, error) {
+	return b.resolveCollection(c, o, a, collection, inputs, record, overlay, now, nil)
+}
+
+// versionOf is the version a record of typ is read at when nothing pins it: its
+// object's version field, when the object declares one (ADR-0098 B5).
+func (b *Build) versionOf(typ string, rec map[string]any) int {
+	if b == nil || rec == nil {
+		return 0
+	}
+	obj, ok := b.objects[typ]
+	if !ok || obj.VersionField == "" {
+		return 0
+	}
+	if vNum, err := buildapi.ValueNumber(rec[obj.VersionField]); err == nil && vNum > 0 {
+		return int(math.Round(vNum))
+	}
+	return 0
+}
+
+// pinnedBy is the version a single-hop reference path from o pins, read from the
+// record's pinned-version field (ADR-0098 B5); zero when it pins none.
+func pinnedBy(o Object, ownMap map[string]any, path []string) int {
+	if len(path) != 1 {
+		return 0
+	}
+	for _, f := range o.Fields {
+		if f.Name == path[0] && f.Type == "reference" && f.Pins != "" {
+			if vNum, err := buildapi.ValueNumber(ownMap[f.Pins]); err == nil && vNum > 0 {
+				return int(math.Round(vNum))
+			}
+		}
+	}
+	return 0
+}
+
+// resolveCollection reads a collection the decision sees. push, when set, offers
+// the store the scalar equalities of a quantifier's where for each collection
+// type; the caller still tests every item in memory.
+func (b *Build) resolveCollection(c platform.Caller, o Object, a Action, collection string, inputs map[string]any, record any, overlay []any, now time.Time, push *whereScope) ([]map[string]any, error) {
 	ownMap := recordMap(record)
 	ownType := buildapi.TypeOf(o.Name)
 	trimmed := strings.TrimPrefix(collection, "record.")
@@ -194,19 +233,19 @@ func (b *Build) resolveCollectionMaps(c platform.Caller, o Object, a Action, col
 		if !known {
 			return nil, fmt.Errorf("collection object %s is not installed", trimmed)
 		}
-		return b.findWithOverlay(c, trimmed, entity, "", "", 0, overlay)
+		return b.findWithOverlay(c, trimmed, entity, "", "", "", 0, overlay, push.clauses(trimmed))
 	}
 
-	// 3. Path ending in an inverse relation or embedded lines field (e.g. "sfcs", "order.sfcs", "routing.operations", "input.product.routing.operations").
+	// 3. A path ending in an inverse relation or an embedded lines field, e.g.
+	// "sfcs", "order.sfcs", "routing.operations", "input.product.routing.operations".
 	parts := strings.Split(collection, ".")
 	parentType := ownType
 	parentID := buildapi.ValueTextOf(ownMap["id"])
 	parentRecordMap := ownMap
 	relName := parts[len(parts)-1]
-	pinnedVersion := 0
-	if vNum, err := buildapi.ValueNumber(ownMap["routingversion"]); err == nil && vNum > 0 {
-		pinnedVersion = int(math.Round(vNum))
-	}
+	// pinned is the version the collection is read at: the one the path's
+	// reference pins, else the version the parent record currently has.
+	pinned := 0
 
 	if len(parts) > 1 {
 		prefix := parts[:len(parts)-1]
@@ -228,7 +267,6 @@ func (b *Build) resolveCollectionMaps(c platform.Caller, o Object, a Action, col
 				if err != nil {
 					return nil, err
 				}
-				pinnedVersion = 0
 			} else {
 				val, refusal := resolveRecordPathValue(c, o, record, prefix, b.conditionLookup, now)
 				if refusal != nil {
@@ -240,19 +278,18 @@ func (b *Build) resolveCollectionMaps(c platform.Caller, o Object, a Action, col
 				if err != nil {
 					return nil, err
 				}
+				pinned = pinnedBy(o, ownMap, prefix)
 			}
 			parentRecordMap = nil
 			if b != nil && b.host != nil && parentType != "" && parentID != "" {
 				if rec, ok := b.host.Record(parentType + "/" + parentID); ok {
 					parentRecordMap = recordMap(rec)
-					if pinnedVersion == 0 {
-						if vNum, err := buildapi.ValueNumber(parentRecordMap["version"]); err == nil && vNum > 0 {
-							pinnedVersion = int(math.Round(vNum))
-						}
-					}
 				}
 			}
 		}
+	}
+	if pinned == 0 {
+		pinned = b.versionOf(parentType, parentRecordMap)
 	}
 
 	// Check if parent has an embedded lines field named relName.
@@ -267,7 +304,9 @@ func (b *Build) resolveCollectionMaps(c platform.Caller, o Object, a Action, col
 	if b == nil || parentID == "" {
 		return nil, nil
 	}
-	// Search installed objects for a reference field pointing to parentType with inverse == relName (or object name matching relName).
+	// Search installed objects for a reference field pointing to parentType with
+	// inverse == relName (or object name matching relName). A reference that pins
+	// a version reads only the children pinned to the parent's version.
 	for _, typ := range sortedTypes(b.installed) {
 		entity := b.installed[typ]
 		info, err := platform.Describe(ID, entity, func(reflect.Type) string { return "" })
@@ -276,11 +315,15 @@ func (b *Build) resolveCollectionMaps(c platform.Caller, o Object, a Action, col
 		}
 		for _, f := range info.Fields {
 			if f.Type == "reference" && f.Ref == parentType && (f.Inverse == relName || strings.TrimPrefix(typ, ID+".")+"s" == relName || strings.TrimPrefix(typ, ID+".") == relName || f.Name == relName) {
-				ver := 0
-				if _, hasVer := info.Field("version"); hasVer && pinnedVersion > 0 {
-					ver = pinnedVersion
+				pinField, ver := "", 0
+				if decl, ok := b.objects[typ]; ok {
+					for _, df := range decl.Fields {
+						if df.Name == f.Name && df.Pins != "" {
+							pinField, ver = df.Pins, pinned
+						}
+					}
 				}
-				return b.findWithOverlay(c, typ, entity, f.Name, parentID, ver, overlay)
+				return b.findWithOverlay(c, typ, entity, f.Name, parentID, pinField, ver, overlay, push.clauses(typ))
 			}
 		}
 	}
@@ -359,16 +402,94 @@ func extractLinesSlice(raw any) []map[string]any {
 	return out
 }
 
-func (b *Build) findWithOverlay(c platform.Caller, typ string, entity platform.Entity, viaField, parentID string, pinnedVersion int, overlay []any) ([]map[string]any, error) {
+// whereScope is a quantifier's matching conditions, as far as the store can
+// answer them exactly (ADR-0098 B1): an equality of a text, choice or reference
+// field with a value known before the collection is read. Everything else, and
+// every "not" and range, is tested in memory on each item only.
+type whereScope struct {
+	b      *Build
+	c      platform.Caller
+	o      Object
+	a      Action
+	inputs map[string]any
+	record any
+	now    time.Time
+	where  []Condition
+}
+
+func (s *whereScope) clauses(typ string) [][]any {
+	if s == nil || s.b == nil || len(s.where) == 0 {
+		return nil
+	}
+	entity, ok := s.b.installed[typ]
+	if !ok {
+		return nil
+	}
+	info, err := platform.Describe(ID, entity, func(reflect.Type) string { return "" })
+	if err != nil {
+		return nil
+	}
+	var out [][]any
+	for _, w := range s.where {
+		name := strings.TrimPrefix(w.Field, "item.")
+		if w.When != nil || w.Quantifier != "" || w.Operator != "" && w.Operator != "=" || strings.ContainsAny(name, ".:") {
+			continue
+		}
+		f, ok := info.Field(name)
+		if !ok || !slices.Contains([]string{"text", "choice", "reference"}, f.Type) {
+			continue
+		}
+		want, known := s.value(w)
+		if !known || want == "" {
+			continue
+		}
+		out = append(out, []any{name, "=", want})
+	}
+	return out
+}
+
+// value is the right-hand side of an item condition when it does not depend on
+// the item: a literal, $me, or a declared input or record path.
+func (s *whereScope) value(w Condition) (string, bool) {
+	switch {
+	case w.ValueField == "" && w.Value == "$me":
+		return s.c.ID, true
+	case w.ValueField == "":
+		return w.Value, true
+	case strings.HasPrefix(w.ValueField, "item."):
+		return "", false
+	case strings.HasPrefix(w.ValueField, "input."):
+		val, refusal := resolveInputPathValue(s.c, s.a, s.inputs, strings.Split(strings.TrimPrefix(w.ValueField, "input."), "."), s.now)
+		if refusal != nil {
+			return "", false
+		}
+		return buildapi.ValueTextOf(val), true
+	}
+	val, refusal := resolveRecordPathValue(s.c, s.o, s.record, strings.Split(strings.TrimPrefix(w.ValueField, "record."), "."), s.b.conditionLookupOrNil(), s.now)
+	if refusal != nil {
+		return "", false
+	}
+	return buildapi.ValueTextOf(val), true
+}
+
+// findWithOverlay reads the stored records of typ, then lays the overlay over
+// them: records changed or created by this decision replace or join the stored
+// ones and are never filtered out by the store's answer. viaField and parentID
+// keep the children of one parent; pinField and pinned keep the children of one
+// version (ADR-0098 B5). extra are the store clauses a caller can offer.
+func (b *Build) findWithOverlay(c platform.Caller, typ string, entity platform.Entity, viaField, parentID, pinField string, pinned int, overlay []any, extra [][]any) ([]map[string]any, error) {
 	var records []any
 	if c.Replaying || b.host != nil {
 		q := platform.Query{Limit: 1000}
+		var clauses [][]any
 		if viaField != "" && parentID != "" {
-			var clauses [][]any
 			clauses = append(clauses, []any{viaField, "=", parentID})
-			if pinnedVersion > 0 {
-				clauses = append(clauses, []any{"version", "=", pinnedVersion})
-			}
+		}
+		if pinField != "" && pinned > 0 {
+			clauses = append(clauses, []any{pinField, "=", pinned})
+		}
+		clauses = append(clauses, extra...)
+		if len(clauses) > 0 {
 			q.Domain, _ = json.Marshal(clauses)
 		}
 		found, total, err := c.FindOf(reflect.TypeOf(entity.Model), q)
@@ -416,8 +537,8 @@ func (b *Build) findWithOverlay(c platform.Caller, typ string, entity platform.E
 		if viaField != "" && buildapi.ValueTextOf(m[viaField]) != parentID {
 			continue
 		}
-		if pinnedVersion > 0 {
-			if vNum, err := buildapi.ValueNumber(m["version"]); err == nil && vNum > 0 && int(math.Round(vNum)) != pinnedVersion {
+		if pinField != "" && pinned > 0 {
+			if vNum, err := buildapi.ValueNumber(m[pinField]); err != nil || int(math.Round(vNum)) != pinned {
 				continue
 			}
 		}
@@ -485,7 +606,12 @@ func (b *Build) evalStep(c platform.Caller, o Object, a Action, expr string, inp
 
 // evalQuantifier evaluates a quantified collection condition (all, none, any, count).
 func (b *Build) evalQuantifier(c platform.Caller, o Object, a Action, cond Condition, inputs map[string]any, record any, overlay []any, now time.Time) (bool, *kernel.Error) {
-	items, err := b.resolveCollectionMaps(c, o, a, cond.Collection, inputs, record, overlay, now)
+	// "all" needs the whole collection to judge, so its where is never pushed down.
+	var push *whereScope
+	if cond.Quantifier != "all" && len(cond.Where) > 0 {
+		push = &whereScope{b: b, c: c, o: o, a: a, inputs: inputs, record: record, now: now, where: cond.Where}
+	}
+	items, err := b.resolveCollection(c, o, a, cond.Collection, inputs, record, overlay, now, push)
 	if err != nil {
 		return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "%s", err.Error())
 	}

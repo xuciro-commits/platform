@@ -30,6 +30,10 @@ type Build struct {
 	// installed are the objects published in this tenant, by entity type: their
 	// declarations, so generated actions of a defined object reach the record store.
 	installed map[string]platform.Entity
+	// objects are the published definitions behind installed, by entity type:
+	// a related update reads the target's states, actions and version field
+	// from them (ADR-0098 B4, B5). Kept in step with installed.
+	objects map[string]Object
 	// jointEntities are the object drafts of the candidate being built, so the
 	// same validation answers entity lookups as the candidate would install
 	// them (ADR-0048). Empty outside a joint build.
@@ -52,7 +56,7 @@ func (b *Build) AttachBuild(h host.BuildHost) { b.host = h }
 
 // New is a tenant's builder app.
 func New(tenant string) *Build {
-	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
+	b := &Build{installed: map[string]platform.Entity{}, objects: map[string]Object{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
@@ -464,6 +468,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 			return fmt.Errorf("install accepted object: %w", err)
 		}
 		b.installed[entity.Type] = entity
+		b.objects[entity.Type] = published
 	case SchemaRelease:
 		if err := b.host.InstallPage(platform.Caller{Replaying: true}, pages[0]); err != nil {
 			return fmt.Errorf("install accepted page: %w", err)
@@ -687,6 +692,9 @@ const BaseField = "base"
 // fields the object lacks, and an extension of a type that is not there, of
 // itself, with a lifecycle of its own, or whose base field is not the base.
 func (b *Build) checkShape(o Object) error {
+	if err := checkVersioning(o); err != nil {
+		return err
+	}
 	if len(o.Implements) > 0 {
 		var declared []platform.Interface
 		if b.host != nil {
@@ -766,6 +774,29 @@ func (b *Build) fieldKnown(ref string) bool {
 
 // checkFields refuses a field the platform has no type for, a choice without
 // values, or a reference to an object this tenant has not.
+// checkVersioning refuses a version field that is not an integer, and a pin
+// that does not name an integer field of the same object (ADR-0098 B5).
+func checkVersioning(o Object) error {
+	intField := func(name string) bool {
+		return slices.ContainsFunc(o.Fields, func(f Field) bool { return f.Name == name && f.Type == "integer" })
+	}
+	if o.VersionField != "" && !intField(o.VersionField) {
+		return fmt.Errorf("the version field %q is not an integer field of %s", o.VersionField, o.Name)
+	}
+	for _, f := range o.Fields {
+		if f.Pins == "" {
+			continue
+		}
+		if f.Type != "reference" {
+			return fmt.Errorf("the field %q pins a version but is not a reference", f.Name)
+		}
+		if !intField(f.Pins) {
+			return fmt.Errorf("the field %q pins the version in %q, which is not an integer field of %s", f.Name, f.Pins, o.Name)
+		}
+	}
+	return nil
+}
+
 func checkFields(fields []Field, known func(string) bool) error {
 	seen := map[string]bool{}
 	for _, f := range fields {
@@ -919,6 +950,7 @@ func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	b.installed[entity.Type] = entity
+	b.objects[entity.Type] = o
 	return nil
 }
 
@@ -1262,7 +1294,7 @@ func goName(name string) string {
 // validation context, while retaining declarations and the ledger identity.
 func (b *Build) ForkDecision() (platform.App, error) {
 	return &Build{host: b.host, ledger: b.ledger,
-		releaseDraftIDs: maps.Clone(b.releaseDraftIDs), installed: maps.Clone(b.installed), jointEntities: maps.Clone(b.jointEntities), jointMode: b.jointMode,
+		releaseDraftIDs: maps.Clone(b.releaseDraftIDs), installed: maps.Clone(b.installed), objects: maps.Clone(b.objects), jointEntities: maps.Clone(b.jointEntities), jointMode: b.jointMode,
 		linkTypes: maps.Clone(b.linkTypes), propertyTypes: maps.Clone(b.propertyTypes),
 		queries: maps.Clone(b.queries), functions: maps.Clone(b.functions), agents: maps.Clone(b.agents),
 		codes: maps.Clone(b.codes), tables: maps.Clone(b.tables)}, nil

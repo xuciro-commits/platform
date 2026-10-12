@@ -1,4 +1,4 @@
-import {Panel,RecordPage,RecordStatus,RecordLinks,t,type EntityRecord,type RecordSource} from '@platform/ui';
+import {Panel,RecordPage,RecordStatus,RecordProcessFlow,RecordLinks,t,type EntityRecord,type RecordSource} from '@platform/ui';
 import type {Api} from '@platform/kernel';
 import {NewActions,RecordActions} from '../actions/actions';
 import {useOpenRecord} from '../index';
@@ -13,6 +13,12 @@ export function StatusRenderer({source,object,record,config}:RecordPorts&{config
  if(!record)return <p className="text-sm text-muted">{t('Select a record to see it here.')}</p>;
  if(!source)return <Panel role="alert">{t('No source for records')}</Panel>;
  return <RecordStatus key={JSON.stringify([source.scope,object,record.id])} source={source} type={object} id={record.id} config={config}/>;
+}
+export function ProcessFlowRenderer({source,object,record,config}:RecordPorts&{config?:Api.PageProcessFlow}){
+ if(!record)return <p className="text-sm text-muted">{t('Select a record to see it here.')}</p>;
+ if(!source)return <Panel role="alert">{t('No source for records')}</Panel>;
+ if(!config)return <Panel role="alert">{t('Choose the process flow bindings.')}</Panel>;
+ return <RecordProcessFlow key={JSON.stringify([source.scope,object,record.id])} source={source} type={object} id={record.id} config={config}/>;
 }
 type Open=(type:string,record:EntityRecord)=>void;
 export function LinksRenderer({source,object,record,groups,live,onOpen}:RecordPorts&{groups:Api.PageRecordLink[];live:boolean;onOpen?:Open}){

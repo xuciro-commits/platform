@@ -1,10 +1,8 @@
 // The build package contributes one application: Builder (ADR-0054 D2) — the
-// workspace where a builder designs applications. Its left rail lists what a
-// project owns, by resource: Ontology (object types, action types, relationships,
-// shared properties, queries), Interface (modules, templates), Automation
-// (automations, flows, runs), Functions (AI, code), Releases (changes, history)
-// and Explore. The editors themselves follow ADR-0053; the host still decides
-// who holds the build role.
+// workspace where a builder designs applications. Its left rail leads through
+// the six steps a project is built in (ADR-0099): the domain blueprint, lifecycles,
+// decisions and rules, role consoles, integrations and AI, then rehearsal and release.
+// Explore stays beside them for reading the whole model.
 import "./i18n";
 import { defineApp, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
@@ -50,6 +48,41 @@ const integration = (): NavSection => ({ label: t("Integration"), items: [
   { label: t("Matching rules"), icon: <Fingerprint />, route: { view: "match" } },
   { label: t("Integration health"), icon: <Activity />, route: { view: "integration-health" } },
 ] });
+
+/** The six steps a project is built in, in the order a person meets them (ADR-0099 §2): the rail says where one is and what comes next. */
+const journey = (): NavSection[] => [
+  { label: t("1 · Domain blueprint"), items: [
+    { label: t("Object types"), icon: <Boxes />, route: { view: "object-type" } },
+    { label: t("Relationships"), icon: <Link2 />, route: { view: "link-type" } },
+    { label: t("Shared properties"), icon: <Tags />, route: { view: "property-type" } },
+    { label: t("Queries"), icon: <Search />, route: { view: "query" } },
+  ] },
+  { label: t("2 · Lifecycles"), items: [
+    { label: t("Object lifecycles"), icon: <Workflow />, route: { view: "object-type", params: { tab: "lifecycle" } } },
+  ] },
+  { label: t("3 · Decisions and rules"), items: [
+    { label: t("Action types"), icon: <Zap />, route: { view: "action-type" } },
+    { label: t("Automations"), icon: <Zap />, route: { view: "automation" } },
+    { label: t("Decision tables"), icon: <Table2 />, route: { view: "decision-table" } },
+    { label: t("AI functions"), icon: <Sparkles />, route: { view: "function" } },
+    { label: t("Code functions"), icon: <Braces />, route: { view: "code" } },
+  ] },
+  { label: t("4 · Role consoles"), items: [
+    { label: t("Modules"), icon: <LayoutTemplate />, route: { view: "module" } },
+    { label: t("Templates"), icon: <LayoutList />, route: { view: "studio-templates" } },
+  ] },
+  { label: t("5 · Integrations and AI"), items: [
+    ...integration().items,
+    { label: t("Flows"), icon: <Workflow />, route: { view: "flow" } },
+    { label: t("Runs"), icon: <Clock />, route: { view: "runs" } },
+    { label: t("Agents"), icon: <Bot />, route: { view: "agent" } },
+    { label: t("Alert rules"), icon: <Bell />, route: { view: "alert" } },
+  ] },
+  { label: t("6 · Rehearse and release"), items: [
+    { label: t("Changes"), icon: <PackageCheck />, route: { view: "changes" } },
+    { label: t("Release history"), icon: <History />, route: { view: "release-history" } },
+  ] },
+];
 
 const views: View[] = [
   // Projects
@@ -102,34 +135,7 @@ export default defineApp({
   views,
   opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.agent": "agent", "build.alertrule": "alert" },
   nav: (host): NavSection[] => builder(host) ? [
-    { label: t("Ontology"), items: [
-      { label: t("Object types"), icon: <Boxes />, route: { view: "object-type" } },
-      { label: t("Action types"), icon: <Zap />, route: { view: "action-type" } },
-      { label: t("Relationships"), icon: <Link2 />, route: { view: "link-type" } },
-      { label: t("Shared properties"), icon: <Tags />, route: { view: "property-type" } },
-      { label: t("Queries"), icon: <Search />, route: { view: "query" } },
-    ] },
-    integration(),
-    { label: t("Interface"), items: [
-      { label: t("Modules"), icon: <LayoutTemplate />, route: { view: "module" } },
-      { label: t("Templates"), icon: <LayoutList />, route: { view: "studio-templates" } },
-    ] },
-    { label: t("Logic"), items: [
-      { label: t("Automations"), icon: <Zap />, route: { view: "automation" } },
-      { label: t("Flows"), icon: <Workflow />, route: { view: "flow" } },
-      { label: t("Runs"), icon: <Clock />, route: { view: "runs" } },
-    ] },
-    { label: t("Functions"), items: [
-      { label: t("AI functions"), icon: <Sparkles />, route: { view: "function" } },
-      { label: t("Code functions"), icon: <Braces />, route: { view: "code" } },
-      { label: t("Decision tables"), icon: <Table2 />, route: { view: "decision-table" } },
-      { label: t("Agents"), icon: <Bot />, route: { view: "agent" } },
-      { label: t("Alert rules"), icon: <Bell />, route: { view: "alert" } },
-    ] },
-    { label: t("Releases"), items: [
-      { label: t("Changes"), icon: <PackageCheck />, route: { view: "changes" } },
-      { label: t("Release history"), icon: <History />, route: { view: "release-history" } },
-    ] },
+    ...journey(),
     { label: t("Explore"), items: [
       { label: t("Object Explorer"), icon: <Compass />, route: { view: "explorer" } },
       { label: t("Lineage"), icon: <GitBranch />, route: { view: "lineage" } },

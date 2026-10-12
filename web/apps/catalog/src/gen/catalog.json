@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:309ce09ce12d70a9",
+  "revision": "sha256:17f48a426da4c39f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -6139,7 +6139,8 @@
       "source": "web/packages/ui/src/records/Records.tsx",
       "exports": [
         "StatusBar",
-        "RecordStatus"
+        "RecordStatus",
+        "RecordProcessFlow"
       ],
       "example": "Lifecycle",
       "authority": "api",
@@ -12397,6 +12398,7 @@
       "web/packages/build/src/workshop/page-editor/widgets/NoticeInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/ObservationInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/PivotInspector.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/ProcessFlowInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/ProgressInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/RangeInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/RecordCalendarInspector.tsx",

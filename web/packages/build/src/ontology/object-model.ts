@@ -7,7 +7,7 @@ import type { Api } from "@platform/kernel";
 import { t, type EntityInfo } from "@platform/ui";
 
 export type LineColumn = { name: string; title: string; type: string; choices?: string; required?: boolean };
-export type Field = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; columns?: LineColumn[]; required?: boolean; search?: boolean; formula?: string; when?: string; ref?: string; inverse?: string; read?: string[]; write?: string[] };
+export type Field = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; columns?: LineColumn[]; required?: boolean; search?: boolean; formula?: string; when?: string; ref?: string; inverse?: string; pins?: string; read?: string[]; write?: string[] };
 export type State = { name: string; title: string; tone?: string; description?: string };
 export type Condition = { field: string; operator: string; value?: string; valueField?: string; message: string; when?: Condition; quantifier?: "all" | "none" | "any" | "count"; collection?: string; where?: Condition[] };
 export type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean; ref?: string; minLength?: number; constraints?: Api.InputConstraints; range?: Api.DateRange; group?: string; when?: string; defaultFrom?: string; filter?: Condition[] };
@@ -47,7 +47,7 @@ export type Access = { role: string; read: "all" | "below" | "unit" | "own" | "n
 export type ObjectScope = { owner?: string; unit?: string; structure?: string };
 export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[]; scope?: ObjectScope; implements?: string[]; extends?: string; numbering?: Numbering_ };
 /** The draft in hand: fields, lifecycle, access, and its shape — the interfaces it implements and the type it extends (ADR-0058 A2, A3). */
-export type Process = { states: State[]; actions: Action[]; access: Access[]; fields: Field[]; scope?: ObjectScope; implements?: string[]; extends?: string; numbering?: Numbering_ };
+export type Process = { states: State[]; actions: Action[]; access: Access[]; fields: Field[]; scope?: ObjectScope; implements?: string[]; extends?: string; numbering?: Numbering_; versionField?: string };
 /** An edit changes only the parts the person touched; null explicitly clears an optional part. */
 export function objectChanges(draft: Process, saved: Process): Record<string, unknown> {
   const changes: Record<string, unknown> = {};

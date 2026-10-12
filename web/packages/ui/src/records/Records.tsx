@@ -593,7 +593,6 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         {work?.(view)}
       </section>}
       {!detailOnly && info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
-      {!detailOnly && <RecordStepFlow source={source} info={info} view={view} />}
       {properties}
       {!detailOnly && (view.files.length > 0 || files) && <Files key={JSON.stringify(["files",source.scope,type,id])} attached={view.files} files={files} />}
       {!detailOnly && (view.comments.length > 0 || comments) && <Comments key={JSON.stringify(["comments",source.scope,type,id])} list={view.comments} following={view.following} comments={comments} />}
@@ -772,60 +771,72 @@ function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
   return <FlowSteps nodes={nodes} edges={edges} height={150} label={t("Approvals")} storeKey={`approvals:${a.id}`} />;
 }
 
-/** Declarative step flow for a record with an ordered step relation or a configured PageProcessFlow binding. */
-export function RecordStepFlow({ source, info, view, config }: { source: RecordSource; info: EntityInfo; view: RecordView; config?: Api.PageProcessFlow }) {
-  const r = view.record;
-  const routingFieldName = config?.routingField ?? info.fields.find((f) => f.type === "reference" && f.ref && source.entity(f.ref)?.fields.some((sf) => sf.name === "version"))?.name;
-  const routingField = routingFieldName ? info.fields.find((f) => f.name === routingFieldName && f.type === "reference" && f.ref) : undefined;
-  const stepFieldName = config?.stepField ?? info.fields.find((f) => f.type === "reference" && f.name !== routingFieldName && source.entity(f.ref ?? "")?.fields.some((sf) => sf.type === "integer"))?.name;
-  const opField = stepFieldName ? info.fields.find((f) => f.name === stepFieldName) : undefined;
-  const routingId = routingField ? String(r[routingField.name] ?? "") : "";
-  const [routingView, setRoutingView] = useState<RecordView>();
+/**
+ * A declared process flow (ADR-0098 D4): the steps of a routing in the order the
+ * page names, only those of the version the record pins, and the step the record
+ * stands at. Nothing is inferred: every field it reads is named by the binding.
+ */
+export function RecordProcessFlow({ source, type, id, config: bound }: { source: RecordSource; type: string; id: string; config: Api.PageProcessFlow }) {
+  const config = { ...bound, routingField: bound.routingField ?? "", versionField: bound.versionField ?? "", stepField: bound.stepField ?? "", stepVersionField: bound.stepVersionField ?? "", orderField: bound.orderField ?? "", stepObject: bound.stepObject ?? "" };
+  const info = source.entity(type);
+  const [view, setView] = useState<RecordView>();
   useEffect(() => {
-    if (!routingField?.ref || !routingId) { setRoutingView(undefined); return; }
     let active = true;
-    source.get(routingField.ref, routingId).then((v) => { if (active) setRoutingView(v); }, () => { if (active) setRoutingView(undefined); });
+    source.get(type, id).then((v) => { if (active) setView(v); }, () => { if (active) setView(undefined); });
+    return () => { active = false; };
+  }, [source, type, id]);
+  const routingField = info?.fields.find((f) => f.name === config.routingField && f.type === "reference" && f.ref);
+  const routingId = view && routingField ? String(view.record[routingField.name] ?? "") : "";
+  const [routing, setRouting] = useState<RecordView>();
+  useEffect(() => {
+    setRouting(undefined);
+    if (!routingField?.ref || !routingId) return;
+    let active = true;
+    source.get(routingField.ref, routingId).then((v) => { if (active) setRouting(v); }, () => { if (active) setRouting(undefined); });
     return () => { active = false; };
   }, [source, routingField?.ref, routingId]);
+  if (!view || !info || !routingField || !routing) return null;
 
-  const orderField = config?.orderField ?? "number";
-  const stepRel = (routingView ?? view).related?.find((rel) => {
-    if (config?.stepObject && rel.type !== config.stepObject) return false;
-    const relInfo = source.entity(rel.type);
-    return relInfo?.fields.some((f) => f.name === orderField && (f.type === "integer" || f.type === "decimal"));
-  });
+  const r = view.record;
+  const stepRel = routing.related?.find((rel) => rel.type === config.stepObject);
   if (!stepRel || stepRel.records.length === 0) return null;
-  const relInfo = source.entity(stepRel.type);
-  const titleField = config?.titleField ?? relInfo?.display ?? "name";
-  const laneField = config?.laneField ?? relInfo?.fields.find((f) => f.type === "reference" && f.name !== routingField?.name)?.name ?? "";
-  const versionField = config?.versionField ?? "routingversion";
-  const pinnedVer = Number(r[versionField] ?? 0);
-  const filteredSteps = stepRel.records.filter((s) => !pinnedVer || !s.version || Number(s.version) === pinnedVer);
-  const steps = [...(filteredSteps.length ? filteredSteps : stepRel.records)].sort((a, b) => Number(a[orderField] ?? 0) - Number(b[orderField] ?? 0));
+  const stepInfo = source.entity(config.stepObject);
+  const orderField = config.orderField;
+  const pinnedVer = Number(r[config.versionField] ?? 0);
+  const steps = stepRel.records
+    .filter((s) => Number(s[config.stepVersionField] ?? 0) === pinnedVer)
+    .sort((a, b) => Number(a[orderField] ?? 0) - Number(b[orderField] ?? 0));
+  const titleField = config.titleField ?? stepInfo?.display ?? "name";
+  const laneField = config.laneField ?? "";
   const lanes = laneField ? [...new Set(steps.map((s) => String(s[laneField] ?? "")).filter(Boolean))].map((id) => ({ id, title: id })) : [];
-  const currentOp = opField ? String(r[opField.name] ?? "") : "";
-  const stateField = info.lifecycle?.field ?? "state";
-  const state = String(r[stateField] ?? "");
+  const stepField = config.stepField;
+  const currentOp = String(r[stepField] ?? "");
+  const state = info.lifecycle ? String(r[info.lifecycle.field] ?? "") : "";
   const terminalTone = info.lifecycle?.states.find((s) => s.name === state)?.tone;
   const succeeded = terminalTone === "success";
-  const ended = !opField || succeeded || terminalTone === "neutral";
+  const ended = succeeded || terminalTone === "neutral";
   const failedEnd = ended && !succeeded;
   const curIdx = steps.findIndex((s) => s.id === currentOp || String(s[orderField] ?? "") === currentOp);
-  const notesField = config?.notesField ?? info.fields.find((f) => f.type === "lines")?.name ?? "";
+  const notesField = config.notesField ?? "";
   const notes = notesField && Array.isArray(r[notesField]) ? (r[notesField] as Record<string, unknown>[]) : [];
   const nodes: FlowStepNode[] = steps.map((s, idx) => {
     const num = String(s[orderField] ?? s.id);
     const name = String(s[titleField] ?? s.id);
     const wc = laneField ? String(s[laneField] ?? "") : "";
-    const stepNotes = opField ? notes.filter((n) => String(n[opField.name] ?? "") === s.id || String(n[opField.name] ?? "") === num).map((n) => String(n.code ?? n.name ?? "")).filter(Boolean) : [];
-    const here = !!opField && idx === curIdx && !ended;
-    const past = !!opField && (curIdx > idx || succeeded);
+    // A note belongs to the step its step column names (by id or by order number).
+    const stepNotes = notes
+      .filter((n) => String(n[stepField] ?? "") === s.id || String(n[stepField] ?? "") === num)
+      .map((n) => String(Object.entries(n).find(([k, v]) => k !== stepField && typeof v === "string" && v)?.[1] ?? ""))
+      .filter(Boolean);
+    const here = idx === curIdx && !ended;
+    const past = curIdx > idx || succeeded;
     return {
       id: s.id, lane: wc || undefined, label: `${num} ${name}`, current: here, notation: "service-task",
       detail: [wc, ...(here && state ? [state] : []), ...stepNotes].filter(Boolean).join(" · ") || undefined,
       tone: here ? (terminalTone === "danger" ? "warning" : "info") : past ? "success" : failedEnd && idx === curIdx ? "danger" : stepNotes.length ? "warning" : undefined,
     };
   });
+  if (nodes.length === 0) return null;
   nodes.push({
     id: "end", label: failedEnd ? state : t("Done"),
     notation: failedEnd ? "event-terminate" : "event-end",
@@ -835,7 +846,7 @@ export function RecordStepFlow({ source, info, view, config }: { source: RecordS
   if (failedEnd && curIdx >= 0) edges.push({ from: steps[curIdx]!.id, to: "end", tone: "danger", dashed: true });
   return (
     <section className="rounded-md border border-border bg-surface p-3">
-      <FlowSteps nodes={nodes} edges={edges} lanes={lanes.length ? lanes : undefined} height={Math.max(180, lanes.length * 88)} label={t("Processes")} storeKey={`step-flow:${info.type}:${r.id}`} />
+      <FlowSteps nodes={nodes} edges={edges} lanes={lanes.length ? lanes : undefined} height={Math.max(180, lanes.length * 88)} label={t("Processes")} storeKey={`step-flow:${type}:${r.id}`} />
     </section>
   );
 }

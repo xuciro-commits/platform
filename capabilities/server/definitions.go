@@ -794,6 +794,13 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 			if section.CheckStatusTracker(shown) != nil {
 				continue
 			}
+			if section.CheckProcessFlow(shown, func(typ string) (platform.EntityInfo, bool) {
+				app, name, _ := strings.Cut(typ, ".")
+				e, ok := entities[name]
+				return e, ok && e.App == app
+			}) != nil {
+				continue
+			}
 			if page.CheckKanban(section, shown) != nil {
 				continue
 			}

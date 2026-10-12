@@ -1878,6 +1878,7 @@ export type PageProcessFlow = {
   stepObject?: string;
   routingField?: string;
   versionField?: string;
+  stepVersionField?: string;
   stepField?: string;
   orderField?: string;
   titleField?: string;
@@ -3307,7 +3308,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.109",
+  "uiProfile": "platform.page.v2.110",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4661,6 +4662,61 @@ export const pageUIManifest = {
           "bindingField": "recordVariable",
           "type": "record",
           "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "process-flow",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.110",
+      "title": "Process flow",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "selection",
+        "record-variable"
+      ],
+      "selectionMode": "read",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.110"
         }
       ],
       "outputPorts": [],
@@ -8513,7 +8569,8 @@ export const pageUIManifest = {
     "platform.page.v2.106",
     "platform.page.v2.107",
     "platform.page.v2.108",
-    "platform.page.v2.109"
+    "platform.page.v2.109",
+    "platform.page.v2.110"
   ],
   "runtime": {
     "telemetry": {
@@ -8721,6 +8778,7 @@ export const pageUIManifest = {
         "record-view",
         "record-links",
         "status-tracker",
+        "process-flow",
         "record-card",
         "record-comments",
         "record-uploader",
@@ -8939,6 +8997,9 @@ export const pageUIManifest = {
     "statusTracker": {
       "requiredUIProfile": "platform.page.v2.39",
       "maxStages": 32
+    },
+    "processFlow": {
+      "requiredUIProfile": "platform.page.v2.110"
     },
     "metricPresentation": {
       "requiredUIProfile": "platform.page.v2.40",

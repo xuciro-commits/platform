@@ -681,4 +681,5 @@ register("zh-CN", {
   "Back to project": "返回项目",
   "until {date}": "至 {date}",
   "{name} · closed {until}": "{name} · 已于 {until} 关闭",
+  "Choose the process flow bindings.": "选择流程图的绑定字段。",
 });

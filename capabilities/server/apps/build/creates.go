@@ -266,6 +266,31 @@ func (b *Build) createBatch(c platform.Caller, o Object, a Action, cr Create, ru
 	return out, nil
 }
 
+// moveAction is the object's own action that takes a record from one state to
+// another, not one that waits for approval or creates records (ADR-0098 B4).
+func moveAction(o Object, from, to string) (Action, bool) {
+	for _, a := range o.Actions {
+		if a.New || a.Approval != nil || !slices.Contains(a.From, from) {
+			continue
+		}
+		reaches := a.To == to
+		for _, br := range a.Branches {
+			reaches = reaches || br.To == to
+		}
+		if a.ToInput != "" {
+			for _, in := range a.Inputs {
+				if in.Name == a.ToInput {
+					reaches = reaches || slices.Contains(buildapi.ValueChoices(in.Choices), to)
+				}
+			}
+		}
+		if reaches {
+			return a, true
+		}
+	}
+	return Action{}, false
+}
+
 func (b *Build) updateRelated(c platform.Caller, o Object, a Action, u UpdateEffect, inputs map[string]any, record any, overlay []any, now time.Time) (any, bool, *kernel.Error) {
 	if b.host == nil {
 		return nil, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Related updates need the host")
@@ -304,6 +329,22 @@ func (b *Build) updateRelated(c platform.Caller, o Object, a Action, u UpdateEff
 	if err != nil {
 		return nil, false, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
+	// A related update is decided under the parent's action, but it may not
+	// change more than the target declares: its fields, and its state only by
+	// one of its own actions (ADR-0098 B4).
+	targetDecl, declared := b.objects[viaField.Ref]
+	if !declared {
+		return nil, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{object} has no published definition", viaField.Ref)
+	}
+	for _, set := range u.Sets {
+		f, ok := info.Field(set.Field)
+		if !ok {
+			return nil, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{object} has no field {field}", viaField.Ref, set.Field)
+		}
+		if !c.Replaying && !c.Automation && !c.Holds(c.App, Builder) && !f.WritesAny(c.RolesHere()) {
+			return nil, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} may not set {field} on {object}", c.ID, set.Field, viaField.Ref)
+		}
+	}
 	targetObj := Object{Name: strings.TrimPrefix(viaField.Ref, ID+".")}
 	for _, f := range info.Fields {
 		if f.Name != "state" {
@@ -338,10 +379,28 @@ func (b *Build) updateRelated(c platform.Caller, o Object, a Action, u UpdateEff
 			return nil, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{object} cannot set {field}: {why}", viaField.Ref, set.Field, err.Error())
 		}
 	}
-	if u.To != "" && targetEntity.Lifecycle != nil {
+	if u.To != "" {
+		if targetEntity.Lifecycle == nil {
+			return nil, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{object} has no states to move to {state}", viaField.Ref, u.To)
+		}
 		curState := tv.FieldByName("State").String()
 		if curState == u.To && len(u.Sets) == 0 {
 			return nil, false, nil
+		}
+		if curState != u.To {
+			move, ok := moveAction(targetDecl, curState, u.To)
+			if !ok {
+				return nil, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A {object} in {from} cannot move to {to}", viaField.Ref, curState, u.To)
+			}
+			for _, cond := range move.Conditions {
+				held, refusal := evaluateConditionOnRecord(c, b, targetDecl, move, cond, map[string]any{}, tv.Addr().Interface(), overlay, b.conditionLookup, now)
+				if refusal != nil {
+					return nil, false, refusal
+				}
+				if !held {
+					return nil, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", cond.Message)
+				}
+			}
 		}
 		tv.FieldByName("State").SetString(u.To)
 	}
