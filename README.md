@@ -11,12 +11,12 @@
 ### 1. 环境准备 (Prerequisites)
 
 运行平台所需基础环境：
-- **Go** >= 1.23
-- **Node.js** >= 20 且启用 `corepack`（使用 `pnpm 8+`）
-- **Docker** 或 **OrbStack**（用于本地运行 PostgreSQL、Rauthy OIDC、RustFS 等轻量基础设施）
-- **Python 3**（用于本地环境编排脚本 `deploy/dev/environment.py`）
+- **Go 1.27.1**（与各模块的 `go.mod` 一致）
+- **Node.js >= 22.18.0** 与 `corepack`；Web 固定使用 `pnpm 12.5.1`
+- `make lite` **不需要 Docker、PostgreSQL、外部对象存储或外部 IdP**。首次先执行 `cd web && corepack pnpm install --frozen-lockfile`。
+- 全栈开发/交付演练才需要 **Docker/OrbStack**；本地热更新编排另需 **Python 3**。
 
-首次克隆代码库后，执行一键环境初始化（安装 Web 依赖、代码热载工具 `air` 及浏览器内核）：
+全栈开发需要的一键初始化（Web 依赖、`air` 与 Playwright 浏览器；轻量启动不依赖后两项）：
 
 ```bash
 make setup
@@ -36,14 +36,18 @@ make setup
 make lite                          # 默认启动酒店业工作台 (http://localhost:8495)
 # 或
 make lite SOLUTION=manufacturing   # 启动制造业工作台 (http://localhost:8490)
+# 只有 Corepack 而未启用 pnpm shim 时：
+make lite PNPM="corepack pnpm"
+# Arena/受信任网络预览（演示席位可被访问，勿直接开放到生产公网）：
+make lite LITE_HOST=0.0.0.0 PNPM="corepack pnpm"
 ```
 
 > **运行机制说明**：
 > `make lite` 自动完成：
-> 1. 构建 Web 前端工作区（`web/apps/workspace/dist`）；
+> 1. 每次构建 Web 前端工作区（`web/apps/workspace/dist`），不把旧 checkout 的页面与新宿主混用；
 > 2. 编译对应行业宿主单二进制；
 > 3. 在本地目录（`.build/lite/<solution>/`）自动生成自研本地 IdP 密钥（`idp.key`）；
-> 4. 自动签发开箱即用的管理员 Token；
+> 4. 工作台通过原 `/v1/sign-in` 获取本机签名的角色卡，不在启动日志打印 Token；
 > 5. 以单进程直接提供完整的 API、持久化日志、本地文件存储与前端 SPA 页面服务。
 
 ---
@@ -76,7 +80,9 @@ make local
 
 ### 3. 开箱即用人员账号与凭据
 
-所有预设本地人员账号的登录密码均为：**`Plant-Local-1`**（在 `make lite` 模式下，工作台登录页还会自动列出预签发的各角色卡片，点击即可一键进入）。
+**`make lite`：** 使用工作台列出的签名角色卡，无需密码；内置酒店身份为 `manager`、`sales`、`desk` 等，制造身份为 `sup`、`op1` 等，不等同下面 Rauthy 账号的 email subject。未签名的开发 token 与其他宿主签名的 token 均被拒绝。
+
+**Docker/Rauthy 本地环境：** 下表预设人员账号密码为 **`Plant-Local-1`**。这些是演示账号，不是生产默认凭据。
 
 #### 常用核心角色推荐：
 
@@ -121,12 +127,12 @@ make local
 |---|---|---|
 | **定位场景** | 企业级多租户交付、标准云原生基础设施部署、合规审计 | 边缘单机运行、离线小设备、快速体验、无 Docker 限制机型 |
 | **依赖环境** | 需 Docker (PostgreSQL, Rauthy, RustFS, Compute 容器) | **0 容器依赖**（仅需 1 个可执行二进制 + 1 个本地数据目录） |
-| **账本持久化** | **PostgreSQL** 关系型数据库存储提交日志与状态快照 | **纯 Go 单文件日志**（`journal.jsonl` + 快照目录；预留 SQLite 同契约接口） |
+| **账本持久化** | **PostgreSQL** 关系型数据库存储提交日志与状态快照 | **纯 Go 单文件日志**（`journal.jsonl` + 快照目录） |
 | **身份认证 (IdP)** | 外部 **OIDC 认证提供商**（本地默认使用 Rauthy 容器 `:8480`） | **内置自研轻量 IdP**（基于 HMAC-SHA256 签名，本地管理 `idp.key`） |
 | **文件存储** | **S3 协议兼容**对象存储（本地默认使用 RustFS 容器 `:9000`） | **本地内容寻址存储**（`<data>/files/<tenant>/<hash>`，零外部依赖） |
-| **计算引擎** | 外部容器化 Wasm Worker 与 Code Builder | **宿主进程内 `wazero`** 纯 Go Wasm 运行时 |
+| **计算引擎** | 隔离 Wasm Worker / Code Builder，沿原 Compute 调用契约 | 原生能力与固定遥测 kernel 可用；租户 Go/TinyGo 代码仍需原隔离 worker/编译器，未配置时明确拒绝，不降级到宿主执行 |
 | **前端工作区分发** | Vite 反向代理开发服务器 或 生产独立 Nginx | **Go 宿主单二进制直接托管**静态工作台 SPA（`-web` 参数） |
-| **备份与迁移** | 需同步备份 PostgreSQL 卷与 S3 存储桶 | **直接复制单一数据目录**（如 `.build/lite/<solution>`）即可完成全量备份与迁移 |
+| **备份与迁移** | 需同步备份 PostgreSQL 卷与 S3 存储桶 | **停止宿主后复制完整数据目录**（如 `.build/lite/<solution>`）；日志、文件与签名密钥必须一起保存 |
 
 ---
 

@@ -24,6 +24,7 @@ PORT.manufacturing := 8490
 WEB_PORT.hospitality := 5176
 WEB_PORT.manufacturing := 5175
 WEB_PORT ?= $(WEB_PORT.$(SOLUTION))
+LITE_HOST ?= 127.0.0.1
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 DIST := .build/release
 
@@ -60,8 +61,8 @@ dev: ## 基于容器 PostgreSQL 与 Rauthy，在 air 下热重载运行宿主（
 	SOLUTION=$(SOLUTION) "$(AIR)" -c deploy/dev/air.toml -- $(SOLUTION) $(PORT.$(SOLUTION))
 
 .PHONY: lite
-lite: ## 一键启动零 Docker 轻量持久化宿主（单数据目录、自研 IdP、本地存储、内置工作台）
-	deploy/local/lite.sh $(SOLUTION) $(PORT.$(SOLUTION))
+lite: ## 一键启动轻量持久化宿主（无 Docker；LITE_HOST=0.0.0.0 可用于受信任网络预览）
+	GO="$(GO)" PNPM="$(PNPM)" LITE_HOST="$(LITE_HOST)" deploy/local/lite.sh $(SOLUTION) $(PORT.$(SOLUTION))
 
 .PHONY: dev-light
 dev-light: ## 轻量内存模式运行宿主（使用开发令牌，完全不依赖 Docker）
@@ -71,7 +72,7 @@ dev-light: ## 轻量内存模式运行宿主（使用开发令牌，完全不依
 
 .PHONY: web
 web: ## 在 Vite 下热重载运行工作区（HMR），将 /v1 反向代理到对应解决方案宿主
-	PLATFORM_HOST=http://127.0.0.1:$(PORT.$(SOLUTION)) $(PNPM) --dir web/apps/workspace dev --host 127.0.0.1 --port $(WEB_PORT)
+	cd web && PLATFORM_HOST=http://127.0.0.1:$(PORT.$(SOLUTION)) $(PNPM) --dir apps/workspace dev --host 127.0.0.1 --port $(WEB_PORT)
 
 .PHONY: setup
 setup: ## 首次环境初始化：安装 Web 依赖、air 工具及 Playwright 浏览器内核
@@ -105,7 +106,7 @@ test-go: ## 仅运行宿主测试；可用 PKG=./platform 或 RUN=TestName 缩�
 
 .PHONY: e2e
 e2e: ## 在开发宿主上运行 docs/Testing.md 浏览器路线；可用 SPEC=page-notice 缩小范围
-	$(PNPM) --dir web/apps/workspace build
+	cd web && $(PNPM) --dir apps/workspace build
 	cd web && $(PNPM) --filter @platform/e2e e2e $(if $(SPEC),tests/$(SPEC).spec.ts)
 
 ## release - 版本发布（完整证据链；CI 在 v* 标签上运行同一检查）
@@ -117,7 +118,7 @@ verify: ## CI 全量验收证据：check + 全模块测试 + 契约校验 + 形�
 .PHONY: build
 build: ## 构建当前系统架构的工作区制品与两个行业宿主二进制，输出到 .build/release
 	rm -rf $(DIST) && mkdir -p $(DIST)
-	$(PNPM) --dir web/apps/workspace build
+	cd web && $(PNPM) --dir apps/workspace build
 	tar -C web/apps/workspace -czf $(DIST)/workspace-$(VERSION).tar.gz dist
 	for s in hospitality manufacturing; do \
 	  (cd solutions/$$s && CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w" -o $(ROOT)/$(DIST)/$$s-server-$(VERSION)-$$($(GO) env GOOS)-$$($(GO) env GOARCH) ./cmd/$$s-server) || exit $$?; \

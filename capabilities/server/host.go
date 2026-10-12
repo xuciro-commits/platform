@@ -324,11 +324,11 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	if a == nil {
 		return nil, unknown()
 	}
-    if s.GetSchema().GetName() == "flow.dead-letter.replay" {
-      if record, refusal, handled := t.prepareContinuousDeadLetterReplay(m, s, now); handled {
-        return record, refusal
-      }
-    }
+	if s.GetSchema().GetName() == "flow.dead-letter.replay" {
+		if record, refusal, handled := t.prepareContinuousDeadLetterReplay(m, s, now); handled {
+			return record, refusal
+		}
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
