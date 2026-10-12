@@ -2,6 +2,17 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "An earlier application update is unconfirmed. Retry its original payload before changing membership.": "此前的应用更新尚未确认；更改归属前，请重试其原载荷。",
+  "The application update is unconfirmed. Retry the original request.": "应用更新尚未确认，请重试原请求。",
+  "The application was saved, but its current record could not be reloaded.": "应用已保存，但暂时无法重新读取当前记录。",
+  "The resource exists, but its project membership could not be read. Retry the same resource.": "资源已存在，但暂时无法读取其项目归属。请重试同一资源。",
+  "An application update may already have been accepted. Retry its original payload; leaving does not undo accepted changes.": "应用更新可能已被接收，请重试原载荷；离开不会撤销已接收的变更。",
+  "Retry original application update": "重试原应用更新",
+  "The resource was created but is not confirmed in this project. Retry adding the same record; do not create another.": "资源已创建，但尚未确认加入此项目。请重试加入同一记录，不要重新创建。",
+  "Retry adding created resource": "重试加入已创建的资源",
+  "Keep resource without project membership": "保留资源，不加入项目",
+  "Pages are confirmed, but application membership is not. Continue with the same imported pages; do not import them again.": "页面已确认，但应用归属尚未确认。请继续处理同一批页面，不要重新导入。",
+
   "The resource was saved, but its current record could not be reloaded.": "资源已保存，但暂时无法重新读取当前记录。",
   "The resource was installed, but its current record could not be reloaded.": "资源已安装，但暂时无法重新读取当前记录。",
 

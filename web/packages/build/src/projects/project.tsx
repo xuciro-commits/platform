@@ -77,13 +77,13 @@ function useProjectResources(project?: Project) {
     };
     const pages = inventories.page?.data?.records ?? [];
     for (const name of project.pages ?? []) {
-      items.push(resolve(kindOfType("build.page")!, { app: "build", kind: "page", name }, pages.find((page) => page.name === name && !page.archived), !!inventories.page?.data));
+      items.push(resolve(kindOfType("build.page")!, { app: "build", kind: "page", name }, pages.find((page) => page.name === name && !page.archived), inventories.page?.isSuccess === true));
     }
     for (const ref of project.resources ?? []) {
       const kind = resourceKinds.find((item) => (item.ref ?? item.kind) === ref.kind);
       if (!kind) continue;
       const record = (inventories[kind.kind]?.data?.records ?? []).find((item) => !item.archived && refKey(resourceRef(kind, item.name)) === refKey(ref));
-      items.push(resolve(kind, ref, record, !!inventories[kind.kind]?.data));
+      items.push(resolve(kind, ref, record, inventories[kind.kind]?.isSuccess === true));
     }
     return items;
   }, [project, definitions, ...resourceKinds.map((kind) => inventories[kind.kind]?.data)]);
@@ -131,6 +131,11 @@ export function ProjectHome({ id }: { id: string }) {
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [importing, setImporting] = useState(false);
   const [importedDependencies, setImportedDependencies] = useState<ApplicationImportDependency[]>([]);
+  const [createdResource, setCreatedResource] = useState<{ kind: ResourceKindInfo; target: { type: string; id: string } }>();
+  const [pendingPatch, setPendingPatch] = useState<{ changes: Partial<Api.Application>; revision?: number; settings: boolean }>();
+  const pendingRef = useRef(pendingPatch); pendingRef.current = pendingPatch;
+  const latestProject = useRef(project); latestProject.current = project;
+  const importRequest = useRef<{ changes: Partial<Api.Application>; revision: number; dependencies: ApplicationImportDependency[] } | undefined>(undefined);
   // Settings follow the record until this editor types into them (`edited`);
   // only typed changes are saved, and only the fields that differ. Comparing
   // a stale local copy against a record that another editor moved on would
@@ -156,21 +161,43 @@ export function ProjectHome({ id }: { id: string }) {
     return out;
   }, [project, settings, edited]);
   const dirty = Object.keys(changedSettings).length > 0;
-  const { markSaved, confirmDiscard } = useUnsavedChanges(dirty, () => {
+  const { markSaved, confirmDiscard } = useUnsavedChanges(dirty || !!pendingPatch || !!createdResource, () => {
+    pendingRef.current = undefined; setPendingPatch(undefined); setCreatedResource(undefined);
     baseline.current = undefined; setEdited(false); if (project) setSettings(fromRecord(project)); setError(undefined);
   }, saving);
-  const patch = async (changes: Partial<Api.Application>, revision = project?.revision, settingsSave = false) => {
-    if (!project || lock.current) return false;
+  const patch = async (changes: Partial<Api.Application>, revision = latestProject.current?.revision, settingsSave = false) => {
+    if ((!latestProject.current && !pendingRef.current) || lock.current) return false;
     if (dirty && !settingsSave) { setError(t("Save or discard project settings before changing resource membership.")); return false; }
+    const original = pendingRef.current;
+    if (original && (JSON.stringify(original.changes) !== JSON.stringify(changes) || original.revision !== revision)) {
+      setError(t("An earlier application update is unconfirmed. Retry its original payload before changing membership.")); return false;
+    }
+    const submitted = original ?? { changes: structuredClone(changes), revision, settings: settingsSave };
     lock.current = true; setSaving(true); setError(undefined);
+    let confirmed = false;
     try {
-      const ok = await decide("build.app.edit", { type: "build.app", id: project.id }, changes, { expectedRevision: revision, quiet: true, onRefused: setError });
-      if (ok) await query.refetch();
-      return ok;
-    } catch { setError(t("The project could not be saved.")); return false; } finally { lock.current = false; setSaving(false); }
+      confirmed = await decide("build.app.edit", { type: "build.app", id }, submitted.changes, {
+        expectedRevision: submitted.revision, quiet: true, onRefused: setError,
+        onOutcome: entry => {
+          const pending = entry.state === "SUBMISSION_STATE_PENDING" || entry.state === "SUBMISSION_STATE_UNKNOWN";
+          pendingRef.current = pending ? submitted : undefined; setPendingPatch(pending ? submitted : undefined);
+        },
+      });
+    } catch {
+      pendingRef.current = submitted; setPendingPatch(submitted); setError(t("The application update is unconfirmed. Retry the original request."));
+    }
+    if (!confirmed) { lock.current = false; setSaving(false); return false; }
+    pendingRef.current = undefined; setPendingPatch(undefined);
+    // The write stands even if its projection cannot refresh. Never offer a
+    // second write just because the subsequent read failed.
+    try { const current = await query.refetch(); if (!current.isSuccess) setError(t("The application was saved, but its current record could not be reloaded.")); }
+    catch { setError(t("The application was saved, but its current record could not be reloaded.")); }
+    finally { lock.current = false; setSaving(false); }
+    if (submitted.settings) { baseline.current = undefined; setEdited(false); markSaved(); }
+    return true;
   };
   const editSettings = (next: NonNullable<typeof settings>) => {
-    if (lock.current || !project) return;
+    if (lock.current || pendingRef.current || !project) return;
     // Diff against the snapshot actually displayed, not a newer read that
     // arrived before this event. The owner's revision gate decides conflicts.
     if (!baseline.current) baseline.current = { values: settings ?? fromRecord(project), revision: project.revision };
@@ -182,25 +209,41 @@ export function ProjectHome({ id }: { id: string }) {
     if (confirmed) { baseline.current = undefined; setEdited(false); markSaved(); }
     return confirmed;
   };
-  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, busy: saving, save: saveSettings });
+  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, enabled: !pendingPatch && !createdResource && !importing, busy: saving, save: saveSettings });
+  const changesForResource = (current: Project, kind: ResourceKindInfo, record: ResourceRecord): Partial<Api.Application> => kind.kind === "page"
+    ? { pages: [...new Set([...(current.pages ?? []), record.name])] }
+    : { resources: [...(current.resources ?? []).filter(ref => refKey(ref) !== refKey(resourceRef(kind, record.name))), resourceRef(kind, record.name)] };
   const addCreated = async (kind: ResourceKindInfo, target: { type: string; id: string }) => {
-    if (!project) return;
-    const record = await fetchRecord(target);
-    if (!record) { notify.error(t("The resource was created but could not be added to this project. Select it from the project's resources.")); return; }
-    const changes = kind.kind === "page" ? { pages: [...new Set([...(project.pages ?? []), record.name])] }
-      : { resources: [...(project.resources ?? []).filter((ref) => refKey(ref) !== refKey(resourceRef(kind, record.name))), resourceRef(kind, record.name)] };
-    if (await patch(changes)) open(resourceRoute(kind, target.id, project.id));
+    setCreatedResource({ kind, target });
+    if (target.type !== kind.type || lock.current || pendingRef.current) return;
+    try {
+      const { record } = await client.get<{ record: ResourceRecord }>(`/v1/records/${encodeURIComponent(target.type)}/${encodeURIComponent(target.id)}`);
+      const current = latestProject.current;
+      if (!record || record.id !== target.id || record.archived || !current) {
+        setError(t("The resource exists, but its project membership could not be read. Retry the same resource.")); return;
+      }
+      if (!await patch(changesForResource(current, kind, record), current.revision)) return;
+      setCreatedResource(undefined); open(resourceRoute(kind, target.id, id));
+    } catch { setError(t("The resource exists, but its project membership could not be read. Retry the same resource.")); }
   };
-  async function fetchRecord(target: { type: string; id: string }) {
-    try { const { record } = await client.get<{ record: ResourceRecord }>(`/v1/records/${target.type}/${encodeURIComponent(target.id)}`); return record; } catch { return undefined; }
-  }
-  const remove = (ref: Api.AssetRef) => project && void patch(ref.kind === "page" ? { pages: (project.pages ?? []).filter((name) => name !== ref.name), groups: (project.groups ?? []).map((group) => ({ ...group, pages: group.pages.filter((name) => name !== ref.name) })).filter((group) => group.pages.length) }
-    : { resources: (project.resources ?? []).filter((item) => refKey(item) !== refKey(ref)) });
+  const retryPatch = async () => {
+    const original = pendingRef.current;
+    if (!original || !await patch(original.changes, original.revision, original.settings)) return;
+    if (createdResource) { const resource = createdResource; setCreatedResource(undefined); open(resourceRoute(resource.kind, resource.target.id, id)); }
+  };
+  const remove = async (ref: Api.AssetRef) => {
+    const current = latestProject.current;
+    if (!current) return;
+    const changes = ref.kind === "page"
+      ? { pages: (current.pages ?? []).filter(name => name !== ref.name), groups: (current.groups ?? []).map(group => ({ ...group, pages: group.pages.filter(name => name !== ref.name) })).filter(group => group.pages.length) }
+      : { resources: (current.resources ?? []).filter(item => refKey(item) !== refKey(ref)) };
+    if (await patch(changes, current.revision)) setSelected(undefined);
+  };
   const builder = role("build") === "builder";
   const unpublished = owned.filter((item) => item.record && item.record.state !== "published");
   const problems: WorkbenchProblem[] = owned.filter((item) => item.missing).map((item) => ({ id: refKey(item.ref), severity: "warning", text: t("{title} is listed but neither a draft nor a published definition exists. Remove it or create it.", { title: item.title }), subject: t(item.kind.label), locate: () => { setSelected(refKey(item.ref)); setTab("resources"); } }));
-  const addExisting = (kind: ResourceKindInfo, record: ResourceRecord) => patch(kind.kind === "page" ? { pages: [...new Set([...(project!.pages ?? []), record.name])] }
-    : { resources: [...(project!.resources ?? []), resourceRef(kind, record.name)] });
+  const addExisting = (kind: ResourceKindInfo, record: ResourceRecord) => latestProject.current
+    ? patch(changesForResource(latestProject.current, kind, record), latestProject.current.revision) : Promise.resolve(false);
   const installed = definitions.find((d) => d.ref.app === "build" && d.ref.kind === "app" && d.ref.name === project?.name);
   const visible = owned.filter((item) => `${item.title} ${item.ref.name} ${t(item.kind.plural)}`.toLowerCase().includes(filter.toLowerCase()));
   const current = owned.find((item) => refKey(item.ref) === selected);
@@ -233,22 +276,35 @@ export function ProjectHome({ id }: { id: string }) {
       status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
       actions={<>
         {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
-        {builder && installed?.application && <Button size="sm" disabled={saving || dirty} onClick={() => setImporting(true)}>{t("Import Workshop module")}</Button>}
-        {builder && <Button size="sm" disabled={saving || dirty} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{unpublished.length}</span>}</Button>}
-        {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" onChange={(event) => {
-          const [kind, id] = event.target.value.split(":");
-          if (kind === "shared") { const found = shared.find((item) => refKey(item.ref) === id); if (found) void patch({ resources: [...(project!.resources ?? []), found.ref] }); return; }
-          const found = available.find((item) => item.kind.kind === kind && item.record.id === id); if (found) void addExisting(found.kind, found.record); }}>
+        {builder && installed?.application && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => { importRequest.current = undefined; setImporting(true); }}>{t("Import Workshop module")}</Button>}
+        {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{unpublished.length}</span>}</Button>}
+        {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" disabled={saving || dirty || !!pendingPatch || !!createdResource} onChange={(event) => {
+          let choice: { kind?: string; id?: string; ref?: Api.AssetRef };
+          try { choice = JSON.parse(event.target.value); } catch { return; }
+          if (choice.kind === "shared" && choice.ref) {
+            const found = shared.find(item => refKey(item.ref) === refKey(choice.ref!));
+            const current = latestProject.current;
+            if (found && current) void patch({ resources: [...(current.resources ?? []).filter(ref => refKey(ref) !== refKey(found.ref)), found.ref] }, current.revision);
+            return;
+          }
+          const found = available.find(item => item.kind.kind === choice.kind && item.record.id === choice.id);
+          if (found) void addExisting(found.kind, found.record); }}>
           <option value="">{t("Add existing…")}</option>
-          {shared.length > 0 && <optgroup label={t("Shared object types (platform and other apps)")}>{shared.map((item) => <option key={refKey(item.ref)} value={`shared:${refKey(item.ref)}`}>{item.title} · {item.app}</option>)}</optgroup>}
-          {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={`${kind.kind}:${item.record.id}`}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
+          {shared.length > 0 && <optgroup label={t("Shared object types (platform and other apps)")}>{shared.map((item) => <option key={refKey(item.ref)} value={JSON.stringify({ kind: "shared", ref: item.ref })}>{item.title} · {item.app}</option>)}</optgroup>}
+          {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
-        {builder && <NewResourceMenu disabled={saving || dirty} onCreated={(kind, target) => void addCreated(kind, target)} />}
-        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || !project.pages?.length} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
+        {builder && <NewResourceMenu disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)} />}
+        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || !!pendingPatch || !!createdResource || !project.pages?.length} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
       </>}
       left={{ label: t("Project resources"), content: tree }}
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+        {error && tab !== "settings" && <p role="alert" className="p-3 text-sm text-danger">{error}</p>}
+        {pendingPatch && <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("An application update may already have been accepted. Retry its original payload; leaving does not undo accepted changes.")} />
+          <div><Button disabled={saving} onClick={() => void retryPatch()}>{t("Retry original application update")}</Button></div></div>}
+        {createdResource && !pendingPatch && <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("The resource was created but is not confirmed in this project. Retry adding the same record; do not create another.")} />
+          <div className="flex gap-2"><Button disabled={saving || dirty} onClick={() => void addCreated(createdResource.kind, createdResource.target)}>{t("Retry adding created resource")}</Button>
+            <Button variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => setCreatedResource(undefined))}>{t("Keep resource without project membership")}</Button></div></div>}
         <div role="tablist" aria-label={t("Project sections")} className="flex gap-1 border-b border-border px-3 pt-2">
           {(["resources", "runs", "roles", "settings"] as const).map((item) => <Button variant="row" key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)}
             className={"rounded-t border-b-2 px-3 py-1.5 text-sm " + (tab === item ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}>{t(item === "resources" ? "Overview" : item === "runs" ? "Runs" : item === "roles" ? "Roles" : "Settings")}</Button>)}
@@ -263,8 +319,8 @@ export function ProjectHome({ id }: { id: string }) {
               <div className="mt-3 flex flex-wrap gap-2">
                 {current.record && <Button size="sm" variant="primary" onClick={() => open(resourceRoute(current.kind, current.record!.id, project.id))}>{t("Open")}</Button>}
                 {!current.record && current.installed && current.kind.kind === "object" && <Button size="sm" variant="primary" onClick={() => open({ view: "object-type", params: { object: current.ref.name, application: project.id } })}>{t("Open in object model")}</Button>}
-                {builder && current.missing && <NewResourceMenu disabled={saving || dirty} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
-                {builder && <Button size="sm" onClick={() => { remove(current.ref); setSelected(undefined); }}>{t("Remove from project")}</Button>}
+                {builder && current.missing && <NewResourceMenu disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
+                {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => void remove(current.ref)}>{t("Remove from project")}</Button>}
               </div>
             </div> : <div className="rounded-md border border-dashed border-border p-6 text-sm text-muted">
               {project.description || t("Choose a resource on the left, create one with New, or bring one in with Add existing.")}
@@ -296,7 +352,7 @@ export function ProjectHome({ id }: { id: string }) {
         </div>}
         {tab === "runs" && <ProjectRuns owned={owned} project={project.id} />}
         {tab === "roles" && <ProjectRoles owned={owned} />}
-        {tab === "settings" && settings && <fieldset disabled={saving} className="grid max-w-xl gap-3 p-4">
+        {tab === "settings" && settings && <fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
           <label className="grid gap-1 text-xs">{t("Title")}<Input value={settings.title} disabled={!builder} onChange={(event) => editSettings({ ...settings, title: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Name")}<Input value={settings.name} disabled={!builder} onChange={(event) => editSettings({ ...settings, name: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Icon")}<IconPicker value={settings.icon} disabled={!builder} onChange={(icon) => editSettings({ ...settings, icon })} /></label>
@@ -311,7 +367,20 @@ export function ProjectHome({ id }: { id: string }) {
       </div>
     </Workbench>
     {installed?.application && <WorkshopApplicationImport key={JSON.stringify([project.id, me])} open={importing} onClose={() => setImporting(false)} application={{ ref: installed.ref, sourceVersion: installed.version }}
-      onPrepared={({ pages, header, dependencies }) => { setImportedDependencies(dependencies); void patch({ pages: [...pages, ...(project.pages ?? []).filter((name) => !pages.includes(name))], header, uiProfile: header ? pageUIProfile : project.uiProfile }); }} />}
+      onPrepared={async ({ pages, header, dependencies }) => {
+        if (!importRequest.current) {
+          const current = latestProject.current;
+          if (!current) return false;
+          importRequest.current = {
+            changes: { pages: [...pages, ...(current.pages ?? []).filter(name => !pages.includes(name))], ...(header ? { header, uiProfile: pageUIProfile } : {}) },
+            revision: current.revision, dependencies: structuredClone(dependencies),
+          };
+        }
+        const submitted = importRequest.current;
+        const confirmed = await patch(submitted.changes, submitted.revision);
+        if (confirmed) { setImportedDependencies(submitted.dependencies); importRequest.current = undefined; }
+        return confirmed;
+      }} />}
   </>;
 }
 
