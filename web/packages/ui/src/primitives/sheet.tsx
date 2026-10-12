@@ -1,3 +1,4 @@
+import { useViewVisible } from "../shell/ViewVisibility";
 import {overlayPolicy,type OverlayPolicy} from "./overlay-policy";
 import { Dialog as D } from "radix-ui";
 import { X } from "lucide-react";
@@ -13,6 +14,8 @@ export function Sheet({ open, onOpenChange, title, children, width = 420, return
   suspended?: boolean;
   returnFocus?: HTMLElement | null; fallbackFocus?: HTMLElement | null;
 } & OverlayPolicy & {side?:"left"|"right"}) {
+  const visible = useViewVisible();
+  suspended = suspended || !visible;
   const focus = useOverlayFocus(returnFocus, fallbackFocus);
   const policy=overlayPolicy({backdrop,closeOnBackdrop,closeOnEsc});
   const body = useOverlayBody(open, children);

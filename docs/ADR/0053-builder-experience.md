@@ -354,7 +354,7 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 
 | ADR 决策 | 代码 |
 | --- | --- |
-| D6 单一 `Workbench` 容器（标题栏 · 结构 · 主区 · 检查器 · 底栏，尺寸记忆） | `@platform/ui` `layout/Workbench.tsx`（`Workbench`、`StructureRow`、`PanelSection`、`ProblemList`、`WorkbenchProblem`） |
+| D7 单一 `Workbench` 容器（标题栏 · 结构 · 主区 · 检查器 · 底栏，尺寸记忆） | `@platform/ui` `layout/Workbench.tsx`（`Workbench`、`StructureRow`、`PanelSection`、`ProblemList`、`WorkbenchProblem`）。侧栏与 Dock 隐藏而不销毁已访问的编辑上下文；Dock 页签只选择/打开，关闭为独立命令，`open` / `onOpenChange` 让 Run / Publish 重新打开同一任务。页签统一复用 `ContentTabs` 的惰性挂载、保留输入与方向键 / Home / End 导航；隐藏拥有面板时 `Dialog` / `Sheet` 撤下全局层而保留逻辑输入。按容器可用空间切换三栏或单面板聚焦，分隔条有边界、键盘及双击复位；不向文档写入面板布局。 |
 | D6 草稿保存、`● Draft`、Publish 菜单 | `build/editor/workbench.tsx`（对象/动作的 Save、其他编辑器的 `useAutoSave`、`savingState`、`DraftStatus`、`PublishMenu`、`WorkbenchMessage`、`ResourceControls`） |
 | D1 Projects 取代 Application 编辑器 | `build/projects/project.tsx`（`ProjectsList`、`ProjectHome`：资源树 · 内容/设置 · 未发布变更底栏）、`projects/resources.ts`（资源种类与路由） |
 | D1 Workshop Module = 项目的页面 + 页头 + 导航 | `build/workshop/ModuleWorkbench.tsx`（模块树、页头编辑、分组、变量/查询汇总、模块预览；移除最后一个 Logo 项同时清 URL，关闭页头以显式 `null` 清除保存值）；`PageEditor` 作为模块内的页面视图（`module` 上下文）。Problems 镜像宿主分组拒绝，发布审查按宿主 Go `%q` 的实际引号识别原因，以成员语言显示并返回 Navigation/Header；特定页头规则优先于通用规则，未知拒绝保留原文 |
@@ -362,7 +362,7 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 | D2 对象类型工作台：Overview · Properties · Links · Actions · Lifecycle · Permissions · Preview | `build/ontology/process.tsx` `ObjectTypeEditor`（草稿会话抽到 `object-draft.ts` `useObjectDraft`，类型与检查抽到 `object-model.ts`）；Actions 分区的检查器只给 `ActionSummary`（计数、问题、"Open action type"） |
 | §6 动作类型是一等资源：Overview · Parameters · Form · Rules · Submission criteria · Side effects · Approval · Permissions | `build/ontology/action-type.tsx` `ActionTypeEditor({id, action})`：左栏 = 对象的动作列表 + 分区；主区 = 分区的表格 / 表单预览；检查器编辑选中的行；底栏 Problems 只列本动作的问题。动作仍存于对象记录的 `actions[]`，与对象工作台共用同一草稿会话 |
 | §7 事件 → 效果链 | `build/workshop/page-editor/EffectsPanel.tsx` `EventEffects`（按钮：全部效果；按钮组：set / overlay / action；表格选择：仅 set）；运行时 `app/runtime/PageNavigation.ts` `usePageEffects` 顺序执行，`useActionEffect` 走动作表单或直接 `decide`，被拒绝/取消即停链；删除 `NavigationPanel.tsx`、`ButtonEventProperties` |
-| D3 Automate：自动化卡片（when/then 一句话） + 线性自动化编辑器 + 逻辑流程工作台 + Runs | `build/automate/automation.tsx`（`Automations` 列表仅收 `kind: "automation"` 的 `build.process`；`AutomationEditor`：触发器 · 条件 · 效果三张卡片，右侧复用 `WorkflowInspector`，底栏 Problems · Runs，保存时把卡片编译成步骤）、`automate/workflow.tsx`（`Flows`、`FlowEditor`） |
+| D3 Automate：自动化卡片（when/then 一句话） + 线性自动化编辑器 + 逻辑流程工作台 + Runs | `build/automate/automation.tsx`（`Automations` 列表仅收 `kind: "automation"` 的 `build.process`；`AutomationEditor`：触发器 · 条件 · 效果三张卡片，右侧复用 `WorkflowInspector`，底栏 Problems · Runs，保存时把卡片编译成步骤）、`automate/workflow.tsx`（`Flows`、`FlowEditor`）。Flow / Automation 的检查器只持有字段，标题与关闭由 Workbench 提供，Input / Settings / Output 页签复用 `ContentTabs`；关闭检查器不取消选中节点，重开保留页签及未解析输入。 |
 | D8 Changes 视图（所有草稿一览 + 发布审查） | `build/releases/changes.tsx` |
 | D9 路由：`projects, project, object-type, action-type, module, automation, flow, runs, changes, release-history` | `build/index.tsx`；旧路由 `applications/application/studio/pages/compose/model/process/workflow/candidate-test` 由 `apps/workspace/src/shell/legacy.ts` 的别名表（含参数映射）转向 |
 | 删除 | `projects/application.tsx`、`projects/studio.tsx`、`shared/asset-controls.tsx`、`PagesList`、`Objects`、`Workflows`、`WorkflowEditor`、`ProcessEditor` |

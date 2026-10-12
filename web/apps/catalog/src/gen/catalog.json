@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:aac0d6c320f37ad4",
+  "revision": "sha256:fed530a8f0f3b22f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -3395,7 +3395,7 @@
         },
         {
           "name": "items",
-          "type": "{ id: string; title: string; content: ReactNode }[]",
+          "type": "{ id: string; title: ReactNode; content: ReactNode }[]",
           "optional": false,
           "isCallback": false,
           "isSlot": true
@@ -3413,13 +3413,48 @@
           "optional": false,
           "isCallback": true,
           "isSlot": false
+        },
+        {
+          "name": "compact",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "open",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "actions",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
+          "name": "className",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
         }
       ],
       "slots": [
         {
           "name": "items",
-          "type": "{ id: string; title: string; content: ReactNode }[]",
+          "type": "{ id: string; title: ReactNode; content: ReactNode }[]",
           "optional": false
+        },
+        {
+          "name": "actions",
+          "type": "ReactNode",
+          "optional": true
         }
       ],
       "composed": [
@@ -11548,6 +11583,7 @@
       ],
       "composed": [
         "ui/button",
+        "ui/content-tabs",
         "ui/input-drafts"
       ],
       "relatedTypes": [
@@ -11569,7 +11605,7 @@
         {
           "name": "WorkbenchPanel",
           "kind": "type",
-          "signature": "export type WorkbenchPanel = { label: string; scope?:string; locate?:(path?:string)=>void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };"
+          "signature": "export type WorkbenchPanel = { label: string; heading?: ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void; scope?: string; locate?: (path?: string) => void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };"
         }
       ]
     }
@@ -12894,6 +12930,8 @@
     ],
     "ui/content-tabs": [
       "web/packages/app/src/pages/sections.tsx",
+      "web/packages/build/src/automate/workflow-inspector.tsx",
+      "web/packages/ui/src/layout/Workbench.tsx",
       "web/packages/ui/src/records/Records.tsx"
     ],
     "ui/sheet": [

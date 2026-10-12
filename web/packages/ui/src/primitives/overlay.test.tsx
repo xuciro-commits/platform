@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
+import { ViewVisibilityContext } from "../shell/ViewVisibility";
 import { Button, Dialog, Sheet, FlowLayout, Input, setLanguage } from "../index";
 
 afterEach(cleanup);
@@ -52,4 +53,16 @@ for (const Frame of [Dialog, Sheet]) test(`${Frame.name} suspends its global lay
   rerender(<Frame open={false} title="Paused task" onOpenChange={() => {}}><Input aria-label="Paused draft" defaultValue="initial" /></Frame>);
   rerender(<Frame open title="Paused task" onOpenChange={() => {}}><Input aria-label="Paused draft" defaultValue="initial" /></Frame>);
   expect((await screen.findByLabelText("Paused draft") as HTMLInputElement).value).toBe("initial");
+});
+
+
+for (const Frame of [Dialog, Sheet]) test(`${Frame.name} releases global layers automatically when its owning pane is hidden`, async () => {
+  const view = (visible: boolean) => <ViewVisibilityContext.Provider value={visible}><Frame open title="Retained pane task" onOpenChange={() => {}}><Input aria-label="Retained pane input" defaultValue="initial" /></Frame></ViewVisibilityContext.Provider>;
+  const { rerender } = render(view(true));
+  fireEvent.change(await screen.findByLabelText("Retained pane input"), { target: { value: "mock draft" } });
+  rerender(view(false));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(document.body.style.pointerEvents).not.toBe("none");
+  rerender(view(true));
+  expect((await screen.findByLabelText("Retained pane input") as HTMLInputElement).value).toBe("mock draft");
 });

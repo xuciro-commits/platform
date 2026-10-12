@@ -126,10 +126,14 @@ export function FlowEditor({ id }: { id: string }) {
   const [createID]=useState(()=>crypto.randomUUID());
   const {draft,dirty}=session;
   const loaded=useRef(""),baseRevision=useRef(0),lock=useRef(false),acknowledged=useRef<WorkflowDraft|undefined>(undefined);
-  const [chosen, setChosen] = useState("");
+  const [chosen, setChosenValue] = useState("");
+  const [inspectorOpen, setInspectorOpen] = useState<boolean>();
+  const setChosen = useCallback((name: string) => { setChosenValue(name); setInspectorOpen(true); }, []);
   const [importingFlow,setImportingFlow]=useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const [dock, setDock] = useState<"problems" | "run" | "history" | "test" | "release">("problems");
+  const [dock, setDockValue] = useState<"problems" | "run" | "history" | "test" | "release">("problems");
+  const [dockOpen, setDockOpen] = useState<boolean>();
+  const setDock = (next: typeof dock) => { setDockValue(next); setDockOpen(true); };
   const [mountedDocks, setMountedDocks] = useState<Partial<Record<typeof dock, true>>>({});
   const [search, setSearch] = useState(""), [filter, setFilter] = useState("all");
   const [run, setRun] = useState<WorkflowRun>();
@@ -349,11 +353,11 @@ export function FlowEditor({ id }: { id: string }) {
         { id: "blocks", title: t("Blocks"), content: library },
         { id: "data", title: t("Data"), content: data },
       ] }}
-      right={{ label: t("Flow inspector"), content: <DraftInputs.Provider value={{...session.inputs,scope:node ? `step:${node.name}` : "settings",reveal:()=>setChosen(node?.name??"")}}><div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
+      right={{ label: t("Flow inspector"), heading: node?.title || node?.name || t("Workflow settings"), scope: node ? `step:${node.name}` : "settings", open: inspectorOpen, onOpenChange: setInspectorOpen, content: <DraftInputs.Provider value={{...session.inputs,scope:node ? `step:${node.name}` : "settings",reveal:()=>setChosen(node?.name??"")}}><div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
         onChange={(patch) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === chosen ? { ...step, ...patch } : step) }))} onRename={rename}
-        onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} onClose={() => setChosen("")} />
-        : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} onClose={() => setChosen("")} />}</div></DraftInputs.Provider> }}
-      dock={{ label: t("Flow dock"), value: dock, onChange: (next) => setDock(next as typeof dock), tabs: [
+        onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} />
+        : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} />}</div></DraftInputs.Provider> }}
+      dock={{ label: t("Flow dock"), value: dock, open: dockOpen, onOpenChange: setDockOpen, onChange: (next) => setDock(next as typeof dock), tabs: [
         { id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} empty={validation?.valid ? t("The native compiler accepted this draft.") : t("No problems.")} /> },
         { id: "run", title: t("Run"), content: <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_280px]"><DraftInputs.Provider value={{...runInputs,scope:"run"}}><JSONEditor label={t("Run input (JSON)")} value={runInput} schema={installed?.inputSchema} onChange={setRunInput} rows={5} /></DraftInputs.Provider>
           <div className="grid content-start gap-2"><h4 className="text-xs font-medium">{t("Run published flow")}</h4><p className="text-[11px] leading-5 text-muted">{t("Runs use the published version and real permissions. Actions and effects can change your platform data.")}</p>

@@ -143,7 +143,7 @@ export function AutomationEditor({ id }: { id: string }) {
       <ActionMenu label={t("More automation commands")} icon={<MoreHorizontal />} commands={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: !draft.id, run: () => open({ view: "flow", params: { id: draft.id } }) }]} />
       <PublishMenu type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} onReview={() => open({ view: "release-review", params: { kind: "flow", id: draft.id } })} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "automation", params: { id } }} />
     </>}
-    right={{ label: t("Automation inspector"),scope:String(chosen),locate:()=>setChosen(chosen), content: <div className="p-2">
+    right={{ label: t("Automation inspector"), heading: chosenStep?.title || chosenStep?.name || t(chosen === "condition" ? "If" : "When"), scope:String(chosen),locate:()=>setChosen(chosen), content: <div className="p-2">
       {chosen === "trigger" && <div className="grid gap-3">
         <label className="grid gap-1 text-xs">{t("Title")}<Input value={draft.title} onChange={(event) => change({ title: event.target.value })} /></label>
         <label className="grid gap-1 text-xs">{t("Start kind")}<Select value={draft.every ? draft.every : ""} disabled={!!draft.published} onChange={(event) => change(event.target.value ? { every: event.target.value, object: "", when: "" } : { every: undefined })}><option value="">{t("When a record reaches a state")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>
@@ -161,7 +161,7 @@ export function AutomationEditor({ id }: { id: string }) {
       {chosenStep && <WorkflowInspector step={chosenStep} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []}
         onChange={(patch) => setSteps(condition, effects.map((step) => step.name === chosen ? { ...step, ...patch } : step))}
         onRename={(name) => { if (/^[a-z][a-z0-9]*$/.test(name) && !draft.steps.some((step) => step.name === name)) { setSteps(condition, effects.map((step) => step.name === chosen ? { ...step, name } : step)); setChosen(name); } }}
-        onMakeEntry={() => {}} onClose={() => setChosen("trigger")} />}
+        onMakeEntry={() => {}} />}
     </div> }}
     dock={{ label: t("Automation dock"), tabs: [
       { id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} empty={t("No problems. The automation can be published.")} /> },

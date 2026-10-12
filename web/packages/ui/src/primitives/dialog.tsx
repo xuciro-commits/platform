@@ -1,3 +1,4 @@
+import { useViewVisible } from "../shell/ViewVisibility";
 import {InputDraftProvider,useInputDrafts} from "../fields/draft";
 import {overlayPolicy,type OverlayPolicy} from "./overlay-policy";
 import { Dialog as D } from "radix-ui";
@@ -16,6 +17,8 @@ export function Dialog({ open, onOpenChange, title, children, wide, returnFocus,
   suspended?: boolean;
   returnFocus?: HTMLElement | null; fallbackFocus?: HTMLElement | null;
 } & OverlayPolicy & {width?:number;side?:"left"|"right"}) {
+  const visible = useViewVisible();
+  suspended = suspended || !visible;
   const inputs=useInputDrafts();
   const change=(next:boolean)=>{if(!inputs?.busy&&!suspended)onOpenChange(next);};
   const focus = useOverlayFocus(returnFocus, fallbackFocus);
