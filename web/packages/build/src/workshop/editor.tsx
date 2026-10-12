@@ -135,7 +135,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     if (page) { session.load(loadDraft(page)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`; }
     select({ kind: "page" }); setRefused(undefined);
-  });
+  }, busy);
   useEffect(() => {
     if (!page || dirty || busy || loaded.current === `${page.id}:${page.revision}`) return;
     session.load(loadDraft(page)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`;

@@ -105,8 +105,10 @@ S1–S5 已于一次提交落地。
 
 | 决策 | 代码 |
 |---|---|
-| D1 页签按应用分组 | `@platform/ui` `shell/Workspace.tsx`：`layoutScope` / `scopeOf` 属性；布局以 `${storageKey}:${scope}` 记忆并在切换时交换（为新应用刚打开的页签随之带过去）；`TabMenu`（右键：关闭 · 关闭其他 · 关闭右侧 · 关闭全部 · 在旁边打开 · 移到新窗口）；Window 菜单同一套 + ⌘W；`open(route, { window: "beside" })` 右侧分栏；`closeAll` 进入 `useWorkspace()`。`apps/workspace/src/App.tsx` 传入当前应用 id 与视图归属。删除：Float tab、悬浮组、`dockFloating`、`window: "float"`（全部调用点改为 `beside`）。 |
+| D1 页签按应用分组 | `@platform/ui` `shell/Workspace.tsx` 与 `WorkspaceLayout.ts`：应用布局只记其所属页签，Shell 页签独立记忆并随切换携带；恢复目标的原活动资源，无布局才打开应用 home。应用菜单/门户/收藏/命令、跨应用 hash/最近入口、账户/身份/语言与批量关闭复用 `unsaved.ask`；RHF 合法修改、输入 raw 和待完成提交都参加保护，busy 时禁止离开/放弃。已有页签的 `beside` 移动同一个 panel，不克隆草稿；只剩一个页签且无其他分栏时禁用伪分屏。旧浮动布局恢复为普通分栏。关闭全部清空旧 URL，并提供主页/命令入口。popout 转移原 panel，不先放弃草稿；两 Web 入口使用同一 `web/public/popout.html`，子窗不启动第二应用或身份会话，阻止弹窗有明确反馈。`App.tsx` 用同一 `applicationOf` 归属驱动选择和保护，显式选择先于旧活动路由。`shell/legacy.ts` 在 hash/布局挂载前解码旧别名；旧 `flow?id=` 按可读的真实 `build.process` / `flow.instance` 类型解析，不猜 ID 格式；设计态 `flow`、共享 `flow-instance` 与运维 `automation-operations` 各有唯一视图，旧运维 automation 列表按 surface/原布局归属解码。历史身份与后台权限不改。 |
 | D2 一个应用设计台 | `packages/build/src/index.tsx`：单一 `build` 应用（标题 Builder / 应用设计台），`views` 全部收回，左栏分组：本体 · 界面 · 自动化 · 函数 · 发布 · 探索（+ Shell 注入的"项目"组，现在在 Build 投影下始终显示）；publisher 角色只见"发布"组。删除 `contributions` 与六个门户条目、"Discover capabilities"；`host/packages.ts` 两个角色同一加载器。 |
 | D3 资产库 | `apps/catalog/src/Catalog.tsx` 重写为 `Workbench`；`app.tsx` 更名 Asset Library，视图只剩 `catalog`（`?id=&layer=&expand=1`）与 `sandbox`。删除 `Governance.tsx`、`governance` / `catalog-example` 视图（别名表转向）、构建/开发模式、"从任务开始"、Workspace URL 输入框。 |
-| D4 代码沙箱 | `apps/catalog/src/Sandbox.tsx` 重写为 `Workbench`：片段（预设移入 `presets/*.html`；我的片段存 localStorage）· 编辑器（Tab 缩进、⌘↩ 运行、⌘S 保存）· 预览（设备宽度、最大化）· 控制台（iframe 内注入桥接脚本回传 console / error）；标题栏命令：运行 · 保存片段 · 复制 · 复制为组件 · 重置。 |
+| D4 代码沙箱 | `apps/catalog/src/Sandbox.tsx` 与私有 `sandbox-model.ts`：预设/本浏览器片段、编辑器、可调整/展开预览与有界 console，命令仍为 Run / Save / Copy / Copy as component / Reset。切片段、新建、重置、删除及离开复用原草稿保护；只有实际浏览器写入成功才确认保存，损坏/未知数据不覆盖，检测到另一页签变更明确拒绝并可重读。在线片段按租户/主体隔离，旧全局条目留在离线浏览器库，不自动归给新登录人；这不是加密或服务端草稿。Run 即使代码未变也重新执行，保留原 doctype，预览明确标出上次运行；隐藏执行 frame 会移除，重开从上次运行重新启动，代码草稿不丢。console 只接本 frame 的已校验消息，保留 200 条、每条最多 65536 字符并标截断。React 骨架以字符串字面量复制源码，`${}`/反引号不能变成插值执行。 |
 | D5 面板归属 | 现有编辑器已符合；本 ADR 作为规则记录。 |
+
+本次 W4 Shell/表单/沙箱改动以源码审查、受限语法/类型和小型逻辑检查收口；未重跑 Playwright、部署或重型套件。此前路线只复用其未受影响的结果，不能将 jsdom/Dockview 或静态检查当作真实窗口、窄视口与负责人验收。

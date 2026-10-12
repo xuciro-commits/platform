@@ -42,9 +42,9 @@ export function CodeEditor({ id }: { id: string }) {
   const testInputs=useInputBuffers();
   const [input, setInput] = useState<unknown>({}), [executedInput, setExecutedInput] = useState<unknown>(), [call, setCall] = useState("");
   const query = useReadQuery<{ record?: CodeDraft }>(`/v1/records/build.code/${encodeURIComponent(id)}`, draft.state === "compiling" ? 1000 : undefined);
-  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { setDraft(query.data?.record ?? empty); setDirty(false); setError(""); setSDK(""); });
+  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { setDraft(query.data?.record ?? empty); setDirty(false); setError(""); setSDK(""); }, busy);
   const result = useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`, 1000, !!call && tab === "test");
-  useEffect(() => { if (query.data?.record && !dirty) setDraft(query.data.record); }, [query.data, dirty]);
+  useEffect(() => { if (query.data?.record && !dirty && !busy) setDraft(query.data.record); }, [query.data, dirty, busy]);
   const testSchemaKey = JSON.stringify((() => { try { return JSON.parse(draft.published ?? "").input; } catch { return draft.input; } })());
   useEffect(() => { setInput(schemaDefault(JSON.parse(testSchemaKey))); setCall(""); setExecutedInput(undefined); }, [testSchemaKey]);
   const change = (patch: Partial<CodeDraft>) => { setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); setSDK(""); };

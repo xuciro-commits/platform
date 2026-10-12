@@ -17,9 +17,10 @@ import { usePlatformHost } from "./host/usePlatformHost";
 import { IDENTITY_KEY, TENANT_KEY, forget, preferred, remember, remembered, type Identity } from "./session/identity";
 import { HostOnly, type HostAdmin } from "./HostOnly";
 import { Recovery, ReleaseInformation, SignInProblem } from "./session/Problems";
-import { legacyProjection, legacyRoute, shellViews } from "./shell/legacy";
+import { legacyProjection, resolveLegacyRoute, shellViews } from "./shell/legacy";
 import { availableProjections, categories, portalEntry, projections, type Projection } from "./shell/registry";
 import { pageApplication, tenantApps } from "./tenantApps";
+import { routeApplication } from "./shell/navigation";
 
 export type { Identity } from "./session/identity";
 
@@ -97,8 +98,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const scope = useRef(selectionScope);
   scope.current = selectionScope;
   const [current, setCurrent] = useState<string>();
-  const chosen = useRef<string | undefined>(undefined);
-  useEffect(() => { setCurrent(selectionScope ? remembered(selectionScope) : undefined); }, [selectionScope]);
+  const chosen = useRef<{ id: string; from?: string } | undefined>(undefined);
+  useEffect(() => { chosen.current = undefined; setCurrent(selectionScope ? remembered(selectionScope) : undefined); }, [selectionScope]);
   // The apps this member may open: the code packages above, and the
   // applications this tenant handed to its people (ADR-0036). The Host
   // Console is a host-level application: it appears only for host administrators.
@@ -120,6 +121,16 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const studioApplicationID = activeRoute?.view === "application" ? activeRoute.params?.id : activeRoute?.params?.application;
   const studioApplication = studioApplications.find((record) => !record.archived && record.id === studioApplicationID);
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
+  // Navigation and the destructive-switch guard must agree on one owner,
+  // including shared pages, diagnostics and old surface-qualified links.
+  const applicationOf = useCallback((route: Route, choice?: string) => {
+    if (shellViews.includes(route.view)) return undefined;
+    const owned = pageApplication(route, definitions, current) ?? owner.get(route.view)
+      ?? (route.view === "dashboard" ? route.params?.app : undefined)
+      ?? (["records", "definitions"].includes(route.view) ? all.find((entry) => entry.surface === "developer")?.id : undefined);
+    const id = routeApplication(route, all, owned, choice);
+    return id && all.some((entry) => entry.id === id) ? id : undefined;
+  }, [all, current, definitions, owner]);
   const select = useCallback((id?: string) => {
     if (scope.current !== selectionScope) return;
     setCurrent(id);
@@ -145,17 +156,24 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [me?.account?.theme, me?.account?.homePage, ready, all.length]);
   useEffect(() => {
     if (!activeRoute) return;
-    const retired = legacyRoute(activeRoute);
-    if (retired) { location.hash = routeToHash(retired); return; }
     if (shellViews.includes(activeRoute.view)) return; // the shell's own places keep the current application
-    const requested = activeRoute.params?.surface ?? (legacyProjection(activeRoute) === "build" ? "studio" : undefined);
-    const context = requested && all.find((entry) => entry.surface === requested);
-    if (context) { if (context.id !== current) select(context.id); return; }
-    const id = owner.get(activeRoute.view) ?? pageApplication(activeRoute, definitions, current)
-      ?? (["records", "definitions"].includes(activeRoute.view) ? all.find((entry) => entry.surface === "developer")?.id : undefined);
-    if (chosen.current) { if (!id || id === chosen.current) chosen.current = undefined; else return; }
+    const choice = chosen.current?.from === routeToHash(activeRoute) ? chosen.current.id : undefined;
+    const id = applicationOf(activeRoute, choice);
+    if (id) chosen.current = undefined;
     if (id && id !== current && all.some((a) => a.id === id)) select(id);
-  }, [activeRoute, all, app, current, definitions, owner, select, surface]);
+  }, [activeRoute, applicationOf, current, select]);
+  const selectedEntry = useRef(current); selectedEntry.current = current;
+  const resolveRoute = useCallback(async (route: Route, layout?: string) => {
+    const resolved = await resolveLegacyRoute(route, {
+      builder: owner.get("flow") === "build", application: layout ?? selectedEntry.current,
+      read: (type, id) => client.record(type, id),
+    });
+    // Old page links become explicit once their chosen membership is known.
+    // Reusing that page in another app must not reassign a saved tab later.
+    const application = pageApplication(resolved, definitions, layout ?? selectedEntry.current);
+    return resolved.view === "page" && application && !resolved.params?.application
+      ? { ...resolved, params: { ...resolved.params, application } } : resolved;
+  }, [client, definitions, owner]);
   const views = useMemo(() => {
     const views = [...chromeViews(() => open.current, () => registry.current), ...(apps ?? []).flatMap((a) => a.views)];
     const seen = new Set<string>();
@@ -190,9 +208,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const openApplication = (id: string) => {
     const target = all.find((a) => a.id === id);
     if (!target) return;
-    chosen.current = id; // an explicit choice wins over tabs that surface while the layout swaps (React #185 ping-pong)
+    chosen.current = { id, from: activeRoute && routeToHash(activeRoute) }; // the previous active route must not undo an explicit app choice during restoration
     select(id);
-    location.hash = routeToHash(target.home);
+    // Workspace restores the target's active tab, or its home when no layout exists.
   };
   const chooseProjection = (id: string) => {
     if (projectionKey) remember(projectionKey, id);
@@ -224,14 +242,14 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     <HostContext.Provider value={host}>
       <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={surface === "studio" && studioApplication ? studioApplication.title || studioApplication.name : app?.title ?? t("Platform")} productIcon={app?.icon}
         storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
-        layoutScope={app?.id} scopeOf={(route) => shellViews.includes(route.view) ? undefined : owner.get(route.view) ?? pageApplication(route, definitions, current)}
-        views={views} home={{ view: "home" }}
+        layoutScope={app?.id} scopeOf={applicationOf}
+        views={views} resolveRoute={resolveRoute} home={{ view: "home" }}
         rail={{ home: { view: "home" }, applications: { view: "portal" }, notifications: { route: { view: "notifications" }, unread },
           ...(host.can("agent.run.start") ? { assist: { view: "assistant" } } : {}) }}
         applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
         workspaces={{ options: held.map((id) => ({ id, title: projections.find((p) => p.id === id)!.title(), icon: projectionIcon[id] })), current: projection, onSelect: chooseProjection }}
         onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}
-        onActiveRoute={setActiveRoute}
+        onActiveRoute={setActiveRoute} onEmpty={() => setActiveRoute(undefined)}
         nav={[
           ...(surface === "studio" && host.role("build") === "builder" ? [{ label: t("Projects"), items: [
             { label: t("All projects"), icon: <LayoutGrid />, route: { view: "projects", params: { surface: "studio" } } },
@@ -269,7 +287,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         </div>}
         session={{ tenant: me!.tenant?.name || me!.tenantId, principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions,
           current: signedIn ? "" : `as:${token}`, onSwitch,
-          onAccount: all.some((a) => a.id === "platform") ? () => { select("platform"); location.hash = routeToHash({ view: "account" }); } : undefined }} />
+          onAccount: all.some((a) => a.id === "platform") ? () => { chosen.current = { id: "platform", from: activeRoute && routeToHash(activeRoute) }; select("platform"); location.hash = routeToHash({ view: "account" }); } : undefined }} />
       <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} /></ApplicationSessionsProvider>
     </HostContext.Provider>
   );

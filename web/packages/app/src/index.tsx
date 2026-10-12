@@ -399,6 +399,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
+  const editingBusy = useRef(false);
   const archive = useRecordArchive(type);
   const transition = useTransition(type);
   // Files (ADR-0028): upload the bytes, then attach them to this record by a decision.
@@ -419,7 +420,9 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
     download:collaboration.download.bind(collaboration),
   };
   const act = async (schema: string, r: EntityRecord, payload: object) => {
-    if (await decide(schema, { type, id: r.id }, payload, { expectedRevision: r.revision })) setEditing(undefined);
+    const confirmed = await decide(schema, { type, id: r.id }, payload, { expectedRevision: r.revision });
+    if (confirmed) setEditing(undefined);
+    return confirmed;
   };
   return (
     <>
@@ -439,8 +442,8 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
         </>} />
       {archive.dialog}
       {transition.dialog}
-      <Dialog wide={source.entity(type)?.fields.some((f) => f.type === "lines")} open={!!editing} onOpenChange={(o) => !o && setEditing(undefined)} title={t("Edit {id}", { id: editing?.id ?? "" })}>
-        {editing && <GeneratedForm type={type} record={editing} submitLabel={t("Save")} onCancel={() => setEditing(undefined)}
+      <Dialog wide={source.entity(type)?.fields.some((f) => f.type === "lines")} open={!!editing} onOpenChange={(o) => !o && !editingBusy.current && setEditing(undefined)} title={t("Edit {id}", { id: editing?.id ?? "" })}>
+        {editing && <GeneratedForm type={type} record={editing} submitLabel={t("Save")} onBusy={(busy) => { editingBusy.current = busy; }} onCancel={() => setEditing(undefined)}
           onSubmit={(v) => act(`${type}.edit`, editing, v)} />}
       </Dialog>
     </>

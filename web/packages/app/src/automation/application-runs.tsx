@@ -14,9 +14,9 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
  const { role } = useHost(), { open } = useWorkspace();
  const [offset,setOffset]=useState(0),[chosen,setChosen]=useState<string>();
  const query=useReadQuery<Api.ApplicationRunPage>(`/v1/applications/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/runs?offset=${offset}&limit=50`);
- const builder=role("build")==="builder" && !!query.data;
+ const builder=role("build")==="builder" && !!query.data && !query.isError;
  const applications=useRecordInventory<{id:string;name:string}>("build.app",1000,builder && owner==="build");
- const selected=query.data?.runs.find(run=>`${run.kind}/${run.id}`===chosen);
+ const selected=query.isError?undefined:query.data?.runs.find(run=>`${run.kind}/${run.id}`===chosen);
  const processes=useRecordInventory<{id:string;name:string}>("build.process",1000,builder && selected?.resource?.app==="build" && selected.kind==="flow");
  const computations=useRecordInventory<{id:string;name:string}>("build.code",1000,builder && selected?.resource?.app==="build" && selected.kind==="compute");
  const application= `${owner}:${name}`;
@@ -40,8 +40,8 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
     <Button size="sm" disabled={offset+50>=(query.data?.total??0)} onClick={()=>setOffset(offset+50)}>{t("Next page")}</Button></div>
   </>}
   {selected&&<Panel className="grid min-w-0 gap-3">
-   <div className="flex flex-wrap gap-2"><Button onClick={()=>open({view:selected.kind==="flow"?"flow":selected.kind==="agent"?"run":"operation-run",params:{id:selected.id,application}}, {window:"beside"})}>{t("Open run")}</Button>
-    {source&&<Button onClick={()=>open({view:selected.kind==="flow"?"workflow":"code",params:{id:source.id,...(draft?{application:draft.id}:{})}})}>{t("Open current source editor")}</Button>}
+   <div className="flex flex-wrap gap-2"><Button onClick={()=>open({view:selected.kind==="flow"?"flow-instance":selected.kind==="agent"?"run":"operation-run",params:{id:selected.id,application}}, {window:"beside"})}>{t("Open run")}</Button>
+    {source&&<Button onClick={()=>open({view:selected.kind==="flow"?"flow":"code",params:{id:source.id,...(draft?{application:draft.id}:{})}})}>{t("Open current source editor")}</Button>}
     {selected.kind==="agent"&&<Button onClick={()=>open({view:"agents",params:{surface:"tenant"}})}>{t("Current agent registry")}</Button>}
    </div>
    <p className="text-xs text-muted">{t("The editor opens the current saved source. The startup binding below belongs to this run.")}</p>
@@ -69,7 +69,7 @@ export function OperationRunView({id,application}:{id:string;application?:string
  if(query.isError)return <Panel role="alert">{t("This calculation run is unavailable to you.")}</Panel>;
  if(!answer)return <p role="status">{t("Loading…")}</p>;
  return <div className="grid min-w-0 gap-3">
-  {application&&<Button variant="ghost" onClick={()=>open({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":")}})}>{t("Back to application runs")}</Button>}
+  {application&&<Button variant="ghost" onClick={()=>open({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":"),application}})}>{t("Back to application runs")}</Button>}
   <p>{stateName(answer.state)}</p>
   <RunBinding run={{version:answer.version?String(answer.version):answer.ownerVersion?`code:${answer.ownerVersion}`:undefined,release:answer.release,dependencies:answer.dependencies,module:answer.module}}/>
   {answer.definition&&<p className="break-all font-mono text-xs">{t("Startup definition")}: {answer.definition}</p>}

@@ -142,7 +142,7 @@ export function FlowEditor({ id }: { id: string }) {
   const [validation, setValidation] = useState<{ valid: boolean; issues: { node?: string; message: string }[] }>();
   const { markSaved, confirmDiscard, discardChanges } = useUnsavedChanges(dirty, () => {
     const saved=query.data?.record??empty();session.load(saved);baseRevision.current=saved.revision;loaded.current=`${saved.id}:${saved.revision}`; setError(""); setValidation(undefined); setChosen("");
-  });
+  }, busy);
   useEffect(()=>{const saved=query.data?.record;if(saved&&saved.revision>=baseRevision.current&&!dirty&&!busy&&loaded.current!==`${saved.id}:${saved.revision}`){session.load(saved);baseRevision.current=saved.revision;loaded.current=`${saved.id}:${saved.revision}`;}},[query.data,dirty,busy,session.load]);
   useEffect(() => { setMountedDocks((previous) => previous[dock] ? previous : { ...previous, [dock]: true }); }, [dock]);
   const change = useCallback((edit: Edit) => {if(lock.current)return;session.edit(edit);setError("");setValidation(undefined);},[session.edit]);

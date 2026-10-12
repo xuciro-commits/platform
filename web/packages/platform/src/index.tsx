@@ -98,11 +98,11 @@ export const runs = defineApp({
   home: { view: "flows" },
   views: [
     { id: "flows", title: () => t("Workflow runs"), render: () => <Flows /> },
-    { id: "automation", title: () => t("Automation"), render: () => <Automation /> },
+    { id: "automation-operations", title: () => t("Automation"), render: () => <Automation /> },
   ],
   nav: (host) => [{ label: t("Runs"), items: [
     ...(host.role("flow") ? [{ label: t("Workflow runs"), icon: <Route />, route: { view: "flows" } }] : []),
-    ...(admin(host) ? [{ label: t("Automation and deliveries"), icon: <Workflow />, route: { view: "automation" } }] : []),
+    ...(admin(host) ? [{ label: t("Automation and deliveries"), icon: <Workflow />, route: { view: "automation-operations" } }] : []),
   ] }],
 });
 

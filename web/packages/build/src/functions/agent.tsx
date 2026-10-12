@@ -44,7 +44,7 @@ export function AgentEditor({ id }: { id: string }) {
  const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const loaded = useRef("");
   const load = (record: Draft) => { setDraft({ ...empty(), ...record, tools: record.tools ?? [], cases: record.cases ?? [] }); loaded.current = `${record.id}:${record.revision}`; };
-  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); });
+  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); }, busy);
   useEffect(() => { const r = query.data?.record; if (r && !dirty && !busy && loaded.current !== `${r.id}:${r.revision}`) load(r); }, [query.data, dirty, busy]);
   const change = (patch: Partial<Draft>) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setError(""); };
   const issues: string[] = [];

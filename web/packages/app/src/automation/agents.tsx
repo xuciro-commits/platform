@@ -71,13 +71,13 @@ export function RunView({ id, compact, application }: { id: string; compact?: bo
   const {run,error}=useRun(id);
   const {open:openWorkspace}=useWorkspace();
   const [open, setOpen] = useState<number>();
-  if(error&&!run)return <p role="alert">{t("This agent run is unavailable to you.")}</p>;
+  if(error)return <p role="alert">{t("This agent run is unavailable to you.")}</p>;
   if (!run) return <p className="text-sm text-muted">{t("Loading run")} {id}…</p>;
   const mine = run.onBehalf === me.principalId;
   const live = run.state === "running" || run.state === "waiting";
   return (
     <div className="grid max-w-4xl gap-3">
-      {application&&<Button variant="ghost" onClick={()=>openWorkspace({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":")}})}>{t("Back to application runs")}</Button>}
+      {application&&<Button variant="ghost" onClick={()=>openWorkspace({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":"),application}})}>{t("Back to application runs")}</Button>}
       {run.definitionVersion&&<p className="break-all font-mono text-xs">{t("Startup definition")}: {run.definitionVersion}</p>}
       <p className="break-all font-mono text-xs">{t("Startup release")}: {run.release||t("No startup activation recorded")}</p>
       {!compact && <PageHeader title={run.title} description={`${run.agent}${run.onBehalf ? ` for ${run.onBehalf}` : ""}${run.flow ? `, in the flow ${run.flow}` : ""}`}

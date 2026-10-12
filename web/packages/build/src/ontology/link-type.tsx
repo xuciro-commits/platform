@@ -22,8 +22,8 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  const [draft,setDraft]=useState<Draft>(()=>({...empty(),parent:parent??"",child:child??"",via:via??""})),[edited,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [createID]=useState(()=>crypto.randomUUID());
  const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
- const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{setDraft(query.data?.record?hydrate(query.data.record):empty());setDirty(false);setError("");});
- useEffect(()=>{if(query.data?.record&&!dirty)setDraft(hydrate(query.data.record));},[query.data,dirty]);
+ const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{setDraft(query.data?.record?hydrate(query.data.record):empty());setDirty(false);setError("");}, busy);
+ useEffect(()=>{if(query.data?.record&&!dirty&&!busy)setDraft(hydrate(query.data.record));},[query.data,dirty,busy]);
  const object={app:"build",kind:"object" as const,name:draft.child};
  const patch=(change:Partial<Draft>)=>{setDraft((d)=>({...d,...change}));setDirty(true);setError("");};
  const perform=async(action:()=>Promise<unknown>)=>{setBusy(true);setError("");try{await action();}catch{setError(t("The relationship could not be saved or loaded. Your draft is still here."));}finally{setBusy(false);}};

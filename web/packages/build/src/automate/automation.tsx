@@ -90,7 +90,7 @@ export function AutomationEditor({ id }: { id: string }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     const saved = query.data?.record ?? empty(); session.load(saved); baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; setError("");
-  });
+  }, busy);
   useEffect(() => {
     const saved = query.data?.record;
     if (saved && saved.revision >= baseRevision.current && !dirty && !busy && loaded.current !== `${saved.id}:${saved.revision}`) { session.load(saved); baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; }

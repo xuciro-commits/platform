@@ -9,6 +9,7 @@ import { Button } from "../primitives/button";
 import { activeValues, recordSchema, type Entity } from "../fields/entity";
 import { applies, checkbox, date, datetime, longText, markdown, number, singleSelect, text, type FieldType } from "../fields/types";
 import { t } from "../i18n";
+import { useUnsavedChanges } from "../shell/Workspace";
 
 /** A field of an ad hoc form; `kind` picks a platform field type for its editor. */
 export type Field<T> = {
@@ -70,8 +71,11 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
 }) {
   const inputs=useInputDrafts();
   const prefix = useId(), lock = useRef(false), [failure, setFailure] = useState("");
-  const { control, handleSubmit, setValue, setError, trigger, formState: { errors, isSubmitting } } =
+  const { control, handleSubmit, setValue, setError, trigger, reset, formState: { errors, isSubmitting, isDirty } } =
     useForm<Record<string, unknown>>({ mode: "onTouched", resolver: zodResolver(schema as never) as never, defaultValues: defaultValues as never });
+  const { confirmDiscard, markSaved } = useUnsavedChanges(isDirty, () => {
+    reset(defaultValues as never); setFailure(""); inputs?.reject();
+  }, isSubmitting);
   useEffect(()=>{for(const issue of issues??[])if(issue.path.length===1&&fields.some(f=>f.name===issue.path[0]))setError(issue.path[0]!,{type:"owner",message:issue.message});},[issues,setError]);
   // Conditional fields (#138) follow the values they depend on; what was typed into a hidden field stays until the form closes.
   const conditions = [...new Set(fields.flatMap(({name,type}) => [name,...(type.when ? [type.when.field] : [])]))];
@@ -80,7 +84,12 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
   return (
     <form onSubmit={handleSubmit(async (values, event) => {
       if (lock.current||inputs?.invalid) return; lock.current = true; setFailure("");inputs?.reject();inputs?.pending(1); onBusy?.(true);
-      try { if (await onSubmit(values, event) === false) setFailure(t("The request was not confirmed. Your input is retained.")); }
+      try {
+        const confirmed = await onSubmit(values, event);
+        if (confirmed === false) setFailure(t("The request was not confirmed. Your input is retained."));
+        else if (confirmed === true) { reset(values); inputs?.clear(); markSaved(); }
+        // A void callback owns its own outcome; it is not proof of acceptance.
+      }
       catch (error) { setFailure(error instanceof Error ? error.message : t("The request was not confirmed. Your input is retained.")); }
       finally { lock.current = false;inputs?.pending(-1); onBusy?.(false); }
     })} className="grid gap-3" noValidate>
@@ -126,7 +135,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
       })}
       </fieldset>
       <div className="mt-1 flex justify-end gap-2">
-        {onCancel && <Button onClick={onCancel} disabled={isSubmitting}>{t("Cancel")}</Button>}
+        {onCancel && <Button onClick={() => confirmDiscard(onCancel)} disabled={isSubmitting}>{t("Cancel")}</Button>}
         <Button type="submit" variant="primary" disabled={isSubmitting}>{isSubmitting ? t("Saving…") : submitLabel}</Button>
       </div>
     </form>

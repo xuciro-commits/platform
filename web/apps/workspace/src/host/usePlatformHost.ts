@@ -119,7 +119,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     if (!me || !source) return undefined;
     // A record opens in its app's view; a protocol's record (lodging.booking)
     // in the view of the app the tenant binds as its provider (D5).
-    const opens = new Map<string, string>([["agent.run", "run"], ["flow.instance", "flow"]]);
+    const opens = new Map<string, string>([["agent.run", "run"], ["flow.instance", "flow-instance"]]);
     for (const app of apps ?? []) {
       for (const [type, view] of Object.entries(app.opens ?? {})) {
         const own = (app.serves ?? [app.id]).some((id) => type.startsWith(`${id}.`));

@@ -6,7 +6,11 @@
 
 打开关联流程会进入共享运行详情，不要求设置管理角色；读取与管理动作仍由原宿主授权。运行详情和工坊历史中的“启动时的发布”是该实例固定的版本来源，不能当成当前租户活跃发布。保持对象/动作依赖时可以正式发布新的流程路径，旧等待实例继续原版本；已有记录的存储字段变更需要单独迁移计划，当前激活会明确拒绝。
 
-工作区的 Shell 按 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md) 组织：左侧常驻 Rail 提供 Home（我的工作摘要、最近、收藏、业务应用）、搜索（⌘K）、通知、Applications 门户（按业务应用 / 本体与数据 / 构建 / 交付与运维 / 治理 / 开发者分类）、最近与收藏列表、助手、工作区投影（Operations / Build / Admin，仅分组门户，不授予权限）与账户；顶栏的“Switch application / 切换应用”在获权应用间切换并可收藏当前应用；左侧 Context pane 只显示当前应用自己的导航。业务成员在 Home 与门户只见已获权原生/租户应用及知识内容；构建者在门户的“构建”分类进入 Application Studio（Applications、Shared resources 或能力发现进入原编辑器），成员/连接/模型/审计及生产运行从“治理”分类的 Tenant console 进入。`AppUI.category` 决定门户分类（未声明时由 `surface` 推导，默认 business）。原资源深链继续可用，`#/home` 现为 Home、`#/portal` 为门户，入口切换保留编辑标签，切身份/租户仍须处理未保存内容。发布者从 Tenant console 的 Release review 选择已封存候选，展开 Sealed definitions 查看原定义、版本与依赖，沿原评测和激活检查交付；不提供设计视图或草稿编辑。审计者可进入成员、受控包清单与审计；成员角色只读，内置应用依赖图仅为管理员显示。项目按 `platform.project.save` 给出资产编辑委派（只提升编辑、不提升发布），发布与审计角色独立：`build` 的 Publisher 只保存/激活候选不改定义，平台控制台的 Auditor 可读审计、成员与包但不可决策。
+工作区的 Shell 按 [ADR-0052](ADR/0052-foundry-aligned-platform-experience.md) 与 [ADR-0054](ADR/0054-ide-workspaces.md) 组织：左侧 Rail 提供 Home、搜索（⌘K）、通知、Applications、最近/收藏、助手、工作区投影与账户；投影只分组，不授予权限。顶栏“Switch application / 切换应用”及门户/收藏/命令入口切换获权应用，左栏只显示当前应用导航。构建侧只有 **Builder / 应用设计台**；治理进入 **Control Panel / 控制面板**，生产运行进入 **Runs / 运行**，发布者使用设计台的发布组而非定义编辑器。应用页签独立记忆；切回来恢复原活动资源，无布局才开主页。切应用、跨应用深链、关闭/关闭其他/关闭全部、身份与语言切换会检查未保存内容，一次列出全部；先在原编辑器保存，或明确放弃，待完成提交须等待结果。Shell 的 Home/门户/通知/搜索等不混入应用记忆。
+
+右键页签或 Window 菜单可在旁边打开或移到新窗口；已有资源移同一个页签，保留本地输入，不复制编辑会话。单独一个页签且无其他分栏时不提供伪分屏。移到新窗口不先放弃草稿；关闭子窗口由原 Dock 归回，浏览器阻止弹窗会提示。关闭全部后可用 Open home / 打开主页或搜索命令重新进入。旧资源深链仍由原 reader 解码：`flow` 是定义编辑器，`flow-instance` 是共享运行详情，运维自动化为 `automation-operations`；不改后台记录身份或权限。已发布应用左栏“Application runs / 应用运行”及其流程/Agent/计算详情沿共享运行读者，返回时保留应用上下文；读取失败不把缓存的旧运行结果继续展示为当前可用。
+
+业务成员只见已获权原生/租户应用及知识内容；`AppUI.category` 决定门户分类。项目按 `platform.project.save` 给出资产编辑委派（只提升编辑、不提升发布），发布与审计角色独立：`build` Publisher 只保存/激活候选不改定义；Auditor 可读审计、成员与包但不可决策。角色投影与导航不替代原宿主授权。
 
 在工作区顶部点“Last activated release / 租户最后激活的发布”，或打开“Search and commands / 搜索和命令”选择同一命令，可查看完整发布 ID 并刷新；窄屏保留搜索图标。它标识最后激活的候选；直接安装可能在其之外改变定义（production profile 已停用），已有流程仍保留自己的启动发布。尚未激活与读取失败分别显示，失败时不继续展示旧 ID。此入口不开放构建者候选目录。
 
@@ -275,7 +279,7 @@ WMS 是工作台中创建并发布的受控应用，复用所属酒店或制造�
 
 ## Asset Library / 资产库
 
-从 Apps 门户、应用设计台左栏"探索"或应用切换器打开 **Asset Library / 资产库**（[ADR-0054](ADR/0054-ide-workspaces.md) D3）：左栏按层级的资产树（搜索、用法筛选），主区文档 + 可操作示例（可展开占满），右栏"怎么用"（导入片段、来源、归属包 API、组成、被谁使用、在应用设计台中打开/创建），底栏 Health（索引健康，实时算出）与 Runtime（当前宿主已授权能力）。同一应用含 **Sandbox / 代码沙箱**（D4）：片段 · 编辑器 · 预览 · 控制台。离线目录用 `pnpm --dir web/apps/catalog dev`，默认端口 5174，复用同一应用声明与外壳；离线示例只有合成数据。
+从 Apps 门户、应用设计台左栏"探索"或应用切换器打开 **Asset Library / 资产库**（[ADR-0054](ADR/0054-ide-workspaces.md) D3）：左栏按层级的资产树（搜索、用法筛选），主区文档 + 可操作示例（可展开占满），右栏"怎么用"（导入片段、来源、归属包 API、组成、被谁使用、在应用设计台中打开/创建），底栏 Health（索引健康，实时算出）与 Runtime（当前宿主已授权能力）。同一应用含 **Sandbox / 代码沙箱**（D4）：片段 · 编辑器 · 预览 · 控制台。片段切换/新建/删除/重置会保护未保存代码，Run 不等于 Save，预览标出上次运行；再次 Run 总会重新执行，隐藏预览停止其 frame，重开会重启。保存失败或另一个页签修改库时保留编辑代码，重读前先处理草稿。在线片段按租户/主体存于此浏览器，旧浏览器全局片段仍在离线库；不要在片段中放业务原文或凭据；这不是服务端/跨设备保存。离线目录用 `pnpm --dir web/apps/catalog dev`，默认端口 5174，复用同一应用声明与外壳；离线示例只有合成数据。
 
 观测代码组件：在Catalog查“Original observation table / 原观测表”“Original observation statistics / 原观测统计”“Original availability history / 原可用率历史”“Original observation time series / 原观测时间序列”，开发视角可查看`@platform/ui`的ObservationTable、ObservationStatistics、ObservationAvailability及ObservationTimeSeries公共类型。调用方提供原EntityInfo、显式信号/单位和事件datetime字段，窗口为`{scope, records, total}`；scope包含原读取/查询身份，旧窗口不显示。表格列搜索/隐藏、元数据固定和行高只改变已读取窗口，选择/导出回调返回原记录和字段，不读取其他数据。统计调用方提供完整窗口答复与signal/threshold/windowRows/计数；最新样本和历史也需原scope。时间图支持最多500点及三种独立单位，保留缺值、原时间和记录身份；availability摘要默认与原窗口作用域、字段及total一致；提供显式averageInfo/averageField时，原资产数量/均值可独立于样本历史total，仍校验可读数值字段与共同作用域，SLO是明确呈现阈值。Catalog示例仅用固定合成数据，不保存文件或接入遥测。四类Workshop源组件可沿显式真实来源映射导入；原生配置/读取/冻结已接通，边界见[ADR-0046 §6.78](ADR/0046-application-studio-fusion.md#678-业务观测宽表窗口统计与真实时间序列)。
 

@@ -41,6 +41,8 @@
 - **宿主测试**（`capabilities/server/*_test.go`）用 `testkit_test.go`：`composeTenant(t, id, seats, apps...)` / `builderTenant(t, id, apps...)` 组租户，`seatOf("ann", "build:desk")` 写席位，`decide(...)` 提交并在拒绝时 fail，`refuse(...)` 返回 `code: message` 做权限表，`publishObject(...)` 一步建并发布对象。不手拼 `pb.Submission`、不自维护幂等计数；文件内已有的 `submit := func` 闭包在触碰时改到 kit 上；样板 `build_access_test.go`。
 - **不写**：像素/布局断言、为每种设备或语言复制的路线、服务端已证明规则的浏览器重测、只为"覆盖率"存在的用例。新功能不自带新测试，除非它改变了某个长期不变量（契约、原子提交/恢复、重放兼容、隔离与授权、发布生命周期、身份）——那就改那条已有测试。浏览器路线封顶 8 条，加一删一。过程探针留在本地不提交（ADR-0082）。
 
+W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Playwright 或重型套件；必要语法/类型/小型逻辑命令使用 8 秒截止加 1 秒强制退出，每条总时长不超过 10 秒。整包类型检查超限不计通过，不反复重试；原已完成且未受影响的证据直接复用。Shell 归属/别名的 Node 检查与既有 Workspace 的 jsdom/Dockview 逻辑仅证明其政策，不替代真实弹窗、原七节点体验、真实 AI、目标存储或独立交接。
+
 ## 自动检查的归属
 
 | 被测能力 | 规范证据入口 |

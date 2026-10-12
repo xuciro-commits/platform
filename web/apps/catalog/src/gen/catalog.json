@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:fed530a8f0f3b22f",
+  "revision": "sha256:f50b01965818fb1f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1748,6 +1748,13 @@
           "isSlot": false
         },
         {
+          "name": "resolveRoute",
+          "type": "(route: Route, layout?: string) => Route | Promise<Route>",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
           "name": "menus",
           "type": "Menu[]",
           "optional": true,
@@ -1801,6 +1808,13 @@
         {
           "name": "onActiveRoute",
           "type": "(route: Route) => void",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "onEmpty",
+          "type": "() => void",
           "optional": true,
           "isCallback": true,
           "isSlot": false
@@ -13278,6 +13292,12 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/App.tsx",
       "web/apps/workspace/src/HostOnly.tsx"
+    ],
+    "app/application-runs": [
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/operation-run": [
+      "web/apps/workspace/src/chrome.tsx"
     ],
     "app/page-workspace": [
       "web/apps/workspace/src/chrome.tsx"

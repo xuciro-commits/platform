@@ -31,7 +31,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "test": "node --test src/host/*.test.mjs",
+    "test": "node --test src/host/*.test.mjs src/shell/*.test.mjs",
     "typecheck": "tsc -p ."
   },
   "type": "module"
