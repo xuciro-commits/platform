@@ -89,11 +89,6 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 		}
 
 	}
-	if validate {
-		if err := t.validateAssetStorage(draft, len(upgrade) > 0 && upgrade[0]); err != nil {
-			return nil, err
-		}
-	}
 	if err := draft.validateAssetSet(); err != nil {
 		return nil, err
 	}

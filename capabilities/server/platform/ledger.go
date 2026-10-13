@@ -145,6 +145,7 @@ func (l *Ledger) AcceptedFor(tenant, key string) *pb.ChangeRecord {
 // published to the tenant's subscribers (ADR-0010).
 func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	allowed func() bool, rules func() (func(*pb.ChangeRecord), *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
+	catalog := l.catalogFor(c)
 	if draft, ok := c.rt.(StagedRuntime); ok {
 		release, refusal := draft.HoldChanges(l)
 		if refusal != nil {
@@ -157,10 +158,10 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if !c.Replaying && !l.Catalog.Enabled(s.GetSchema().GetName()) {
+	if !c.Replaying && !catalog.Enabled(s.GetSchema().GetName()) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
-	rules = l.checked(c, s, now, rules)
+	rules = l.checked(c, s, now, catalog, rules)
 	probing := c.rt != nil && c.rt.Probing()
 	refused := false // the kernel's policy step said no
 	var decision AuthzDecision
@@ -181,7 +182,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	receiver := kernel.Receiver{Changes: changes, Authorities: l.authorities,
 		Policy: func(kernel.Caller, *pb.Submission) bool {
 			if !c.Replaying || probing {
-				decision = l.Catalog.DecideSubmission(c, s, now)
+				decision = catalog.DecideSubmission(c, s, now)
 			}
 			ok := c.Replaying && !probing || decision.Allow && (allowed == nil || c.Automation || allowed())
 			refused = !ok
@@ -225,11 +226,20 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	return record, err
 }
 
+func (l *Ledger) catalogFor(c Caller) *Catalog {
+	if bound, ok := c.rt.(DecisionDeclarationRuntime); ok {
+		if selected := bound.DecisionCatalog(l); selected != nil {
+			return selected
+		}
+	}
+	return l.Catalog
+}
+
 // checked puts before rules the check of the payload's declared choices and
 // references (ADR-0028 D5): after the policy, as the kernel's order has it
 // (K6 T2); a replay does not check again.
-func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, rules func() (func(*pb.ChangeRecord), *kernel.Error)) func() (func(*pb.ChangeRecord), *kernel.Error) {
-	declared, _ := l.Catalog.Action(s.GetSchema().GetName())
+func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, catalog *Catalog, rules func() (func(*pb.ChangeRecord), *kernel.Error)) func() (func(*pb.ChangeRecord), *kernel.Error) {
+	declared, _ := catalog.Action(s.GetSchema().GetName())
 	return func() (func(*pb.ChangeRecord), *kernel.Error) {
 		if !c.Replaying {
 			var payload map[string]any

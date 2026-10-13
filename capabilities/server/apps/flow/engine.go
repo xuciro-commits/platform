@@ -34,6 +34,7 @@ type session struct {
 	cancelOperations   []string
 	withdrawals        []approvalWithdrawal
 	assets             []any
+	executions         map[string]host.FlowHost
 }
 
 type approvalWithdrawal struct{ app, id, member string }
@@ -85,7 +86,7 @@ func (ss *session) load(id string) *FlowInstance {
 
 func (ss *session) apply(r *pb.ChangeRecord) {
 	for _, withdrawal := range ss.withdrawals {
-		if _, err := ss.act(withdrawal.app, "", "work.approval.withdraw", withdrawal.id, json.RawMessage("{}"), "flow-withdraw:"+withdrawal.id, withdrawal.member); err != nil {
+		if _, err := ss.act(nil, withdrawal.app, "", "work.approval.withdraw", withdrawal.id, json.RawMessage("{}"), "flow-withdraw:"+withdrawal.id, withdrawal.member); err != nil {
 			return
 		}
 	}
@@ -185,7 +186,27 @@ func (ss *session) token(x *FlowInstance, id int) *Token {
 func (ss *session) def(x *FlowInstance) *flowDef { return ss.f.def(x.Flow, x.Version) }
 
 func (ss *session) app(x *FlowInstance) platform.Caller {
-	return ss.f.host.Automation(ss.c, ss.def(x).app)
+	return ss.execution(x).Automation(ss.c, ss.def(x).app)
+}
+
+func (ss *session) execution(x *FlowInstance) host.FlowHost {
+	if x.Release == "" {
+		return ss.f.host
+	}
+	if h := ss.executions[x.ID]; h != nil {
+		return h
+	}
+	d := ss.def(x)
+	h, err := ss.f.host.FlowExecution(ss.c, d.app, d.Name, d.Version, host.FlowBinding{Dependencies: x.Dependencies, Release: x.Release})
+	if err != nil {
+		ss.c.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error()))
+		return ss.f.host
+	}
+	if ss.executions == nil {
+		ss.executions = map[string]host.FlowHost{}
+	}
+	ss.executions[x.ID] = h
+	return h
 }
 
 func (ss *session) run(x *FlowInstance, token ...int) *platform.Run {
@@ -445,7 +466,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		ss.trace(x, tok.Step, "computing", request.Name, "")
 	case step.Invoke != nil:
 		a := step.Invoke.Act
-		ref, err := ss.act(d.app, a.Protocol, a.Action, a.Target(app, run), payloadOf(a.Payload, app, run), fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq))
+		ref, err := ss.act(x, d.app, a.Protocol, a.Action, a.Target(app, run), payloadOf(a.Payload, app, run), fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq))
 		if err != nil {
 			ss.failed(x, token, step, err.Error())
 			return
@@ -481,7 +502,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		if step.Act.AsMember {
 			member = x.OnBehalf
 		}
-		ref, err := ss.act(d.app, step.Act.Protocol, step.Act.Action, target, payload, fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq), member)
+		ref, err := ss.act(x, d.app, step.Act.Protocol, step.Act.Action, target, payload, fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq), member)
 		if err != nil {
 			ss.deadLetterAct(x, tok, step, target, payload, err.Error())
 			ss.failed(x, token, step, err.Error())
@@ -633,8 +654,11 @@ func payloadOf(build func(platform.Caller, *platform.Run) any, c platform.Caller
 }
 
 // act submits an action as the app: its own, or a protocol's through the host.
-func (ss *session) act(appID, protocol, action, target string, payload json.RawMessage, key string, onBehalf ...string) (*pb.EntityRef, *kernel.Error) {
+func (ss *session) act(x *FlowInstance, appID, protocol, action, target string, payload json.RawMessage, key string, onBehalf ...string) (*pb.EntityRef, *kernel.Error) {
 	h := ss.f.host
+	if x != nil {
+		h = ss.execution(x)
+	}
 	c := h.Automation(ss.c, appID)
 	if protocol != "" {
 		return h.Invoke(c, protocol, action, target, payload, key, key, ss.now)
@@ -759,7 +783,7 @@ func (ss *session) undo(x *FlowInstance, token int) {
 		return
 	}
 	u := x.Undo[len(x.Undo)-1]
-	if _, err := ss.act(u.App, u.Protocol, u.Action, u.Target, u.Payload, fmt.Sprintf("undo:%s:%d", x.ID, len(x.Undo))); err != nil {
+	if _, err := ss.act(x, u.App, u.Protocol, u.Action, u.Target, u.Payload, fmt.Sprintf("undo:%s:%d", x.ID, len(x.Undo))); err != nil {
 		tok := ss.token(x, token)
 		tok.Attempts++
 		tok.Error = err.Error()

@@ -48,6 +48,12 @@ type FlowReleaseOwner interface {
 	FlowReleaseAsset(string, int) (platform.ReleaseAsset, error)
 }
 
+// ReleaseExecutionOwner compiles retained bytes with the original owner and
+// ledger. It neither installs them live nor creates a second decision engine.
+type ReleaseExecutionOwner interface {
+	ForkReleaseExecution([]platform.ReleaseAsset) (platform.App, error)
+}
+
 type OperationDefinitions interface {
 	OperationDefinition(string, int) (platform.Operation, int, bool)
 }

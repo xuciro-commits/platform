@@ -19,6 +19,7 @@ type FlowHost interface {
 	Tasks() Tasks
 	Runs() Runs
 	BindFlow(string, string, int, FlowBinding) (FlowBinding, error)
+	FlowExecution(platform.Caller, string, string, int, FlowBinding) (FlowHost, error)
 	Invoke(platform.Caller, string, string, string, []byte, string, string, time.Time) (*pb.EntityRef, *kernel.Error)
 	Action(string) (string, platform.Action, bool)
 	Caller(platform.Caller, platform.Member, string) platform.Caller

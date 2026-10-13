@@ -173,7 +173,7 @@ func (b *Build) validateObjectInstallation(record Object) error {
 				return err
 			}
 			if string(oldBody) != string(newBody) {
-				running, err := processes.HasRunningDependency(buildapi.TypeOf(previous.Name))
+				running, err := processes.HasUnboundRunningDependency(buildapi.TypeOf(previous.Name))
 				if err != nil {
 					return err
 				}
@@ -190,20 +190,22 @@ func (b *Build) validateObjectInstallation(record Object) error {
 	}
 	current, _ := platform.Get[Object](b.host.Automation(platform.Caller{}, ID), record.ID)
 	previous, _ := wasPublished[Object](current.Published)
-	for _, process := range processes {
-		if process.Published == "" {
-			continue
-		}
-		raw, _ := json.Marshal(process)
-		installed, err := processImage(raw)
-		if err != nil {
-			return err
-		}
-		if installed.Object != entity.Type && installed.Object != buildapi.TypeOf(previous.Name) {
-			continue
-		}
-		if problem := b.checkFlowOn(installed, entity); problem != nil {
-			return fmt.Errorf("%s", problem.Message)
+	if !b.jointMode {
+		for _, process := range processes {
+			if process.Published == "" {
+				continue
+			}
+			raw, _ := json.Marshal(process)
+			installed, err := processImage(raw)
+			if err != nil {
+				return err
+			}
+			if installed.Object != entity.Type && installed.Object != buildapi.TypeOf(previous.Name) {
+				continue
+			}
+			if problem := b.checkFlowOn(installed, entity); problem != nil {
+				return fmt.Errorf("%s", problem.Message)
+			}
 		}
 	}
 	pages, generated, err := b.objectInstallationPages(record)

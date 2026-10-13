@@ -445,13 +445,22 @@ func (f *Flows) running(c platform.Caller) ([]FlowInstance, *kernel.Error) {
 // HasRunningDependency checks every live instance, beyond a single read page.
 // Terminal instances retain their history but no longer block source edits.
 func (f *Flows) HasRunningDependency(typ string) (bool, error) {
+	return f.hasRunningDependency(typ, false)
+}
+
+func (f *Flows) HasUnboundRunningDependency(typ string) (bool, error) {
+	return f.hasRunningDependency(typ, true)
+}
+
+func (f *Flows) hasRunningDependency(typ string, unboundOnly bool) (bool, error) {
 	c := f.host.Automation(platform.Caller{Replaying: true}, ID)
 	found := false
 	err := f.eachRunning(c, func(row FlowInstance) error {
 		binding, err := f.binding(row)
-		found = found || strings.HasPrefix(row.Subject, typ+"/") || slices.ContainsFunc(binding.Assets, func(ref platform.AssetRef) bool {
+		depends := strings.HasPrefix(row.Subject, typ+"/") || slices.ContainsFunc(binding.Assets, func(ref platform.AssetRef) bool {
 			return ref.Kind == platform.AssetObject && ref.Name == typ
 		})
+		found = found || depends && (!unboundOnly || binding.Release == "")
 		return err
 	})
 	return found, err

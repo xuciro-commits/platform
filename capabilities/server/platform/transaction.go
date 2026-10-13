@@ -127,12 +127,13 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 	s.Schema = &pb.SchemaRef{Name: e.Type + "." + verb, Version: 1}
 	s.Target = &pb.EntityRef{Type: e.Type, Id: id}
 	s.Payload = payload
-	a, ok := l.Catalog.Action(s.Schema.Name)
+	catalog := l.catalogFor(c)
+	a, ok := catalog.Action(s.Schema.Name)
 	if !ok || a.Target != e.Type || verb == "create" && !e.Standard.Create || verb == "edit" && !e.Standard.Edit || verb == "archive" && !e.Standard.Archive {
 		return Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "Transaction step action is unavailable / 事务步骤动作不可用")
 	}
 	c.Automation = false
-	decision := l.Catalog.DecideSubmission(c, s, now)
+	decision := catalog.DecideSubmission(c, s, now)
 	if !decision.Allow {
 		layer := "verb"
 		if len(decision.Layers) > 0 {
@@ -158,7 +159,7 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 			}
 		}
 	}
-	apply, err := l.checked(c, s, now, func() (func(*pb.ChangeRecord), *kernel.Error) { return standard(c, e, verb, s, now) })()
+	apply, err := l.checked(c, s, now, catalog, func() (func(*pb.ChangeRecord), *kernel.Error) { return standard(c, e, verb, s, now) })()
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package platform
 
 import (
 	"encoding/json"
+	"maps"
 	"platformserver/platform/authz"
 	"slices"
 	"strings"
@@ -206,6 +207,21 @@ func NewCatalog(actions ...Action) *Catalog {
 		actions[i].NeedsApproval = actions[i].Approval != nil
 	}
 	return &Catalog{actions: actions, disabled: map[string]bool{}}
+}
+
+// WithActions selects immutable declarations while retaining today's tenant
+// controls. A retained execution cannot restore revoked roles or capabilities.
+func (c *Catalog) WithActions(actions []Action) *Catalog {
+	bound := NewCatalog(actions...)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	bound.policies = c.policies
+	bound.disabled = maps.Clone(c.disabled)
+	bound.custom = make(map[string][]string, len(c.custom))
+	for role, schemas := range c.custom {
+		bound.custom[role] = slices.Clone(schemas)
+	}
+	return bound
 }
 
 // Disable deactivates a capability; false if no action belongs to it.

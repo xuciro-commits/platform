@@ -155,6 +155,12 @@ func (c Caller) Staging() bool {
 
 type DecisionFailureRuntime interface{ FailDecision(*kernel.Error) }
 
+// DecisionDeclarationRuntime selects immutable owner declarations only for
+// a host-validated retained execution. Ledger and decision semantics stay shared.
+type DecisionDeclarationRuntime interface {
+	DecisionCatalog(*Ledger) *Catalog
+}
+
 // FailDecision refuses an apply closure before its private result is sealed.
 // It cannot change an already accepted decision or be used during recovery.
 func (c Caller) FailDecision(err *kernel.Error) {

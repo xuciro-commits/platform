@@ -132,16 +132,22 @@ func (d *stagedDecision) ReadRecord(c platform.Caller, typ, id string, now time.
 }
 
 func (t *Tenant) readRecordPathFrom(store *recordStore, c platform.Caller, typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
+	return readRecordPath(c, typ, id, path, now, t.entity, func(typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
+		return t.readRecordFrom(store, c, typ, id, at)
+	})
+}
+
+func readRecordPath(c platform.Caller, typ, id string, path []string, now time.Time, entity func(string) (platform.EntityInfo, bool), read func(string, string, time.Time) (json.RawMessage, *kernel.Error)) (json.RawMessage, []string, *kernel.Error) {
 	if len(path) == 0 || len(path) > 16 {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record paths need 1–16 fields")
 	}
 	var sources []string
 	for i, name := range path {
-		raw, refusal := t.readRecordFrom(store, c, typ, id, now)
+		raw, refusal := read(typ, id, now)
 		if refusal != nil {
 			return nil, nil, refusal
 		}
-		info, known := t.entity(typ)
+		info, known := entity(typ)
 		field, declared := info.Field(name)
 		var fields map[string]json.RawMessage
 		_ = json.Unmarshal(raw, &fields)

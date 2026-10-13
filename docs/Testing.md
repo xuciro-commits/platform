@@ -52,7 +52,7 @@ W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Play
 | K1–K9 语义及跨语言边缘 | `contract/spec`、`contract/vectors`、`contract/go`、Rust/TypeScript K5；选定 K4 Lean 模型 |
 | 声明/读取/动作/授权与派生来源 | `capabilities/server` 的对应 Go 测试与应用组合探针 |
 | 原子提交、版本和恢复 | 对应 accepted-result / release / process / function 测试；需要 PostgreSQL 的用例不能用内存通过代替 |
-| 数据与定义演进（ADR-0106，实施中） | `make test-go PKG='. ./platform' RUN=TestMigration` 核对封存审阅、三行两批、同键重试、源写入/直接发布拒绝、失败整批边界、隔离与补偿取消、快照及日志文件关闭重开续接、目标校验/激活/恢复，以及只读别名的后续更新/权限、字段退役、动作退役两批/待审批默认拒绝/任务关闭与恢复。配置 `PLATFORM_TEST_DATABASE` 时同一日志路线加入 PostgreSQL；未配置须明确未验。`make e2e SPEC=migration` 走原发布工作台：审阅重命名两批、服务端接受后回复丢失的同键重试、重开续接、激活、新字段编辑，以及动作退役→旧审批拒绝/退出等待状态→激活后目录撤除；`PLATFORM_SCREENSHOTS=1` 保存桌面/窄视口图。手测按 Apps 的迁移面板操作，取消按批恢复源事实并保留历史。六类全部在途语义与两行业 `make rehearse` 未完成，不按此行宣称整块验收 |
+| 数据与定义演进（ADR-0106，实施中） | `make test-go PKG='. ./platform' RUN=TestMigration` 核对封存审阅、三行两批、同键重试、源写入/直接发布拒绝、失败整批边界、隔离与补偿取消、快照及日志文件关闭重开续接、目标校验/激活/恢复，以及只读别名的后续更新/权限、字段退役、动作退役两批/待审批默认拒绝/任务关闭与恢复、旧 Flow 封存动作/别名写入/等待恢复及多次迁移源映像保留。配置 `PLATFORM_TEST_DATABASE` 时同一日志路线加入 PostgreSQL；未配置须明确未验。`make e2e SPEC=migration` 走原发布工作台：审阅重命名两批、服务端接受后回复丢失的同键重试、重开续接、激活、新字段编辑，以及动作退役→旧审批拒绝/退出等待状态→激活后目录撤除、联合候选迁移后从收件箱继续旧 Flow 并对比新实例的动作结果；`PLATFORM_SCREENSHOTS=1` 保存桌面/窄视口图。手测按 Apps 的迁移面板操作，取消按批恢复源事实并保留历史。六类全部在途语义与两行业 `make rehearse` 未完成，不按此行宣称整块验收 |
 | 业务与协议 | 各应用/协议测试及 `CheckReplay`，酒店/制造组合 |
 | 共享组件行为 | `web/packages/ui`；翻译完整性由 i18n 检查 |
 | Catalog 一致性与查询 | `scripts/catalog.mjs check` 已接入 Web：公共导出/示例/翻译/Widget 引用与私有导入；`@platform/catalog` 验证有界查询，Catalog 预览隔离和 Studio 草稿路线只保留核心行为 |

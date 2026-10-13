@@ -406,12 +406,10 @@ func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef, member platf
 	}
 	// The same private installation path that activates a saved candidate runs
 	// here against a tenant draft: a joint selection that installs nothing is
-	// diagnosed now, before it can be saved (ADR-0048 D2/D4). A shape the
-	// storage upgrade profile carries (one optional scalar per object) passes
-	// the preview as it does for a single draft; activation still demands the
-	// reviewed plan.
+	// diagnosed now, before it can be saved (ADR-0048 D2/D4). Preview validates
+	// the sealed definitions; storage admission belongs to migration/activation.
 	if len(drafts) > 1 {
-		if _, _, err := t.prepareReleaseLifecycleLocked(candidate, member, time.Now().UTC(), true); err != nil {
+		if _, _, err := t.prepareReleaseInstallationLocked(candidate, member, time.Now().UTC(), true, false); err != nil {
 			reply.Diagnostic = err.Error()
 			return reply, platform.ReleaseCandidate{}, nil
 		}

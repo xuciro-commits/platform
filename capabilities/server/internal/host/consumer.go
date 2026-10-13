@@ -107,4 +107,5 @@ type ProcessDefinitions interface {
 	Install(platform.App, platform.Flow) error
 	Validate(platform.App, platform.Flow) error
 	HasRunningDependency(string) (bool, error)
+	HasUnboundRunningDependency(string) (bool, error)
 }

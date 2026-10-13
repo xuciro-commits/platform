@@ -58,6 +58,7 @@ type Processes interface {
 	// HasRunningDependency protects a composed flow's source and transitive
 	// object dependencies while its instances are running, waiting, compensating or stuck.
 	HasRunningDependency(typ string) (bool, error)
+	HasUnboundRunningDependency(typ string) (bool, error)
 	// Check refuses to start when a running instance needs a version the code no longer declares.
 	Check() error
 	// Versions are those new instances took during the input being handled

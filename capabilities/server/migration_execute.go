@@ -330,18 +330,24 @@ func (d *stagedDecision) cancelMigrationBatch(c platform.Caller, r *pb.ChangeRec
 			return run, err
 		}
 		d.RecordAuthorization(c, request, grant)
-		if current.projection != nil {
-			if current.projection.Shape != run.SourceShapes[typ] {
+		if source := projectionFor(current.projection, run.Plan.From); source != nil {
+			if source.Shape != run.SourceShapes[typ] {
 				return run, migrationRefusal(fmt.Errorf("migration source projection changed"))
 			}
 			var values map[string]json.RawMessage
-			if err := json.Unmarshal(current.projection.Value, &values); err != nil {
+			if err := json.Unmarshal(source.Value, &values); err != nil {
 				return run, migrationRefusal(err)
 			}
 			if err := d.putMigrationImage(c, r, et, id, values, run.SourceShapes[typ]); err != nil {
 				return run, err
 			}
+			remaining := et.rows[id].projection.Prior
 			et.rows[id].projection = nil
+			if len(remaining) > 0 {
+				retained := remaining[0]
+				retained.Prior = slices.Clone(remaining[1:])
+				et.rows[id].projection = &retained
+			}
 		}
 		run.Cursor = ref
 		processed++
@@ -462,6 +468,15 @@ func (d *stagedDecision) putMigrationImage(c platform.Caller, r *pb.ChangeRecord
 		}
 	}
 	current.original = actual
+	retained := current.projection
 	current.projection = &recordProjection{From: d.tenant.releases.active, Shape: shape, Value: projection}
+	if retained != nil {
+		if retained.From != current.projection.From {
+			previous := *retained
+			previous.Prior = nil
+			current.projection.Prior = append(current.projection.Prior, previous)
+		}
+		current.projection.Prior = append(current.projection.Prior, retained.Prior...)
+	}
 	return nil
 }

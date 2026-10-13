@@ -111,7 +111,7 @@ func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time
 		if asset.AsMember {
 			member = asset.OnBehalf
 		}
-		if _, err := ss.act(asset.App, asset.Protocol, asset.Action, asset.Target, asset.Payload, asset.Key, member); err != nil {
+		if _, err := ss.act(x, asset.App, asset.Protocol, asset.Action, asset.Target, asset.Payload, asset.Key, member); err != nil {
 			return nil, err
 		}
 		asset.Replayed = true

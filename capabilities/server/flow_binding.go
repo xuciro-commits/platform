@@ -1,51 +1,49 @@
 package platformserver
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"slices"
 
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
 // BindFlow runs under the tenant input/recovery lock. The flow owner supplies
 // its retained native version; dependency owners supply their complete assets.
 func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding) (host.FlowBinding, error) {
+	if prior.Release != "" {
+		closed, err := h.retainedFlowClosure(app, name, version, prior)
+		if err != nil {
+			return host.FlowBinding{}, err
+		}
+		bound := prior
+		bound.Assets = nil
+		for _, asset := range closed.Assets {
+			bound.Assets = append(bound.Assets, asset.Ref)
+		}
+		return bound, nil
+	}
 	closure, root, err := h.flowClosure(app, name, version)
 	if err != nil {
 		return host.FlowBinding{}, err
 	}
 	if closure.ID == "" {
-		if prior.Dependencies != "" || prior.Release != "" {
+		if prior.Dependencies != "" {
 			return host.FlowBinding{}, fmt.Errorf("flow %s.%s has no release descriptor owner", app, name)
 		}
 		return host.FlowBinding{}, nil
 	}
-	binding := host.FlowBinding{Dependencies: closure.ID, Release: prior.Release}
-	for _, dependency := range closure.Assets {
-		binding.Assets = append(binding.Assets, dependency.Ref)
+	binding := host.FlowBinding{Dependencies: closure.ID}
+	for _, asset := range closure.Assets {
+		binding.Assets = append(binding.Assets, asset.Ref)
 	}
-	if prior.Dependencies != "" && prior.Dependencies != closure.ID {
-		if raw := h.t.releases.raw(prior.Release); raw != nil {
-			if saved, err := platform.ReadCandidate(prior.Release, raw); err == nil {
-				if original, err := platform.Candidate([]platform.AssetRef{root}, saved.Assets); err == nil && original.ID == prior.Dependencies && compatibleFlowStorageExpansion(original, closure) {
-					bound := prior
-					bound.Assets = nil
-					for _, asset := range original.Assets {
-						bound.Assets = append(bound.Assets, asset.Ref)
-					}
-					return bound, nil
-				}
-			}
+	if prior.Dependencies != "" {
+		if prior.Dependencies != closure.ID {
+			return binding, fmt.Errorf("flow %s version %d dependency release changed", root, version)
 		}
-		return binding, fmt.Errorf("flow %s version %d dependency release changed", root, version)
+		return binding, nil
 	}
-	if prior.Dependencies == "" {
-		binding.Release = h.t.releases.active
-	}
+	binding.Release = h.t.releases.active
 	if binding.Release == "" {
 		return binding, nil
 	}
@@ -53,9 +51,8 @@ func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding
 	if err != nil {
 		return binding, fmt.Errorf("flow release %s: %w", binding.Release, err)
 	}
-	contains := slices.ContainsFunc(saved.Assets, func(a platform.ReleaseAsset) bool { return a.Ref == root })
-	if !contains && prior.Dependencies == "" {
-		binding.Release = "" // An unrelated active release does not bind this run.
+	if !slices.ContainsFunc(saved.Assets, func(a platform.ReleaseAsset) bool { return a.Ref == root }) {
+		binding.Release = ""
 		return binding, nil
 	}
 	closed, err := platform.Candidate([]platform.AssetRef{root}, saved.Assets)
@@ -65,32 +62,33 @@ func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding
 	return binding, nil
 }
 
-// Keep the original dependency identity. Only additive storage differs; every
-// executable asset must remain byte-identical to the instance's saved closure.
-func compatibleFlowStorageExpansion(before, after platform.ReleaseCandidate) bool {
-	if len(before.Assets) != len(after.Assets) {
-		return false
+func (h hostView) retainedFlowClosure(app, name string, version int, prior host.FlowBinding) (platform.ReleaseCandidate, error) {
+	owner, ok := h.t.app(app).(host.FlowReleaseOwner)
+	if !ok || prior.Dependencies == "" {
+		return platform.ReleaseCandidate{}, fmt.Errorf("flow has no retained starting dependency descriptor")
 	}
-	for _, old := range before.Assets {
-		at := slices.IndexFunc(after.Assets, func(next platform.ReleaseAsset) bool { return next.Ref == old.Ref })
-		if at < 0 {
-			return false
-		}
-		next := after.Assets[at]
-		a, _ := json.Marshal(old)
-		b, _ := json.Marshal(next)
-		if bytes.Equal(a, b) {
-			continue
-		}
-		if old.Ref.App != build.ID || old.Ref.Kind != platform.AssetObject || old.SourceVersion != next.SourceVersion || old.ContractVersion != next.ContractVersion || !slices.Equal(old.Requires, next.Requires) {
-			return false
-		}
-		var oldObject, nextObject build.Object
-		if json.Unmarshal(old.Body, &oldObject) != nil || json.Unmarshal(next.Body, &nextObject) != nil || !build.CompatibleObjectExpansion(oldObject, nextObject) {
-			return false
+	root, err := owner.FlowReleaseAsset(name, version)
+	if err != nil {
+		return platform.ReleaseCandidate{}, err
+	}
+	saved, err := h.t.releases.candidate(prior.Release)
+	if err != nil {
+		return platform.ReleaseCandidate{}, err
+	}
+	closed, err := platform.Candidate([]platform.AssetRef{root.Ref}, saved.Assets)
+	if err != nil || closed.ID != prior.Dependencies {
+		return platform.ReleaseCandidate{}, fmt.Errorf("flow starting dependency descriptor differs")
+	}
+	for _, asset := range closed.Assets {
+		if asset.Ref == root.Ref {
+			before, _ := canonicalDigest(asset)
+			after, _ := canonicalDigest(root)
+			if before != after {
+				return platform.ReleaseCandidate{}, fmt.Errorf("retained native flow differs from its starting release")
+			}
 		}
 	}
-	return true
+	return closed, nil
 }
 
 func (h hostView) flowClosure(app, name string, version int) (platform.ReleaseCandidate, platform.AssetRef, error) {

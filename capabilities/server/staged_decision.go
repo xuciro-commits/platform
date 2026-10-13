@@ -113,6 +113,10 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 }
 
 func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return d.decideApp(c, d.stateApp(app), s, at)
+}
+
+func (d *stagedDecision) decideApp(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if app.AcceptedLedger() == nil {
 		unsupportedStagedEffect()
 	}
@@ -131,7 +135,7 @@ func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submi
 	c.Roles = maps.Clone(c.Roles)
 	// Callers may reuse/edit their request object for a later nested action.
 	// Receipts and their staged idempotency entries must own the input bytes.
-	r, err := d.stateApp(app).Submit(c, proto.Clone(s).(*pb.Submission), at)
+	r, err := app.Submit(c, proto.Clone(s).(*pb.Submission), at)
 	if err != nil && d.failure == nil {
 		d.failure = err
 	}

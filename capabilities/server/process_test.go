@@ -167,17 +167,14 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 		}
 	}
 	must("builder", build.ObjectType+".edit", build.ObjectType, "GROUP", map[string]any{"title": "Changed group"})
-	if _, err := tn.Submit(member("builder"), request("builder", build.SchemaPublish, build.ObjectType, "GROUP", map[string]any{}), at); err == nil {
-		t.Fatal("changed a transitive object dependency of a waiting instance")
-	}
+	must("builder", build.SchemaPublish, build.ObjectType, "GROUP", map[string]any{})
 	must("builder", build.ObjectType+".edit", build.ObjectType, "GROUP", map[string]any{"title": "Group"})
+	must("builder", build.SchemaPublish, build.ObjectType, "GROUP", map[string]any{})
 	// A waiting v1 must not silently execute a changed object's close action.
 	originalActions := []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}, {Name: "reject", Title: "Reject", From: []string{"open"}, To: "rejected"}}
 	changedActions := []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "rejected"}, originalActions[1]}
 	must("builder", build.ObjectType+".edit", build.ObjectType, "O", map[string]any{"actions": changedActions})
-	if _, err := tn.Submit(member("builder"), request("builder", build.SchemaPublish, build.ObjectType, "O", map[string]any{}), at); err == nil {
-		t.Fatal("changed a dependency of a waiting flow")
-	}
+	must("builder", build.SchemaPublish, build.ObjectType, "O", map[string]any{})
 	// Republishing the identical source is safe, even with a waiting instance.
 	must("builder", build.ObjectType+".edit", build.ObjectType, "O", map[string]any{"actions": originalActions})
 	must("builder", build.SchemaPublish, build.ObjectType, "O", map[string]any{})

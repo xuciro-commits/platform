@@ -164,16 +164,73 @@ type row struct {
 // A migration retains the source release's read image while its target facts
 // are accepted in batches. Only that exact shape can select this projection.
 type recordProjection struct {
-	From  string          `json:"from"`
-	Shape string          `json:"shape"`
-	Value json.RawMessage `json:"value"`
+	From  string             `json:"from"`
+	Shape string             `json:"shape"`
+	Value json.RawMessage    `json:"value"`
+	Prior []recordProjection `json:"prior,omitempty"`
 }
 
 func cloneRecordProjection(p *recordProjection) *recordProjection {
 	if p == nil {
 		return nil
 	}
-	return &recordProjection{From: p.From, Shape: p.Shape, Value: slices.Clone(p.Value)}
+	copy := &recordProjection{From: p.From, Shape: p.Shape, Value: slices.Clone(p.Value)}
+	for _, prior := range p.Prior {
+		copy.Prior = append(copy.Prior, *cloneRecordProjection(&prior))
+	}
+	return copy
+}
+
+func projectionFor(p *recordProjection, release string) *recordProjection {
+	if p == nil {
+		return nil
+	}
+	if p.From == release {
+		return p
+	}
+	for i := range p.Prior {
+		if p.Prior[i].From == release {
+			return &p.Prior[i]
+		}
+	}
+	return nil
+}
+
+// Source values remain facts of their release. Only the common record header
+// follows subsequent accepted writes, so every image names the same record.
+func refreshRecordProjection(p *recordProjection, value any) *kernel.Error {
+	if p == nil {
+		return nil
+	}
+	var header map[string]json.RawMessage
+	if json.Unmarshal(jsonOf(value), &header) != nil {
+		return migrationRefusal(fmt.Errorf("versioned record header is invalid"))
+	}
+	refresh := func(image *recordProjection) *kernel.Error {
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(image.Value, &fields) != nil {
+			return migrationRefusal(fmt.Errorf("versioned source image is invalid"))
+		}
+		for _, name := range []string{"id", "revision", "created", "changed", "archived", "versionPins"} {
+			if value, present := header[name]; present {
+				fields[name] = value
+			} else {
+				delete(fields, name)
+			}
+		}
+		raw, err := json.Marshal(fields)
+		image.Value = raw
+		return migrationRefusal(err)
+	}
+	if err := refresh(p); err != nil {
+		return err
+	}
+	for i := range p.Prior {
+		if err := refresh(&p.Prior[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func rowDecodeImage(info platform.EntityInfo, value json.RawMessage, projection *recordProjection, release string) (json.RawMessage, error) {
@@ -184,15 +241,24 @@ func rowDecodeImage(info platform.EntityInfo, value json.RawMessage, projection 
 	if err != nil {
 		return nil, err
 	}
-	if projection.From == "" || projection.Shape == "" || len(projection.Value) == 0 {
-		return nil, fmt.Errorf("incomplete versioned record projection")
+	var actual platform.Record
+	if json.Unmarshal(value, &actual) != nil {
+		return nil, fmt.Errorf("versioned record identity is invalid")
 	}
-	var actual, view platform.Record
-	if json.Unmarshal(value, &actual) != nil || json.Unmarshal(projection.Value, &view) != nil || !reflect.DeepEqual(actual, view) {
-		return nil, fmt.Errorf("versioned record projection identity differs")
+	seen := map[string]bool{}
+	images := append([]recordProjection{*projection}, projection.Prior...)
+	for i, image := range images {
+		if image.From == "" || image.Shape == "" || len(image.Value) == 0 || seen[image.From] || i > 0 && len(image.Prior) != 0 {
+			return nil, fmt.Errorf("incomplete or duplicate versioned record projection")
+		}
+		seen[image.From] = true
+		var view platform.Record
+		if json.Unmarshal(image.Value, &view) != nil || !reflect.DeepEqual(actual, view) {
+			return nil, fmt.Errorf("versioned record projection identity differs")
+		}
 	}
-	if shape == projection.Shape && release == projection.From {
-		return projection.Value, nil
+	if selected := projectionFor(projection, release); selected != nil && shape == selected.Shape {
+		return selected.Value, nil
 	}
 	return value, nil
 }
@@ -487,7 +553,14 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	if named {
 		rec.Revision = r.GetRevision()
 	}
-	et.rows[rec.ID] = &row{value: v, history: append(history, change)}
+	var projection *recordProjection
+	if prev != nil {
+		projection = cloneRecordProjection(prev.projection)
+		if err := refreshRecordProjection(projection, v.Interface()); err != nil {
+			return err
+		}
+	}
+	et.rows[rec.ID] = &row{value: v, history: append(history, change), projection: projection}
 	s.generation++
 	s.liveTouched(et.info.Type)
 	if s.writes != nil {

@@ -204,9 +204,17 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 }
 
 func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]releaseInstallation, json.RawMessage, error) {
-	migrated, err := t.migrationActivationLocked(candidate.ID)
-	if err != nil {
-		return nil, nil, err
+	return t.prepareReleaseInstallationLocked(candidate, member, at, upgrade, true)
+}
+
+func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade, activating bool) ([]releaseInstallation, json.RawMessage, error) {
+	migrated := false
+	if activating {
+		var err error
+		migrated, err = t.migrationActivationLocked(candidate.ID)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	upgrade = upgrade || migrated
 	registry, err := t.assetRegistryLocked()
@@ -229,6 +237,11 @@ func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandida
 	if err != nil {
 		return nil, nil, err
 	}
+	end, err := registry.BeginBootstrap(candidate.Assets)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer end()
 	plans, err := registry.PrepareReleaseAssets(candidate.Assets, context)
 	if err != nil {
 		return nil, nil, err
@@ -246,8 +259,10 @@ func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandida
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := t.validateAssetStorage(trial, upgrade); err != nil {
-		return nil, nil, err
+	if activating {
+		if err := t.validateAssetStorage(trial, upgrade); err != nil {
+			return nil, nil, err
+		}
 	}
 	if migrated {
 		if err := t.validateMigratedRecordsLocked(trial, member, at); err != nil {

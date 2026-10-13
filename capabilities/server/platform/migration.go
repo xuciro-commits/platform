@@ -218,7 +218,14 @@ func (p *MigrationProgram) Transform(index int, typ string, raw json.RawMessage,
 			if result.Value.Status != "value" {
 				return MigrationRecordResult{}, fmt.Errorf("conversion for %s is missing, null or withheld", change.To)
 			}
-			value = slices.Clone(result.Value.Data)
+			native, err := ExprGoValue(result.Value)
+			if err != nil {
+				return MigrationRecordResult{}, err
+			}
+			value, err = json.Marshal(native)
+			if err != nil {
+				return MigrationRecordResult{}, err
+			}
 		}
 		if len(value) == 0 {
 			return MigrationRecordResult{}, fmt.Errorf("source field %s has no value", change.From)
