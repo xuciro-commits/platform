@@ -1448,6 +1448,25 @@ export type Metamodel = {
   contracts: Contract[];
 };
 
+export type MigrateField = {
+  from?: string;
+  to: string;
+  expr?: Expr;
+};
+
+export type MigrateStep = {
+  kind: "add" | "default" | "rename" | "split" | "merge" | "retype" | "extract" | "retire" | "retire-action" | "rebind";
+  types: string[];
+  fields?: MigrateField[];
+  expr?: Expr;
+  batch: number;
+  onFailure?: "reject" | "quarantine";
+  mapping?: Record<string, string>;
+  action?: string;
+  redirect?: string;
+  target?: string;
+};
+
 export type MigrationManifest = {
   at: string;
   from: string;
@@ -1457,11 +1476,46 @@ export type MigrationManifest = {
   types: MigrationType[];
 };
 
+export type MigrationPlan = {
+  from: string;
+  to: string;
+  scope: MigrationScope;
+  steps: MigrateStep[];
+};
+
 export type MigrationResult = {
   from: string;
   to: string;
   key: string;
   types: MigrationType[];
+};
+
+export type MigrationReview = {
+  id: string;
+  from: string;
+  to: string;
+  types: MigrationReviewType[];
+  steps: number;
+  issues: MigrationReviewIssue[];
+};
+
+export type MigrationReviewIssue = {
+  type: string;
+  record: string;
+  step: number;
+  reason: string;
+};
+
+export type MigrationReviewType = {
+  type: string;
+  records: number;
+  sourceShape: string;
+  targetShape: string;
+};
+
+export type MigrationScope = {
+  type: string;
+  where?: Expr;
 };
 
 export type MigrationType = {

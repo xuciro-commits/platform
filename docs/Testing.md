@@ -73,6 +73,10 @@ W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Play
 
 `make test-go PKG=. RUN='TestDerivedDTO|TestUndeclaredDTO|TestUndeclaredOpaque|TestOriginalReadSource|TestMissingSources|TestAuthorizationDefinitionChanges'` 检查非实体/JSON 的来源行与字段、撤权后重新投影、缺少出处的整字段/列表/合并来源、原始配置不能扩大嵌入实体权限、循环/不透明内容关闭以及原字节不变。JSON 检查包含大整数与重复键；来源/策略改变须改变接受依据的定义指纹。通知没有可读出处时保留自身状态而遮蔽文本；原始 Flow 记录读取与纯恢复保留执行状态，不能拿派生遮蔽后的状态驱动调度。
 
+### 数据与定义演进（ADR-0106，实施中）
+
+`make test-go PKG='. ./platform' RUN=TestMigration` 检查迁移声明的封闭步骤、原求值器转换、默认值/原值保留、来源/目标形状、引用映射与失败，以及封存版本审阅不改业务记录。当前尚无持久分批迁移与中断续接证据；不能把这组检查当作 ADR-0106 §5 或 `make rehearse` 的替代。构建器执行、退役/在途兼容、客户扩展与版本协商完成后，补充对应路线和真实环境迁移。
+
 ### 业务事务最小切片（ADR-0100）
 
 `make test-go PKG=. RUN=TestBusinessTxnMinimalSlice` 在一个宿主场景验证构建器定义 → 发布编译 → 私有步骤 → 一次接受 → 纯应用 → 重开恢复：头、两行、输入主体与命名序列同批；步骤/授权/追加失败不改变业务状态；接受和拒绝均按原键重试，异内容冲突；实际子进程在 fsync 后、应用前退出，文件日志重开后结果与记录字节一致；跨应用类型发布拒绝。用 `GOFLAGS=-v` 查看真实结果占用与超限拒绝数字；没有配置数据库也会运行真实文件日志，不把内存回放算成进程重开。编译反例用 `make test-go PKG=./apps/build RUN=TestBusinessTxnPublicationBoundaries`。
