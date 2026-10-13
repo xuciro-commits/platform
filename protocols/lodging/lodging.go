@@ -13,13 +13,14 @@ const ID = "lodging.booking/1"
 
 // Booking is the protocol's read shape.
 type Booking struct {
-	ID       string `json:"id"`
-	RoomType string `json:"roomType"`
-	CheckIn  string `json:"checkIn"`
-	CheckOut string `json:"checkOut"`
-	Guest    string `json:"guest"`
-	Status   string `json:"status"`          // held, booked, canceled or released
-	Until    string `json:"until,omitempty"` // a hold's last day
+	ID       string `json:"id" source:"record" from:"Source"`
+	RoomType string `json:"roomType" source:"record" from:"Source#roomType"`
+	CheckIn  string `json:"checkIn" source:"record" from:"Source#checkIn"`
+	CheckOut string `json:"checkOut" source:"record" from:"Source#checkOut"`
+	Guest    string `json:"guest" source:"record" from:"Source#guest"`
+	Status   string `json:"status" source:"record" from:"Source#status"`         // held, booked, canceled or released
+	Until    string `json:"until,omitempty" source:"record" from:"Source#until"` // a hold's last day
+	Source   string `json:"-"`
 }
 
 // A booking's statuses: a hold takes a room until its date; a booking keeps it.
@@ -65,7 +66,8 @@ func RoomTypeProtocol() platform.Protocol {
 
 // RoomType is the bounded directory read shape. Unit is night or hour.
 type RoomType struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Unit string `json:"unit"`
+	ID     string `json:"id" source:"record" from:"Source"`
+	Name   string `json:"name" source:"record" from:"Source#name"`
+	Unit   string `json:"unit" source:"record" from:"Source#hourly"`
+	Source string `json:"-"`
 }

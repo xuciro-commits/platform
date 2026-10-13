@@ -46,7 +46,7 @@ type Stay struct {
 }
 
 func (s Stay) booking() Booking {
-	return Booking{ID: s.ID, RoomType: s.RoomType, CheckIn: s.CheckIn, CheckOut: s.CheckOut, Guest: s.Guest, Status: s.Status, Until: s.Until}
+	return Booking{ID: s.ID, RoomType: s.RoomType, CheckIn: s.CheckIn, CheckOut: s.CheckOut, Guest: s.Guest, Status: s.Status, Until: s.Until, Source: StayType + "/" + s.ID}
 }
 
 func stays() []platform.Entity {

@@ -143,7 +143,8 @@ func (a *AI) Restore(raw json.RawMessage) error {
 
 func (a *AI) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: "AI", Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage", "ai-limits"},
-		Everyone: []string{"ai-models", "ai-usage"}, Roles: []string{User}, // the user role opens models with access "users"
+		ReadSources: map[string]string{"ai-providers": "record", "ai-models": "record", "ai-usage": "record", "ai-limits": "record"},
+		Everyone:    []string{"ai-models", "ai-usage"}, Roles: []string{User}, // the user role opens models with access "users"
 		Settings: []platform.Setting{
 			{Name: SettingDailyTokens, Title: "Tokens per person per day", Type: "integer", Default: "0",
 				Description: "What each person may spend on models a day, unless an AI limit says otherwise; 0: no limit. Agents have their own, in the Agents settings."},

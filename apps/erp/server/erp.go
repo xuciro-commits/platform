@@ -337,12 +337,14 @@ func reversed(c platform.Caller, r *pb.ChangeRecord, record any, _ time.Time) {
 
 // Balance is one account's line of the trial balance, in minor units of the company's currency.
 type Balance struct {
-	Account string `json:"account"`
-	Name    string `json:"name"`
-	Kind    string `json:"kind"`
-	Debit   int64  `json:"debit"`
-	Credit  int64  `json:"credit"`
-	Balance int64  `json:"balance"` // debit minus credit
+	Account string   `json:"account" source:"record" from:"Source"`
+	Name    string   `json:"name" source:"record" from:"Source#name"`
+	Kind    string   `json:"kind" source:"record" from:"Source#kind"`
+	Debit   int64    `json:"debit" source:"generated" from:"Sources"`
+	Credit  int64    `json:"credit" source:"generated" from:"Sources"`
+	Balance int64    `json:"balance" source:"generated" from:"Sources"` // debit minus credit
+	Source  string   `json:"-"`
+	Sources []string `json:"-"`
 }
 
 // Read serves the trial balance: every account with postings, and their sums.
@@ -361,9 +363,10 @@ func (a *App) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		b := sums[string(p.Account)]
 		if b == nil {
 			account, _ := platform.Get[Account](c, string(p.Account))
-			b = &Balance{Account: account.ID, Name: account.Name, Kind: account.Kind}
+			b = &Balance{Account: account.ID, Name: account.Name, Kind: account.Kind, Source: AccountType + "/" + account.ID}
 			sums[b.Account] = b
 		}
+		b.Sources = append(b.Sources, PostingType+"/"+p.ID+"#debit", PostingType+"/"+p.ID+"#credit")
 		b.Debit, b.Credit = b.Debit+p.Debit.Amount, b.Credit+p.Credit.Amount
 		b.Balance = b.Debit - b.Credit
 	}

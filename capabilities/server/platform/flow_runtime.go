@@ -26,7 +26,7 @@ type FlowInstance struct {
 	Subject      string                     `json:"subject,omitempty" field:"readonly"` // "<type>/<key>" when the flow declares its subject
 	State        string                     `json:"state" field:"readonly" choices:"running,waiting,done,compensating,compensated,canceled,stuck"`
 	OnBehalf     string                     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
-	Data         string                     `json:"data,omitempty" field:"readonly" type:"longtext"`
+	Data         string                     `json:"data,omitempty" field:"readonly" type:"longtext" source:"external-input"`
 	Outputs      map[string]json.RawMessage `json:"outputs,omitempty" field:"readonly" type:"json"`
 	Sources      []string                   `json:"sources,omitempty" field:"readonly"`
 	Withheld     bool                       `json:"withheld,omitempty" field:"readonly"`

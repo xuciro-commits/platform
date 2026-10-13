@@ -309,9 +309,12 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 		context.Definition = et.info.Type
 		if digest, err := canonicalDigest(struct {
 			Fields                          []platform.FieldInfo
+			Derived                         []platform.DerivationInfo
+			Withheld                        []int
+			Policies                        []authz.Policy
 			Default, Owner, Unit, Structure string
 			Levels                          map[string]string
-		}{et.info.Fields, et.info.Scope.Default, et.info.Scope.Owner, et.info.Scope.Unit, et.info.Scope.Structure, et.info.Scope.Levels}); err == nil {
+		}{et.info.Fields, et.info.Derived, et.info.Withheld, policies, et.info.Scope.Default, et.info.Scope.Owner, et.info.Scope.Unit, et.info.Scope.Structure, et.info.Scope.Levels}); err == nil {
 			context.Definition = digest
 		}
 		if q.Record != "" && q.Kind != "create" && (q.Kind != "action" || current != nil) {

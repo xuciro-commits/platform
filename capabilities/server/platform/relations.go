@@ -36,18 +36,18 @@ func FollowID(member, target string) string {
 }
 
 type RelationLink struct {
-	From string    `json:"from"` // "<type>/<id>"
-	To   string    `json:"to"`
-	By   string    `json:"by"`
+	From string    `json:"from" source:"record"` // "<type>/<id>"
+	To   string    `json:"to" source:"record"`
+	By   string    `json:"by" source:"record"`
 	At   time.Time `json:"at"`
 }
 
 // Note is one protocol event on an entity's timeline, told by the app that decided it.
 type RelationNote struct {
-	Entity string    `json:"entity"`
-	By     string    `json:"by"`
+	Entity string    `json:"entity" source:"record"`
+	By     string    `json:"by" source:"record"`
 	At     time.Time `json:"at"`
-	Title  string    `json:"title,omitempty"` // a protocol event's title, said in the reader's language (F-37)
+	Title  string    `json:"title,omitempty" source:"record" from:"Entity"` // a protocol event's title, said in the reader's language (F-37)
 	Text   string    `json:"text"`
 }
 

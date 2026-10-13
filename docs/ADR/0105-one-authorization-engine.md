@@ -132,10 +132,14 @@ Compute 的输入准备、接受前计划、执行前检查、锁外输入读取
 
 `FieldInfo.SourceType` 与原生 `source` 标签、Build 字段配置提供 `record` / `user-input` / `external-input` / `generated`。命名/派生读取遮蔽未声明的自由文本；生成文本还须有记录出处。普通原始记录读取保留其权威数据。任务 title/body 声明来自任务 ref，并提供 `withheld`；审批引用/动作等固有元数据与用户拒绝备注显式声明类型。旧发布与已保存记录不重写。
 
-record / batch / input / work / effect / usage / host 接受结果保存可选 `authorizations`，包含原请求、有效角色、定义指纹与命中层。解码只检验身份、层级顺序和结果一致性；旧结果没有该字段仍可恢复。私有 savepoint 克隆依据；被拒的子尝试随其私有状态丢弃。原 ledger 的拒绝原因不再重新求值一次。治理页支持对象/记录/字段解释并展示后端层级，英中翻译随现有 API 生成。
+同一投影覆盖非实体结构、指针、接口、命名切片、数组、map、字节和 `json.RawMessage`。非实体字段复用 `source`，`from` 指向保存出处的 Go 字段，可附 `#字段`；实际来源仍交给同一授权引擎检查行与字段。任意 map 的未声明键/值、未声明文本与不透明序列化结果关闭；JSON 解码复用有界、拒绝重复键且保留精确整数的 `DecodeValue`。指针循环与过深容器停止投影，不改原值。数组不再沿旧路径原样返回。
+
+`Manifest.ReadSources` 只声明 owner 自己的配置、身份、定义与运行元数据等原始非实体结果，组合期拒绝未知来源类型及未注册的读取名；它不能扩大嵌入实体的行/字段权限，也不能盖过字段的显式派生来源。酒店/生产协议投影、输入选项和账簿/库存合计携带具体来源，后续 Agent 读取沿 `refsIn` 保留可见字段出处。成员协议读取复用 `Tenant.Read`，删除旧单角色短路。控制台任务/效果/通知的未声明正文与诊断被遮蔽，并提供 `withheld`。缺少出处的实体整字段、列表元素及合并来源只在派生上下文中收窄；原始 Flow 状态保留，声明原始输入的字段保留，有来源时仍逐源检查。引用元素由自己的来源逐个过滤，不因另一个不可见引用而清掉可见引用。
+
+record / batch / input / work / effect / usage / host 接受结果保存可选 `authorizations`，包含原请求、有效角色、定义指纹与命中层。指纹包含字段、派生声明、遮蔽字段和生效策略，修改出处或策略不会继续使用同一依据标识。解码只检验身份、层级顺序和结果一致性；旧结果没有该字段仍可恢复。私有 savepoint 克隆依据；被拒的子尝试随其私有状态丢弃。原 ledger 的拒绝原因不再重新求值一次。治理页支持对象/记录/字段解释并展示后端层级，英中翻译随现有 API 生成。
 
 具名读取中的实体记录逐行判定后投影；直接返回一批 owner 记录不能跳过行范围。Agent run 和 memory 的原受益人声明为参与者，保留其既有读取资格；记录详情的评论列表属于派生投影，未声明自由文本被遮蔽，原始评论记录及历史字节保留。隔离仿真的配置主体在沙箱身份 owner 里显式登记，不靠虚构成员取得管理资格。`check-boundaries` 的 AST 检查经 `scripts/escapes.sh` 拦截新增的成员存储投影；namespace 内部存储、私有写入和授权事实解析仍是各自 owner。
 
 `TestAuthorizationNineEntryFamilies` 覆盖 Submit、Input、协议、作业、效果回调、Agent 步骤、模型计量、Compute 和发布路由的显式拒绝；`TestHostHTTPRetainsItsExplicitAuthorityAndRecoversWithoutAuthorization` 覆盖宿主角色隔离、HTTP 管理接受依据和纯恢复。成员/来源与集合的反例另归 `authorization_decision_test.go` 和记录集测试。
 
-**本 ADR 仍在实施。** 九类入口已有实际拒绝用例，Compute/函数与宿主控制的重复条件已替换，成员读取守门已接通。仍须核对任意非实体 DTO/自由 JSON 的派生自由文本声明与完整读时闭包，不能以实体投影和入口用例通过代替全部读取表面完成。完成前 WorkQueue 保留 ADR-0105，不转入下一能力块。
+非实体/JSON、缺少出处、撤权、原始声明不能扩大嵌入权限以及原值不变的反例归 `authorization_projection_test.go`；定义依据变化归 `TestAuthorizationDefinitionChangesWithItsSourceContractAndPolicies`。实现边界仍是声明的来源与有界遍历，不实现 `related`、第二套授权语言或跨主体缓存。原生 owner 须如实声明自己复制的字段；AST 守门与反例不构成对任意新 Go 业务算法的数学证明。

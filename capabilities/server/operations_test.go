@@ -131,7 +131,7 @@ func TestOperations(t *testing.T) {
 		}
 		return out.([]platform.Notification)
 	}
-	if got := inbox(sup); len(got) != 2 || got[0].Title != "Feed 3" || got[0].App != "p" || got[0].Read {
+	if got := inbox(sup); len(got) != 2 || got[0].Title != "" || !got[0].Withheld || got[0].App != "p" || got[0].Read {
 		t.Fatalf("sup's inbox %+v", got)
 	}
 	if got := inbox(op); len(got) != 0 {
@@ -165,7 +165,7 @@ func TestOperations(t *testing.T) {
 	}
 	tn.Work(now.Add(time.Minute))
 	tn.Work(now.Add(2 * time.Minute)) // "tick" is already in every inbox: nothing new
-	if got := inbox(sup); len(got) != 3 || got[0].Title != "Tick" || len(inbox(ana)) != 1 {
+	if got := inbox(sup); len(got) != 3 || got[0].Key != "tick" || got[0].Title != "" || !got[0].Withheld || len(inbox(ana)) != 1 {
 		t.Fatalf("after ticks: sup %+v, ana %+v", got, inbox(ana))
 	}
 	workResults := 0

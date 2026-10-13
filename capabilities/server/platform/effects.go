@@ -21,25 +21,26 @@ type EffectKind struct {
 
 // Effect is one intent for one endpoint and what became of it.
 type Effect struct {
-	ID         string          `json:"id"` // the idempotency key: <tenant>:<app>:<change id or key>:<endpoint>
-	Endpoint   string          `json:"endpoint"`
-	Event      string          `json:"event"`         // the event or effect kind
-	App        string          `json:"app,omitempty"` // the app that emitted it; empty for webhooks
-	Key        string          `json:"key,omitempty"` // the app's key for it
-	Target     string          `json:"target"`
+	ID         string          `json:"id" source:"record"` // the idempotency key: <tenant>:<app>:<change id or key>:<endpoint>
+	Endpoint   string          `json:"endpoint" source:"record"`
+	Event      string          `json:"event" source:"record"`         // the event or effect kind
+	App        string          `json:"app,omitempty" source:"record"` // the app that emitted it; empty for webhooks
+	Key        string          `json:"key,omitempty" source:"record"` // the app's key for it
+	Target     string          `json:"target" source:"record"`
 	At         time.Time       `json:"at"`
-	State      string          `json:"state"`           // held, pending, retrying, delivered, rejected, failed, discarded
-	Agent      string          `json:"agent,omitempty"` // the AI agent that caused a held effect
-	Run        string          `json:"run,omitempty"`   // and its run
+	State      string          `json:"state" source:"record"`           // held, pending, retrying, delivered, rejected, failed, discarded
+	Agent      string          `json:"agent,omitempty" source:"record"` // the AI agent that caused a held effect
+	Run        string          `json:"run,omitempty" source:"record"`   // and its run
 	Attempts   int             `json:"attempts"`
 	Last       time.Time       `json:"last,omitzero"`
 	Due        time.Time       `json:"due,omitzero"`
 	Error      string          `json:"error,omitempty"`
-	Digest     string          `json:"digest,omitempty"`     // sha256 of the body last sent
-	Body       string          `json:"body,omitempty"`       // kept 30 days for support (D8)
-	Generation uint32          `json:"generation,omitempty"` // K9 generation of an internal operation attempt
-	Output     json.RawMessage `json:"output,omitempty"`     // accepted internal computation output
+	Digest     string          `json:"digest,omitempty" source:"record"` // sha256 of the body last sent
+	Body       string          `json:"body,omitempty"`                   // kept 30 days for support (D8)
+	Generation uint32          `json:"generation,omitempty"`             // K9 generation of an internal operation attempt
+	Output     json.RawMessage `json:"output,omitempty"`                 // accepted internal computation output
 	Millis     int64           `json:"millis,omitempty"`
+	Withheld   bool            `json:"withheld,omitempty"`
 }
 
 // Outcome is what an attempt learned; it is the journal entry of the attempt.

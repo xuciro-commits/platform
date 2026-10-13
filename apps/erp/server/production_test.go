@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"platformserver"
+	"platformserver/platform"
 )
 
 // A planner releases a production order for a finished product with its
@@ -42,7 +43,7 @@ func TestProduction(t *testing.T) {
 	b.expect("confirmed", fmt.Sprint(o.State, " ", o.Number, " ", o.ShopOrder, " ", o.Yield, " ", o.Scrap, " ", b.entry("MO-1-C").Number),
 		"confirmed MO/2026/00001 SO-7 9 1 MJ/2026/00001")
 	stock, _ := b.tn.Read(m, OnHand)
-	b.expect("stock", fmt.Sprint(stock), "[{M-1 Steel kg -20 -10000} {P-100 Bracket pcs 9 9900}]")
+	b.expect("stock", string(platform.Raw(stock)), `[{"product":"M-1","name":"Steel","unit":"kg","quantity":-20,"value":-10000},{"product":"P-100","name":"Bracket","unit":"pcs","quantity":9,"value":9900}]`)
 	balances, _ := b.tn.Read(m, TrialBalance)
 	got := ""
 	for _, x := range balances.([]Balance) {

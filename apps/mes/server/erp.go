@@ -196,12 +196,13 @@ func (p *Plant) planner() platform.Agent {
 
 // PlannedOrder is a provider's order as the plant lists it.
 type PlannedOrder struct {
-	ERPID    string `json:"erpId"`
-	Number   string `json:"number"`
-	Product  string `json:"product"`
-	Quantity int    `json:"quantity"`
-	Due      string `json:"due,omitempty"`
-	State    string `json:"state"`
+	ERPID    string `json:"erpId" source:"record" from:"Source"`
+	Number   string `json:"number" source:"record" from:"Source#number"`
+	Product  string `json:"product" source:"record" from:"Source#product"`
+	Quantity int    `json:"quantity" source:"record" from:"Source#quantity"`
+	Due      string `json:"due,omitempty" source:"record" from:"Source#due"`
+	State    string `json:"state" source:"record" from:"Source#state"`
+	Source   string `json:"-"`
 }
 
 // erpOrders are the orders of the protocol's providers; ok is false when the
@@ -231,7 +232,7 @@ func planned(c platform.Caller) []PlannedOrder {
 	orders, _ := erpOrders(c)
 	out := []PlannedOrder{}
 	for _, o := range orders {
-		out = append(out, PlannedOrder{ERPID: o.ID, Number: o.Number, Product: o.Product, Quantity: int(o.Quantity), Due: o.Due, State: o.State})
+		out = append(out, PlannedOrder{ERPID: o.ID, Number: o.Number, Product: o.Product, Quantity: int(o.Quantity), Due: o.Due, State: o.State, Source: o.Source})
 	}
 	return out
 }

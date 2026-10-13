@@ -74,7 +74,7 @@ func TestPurchasing(t *testing.T) {
 
 	ada, _ := b.tn.Member("ada")
 	stock, _ := b.tn.Read(ada, OnHand)
-	b.expect("on hand", fmt.Sprint(stock), "[{M-1 Steel sheet kg 100 50000}]")
+	b.expect("on hand", string(platform.Raw(stock)), `[{"product":"M-1","name":"Steel sheet","unit":"kg","quantity":100,"value":50000}]`)
 	balances, _ := b.tn.Read(ada, TrialBalance)
 	got := ""
 	for _, x := range balances.([]Balance) {

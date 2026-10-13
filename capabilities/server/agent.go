@@ -197,6 +197,7 @@ func agentEntities() []platform.Entity {
 func (a *Agents) Manifest() platform.Manifest {
 	return platform.Manifest{ID: AgentApp, Title: "Agents", Version: "1", Actions: a.ledger.Catalog, Entities: agentEntities(),
 		Reads: []string{"agents", "runs", "memories", "agent-overview"}, Everyone: []string{"agents", "runs", "memories"},
+		ReadSources: map[string]string{"agents": "record", "agent-overview": "record"},
 		Settings: []platform.Setting{
 			{Name: SettingAgentModel, Title: "Model for agents", Type: "text", Default: "",
 				Description: "The enabled model agents call, <provider>/<model>; it must call tools. Empty: agents stop and hand their goal to a person."},

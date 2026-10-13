@@ -32,7 +32,7 @@ func newNotes(tenant, id string) *notes {
 }
 
 func (n *notes) Manifest() platform.Manifest {
-	return platform.Manifest{ID: n.id, Version: "1", Actions: n.ledger.Catalog, Reads: []string{n.id + "-notes"}, Inputs: map[string]bool{n.id + "-feed": true}}
+	return platform.Manifest{ID: n.id, Version: "1", Actions: n.ledger.Catalog, Reads: []string{n.id + "-notes"}, ReadSources: map[string]string{n.id + "-notes": "record"}, Inputs: map[string]bool{n.id + "-feed": true}}
 }
 func (n *notes) Snapshot() (json.RawMessage, error) { return n.ledger.SnapshotWith(n.texts) }
 func (n *notes) Restore(raw json.RawMessage) error {

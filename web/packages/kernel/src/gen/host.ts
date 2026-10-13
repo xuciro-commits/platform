@@ -783,6 +783,7 @@ export type Effect = {
   generation?: number;
   output?: unknown;
   millis?: number;
+  withheld?: boolean;
 };
 
 export type EffectKind = {
@@ -1514,6 +1515,7 @@ export type Notification = {
   key?: string;
   at: string;
   read: boolean;
+  withheld?: boolean;
 };
 
 export type Operation = {
@@ -3225,6 +3227,7 @@ export type Task = {
   last?: string;
   due?: string;
   error?: string;
+  withheld?: boolean;
 };
 
 export type TaskSummary = {

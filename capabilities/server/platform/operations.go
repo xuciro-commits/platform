@@ -76,15 +76,16 @@ type Recipient struct {
 }
 
 type Notification struct {
-	ID     string    `json:"id"`
-	Member string    `json:"member"`
-	App    string    `json:"app"`
-	Title  string    `json:"title"`
-	Body   string    `json:"body,omitempty"`
-	Ref    string    `json:"ref,omitempty"` // the entity it is about, "<type>/<id>"
-	Key    string    `json:"key,omitempty"` // one notification per member, app and key
-	At     time.Time `json:"at"`
-	Read   bool      `json:"read"`
+	ID       string    `json:"id" source:"record"`
+	Member   string    `json:"member" source:"record"`
+	App      string    `json:"app" source:"record"`
+	Title    string    `json:"title" source:"generated" from:"Ref"`
+	Body     string    `json:"body,omitempty" source:"generated" from:"Ref"`
+	Ref      string    `json:"ref,omitempty" source:"record"` // context of the owned notice; content still checks Ref
+	Key      string    `json:"key,omitempty" source:"record"` // one notification per member, app and key
+	At       time.Time `json:"at"`
+	Read     bool      `json:"read"`
+	Withheld bool      `json:"withheld,omitempty"`
 }
 
 // Notify resolves recipients on now's day and gives each one n, unless it has

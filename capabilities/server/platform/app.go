@@ -387,7 +387,13 @@ type Manifest struct {
 	Version string
 	Actions *Catalog
 	Reads   []string
-	Inputs  map[string]bool // connector inputs; true: accepted result before live application
+	// ReadSources declares original non-entity results, such as an owner's
+	// configuration or retained definitions. Copied/generated business content
+	// instead declares source/from on its fields (from names a Go ref field,
+	// optionally followed by #sourceField). Registered records always
+	// retain their own row, field and derivation checks (ADR-0105 D4).
+	ReadSources map[string]string
+	Inputs      map[string]bool // connector inputs; true: accepted result before live application
 	// Subscribes names its own actions, or events of protocols it consumes
 	// ("<protocol id>#<event>"), delivered to Handle after commit. Apps know no
 	// other app: they reach each other through protocols only (ADR-0011).

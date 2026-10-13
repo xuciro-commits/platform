@@ -31,11 +31,11 @@ type StateBatch struct {
 // Downtime is derived from samples (K2 derived); its identity is a K1 entity so
 // decisions about it (the reason) survive recomputation through redirects.
 type Downtime struct {
-	ID         string     `json:"id"`
-	Resource   string     `json:"resource"`
+	ID         string     `json:"id" source:"external-input"`
+	Resource   string     `json:"resource" source:"external-input"`
 	Start      time.Time  `json:"start"`
 	End        *time.Time `json:"end,omitempty"`
-	Reason     string     `json:"reason,omitempty"`
+	Reason     string     `json:"reason,omitempty" source:"user-input"`
 	NeedsCheck bool       `json:"needsCheck,omitempty"` // a reason was given for an event that later split
 }
 

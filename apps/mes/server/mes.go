@@ -759,9 +759,10 @@ func (p *Plant) Manifest() platform.Manifest {
 			DetailFields: []string{"product", "quantity", "status", "planned", "sfcs", "erp", "confirmation", "erpDetail"},
 			Actions:      []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: SchemaRelease}, {App: ID, Kind: platform.AssetAction, Name: SchemaResend}}}},
 		Reads: []string{"master", "products", "planned-orders", "downtime"}, Entities: p.entities,
-		Consumes: []platform.Consumption{{Protocol: production.ID, Optional: true}},
-		Inputs:   map[string]bool{"states": true},
-		Jobs:     []platform.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},
+		ReadSources: map[string]string{"master": "record", "products": "record"},
+		Consumes:    []platform.Consumption{{Protocol: production.ID, Optional: true}},
+		Inputs:      map[string]bool{"states": true},
+		Jobs:        []platform.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},
 		Emits: []platform.EffectKind{{Name: EffectLeadTime, Title: "Lead time from a supplier",
 			Description: "A question to a supplier's agent about how soon it can deliver a product; bind it to the supplier's A2A endpoint."}},
 		Settings: []platform.Setting{

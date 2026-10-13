@@ -152,7 +152,8 @@ func flowEntities() []platform.Entity {
 
 func (f *Flows) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: "Flows", Version: "1", Actions: f.ledger.Catalog, Entities: flowEntities(), Reads: []string{"flows"},
-		Jobs: []platform.Job{{Name: "timers", Title: "Take flows' due steps: retries, timeouts, times and conditions", Every: time.Second}}}
+		ReadSources: map[string]string{"flows": "record"},
+		Jobs:        []platform.Job{{Name: "timers", Title: "Take flows' due steps: retries, timeouts, times and conditions", Every: time.Second}}}
 }
 
 func (f *Flows) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }

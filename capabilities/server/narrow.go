@@ -1,6 +1,8 @@
 package platformserver
 
 import (
+	"encoding"
+	"encoding/json"
 	"reflect"
 	"slices"
 	"strings"
@@ -118,12 +120,19 @@ func fieldName(t reflect.Type, path []int) string {
 // records leave for a member — a record page, a record's detail, every app
 // read — so no app, page or builder carries a second filter (rule 11).
 func (t *Tenant) narrowed(m platform.Member, v any, now time.Time, held bool) any {
+	return t.narrowedSource(m, v, now, held, "")
+}
+
+func (t *Tenant) narrowedSource(m platform.Member, v any, now time.Time, held bool, source string) any {
 	if v == nil {
 		return v
 	}
 	w := t.narrower(m, now, held)
 	w.derivedContext = true
-	out, changed := w.value(reflect.ValueOf(v))
+	out, changed := w.valueFrom(reflect.ValueOf(v), originalSource(source))
+	if w.opaque {
+		return nil
+	}
 	if !changed {
 		return v
 	}
@@ -138,7 +147,7 @@ func (t *Tenant) narrower(m platform.Member, now time.Time, held bool) *narrower
 
 func (t *Tenant) narrowerIn(store *recordStore, m platform.Member, now time.Time, held bool) *narrower {
 	m = t.authorizationMember(m)
-	return &narrower{t: t, store: store, m: m, at: now, may: t.mayReadIn(store, m, now, held), held: held, hidden: map[reflect.Type][]platform.FieldInfo{}, decisions: map[string]platform.AuthzDecision{}}
+	return &narrower{t: t, store: store, m: m, at: now, may: t.mayReadIn(store, m, now, held), held: held, hidden: map[reflect.Type][]platform.FieldInfo{}, decisions: map[string]platform.AuthzDecision{}, pointers: map[uintptr]bool{}}
 }
 
 type narrower struct {
@@ -151,6 +160,8 @@ type narrower struct {
 	may            func(ref string) bool
 	held           bool
 	hidden         map[reflect.Type][]platform.FieldInfo
+	opaque         bool
+	pointers       map[uintptr]bool
 }
 
 // entity is the declared type of a Go struct type, or nil.
@@ -164,13 +175,57 @@ func (w *narrower) entity(typ reflect.Type) *entityType {
 
 // value narrows what it finds inside v — records in slices, maps, pointers,
 // interfaces and other structs — and says whether anything changed.
-func (w *narrower) value(v reflect.Value) (reflect.Value, bool) {
+func originalSource(source string) bool {
+	return source == "record" || source == "user-input" || source == "external-input"
+}
+
+// valueFrom carries a declaration only through unregistered DTO/JSON content.
+// A registered entity always resolves its own authorization and provenance.
+func (w *narrower) valueFrom(v reflect.Value, declared bool) (reflect.Value, bool) {
+	return w.project(v, declared, 0)
+}
+
+func (w *narrower) project(v reflect.Value, declared bool, depth int) (reflect.Value, bool) {
+	if depth > 16 {
+		return reflect.Zero(v.Type()), !v.IsZero()
+	}
+	if w.derivedContext && !declared && opaqueProjection(v) {
+		// A serializer can emit content absent from its exported fields.
+		// An undeclared opaque result cannot be projected by reflection.
+		w.opaque = true
+		return reflect.Zero(v.Type()), true
+	}
+	if v.IsValid() && v.Type() == reflect.TypeFor[json.RawMessage]() {
+		if v.IsNil() {
+			return v, false
+		}
+		data, err := platform.DecodeValue(v.Bytes(), 1<<20)
+		if err != nil {
+			return reflect.ValueOf(json.RawMessage("null")), true
+		}
+		if data == nil {
+			return v, false
+		}
+		out, changed := w.project(reflect.ValueOf(data), declared, depth)
+		if !changed {
+			return v, false
+		}
+		return reflect.ValueOf(json.RawMessage(platform.Raw(out.Interface()))), true
+	}
 	switch v.Kind() {
 	case reflect.Interface, reflect.Pointer:
 		if v.IsNil() {
 			return v, false
 		}
-		inner, changed := w.value(v.Elem())
+		if v.Kind() == reflect.Pointer {
+			identity := v.Pointer()
+			if w.pointers[identity] {
+				return reflect.Zero(v.Type()), true
+			}
+			w.pointers[identity] = true
+			defer delete(w.pointers, identity)
+		}
+		inner, changed := w.project(v.Elem(), declared, depth)
 		if !changed {
 			return v, false
 		}
@@ -183,28 +238,46 @@ func (w *narrower) value(v reflect.Value) (reflect.Value, bool) {
 		p.Elem().Set(inner)
 		return p, true
 	case reflect.Slice, reflect.Array:
-		out, changed := reflect.MakeSlice(reflect.SliceOf(v.Type().Elem()), 0, v.Len()), false
+		if v.Type().Elem().Kind() == reflect.Uint8 && w.derivedContext && !declared && v.Len() > 0 {
+			return reflect.Zero(v.Type()), true
+		}
+		typ := v.Type()
+		if v.Kind() == reflect.Array {
+			typ = reflect.SliceOf(typ.Elem())
+		}
+		out, changed := reflect.MakeSlice(typ, 0, v.Len()), false
 		for i := range v.Len() {
 			if !w.permitsRecord(v.Index(i)) {
 				changed = true
 				continue
 			}
-			x, c := w.value(v.Index(i))
+			x, c := w.project(v.Index(i), declared, depth+1)
 			changed = changed || c
 			out = reflect.Append(out, x)
 		}
-		if !changed || v.Kind() == reflect.Array {
-			return v, false // an array is left alone; records are never held in one
+		if !changed {
+			return v, false
+		}
+		if v.Kind() == reflect.Array {
+			array := reflect.New(v.Type()).Elem()
+			reflect.Copy(array, out)
+			return array, true
 		}
 		return out, true
 	case reflect.Map:
 		out, changed := reflect.MakeMapWithSize(v.Type(), v.Len()), false
 		for _, k := range v.MapKeys() {
+			if w.derivedContext && !declared && k.Kind() == reflect.String && !w.isRecord(v.MapIndex(k)) {
+				// Arbitrary map keys can carry prose too. Only a declared
+				// original/derived JSON container may expose that namespace.
+				changed = true
+				continue
+			}
 			if !w.permitsRecord(v.MapIndex(k)) {
 				changed = true
 				continue
 			}
-			x, c := w.value(v.MapIndex(k))
+			x, c := w.project(v.MapIndex(k), declared, depth+1)
 			changed = changed || c
 			out.SetMapIndex(k, x)
 		}
@@ -222,18 +295,105 @@ func (w *narrower) value(v reflect.Value) (reflect.Value, bool) {
 		out, changed := reflect.New(v.Type()).Elem(), false
 		out.Set(v)
 		for i := range v.NumField() {
-			if !v.Type().Field(i).IsExported() {
+			field := v.Type().Field(i)
+			if !field.IsExported() || field.Tag.Get("json") == "-" {
 				continue
 			}
-			x, c := w.value(v.Field(i))
+			allowed := declared
+			source, from := field.Tag.Get("source"), field.Tag.Get("from")
+			if source != "" || from != "" {
+				allowed = originalSource(source)
+				if from != "" {
+					refs := projectionRefs(v, from)
+					allowed = (allowed || source == "generated") && len(refs) > 0 && w.readable(refs)
+				}
+			}
+			var x reflect.Value
+			var c bool
+			if from != "" && !allowed || source != "" && !allowed {
+				w.opaque = w.opaque || opaqueProjection(v.Field(i))
+				x, c = reflect.Zero(v.Field(i).Type()), !v.Field(i).IsZero()
+			} else {
+				x, c = w.project(v.Field(i), allowed, depth+1)
+			}
 			if c {
 				out.Field(i).Set(x)
 				changed = true
 			}
 		}
+		if changed {
+			if withheld := out.FieldByName("Withheld"); withheld.IsValid() && withheld.CanSet() && withheld.Kind() == reflect.Bool {
+				withheld.SetBool(true)
+			}
+		}
 		return out, changed
+	case reflect.String:
+		if w.derivedContext && !declared && v.Type() != reflect.TypeFor[json.Number]() && v.Len() > 0 {
+			return reflect.Zero(v.Type()), true
+		}
 	}
 	return v, false
+}
+
+func opaqueProjection(v reflect.Value) bool {
+	if !v.CanInterface() {
+		return false
+	}
+	typ := v.Type()
+	if typ == reflect.TypeFor[json.RawMessage]() {
+		return false
+	}
+	for typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ == reflect.TypeFor[time.Time]() {
+		return false
+	}
+	_, marshalsJSON := v.Interface().(json.Marshaler)
+	_, marshalsText := v.Interface().(encoding.TextMarshaler)
+	return marshalsJSON || marshalsText
+}
+
+func (w *narrower) isRecord(v reflect.Value) bool {
+	for v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return false
+		}
+		v = v.Elem()
+	}
+	return v.Kind() == reflect.Struct && w.entity(v.Type()) != nil
+}
+
+// projectionRefs uses one DTO field holding a ref or []refs. The optional
+// #field suffix rechecks the exact source field as well as its row; it does
+// not introduce another relationship traversal or authorization evaluator.
+func projectionRefs(v reflect.Value, from string) []string {
+	name, suffix, field := strings.Cut(from, "#")
+	at := v.FieldByName(name)
+	if !at.IsValid() {
+		return nil
+	}
+	refs := []string{}
+	add := func(ref string) {
+		if ref != "" {
+			if field {
+				ref += "#" + suffix
+			}
+			refs = append(refs, ref)
+		}
+	}
+	switch at.Kind() {
+	case reflect.String:
+		add(at.String())
+	case reflect.Slice:
+		for i := range at.Len() {
+			if at.Index(i).Kind() != reflect.String {
+				return nil
+			}
+			add(at.Index(i).String())
+		}
+	}
+	return refs
 }
 
 // record narrows one record: first the fields m's role may not read, then the
@@ -274,6 +434,17 @@ func (w *narrower) permitsRecord(value reflect.Value) bool {
 	}
 	et := w.entity(value.Type())
 	if et == nil {
+		for i := range value.NumField() {
+			field := value.Type().Field(i)
+			from := field.Tag.Get("from")
+			if !field.IsExported() || field.Tag.Get("source") != "record" || from == "" || strings.Contains(from, "#") {
+				continue
+			}
+			refs := projectionRefs(value, from)
+			if len(refs) == 0 && !value.Field(i).IsZero() || !w.readable(refs) {
+				return false
+			}
+		}
 		return true
 	}
 	copy := copyOf(et.info.Go, value.Interface())
@@ -349,28 +520,56 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 		}
 	}
 	for _, d := range et.info.Derived {
+		fieldsToEmpty := func(refs []string, value reflect.Value, typ reflect.Type) ([][]int, bool) {
+			if len(refs) > 0 {
+				return d.Fields, !readable(refs)
+			}
+			if !w.derivedContext {
+				return nil, false // the authority's original record is not a copied read
+			}
+			if d.Element {
+				return nil, true
+			}
+			missing := [][]int{}
+			for _, path := range d.Fields {
+				if typ == et.info.Go && slices.ContainsFunc(et.info.Derived, func(other platform.DerivationInfo) bool {
+					return other.Element && slices.Equal(other.List, path)
+				}) {
+					continue // each child is independently kept or dropped by its declared source
+				}
+				field := typ.FieldByIndex(path)
+				source := field.Tag.Get("source")
+				if typ == et.info.Go {
+					if info, known := et.info.Field(fieldName(typ, path)); known {
+						source = info.SourceType
+					}
+				}
+				if !originalSource(source) && !value.FieldByIndex(path).IsZero() {
+					missing = append(missing, path)
+				}
+			}
+			return missing, len(missing) > 0
+		}
 		switch {
 		case d.All:
-			if !readable(every) {
+			if fields, denied := fieldsToEmpty(every, out, et.info.Go); denied {
 				withheld = true
-				empty(out, d.Fields)
+				empty(out, fields)
 			}
 		case len(d.List) == 0:
 			refs := w.refsAt(out, d.Refs)
-			missing := len(refs) == 0 && slices.ContainsFunc(d.Fields, func(path []int) bool {
-				field, known := et.info.Field(fieldName(et.info.Go, path))
-				return known && field.SourceType == "generated" && !out.FieldByIndex(path).IsZero()
-			})
-			if missing || !readable(refs) {
+			if fields, denied := fieldsToEmpty(refs, out, et.info.Go); denied {
 				withheld = true
-				empty(out, d.Fields)
+				empty(out, fields)
 			}
 		default:
 			list := out.FieldByIndex(d.List)
 			kept := reflect.MakeSlice(list.Type(), 0, list.Len())
 			for i := range list.Len() {
 				element := list.Index(i)
-				if readable(w.refsAt(element, d.Refs)) {
+				refs := w.refsAt(element, d.Refs)
+				fields, denied := fieldsToEmpty(refs, element, element.Type())
+				if !denied {
 					kept = reflect.Append(kept, element)
 					continue
 				}
@@ -380,7 +579,7 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 				}
 				narrowed := reflect.New(element.Type()).Elem()
 				narrowed.Set(element)
-				empty(narrowed, d.Fields)
+				empty(narrowed, fields)
 				kept = reflect.Append(kept, narrowed)
 			}
 			list.Set(kept)
@@ -483,6 +682,10 @@ func (t *Tenant) refsIn(v any) []string {
 			}
 			for i := range v.NumField() {
 				if v.Type().Field(i).IsExported() {
+					field := v.Type().Field(i)
+					if from := field.Tag.Get("from"); from != "" && !v.Field(i).IsZero() {
+						out = append(out, projectionRefs(v, from)...)
+					}
 					walk(v.Field(i))
 				}
 			}

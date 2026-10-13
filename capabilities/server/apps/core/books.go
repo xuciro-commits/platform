@@ -276,20 +276,24 @@ func strconv(s string) string { b, _ := json.Marshal(s); return string(b) }
 
 // TrialBalance is the per-account total of a period.
 type TrialBalance struct {
-	Period string             `json:"period"`
-	Rows   []TrialBalanceLine `json:"rows"`
-	Debit  float64            `json:"debit"`
-	Credit float64            `json:"credit"`
+	Period   string             `json:"period" source:"user-input"`
+	Rows     []TrialBalanceLine `json:"rows"`
+	Debit    float64            `json:"debit" source:"generated" from:"Sources"`
+	Credit   float64            `json:"credit" source:"generated" from:"Sources"`
+	Sources  []string           `json:"-"`
+	Withheld bool               `json:"withheld,omitempty"`
 }
 
 type TrialBalanceLine struct {
-	Account string  `json:"account"`
-	Name    string  `json:"name" source:"record"`
-	Kind    string  `json:"kind" source:"record"`
-	Debit   float64 `json:"debit"`
-	Credit  float64 `json:"credit"`
-	Balance float64 `json:"balance"` // debit minus credit
-	Entries int     `json:"entries"`
+	Account       string   `json:"account" source:"record" from:"Sources"`
+	Name          string   `json:"name" source:"record" from:"AccountSource#name"`
+	Kind          string   `json:"kind" source:"record" from:"AccountSource#kind"`
+	Debit         float64  `json:"debit" source:"generated" from:"Sources"`
+	Credit        float64  `json:"credit" source:"generated" from:"Sources"`
+	Balance       float64  `json:"balance" source:"generated" from:"Sources"` // debit minus credit
+	Entries       int      `json:"entries" source:"generated" from:"Sources"`
+	AccountSource string   `json:"-"`
+	Sources       []string `json:"-"`
 }
 
 func trialBalance(c platform.Caller, period string) TrialBalance {
@@ -306,14 +310,17 @@ func trialBalance(c platform.Caller, period string) TrialBalance {
 				row = &TrialBalanceLine{Account: l.Account}
 				if k := slices.IndexFunc(accounts, func(a Account) bool { return a.Code == l.Account }); k >= 0 {
 					row.Name, row.Kind = accounts[k].Name, accounts[k].Kind
+					row.AccountSource = AccountType + "/" + accounts[k].ID
 				}
 				sums[l.Account] = row
 			}
+			row.Sources = append(row.Sources, JournalType+"/"+j.ID+"#lines")
 			row.Debit, row.Credit, row.Entries = round2(row.Debit+l.Debit), round2(row.Credit+l.Credit), row.Entries+1
 		}
 	}
 	out := TrialBalance{Period: period}
 	for _, row := range sums {
+		out.Sources = append(out.Sources, row.Sources...)
 		row.Balance = round2(row.Debit - row.Credit)
 		out.Rows = append(out.Rows, *row)
 		out.Debit, out.Credit = round2(out.Debit+row.Debit), round2(out.Credit+row.Credit)

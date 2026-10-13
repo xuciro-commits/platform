@@ -686,7 +686,7 @@ func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
 	// An app chooses which records its read answers with; the host keeps what
 	// leaves no wider than the member's authority over the fields and sources
 	// behind them (#130), however the app collected them.
-	return t.narrowed(m, out, Now(), false), nil
+	return t.narrowedSource(m, out, Now(), false, a.Manifest().ReadSources[name]), nil
 }
 
 // caused is an accepted decision with how many deliveries caused it.
@@ -892,6 +892,11 @@ func checkManifest(a platform.App) error {
 	for _, r := range m.Everyone {
 		if !slices.Contains(m.Reads, r) {
 			return fmt.Errorf("read %q is opened to everyone but not declared", r)
+		}
+	}
+	for name, source := range m.ReadSources {
+		if !slices.Contains(m.Reads, name) || !slices.Contains([]string{"record", "user-input", "external-input"}, source) {
+			return fmt.Errorf("read %q has an undeclared name or invalid original source type %q", name, source)
 		}
 	}
 	return nil

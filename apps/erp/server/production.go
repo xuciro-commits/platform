@@ -176,7 +176,7 @@ func productionOrders(c platform.Caller) []production.Order {
 		if o.State == "released" || o.State == "confirmed" {
 			entry, _ := platform.Get[Entry](c, o.ID+"-C") // the confirmation's posting: its number answers the plant
 			out = append(out, production.Order{ID: o.ID, Number: o.Number, Product: string(o.Product), Quantity: o.Quantity, Due: o.Due, State: o.State,
-				ShopOrder: o.ShopOrder, Confirmation: entry.Number})
+				ShopOrder: o.ShopOrder, Confirmation: entry.Number, Source: ProductionType + "/" + o.ID, ConfirmationSource: EntryType + "/" + entry.ID})
 		}
 	}
 	return out

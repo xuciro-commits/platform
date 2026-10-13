@@ -157,7 +157,8 @@ func (e *Enterprise) Restore(raw json.RawMessage) error {
 
 func (e *Enterprise) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: "Enterprise", Version: "1", Actions: e.ledger.Catalog,
-		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished, ReadPatterns}, Everyone: []string{ReadModel, ReadMetamodel, ReadPatterns}}
+		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished, ReadPatterns}, Everyone: []string{ReadModel, ReadMetamodel, ReadPatterns},
+		ReadSources: map[string]string{ReadOrganization: "record", ReadModel: "record", ReadMetamodel: "record", ReadPublished: "record", ReadPatterns: "record"}}
 }
 
 // memberOffboard is the console's decision that a member left (ADR-0079 §4):

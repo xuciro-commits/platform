@@ -147,9 +147,10 @@ type InputOptions struct {
 	Items  []InputOption `json:"items"`
 }
 type InputOption struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Unit string `json:"unit,omitempty"`
+	ID     string `json:"id" source:"record"`
+	Name   string `json:"name" source:"record" from:"Source#name"`
+	Unit   string `json:"unit,omitempty" source:"record"`
+	Source string `json:"-"`
 }
 
 // Catalog holds a domain's actions and which capabilities are deactivated for a

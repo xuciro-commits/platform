@@ -452,7 +452,7 @@ func (c *CRM) Read(who platform.Caller, name string) (any, *kernel.Error) {
 			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 		}
 		for _, typ := range types {
-			options.Items = append(options.Items, platform.InputOption{ID: typ.ID, Name: typ.Name, Unit: typ.Unit})
+			options.Items = append(options.Items, platform.InputOption{ID: typ.ID, Name: typ.Name, Unit: typ.Unit, Source: typ.Source})
 		}
 	}
 	return options, nil

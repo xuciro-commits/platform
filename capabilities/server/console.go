@@ -296,8 +296,9 @@ func clone(m *platform.Member) platform.Member {
 
 func (d *Console) Manifest() platform.Manifest {
 	return platform.Manifest{ID: PlatformApp, Title: "Settings", Version: "1", Actions: d.ledger.Catalog, Roles: []string{Admin, Auditor},
-		Reads:    []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "projects", "packages", "contributions"},
-		Everyone: []string{"notifications", "tenant", "account"}, Inputs: map[string]bool{"heartbeat": false},
+		Reads:       []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "projects", "packages", "contributions"},
+		ReadSources: map[string]string{"members": "record", "tenant": "record", "account": "record", "audit": "record", "deliveries": "record", "connectors": "record", "settings": "record", "endpoints": "record", "health": "record", "personal-reads": "record", "permissions": "record", "access": "record", "projects": "record", "packages": "record", "contributions": "record"},
+		Everyone:    []string{"notifications", "tenant", "account"}, Inputs: map[string]bool{"heartbeat": false},
 		Settings: tenantSettings()}
 }
 

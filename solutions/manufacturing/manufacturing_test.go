@@ -119,7 +119,7 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	mo := production("MO-1")
 	expect("the ERP's order", fmt.Sprint(mo.State, " ", mo.ShopOrder, " ", mo.Yield, " ", mo.Scrap), "confirmed SO-1 4 0")
 	stock, _ := tn.Read(sup, erp.OnHand)
-	expect("stock", fmt.Sprint(stock), "[{M-STEEL Steel kg -8 -4000} {P-100 Pump housing pcs 4 4800}]")
+	expect("stock", string(platform.Raw(stock)), `[{"product":"M-STEEL","name":"Steel","unit":"kg","quantity":-8,"value":-4000},{"product":"P-100","name":"Pump housing","unit":"pcs","quantity":4,"value":4800}]`)
 
 	// A refusal: the ERP's period is closed when the second order ends.
 	expect("MO-2", do("sup-1", erp.ID, erp.ProductionType+".create", erp.ProductionType, "MO-2", map[string]any{"product": "P-100", "quantity": 1}), "ok")

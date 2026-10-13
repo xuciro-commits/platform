@@ -254,10 +254,11 @@ func (t *Tenant) Query(m platform.Member, protocol, read string) (any, *kernel.E
 	if !bound {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if m.Roles[b.provider.Manifest().ID] == "" {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	name, declared := b.provision.Reads[read]
+	if !declared || !slices.Contains(b.provision.Protocol.Reads, read) {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	return b.provider.Read(t.caller(m, b.provider, false), b.provision.Reads[read])
+	return t.Read(m, name)
 }
 
 func (t *Tenant) authorityOf(dataClass string) string {

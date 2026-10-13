@@ -14,18 +14,20 @@ const ID = "production.orders/1"
 
 // Order is the protocol's read shape: a production order and where it stands.
 type Order struct {
-	ID       string  `json:"id"`
-	Number   string  `json:"number"`
-	Product  string  `json:"product"`
-	Quantity float64 `json:"quantity"`
-	Due      string  `json:"due,omitempty"`
+	ID       string  `json:"id" source:"record" from:"Source"`
+	Number   string  `json:"number" source:"record" from:"Source#number"`
+	Product  string  `json:"product" source:"record" from:"Source#product"`
+	Quantity float64 `json:"quantity" source:"record" from:"Source#quantity"`
+	Due      string  `json:"due,omitempty" source:"record" from:"Source#due"`
 	// State: released, the plant may execute it; sent, a confirmation is on its
 	// way to the ERP; confirmed, done; refused or failed, the last confirmation
 	// was refused or never arrived, and the order may be confirmed again.
-	State        string `json:"state"`
-	ShopOrder    string `json:"shopOrder,omitempty"`    // the consumer's order its last confirmation named
-	Confirmation string `json:"confirmation,omitempty"` // the ERP's number for the confirmation
-	Detail       string `json:"detail,omitempty"`       // why it was refused or failed
+	State              string `json:"state" source:"record" from:"Source#state"`
+	ShopOrder          string `json:"shopOrder,omitempty" source:"record" from:"Source#shopOrder"`             // the consumer's order its last confirmation named
+	Confirmation       string `json:"confirmation,omitempty" source:"record" from:"ConfirmationSource#number"` // the ERP's number for the confirmation
+	Detail             string `json:"detail,omitempty"`                                                        // why it was refused or failed
+	Source             string `json:"-"`
+	ConfirmationSource string `json:"-"`
 }
 
 // Answered reports whether the ERP has answered shop order's confirmation of o.

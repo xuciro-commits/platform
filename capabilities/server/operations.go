@@ -40,15 +40,16 @@ func (t *Tenant) retryOf(app string) platform.Retry {
 
 // Task is one piece of owned work: an event for a subscriber, or a job.
 type Task struct {
-	ID       string    `json:"id"`
-	Kind     string    `json:"kind"` // delivery, job
-	App      string    `json:"app"`  // the subscriber, or the job's app
-	Title    string    `json:"title"`
-	State    string    `json:"state"` // queued, retrying, failed, scheduled
+	ID       string    `json:"id" source:"record"`
+	Kind     string    `json:"kind" source:"record"` // delivery, job
+	App      string    `json:"app" source:"record"`  // the subscriber, or the job's app
+	Title    string    `json:"title" source:"record"`
+	State    string    `json:"state" source:"record"` // queued, retrying, failed, scheduled
 	Attempts int       `json:"attempts"`
 	Last     time.Time `json:"last,omitzero"`
 	Due      time.Time `json:"due,omitzero"`
 	Error    string    `json:"error,omitempty"`
+	Withheld bool      `json:"withheld,omitempty"`
 	since    int       // attempts before the last manual retry: each retry gets a full schedule
 	event    *caused
 	job      platform.Job

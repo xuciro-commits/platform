@@ -246,11 +246,13 @@ func billed(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
 
 // Stock is one product's line of the on-hand read.
 type Stock struct {
-	Product  string  `json:"product"`
-	Name     string  `json:"name"`
-	Unit     string  `json:"unit"`
-	Quantity float64 `json:"quantity"`
-	Value    int64   `json:"value"` // minor units of the tenant's currency
+	Product  string   `json:"product" source:"record" from:"Source"`
+	Name     string   `json:"name" source:"record" from:"Source#name"`
+	Unit     string   `json:"unit" source:"record" from:"Source#unit"`
+	Quantity float64  `json:"quantity" source:"generated" from:"Sources"`
+	Value    int64    `json:"value" source:"generated" from:"Sources"` // minor units of the tenant's currency
+	Source   string   `json:"-"`
+	Sources  []string `json:"-"`
 }
 
 // onHand sums every product's moves.
@@ -260,9 +262,10 @@ func onHand(c platform.Caller) []Stock {
 		s := sums[string(m.Product)]
 		if s == nil {
 			product, _ := platform.Get[Product](c, string(m.Product))
-			s = &Stock{Product: product.ID, Name: product.Name, Unit: product.Unit}
+			s = &Stock{Product: product.ID, Name: product.Name, Unit: product.Unit, Source: ProductType + "/" + product.ID}
 			sums[s.Product] = s
 		}
+		s.Sources = append(s.Sources, MoveType+"/"+m.ID+"#quantity", MoveType+"/"+m.ID+"#value")
 		s.Quantity += m.Quantity
 		s.Value += m.Value.Amount
 	}

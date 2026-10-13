@@ -75,6 +75,28 @@ func TestAuthorizationRevocationPreservesAcceptedRecovery(t *testing.T) {
 	}
 }
 
+func TestAuthorizationDefinitionChangesWithItsSourceContractAndPolicies(t *testing.T) {
+	tn := stockTenant(t)
+	c := platform.NewCaller(runtime{tn}, memberOf(t, tn, "ana"), "stock", false, false)
+	request := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: "stock.item"}
+	before := c.Authorize(request, txnAt)
+	et := tn.records.types["stock.item"]
+	note, _ := et.info.Field("note")
+	bin, _ := et.info.Field("bin")
+	et.info.Derived = []platform.DerivationInfo{{Refs: [][]int{bin.Index}, Fields: [][]int{note.Index}, Names: []string{"bin", "note"}}}
+	sourced := c.Authorize(request, txnAt)
+	if before.Definition == "" || sourced.Definition == before.Definition {
+		t.Fatal("different source contracts retained the same authorization basis")
+	}
+	tn.app("stock").Manifest().Actions.UsePolicies(func() []authz.Policy {
+		return []authz.Policy{{ID: "source-freeze", Effect: "deny", Permission: "*"}}
+	})
+	frozen := c.Authorize(request, txnAt)
+	if frozen.Allow || frozen.Definition == sourced.Definition || frozen.Policy != "source-freeze" {
+		t.Fatalf("changed policy was absent from the recorded definition basis: before=%s after=%+v", sourced.Definition, frozen)
+	}
+}
+
 func TestDeclaredInputAndWorkShareDenyPrecedence(t *testing.T) {
 	tn, owner, _ := setup(t, nil)
 	owner.Manifest().Actions.UsePolicies(func() []authz.Policy { return []authz.Policy{{ID: "frozen", Effect: "deny", Permission: "*"}} })

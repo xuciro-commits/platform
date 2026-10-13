@@ -347,7 +347,7 @@ func (h *Hotel) Read(c platform.Caller, name string) (any, *kernel.Error) {
 			if typ.Hourly {
 				unit = "hour"
 			}
-			out = append(out, lodging.RoomType{ID: typ.ID, Name: typ.Name, Unit: unit})
+			out = append(out, lodging.RoomType{ID: typ.ID, Name: typ.Name, Unit: unit, Source: RoomTypeType + "/" + typ.ID})
 		}
 		return out, nil
 	}
@@ -357,7 +357,7 @@ func (h *Hotel) Read(c platform.Caller, name string) (any, *kernel.Error) {
 
 	out := []lodging.Booking{}
 	for _, r := range reservations(c) {
-		out = append(out, lodging.Booking{ID: r.ID, RoomType: string(r.RoomType), CheckIn: r.CheckIn, CheckOut: r.CheckOut, Guest: r.Guest, Status: r.Status, Until: r.Until})
+		out = append(out, lodging.Booking{ID: r.ID, RoomType: string(r.RoomType), CheckIn: r.CheckIn, CheckOut: r.CheckOut, Guest: r.Guest, Status: r.Status, Until: r.Until, Source: ReservationType + "/" + r.ID})
 	}
 	return out, nil
 }
