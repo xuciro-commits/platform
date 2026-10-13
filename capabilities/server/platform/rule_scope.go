@@ -46,7 +46,7 @@ func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, b
 	schema := ExprSchema{Refs: map[string]ExprType{"caller.id": {Kind: "text"}}, Sets: map[string]ExprSetType{}}
 	for key, typ := range spec.Inputs {
 		name := "input." + key
-		if strings.HasPrefix(key, "step.") {
+		if strings.HasPrefix(key, "step.") || strings.HasPrefix(key, "row.") {
 			name = key
 		}
 		schema.Refs[name] = typ
@@ -101,7 +101,7 @@ func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, b
 				typ = spec.Collections[child].Object
 				fieldName = strings.TrimPrefix(ref, "item.")
 			}
-			if strings.HasPrefix(ref, "input.") || strings.HasPrefix(ref, "step.") {
+			if strings.HasPrefix(ref, "input.") || strings.HasPrefix(ref, "step.") || strings.HasPrefix(ref, "row.") {
 				input := spec.Inputs[strings.TrimPrefix(ref, "input.")]
 				if input.Kind != "reference" || input.Object == "" {
 					return fmt.Errorf("rule path input is not a declared reference")
@@ -188,7 +188,11 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 	for name, typ := range spec.Inputs {
 		v, ok := inputs[name]
 		if ok {
-			ctx.Refs[ruleInputName(name)] = ExprPresent(typ.Kind, v)
+			if fact, captured := v.(ExprValue); captured && strings.HasPrefix(name, "row.") {
+				ctx.Refs[ruleInputName(name)] = fact
+			} else {
+				ctx.Refs[ruleInputName(name)] = ExprPresent(typ.Kind, v)
+			}
 			if spec.Object == "" {
 				ctx.Refs[name] = ctx.Refs[ruleInputName(name)]
 			}
@@ -253,7 +257,7 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 	}
 	var visit func(Expr) error
 	visit = func(e Expr) error {
-		if e.Ref != "" && !strings.HasPrefix(e.Ref, "item.") && !strings.HasPrefix(e.Ref, "input.") && e.Ref != "caller.id" && !strings.HasPrefix(e.Ref, "step.") {
+		if e.Ref != "" && !strings.HasPrefix(e.Ref, "item.") && !strings.HasPrefix(e.Ref, "input.") && e.Ref != "caller.id" && !strings.HasPrefix(e.Ref, "step.") && !strings.HasPrefix(e.Ref, "row.") {
 			var id string
 			_ = json.Unmarshal(values["id"], &id)
 			if id != "" {
@@ -263,7 +267,7 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 		if e.Op == "path" && len(e.Args) == 1 && !strings.HasPrefix(e.Args[0].Ref, "item.") {
 			name := e.Args[0].Ref
 			field, ok := info.Field(name)
-			if strings.HasPrefix(name, "input.") || strings.HasPrefix(name, "step.") {
+			if strings.HasPrefix(name, "input.") || strings.HasPrefix(name, "step.") || strings.HasPrefix(name, "row.") {
 				t := spec.Inputs[strings.TrimPrefix(name, "input.")]
 				field = FieldInfo{Type: t.Kind, Ref: t.Object}
 				ok = t.Kind == "reference" && t.Object != ""
@@ -349,7 +353,7 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 		if set.Set != "" {
 			var subjectID string
 			_ = json.Unmarshal(values["id"], &subjectID)
-			page, err := c.ReadRecordSet(spec.Object, subjectID, set.Set, now)
+			page, err := c.ruleRecordSet(spec.Object, subjectID, set.Set, record, now)
 			readErr = err
 			if err == nil {
 				raw = Raw(map[string]any{"records": page.Records, "total": len(page.Records), "sources": page.Sources, "partial": page.Partial})
@@ -455,7 +459,7 @@ func ExprGoValue(v ExprValue) (any, error) {
 }
 
 func ruleInputName(name string) string {
-	if strings.HasPrefix(name, "step.") {
+	if strings.HasPrefix(name, "step.") || strings.HasPrefix(name, "row.") {
 		return name
 	}
 	return "input." + name

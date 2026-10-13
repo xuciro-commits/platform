@@ -104,6 +104,14 @@ func (r *Relations) Restore(raw json.RawMessage) error {
 	return nil
 }
 
+// Historical owner-state remains byte-preserving evidence for the endpoint
+// owner's explicit migration; it is never rewritten by that migration.
+func (r *Relations) LegacyRelations() []platform.RelationLink {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.links)
+}
+
 func (r *Relations) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: "Relations", Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"},
 		Entities: entities()}
@@ -187,6 +195,9 @@ func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (
 		if slices.ContainsFunc(entities, func(e string) bool { return !strings.Contains(e, "/") }) {
 			return nil, invalid
 		}
+		if !c.Replaying && !c.LegacyRelationWritable(p.From, p.To) {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Use the object's declared relationship transaction / 请使用对象声明的关系事务")
+		}
 		linked := slices.IndexFunc(r.links, func(l Link) bool { return l.From == p.From && l.To == p.To })
 		switch s.GetSchema().GetName() {
 		case SchemaLink:
@@ -211,9 +222,9 @@ func (r *Relations) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if name == "links" {
-		out := []Link{}
+		out := c.OwnedRelations("")
 		for _, l := range r.links {
-			if r.sees(c, l.From) && r.sees(c, l.To) {
+			if c.LegacyRelationActive(l) && r.sees(c, l.From) && r.sees(c, l.To) {
 				out = append(out, l)
 			}
 		}
@@ -300,6 +311,9 @@ func (r *Relations) Links(c platform.Caller, entity string) []string {
 	defer r.mu.Unlock()
 	var out []string
 	for _, l := range r.links {
+		if !c.LegacyRelationActive(l) {
+			continue
+		}
 		switch {
 		case l.From == entity && r.sees(c, l.To):
 			out = append(out, l.To)

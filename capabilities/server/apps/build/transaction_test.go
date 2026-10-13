@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -26,6 +27,41 @@ func TestBusinessTxnPublicationBoundaries(t *testing.T) {
 	}}}}}
 	if err := b.checkTransactions(root); err != nil {
 		t.Fatal(err)
+	}
+	root.Sets = []platform.RecordSet{{Name: "lines", From: "lines", Direction: "inverse", Object: "build.detail", Order: []platform.RecordSetSort{{Expr: platform.ExprReference("text", "id")}}, Limit: 10000}}
+	for _, which := range []string{"nested iteration", "undeclared set", "missing order", "step limit", "duplicate item writes"} {
+		t.Run(which, func(t *testing.T) {
+			raw, _ := json.Marshal(root)
+			var candidate Object
+			_ = json.Unmarshal(raw, &candidate)
+			item := platform.TxnStep{Name: "editline", Kind: "update", Target: platform.TxnRef{Type: "build.detail", ID: "$item"}}
+			loop := platform.TxnStep{Name: "lines", Kind: "for-each", ForEach: &platform.TxnForEach{Set: "lines", Steps: []platform.TxnStep{item}}}
+			candidate.Actions[0].Transaction.Steps = append(candidate.Actions[0].Transaction.Steps, loop)
+			last := &candidate.Actions[0].Transaction.Steps[len(candidate.Actions[0].Transaction.Steps)-1]
+			switch which {
+			case "nested iteration":
+				nested := loop
+				nested.Name = "nested"
+				last.ForEach.Steps = []platform.TxnStep{nested}
+			case "undeclared set":
+				last.ForEach.Set = "missing"
+			case "missing order":
+				candidate.Sets[0].Order = nil
+			case "step limit":
+				for i := 0; i < platform.TxnMaxSteps; i++ {
+					step := candidate.Actions[0].Transaction.Steps[0]
+					step.Name = fmt.Sprintf("sequence%d", i)
+					candidate.Actions[0].Transaction.Steps = append(candidate.Actions[0].Transaction.Steps, step)
+				}
+			case "duplicate item writes":
+				again := item
+				again.Name = "again"
+				last.ForEach.Steps = append(last.ForEach.Steps, again)
+			}
+			if err := b.checkTransactions(candidate); err == nil {
+				t.Fatalf("%s was published", which)
+			}
+		})
 	}
 	for _, kind := range []string{"archive", "link", "unlink", "post", "journal", "effect", "work", "call", "ForEach"} {
 		t.Run(kind, func(t *testing.T) {

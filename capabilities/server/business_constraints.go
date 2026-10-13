@@ -378,6 +378,17 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 	rootID := recordOf(root.value).ID
 	if rule.Reads != nil {
 		for _, set := range rule.Reads.Collections {
+			if set.Set != "" {
+				index := slices.IndexFunc(info.Sets, func(declaration platform.RecordSet) bool { return declaration.Name == set.Set })
+				if index < 0 {
+					return true
+				}
+				declaration := info.Sets[index]
+				if (typ == declaration.Object || typ == platform.OwnedRelationType(info.App)) && d.declaredSetDepends(info, root, declaration, typ, id, old) {
+					return true
+				}
+				continue
+			}
 			if set.Object != typ {
 				continue
 			}
@@ -434,6 +445,37 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 	if rule.Expr != nil {
 		visit(*rule.Expr, "")
 	}
+	if rule.Reads != nil {
+		for name, binding := range rule.Reads.Collections {
+			if binding.Set == "" {
+				continue
+			}
+			index := slices.IndexFunc(info.Sets, func(set platform.RecordSet) bool { return set.Name == binding.Set })
+			if index < 0 {
+				return true
+			}
+			set := info.Sets[index]
+			var capture func(platform.Expr)
+			capture = func(expr platform.Expr) {
+				if expr.Op == "path" && len(expr.Args) == 1 {
+					paths[name] = append(paths[name], append([]string{expr.Args[0].Ref}, expr.Path...))
+				}
+				for _, child := range expr.Args {
+					capture(child)
+				}
+			}
+			for _, predicate := range set.Where {
+				lowered, err := platform.LowerRecordSetPredicate(set, predicate, d.constraintLookup)
+				if err != nil {
+					return true
+				}
+				capture(lowered)
+			}
+			for _, order := range set.Order {
+				capture(order.Expr)
+			}
+		}
+	}
 	follows := func(root *row, info platform.EntityInfo, path []string) bool {
 		current, currentInfo := root, info
 		for _, name := range path {
@@ -463,6 +505,24 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 			continue
 		}
 		set := rule.Reads.Collections[collection]
+		if set.Set != "" {
+			index := slices.IndexFunc(info.Sets, func(declaration platform.RecordSet) bool { return declaration.Name == set.Set })
+			et := d.records.types[set.Object]
+			if index < 0 || et == nil {
+				return true
+			}
+			for itemID, item := range et.rows {
+				if !d.declaredSetDepends(info, root, info.Sets[index], et.info.Type, itemID, nil) {
+					continue
+				}
+				for _, path := range itemPaths {
+					if follows(item, et.info, path) {
+						return true
+					}
+				}
+			}
+			continue
+		}
 		q, _, ok := (hostView{t: d.tenant}).RuleQuery(set.App, set.Query, set.Version)
 		et := d.records.types[set.Object]
 		if !ok || et == nil {
@@ -492,4 +552,115 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 		}
 	}
 	return false
+}
+
+// This is dependency discovery, not a second rule evaluation. It considers
+// both sides of a moved reference and archived edges before the original
+// caller's constraint is evaluated through the normal scoped reader.
+func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *row, set platform.RecordSet, typ, id string, old *row) bool {
+	if typ != set.Object && (set.Binding == nil || set.Binding.Ref.Kind != platform.AssetLinkType) {
+		return false
+	}
+	rootID := recordOf(root.value).ID
+	rootRef := info.Type + "/" + rootID
+	matchField := func(field platform.FieldInfo) bool {
+		et := d.records.types[typ]
+		if et == nil {
+			return true
+		}
+		for _, candidate := range []*row{et.rows[id], old} {
+			if candidate != nil && candidate.value.FieldByIndex(field.Index).String() == rootID {
+				return true
+			}
+		}
+		return false
+	}
+	if set.Binding != nil {
+		definition, ok := d.tenant.recordSetBinding(*set.Binding)
+		if !ok {
+			return true
+		}
+		if query := definition.Query; query != nil {
+			if typ != set.Object {
+				return false
+			}
+			if query.By == "" {
+				return true
+			}
+			et := d.records.types[typ]
+			if et == nil {
+				return true
+			}
+			field, ok := et.info.Field(query.By)
+			return !ok || matchField(field)
+		}
+		link := definition.LinkType
+		if link == nil {
+			return true
+		}
+		if link.Storage == "edge" {
+			et := d.records.types[platform.OwnedRelationType(info.App)]
+			if et == nil {
+				return true
+			}
+			candidates := []*row{}
+			if typ == et.info.Type {
+				candidates = append(candidates, et.rows[id], old)
+			} else {
+				for _, edge := range et.rows {
+					candidates = append(candidates, edge)
+				}
+				for ref, write := range d.constraintWrites {
+					if strings.HasPrefix(ref, et.info.Type+"/") {
+						candidates = append(candidates, write.before)
+					}
+				}
+			}
+			for _, edge := range candidates {
+				if edge == nil {
+					continue
+				}
+				var value struct{ Binding, Parent, Child string }
+				_ = json.Unmarshal(platform.Raw(edge.value.Interface()), &value)
+				if value.Binding != link.Name {
+					continue
+				}
+				from, to := value.Parent, value.Child
+				if set.Direction == "reverse" {
+					from, to = to, from
+				}
+				if from == rootRef && (typ == et.info.Type || to == typ+"/"+id) {
+					return true
+				}
+			}
+			return false
+		}
+		if typ != set.Object {
+			return false
+		}
+		if set.Direction == "reverse" {
+			field, ok := info.Field(link.Via)
+			return !ok || root.value.FieldByIndex(field.Index).String() == id
+		}
+		et := d.records.types[typ]
+		if et == nil {
+			return true
+		}
+		field, ok := et.info.Field(link.Via)
+		return !ok || matchField(field)
+	}
+	if set.Direction == "reference" {
+		field, ok := info.Field(set.From)
+		return !ok || root.value.FieldByIndex(field.Index).String() == id
+	}
+	et := d.records.types[typ]
+	if et == nil {
+		return true
+	}
+	for _, field := range et.info.Fields {
+		if field.Inverse == set.From && field.Ref == info.Type {
+			return matchField(field)
+		}
+	}
+	return true
 }

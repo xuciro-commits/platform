@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"slices"
+	"strconv"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -206,6 +207,23 @@ func (b *Build) linkTypeDeclarations() []platform.LinkType {
 func linkKeepsGuarantees(old, next LinkType) bool {
 	before, after := old.Definition(), next.Definition()
 	return before.Storage == after.Storage && !(before.Cardinality != "many-to-many" && after.Cardinality == "many-to-many" || before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
+}
+
+func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return b.ledger.Receive(c, submission, at, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		record, ok := platform.Get[LinkType](c, submission.GetTarget().GetId())
+		installed, retained := wasPublished[LinkType](record.Published)
+		if !ok || record.Archived || !retained || installed.Definition().Storage != "edge" {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Publish an owned relationship before migrating")
+		}
+		binding := platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: installed.Name}, SourceVersion: b.Manifest().Version + ".link-" + strconv.Itoa(installed.Version)}
+		return func(receipt *pb.ChangeRecord) {
+			if c.MigrateOwnedRelations(receipt, binding, at) != nil {
+				return
+			}
+			_ = c.Put(receipt, record)
+		}, nil
+	})
 }
 
 // LinkPublication decodes the original accepted owner image without a

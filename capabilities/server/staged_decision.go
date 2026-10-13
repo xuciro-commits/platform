@@ -20,6 +20,7 @@ import (
 // stagedDecision owns the private record, ledger and intent views for supported
 // ADR-0038 transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
+	iterations       []platform.TxnIteration
 	constraintWrites map[string]constraintWrite
 	callbackOrigin   *platform.Effect
 	callbackWrites   map[string]callbackWrite
@@ -323,10 +324,11 @@ func (d *stagedDecision) Related(c platform.Caller, element, stereotype string, 
 	return d.directoryView().Related(element, stereotype, outgoing, now.UTC().Format(time.DateOnly))
 }
 func (d *stagedDecision) Links(c platform.Caller, entity string) []string {
-	if d.tenant.linker == nil {
-		return nil
+	var out []string
+	if d.tenant.linker != nil {
+		out = d.stateApp(d.tenant.linker.(platform.App)).(host.Linker).Links(c, entity)
 	}
-	return d.stateApp(d.tenant.linker.(platform.App)).(host.Linker).Links(c, entity)
+	return appendOwnedRelationNeighbors(out, c.OwnedRelations(entity), entity)
 }
 func (d *stagedDecision) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
 	if d.tenant.linker == nil {

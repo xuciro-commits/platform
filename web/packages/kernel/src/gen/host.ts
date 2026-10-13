@@ -377,6 +377,14 @@ export type BuildProject = {
   assets?: ProjectAsset[];
 };
 
+export type BusinessTxn = {
+  subject: string;
+  steps: TxnStep[];
+  guard?: Expr;
+  message?: string;
+  reads?: RuleReadSpec;
+};
+
 export type Calendar = {
   id: string;
   name: string;
@@ -2469,6 +2477,14 @@ export type RecordSetPredicate = {
   set?: QuerySet;
 };
 
+export type RecordSetResult = {
+  object: string;
+  records: unknown[];
+  partial: boolean;
+  sources?: string[];
+  definition: string;
+};
+
 export type RecordSetSort = {
   expr: Expr;
   desc?: boolean;
@@ -2497,6 +2513,13 @@ export type Related = {
   title: string;
   records: unknown[];
   total: number;
+};
+
+export type RelationMigrationPlan = {
+  binding: AssetBinding;
+  links: Link[];
+  partial: boolean;
+  migrated: boolean;
 };
 
 export type Relationship = {
@@ -2822,6 +2845,12 @@ export type Section = {
 export type SelectionVariable = {
   name: string;
   object: AssetRef;
+};
+
+export type Sequence = {
+  Name: string;
+  Pattern: string;
+  Yearly: boolean;
 };
 
 export type Session = {
@@ -3255,6 +3284,40 @@ export type TransitionInfo = {
   title: string;
   from: string[];
   to: string[];
+};
+
+export type TxnForEach = {
+  set: string;
+  steps: TxnStep[];
+};
+
+export type TxnLink = {
+  binding: AssetBinding;
+  parent: TxnRef;
+  child: TxnRef;
+};
+
+export type TxnRef = {
+  type: string;
+  id?: string;
+  via?: string;
+};
+
+export type TxnSet = {
+  field: string;
+  expr?: Expr;
+  from?: string;
+};
+
+export type TxnStep = {
+  name: string;
+  kind: string;
+  target?: TxnRef;
+  changes?: TxnSet[];
+  sequence?: Sequence;
+  when?: Expr;
+  link?: TxnLink;
+  forEach?: TxnForEach;
 };
 
 export type Type = {

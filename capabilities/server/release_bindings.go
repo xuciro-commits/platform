@@ -44,9 +44,34 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 				Fields []struct {
 					Property *platform.AssetBinding `json:"property,omitempty"`
 				} `json:"fields"`
+				Sets    []platform.RecordSet `json:"sets,omitempty"`
+				Actions []struct {
+					Transaction *platform.BusinessTxn `json:"transaction,omitempty"`
+				} `json:"actions,omitempty"`
 			}
 			if json.Unmarshal(asset.Body, &object) != nil {
 				return fmt.Errorf("invalid property consumer")
+			}
+			for _, set := range object.Sets {
+				if set.Binding != nil {
+					bindings = append(bindings, *set.Binding)
+				}
+			}
+			var bindSteps func([]platform.TxnStep)
+			bindSteps = func(steps []platform.TxnStep) {
+				for _, step := range steps {
+					if step.Link != nil {
+						bindings = append(bindings, step.Link.Binding)
+					}
+					if step.ForEach != nil {
+						bindSteps(step.ForEach.Steps)
+					}
+				}
+			}
+			for _, action := range object.Actions {
+				if action.Transaction != nil {
+					bindSteps(action.Transaction.Steps)
+				}
 			}
 			for _, f := range object.Fields {
 				if f.Property != nil {

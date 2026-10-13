@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:5617bbba6b9464ef",
+  "revision": "sha256:969cccc9106e233f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12176,6 +12176,7 @@
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/property-type.tsx",
       "web/packages/build/src/ontology/query.tsx",
+      "web/packages/build/src/ontology/record-sets.tsx",
       "web/packages/build/src/ontology/shape.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
       "web/packages/build/src/projects/project-roles.tsx",
@@ -12323,6 +12324,7 @@
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/property-type.tsx",
       "web/packages/build/src/ontology/query.tsx",
+      "web/packages/build/src/ontology/record-sets.tsx",
       "web/packages/build/src/ontology/shape.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
       "web/packages/build/src/projects/project-roles.tsx",
@@ -12583,6 +12585,7 @@
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/property-type.tsx",
       "web/packages/build/src/ontology/query.tsx",
+      "web/packages/build/src/ontology/record-sets.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
@@ -12862,6 +12865,7 @@
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/ontology/constraints.tsx",
+      "web/packages/build/src/ontology/record-sets.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/editor.tsx",

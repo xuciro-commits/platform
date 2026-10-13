@@ -78,6 +78,27 @@ func (d *stagedDecision) ReadRecordSet(c platform.Caller, object, id, name strin
 	return d.tenant.readRecordSetFrom(d.records, c, object, id, name, at)
 }
 
+// A proposed owner row supplies reference values to its own rules before Put.
+// The copied read view has no history, writes or authoritative side effects.
+func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, name string, raw json.RawMessage, at time.Time) (platform.RecordSetResult, *kernel.Error) {
+	store := d.records.forkRecords()
+	et := store.types[object]
+	if !c.Staging() || et == nil || et.info.App != c.App || id == "" {
+		return platform.RecordSetResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection candidate is outside its owner")
+	}
+	value := reflect.New(et.info.Go).Elem()
+	if json.Unmarshal(raw, value.Addr().Interface()) != nil || recordOf(value).ID != id {
+		return platform.RecordSetResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Collection candidate is invalid")
+	}
+	if before := et.rows[id]; before != nil {
+		recordOf(value).Created = recordOf(before.value).Created
+	} else {
+		recordOf(value).Created.By = c.ID
+	}
+	et.rows[id] = &row{value: value}
+	return d.tenant.readRecordSetFrom(store, c, object, id, name, at)
+}
+
 func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *kernel.Error) {
 	result := platform.RecordSetResult{Records: []json.RawMessage{}}
 	lookup := func(typ string) (platform.EntityInfo, bool) {
@@ -95,6 +116,7 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	}
 	set := info.Sets[slices.IndexFunc(info.Sets, func(set platform.RecordSet) bool { return set.Name == name })]
 	result.Object = set.Object
+	result.Definition, _ = canonicalDigest(set)
 	root, err := t.readRecordFrom(store, c, object, id, at)
 	if err != nil {
 		return result, err
@@ -198,18 +220,32 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 		keys []platform.ExprValue
 	}
 	selectedRows := []selected{}
+	programs := map[string]*platform.ExprProgram{}
+	predicates := make([]platform.Expr, len(set.Where))
+	for i, where := range set.Where {
+		lowered, err := platform.LowerRecordSetPredicate(set, where, lookup)
+		if err != nil {
+			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		predicates[i] = lowered
+	}
 	evaluate := func(expr platform.Expr, row any) (platform.ExprValue, *kernel.Error) {
-		schema, compileErr := platform.RuleSchema(expr, spec, ruleLookup)
-		if compileErr != nil {
-			return platform.ExprValue{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, compileErr.Error())
+		key := string(platform.Raw(expr))
+		program := programs[key]
+		if program == nil {
+			schema, err := platform.RuleSchema(expr, spec, ruleLookup)
+			if err != nil {
+				return platform.ExprValue{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			program, err = platform.CompileExpr(expr, schema)
+			if err != nil {
+				return platform.ExprValue{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			programs[key] = program
 		}
 		context, captureErr := c.RuleContext(expr, spec, ruleLookup, row, nil, at)
 		if captureErr != nil {
 			return platform.ExprValue{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, captureErr.Error())
-		}
-		program, compileErr := platform.CompileExpr(expr, schema)
-		if compileErr != nil {
-			return platform.ExprValue{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, compileErr.Error())
 		}
 		value, evalErr := program.Eval(context)
 		if evalErr != nil {
@@ -223,7 +259,7 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 		value.Set(reflect.ValueOf(row))
 		rowValues := constraintValues(et.info, value)
 		keep := true
-		for _, where := range set.Where {
+		for _, where := range predicates {
 			value, err := evaluate(where, rowValues)
 			if err != nil {
 				return result, err

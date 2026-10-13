@@ -24,6 +24,40 @@ func enterpriseApp(t *Tenant) host.EnterpriseQueries {
 
 // routesRecords serves records, files, links, aggregates, search, knowledge and transcripts.
 func (h *Host) routesRecords(rt *routes) {
+	rt.handle(Route{Pattern: "GET /v1/record-sets/{type}/{id}/{name}", Summary: "Read a bounded declared collection through its original owner", Answer: platform.RecordSetResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		info, ok := t.entity(r.PathValue("type"))
+		if !ok {
+			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Collection object is unavailable"))
+			return
+		}
+		caller := platform.NewCaller(runtime{t}, m, info.App, false, false)
+		value, err := caller.ReadRecordSet(info.Type, r.PathValue("id"), r.PathValue("name"), h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, value)
+	})
+	rt.handle(Route{Pattern: "POST /v1/relation-migrations/preview", Summary: "Preview an explicit migration of historical links into their endpoint owner's records", Body: platform.AssetBinding{}, Answer: platform.RelationMigrationPlan{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var binding platform.AssetBinding
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&binding) != nil {
+			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid relationship binding"))
+			return
+		}
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		caller := platform.NewCaller(runtime{t}, m, binding.Ref.App, false, false)
+		plan, err := t.relationMigrationPlan(t.records, caller, binding, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, plan)
+	})
 	rt.handle(Route{Pattern: "GET /v1/interfaces/{name}/records", Summary: "Common-field records of actual interface implementers, with original type and id (ADR-0058)", Answer: InterfaceRecordPage{}, Query: []Param{{"search", "Words to find"}, {"sort", "Common fields, comma-separated"}, {"offset", "Records to skip"}, {"limit", "Records in this window (at most 200)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		offset, limit := pageBounds(r, 0, 25)
 		query := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Offset: offset, Limit: limit}

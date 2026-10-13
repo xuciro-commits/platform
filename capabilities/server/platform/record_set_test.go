@@ -19,7 +19,6 @@ func TestDeclaredSetRejectsUnboundedOrUnsupportedSources(t *testing.T) {
 		func(s *RecordSet) { s.Order = nil },
 		func(s *RecordSet) { s.From = "undeclared" },
 		func(s *RecordSet) { s.Path = slices.Repeat([]string{"parent"}, 17) },
-		func(s *RecordSet) { s.Path = []string{"parent"} },
 	} {
 		invalid := set
 		alter(&invalid)

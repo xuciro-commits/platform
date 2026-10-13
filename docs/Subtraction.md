@@ -33,7 +33,7 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 
 `buildapi.Action` 的 `Sets`、`Creates`、`Posts`、`Journal`、`Reverses` 及 `Object.Numbering` 的记录计数编号冻结为既有能力，不再承载新能力。新增多对象变更只用 `Action.Transaction`；编译拒绝将事务与旧变更字段或旧计数编号混用。最小切片接管 create/update/sequence，复用原生成记录动作的授权、字段与记录校验及宿主命名序列；它不走 `stored` 的相关记录复算，也不走 `numberingOf` 的记录计数。
 
-退出路径：旧定义逐一迁移到事务步骤后，删除对应 `actions.go:stored`、`creates.go`、`posts.go` 和旧编号表达；post/journal 迁移仍需各自 owner 的后续步骤支持，本块不实现。旧 `Published`、日志与定义字节保持原样，既有动作继续读取、运行与历史恢复；迁移完成前保留这些义务，不建立新旧双写路径。新赋值源由 ADR-0101 的 Expr 接管，`setSource` 仅保留冻结旧步骤/相关创建的输入适配；逐步骤写入沿 `Ledger.ApplyTxnRecord` 调用原 `standard`，不另造授权或记录校验实现。
+退出路径：旧定义逐一迁移到事务步骤后，删除对应 `actions.go:stored`、`creates.go`、`posts.go` 和旧编号表达；post/journal 迁移仍需各自 owner 的后续步骤支持，本块不实现。旧 `Published`、日志与定义字节保持原样，既有动作继续读取、运行与历史恢复；迁移完成前保留这些义务，不建立新旧双写路径。新赋值源由 ADR-0101 的 Expr 接管，`setSource` 仅保留冻结旧相关创建的输入适配；事务中的旧赋值输入先降低为 Expr，再走同一求值器；逐步骤写入沿 `Ledger.ApplyTxnRecord` 调用原 `standard`，不另造授权或记录校验实现。
 
 ## 5. 四套规则求值（ADR-0101，已替换）
 
@@ -42,3 +42,7 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 ## 6. 新模型的入口专属校验（ADR-0102，已收敛）
 
 新对象的存储不变式归统一约束门禁，不在表单、CSV、事务、AI 或协议另写一份。CSV 的“空白单元格静默省略”已删除，空白表示清空并由同一门禁报告；预览复用私有决定试算，未增加预览执行器。字段输入语义保留在原 Required/InputConstraints；原生行业守卫与独立 relations 图分别随 ADR-0113/0114、ADR-0104 退出，旧定义/日志的读取与恢复义务继续保留。
+
+## 7. 独立同权威关系图（ADR-0104，迁移中）
+
+声明了所属关系存储的 owner 冻结 ad-hoc 同权威 link / unlink；新关系只经所有者事务。旧关系通过显式迁移成为所有者记录，迁移标记让原边退出当前读取，原 owner-state 仅保留历史证据；不双写、不改历史字节。尚未声明关系存储的原生 owner 暂留旧路径，按 ADR-0114 迁移/退出后删除剩余同权威旧写入分支。跨应用关系、动态、评论和关注仍归 relations。

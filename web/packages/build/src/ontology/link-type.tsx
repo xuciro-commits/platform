@@ -1,3 +1,4 @@
+import type { Api } from "@platform/kernel";
 import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
@@ -7,19 +8,20 @@ import { Button, Input, Select, PageHeader, Panel, Textarea, t, useUnsavedChange
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { useDirectInstall } from "../releases/release-profile";
 
-type Draft = {id:string;revision:number;name:string;title:string;description:string;parent:string;child:string;via:string;forward:string;reverse:string;cardinality:string;deletePolicy:string;published?:string;version?:number};
-const empty=():Draft=>({id:"",revision:0,name:"",title:"",description:"",parent:"",child:"",via:"",forward:"children",reverse:"parent",cardinality:"one-to-many",deletePolicy:"owner"});
-const hydrate=(record:Draft):Draft=>({...empty(),...record});
+type Draft = {id:string;revision:number;name:string;title:string;description:string;parent:string;child:string;via:string;forward:string;reverse:string;cardinality:string;deletePolicy:string;storage?:string;roles?:string[];published?:string;version?:number};
+const empty=():Draft=>({id:"",revision:0,name:"",title:"",description:"",parent:"",child:"",via:"",forward:"children",reverse:"parent",cardinality:"one-to-many",deletePolicy:"owner",storage:"edge",roles:["builder","user"]});
+const hydrate=(record:Draft):Draft=>({...empty(),...record,storage:record.storage||"reference"});
 
 export function LinkTypes() {
  const {source,role}=useHost(),{open}=useApplicationWorkspace();
  if(role("build")!=="builder")return <PageHeader title={t("Relationships")} description={t("Only a builder can edit relationships.")}/>;
- return <div className="grid gap-3"><PageHeader title={t("Relationships")} description={t("Define a reference-backed relationship and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"link-type",params:{id:"new"}})}>{t("New relationship")}</Button>}/><ResourceList source={source} type="build.linktype" fields={["title","name","parent","child","version"]} onOpen={(record)=>open({view:"link-type",params:{id:record.id}})}/></div>;
+ return <div className="grid gap-3"><PageHeader title={t("Relationships")} description={t("Declare relationships in their object owner and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"link-type",params:{id:"new"}})}>{t("New relationship")}</Button>}/><ResourceList source={source} type="build.linktype" fields={["title","name","parent","child","version"]} onOpen={(record)=>open({view:"link-type",params:{id:record.id}})}/></div>;
 }
 export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;child?:string;via?:string}) {
- const {decide,role,definitions}=useHost(),{open,close}=useApplicationWorkspace();
+ const {decide,role,definitions,client}=useHost(),{open,close}=useApplicationWorkspace();
  const query=useReadQuery<{record?:Draft}>(`/v1/records/build.linktype/${encodeURIComponent(id)}`);
  const [draft,setDraft]=useState<Draft>(()=>({...empty(),parent:parent??"",child:child??"",via:via??""})),[edited,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [migration,setMigration]=useState<Api.RelationMigrationPlan>();
  const [createID]=useState(()=>crypto.randomUUID());
  const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
  const lock=useRef(false),baseRevision=useRef(0),loaded=useRef(""),confirmedDraft=useRef<Draft>(empty());
@@ -27,14 +29,14 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{if(query.data?.record&&query.data.record.revision>=baseRevision.current)load(query.data.record);else setDraft(structuredClone(confirmedDraft.current));setDirty(false);setError("");}, busy);
  useEffect(()=>{const record=query.data?.record;if(record&&!dirty&&!busy&&record.revision>=baseRevision.current&&loaded.current!==`${record.id}:${record.revision}`)load(record);},[query.data,dirty,busy]);
  const object={app:"build",kind:"object" as const,name:draft.child};
- const patch=(change:Partial<Draft>)=>{if(lock.current)return;setDraft((d)=>({...d,...change}));setDirty(true);setError("");};
+ const patch=(change:Partial<Draft>)=>{if(lock.current)return;setDraft((d)=>({...d,...change}));setDirty(true);setError("");setMigration(undefined);};
  const perform=async(action:()=>Promise<unknown>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError("");try{await action();}catch{setError(t("The relationship could not be saved or loaded. Your draft is still here."));}finally{lock.current=false;setBusy(false);}};
  const reload=async()=>{const r=await query.refetch();if(r.data?.record&&!r.isError){load(r.data.record);markSaved();setDirty(false);}else setError(t("Reload the saved relationship before editing again."));};
  const save=async():Promise<{id:string;revision:number}|undefined>=>{
   if(inputs?.invalid)return;
   const submitted=structuredClone(draft),target=submitted.id||createID,expected=submitted.id?baseRevision.current:0;
-  const {name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy}=submitted;
-  if(!await decide(`build.linktype.${submitted.id?"edit":"create"}`,{type:"build.linktype",id:target},{name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy},{expectedRevision:submitted.id?expected:0,quiet:true,onRefused:setError}))return;
+  const {name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles}=submitted;
+  if(!await decide(`build.linktype.${submitted.id?"edit":"create"}`,{type:"build.linktype",id:target},{name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles},{expectedRevision:submitted.id?expected:0,quiet:true,onRefused:setError}))return;
   const revision=expected+1;load({...submitted,id:target,revision});markSaved();setDirty(false);
   if(!submitted.id){open({view:"link-type",params:{id:target}});close({view:"link-type",params:{id}});}
   else {try{const fresh=await query.refetch();if(fresh.isSuccess&&fresh.data?.record?.revision===revision)load(fresh.data.record);else setError(t("The resource was saved, but its current record could not be reloaded."));}catch{setError(t("The resource was saved, but its current record could not be reloaded."));}}
@@ -52,7 +54,7 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  const versions=Object.keys(installed?.linkVersions??{});
  if(role("build")!=="builder")return <PageHeader title={t("Relationships")} description={t("Only a builder can edit relationships.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Relationships")} description={query.isError?t("The relationship could not be loaded."):t("Loading…")}/>;
- return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New relationship")} description={t("Define a reference-backed relationship and bind pages to an exact version.")} actions={<div className="flex min-w-0 flex-wrap gap-2"><Button onClick={()=>open({view:"link-type"})}>{t("Relationships")}</Button><AssetControls type="build.linktype" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"link-type",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved relationship")}</Button><Button disabled={busy||inputs?.invalid||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save relationship")}</Button>{directInstall&&<Button disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button>}<Button variant="primary" disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
+ return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New relationship")} description={t("Declare relationships in their object owner and bind pages to an exact version.")} actions={<div className="flex min-w-0 flex-wrap gap-2"><Button onClick={()=>open({view:"link-type"})}>{t("Relationships")}</Button><AssetControls type="build.linktype" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"link-type",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved relationship")}</Button><Button disabled={busy||inputs?.invalid||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save relationship")}</Button>{directInstall&&<Button disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button>}<Button variant="primary" disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
  <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
  {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
  {error&&<Panel role="alert" className="text-danger">{error}</Panel>}
@@ -64,18 +66,26 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Relationship description")}<Textarea value={draft.description} onChange={e=>patch({description:e.target.value})}/></label>
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Parent object")}<SemanticObjectSelect value={draft.parent} label={t("Parent object")} filter={d=>d.source==="tenant"&&d.ref.app==="build"} disabled={!!draft.published} onChange={ref=>{if(ref)patch({parent:ref.name,via:""})}}/></label>
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Child object")}<SemanticObjectSelect value={draft.child} label={t("Child object")} filter={d=>d.source==="tenant"&&d.ref.app==="build"} disabled={!!draft.published} onChange={ref=>{if(ref)patch({child:ref.name,via:""})}}/></label>
- <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Reference field")}<SemanticPropertySelect object={object} value={draft.via} label={t("Reference field")} disabled={!!draft.published} filter={f=>f.type==="reference"&&f.ref===draft.parent} onChange={ref=>{if(!draft.published)patch({via:ref?.field??""})}}/></label>
+ <label className="grid gap-1 text-xs">{t("Relationship storage")}<Select value={draft.storage||"reference"} disabled={!!draft.published} onChange={event=>patch({storage:event.target.value,via:"",cardinality:"one-to-many"})}><option value="edge">{t("Owned relationship records")}</option><option value="reference">{t("Original reference field")}</option></Select></label>
+ {draft.storage==="edge"&&<label className="grid gap-1 text-xs">{t("Relationship writer roles")}<Input value={draft.roles?.join(", ")??""} onChange={event=>patch({roles:event.target.value.split(",").map(role=>role.trim()).filter(Boolean)})}/></label>}
+ {draft.storage!=="edge"&&<label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Reference field")}<SemanticPropertySelect object={object} value={draft.via} label={t("Reference field")} disabled={!!draft.published} filter={f=>f.type==="reference"&&f.ref===draft.parent} onChange={ref=>{if(!draft.published)patch({via:ref?.field??""})}}/></label>}
  </Panel>
  <Panel title={t("Relationship directions")} className="grid min-w-0 grid-cols-1 content-start gap-3">
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Parent to children name")}<Input value={draft.forward} onChange={e=>patch({forward:e.target.value})}/></label>
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Child to parent name")}<Input value={draft.reverse} onChange={e=>patch({reverse:e.target.value})}/></label>
- <label className="grid gap-1 text-xs">{t("Relationship cardinality")}<Select aria-label={t("Relationship cardinality")} value={draft.cardinality||"one-to-many"} onChange={e=>patch({cardinality:e.target.value})}><option value="one-to-many">{t("One-to-many")}</option><option value="one-to-one">{t("One-to-one (at most one child)")}</option></Select></label>
+ <label className="grid gap-1 text-xs">{t("Relationship cardinality")}<Select aria-label={t("Relationship cardinality")} value={draft.cardinality||"one-to-many"} onChange={e=>patch({cardinality:e.target.value})}><option value="one-to-many">{t("One-to-many")}</option><option value="one-to-one">{t("One-to-one (at most one child)")}</option>{draft.storage==="edge"&&<option value="many-to-many">{t("Many-to-many")}</option>}</Select></label>
  {draft.cardinality==="one-to-one"&&<p className="text-xs text-muted">{t("A parent reference may belong to at most one child, including archived children. Empty optional references are not reserved. A published unique relationship cannot be relaxed.")}</p>}
  <label className="grid gap-1 text-xs">{t("Relationship archive policy")}<Select aria-label={t("Relationship archive policy")} value={draft.deletePolicy||"owner"} onChange={e=>patch({deletePolicy:e.target.value})}><option value="owner">{t("Object owner")}</option><option value="restrict-active">{t("Protect active references")}</option></Select></label>
  {draft.deletePolicy==="restrict-active"&&<p className="text-xs text-muted">{t("Active children prevent parent archiving. Archived children keep their references. New or restored active children need an unarchived parent. Published protection cannot be relaxed.")}</p>}
- <p className="text-sm">{t("One child has at most one parent reference. The original field controls required values; the object owner controls archive behavior.")}</p>
- <p className="text-xs text-muted">{t("Instances stay in the original reference field. This profile does not enable cascade deletion.")}</p>
+ {draft.storage!=="edge"&&<p className="text-sm">{t("One child has at most one parent reference. The original field controls required values; the object owner controls archive behavior.")}</p>}
+ <p className="text-xs text-muted">{t(draft.storage==="edge"?"Relationship instances commit in the object owner with the records they connect.":"Instances stay in the original reference field. This profile does not enable cascade deletion.")}</p>
  </Panel></fieldset>
+ {draft.storage==="edge"&&installed&&<Panel title={t("Historical relationship migration")} className="grid gap-2">
+   <p className="text-xs text-muted">{t("Preview historical links, then move them in one accepted decision. Original history remains readable.")}</p>
+   <Button disabled={busy||dirty} onClick={()=>void perform(async()=>setMigration(await client.get<Api.RelationMigrationPlan>(`/v1/relation-migrations/preview\n${JSON.stringify({ref:installed.ref,sourceVersion:installed.version})}`,true)))}>{t("Preview relationship migration")}</Button>
+   {migration&&<><p>{migration.migrated?t("Relationships already migrated"):t("{n} visible relationships",{n:migration.links.length})}</p>{migration.partial&&<p role="alert">{t("Migration contains hidden relationships and cannot proceed.")}</p>}
+   <Button disabled={busy||dirty||migration.partial||migration.migrated} onClick={()=>void perform(async()=>{if(await decide("build.linktype.migrate",{type:"build.linktype",id:draft.id},{},{expectedRevision:baseRevision.current,onRefused:setError})){setMigration(undefined);await reload();}})}>{t("Migrate relationships")}</Button></>}
+ </Panel>}
  <Panel role="region" aria-label={t("Published relationship versions")} title={t("Published relationship versions")} className="grid gap-2"><p className="text-xs">{t("New drafts and publications do not replace versions already bound by pages.")}</p>{versions.length?versions.map((version)=><p key={version} className="break-all text-xs">{version}</p>):<p className="text-xs text-muted">{t("No published relationship yet.")}</p>}</Panel>
  </div>;
 }

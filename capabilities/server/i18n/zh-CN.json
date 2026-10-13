@@ -1730,5 +1730,9 @@
   "Storage": "存储",
   "Storage (reference, edge)": "存储（引用、关系实例）",
   "edge": "关系实例",
-  "many-to-many": "多对多"
+  "many-to-many": "多对多",
+  "Legacy": "历史来源",
+  "Migration": "迁移",
+  "Migrate relationships": "迁移关系",
+  "Move historical links into the endpoint owner's accepted records": "将历史关系迁入端点所有者的接受记录"
 }

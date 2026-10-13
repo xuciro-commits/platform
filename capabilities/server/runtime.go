@@ -87,10 +87,11 @@ func (r runtime) Related(c platform.Caller, element, stereotype string, outgoing
 }
 
 func (r runtime) Links(c platform.Caller, entity string) []string {
-	if r.t.linker == nil {
-		return nil
+	var out []string
+	if r.t.linker != nil {
+		out = r.t.linker.Links(c, entity)
 	}
-	return r.t.linker.Links(c, entity)
+	return appendOwnedRelationNeighbors(out, c.OwnedRelations(entity), entity)
 }
 
 func (r runtime) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {

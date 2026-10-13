@@ -45,6 +45,7 @@ type acceptedBatch struct {
 	Operations    []acceptedOperationCancellation `json:"operations,omitempty"`
 	Control       *acceptedControl                `json:"control,omitempty"`
 	DirectRows    []acceptedCallbackRow           `json:"directRows,omitempty"`
+	Iterations    []platform.TxnIteration         `json:"iterations,omitempty"`
 }
 
 type acceptedBatchRow struct {
@@ -185,6 +186,10 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		}
 		result.Version = 4
 	}
+	if len(d.iterations) > 0 {
+		result.Iterations = slices.Clone(d.iterations)
+		result.Version = 5
+	}
 	d.records.mu.Lock()
 	defer d.records.mu.Unlock()
 	d.records.parent.mu.Lock()
@@ -262,7 +267,7 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if (result.Version != 1 && result.Version != 2 && result.Version != 3 && result.Version != 4) || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
+	if result.Version < 1 || result.Version > 5 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || sub == nil || sub.GetTenantId() != result.Tenant ||
 		sub.GetAuthority() != result.App || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || receipt.GetChangeId() == "" ||
@@ -270,8 +275,11 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 		len(result.Decisions) == 0 {
 		return result, nil, fmt.Errorf("record batch has inconsistent identity or effects")
 	}
-	if result.Version < 4 && (result.Version == 3) != (result.Control != nil) || (result.Version == 4) != (len(result.DirectRows) > 0) {
+	if result.Version < 4 && (result.Version == 3) != (result.Control != nil) || result.Version < 5 && (result.Version == 4) != (len(result.DirectRows) > 0) || (result.Version == 5) != (len(result.Iterations) > 0) {
 		return result, nil, fmt.Errorf("record batch control format differs")
+	}
+	if err := validateTxnIterations(result.App, result.Iterations); err != nil {
+		return result, nil, err
 	}
 	hash, err := submissionHash(sub)
 	if err != nil || result.RequestHash != hash {

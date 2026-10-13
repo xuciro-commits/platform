@@ -59,6 +59,7 @@ func New(tenant string) *Build {
 	actions = append(actions, platform.EntityActions(b.processEntity())...)
 	actions = append(actions, platform.EntityActions(b.functionEntity())...)
 	actions = append(actions, platform.EntityActions(b.linkTypeEntity())...)
+	actions = append(actions, platform.Action{Schema: LinkTypeType + ".migrate", Target: LinkTypeType, Title: "Migrate relationships", Description: "Move historical links into the endpoint owner's accepted records", Capability: LinkTypeType, Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = append(actions, platform.EntityActions(b.propertyTypeEntity())...)
 	actions = append(actions, platform.EntityActions(b.queryEntity())...)
 	actions = append(actions, functionCallActions([]string{Builder, User})...)
@@ -586,6 +587,9 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 // Submit takes the builder's own actions and those generated for every object
 // it has installed: a defined object's records are decided like any other's.
 func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if s.GetSchema().GetName() == LinkTypeType+".migrate" {
+		return b.migrateLinkType(c, s, now)
+	}
 	if !c.Replaying {
 		if err := b.checkReleaseProfile(c, s.GetSchema().GetName()); err != nil {
 			return nil, err

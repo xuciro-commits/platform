@@ -77,9 +77,11 @@ W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Play
 
 ### 记录集与关联（ADR-0104）
 
-`make test-go PKG='./internal/rules ./platform ./apps/build .'` 覆盖声明来源与边界、当前草稿集合绑定、关系发布还原、同权威记录与关系共同接受、父/子基数拒绝无残留、归档限制、解除关系与结果重放；同时核对可见记录排序、`partial` 与 Limit 拒绝，部分不可见集合不能证明 `all` / `none`。
+`make test-go PKG='./internal/rules ./platform ./apps/build ./apps/relations .'` 检查来源/排序/路径和步骤边界、当前草稿绑定、条件/计算/约束一致、封存后改行拒绝、有序 ForEach 分组及格式 5 保存结果重放；关系与记录共同接受、父/子基数拒绝、归档、解除关系、旧关系迁移失败无残留、原 owner-state 字节保持与当前唯一读取。partial、顺序和 Limit 拒绝仍由 owner 回归覆盖。
 
-手测：在对象的“Declared record sets / 声明记录集”中配置有序 inverse 或保留版本关系，核对普通成员只见授权元素，缺来源或排序时拒绝。事务 `ForEach`、旧关系显式迁移及其浏览器闭环仍未实现，不作为当前通过证据。
+`make e2e SPEC=record-sets` 走构建者配置有序 inverse 集合 → 不可变候选激活 → 动作 Transaction 的非法 JSON 保留/修正 → 配置拆批迭代 → 再激活 → 操作员拆四行到两批。`make e2e SPEC=rule-language` 保留规则与约束路线。
+
+手测：选择固定版本的查询/关系或 inverse，配置 Where / Order、英中约束原因和事务；撤去某行/字段权限，核对 partial、量词和整批拒绝。历史关系先预览再迁移，核对原始历史可读且当前没有重复边；新关系和迁移共用所属宿主。聚合统一、原生 owner 剩余迁移与 Required edge 仍未作为通过证据。
 
 ### 业务约束（ADR-0102）
 

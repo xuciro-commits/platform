@@ -123,7 +123,7 @@ func assignmentExpr(kind string, set Set, spec platform.RuleReadSpec) (platform.
 		return platform.ExprLiteralValue(kind, v), err
 	default:
 		name := set.From
-		if !strings.HasPrefix(name, "step.") {
+		if !strings.HasPrefix(name, "step.") && !strings.HasPrefix(name, "row.") {
 			name = "input." + name
 		}
 		input := strings.TrimPrefix(name, "input.")
@@ -262,35 +262,8 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 			*set = Set{Field: set.Field, Expr: &e}
 		}
 		if a.Transaction != nil {
-			ts := ruleSpec(*o, *a, a.Transaction.Reads)
-			for j := range a.Transaction.Steps {
-				step := &a.Transaction.Steps[j]
-				if step.Kind == "sequence" {
-					ts.Inputs["step."+step.Name] = platform.ExprType{Kind: "text"}
-					continue
-				}
-				if !strings.HasPrefix(step.Target.Type, ID+".") {
-					return fmt.Errorf("transaction cannot change another application")
-				}
-				info, ok := lookup(step.Target.Type)
-				if !ok {
-					return fmt.Errorf("transaction object is unavailable")
-				}
-				for k := range step.Changes {
-					set := &step.Changes[k]
-					field, ok := info.Field(set.Field)
-					if !ok {
-						return fmt.Errorf("transaction field is unavailable")
-					}
-					e, err := assignmentExpr(field.Type, *set, ts)
-					if err != nil {
-						return err
-					}
-					*set = Set{Field: set.Field, Expr: &e}
-				}
-				if step.Kind == "create" {
-					ts.Inputs["step."+step.Name] = platform.ExprType{Kind: "reference", Object: step.Target.Type}
-				}
+			if err := b.normalizeTransaction(*o, a, lookup); err != nil {
+				return err
 			}
 		}
 	}

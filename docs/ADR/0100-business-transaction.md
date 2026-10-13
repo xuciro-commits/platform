@@ -167,11 +167,11 @@ type TxnStep struct {
 
 `docs/Testing.md` 增加"业务事务"小节记录该场景的手测行；ADR 更新只在本文的 As built 段落，不新建报告文件。
 
-## 6. As built — 最小切片
+## 6. As built — 事务底座与当前步骤
 
-已实现 ADR-0098 §12 的 create/update/sequence 切片：`platform.BusinessTxn` 由 `buildapi.Action.Transaction` 保存并发布，Build 检查主体、同权威目标、步骤名称、前序结果引用、单次写入与命名序列一致性，编译到原生命周期动作。create ID 来自父决策 change ID 与步骤名；update 指定 `$subject`、固定 ID 或声明的引用路径；`step.<name>` 只读更早 create 的 ID 或 sequence 的编号。赋值现由 ADR-0101 的 Expr 接管，增加事务 Guard 与步骤 When，保持三种步骤与原接受边界。
+已实现 ADR-0098 §12 的 create/update/sequence 切片：`platform.BusinessTxn` 由 `buildapi.Action.Transaction` 保存并发布，Build 检查主体、同权威目标、步骤名称、前序结果引用、单次写入与命名序列一致性，编译到原生命周期动作。create ID 来自父决策 change ID 与步骤名；update 指定 `$subject`、固定 ID 或声明的引用路径；`step.<name>` 只读更早 create 的 ID 或 sequence 的编号。赋值现由 ADR-0101 的 Expr 接管，增加事务 Guard 与步骤 When，保持原接受边界；ADR-0104 已接入 archive、link / unlink 和单层 for-each，具体界限与构建者路线见其 As built。
 
-原 Ledger 在私有上下文执行事务，逐步骤复用原 Catalog、行范围、字段权限、记录计算与校验；引用读取同一私有上下文中更早创建的记录。自动调用仍按申请人权限判定。全部记录及序列由原 `record-batch` 一次接受后纯应用，恢复只应用保存的映像、前驱与原答复，不执行事务步骤、不重查调用者权限、不外部调用。事务嵌入既有对象动作资产，候选依赖包含步骤目标对象，没有另加资产类型、`contract/` 语义、日志版本或预算。
+原 Ledger 在私有上下文执行事务，逐步骤复用原 Catalog、行范围、字段权限、记录计算与校验；引用读取同一私有上下文中更早创建的记录。自动调用仍按申请人权限判定。全部记录及序列由原 `record-batch` 一次接受后纯应用，恢复只应用保存的映像、前驱与原答复，不执行事务步骤、不重查调用者权限、不外部调用。事务嵌入既有对象动作资产，候选依赖包含步骤目标对象，没有另加资产类型或 `contract/` 语义；ADR-0104 使用可兼容读取旧格式的 record-batch 5 保存迭代顺序，接受结果仍受现有 1 MiB 预算限制。
 
 `TestBusinessTxnMinimalSlice` 在同一次宿主场景证明：3 个对象类型、4 行（输入主体更新、一个头、两行）、1 个决策、1 个命名序列；第 3 步、逐步骤授权或追加失败不改变业务记录、编号、效果或输入消费标志；原键重试返回原接受/拒绝，异内容冲突；实际子进程在 fsync 后、应用前以 86 退出，重新打开后原结果及各行逐字节相同；外应用类型在保存/发布前明确拒绝。跨类型 `Before` 反例分别篡改首部新明细及末尾更新主体的前驱后，整批拒绝且早期记录不应用。
 

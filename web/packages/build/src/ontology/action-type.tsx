@@ -19,7 +19,7 @@ import { Label } from "./process";
 import { actionInputFields, comparisonFits, conditionSubjects, inputTypes, nameOf, operators, type Action, type ApproverLevel, type Condition, type Create_, type Input_, type JournalLine_, type Post_, type Set_ } from "./object-model";
 import { useObjectDraft } from "./object-draft";
 
-type Section = "overview" | "parameters" | "form" | "rules" | "criteria" | "effects" | "approval" | "permissions";
+type Section = "overview" | "parameters" | "form" | "rules" | "criteria" | "effects" | "transaction" | "approval" | "permissions";
 type Pick = { kind: "parameter" | "rule" | "criterion" | "effect" | "posting"; at: number } | undefined;
 const sections: { id: Section; title: () => string; icon: ReactNode }[] = [
   { id: "overview", title: () => t("Overview"), icon: <Zap /> },
@@ -28,6 +28,7 @@ const sections: { id: Section; title: () => string; icon: ReactNode }[] = [
   { id: "rules", title: () => t("Rules"), icon: <Wand2 /> },
   { id: "criteria", title: () => t("Submission criteria"), icon: <CheckSquare /> },
   { id: "effects", title: () => t("Side effects"), icon: <Sparkles /> },
+  { id: "transaction", title: () => t("Transaction"), icon: <ListChecks /> },
   { id: "approval", title: () => t("Approval"), icon: <Shield /> },
   { id: "permissions", title: () => t("Permissions"), icon: <Shield /> },
 ];
@@ -158,6 +159,14 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
       (s) => <><span className="min-w-0 flex-1 truncate font-medium">{process.fields.find((f) => f.name === s.field)?.title ?? s.field}</span><span className="text-xs text-muted">← {s.from.startsWith("=") ? `"${s.from.slice(1)}"` : sources.find((x) => x.value === s.from)?.label ?? s.from}</span></>, t("No rules. The action changes only the state.")),
     criteria: list<Condition>(conditions, "criterion", (next) => patch({ conditions: next }), { label: t("Add a criterion"), make: () => ({ field: subjects[0]?.value ?? "", operator: "=", value: "", message: "" }) },
       (c) => <><span className="min-w-0 flex-1 truncate font-medium">{subjects.find((s) => s.value === c.field)?.label ?? c.field} {t(c.operator)} {c.valueField ? subjects.find((s) => s.value === c.valueField)?.label : c.value}</span><span className="truncate text-xs text-muted">{c.message}</span></>, t("No criteria. The action can always be submitted from its starting states.")),
+    transaction: <div className="grid max-w-4xl content-start gap-3 p-4">
+      <h2 className="text-sm font-semibold">{t("Transaction")}</h2>
+      <p className="text-sm text-muted">{t("One operation commits all steps together. Iteration uses an ordered record set; a failed step leaves every record unchanged.")}</p>
+      {action?.transaction ? <>
+        <label className="grid gap-1 text-xs">{t("Transaction definition")}<Textarea aria-label={t("Transaction definition")} parse="json" rows={22} value={JSON.stringify(action.transaction, null, 2)} onChange={event => patch({transaction: event.target.value.trim()?JSON.parse(event.target.value):undefined})} /></label>
+        <Button size="sm" variant="ghost" onClick={() => patch({transaction:undefined})}>{t("Remove transaction")}</Button>
+      </> : <Button disabled={!!sets.length || !!conditions.length || !!creates.length || !!posts.length || !!action?.journal || !!action?.approval || !!action?.to || !!action?.toInput} onClick={() => patch({transaction:{subject:parent,steps:[{name:"update",kind:"update",target:{type:parent,id:"$subject"},changes:[]}]}})}>{t("Define transaction")}</Button>}
+    </div>,
     effects: <>{list<Create_>(creates, "effect", (next) => patch({ creates: next }), { label: t("Create a related record"), make: () => relatedCreate(targets[0]?.type ?? "", undefined, targets, parent, inputs), disabled: !targets.length },
       (c) => <><span className="min-w-0 flex-1 truncate font-medium">{t("Create {object}", { object: targets.find((x) => x.type === c.object)?.title ?? c.object })}</span><span className="text-xs text-muted">{t("via {field}", { field: c.via })}</span></>, targets.length ? t("No side effects. Related records can be created when the action commits.") : t("Publish a related object with a reference to this object first."))}
       <p className="px-4 text-xs text-muted">{t("Related records commit with this action. The target object's create permissions still apply.")}</p>
@@ -216,14 +225,14 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
         {!process.actions.length && <p className="px-2 text-[11px] text-muted">{process.states.length ? t("No actions yet.") : t("Add a lifecycle state first: every action starts from a state.")}</p>}
       </PanelSection>
       {action && <PanelSection title={t("Sections")}>
-        {sections.map((s) => <StructureRow key={s.id} icon={s.icon} label={s.title()} selected={section === s.id} onClick={() => go(s.id)}
+        {sections.filter(s => !action.transaction || !["rules", "criteria", "effects", "approval"].includes(s.id)).map((s) => <StructureRow key={s.id} icon={s.icon} label={s.title()} selected={section === s.id} onClick={() => go(s.id)}
           meta={s.id === "parameters" ? String(inputs.length) : s.id === "rules" ? String(sets.length) : s.id === "criteria" ? String(conditions.length) : s.id === "effects" ? String(creates.length) : s.id === "approval" && action.approval ? "✓" : undefined} />)}
       </PanelSection>}
     </div> }}
     right={{ label: t("Action inspector"),scope:JSON.stringify([at,pick]),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("["));setPick(scope?(JSON.parse(scope) as [number,Pick])[1]:pick);}, content: inspector }}
     dock={{ label: t("Action dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The action can be published with its object type.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
-    {action ? <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[section]}</fieldset>
+    {action ? <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[action.transaction && ["rules", "criteria", "effects", "approval"].includes(section) ? "transaction" : section]}</fieldset>
       : <WorkbenchMessage>{process.actions.length ? t("Choose an action on the left.") : t("This object type has no actions yet.")}</WorkbenchMessage>}
   </Workbench>;
 }

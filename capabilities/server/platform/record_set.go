@@ -33,14 +33,66 @@ type RecordSetSort struct {
 }
 
 type RecordSetResult struct {
-	Object  string            `json:"object"`
-	Records []json.RawMessage `json:"records"`
-	Partial bool              `json:"partial"`
-	Sources []string          `json:"sources,omitempty"`
+	Object     string            `json:"object"`
+	Records    []json.RawMessage `json:"records"`
+	Partial    bool              `json:"partial"`
+	Sources    []string          `json:"sources,omitempty"`
+	Definition string            `json:"definition"`
 }
 
 type RecordSetRuntime interface {
 	ReadRecordSet(Caller, string, string, string, time.Time) (RecordSetResult, *kernel.Error)
+}
+
+type RecordSetCandidateRuntime interface {
+	ReadRecordSetCandidate(Caller, string, string, string, json.RawMessage, time.Time) (RecordSetResult, *kernel.Error)
+}
+
+func (c Caller) ruleRecordSet(object, id, name string, record any, at time.Time) (RecordSetResult, *kernel.Error) {
+	if runtime, ok := c.rt.(RecordSetCandidateRuntime); ok && c.Staging() {
+		return runtime.ReadRecordSetCandidate(c, object, id, name, Raw(record), at)
+	}
+	return c.ReadRecordSet(object, id, name, at)
+}
+
+// RecordSetPredicate lowers an optional reference prefix into the same Expr
+// path operation used everywhere else. Order always addresses the set element.
+func LowerRecordSetPredicate(set RecordSet, expr Expr, lookup func(string) (EntityInfo, bool)) (Expr, error) {
+	if len(set.Path) == 0 {
+		return expr, nil
+	}
+	field, err := RecordPathField(set.Object, set.Path, lookup)
+	if err != nil || field.Type != "reference" || field.Ref == "" {
+		return Expr{}, fmt.Errorf("set %s filter path must end at a declared record reference", set.Name)
+	}
+	schemaLookup := func(typ string) (EntityInfo, bool) { info, ok := lookup(typ); return ConstraintEntity(info), ok }
+	if _, err := RuleSchema(expr, RuleReadSpec{Object: field.Ref}, schemaLookup); err != nil {
+		return Expr{}, err
+	}
+	var lower func(Expr) Expr
+	lower = func(node Expr) Expr {
+		ref, tail := node.Ref, []string{}
+		if node.Op == "path" && len(node.Args) == 1 {
+			ref, tail = node.Args[0].Ref, node.Path
+		}
+		if ref != "" && ref != "caller.id" {
+			path := append(slices.Clone(set.Path[1:]), ref)
+			path = append(path, tail...)
+			return Expr{Op: "path", Kind: node.Kind, Args: []Expr{ExprReference("reference", set.Path[0])}, Path: path}
+		}
+		node.Args = slices.Clone(node.Args)
+		for i := range node.Args {
+			node.Args[i] = lower(node.Args[i])
+		}
+		if node.In != nil {
+			value := lower(*node.In)
+			node.In = &value
+		}
+		return node
+	}
+	lowered := lower(expr)
+	_, err = RuleSchema(lowered, RuleReadSpec{Object: set.Object}, schemaLookup)
+	return lowered, err
 }
 
 func (c Caller) ReadRecordSet(object, id, name string, at time.Time) (RecordSetResult, *kernel.Error) {
@@ -114,6 +166,10 @@ func CheckRecordSets(info EntityInfo, lookup func(string) (EntityInfo, bool)) er
 			if where.Kind != "boolean" {
 				return fmt.Errorf("set predicate must be boolean")
 			}
+			where, err := LowerRecordSetPredicate(set, where, lookup)
+			if err != nil {
+				return err
+			}
 			if err := check(where); err != nil {
 				return err
 			}
@@ -127,10 +183,13 @@ func CheckRecordSets(info EntityInfo, lookup func(string) (EntityInfo, bool)) er
 			}
 		}
 		if len(set.Path) > 0 {
-			if _, err := RecordPathField(set.Object, set.Path, lookup); err != nil {
+			field, err := RecordPathField(set.Object, set.Path, lookup)
+			if err != nil {
 				return err
 			}
-			return fmt.Errorf("set %s filter paths must be expressed explicitly in Where expressions", set.Name)
+			if field.Type != "reference" || field.Ref == "" {
+				return fmt.Errorf("set filter path must resolve a record")
+			}
 		}
 	}
 	return nil

@@ -255,6 +255,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	fork.writers, fork.changed = cloneLists(d.writers), cloneLists(d.changed)
 	fork.noticeEffects, fork.publications = slices.Clone(d.noticeEffects), maps.Clone(d.publications)
 	fork.intents = slices.Clone(d.intents)
+	fork.iterations = slices.Clone(d.iterations)
 	fork.observations = slices.Clone(d.observations)
 	fork.active = maps.Clone(d.active)
 	fork.receiving = maps.Clone(d.receiving)

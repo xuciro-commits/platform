@@ -283,11 +283,14 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 			requires = append(requires, ruleRequirements(action.Reads)...)
 			if action.Transaction != nil {
 				requires = append(requires, ruleRequirements(action.Transaction.Reads)...)
-				for _, step := range action.Transaction.Steps {
+				walkTxnSteps(action.Transaction.Steps, func(step platform.TxnStep) {
 					if step.Target.Type != "" && step.Target.Type != ref.Name {
 						requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: step.Target.Type})
 					}
-				}
+					if step.Link != nil {
+						requires = append(requires, step.Link.Binding.Ref)
+					}
+				})
 			}
 			for _, create := range action.Creates {
 				requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: create.Object})

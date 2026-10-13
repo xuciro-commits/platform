@@ -21,6 +21,10 @@ func ownedRelationID(binding, parent, child string) string {
 }
 
 func (d *stagedDecision) PutOwnedRelation(c platform.Caller, receipt *pb.ChangeRecord, request platform.TxnLink, remove bool, at time.Time) *kernel.Error {
+	return d.putOwnedRelation(c, receipt, request, remove, at, nil)
+}
+
+func (d *stagedDecision) putOwnedRelation(c platform.Caller, receipt *pb.ChangeRecord, request platform.TxnLink, remove bool, at time.Time, legacy []platform.RelationLink) *kernel.Error {
 	fail := func(message string) *kernel.Error {
 		err := platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, message)
 		if d.failure == nil {
@@ -28,7 +32,7 @@ func (d *stagedDecision) PutOwnedRelation(c platform.Caller, receipt *pb.ChangeR
 		}
 		return err
 	}
-	if c.Replaying || !c.Staging() || receipt.GetChangeId() == "" || receipt.GetSubmission().GetAuthority() != c.App || request.Binding.Ref.App != c.App || request.Parent.ID == "" || request.Child.ID == "" || request.Parent.Via != "" || request.Child.Via != "" {
+	if c.Replaying || !c.Staging() || receipt.GetChangeId() == "" || receipt.GetSubmission().GetAuthority() != c.App || receipt.GetSubmission().GetPrincipalId() != c.ID || receipt.GetSubmission().GetTenantId() != d.tenant.ID || request.Binding.Ref.App != c.App || request.Parent.ID == "" || request.Child.ID == "" || request.Parent.Via != "" || request.Child.Via != "" {
 		return fail("Owned relationship is outside its private authority")
 	}
 	definition, ok := d.tenant.recordSetBinding(request.Binding)
@@ -36,6 +40,17 @@ func (d *stagedDecision) PutOwnedRelation(c platform.Caller, receipt *pb.ChangeR
 		return fail("Owned relationship needs a retained edge declaration")
 	}
 	link := definition.LinkType
+	if len(legacy) == 0 && !remove {
+		if source, ok := d.tenant.linker.(platform.LegacyRelationSource); ok {
+			for _, prior := range source.LegacyRelations() {
+				from, _, _ := strings.Cut(prior.From, "/")
+				to, _, _ := strings.Cut(prior.To, "/")
+				if (from == link.Parent.Name && to == link.Child.Name || to == link.Parent.Name && from == link.Child.Name) && d.tenant.legacyRelationActive(d.records, prior) {
+					return fail("Historical relationships require explicit migration first")
+				}
+			}
+		}
+	}
 	if request.Parent.Type != link.Parent.Name || request.Child.Type != link.Child.Name || link.Parent.App != c.App || link.Child.App != c.App {
 		return fail("Owned relationship endpoint types differ")
 	}
@@ -59,7 +74,7 @@ func (d *stagedDecision) PutOwnedRelation(c platform.Caller, receipt *pb.ChangeR
 	if !remove && prior != nil && !recordOf(prior.value).Archived {
 		return fail("Owned relationship already exists")
 	}
-	return d.Put(c, receipt, platform.RelationValue(entity, id, request.Binding.Ref.Name, request.Binding.SourceVersion, parent, child, remove))
+	return d.Put(c, receipt, platform.RelationValue(entity, id, request.Binding.Ref.Name, request.Binding.SourceVersion, parent, child, remove, legacy...))
 }
 
 func (t *Tenant) ownedRelationTargets(store *recordStore, c platform.Caller, link platform.LinkType, direction, id string, at time.Time) ([]string, bool, *kernel.Error) {
@@ -78,9 +93,12 @@ func (t *Tenant) ownedRelationTargets(store *recordStore, c platform.Caller, lin
 			if recordOf(row.value).Archived {
 				continue
 			}
-			var value struct{ Binding, Parent, Child string }
+			var value struct {
+				Binding, Parent, Child string
+				Migration              bool
+			}
 			_ = json.Unmarshal(platform.Raw(row.value.Interface()), &value)
-			if value.Binding != link.Name {
+			if value.Migration || value.Binding != link.Name {
 				continue
 			}
 			from, to := value.Parent, value.Child
@@ -127,11 +145,14 @@ func (s *recordStore) ownedRelationViolations(link platform.LinkType) ([]ownedRe
 		if recordOf(row.value).Archived {
 			continue
 		}
-		var value struct{ Binding, Parent, Child string }
+		var value struct {
+			Binding, Parent, Child string
+			Migration              bool
+		}
 		if err := json.Unmarshal(platform.Raw(row.value.Interface()), &value); err != nil {
 			return nil, err
 		}
-		if value.Binding != link.Name {
+		if value.Migration || value.Binding != link.Name {
 			continue
 		}
 		edges = append(edges, edge{id, value.Parent, value.Child})

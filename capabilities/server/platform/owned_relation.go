@@ -20,6 +20,10 @@ func RelationEntity(app string) Entity {
 	for _, field := range []string{"binding", "version", "parent", "child"} {
 		fields = append(fields, reflect.StructField{Name: strings.ToUpper(field[:1]) + field[1:], Type: reflect.TypeFor[string](), Tag: reflect.StructTag(fmt.Sprintf(`json:"%s" field:"readonly"`, field))})
 	}
+	fields = append(fields,
+		reflect.StructField{Name: "Migration", Type: reflect.TypeFor[bool](), Tag: `json:"migration,omitempty" field:"readonly"`},
+		reflect.StructField{Name: "Legacy", Type: reflect.TypeFor[[]RelationLink](), Tag: `json:"legacy,omitempty" type:"json" field:"readonly"`},
+	)
 	model := reflect.New(reflect.StructOf(fields)).Elem().Interface()
 	return Entity{Type: OwnedRelationType(app), Title: "Owned relationship", Description: "An immutable typed relation instance of this application's authority", Model: model, Scope: Scope{Default: ScopeNone}}
 }
@@ -42,8 +46,53 @@ func (c Caller) PutOwnedRelation(receipt *pb.ChangeRecord, link TxnLink, remove 
 	return runtime.PutOwnedRelation(c, receipt, link, remove, at)
 }
 
-func RelationValue(entity Entity, id, binding, version, parent, child string, archived bool) any {
+func RelationValue(entity Entity, id, binding, version, parent, child string, archived bool, legacy ...RelationLink) any {
 	value := reflect.New(reflect.TypeOf(entity.Model))
-	_ = json.Unmarshal(Raw(map[string]any{"id": id, "binding": binding, "version": version, "parent": parent, "child": child, "archived": archived}), value.Interface())
+	_ = json.Unmarshal(Raw(map[string]any{"id": id, "binding": binding, "version": version, "parent": parent, "child": child, "archived": archived, "legacy": legacy}), value.Interface())
 	return value.Elem().Interface()
+}
+
+type RelationMigrationPlan struct {
+	Binding  AssetBinding   `json:"binding"`
+	Links    []RelationLink `json:"links"`
+	Partial  bool           `json:"partial"`
+	Migrated bool           `json:"migrated"`
+}
+
+type OwnedRelationMigrationRuntime interface {
+	MigrateOwnedRelations(Caller, *pb.ChangeRecord, AssetBinding, time.Time) *kernel.Error
+}
+
+func (c Caller) MigrateOwnedRelations(receipt *pb.ChangeRecord, binding AssetBinding, at time.Time) *kernel.Error {
+	runtime, ok := c.rt.(OwnedRelationMigrationRuntime)
+	if !ok {
+		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Relationship migration requires a private decision")
+	}
+	return runtime.MigrateOwnedRelations(c, receipt, binding, at)
+}
+
+type LegacyRelationSource interface{ LegacyRelations() []RelationLink }
+type OwnedRelationReadRuntime interface {
+	OwnedRelations(Caller, string) []RelationLink
+	LegacyRelationActive(Caller, RelationLink) bool
+	LegacyRelationWritable(Caller, string, string) bool
+}
+
+func (c Caller) OwnedRelations(entity string) []RelationLink {
+	if runtime, ok := c.rt.(OwnedRelationReadRuntime); ok {
+		return runtime.OwnedRelations(c, entity)
+	}
+	return nil
+}
+func (c Caller) LegacyRelationActive(link RelationLink) bool {
+	if runtime, ok := c.rt.(OwnedRelationReadRuntime); ok {
+		return runtime.LegacyRelationActive(c, link)
+	}
+	return true
+}
+func (c Caller) LegacyRelationWritable(from, to string) bool {
+	if runtime, ok := c.rt.(OwnedRelationReadRuntime); ok {
+		return runtime.LegacyRelationWritable(c, from, to)
+	}
+	return true
 }
