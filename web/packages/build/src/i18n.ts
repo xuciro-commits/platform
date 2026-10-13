@@ -2,6 +2,25 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Business versions": "业务版本",
+  "Business versioning": "业务版本配置",
+  "Pinned business versions": "已固定的业务版本",
+  "Retain business versions as ordinary records": "将业务版本保留为普通记录",
+  "Business key": "业务标识",
+  "Business version": "业务版本",
+  "Valid from field": "生效时间字段",
+  "Valid until field": "失效时间字段",
+  "Pin policy": "固定策略",
+  "No automatic pin": "不自动固定",
+  "On consumer creation": "创建引用单据时",
+  "On consumer state": "引用单据进入状态时",
+  "Consumer state name": "引用单据的状态名称",
+  "Choose a versioned reference and the field that receives its version. The source policy decides when it becomes fixed.": "选择带版本的引用及接收其版本的字段；来源策略决定何时固定。",
+  "Versioned reference": "带版本的引用",
+  "Pinned version field": "固定版本字段",
+  "Remove pin": "移除固定声明",
+  "Add a version pin": "添加版本固定声明",
+
  "Rule reason": "规则原因",
  "Evaluated caller-visible collection": "仅求值调用者可见集合",
  "Rule comparison input is missing": "规则比较的输入缺失",

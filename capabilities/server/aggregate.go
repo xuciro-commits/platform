@@ -24,17 +24,18 @@ import (
 //     money field. Money is summed per currency: its currency becomes a group
 //     ("amount.currency"), and amounts stay in minor units.
 type AggregateQuery struct {
-	Collection *platform.RecordSetRef  `json:"collection,omitempty"`
-	Window     *AggregateWindowQuery   `json:"window,omitempty"`
-	Histogram  *HistogramQuery         `json:"histogram,omitempty"`
-	MaxRows    int                     `json:"maxRows,omitempty"`
-	Traversal  *platform.LinkTraversal `json:"traversal,omitempty"`
-	Set        *platform.QuerySet      `json:"set,omitempty"`
-	Domain     json.RawMessage         `json:"domain,omitempty"`
-	Search     string                  `json:"search,omitempty"`
-	Archived   bool                    `json:"archived,omitempty"`
-	Groups     []string                `json:"groups,omitempty"`
-	Measures   []string                `json:"measures,omitempty"`
+	BusinessTime *platform.BusinessTime  `json:"businessTime,omitempty"`
+	Collection   *platform.RecordSetRef  `json:"collection,omitempty"`
+	Window       *AggregateWindowQuery   `json:"window,omitempty"`
+	Histogram    *HistogramQuery         `json:"histogram,omitempty"`
+	MaxRows      int                     `json:"maxRows,omitempty"`
+	Traversal    *platform.LinkTraversal `json:"traversal,omitempty"`
+	Set          *platform.QuerySet      `json:"set,omitempty"`
+	Domain       json.RawMessage         `json:"domain,omitempty"`
+	Search       string                  `json:"search,omitempty"`
+	Archived     bool                    `json:"archived,omitempty"`
+	Groups       []string                `json:"groups,omitempty"`
+	Measures     []string                `json:"measures,omitempty"`
 }
 
 const AggregateSetMaxGroups = 4
@@ -231,7 +232,7 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 		rows = selected[0]
 	} else {
 		var err *kernel.Error
-		rows, err = s.matchingQuery(et, platform.Query{Set: q.Set, Domain: q.Domain, Search: q.Search, Archived: q.Archived}, visible)
+		rows, err = s.matchingQuery(et, platform.Query{Set: q.Set, Domain: q.Domain, Search: q.Search, Archived: q.Archived, BusinessTime: q.BusinessTime}, visible)
 		if err != nil {
 			return Aggregate{}, err
 		}
@@ -347,6 +348,9 @@ func (t *Tenant) Aggregate(m platform.Member, typ string, q AggregateQuery, now 
 	if err := t.admits(m); err != nil {
 		return Aggregate{}, err
 	}
+	if info, ok := t.entity(typ); ok {
+		q.BusinessTime = businessQuery(info, platform.Query{BusinessTime: q.BusinessTime}, m, now).BusinessTime
+	}
 	if q.Collection != nil {
 		if q.Window != nil || q.Histogram != nil || q.Traversal != nil || q.Set != nil || len(q.Domain) > 0 || q.Search != "" || q.Archived {
 			return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A declared collection cannot be combined with another selection")
@@ -406,7 +410,7 @@ func (t *Tenant) Aggregate(m platform.Member, typ string, q AggregateQuery, now 
 	defer s.mu.Unlock()
 	out, refusal := s.aggregate(view, q, visible)
 	if refusal == nil && q.Window == nil && q.Histogram == nil {
-		query := platform.Query{Set: q.Set, Domain: q.Domain, Search: q.Search, Archived: q.Archived}
+		query := platform.Query{Set: q.Set, Domain: q.Domain, Search: q.Search, Archived: q.Archived, BusinessTime: q.BusinessTime}
 		all, err := s.matchingQuery(et, query, nil)
 		if err != nil {
 			return Aggregate{}, err

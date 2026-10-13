@@ -116,7 +116,7 @@ type Model struct {
 	Calendars     []platform.Calendar `json:"calendars,omitempty"`
 }
 
-func ActiveOn(from, until, day Date) bool { return from <= day && (until == "" || day < until) }
+func ActiveOn(from, until, day Date) bool { return platform.ActiveOn(from, until, day) }
 
 func (m *Model) ElementOf(id string) *Element {
 	if i := slices.IndexFunc(m.Elements, func(e Element) bool { return e.ID == id }); i >= 0 {

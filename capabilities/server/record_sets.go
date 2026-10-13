@@ -60,6 +60,9 @@ func (t *Tenant) checkRecordSetDeclarations(info platform.EntityInfo) error {
 		}
 		return t.entity(typ)
 	}
+	if err := platform.CheckVersioning(info, lookup); err != nil {
+		return err
+	}
 	if err := platform.CheckRecordSets(info, lookup); err != nil {
 		return err
 	}
@@ -191,8 +194,9 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	// Selection, filtering, ordering and paging use one captured private store.
 	// Read grants and derived-source checks still come from the original owner.
 	store.mu.Lock()
-	raw, queryErr := store.matchingQuery(et, platform.Query{Domain: platform.Raw(domain)}, nil)
-	values, visibleErr := store.matchingQuery(view, platform.Query{Domain: platform.Raw(domain)}, visible)
+	query := businessQuery(et.info, platform.Query{Domain: platform.Raw(domain), BusinessTime: set.BusinessTime}, c.Member, at)
+	raw, queryErr := store.matchingQuery(et, query, nil)
+	values, visibleErr := store.matchingQuery(view, query, visible)
 	if queryErr != nil || visibleErr != nil {
 		store.mu.Unlock()
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection membership is unavailable")
@@ -202,7 +206,7 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	rows := make([]any, 0, len(values))
 	for _, value := range values {
 		v := masked(et, value, hidden)
-		if len(et.info.Derived) > 0 {
+		if len(et.info.Derived) > 0 || len(et.info.VersionPins) > 0 {
 			narrowed, _ := narrower.derive(et, reflect.ValueOf(v))
 			v = narrowed.Interface()
 		}

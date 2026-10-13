@@ -547,6 +547,9 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         <h1 className="min-w-0 break-words text-lg font-semibold">{displayOf(info, r)}</h1>
         <span className="min-w-0 break-words font-mono text-xs text-muted">{info.title} · {r.id} {t("· rev")} {r.revision}</span>
         {r.archived && <Tag label="archived" />}
+		{view.effective===false&&<Tag label={t("Expired")} />}
+        {!!info.versionPins?.length&&(r.versionPins as Api.RecordVersionPin[]|undefined)?.map(pin=><Tag key={pin.reference} label={t("Pinned version: {version}",{version:String(pin.version)})} />)}
+        {info.versioning?.validUntil&&Boolean(r[info.versioning.validUntil])&&<Tag label={t("Valid until: {date}",{date:String(r[info.versioning.validUntil])})} />}
         {!detailOnly && <span className="ml-auto flex flex-wrap gap-1">{actions?.(r)}</span>}
       </header>);
   const barcode=detailPresentation?.barcode?detailPresentation.barcode==="id"?r.id:String(r[detailPresentation.barcode]??""):"";

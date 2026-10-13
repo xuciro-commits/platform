@@ -328,6 +328,10 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 	if d.failure != nil {
 		return d.failure
 	}
+	if err := d.checkBusinessVersionPins(); err != nil {
+		d.failure = err
+		return err
+	}
 	if err := d.checkOwnedRelationConstraints(); err != nil {
 		d.failure = err
 		return err

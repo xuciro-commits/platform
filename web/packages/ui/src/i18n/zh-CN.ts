@@ -1,5 +1,9 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+  "Pinned version: {version}": "已固定版本：{version}",
+  "Valid until: {date}": "失效时间：{date}",
+  "Expired": "已失效",
+
  "Scoped input drafts": "会话内输入草稿",
  "Keep unparsed number and JSON text in its original document and block unsafe submissions.": "把未解析的数字和 JSON 原文保留在原文档中，并阻止无效提交。",
  "The input draft limit was reached. Correct or discard an existing draft first.": "输入草稿已达到上限，请先修正或放弃已有草稿。",

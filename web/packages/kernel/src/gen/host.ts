@@ -108,6 +108,7 @@ export type AgentRunRecord = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   release?: string;
   definitionVersion?: string;
   agent: string;
@@ -143,6 +144,7 @@ export type Aggregate = {
 };
 
 export type AggregateQuery = {
+  businessTime?: BusinessTime;
   collection?: RecordSetRef;
   window?: AggregateWindowQuery;
   histogram?: HistogramQuery;
@@ -290,6 +292,7 @@ export type ApprovalRequest = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   action: string;
   title: string;
   app: string;
@@ -372,10 +375,16 @@ export type BuildProject = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   name: string;
   title: string;
   members?: ProjectMember[];
   assets?: ProjectAsset[];
+};
+
+export type BusinessTime = {
+  at?: string;
+  all?: boolean;
 };
 
 export type BusinessTxn = {
@@ -556,6 +565,7 @@ export type Connection = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   name: string;
   title: string;
   kind: "http" | "odata" | "postgres";
@@ -840,6 +850,8 @@ export type EnterpriseReferenceGroup = {
 };
 
 export type EntityInfo = {
+  versioning?: Versioning;
+  versionPins?: VersionPinBinding[];
   sets?: RecordSet[];
   constraints?: Constraint[];
   type: string;
@@ -1011,6 +1023,7 @@ export type FunctionRun = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   question?: string;
   history?: string[];
   function: string;
@@ -1147,6 +1160,7 @@ export type InboxTask = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   title: string;
   body?: string;
   ref?: string;
@@ -1372,6 +1386,7 @@ export type Memory = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   agent: string;
   fact: string;
   for?: string;
@@ -2249,6 +2264,7 @@ export type Process = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   name: string;
   title: string;
   kind?: "flow" | "automation";
@@ -2427,6 +2443,7 @@ export type Provider = {
 };
 
 export type Query = {
+  businessTime?: BusinessTime;
   traversal?: LinkTraversal;
   set?: QuerySet;
   domain?: unknown;
@@ -2462,6 +2479,7 @@ export type RecordPage = {
 };
 
 export type RecordSet = {
+  businessTime?: BusinessTime;
   name: string;
   from: string;
   binding?: AssetBinding;
@@ -2498,7 +2516,16 @@ export type RecordSetSort = {
   desc?: boolean;
 };
 
+export type RecordVersionPin = {
+  reference: string;
+  versionField: string;
+  source: string;
+  version: unknown;
+  at: string;
+};
+
 export type RecordView = {
+  effective?: boolean;
   values?: Record<string, unknown>;
   valueErrors?: Record<string, string>;
   record: unknown;
@@ -2710,6 +2737,7 @@ export type SavedView = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   title: string;
   entity: string;
   state: string;
@@ -2952,6 +2980,7 @@ export type Source = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   name: string;
   title: string;
   connection?: string;
@@ -3126,6 +3155,7 @@ export type Table = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   name: string;
   title: string;
   description?: string;
@@ -3401,6 +3431,19 @@ export type Verdict = {
   policy?: string;
 };
 
+export type VersionPinBinding = {
+  reference: string;
+  version: string;
+};
+
+export type Versioning = {
+  key: string;
+  version: string;
+  validFrom: string;
+  validUntil?: string;
+  pin: string;
+};
+
 export type View = {
   id: string;
   name: string;
@@ -3441,6 +3484,7 @@ export type WorkTask = {
   created: Stamp;
   changed: Stamp;
   archived?: boolean;
+  versionPins?: RecordVersionPin[];
   title: string;
   body?: string;
   ref?: string;

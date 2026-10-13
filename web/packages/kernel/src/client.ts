@@ -41,7 +41,7 @@ export class EdgeClient {
     return () => { stops.forEach(stop => stop()); stops.clear(); };
   }
   recordsPath(type: string, q: Omit<Query,"domain"> & {domain?:unknown[]} = {}) {
-    if (q.set || q.traversal) return `/v1/records/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
+    if (q.set || q.traversal || q.businessTime) return `/v1/records/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
     return `/v1/records/${encodeURIComponent(type)}?${this.readParams(q)}`;
   }
   interfaceRecordsPath(name:string,q:Omit<Query,"domain"> & {domain?:unknown[]}={}) {
@@ -53,7 +53,7 @@ export class EdgeClient {
     return `/v1/queries/${encodeURIComponent(binding.ref.app)}/${encodeURIComponent(binding.ref.name)}?${p}`;
   }
   aggregatePath(type: string, q: Omit<AggregateQuery,"domain"> & {domain?:unknown[]} = {}) {
-    if (q.window || q.histogram || q.set || q.traversal || q.maxRows) return `/v1/aggregates/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
+    if (q.window || q.histogram || q.set || q.traversal || q.maxRows || q.collection || q.businessTime) return `/v1/aggregates/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
     const p = this.readParams(q);
     if (q.groups?.length) p.set("group", q.groups.join(","));
     if (q.measures?.length) p.set("measure", q.measures.join(","));

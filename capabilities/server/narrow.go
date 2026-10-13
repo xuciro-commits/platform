@@ -256,7 +256,7 @@ func (w *narrower) record(et *entityType, v reflect.Value) (reflect.Value, bool)
 	if len(hidden) > 0 {
 		out, changed = reflect.ValueOf(masked(et, v, hidden)), true
 	}
-	if len(et.info.Derived) == 0 {
+	if len(et.info.Derived) == 0 && len(et.info.VersionPins) == 0 {
 		return out, changed
 	}
 	derived, narrowed := w.derive(et, out)
@@ -272,6 +272,29 @@ func (w *narrower) record(et *entityType, v reflect.Value) (reflect.Value, bool)
 func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool) {
 	out := copyOf(et.info.Go, v.Interface())
 	withheld, every := false, []string{}
+	pins := recordOf(out).VersionPins
+	visiblePins := []platform.RecordVersionPin{}
+	for _, pin := range pins {
+		reference, visible := et.info.Field(pin.Reference)
+		version, known := et.info.Field(pin.VersionField)
+		typ, _, _ := strings.Cut(pin.Source, "/")
+		if !w.held {
+			w.store.mu.Lock()
+		}
+		source := w.store.types[typ]
+		if !w.held {
+			w.store.mu.Unlock()
+		}
+		if source == nil || source.info.Versioning == nil || !visible || !known || !reference.ReadsAny(w.m.RolesIn(et.info.App)) || !version.ReadsAny(w.m.RolesIn(et.info.App)) || !w.may(pin.Source+"#"+source.info.Versioning.Version) {
+			if known {
+				out.FieldByIndex(version.Index).SetZero()
+			}
+			withheld = true
+			continue
+		}
+		visiblePins = append(visiblePins, pin)
+	}
+	recordOf(out).VersionPins = visiblePins
 	for _, d := range et.info.Derived { // every source the type names, for "*"
 		if !d.All {
 			every = append(every, w.sources(out, d)...)

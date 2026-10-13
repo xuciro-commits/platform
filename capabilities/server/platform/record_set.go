@@ -17,15 +17,16 @@ const RecordSetMaxDeclarations = 64
 // RecordSet is an object's bounded collection. From is a declared reference /
 // inverse name, or Binding's retained query/link name. It is not a query string.
 type RecordSet struct {
-	Name      string          `json:"name"`
-	From      string          `json:"from"`
-	Binding   *AssetBinding   `json:"binding,omitempty"`
-	Direction string          `json:"direction,omitempty"`
-	Object    string          `json:"object"`
-	Path      []string        `json:"path,omitempty"`
-	Where     []Expr          `json:"where,omitempty"`
-	Order     []RecordSetSort `json:"order"`
-	Limit     int             `json:"limit"`
+	BusinessTime *BusinessTime   `json:"businessTime,omitempty"`
+	Name         string          `json:"name"`
+	From         string          `json:"from"`
+	Binding      *AssetBinding   `json:"binding,omitempty"`
+	Direction    string          `json:"direction,omitempty"`
+	Object       string          `json:"object"`
+	Path         []string        `json:"path,omitempty"`
+	Where        []Expr          `json:"where,omitempty"`
+	Order        []RecordSetSort `json:"order"`
+	Limit        int             `json:"limit"`
 }
 type RecordSetSort struct {
 	Expr Expr `json:"expr"`

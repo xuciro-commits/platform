@@ -70,6 +70,9 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 		if before.info.App != info.App {
 			return fmt.Errorf("%s is declared by %s", info.Type, before.info.App)
 		}
+		if before.info.Versioning != nil && !reflect.DeepEqual(before.info.Versioning, info.Versioning) || len(before.info.VersionPins) > 0 && !reflect.DeepEqual(before.info.VersionPins, info.VersionPins) {
+			return fmt.Errorf("published business versioning and pin bindings are retained")
+		}
 		for id, r := range before.rows {
 			raw, err := r.image()
 			if err != nil {

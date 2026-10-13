@@ -23,11 +23,12 @@ import (
 
 // Record is embedded first in every entity struct.
 type Record struct {
-	ID       string `json:"id"`
-	Revision uint32 `json:"revision"` // the kernel's revision of the record (K4 C12)
-	Created  Stamp  `json:"created"`
-	Changed  Stamp  `json:"changed"`
-	Archived bool   `json:"archived,omitempty"`
+	ID          string             `json:"id"`
+	Revision    uint32             `json:"revision"` // the kernel's revision of the record (K4 C12)
+	Created     Stamp              `json:"created"`
+	Changed     Stamp              `json:"changed"`
+	Archived    bool               `json:"archived,omitempty"`
+	VersionPins []RecordVersionPin `json:"versionPins,omitempty"`
 }
 
 // Stamp is who changed a record, when, and by which decision.
@@ -53,6 +54,8 @@ type Money struct {
 
 // Entity declares an entity type of the app.
 type Entity struct {
+	Versioning       *Versioning
+	VersionPins      []VersionPinBinding
 	Sets             []RecordSet
 	Constraints      []Constraint
 	PropertyBindings map[string]AssetBinding
@@ -382,23 +385,25 @@ func (f FieldInfo) Active(valueOf func(field string) string) bool {
 
 // EntityInfo is an entity type as the host and the UI see it.
 type EntityInfo struct {
-	Sets           []RecordSet    `json:"sets,omitempty"`
-	Constraints    []Constraint   `json:"constraints,omitempty"`
-	Type           string         `json:"type"`
-	Title          string         `json:"title"`
-	Plural         string         `json:"plural"`
-	Description    string         `json:"description,omitempty"`
-	Synonyms       string         `json:"synonyms,omitempty"`
-	KnowledgeFiles bool           `json:"knowledgeFiles,omitempty"` // its attached text files are knowledge (ADR-0028)
-	App            string         `json:"app"`
-	Display        string         `json:"display"`
-	Fields         []FieldInfo    `json:"fields"`
-	Standard       []string       `json:"standard"`             // the generated actions' schemas
-	Implements     []string       `json:"implements,omitempty"` // the interfaces it carries the fields of (ADR-0058 A2)
-	Extends        string         `json:"extends,omitempty"`    // the type it adds fields to (ADR-0058 A3)
-	Lifecycle      *LifecycleInfo `json:"lifecycle,omitempty"`
-	Go             reflect.Type   `json:"-"`
-	Scope          Scope          `json:"-"`
+	Versioning     *Versioning         `json:"versioning,omitempty"`
+	VersionPins    []VersionPinBinding `json:"versionPins,omitempty"`
+	Sets           []RecordSet         `json:"sets,omitempty"`
+	Constraints    []Constraint        `json:"constraints,omitempty"`
+	Type           string              `json:"type"`
+	Title          string              `json:"title"`
+	Plural         string              `json:"plural"`
+	Description    string              `json:"description,omitempty"`
+	Synonyms       string              `json:"synonyms,omitempty"`
+	KnowledgeFiles bool                `json:"knowledgeFiles,omitempty"` // its attached text files are knowledge (ADR-0028)
+	App            string              `json:"app"`
+	Display        string              `json:"display"`
+	Fields         []FieldInfo         `json:"fields"`
+	Standard       []string            `json:"standard"`             // the generated actions' schemas
+	Implements     []string            `json:"implements,omitempty"` // the interfaces it carries the fields of (ADR-0058 A2)
+	Extends        string              `json:"extends,omitempty"`    // the type it adds fields to (ADR-0058 A3)
+	Lifecycle      *LifecycleInfo      `json:"lifecycle,omitempty"`
+	Go             reflect.Type        `json:"-"`
+	Scope          Scope               `json:"-"`
 	// Derived and Withheld are ADR-0033's declaration, resolved: the host
 	// narrows these fields to the sources the reader may still read.
 	Derived  []DerivationInfo `json:"-"`
@@ -430,7 +435,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, Constraints: e.Constraints, Sets: e.Sets}
+	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
 	if info.Title == "" {
 		info.Title = e.Type
 	}
@@ -611,14 +616,15 @@ func EntityActions(e Entity) []Action {
 // conditions joined by "&" unless "|" or "!" says otherwise; a text search
 // over the type's search fields; sort fields ("-" for descending); a page.
 type Query struct {
-	Traversal *LinkTraversal  `json:"traversal,omitempty"`
-	Set       *QuerySet       `json:"set,omitempty"`
-	Domain    json.RawMessage `json:"domain,omitempty"`
-	Search    string          `json:"search,omitempty"`
-	Sort      []string        `json:"sort,omitempty"`
-	Offset    int             `json:"offset,omitempty"`
-	Limit     int             `json:"limit,omitempty"`    // 0: all
-	Archived  bool            `json:"archived,omitempty"` // include archived records
+	BusinessTime *BusinessTime   `json:"businessTime,omitempty"`
+	Traversal    *LinkTraversal  `json:"traversal,omitempty"`
+	Set          *QuerySet       `json:"set,omitempty"`
+	Domain       json.RawMessage `json:"domain,omitempty"`
+	Search       string          `json:"search,omitempty"`
+	Sort         []string        `json:"sort,omitempty"`
+	Offset       int             `json:"offset,omitempty"`
+	Limit        int             `json:"limit,omitempty"`    // 0: all
+	Archived     bool            `json:"archived,omitempty"` // include archived records
 }
 
 // Put stores entity (a struct embedding Record, with its ID set) as the

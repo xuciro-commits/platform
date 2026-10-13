@@ -702,6 +702,9 @@ func (b *Build) Check(o Object, id string) error {
 	if err := b.checkRecordSets(o); err != nil {
 		return err
 	}
+	if err := b.checkVersioning(o); err != nil {
+		return err
+	}
 	if err := checkFormulas(o.Fields); err != nil {
 		return err
 	}
@@ -1026,13 +1029,13 @@ func (b *Build) Reinstall() error {
 	if err != nil {
 		return err
 	}
-	for _, o := range objects {
-		was, ok := wasPublished[Object](o.Published)
-		if !ok || o.Archived {
-			continue
-		}
+	ordered, err := businessVersionInstallOrder(objects)
+	if err != nil {
+		return err
+	}
+	for _, was := range ordered {
 		if err := b.install(platform.Caller{Replaying: true}, was); err != nil {
-			return fmt.Errorf("object %s: %v", o.Name, err)
+			return fmt.Errorf("object %s: %v: %s", was.Name, err, err.Message)
 		}
 	}
 	links, err := b.linkTypeInventory()
@@ -1178,6 +1181,9 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		if f.Formula != "" || f.FormulaExpr != nil {
 			marks = append(marks, "readonly")
 		}
+		if slices.ContainsFunc(o.VersionPins, func(pin platform.VersionPinBinding) bool { return pin.Version == f.Name }) && !slices.Contains(marks, "readonly") {
+			marks = append(marks, "readonly")
+		}
 		if len(marks) > 0 {
 			tag += fmt.Sprintf(` field:"%s"`, strings.Join(marks, ","))
 		}
@@ -1228,7 +1234,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: buildapi.TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), Constraints: o.Constraints, Sets: o.Sets, PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Derived: derived, Withheld: withheld, ComputeAt: computeRulesOf(o, lookup), Validate: validateOf(o, model), ValidateAt: numberingOf(o, model)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Derived: derived, Withheld: withheld, ComputeAt: computeRulesOf(o, lookup), Validate: validateOf(o, model), ValidateAt: numberingOf(o, model)}
 }
 
 // page is the list and detail page a defined object comes with: the same

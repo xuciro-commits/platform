@@ -705,13 +705,17 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
+	effective, refusal := s.effectivePredicate(et, q)
+	if refusal != nil {
+		return nil, refusal
+	}
 	var out []reflect.Value
 	visit := func(r *row) {
 		if r == nil {
 			return
 		}
 		v := r.value
-		if !q.Archived && recordOf(v).Archived || visible != nil && !visible(v) || !match(v) {
+		if !q.Archived && recordOf(v).Archived || visible != nil && !visible(v) || effective != nil && !effective(v) || !match(v) {
 			return
 		}
 		out = append(out, v)
@@ -1040,6 +1044,7 @@ func (r runtime) Find(c platform.Caller, t reflect.Type, q platform.Query) ([]an
 	if len(q.Sort) == 0 {
 		q.Sort = []string{"id"}
 	}
+	q = businessQuery(et.info, q, c.Member, time.Now())
 	page, total, err := s.find(et, q, nil)
 	out := make([]any, len(page))
 	for i, v := range page {
@@ -1249,6 +1254,7 @@ func (t *Tenant) recordsFrom(s *recordStore, m platform.Member, typ string, q pl
 	if q.Limit == 0 || q.Limit > 500 {
 		q.Limit = 500
 	}
+	q = businessQuery(et.info, q, m, now)
 	view, hidden := viewOf(m, et)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1261,7 +1267,7 @@ func (t *Tenant) recordsFrom(s *recordStore, m platform.Member, typ string, q pl
 	w := t.narrowerIn(s, m, now, true)
 	for i, v := range page {
 		out.Records[i] = masked(et, v, hidden)
-		if len(et.info.Derived) > 0 { // checked against its sources again (ADR-0033)
+		if len(et.info.Derived) > 0 || len(et.info.VersionPins) > 0 { // checked against its sources again (ADR-0033)
 			narrowed, _ := w.derive(et, reflect.ValueOf(out.Records[i]))
 			out.Records[i] = narrowed.Interface()
 		}
@@ -1495,6 +1501,7 @@ func recordLabel(et *entityType, value any, id string) string {
 // the app's other types that refer to it, and the processes about it the
 // member may read (ADR-0026 D4).
 type RecordView struct {
+	Effective   *bool             `json:"effective,omitempty"`
 	Values      map[string]any    `json:"values,omitempty"`
 	ValueErrors map[string]string `json:"valueErrors,omitempty"`
 	Record      any               `json:"record"`
@@ -1545,12 +1552,18 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	}
 	seen, hidden := viewOf(m, et)
 	record := masked(et, r.value, hidden)
-	if len(et.info.Derived) > 0 {
+	if len(et.info.Derived) > 0 || len(et.info.VersionPins) > 0 {
 		narrowed, _ := t.narrower(m, now, false).derive(et, reflect.ValueOf(record))
 		record = narrowed.Interface()
 	}
 	values, valueErrors := propertyValues(seen.info, record)
 	view := RecordView{Values: values, ValueErrors: valueErrors, Record: record, History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
+	if versioning := et.info.Versioning; versioning != nil {
+		field, _ := et.info.Field(versioning.ValidFrom)
+		clock := businessQuery(et.info, platform.Query{}, m, now).BusinessTime.At
+		active, _ := platform.EffectiveAt(field.Type, businessField(et.info, r.value, versioning.ValidFrom), businessField(et.info, r.value, versioning.ValidUntil), clock)
+		view.Effective = &active
+	}
 	if c := t.app(platform.RelationsApp); c != nil && typ != platform.CommentType && typ != platform.FollowType {
 		about, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
 		if page, err := t.Records(m, platform.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {

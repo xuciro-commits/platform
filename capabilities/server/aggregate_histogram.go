@@ -87,7 +87,7 @@ func (s *recordStore) histogram(et *entityType, q AggregateQuery, visible func(r
 	if !ok || !slices.Contains([]string{"integer", "decimal"}, field.Type) || h.Bins < 1 || h.Bins > HistogramMaxBins || len(q.Groups) > 0 || len(q.Measures) > 0 && !slices.Equal(q.Measures, []string{"count"}) || q.MaxRows > 0 && q.MaxRows < h.Bins {
 		return Aggregate{}, invalid
 	}
-	rows, err := s.matchingQuery(et, platform.Query{Domain: q.Domain, Search: q.Search, Set: q.Set, Archived: q.Archived}, visible)
+	rows, err := s.matchingQuery(et, platform.Query{Domain: q.Domain, Search: q.Search, Set: q.Set, Archived: q.Archived, BusinessTime: q.BusinessTime}, visible)
 	if err != nil {
 		return Aggregate{}, err
 	}

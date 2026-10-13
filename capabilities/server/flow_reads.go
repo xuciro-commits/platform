@@ -98,7 +98,7 @@ func (t *Tenant) readDeclaredQueryFrom(store *recordStore, c platform.Caller, q 
 
 func (t *Tenant) readRecordFrom(store *recordStore, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
 	domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
-	page, refusal := t.recordsFrom(store, c.Member, typ, platform.Query{Domain: domain, Limit: 1}, now)
+	page, refusal := t.recordsFrom(store, c.Member, typ, platform.Query{Domain: domain, Limit: 1, BusinessTime: &platform.BusinessTime{All: true}}, now)
 	if refusal != nil {
 		return nil, refusal
 	}

@@ -167,7 +167,10 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 		before, ref = et.rows[id], et.info.Type+"/"+id
 	}
 	d.records.mu.Unlock()
-	err := d.records.put(c, r, entity)
+	prepared, err := d.prepareBusinessRecord(c, entity, d.at)
+	if err == nil {
+		err = d.records.put(c, r, prepared)
+	}
 	if err == nil {
 		if d.constraintWrites == nil {
 			d.constraintWrites = map[string]constraintWrite{}
@@ -377,6 +380,7 @@ func (d *stagedDecision) Find(c platform.Caller, typ reflect.Type, q platform.Qu
 	if len(q.Sort) == 0 {
 		q.Sort = []string{"id"}
 	}
+	q = businessQuery(et.info, q, c.Member, d.at)
 	page, total, err := d.records.find(et, q, nil)
 	out := make([]any, len(page))
 	for i, v := range page {

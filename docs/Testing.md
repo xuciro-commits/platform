@@ -75,6 +75,14 @@ W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Play
 
 手测：同一 Expr 放入动作条件、布尔计算字段、表格条件和页面 Rule；切换输入确认四处一致。将 required 数值留空、除数置零、撤去来源字段读取权限，确认可读原因与整批拒绝；对部分查询窗口聚合应拒绝。保存旧条件/公式/单元格/算子图后检查对应 Expr 字段，核对旧 Published 字符串未改变；调用旧不可变公式仍保持旧缺值/除零行为，新发布明确拒绝。规则编辑控件与复杂树 API 分工见 ADR-0101 As built。
 
+### 业务版本与时间（ADR-0103）
+
+`make test-go PKG='./platform ./apps/build ./apps/enterprise .'` 检查版本声明、唯一键、on_create / on_state 固定、固定后引用/主数据/工序集合修改拒绝、有效期倒置及失效新引用拒绝。`TestBusinessVersionsPinTimeAndPureRecovery` 在真实文件日志关闭重开后恢复保存结果并比较记录字节；`TestPinnedBusinessVersionPreservesSourceReadPermissions` 核对来源版本字段权限撤回后复制字段和收据均被遮蔽；`TestBusinessEffectiveTimeBoundaries` 核对半开日期边界及含时区时间点。
+
+`make e2e SPEC=business-version` 走构建者 Business versions 配置 → 候选激活 → 普通成员在页面创建两版主数据 → 配置引用单据固定映射 → 新旧单据分别使用所选版本 → 失效版本与日期标注。它不代替完整 MES 主数据迁移或负责人体验认可。
+
+手测：把业务版本与记录 rev、定义发布版本分别核对；用有效期字段关闭旧版，确认默认列表只含当前有效版本，显式 `businessTime.at` 可看当时集合，`businessTime.all` 可读被授权的保留版本。已固定单据继续读原记录，新单据选失效版本应明确拒绝；创建另一版及其工序，不改变旧单据集合。来源权限撤回后，旧复制版本和固定标注也不得泄漏。
+
 ### 记录集与关联（ADR-0104）
 
 `make test-go PKG='./internal/rules ./platform ./apps/build ./apps/relations .'` 检查来源/排序/路径和步骤边界、当前草稿绑定、条件/计算/约束一致、封存后改行拒绝、有序 ForEach 分组及格式 5 保存结果重放；关系与记录共同接受、父/子基数和 Required 最终检查、归档、解除最后父关系拒绝、修改引用后两端 inverse 更新、旧关系迁移失败无残留、原 owner-state 字节保持与当前唯一读取。`TestAggregateUsesTheExactRuleFold` 核对 HTTP / Expr 聚合精度一致；`TestDeclaredAggregateAndTenThousandRuleMembers` 核对同集合聚合、10000 元素及 10001 拒绝；`TestDeclaredSetVisibility` 核对 HTTP 聚合可见 count 和 partial，`TestSameAuthorityAdHocRelationshipIsFrozen` 守旧写入冻结。

@@ -96,7 +96,7 @@ func (s *recordStore) aggregateWindow(et *entityType, q AggregateQuery, visible 
 	if !hasTime || when.Type != "datetime" || !hasField || !slices.Contains([]string{"integer", "decimal"}, field.Type) || w.Rows < 1 || w.Rows > AggregateWindowMaxRows || !valid || len(q.Groups) > 0 || len(q.Measures) > 0 || q.Histogram != nil || q.MaxRows != 0 {
 		return invalid("Window statistics need readable event time and numeric fields, a bounded row count and decimal threshold; other aggregate modes cannot be mixed.")
 	}
-	rows, issue := s.matchingQuery(et, platform.Query{Domain: q.Domain, Search: q.Search, Set: q.Set, Archived: q.Archived}, visible)
+	rows, issue := s.matchingQuery(et, platform.Query{Domain: q.Domain, Search: q.Search, Set: q.Set, Archived: q.Archived, BusinessTime: q.BusinessTime}, visible)
 	if issue != nil {
 		return Aggregate{}, issue
 	}
