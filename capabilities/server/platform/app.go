@@ -153,6 +153,21 @@ func (c Caller) Staging() bool {
 	return ok
 }
 
+type DecisionFailureRuntime interface{ FailDecision(*kernel.Error) }
+
+// FailDecision refuses an apply closure before its private result is sealed.
+// It cannot change an already accepted decision or be used during recovery.
+func (c Caller) FailDecision(err *kernel.Error) {
+	if err == nil {
+		return
+	}
+	runtime, ok := c.rt.(DecisionFailureRuntime)
+	if !ok || c.Replaying || !c.Staging() {
+		panic("decision failure requires private staging")
+	}
+	runtime.FailDecision(err)
+}
+
 // AcceptedPublisher installs a definition from an already committed record
 // image. This is not a second decision and must never emit external effects.
 type AcceptedPublisher interface {

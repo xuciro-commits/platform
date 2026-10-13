@@ -69,8 +69,9 @@ type tenantState struct {
 }
 
 type recordState struct {
-	Value   json.RawMessage `json:"value"`
-	History []RecordChange  `json:"history"`
+	Value      json.RawMessage   `json:"value"`
+	History    []RecordChange    `json:"history"`
+	Projection *recordProjection `json:"projection,omitempty"`
 }
 
 type taskState struct {
@@ -104,7 +105,7 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 			if err != nil {
 				return nil, 0, err
 			}
-			saved[i] = recordState{Value: raw, History: r.history}
+			saved[i] = recordState{Value: raw, History: r.history, Projection: cloneRecordProjection(r.projection)}
 		}
 		slices.SortFunc(saved, func(a, b recordState) int { return strings.Compare(string(a.Value), string(b.Value)) })
 		s.Records[typ] = saved
@@ -190,11 +191,15 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 		et.rows = map[string]*row{}
 		for _, r := range rows {
 			v := reflect.New(et.info.Go).Elem()
-			if err := json.Unmarshal(r.Value, v.Addr().Interface()); err != nil {
+			decode, err := rowDecodeImage(et.info, r.Value, r.Projection, t.records.readRelease)
+			if err != nil {
+				return nil, err
+			}
+			if err := json.Unmarshal(decode, v.Addr().Interface()); err != nil {
 				return nil, err
 			}
 			emptyLists(v) // a snapshot of older code may hold null lists
-			recovered := &row{value: v, history: r.History}
+			recovered := &row{value: v, history: r.History, projection: cloneRecordProjection(r.Projection)}
 			recovered.retainOriginal(r.Value)
 			et.rows[recordOf(v).ID] = recovered
 		}
@@ -212,6 +217,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.records.readRelease = s.ActiveRelease
 	if len(s.Apps) != len(t.apps) {
 		return fmt.Errorf("tenant %s: the snapshot has %d apps, the tenant %d", t.ID, len(s.Apps), len(t.apps))
 	}

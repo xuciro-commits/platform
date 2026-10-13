@@ -24,6 +24,7 @@ import (
 
 type recordStore struct {
 	mu               sync.Mutex
+	readRelease      string // decoder context, derived from the release owner's pointer
 	referenceIndexes map[string]referenceIndex
 	liveVersions     map[string]uint64
 	uniqueLinks      map[string]platform.LinkType
@@ -146,7 +147,44 @@ type row struct {
 	// Recovery bytes preserve an accepted predecessor's identity when typed
 	// decoding normalises its definition. The next mutation writes only the
 	// current format; these bytes have no writable or executable API.
-	original json.RawMessage
+	original   json.RawMessage
+	projection *recordProjection
+}
+
+// A migration retains the source release's read image while its target facts
+// are accepted in batches. Only that exact shape can select this projection.
+type recordProjection struct {
+	From  string          `json:"from"`
+	Shape string          `json:"shape"`
+	Value json.RawMessage `json:"value"`
+}
+
+func cloneRecordProjection(p *recordProjection) *recordProjection {
+	if p == nil {
+		return nil
+	}
+	return &recordProjection{From: p.From, Shape: p.Shape, Value: slices.Clone(p.Value)}
+}
+
+func rowDecodeImage(info platform.EntityInfo, value json.RawMessage, projection *recordProjection, release string) (json.RawMessage, error) {
+	if projection == nil {
+		return value, nil
+	}
+	shape, err := canonicalDigest(info.Fields)
+	if err != nil {
+		return nil, err
+	}
+	if projection.From == "" || projection.Shape == "" || len(projection.Value) == 0 {
+		return nil, fmt.Errorf("incomplete versioned record projection")
+	}
+	var actual, view platform.Record
+	if json.Unmarshal(value, &actual) != nil || json.Unmarshal(projection.Value, &view) != nil || !reflect.DeepEqual(actual, view) {
+		return nil, fmt.Errorf("versioned record projection identity differs")
+	}
+	if shape == projection.Shape && release == projection.From {
+		return projection.Value, nil
+	}
+	return value, nil
 }
 
 func (r *row) image() (json.RawMessage, error) {
@@ -190,14 +228,14 @@ func newRecordStore() *recordStore {
 func (s *recordStore) forkRecords() *recordStore {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	draft := &recordStore{liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
+	draft := &recordStore{readRelease: s.readRelease, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
 		byGo: make(map[reflect.Type]*entityType, len(s.byGo)), writes: map[string]bool{},
 		dirty: make(map[string]bool, len(s.dirty)), changed: make(map[string][]string, len(s.changed)),
 		order: slices.Clone(s.order)}
 	for typ, et := range s.types {
 		copied := &entityType{info: et.info, knowledge: et.knowledge, rows: make(map[string]*row, len(et.rows))}
 		for id, r := range et.rows {
-			copied.rows[id] = &row{value: copyOf(et.info.Go, r.value.Interface()), history: copyHistory(r.history), original: slices.Clone(r.original)}
+			copied.rows[id] = &row{value: copyOf(et.info.Go, r.value.Interface()), history: copyHistory(r.history), original: slices.Clone(r.original), projection: cloneRecordProjection(r.projection)}
 		}
 		draft.types[typ] = copied
 		draft.byGo[et.info.Go] = copied
@@ -243,6 +281,7 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 	s.uniqueLinks = draft.uniqueLinks
 	s.archiveLinks = draft.archiveLinks
 	s.types, s.byGo = draft.types, draft.byGo
+	s.readRelease = draft.readRelease
 	s.dirty, s.changed, s.order = draft.dirty, draft.changed, draft.order
 	s.generation++
 	draft.sealed = true
@@ -385,6 +424,9 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	et := s.of(c, reflect.TypeOf(entity))
 	if et == nil || r == nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	if err := s.migrationWriteLocked(et.info, r); err != nil {
+		return err
 	}
 	v := copyOf(et.info.Go, entity)
 	emptyLists(v)

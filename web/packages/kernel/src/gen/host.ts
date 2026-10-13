@@ -1492,6 +1492,7 @@ export type MigrationResult = {
 
 export type MigrationReview = {
   id: string;
+  at: string;
   from: string;
   to: string;
   types: MigrationReviewType[];

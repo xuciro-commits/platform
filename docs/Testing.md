@@ -52,6 +52,7 @@ W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Play
 | K1–K9 语义及跨语言边缘 | `contract/spec`、`contract/vectors`、`contract/go`、Rust/TypeScript K5；选定 K4 Lean 模型 |
 | 声明/读取/动作/授权与派生来源 | `capabilities/server` 的对应 Go 测试与应用组合探针 |
 | 原子提交、版本和恢复 | 对应 accepted-result / release / process / function 测试；需要 PostgreSQL 的用例不能用内存通过代替 |
+| 数据与定义演进（ADR-0106，实施中） | `make test-go PKG='. ./platform' RUN=TestMigration` 核对封存审阅、三行两批、同键重试、源写入/直接发布拒绝、失败整批边界、隔离与补偿取消、快照及日志文件关闭重开续接、目标校验/激活/恢复。配置 `PLATFORM_TEST_DATABASE` 时同一日志路线加入 PostgreSQL；未配置须明确未验。手测先保存源/目标候选，审阅计划，以返回的 `id`/`at` 提交 `build.migration.start` 的 `review`/`reviewedAt`，按 `advance` 查看 `build.migration` 的游标、已处理/迁移量与失败，再走原目标激活。`cancel` 分批恢复源事实后允许旧定义写入。专用界面、六类变更/在途语义与两行业 `make rehearse` 未完成，不按此行宣称整块验收 |
 | 业务与协议 | 各应用/协议测试及 `CheckReplay`，酒店/制造组合 |
 | 共享组件行为 | `web/packages/ui`；翻译完整性由 i18n 检查 |
 | Catalog 一致性与查询 | `scripts/catalog.mjs check` 已接入 Web：公共导出/示例/翻译/Widget 引用与私有导入；`@platform/catalog` 验证有界查询，Catalog 预览隔离和 Studio 草稿路线只保留核心行为 |

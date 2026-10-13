@@ -196,6 +196,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 		if err != nil {
 			return saved, err
 		}
+		view.records.readRelease = saved.CandidateID
 		draft, err := view.stageReleaseInstallationLocked(saved.Installations, false)
 		if err != nil {
 			return saved, err
@@ -246,6 +247,9 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 	}
 	if err := t.releases.commit(saved.Key, saved.Digest, saved.CandidateID, saved.Bytes, saved.Active); err != nil {
 		return saved, err
+	}
+	if saved.Active {
+		t.records.readRelease = saved.CandidateID
 	}
 	t.releases.rememberRequest(saved.Key, saved.RequestHash)
 	if saved.Version >= 3 {
@@ -366,7 +370,11 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	if err != nil {
 		return "", err
 	}
-	installations, bootstrap, err = t.prepareReleaseLifecycleLocked(candidate, m, now, upgradeID != "")
+	migrated, err := t.migrationActivationLocked(candidateID)
+	if err != nil {
+		return "", err
+	}
+	installations, bootstrap, err = t.prepareReleaseLifecycleLocked(candidate, m, now, upgradeID != "" || migrated)
 	if err != nil {
 		return "", err
 	}

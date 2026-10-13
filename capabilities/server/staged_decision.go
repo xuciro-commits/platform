@@ -86,6 +86,12 @@ func (d *stagedDecision) InputRefused(err *kernel.Error, issues []platform.Field
 
 var _ platform.StagedRuntime = (*stagedDecision)(nil)
 
+func (d *stagedDecision) FailDecision(err *kernel.Error) {
+	if d.failure == nil {
+		d.failure = err
+	}
+}
+
 func (t *Tenant) newStagedDecision() *stagedDecision {
 	sequences := t.sequences.clone()
 	notices, noticeSeq := t.notices.state()

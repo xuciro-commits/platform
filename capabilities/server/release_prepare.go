@@ -72,6 +72,7 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 		return nil, nil, err
 	}
 	decision.tenant, decision.records = view, view.records
+	decision.records.readRelease = candidate.ID
 	for i, app := range view.apps {
 		if _, ok := app.(platform.AssetLifecycleOwner); !ok {
 			continue
@@ -203,6 +204,11 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 }
 
 func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]releaseInstallation, json.RawMessage, error) {
+	migrated, err := t.migrationActivationLocked(candidate.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	upgrade = upgrade || migrated
 	registry, err := t.assetRegistryLocked()
 	if err != nil {
 		return nil, nil, err
@@ -242,6 +248,11 @@ func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandida
 	}
 	if err := t.validateAssetStorage(trial, upgrade); err != nil {
 		return nil, nil, err
+	}
+	if migrated {
+		if err := t.validateMigratedRecordsLocked(trial, member, at); err != nil {
+			return nil, nil, err
+		}
 	}
 	if err := t.pendingWorkFitsLocked(candidate.ID, candidate.Bytes); err != nil {
 		return nil, nil, err

@@ -79,9 +79,10 @@ func New(tenant string) *Build {
 	actions = append(actions, platform.EntityActions(b.agentEntity())...)
 	actions = append(actions, platform.EntityActions(b.alertEntity())...)
 	actions = append(actions, sourceActions()...)
+	actions = append(actions, migrationActions()...)
 	actions = append(actions, connectionActions()...)
 	actions = append(actions, codeActions()...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, platform.OwnedRelationType(ID))
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, platform.MigrationRunType, platform.OwnedRelationType(ID))
 	return b
 }
 
@@ -140,6 +141,7 @@ func (b *Build) settings() []platform.Setting {
 
 func (b *Build) Manifest() platform.Manifest {
 	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity()}
+	entities = append(entities, migrationEntity())
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -615,6 +617,9 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	}
 	if s.GetSchema().GetName() == SchemaWritebackAnswered {
 		return b.submitWritebackAnswered(c, s, now)
+	}
+	if name := s.GetSchema().GetName(); name == migrationStart || name == migrationAdvance || name == migrationCancel {
+		return b.submitMigration(c, s, now)
 	}
 	if name := s.GetSchema().GetName(); name == SchemaFunctionCall || name == SchemaFunctionAnswer {
 		return b.submitFunctionCall(c, s, now)

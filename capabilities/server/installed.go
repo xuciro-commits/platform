@@ -65,6 +65,9 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 	if other := s.byGo[info.Go]; other != nil && other.info.Type != info.Type {
 		return fmt.Errorf("%s: another type is already this Go type", info.Type)
 	}
+	if err := s.migrationDefinitionLocked(info); err != nil {
+		return err
+	}
 	et := &entityType{info: info, rows: map[string]*row{}, knowledge: knowledgeBearing(info)}
 	if before := s.types[info.Type]; before != nil {
 		if before.info.App != info.App {
@@ -79,11 +82,15 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 				return err
 			}
 			v := reflect.New(info.Go).Elem()
-			if err := json.Unmarshal(raw, v.Addr().Interface()); err != nil {
+			decode, err := rowDecodeImage(info, raw, r.projection, s.readRelease)
+			if err != nil {
+				return err
+			}
+			if err := json.Unmarshal(decode, v.Addr().Interface()); err != nil {
 				return err
 			}
 			emptyLists(v)
-			et.rows[id] = &row{value: v, history: copyHistory(r.history)}
+			et.rows[id] = &row{value: v, history: copyHistory(r.history), projection: cloneRecordProjection(r.projection)}
 			et.rows[id].retainOriginal(raw)
 		}
 		delete(s.byGo, before.info.Go)

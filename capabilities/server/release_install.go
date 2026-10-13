@@ -148,7 +148,7 @@ func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool) error {
 		if next == nil || len(old.rows) == 0 {
 			continue
 		}
-		if !sameStoredFields(old.info, next.info) && (!upgrade || optionalStoredAddition(old.info, next.info) == nil) {
+		if !sameStoredFields(old.info, next.info) && (!upgrade || optionalStoredAddition(old.info, next.info) == nil && !t.migratedStorageLocked(old.info, next.info)) {
 			return fmt.Errorf("object %s has records; changing their storage shape needs a supported upgrade plan", typ)
 		}
 	}

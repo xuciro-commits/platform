@@ -40,10 +40,11 @@ type acceptedResult struct {
 }
 
 type acceptedRow struct {
-	Type    string          `json:"type"`
-	ID      string          `json:"id"`
-	Value   json.RawMessage `json:"value"`
-	History []RecordChange  `json:"history"`
+	Type       string            `json:"type"`
+	ID         string            `json:"id"`
+	Value      json.RawMessage   `json:"value"`
+	History    []RecordChange    `json:"history"`
+	Projection *recordProjection `json:"projection,omitempty"`
 }
 
 type acceptedEvent struct {
@@ -110,6 +111,10 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 		d.records.mu.Unlock()
 		return nil, fmt.Errorf("decision has no declared record image")
 	}
+	if et.rows[id].projection != nil {
+		d.records.mu.Unlock()
+		return nil, fmt.Errorf("versioned migration row requires the complete record batch")
+	}
 	value, err := json.Marshal(et.rows[id].value.Interface())
 	history := copyHistory(et.rows[id].history)
 	d.records.mu.Unlock()
@@ -160,6 +165,9 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&result); err != nil {
 		return result, nil, err
+	}
+	if result.Row.Projection != nil {
+		return result, nil, fmt.Errorf("versioned migration row requires the complete record batch")
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return result, nil, fmt.Errorf("accepted result has trailing data")

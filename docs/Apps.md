@@ -60,7 +60,9 @@ Flow/Automation 的发布审阅先确认当前草稿，再进入原候选审阅�
 
 发布 profile（ADR-0048）：构建者用设置 `build/releaseProfile` 声明 `development`（默认，开发/导入/探针）或 `production`。production 租户不再提供直接安装——编辑器与资源库不显示按钮，owner 在提交处拒绝其 API 旁路并点名候选路径；正式交付走“审查发布 → 检查依赖 → 保存不可变候选 → 激活”。历史已发布定义、回放与恢复不受影响。
 
-已有数据的字段升级（ADR-0039）：在对象草稿新增一个非必填标量字段，保存并审查/封存候选。发布审查显示“Storage upgrade plan / 存储升级计划”、字段类型及已有记录数；勾选“Confirm this optional field upgrade plan / 确认本次可选字段升级计划”后激活。计划过期须刷新并重新确认，未提供计划的接口请求仍拒绝。旧值和历史保持，新动作可写新字段；旧流程保留启动版本并沿原动作继续。该 profile 不支持必填、引用、选择、金额或一般转换，范围归 ADR-0039。
+已有数据的可选字段升级（ADR-0039）：在对象草稿新增一个非必填标量字段，保存并审查/封存候选。发布审查显示“Storage upgrade plan / 存储升级计划”、字段类型及已有记录数；勾选“Confirm this optional field upgrade plan / 确认本次可选字段升级计划”后激活。计划过期须刷新并重新确认，未提供计划的接口请求仍拒绝。旧值和历史保持，新动作可写新字段；旧流程保留启动版本并沿原动作继续。该 profile 不支持必填、引用、选择、金额或一般转换。
+
+真实数据迁移（[ADR-0106 As built](ADR/0106-data-and-definition-evolution.md#as-built)，实施中）：源候选先激活，目标草稿保存为封存候选；`POST /v1/releases/migrations/review` 审阅显式 `MigrationPlan`。builder 通过原提交 API 向新 `build.migration` ID 提交 `build.migration.start`，输入为 `plan`、审阅返回的 `review=id`、`reviewedAt=at`；随后向同 ID 提交 `build.migration.advance`（空输入，每次新 key；结果不明时重用原 key）。读取该记录的状态、游标、已处理/迁移量与失败；来源对象在迁移期间保持只读。完成且无失败后，从原发布审查激活封存目标；目标值/引用/约束仍须通过。要放弃则提交 `build.migration.cancel`，继续取消批次直到 `cancelled`，补偿历史保留。当前只有 API 操作，专用编辑界面未完成；仅执行 build 自有对象的字段步骤，`extract` 和 `retire-action` 在开始时拒绝，其他验收边界见 ADR。
 
 完整 Workshop 模块导入：在已保存、已发布的应用编辑器点击“Import complete Workshop module / 导入完整 Workshop 模块”，选择原 JSON，为所有来源页选择新页面或现有页面。通过“Edit shared platform bindings / 编辑共同平台绑定”配置原对象/字段/动作和应用端口；来源页选择只切换专属配置，共同映射保留。也可加载与原文一致的已下载映射报告，所有绑定重新检查。查询、模型函数、Go/Wasm 和嵌入分析页先由其原编辑器真实发布，再在此显式选择固定版本。审查各页诊断、四浮层/库存及呈现差异后保存并发布页面；完成后关闭窗口，Save application，再进入原应用候选审查。失败可查看已保存/发布进度并继续，未确认提交先沿原 Pending changes 重新发送；离开编辑器前下载原文和报告。边界归 [ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-格式与导入)。
 

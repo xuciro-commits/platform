@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"slices"
 	"strings"
+	"time"
 )
 
 // MigrationProgram contains only programs compiled by ADR-0101. The host
@@ -237,6 +240,55 @@ type MigrationPlan struct {
 	To    string         `json:"to"`
 	Scope MigrationScope `json:"scope"`
 	Steps []MigrateStep  `json:"steps"`
+}
+
+const MigrationRunType = "build.migration"
+
+// MigrationRun is the accepted progress record, in the same authority as the
+// customer objects a builder owns. A batch advances its cursor with its rows.
+type MigrationRun struct {
+	Record
+	Plan         MigrationPlan      `json:"plan" type:"json" field:"readonly"`
+	Review       string             `json:"review" field:"readonly" source:"record"`
+	State        string             `json:"state" choices:"pending,running,blocked,complete,cancelling,cancelled" field:"readonly"`
+	Step         int                `json:"step" field:"readonly"`
+	Cursor       string             `json:"cursor,omitempty" field:"readonly" source:"record"`
+	Processed    int                `json:"processed" field:"readonly"`
+	Migrated     int                `json:"migrated" field:"readonly"`
+	Failures     []MigrationFailure `json:"failures,omitempty" field:"readonly"`
+	StartedBy    string             `json:"startedBy" field:"readonly" source:"record"`
+	EvaluationAt time.Time          `json:"evaluationAt" field:"readonly"`
+	SourceShapes map[string]string  `json:"sourceShapes" type:"json" field:"readonly"`
+	TargetShapes map[string]string  `json:"targetShapes" type:"json" field:"readonly"`
+	Targets      []string           `json:"targets" field:"readonly"`
+}
+
+type MigrationFailure struct {
+	Type   string `json:"type" source:"record"`
+	Record string `json:"record" source:"record"`
+	Step   int    `json:"step"`
+	Reason string `json:"reason"`
+}
+
+type MigrationRuntime interface {
+	BeginMigration(Caller, *pb.ChangeRecord, MigrationPlan, string, time.Time, time.Time) (MigrationRun, *kernel.Error)
+	AdvanceMigration(Caller, *pb.ChangeRecord, MigrationRun, time.Time) (MigrationRun, *kernel.Error)
+}
+
+func (c Caller) BeginMigration(r *pb.ChangeRecord, p MigrationPlan, review string, reviewedAt, at time.Time) (MigrationRun, *kernel.Error) {
+	runtime, ok := c.rt.(MigrationRuntime)
+	if !ok || !c.Staging() || c.Replaying {
+		return MigrationRun{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Migration requires a private accepted decision")
+	}
+	return runtime.BeginMigration(c, r, p, review, reviewedAt, at)
+}
+
+func (c Caller) AdvanceMigration(r *pb.ChangeRecord, run MigrationRun, at time.Time) (MigrationRun, *kernel.Error) {
+	runtime, ok := c.rt.(MigrationRuntime)
+	if !ok || !c.Staging() || c.Replaying {
+		return MigrationRun{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Migration requires a private accepted decision")
+	}
+	return runtime.AdvanceMigration(c, r, run, at)
 }
 
 type MigrationScope struct {

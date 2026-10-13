@@ -95,7 +95,7 @@ func canonicalDigest(v any) (string, error) {
 
 func acceptedRowOf(typ, id string, r *row) (acceptedRow, error) {
 	value, err := r.image()
-	return acceptedRow{Type: typ, ID: id, Value: value, History: copyHistory(r.history)}, err
+	return acceptedRow{Type: typ, ID: id, Value: value, History: copyHistory(r.history), Projection: cloneRecordProjection(r.projection)}, err
 }
 
 func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
@@ -650,7 +650,11 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 				image.Type, image.ID, before == image.Before, baseHistory, len(image.History), prefixEqual)
 		}
 		value := reflect.New(et.info.Go).Elem()
-		decoder := json.NewDecoder(bytes.NewReader(image.Value))
+		decode, err := rowDecodeImage(et.info, image.Value, image.Projection, draft.readRelease)
+		if err != nil {
+			return err
+		}
+		decoder := json.NewDecoder(bytes.NewReader(decode))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(value.Addr().Interface()); err != nil {
 			return fmt.Errorf("record batch image: %w", err)
@@ -687,7 +691,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 				rec.Created.By != image.History[0].By || !rec.Created.At.Equal(image.History[0].At)) {
 			return fmt.Errorf("record batch image differs from its decisions")
 		}
-		recovered := &row{value: value, history: copyHistory(image.History)}
+		recovered := &row{value: value, history: copyHistory(image.History), projection: cloneRecordProjection(image.Projection)}
 		recovered.retainOriginal(image.Value)
 		et.rows[rec.ID] = recovered
 		draft.writes[image.Type+"/"+rec.ID] = true
