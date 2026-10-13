@@ -19,6 +19,7 @@ func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after ma
 	release := r.release
 	declared := r.shapes
 	seen := map[string]bool{}
+	convertedSources := map[string]bool{}
 	for {
 		if seen[release] {
 			return nil, nil, fmt.Errorf("retained write migration path contains a cycle")
@@ -41,6 +42,16 @@ func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after ma
 		if selected == nil {
 			current := r.records.types[typ]
 			for _, target := range current.info.Fields {
+				// Split/merge source values are historical fields in this release.
+				// Their declared destinations receive the write; the caller's
+				// original values remain in its retained source projection.
+				if target.ReadOnly && target.AliasOf == "" && convertedSources[target.Name] {
+					if value, exists := before[target.Name]; exists {
+						after[target.Name] = value
+					} else {
+						delete(after, target.Name)
+					}
+				}
 				if string(before[target.Name]) == string(after[target.Name]) {
 					continue
 				}
@@ -98,6 +109,11 @@ func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after ma
 				return nil, nil, err
 			}
 			after = next.Values
+			if step.Kind == "split" || step.Kind == "merge" {
+				for _, field := range next.Retired {
+					convertedSources[field] = true
+				}
+			}
 		}
 		release = selected.Plan.To
 		declared = targets

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -14,31 +15,50 @@ import (
 )
 
 func TestMigrationRetiresActionAndRejectsItsPendingApproval(t *testing.T) {
-	testActionRetirement(t, false, false)
+	testActionRetirement(t, actionRetirementCase{})
 }
 func TestMigrationRedirectsApprovalAfterTargetActivation(t *testing.T) {
-	testActionRetirement(t, true, false)
+	testActionRetirement(t, actionRetirementCase{redirect: true})
 }
 
-func TestMigrationRedirectReauthorizesRequester(t *testing.T) { testActionRetirement(t, true, true) }
+func TestMigrationRedirectReauthorizesRequester(t *testing.T) {
+	testActionRetirement(t, actionRetirementCase{redirect: true, deny: true})
+}
 
-func testActionRetirement(t *testing.T, redirect, deny bool) {
+func TestMigrationRedirectsMultilevelDelegatedApproval(t *testing.T) {
+	testActionRetirement(t, actionRetirementCase{redirect: true, multilevel: true})
+}
+
+type actionRetirementCase struct{ redirect, deny, multilevel bool }
+
+func testActionRetirement(t *testing.T, scenario actionRetirementCase) {
+	redirect, deny := scenario.redirect, scenario.deny
 	compose := func() *Tenant {
+		if scenario.multilevel {
+			return composeTenant(t, "migration-retire-action", []Seat{seatOf("builder", "build:builder"), seatOf("user", "build:user"), seatOf("deputy", "build:user")}, build.New("migration-retire-action"), work.New("migration-retire-action"))
+		}
 		return builderTenant(t, "migration-retire-action", work.New("migration-retire-action"))
 	}
 	tn := compose()
 	entries := []Entry{}
 	failAppend := false
-	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
-		if failAppend {
-			return nil, errors.New("injected migration append failure")
+	attach := func() {
+		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+			if failAppend {
+				return nil, errors.New("injected migration append failure")
+			}
+			entries = append(entries, e)
+			return e.Body, nil
 		}
-		entries = append(entries, e)
-		return e.Body, nil
 	}
+	attach()
 	fields := []map[string]any{{"name": "name", "title": "Name", "type": "text", "sourceType": "user-input"}}
 	states := []map[string]any{{"name": "open", "title": "Open"}, {"name": "pending", "title": "Pending"}, {"name": "done", "title": "Done"}, {"name": "rejected", "title": "Rejected"}}
-	action := map[string]any{"name": "finish", "title": "Finish", "from": []string{"open"}, "to": "done", "roles": []string{build.User}, "approval": map[string]any{"pending": "pending", "rejected": "rejected", "levels": []map[string]any{{"title": "Builder", "role": build.Builder}}}}
+	levels := []map[string]any{{"title": "Builder", "role": build.Builder}}
+	if scenario.multilevel {
+		levels = append(levels, map[string]any{"title": "Final review", "role": build.Builder})
+	}
+	action := map[string]any{"name": "finish", "title": "Finish", "from": []string{"open"}, "to": "done", "roles": []string{build.User}, "approval": map[string]any{"pending": "pending", "rejected": "rejected", "levels": levels}}
 	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "asset", map[string]any{"name": "asset", "title": "Asset", "fields": fields, "states": states, "actions": []any{action}}, txnAt)
 	builder := memberOf(t, tn, "builder")
 	save := func(key string) string {
@@ -65,10 +85,20 @@ func testActionRetirement(t *testing.T, redirect, deny bool) {
 	if refusal != nil || len(requests) != 2 || requests[0].State != "pending" {
 		t.Fatalf("pending approval: %+v %v", requests, refusal)
 	}
+	if scenario.multilevel {
+		for i, request := range requests {
+			decide(t, tn, "builder", work.ID, "work.approval.approve", work.ApprovalType, request.ID, map[string]any{}, txnAt)
+			requests[i], _ = platform.Get[platform.ApprovalRequest](tn.automation(work.ID, false), request.ID)
+			if requests[i].Level != 1 || requests[i].State != "pending" {
+				t.Fatal("the source request did not wait at its second level")
+			}
+		}
+		decide(t, tn, "builder", work.ID, work.SchemaDelegate, work.DelegationType, "D", map[string]any{"to": "deputy", "start": txnAt.UTC().Format(time.DateOnly), "end": txnAt.AddDate(1, 0, 0).UTC().Format(time.DateOnly)}, txnAt)
+	}
 	original := bytes.Clone([]byte(requests[0].Submission))
 	targetActions := []any{}
 	if redirect {
-		newAction := map[string]any{"name": "finishnew", "title": "New finish", "from": []string{"open"}, "to": "done", "roles": []string{build.User}, "approval": map[string]any{"pending": "pending", "rejected": "rejected", "levels": []map[string]any{{"title": "Builder", "role": build.Builder}}}}
+		newAction := map[string]any{"name": "finishnew", "title": "New finish", "from": []string{"open"}, "to": "done", "roles": []string{build.User}, "approval": map[string]any{"pending": "pending", "rejected": "rejected", "levels": levels}}
 		targetActions = append(targetActions, newAction)
 	}
 	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "asset", map[string]any{"actions": targetActions}, txnAt)
@@ -125,7 +155,7 @@ func testActionRetirement(t *testing.T, redirect, deny bool) {
 		t.Fatalf("held business state was not released: %s", got)
 	}
 	for _, request := range requests {
-		task, exists := platform.Get[platform.WorkTask](tn.automation(work.ID, false), request.ID+"#1")
+		task, exists := platform.Get[platform.WorkTask](tn.automation(work.ID, false), fmt.Sprintf("%s#%d", request.ID, request.Level+1))
 		if !exists || task.State != "canceled" {
 			t.Fatal("retirement left an actionable approval task")
 		}
@@ -182,7 +212,45 @@ func testActionRetirement(t *testing.T, redirect, deny bool) {
 			if !exists || newRequest.State != "pending" || newRequest.Action != "build.asset.finishnew" || newRequest.Release != to || newRequest.Requester != old.Requester {
 				t.Fatalf("redirect was not a new fixed target request: %+v", newRequest)
 			}
-			decide(t, tn, "builder", work.ID, "work.approval.approve", work.ApprovalType, newRequest.ID, map[string]any{}, txnAt.Add(5*time.Hour))
+			approver := "builder"
+			if scenario.multilevel {
+				approver = "deputy"
+				if len(newRequest.Levels) != 2 || newRequest.Levels[0].Delegates[approver] != "builder" {
+					t.Fatal("the target request did not capture its declared levels and current delegation")
+				}
+				if got := refuse(t, tn, "user", work.ID, "work.approval.approve", work.ApprovalType, newRequest.ID, map[string]any{}, txnAt); got == "ok" {
+					t.Fatal("the original requester approved the redirected request")
+				}
+				decide(t, tn, approver, work.ID, "work.approval.approve", work.ApprovalType, newRequest.ID, map[string]any{}, txnAt.Add(5*time.Hour))
+				intermediate, _ := platform.Get[platform.ApprovalRequest](tn.automation(work.ID, false), newRequest.ID)
+				if intermediate.Level != 1 || intermediate.State != "pending" || intermediate.Levels[0].DecidedBy["builder"] != approver || intermediate.Submission != newRequest.Submission {
+					t.Fatal("delegated first-level approval lost its actor, fixed input or next level")
+				}
+				restarted := compose()
+				if err := restarted.Replay(entries); err != nil {
+					t.Fatal(err)
+				}
+				tn = restarted
+				attach()
+				last := submission(tn, memberOf(t, tn, approver), work.ID, "work.approval.approve", work.ApprovalType, newRequest.ID, map[string]any{})
+				before, count := snapshot(tn), len(entries)
+				failAppend = true
+				if _, err := tn.Submit(memberOf(t, tn, approver), last, txnAt.Add(5*time.Hour)); err == nil || snapshot(tn) != before || len(entries) != count {
+					t.Fatal("a failed last approval exposed business completion or closed tasks")
+				}
+				failAppend = false
+				first, refusal := tn.Submit(memberOf(t, tn, approver), last, txnAt.Add(5*time.Hour))
+				if refusal != nil {
+					t.Fatal(refusal)
+				}
+				before, count = snapshot(tn), len(entries)
+				again, refusal := tn.Submit(memberOf(t, tn, approver), last, txnAt.Add(6*time.Hour))
+				if refusal != nil || first.GetChangeId() != again.GetChangeId() || snapshot(tn) != before || len(entries) != count {
+					t.Fatal("retry repeated the last approval or its business decision")
+				}
+			} else {
+				decide(t, tn, approver, work.ID, "work.approval.approve", work.ApprovalType, newRequest.ID, map[string]any{}, txnAt.Add(5*time.Hour))
+			}
 		}
 		if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows["A"].value, "state"); got != "done" {
 			t.Fatalf("target approval did not execute: %s", got)

@@ -69,85 +69,95 @@ test("a builder reviews a rename, resumes its data batches and activates the sea
   expect(record.title).toBe("Changed after migration");
 });
 
-test("a waiting flow finishes its retired action under the starting release after migration", async ({ page, builder, operator, browser }) => {
-  test.setTimeout(90_000);
-  const object = await builder.object({ name: slug("evolve"), title: "Evolving visits", fields: [{ name: "note", title: "Note", type: "text", sourceType: "user-input" }], states: [
-    { name: "open", title: "Open" }, { name: "done", title: "Done" }, { name: "rejected", title: "Rejected" },
-  ], actions: [
-    { name: "close", title: "Close", from: ["open"], to: "done" },
-    { name: "reject", title: "Reject", from: ["open"], to: "rejected" },
-  ] });
-  const flowID = fresh("FLOW"), flowName = slug("review");
-  const steps = [
-    { name: "ask", title: "Review visit", kind: "ask", ask: "user", answers: ["yes"], next: "edit" },
-    { name: "edit", kind: "action", act: "edit", inputs: { note: { source: "literal", value: "Old flow finished" } }, next: "close" },
-    { name: "close", kind: "action", act: "close" },
-  ];
-  await builder.decide("build.process.create", { type: "build.process", id: flowID }, { name: flowName, title: "Migration review", object: object.type, when: "open", steps });
-  await builder.decide("build.process.publish", { type: "build.process", id: flowID }, {});
-  const drafts = [{ kind: "object", id: object.id }, { kind: "flow", id: flowID }];
-  const from = await builder.candidate(drafts);
-  await builder.activate(from);
-  const oldID = slug("oldvisit");
-  await operator.decide(`${object.type}.create`, { type: object.type, id: oldID }, { note: "Original note" });
-  const context = await browser.newContext();
-  try {
-    const inbox = await context.newPage();
-    await operator.open(inbox, "/inbox");
-    await expect(inbox.getByRole("listitem").filter({ hasText: oldID })).toBeVisible();
-    const starting = await builder.record("flow.instance", `build.${flowName}:${oldID}`);
-    expect(starting.release).toBe(from);
-
-    await builder.decide("build.object.edit", { type: "build.object", id: object.id }, { fields: [
-      { name: "note", title: "Old note", type: "text", sourceType: "user-input", readOnly: true, aliasOf: "label" },
-      { name: "label", title: "Label", type: "text", sourceType: "user-input" },
-      { name: "enabled", title: "Enabled", type: "boolean", sourceType: "user-input", required: true },
-    ], actions: [{ name: "reject", title: "Reject", from: ["open"], to: "rejected" }] });
-    await builder.decide("build.process.edit", { type: "build.process", id: flowID }, { steps: [
-      steps[0],
-      { name: "edit", kind: "action", act: "edit", inputs: { label: { source: "literal", value: "New flow finished" } }, next: "close" },
-      { name: "close", kind: "action", act: "reject" },
+for (const change of ["rename", "split"] as const) {
+  test(`a waiting flow finishes its retired action after a ${change} migration`, async ({ page, builder, operator, browser }) => {
+    test.setTimeout(90_000);
+    const object = await builder.object({ name: slug("evolve"), title: "Evolving visits", fields: [{ name: "note", title: "Note", type: "text", sourceType: "user-input" }], states: [
+      { name: "open", title: "Open" }, { name: "done", title: "Done" }, { name: "rejected", title: "Rejected" },
+    ], actions: [
+      { name: "close", title: "Close", from: ["open"], to: "done" },
+      { name: "reject", title: "Reject", from: ["open"], to: "rejected" },
     ] });
-    const to = await builder.candidate(drafts);
-    await builder.open(page, "/release-review");
-    await page.getByRole("combobox", { name: "Saved candidate", exact: true }).selectOption(to);
-    const migration = page.getByRole("region", { name: "Data migration", exact: true });
-    await migration.getByRole("combobox", { name: "Migration object", exact: true }).selectOption(object.type);
-    await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(JSON.stringify([
-      { kind: "rename", types: [object.type], batch: 1, fields: [{ from: "note", to: "label" }] },
-      { kind: "default", types: [object.type], batch: 1, fields: [{ to: "enabled", expr: { op: "", kind: "boolean", lit: { value: true } } }] },
-      { kind: "retire-action", types: [object.type], action: `${object.type}.close`, batch: 1 },
-    ]));
-    await migration.getByRole("button", { name: "Review migration", exact: true }).click();
-    await migration.getByRole("button", { name: "Start reviewed migration", exact: true }).click();
-    for (let batch = 0; batch < 3; batch++) {
-      await migration.getByRole("button", { name: "Run next migration batch", exact: true }).click();
-      if (batch < 2) await expect(migration.getByRole("region", { name: "Migration progress", exact: true })).toContainText(`Next step: ${batch + 2} / 3`);
-    }
-    await expect(migration.getByRole("region", { name: "Migration progress", exact: true })).toContainText("complete");
-    await page.getByRole("button", { name: "Activate release", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toContainText(to);
+    const flowID = fresh("FLOW"), flowName = slug("review");
+    const steps = [
+      { name: "ask", title: "Review visit", kind: "ask", ask: "user", answers: ["yes"], next: "edit" },
+      { name: "edit", kind: "action", act: "edit", inputs: { note: { source: "literal", value: "Old flow finished" } }, next: "close" },
+      { name: "close", kind: "action", act: "close" },
+    ];
+    await builder.decide("build.process.create", { type: "build.process", id: flowID }, { name: flowName, title: "Migration review", object: object.type, when: "open", steps });
+    await builder.decide("build.process.publish", { type: "build.process", id: flowID }, {});
+    const drafts = [{ kind: "object", id: object.id }, { kind: "flow", id: flowID }];
+    const from = await builder.candidate(drafts);
+    await builder.activate(from);
+    const oldID = slug("oldvisit");
+    await operator.decide(`${object.type}.create`, { type: object.type, id: oldID }, { note: "Original note" });
+    const context = await browser.newContext();
+    try {
+      const inbox = await context.newPage();
+      await operator.open(inbox, "/inbox");
+      await expect(inbox.getByRole("listitem").filter({ hasText: oldID })).toBeVisible();
+      const starting = await builder.record("flow.instance", `build.${flowName}:${oldID}`);
+      expect(starting.release).toBe(from);
 
-    await inbox.reload();
-    await inbox.getByRole("listitem").filter({ hasText: oldID }).getByRole("button", { name: "yes", exact: true }).click();
-    await expect.poll(async () => (await operator.record(object.type, oldID)).state).toBe("done");
-    const old = await operator.record(object.type, oldID);
-    expect(old.label).toBe("Old flow finished");
-    expect(old.enabled).toBe(true);
-    const ended = await builder.record("flow.instance", `build.${flowName}:${oldID}`);
-    expect(ended.release).toBe(starting.release);
-    expect(ended.dependencies).toBe(starting.dependencies);
-    expect(ended.state).toBe("done");
-    expect((await operator.definitions()).some((d: any) => d.ref.kind === "action" && d.ref.name === `${object.type}.close`)).toBe(false);
+      await builder.decide("build.object.edit", { type: "build.object", id: object.id }, { fields: [
+        { name: "note", title: "Old note", type: "text", sourceType: "user-input", readOnly: true, aliasOf: change === "rename" ? "label" : undefined },
+        { name: "label", title: "Label", type: "text", sourceType: "user-input" },
+        { name: "enabled", title: "Enabled", type: "boolean", sourceType: "user-input", required: true },
+        ...(change === "split" ? [{ name: "detail", title: "Detail", type: "text", sourceType: "user-input" }] : []),
+      ], actions: [{ name: "reject", title: "Reject", from: ["open"], to: "rejected" }] });
+      await builder.decide("build.process.edit", { type: "build.process", id: flowID }, { steps: [
+        steps[0],
+        { name: "edit", kind: "action", act: "edit", inputs: { label: { source: "literal", value: "New flow finished" } }, next: "close" },
+        { name: "close", kind: "action", act: "reject" },
+      ] });
+      const to = await builder.candidate(drafts);
+      await builder.open(page, "/release-review");
+      await page.getByRole("combobox", { name: "Saved candidate", exact: true }).selectOption(to);
+      const migration = page.getByRole("region", { name: "Data migration", exact: true });
+      await migration.getByRole("combobox", { name: "Migration object", exact: true }).selectOption(object.type);
+      const fields = change === "rename"
+        ? [{ from: "note", to: "label" }]
+        : [{ from: "note", to: "label", expr: { kind: "text", ref: "note" } }, { from: "note", to: "detail", expr: { kind: "text", ref: "note" } }];
+      await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(JSON.stringify([
+        { kind: change, types: [object.type], batch: 1, fields },
+        { kind: "default", types: [object.type], batch: 1, fields: [{ to: "enabled", expr: { op: "", kind: "boolean", lit: { value: true } } }] },
+        { kind: "retire-action", types: [object.type], action: `${object.type}.close`, batch: 1 },
+      ]));
+      await migration.getByRole("button", { name: "Review migration", exact: true }).click();
+      await migration.getByRole("button", { name: "Start reviewed migration", exact: true }).click();
+      for (let batch = 0; batch < 3; batch++) {
+        await migration.getByRole("button", { name: "Run next migration batch", exact: true }).click();
+        if (batch < 2) await expect(migration.getByRole("region", { name: "Migration progress", exact: true })).toContainText(`Next step: ${batch + 2} / 3`);
+      }
+      await expect(migration.getByRole("region", { name: "Migration progress", exact: true })).toContainText("complete");
+      await page.getByRole("button", { name: "Activate release", exact: true }).click();
+      await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toContainText(to);
 
-    const newID = slug("newvisit");
-    await operator.decide(`${object.type}.create`, { type: object.type, id: newID }, { label: "New note", enabled: true });
-    await inbox.reload();
-    await inbox.getByRole("listitem").filter({ hasText: newID }).getByRole("button", { name: "yes", exact: true }).click();
-    await expect.poll(async () => (await operator.record(object.type, newID)).state).toBe("rejected");
-    expect((await operator.record(object.type, newID)).label).toBe("New flow finished");
-  } finally { await context.close(); }
-});
+      await inbox.reload();
+      await inbox.getByRole("listitem").filter({ hasText: oldID }).getByRole("button", { name: "yes", exact: true }).click();
+      await expect.poll(async () => (await operator.record(object.type, oldID)).state).toBe("done");
+      const old = await operator.record(object.type, oldID);
+      expect(old.label).toBe("Old flow finished");
+      expect(old.enabled).toBe(true);
+      if (change === "split") {
+        expect(old.note).toBe("Original note");
+        expect(old.detail).toBe("Old flow finished");
+      }
+      const ended = await builder.record("flow.instance", `build.${flowName}:${oldID}`);
+      expect(ended.release).toBe(starting.release);
+      expect(ended.dependencies).toBe(starting.dependencies);
+      expect(ended.state).toBe("done");
+      expect((await operator.definitions()).some((d: any) => d.ref.kind === "action" && d.ref.name === `${object.type}.close`)).toBe(false);
+
+      const newID = slug("newvisit");
+      await operator.decide(`${object.type}.create`, { type: object.type, id: newID }, { label: "New note", enabled: true });
+      await inbox.reload();
+      await inbox.getByRole("listitem").filter({ hasText: newID }).getByRole("button", { name: "yes", exact: true }).click();
+      await expect.poll(async () => (await operator.record(object.type, newID)).state).toBe("rejected");
+      expect((await operator.record(object.type, newID)).label).toBe("New flow finished");
+    } finally { await context.close(); }
+  });
+}
 
 for (const redirect of [false, true]) {
 test(redirect ? "a declared redirect opens and executes a new approval after target activation" : "action retirement rejects the pending request through its owner before activation", async ({ page, builder, operator }) => {
