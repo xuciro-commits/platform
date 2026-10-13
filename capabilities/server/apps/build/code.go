@@ -217,6 +217,14 @@ func (b *Build) OperationDefinition(name string, version int) (platform.Operatio
 	if tb, ok := b.tables[name]; ok && (version == 0 || version == tb.Version) {
 		return tb.Definition(), tb.Version, true
 	}
+	for _, tb := range b.tables {
+		for _, raw := range tb.Versions {
+			prior, ok := wasPublished[Table](raw)
+			if ok && prior.Name == name && prior.Version == version {
+				return prior.Definition(), version, true
+			}
+		}
+	}
 	list, err := b.codeInventory()
 	if err != nil {
 		return platform.Operation{}, 0, false

@@ -356,3 +356,21 @@ func (h hostView) Holders(structure, unit, role string, day platform.Date) []str
 	}
 	return nil
 }
+
+// RuleQuery resolves the immutable query declaration used by rule publication.
+func (h hostView) RuleQuery(app, name string, version int) (platform.NamedQuery, int, bool) {
+	owner := h.t.app(app)
+	if owner == nil {
+		return platform.NamedQuery{}, 0, false
+	}
+	if source, ok := owner.(interface {
+		QueryDefinition(string, int) (platform.NamedQuery, int, bool)
+	}); ok {
+		return source.QueryDefinition(name, version)
+	}
+	if version == 0 {
+		q, ok := h.t.namedQuery(app, name)
+		return q, 0, ok
+	}
+	return platform.NamedQuery{}, 0, false
+}

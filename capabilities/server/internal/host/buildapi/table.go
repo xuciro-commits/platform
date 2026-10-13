@@ -13,17 +13,19 @@ import (
 
 type Table struct {
 	platform.Record
-	Name        string        `json:"name" field:"required,search"`
-	Title       string        `json:"title" field:"required,search"`
-	Description string        `json:"description,omitempty" field:"search"`
-	Inputs      []TableColumn `json:"inputs" title:"Condition columns"`
-	Outputs     []TableColumn `json:"outputs" title:"Result columns"`
+	Name        string                 `json:"name" field:"required,search"`
+	Title       string                 `json:"title" field:"required,search"`
+	Description string                 `json:"description,omitempty" field:"search"`
+	Reads       *platform.RuleReadSpec `json:"reads,omitempty" type:"json" field:"aside"`
+	Inputs      []TableColumn          `json:"inputs" title:"Condition columns"`
+	Outputs     []TableColumn          `json:"outputs" title:"Result columns"`
 	// Rows hold one condition cell per input and one result cell per output.
 	Rows []TableRow `json:"rows"`
 	// Default is the result when no row matches; empty: the call is refused.
 	Default   []string `json:"default,omitempty" title:"Default result"`
 	State     string   `json:"state" field:"readonly"`
 	Version   int      `json:"version,omitempty" field:"readonly"`
+	Versions  []string `json:"versions,omitempty" field:"readonly" type:"json"`
 	Published string   `json:"published,omitempty" field:"readonly" type:"json"`
 }
 
@@ -36,8 +38,9 @@ type TableColumn struct {
 // TableRow is one rule. A condition cell is empty or "*" for any value, or
 // "= v", "!= v", "< v", "<= v", "> v", ">= v", "a..b" (inclusive) or "a|b|c".
 type TableRow struct {
-	When []string `json:"when"`
-	Then []string `json:"then"`
+	Expressions []platform.Expr `json:"expressions,omitempty" type:"json" field:"aside"`
+	When        []string        `json:"when,omitempty"`
+	Then        []string        `json:"then"`
 }
 
 func ValueColumnSchema(cols []TableColumn) platform.ValueSchema {
@@ -52,42 +55,43 @@ func ValueColumnSchema(cols []TableColumn) platform.ValueSchema {
 
 // definition is the table as the native operation it installs as.
 func (tb Table) Definition() platform.Operation {
-	return platform.Operation{Name: tb.Name, Title: tb.Title, Description: tb.Description, Input: ValueColumnSchema(tb.Inputs), Output: ValueColumnSchema(tb.Outputs), Roles: []string{Builder, User},
+	plan, _ := tb.RulePlan()
+	return platform.Operation{Rules: plan, Name: tb.Name, Title: tb.Title, Description: tb.Description, Input: ValueColumnSchema(tb.Inputs), Output: ValueColumnSchema(tb.Outputs), Roles: []string{Builder, User},
 		Binding: platform.OperationBinding{Kind: "native"}, Limits: platform.OperationLimits{TimeoutMillis: 1000, MemoryPages: 1, MaxInputBytes: 64 << 10, MaxOutputBytes: 16 << 10}}
 }
 
 // Decide is the table's rule: the first row whose every condition holds, else
 // the default, else a refusal naming the inputs.
 func (tb Table) Decide(values map[string]any) (map[string]any, error) {
-	result := func(cells []string) (map[string]any, error) {
-		out := map[string]any{}
-		for j, col := range tb.Outputs {
-			v, err := ValueCastCell(cells[j], col.Type)
-			if err != nil {
-				return nil, err
-			}
-			out[col.Name] = v
+	plan, err := tb.RulePlan()
+	if err != nil {
+		return nil, err
+	}
+	facts := platform.ExprContext{Refs: map[string]platform.ExprValue{}}
+	for _, col := range tb.Inputs {
+		v, ok := values[col.Name]
+		if len(tb.Rows) > 0 && len(tb.Rows[0].Expressions) == 0 {
+			v, _ = ValueCastValue(v, col.Type)
 		}
-		return out, nil
-	}
-rows:
-	for _, row := range tb.Rows {
-		for j, col := range tb.Inputs {
-			cond, err := ValueParseCondition(row.When[j], col.Type)
-			if err != nil || !cond.Holds(values[col.Name], col.Type) {
-				continue rows
-			}
+		if ok {
+			facts.Refs["input."+col.Name] = platform.ExprPresent(col.Type, v)
+			facts.Refs[col.Name] = facts.Refs["input."+col.Name]
 		}
-		return result(row.Then)
 	}
-	if len(tb.Default) > 0 {
-		return result(tb.Default)
+	raw, err := plan.Decide(facts, func(string) (platform.EntityInfo, bool) { return platform.EntityInfo{}, false })
+	if err != nil {
+		return nil, err
 	}
-	raw, _ := json.Marshal(values)
-	return nil, fmt.Errorf("no row of %s matches %s", tb.Name, raw)
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+
 }
 
 type ValueCondition struct {
+	expr *platform.Expr
 	op   string // "", =, !=, <, <=, >, >=, range, in
 	a, b any
 	set  []any
@@ -95,6 +99,16 @@ type ValueCondition struct {
 
 func ValueParseCondition(cell, typ string) (ValueCondition, error) {
 	text := strings.TrimSpace(cell)
+	if strings.HasPrefix(text, "{") {
+		var e platform.Expr
+		if err := json.Unmarshal([]byte(text), &e); err != nil {
+			return ValueCondition{}, err
+		}
+		if e.Kind != "boolean" {
+			return ValueCondition{}, fmt.Errorf("condition needs boolean Expr")
+		}
+		return ValueCondition{expr: &e}, nil
+	}
 	if text == "" || text == "*" {
 		return ValueCondition{}, nil
 	}
@@ -103,13 +117,13 @@ func ValueParseCondition(cell, typ string) (ValueCondition, error) {
 			if (op == "<" || op == ">" || op == "<=" || op == ">=") && typ != "number" {
 				return ValueCondition{}, fmt.Errorf("%q compares, which only a number column does", text)
 			}
-			v, err := ValueCastCell(rest, typ)
+			v, err := ruleCellLiteral(rest, typ)
 			return ValueCondition{op: op, a: v}, err
 		}
 	}
 	if lo, hi, ok := strings.Cut(text, ".."); ok && typ == "number" {
-		a, errA := ValueCastCell(lo, typ)
-		b, errB := ValueCastCell(hi, typ)
+		a, errA := ruleCellLiteral(lo, typ)
+		b, errB := ruleCellLiteral(hi, typ)
 		if errA != nil || errB != nil {
 			return ValueCondition{}, fmt.Errorf("%q is not a range of numbers", text)
 		}
@@ -118,7 +132,7 @@ func ValueParseCondition(cell, typ string) (ValueCondition, error) {
 	if strings.Contains(text, "|") {
 		c := ValueCondition{op: "in"}
 		for _, part := range strings.Split(text, "|") {
-			v, err := ValueCastCell(part, typ)
+			v, err := ruleCellLiteral(part, typ)
 			if err != nil {
 				return ValueCondition{}, err
 			}
@@ -126,48 +140,112 @@ func ValueParseCondition(cell, typ string) (ValueCondition, error) {
 		}
 		return c, nil
 	}
-	v, err := ValueCastCell(text, typ)
+	v, err := ruleCellLiteral(text, typ)
 	return ValueCondition{op: "=", a: v}, err
 }
 
-func (c ValueCondition) Holds(value any, typ string) bool {
+// Expr compiles familiar cell sugar to the common language.
+func (c ValueCondition) Expr(name, kind string) platform.Expr {
+	if c.expr != nil {
+		return *c.expr
+	}
 	if c.op == "" {
-		return true
+		return platform.ExprLiteralValue("boolean", true)
 	}
-	v, err := ValueCastValue(value, typ)
-	if err != nil {
-		return false
+	e := platform.Expr{Op: c.op, Kind: "boolean", Args: []platform.Expr{platform.ExprReference(kind, "input."+name)}}
+	if c.op == "in" {
+		e.Args = append(e.Args, platform.Expr{Kind: "set", Lit: &platform.ExprLiteral{Element: kind, Value: platform.Raw(c.set)}})
+	} else {
+		e.Args = append(e.Args, platform.ExprLiteralValue(kind, c.a))
+		if c.op == "range" {
+			e.Args = append(e.Args, platform.ExprLiteralValue(kind, c.b))
+		}
 	}
-	switch c.op {
-	case "=":
-		return v == c.a
-	case "!=":
-		return v != c.a
-	case "in":
-		for _, x := range c.set {
-			if v == x {
-				return true
+	return e
+}
+func (tb Table) RulePlan() (*platform.RuleTablePlan, error) {
+	s := platform.RuleReadSpec{Inputs: map[string]platform.ExprType{}}
+	if tb.Reads != nil {
+		s.Collections = tb.Reads.Collections
+	}
+	for _, col := range tb.Inputs {
+		s.Inputs[col.Name] = platform.ExprType{Kind: col.Type}
+	}
+	p := &platform.RuleTablePlan{Reads: s}
+	result := func(cells []string) (json.RawMessage, error) {
+		if len(cells) != len(tb.Outputs) {
+			return nil, fmt.Errorf("table result columns differ")
+		}
+		out := map[string]any{}
+		for i, col := range tb.Outputs {
+			v, err := ValueCastCell(cells[i], col.Type)
+			if err != nil {
+				return nil, err
+			}
+			out[col.Name] = v
+		}
+		return json.Marshal(out)
+	}
+	for _, row := range tb.Rows {
+		args := row.Expressions
+		if len(args) == 0 {
+			if len(row.When) != len(tb.Inputs) {
+				return nil, fmt.Errorf("table condition columns differ")
+			}
+			for j, col := range tb.Inputs {
+				cond, err := ValueParseCondition(row.When[j], col.Type)
+				if err != nil {
+					return nil, err
+				}
+				args = append(args, cond.Expr(col.Name, col.Type))
 			}
 		}
-		return false
+		if len(args) != len(tb.Inputs) {
+			return nil, fmt.Errorf("table condition columns differ")
+		}
+		e := args[0]
+		if len(args) > 1 {
+			e = platform.Expr{Op: "and", Kind: "boolean", Args: args}
+		}
+		raw, err := result(row.Then)
+		if err != nil {
+			return nil, err
+		}
+		p.Rows = append(p.Rows, platform.RuleTableRow{Condition: e, Result: raw})
 	}
-	n, a := v.(float64), c.a.(float64)
-	switch c.op {
-	case "<":
-		return n < a
-	case "<=":
-		return n <= a
-	case ">":
-		return n > a
-	case ">=":
-		return n >= a
-	case "range":
-		return n >= a && n <= c.b.(float64)
+	if len(tb.Default) > 0 {
+		raw, err := result(tb.Default)
+		if err != nil {
+			return nil, err
+		}
+		p.Default = raw
 	}
-	return false
+	return p, nil
+}
+func (tb *Table) NormalizeRules() error {
+	for i := range tb.Rows {
+		row := &tb.Rows[i]
+		if len(row.Expressions) > 0 {
+			if len(row.When) > 0 {
+				return fmt.Errorf("use one table condition representation")
+			}
+			continue
+		}
+		if len(row.When) != len(tb.Inputs) {
+			return fmt.Errorf("table condition columns differ")
+		}
+		for j, col := range tb.Inputs {
+			cond, err := ValueParseCondition(row.When[j], col.Type)
+			if err != nil {
+				return err
+			}
+			row.Expressions = append(row.Expressions, cond.Expr(col.Name, col.Type))
+		}
+		row.When = nil
+	}
+	return nil
 }
 
-// castCell reads a table cell as its column's type.
 func ValueCastCell(cell, typ string) (any, error) {
 	text := strings.TrimSpace(cell)
 	switch typ {
@@ -208,4 +286,17 @@ func ValueCastValue(value any, typ string) (any, error) {
 		return ValueCastCell(x.String(), typ)
 	}
 	return nil, fmt.Errorf("no value")
+}
+
+func ruleCellLiteral(raw, kind string) (any, error) {
+	if kind != "number" {
+		return ValueCastCell(raw, kind)
+	}
+	text := strings.TrimSpace(raw)
+	e := platform.ExprLiteralValue("number", text)
+	_, err := platform.CompileExpr(e, platform.ExprSchema{})
+	if err != nil {
+		return nil, err
+	}
+	return text, nil
 }

@@ -6,7 +6,6 @@ import (
 	"reflect"
 
 	"strconv"
-	"strings"
 	"time"
 
 	"platformserver/platform"
@@ -25,16 +24,17 @@ type State struct {
 // New multi-record capabilities use Transaction exclusively; historical
 // definitions retain their original bytes and execution during migration.
 type Action struct {
-	Name        string                `json:"name" field:"required" help:"Lower-case letters and digits" example:"return"`
-	Title       string                `json:"title" field:"required" title:"What people call it" example:"Hand it back"`
-	Description string                `json:"description,omitempty" help:"What it does, for people and agents"`
-	From        []string              `json:"from" title:"Taken from" help:"The states it takes a record from"`
-	ToInput     string                `json:"toInput,omitempty" title:"State from input"`
-	To          string                `json:"to,omitempty" title:"Leaves it in" help:"The state it leaves the record in; empty: where it was"`
-	Inputs      []Input               `json:"inputs,omitempty" title:"What people give"`
-	Transaction *platform.BusinessTxn `json:"transaction,omitempty"`
-	Sets        []Set                 `json:"sets,omitempty" title:"What it sets"`
-	Conditions  []Condition           `json:"conditions,omitempty" title:"What it needs"`
+	Name        string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"return"`
+	Title       string                 `json:"title" field:"required" title:"What people call it" example:"Hand it back"`
+	Description string                 `json:"description,omitempty" help:"What it does, for people and agents"`
+	From        []string               `json:"from" title:"Taken from" help:"The states it takes a record from"`
+	ToInput     string                 `json:"toInput,omitempty" title:"State from input"`
+	To          string                 `json:"to,omitempty" title:"Leaves it in" help:"The state it leaves the record in; empty: where it was"`
+	Inputs      []Input                `json:"inputs,omitempty" title:"What people give"`
+	Transaction *platform.BusinessTxn  `json:"transaction,omitempty"`
+	Reads       *platform.RuleReadSpec `json:"reads,omitempty" type:"json" field:"aside"`
+	Sets        []Set                  `json:"sets,omitempty" title:"What it sets"`
+	Conditions  []Condition            `json:"conditions,omitempty" title:"What it needs"`
 	// Roles are who may take it (ADR-0037 18b); empty: every role of the object.
 	Roles    []string        `json:"roles,omitempty" title:"Taken by"`
 	Approval *ActionApproval `json:"approval,omitempty" title:"Approval"`
@@ -107,12 +107,13 @@ type Set = platform.TxnSet
 // Condition is what must hold for the action to be taken, and what a person
 // reads when it does not (Foundry's submission criteria, as data).
 type Condition struct {
-	When       *Condition `json:"when,omitempty" title:"Only when"`
-	Field      string     `json:"field" field:"required" help:"A declared record path through references, or input.<name>"`
-	Operator   string     `json:"operator" field:"required" choices:"=,!=,<,<=,>,>=,empty,not empty"`
-	Value      string     `json:"value,omitempty" help:"What it is compared with; $me is the person taking the action"`
-	ValueField string     `json:"valueField,omitempty" help:"Compare with another declared record path or input; excludes value"`
-	Message    string     `json:"message" field:"required" help:"What a person reads when it does not hold"`
+	Expr       *platform.Expr `json:"expr,omitempty" type:"json" field:"aside"`
+	When       *Condition     `json:"when,omitempty" title:"Only when"`
+	Field      string         `json:"field,omitempty" help:"A declared record path through references, or input.<name>"`
+	Operator   string         `json:"operator,omitempty" choices:"=,!=,<,<=,>,>=,empty,not empty"`
+	Value      string         `json:"value,omitempty" help:"What it is compared with; $me is the person taking the action"`
+	ValueField string         `json:"valueField,omitempty" help:"Compare with another declared record path or input; excludes value"`
+	Message    string         `json:"message" field:"required" help:"What a person reads when it does not hold"`
 }
 
 var ValueInputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string"}
@@ -149,63 +150,37 @@ func ValueConditionValue(kind, raw string) (any, error) {
 // holds compares typed values. An unset or malformed value fails closed; it
 // never falls back to lexical order when a numeric or temporal parse fails.
 func ValueHolds(got any, kind, op, want string) bool {
-	text := ValueTextOf(got)
-	switch op {
-	case "empty":
-		return text == ""
-	case "not empty":
-		return text != ""
+	kind = platform.RuleFieldKind(kind)
+	v := got
+	if kind == "date" {
+		if t, ok := got.(time.Time); ok {
+			v = t.UTC().Format(time.DateOnly)
+		}
 	}
-	if text == "" {
+	e := platform.Expr{Kind: "boolean", Op: op, Args: []platform.Expr{platform.ExprReference(kind, "value")}}
+	if op == "not empty" {
+		e.Op = "not-empty"
+	}
+	if op != "empty" && op != "not empty" {
+		x, err := ValueConditionValue(kind, want)
+		if err != nil {
+			return false
+		}
+		if t, ok := x.(time.Time); ok {
+			if kind == "date" {
+				x = t.Format(time.DateOnly)
+			} else {
+				x = t.Format(time.RFC3339Nano)
+			}
+		}
+		e.Args = append(e.Args, platform.ExprLiteralValue(kind, x))
+	}
+	p, err := platform.CompileExpr(e, platform.ExprSchema{Refs: map[string]platform.ExprType{"value": {Kind: kind}}})
+	if err != nil {
 		return false
 	}
-	a, errA := ValueConditionValue(kind, text)
-	b, errB := ValueConditionValue(kind, want)
-	if errA != nil || errB != nil {
-		return false
-	}
-	cmp := 0
-	switch x := a.(type) {
-	case int64:
-		y := b.(int64)
-		cmp = map[bool]int{true: -1, false: 0}[x < y]
-		if x > y {
-			cmp = 1
-		}
-	case float64:
-		y := b.(float64)
-		cmp = map[bool]int{true: -1, false: 0}[x < y]
-		if x > y {
-			cmp = 1
-		}
-	case time.Time:
-		y := b.(time.Time)
-		cmp = map[bool]int{true: -1, false: 0}[x.Before(y)]
-		if x.After(y) {
-			cmp = 1
-		}
-	case bool:
-		if x != b.(bool) {
-			cmp = 1
-		}
-	case string:
-		cmp = strings.Compare(x, b.(string))
-	}
-	switch op {
-	case "=":
-		return cmp == 0
-	case "!=":
-		return cmp != 0
-	case "<":
-		return cmp < 0
-	case "<=":
-		return cmp <= 0
-	case ">":
-		return cmp > 0
-	case ">=":
-		return cmp >= 0
-	}
-	return false
+	r, err := p.Eval(platform.ExprContext{Refs: map[string]platform.ExprValue{"value": platform.ExprPresent(kind, v)}})
+	return err == nil && string(r.Value.Data) == "true"
 }
 
 // textOf is a value as a condition reads it: money by its amount, a time by its day.

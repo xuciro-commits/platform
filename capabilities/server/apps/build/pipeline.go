@@ -23,6 +23,11 @@ func (b *Build) pipelineEntity() platform.Entity {
 	return platform.Entity{Type: PipelineType, Title: "Pipeline", Plural: "Pipelines", Model: Pipeline{}, Display: "title",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			p := record.(*Pipeline)
+			if !c.Replaying {
+				if err := p.NormalizeFormulaRules(); err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+				}
+			}
 			if p.State == "published" {
 				return b.checkPipeline(c, *p)
 			}
@@ -56,6 +61,11 @@ func (b *Build) publishPipeline(c platform.Caller, record any, _ json.RawMessage
 	p, ok := record.(*Pipeline)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	if !c.Replaying {
+		if err := p.NormalizeFormulaRules(); err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
 	}
 	if err := b.checkPipeline(c, *p); err != nil {
 		return err
@@ -166,7 +176,25 @@ func checkStep(c platform.Caller, s Step) error {
 		if s.To == "" {
 			return fmt.Errorf("needs a target column")
 		}
-		_, err := buildapi.ValueParseFormula(s.Formula)
+		if s.FormulaExpr == nil {
+			_, err := buildapi.ValueParseFormula(s.Formula)
+			return err
+		}
+		schema := platform.ExprSchema{Refs: map[string]platform.ExprType{}}
+		var refs func(platform.Expr)
+		refs = func(e platform.Expr) {
+			if e.Ref != "" {
+				schema.Refs[e.Ref] = platform.ExprType{Kind: e.Kind}
+			}
+			for _, a := range e.Args {
+				refs(a)
+			}
+			if e.In != nil {
+				refs(*e.In)
+			}
+		}
+		refs(*s.FormulaExpr)
+		_, err := platform.CompileExpr(*s.FormulaExpr, schema)
 		return err
 	case "lookup", "join":
 		if s.Dataset == "" || s.Column == "" || s.Match == "" {

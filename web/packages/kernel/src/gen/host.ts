@@ -138,10 +138,8 @@ export type AgentRunRecord = {
 };
 
 export type Aggregate = {
-  window?: AggregateWindowResult;
-  histogram?: HistogramResult;
-  columns: Column[];
-  rows: Record<string, unknown>[];
+  source: string;
+  field?: string[];
 };
 
 export type AggregateQuery = {
@@ -860,6 +858,17 @@ export type Explanation = {
   verdict: Verdict;
 };
 
+export type Expr = {
+  op: string;
+  kind: string;
+  args?: Expr[];
+  lit?: Literal;
+  ref?: string;
+  path?: string[];
+  agg?: Aggregate;
+  in?: Expr;
+};
+
 export type Field = {
   name: string;
   type: string;
@@ -1252,6 +1261,11 @@ export type LinkType = {
   deletePolicy: string;
 };
 
+export type Literal = {
+  value: unknown;
+  element?: string;
+};
+
 export type LiveQueryFrame = {
   sequence: number;
   results: LiveQueryResult[];
@@ -1425,6 +1439,7 @@ export type Notification = {
 };
 
 export type Operation = {
+  rules?: RuleTablePlan;
   name: string;
   title: string;
   description: string;
@@ -2092,6 +2107,8 @@ export type PageValue = {
 };
 
 export type PageVariable = {
+  ruleType?: Type;
+  rule?: Expr;
   writable?: boolean;
   title?: string;
   scope: string;
@@ -2150,6 +2167,13 @@ export type Pin = {
   label?: string;
   anchor: string;
   at: number[];
+};
+
+export type PlatformserverAggregate = {
+  window?: AggregateWindowResult;
+  histogram?: HistogramResult;
+  columns: Column[];
+  rows: Record<string, unknown>[];
 };
 
 export type PolicyRecord = {
@@ -2557,6 +2581,32 @@ export type RolePermissions = {
   role: string;
   holders: number;
   actions: PermissionAction[];
+};
+
+export type RuleCollection = {
+  app: string;
+  query: string;
+  version: number;
+  object: string;
+  of?: string;
+  policy: string;
+};
+
+export type RuleReadSpec = {
+  object?: string;
+  inputs?: Record<string, Type>;
+  collections?: Record<string, RuleCollection>;
+};
+
+export type RuleTablePlan = {
+  reads: RuleReadSpec;
+  rows: RuleTableRow[];
+  default?: unknown;
+};
+
+export type RuleTableRow = {
+  condition: Expr;
+  result: unknown;
 };
 
 export type RunStep = {
@@ -3002,12 +3052,14 @@ export type Table = {
   name: string;
   title: string;
   description?: string;
+  reads?: RuleReadSpec;
   inputs: TableColumn[];
   outputs: TableColumn[];
   rows: TableRow[];
   default?: string[];
   state: string;
   version?: number;
+  versions?: string[];
   published?: string;
 };
 
@@ -3018,7 +3070,8 @@ export type TableColumn = {
 };
 
 export type TableRow = {
-  when: string[];
+  expressions?: Expr[];
+  when?: string[];
   then: string[];
 };
 
@@ -3162,6 +3215,15 @@ export type TransitionInfo = {
   title: string;
   from: string[];
   to: string[];
+};
+
+export type Type = {
+  object?: string;
+  kind: string;
+  fields?: Record<string, Type>;
+  element?: Type;
+  resource?: string;
+  currency?: string;
 };
 
 export type Unit = {

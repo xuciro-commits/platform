@@ -57,7 +57,6 @@ const SchemaConnectionChecked = buildapi.SchemaConnectionChecked
 
 type Connection = buildapi.Connection
 type ConnectionCheck = buildapi.ConnectionCheck
-type formulaParser = buildapi.ValueFormulaParser
 
 const CodeType = buildapi.CodeType
 const BooksEndpoint = buildapi.BooksEndpoint
@@ -148,7 +147,6 @@ type Post = buildapi.Post
 
 var ConnectionKinds = buildapi.ConnectionKinds
 
-type formulaNode = buildapi.ValueFormulaNode
 type JournalPost = buildapi.JournalPost
 type JournalPostLine = buildapi.JournalPostLine
 type OperationRef = buildapi.OperationRef

@@ -33,4 +33,8 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 
 `buildapi.Action` 的 `Sets`、`Creates`、`Posts`、`Journal`、`Reverses` 及 `Object.Numbering` 的记录计数编号冻结为既有能力，不再承载新能力。新增多对象变更只用 `Action.Transaction`；编译拒绝将事务与旧变更字段或旧计数编号混用。最小切片接管 create/update/sequence，复用原生成记录动作的授权、字段与记录校验及宿主命名序列；它不走 `stored` 的相关记录复算，也不走 `numberingOf` 的记录计数。
 
-退出路径：旧定义逐一迁移到事务步骤后，删除对应 `actions.go:stored`、`creates.go`、`posts.go` 和旧编号表达；post/journal 迁移仍需各自 owner 的后续步骤支持，本块不实现。旧 `Published`、日志与定义字节保持原样，既有动作继续读取、运行与历史恢复；迁移完成前保留这些义务，不建立新旧双写路径。赋值源求值由 `setSource` 复用，逐步骤写入沿 `Ledger.ApplyTxnRecord` 调用原 `standard`，不另造授权或记录校验实现。
+退出路径：旧定义逐一迁移到事务步骤后，删除对应 `actions.go:stored`、`creates.go`、`posts.go` 和旧编号表达；post/journal 迁移仍需各自 owner 的后续步骤支持，本块不实现。旧 `Published`、日志与定义字节保持原样，既有动作继续读取、运行与历史恢复；迁移完成前保留这些义务，不建立新旧双写路径。新赋值源由 ADR-0101 的 Expr 接管，`setSource` 仅保留冻结旧步骤/相关创建的输入适配；逐步骤写入沿 `Ledger.ApplyTxnRecord` 调用原 `standard`，不另造授权或记录校验实现。
+
+## 5. 四套规则求值（ADR-0101，已替换）
+
+旧公式 `ValueFormulaNode.Eval`、决策表条件 `ValueCondition.Holds`、动作 `take` 的比较分派及页面 TypeScript `operators` 已删除。旧字符串/单元格/三元组/页面算子图只作编译输入，保存为 Expr；数字稿件的格式化与原参考应用的领域规则不算语言求值器。未使用的前端 `decimalArithmetic` 已删除。冻结旧公式的数值语义在同一引擎内受限保留，新 Expr 不可指定兼容模式；退出条件是既有不可变旧公式不再有运行义务，历史字节始终保留。

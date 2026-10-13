@@ -1,0 +1,467 @@
+[
+  {
+    "name": "exact decimal",
+    "request": {
+      "expr": {
+        "op": "+",
+        "kind": "decimal",
+        "args": [
+          {
+            "kind": "decimal",
+            "lit": {
+              "value": "0.1"
+            }
+          },
+          {
+            "kind": "decimal",
+            "lit": {
+              "value": "0.2"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "value": "0.3"
+  },
+  {
+    "name": "captured clock",
+    "request": {
+      "expr": {
+        "op": "$today",
+        "kind": "date"
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "today": "2026-10-12",
+        "refs": {}
+      }
+    },
+    "value": "2026-10-12"
+  },
+  {
+    "name": "missing comparison",
+    "request": {
+      "expr": {
+        "op": "=",
+        "kind": "boolean",
+        "args": [
+          {
+            "kind": "integer",
+            "ref": "amount"
+          },
+          {
+            "kind": "integer",
+            "lit": {
+              "value": "0"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {
+          "amount": {
+            "kind": "integer"
+          }
+        }
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "value": false,
+    "reason": "missing"
+  },
+  {
+    "name": "withheld operand",
+    "request": {
+      "expr": {
+        "op": "not",
+        "kind": "boolean",
+        "args": [
+          {
+            "kind": "boolean",
+            "ref": "secret"
+          }
+        ]
+      },
+      "schema": {
+        "refs": {
+          "secret": {
+            "kind": "boolean"
+          }
+        }
+      },
+      "context": {
+        "refs": {
+          "secret": {
+            "kind": "boolean",
+            "status": "withheld"
+          }
+        }
+      }
+    },
+    "error": "withheld"
+  },
+  {
+    "name": "short circuit",
+    "request": {
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "kind": "boolean",
+            "lit": {
+              "value": false
+            }
+          },
+          {
+            "kind": "boolean",
+            "ref": "secret"
+          }
+        ]
+      },
+      "schema": {
+        "refs": {
+          "secret": {
+            "kind": "boolean"
+          }
+        }
+      },
+      "context": {
+        "refs": {
+          "secret": {
+            "kind": "boolean",
+            "status": "withheld"
+          }
+        }
+      }
+    },
+    "value": false
+  },
+  {
+    "name": "zero division",
+    "request": {
+      "expr": {
+        "op": "/",
+        "kind": "decimal",
+        "args": [
+          {
+            "kind": "decimal",
+            "lit": {
+              "value": "1"
+            }
+          },
+          {
+            "kind": "decimal",
+            "lit": {
+              "value": "0"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "error": "division-zero"
+  },
+  {
+    "name": "ordered visible set",
+    "request": {
+      "expr": {
+        "op": "all",
+        "kind": "boolean",
+        "agg": {
+          "source": "capabilities"
+        },
+        "in": {
+          "kind": "boolean",
+          "ref": "item.certified"
+        }
+      },
+      "schema": {
+        "refs": {},
+        "sets": {
+          "capabilities": {
+            "element": {
+              "kind": "reference",
+              "fields": {
+                "certified": {
+                  "kind": "boolean"
+                }
+              }
+            },
+            "policy": "visible"
+          }
+        }
+      },
+      "context": {
+        "refs": {},
+        "sets": {
+          "capabilities": {
+            "complete": true,
+            "items": [
+              {
+                "id": "B",
+                "fields": {
+                  "certified": {
+                    "kind": "boolean",
+                    "status": "value",
+                    "value": true
+                  }
+                }
+              },
+              {
+                "id": "A",
+                "fields": {
+                  "certified": {
+                    "kind": "boolean",
+                    "status": "value",
+                    "value": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "value": true,
+    "reason": "scope"
+  },
+  {
+    "name": "partial window",
+    "request": {
+      "expr": {
+        "op": "count",
+        "kind": "integer",
+        "agg": {
+          "source": "capabilities"
+        }
+      },
+      "schema": {
+        "refs": {},
+        "sets": {
+          "capabilities": {
+            "element": {
+              "kind": "reference"
+            },
+            "policy": "visible"
+          }
+        }
+      },
+      "context": {
+        "refs": {},
+        "sets": {
+          "capabilities": {
+            "complete": false,
+            "items": []
+          }
+        }
+      }
+    },
+    "error": "incomplete"
+  },
+  {
+    "name": "declared path",
+    "request": {
+      "expr": {
+        "op": "path",
+        "kind": "text",
+        "args": [
+          {
+            "kind": "reference",
+            "ref": "supplier"
+          }
+        ],
+        "path": [
+          "country"
+        ]
+      },
+      "schema": {
+        "refs": {
+          "supplier": {
+            "kind": "reference",
+            "fields": {
+              "country": {
+                "kind": "text"
+              }
+            }
+          }
+        }
+      },
+      "context": {
+        "refs": {
+          "supplier.country": {
+            "kind": "text",
+            "status": "value",
+            "value": "CN"
+          }
+        }
+      }
+    },
+    "value": "CN"
+  },
+  {
+    "name": "integer decimal zero digits",
+    "request": {
+      "expr": {
+        "op": "parse-decimal",
+        "kind": "decimal",
+        "args": [
+          {
+            "kind": "text",
+            "lit": {
+              "value": "100"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "value": "100"
+  },
+  {
+    "name": "small exact decimal",
+    "request": {
+      "expr": {
+        "op": "parse-decimal",
+        "kind": "decimal",
+        "args": [
+          {
+            "kind": "text",
+            "lit": {
+              "value": "0.0000000000000000001"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "value": "0.0000000000000000001"
+  },
+  {
+    "name": "declared currency promotion",
+    "request": {
+      "expr": {
+        "op": "+",
+        "kind": "money",
+        "args": [
+          {
+            "kind": "money",
+            "lit": {
+              "value": {
+                "amount": "100",
+                "currency": "USD"
+              }
+            }
+          },
+          {
+            "kind": "integer",
+            "lit": {
+              "value": "2"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "value": {
+      "amount": "102",
+      "currency": "USD"
+    }
+  },
+  {
+    "name": "currency mismatch",
+    "request": {
+      "expr": {
+        "op": "=",
+        "kind": "boolean",
+        "args": [
+          {
+            "kind": "money",
+            "lit": {
+              "value": {
+                "amount": "100",
+                "currency": "USD"
+              }
+            }
+          },
+          {
+            "kind": "money",
+            "lit": {
+              "value": {
+                "amount": "100",
+                "currency": "CNY"
+              }
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "error": "currency"
+  },
+  {
+    "name": "wide integer",
+    "request": {
+      "expr": {
+        "op": "+",
+        "kind": "integer",
+        "args": [
+          {
+            "kind": "integer",
+            "lit": {
+              "value": "9007199254740993"
+            }
+          },
+          {
+            "kind": "integer",
+            "lit": {
+              "value": "1"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "value": "9007199254740994"
+  }
+]

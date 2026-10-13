@@ -287,6 +287,7 @@ type OperationLimits struct {
 	DataInputBytes int `json:"dataInputBytes,omitempty"`
 }
 type Operation struct {
+	Rules       *RuleTablePlan   `json:"rules,omitempty"`
 	Name        string           `json:"name"`
 	Title       string           `json:"title"`
 	Description string           `json:"description"`

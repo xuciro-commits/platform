@@ -1,3 +1,4 @@
+import {cellRuleText} from "../editor/rule-text";
 import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
@@ -9,7 +10,7 @@ import { Button, Input, PageHeader, Panel, Select, Tag, Textarea, t, useUnsavedC
 // Decision tables (ADR-0062): condition columns → result columns, first match
 // wins. The grid is the editor; publishing installs the table as a native
 // operation that processes, pages and the API call like any other.
-type Draft = Api.Table;
+type Draft = Omit<Api.Table,"rows">&{rows:(Omit<Api.TableRow,"when">&{when:string[]})[]};
 const empty = (): Draft => ({ id: "", revision: 0, created: { at: "" } as Api.Stamp, changed: { at: "" } as Api.Stamp, name: "", title: "", description: "", inputs: [{ name: "input", type: "text" }], outputs: [{ name: "result", type: "text" }], rows: [{ when: [""], then: [""] }], default: [], state: "draft" });
 const types = ["text", "number", "boolean"];
 const fieldClass = "grid min-w-0 gap-1 text-xs";
@@ -32,7 +33,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
  const [createID]=useState(()=>crypto.randomUUID());
  const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
-  const load = (record: Draft) => { setDraft({ ...empty(), ...record, default: record.default ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
+  const load = (record: Api.Table) => { setDraft({ ...empty(), ...record, rows:record.rows.map(r=>({...r,when:r.when??r.expressions?.map(cellRuleText)??[]})), default: record.default ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); }, busy);
   useEffect(() => { const record = query.data?.record; if (record && !dirty && !busy && loaded.current !== `${record.id}:${record.revision}`) load(record); }, [query.data, dirty, busy]);
   const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
@@ -40,7 +41,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
   const save = async (): Promise<{ id: string; revision: number } | undefined> => {
     const target = draft.id || createID, expected = baseRevision.current;
     const { name, title, description, inputs, outputs, rows } = draft;
-    const payload = { name, title, description: description ?? "", inputs, outputs, rows, default: draft.default?.some((c) => c.trim() !== "") ? draft.default : [] };
+    const payload = { name, title, rows:rows.map(r=>r.expressions?.length?{expressions:r.expressions,then:r.then}:{when:r.when,then:r.then}), description: description ?? "", inputs, outputs, default: draft.default?.some((c) => c.trim() !== "") ? draft.default : [] };
     if (!await decide(`build.table.${draft.id ? "edit" : "create"}`, { type: "build.table", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
     baseRevision.current = expected + 1; loaded.current = `${target}:${expected + 1}`;
     setDraft((d) => ({ ...d, id: target, revision: expected + 1 })); markSaved(); setDirty(false);
@@ -54,17 +55,17 @@ export function DecisionTableEditor({ id }: { id: string }) {
     if (await decide("build.table.publish", { type: "build.table", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) { const result = await query.refetch(); if (result.data?.record) load(result.data.record); }
   };
   // Column edits keep every row the same width.
-  const setColumn = (side: "inputs" | "outputs", i: number, change: Partial<Api.TableColumn>) => patch({ [side]: draft[side].map((c, j) => j === i ? { ...c, ...change } : c) } as Partial<Draft>);
+  const setColumn = (side: "inputs" | "outputs", i: number, change: Partial<Api.TableColumn>) => patch({ ...(side==="inputs"?{rows:draft.rows.map(r=>({...r,expressions:undefined}))}:{}),[side]: draft[side].map((c, j) => j === i ? { ...c, ...change } : c) } as Partial<Draft>);
   const addColumn = (side: "inputs" | "outputs") => {
     const key = side === "inputs" ? "when" : "then";
-    patch({ [side]: [...draft[side], { name: `${side === "inputs" ? "input" : "result"}${draft[side].length + 1}`, type: "text" }], rows: draft.rows.map((r) => ({ ...r, [key]: [...r[key], ""] })), ...(side === "outputs" && draft.default?.length ? { default: [...draft.default, ""] } : {}) } as Partial<Draft>);
+    patch({ [side]: [...draft[side], { name: `${side === "inputs" ? "input" : "result"}${draft[side].length + 1}`, type: "text" }], rows: draft.rows.map((r) => ({ ...r, ...(side==="inputs"?{expressions:undefined}:{}), [key]: [...r[key], ""] })), ...(side === "outputs" && draft.default?.length ? { default: [...draft.default, ""] } : {}) } as Partial<Draft>);
   };
   const removeColumn = (side: "inputs" | "outputs", i: number) => {
     if (draft[side].length <= 1) return;
     const key = side === "inputs" ? "when" : "then";
-    patch({ [side]: draft[side].filter((_, j) => j !== i), rows: draft.rows.map((r) => ({ ...r, [key]: r[key].filter((_, j) => j !== i) })), ...(side === "outputs" ? { default: (draft.default ?? []).filter((_, j) => j !== i) } : {}) } as Partial<Draft>);
+    patch({ [side]: draft[side].filter((_, j) => j !== i), rows: draft.rows.map((r) => ({ ...r, ...(side==="inputs"?{expressions:undefined}:{}), [key]: r[key].filter((_, j) => j !== i) })), ...(side === "outputs" ? { default: (draft.default ?? []).filter((_, j) => j !== i) } : {}) } as Partial<Draft>);
   };
-  const setCell = (row: number, key: "when" | "then", i: number, value: string) => patch({ rows: draft.rows.map((r, j) => j === row ? { ...r, [key]: r[key].map((c, k) => k === i ? value : c) } : r) });
+  const setCell = (row: number, key: "when" | "then", i: number, value: string) => patch({ rows: draft.rows.map((r, j) => j === row ? { ...r, ...(key==="when"?{expressions:undefined}:{}),[key]: r[key].map((c, k) => k === i ? value : c) } : r) });
   const moveRow = (row: number, by: number) => { const to = row + by; if (to < 0 || to >= draft.rows.length) return; const rows = [...draft.rows]; const a = rows[row]!, b = rows[to]!; rows[row] = b; rows[to] = a; patch({ rows }); };
   const defaults = draft.default?.length === draft.outputs.length ? draft.default : draft.outputs.map(() => "");
   if (role("build") !== "builder") return <PageHeader title={t("Decision tables")} description={t("Only a builder can edit decision tables.")} />;

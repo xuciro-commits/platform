@@ -102,7 +102,7 @@ export class PageSessionStore {
   private sourceRevision?: number;
   private sourceScope?: string;
   private disposed = false;
-  constructor(source: RecordSource, plan: SelectionPlan) { this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.plan = plan; }
+  constructor(source: RecordSource, plan: SelectionPlan) { const identity=source.ruleIdentity;this.property.clock={me:identity?.me,now:this.ruleClock,today:new Intl.DateTimeFormat("en-CA",{timeZone:identity?.timezone??"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(this.ruleClock))};this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.plan = plan; }
   activate() { this.disposed = false; }
   snapshot = () => this.state;
   snapshotScope = () => this.sourceScope;
@@ -167,7 +167,7 @@ export class PageSessionStore {
     if (!this.readAdapter) {
       const session = this;
       this.readAdapter = {
-        entity: (type) => session.source.entity(type), list: (type, query) => session.source.list(type, query),
+        get ruleIdentity(){return session.source.ruleIdentity;},entity: (type) => session.source.entity(type), list: (type, query) => session.source.list(type, query),
         get: (type, id) => session.readReference(type, id),
         watchList: (type, query, changed) => session.source.watchList?.(type, query, changed) ?? (() => {}),
         watchRecord: (type, id, changed) => session.watchReference(type, id, changed),
@@ -209,7 +209,34 @@ export class PageSessionStore {
     return promise;
   }
   private cacheView(key:string,view:RecordView){if(!this.viewCache.has(key)&&this.viewCache.size>=256)this.viewCache.delete(this.viewCache.keys().next().value!);this.viewCache.set(key,view);}
-  property:PropertyReader=(reference,field,type)=>{const descriptor=this.source.entity(reference.object)?.fields.find((f)=>f.name===field),view=this.viewCache.get(JSON.stringify([reference.object,reference.id]));if(!descriptor||!view)return {status:"error",code:"Property value is unavailable."};if(view.valueErrors?.[field])return {status:"error",code:view.valueErrors[field]!};if(!view.values||!Object.hasOwn(view.values,field))return {status:"empty"};const value=view.values[field];if(type==="decimal"?!isDecimal(value):typeof value!==type)return {status:"error",code:"Property value type mismatch"};return {status:"value",value:value as import("./decimal").ScalarValue};};
+  private ruleClock=new Date().toISOString();
+  private ruleWatches=new Map<string,()=>void>();
+ private rulePending=new Set<string>();
+  private ruleFailures=new Set<string>();
+  property:PropertyReader=Object.assign((reference:RecordReference,field:string,type:string):VariableResult=>{
+    const path=field.split(".");if(path.length>16||path.some(p=>!p))return {status:"error",code:"Invalid rule path"};
+    let current=reference;
+    for(let i=0;i<path.length;i++){
+      const key=JSON.stringify([current.object,current.id]),descriptor=this.source.entity(current.object)?.fields.find(f=>f.name===path[i]),view=this.viewCache.get(key);
+      if(!descriptor)return {status:"error",code:"Property value is unavailable."};
+      if(!view){
+        if(this.ruleFailures.has(key))return {status:"error",code:"Property read failed"};
+        if(!this.rulePending.has(key)){const ruleEpoch=this.version;this.rulePending.add(key);if(!this.ruleWatches.has(key)){const original={...current};this.ruleWatches.set(key,this.watchReference(original.object,original.id,()=>{this.ruleFailures.delete(key);this.publish({scalars:{...this.state.scalars}})}));}void this.readReference(current.object,current.id).then(()=>{if(this.disposed||ruleEpoch!==this.version)return;this.rulePending.delete(key);this.publish({scalars:{...this.state.scalars}})},()=>{if(this.disposed||ruleEpoch!==this.version)return;this.rulePending.delete(key);this.ruleFailures.add(key);this.publish({scalars:{...this.state.scalars}})});}
+        return {status:"pending"};
+      }
+      const name=path[i]!;if(view.valueErrors?.[name])return {status:"error",code:view.valueErrors[name]!};
+      if(!view.values||!Object.hasOwn(view.values,name))return {status:"empty"};
+      const value=view.values[name];
+      if(i<path.length-1){const id=view.record[name];if(descriptor.type!=="reference"||!descriptor.ref||typeof id!=="string"||!id)return {status:"error",code:"Rule reference is unavailable"};current={object:descriptor.ref,id};continue;}
+      if(["date","datetime","choice","reference","money"].includes(type))return {status:"value",value:view.values[name] as ScalarValue};
+ const kind=type==="text"||type==="choice"||type==="reference"?"string":type;
+      if(["integer","decimal","number"].includes(kind)&&isDecimal(value))return {status:"value",value};
+      if(kind==="decimal"?!isDecimal(value):typeof value!==kind)return {status:"error",code:"Property value type mismatch"};
+      return {status:"value",value:value as ScalarValue};
+    }
+    return {status:"error",code:"Property value is unavailable."};
+  },{clock:{now:this.ruleClock,today:this.ruleClock.slice(0,10)}});
+
   selected(key: string): EntityRecord | undefined { return this.recordCache.get(key); }
   /** Binding retirement changes even when the next original record has the same ID. */
   recordBindingEpoch(key:string):number {return this.recordLeases.get(key)??0;}
@@ -343,9 +370,10 @@ export class PageSessionStore {
     this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.version++;
     for(const child of this.childSessions.values())child.session.updateSource(this.readSource());
     this.aggregates.clear();
-    this.queries.clear();this.queryData.clear();this.interfaceData.clear(); this.reads.clear();this.viewCache.clear();
+    this.queries.clear();this.queryData.clear();this.interfaceData.clear(); this.reads.clear();this.viewCache.clear();this.rulePending.clear();this.ruleFailures.clear();for(const stop of this.ruleWatches.values())stop();this.ruleWatches.clear();
     this.publish({ aggregates:{}, queries: Object.fromEntries(Object.keys(this.state.queries).map((key) => [key, { status: "empty" }])) });
     if (changedScope) {
+      const identity=source.ruleIdentity;this.ruleClock=new Date().toISOString();this.property.clock={me:identity?.me,now:this.ruleClock,today:new Intl.DateTimeFormat("en-CA",{timeZone:identity?.timezone??"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(this.ruleClock))};
       this.externalMembers.clear();this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear(); this.querySignatures.clear();
       this.publish({ aggregates:{}, views:{}, scalars: {}, items: {}, filters: {}, records: this.clear([...this.plan.objects.keys(),...this.plan.interfaces?.keys()??[]]) });
       return;
@@ -448,7 +476,7 @@ export class PageSessionStore {
   dispose() {
     for(const child of this.childSessions.values())child.session.dispose();this.childSessions.clear();
     this.aggregates.clear();
-    this.disposed = true;this.selectionSetCache.clear();for(const [key,epoch] of this.selectionSetEpoch)this.selectionSetEpoch.set(key,epoch+1);this.externalMembers.clear(); this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear();this.queryData.clear();this.interfaceData.clear(); this.recordCache.clear();this.viewCache.clear();this.selectionQueries.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
+    this.disposed = true;this.selectionSetCache.clear();for(const [key,epoch] of this.selectionSetEpoch)this.selectionSetEpoch.set(key,epoch+1);this.externalMembers.clear(); this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear();this.queryData.clear();this.interfaceData.clear(); this.recordCache.clear();this.viewCache.clear();this.rulePending.clear();this.ruleFailures.clear();for(const stop of this.ruleWatches.values())stop();this.ruleWatches.clear();this.selectionQueries.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
     for (const [key, epoch] of this.recordEpoch) this.recordEpoch.set(key, epoch + 1);
     for(const [key,epoch] of this.recordLeases)this.recordLeases.set(key,epoch+1);
     this.state = { aggregates:{}, views:{}, scalars: {}, items: {}, records: {},recordSets:{}, filters: {}, queries: {} };

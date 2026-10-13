@@ -87,7 +87,16 @@ func New(tenant string) *Build {
 func (b *Build) objectEntity() platform.Entity {
 	return platform.Entity{Type: ObjectType, Title: "Object", Plural: "Objects", Model: Object{}, Display: "title",
 		Description: "An object this organisation defines itself: its name, what people call it and its fields. Publishing it installs it, and records of it are kept like any other app's.",
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"},
+		Validate: func(c platform.Caller, record any) *kernel.Error {
+			if c.Replaying {
+				return nil
+			}
+			if err := b.normalizeObjectRules(record.(*Object)); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			return nil
+		},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
 			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being defined; nothing is installed yet."},
 				{Name: "published", Title: "Published", Tone: "success", Description: "Installed in this tenant: people work with its records."}},
@@ -98,6 +107,11 @@ func (b *Build) objectEntity() platform.Entity {
 					object, ok := record.(*Object)
 					if !ok {
 						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+					}
+					if !c.Replaying {
+						if err := b.normalizeObjectRules(object); err != nil {
+							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+						}
 					}
 					if c.Staging() {
 						if err := b.Check(*object, object.ID); err != nil {
@@ -211,7 +225,7 @@ func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Er
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
 func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish}
+	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish}
 }
 
 // publicationImage reads and verifies the already committed record image
@@ -268,6 +282,13 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaTablePublish {
+		tb, err := tableImage(image)
+		if err != nil {
+			return err
+		}
+		return b.host.ValidateInstallOperation(tb.Definition())
+	}
 	if schema == SchemaAgentPublish {
 		var record Agent
 		if err := json.Unmarshal(image, &record); err != nil {
@@ -351,6 +372,18 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 // Installation reconstructs the runtime registry from the saved published
 // image, not by running the publish transition or making another journal entry.
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaTablePublish {
+		tb, err := tableImage(image)
+		if err != nil {
+			return err
+		}
+		var record Table
+		if err := json.Unmarshal(image, &record); err != nil {
+			return err
+		}
+		tb.Versions = record.Versions
+		return b.installTable(platform.Caller{Replaying: true}, tb)
+	}
 	if schema == SchemaAgentPublish {
 		var record Agent
 		if err := json.Unmarshal(image, &record); err != nil {
@@ -654,6 +687,9 @@ func (b *Build) Check(o Object, id string) error {
 		return err
 	}
 	if err := checkFields(o.Fields, b.fieldKnown); err != nil {
+		return err
+	}
+	if err := b.checkObjectRules(o); err != nil {
 		return err
 	}
 	if err := checkFormulas(o.Fields); err != nil {
@@ -1129,7 +1165,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		if f.Search {
 			marks = append(marks, "search")
 		}
-		if f.Formula != "" {
+		if f.Formula != "" || f.FormulaExpr != nil {
 			marks = append(marks, "readonly")
 		}
 		if len(marks) > 0 {
@@ -1147,10 +1183,23 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		fieldType := goType(f.Type)
 		// Optional scalar values need a nil state. Otherwise an omitted number
 		// or boolean is indistinguishable from an explicitly supplied zero.
-		if !f.Required && (f.Type == "integer" || f.Type == "decimal" || f.Type == "boolean" || f.Type == "datetime" || f.Type == "money") {
+		if (!f.Required || f.FormulaExpr != nil) && (f.Type == "integer" || f.Type == "decimal" || f.Type == "boolean" || f.Type == "datetime" || f.Type == "money") {
 			fieldType = reflect.PointerTo(fieldType)
 		}
 		fields = append(fields, reflect.StructField{Name: goName(f.Name), Type: fieldType, Tag: reflect.StructTag(tag)})
+	}
+	var derived []platform.Derivation
+	for _, f := range o.Fields {
+		if f.FormulaExpr != nil {
+			name := "rulesources" + f.Name
+			fields = append(fields, reflect.StructField{Name: "RuleSources" + goName(f.Name), Type: reflect.TypeFor[[]string](), Tag: reflect.StructTag(fmt.Sprintf(`json:"%s,omitempty" type:"json" field:"readonly,aside"`, name))})
+			derived = append(derived, platform.Derivation{From: name, Fields: []string{f.Name}})
+		}
+	}
+	withheld := ""
+	if len(derived) > 0 {
+		withheld = "rulewithheld"
+		fields = append(fields, reflect.StructField{Name: "RuleWithheld", Type: reflect.TypeFor[bool](), Tag: reflect.StructTag(`json:"rulewithheld,omitempty" field:"readonly,aside"`)})
 	}
 	if len(o.States) > 0 { // where a record stands, which only its actions move (ADR-0037 D2)
 		names := make([]string, 0, len(o.States))
@@ -1169,7 +1218,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: buildapi.TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Compute: computeOf(o), Validate: validateOf(o, model), ValidateAt: numberingOf(o, model)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Derived: derived, Withheld: withheld, ComputeAt: computeRulesOf(o, lookup), Validate: validateOf(o, model), ValidateAt: numberingOf(o, model)}
 }
 
 // page is the list and detail page a defined object comes with: the same

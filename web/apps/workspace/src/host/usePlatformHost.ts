@@ -100,6 +100,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     if (!me) return undefined;
     return {
       scope: JSON.stringify([me, entities, actions, definitions]),
+ ruleIdentity:{me:me.principalId,timezone:me.profile.timezone??me.account.effective.timezone},
       entity: (type) => entities.find((e) => e.type === type),
       list: (type, q) => client.records<RecordPageData>(type, q),
       interfaceList: (name,q) => client.get<InterfaceRecordPageData>(client.interfaceRecordsPath(name,q)),

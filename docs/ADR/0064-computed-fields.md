@@ -1,6 +1,6 @@
 # ADR-0064 Computed fields (W3 · B1)
 
-Status: accepted · 2026-10-06 · implements ADR-0057 block B (first slice)
+Status: formula grammar and evaluation superseded by [ADR-0101](0101-one-rule-language.md); computed fields and read-only storage remain in force. The decision below describes frozen legacy publication semantics.
 
 ## Decision
 

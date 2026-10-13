@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Rule reason": "规则原因",
+ "Evaluated caller-visible collection": "仅求值调用者可见集合",
+ "Rule comparison input is missing": "规则比较的输入缺失",
   "After an explicit revision refusal, review the current application before retrying. Confirmed pages remain; the imported header replaces the current header only when one was reviewed.": "修订被明确拒绝后，请先审查当前应用再重试。已确认的页面保留；只有已审查的导入页头才替换当前页头。",
   "Review current application and retry membership": "审查当前应用并重试归属",
   "Project ownership is unavailable": "无法读取项目归属",

@@ -6,7 +6,7 @@ import { stateInputValid, ruleInputValid, assignmentInputFits } from "./process-
 import type { Api } from "@platform/kernel";
 import { t, type EntityInfo } from "@platform/ui";
 
-export type Field = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; formula?: string; when?: string; ref?: string; inverse?: string; read?: string[]; write?: string[] };
+export type Field = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; formula?: string; formulaExpr?:Api.Expr; when?: string; ref?: string; inverse?: string; read?: string[]; write?: string[] };
 export type State = { name: string; title: string; tone?: string; description?: string };
 export type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean;ref?:string;minLength?:number;constraints?:Api.InputConstraints;range?:Api.DateRange;group?:string };
 /** Preview the same complete input contract in both object and action workbenches. */
@@ -19,8 +19,8 @@ export function actionInputFields(inputs: Input_[]): Api.Field[] {
     choices: input.type === "choice" ? (input.choices ?? "").split(",").map(value => value.trim()).filter(Boolean) : undefined,
   }));
 }
-export type Set_ = { field: string; from: string };
-export type Condition = { field: string; operator: string; value?: string; valueField?: string; message: string;when?:Condition };
+export type Set_ = { field: string; from: string;expr?:Api.Expr };
+export type Condition = {expr?:Api.Expr; field: string; operator: string; value?: string; valueField?: string; message: string;when?:Condition };
 export type ApproverLevel = { title: string; role: string; all?: boolean };
 export type Approval = { pending: string; rejected?: string; levels: ApproverLevel[] };
 export type Create_ = { object: string; via: string; sets?: Set_[] };
@@ -102,6 +102,7 @@ export function actionIssues(action: Action, process: Process, parent: string, t
   }
   const subjects = conditionSubjects(process, action, parent, entities);
   for (const condition of (action.conditions??[]).flatMap(c=>[c,...c.when?[c.when]:[]])) {
+    if(condition.expr)continue;
     const field = subjects.find((field) => field.value === condition.field), kind = field?.type;
     if((action.conditions??[]).some(c=>c.when?.when))issues.push(t("Condition guards support one level."));
     if ((action.conditions??[]).includes(condition)&&!condition.message.trim()) issues.push(t("Write the message people see when a rule fails."));

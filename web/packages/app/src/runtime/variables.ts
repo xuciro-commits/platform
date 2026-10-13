@@ -1,4 +1,5 @@
-import {isNumber,isStringSet,isDecimal,parseDecimal,decimalDraft,compareDecimal,decimalArithmetic,type ScalarValue} from "./decimal";
+import {checkRule,evaluateRule,lowerPageRule,pageRuleKind,pageRuleFits,pageRuleSchema,ruleDependencies,type RuleContext,type RuleValue} from "./rule-engine";
+import {isNumber,isStringSet,isDecimal,parseDecimal,decimalDraft,type ScalarValue} from "./decimal";
 import type { Api, pageUIManifest } from "@platform/kernel";
 import type { QueryWindow, RecordReference } from "./Session";
 
@@ -6,9 +7,9 @@ type Contract = typeof pageUIManifest.runtime;
 type Variables = Record<string, Api.PageVariable>;
 type Scalar = ScalarValue;
 export type VariableIssue = { variable: string; code: string };
-export type PropertyReader=(reference:RecordReference,field:string,type:string)=>VariableResult;
+export type PropertyReader=((reference:RecordReference,field:string,type:string)=>VariableResult)&{clock?:{me?:string;now:string;today:string}};
 export type ResourceValue = import("./collection-input").CollectionInput | import("@platform/ui").StatisticsValue | {kind:"record-set";object:string;records:RecordReference[]} | { kind: "record"; reference: RecordReference } | { kind: "filter"; object: string; fields: Record<string, unknown> } | { kind: "object-set"; window: QueryWindow };
-export type VariableResult = { status: "value"; value: Scalar | ResourceValue; draft?:string } | { status: "empty"; value?: ResourceValue } | { status: "pending" } | { status: "error"; code: string; draft?:string };
+export type VariableResult = { status: "value"; value: Scalar | ResourceValue; draft?:string;reasons?:import("./rule-engine").RuleIssue[] } | { status: "empty"; value?: ResourceValue } | { status: "pending" } | { status: "error"; code: string; draft?:string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 const bytes = (value: string) => new TextEncoder().encode(value).length;
 const valueType = (value: unknown, contract: Contract) => isNumber(value)?"number":isStringSet(value)?"string-set":isDecimal(value,contract.decimal.maxBytes)?"decimal":typeof value === "boolean" ? "boolean"
@@ -66,19 +67,17 @@ export function compileVariables(variables: Variables, contract: Contract) {
     } else if (variable.mode === "state" || variable.mode === "constant") {
       if (variable.expression || valueType(variable.initial, contract) !== variable.type) fail(id, "Initial value type mismatch");
     } else if (variable.mode === "derived") {
-      const expr = variable.expression, op = contract.operators.find((op) => op.id === expr?.op);
-      if (variable.initial !== undefined || !expr || !op || !Array.isArray(expr.args)) fail(id, "Unsupported variable expression");
-      else {
-        if (expr.args.length < op.minArgs || expr.args.length > op.maxArgs || variable.type !== op.output) fail(id, "Operator arity or output type mismatch");
-        const types = expr.args.map((arg) => {
-          if (!arg || typeof arg !== "object") return fail(id, "Argument needs a variable or literal");
-          if (!!arg.variable === (arg.literal !== undefined)) return fail(id, "Argument needs a variable or literal");
-          if (arg.variable && variables[arg.variable]?.scope === contract.loop.scope && (variable.scope !== contract.loop.scope || variable.owner !== variables[arg.variable]?.owner)) return fail(id, "Item dependency escapes its loop scope");
-          if (arg.variable && variables[arg.variable]?.scope === contract.overlay.scope && (variable.scope !== contract.overlay.scope || variable.owner !== variables[arg.variable]?.owner)) return fail(id, "Overlay dependency escapes its owner scope");
-          return arg.variable ? visit(arg.variable) : valueType(arg.literal, contract);
-        });
-        if (types.some((type) => !type || (op.input === "resource" ? type === "record-set" || !contract.resources.some((resource) => resource.type === type) : type !== (op.input === "same" ? types[0] : op.input) || op.input === "same" && !["string", "boolean","decimal","number"].includes(type)))) fail(id, "Argument type mismatch");
-      }
+      try{
+        if(variable.initial!==undefined||!!variable.rule===!!variable.expression)throw new Error("One rule expression required");
+        const schema=pageRuleSchema(variables),expr=variable.rule??lowerPageRule(variable.expression!,pageRuleKind(variable.type),schema);
+        for(const ref of ruleDependencies(expr)){
+          const dependency=variables[ref];
+          if(dependency?.scope===contract.loop.scope&&(variable.scope!==contract.loop.scope||variable.owner!==dependency.owner)||dependency?.scope===contract.overlay.scope&&(variable.scope!==contract.overlay.scope||variable.owner!==dependency.owner))throw new Error("Rule dependency escapes its scope");
+          visit(ref);
+        }
+        if(!pageRuleFits(variable.type,expr.kind))throw new Error("Rule output type mismatch");
+        checkRule(expr,schema);
+      }catch(error){fail(id,error instanceof Error?error.message:"Invalid rule");}
     } else fail(id, "Unsupported variable mode");
     visiting.delete(id); order.push(id);
     return variable.type;
@@ -86,18 +85,6 @@ export function compileVariables(variables: Variables, contract: Contract) {
   Object.keys(variables).sort().forEach(visit);
   return { order, issues };
 }
-
-const operators: Record<Contract["operators"][number]["id"], (values: Scalar[]) => Scalar> = {
- "parse-decimal":([text])=>{const value=parseDecimal(text as string);if(!value)throw new Error("Invalid numeric value.");return value;},
-  "parse-number":([text])=>{const parsed=parseDecimal(text as string),value=parsed?Number(parsed.value):NaN;if(!Number.isFinite(value))throw new Error("Invalid numeric value.");return {kind:"number",value};},
-  equal: ([a, b]) => isNumber(a)&&isNumber(b)?a.value===b.value:isDecimal(a)&&isDecimal(b)?compareDecimal(a,b)===0:a === b, not: ([a]) => !a,
-  and: (values) => values.every((value) => value === true), or: (values) => values.some((value) => value === true),
-  concat: (values) => values.join(""),
-  present: () => true,
-  "decimal-add":([a,b])=>decimalArithmetic(a as import("./decimal").DecimalValue,b as import("./decimal").DecimalValue),
-  "decimal-subtract":([a,b])=>decimalArithmetic(a as import("./decimal").DecimalValue,b as import("./decimal").DecimalValue,true),
-  "decimal-less":([a,b])=>compareDecimal(a as import("./decimal").DecimalValue,b as import("./decimal").DecimalValue)<0,
-};
 
 export function evaluateVariables(variables: Variables, state: Record<string, unknown>, contract: Contract, resources: Record<string, VariableResult> = {}, owner?: string, overlay?: string,property?:PropertyReader,inherited?:Record<string,VariableResult>): Record<string, VariableResult> {
   const compiled = compileVariables(variables, contract), result: Record<string, VariableResult> = {};
@@ -120,14 +107,42 @@ export function evaluateVariables(variables: Variables, state: Record<string, un
       result[id] = valueType(value, contract) === variable.type ? { status: "value", value: value as Scalar } : variable.type==="decimal"&&decimalDraft(value,contract.decimal.maxBytes)?{status:"error",code:"Invalid numeric value.",draft:value.value}:{ status: "error", code: "State value type mismatch" };
       continue;
     }
-    const expression = variable.expression!;
-    const inputs = expression.args.map((arg): VariableResult => arg.variable ? result[arg.variable]! : { status: "value", value: arg.literal as Scalar });
-    if (inputs.some((input) => input.status === "error")) { result[id] = { status: "error", code: "Variable dependency failed" }; continue; }
-    if (inputs.some((input) => input.status === "pending")) { result[id] = { status: "pending" }; continue; }
-    if (expression.op === "present" && inputs[0]?.status === "empty") { result[id] = { status: "value", value: false }; continue; }
-    if (inputs.some((input) => input.status === "empty")) { result[id] = { status: "empty" }; continue; }
-    let value:Scalar;try {value = operators[expression.op as keyof typeof operators](inputs.map((input) => (input as { value: Scalar }).value));}catch {result[id]={status:"error",code:["parse-decimal","parse-number"].includes(expression.op)?"Invalid numeric value.":"Numeric result exceeds its budget."};continue;}
-    result[id] = valueType(value, contract) === variable.type ? { status: "value", value } : { status: "error", code: "Variable result limit exceeded" };
+    try {
+      const schema=pageRuleSchema(variables),expression=variable.rule??lowerPageRule(variable.expression!,pageRuleKind(variable.type),schema);
+      const context:RuleContext={refs:{},...property?.clock};
+      for(const ref of ruleDependencies(expression)){
+        const dependency=result[ref],kind=schema.refs[ref]!.kind;
+        let value:RuleValue={kind,status:"missing"};
+        if(dependency?.status==="pending")value.status="pending";
+        else if(dependency?.status==="error")value.status="withheld";
+        else if(dependency?.status==="empty")value={kind,status:"null"};
+        else if(dependency?.status==="value"){
+          const raw=dependency.value;
+          value={kind,status:"value",value:isStringSet(raw)?raw.values:isDecimal(raw)||isNumber(raw)?raw.value:typeof raw==="object"&&raw!==null?raw.kind==="record"?raw.reference.id:"present":raw};
+        }
+        context.refs[ref]=value;
+      }
+      const readPath=(ref:RecordReference,path:string[],kind:string):RuleValue=>{
+        const value=property?.(ref,path.join("."),kind)??{status:"error" as const,code:"Rule property is unavailable."};
+        if(value.status!=="value")return {kind,status:value.status==="error"?"withheld":value.status==="empty"?"missing":value.status};
+        const raw=value.value;return {kind,status:"value",value:isDecimal(raw)||isNumber(raw)?raw.value:isStringSet(raw)?raw.values:raw};
+      };
+      const visit=(e:Api.Expr,item?:{fields:Record<string,RuleValue>;reference:RecordReference})=>{
+        if(e.agg){const resource=result[e.agg.source];if(resource?.status!=="value"){context.sets??={};context.sets[e.agg.source]={items:[],complete:false,status:resource?.status==="error"?"withheld":resource?.status==="pending"?"pending":"missing"};}if(resource?.status==="value"&&typeof resource.value==="object"&&resource.value.kind==="object-set"){
+          const window=resource.value.window,fields=schema.sets?.[e.agg.source]?.element.fields??{};
+          const needed=new Set<string>();const use=(x:Api.Expr)=>{if(x.ref?.startsWith("item."))needed.add(x.ref.slice(5));for(const a of x.args??[])use(a);if(x.in)use(x.in)};if(e.in)use(e.in);if(e.agg.field?.length)needed.add(e.agg.field[0]!);
+          const items=window.records.map(reference=>{const row={id:reference.id,fields:Object.fromEntries([...needed].filter(key=>fields[key]).map(key=>[key,readPath(reference,[key],fields[key]!.kind)]))};const holder={fields:row.fields,reference};if(e.in)visit(e.in,holder);if(e.agg!.field?.length){const path=e.agg!.field;row.fields[path.join(".")]=readPath(reference,path,e.kind)};return row});
+          context.sets??={};context.sets[e.agg.source]={items,complete:window.complete};
+        }}
+        if(e.op==="path"&&e.args?.[0]?.ref){const ref=e.args[0].ref;if(ref.startsWith("item.")&&item){const path=[ref.slice(5),...(e.path??[])];item.fields[path.join(".")]=readPath(item.reference,path,e.kind)}else{const value=result[ref];if(value?.status==="value"&&typeof value.value==="object"&&value.value.kind==="record")context.refs[`${ref}.${e.path?.join(".")}`]=readPath(value.value.reference,e.path??[],e.kind)}}
+        for(const a of e.args??[])visit(a,item);if(e.in&&!e.agg)visit(e.in,item);
+      };
+      visit(expression);
+      const evaluated=evaluateRule(expression,schema,context),answer=evaluated.value;
+      const value=(variable.type==="decimal"?{kind:"decimal",value:String(answer.value)}:variable.type==="number"?{kind:"number",value:Number(answer.value)}:variable.type==="string-set"?{kind:"string-set",values:answer.value}:answer.value) as Scalar;
+      result[id]=valueType(value,contract)===variable.type?{status:"value",value,...(evaluated.reasons?.length?{reasons:evaluated.reasons}:{})}:{status:"error",code:"Variable result limit exceeded"};
+    }catch(error){const issue=(error as {issue?:{code:string}}).issue;result[id]=issue?.code==="pending"?{status:"pending"}:issue?.code==="missing"?{status:"empty"}:{status:"error",code:["parse-decimal","parse-number"].includes(variable.rule?.op??variable.expression?.op??"")?"Invalid numeric value.":error instanceof Error?error.message:"Variable evaluation failed"};}
+
   }
   return result;
 }

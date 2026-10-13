@@ -1,9 +1,12 @@
+import {initializeRules} from "@platform/app/rules";
 import { currentSession, signIn, type Api, type OidcConfig } from "@platform/kernel";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./styles.css";
+
+await initializeRules();
 
 const root = createRoot(document.getElementById("root")!);
 const previewWorkspace = new URLSearchParams(location.search).get("preview") === "pattern/workspace";

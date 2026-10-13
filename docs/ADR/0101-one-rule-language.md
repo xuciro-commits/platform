@@ -43,6 +43,7 @@ type Expr struct {
 | **空值** | `empty` `not-empty` `is-null` `is-not-null` | 任意 | boolean |
 | **算术** | `+ - * /` `negate` `abs` `round` `min` `max` | integer/decimal/money | 同类型 |
 | **文本** | `concat` `lower` `upper` `trim` `contains` `starts-with` `ends-with` `length` `replace` | text | text/boolean/integer |
+| **显式转换** | `parse-decimal` `parse-number` | text；无效、空白、超预算或非有限值明确拒绝 | decimal/number |
 | **时间** | `add-days` `add-months` `diff-days` `date-part`（year/month/day/weekday）`before` `after` `within-period` | date/datetime | date/integer/boolean |
 | **集合** | `count` `sum` `min` `max` `avg` | 集合（见下） | integer/decimal/money |
 | **量词** | `any` `all` `none` | 集合 + 谓词 | boolean |
@@ -90,7 +91,7 @@ type Expr struct {
 
 - 现有四套语法**全部可机械迁移**到 `Expr`（都是子集）。迁移在**解码期**做：旧定义读入后升到 `Expr`，保存时写新形态；旧发布字节保留只读不重写（沿 ADR-0097 §3.5 的历史义务）。
 - 迁移必须逐条覆盖：`Condition` 三元组 → `Expr`；公式字符串 → `Expr`；表格单元格 → `Expr` 语法糖；页面算子图 → `Expr`。
-- **迁移是编译期转换，不改写既有发布的内容**；既有租户在下次保存时升级。旧形态的求值器**只服务历史重放**，不再服务新写入（沿 ADR-0100 §D3 的"恢复不重跑规则"）。
+- **迁移是编译期转换，不改写既有发布的内容**；既有租户在下次保存时升级。旧语法只保留解码编译器，不保留第二套求值器。负责人确认（2026-10-12）：同一个求值器对**既有不可变发布版本**保留旧公式的缺值/除零得 0 与浮点运算语义；新保存/发布的 `Expr` 一律严格。兼容标记由已冻结发布的旧公式字节确定，不接受客户端指定。恢复仍只应用已接受结果，不重跑规则。
 
 ## 2. 不做
 
@@ -115,3 +116,17 @@ type Expr struct {
 6. 反例：未知算子、类型不匹配的比较、超出 16 段的路径、对未声明集合的聚合 → 全部发布期拒绝。
 
 测试归各 owner 包；`docs/Testing.md` 增"业务规则语言"手测行。
+
+## 5. As built
+
+五个使用面已接入 `platform.Expr`：动作条件 `Condition.Expr`、事务 `Guard`/步骤 `When`、赋值 `TxnSet.Expr`、计算字段 `Field.FormulaExpr`、表格行 `Expressions`、页面变量 `Rule`。这些名称区分历史输入字段；新保存去掉对应旧语法。唯一严格编译/求值实现是 `internal/rules`，应用由 `platform` 的具名 API 使用；浏览器加载同一 Go 源编译的受信 Go/Wasm 模块，不再保留 TypeScript 算子求值表。旧公式递归求值器和旧表格 `Holds` 分派已删，旧比较入口只委托统一求值器；旧语法解析器仅生成 Expr。
+
+发布检查所有分支，含短路不会到达的分支。表达式最多 512 节点、32 层、64 KiB；单文本 4096 字节，整数/金额受 int64 界限约束，数值分子/分母最多 256 bit。终止小数保留精确文本，循环小数运算采用固定 18 位小数；`round` 是显式舍入。未知算子、类型错误、超长/未声明路径、未声明集合、不同币种及不可唯一确定的金额提升拒绝。路径从本记录、类型化输入或集合元素的声明引用展开；读取每跳复用原 Caller 权限。
+
+集合绑定已有 query/app/version/object/parent，发布检查原查询，执行读取原私有视图。`visible` 表示调用者可见集合并返回 scope 原因；`complete` 要求整个对象的读取权限，含权限遮蔽或不完整窗口即拒绝。集合稳定键排序，重复键、超预算及部分窗口不产生伪总计。页面只读已声明资源/查询窗口和同一会话的权限缓存；类型投影由对象 owner 生成，不能用租户提交的类型元数据扩展路径。
+
+计算字段在原 `ComputeAt` 位置、接受前求值，拒绝回滚整个私有结果；计算依赖拒绝环并按依赖顺序计算。结果保存逐字段来源，沿 ADR-0033 的派生内容读取路径重新检查权限。决策表调用在原接受阶段冻结事实、原来源及编译 schema，执行阶段使用该次不可变规则计划，不给执行器 Caller，也不读最新表替代旧版本；表发布接入原已接受结果的安装路径并保留最多 64 个版本。
+
+兼容边界按负责人确认：只有既有不可变发布中的公式串使用同一引擎的冻结公式模式，保留旧浮点、缺值/除零得 0 和整数舍入。新保存的公式树严格；旧隐式 money→数值公式升级时须改成显式的币种规则，不能继续静默按金额部分计算。旧 Published、页面/查询/表格版本和日志字节不改；恢复只应用已接受映像，不执行规则。
+
+证据：`TestOneRuleAcrossBusinessFaces`、`TestDeclaredRuleCollectionsRespectCallerScope`、`TestStrictRuleFailureLeavesBusinessStateUntouched`、`TestRuleMigrationRetainsFrozenPublicationBytes`；各 owner 的迁移/类型反例及 Go 与浏览器共享 `conformance.json`。`rule-language` 浏览器路线观察到已发布 Expr 控制显示/隐藏以及实际 Go/Wasm 模块。通用规则设计器归 ADR-0109；既有数字公式、条件/赋值、表格单元格与页面算子控件保留为语法糖，复杂树由现有定义 API 配置。

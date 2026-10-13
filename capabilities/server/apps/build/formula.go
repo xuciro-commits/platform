@@ -3,121 +3,145 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
+	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-// Computed fields (ADR-0064, ADR-0057 block B1): an integer or decimal field
-// may carry a Formula over the record's other number fields - `price * qty`,
-// `(ordered - received) * 1.0` - evaluated by the platform each time the
-// record is decided, never set by hand. Grammar: numbers, field names,
-// + - * /, parentheses, unary minus; a missing operand counts as zero; a
-// division by zero yields zero.
-
-// checkFormulas: a formula sits on an integer or decimal field and names only
-// the object's other plain number fields.
-func checkFormulas(fields []Field) error {
-	numbers := map[string]bool{}
-	for _, f := range fields {
-		if f.Formula == "" && (f.Type == "integer" || f.Type == "decimal" || f.Type == "money") {
-			numbers[f.Name] = true
+// formulaExpr mechanically lowers the old grammar. Integer destinations use
+// an explicit round node; saved Expr values never inherit legacy zero fallback.
+func formulaExpr(fields []Field, f Field) (platform.Expr, error) {
+	if f.FormulaExpr != nil {
+		if f.Formula != "" {
+			return platform.Expr{}, fmt.Errorf("field %s has two formulas", f.Name)
+		}
+		return *f.FormulaExpr, nil
+	}
+	node, err := buildapi.ValueParseFormula(f.Formula)
+	if err != nil {
+		return platform.Expr{}, err
+	}
+	types := map[string]string{}
+	for _, operand := range fields {
+		if operand.Formula == "" && operand.FormulaExpr == nil && (operand.Type == "integer" || operand.Type == "decimal" || operand.Type == "money") {
+			types[operand.Name] = operand.Type
+			if operand.Type == "money" {
+				types[operand.Name] = "decimal"
+			}
 		}
 	}
+	e, err := node.Expr(types)
+	if err != nil {
+		return e, err
+	}
+	if f.Type == "integer" {
+		e = platform.Expr{Op: "round", Kind: "integer", Args: []platform.Expr{e}}
+	}
+	return e, nil
+}
+func checkFormulas(fields []Field) error {
 	for _, f := range fields {
-		if f.Formula == "" {
-			continue
-		}
-		if f.Type != "integer" && f.Type != "decimal" {
-			return fmt.Errorf("the field %q has a formula, which only an integer or decimal field may", f.Name)
-		}
-		node, err := buildapi.ValueParseFormula(f.Formula)
-		if err != nil {
-			return fmt.Errorf("the field %q: %v", f.Name, err)
-		}
-		used := map[string]bool{}
-		node.Fields(used)
-		for name := range used {
-			if !numbers[name] {
-				return fmt.Errorf("the field %q computes from %q, which is not a number field of this object set by hand", f.Name, name)
+		if f.Formula != "" {
+			if f.Type != "integer" && f.Type != "decimal" {
+				return fmt.Errorf("field %s legacy formula needs a numeric destination", f.Name)
+			}
+			if _, err := formulaExpr(fields, f); err != nil {
+				return fmt.Errorf("field %s: %w", f.Name, err)
 			}
 		}
 	}
 	return nil
 }
-
-// computeOf is the entity hook that fills every formula field of a record.
-func computeOf(o Object) func(record any) {
-	type computed struct {
-		name string
-		kind string
-		node *formulaNode
-	}
-	var list []computed
-	for _, f := range o.Fields {
-		if f.Formula != "" {
-			if node, err := buildapi.ValueParseFormula(f.Formula); err == nil {
-				list = append(list, computed{f.Name, f.Type, node})
-			}
-		}
-	}
+func computeRulesOf(o Object, lookup func(string) (platform.EntityInfo, bool)) func(platform.Caller, any, time.Time) *kernel.Error {
+	list, orderErr := formulaOrder(o.Fields)
 	if len(list) == 0 {
 		return nil
 	}
-	return func(record any) {
-		v := reflect.ValueOf(record)
-		if v.Kind() != reflect.Pointer || v.Elem().Kind() != reflect.Struct {
-			return
+	lookup = ruleLookup(o, lookup)
+	return func(c platform.Caller, record any, now time.Time) *kernel.Error {
+		if orderErr != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, orderErr.Error())
 		}
-		v = v.Elem()
-		read := func(name string) float64 {
-			f := v.FieldByName(goName(name))
-			if !f.IsValid() {
-				return 0
+		for _, f := range list {
+			e, err := formulaExpr(o.Fields, f)
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			if f.Kind() == reflect.Pointer {
-				if f.IsNil() {
-					return 0
+			s := ruleSpec(o, Action{}, o.Reads)
+			schema, err := platform.RuleSchema(e, s, lookup)
+			if f.Formula != "" {
+				refs := map[string]platform.ExprType{}
+				for _, field := range o.Fields {
+					kind := platform.RuleFieldKind(field.Type)
+					if field.Type == "money" {
+						kind = "decimal"
+					}
+					refs[field.Name] = platform.ExprType{Kind: kind}
 				}
-				f = f.Elem()
+				schema = platform.ExprSchema{Refs: refs}
+				_, err = platform.CompileFrozenFormula(e, schema)
 			}
-			switch f.Kind() {
-			case reflect.Int, reflect.Int64:
-				return float64(f.Int())
-			case reflect.Float64:
-				return f.Float()
-			case reflect.Struct: // money: its minor units
-				if a := f.FieldByName("Amount"); a.IsValid() {
-					return float64(a.Int())
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			ctx, err := c.RuleContext(e, s, lookup, record, nil, now)
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, err.Error())
+			}
+			if f.Formula != "" {
+				for _, field := range o.Fields {
+					if field.Type == "money" {
+						v := ctx.Refs[field.Name]
+						v.Kind = "decimal"
+						if v.Status == "value" {
+							var amount struct {
+								Amount json.RawMessage `json:"amount"`
+							}
+							if json.Unmarshal(v.Data, &amount) == nil {
+								v.Data = amount.Amount
+							}
+						}
+						ctx.Refs[field.Name] = v
+					}
 				}
 			}
-			return 0
-		}
-		for _, c := range list {
-			result := c.node.Eval(read)
-			if math.IsNaN(result) || math.IsInf(result, 0) {
-				result = 0
-			}
-			f := v.FieldByName(goName(c.name))
-			if !f.IsValid() {
-				continue
-			}
-			if f.Kind() == reflect.Pointer {
-				if f.IsNil() {
-					f.Set(reflect.New(f.Type().Elem()))
-				}
-				f = f.Elem()
-			}
-			if c.kind == "integer" {
-				f.SetInt(int64(math.Round(result)))
+			var program *platform.ExprProgram
+			if f.Formula != "" {
+				program, err = platform.CompileFrozenFormula(e, schema)
 			} else {
-				f.SetFloat(result)
+				program, err = platform.CompileExpr(e, schema)
+			}
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			var result platform.ExprResult
+			if f.Formula != "" {
+				result, err = program.EvalFrozenFormula(ctx)
+			} else {
+				result, err = program.Eval(ctx)
+			}
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Field {field}: {reason} / 字段 {field}：{reason}", f.Name, err.Error(), f.Name, err.Error())
+			}
+			if f.FormulaExpr != nil {
+				holder := reflect.ValueOf(record).Elem().FieldByName("RuleSources" + goName(f.Name))
+				if holder.IsValid() {
+					holder.Set(reflect.ValueOf(ctx.Sources))
+				}
+			}
+			value, err := platform.ExprGoValue(result.Value)
+			if err == nil {
+				err = assign(reflect.ValueOf(record).Elem().FieldByName(goName(f.Name)), value)
+			}
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 		}
+		return nil
 	}
 }
 
@@ -148,4 +172,61 @@ func validateOf(o Object, model any) func(c platform.Caller, record any) *kernel
 		}
 		return nil
 	}
+}
+
+func formulaOrder(fields []Field) ([]Field, error) {
+	byName := map[string]Field{}
+	for _, f := range fields {
+		if f.Formula != "" || f.FormulaExpr != nil {
+			byName[f.Name] = f
+		}
+	}
+	visited, visiting := map[string]bool{}, map[string]bool{}
+	out := []Field{}
+	var walk func(string) error
+	walk = func(name string) error {
+		if visited[name] {
+			return nil
+		}
+		if visiting[name] {
+			return fmt.Errorf("field %s formula dependency is cyclic", name)
+		}
+		f, ok := byName[name]
+		if !ok {
+			return nil
+		}
+		visiting[name] = true
+		if f.FormulaExpr != nil {
+			var refs func(platform.Expr) error
+			refs = func(e platform.Expr) error {
+				if _, ok := byName[e.Ref]; ok {
+					if err := walk(e.Ref); err != nil {
+						return err
+					}
+				}
+				for _, a := range e.Args {
+					if err := refs(a); err != nil {
+						return err
+					}
+				}
+				if e.In != nil {
+					return refs(*e.In)
+				}
+				return nil
+			}
+			if err := refs(*f.FormulaExpr); err != nil {
+				return err
+			}
+		}
+		delete(visiting, name)
+		visited[name] = true
+		out = append(out, f)
+		return nil
+	}
+	for _, f := range fields {
+		if err := walk(f.Name); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }

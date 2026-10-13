@@ -180,3 +180,24 @@ func (r runtime) ReadRecordPath(c platform.Caller, typ, id string, path []string
 func (d *stagedDecision) ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
 	return d.tenant.readRecordPathFrom(d.records, c, typ, id, path, now)
 }
+
+func (t *Tenant) readRuleQueryFrom(store *recordStore, c platform.Caller, set platform.RuleCollection, input json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+	q, _, ok := t.memberQueryVersion(c.Member, platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}, set.Version)
+	if !ok || q.Object != set.Object || (q.By == "") != (set.Of == "") {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule collection declaration is unavailable")
+	}
+	info, known := t.entity(q.Object)
+	if !known {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule collection object is unavailable")
+	}
+	if set.Policy == "complete" && (info.Scope.LevelFor(c.RolesIn(info.App)) != platform.ScopeTenant || info.Scope.Through != nil) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Complete collection requires permission to read its whole object / 完整集合需要整个对象的读取权限")
+	}
+	return t.readQueryVersionFrom(store, c, set.App, set.Query, set.Version, input, now)
+}
+func (r runtime) ReadRuleQuery(c platform.Caller, set platform.RuleCollection, input json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+	return r.t.readRuleQueryFrom(r.t.records, c, set, input, now)
+}
+func (d *stagedDecision) ReadRuleQuery(c platform.Caller, set platform.RuleCollection, input json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+	return d.tenant.readRuleQueryFrom(d.records, c, set, input, now)
+}

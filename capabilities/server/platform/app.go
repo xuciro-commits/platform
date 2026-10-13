@@ -279,6 +279,12 @@ type ReadRuntime interface {
 	ReadRecordPath(Caller, string, string, []string, time.Time) (json.RawMessage, []string, *kernel.Error)
 }
 
+// RuleReadRuntime captures retained, caller-filtered rule collections. It grants
+// no writes and keeps completeness checks with the original record owner.
+type RuleReadRuntime interface {
+	ReadRuleQuery(Caller, RuleCollection, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
+}
+
 // OperationRuntime owns controlled computation and cancellation. A runtime
 // outside an accepted decision must explicitly refuse requests.
 type OperationRuntime interface {

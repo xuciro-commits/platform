@@ -66,21 +66,22 @@ type Pipeline struct {
 //	aggregate  Columns (group by), Measures (sum/min/max/count/avg of a column into To)
 //	sort       Column, Desc
 type Step struct {
-	Kind     string    `json:"kind"`
-	Columns  []string  `json:"columns,omitempty"`
-	From     string    `json:"from,omitempty"`
-	To       string    `json:"to,omitempty"`
-	Column   string    `json:"column,omitempty"`
-	Type     string    `json:"type,omitempty"`
-	Op       string    `json:"op,omitempty"`
-	Value    string    `json:"value,omitempty"`
-	Formula  string    `json:"formula,omitempty"`
-	Dataset  string    `json:"dataset,omitempty"`
-	Match    string    `json:"match,omitempty"`
-	As       string    `json:"as,omitempty"`
-	Outer    bool      `json:"outer,omitempty"`
-	Desc     bool      `json:"desc,omitempty"`
-	Measures []Measure `json:"measures,omitempty"`
+	Kind        string         `json:"kind"`
+	Columns     []string       `json:"columns,omitempty"`
+	From        string         `json:"from,omitempty"`
+	To          string         `json:"to,omitempty"`
+	Column      string         `json:"column,omitempty"`
+	Type        string         `json:"type,omitempty"`
+	Op          string         `json:"op,omitempty"`
+	Value       string         `json:"value,omitempty"`
+	FormulaExpr *platform.Expr `json:"formulaExpr,omitempty" type:"json" field:"aside"`
+	Formula     string         `json:"formula,omitempty"`
+	Dataset     string         `json:"dataset,omitempty"`
+	Match       string         `json:"match,omitempty"`
+	As          string         `json:"as,omitempty"`
+	Outer       bool           `json:"outer,omitempty"`
+	Desc        bool           `json:"desc,omitempty"`
+	Measures    []Measure      `json:"measures,omitempty"`
 }
 
 type Measure struct {
@@ -204,14 +205,74 @@ func (s Step) Apply(rows []map[string]any, read func(string) ([]map[string]any, 
 		}
 		return out, nil
 	case "compute":
-		node, err := ValueParseFormula(s.Formula)
+		expr := s.FormulaExpr
+		if expr == nil {
+			node, err := ValueParseFormula(s.Formula)
+			if err != nil {
+				return nil, err
+			}
+			used := map[string]bool{}
+			node.Fields(used)
+			types := map[string]string{}
+			for name := range used {
+				types[name] = "decimal"
+			}
+			e, err := node.Expr(types)
+			if err != nil {
+				return nil, err
+			}
+			expr = &e
+		}
+		schema := platform.ExprSchema{Refs: map[string]platform.ExprType{}}
+		var refs func(platform.Expr)
+		refs = func(e platform.Expr) {
+			if e.Ref != "" {
+				schema.Refs[e.Ref] = platform.ExprType{Kind: e.Kind}
+			}
+			for _, arg := range e.Args {
+				refs(arg)
+			}
+			if e.In != nil {
+				refs(*e.In)
+			}
+		}
+		refs(*expr)
+		var program *platform.ExprProgram
+		var err error
+		if s.FormulaExpr == nil {
+			program, err = platform.CompileFrozenFormula(*expr, schema)
+		} else {
+			program, err = platform.CompileExpr(*expr, schema)
+		}
 		if err != nil {
 			return nil, err
 		}
 		for _, r := range rows {
-			r[s.To] = node.Eval(func(name string) float64 { return ValueNumeric(r[name]) })
+			ctx := platform.ExprContext{Refs: map[string]platform.ExprValue{}}
+			for name, typ := range schema.Refs {
+				if s.FormulaExpr == nil {
+					ctx.Refs[name] = platform.ExprPresent(typ.Kind, ValueNumeric(r[name]))
+				} else if v, ok := r[name]; ok && v != nil {
+					ctx.Refs[name] = platform.ExprPresent(typ.Kind, v)
+				}
+			}
+			var result platform.ExprResult
+			if s.FormulaExpr == nil {
+				result, err = program.EvalFrozenFormula(ctx)
+			} else {
+				result, err = program.Eval(ctx)
+			}
+			if err != nil {
+				return nil, err
+			}
+			v, err := platform.ExprGoValue(result.Value)
+			if err != nil {
+				return nil, err
+			}
+			r[s.To] = v
 		}
 		return rows, nil
+
 	case "lookup", "join":
 		other, err := read(s.Dataset)
 		if err != nil {
@@ -464,6 +525,9 @@ func ValueMatches(v any, op, want string) bool {
 
 func ValueNumeric(v any) float64 {
 	switch x := v.(type) {
+	case json.Number:
+		n, _ := x.Float64()
+		return n
 	case float64:
 		return x
 	case bool:
@@ -494,4 +558,36 @@ func (p Pipeline) StepDatasets() []string {
 		}
 	}
 	return ids
+}
+
+func (p *Pipeline) NormalizeFormulaRules() error {
+	for i := range p.Steps {
+		s := &p.Steps[i]
+		if s.Kind != "compute" {
+			continue
+		}
+		if s.FormulaExpr != nil {
+			if s.Formula != "" {
+				return fmt.Errorf("one formula expression required")
+			}
+			continue
+		}
+		node, err := ValueParseFormula(s.Formula)
+		if err != nil {
+			return err
+		}
+		used := map[string]bool{}
+		node.Fields(used)
+		types := map[string]string{}
+		for name := range used {
+			types[name] = "decimal"
+		}
+		e, err := node.Expr(types)
+		if err != nil {
+			return err
+		}
+		s.FormulaExpr = &e
+		s.Formula = ""
+	}
+	return nil
 }

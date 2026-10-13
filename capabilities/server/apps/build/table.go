@@ -7,6 +7,7 @@ import (
 
 	buildapi "platformserver/internal/host/buildapi"
 	"regexp"
+	"slices"
 
 	"strings"
 	"time"
@@ -24,13 +25,27 @@ import (
 // A table is operational configuration: publishing installs it at once and
 // keeps the published image; drafts never change what runs.
 const (
-	TableType = "build.table"
-	tableRows = 500
-	tableCols = 16
+	TableType          = "build.table"
+	SchemaTablePublish = TableType + ".publish"
+	tableRows          = 500
+	tableCols          = 16
 )
 
 func (b *Build) tableEntity() platform.Entity {
 	return platform.Entity{Type: TableType, Title: "Decision table", Plural: "Decision tables", Model: Table{}, Display: "title", Description: "Condition columns to result columns; the first matching row decides. Published as a native operation.",
+		Validate: func(c platform.Caller, record any) *kernel.Error {
+			if c.Replaying {
+				return nil
+			}
+			tb := record.(*Table)
+			if err := tb.NormalizeRules(); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			if err := b.checkTableShape(*tb); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			return nil
+		},
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "compute"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
@@ -42,6 +57,11 @@ func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
+	if !c.Replaying {
+		if err := tb.NormalizeRules(); err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+	}
 	if err := b.checkTable(*tb); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
@@ -51,6 +71,7 @@ func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _
 	tb.Version++
 	frozen := *tb
 	frozen.Published = ""
+	frozen.Versions = nil
 	if c.Staging() {
 		if err := b.host.ValidateInstallOperation(frozen.Definition()); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -59,7 +80,11 @@ func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	raw, _ := json.Marshal(frozen)
+	if tb.Published != "" && !slices.Contains(tb.Versions, tb.Published) {
+		tb.Versions = append(tb.Versions, tb.Published)
+	}
 	tb.Published = string(raw)
+	tb.Versions = append(tb.Versions, tb.Published)
 	return nil
 }
 
@@ -85,6 +110,7 @@ func (b *Build) installTables() error {
 		if !ok || tb.Name != record.Name {
 			return fmt.Errorf("decision table %s has a malformed publication", record.Name)
 		}
+		tb.Versions = record.Versions
 		if err := b.installTable(platform.Caller{Replaying: true}, tb); err != nil {
 			return err
 		}
@@ -113,8 +139,23 @@ func (b *Build) checkTableShape(tb Table) error {
 		}
 		seen[col.Name] = true
 	}
+	plan, err := tb.RulePlan()
+	if err != nil {
+		return err
+	}
+	if err := b.checkRuleCollections(plan.Reads, "table "+tb.Name); err != nil {
+		return err
+	}
+	for i, row := range plan.Rows {
+		if row.Condition.Kind != "boolean" {
+			return fmt.Errorf("row %d needs boolean", i+1)
+		}
+		if _, err := platform.RuleSchema(row.Condition, plan.Reads, b.conditionLookup); err != nil {
+			return fmt.Errorf("row %d: %w", i+1, err)
+		}
+	}
 	for i, row := range tb.Rows {
-		if len(row.When) != len(tb.Inputs) || len(row.Then) != len(tb.Outputs) {
+		if (len(row.When) != len(tb.Inputs) && len(row.Expressions) != len(tb.Inputs)) || len(row.Then) != len(tb.Outputs) {
 			return fmt.Errorf("row %d does not fill every column", i+1)
 		}
 		for j, cell := range row.When {
@@ -156,4 +197,16 @@ func (b *Build) Compute(_ context.Context, name string, input json.RawMessage) (
 		return nil, err
 	}
 	return json.Marshal(result)
+}
+
+func tableImage(image []byte) (Table, error) {
+	var record Table
+	if err := json.Unmarshal(image, &record); err != nil {
+		return record, err
+	}
+	frozen, ok := wasPublished[Table](record.Published)
+	if !ok || record.State != "published" || frozen.ID != record.ID || frozen.Name != record.Name || frozen.Version != record.Version {
+		return frozen, fmt.Errorf("accepted table has no matching immutable publication")
+	}
+	return frozen, nil
 }

@@ -231,18 +231,17 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 	cross := txnDefinition()
 	cross.Steps[2].Target.Type = "foreign.header"
 	definition := map[string]any{"actions": []build.Action{{Name: "apply", Title: "Apply transaction", From: []string{"draft"}, Inputs: []build.Input{{Name: "label", Title: "Label", Type: "longtext"}}, Transaction: cross}}}
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "REQUEST", definition, txnAt)
-	if result := refuse(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "REQUEST", map[string]any{}, txnAt); !strings.Contains(result, "another application") {
+	if result := refuse(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "REQUEST", definition, txnAt); !strings.Contains(result, "another application") {
 		t.Fatalf("cross authority not explicitly refused: %s", result)
 	}
-	t.Log("proof 5: cross-application definition explicitly refused at publication")
-	// A large input stays below the refusal envelope budget but exceeds the full
-	// four-row result. No truncation, number allocation or partial application.
+	t.Log("proof 5: cross-application definition explicitly refused before saving")
+	// ADR-0101 refuses an oversized rule operand before it can inflate the
+	// accepted result. No truncation, number allocation or partial application.
 	large := txnRequest(t, tn, "operator", strings.Repeat("x", 200000))
 	state := txnState(tn)
 	counters := tn.sequences.clone()
 	_, over := tn.Submit(memberOf(t, tn, "operator"), large, txnAt)
-	if over == nil || !strings.Contains(over.Message, "1048576") {
+	if over == nil || !strings.Contains(over.Message, "4096") {
 		t.Fatalf("budget overflow did not identify its limit: %v", over)
 	}
 	if txnState(tn) != state || !reflect.DeepEqual(counters, tn.sequences.last) {

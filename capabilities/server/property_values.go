@@ -15,7 +15,7 @@ func propertyValues(info platform.EntityInfo, record any) (map[string]any, map[s
 	row := reflect.ValueOf(record)
 	for _, field := range info.Fields {
 		typ := platform.PropertyValueType(field)
-		if typ == "" {
+		if typ == "" && field.Type != "reference" && field.Type != "date" && field.Type != "datetime" && field.Type != "money" {
 			continue
 		}
 		value := row.FieldByIndex(field.Index)
@@ -24,6 +24,29 @@ func propertyValues(info platform.EntityInfo, record any) (map[string]any, map[s
 				continue
 			}
 			value = value.Elem()
+		}
+		if typ == "" {
+			raw, err := json.Marshal(value.Interface())
+			if err != nil {
+				errors[field.Name] = "Property value is unavailable."
+				continue
+			}
+			var decoded any
+			decoder := json.NewDecoder(strings.NewReader(string(raw)))
+			decoder.UseNumber()
+			if decoder.Decode(&decoded) != nil {
+				errors[field.Name] = "Property value is unavailable."
+				continue
+			}
+			if field.Type == "money" {
+				if m, ok := decoded.(map[string]any); ok {
+					if amount, ok := m["amount"].(json.Number); ok {
+						m["amount"] = amount.String()
+					}
+				}
+			}
+			values[field.Name] = decoded
+			continue
 		}
 		if typ == "decimal" {
 			raw, err := json.Marshal(value.Interface())

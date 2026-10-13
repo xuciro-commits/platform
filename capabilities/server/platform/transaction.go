@@ -14,10 +14,13 @@ import (
 )
 
 // BusinessTxn is the bounded, single-authority definition of ADR-0100's first
-// slice. Other step kinds and rule-language fields are not accepted here.
+// slice. Rule guards and assignments use ADR-0101; other step kinds are refused.
 type BusinessTxn struct {
-	Subject string    `json:"subject"`
-	Steps   []TxnStep `json:"steps"`
+	Subject string        `json:"subject"`
+	Steps   []TxnStep     `json:"steps"`
+	Guard   *Expr         `json:"guard,omitempty"`
+	Message string        `json:"message,omitempty"`
+	Reads   *RuleReadSpec `json:"reads,omitempty"`
 }
 
 type TxnStep struct {
@@ -26,6 +29,7 @@ type TxnStep struct {
 	Target   TxnRef    `json:"target,omitempty"`
 	Changes  []TxnSet  `json:"changes,omitempty"`
 	Sequence *Sequence `json:"sequence,omitempty"`
+	When     *Expr     `json:"when,omitempty"`
 }
 
 type TxnRef struct {
@@ -40,7 +44,8 @@ type TxnRef struct {
 // accepts step.<name>, referring only to an earlier create ID or sequence.
 type TxnSet struct {
 	Field string `json:"field" field:"required" help:"A field of the object"`
-	From  string `json:"from" field:"required" help:"An input's name, $me, $now, or =<a fixed value>" example:"to"`
+	Expr  *Expr  `json:"expr,omitempty" type:"json" field:"aside"`
+	From  string `json:"from,omitempty" field:"required" help:"An input's name, $me, $now, or =<a fixed value>" example:"to"`
 }
 
 func strictTxn(raw []byte, into any) error {

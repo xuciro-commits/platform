@@ -11,11 +11,12 @@
     "./search": "./src/widgets/search-input.ts",
     "./action-table": "./src/widgets/action-table.ts",
     "./action-defaults": "./src/widgets/action-defaults.ts",
-    "./query-inventory": "./src/runtime/query-inventory.ts"
+    "./query-inventory": "./src/runtime/query-inventory.ts",
+    "./rules": "./src/runtime/rule-engine.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "node --test src/*/*.test.mjs",
+    "test": "node ../../../scripts/rule-browser.mjs && node --import ../../../scripts/rule-test.mjs --test src/*/*.test.mjs",
     "build": "true"
   },
   "dependencies": {

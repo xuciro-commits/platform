@@ -20,3 +20,6 @@ dist/
 
 # Local secrets (never committed)
 .env
+
+# Generated trusted rule runtime (scripts/rule-browser.mjs)
+web/public/rules/

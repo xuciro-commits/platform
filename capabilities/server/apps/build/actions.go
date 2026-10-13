@@ -156,6 +156,9 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 			}
 		}
 		for _, set := range a.Sets {
+			if set.Expr != nil {
+				continue
+			}
 			f, ok := fields[set.Field]
 			if !ok {
 				return fmt.Errorf("%s sets %q, which is not a field of the object", where, set.Field)
@@ -208,6 +211,9 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 }
 
 func checkActionCondition(o Object, a Action, cond Condition, lookup func(string) (platform.EntityInfo, bool), requireMessage bool) error {
+	if cond.Expr != nil {
+		return nil
+	}
 	left, err := conditionField(o, a, cond.Field, lookup)
 	if err != nil {
 		return fmt.Errorf("action condition: %w", err)
@@ -440,75 +446,22 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		}
 	}
 	v := reflect.ValueOf(record).Elem()
-	value := func(name string) (any, *kernel.Error) {
-		if in, ok := strings.CutPrefix(name, "input."); ok {
-			return inputs[in], nil
-		}
-		if strings.Contains(name, ".") {
-			rec := v.Field(0).Interface().(platform.Record)
-			raw, _, refusal := c.ReadRecordPath(buildapi.TypeOf(o.Name), rec.ID, strings.Split(name, "."), now)
-			if refusal != nil {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A related condition source is unavailable / 关联条件来源不可读")
-			}
-			var result any
-			if json.Unmarshal(raw, &result) != nil {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid condition source")
-			}
-			return result, nil
-		}
-		f := v.FieldByName(goName(name))
-		if !f.IsValid() {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition field is unavailable")
-		}
-		return f.Interface(), nil
-	}
-	evaluate := func(cond Condition) (bool, *kernel.Error) {
-		field, err := conditionField(o, a, cond.Field, lookup)
-		if err != nil {
-			return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition field is unavailable")
-		}
-		got, refusal := value(cond.Field)
-		if refusal != nil {
-			return false, refusal
-		}
-		kind, want := field.Type, cond.Value
-		if cond.ValueField != "" {
-			right, err := conditionField(o, a, cond.ValueField, lookup)
-			if err != nil || checkConditionFields(field, right, cond.Operator) != nil {
-				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition comparison field is unavailable or incompatible")
-			}
-			other, refusal := value(cond.ValueField)
-			if refusal != nil {
-				return false, refusal
-			}
-			want = buildapi.ValueTextOf(other)
-			if want == "" {
-				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", cond.Message)
-			}
-			if right.Type == "decimal" {
-				kind = "decimal"
-			}
-		} else if want == "$me" {
-			want = c.ID
-		}
-		return buildapi.ValueHolds(got, kind, cond.Operator, want), nil
-	}
+	lookup = ruleLookup(o, lookup)
 	for _, cond := range a.Conditions {
-		if cond.When != nil {
-			held, err := evaluate(*cond.When)
-			if err != nil {
-				return err
-			}
-			if !held {
-				continue
-			}
-		}
-		held, err := evaluate(cond)
+		e, err := conditionExpr(o, a, cond, lookup)
 		if err != nil {
-			return err
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-		if !held {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", cond.Message)
+		result, refusal := evalRule(e, ruleSpec(o, a, a.Reads), c, record, inputs, now, lookup)
+		if refusal != nil {
+			return refusal
+		}
+		if string(result.Value.Data) != "true" {
+			reason := cond.Message
+			for _, issue := range result.Reasons {
+				reason += " · " + issue.At + ": " + issue.Message
+			}
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", reason)
 		}
 	}
 	if a.ToInput != "" {
@@ -530,12 +483,13 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		types[f.Name] = f.Type
 	}
 	for _, set := range a.Sets {
-		x, present, err := setSource(c, types[set.Field], set.From, inputs, now)
-		if err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid assignment source")
+		e, failure := assignmentExpr(types[set.Field], set, ruleSpec(o, a, a.Reads))
+		if failure != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, failure.Error())
 		}
-		if !present {
-			continue
+		x, refusal := ruleAssignment(e, ruleSpec(o, a, a.Reads), c, record, inputs, now, lookup)
+		if refusal != nil {
+			return refusal
 		}
 
 		if err := assign(v.FieldByName(goName(set.Field)), x); err != nil {

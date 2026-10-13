@@ -57,6 +57,8 @@ type Entity struct {
 	// Compute, when set, fills the record's computed fields right before every
 	// decision on it is checked; it receives a pointer to the record.
 	Compute func(record any)
+	// ComputeAt captures scoped rule facts and may reject before acceptance.
+	ComputeAt func(c Caller, record any, now time.Time) *kernel.Error
 	// Validate, when set, may refuse a record after Compute and before the
 	// store's own checks: cross-record rules such as one extension record per
 	// base record (ADR-0058 A3). It receives a pointer to the record.

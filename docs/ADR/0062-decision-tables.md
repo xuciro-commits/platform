@@ -1,5 +1,7 @@
 # ADR-0062 — Decision tables as native operations (ADR-0057 block E, step E2)
 
+Status: condition grammar and evaluation superseded by [ADR-0101](0101-one-rule-language.md); table data, first-match behavior, native operations and retained publication versions remain in force.
+
 ## Decision
 
 A builder authors business rules as a **decision table** (`build.table`):

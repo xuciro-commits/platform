@@ -2,6 +2,7 @@ package buildapi
 
 import (
 	"fmt"
+	"platformserver/platform"
 
 	"strconv"
 	"strings"
@@ -10,7 +11,7 @@ import (
 
 type ValueFormulaNode struct {
 	op          byte // 'n' number, 'f' field, or + - * / ~ (negate)
-	value       float64
+	value       string
 	field       string
 	left, right *ValueFormulaNode
 }
@@ -113,11 +114,11 @@ func (p *ValueFormulaParser) Factor() (*ValueFormulaNode, error) {
 		for p.pos < len(p.src) && (p.src[p.pos] >= '0' && p.src[p.pos] <= '9' || p.src[p.pos] == '.') {
 			p.pos++
 		}
-		n, err := strconv.ParseFloat(p.src[start:p.pos], 64)
+		_, err := strconv.ParseFloat(p.src[start:p.pos], 64)
 		if err != nil {
 			return nil, fmt.Errorf("%q is not a number", p.src[start:p.pos])
 		}
-		return &ValueFormulaNode{op: 'n', value: n}, nil
+		return &ValueFormulaNode{op: 'n', value: p.src[start:p.pos]}, nil
 	case c >= 'a' && c <= 'z':
 		start := p.pos
 		for p.pos < len(p.src) && (unicode.IsLower(rune(p.src[p.pos])) || unicode.IsDigit(rune(p.src[p.pos]))) {
@@ -141,26 +142,32 @@ func (n *ValueFormulaNode) Fields(into map[string]bool) {
 	n.right.Fields(into)
 }
 
-func (n *ValueFormulaNode) Eval(value func(string) float64) float64 {
+// Expr lowers the old arithmetic grammar; there is no second evaluator.
+func (n *ValueFormulaNode) Expr(fields map[string]string) (platform.Expr, error) {
 	switch n.op {
 	case 'n':
-		return n.value
+		return platform.ExprLiteralValue("decimal", n.value), nil
 	case 'f':
-		return value(n.field)
-	case '~':
-		return -n.left.Eval(value)
-	case '+':
-		return n.left.Eval(value) + n.right.Eval(value)
-	case '-':
-		return n.left.Eval(value) - n.right.Eval(value)
-	case '*':
-		return n.left.Eval(value) * n.right.Eval(value)
-	case '/':
-		d := n.right.Eval(value)
-		if d == 0 {
-			return 0
+		kind, ok := fields[n.field]
+		if !ok {
+			return platform.Expr{}, fmt.Errorf("undeclared formula field %s", n.field)
 		}
-		return n.left.Eval(value) / d
+		return platform.ExprReference(platform.RuleFieldKind(kind), n.field), nil
 	}
-	return 0
+	a, err := n.left.Expr(fields)
+	if err != nil {
+		return a, err
+	}
+	op := string(n.op)
+	args := []platform.Expr{a}
+	if n.op == '~' {
+		op = "negate"
+	} else {
+		b, err := n.right.Expr(fields)
+		if err != nil {
+			return b, err
+		}
+		args = append(args, b)
+	}
+	return platform.Expr{Op: op, Kind: "decimal", Args: args}, nil
 }

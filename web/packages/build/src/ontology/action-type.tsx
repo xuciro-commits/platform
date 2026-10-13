@@ -1,3 +1,4 @@
+import {assignmentSugar,conditionSugar} from "../editor/rule-text";
 // The action type workbench (ADR-0053 §6, built under ADR-0054): an action is a
 // first-class resource with its own sections — Overview, Parameters, Form,
 // Rules, Submission criteria, Side effects, Approval, Permissions. Left: the
@@ -257,7 +258,10 @@ function ParameterEditor({ input, inputs, entities, onChange }: { input: Input_;
   </>;
 }
 
-function AssignmentEditor({ fields, sources, set, onChange }: { fields: { name: string; title: string }[]; sources: { value: string; label: string }[]; set: Set_; onChange: (patch: Partial<Set_>) => void }) {
+function AssignmentEditor({ fields, sources, set:storedSet, onChange:save }: { fields: { name: string; title: string }[]; sources: { value: string; label: string }[]; set: Set_; onChange: (patch: Partial<Set_>) => void }) {
+  const set=storedSet.expr?{...storedSet,from:assignmentSugar(storedSet.expr)??""}:storedSet;
+  const onChange=(patch:Partial<Set_>)=>save({...patch,expr:undefined});
+
   return <>
     <Label text={t("Field")}><Select value={set.field} onChange={(event) => onChange({ field: event.target.value })}>
       <option value="">{t("Choose a field")}</option>{fields.map((field) => <option key={field.name} value={field.name}>{field.title}</option>)}</Select></Label>
@@ -268,7 +272,13 @@ function AssignmentEditor({ fields, sources, set, onChange }: { fields: { name: 
 }
 
 type Subject = { value: string; label: string; type: string; ref?: string };
-function ConditionEditor({ condition: c, subjects, onChange: patch, guard = false }: { condition: Condition; subjects: Subject[]; onChange: (patch: Partial<Condition>) => void; guard?: boolean }) {
+function ConditionEditor({ condition:storedCondition, subjects, onChange:save, guard = false }: { condition: Condition; subjects: Subject[]; onChange: (patch: Partial<Condition>) => void; guard?: boolean }) {
+  const projected=storedCondition.expr?conditionSugar(storedCondition.expr):undefined;
+  const c=projected?{...storedCondition,...projected}:storedCondition;
+  const patch=(change:Partial<Condition>)=>save(storedCondition.expr?{...c,...change,expr:undefined}:change);
+  if(storedCondition.expr&&!projected)return <Textarea readOnly value={JSON.stringify(storedCondition.expr,null,2)} aria-label={t("Submission criterion")} />;
+
+
   const current = subjects.find((s) => s.value === c.field) ?? { type: "" };
   return <>
     <Label text={t("Field")}><Select value={c.field} onChange={(e) => patch({ field: e.target.value, valueField: undefined })}>{subjects.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</Select></Label>

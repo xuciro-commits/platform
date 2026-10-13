@@ -1,3 +1,4 @@
+import {initializeRules} from "@platform/app/rules";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Workspace, routeToHash, t } from "@platform/ui";
@@ -14,6 +15,7 @@ function OfflineCatalog() {
     applications={{ apps: [{ id: catalogApp.id, title: catalogApp.title, icon: catalogApp.icon, category: "developer", home }], categories: [{ id: "developer", label: t("Developer") }], current: catalogApp.id, onSelect: () => { location.hash = routeToHash(home); } }}
     status={<span className="text-xs text-muted">{t("Public code assets")}</span>} />;
 }
+await initializeRules();
 createRoot(document.getElementById("root")!).render(<StrictMode>{previewWorkspace ? <CatalogPreview id="pattern/workspace" standalone /> :
   <OfflineCatalog />}
 </StrictMode>);

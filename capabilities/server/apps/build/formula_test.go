@@ -2,7 +2,9 @@ package build
 
 import (
 	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/platform"
 	"testing"
+	"time"
 )
 
 func TestFormula(t *testing.T) {
@@ -25,14 +27,16 @@ func TestFormula(t *testing.T) {
 		t.Fatal("a broken formula parsed")
 	}
 	type rec struct {
-		Price *float64
-		Qty   int64
+		Price *float64 `json:"price"`
+		Qty   int64    `json:"qty"`
 		Total *float64
 		Half  *int64
 	}
 	price := 2.5
 	r := &rec{Price: &price, Qty: 3}
-	computeOf(o)(r)
+	if err := computeRulesOf(o, nil)(platform.Caller{}, r, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
 	if r.Total == nil || *r.Total != 7.5 || r.Half == nil || *r.Half != -2 {
 		t.Fatalf("computed %v %v", r.Total, r.Half)
 	}

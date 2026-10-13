@@ -187,7 +187,22 @@ type Section struct {
 func (b *Build) pageEntity() platform.Entity {
 	return platform.Entity{Type: PageType, Title: "Page", Plural: "Pages", Model: Page{}, Display: "title",
 		Description: "A list and detail page this organisation composed over an object it may read: the fields it shows and the actions it offers.",
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "pages"},
+		Validate: func(c platform.Caller, record any) *kernel.Error {
+			if c.Replaying {
+				return nil
+			}
+			p := record.(*Page)
+			if p.Document != nil {
+				if err := descriptor(*p).BindRuleTypes(b.conditionLookup); err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+				}
+				if err := p.Document.NormalizePageRules(); err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+				}
+			}
+			return nil
+		},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "pages"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
 			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being composed; nobody can open it yet."},
 				{Name: "published", Title: "Published", Tone: "success", Description: "Open to the members who may read its object."}},
@@ -198,6 +213,14 @@ func (b *Build) pageEntity() platform.Entity {
 					page, ok := record.(*Page)
 					if !ok {
 						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+					}
+					if !c.Replaying && page.Document != nil {
+						if err := descriptor(*page).BindRuleTypes(b.conditionLookup); err != nil {
+							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+						}
+						if err := page.Document.NormalizePageRules(); err != nil {
+							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+						}
 					}
 					next := *page
 					if err := retainPagePublication(&next); err != nil {

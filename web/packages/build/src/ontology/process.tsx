@@ -1,3 +1,4 @@
+import {formulaText} from "../editor/rule-text";
 import { mixedNames } from "../editor/names";
 import { ObjectLineage } from "./lineage";
 import {actionDestinations,actionResultEdges} from "./process-rules";
@@ -248,8 +249,8 @@ function FieldProperties({ field, others, onChange, onRemove }: { field: Field; 
     {field.type === "choice" && <Label text={t("Choices")}><Input value={field.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
     {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect label={t("Reference object")} value={field.ref} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined })} /></Label>}
     {field.type === "reference" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
-    {(field.type === "integer" || field.type === "decimal") && <Label text={t("Computed by formula")}><Input className="font-mono" placeholder="price * qty" value={field.formula ?? ""} onChange={(e) => onChange({ formula: e.target.value || undefined })} /></Label>}
-    {field.formula && <p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p>}
+    {(field.type === "integer" || field.type === "decimal") && <Label text={t("Computed by formula")}><Input className="font-mono" placeholder="price * qty" value={field.formula ?? (field.formulaExpr?formulaText(field.formulaExpr):"")} onChange={(e) => onChange({ formula: e.target.value || undefined,formulaExpr:undefined })} /></Label>}
+    {(field.formula||field.formulaExpr) && <p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
     <Checkbox checked={!!field.search} onChange={(search) => onChange({ search })}>{t("Searchable")}</Checkbox>
     {conditions.length > 0 && <Label text={t("Only when")}>

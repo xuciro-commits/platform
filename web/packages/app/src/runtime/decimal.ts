@@ -17,6 +17,3 @@ export function scalarAssignable(type:string,value:unknown,maxBytes=4096,decimal
 function parts(value:DecimalValue){const [whole,fraction=""]=value.value.split(".");return {coefficient:BigInt(whole+fraction),scale:fraction.length};}
 function aligned(a:DecimalValue,b:DecimalValue){const x=parts(a),y=parts(b),scale=Math.max(x.scale,y.scale);return {a:x.coefficient*10n**BigInt(scale-x.scale),b:y.coefficient*10n**BigInt(scale-y.scale),scale};}
 export function compareDecimal(a:DecimalValue,b:DecimalValue){const x=aligned(a,b);return x.a<x.b?-1:x.a>x.b?1:0;}
-export function decimalArithmetic(a:DecimalValue,b:DecimalValue,subtract=false,maxBytes=128):DecimalValue {
- const x=aligned(a,b),n=subtract?x.a-x.b:x.a+x.b,negative=n<0n,text=(negative?-n:n).toString().padStart(x.scale+1,"0");const raw=(negative?"-":"")+(x.scale?`${text.slice(0,-x.scale)}.${text.slice(-x.scale)}`:text),value=parseDecimal(raw,maxBytes);if(!value)throw new Error("Numeric result exceeds its budget.");return value;
-}

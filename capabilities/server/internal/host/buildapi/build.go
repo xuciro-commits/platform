@@ -23,11 +23,12 @@ const (
 // which fields it holds. Publishing it installs it (ADR-0034 D2).
 type Object struct {
 	platform.Record
-	Name        string  `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
-	Title       string  `json:"title" field:"required,search" title:"What people call it" example:"Visit"`
-	Plural      string  `json:"plural,omitempty" title:"What people call several" example:"Visits"`
-	Description string  `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
-	Fields      []Field `json:"fields" title:"Fields"`
+	Name        string                 `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
+	Title       string                 `json:"title" field:"required,search" title:"What people call it" example:"Visit"`
+	Plural      string                 `json:"plural,omitempty" title:"What people call several" example:"Visits"`
+	Description string                 `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
+	Fields      []Field                `json:"fields" title:"Fields"`
+	Reads       *platform.RuleReadSpec `json:"reads,omitempty" type:"json" field:"aside"`
 	// States and Actions make its records a small process (ADR-0037): the
 	// object editor owns them, so generated forms do not ask for them.
 	States  []State  `json:"states,omitempty" field:"aside" title:"States"`
@@ -72,7 +73,8 @@ type Field struct {
 	When string `json:"when,omitempty" title:"Only when" help:"field=value,value — another choice or boolean field of this object and the values that make this field apply" example:"kind=refund,return"`
 	// Formula computes an integer or decimal field from the record's other
 	// number fields at every decision; such a field is read-only (ADR-0064).
-	Formula string `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
+	FormulaExpr *platform.Expr `json:"formulaExpr,omitempty" type:"json" field:"aside"`
+	Formula     string         `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
 	// Read and Write, when set, are the roles that read and set it (ADR-0028 D3).
 	Read  []string `json:"read,omitempty" title:"Read by" help:"Roles that read it; empty: every role that reads the object"`
 	Write []string `json:"write,omitempty" title:"Set by" help:"Roles that set it; empty: every role that edits the object"`

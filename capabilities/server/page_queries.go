@@ -52,6 +52,12 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 	if p.Document == nil {
 		return nil
 	}
+	if err := p.BindRuleTypes(t.entity); err != nil {
+		return err
+	}
+	if err := p.Document.CheckVariables(); err != nil {
+		return err
+	}
 	for id, c := range p.ComputeResources() {
 		ref := p.RecordResourceObject(c.RecordVariable)
 		object, ok := t.entity(ref.Name)

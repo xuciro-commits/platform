@@ -25,6 +25,7 @@ type BuildHost interface {
 	Interfaces() []platform.Interface
 	Member(id string) (platform.Member, bool)
 	Operation(app, name string, version int) (platform.Operation, int, bool)
+	RuleQuery(app, name string, version int) (platform.NamedQuery, int, bool)
 	BuildProcesses() ProcessDefinitions
 	Record(ref string) (any, bool)
 	ResolvePropertyType(binding platform.AssetBinding) (platform.PropertyType, bool)

@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 )
 
 // PageVariable is presentation state, never a business record or authorization.
 // Additional types/scopes require a versioned runtime contract.
 type PageVariable struct {
+	RuleType   *ExprType           `json:"ruleType,omitempty"`
+	Rule       *Expr               `json:"rule,omitempty"`
 	Writable   bool                `json:"writable,omitempty"`
 	Title      string              `json:"title,omitempty"`
 	Scope      string              `json:"scope"`
@@ -494,6 +497,9 @@ func (d *PageDocument) CheckVariables() error {
 		if v.Source != nil && v.Source.Field != "" && v.Mode != "property" {
 			return fail("only a property source declares a field")
 		}
+		if v.Rule != nil && v.Mode != "derived" {
+			return fail("only derived variables carry rules")
+		}
 		switch v.Mode {
 		case "aggregate":
 			if v.Source == nil || !((v.Type == "decimal" && v.Source.Kind == contract.Aggregate.Source && v.Source.Measure == "") || (v.Type == "number" && v.Source.Kind == "aggregate") || (v.Type == "statistics" && v.Source.Kind == "statistics" && pageNodeID.MatchString(v.Source.Measure))) || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Variable != "" || v.Expression != nil || len(v.Initial) > 0 {
@@ -602,8 +608,50 @@ func (d *PageDocument) CheckVariables() error {
 				return fail("initial value type mismatch")
 			}
 		case "derived":
-			if len(v.Initial) != 0 || v.Expression == nil {
+			if len(v.Initial) != 0 || v.Expression == nil && v.Rule == nil {
 				return fail("derived variable needs only an expression")
+			}
+			if v.Rule != nil {
+				if v.Expression != nil {
+					return fail("use one rule expression")
+				}
+				schema := d.PageRuleSchema()
+				var walk func(Expr) error
+				walk = func(e Expr) error {
+					if e.Agg != nil {
+						if _, err := visit(e.Agg.Source); err != nil {
+							return err
+						}
+					}
+					if e.Ref != "" && !strings.HasPrefix(e.Ref, "item.") {
+						dependency := d.Variables[e.Ref]
+						if dependency.Scope == contract.Loop.Scope && (v.Scope != contract.Loop.Scope || v.Owner != dependency.Owner) || dependency.Scope == contract.Overlay.Scope && (v.Scope != contract.Overlay.Scope || v.Owner != dependency.Owner) {
+							return fmt.Errorf("rule dependency escapes its scope")
+						}
+						if _, err := visit(e.Ref); err != nil {
+							return err
+						}
+					}
+					for _, arg := range e.Args {
+						if err := walk(arg); err != nil {
+							return err
+						}
+					}
+					if e.In != nil {
+						return walk(*e.In)
+					}
+					return nil
+				}
+				if err := walk(*v.Rule); err != nil {
+					return fail(err.Error())
+				}
+				if !PageRuleFits(v.Type, v.Rule.Kind) {
+					return fail("rule output type differs")
+				}
+				if _, err := CompileExpr(*v.Rule, schema); err != nil {
+					return fail(err.Error())
+				}
+				break
 			}
 			expr := v.Expression
 			if expr.Op == "parse-number" && !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Gauge.RequiredUIProfile) {
@@ -661,4 +709,80 @@ func (d *PageDocument) CheckVariables() error {
 		}
 	}
 	return nil
+}
+
+func PageRuleKind(kind string) string {
+	switch kind {
+	case "string":
+		return "text"
+	case "record", "filter", "object-set", "record-set":
+		return "reference"
+	case "string-set":
+		return "set"
+	default:
+		return kind
+	}
+}
+func (d PageDocument) PageRuleSchema() ExprSchema {
+	schema := ExprSchema{Refs: map[string]ExprType{}, Sets: map[string]ExprSetType{}}
+	for name, v := range d.Variables {
+		t := ExprType{Kind: PageRuleKind(v.Type)}
+		if t.Kind == "reference" {
+			t.Resource = v.Type
+		}
+		if t.Kind == "set" {
+			t.Element = &ExprType{Kind: "text"}
+		}
+		if v.RuleType != nil {
+			if v.Mode == "property" {
+				t.Kind = v.RuleType.Kind
+			}
+			t.Fields = v.RuleType.Fields
+		}
+		if v.Rule != nil {
+			t.Kind = v.Rule.Kind
+		}
+		schema.Refs[name] = t
+		if v.Type == "object-set" && v.RuleType != nil {
+			schema.Sets[name] = ExprSetType{Element: *v.RuleType, Policy: "visible"}
+		}
+	}
+	return schema
+}
+
+// NormalizePageRules runs only on a live save/publication. Historical bytes
+// remain untouched; legacy graphs are also lowered in the browser on read.
+func (d *PageDocument) NormalizePageRules() error {
+	if err := d.CheckVariables(); err != nil {
+		return err
+	}
+	schema := d.PageRuleSchema()
+	for name, v := range d.Variables {
+		if v.Mode == "derived" && v.Expression != nil {
+			raw, _ := json.Marshal(v.Expression)
+			e, err := LowerPageExpr(raw, PageRuleKind(v.Type), schema)
+			if err != nil {
+				return fmt.Errorf("page variable %s: %w", name, err)
+			}
+			v.Rule = &e
+			v.Expression = nil
+			d.Variables[name] = v
+		}
+	}
+	return d.CheckVariables()
+}
+
+// Page variables retain their presentation scalar carriers. Rule kinds remain
+// explicit in the tree/schema; this is transport projection, not coercion.
+func PageRuleFits(carrier, kind string) bool {
+	if PageRuleKind(carrier) == kind {
+		return true
+	}
+	if carrier == "decimal" && kind == "integer" {
+		return true
+	}
+	if carrier == "string" {
+		return kind == "date" || kind == "datetime" || kind == "choice" || kind == "reference"
+	}
+	return false
 }

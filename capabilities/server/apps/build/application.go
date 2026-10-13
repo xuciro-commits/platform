@@ -41,7 +41,19 @@ type Application struct {
 func (b *Build) applicationEntity() platform.Entity {
 	return platform.Entity{Type: AppType, Title: "Application", Plural: "Applications", Model: Application{}, Display: "title",
 		Description: "An application this organisation hands to its people: a name, an icon, its pages and shared resource references. It gives nobody new access; each page is offered to whoever may read what it shows.",
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "applications"},
+		Validate: func(c platform.Caller, record any) *kernel.Error {
+			if c.Replaying {
+				return nil
+			}
+			a := record.(*Application)
+			d := platform.PageDocument{UIProfile: platform.PageUIProfile(), Variables: a.Variables}
+			if err := d.NormalizePageRules(); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			a.Variables = d.Variables
+			return nil
+		},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "applications"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
 			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being put together; nobody has it yet."},
 				{Name: "published", Title: "Published", Tone: "success", Description: "In the launcher of everyone who may open one of its pages."}},

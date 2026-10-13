@@ -172,6 +172,7 @@
 | 工作流 | D5 | 应用 API、平台应用 `flow` | 原生动作/等待/人工/并行/子流程/AI/计算、持久 scope/frame、超时/补偿、取消与追踪。 | platform.Flow；[ADR-0044](ADR/0044-capability-fabric.md) |
 | AI 提供商与模型 (ADR-0015, ADR-0029) | D6 | 平台应用 `ai` | 多供应商、受权模型、预算/熔断、SSE 及接受时模型绑定。 | capabilities/server/apps/ai/ai.go, aicall.go；[ADR-0015](ADR/0015-ai-providers.md), [ADR-0029](ADR/0029-ai-control-plane.md) |
 | 类型化 AI 函数 (ADR-0043 24b–24c 部分实现) | D6 | 应用 API、宿主 AI 模型效果路径 | 强类型建议、Build 版本/独立结果、页面/Flow 复用与评测门禁；ADR-0046 §6.80增加可选受权问题/原调用历史输入。真实模型质量未验收。 | platform.AIFunction, Caller.RequestFunction；[ADR-0043](ADR/0043-typed-ai-functions.md) |
+| 业务规则语言（ADR-0101） | D4 | 应用 API、Build、页面运行时 | 动作/事务守卫、赋值、计算字段、表格条件和页面 Rule 共用同一 Go 求值器，浏览器使用同源 Go/Wasm；声明路径/查询集合、权限读取、严格缺值/除零与只读旧发布兼容。 | [ADR-0101 As built](ADR/0101-one-rule-language.md#5-as-built) |
 | 能力装配与代码计算 | D4 | 应用 API、宿主、Build、FileStore、独立 Go worker | 原生目录投影/共同调用，Go/TinyGo 隔离编译、候选制品、wazero、页面/Flow 复用；显式 v2 数据通道的原生调用在锁外封存大输入，接受结果保存引用；原来源权限与 generation。 | platform.Operation/ValueSchema、build.code；[ADR-0044 §12](ADR/0044-capability-fabric.md#12-实际构建边界) |
 | 智能体 (ADR-0021, 0022) | D6 | 应用 API、平台应用 `agent` | 受管主体、交集权限、工具、草稿确认、追踪/记忆/评估和暂停。 | platform.Agent, agent*.go；[ADR-0021](ADR/0021-agents.md) |
 | 知识库 (ADR-0022) | D6 | 平台应用 `knowledge` | 权限内文本/向量检索、增量索引与引用来源；规模证据归 ADR-0033。 | knowledge.go, index.postings；[ADR-0022](ADR/0022-knowledge-memory-a2a.md) |
@@ -183,7 +184,7 @@
 | 固定页面内容与受控嵌入（ADR-0046，F1e59） | D1 | 原页面/宿主/前端边缘、UI Kit、Build | 原页面内容摘要与64份发布内容、当前成员精确版本读取、固定子页面候选闭包、原类型化接口、独立会话、共同预算、隔离外部文档及四类来源有限导入已接通；原类型化集合输入与默认CustomWidget集合参数已接通；集合返回与更广来源模块仍待实施，当前版本默认嵌入待联合运行验收。 | [ADR-0046 §6.79](ADR/0046-application-studio-fusion.md#679-受控嵌入与组合页面) |
 | 记录 AI 呈现与会话（ADR-0046，F1e60） | D6 | 原 AI/函数宿主、应用 API、UI Kit、Build | 固定受权函数、原确认记录/类型化结果、三种原生呈现与有限来源导入已接通；问题/原调用历史、同owner状态与退役、候选函数评估门禁沿原路径。跨集合/知识上下文和真实模型质量仍待验证。 | [ADR-0046 §6.80](ADR/0046-application-studio-fusion.md#680-三种原生-ai-呈现与受控会话) |
 | 原表单默认值与三处动作装配（ADR-0046，F1e63e2） | D4 | 应用 API、Build、Go | 原字段默认值、检查器/显式映射、共享记录草稿/revision保持、完整动作候选声明及三浮层共同冻结/真实状态与关联创建已接通；动作规则设计器和完整Module待接。 | [ADR-0046 §6.88](ADR/0046-application-studio-fusion.md#688-原动作参数默认值与三个表单) |
-| 受控动作参数与条件守卫（ADR-0046，F1e63e1） | D4 | Build、原Lifecycle/Caller | 原状态choice参数、类型化引用参数、UTF-16最小长度和单层条件守卫已接通原发布/调用/关联创建与内存重放；原动作设计器配置、多目标图/预览和三表单共同旅程已接通；更广规则/完整Module待接。 | [ADR-0046 §6.87](ADR/0046-application-studio-fusion.md#687-默认动作的原宿主规则与参数装配) |
+| 受控动作参数与条件守卫（ADR-0046，F1e63e1） | D4 | Build、原Lifecycle/Caller | 原状态choice参数、类型化引用参数、UTF-16最小长度和单层条件守卫已接通原发布/调用/关联创建与内存重放；原动作设计器配置、多目标图/预览和三表单共同旅程已接通；规则求值已由 ADR-0101 替换；通用规则编辑器/完整Module待接。 | [ADR-0046 §6.87](ADR/0046-application-studio-fusion.md#687-默认动作的原宿主规则与参数装配) |
 | 默认页面/抽屉集合与关联装配（ADR-0046，F1e63d） | D4 | Build、应用 API | 原页面变量可供浮层读取且保持唯一owner；双标题完整计数、双关联列表及生命周期状态可共同映射/冻结，浮层导航先关闭原遮罩再开原记录窗口；完整默认Module仍有动作等断点。 | [ADR-0046 §6.86](ADR/0046-application-studio-fusion.md#686-默认页面与抽屉的集合关联和状态消费者) |
 | 默认浮层与共享AI上下文（ADR-0046，F1e63c） | D1 | UI Kit、应用 API、Build、Go | 四个原浮层尺寸/关闭规则、检查器/导入/冻结及原共享record AI确认已接通；同记录刷新保留受理请求，换记录/owner退役仍清理；完整默认Module与真实模型质量待后续。 | [ADR-0046 §6.85](ADR/0046-application-studio-fusion.md#685-原默认浮层呈现与共享-ai-上下文) |
 | 原Operations表格与KPI呈现（ADR-0046，F1e63b） | D1 | UI Kit、应用 API、Build | 密度/工具栏/授权全集计数标题、显式静态KPI注释、检查器/导入/冻结已接通；完整默认Module与真期间趋势待后续。 | [ADR-0046 §6.84](ADR/0046-application-studio-fusion.md#684-默认四个-kpi-与资产表格的呈现配置) |

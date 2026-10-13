@@ -29,8 +29,8 @@
   "name": "workspace",
   "private": true,
   "scripts": {
-    "build": "vite build",
-    "dev": "vite",
+    "build": "node ../../../scripts/rule-browser.mjs && vite build",
+    "dev": "node ../../../scripts/rule-browser.mjs && vite",
     "test": "node --test src/host/*.test.mjs src/shell/*.test.mjs",
     "typecheck": "tsc -p ."
   },

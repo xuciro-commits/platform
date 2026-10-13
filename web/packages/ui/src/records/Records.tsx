@@ -74,6 +74,7 @@ export type Money = { amount: number; currency: string };
 export type RecordSource = {
   /** Stable member/definition scope; changing it discards cached view data. */
   scope?: string;
+  ruleIdentity?: {me:string;timezone:string};
   entity: (type: string) => EntityInfo | undefined;
   list: (type: string, query: RecordQuery) => Promise<RecordPageData>;
   get: (type: string, id: string) => Promise<RecordView>;

@@ -13,8 +13,8 @@ import (
 	"platformserver/platform"
 )
 
-// setSource is the existing assignment vocabulary, shared with frozen actions.
-// step outputs are supplied as named values, not a new expression language.
+// setSource adapts only frozen legacy assignment inputs. New saved actions
+// and transactions carry Expr; step facts remain named, typed private values.
 func setSource(c platform.Caller, kind, from string, inputs map[string]any, now time.Time) (any, bool, error) {
 	switch {
 	case from == "$me":
@@ -84,6 +84,18 @@ func (b *Build) checkTransactions(o Object) error {
 			}
 			return b.conditionLookup(typ)
 		}
+		spec := ruleSpec(o, a, txn.Reads)
+		if err := b.checkRuleCollections(spec, "transaction "+a.Name); err != nil {
+			return err
+		}
+		if txn.Guard != nil {
+			if txn.Guard.Kind != "boolean" || txn.Message == "" {
+				return fmt.Errorf("transaction guard needs a boolean and message")
+			}
+			if _, err := platform.RuleSchema(*txn.Guard, spec, lookup); err != nil {
+				return err
+			}
+		}
 		prior := map[string]platform.TxnStep{}
 		updates := map[string]bool{}
 		creates := map[string]bool{}
@@ -92,6 +104,22 @@ func (b *Build) checkTransactions(o Object) error {
 			where := fmt.Sprintf("transaction %s step %d", a.Name, i+1)
 			if !named(step.Name) || prior[step.Name].Name != "" {
 				return fmt.Errorf("%s needs a unique step name", where)
+			}
+			if step.When != nil {
+				ws := ruleSpec(o, a, txn.Reads)
+				for name, prev := range prior {
+					kind := "reference"
+					if prev.Kind == "sequence" {
+						kind = "text"
+					}
+					ws.Inputs["step."+name] = platform.ExprType{Kind: kind, Object: prev.Target.Type}
+				}
+				if step.When.Kind != "boolean" {
+					return fmt.Errorf("%s when must be boolean", where)
+				}
+				if _, err := platform.RuleSchema(*step.When, ws, lookup); err != nil {
+					return err
+				}
 			}
 			if step.Kind == "sequence" {
 				if step.Sequence == nil || step.Sequence.Check() != nil || step.Target != (platform.TxnRef{}) || len(step.Changes) > 0 {
@@ -167,16 +195,36 @@ func (b *Build) checkTransactions(o Object) error {
 					if step.Target.ID != "$subject" {
 						return fmt.Errorf("%s must write its subject explicitly", where)
 					}
+					if step.When != nil {
+						return fmt.Errorf("the subject update cannot be skipped")
+					}
 					subjectWrite = true
 				}
 			}
 			used := map[string]bool{}
 			for _, set := range step.Changes {
 				f, found := info.Field(set.Field)
-				if !found || f.ReadOnly || used[set.Field] || set.From == "" {
+				if !found || f.ReadOnly || used[set.Field] || set.From == "" && set.Expr == nil {
 					return fmt.Errorf("%s needs distinct writable fields", where)
 				}
 				used[set.Field] = true
+				if set.Expr != nil {
+					spec := ruleSpec(o, a, txn.Reads)
+					for name, prev := range prior {
+						kind := "reference"
+						if prev.Kind == "sequence" {
+							kind = "text"
+						}
+						spec.Inputs["step."+name] = platform.ExprType{Kind: kind, Object: prev.Target.Type}
+					}
+					if !ruleAssignmentFits(f.Type, set.Expr.Kind) {
+						return fmt.Errorf("%s assignment result type differs", where)
+					}
+					if _, err := platform.RuleSchema(*set.Expr, spec, lookup); err != nil {
+						return fmt.Errorf("%s set %s: %w", where, set.Field, err)
+					}
+					continue
+				}
 				if name, stepValue := strings.CutPrefix(set.From, "step."); stepValue {
 					prev, ok := prior[name]
 					if !ok || prev.Kind != "create" && prev.Kind != "sequence" || prev.Kind == "sequence" && f.Type != "text" && f.Type != "longtext" || prev.Kind == "create" && (f.Type != "reference" || f.Ref != prev.Target.Type) {
@@ -215,13 +263,64 @@ func (b *Build) transact(c platform.Caller, r *pb.ChangeRecord, txn *platform.Bu
 	if json.Unmarshal(r.GetSubmission().GetPayload(), &values) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction inputs / 事务输入无效")
 	}
+	subjectRaw, refusal := c.ReadRecord(txn.Subject, r.GetSubmission().GetTarget().GetId(), now)
+	if refusal != nil {
+		return refusal
+	}
+	var subject map[string]any
+	decoder := json.NewDecoder(strings.NewReader(string(subjectRaw)))
+	decoder.UseNumber()
+	if err := decoder.Decode(&subject); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction subject")
+	}
+	spec := platform.RuleReadSpec{Object: txn.Subject, Inputs: map[string]platform.ExprType{}}
+	if txn.Reads != nil {
+		spec.Collections = txn.Reads.Collections
+	}
+	entity := b.installed[txn.Subject]
+	life := entity.Lifecycle
+	for _, transition := range life.Transitions {
+		if transition.Txn != nil && transition.Name == strings.TrimPrefix(r.GetSubmission().GetSchema().GetName(), txn.Subject+".") {
+			for _, in := range transition.Payload {
+				kind := platform.RuleFieldKind(in.Type)
+				if in.Ref != "" {
+					kind = "reference"
+				} else if len(in.Choices) > 0 {
+					kind = "choice"
+				}
+				if kind == "string" {
+					kind = "text"
+				}
+				spec.Inputs[in.Name] = platform.ExprType{Kind: kind, Object: in.Ref}
+			}
+		}
+	}
+	if txn.Guard != nil {
+		result, err := evalRule(*txn.Guard, spec, c, subject, values, now, b.conditionLookup)
+		if err != nil {
+			return err
+		}
+		if string(result.Value.Data) != "true" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", txn.Message)
+		}
+	}
 	for _, step := range txn.Steps {
+		if step.When != nil {
+			result, err := evalRule(*step.When, spec, c, subject, values, now, b.conditionLookup)
+			if err != nil {
+				return err
+			}
+			if string(result.Value.Data) != "true" {
+				continue
+			}
+		}
 		if step.Kind == "sequence" {
 			number, err := c.Next(r, step.Sequence.Name, now)
 			if err != nil {
 				return err
 			}
 			values["step."+step.Name] = number
+			spec.Inputs["step."+step.Name] = platform.ExprType{Kind: "text"}
 			continue
 		}
 		entity, ok := b.installed[step.Target.Type]
@@ -250,7 +349,17 @@ func (b *Build) transact(c platform.Caller, r *pb.ChangeRecord, txn *platform.Bu
 		patch := map[string]any{}
 		for _, set := range step.Changes {
 			field, _ := info.Field(set.Field)
-			value, present, err := setSource(c, field.Type, set.From, values, now)
+			var value any
+			present := true
+			var err error
+			if set.Expr != nil {
+				value, refusal = ruleAssignment(*set.Expr, spec, c, subject, values, now, b.conditionLookup)
+				if refusal != nil {
+					return refusal
+				}
+			} else {
+				value, present, err = setSource(c, field.Type, set.From, values, now)
+			}
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction assignment / 事务赋值无效")
 			}
@@ -263,6 +372,7 @@ func (b *Build) transact(c platform.Caller, r *pb.ChangeRecord, txn *platform.Bu
 		}
 		if step.Kind == "create" {
 			values["step."+step.Name] = id
+			spec.Inputs["step."+step.Name] = platform.ExprType{Kind: "reference", Object: step.Target.Type}
 		}
 	}
 	return nil

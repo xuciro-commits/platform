@@ -1,6 +1,6 @@
 # ADR-0046: 融合外包编辑体验与平台语义的应用设计台
 
-**状态：** 已接受，分批实施，2026-10-01（#141，关联 #123/#132/#138）。**§3 的"Application Studio / 应用设计台"顶层结构已被 [ADR-0052](0052-foundry-aligned-platform-experience.md) 取代**：页面编辑器现为 Workshop 应用，本体视图为 Ontology 应用，Logic 为 Automate / AI Functions / Code，测试发布为 Releases；§5–§6 的页面文档、容器、变量与组件契约继续有效。外包原型源码（原 `references/application-studio/`）已从仓库移除，需要时取 Git 历史 `1487b6b` 之前的版本。负责人明确要求“开始执行落地ADR0046”；按 F1–F6 推进，产品方向、文档/组件契约和迁移路线已有实施授权。活动批次只在 [WorkQueue](../WorkQueue.md)，工程检查与体验验收保持区分。
+**状态：** 页面算子图语法/求值由 [ADR-0101](0101-one-rule-language.md) 取代；变量/资源的执行边界继续有效。 已接受，分批实施，2026-10-01（#141，关联 #123/#132/#138）。**§3 的"Application Studio / 应用设计台"顶层结构已被 [ADR-0052](0052-foundry-aligned-platform-experience.md) 取代**：页面编辑器现为 Workshop 应用，本体视图为 Ontology 应用，Logic 为 Automate / AI Functions / Code，测试发布为 Releases；§5–§6 的页面文档、容器、变量与组件契约继续有效。外包原型源码（原 `references/application-studio/`）已从仓库移除，需要时取 Git 历史 `1487b6b` 之前的版本。负责人明确要求“开始执行落地ADR0046”；按 F1–F6 推进，产品方向、文档/组件契约和迁移路线已有实施授权。活动批次只在 [WorkQueue](../WorkQueue.md)，工程检查与体验验收保持区分。
 
 **与既有决策的关系：** 延续 [ADR-0018](0018-one-workspace.md) 的一个工作区、[ADR-0040](0040-semantic-builder-and-relationship-model.md) 的统一语义及多种创作界面、[ADR-0039](0039-minimal-definition-release.md) 的冻结候选与激活、[ADR-0044](0044-capability-fabric.md) 的原能力执行路径，以及 [ADR-0045](0045-platform-catalog.md) 的规范主人与 Catalog。接受本文后，扩展 [ADR-0035](0035-a-page-is-a-layout-of-bound-widgets.md) 的平铺页面表达范围；不改变 K1–K9，也不改变原应用的业务权威。
 

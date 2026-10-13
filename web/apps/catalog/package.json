@@ -2,12 +2,15 @@
   "name": "@platform/catalog-app",
   "private": true,
   "type": "module",
-  "exports": { "./app": "./src/app.tsx", "./view": "./src/Catalog.tsx" },
+  "exports": {
+    "./app": "./src/app.tsx",
+    "./view": "./src/Catalog.tsx"
+  },
   "scripts": {
-    "dev": "vite",
+    "dev": "node ../../../scripts/rule-browser.mjs && vite",
     "typecheck": "tsc -p .",
     "test": "vitest run",
-    "build": "vite build"
+    "build": "node ../../../scripts/rule-browser.mjs && vite build"
   },
   "dependencies": {
     "@platform/app": "workspace:*",

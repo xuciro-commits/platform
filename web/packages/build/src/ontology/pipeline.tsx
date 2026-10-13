@@ -1,3 +1,4 @@
+import {formulaText} from "../editor/rule-text";
 import {useInputDrafts} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
@@ -15,7 +16,7 @@ import { cell } from "./dataset";
 // pipeline when its input gains a version, on a period, or on request; rows
 // that fail an expectation are quarantined on the run, never written.
 type Measure = { fn: string; column?: string; to: string };
-type Step = { kind: string; columns?: string[]; from?: string; to?: string; column?: string; type?: string; op?: string; value?: string; formula?: string; dataset?: string; match?: string; as?: string; outer?: boolean; desc?: boolean; measures?: Measure[] };
+type Step = { kind: string; columns?: string[]; from?: string; to?: string; column?: string; type?: string; op?: string; value?: string; formula?: string;formulaExpr?:import("@platform/kernel").Api.Expr; dataset?: string; match?: string; as?: string; outer?: boolean; desc?: boolean; measures?: Measure[] };
 type Expectation = { column: string; rule: string; value?: string };
 type Run = { merged?: number; at: string; inputVersion: number; rows: number; written: number; quarantined: number; failed: number; error?: string; outputVersion?: number;
   quarantine?: { reason: string; row: Record<string, unknown> }[]; failures?: { id: string; outcome: string }[] };
@@ -244,7 +245,7 @@ function StepFields({ step: s, datasets, onChange }: { step: Step; datasets: Dat
     case "rename": return <div className={row}>{text("From", "from", "MaterialNumber")}{text("To", "to", "matnr")}</div>;
     case "cast": return <div className={row}>{text("Column", "column", "qty")}<label className={fieldClass}>{t("Type")}<Select value={s.type ?? ""} onChange={(e) => onChange({ type: e.target.value })}><option value="">{t("Choose a type")}</option>{TYPES.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></label></div>;
     case "filter": return <div className={row}>{text("Column", "column", "plant")}<label className={fieldClass}>{t("Condition")}<Select value={s.op ?? "="} onChange={(e) => onChange({ op: e.target.value })}>{OPS.map((x) => <option key={x} value={x}>{x}</option>)}</Select></label>{s.op !== "empty" && s.op !== "notempty" && text("Value", "value", "1000")}</div>;
-    case "compute": return <div className={row}>{text("New column", "to", "value")}<label className={`${fieldClass} md:col-span-3`}>{t("Formula")}<Input value={s.formula ?? ""} placeholder="qty * price" onChange={(e) => onChange({ formula: e.target.value })} /><span className="text-[11px] text-muted">{t("Arithmetic over number columns: + - * / and parentheses.")}</span></label></div>;
+    case "compute": return <div className={row}>{text("New column", "to", "value")}<label className={`${fieldClass} md:col-span-3`}>{t("Formula")}<Input value={s.formula ?? (s.formulaExpr?formulaText(s.formulaExpr):"")} placeholder="qty * price" onChange={(e) => onChange({ formula: e.target.value,formulaExpr:undefined })} /><span className="text-[11px] text-muted">{t("Arithmetic over number columns: + - * / and parentheses.")}</span></label></div>;
     case "lookup": case "join": return <div className={row}>{other}{text("Column here", "column", "plant")}{text("Column there", "match", "werks")}{text("Prefix", "as", "plant_")}
       {s.kind === "lookup" ? <label className={`${fieldClass} md:col-span-4`}>{t("Columns to take")}<Input value={list(s.columns)} placeholder="name, region" onChange={(e) => onChange({ columns: parse(e.target.value) })} /></label>
         : <Checkbox checked={!!s.outer} onChange={(outer) => onChange({ outer })}>{t("Keep rows without a match")}</Checkbox>}</div>;

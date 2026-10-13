@@ -380,6 +380,11 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 	} else if !slices.Contains(t.To, to) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT} // Do chose a status the transition does not reach
 	}
+	if e.ComputeAt != nil {
+		if err := e.ComputeAt(c, v.Interface(), now); err != nil {
+			return nil, err
+		}
+	}
 	if e.Compute != nil {
 		e.Compute(v.Interface())
 	}
@@ -461,6 +466,11 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 			return nil, invalid
 		}
 		v.Elem().Field(0).Addr().Interface().(*Record).ID = id
+	}
+	if e.ComputeAt != nil {
+		if err := e.ComputeAt(c, v.Interface(), now); err != nil {
+			return nil, err
+		}
 	}
 	if e.Compute != nil {
 		e.Compute(v.Interface())

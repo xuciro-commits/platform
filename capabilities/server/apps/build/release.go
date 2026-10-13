@@ -262,7 +262,7 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 		if err != nil {
 			return nil, err
 		}
-		var requires []platform.AssetRef
+		requires := ruleRequirements(saved.Reads)
 		for _, field := range saved.Fields {
 			if field.Property != nil {
 				requires = append(requires, field.Property.Ref)
@@ -276,7 +276,9 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 			}
 		}
 		for _, action := range saved.Actions {
+			requires = append(requires, ruleRequirements(action.Reads)...)
 			if action.Transaction != nil {
+				requires = append(requires, ruleRequirements(action.Transaction.Reads)...)
 				for _, step := range action.Transaction.Steps {
 					if step.Target.Type != "" && step.Target.Type != ref.Name {
 						requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: step.Target.Type})

@@ -27,6 +27,8 @@ type operationBinding struct {
 	Member      string                     `json:"member"`
 	Inputs      json.RawMessage            `json:"inputs,omitempty"`
 	SealedInput *operationInputArtifact    `json:"sealedInput,omitempty"`
+	RuleFacts   *platform.ExprContext      `json:"ruleFacts,omitempty"`
+	RuleSchemas []platform.ExprSchema      `json:"ruleSchemas,omitempty"`
 	Build       *platform.CodeBuildRequest `json:"build,omitempty"`
 }
 
@@ -171,6 +173,34 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 		target = r.GetSubmission().GetTarget().GetType() + "/" + r.GetSubmission().GetTarget().GetId()
 	}
 	binding := operationBinding{Definition: op, Call: call, Member: member.ID, Inputs: slices.Clone(q.Inputs), SealedInput: input}
+	if op.Rules != nil {
+		if input != nil {
+			return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Rule tables use captured scalar inputs")
+		}
+		ruleCaller := platform.ActingCaller(c, member, owner, false)
+		var values map[string]any
+		decoder := json.NewDecoder(strings.NewReader(string(q.Inputs)))
+		decoder.UseNumber()
+		if decoder.Decode(&values) != nil {
+			return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Rule table inputs are invalid")
+		}
+		aggregate := platform.Expr{}
+		for _, row := range op.Rules.Rows {
+			schema, err := platform.RuleSchema(row.Condition, op.Rules.Reads, t.entity)
+			if err != nil {
+				return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			binding.RuleSchemas = append(binding.RuleSchemas, schema)
+			aggregate.Args = append(aggregate.Args, row.Condition)
+		}
+		facts, err := ruleCaller.RuleContext(aggregate, op.Rules.Reads, t.entity, nil, values, r.GetRecordedTime().AsTime())
+		if err != nil {
+			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, err.Error())
+		}
+		binding.RuleFacts = &facts
+		call.Sources = append(call.Sources, facts.Sources...)
+		binding.Call = call
+	}
 	if input != nil {
 		binding.Inputs = nil
 	}
@@ -446,7 +476,27 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 				return out
 			}
 		}
-		if op.Binding.Kind == "native" {
+		if op.Rules != nil {
+			for _, set := range op.Rules.Reads.Collections {
+				query, _, ok := t.memberQueryVersion(member, platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}, set.Version)
+				if !ok || query.Object != set.Object {
+					out.Detail = "Rule collection permission was revoked"
+					return out
+				}
+				info, _ := t.entity(set.Object)
+				if set.Policy == "complete" && info.Scope.LevelFor([]string{member.Roles[info.App]}) != platform.ScopeTenant {
+					out.Detail = "Complete collection permission was revoked"
+					return out
+				}
+			}
+		}
+		if op.Rules != nil {
+			if b.RuleFacts == nil {
+				err = fmt.Errorf("Rule facts are not bound")
+			} else {
+				output, err = op.Rules.DecideSchemas(*b.RuleFacts, b.RuleSchemas)
+			}
+		} else if op.Binding.Kind == "native" {
 			executor, ok := t.app(x.App).(platform.OperationExecutor)
 			if !ok {
 				err = fmt.Errorf("Native operation executor is not available")

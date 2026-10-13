@@ -1,6 +1,8 @@
 package build
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -50,5 +52,27 @@ func TestPipelineStepsAndExpectations(t *testing.T) {
 	schema := DatasetSchema(rows)
 	if len(schema) != 5 || schema[0].Name != "changed" || schema[0].Type != "date" {
 		t.Fatalf("schema %+v", schema)
+	}
+}
+
+func TestPipelineFormulaMigrationUsesStrictSharedEngine(t *testing.T) {
+	p := Pipeline{Steps: []Step{{Kind: "compute", To: "ratio", Formula: "qty / price"}}}
+	before, _ := json.Marshal(p)
+	if err := p.NormalizeFormulaRules(); err != nil {
+		t.Fatal(err)
+	}
+	if p.Steps[0].Formula != "" || p.Steps[0].FormulaExpr == nil {
+		t.Fatal("old pipeline formula writer retained")
+	}
+	if _, _, err := p.Execute([]map[string]any{{"qty": 1.0, "price": 0.0}}, nil); err == nil {
+		t.Fatal("new pipeline division silently produced zero")
+	}
+	var frozen Pipeline
+	if err := json.Unmarshal(before, &frozen); err != nil {
+		t.Fatal(err)
+	}
+	rows, _, err := frozen.Execute([]map[string]any{{"qty": 1.0, "price": 0.0}}, nil)
+	if err != nil || fmt.Sprint(rows[0]["ratio"]) != "0" {
+		t.Fatalf("frozen pipeline changed: %+v %v", rows, err)
 	}
 }

@@ -1,3 +1,4 @@
+import {pageSugar} from "../../editor/rule-text";
 import {originalRecordObject} from "./record-binding";
 import type { Api } from "@platform/kernel";
 import { parsePageDecimal,isPageDecimalDraft,SemanticObjectSelect, pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";
@@ -25,10 +26,10 @@ export function VariablesPanel({ document, sections, values, onChange, object, a
   const variables = document.variables ?? {}, [chosen, choose] = useState("");
   const id = variables[chosen] ? chosen : Object.keys(variables)[0] ?? "", variable = variables[id];
   const update = (next: Variables) => onChange({ ...document, uiProfile: pageUIProfile, variables: next });
-  const patch = (change: Partial<Api.PageVariable>) => update({ ...variables, [id]: { ...variable!, ...change } });
+  const patch = (change: Partial<Api.PageVariable>) => {if(Object.hasOwn(change,"expression")||change.mode&&change.mode!=="derived")change={...change,rule:undefined};return update({ ...variables, [id]: { ...variable!, ...change } });};
   const bindShared=(key:string)=>{const source=shared[key];if(source)patch({type:source.type,writable:source.mode==="state"||["record","filter","record-set"].includes(source.type),source:{kind:"application",variable:key,...(["object-set","record","filter","record-set"].includes(source.type)?{object:sharedObjects[key]}:{})}});};
   const targets = Object.values(document.nodes).filter((node) => node.activeVariable === id).flatMap((node) => node.children ?? []);
-  const expr = variable?.expression;
+  const expr = variable?.expression ?? (variable?.rule?pageSugar(variable.rule):undefined);
   const result = values[id], current = result && (result.status === "value" || result.status === "empty") ? result.value : undefined;
   return <Card className="grid content-start gap-3 p-3">
     <h3 className="text-sm font-semibold">{t(application ? "Application variables" : "Page variables")}</h3>
@@ -110,6 +111,7 @@ export function VariablesPanel({ document, sections, values, onChange, object, a
       <div role="region" aria-label={t("Current variable value")} className="grid gap-2 border-t border-border pt-2 text-xs">
         <strong>{t("Current variable value")}</strong><span role="status">{t(result?.status === "pending" ? "Loading value" : result?.status === "value" ? "Value available" : result?.status === "error" ? "Value error" : "No value")}</span>
         {result?.status === "error" && <p role="alert">{t(result.code)}</p>}
+ {result?.status==="value"&&result.reasons?.map((reason,at)=><p key={at}>{t("Rule reason")}: {reason.at} · {t(reason.code==="scope"?"Evaluated caller-visible collection":reason.code==="missing"?"Rule comparison input is missing":reason.message)}</p>)}
         {current !== undefined && (typeof current === "object" ? (current.kind==="decimal"||current.kind==="number")?<p>{current.value}</p>:current.kind==="statistics"?<PropertyList items={[[t("Count"),current.count],[t("Min"),current.min===undefined?t("No value"):String(current.min)],[t("Mean"),current.mean===undefined?t("No value"):String(current.mean)],[t("Max"),current.max===undefined?t("No value"):String(current.max)],[t("Sum"),current.sum===undefined?t("No value"):String(current.sum)]]}/>:current.kind === "record" ? <PropertyList items={[[t("Object"), current.reference.object], [t("Record"), current.reference.id]]} />
           : current.kind === "string-set" ? <p>{current.values.join(", ")}</p> :current.kind==="record-set"?<PropertyList items={[[t("Object"),current.object],[t("Selected records"),current.records.map(r=>r.id).join(", ")]]}/>: current.kind === "filter" ? <PropertyList items={Object.entries(current.fields).map(([field, value]) => [field, String(value)])} />
           : current.kind==="object-set-input"?<PropertyList items={[[t("Object"),current.object.name],[t("Collection query"),JSON.stringify(current.predicate)]]}/>: <PropertyList items={[[t("Object"), current.window.object], [t("Records in window"), String(current.window.records.length)], [t("Total matching records"), String(current.window.total)], [t("Offset"), String(current.window.query.offset ?? 0)], [t("Window coverage"), t(current.window.complete ? "Complete for this read" : "Partial window")]]} />
