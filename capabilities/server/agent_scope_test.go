@@ -19,7 +19,7 @@ func TestAgentKnowledgeCitationUsesCurrentDocumentGrant(t *testing.T) {
 	doc := platform.KnowledgeDocument{Record: platform.Record{ID: "D1"}, Title: "Inspection policy", Text: "Hydraulic inspection policy", Apps: []string{"stock"}}
 	put := func() {
 		t.Helper()
-		if err := tn.automation(platform.KnowledgeApp, false).PutAt(now, "test.policy", doc); err != nil {
+		if err := tn.automation(platform.KnowledgeApp, true).PutAt(now, "test.policy", doc); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -27,7 +27,7 @@ func TestAgentKnowledgeCitationUsesCurrentDocumentGrant(t *testing.T) {
 	run := AgentRunRecord{Record: platform.Record{ID: "R1"}, Agent: "stock.guide", OnBehalf: reader.ID, State: "done",
 		Steps:     []RunStep{{Tool: "knowledge", Sources: []string{"knowledge.document/D1"}, Outcome: doc.Text}},
 		Citations: []Citation{{Document: "knowledge.document/D1", Title: doc.Title}}, Result: "Use the inspection policy"}
-	if err := tn.automation(AgentApp, false).PutAt(now, "test.run", run); err != nil {
+	if err := tn.automation(AgentApp, true).PutAt(now, "test.run", run); err != nil {
 		t.Fatal(err)
 	}
 	check := func(visible bool) {
@@ -89,7 +89,7 @@ func TestAgentKnowledgeCitationUsesCurrentDocumentGrant(t *testing.T) {
 	// association at the agent entity, not in a second host permission filter.
 	decide(t, tn, reader.ID, "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Press", "line": "L1"}, now)
 	run.Ref = "stock.item/I1"
-	if err := tn.automation(AgentApp, false).PutAt(now, "test.context", run); err != nil {
+	if err := tn.automation(AgentApp, true).PutAt(now, "test.context", run); err != nil {
 		t.Fatal(err)
 	}
 	check(true)
@@ -121,7 +121,7 @@ func TestAgentTraceScope(t *testing.T) {
 	decide(t, tn, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Press", "line": "L1", "note": "hydraulic inspection due"}, now)
 	item, _ := platform.Get[Item](tn.automation("stock", false), "I1")
 	item.Secret = "the tolerance is 0.02mm" // only a lead reads it (ADR-0028 D3)
-	if err := tn.automation("stock", false).PutAt(now, "test.tolerance", item); err != nil {
+	if err := tn.automation("stock", true).PutAt(now, "test.tolerance", item); err != nil {
 		t.Fatal(err)
 	}
 	run := AgentRunRecord{Record: platform.Record{ID: "R1"}, Agent: "stock.guide", OnBehalf: "ana", State: "done", Ref: "stock.item/I1",
@@ -130,11 +130,11 @@ func TestAgentTraceScope(t *testing.T) {
 		Citations: []Citation{{Document: "stock.item/I1#note", Title: "Press"}},
 		Draft:     []Draft{{Kind: "action", Action: "stock.item.count", Type: "stock.item", Target: "I1", Payload: `{"qty":6}`}},
 		Result:    "the press is due for hydraulic inspection"}
-	if err := tn.automation(AgentApp, false).PutAt(now, "test.run", run); err != nil {
+	if err := tn.automation(AgentApp, true).PutAt(now, "test.run", run); err != nil {
 		t.Fatal(err)
 	}
 	tn.transcribe(Transcript{At: now, Member: "ana", Model: "test", Run: "R1", Request: json.RawMessage(`{"prompt":"hydraulic inspection due"}`)})
-	if err := tn.automation(AgentApp, false).PutAt(now, "test.memory", Memory{Record: platform.Record{ID: "M1"}, Agent: "stock.guide",
+	if err := tn.automation(AgentApp, true).PutAt(now, "test.memory", Memory{Record: platform.Record{ID: "M1"}, Agent: "stock.guide",
 		Fact: "the press needs a hydraulic inspection every month", For: "ana", Run: "R1", Sources: []string{"stock.item/I1"}, State: "active"}); err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestAgentTraceScope(t *testing.T) {
 		Steps:     []RunStep{{Tool: "context", Sources: []string{"stock.item/I1#secret"}, Outcome: `{"secret":"the tolerance is 0.02mm"}`}},
 		Citations: []Citation{{Document: "stock.item/I1#note", Title: "Press"}, {Document: "stock.item/I1#secret", Title: "Press"}},
 		Result:    "the tolerance is 0.02mm"}
-	if err := tn.automation(AgentApp, false).PutAt(now, "test.run", second); err != nil {
+	if err := tn.automation(AgentApp, true).PutAt(now, "test.run", second); err != nil {
 		t.Fatal(err)
 	}
 	opRun := read(member("op"))
@@ -234,7 +234,7 @@ func TestAgentTraceScope(t *testing.T) {
 	whole(leadAdmin, detail(leadAdmin, "R1"))
 	item, _ = platform.Get[Item](tn.automation("stock", false), "I1")
 	item.Owner, item.Line = "bo", "L2"
-	if err := tn.automation("stock", false).PutAt(now, "test.move", item); err != nil {
+	if err := tn.automation("stock", true).PutAt(now, "test.move", item); err != nil {
 		t.Fatal(err)
 	}
 	if tn.Readable(member("ana"), "stock.item/I1", now) {

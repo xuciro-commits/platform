@@ -74,7 +74,8 @@ func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvoca
 		}
 		s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: q.Ref.App, IdempotencyKey: q.Key,
 			Target: &pb.EntityRef{Type: selected.Target, Id: q.Target}, Schema: &pb.SchemaRef{Name: q.Ref.Name, Version: 1}, Payload: payload, ExpectedRevision: q.ExpectedRevision}
-		record, err := t.Submit(m, s, now)
+		record, err, issues := t.submitDiagnosed(m, s, now)
+		answer.Issues = issues
 		if err != nil {
 			return answer, err
 		}

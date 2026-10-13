@@ -444,6 +444,7 @@ export type CapabilityInvocation = {
 };
 
 export type CapabilityResult = {
+  issues?: FieldIssue[];
   ref: AssetRef;
   state: string;
   call?: string;
@@ -584,6 +585,18 @@ export type ConnectorView = {
   cursor?: string;
   disabled: boolean;
   lastError?: ConnectorError;
+};
+
+export type Constraint = {
+  name: string;
+  kind: "required" | "unique" | "range" | "pattern" | "expression" | "cardinality" | "immutable" | "temporal";
+  fields: string[];
+  expr?: Expr;
+  message: string;
+  translations?: Record<string, string>;
+  scope?: string;
+  level?: "record" | "txn";
+  reads?: RuleReadSpec;
 };
 
 export type ContextView = {
@@ -818,6 +831,7 @@ export type EnterpriseReferenceGroup = {
 };
 
 export type EntityInfo = {
+  constraints?: Constraint[];
   type: string;
   title: string;
   plural: string;
@@ -926,6 +940,11 @@ export type FieldInfo = {
 };
 
 export type FieldIssue = {
+  record?: string;
+  constraint?: string;
+  translations?: Record<string, string>;
+  values?: Record<string, unknown>;
+  reason?: string;
   code: string;
   message: string;
   path: string[];
@@ -1109,6 +1128,7 @@ export type ImportRow = {
   id: string;
   action: string;
   outcome: string;
+  error?: ErrorBody;
 };
 
 export type InboxTask = {

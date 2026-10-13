@@ -77,7 +77,7 @@ func (t *TxnRef) UnmarshalJSON(raw []byte) error {
 // All rows carry the parent receipt and remain private until the host accepts
 // its complete result. This is not an authoritative write entry point.
 func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id string, payload json.RawMessage, now time.Time) *kernel.Error {
-	if !c.Staging() || c.Replaying || c.rt.Probing() || c.App != l.authority || r.GetSubmission().GetAuthority() != c.App ||
+	if !c.Staging() || c.Replaying || c.App != l.authority || r.GetSubmission().GetAuthority() != c.App ||
 		r.GetSubmission().GetTenantId() != l.tenant || r.GetSubmission().GetPrincipalId() != c.ID || r.GetChangeId() == "" || id == "" || !strings.HasPrefix(e.Type, c.App+".") ||
 		(verb != "create" && verb != "edit") {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction step is outside its private authority / 事务步骤超出私有权威范围")

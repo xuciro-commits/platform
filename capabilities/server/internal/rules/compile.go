@@ -3,6 +3,7 @@ package rules
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -32,7 +33,23 @@ func compile(e Expr, s Schema, frozen bool) (*Program, error) {
 	}
 	var schema Schema
 	json.Unmarshal(schemaRaw, &schema)
-	return &Program{expr: cloneExpr(e), schema: schema}, nil
+	program := &Program{expr: cloneExpr(e), schema: schema, patterns: map[string]*regexp.Regexp{}}
+	var patterns func(Expr)
+	patterns = func(expr Expr) {
+		if expr.Op == "matches" {
+			var pattern string
+			_ = json.Unmarshal(expr.Args[1].Lit.Value, &pattern)
+			program.patterns[pattern], _ = regexp.Compile("\\A(?:" + pattern + ")\\z")
+		}
+		for _, child := range expr.Args {
+			patterns(child)
+		}
+		if expr.In != nil {
+			patterns(*expr.In)
+		}
+	}
+	patterns(e)
+	return program, nil
 }
 func cloneExpr(e Expr) Expr {
 	e.Args = append([]Expr(nil), e.Args...)
@@ -283,6 +300,17 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 		good = arity(1, 1) && all("text") && same(e.Kind, "text")
 	case "contains", "starts-with", "ends-with":
 		good = arity(2, 2) && all("text") && e.Kind == "boolean"
+	case "matches":
+		good = arity(2, 2) && all("text") && e.Kind == "boolean" && e.Args[1].Lit != nil
+		if good {
+			var pattern string
+			if json.Unmarshal(e.Args[1].Lit.Value, &pattern) != nil || len(pattern) > 256 {
+				return Type{}, fail("pattern", at, "pattern needs a literal of at most 256 bytes")
+			}
+			if _, err := regexp.Compile("\\A(?:" + pattern + ")\\z"); err != nil {
+				return Type{}, fail("pattern", at, "pattern is not a supported RE2 expression")
+			}
+		}
 	case "length":
 		good = arity(1, 1) && all("text") && e.Kind == "integer"
 	case "replace":

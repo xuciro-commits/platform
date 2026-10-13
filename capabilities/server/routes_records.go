@@ -65,6 +65,14 @@ func (h *Host) routesRecords(rt *routes) {
 			Reply(w, nil, err)
 			return
 		}
+		for i := range rows {
+			if rows[i].Error != nil {
+				rows[i].Error.Issues = t.localizedFieldIssues(m, rows[i].Error.Issues, t.Language(m, r))
+				if len(rows[i].Error.Issues) > 0 {
+					rows[i].Error.Message = rows[i].Error.Issues[0].Message
+				}
+			}
+		}
 		WriteJSON(w, http.StatusOK, rows)
 	})
 	rt.handle(Route{Pattern: "GET /v1/export/{type}", Summary: "The records a list shows the caller, as CSV (ADR-0028)",

@@ -162,6 +162,8 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		return out(false)
 	case "not":
 		return out(!values[0].(bool))
+	case "matches":
+		return out(p.patterns[values[1].(string)].MatchString(values[0].(string)))
 	case "empty", "not-empty", "is-null", "is-not-null":
 		empty := values[0] == nil
 		switch x := values[0].(type) {

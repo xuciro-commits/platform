@@ -36,9 +36,9 @@ export type Numbering_ = { field: string; prefix?: string; yearly?: boolean; wid
 export type Access = { role: string; read: "all" | "below" | "unit" | "own" | "none"; create?: boolean; edit?: boolean; archive?: boolean };
 /** The fields that place a record for row scopes: its owner (empty: creator) and its unit within a structure (ADR-0066). */
 export type ObjectScope = { owner?: string; unit?: string; structure?: string };
-export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[]; scope?: ObjectScope; implements?: string[]; extends?: string; numbering?: Numbering_ };
+export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[]; scope?: ObjectScope; implements?: string[]; extends?: string; numbering?: Numbering_; constraints?: Api.Constraint[] };
 /** The draft in hand: fields, lifecycle, access, and its shape — the interfaces it implements and the type it extends (ADR-0058 A2, A3). */
-export type Process = { states: State[]; actions: Action[]; access: Access[]; fields: Field[]; scope?: ObjectScope; implements?: string[]; extends?: string; numbering?: Numbering_ };
+export type Process = { states: State[]; actions: Action[]; access: Access[]; fields: Field[]; scope?: ObjectScope; implements?: string[]; extends?: string; numbering?: Numbering_; constraints?: Api.Constraint[] };
 /** An edit changes only the parts the person touched; null explicitly clears an optional part. */
 export function objectChanges(draft: Process, saved: Process): Record<string, unknown> {
   const changes: Record<string, unknown> = {};

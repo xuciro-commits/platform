@@ -38,3 +38,7 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 ## 5. 四套规则求值（ADR-0101，已替换）
 
 旧公式 `ValueFormulaNode.Eval`、决策表条件 `ValueCondition.Holds`、动作 `take` 的比较分派及页面 TypeScript `operators` 已删除。旧字符串/单元格/三元组/页面算子图只作编译输入，保存为 Expr；数字稿件的格式化与原参考应用的领域规则不算语言求值器。未使用的前端 `decimalArithmetic` 已删除。冻结旧公式的数值语义在同一引擎内受限保留，新 Expr 不可指定兼容模式；退出条件是既有不可变旧公式不再有运行义务，历史字节始终保留。
+
+## 6. 新模型的入口专属校验（ADR-0102，已收敛）
+
+新对象的存储不变式归统一约束门禁，不在表单、CSV、事务、AI 或协议另写一份。CSV 的“空白单元格静默省略”已删除，空白表示清空并由同一门禁报告；预览复用私有决定试算，未增加预览执行器。字段输入语义保留在原 Required/InputConstraints；原生行业守卫与独立 relations 图分别随 ADR-0113/0114、ADR-0104 退出，旧定义/日志的读取与恢复义务继续保留。

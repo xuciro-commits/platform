@@ -47,7 +47,7 @@ func (t *Tenant) registerDefinitions() error {
 	}
 	for _, et := range t.records.sortedTypes() {
 		info := et.info
-		var requires []platform.AssetRef
+		requires := platform.ConstraintDependencies(info)
 		for _, field := range info.Fields {
 			if field.Property != nil {
 				requires = append(requires, field.Property.Ref)

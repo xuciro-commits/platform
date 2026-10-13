@@ -54,10 +54,7 @@ func (h *Host) routesCore(rt *routes) {
 			return
 		}
 		record, err, issues := t.submitDiagnosed(m, sub, h.Now())
-		localized := append([]platform.FieldIssue(nil), issues...)
-		for i := range localized {
-			localized[i].Message = t.i18n.said(&kernel.Error{Message: localized[i].Message}, t.Language(m, r)).Message
-		}
+		localized := t.localizedFieldIssues(m, issues, t.Language(m, r))
 		Reply(w, record, t.i18n.said(err, t.Language(m, r)), localized...)
 	})
 	rt.handle(Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors; ADR-0078)", Answer: Explanation{},

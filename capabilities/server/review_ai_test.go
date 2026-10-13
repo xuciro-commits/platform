@@ -99,14 +99,14 @@ func reviewTenant(t *testing.T) (*Tenant, func(authority, schema, typ, id string
 func TestAutomationRunReadsItsOwnAppNotTheHost(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	tn, _ := reviewTenant(t)
-	if err := tn.automation("stock", false).PutAt(now, "test.item", Item{Record: platform.Record{ID: "I1"}, Name: "Press", Line: "L1"}); err != nil {
+	if err := tn.automation("stock", true).PutAt(now, "test.item", Item{Record: platform.Record{ID: "I1"}, Name: "Press", Line: "L1"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := tn.automation("desk", false).PutAt(now, "test.ticket", Ticket{Record: platform.Record{ID: "T1"}, Subject: "Wifi down in room 12", Status: "open"}); err != nil {
+	if err := tn.automation("desk", true).PutAt(now, "test.ticket", Ticket{Record: platform.Record{ID: "T1"}, Subject: "Wifi down in room 12", Status: "open"}); err != nil {
 		t.Fatal(err)
 	}
 	// A flow's agent: a run with no person behind it.
-	if err := tn.automation(AgentApp, false).PutAt(now, "test.run", AgentRunRecord{Record: platform.Record{ID: "R1"},
+	if err := tn.automation(AgentApp, true).PutAt(now, "test.run", AgentRunRecord{Record: platform.Record{ID: "R1"},
 		Agent: "desk.triage", Goal: "Look into the wifi", State: "running", Steps: []RunStep{}}); err != nil {
 		t.Fatal(err)
 	}
@@ -155,13 +155,13 @@ func TestRunForAPersonStillReadsAsThatPerson(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	tn, _ := reviewTenant(t)
 	item := Item{Record: platform.Record{ID: "I1"}, Name: "Press", Line: "L1", Secret: "the tolerance is 0.02mm"} // L1 is below ana's plant
-	if err := tn.automation("stock", false).PutAt(now, "test.tolerance", item); err != nil {
+	if err := tn.automation("stock", true).PutAt(now, "test.tolerance", item); err != nil {
 		t.Fatal(err)
 	}
 	// ana is a lead in stock; bo, who also has the desk role this agent
 	// belongs to, holds none — the same read differs between them.
 	for _, who := range []string{"ana", "bo"} {
-		if err := tn.automation(AgentApp, false).PutAt(now, "test.run"+who, AgentRunRecord{Record: platform.Record{ID: "R-" + who},
+		if err := tn.automation(AgentApp, true).PutAt(now, "test.run"+who, AgentRunRecord{Record: platform.Record{ID: "R-" + who},
 			Agent: "desk.triage", OnBehalf: who, Goal: "check the press", State: "running", Steps: []RunStep{}}); err != nil {
 			t.Fatal(err)
 		}
@@ -221,7 +221,7 @@ func TestLateModelAnswerCannotActAfterCancel(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}},
 			Body: io.NopCloser(strings.NewReader(late.body(t)))}, nil
 	}
-	if err := tn.automation(AgentApp, false).PutAt(now, "test.run", AgentRunRecord{Record: platform.Record{ID: "R1"},
+	if err := tn.automation(AgentApp, true).PutAt(now, "test.run", AgentRunRecord{Record: platform.Record{ID: "R1"},
 		Agent: "desk.triage", Goal: "Answer ticket T1: wifi", State: "running", Steps: []RunStep{}}); err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +408,7 @@ func TestRunBudgetCountsUnreportedUsageAndCost(t *testing.T) {
 	tenant.agents.(*Agents).defs["desk.triage"] = &def
 	seed := func(id string) {
 		t.Helper()
-		if err := tenant.automation(AgentApp, false).PutAt(now, "test.run"+id, AgentRunRecord{Record: platform.Record{ID: "R" + id},
+		if err := tenant.automation(AgentApp, true).PutAt(now, "test.run"+id, AgentRunRecord{Record: platform.Record{ID: "R" + id},
 			Agent: "desk.triage", Goal: "look around", State: "running", Steps: []RunStep{}}); err != nil {
 			t.Fatal(err)
 		}

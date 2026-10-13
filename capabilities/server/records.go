@@ -1006,6 +1006,9 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 // Runtime: apps put and read their own records.
 
 func (r runtime) Put(c platform.Caller, rec *pb.ChangeRecord, entity any) *kernel.Error {
+	if !c.Replaying {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A new record write requires a private runtime")
+	}
 	return r.t.records.put(c, rec, entity)
 }
 

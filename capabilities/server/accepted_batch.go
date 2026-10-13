@@ -97,6 +97,9 @@ func acceptedRowOf(typ, id string, r *row) (acceptedRow, error) {
 }
 
 func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
+	if err := d.checkFinalConstraints(); err != nil {
+		return nil, err
+	}
 	if receipt == nil || len(d.events) == 0 || d.failure != nil {
 		return nil, fmt.Errorf("batch needs accepted decisions and all written records")
 	}

@@ -9,7 +9,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDraftSession } from "../session/DraftSession";
 import { actionIssues, objectChanges, type ObjectRecord, type Process } from "./object-model";
 
-const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", numbering: record.numbering });
+const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", numbering: record.numbering, constraints: record.constraints ?? [] });
 
 export function useObjectDraft(id: string, onReset?: () => void) {
   const { decide, entities, definitions } = useHost();
@@ -42,7 +42,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     // Inspector rows have no serialized UI ids. Move their buffers with the
     // original row when a sibling is removed or reordered; renames keep the slot.
     const indexOf=(before:unknown[],after:unknown[],at:number)=>{const found=after.indexOf(before[at]);return found>=0?found:before.length===after.length?at:-1;};
-    const collections={field:"fields",state:"states",action:"actions",access:"access"} as const;
+    const collections={field:"fields",state:"states",action:"actions",access:"access",constraint:"constraints"} as const;
     const parts={parameter:"inputs",rule:"sets",criterion:"conditions",effect:"creates",posting:"posts"} as const;
     const moves=Object.entries(session.inputs.values).flatMap(([key,value])=>{
       const segments=key.split("/");let changed=false,removed=false;
@@ -59,7 +59,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
           segments[i]=JSON.stringify([at,{...parsed[1],at:row}]);changed ||= segments[i]!==segment;
         }else if(parsed&&typeof parsed==="object"&&"kind" in parsed&&"at" in parsed&&(parsed.kind as string) in collections){
           const pick=parsed as {kind:keyof typeof collections;at:number},collection=collections[pick.kind];
-          const at=indexOf(process[collection],next[collection],pick.at);
+          const at=indexOf(process[collection]??[],next[collection]??[],pick.at);
           if(at<0){removed=true;break;}
           segments[i]=JSON.stringify({...pick,at});changed ||= segments[i]!==segment;
         }

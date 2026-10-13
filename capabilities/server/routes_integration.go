@@ -28,8 +28,8 @@ func (h *Host) routesIntegration(rt *routes) {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}
-		_, record, err := t.Invoke(m, r.PathValue("protocol")+"/"+r.PathValue("version"), r.PathValue("action"), call.Target, call.Payload, call.IdempotencyKey, h.Now())
-		Reply(w, record, err)
+		_, record, err, issues := t.invokeDiagnosed(m, r.PathValue("protocol")+"/"+r.PathValue("version"), r.PathValue("action"), call.Target, call.Payload, call.IdempotencyKey, h.Now())
+		Reply(w, record, t.i18n.said(err, t.Language(m, r)), t.localizedFieldIssues(m, issues, t.Language(m, r))...)
 	})
 	rt.handle(Route{Pattern: "POST /v1/capabilities/invoke", Summary: "Route a typed call to its canonical query, action, AI or compute owner", Body: platform.CapabilityInvocation{}, Answer: platform.CapabilityResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var q platform.CapabilityInvocation
@@ -38,7 +38,7 @@ func (h *Host) routesIntegration(rt *routes) {
 		}
 		answer, err := t.InvokeCapability(m, q, h.Now())
 		if err != nil {
-			Reply(w, nil, err)
+			Reply(w, nil, t.i18n.said(err, t.Language(m, r)), t.localizedFieldIssues(m, answer.Issues, t.Language(m, r))...)
 			return
 		}
 		WriteJSON(w, http.StatusOK, answer)

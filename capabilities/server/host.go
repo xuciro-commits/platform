@@ -268,6 +268,11 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	if err := t.registerDefinitions(); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
+	for _, et := range t.records.sortedTypes() {
+		if err := platform.CheckConstraints(et.info, t.entity, true); err != nil {
+			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.info.Type, err)
+		}
+	}
 	var assetOwners []platform.AssetLifecycleOwner
 	for _, app := range apps {
 		if owner, ok := app.(platform.AssetLifecycleOwner); ok {
@@ -311,7 +316,7 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb
 func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
 	var issues []platform.FieldIssue
 	record, err := t.submit(m, s, now, func(_ *kernel.Error, found []platform.FieldIssue) { issues = found })
-	return record, err, issues
+	return record, err, t.readableFieldIssues(m, issues, now)
 }
 
 func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, report func(*kernel.Error, []platform.FieldIssue)) (record *pb.ChangeRecord, err *kernel.Error) {
@@ -577,6 +582,9 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 	}
 	if refusal == nil {
 		refusal = draft.stageObservers()
+	}
+	if refusal == nil {
+		refusal = draft.checkFinalConstraints()
 	}
 	return record, refusal
 }

@@ -263,6 +263,9 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 			return nil, err
 		}
 		requires := ruleRequirements(saved.Reads)
+		for _, constraint := range saved.Constraints {
+			requires = append(requires, ruleRequirements(constraint.Reads)...)
+		}
 		for _, field := range saved.Fields {
 			if field.Property != nil {
 				requires = append(requires, field.Property.Ref)

@@ -202,32 +202,23 @@ func TestContinuousFlowAutoStartsOnceAndStopIsDurable(t *testing.T) {
 	source := newFrameSource(tenant, 128<<10)
 	source.autoStart = true
 	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
-	procs := tn.app(flow.ID).(*flow.Flows)
 	at := time.Date(2026, 10, 10, 10, 0, 0, 0, time.UTC)
-	if err := procs.Run(tn.automation(flow.ID, false), "", at); err != nil {
-		t.Fatalf("inactive published-owner guard: %v", err)
-	}
+	runJob(t, tn, flow.ID, "timers", at)
 	if _, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id); ok {
 		t.Fatal("a continuous flow started while its published Process owner was inactive")
 	}
 	source.autoEnabled = true
-	if err := procs.Run(tn.automation(flow.ID, false), "", at.Add(time.Second)); err != nil {
-		t.Fatalf("start continuous flow: %v", err)
-	}
+	runJob(t, tn, flow.ID, "timers", at.Add(time.Second))
 	instance, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
 	if !ok || instance.State != "waiting" || instance.OnBehalf != "member" || len(instance.Tokens) != 1 || instance.Tokens[0].Waits != "stream" {
 		t.Fatalf("published stream did not start one retained waiting instance: %+v", instance)
 	}
-	if err := procs.Run(tn.automation(flow.ID, false), "", at.Add(2*time.Second)); err != nil {
-		t.Fatalf("idempotent start tick: %v", err)
-	}
+	runJob(t, tn, flow.ID, "timers", at.Add(2*time.Second))
 	if _, duplicate := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id+"#2"); duplicate {
 		t.Fatal("the continuous start tick created a duplicate instance")
 	}
 	decide(t, tn, "member", flow.ID, flow.SchemaFlowStop, flow.InstanceType, id, map[string]any{}, at.Add(3*time.Second))
-	if err := procs.Run(tn.automation(flow.ID, false), "", at.Add(4*time.Second)); err != nil {
-		t.Fatalf("stop retention tick: %v", err)
-	}
+	runJob(t, tn, flow.ID, "timers", at.Add(4*time.Second))
 	stopped, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
 	if !ok || stopped.State != "canceled" {
 		t.Fatalf("the explicit stop did not remain terminal: %+v", stopped)
@@ -545,9 +536,7 @@ func TestContinuousLatestBootstrapWithComputeEntry(t *testing.T) {
 	tn.Files = &memoryFiles{}
 	at := time.Date(2026, 10, 11, 10, 0, 0, 0, time.UTC)
 	procs := tn.app(flow.ID).(*flow.Flows)
-	if err := procs.Run(tn.automation(flow.ID, false), "", at); err != nil {
-		t.Fatal(err)
-	}
+	runJob(t, tn, flow.ID, "timers", at)
 	x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "frames.window:continuous-v1")
 	if !ok {
 		t.Fatal("continuous instance did not start")

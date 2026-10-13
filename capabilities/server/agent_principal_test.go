@@ -15,7 +15,7 @@ func TestAgentPrincipalRevocation(t *testing.T) {
 	tn := stockTenant(t, NewAgents("t-1"))
 	tn.agents.(*Agents).defs["stock.guide"] = &agentDef{app: "stock"}
 	for _, x := range []struct{ id, who string }{{"R1", "departed"}, {"R2", "ana"}} {
-		if err := tn.automation(AgentApp, false).PutAt(now, "test.run", AgentRunRecord{Record: platform.Record{ID: x.id}, Agent: "stock.guide", OnBehalf: x.who, State: "running"}); err != nil {
+		if err := tn.automation(AgentApp, true).PutAt(now, "test.run", AgentRunRecord{Record: platform.Record{ID: x.id}, Agent: "stock.guide", OnBehalf: x.who, State: "running"}); err != nil {
 			t.Fatal(err)
 		}
 	}

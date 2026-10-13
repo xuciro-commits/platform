@@ -191,11 +191,11 @@ func TestContinuousOrphanCollectionPreservesExactLargeVersions(t *testing.T) {
 	}
 	historical, current, orphan := seal("historical"), seal("current"), seal("orphan")
 	x := platform.FlowInstance{Record: platform.Record{ID: id}, Version: version, Batch: &platform.FlowBatchFrame{Sealed: &historical}}
-	if err := live.automation(platform.FlowApp, false).PutAt(now, "test.frame", x); err != nil {
+	if err := live.automation(platform.FlowApp, true).PutAt(now, "test.frame", x); err != nil {
 		t.Fatal(err)
 	}
 	x.Batch.Sealed = &current
-	if err := live.automation(platform.FlowApp, false).PutAt(now, "test.frame", x); err != nil {
+	if err := live.automation(platform.FlowApp, true).PutAt(now, "test.frame", x); err != nil {
 		t.Fatal(err)
 	}
 	files.mu.Lock()

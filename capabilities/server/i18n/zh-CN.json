@@ -1717,5 +1717,8 @@
   "Books owner does not provide posting checks": "账簿所属应用未提供过账检查",
   "The approval owner is unavailable": "审批所属应用不可用",
   "FormulaExpr": "计算表达式",
-  "Reads": "声明读取"
+  "Reads": "声明读取",
+  "Business constraints": "业务约束",
+  "Constraint {name}: {message}": "约束 {name}：{message}",
+  "A new record write requires a private runtime": "新记录写入需要私有运行时"
 }

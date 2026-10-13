@@ -42,7 +42,7 @@ type Expr struct {
 | **逻辑** | `and or not` | boolean；`and`/`or` 短路 | boolean |
 | **空值** | `empty` `not-empty` `is-null` `is-not-null` | 任意 | boolean |
 | **算术** | `+ - * /` `negate` `abs` `round` `min` `max` | integer/decimal/money | 同类型 |
-| **文本** | `concat` `lower` `upper` `trim` `contains` `starts-with` `ends-with` `length` `replace` | text | text/boolean/integer |
+| **文本** | `concat` `lower` `upper` `trim` `contains` `starts-with` `ends-with` `length` `replace` `matches` | text；`matches` 的模式是至多 256 字节的 RE2 字面量，整串匹配，发布期拒绝非法模式（规范主人 ADR-0102） | text/boolean/integer |
 | **显式转换** | `parse-decimal` `parse-number` | text；无效、空白、超预算或非有限值明确拒绝 | decimal/number |
 | **时间** | `add-days` `add-months` `diff-days` `date-part`（year/month/day/weekday）`before` `after` `within-period` | date/datetime | date/integer/boolean |
 | **集合** | `count` `sum` `min` `max` `avg` | 集合（见下） | integer/decimal/money |

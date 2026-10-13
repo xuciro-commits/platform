@@ -198,6 +198,9 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		err = l.denied(c, s) // the kernel's policy step refused: say whose role does not reach
 	}
 	if probing {
+		if c.Staging() && err == nil && decided && apply != nil {
+			apply(record) // prospective private state; the probe discards it
+		}
 		return nil, err
 	}
 	if err == nil && decided {
@@ -295,7 +298,7 @@ func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed fu
 			tr := e.Lifecycle.Transitions[i]
 			var failure *kernel.Error
 			if tr.Txn != nil {
-				if !c.Staging() || c.Replaying || c.rt.Probing() || tr.ApplyTxn == nil || tr.After != nil {
+				if !c.Staging() || c.Replaying || tr.ApplyTxn == nil || tr.After != nil {
 					return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions require a private accepted decision / 业务事务须经私有接受决策"), true
 				}
 				// A transaction always acts as its applicant. Service automation

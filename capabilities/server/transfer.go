@@ -27,10 +27,11 @@ import (
 
 // ImportRow is what one row did, or would do.
 type ImportRow struct {
-	Row     int    `json:"row"` // from 1, after the header
-	ID      string `json:"id"`
-	Action  string `json:"action"`  // the generated action it is
-	Outcome string `json:"outcome"` // ok, or the refusal's code
+	Row     int        `json:"row"` // from 1, after the header
+	ID      string     `json:"id"`
+	Action  string     `json:"action"`  // the generated action it is
+	Outcome string     `json:"outcome"` // ok, or the refusal's code
+	Error   *ErrorBody `json:"error,omitempty"`
 }
 
 // Import runs, or previews, a CSV of records of typ: a header of field names
@@ -76,7 +77,17 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 			// An export writes read-only columns (state, computed values) for
 			// the reader; they are not inputs, so a file that comes back
 			// round-trips instead of failing on its own header.
-			if value == "" || f.ReadOnly {
+			if f.ReadOnly {
+				continue
+			}
+			if value == "" {
+				// A blank cell clears that field. Omitting it from an edit would
+				// silently preserve an old value and bypass a required invariant.
+				if f.Type == "text" || f.Type == "longtext" || f.Type == "reference" || f.Type == "choice" || f.Type == "date" {
+					payload[name] = ""
+				} else {
+					payload[name] = nil
+				}
 				continue
 			}
 			v, err := fromCSV(f, value, currency)
@@ -95,6 +106,7 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 			// already existed is edited instead.
 			raw, _ := json.Marshal(payload)
 			try := func(verb, key string) *kernel.Error {
+				r.Error = nil
 				r.Action = typ + verb
 				if !slices.Contains(view.info.Standard, r.Action) {
 					return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -102,9 +114,16 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 				s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: view.info.App, IdempotencyKey: key,
 					Target: &pb.EntityRef{Type: typ, Id: r.ID}, Schema: &pb.SchemaRef{Name: r.Action, Version: 1}, Payload: raw}
 				if preview {
-					return t.probe1(m, s, now)
+					refusal, issues := t.probeDiagnosed(m, s, now)
+					if refusal != nil {
+						r.Error = &ErrorBody{Code: refusal.Code.String(), Message: refusal.Message, Issues: issues}
+					}
+					return refusal
 				}
-				_, err := t.Submit(m, s, now)
+				_, err, issues := t.submitDiagnosed(m, s, now)
+				if err != nil {
+					r.Error = &ErrorBody{Code: err.Code.String(), Message: err.Message, Issues: issues}
+				}
 				return err
 			}
 			key := fmt.Sprintf("import:%s:%d", file, r.Row)
@@ -113,6 +132,9 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 				err = try(".edit", key+":edit")
 			}
 			r.Outcome = outcomeOf(err)
+			if r.Error != nil && len(r.Error.Issues) > 0 && r.Error.Issues[0].Constraint != "" {
+				r.Outcome, r.Error.Code = "CONSTRAINT_VIOLATION", "CONSTRAINT_VIOLATION"
+			}
 		}
 		out = append(out, r)
 	}
@@ -121,16 +143,21 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 
 // probe1 checks one submission's policy and rules as m, applying nothing.
 func (t *Tenant) probe1(m platform.Member, s *pb.Submission, now time.Time) *kernel.Error {
+	err, _ := t.probeDiagnosed(m, s, now)
+	return err
+}
+
+func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*kernel.Error, []platform.FieldIssue) {
 	a := t.owner["action:"+s.GetSchema().GetName()]
 	if a == nil {
-		return unknown()
+		return unknown(), nil
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return platform.ProbeDecision(t.caller(m, a, false), func(probe platform.Caller) *kernel.Error {
-		_, err := platform.Decide(probe, a, s, now)
-		return err
-	})
+	draft := t.newStagedDecision()
+	draft.probing = true
+	_, err := decideAcceptedAs(a, draft, m, s, now, false)
+	return err, draft.inputIssues[err]
 }
 
 // fromCSV reads one cell as the field's type.

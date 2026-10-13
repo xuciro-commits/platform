@@ -47,6 +47,11 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 	if err := draft.Install(h.app, e, actions, pages...); err != nil {
 		return err
 	}
+	for _, et := range draft.records.sortedTypes() {
+		if err := platform.CheckConstraints(et.info, draft.entity, true); err != nil {
+			return err
+		}
+	}
 	for _, def := range h.t.definitions {
 		if def.LinkType != nil {
 			view := hostView{t: draft, app: h.t.app(def.Ref.App)}

@@ -87,11 +87,11 @@ func TestKnowledgeAndContextScope(t *testing.T) {
 		}
 	}
 
-	if err := tn.automation(flow.ID, false).PutAt(now, "test.flow", flow.FlowInstance{Record: platform.Record{ID: "F1"}, Key: "I1", Flow: "stock.private", State: "waiting", OnBehalf: "lead",
+	if err := tn.automation(flow.ID, true).PutAt(now, "test.flow", flow.FlowInstance{Record: platform.Record{ID: "F1"}, Key: "I1", Flow: "stock.private", State: "waiting", OnBehalf: "lead",
 		Trace: []flow.TraceLine{{Detail: "private flow reason"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := tn.automation(work.ID, false).PutAt(now, "test.task", work.WorkTask{Record: platform.Record{ID: "T1"}, Ref: "stock.item/I1", Title: "Private task", Answer: "private answer", Candidates: []string{"lead"}, State: "open"}); err != nil {
+	if err := tn.automation(work.ID, true).PutAt(now, "test.task", work.WorkTask{Record: platform.Record{ID: "T1"}, Ref: "stock.item/I1", Title: "Private task", Answer: "private answer", Candidates: []string{"lead"}, State: "open"}); err != nil {
 		t.Fatal(err)
 	}
 	ref := func(id string) *pb.EntityRef { return &pb.EntityRef{Type: "stock.item", Id: id} }
@@ -120,7 +120,7 @@ func TestKnowledgeIndexesPastFirstPage(t *testing.T) {
 	tn := stockTenant(t, knowledge.New("t-1"))
 	for i := range 501 {
 		id := fmt.Sprintf("I%03d", i)
-		if err := tn.automation("stock", false).PutAt(now, "test.seed", Item{Record: platform.Record{ID: id}, Name: "Machine " + id, Note: "inspection needle " + id, Owner: "ana", Line: "L1"}); err != nil {
+		if err := tn.automation("stock", true).PutAt(now, "test.seed", Item{Record: platform.Record{ID: id}, Name: "Machine " + id, Note: "inspection needle " + id, Owner: "ana", Line: "L1"}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -18,15 +18,16 @@ import {
 import { Boxes, Link2, Plus, Shield, Tags, Trash2, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useObjectDraft } from "./object-draft";
+import { ConstraintsEditor } from "./constraints";
 
 /** The objects of this organisation: open one to give it states and actions. */
-type Tab = "overview" | "properties" | "links" | "actions" | "lifecycle" | "permissions" | "data" | "preview";
+type Tab = "overview" | "properties" | "links" | "actions" | "constraints" | "lifecycle" | "permissions" | "data" | "preview";
 export function ObjectTypeEditor({ id, initialField, initialAction, initialAccess, initialTab }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean; initialTab?: string }) {
   const [chosen, setChosen] = useState<Chosen>();
   const draft = useObjectDraft(id, () => setChosen(undefined));
   const { object, process, dirty, busy, refused, change, issues, parent, entities, session, discardChanges, open } = draft;
   const initiallyChosen = useRef("");
-  const [tab, setTab] = useState<Tab>((["overview", "properties", "links", "actions", "lifecycle", "permissions", "data", "preview"] as Tab[]).includes(initialTab as Tab) ? initialTab as Tab : "overview");
+  const [tab, setTab] = useState<Tab>((["overview", "properties", "links", "actions", "constraints", "lifecycle", "permissions", "data", "preview"] as Tab[]).includes(initialTab as Tab) ? initialTab as Tab : "overview");
   useEffect(() => {
     const key = `${id}:${initialField ?? ""}:${initialAction ?? ""}:${initialAccess ?? false}`;
     if (!object || initiallyChosen.current === key) return;
@@ -59,7 +60,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   const incoming = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent));
   const tabs: { id: Tab; title: string }[] = [
     { id: "overview", title: t("Overview") }, { id: "properties", title: t("Properties") }, { id: "links", title: t("Links") }, { id: "actions", title: t("Actions") },
-    { id: "lifecycle", title: t("Lifecycle") }, { id: "permissions", title: t("Permissions") }, { id: "data", title: t("Data") }, { id: "preview", title: t("Preview") },
+    { id: "constraints", title: t("Business constraints") }, { id: "lifecycle", title: t("Lifecycle") }, { id: "permissions", title: t("Permissions") }, { id: "data", title: t("Data") }, { id: "preview", title: t("Preview") },
   ];
   const structure = <div className="grid min-w-0 content-start">
     <PanelSection title={t("Object type")}>
@@ -130,6 +131,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       </Button>)}</div>
     </div>,
     lifecycle: <div className="min-h-0 flex-1 overflow-auto p-3"><ProcessGraph key={id} objectId={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} /></div>,
+    constraints: <ConstraintsEditor process={process} onChange={change} />,
     permissions: <div className="grid content-start gap-3 p-4">
       <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Who may do what")}</h2><Button size="sm" onClick={addAccess}><Plus />{t("Add a role")}</Button></div>
       <table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted"><th className="px-2 py-1 font-medium">{t("Role")}</th><th className="px-2 py-1 font-medium">{t("Read")}</th><th className="px-2 py-1 font-medium">{t("Create")}</th><th className="px-2 py-1 font-medium">{t("Edit")}</th><th className="px-2 py-1 font-medium">{t("Archive")}</th></tr></thead>

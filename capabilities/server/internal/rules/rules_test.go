@@ -57,6 +57,8 @@ func TestRuleOperatorFamilies(t *testing.T) {
 		{op("contains", "boolean", text("abc"), text("b")), true}, {op("starts-with", "boolean", text("abc"), text("a")), true},
 		{op("ends-with", "boolean", text("abc"), text("c")), true}, {op("length", "integer", text("字a")), json.Number("2")},
 		{op("replace", "text", text("abc"), text("b"), text("d")), "adc"},
+		{op("matches", "boolean", text("AB-12"), text("[A-Z]{2}-[0-9]{2}")), true},
+		{op("matches", "boolean", text("xAB-12x"), text("[A-Z]{2}-[0-9]{2}")), false},
 		{op("parse-decimal", "decimal", text(".10")), "0.1"}, {op("parse-number", "number", text("12.50")), "12.5"},
 		{op("add-days", "date", date("2026-02-28"), integer(1)), "2026-03-01"},
 		{op("add-months", "date", date("2026-01-31"), integer(1)), "2026-02-28"},

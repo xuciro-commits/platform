@@ -17,6 +17,7 @@ type CapabilityInvocation struct {
 }
 
 type CapabilityResult struct {
+	Issues []FieldIssue    `json:"issues,omitempty"`
 	Ref    AssetRef        `json:"ref"`
 	State  string          `json:"state"`
 	Call   string          `json:"call,omitempty"`

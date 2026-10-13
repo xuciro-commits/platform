@@ -60,6 +60,9 @@ type acceptedEvent struct {
 // only an encoding optimisation; its writer must account for every effect.
 // The batch format also handles history that no longer fits a compact result.
 func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
+	if err := d.checkFinalConstraints(); err != nil {
+		return nil, err
+	}
 	owner := d.tenant.app(app)
 	if owner == nil || request.GetAuthority() != app {
 		return nil, fmt.Errorf("decision has no matching submission owner")

@@ -29,6 +29,7 @@ type Object struct {
 	Description string                 `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
 	Fields      []Field                `json:"fields" title:"Fields"`
 	Reads       *platform.RuleReadSpec `json:"reads,omitempty" type:"json" field:"aside"`
+	Constraints []platform.Constraint  `json:"constraints,omitempty" type:"json" field:"aside" title:"Business constraints"`
 	// States and Actions make its records a small process (ADR-0037): the
 	// object editor owns them, so generated forms do not ask for them.
 	States  []State  `json:"states,omitempty" field:"aside" title:"States"`

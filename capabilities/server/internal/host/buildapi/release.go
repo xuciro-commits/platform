@@ -15,6 +15,9 @@ func CompatibleObjectExpansion(previous, next Object) bool {
 	if previous.Name != next.Name || len(next.Fields) <= len(previous.Fields) || len(previous.States) != len(next.States) || len(previous.Access) != len(next.Access) {
 		return false
 	}
+	if !reflect.DeepEqual(previous.Constraints, next.Constraints) {
+		return false // changing invariants is not an optional storage-only expansion
+	}
 	for i, state := range previous.States {
 		if !reflect.DeepEqual(state, next.States[i]) {
 			return false

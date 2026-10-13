@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"encoding/json"
 	"platformserver/platform/authz"
 	"slices"
 	"sync"
@@ -128,10 +129,15 @@ type DateRange struct {
 }
 
 type FieldIssue struct {
-	Code         string     `json:"code"`
-	Message      string     `json:"message"`
-	Path         []string   `json:"path"`
-	RelatedPaths [][]string `json:"relatedPaths,omitempty"`
+	Record       string                     `json:"record,omitempty"`
+	Constraint   string                     `json:"constraint,omitempty"`
+	Translations map[string]string          `json:"translations,omitempty"`
+	Values       map[string]json.RawMessage `json:"values,omitempty"`
+	Reason       string                     `json:"reason,omitempty"`
+	Code         string                     `json:"code"`
+	Message      string                     `json:"message"`
+	Path         []string                   `json:"path"`
+	RelatedPaths [][]string                 `json:"relatedPaths,omitempty"`
 }
 
 // InputOptions is a bounded app read; Manual is true only for an unbound source.

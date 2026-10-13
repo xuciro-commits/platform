@@ -6,6 +6,7 @@ import (
 	"maps"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -19,6 +20,7 @@ import (
 // stagedDecision owns the private record, ledger and intent views for supported
 // ADR-0038 transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
+	constraintWrites map[string]constraintWrite
 	callbackOrigin   *platform.Effect
 	callbackWrites   map[string]callbackWrite
 	control          *controlDecision
@@ -153,7 +155,27 @@ func (d *stagedDecision) bindPrivateFacts(l *platform.Ledger) {
 }
 
 func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *kernel.Error {
+	d.records.mu.Lock()
+	et := d.records.of(c, reflect.TypeOf(entity))
+	var before *row
+	var info platform.EntityInfo
+	var ref string
+	if et != nil {
+		info = et.info
+		id := recordOf(copyOf(et.info.Go, entity)).ID
+		before, ref = et.rows[id], et.info.Type+"/"+id
+	}
+	d.records.mu.Unlock()
 	err := d.records.put(c, r, entity)
+	if err == nil {
+		if d.constraintWrites == nil {
+			d.constraintWrites = map[string]constraintWrite{}
+		}
+		if _, exists := d.constraintWrites[ref]; !exists {
+			d.constraintWrites[ref] = constraintWrite{caller: c, before: before}
+		}
+		err = d.checkRecordConstraints(c, info, d.records.types[info.Type].rows[strings.TrimPrefix(ref, info.Type+"/")], before)
+	}
 	if err != nil && d.failure == nil {
 		d.failure = err
 	}

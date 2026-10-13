@@ -463,5 +463,32 @@
       }
     },
     "value": "9007199254740994"
+  },
+  {
+    "name": "bounded whole text pattern",
+    "request": {
+      "expr": {"op":"matches","kind":"boolean","args":[{"kind":"text","lit":{"value":"AB-12"}},{"kind":"text","lit":{"value":"[A-Z]{2}-[0-9]{2}"}}]},
+      "schema": {"refs":{}},
+      "context": {"refs":{}}
+    },
+    "value": true
+  },
+  {
+    "name": "pattern does not accept a substring",
+    "request": {
+      "expr": {"op":"matches","kind":"boolean","args":[{"kind":"text","lit":{"value":"xAB-12x"}},{"kind":"text","lit":{"value":"[A-Z]{2}-[0-9]{2}"}}]},
+      "schema": {"refs":{}},
+      "context": {"refs":{}}
+    },
+    "value": false
+  },
+  {
+    "name": "unsupported pattern rejected at compilation",
+    "request": {
+      "expr": {"op":"matches","kind":"boolean","args":[{"kind":"text","lit":{"value":"AB"}},{"kind":"text","lit":{"value":"(?=AB)"}}]},
+      "schema": {"refs":{}},
+      "context": {"refs":{}}
+    },
+    "error": "pattern"
   }
 ]

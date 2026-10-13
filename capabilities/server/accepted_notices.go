@@ -217,6 +217,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		fork.operationInputs[hash] = slices.Clone(pending)
 	}
 	fork.inputIssues = maps.Clone(d.inputIssues)
+	fork.constraintWrites = maps.Clone(d.constraintWrites)
 	for refusal, issues := range fork.inputIssues {
 		issues = slices.Clone(issues)
 		for i := range issues {
@@ -335,6 +336,9 @@ func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller
 	err = decide(platform.NewCaller(d, c.Member, c.App, c.Replaying, c.Automation))
 	if err == nil {
 		err = d.failure
+	}
+	if err == nil {
+		err = d.checkFinalConstraints()
 	}
 	return err
 }

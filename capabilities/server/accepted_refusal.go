@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -60,6 +61,9 @@ func encodeRefusedResult(s *pb.Submission, at time.Time, refusal *kernel.Error, 
 	if len(issues) > 0 {
 		result.Version = 2
 		result.Issues = issues
+		if slices.ContainsFunc(issues, func(issue platform.FieldIssue) bool { return issue.Constraint != "" }) {
+			result.Version = 3
+		}
 	}
 	result.Digest, err = digestRefusedResult(result)
 	if err != nil {
@@ -100,15 +104,35 @@ func decodeRefusedResult(raw []byte) (refusedResult, *pb.Submission, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if (result.Version != 1 && result.Version != 2) || result.Version == 1 && len(result.Issues) > 0 || len(result.Issues) > 64 || result.Kind != "refusal" || result.Tenant == "" || result.App == "" ||
+	if (result.Version < 1 || result.Version > 3) || result.Version == 1 && len(result.Issues) > 0 || len(result.Issues) > 64 || result.Kind != "refusal" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || result.RequestHash != hash || result.Tenant != sub.GetTenantId() ||
 		result.App != sub.GetAuthority() || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || result.Error.Code == pb.ErrorCode_ERROR_CODE_UNSPECIFIED {
 		return result, nil, fmt.Errorf("refused result has inconsistent identity or answer")
 	}
 	for _, issue := range result.Issues {
-		if issue.Code == "" || len(issue.Code) > 64 || len(issue.Message) > 1024 || len(issue.Path) != 1 || len(issue.Path[0]) > 128 || len(issue.RelatedPaths) > 4 {
+		if issue.Code == "" || len(issue.Code) > 64 || len(issue.Message) > 1024 || len(issue.Path) != 1 || len(issue.Path[0]) > 128 || len(issue.RelatedPaths) > 15 {
 			return result, nil, fmt.Errorf("refused input issue exceeds its bounds")
+		}
+		if issue.Constraint == "" && len(issue.RelatedPaths) > 4 {
+			return result, nil, fmt.Errorf("refused input issue exceeds its original related path bound")
+		}
+		if issue.Constraint != "" {
+			if result.Version != 3 || issue.Code != "constraint_violation" || len(issue.Constraint) > 64 || issue.Record == "" || len(issue.Record) > 512 || len(issue.Reason) > 256 || len(issue.Translations) > 1 || len(issue.Values) > 16 {
+				return result, nil, fmt.Errorf("refused constraint diagnostic exceeds its bounds")
+			}
+			for name, value := range issue.Values {
+				if len(name) > 128 || len(value) > 4096 || !json.Valid(value) {
+					return result, nil, fmt.Errorf("refused constraint value exceeds its bounds")
+				}
+			}
+			for language, message := range issue.Translations {
+				if language != "zh-CN" || len(message) > 512 {
+					return result, nil, fmt.Errorf("refused constraint translation exceeds its bounds")
+				}
+			}
+		} else if issue.Record != "" || len(issue.Values) > 0 || issue.Reason != "" || len(issue.Translations) > 0 {
+			return result, nil, fmt.Errorf("constraint facts need a named constraint")
 		}
 		for _, path := range issue.RelatedPaths {
 			if len(path) != 1 || len(path[0]) > 128 {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"time"
 )
 
@@ -90,6 +91,7 @@ type Result struct {
 	Reasons []Issue `json:"reasons,omitempty"`
 }
 type Program struct {
+	patterns      map[string]*regexp.Regexp
 	frozenFormula bool
 	expr          Expr
 	schema        Schema

@@ -53,6 +53,7 @@ type Money struct {
 
 // Entity declares an entity type of the app.
 type Entity struct {
+	Constraints      []Constraint
 	PropertyBindings map[string]AssetBinding
 	// Compute, when set, fills the record's computed fields right before every
 	// decision on it is checked; it receives a pointer to the record.
@@ -380,6 +381,7 @@ func (f FieldInfo) Active(valueOf func(field string) string) bool {
 
 // EntityInfo is an entity type as the host and the UI see it.
 type EntityInfo struct {
+	Constraints    []Constraint   `json:"constraints,omitempty"`
 	Type           string         `json:"type"`
 	Title          string         `json:"title"`
 	Plural         string         `json:"plural"`
@@ -426,7 +428,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends}
+	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, Constraints: e.Constraints}
 	if info.Title == "" {
 		info.Title = e.Type
 	}

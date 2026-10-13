@@ -102,3 +102,20 @@ func publishObject(t *testing.T, tn *Tenant, who, id string, object map[string]a
 }
 
 func testConsoleOf(t *Tenant) *Console { c, _ := t.app(PlatformApp).(*Console); return c }
+
+// runJob takes the real accepted-work path for a single owned job. A test must
+// not call Runner.Run with the legacy live runtime to create new records.
+func runJob(t *testing.T, tn *Tenant, app, name string, at time.Time) {
+	t.Helper()
+	tn.mu.Lock()
+	defer tn.mu.Unlock()
+	for _, task := range tn.work.jobs {
+		if task.App == app && task.job.Name == name {
+			if outcome := tn.run(task, at, false); outcome != "ok" {
+				t.Fatalf("job %s/%s: %s", app, name, outcome)
+			}
+			return
+		}
+	}
+	t.Fatalf("job %s/%s is not declared", app, name)
+}

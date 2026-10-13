@@ -40,12 +40,14 @@ type Constraint struct {
     Fields  []string // 涉及的字段
     Expr    *Expr    // 0101 的表达式；expression / range / pattern 用
     Message string   // 给人读的原因（英文原文 + zh-CN，沿 ADR-0023）
+    Translations map[string]string // 可选的 zh-CN 原因；发布内容的一部分
     Scope   string   // 唯一性的作用域：tenant | parent | <path>（见 D3）
     Level   string   // record（默认）| txn（见 D4）
+    Reads   *RuleReadSpec // 固定的本应用查询/版本/父绑定；只接受 complete
 }
 ```
 
-### D2 六类约束，语义各自明确
+### D2 八类约束，语义各自明确
 
 **每一类在多个领域下都用得上**；下表给出跨行业的实例，证明它们不是为某个行业定制的：
 
@@ -66,15 +68,22 @@ type Constraint struct {
 4. **expression**：任意 ADR-0101 表达式必须为真。全量求值，读不到的字段使约束**拒绝并说明**（不是静默通过）。
 5. **cardinality**：关系上的基数（沿用 `platform/link_type.go:16-45` 的 `Cardinality` 与 `DeletePolicy`），并补一条今天缺的语义：**基数约束在关系写入时检查，与记录写入同一事务**（今天 relations 是独立应用的决策，`platform/relations.go:38-43`，所以关系与记录不原子）。
 6. **immutable**：字段一旦离开初始状态即不可改（已下达工单的工艺版本）。**immutable 的判定依据是状态与历史，不是"当前值是否为空"**。
+7. **temporal**：日期/时间表达式必须为真，例如 `within-period` 检查包含两端的有效期；采用本次提交固定的时间上下文，不读取外部时钟或系统。
+
+执行细节：`required` 在对象没有生命周期或记录离开初始状态时生效；数值 0 与布尔 false 是已提供的值，空白文本、null 和空集合为空。`immutable` 检查写入前的状态与已保存状态历史；返回初始状态也不解除锁定。`range`、`pattern`、`expression`、`cardinality`、`temporal` 使用布尔 Expr；文本模式复用 ADR-0101 的 `matches`，不建立第二个模式执行器。
 
 ### D3 作用域与"父"的含义
 
 `Scope` 里的父沿**已声明的引用路径**解析（复用 `record_path.go`）。这使"同一工单下唯一"、"同一批次下序号连续"这类真实的行业约束可以声明，而不需要为每个行业加 Go 代码。
 
+唯一性以对象类型为命名空间，默认 `tenant`；`parent` 只有在该对象恰好一个标量引用字段时可用，否则须选择明确路径（最多 16 段）。组合中有空值时不占唯一键，非空要求另行声明；归档不释放键。检查覆盖完整的本应用私有记录库，由租户单写者把检查与接受串在一起，不以调用者可见窗口代替唯一性。
+
 ### D4 记录级与事务级
 
 - `Level: record`（默认）：在**每条记录写入时**检查，适用于唯一、非空、类型、基数。
 - `Level: txn`：在**事务的全部步骤应用之后、落盘之前**检查，适用于跨记录的不变式——"借贷合计相等"（ADR-0076 §1 的容差 0.005）、"工序序列连续"、"批次总数量等于各行之和"。
+
+单条动作、导入行、受权 AI 动作和协议提供方决定也有确定的接受边界，因而同样执行事务级门禁。最终检查包括受已声明路径/查询影响但没有直接修改的记录；例如改单行数量也必须重查其父单的合计。与本次写入无关的旧记录不会触发历史清洗。
 
 **两级都必须存在。** 只有记录级则跨记录约束写不出来；只有事务级则单条记录写入（含 CSV 导入、AI 动作）没有兜底。当事务级约束失败，整个事务拒绝（ADR-0100 §D3），不留部分状态。
 
@@ -121,3 +130,15 @@ type Constraint struct {
 6. 反例：未知约束种类、作用域路径超出 16 段、事务级约束出现在无法判定事务边界的上下文 → 发布期拒绝。
 
 测试归宿主与 build owner 包；`docs/Testing.md` 增"业务约束"手测行。
+
+## 6. As built
+
+对象上的 `Constraints` 已贯通受控定义、生成 Entity、草稿、冻结候选与激活；构建器对象编辑器的“Business constraints / 业务约束”沿原 DraftSession、共享输入 buffer、撤销/重做与发布菜单保存，不另建运行时。约束与其读取依赖封存在原 object 资产中；它没有独立可调用的能力，Expr 是 pure，唯一可写入口仍是原 action/transaction（ADR-0118）。组合与发布检查种类、字段、类型、路径、完整查询、同应用归属及接受边界；每对象最多 64 条，每条 1–16 个字段，原因每种语言最多 512 字节。
+
+所有新记录写入在原 `stagedDecision.Put` 检查记录级约束，非恢复的 live runtime 写入明确拒绝；同一 `checkConstraint` 实现于接受前检查事务级及受影响的关联记录，读取实际私有视图，任一步失败使记录、编号、效果意图和观察全部消失。唯一性在完整私有库加锁检查，包含归档记录；只读/缺失事实明确拒绝。关系实例采用原引用字段存储，创建头和两行的引用与记录在同一个 `record-batch` 接受结果内共同落盘。独立 `relations` 图与 M:N 的替换仍归 ADR-0104；既有原生应用按 ADR-0098 §10 保留运行，不把它们改写为新模型冒充退出。
+
+拒绝复用原 `FieldIssue`/`ErrorBody`：宿主码 `CONSTRAINT_VIOLATION`、issue 码 `constraint_violation`、稳定约束名、记录引用、字段及 relatedPaths、英中原因、读取范围内的有界值与失败类别。内核保留 `ERROR_CODE_INVALID_ARGUMENT`，未扩展契约词汇。拒绝事实按原接受结果路径保存为 refusal v3，同键重试返回原决定，旧 v1/v2 字节仍可恢复；发送诊断时再次过滤当前行/字段权限。CSV 每行明确返回 Error 与问题；空白单元格表示清空，不能静默保留旧字段。预览在私有副本执行同一门禁，不应用到权威状态；业务约束没有跳过开关。
+
+棕地与替换：旧已发布定义、记录和日志不迁写；新约束只影响新写入，收紧后旧违规记录仍可读取与恢复，不在恢复时求值。新模型的不变式归统一约束门禁，表单 Required/InputConstraints 保留输入语义，原行业 Go 守卫按 ADR-0113/0114 的等价构建产物退出，不形成新模型的第二写入实现。完整规则可视化编辑归 ADR-0109，本块用已有 JSON 输入编辑复杂 Expr 与固定查询集合。
+
+验收证据：`TestBusinessConstraintsAllWriteEntrances`（四种不变式 × 标准动作、事务、CSV 预览/导入、受权 agent 动作、协议；另测忽略 Put 错误与 live runtime 绕过）；`TestBusinessConstraintsTransactionTotalsAndReferenceCardinality`（合计与借贷 0.005 容差、单行改变触发父记录门禁、归档基数、同一接受结果、编号回滚与恢复）；`TestBusinessConstraintsUniqueConcurrentAndHistory`（并发唯一、状态返回仍锁定、收紧后历史恢复）；required/pattern/temporal/父作用域与空 CSV、关联来源改变和遮蔽字段反例；平台与 Build 的发布/冻结反例。`rule-language` 浏览器路线走构建器配置 → 冻结候选 → 激活 → 重复值拒绝、保留输入 → 更正成功。

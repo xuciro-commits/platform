@@ -266,6 +266,10 @@ func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error, is
 	switch {
 	case err != nil:
 		body := ErrorBody{Code: err.Error(), Message: err.Message, Issues: issues}
+		if len(issues) > 0 && issues[0].Constraint != "" {
+			body.Code = "CONSTRAINT_VIOLATION"
+			body.Message = issues[0].Constraint + ": " + issues[0].Message
+		}
 		status := statuses[err.Code]
 		if status == 0 {
 			status = http.StatusInternalServerError

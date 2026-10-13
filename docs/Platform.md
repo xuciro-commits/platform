@@ -173,6 +173,7 @@
 | AI 提供商与模型 (ADR-0015, ADR-0029) | D6 | 平台应用 `ai` | 多供应商、受权模型、预算/熔断、SSE 及接受时模型绑定。 | capabilities/server/apps/ai/ai.go, aicall.go；[ADR-0015](ADR/0015-ai-providers.md), [ADR-0029](ADR/0029-ai-control-plane.md) |
 | 类型化 AI 函数 (ADR-0043 24b–24c 部分实现) | D6 | 应用 API、宿主 AI 模型效果路径 | 强类型建议、Build 版本/独立结果、页面/Flow 复用与评测门禁；ADR-0046 §6.80增加可选受权问题/原调用历史输入。真实模型质量未验收。 | platform.AIFunction, Caller.RequestFunction；[ADR-0043](ADR/0043-typed-ai-functions.md) |
 | 业务规则语言（ADR-0101） | D4 | 应用 API、Build、页面运行时 | 动作/事务守卫、赋值、计算字段、表格条件和页面 Rule 共用同一 Go 求值器，浏览器使用同源 Go/Wasm；声明路径/查询集合、权限读取、严格缺值/除零与只读旧发布兼容。 | [ADR-0101 As built](ADR/0101-one-rule-language.md#5-as-built) |
+| 业务约束（ADR-0102） | D4 | 对象定义、宿主私有提交、Build | 对象声明的八种不变式，记录写入与接受前共用检查，关联来源/子行改变重查受影响记录；完整库唯一性、历史锁定、完整查询、结构化英中拒绝、CSV 预览/逐行拒绝及冻结发布。引用关系与记录共用接受结果；独立关系图替换归 ADR-0104。 | [ADR-0102 As built](ADR/0102-business-constraints.md#6-as-built) |
 | 能力装配与代码计算 | D4 | 应用 API、宿主、Build、FileStore、独立 Go worker | 原生目录投影/共同调用，Go/TinyGo 隔离编译、候选制品、wazero、页面/Flow 复用；显式 v2 数据通道的原生调用在锁外封存大输入，接受结果保存引用；原来源权限与 generation。 | platform.Operation/ValueSchema、build.code；[ADR-0044 §12](ADR/0044-capability-fabric.md#12-实际构建边界) |
 | 智能体 (ADR-0021, 0022) | D6 | 应用 API、平台应用 `agent` | 受管主体、交集权限、工具、草稿确认、追踪/记忆/评估和暂停。 | platform.Agent, agent*.go；[ADR-0021](ADR/0021-agents.md) |
 | 知识库 (ADR-0022) | D6 | 平台应用 `knowledge` | 权限内文本/向量检索、增量索引与引用来源；规模证据归 ADR-0033。 | knowledge.go, index.postings；[ADR-0022](ADR/0022-knowledge-memory-a2a.md) |

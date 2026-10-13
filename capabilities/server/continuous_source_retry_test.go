@@ -146,13 +146,13 @@ func TestContinuousSourcePreparationRetriesWithoutCursorLoss(t *testing.T) {
 				case "source":
 					x, _ := platform.Get[build.Source](tn.automation(build.ID, false), "stream")
 					x.Entity = "different_source"
-					if err := tn.automation(build.ID, false).PutAt(at, "test.change-source", x); err != nil {
+					if err := tn.automation(build.ID, true).PutAt(at, "test.change-source", x); err != nil {
 						t.Error(err)
 					}
 				case "connection":
 					x, _ := platform.Get[build.Connection](tn.automation(build.ID, false), "db")
 					x.Address += "&connect_timeout=2"
-					if err := tn.automation(build.ID, false).PutAt(at, "test.change-connection", x); err != nil {
+					if err := tn.automation(build.ID, true).PutAt(at, "test.change-connection", x); err != nil {
 						t.Error(err)
 					}
 				case "stop":
@@ -165,7 +165,7 @@ func TestContinuousSourcePreparationRetriesWithoutCursorLoss(t *testing.T) {
 				build.Connection{Record: platform.Record{ID: "db"}, Name: "db", Kind: "postgres", Address: address, State: "ready"},
 				build.Source{Record: platform.Record{ID: "stream"}, Name: "frames.source", Connection: "db", Profile: "table", Entity: "telemetry", Since: "seq", Stream: true, State: "published"},
 			} {
-				if err := tn.automation(build.ID, false).PutAt(at, "test.source", record); err != nil {
+				if err := tn.automation(build.ID, true).PutAt(at, "test.source", record); err != nil {
 					t.Fatal(err)
 				}
 			}
