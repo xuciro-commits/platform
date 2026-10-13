@@ -54,4 +54,20 @@ test("publisher reviews and activates sealed bytes while auditor can only inspec
   await expect(aud.getByRole("heading", { name: "Audit", exact: true })).toBeVisible();
   await expect(decide(request, audToken, "platform", "platform.member.grant", { type: "platform.member", id: publisher }, { app: "build", role: "builder" })).rejects.toThrow(/POLICY_DENIED/);
   expect((await request.get("/v1/releases/candidates?limit=1", { headers: { Authorization: `Bearer ${audToken}` } })).status()).toBe(403);
+
+  await open(aud, audToken, "/permissions?surface=tenant");
+  await aud.getByLabel("Member", { exact: true }).selectOption(publisher);
+  await aud.getByLabel("Permission", { exact: true }).fill("build.object.edit");
+  await aud.getByLabel("Object type", { exact: true }).fill("build.object");
+  await aud.getByLabel("Record ID", { exact: true }).fill(objectID);
+  await aud.getByRole("button", { name: "Explain", exact: true }).click();
+  await expect(aud.getByText("Operation grant", { exact: true })).toBeVisible();
+  await expect(aud.getByText("No role or policy grants this operation", { exact: true })).toHaveCount(2);
+  await expect(aud.getByText("Final allow", { exact: true })).toHaveCount(0);
+  await aud.getByLabel("Permission", { exact: true }).fill("");
+  await aud.getByLabel("Object type", { exact: true }).fill("build.evaluation");
+  await aud.getByLabel("Record ID", { exact: true }).fill("");
+  await aud.getByRole("button", { name: "Explain", exact: true }).click();
+  await expect(aud.getByText("Source closure", { exact: true })).toBeVisible();
+  await expect(aud.getByText("Final allow", { exact: true })).toBeVisible();
 });

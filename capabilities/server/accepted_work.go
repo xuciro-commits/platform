@@ -22,24 +22,25 @@ import (
 // result includes the K9 generation, scheduling outcome, business changes and
 // notices. No runner/listener executes when this result is recovered.
 type acceptedWork struct {
-	Version     int               `json:"version"`
-	Kind        string            `json:"kind"`
-	Tenant      string            `json:"tenant"`
-	App         string            `json:"app"`
-	Key         string            `json:"key"`
-	At          time.Time         `json:"at"`
-	RequestHash string            `json:"requestHash"`
-	Digest      string            `json:"digest"`
-	Input       taskState         `json:"input"`
-	PriorWork   json.RawMessage   `json:"priorWork,omitempty"`
-	Work        json.RawMessage   `json:"work"`
-	Outcome     string            `json:"outcome"`
-	After       Task              `json:"after"`
-	Changes     json.RawMessage   `json:"changes,omitempty"`
-	Notices     *acceptedNotices  `json:"notices,omitempty"`
-	Intents     []platform.Effect `json:"intents,omitempty"`
-	States      []acceptedState   `json:"states,omitempty"`
-	Control     *acceptedControl  `json:"control,omitempty"`
+	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
+	Version        int                     `json:"version"`
+	Kind           string                  `json:"kind"`
+	Tenant         string                  `json:"tenant"`
+	App            string                  `json:"app"`
+	Key            string                  `json:"key"`
+	At             time.Time               `json:"at"`
+	RequestHash    string                  `json:"requestHash"`
+	Digest         string                  `json:"digest"`
+	Input          taskState               `json:"input"`
+	PriorWork      json.RawMessage         `json:"priorWork,omitempty"`
+	Work           json.RawMessage         `json:"work"`
+	Outcome        string                  `json:"outcome"`
+	After          Task                    `json:"after"`
+	Changes        json.RawMessage         `json:"changes,omitempty"`
+	Notices        *acceptedNotices        `json:"notices,omitempty"`
+	Intents        []platform.Effect       `json:"intents,omitempty"`
+	States         []acceptedState         `json:"states,omitempty"`
+	Control        *acceptedControl        `json:"control,omitempty"`
 }
 
 func stateOfTask(task *Task) (taskState, error) {
@@ -99,6 +100,7 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 	}
 	c := platform.NewCaller(draft, platform.Member{ID: "app:" + task.App, Tenant: t.ID}, task.App, false, true)
 	refusal = decideWork(t, draft, c, task, now)
+	result.Authorizations = slices.Clone(draft.authorizations)
 	if refusal != nil {
 		result.Outcome = refusal.Error()
 		// A failed attempt may advance its K9 retry state, never a half-applied
@@ -204,6 +206,20 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *Task, now
 			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action uses an effect outside the accepted-result boundary")
 		}
 	}()
+	owner := t.app(task.App)
+	if owner == nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", "verb", "The operation is unavailable in its owner declaration")
+	}
+	permission, declared := "job:"+task.job.Name, false
+	if task.Kind == "job" {
+		declared = slices.ContainsFunc(owner.Manifest().Jobs, func(job platform.Job) bool { return job.Name == task.job.Name })
+	} else if task.event != nil {
+		permission = "delivery:" + task.event.Record.GetSubmission().GetSchema().GetName()
+		declared = len(owner.Manifest().Subscribes) > 0 || slices.Contains(t.listeners, task.App)
+	}
+	if refusal := d.authorizeNative(c, permission, "action", owner.Manifest().AllRoles(), declared); refusal != nil {
+		return refusal
+	}
 	if task.Kind == "job" {
 		refusal = d.stateApp(t.app(task.App)).(platform.Runner).Run(c, task.job.Name, now)
 	} else {
@@ -248,6 +264,10 @@ func decodeAcceptedWork(raw []byte) (acceptedWork, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return result, fmt.Errorf("work result has trailing data")
 	}
+	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
+		return result, err
+	}
+
 	digest, err := digestAcceptedWork(result)
 	hash, hashErr := workInputHash(result.Input, result.PriorWork)
 	finished := new(pb.Work)

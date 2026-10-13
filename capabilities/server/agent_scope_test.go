@@ -95,6 +95,12 @@ func TestAgentKnowledgeCitationUsesCurrentDocumentGrant(t *testing.T) {
 	check(true)
 	// A former task reader can retain an agent-audit role, but no task grant.
 	for _, who := range []platform.Member{admin, {ID: reader.ID, Tenant: tn.ID, Roles: map[string]string{AgentApp: AgentAdmin}}} {
+		if who.ID == reader.ID {
+			dir := tn.app(PlatformApp).(*Console)
+			dir.mu.Lock()
+			dir.members[reader.ID].Grants = append(dir.currentMember(dir.members[reader.ID]).Grants, platform.Grant{App: AgentApp, Role: AgentAdmin})
+			dir.mu.Unlock()
+		}
 		r := trace(who)
 		if !r.Withheld || len(r.Citations) != 0 || r.Result != "" {
 			t.Fatalf("private task escaped via a public citation for %s: %+v", who.ID, r)
@@ -140,6 +146,10 @@ func TestAgentTraceScope(t *testing.T) {
 	}
 	admin := platform.Member{ID: "admin", Tenant: tn.ID, Roles: map[string]string{AgentApp: AgentAdmin}}
 	leadAdmin := member("lead")
+	dir := tn.app(PlatformApp).(*Console)
+	dir.mu.Lock()
+	dir.members[leadAdmin.ID].Grants = append(dir.currentMember(dir.members[leadAdmin.ID]).Grants, platform.Grant{App: AgentApp, Role: AgentAdmin})
+	dir.mu.Unlock()
 	leadAdmin.Roles[AgentApp] = AgentAdmin
 
 	read := func(who platform.Member) AgentRunRecord {

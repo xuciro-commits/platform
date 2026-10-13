@@ -45,30 +45,56 @@ function AppMatrix({ app }: { app: AppPermissions }) {
 
 // Ask the engine why (ADR-0078 §3.4): a member, a permission, the verdict with its rule.
 function Explain({ catalog }: { catalog: AppPermissions[] }) {
+	const { client } = useHost();
   const members = useRead<Member[]>("/v1/members").data ?? [];
   const permissions = Array.from(new Set(catalog.flatMap((a) => a.roles.flatMap((r) => r.actions.map((x) => x.id))))).sort();
   const [member, setMember] = useState("");
   const [permission, setPermission] = useState("");
-  const [asked, setAsked] = useState<{ member: string; permission: string } | null>(null);
-  const answer = useRead<Explanation>(`/v1/authz/explain?member=${encodeURIComponent(asked?.member ?? "")}&permission=${encodeURIComponent(asked?.permission ?? "")}`, undefined, asked !== null);
-  const v = answer.data?.verdict;
+  const [object, setObject] = useState("");
+  const [record, setRecord] = useState("");
+  const [fields, setFields] = useState("");
+  const [kind, setKind] = useState<Api.AuthzRequest["kind"]>("read");
+  const [asked, setAsked] = useState<string | null>(null);
+  const answer = useRead<Explanation | Api.Verdict>(asked ?? "/v1/authz/explain", undefined, asked !== null);
+  const explanation = answer.data && "verdict" in answer.data ? answer.data : undefined;
+  const v = explanation?.verdict ?? (answer.data && "allow" in answer.data ? answer.data : undefined);
+  const names: Record<string, string> = { tenant: "Tenant isolation", principal: "Principal validity", deny: "Explicit deny", verb: "Operation grant", row: "Row scope", fields: "Field permissions", derived: "Source closure", markings: "Data markings", allow: "Final allow" };
+  const columns: ColumnDef<Api.Layer, unknown>[] = [
+    { id: "layer", header: t("Authorization layer"), accessorFn: (layer) => t(names[layer.name] ?? layer.name) },
+    { id: "allowed", header: t("Result"), cell: ({ row: { original } }) => <Tag label={original.allowed ? t("allowed") : t("not allowed")} tone={original.allowed ? "success" : "danger"} /> },
+    { id: "reason", header: t("Reason"), cell: ({ row: { original } }) => <span>{t(original.reason)}{original.role && ` · ${original.role}`}{original.policy && ` · ${original.policy}`}</span> },
+  ];
   return (
     <Panel title={t("Why may — or may not — someone do something?")}>
-      <Form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={() => { if (member && permission) setAsked({ member, permission }); }}>
+      <Form className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] items-end gap-2 text-sm" onSubmit={() => {
+        if (!member) return;
+        if (object) {
+          const request: Api.AuthzRequest = { principal: member, tenant: client.connection.tenant, kind, type: object, record, fields: fields.split(",").map((name) => name.trim()).filter(Boolean), ...(permission ? { action: permission } : {}) };
+          setAsked(`/v1/authz/explain\n${JSON.stringify(request)}`);
+        } else if (permission) setAsked(`/v1/authz/explain?member=${encodeURIComponent(member)}&permission=${encodeURIComponent(permission)}`);
+      }}>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("Member")}</span>
-          <Select value={member} onChange={(e) => setMember(e.target.value)}><option value="">—</option>{members.map((m) => <option key={m.id} value={m.id}>{m.profile.displayName || m.id}</option>)}</Select></label>
+          <Select aria-label={t("Member")} value={member} onChange={(e) => setMember(e.target.value)}><option value="">—</option>{members.map((m) => <option key={m.id} value={m.id}>{m.profile.displayName || m.id}</option>)}</Select></label>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("Permission")}</span>
-          <Input list="platform-permission-ids" value={permission} onChange={(e) => setPermission(e.target.value)} placeholder="app.entity.verb · app:read:name" className="w-72" />
+          <Input aria-label={t("Permission")} list="platform-permission-ids" value={permission} onChange={(e) => setPermission(e.target.value)} placeholder="app.entity.verb · app:read:name" className="w-full" />
           <datalist id="platform-permission-ids">{permissions.map((p) => <option key={p} value={p} />)}</datalist></label>
-        <Button type="submit" variant="primary" disabled={!member || !permission}>{t("Explain")}</Button>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("Object type")}</span><Input aria-label={t("Object type")} value={object} onChange={(event) => setObject(event.target.value)} placeholder="app.object" /></label>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("Record ID")}</span><Input aria-label={t("Record ID")} value={record} onChange={(event) => setRecord(event.target.value)} /></label>
+        {object && <>
+          <label className="grid gap-1"><span className="text-xs text-muted">{t("Operation kind")}</span><Select aria-label={t("Operation kind")} value={kind} onChange={(event) => setKind(event.target.value as Api.AuthzRequest["kind"])}>{(["read", "write", "create", "archive", "action", "derive", "export", "protocol"] as const).map((value) => <option key={value} value={value}>{t(value)}</option>)}</Select></label>
+          <label className="grid gap-1"><span className="text-xs text-muted">{t("Fields (comma separated)")}</span><Input aria-label={t("Fields (comma separated)")} value={fields} onChange={(event) => setFields(event.target.value)} /></label>
+        </>}
+        <Button type="submit" variant="primary" disabled={!member || (!permission && !object)}>{t("Explain")}</Button>
       </Form>
       {answer.error && <p className="mt-2 text-xs text-[var(--tone-danger)]">{String(answer.error)}</p>}
       {answer.data && v && <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
         <Tag label={v.allow ? t("allowed") : t("not allowed")} tone={v.allow ? "success" : "danger"} />
-        <span>{v.reason}</span>
+        <span>{t(v.reason)}</span>
         <span className="text-xs text-muted">{t("rule")}: {v.rule}{v.role ? ` (${v.role})` : ""}{v.policy ? ` ${v.policy}` : ""}</span>
-        <span className="text-xs text-muted">{t("holds")}: {(answer.data.roles ?? []).join(", ") || t("none")} · {t("needs")}: {(answer.data.allowed ?? []).join(", ") || "—"}</span>
+        {explanation && <span className="text-xs text-muted">{t("holds")}: {(explanation.roles ?? []).join(", ") || t("none")} · {t("needs")}: {(explanation.allowed ?? []).join(", ") || "—"}</span>}
       </p>}
+      {v && <DataTable data={v.layers} columns={columns} getRowId={(layer) => layer.name} searchable={false} height={Math.min(360, 40 + v.layers.length * 32)} />}
+      {!!v?.withheld?.length && <p className="mt-2 text-xs text-muted">{t("Withheld fields")}: {v.withheld.join(", ")}</p>}
     </Panel>
   );
 }

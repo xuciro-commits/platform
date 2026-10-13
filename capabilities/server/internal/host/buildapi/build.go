@@ -60,12 +60,13 @@ type Object struct {
 
 // Field is one field of a defined object, as a person describes it.
 type Field struct {
-	Property *platform.AssetBinding `json:"property,omitempty" type:"json" field:"aside"`
-	Name     string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
-	Title    string                 `json:"title" field:"required" title:"Label" example:"Visited on"`
-	Type     string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
-	Choices  string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
-	Ref      string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
+	SourceType string                 `json:"sourceType,omitempty" choices:"record,user-input,external-input,generated" title:"Text source type"`
+	Property   *platform.AssetBinding `json:"property,omitempty" type:"json" field:"aside"`
+	Name       string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
+	Title      string                 `json:"title" field:"required" title:"Label" example:"Visited on"`
+	Type       string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
+	Choices    string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
+	Ref        string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
 	// Inverse names the relation seen from the referenced record (ADR-0040 21b).
 	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
 	Required bool   `json:"required,omitempty"`

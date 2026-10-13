@@ -113,6 +113,14 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time, delta .
 		return ChatAnswer{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID), nil
 	}
 	model, pv, err := t.ai.Callable(m, req.Model)
+	if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+		return ChatAnswer{}, err, nil
+	}
+	c := platform.NewCaller(runtime{t}, m, platform.AIApp, false, false)
+	decision := t.authorizeNative(c, "model:"+req.Model, "action", []string{platform.AnyMember}, err == nil)
+	if refusal := authorizationRefusal(decision); refusal != nil {
+		return ChatAnswer{}, refusal, nil
+	}
 	if err != nil {
 		return ChatAnswer{}, err, nil
 	}

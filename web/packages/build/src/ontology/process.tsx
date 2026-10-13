@@ -259,6 +259,7 @@ function FieldProperties({ field, others, onChange, onRemove }: { field: Field; 
     {(field.formula||field.formulaExpr) && <p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
     <Checkbox checked={!!field.search} onChange={(search) => onChange({ search })}>{t("Searchable")}</Checkbox>
+	{["text","longtext"].includes(field.type)&&<Label text={t("Text source type")}><Select value={field.sourceType??""} onChange={event=>onChange({sourceType:event.target.value||undefined})}><option value="">{t("Undeclared source")}</option><option value="record">{t("Original record")}</option><option value="user-input">{t("User input")}</option><option value="external-input">{t("External input")}</option><option value="generated">{t("Generated from declared sources")}</option></Select><p className="text-xs text-muted">{t("Undeclared text is withheld from derived reads. Generated text also requires record provenance.")}</p></Label>}
     {conditions.length > 0 && <Label text={t("Only when")}>
       <Select value={on?.name ?? ""} onChange={(e) => onChange({ when: e.target.value ? `${e.target.value}=` : undefined })}>
         <option value="">{t("Always")}</option>{conditions.map((f) => <option key={f.name} value={f.name}>{f.title || f.name}</option>)}

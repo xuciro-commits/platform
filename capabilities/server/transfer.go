@@ -194,6 +194,7 @@ func sign(x float64) float64 {
 // Export writes the records of typ m's query finds as CSV: the ID and every
 // field m may read, lines aside.
 func (t *Tenant) Export(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
+	m = t.authorizationMember(m)
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
@@ -203,8 +204,9 @@ func (t *Tenant) Export(m platform.Member, typ string, q platform.Query, now tim
 	if et == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if t.restricted(typ) {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Restricted data does not leave as CSV")
+	c := platform.NewCaller(runtime{t}, m, et.info.App, false, false)
+	if err := authorizationRefusal(t.authorizeFrom(t.records, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "export", Type: typ}, now, false)); err != nil {
+		return nil, err
 	}
 	view, _ := viewOf(m, et)
 	var fields []platform.FieldInfo

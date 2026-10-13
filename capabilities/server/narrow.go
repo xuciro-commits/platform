@@ -36,6 +36,7 @@ func (t *Tenant) mayRead(m platform.Member, now time.Time, held bool) func(ref s
 
 func (t *Tenant) mayReadIn(store *recordStore, m platform.Member, now time.Time, held bool) func(ref string) bool {
 	seen := map[string]bool{}
+	walk := newAuthorizationWalk()
 	return func(ref string) bool {
 		if ref == "" {
 			return true
@@ -49,29 +50,25 @@ func (t *Tenant) mayReadIn(store *recordStore, m platform.Member, now time.Time,
 			return ok
 		}
 		record, field, _ := strings.Cut(ref, "#")
-		ok := false
+		typ, id, _ := strings.Cut(record, "/")
 		if !held {
 			store.mu.Lock()
 		}
-		typ, id, _ := strings.Cut(record, "/")
-		if typ == platform.KnowledgeDocumentType {
-			ok = t.knowledgeSourceReadable(store, m, id, field)
-		} else {
-			ok = t.readableIn(store, m, record, now)
-		}
-		if ok && field != "" {
-			typ, _, _ := strings.Cut(record, "/")
-			et := store.types[typ]
-			if et == nil {
-				ok = false
-			} else {
-				f, found := et.info.Field(field)
-				ok = found && f.Reads(m.Roles[et.info.App])
-			}
-		}
+		et := store.types[typ]
 		if !held {
 			store.mu.Unlock()
 		}
+		app := ""
+		if et != nil {
+			app = et.info.App
+		}
+		c := platform.NewCaller(runtime{t}, m, app, false, false)
+		fields := []string{}
+		if field != "" {
+			fields = append(fields, field)
+		}
+		decision := t.authorizeDepth(store, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "derive", Type: typ, Record: id, Fields: fields}, now, held, 0, walk)
+		ok := decision.Allow && len(decision.Withheld) == 0
 		seen[ref] = ok
 		return ok
 	}
@@ -83,24 +80,7 @@ func (t *Tenant) mayReadIn(store *recordStore, m platform.Member, now time.Time,
 // when what a read answers with is not records (ADR-0033 D1).
 func (t *Tenant) mayCallRead(m platform.Member, name string) bool {
 	a := t.owner["read:"+name]
-	return a != nil && (m.Roles[a.Manifest().ID] != "" || slices.Contains(a.Manifest().Everyone, name))
-}
-
-// readsField reports whether m's role in the owning app reads one field of a
-// record's type (ADR-0028 D3): a citation of a restricted field is withheld
-// even where the record itself is readable.
-func (t *Tenant) readsField(m platform.Member, ref, field string, held bool) bool {
-	typ, _, _ := strings.Cut(ref, "/")
-	if !held {
-		t.records.mu.Lock()
-		defer t.records.mu.Unlock()
-	}
-	et := t.records.types[typ]
-	if et == nil {
-		return false
-	}
-	f, ok := et.info.Field(field)
-	return ok && f.Reads(m.Roles[et.info.App])
+	return a != nil && t.authorizeEntry(m, a.Manifest().ID, name, "read", Now()).Allow
 }
 
 // narrowable are the fields a type's derivations may leave out.
@@ -142,6 +122,7 @@ func (t *Tenant) narrowed(m platform.Member, v any, now time.Time, held bool) an
 		return v
 	}
 	w := t.narrower(m, now, held)
+	w.derivedContext = true
 	out, changed := w.value(reflect.ValueOf(v))
 	if !changed {
 		return v
@@ -156,16 +137,18 @@ func (t *Tenant) narrower(m platform.Member, now time.Time, held bool) *narrower
 }
 
 func (t *Tenant) narrowerIn(store *recordStore, m platform.Member, now time.Time, held bool) *narrower {
+	m = t.authorizationMember(m)
 	return &narrower{t: t, store: store, m: m, may: t.mayReadIn(store, m, now, held), held: held, hidden: map[reflect.Type][]platform.FieldInfo{}}
 }
 
 type narrower struct {
-	t      *Tenant
-	store  *recordStore
-	m      platform.Member
-	may    func(ref string) bool
-	held   bool
-	hidden map[reflect.Type][]platform.FieldInfo
+	derivedContext bool
+	t              *Tenant
+	store          *recordStore
+	m              platform.Member
+	may            func(ref string) bool
+	held           bool
+	hidden         map[reflect.Type][]platform.FieldInfo
 }
 
 // entity is the declared type of a Go struct type, or nil.
@@ -256,7 +239,7 @@ func (w *narrower) record(et *entityType, v reflect.Value) (reflect.Value, bool)
 	if len(hidden) > 0 {
 		out, changed = reflect.ValueOf(masked(et, v, hidden)), true
 	}
-	if len(et.info.Derived) == 0 && len(et.info.VersionPins) == 0 {
+	if len(et.info.Derived) == 0 && len(et.info.VersionPins) == 0 && !w.derivedContext {
 		return out, changed
 	}
 	derived, narrowed := w.derive(et, out)
@@ -271,7 +254,30 @@ func (w *narrower) record(et *entityType, v reflect.Value) (reflect.Value, bool)
 // the declared withheld field says so.
 func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool) {
 	out := copyOf(et.info.Go, v.Interface())
+	self := et.info.Type + "/" + recordOf(out).ID
+	readable := func(refs []string) bool {
+		for _, ref := range refs {
+			if ref != self && !w.may(ref) {
+				return false
+			}
+		}
+		return true
+	}
 	withheld, every := false, []string{}
+	if w.derivedContext {
+		for _, field := range et.info.Fields {
+			if field.Type != "text" && field.Type != "longtext" {
+				continue
+			}
+			declared := slices.ContainsFunc(et.info.Derived, func(d platform.DerivationInfo) bool {
+				return len(d.List) == 0 && slices.ContainsFunc(d.Fields, func(path []int) bool { return slices.Equal(path, field.Index) })
+			})
+			if field.SourceType == "" && !declared || field.SourceType == "generated" && !declared {
+				out.FieldByIndex(field.Index).SetZero()
+				withheld = true
+			}
+		}
+	}
 	pins := recordOf(out).VersionPins
 	visiblePins := []platform.RecordVersionPin{}
 	for _, pin := range pins {
@@ -303,12 +309,17 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 	for _, d := range et.info.Derived {
 		switch {
 		case d.All:
-			if !w.readable(every) {
+			if !readable(every) {
 				withheld = true
 				empty(out, d.Fields)
 			}
 		case len(d.List) == 0:
-			if !w.readable(w.refsAt(out, d.Refs)) {
+			refs := w.refsAt(out, d.Refs)
+			missing := len(refs) == 0 && slices.ContainsFunc(d.Fields, func(path []int) bool {
+				field, known := et.info.Field(fieldName(et.info.Go, path))
+				return known && field.SourceType == "generated" && !out.FieldByIndex(path).IsZero()
+			})
+			if missing || !readable(refs) {
 				withheld = true
 				empty(out, d.Fields)
 			}
@@ -317,7 +328,7 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 			kept := reflect.MakeSlice(list.Type(), 0, list.Len())
 			for i := range list.Len() {
 				element := list.Index(i)
-				if w.readable(w.refsAt(element, d.Refs)) {
+				if readable(w.refsAt(element, d.Refs)) {
 					kept = reflect.Append(kept, element)
 					continue
 				}
@@ -381,17 +392,11 @@ func (w *narrower) refsAt(v reflect.Value, paths [][]int) []string {
 	return nil
 }
 
-// readable reports whether the reader may read every one of these records.
+// empty sets the fields of a record or an element to their zero value.
 func (w *narrower) readable(refs []string) bool {
-	for _, ref := range refs {
-		if !w.may(ref) {
-			return false
-		}
-	}
-	return true
+	return !slices.ContainsFunc(refs, func(ref string) bool { return !w.may(ref) })
 }
 
-// empty sets the fields of a record or an element to their zero value.
 func empty(v reflect.Value, fields [][]int) {
 	for _, path := range fields {
 		v.FieldByIndex(path).SetZero()

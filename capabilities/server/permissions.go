@@ -4,6 +4,7 @@ import (
 	"platformserver/internal/host"
 	"slices"
 	"strings"
+	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -77,6 +78,21 @@ type Explanation struct {
 	Verdict    authz.Verdict `json:"verdict"`
 }
 
+// ExplainOperation resolves row/field/source facts through the same runtime as
+// an actual operation; it never accepts roles or owner facts from the client.
+func (t *Tenant) ExplainOperation(request platform.AuthzRequest, at time.Time) (platform.AuthzDecision, *kernel.Error) {
+	m, known := t.member(request.Principal)
+	if !known {
+		return platform.AuthzDecision{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The operation principal is unavailable")
+	}
+	app := ""
+	if info, exists := t.entity(request.Type); exists {
+		app = info.App
+	}
+	c := platform.NewCaller(runtime{t}, m, app, false, false)
+	return t.authorizeFrom(t.records, c, request, at, false), nil
+}
+
 // Explain decides permission for member and says why: an action's schema
 // ("<app>.<entity>.<verb>"), or a read ("<app>:read:<name>").
 func (t *Tenant) Explain(member, permission string) (Explanation, *kernel.Error) {
@@ -100,14 +116,14 @@ func (t *Tenant) Explain(member, permission string) (Explanation, *kernel.Error)
 		default:
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "No read {name} in {app}", name, app)
 		}
-		out.Verdict = m.May(app, permission, out.Allowed)
+		out.Verdict = t.authorizeEntry(m, app, name, "read", Now())
 		return out, nil
 	}
 	for _, a := range t.apps {
 		mf := a.Manifest()
 		if action, own := mf.Actions.Action(permission); own {
 			out.App, out.Roles, out.Allowed = mf.ID, nonNil(m.RolesIn(mf.ID)), nonNil(action.Roles)
-			out.Verdict = mf.Actions.Decide(platform.Caller{Member: m, App: mf.ID}, permission)
+			out.Verdict = mf.Actions.Decide(platform.NewCaller(runtime{t}, m, mf.ID, false, false), permission)
 			return out, nil
 		}
 	}

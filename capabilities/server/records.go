@@ -1114,20 +1114,8 @@ func (t *Tenant) visible(m platform.Member, et *entityType, now time.Time) (func
 	return t.visibleIn(t.records, m, et, now)
 }
 
-func (t *Tenant) visibleIn(store *recordStore, m platform.Member, et *entityType, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
+func (t *Tenant) scopeVisibility(store *recordStore, m platform.Member, et *entityType, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
 	roles, scope := m.RolesIn(et.info.App), et.info.Scope
-	if scope.Through != nil { // readable when the record it belongs to is; the store's lock is held by whoever calls it
-		seen := map[string]bool{}
-		return func(v reflect.Value) bool {
-			ref := scope.Through(v.Interface())
-			ok, known := seen[ref]
-			if !known {
-				ok = t.readableIn(store, m, ref, now)
-				seen[ref] = ok
-			}
-			return ok
-		}, nil
-	}
 	participant := func(v reflect.Value) bool {
 		return scope.Participants != nil && slices.Contains(scope.Participants(v.Interface()), m.ID)
 	}
@@ -1227,6 +1215,7 @@ func (t *Tenant) Records(m platform.Member, typ string, q platform.Query, now ti
 // Flow queries must see prior accepted-decision writes without acquiring a
 // second live runtime or widening the member's record/field scope.
 func (t *Tenant) recordsFrom(s *recordStore, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+	m = t.authorizationMember(m)
 	if q.Traversal != nil {
 		if s != t.records {
 			return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Link traversal is unavailable in a staged read")
@@ -1528,6 +1517,7 @@ type Related struct {
 }
 
 func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *kernel.Error) {
+	m = t.authorizationMember(m)
 	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	if err := t.admits(m); err != nil {
 		return RecordView{}, err

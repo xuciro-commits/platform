@@ -1,15 +1,5 @@
-// Package authz decides whether a member may perform an action (ADR-0078
-// §3.3, as built). Every action the platform executes — a decision submitted
-// by a person, an API token, an agent or an automation — asks Decide through
-// Catalog.DecideOn / Member.May and gets a Verdict that says yes or no and
-// why. Row visibility (Scope) and field narrowing are decided elsewhere, by
-// the record store; this package does not see them.
-//
-// The order is fixed: a bypass the host grants (replay, automation), then the
-// tenant's deny policies, then what the roles allow (RBAC), then the tenant's
-// allow policies (ABAC on member/app/agent/target, exact match). The engine
-// knows no manifests and no records: callers hand it the roles the permission
-// names, so it stays a few dozen lines any reader can verify.
+// Package authz owns the ordered authorization decision. Owners resolve facts;
+// neither a role nor an allow policy can widen row, field or provenance limits.
 package authz
 
 import (
@@ -33,21 +23,53 @@ type Subject struct {
 
 // Request is one question: may Subject exercise Permission on Resource?
 type Request struct {
+	Kind       string
 	Subject    Subject
 	Permission string   // e.g. "mes.order.release", "mes.order.read", "mes.order.cost.write"
 	Resource   string   // "<type>/<id>" when about a record; "" otherwise
 	Allowed    []string // the roles the permission names (AnyMember for every member)
 	Attributes map[string]string
+	Context    *Context
+}
+
+// Context contains resolved owner facts, not caller-supplied policy overrides.
+// A nil context is the original role-only question used by static catalogues.
+type Context struct {
+	Tenant     Gate
+	Principal  Gate
+	Verb       *Gate
+	Row        Gate
+	Fields     Gate
+	Derived    Gate
+	Markings   Gate
+	Withheld   []string
+	Definition string
+}
+
+type Gate struct {
+	Allowed bool   `json:"allowed"`
+	Reason  string `json:"reason"`
+}
+
+type Layer struct {
+	Name    string `json:"name"`
+	Allowed bool   `json:"allowed"`
+	Reason  string `json:"reason"`
+	Role    string `json:"role,omitempty"`
+	Policy  string `json:"policy,omitempty"`
 }
 
 // Verdict is the answer, with the rule that decided it, for the UI, the
 // audit trail and the explain endpoint.
 type Verdict struct {
-	Allow  bool   `json:"allow"`
-	Rule   string `json:"rule"`   // bypass, role, policy, none
-	Reason string `json:"reason"` // one sentence a person can read
-	Role   string `json:"role,omitempty"`
-	Policy string `json:"policy,omitempty"`
+	Allow      bool     `json:"allow"`
+	Rule       string   `json:"rule"`   // bypass, role, policy, none
+	Reason     string   `json:"reason"` // one sentence a person can read
+	Role       string   `json:"role,omitempty"`
+	Policy     string   `json:"policy,omitempty"`
+	Layers     []Layer  `json:"layers"`
+	Withheld   []string `json:"withheld,omitempty"`
+	Definition string   `json:"definition,omitempty"`
 }
 
 // Policy is a tenant rule over requests (ADR-0078 §3.4 ABAC): the first
@@ -74,36 +96,93 @@ func (p Policy) Matches(r Request) bool {
 // Decide answers the request.
 func Decide(r Request, policies ...Policy) Verdict {
 	if r.Subject.Replaying {
-		return Verdict{Allow: true, Rule: "bypass", Reason: "replaying an accepted decision"}
+		// Only the legacy replay decoder uses this branch. Modern recovery never
+		// enters the engine; it applies the recorded authorization evidence.
+		return Verdict{Allow: true, Rule: "bypass", Reason: "replaying an accepted decision", Layers: []Layer{{Name: "recorded", Allowed: true, Reason: "replaying an accepted decision"}}}
+	}
+	if r.Kind == "" {
+		r.Kind = "action"
+	}
+	v := Verdict{Rule: "none", Layers: []Layer{}}
+	check := func(name string, gate Gate, role, policy string) bool {
+		v.Layers = append(v.Layers, Layer{Name: name, Allowed: gate.Allowed, Reason: gate.Reason, Role: role, Policy: policy})
+		if !gate.Allowed {
+			v.Reason = gate.Reason
+		}
+		return gate.Allowed
+	}
+	context := r.Context
+	if context == nil {
+		pass := Gate{Allowed: true, Reason: "not restricted by this owner"}
+		context = &Context{Tenant: pass, Principal: pass, Row: pass, Fields: pass, Derived: pass, Markings: pass}
+	}
+	v.Definition = context.Definition
+	v.Withheld = slices.Clone(context.Withheld)
+	if !check("tenant", context.Tenant, "", "") || !check("principal", context.Principal, "", "") {
+		return v
+	}
+	if !slices.Contains([]string{"read", "write", "create", "archive", "action", "derive", "export", "protocol"}, r.Kind) {
+		check("deny", Gate{Reason: "Unknown authorization kind"}, "", "")
+		return v
+	}
+	var allow *Policy
+	for i := range policies {
+		p := &policies[i]
+		if p.Effect == "deny" && p.Matches(r) {
+			v.Rule, v.Policy = "policy", p.ID
+			check("deny", Gate{Reason: "An explicit policy denies this operation"}, "", p.ID)
+			return v
+		}
+		if allow == nil && p.Effect == "allow" && p.Matches(r) {
+			allow = p
+		}
+	}
+	check("deny", Gate{Allowed: true, Reason: "no explicit deny matched"}, "", "")
+	role := ""
+	if slices.Contains(r.Allowed, AnyMember) {
+		role = AnyMember
+	}
+	for _, held := range r.Subject.Roles {
+		if role == "" && held != "" && slices.Contains(r.Allowed, held) {
+			role = held
+		}
+	}
+	// A matching allow may supply the verb grant, preserving ADR-0078. It
+	// remains pending until every narrowing layer below has passed.
+	verb := Gate{Allowed: role != "" || allow != nil || r.Subject.Automation, Reason: "No role or policy grants this operation"}
+	if role != "" {
+		verb.Reason = "An assigned role grants this operation"
 	}
 	if r.Subject.Automation {
-		return Verdict{Allow: true, Rule: "bypass", Reason: "the host's own work"}
+		verb.Reason = "the host's declared operation"
 	}
-	for _, p := range policies {
-		if p.Effect == "deny" && p.Matches(r) {
-			return Verdict{Allow: false, Rule: "policy", Policy: p.ID, Reason: "policy " + p.ID + " denies " + r.Permission}
+	if allow != nil && role == "" {
+		verb.Reason = "allow policy supplies the operation grant"
+	}
+	if context.Verb != nil && !context.Verb.Allowed {
+		verb = *context.Verb
+	}
+	if !check("verb", verb, role, "") {
+		return v
+	}
+	for _, layer := range []struct {
+		name string
+		gate Gate
+	}{{"row", context.Row}, {"fields", context.Fields}, {"derived", context.Derived}, {"markings", context.Markings}} {
+		if !check(layer.name, layer.gate, "", "") {
+			return v
 		}
 	}
-	if slices.Contains(r.Allowed, AnyMember) {
-		return Verdict{Allow: true, Rule: "role", Role: AnyMember, Reason: "every member may " + r.Permission}
+	final := Gate{Allowed: true, Reason: verb.Reason}
+	v.Rule, v.Role = "role", role
+	if r.Subject.Automation {
+		v.Rule = "automation"
 	}
-	for _, role := range r.Subject.Roles {
-		if role != "" && slices.Contains(r.Allowed, role) {
-			return Verdict{Allow: true, Rule: "role", Role: role, Reason: "the role " + role + " in " + r.Subject.App + " may " + r.Permission}
-		}
+	if allow != nil && role == "" {
+		v.Rule, v.Policy, final.Reason = "policy", allow.ID, "An allow policy grants this operation"
 	}
-	for _, p := range policies {
-		if p.Effect == "allow" && p.Matches(r) {
-			return Verdict{Allow: true, Rule: "policy", Policy: p.ID, Reason: "policy " + p.ID + " allows " + r.Permission}
-		}
-	}
-	v := Verdict{Rule: "none"}
-	switch {
-	case len(r.Subject.Roles) == 0:
-		v.Reason = r.Subject.ID + " holds no role in " + r.Subject.App + ", so may not " + r.Permission
-	default:
-		v.Reason = "the role " + strings.Join(r.Subject.Roles, ", ") + " in " + r.Subject.App + " may not " + r.Permission
-	}
+	check("allow", final, "", v.Policy)
+	v.Allow, v.Reason = true, final.Reason
 	return v
 }
 

@@ -1,16 +1,16 @@
 # ADR-0078 — 租户与授权：租户即边界、权限即一等概念、一个授权引擎（XXL）
 
-状态：接受，已实现有界基座；租户设置生效、单位授予生效（2026-10-07）；统一标记策略、岗位推角色、策略表达式不做 · 2026-10-07 · 承接 ADR-0012（组织与单位）、ADR-0025 D4、ADR-0028 D3（字段读写角色）、ADR-0037 18b（角色与范围）、ADR-0066（范围设计器）、ADR-0067/0068/0073（企业模型）、ADR-0075（Markings）、ADR-0069 第二程
+状态：接受，已实现有界基座；判定合成口径由 [ADR-0105](0105-one-authorization-engine.md) 取代并正在实施；租户设置、单位授予保留；岗位推角色、策略表达式不做 · 承接 ADR-0012、0025、0028、0037、0066–0069、0073、0075
 
 
-## 实际边界（As-built，2026-10-07）
+## 实际边界（As-built）
 
 本 ADR 正文是设计稿，写在代码之前；下表是对照代码逐项核过的现状。**正文与本表冲突时以本表为准。** 再往下的 §2–§4 不要当成已实现清单读。
 
 | 正文的说法 | 代码里的事实 |
 |---|---|
-| "一个授权引擎，UI/API/智能体/自动化/导出全部经过 `authz.Decide`" | **只有动作授权**走引擎：`Catalog.DecideOn` / `Member.May` 在 `ledger.Submit`、动作目录、页面/函数的可调用判断里调用（约 30 个调用点，覆盖人、令牌、智能体、自动化）。**行可见性**仍由记录存储按 `Scope.Levels/Participants/Through` 自行计算，**字段遮蔽**仍是 `narrow.go` 的 `readsField`，导出沿记录可见性。它们已改为"按全部角色取并集"，但不经过 `authz.Decide`。 |
-| "RBAC + ReBAC + ABAC 三种判断一个顺序" | 引擎顺序是 bypass → deny 策略 → 角色 → allow 策略。**没有 ReBAC**：`related(link)` 谓词从未实现，`Request.Related` 字段无任何调用方设置，已于 2026-10-07 删除。"与记录的关系"（own/participant/through）只存在于记录存储的 Scope 里，而且只管可见性，不管动作。 |
+| "一个授权引擎，UI/API/智能体/自动化/导出全部经过 `authz.Decide`" | ADR-0105 已接通动作、记录行范围、来源字段、CSV 标记、声明集合和接受依据。原 owner 提供事实，统一引擎决定固定次序；`readsField` 的独立判断已删除。命名读取、输入、作业和回调接入同一引擎；九类入口与直接读取守门尚未全部验收，边界归 [ADR-0105 As built](0105-one-authorization-engine.md#as-built)。 |
+| "RBAC + ReBAC + ABAC 三种判断一个顺序" | 当前固定九层：租户 → 主体 → deny → 动词 → 行 → 字段 → 来源 → 标记 → allow。Scope 的 own/participant/through 是 owner 的行事实，保留多角色并集与有界来源；不实现 `related` 或任意关系遍历。 |
 | "`platform.tenant` 一条记录" | **没有这个实体**。租户信息是 `platform.setting` 的若干键（名称、语言、时区、币种、`signInDomains`、`mfaRequired`、`sessionHours` …）在 `GET /v1/tenant` 里拼成的 `TenantRecord` 视图。 |
 | 租户设置 `signInDomains` / `mfaRequired` / `sessionHours` | **已生效**：命中登录域的已验证陌生身份，在满足 MFA 要求后由宿主记 `platform.member.join`，成员 id 为邮箱 slug、重名加序号，无角色直到授予；并发加入在租户锁内重新检查身份与分配 id。`sessionHours` 从该凭证首次见到起计时，到期凭证持续拒绝，须换新凭证；0 不限。会话/撤销仍为内存，重启清空，不检查 IdP 的 `auth_time`。`mfaRequired` 要求签名验证后的 `amr` 明示 `mfa`，或包含知识/持有/生物中的至少两类方法；`user`、单独 `otp/hwk/sms/swk` 不能证明多因素（[RFC 8176](https://datatracker.ietf.org/doc/html/rfc8176)）。开发/lightweight 宿主无法证明时拒绝登录。个人令牌走独立授权路径，不受三者约束。 |
 | 授予带单位与时效 `Grant{Unit, Structure, From, Until}` | `From/Until` 过滤当前角色；行范围按每个角色/授予的谓词取并集：`Unit` 只收窄 unit/below 层级，all/own 保持原有范围；带单位授予从该单位起，below 仅沿 `Scope.Structure` 的有效 Placement 展开，与 scope 不符的显式 Structure 不扩大 below；无单位授予与旧席位按成员所属单位计算。单位关闭/关系到期不继续展开。只约束记录可见性；`Caller.Units`（决策内）仍按所属单位。 |
@@ -19,7 +19,7 @@
 | 模板建租户 | 已做：`deploy/templates/{blank,hospitality,manufacturing}.json`、`GET /v1/host/templates`、`POST /v1/host/tenants`、宿主控制台入口。 |
 | 自定义角色 / 策略 / 团队 / 委托 / explain | 已做，见 §5 B–D 的"已交付"括注，形状以括注为准。 |
 
-退出判据（§6）据此修正：第 2 条中"单位 L1 / plant-sz"的行范围效果**未达成**；第 4 条"全部入口只经过 `authz.Decide`"**未达成**，达成的是"全部动作入口只经过 `authz.Decide`，`c.Role()` 为 0"。
+退出判据（§6）的完整入口闭合由 ADR-0105 §4 验收；单位范围已按上表生效，不能将当前主路径检查外推为所有入口完成。
 
 ## 0. 为什么现在
 

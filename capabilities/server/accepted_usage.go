@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -15,17 +16,18 @@ import (
 // A direct model call has no owned effect. Its immutable usage observation is
 // accepted before changing the meter, using the same predecessor as effects.
 type acceptedUsage struct {
-	Version     int              `json:"version"`
-	Kind        string           `json:"kind"`
-	Tenant      string           `json:"tenant"`
-	App         string           `json:"app"`
-	Member      string           `json:"member"`
-	Key         string           `json:"key"`
-	At          time.Time        `json:"at"`
-	RequestHash string           `json:"requestHash"`
-	Digest      string           `json:"digest"`
-	Before      string           `json:"before"`
-	Usage       platform.AIUsage `json:"usage"`
+	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
+	Version        int                     `json:"version"`
+	Kind           string                  `json:"kind"`
+	Tenant         string                  `json:"tenant"`
+	App            string                  `json:"app"`
+	Member         string                  `json:"member"`
+	Key            string                  `json:"key"`
+	At             time.Time               `json:"at"`
+	RequestHash    string                  `json:"requestHash"`
+	Digest         string                  `json:"digest"`
+	Before         string                  `json:"before"`
+	Usage          platform.AIUsage        `json:"usage"`
 }
 
 func (t *Tenant) usagePredecessor() (string, error) {
@@ -60,6 +62,10 @@ func decodeAcceptedUsage(raw []byte) (acceptedUsage, error) {
 	if err := dec.Decode(new(any)); err != io.EOF {
 		return r, fmt.Errorf("usage result has trailing data")
 	}
+	if err := validateAuthorizationEvidence(r.Tenant, r.Authorizations); err != nil {
+		return r, err
+	}
+
 	hash, err := usageHash(r.Before, r.Usage)
 	digest, digestErr := digestUsage(r)
 	if err != nil || digestErr != nil || r.Version != 1 || r.Kind != "usage-result" || r.Tenant == "" || r.App != platform.AIApp || r.Before == "" ||
@@ -70,11 +76,19 @@ func decodeAcceptedUsage(raw []byte) (acceptedUsage, error) {
 }
 
 func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Error {
+	// Usage observes a completed call. Its principal is the meter owner; a
+	// later revocation of the attributed caller cannot erase an incurred cost.
+	c := platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + platform.AIApp, Tenant: m.Tenant}, platform.AIApp, false, true)
+	decision := t.authorizeNative(c, "usage:observe", "derive", nil, m.ID != "" && m.ID == u.Member && validUsage(u))
+	if refusal := authorizationRefusal(decision); refusal != nil {
+		return refusal
+	}
 	before, err := t.usagePredecessor()
 	if err != nil || m.Tenant != t.ID || m.ID != u.Member || !validUsage(u) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage cannot be accepted")
 	}
 	r := acceptedUsage{Version: 1, Kind: "usage-result", Tenant: t.ID, App: platform.AIApp, Member: m.ID, At: u.At.UTC(), Before: before, Usage: u}
+	r.Authorizations = []authorizationEvidence{{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Action: "usage:observe"}, Decision: decision, Roles: slices.Clone(c.RolesHere())}}
 	r.RequestHash, err = usageHash(before, u)
 	if err != nil {
 		return unknown()

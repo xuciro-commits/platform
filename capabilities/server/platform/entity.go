@@ -272,6 +272,7 @@ func (s Scope) LevelFor(roles []string) string {
 
 // FieldInfo describes one field, for the host's reads and the UI kit's pages.
 type FieldInfo struct {
+	SourceType  string            `json:"sourceType,omitempty" enum:"record,user-input,external-input,generated"`
 	Constraints *InputConstraints `json:"constraints,omitempty"`
 	Range       *DateRange        `json:"range,omitempty"`
 	Group       string            `json:"group,omitempty"`
@@ -719,6 +720,10 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		}
 		f := FieldInfo{Name: name, Title: sf.Tag.Get("title"), Index: sf.Index, Knowledge: sf.Tag.Get("knowledge") == "true",
 			Help: sf.Tag.Get("help"), Synonyms: sf.Tag.Get("synonyms"), Example: sf.Tag.Get("example"), Personal: sf.Tag.Get("personal")}
+		f.SourceType = sf.Tag.Get("source")
+		if f.SourceType != "" && !slices.Contains([]string{"record", "user-input", "external-input", "generated"}, f.SourceType) {
+			return nil, fmt.Errorf("field %s has an unknown source type", name)
+		}
 		if raw := sf.Tag.Get("constraints"); raw != "" {
 			if err := json.Unmarshal([]byte(raw), &f.Constraints); err != nil {
 				return nil, fmt.Errorf("%s.%s constraints: %w", e.Type, name, err)

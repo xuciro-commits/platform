@@ -36,9 +36,9 @@ const (
 // Account is one line of the chart of accounts.
 type Account struct {
 	platform.Record
-	Code   string `json:"code" field:"required,search" help:"Unique, sorts the chart, e.g. 1403"`
-	Name   string `json:"name" field:"required,search"`
-	Kind   string `json:"kind" field:"required" choices:"asset,liability,equity,revenue,expense"`
+	Code   string `json:"code" field:"required,search" help:"Unique, sorts the chart, e.g. 1403" source:"record"`
+	Name   string `json:"name" field:"required,search" source:"record"`
+	Kind   string `json:"kind" field:"required" choices:"asset,liability,equity,revenue,expense" source:"record"`
 	Parent string `json:"parent,omitempty" title:"Under" help:"The summary account's code"`
 	// Posting says whether entries hit it directly; summary accounts only total.
 	Posting bool `json:"posting" title:"Postable"`
@@ -49,11 +49,11 @@ type Account struct {
 // open; once closed, a late entry goes to the next open period and says so.
 type Period struct {
 	platform.Record
-	Code  string `json:"code" field:"required,search" help:"e.g. 2026-10"`
+	Code  string `json:"code" field:"required,search" help:"e.g. 2026-10" source:"record"`
 	Year  int    `json:"year" field:"required"`
 	From  string `json:"from" field:"required" title:"First day" help:"YYYY-MM-DD"`
 	To    string `json:"to" field:"required" title:"Last day" help:"YYYY-MM-DD, inclusive"`
-	State string `json:"state" field:"readonly"`
+	State string `json:"state" field:"readonly" source:"record"`
 }
 
 type Journal = platform.Journal
@@ -284,8 +284,8 @@ type TrialBalance struct {
 
 type TrialBalanceLine struct {
 	Account string  `json:"account"`
-	Name    string  `json:"name"`
-	Kind    string  `json:"kind"`
+	Name    string  `json:"name" source:"record"`
+	Kind    string  `json:"kind" source:"record"`
 	Debit   float64 `json:"debit"`
 	Credit  float64 `json:"credit"`
 	Balance float64 `json:"balance"` // debit minus credit

@@ -26,16 +26,17 @@ const acceptedResultVersion = 4
 const maxAcceptedResultBytes = 1 << 20
 
 type acceptedResult struct {
-	Version     int             `json:"version"`
-	Kind        string          `json:"kind,omitempty"` // version 4: callback-free lifecycle transition
-	Tenant      string          `json:"tenant"`
-	App         string          `json:"app"`
-	At          time.Time       `json:"at,omitempty"` // the original input clock, not a retry's
-	RequestHash string          `json:"requestHash"`
-	Digest      string          `json:"digest,omitempty"`
-	Receipt     json.RawMessage `json:"receipt"`
-	Row         acceptedRow     `json:"row"`
-	Event       acceptedEvent   `json:"event"`
+	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
+	Version        int                     `json:"version"`
+	Kind           string                  `json:"kind,omitempty"` // version 4: callback-free lifecycle transition
+	Tenant         string                  `json:"tenant"`
+	App            string                  `json:"app"`
+	At             time.Time               `json:"at,omitempty"` // the original input clock, not a retry's
+	RequestHash    string                  `json:"requestHash"`
+	Digest         string                  `json:"digest,omitempty"`
+	Receipt        json.RawMessage         `json:"receipt"`
+	Row            acceptedRow             `json:"row"`
+	Event          acceptedEvent           `json:"event"`
 }
 
 type acceptedRow struct {
@@ -135,7 +136,7 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	result := acceptedResult{Version: version, Tenant: receipt.GetSubmission().GetTenantId(),
 		Kind: kind, App: app, At: submittedAt.UTC(), RequestHash: hex.EncodeToString(hash[:]), Receipt: raw,
 		Row:   acceptedRow{Type: typ, ID: id, Value: value, History: history},
-		Event: d.tenant.planAcceptedEvent(d.events[0])}
+		Event: d.tenant.planAcceptedEvent(d.events[0]), Authorizations: slices.Clone(d.authorizations)}
 	result.Digest, err = digestAcceptedResult(result)
 	if err != nil {
 		return nil, err
@@ -163,6 +164,10 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return result, nil, fmt.Errorf("accepted result has trailing data")
 	}
+	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
+		return result, nil, err
+	}
+
 	digest, err := digestAcceptedResult(result)
 	if err != nil || result.Digest != digest {
 		return result, nil, fmt.Errorf("accepted result content digest differs")

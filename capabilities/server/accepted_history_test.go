@@ -17,7 +17,7 @@ type resultStockCount struct{ *stock }
 func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.T) {
 	id := "canonical-history"
 	build := func() *Tenant {
-		seat := Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}
+		seat := Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}, Grants: []platform.Grant{{App: "stock", Role: "clerk"}, {App: "stock", Role: "line"}}}}
 		tn, err := NewTenant(id, NewConsole(id, seat), &resultStockCount{newStock(id)})
 		if err != nil {
 			t.Fatal(err)
@@ -46,7 +46,6 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	// formatting for the same historic field change; semantic bytes stay equal.
 	before := slices.Clone(row.history[0].Fields[0].After)
 	row.history[0].Fields[0].After = append(append([]byte{' '}, before...), ' ')
-	ana.Roles["stock"] = "line"
 	count := &pb.Submission{TenantId: id, PrincipalId: ana.ID, Authority: "stock", IdempotencyKey: "count",
 		Target: &pb.EntityRef{Type: "stock.item", Id: "I1"}, Schema: &pb.SchemaRef{Name: "stock.item.count", Version: 1},
 		Payload: []byte(`{"qty":4}`)}

@@ -120,6 +120,12 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	set := info.Sets[slices.IndexFunc(info.Sets, func(set platform.RecordSet) bool { return set.Name == name })]
 	result.Object = set.Object
 	result.Definition, _ = canonicalDigest(set)
+	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: object, Record: id}
+	outer := t.authorizeFrom(store, c, question, at, false)
+	result.Authorization = &platform.AuthzCollection{Decision: outer, Elements: []platform.AuthzElement{}}
+	if refusal := authorizationRefusal(outer); refusal != nil {
+		return result, refusal
+	}
 	root, err := t.readRecordFrom(store, c, object, id, at)
 	if err != nil {
 		return result, err
@@ -202,6 +208,19 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection membership is unavailable")
 	}
 	result.Partial = result.Partial || len(raw) != len(values)
+	decisions := map[string]platform.AuthzDecision{}
+	walk := newAuthorizationWalk()
+	question.Type = set.Object
+	for _, value := range raw {
+		question.Record = recordOf(value).ID
+		decision := t.authorizeDepth(store, c, question, at, true, 0, walk)
+		if !decision.Allow && result.Authorization.Filtered == nil {
+			result.Authorization.Filtered = &decision
+		}
+		if decision.Allow {
+			decisions[question.Record] = decision
+		}
+	}
 	narrower := t.narrowerIn(store, c.Member, at, true)
 	rows := make([]any, 0, len(values))
 	for _, value := range values {
@@ -312,6 +331,7 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	result.Sources = append(result.Sources, object+"/"+id)
 	for _, item := range selectedRows {
 		result.Records = append(result.Records, item.raw)
+		result.Authorization.Elements = append(result.Authorization.Elements, platform.AuthzElement{Record: item.id, Decision: decisions[item.id]})
 		result.Sources = append(result.Sources, set.Object+"/"+item.id)
 	}
 	slices.Sort(result.Sources)

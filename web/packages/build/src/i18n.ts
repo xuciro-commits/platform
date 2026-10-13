@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Text source type": "文本来源类型",
+  "Undeclared source": "未声明来源",
+  "Original record": "原始记录",
+  "User input": "用户输入",
+  "External input": "外部输入",
+  "Generated from declared sources": "由已声明来源生成",
+  "Undeclared text is withheld from derived reads. Generated text also requires record provenance.": "派生读取会遮蔽未声明来源的文本；生成文本还须声明记录出处。",
   "Business versions": "业务版本",
   "Business versioning": "业务版本配置",
   "Pinned business versions": "已固定的业务版本",

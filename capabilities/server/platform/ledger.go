@@ -163,6 +163,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	rules = l.checked(c, s, now, rules)
 	probing := c.rt != nil && c.rt.Probing()
 	refused := false // the kernel's policy step said no
+	var decision AuthzDecision
 	changes := l.changes
 	// ADR-0038 19a: a host-owned decision view may use a private change log.
 	// Ordinary callers and replay retain the existing authoritative path.
@@ -179,8 +180,12 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	}
 	receiver := kernel.Receiver{Changes: changes, Authorities: l.authorities,
 		Policy: func(kernel.Caller, *pb.Submission) bool {
-			ok := c.Replaying && !probing || c.Automation || l.Catalog.DecideOn(c, s.GetSchema().GetName(), s.GetTarget().GetType()+"/"+s.GetTarget().GetId()).Allow && (allowed == nil || allowed())
+			if !c.Replaying || probing {
+				decision = l.Catalog.DecideSubmission(c, s, now)
+			}
+			ok := c.Replaying && !probing || decision.Allow && (allowed == nil || c.Automation || allowed())
 			refused = !ok
+
 			return ok
 		}}
 	var apply func(*pb.ChangeRecord)
@@ -195,7 +200,11 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		return err
 	})
 	if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED && err.Message == "" && refused {
-		err = l.denied(c, s) // the kernel's policy step refused: say whose role does not reach
+		if !decision.Allow && len(decision.Layers) > 0 {
+			err = Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", decision.Layers[len(decision.Layers)-1].Name, decision.Reason)
+		} else {
+			err = Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} may not {action} on this record", c.ID, s.GetSchema().GetName())
+		}
 	}
 	if probing {
 		if c.Staging() && err == nil && decided && apply != nil {
@@ -214,26 +223,6 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		}
 	}
 	return record, err
-}
-
-// denied is a refusal of the engine's check, with why (F-23): the member
-// holds no role in the app, their roles do not include the action, or the
-// action is theirs but not on this record.
-func (l *Ledger) denied(c Caller, s *pb.Submission) *kernel.Error {
-	action := s.GetSchema().GetName()
-	if declared, ok := l.Catalog.Action(action); ok && declared.Title != "" {
-		action = declared.Title
-	}
-	v := l.Catalog.DecideOn(c, s.GetSchema().GetName(), s.GetTarget().GetType()+"/"+s.GetTarget().GetId())
-	switch {
-	case v.Allow:
-		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} may not {action} on this record", c.ID, action)
-	case v.Rule == "policy":
-		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Policy {policy} does not let {member} {action}", v.Policy, c.ID, action)
-	case len(c.RolesHere()) == 0:
-		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} holds no role in {app}, so may not {action}", c.ID, c.App, action)
-	}
-	return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The role {role} in {app} may not {action}", strings.Join(c.RolesHere(), ", "), c.App, action)
 }
 
 // checked puts before rules the check of the payload's declared choices and

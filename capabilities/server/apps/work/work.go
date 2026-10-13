@@ -156,7 +156,7 @@ func (w *Work) entities() []platform.Entity {
 					{Name: "withdraw", Title: "Withdraw", From: []string{"pending"}, To: []string{"withdrawn"}, Roles: everyone, Capability: "approvals",
 						Description: "Withdraw your own request.", Do: w.requester, After: w.ended},
 				}}},
-		{Type: TaskType, Title: "Task", Model: WorkTask{},
+		{Type: TaskType, Title: "Task", Model: WorkTask{}, Derived: []platform.Derivation{{From: "ref", Fields: []string{"title", "body"}}}, Withheld: "withheld",
 			Scope: platform.Scope{Participants: func(record any) []string {
 				task := record.(WorkTask)
 				return append([]string{task.Assignee}, task.Candidates...)

@@ -24,28 +24,29 @@ import (
 // One top-level input, not one row or one nested decision. Before validates
 // the predecessor image/history before any authoritative ledger is advanced.
 type acceptedBatch struct {
-	Version       int                             `json:"version"`
-	Kind          string                          `json:"kind"`
-	Tenant        string                          `json:"tenant"`
-	App           string                          `json:"app"`
-	At            time.Time                       `json:"at"`
-	RequestHash   string                          `json:"requestHash"`
-	Digest        string                          `json:"digest"`
-	Receipt       json.RawMessage                 `json:"receipt"`              // top-level answer/key
-	Submission    json.RawMessage                 `json:"submission,omitempty"` // original input, when answer is an approval receipt
-	Rows          []acceptedBatchRow              `json:"rows"`
-	Decisions     []acceptedDecision              `json:"decisions"`
-	Sequences     map[string]int                  `json:"sequences,omitempty"`
-	SequenceBases map[string]int                  `json:"sequenceBases,omitempty"`
-	Notices       *acceptedNotices                `json:"notices,omitempty"`
-	Intents       []platform.Effect               `json:"intents,omitempty"`
-	Observations  []acceptedObservation           `json:"observations,omitempty"`
-	States        []acceptedState                 `json:"states,omitempty"`
-	Deliveries    []acceptedConnectorDelivery     `json:"deliveries,omitempty"`
-	Operations    []acceptedOperationCancellation `json:"operations,omitempty"`
-	Control       *acceptedControl                `json:"control,omitempty"`
-	DirectRows    []acceptedCallbackRow           `json:"directRows,omitempty"`
-	Iterations    []platform.TxnIteration         `json:"iterations,omitempty"`
+	Authorizations []authorizationEvidence         `json:"authorizations,omitempty"`
+	Version        int                             `json:"version"`
+	Kind           string                          `json:"kind"`
+	Tenant         string                          `json:"tenant"`
+	App            string                          `json:"app"`
+	At             time.Time                       `json:"at"`
+	RequestHash    string                          `json:"requestHash"`
+	Digest         string                          `json:"digest"`
+	Receipt        json.RawMessage                 `json:"receipt"`              // top-level answer/key
+	Submission     json.RawMessage                 `json:"submission,omitempty"` // original input, when answer is an approval receipt
+	Rows           []acceptedBatchRow              `json:"rows"`
+	Decisions      []acceptedDecision              `json:"decisions"`
+	Sequences      map[string]int                  `json:"sequences,omitempty"`
+	SequenceBases  map[string]int                  `json:"sequenceBases,omitempty"`
+	Notices        *acceptedNotices                `json:"notices,omitempty"`
+	Intents        []platform.Effect               `json:"intents,omitempty"`
+	Observations   []acceptedObservation           `json:"observations,omitempty"`
+	States         []acceptedState                 `json:"states,omitempty"`
+	Deliveries     []acceptedConnectorDelivery     `json:"deliveries,omitempty"`
+	Operations     []acceptedOperationCancellation `json:"operations,omitempty"`
+	Control        *acceptedControl                `json:"control,omitempty"`
+	DirectRows     []acceptedCallbackRow           `json:"directRows,omitempty"`
+	Iterations     []platform.TxnIteration         `json:"iterations,omitempty"`
 }
 
 type acceptedBatchRow struct {
@@ -110,7 +111,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	result := acceptedBatch{Version: 2, Kind: "record-batch", Tenant: d.tenant.ID,
 		App: app, At: at.UTC(), Sequences: maps.Clone(d.allocated), SequenceBases: maps.Clone(d.sequenceBases),
 		Notices: d.savedNotices(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations),
-		Deliveries: slices.Clone(d.deliveries)}
+		Deliveries: slices.Clone(d.deliveries), Authorizations: slices.Clone(d.authorizations)}
 	var err error
 	result.Control, err = d.savedControl()
 	if err != nil {
@@ -255,6 +256,10 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return result, nil, fmt.Errorf("record batch has trailing data")
 	}
+	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
+		return result, nil, err
+	}
+
 	digest, err := digestAcceptedBatch(result)
 	if err != nil || result.Digest != digest {
 		return result, nil, fmt.Errorf("record batch content digest differs")

@@ -70,6 +70,22 @@ func (h *Host) routesCore(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
+	rt.handle(Route{Pattern: "POST /v1/authz/explain", Summary: "Explain the ordered owner authorization decision for a record, fields and source", Body: platform.AuthzRequest{}, Answer: platform.AuthzDecision{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if !m.Holds(PlatformApp, Admin) && !m.Holds(PlatformApp, Auditor) {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED})
+			return
+		}
+		var request platform.AuthzRequest
+		if !readCapabilityBody(w, r, &request) {
+			return
+		}
+		decision, err := t.ExplainOperation(request, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, decision)
+	})
 	rt.handle(Route{Pattern: "GET /v1/sessions", Summary: "The caller's sessions: the credentials the host has seen act as them, the current one marked (ADR-0079 §5)", Answer: []Session{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, consoleOf(t).Sessions(m.ID, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), h.Now()))
 	})

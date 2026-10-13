@@ -23,24 +23,25 @@ import (
 // Its answer, record images and K8 marks are saved together. An application
 // with additional mutable state must supply an AcceptedStateApp fork.
 type acceptedInput struct {
-	Version     int                         `json:"version"`
-	Kind        string                      `json:"kind"`
-	Tenant      string                      `json:"tenant"`
-	App         string                      `json:"app"`
-	Name        string                      `json:"name"`
-	Member      string                      `json:"member"`
-	Key         string                      `json:"key"`
-	At          time.Time                   `json:"at"`
-	Body        []byte                      `json:"body"`
-	RequestHash string                      `json:"requestHash"`
-	Digest      string                      `json:"digest"`
-	Answer      json.RawMessage             `json:"answer,omitempty"`
-	Refusal     *kernel.Error               `json:"refusal,omitempty"`
-	Changes     json.RawMessage             `json:"changes,omitempty"`
-	Rows        []acceptedInputRow          `json:"rows,omitempty"`
-	Deliveries  []acceptedConnectorDelivery `json:"deliveries,omitempty"`
-	States      []acceptedState             `json:"states,omitempty"`
-	Notices     *acceptedNotices            `json:"notices,omitempty"`
+	Authorizations []authorizationEvidence     `json:"authorizations,omitempty"`
+	Version        int                         `json:"version"`
+	Kind           string                      `json:"kind"`
+	Tenant         string                      `json:"tenant"`
+	App            string                      `json:"app"`
+	Name           string                      `json:"name"`
+	Member         string                      `json:"member"`
+	Key            string                      `json:"key"`
+	At             time.Time                   `json:"at"`
+	Body           []byte                      `json:"body"`
+	RequestHash    string                      `json:"requestHash"`
+	Digest         string                      `json:"digest"`
+	Answer         json.RawMessage             `json:"answer,omitempty"`
+	Refusal        *kernel.Error               `json:"refusal,omitempty"`
+	Changes        json.RawMessage             `json:"changes,omitempty"`
+	Rows           []acceptedInputRow          `json:"rows,omitempty"`
+	Deliveries     []acceptedConnectorDelivery `json:"deliveries,omitempty"`
+	States         []acceptedState             `json:"states,omitempty"`
+	Notices        *acceptedNotices            `json:"notices,omitempty"`
 }
 
 type acceptedInputRow struct {
@@ -66,7 +67,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	}
 	result := acceptedInput{Version: 1, Kind: "input-result", Tenant: d.tenant.ID, App: app,
 		Name: name, Member: m.ID, Key: "input:" + hash, At: at.UTC(), Body: slices.Clone(body),
-		RequestHash: hash, Deliveries: slices.Clone(d.deliveries), Notices: d.savedNotices()}
+		RequestHash: hash, Deliveries: slices.Clone(d.deliveries), Notices: d.savedNotices(), Authorizations: slices.Clone(d.authorizations)}
 	if message, ok := answer.(proto.Message); ok {
 		result.Answer, err = protojson.Marshal(message)
 	} else {
@@ -197,6 +198,8 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 		return t.answerAcceptedInput(a, saved)
 	}
 	draft := t.newStagedDecision()
+	entry := t.authorizeEntry(m, a.Manifest().ID, "input:"+name, "action", now)
+	draft.authorizations = append(draft.authorizations, authorizationEvidence{Request: platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "action", Action: "input:" + name}, Decision: entry, Roles: slices.Clone(m.RolesIn(a.Manifest().ID))})
 	answer, refusal, unsupported := decideAcceptedInput(a, draft, m, name, body, now)
 	if unsupported {
 		return nil, refusal
@@ -292,6 +295,10 @@ func decodeAcceptedInput(raw []byte) (acceptedInput, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return result, fmt.Errorf("connector result has trailing data")
 	}
+	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
+		return result, err
+	}
+
 	digest, err := digestAcceptedInput(result)
 	if err != nil || digest != result.Digest {
 		return result, fmt.Errorf("connector result digest differs")

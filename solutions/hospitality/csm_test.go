@@ -158,6 +158,7 @@ func TestCSMTriage(t *testing.T) {
 	// administrator of agents alone sees that the run happened, not its content,
 	// and no model call of it.
 	agents := lead
+	w.expect(w.submit("admin", platformserver.PlatformApp, platformserver.SchemaGrant, platformserver.MemberType, lead.ID, "agent-audit", map[string]string{"app": platformserver.AgentApp, "role": platformserver.AgentAdmin}), "ok")
 	agents.Roles = maps.Clone(lead.Roles)
 	agents.Roles[platformserver.AgentApp] = platformserver.AgentAdmin
 	cited, _ := w.tenant.Records(agents, platformserver.RunType, platform.Query{Domain: json.RawMessage(`[["goal","like","T-1"]]`)}, now)

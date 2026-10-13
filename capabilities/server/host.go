@@ -638,6 +638,10 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 	if a == nil {
 		return nil, unknown()
 	}
+	if refusal := authorizationRefusal(t.authorizeEntry(m, a.Manifest().ID, "input:"+name, "action", now)); refusal != nil {
+		t.refused(m.ID, name, refusal, now)
+		return nil, refusal
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
@@ -664,6 +668,7 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 // Read serves a named read of the app that declares it, to members holding a
 // role in that app or to everyone when the manifest says so; the app may refuse further.
 func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
+	m = t.authorizationMember(m)
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
@@ -671,8 +676,8 @@ func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if m.Roles[a.Manifest().ID] == "" && !slices.Contains(a.Manifest().Everyone, name) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	if refusal := authorizationRefusal(t.authorizeEntry(m, a.Manifest().ID, name, "read", Now())); refusal != nil {
+		return nil, refusal
 	}
 	out, err := a.Read(t.caller(m, a, false), name)
 	if err != nil {

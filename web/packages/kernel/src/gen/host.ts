@@ -340,6 +340,28 @@ export type AuditEntry = {
 /** The kernel contract's AuthorityDeclaration (contract/proto). */
 export type AuthorityDeclaration = AuthorityDeclarationJson;
 
+export type AuthzCollection = {
+  decision: Verdict;
+  elements: AuthzElement[];
+  filtered?: Verdict;
+};
+
+export type AuthzElement = {
+  record: string;
+  decision: Verdict;
+};
+
+export type AuthzRequest = {
+  principal: string;
+  tenant: string;
+  kind: "read" | "write" | "create" | "archive" | "action" | "derive" | "export" | "protocol";
+  type?: string;
+  record?: string;
+  fields?: string[];
+  action?: string;
+  from?: string;
+};
+
 export type Binding = {
   source: "literal" | "input" | "subject" | "step" | "item" | "index" | "answer";
   step?: string;
@@ -934,6 +956,7 @@ export type FieldCondition = {
 };
 
 export type FieldInfo = {
+  sourceType?: "record" | "user-input" | "external-input" | "generated";
   constraints?: InputConstraints;
   range?: DateRange;
   group?: string;
@@ -1163,6 +1186,7 @@ export type InboxTask = {
   versionPins?: RecordVersionPin[];
   title: string;
   body?: string;
+  withheld?: boolean;
   ref?: string;
   app: string;
   key?: string;
@@ -1257,6 +1281,14 @@ export type Kind = {
   name: string;
   kind: string;
   matrix?: boolean;
+};
+
+export type Layer = {
+  name: string;
+  allowed: boolean;
+  reason: string;
+  role?: string;
+  policy?: string;
 };
 
 export type LifecycleInfo = {
@@ -2504,6 +2536,7 @@ export type RecordSetRef = {
 };
 
 export type RecordSetResult = {
+  authorization?: AuthzCollection;
   object: string;
   records: unknown[];
   partial: boolean;
@@ -3429,6 +3462,9 @@ export type Verdict = {
   reason: string;
   role?: string;
   policy?: string;
+  layers: Layer[];
+  withheld?: string[];
+  definition?: string;
 };
 
 export type VersionPinBinding = {
@@ -3487,6 +3523,7 @@ export type WorkTask = {
   versionPins?: RecordVersionPin[];
   title: string;
   body?: string;
+  withheld?: boolean;
   ref?: string;
   app: string;
   key?: string;

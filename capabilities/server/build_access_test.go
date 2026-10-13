@@ -140,7 +140,7 @@ func TestTenantDefinedAccess(t *testing.T) {
 		t.Errorf("the value is read by the wrong roles: bea %s, sam %s", value("bea", "L-2"), value("sam", "L-2"))
 	}
 	// Acting follows reading: a record outside your scope is not there to act on.
-	if got := do("ann", lost+".edit", lost, "L-2", map[string]any{"claimant": "Mallory"}); !strings.Contains(got, "NOT_FOUND") {
+	if got := do("ann", lost+".edit", lost, "L-2", map[string]any{"claimant": "Mallory"}); !strings.Contains(got, "POLICY_DENIED") {
 		t.Errorf("ann edits bea's item: %s", got)
 	}
 	if got := do("ann", lost+".handback", lost, "L-1", map[string]any{"to": "Ada"}); !strings.Contains(got, "POLICY_DENIED") {

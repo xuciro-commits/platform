@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"platformserver/platform/authz"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -186,6 +187,16 @@ func (c *Catalog) UsePolicies(policies func() []authz.Policy) {
 	c.policies = policies
 }
 
+func (c *Catalog) AuthorizationPolicies() []authz.Policy {
+	c.mu.RLock()
+	lookup := c.policies
+	c.mu.RUnlock()
+	if lookup == nil {
+		return nil
+	}
+	return lookup()
+}
+
 func NewCatalog(actions ...Action) *Catalog {
 	for i := range actions {
 		if err := CheckInputs(actions[i].Payload); err != nil {
@@ -267,8 +278,8 @@ func (c *Catalog) PermitsAny(roles []string, schema string) bool {
 }
 
 // Decide asks the engine whether the caller's roles let them call schema
-// (ADR-0078 §3.4); a disabled capability is no action at all. Replay and
-// automation bypass in the ledger, which knows whether it is probing.
+// (ADR-0078 §3.4); a disabled capability is no action at all. Modern recovery
+// applies saved results, while owner automation still passes the engine.
 func (c *Catalog) Decide(caller Caller, schema string) authz.Verdict {
 	return c.DecideOn(caller, schema, "")
 }
@@ -276,9 +287,53 @@ func (c *Catalog) Decide(caller Caller, schema string) authz.Verdict {
 // DecideOn decides schema on a target ("<type>/<id>"), which policies may
 // read as attributes: member, app, agent, target type.
 func (c *Catalog) DecideOn(caller Caller, schema, target string) authz.Verdict {
+	if _, ok := caller.rt.(AuthorizationRuntime); ok && !caller.Replaying {
+		typ, id, _ := strings.Cut(target, "/")
+		kind := "action"
+		if strings.HasSuffix(schema, ".create") {
+			kind = "create"
+		}
+		return caller.Authorize(AuthzRequest{Principal: caller.ID, Tenant: caller.Tenant, Kind: kind, Type: typ, Record: id, Action: schema}, time.Time{})
+	}
+	request, policies, ok := c.AuthorizationRequest(caller, schema, target)
+	if !ok {
+		return authz.Verdict{Rule: "none", Reason: "no action " + schema, Layers: []authz.Layer{}}
+	}
+	return authz.Decide(request, policies...)
+}
+
+// DecideSubmission includes the fields supplied to generated record writes.
+// Custom actions retain their declaration's operation contract.
+func (c *Catalog) DecideSubmission(caller Caller, s *pb.Submission, at time.Time) authz.Verdict {
+	if _, hosted := caller.rt.(AuthorizationRuntime); !hosted || caller.Replaying {
+		return c.DecideOn(caller, s.GetSchema().GetName(), s.GetTarget().GetType()+"/"+s.GetTarget().GetId())
+	}
+	typ, schema := s.GetTarget().GetType(), s.GetSchema().GetName()
+	kind := "action"
+	fields := []string{}
+	if schema == typ+".create" || schema == typ+".edit" {
+		kind = "write"
+		if schema == typ+".create" {
+			kind = "create"
+		}
+		var payload map[string]json.RawMessage
+		if json.Unmarshal(s.GetPayload(), &payload) == nil {
+			for field := range payload {
+				fields = append(fields, field)
+			}
+			slices.Sort(fields)
+		}
+	} else if schema == typ+".archive" {
+		kind = "archive"
+	}
+	return caller.Authorize(AuthzRequest{Principal: caller.ID, Tenant: caller.Tenant, Kind: kind, Type: typ, Record: s.GetTarget().GetId(), Fields: fields, Action: schema}, at)
+}
+
+// AuthorizationRequest resolves declaration facts without making a decision.
+func (c *Catalog) AuthorizationRequest(caller Caller, schema, target string) (authz.Request, []authz.Policy, bool) {
 	a, ok := c.Action(schema)
 	if !ok || !c.Enabled(schema) {
-		return authz.Verdict{Rule: "none", Reason: "no action " + schema}
+		return authz.Request{}, nil, false
 	}
 	allowed := slices.Clone(a.Roles)
 	for i, r := range allowed {
@@ -305,8 +360,8 @@ func (c *Catalog) DecideOn(caller Caller, schema, target string) authz.Verdict {
 	if !caller.InScope(schema) { // a personal token reaches only what it was issued for (ADR-0079 §5)
 		rules = append([]authz.Policy{{ID: "token-scope", Effect: "deny", Permission: schema}}, rules...)
 	}
-	return authz.Decide(authz.Request{Subject: authz.Subject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent},
-		Permission: schema, Resource: target, Allowed: allowed, Attributes: attrs}, rules...)
+	return authz.Request{Subject: authz.Subject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent, Automation: caller.Automation},
+		Permission: schema, Resource: target, Allowed: allowed, Attributes: attrs}, rules, true
 }
 
 // For is the catalog a caller with role receives: enabled actions it may call.

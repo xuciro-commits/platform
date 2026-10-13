@@ -23,24 +23,24 @@ const SchemaCodeCompiled = CodeType + ".compiled"
 // Compiling changes no installed capability. Candidate activation owns release.
 type Code struct {
 	platform.Record
-	Name          string                   `json:"name" field:"required,search"`
-	Title         string                   `json:"title" field:"required,search"`
-	Description   string                   `json:"description" type:"longtext"`
-	ABI           string                   `json:"abi,omitempty" field:"aside" title:"Compute ABI"`
-	BuiltABI      string                   `json:"builtABI,omitempty" field:"readonly,aside" title:"Built ABI"`
+	Name          string                   `json:"name" field:"required,search" source:"record"`
+	Title         string                   `json:"title" field:"required,search" source:"record"`
+	Description   string                   `json:"description" type:"longtext" source:"record"`
+	ABI           string                   `json:"abi,omitempty" field:"aside" title:"Compute ABI" source:"record"`
+	BuiltABI      string                   `json:"builtABI,omitempty" field:"readonly,aside" title:"Built ABI" source:"record"`
 	Language      string                   `json:"language" field:"required" choices:"go,tinygo"`
-	Source        string                   `json:"source" field:"required" type:"longtext"`
+	Source        string                   `json:"source" field:"required" type:"longtext" source:"record"`
 	Input         platform.ValueSchema     `json:"input" field:"aside" type:"json"`
 	Output        platform.ValueSchema     `json:"output" field:"aside" type:"json"`
 	Roles         []string                 `json:"roles" field:"aside"`
 	Limits        platform.OperationLimits `json:"limits" field:"aside" type:"json"`
 	State         string                   `json:"state" field:"readonly" choices:"draft,compiling,compiled,failed,published"`
-	Call          string                   `json:"call,omitempty" field:"readonly"`
-	Module        string                   `json:"module,omitempty" field:"readonly"`
-	SourceHash    string                   `json:"sourceHash,omitempty" field:"readonly"`
-	BuildHash     string                   `json:"buildHash,omitempty" field:"readonly"`
-	BuiltSource   string                   `json:"builtSource,omitempty" field:"readonly" type:"longtext"`
-	BuiltLanguage string                   `json:"builtLanguage,omitempty" field:"readonly"`
+	Call          string                   `json:"call,omitempty" field:"readonly" source:"record"`
+	Module        string                   `json:"module,omitempty" field:"readonly" source:"record"`
+	SourceHash    string                   `json:"sourceHash,omitempty" field:"readonly" source:"record"`
+	BuildHash     string                   `json:"buildHash,omitempty" field:"readonly" source:"record"`
+	BuiltSource   string                   `json:"builtSource,omitempty" field:"readonly" type:"longtext" source:"record"`
+	BuiltLanguage string                   `json:"builtLanguage,omitempty" field:"readonly" source:"record"`
 	BuiltInput    platform.ValueSchema     `json:"builtInput" field:"readonly,aside" type:"json"`
 	BuiltOutput   platform.ValueSchema     `json:"builtOutput" field:"readonly,aside" type:"json"`
 	Toolchain     string                   `json:"toolchain,omitempty" field:"readonly"`

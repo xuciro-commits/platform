@@ -6,7 +6,7 @@ import { stateInputValid, ruleInputValid, assignmentInputFits } from "./process-
 import type { Api } from "@platform/kernel";
 import { t, type EntityInfo } from "@platform/ui";
 
-export type Field = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; formula?: string; formulaExpr?:Api.Expr; when?: string; ref?: string; inverse?: string; read?: string[]; write?: string[] };
+export type Field = { name: string; title: string; type: string; sourceType?:string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; formula?: string; formulaExpr?:Api.Expr; when?: string; ref?: string; inverse?: string; read?: string[]; write?: string[] };
 export type State = { name: string; title: string; tone?: string; description?: string };
 export type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean;ref?:string;minLength?:number;constraints?:Api.InputConstraints;range?:Api.DateRange;group?:string };
 /** Preview the same complete input contract in both object and action workbenches. */

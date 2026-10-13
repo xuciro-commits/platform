@@ -1160,6 +1160,9 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, buildapi.TypeOf(o.Name)))}}
 	for _, f := range o.Fields {
 		tag := fmt.Sprintf(`json:"%s,omitempty" title:"%s"`, f.Name, f.Title)
+		if f.SourceType != "" {
+			tag += fmt.Sprintf(` source:"%s"`, f.SourceType)
+		}
 		switch f.Type {
 		case "longtext", "date", "datetime":
 			tag += fmt.Sprintf(` type:"%s"`, f.Type)

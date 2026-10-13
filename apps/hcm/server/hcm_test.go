@@ -110,7 +110,7 @@ func TestLeaveApprovals(t *testing.T) {
 	expect("bob's inbox", fmt.Sprint(inbox("bob")), "[Approve: Submit for approval hcm.leave/L1]")
 	expect("the agent approves", do("bot", "work.approval.approve", work.ApprovalType, a1.ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
 	// carol is no approver, so the request is not hers to read or to act on (ADR-0037 18b).
-	expect("carol approves", do("carol", "work.approval.approve", work.ApprovalType, a1.ID, struct{}{}), "ERROR_CODE_NOT_FOUND")
+	expect("carol approves", do("carol", "work.approval.approve", work.ApprovalType, a1.ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
 	expect("bob approves", do("bob", "work.approval.approve", work.ApprovalType, a1.ID, struct{}{}), "work.approval.approve")
 	expect("after approval", leave("L1").State+" "+request("L1").State, "approved approved")
 	// The task bob answered is no longer unread in his notifications (F-30).

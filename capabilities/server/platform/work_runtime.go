@@ -23,24 +23,24 @@ type ApprovalOwner interface {
 
 type ApprovalRequest struct {
 	Record
-	Action     string         `json:"action" field:"readonly,search"`
-	Title      string         `json:"title" field:"readonly,search"`
-	App        string         `json:"app" field:"readonly"`
-	Target     string         `json:"target" field:"readonly,search"` // "<type>/<id>"
-	Requester  string         `json:"requester" field:"readonly"`
+	Action     string         `json:"action" field:"readonly,search" source:"record"`
+	Title      string         `json:"title" field:"readonly,search" source:"record"`
+	App        string         `json:"app" field:"readonly" source:"record"`
+	Target     string         `json:"target" field:"readonly,search" source:"record"` // "<type>/<id>"
+	Requester  string         `json:"requester" field:"readonly" source:"record"`
 	Submission string         `json:"submission" field:"readonly" type:"longtext"` // the held submission, as protojson
 	Level      int            `json:"level" field:"readonly"`                      // the level deciding now
 	Levels     []ApprovalStep `json:"levels" field:"readonly"`
 	State      string         `json:"state" field:"readonly" choices:"pending,approved,rejected,refused,withdrawn"`
-	Outcome    string         `json:"outcome,omitempty" field:"readonly"` // why a request was refused when it ran, or rejected
-	RejectedBy string         `json:"rejectedBy,omitempty" field:"readonly" title:"Rejected by"`
+	Outcome    string         `json:"outcome,omitempty" field:"readonly" source:"user-input"` // refusal or the approver's note
+	RejectedBy string         `json:"rejectedBy,omitempty" field:"readonly" title:"Rejected by" source:"record"`
 	// Release is the tenant's active release when the request opened; a later
 	// activation may not change the held action under it (ADR-0039 D4).
-	Release string `json:"release,omitempty" field:"readonly"`
+	Release string `json:"release,omitempty" field:"readonly" source:"record"`
 }
 
 type ApprovalStep struct {
-	Title     string    `json:"title"`
+	Title     string    `json:"title" source:"record"`
 	Approvers []string  `json:"approvers"`
 	All       bool      `json:"all,omitempty"`
 	Count     int       `json:"count,omitempty"`
@@ -62,13 +62,14 @@ type WorkDelegation struct {
 
 type WorkTask struct {
 	Record
-	Title      string    `json:"title" field:"readonly,search"`
-	Body       string    `json:"body,omitempty" field:"readonly" type:"longtext"`
-	Ref        string    `json:"ref,omitempty" field:"readonly"`
-	App        string    `json:"app" field:"readonly"`
-	Key        string    `json:"key,omitempty" field:"readonly"`
+	Title      string    `json:"title" field:"readonly,search" source:"generated"`
+	Body       string    `json:"body,omitempty" field:"readonly" type:"longtext" source:"generated"`
+	Withheld   bool      `json:"withheld,omitempty" field:"readonly"`
+	Ref        string    `json:"ref,omitempty" field:"readonly" source:"record"`
+	App        string    `json:"app" field:"readonly" source:"record"`
+	Key        string    `json:"key,omitempty" field:"readonly" source:"record"`
 	Candidates []string  `json:"candidates" field:"readonly"`
-	Assignee   string    `json:"assignee,omitempty" field:"readonly"`
+	Assignee   string    `json:"assignee,omitempty" field:"readonly" source:"record"`
 	Due        time.Time `json:"due,omitzero" field:"readonly"`
 	State      string    `json:"state" field:"readonly" choices:"open,done,canceled"`
 	Answers    []string  `json:"answers,omitempty" field:"readonly"` // what the person may answer (a flow's Ask)
@@ -77,8 +78,8 @@ type WorkTask struct {
 
 type SavedView struct {
 	Record
-	Title  string `json:"title" field:"required,search"`
-	Entity string `json:"entity" field:"required,readonly"`
+	Title  string `json:"title" field:"required,search" source:"record"`
+	Entity string `json:"entity" field:"required,readonly" source:"record"`
 	State  string `json:"state" type:"longtext"`
-	Owner  string `json:"owner" field:"readonly"`
+	Owner  string `json:"owner" field:"readonly" source:"record"`
 }

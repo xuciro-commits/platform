@@ -63,6 +63,12 @@ W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Play
 
 浏览器历史路线号只是检索标识，已删除的次要路线转人工验证，不表示能力删除。固定计划、关系/查询、关联创建和函数夹具的语义由 Go 回归；保留浏览器主路径，避免逐功能重复完整生命周期。
 
+### 授权判定（ADR-0105）
+
+`make test-go PKG='./platform/authz .' RUN='TestOperationLayerOrder|TestOwnerAuthorization|TestAuthorizationRevocation|TestDeclaredInput|TestDerivedFreeText|TestGeneratedText|TestDeclaredSetVisibility|TestRecordSetTransactionSplit'` 核对九层定序、允许策略不能扩大行范围、出处与文本类型、集合可见计数、有效角色、保存的判定依据和恢复不重授权。行业组合按 `scripts/verify.sh composition`；权限/发布浏览器路线按 `make e2e SPEC=release-roles`，该路线包含审计者读取逐层解释、发布者不能编辑、可读对象的完整九层结果。
+
+手测：治理页「Roles and permissions / 角色与权限」选择成员，填写动作或对象、记录和字段，查看第一拒绝层；撤回来源权限后重开派生记录，确认文本与出处被遮蔽。检查只证明这些用例；ADR-0105 §4 的九类入口整体验收仍以各入口的实际拒绝证据为准。
+
 ### 业务事务最小切片（ADR-0100）
 
 `make test-go PKG=. RUN=TestBusinessTxnMinimalSlice` 在一个宿主场景验证构建器定义 → 发布编译 → 私有步骤 → 一次接受 → 纯应用 → 重开恢复：头、两行、输入主体与命名序列同批；步骤/授权/追加失败不改变业务状态；接受和拒绝均按原键重试，异内容冲突；实际子进程在 fsync 后、应用前退出，文件日志重开后结果与记录字节一致；跨应用类型发布拒绝。用 `GOFLAGS=-v` 查看真实结果占用与超限拒绝数字；没有配置数据库也会运行真实文件日志，不把内存回放算成进程重开。编译反例用 `make test-go PKG=./apps/build RUN=TestBusinessTxnPublicationBoundaries`。

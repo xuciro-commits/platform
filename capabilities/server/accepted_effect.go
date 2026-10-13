@@ -24,29 +24,30 @@ import (
 // application callback and any resulting decisions belong to the same
 // accepted journal row; applying one never resends the external request.
 type acceptedEffect struct {
-	Version       int                `json:"version"`
-	Kind          string             `json:"kind"`
-	Tenant        string             `json:"tenant"`
-	App           string             `json:"app"`
-	Key           string             `json:"key"`
-	At            time.Time          `json:"at"`
-	RequestHash   string             `json:"requestHash"`
-	Digest        string             `json:"digest"`
-	Outcome       platform.Outcome   `json:"outcome"`
-	Usage         *platform.AIUsage  `json:"usage,omitempty"`
-	UsageBefore   string             `json:"usageBefore,omitempty"`
-	CallbackError string             `json:"callbackError,omitempty"`
-	Before        effectState        `json:"before"`
-	After         effectState        `json:"after"`
-	Member        string             `json:"member,omitempty"`
-	Rows          []acceptedInputRow `json:"rows,omitempty"`
-	Changes       json.RawMessage    `json:"changes,omitempty"`
-	Notices       *acceptedNotices   `json:"notices,omitempty"`
-	Intents       []platform.Effect  `json:"intents,omitempty"`
-	States        []acceptedState    `json:"states,omitempty"`
-	WorkBefore    json.RawMessage    `json:"workBefore,omitempty"`
-	Work          json.RawMessage    `json:"work,omitempty"`
-	Control       *acceptedControl   `json:"control,omitempty"`
+	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
+	Version        int                     `json:"version"`
+	Kind           string                  `json:"kind"`
+	Tenant         string                  `json:"tenant"`
+	App            string                  `json:"app"`
+	Key            string                  `json:"key"`
+	At             time.Time               `json:"at"`
+	RequestHash    string                  `json:"requestHash"`
+	Digest         string                  `json:"digest"`
+	Outcome        platform.Outcome        `json:"outcome"`
+	Usage          *platform.AIUsage       `json:"usage,omitempty"`
+	UsageBefore    string                  `json:"usageBefore,omitempty"`
+	CallbackError  string                  `json:"callbackError,omitempty"`
+	Before         effectState             `json:"before"`
+	After          effectState             `json:"after"`
+	Member         string                  `json:"member,omitempty"`
+	Rows           []acceptedInputRow      `json:"rows,omitempty"`
+	Changes        json.RawMessage         `json:"changes,omitempty"`
+	Notices        *acceptedNotices        `json:"notices,omitempty"`
+	Intents        []platform.Effect       `json:"intents,omitempty"`
+	States         []acceptedState         `json:"states,omitempty"`
+	WorkBefore     json.RawMessage         `json:"workBefore,omitempty"`
+	Work           json.RawMessage         `json:"work,omitempty"`
+	Control        *acceptedControl        `json:"control,omitempty"`
 }
 
 func effectResultKey(before effectState) string {
@@ -75,6 +76,10 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return result, fmt.Errorf("effect result has trailing data")
 	}
+	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
+		return result, err
+	}
+
 	digest, err := digestAcceptedEffect(result)
 	hash, hashErr := effectResultHash(result.Before, result.Outcome, result.At)
 	expected := &effect{Effect: result.Before.Effect, since: result.Before.Since}
@@ -327,10 +332,12 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 			// private writes; an unsupported staging operation is not a
 			// business refusal and instead isolates this tenant.
 			result.CallbackError = err.Error()
+			result.Authorizations = slices.Clone(draft.authorizations)
 			draft = t.newStagedDecision()
 			draft.at = at
 		}
 	}
+	result.Authorizations = append(result.Authorizations, draft.authorizations...)
 	if draft.failure != nil {
 		t.quarantine(fmt.Errorf("stage effect %s: %v", id, draft.failure))
 		return
@@ -461,6 +468,12 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 			err = fmt.Errorf("unsupported effect callback")
 		}
 	}()
+	if x.App != "" {
+		c := platform.NewCaller(draft, platform.Member{ID: "app:" + x.App, Tenant: t.ID}, x.App, false, true)
+		if refusal := draft.authorizeNative(c, "effect:"+x.Endpoint, "action", nil, t.app(x.App) != nil); refusal != nil {
+			return refusal
+		}
+	}
 	if x.Endpoint == modelEndpoint {
 		app, reply := t.modelAnswerSubmission(x, out, usage)
 		if app == nil || reply == nil {

@@ -42,29 +42,29 @@ const (
 // AgentRunRecord is one run of an agent.
 type AgentRunRecord struct {
 	platform.Record
-	Release           string     `json:"release,omitempty" field:"readonly" title:"Startup release"`
-	DefinitionVersion string     `json:"definitionVersion,omitempty" field:"readonly" title:"Startup agent definition"`
-	Agent             string     `json:"agent" field:"readonly,search"` // "<app>.<name>"
-	Title             string     `json:"title" field:"readonly,search"`
-	Goal              string     `json:"goal" field:"readonly" type:"longtext"`
-	Ref               string     `json:"ref,omitempty" field:"readonly"`
+	Release           string     `json:"release,omitempty" field:"readonly" title:"Startup release" source:"record"`
+	DefinitionVersion string     `json:"definitionVersion,omitempty" field:"readonly" title:"Startup agent definition" source:"record"`
+	Agent             string     `json:"agent" field:"readonly,search" source:"record"` // "<app>.<name>"
+	Title             string     `json:"title" field:"readonly,search" source:"record"`
+	Goal              string     `json:"goal" field:"readonly" type:"longtext" source:"record"`
+	Ref               string     `json:"ref,omitempty" field:"readonly" source:"record"`
 	Seen              string     `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
-	OnBehalf          string     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
+	OnBehalf          string     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of" source:"record"`
 	Acts              bool       `json:"acts,omitempty" field:"readonly" title:"Acts without drafts"` // for its person, within their grants: an A2A caller
-	Language          string     `json:"language,omitempty" field:"readonly"`                         // the person's, which the agent answers in (ADR-0023 D6)
-	Flow              string     `json:"flow,omitempty" field:"readonly"`                             // the flow instance whose step started it
+	Language          string     `json:"language,omitempty" field:"readonly" source:"record"`         // the person's, which the agent answers in (ADR-0023 D6)
+	Flow              string     `json:"flow,omitempty" field:"readonly" source:"record"`             // the flow instance whose step started it
 	Token             int        `json:"token,omitempty" field:"readonly"`
-	Step              string     `json:"step,omitempty" field:"readonly"` // that step's name
+	Step              string     `json:"step,omitempty" field:"readonly" source:"record"` // that step's name
 	State             string     `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
-	Model             string     `json:"model,omitempty" field:"readonly"`
+	Model             string     `json:"model,omitempty" field:"readonly" source:"record"`
 	Steps             []RunStep  `json:"steps" field:"readonly"`
 	StepsUsed         int        `json:"stepsUsed" field:"readonly" title:"Model turns"`
 	TokensUsed        int        `json:"tokensUsed" field:"readonly" title:"Tokens"`
 	ActionsUsed       int        `json:"actionsUsed" field:"readonly" title:"Actions"`
 	Cost              float64    `json:"cost,omitempty" field:"readonly"`
 	Result            string     `json:"result,omitempty" field:"readonly" type:"longtext"`
-	Task              string     `json:"task,omitempty" field:"readonly"`
-	Stopped           string     `json:"stopped,omitempty" field:"readonly" title:"Why it stopped"`
+	Task              string     `json:"task,omitempty" field:"readonly" source:"record"`
+	Stopped           string     `json:"stopped,omitempty" field:"readonly" title:"Why it stopped" source:"record"`
 	Draft             []Draft    `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"` // at most one
 	Citations         []Citation `json:"citations,omitempty" field:"readonly" title:"Sources it read"`
 	Signals           []Signal   `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
@@ -88,7 +88,7 @@ type Draft struct {
 // Citation is a passage of knowledge a run read (ADR-0022 D4).
 type Citation struct {
 	Document string `json:"document"`
-	Title    string `json:"title"`
+	Title    string `json:"title" source:"record"`
 	Chunk    int    `json:"chunk"`
 	Step     int    `json:"step"`
 }
@@ -569,7 +569,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 		if row, ok := a.host.Record("flow.instance/" + flow); ok {
 			raw, _ := json.Marshal(row)
 			var parent struct {
-				Release string `json:"release"`
+				Release string `json:"release" source:"record"`
 			}
 			if json.Unmarshal(raw, &parent) == nil {
 				run.Release = parent.Release

@@ -34,11 +34,12 @@ type RecordSetSort struct {
 }
 
 type RecordSetResult struct {
-	Object     string            `json:"object"`
-	Records    []json.RawMessage `json:"records"`
-	Partial    bool              `json:"partial"`
-	Sources    []string          `json:"sources,omitempty"`
-	Definition string            `json:"definition"`
+	Authorization *AuthzCollection  `json:"authorization,omitempty"`
+	Object        string            `json:"object"`
+	Records       []json.RawMessage `json:"records"`
+	Partial       bool              `json:"partial"`
+	Sources       []string          `json:"sources,omitempty"`
+	Definition    string            `json:"definition"`
 }
 
 type RecordSetRef struct {

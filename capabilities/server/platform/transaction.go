@@ -132,8 +132,13 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 		return Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "Transaction step action is unavailable / 事务步骤动作不可用")
 	}
 	c.Automation = false
-	if !l.Catalog.DecideOn(c, s.Schema.Name, e.Type+"/"+id).Allow {
-		return l.denied(c, s)
+	decision := l.Catalog.DecideSubmission(c, s, now)
+	if !decision.Allow {
+		layer := "verb"
+		if len(decision.Layers) > 0 {
+			layer = decision.Layers[len(decision.Layers)-1].Name
+		}
+		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", layer, decision.Reason)
 	}
 	// The ordinary reference validator checks existence. Transaction assignment
 	// also requires the referenced row to be readable in this private view.
