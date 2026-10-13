@@ -24,12 +24,8 @@ func (h *Host) routesCore(rt *routes) {
 			}
 			followChanges(w, r, t)
 		})
-	rt.handle(Route{Pattern: "POST /v1/recovery/retry", Summary: "Retry recovery of this quarantined tenant from the durable journal after an operator repairs its cause (ADR-0038)",
-		Answer: TenantHealth{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if m.Roles[PlatformApp] != Admin {
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
+	rt.authorized(Route{Pattern: "POST /v1/recovery/retry", Summary: "Retry recovery of this quarantined tenant from the durable journal after an operator repairs its cause (ADR-0038)",
+		Answer: TenantHealth{}}, PlatformApp, []string{Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if h.Recover == nil {
 			w.WriteHeader(http.StatusNotImplemented)
 			return
@@ -57,12 +53,8 @@ func (h *Host) routesCore(rt *routes) {
 		localized := t.localizedFieldIssues(m, issues, t.Language(m, r))
 		Reply(w, record, t.i18n.said(err, t.Language(m, r)), localized...)
 	})
-	rt.handle(Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors; ADR-0078)", Answer: Explanation{},
-		Query: []Param{{"member", "the member to ask about"}, {"permission", "an action's schema, or <app>:read:<name>"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if !m.Holds(PlatformApp, Admin) && !m.Holds(PlatformApp, Auditor) {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED})
-			return
-		}
+	rt.authorized(Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors; ADR-0078)", Answer: Explanation{},
+		Query: []Param{{"member", "the member to ask about"}, {"permission", "an action's schema, or <app>:read:<name>"}}}, PlatformApp, []string{Admin, Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		out, err := t.Explain(r.URL.Query().Get("member"), r.URL.Query().Get("permission"))
 		if err != nil {
 			Reply(w, nil, err)
@@ -70,11 +62,7 @@ func (h *Host) routesCore(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	rt.handle(Route{Pattern: "POST /v1/authz/explain", Summary: "Explain the ordered owner authorization decision for a record, fields and source", Body: platform.AuthzRequest{}, Answer: platform.AuthzDecision{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if !m.Holds(PlatformApp, Admin) && !m.Holds(PlatformApp, Auditor) {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED})
-			return
-		}
+	rt.authorized(Route{Pattern: "POST /v1/authz/explain", Summary: "Explain the ordered owner authorization decision for a record, fields and source", Body: platform.AuthzRequest{}, Answer: platform.AuthzDecision{}}, PlatformApp, []string{Admin, Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request platform.AuthzRequest
 		if !readCapabilityBody(w, r, &request) {
 			return

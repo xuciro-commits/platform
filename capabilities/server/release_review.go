@@ -85,8 +85,9 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int) (ReleasePag
 	if err := t.admits(m); err != nil {
 		return ReleasePage{}, err
 	}
-	if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
-		return ReleasePage{}, fmt.Errorf("builder or publisher role required")
+	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
+		return ReleasePage{}, err
 	}
 	if offset < 0 || limit < 1 || limit > 100 {
 		return ReleasePage{}, fmt.Errorf("release page needs a nonnegative offset and a limit from 1 to 100")
@@ -137,8 +138,9 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	if err := t.admits(m); err != nil {
 		return SavedReleaseReview{}, err
 	}
-	if m.Roles[build.ID] != build.Builder && m.Roles[build.ID] != build.Publisher {
-		return SavedReleaseReview{}, fmt.Errorf("builder or publisher role required")
+	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates/{id}", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
+		return SavedReleaseReview{}, err
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()

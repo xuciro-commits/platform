@@ -26,22 +26,23 @@ type hostControlReceipt struct {
 	Answer      SupportGrant `json:"answer,omitempty"`
 }
 type acceptedHostControl struct {
-	Version     int              `json:"version"`
-	Kind        string           `json:"kind"`
-	Tenant      string           `json:"tenant"`
-	App         string           `json:"app"`
-	Member      string           `json:"member"`
-	Key         string           `json:"key"`
-	At          time.Time        `json:"at"`
-	Action      string           `json:"action"`
-	Request     json.RawMessage  `json:"request"`
-	RequestHash string           `json:"requestHash"`
-	Digest      string           `json:"digest"`
-	Before      string           `json:"before"`
-	AuditBefore string           `json:"auditBefore"`
-	Image       hostControlImage `json:"image"`
-	Audit       AuditEntry       `json:"audit"`
-	Answer      SupportGrant     `json:"answer,omitempty"`
+	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
+	Version        int                     `json:"version"`
+	Kind           string                  `json:"kind"`
+	Tenant         string                  `json:"tenant"`
+	App            string                  `json:"app"`
+	Member         string                  `json:"member"`
+	Key            string                  `json:"key"`
+	At             time.Time               `json:"at"`
+	Action         string                  `json:"action"`
+	Request        json.RawMessage         `json:"request"`
+	RequestHash    string                  `json:"requestHash"`
+	Digest         string                  `json:"digest"`
+	Before         string                  `json:"before"`
+	AuditBefore    string                  `json:"auditBefore"`
+	Image          hostControlImage        `json:"image"`
+	Audit          AuditEntry              `json:"audit"`
+	Answer         SupportGrant            `json:"answer,omitempty"`
 }
 
 func (h *hostControl) image() (hostControlImage, error) {
@@ -120,6 +121,9 @@ func decodeAcceptedHostControl(raw []byte) (acceptedHostControl, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return r, fmt.Errorf("host result has trailing data")
 	}
+	if err := validateAuthorizationEvidence(r.Tenant, r.Authorizations); err != nil {
+		return r, err
+	}
 	hash, hashErr := hostRequestHash(r)
 	digest, digestErr := hostResultDigest(r)
 	if hashErr != nil || digestErr != nil || r.Version != 1 || r.Kind != "host-result" || r.Tenant == "" || r.App != PlatformApp || r.Member == "" || r.At.IsZero() ||
@@ -140,8 +144,9 @@ func decodeAcceptedHostControl(raw []byte) (acceptedHostControl, error) {
 // acceptHostControl holds Tenant.mu from private image capture through append
 // and application. The accepted clock is part of identity because these APIs
 // predate caller supplied keys; repeating that same request returns its receipt.
-func (t *Tenant) acceptHostControl(action, member string, request any, now time.Time, audit AuditEntry, decide func(*hostControlImage) (SupportGrant, error)) (SupportGrant, error) {
+func (t *Tenant) acceptHostControl(action, member string, request any, now time.Time, audit AuditEntry, decide func(*hostControlImage) (SupportGrant, error), evidence ...authorizationEvidence) (SupportGrant, error) {
 	r := acceptedHostControl{Version: 1, Kind: "host-result", Tenant: t.ID, App: PlatformApp, Member: member, Action: action, At: now.UTC(), Request: platform.Raw(request)}
+	r.Authorizations = slices.Clone(evidence)
 	var err error
 	r.RequestHash, err = hostRequestHash(r)
 	if err != nil {

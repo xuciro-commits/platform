@@ -62,7 +62,7 @@ func requestsResultTenant(t *testing.T) *Tenant {
 func requestsResultTenantFor(t *testing.T, id string) *Tenant {
 	t.Helper()
 	source := newRequestsTenant(t, true)
-	tn, err := NewTenant(id, NewConsole(id),
+	tn, err := NewTenant(id, NewConsole(id, seatOf("buyer", "cart:buyer", "stock:keeper")),
 		&resultCart{&cart{ledger: platform.NewLedger(id, "cart", source.app("cart").(*cart).ledger.Catalog, "cart.line")}},
 		&resultDepot{depot: &depot{ledger: platform.NewLedger(id, "stock", source.app("stock").(*depot).ledger.Catalog, "stock.hold")}})
 	if err != nil {
@@ -235,7 +235,7 @@ func TestJournalAcceptedProtocolCrashBeforeApplication(t *testing.T) {
 func TestAcceptedModelRequestsPersistWithoutCallingProvider(t *testing.T) {
 	compose := func() *Tenant {
 		source := newRequestsTenant(t, false)
-		tn, err := NewTenant("t", NewConsole("t"), &modelResultCart{resultCart: resultCart{source.app("cart").(*cart)}, model: "local/chosen"})
+		tn, err := NewTenant("t", NewConsole("t", seatOf("buyer", "cart:buyer")), &modelResultCart{resultCart: resultCart{source.app("cart").(*cart)}, model: "local/chosen"})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -69,6 +69,8 @@ W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Play
 
 手测：治理页「Roles and permissions / 角色与权限」选择成员，填写动作或对象、记录和字段，查看第一拒绝层；撤回来源权限后重开派生记录，确认文本与出处被遮蔽。检查只证明这些用例；ADR-0105 §4 的九类入口整体验收仍以各入口的实际拒绝证据为准。
 
+`make test-go PKG='./cmd/check-boundaries .' RUN='TestAuthorizationNine|TestAuthorizationRejects|TestHostHTTP|TestMemberProjection|TestSourceBoundary'` 验证九类入口显式拒绝、虚构主体、第二角色、宿主管理依据/恢复和实体投影/评论。`scripts/escapes.sh` 使用同一个 AST 守门检查成员存储投影；它是入口防遗漏检查，不代替任意原生业务算法的权限审查。
+
 ### 业务事务最小切片（ADR-0100）
 
 `make test-go PKG=. RUN=TestBusinessTxnMinimalSlice` 在一个宿主场景验证构建器定义 → 发布编译 → 私有步骤 → 一次接受 → 纯应用 → 重开恢复：头、两行、输入主体与命名序列同批；步骤/授权/追加失败不改变业务状态；接受和拒绝均按原键重试，异内容冲突；实际子进程在 fsync 后、应用前退出，文件日志重开后结果与记录字节一致；跨应用类型发布拒绝。用 `GOFLAGS=-v` 查看真实结果占用与超限拒绝数字；没有配置数据库也会运行真实文件日志，不把内存回放算成进程重开。编译反例用 `make test-go PKG=./apps/build RUN=TestBusinessTxnPublicationBoundaries`。

@@ -17,9 +17,9 @@ const (
 // Comment is a member's comment on a record; @member mentions notify them.
 type RecordComment struct {
 	Record
-	Target   string   `json:"target" field:"readonly" title:"On"`
+	Target   string   `json:"target" field:"readonly" title:"On" source:"record"`
 	Text     string   `json:"text" field:"required,search" type:"longtext"`
-	By       string   `json:"by" field:"readonly"`
+	By       string   `json:"by" field:"readonly" source:"record"`
 	Mentions []string `json:"mentions,omitempty" field:"readonly"`
 }
 

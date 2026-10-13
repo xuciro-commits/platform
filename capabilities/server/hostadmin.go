@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"platformserver/platform"
+	"platformserver/platform/authz"
 )
 
 // The host console (ADR-0047 §6.5) is the host's own management scope: it is
@@ -91,15 +93,25 @@ type SupportAnswer struct {
 
 // hostAdmin authenticates the bearer token as a subject the deployment names a
 // host administrator. A tenant member is not one by being a member.
-func (h *Host) hostAdmin(r *http.Request) (string, bool) {
-	subject, ok := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-	if !ok || len(h.HostAdmins) == 0 {
-		return "", false
-	}
+type hostAuthorizationKey struct{}
+
+func (h *Host) hostAuthorization(subject string, authenticated bool, permission, tenant string) platform.AuthzDecision {
+	pass := authorizationPass("The explicit host management boundary")
+	roles := []string{}
 	if h.HostAdmins[subject] {
-		return subject, true
+		roles = []string{"host-admin"}
 	}
-	return "", false
+	definition, _ := canonicalDigest([]any{permission, tenant, "host-admin"})
+	return authz.Decide(authz.Request{Kind: "action", Subject: authz.Subject{ID: "host:" + subject, App: "host", Roles: roles}, Permission: permission, Allowed: []string{"host-admin"}, Context: &authz.Context{Tenant: pass, Principal: authz.Gate{Allowed: authenticated && subject != "", Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass, Definition: definition}})
+}
+
+func hostRequestAuthorization(r *http.Request, tenant string) []authorizationEvidence {
+	evidence, found := r.Context().Value(hostAuthorizationKey{}).(authorizationEvidence)
+	if !found {
+		return nil
+	}
+	evidence.Request.Tenant = tenant // target selected by the registered management route
+	return []authorizationEvidence{evidence}
 }
 
 // hostRoute registers a console route: the API contract lists it, and the
@@ -107,9 +119,10 @@ func (h *Host) hostAdmin(r *http.Request) (string, bool) {
 func (h *Host) hostRoute(mux *http.ServeMux, route Route, f func(http.ResponseWriter, *http.Request, string, *Tenant)) {
 	h.routes = append(h.routes, route)
 	mux.HandleFunc(route.Pattern, func(w http.ResponseWriter, r *http.Request) {
-		subject, ok := h.hostAdmin(r)
-		if !ok {
-			w.WriteHeader(http.StatusUnauthorized)
+		subject, authenticated := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		decision := h.hostAuthorization(subject, authenticated, route.Pattern, r.PathValue("tenant"))
+		if refusal := authorizationRefusal(decision); refusal != nil {
+			WriteJSON(w, http.StatusUnauthorized, map[string]any{"error": ErrorBody{Code: refusal.Error(), Message: refusal.Message}})
 			return
 		}
 		var tenant *Tenant
@@ -125,6 +138,9 @@ func (h *Host) hostRoute(mux *http.ServeMux, route Route, f func(http.ResponseWr
 				return
 			}
 		}
+		question := platform.AuthzRequest{Principal: "host:" + subject, Tenant: r.PathValue("tenant"), Kind: "action", Action: route.Pattern}
+		evidence := authorizationEvidence{Request: question, Decision: decision, Roles: []string{"host-admin"}}
+		r = r.WithContext(context.WithValue(r.Context(), hostAuthorizationKey{}, evidence))
 		f(w, r, subject, tenant)
 	})
 }
@@ -163,7 +179,7 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 				return
 			}
-			if err := t.setHostLifecycle(body.Action, body.Reason, subject, h.Now()); err != nil {
+			if err := t.setHostLifecycle(body.Action, body.Reason, subject, h.Now(), hostRequestAuthorization(r, t.ID)...); err != nil {
 				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
 				return
 			}
@@ -188,7 +204,7 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 				return
 			}
-			grant, err := t.openSupport(body.Member, body.Reason, subject, body.Minutes, h.Now())
+			grant, err := t.openSupport(body.Member, body.Reason, subject, body.Minutes, h.Now(), hostRequestAuthorization(r, t.ID)...)
 			if err != nil {
 				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
 				return
@@ -199,7 +215,7 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 		func(w http.ResponseWriter, r *http.Request, subject string, _ *Tenant) {
 			grant := r.PathValue("grant")
 			for _, t := range h.currentTenants() {
-				read, err := t.useSupport(grant, subject, h.Now())
+				read, err := t.useSupport(grant, subject, h.Now(), hostRequestAuthorization(r, t.ID)...)
 				if err == errUnknownGrant {
 					continue
 				}
@@ -327,7 +343,7 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
 				return
 			}
-			if err := to.rememberMigration(result, target.ID, h.Now()); err != nil {
+			if err := to.rememberMigration(result, target.ID, h.Now(), hostRequestAuthorization(r, to.ID)...); err != nil {
 				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
 				return
 			}
@@ -426,7 +442,7 @@ func (e errSupport) Error() string { return string(e) }
 // record and blocks ordinary requests; decommissioning does the same and is
 // terminal until the console opens the tenant again. Both are recorded in the
 // tenant's audit next to the reason, so support work leaves a trace.
-func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time) error {
+func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time, evidence ...authorizationEvidence) error {
 	if now.IsZero() {
 		now = Now()
 	}
@@ -446,13 +462,13 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time)
 				image.Lifecycle = action
 			}
 			return SupportGrant{}, nil
-		})
+		}, evidence...)
 	return err
 }
 
 // openSupport authorizes a support session for a real member. Its accepted
 // receipt fixes the original grant; a same-clock retry does not append another.
-func (t *Tenant) openSupport(member, reason, subject string, minutes int, now time.Time) (SupportGrant, error) {
+func (t *Tenant) openSupport(member, reason, subject string, minutes int, now time.Time, evidence ...authorizationEvidence) (SupportGrant, error) {
 	if member == "" || reason == "" || subject == "" || now.IsZero() || minutes < 1 || minutes > 24*60 {
 		return SupportGrant{}, errSupport("a support session needs a member, a reason and 1 to 1440 minutes")
 	}
@@ -475,7 +491,7 @@ func (t *Tenant) openSupport(member, reason, subject string, minutes int, now ti
 			grant := SupportGrant{ID: id, Tenant: t.ID, Member: member, Reason: reason, Opened: subject, Expires: now.UTC().Add(time.Duration(minutes) * time.Minute)}
 			image.Support = append(image.Support, grant)
 			return grant, nil
-		})
+		}, evidence...)
 }
 
 // supportGrants lists the tenant's sessions, newest first.
@@ -487,7 +503,7 @@ func (t *Tenant) supportGrants(now time.Time) []SupportGrant {
 // useSupport performs one authorized read of the tenant: health, the audit tail
 // and the reads the granted member may make. The use is recorded in the audit
 // with the operator and the grant, and the grant's count moves.
-func (t *Tenant) useSupport(id, subject string, now time.Time) (SupportRead, error) {
+func (t *Tenant) useSupport(id, subject string, now time.Time, evidence ...authorizationEvidence) (SupportRead, error) {
 	t.mu.Lock()
 	_, err := t.acceptHostControl("support.use", "host:"+subject, struct{ ID string }{id}, now,
 		AuditEntry{Action: "host.support.use", Target: id}, func(image *hostControlImage) (SupportGrant, error) {
@@ -500,7 +516,7 @@ func (t *Tenant) useSupport(id, subject string, now time.Time) (SupportRead, err
 			}
 			image.Support[i].Uses++
 			return image.Support[i], nil
-		})
+		}, evidence...)
 	t.mu.Unlock()
 	if err != nil {
 		return SupportRead{}, err

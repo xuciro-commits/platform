@@ -175,5 +175,63 @@ func checkFile(path string, file *ast.File, set *token.FileSet, appModules ...st
 		}
 		return true
 	})
+	if root && !strings.HasSuffix(path, "/authorization_decision.go") {
+		for _, declaration := range file.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || function.Body == nil || !memberProjection(function) {
+				continue
+			}
+			if strings.HasSuffix(path, "/knowledge.go") && function.Name.Name == "knowledgeSourceReadable" {
+				continue
+			} // source-grant fact resolver consumed by authorizeDepth
+			reads, guarded := false, false
+			ast.Inspect(function.Body, func(node ast.Node) bool {
+				var accessed ast.Expr
+				switch expr := node.(type) {
+				case *ast.IndexExpr:
+					accessed = expr.X
+				case *ast.RangeStmt:
+					accessed = expr.X
+				}
+				if selection, ok := accessed.(*ast.SelectorExpr); ok && selection.Sel.Name == "rows" {
+					reads = true
+				}
+				if call, ok := node.(*ast.CallExpr); ok {
+					if selection, ok := call.Fun.(*ast.SelectorExpr); ok {
+						switch selection.Sel.Name {
+						case "authorizeFrom", "authorizeDepth", "authorizeNative", "authorizeCapability", "visible", "visibleIn", "Readable", "readableIn", "mayRead", "mayReadIn", "Records", "recordsFrom", "RecordOf", "readRecordFrom", "ReadRecord", "narrowed":
+							guarded = true
+						}
+					}
+				}
+				return true
+			})
+			if reads && !guarded {
+				report(function, "member record projection reads storage without the owner authorization decision")
+			}
+		}
+	}
 	return failures
+}
+
+func memberProjection(function *ast.FuncDecl) bool {
+	if function.Recv != nil {
+		for _, receiver := range function.Recv.List {
+			typ := receiver.Type
+			if pointer, ok := typ.(*ast.StarExpr); ok {
+				typ = pointer.X
+			}
+			if name, ok := typ.(*ast.Ident); ok && (name.Name == "recordStore" || name.Name == "runtime" || name.Name == "stagedDecision") {
+				return false
+			} // namespace-bound owner storage and private writes
+		}
+	}
+	if function.Type.Params != nil {
+		for _, parameter := range function.Type.Params.List {
+			if typ, ok := parameter.Type.(*ast.SelectorExpr); ok && (typ.Sel.Name == "Member" || typ.Sel.Name == "Caller") {
+				return true
+			}
+		}
+	}
+	return false
 }

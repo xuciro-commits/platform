@@ -138,7 +138,7 @@ func (t *Tenant) narrower(m platform.Member, now time.Time, held bool) *narrower
 
 func (t *Tenant) narrowerIn(store *recordStore, m platform.Member, now time.Time, held bool) *narrower {
 	m = t.authorizationMember(m)
-	return &narrower{t: t, store: store, m: m, may: t.mayReadIn(store, m, now, held), held: held, hidden: map[reflect.Type][]platform.FieldInfo{}}
+	return &narrower{t: t, store: store, m: m, at: now, may: t.mayReadIn(store, m, now, held), held: held, hidden: map[reflect.Type][]platform.FieldInfo{}, decisions: map[string]platform.AuthzDecision{}}
 }
 
 type narrower struct {
@@ -146,6 +146,8 @@ type narrower struct {
 	t              *Tenant
 	store          *recordStore
 	m              platform.Member
+	at             time.Time
+	decisions      map[string]platform.AuthzDecision
 	may            func(ref string) bool
 	held           bool
 	hidden         map[reflect.Type][]platform.FieldInfo
@@ -181,11 +183,15 @@ func (w *narrower) value(v reflect.Value) (reflect.Value, bool) {
 		p.Elem().Set(inner)
 		return p, true
 	case reflect.Slice, reflect.Array:
-		out, changed := reflect.MakeSlice(reflect.SliceOf(v.Type().Elem()), v.Len(), v.Len()), false
+		out, changed := reflect.MakeSlice(reflect.SliceOf(v.Type().Elem()), 0, v.Len()), false
 		for i := range v.Len() {
+			if !w.permitsRecord(v.Index(i)) {
+				changed = true
+				continue
+			}
 			x, c := w.value(v.Index(i))
 			changed = changed || c
-			out.Index(i).Set(x)
+			out = reflect.Append(out, x)
 		}
 		if !changed || v.Kind() == reflect.Array {
 			return v, false // an array is left alone; records are never held in one
@@ -194,6 +200,10 @@ func (w *narrower) value(v reflect.Value) (reflect.Value, bool) {
 	case reflect.Map:
 		out, changed := reflect.MakeMapWithSize(v.Type(), v.Len()), false
 		for _, k := range v.MapKeys() {
+			if !w.permitsRecord(v.MapIndex(k)) {
+				changed = true
+				continue
+			}
 			x, c := w.value(v.MapIndex(k))
 			changed = changed || c
 			out.SetMapIndex(k, x)
@@ -229,6 +239,9 @@ func (w *narrower) value(v reflect.Value) (reflect.Value, bool) {
 // record narrows one record: first the fields m's role may not read, then the
 // content the type declares it took from other records (ADR-0033).
 func (w *narrower) record(et *entityType, v reflect.Value) (reflect.Value, bool) {
+	if !w.permitsRecord(v) {
+		return reflect.Zero(v.Type()), true
+	}
 	hidden, known := w.hidden[et.info.Go]
 	if !known {
 		_, hidden = viewOf(w.m, et)
@@ -247,6 +260,35 @@ func (w *narrower) record(et *entityType, v reflect.Value) (reflect.Value, bool)
 		return derived, true
 	}
 	return out, changed
+}
+
+func (w *narrower) permitsRecord(value reflect.Value) bool {
+	for value.Kind() == reflect.Interface || value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return true
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return true
+	}
+	et := w.entity(value.Type())
+	if et == nil {
+		return true
+	}
+	copy := copyOf(et.info.Go, value.Interface())
+	id := recordOf(copy).ID
+	if id == "" {
+		return true
+	} // an input shape carries no stored row identity
+	key := et.info.Type + "/" + id
+	if decision, known := w.decisions[key]; known {
+		return decision.Allow
+	}
+	c := platform.NewCaller(runtime{w.t}, w.m, et.info.App, false, false)
+	decision := w.t.authorizeFrom(w.store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: et.info.Type, Record: id}, w.at, w.held)
+	w.decisions[key] = decision
+	return decision.Allow
 }
 
 // derive applies a type's derivations to a copy of the record: content whose

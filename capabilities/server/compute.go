@@ -97,8 +97,14 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	if !ok {
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation is not declared")
 	}
-	if op.Check() != nil || !slices.Contains(op.Roles, member.Roles[owner]) {
-		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This member cannot call the operation")
+	definition, err := canonicalDigest([]any{owner, op, version})
+	if err != nil {
+		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation definition cannot be bound")
+	}
+	applicant := platform.ActingCaller(c, member, owner, false)
+	decision := t.authorizeCapability(applicant, owner, op.Name, op.Roles, op.Check() == nil, authorizationDetails{Store: store, At: r.GetRecordedTime().AsTime(), Sources: q.Sources, Definition: definition})
+	if refusal := authorizationRefusal(decision); refusal != nil {
+		return platform.OperationCall{}, platform.Effect{}, refusal
 	}
 	var input *operationInputArtifact
 	if len(sealed) == 1 {
@@ -108,18 +114,6 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 		if err := op.Input.Validate(q.Inputs, op.Limits.MaxInputBytes); err != nil {
 			return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-	}
-	for _, source := range q.Sources {
-		if !t.readableIn(store, member, strings.Split(source, "#")[0], r.GetRecordedTime().AsTime()) {
-			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation source is not readable")
-		}
-		if strings.Contains(source, "#") && !t.mayRead(member, r.GetRecordedTime().AsTime(), false)(source) {
-			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation source field is not readable")
-		}
-	}
-	definition, err := canonicalDigest([]any{owner, op, version})
-	if err != nil {
-		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation definition cannot be bound")
 	}
 	closure, release, err := t.operationClosure(owner, op, version, q.Release)
 	if err != nil {
@@ -243,13 +237,11 @@ func (t *Tenant) operationResult(c platform.Caller, id string) (platform.Operati
 			return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation is not readable")
 		}
 		member, ok := t.Member(b.Member)
-		if !ok || b.Build != nil && member.Roles["build"] != "builder" || b.Build == nil && !slices.Contains(b.Definition.Roles, member.Roles[x.App]) {
+		if !ok {
 			return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation permission was revoked")
 		}
-		for _, source := range b.Call.Sources {
-			if !t.mayRead(member, time.Now().UTC(), false)(source) {
-				return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation source is no longer readable")
-			}
+		if refusal := authorizationRefusal(t.operationAuthorization(member, x.App, b, time.Now().UTC())); refusal != nil {
+			return platform.OperationResult{}, refusal
 		}
 		return operationResultOf(x), nil
 	}
@@ -300,18 +292,16 @@ func (t *Tenant) operationAllowed(x platform.Effect, at time.Time) bool {
 	if !ok || member.Tenant != t.ID {
 		return false
 	}
-	if b.Build != nil {
-		return member.Roles["build"] == "builder"
+	return t.operationAuthorization(member, x.App, b, at).Allow
+}
+
+func (t *Tenant) operationAuthorization(member platform.Member, owner string, binding operationBinding, at time.Time) platform.AuthzDecision {
+	permission, allowed, declared := binding.Definition.Name, binding.Definition.Roles, binding.Definition.Check() == nil
+	if binding.Build != nil {
+		permission, allowed, declared = "build.code.compile", []string{"builder"}, binding.Build.Input.Check() == nil && binding.Build.Output.Check() == nil
 	}
-	if !slices.Contains(b.Definition.Roles, member.Roles[x.App]) {
-		return false
-	}
-	for _, source := range b.Call.Sources {
-		if !t.mayRead(member, at, false)(source) {
-			return false
-		}
-	}
-	return true
+	c := platform.NewCaller(runtime{t}, member, owner, false, false)
+	return t.authorizeCapability(c, owner, permission, allowed, declared, authorizationDetails{At: at, Sources: binding.Call.Sources, Definition: binding.Call.Definition})
 }
 
 func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecord, key, target string, q platform.CodeBuildRequest) (platform.OperationCall, *kernel.Error) {
@@ -401,8 +391,8 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 	var output json.RawMessage
 	var err error
 	if b.Build != nil {
-		if member.Roles["build"] != "builder" {
-			out.Detail = "Compilation permission was revoked"
+		if refusal := authorizationRefusal(t.operationAuthorization(member, x.App, b, now)); refusal != nil {
+			out.Detail = refusal.Message
 			return out
 		}
 		compiler := t.Compiler
@@ -432,15 +422,13 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			hash = b.SealedInput.InputHash
 		}
 		definition, _ := canonicalDigest([]any{x.App, op, b.Call.Version})
-		if op.Check() != nil || hash != b.Call.InputHash || definition != b.Call.Definition || !slices.Contains(op.Roles, member.Roles[x.App]) {
+		if op.Check() != nil || hash != b.Call.InputHash || definition != b.Call.Definition {
 			out.Detail = "Operation definition or permission differs"
 			return out
 		}
-		for _, source := range b.Call.Sources {
-			if !t.mayRead(member, now, false)(source) {
-				out.Detail = "Operation source permission was revoked"
-				return out
-			}
+		if refusal := authorizationRefusal(t.operationAuthorization(member, x.App, b, now)); refusal != nil {
+			out.Detail = refusal.Message
+			return out
 		}
 		inputs := b.Inputs
 		if ref := b.SealedInput; ref != nil {
@@ -466,10 +454,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			// grants and cancellation before disclosing its bytes to a guest.
 			t.mu.Lock()
 			latest, authorised := t.Member(b.Member)
-			authorised = authorised && t.admits(latest) == nil && slices.Contains(op.Roles, latest.Roles[x.App]) && t.operationCurrent(x.ID, x.Generation)
-			for _, source := range b.Call.Sources {
-				authorised = authorised && t.mayRead(latest, now, false)(source)
-			}
+			authorised = authorised && t.operationAuthorization(latest, x.App, b, now).Allow && t.operationCurrent(x.ID, x.Generation)
 			t.mu.Unlock()
 			if !authorised {
 				out.Detail = "Operation permission or generation changed while its input was read"
@@ -484,7 +469,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 					return out
 				}
 				info, _ := t.entity(set.Object)
-				if set.Policy == "complete" && info.Scope.LevelFor([]string{member.Roles[info.App]}) != platform.ScopeTenant {
+				if set.Policy == "complete" && info.Scope.LevelFor(member.RolesIn(info.App)) != platform.ScopeTenant {
 					out.Detail = "Complete collection permission was revoked"
 					return out
 				}

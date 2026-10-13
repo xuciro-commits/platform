@@ -48,7 +48,7 @@ type TaskSummary struct {
 // view for indexing and maintenance, not a reader: reads taken for a person or
 // an agent are taken as that person or as the agent's own app (ADR-0050 D2).
 func (t *Tenant) host() platform.Member {
-	m := platform.Member{ID: "app:" + AgentApp, Tenant: t.ID, Roles: map[string]string{}}
+	m := platform.Member{ID: "host:maintenance", Tenant: t.ID, Roles: map[string]string{}}
 	for _, a := range t.apps {
 		m.Roles[a.Manifest().ID] = "*"
 	}

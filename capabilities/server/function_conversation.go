@@ -6,6 +6,7 @@ import (
 	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -37,6 +38,11 @@ func (t *Tenant) functionConversation(store *recordStore, member platform.Member
 			return nil, nil, fmt.Errorf("conversation history is unavailable")
 		}
 		seen[id] = true
+		reader := platform.NewCaller(runtime{t}, member, et.info.App, false, false)
+		decision := t.authorizeFrom(store, reader, platform.AuthzRequest{Principal: member.ID, Tenant: member.Tenant, Kind: "derive", Type: et.info.Type, Record: id, Fields: []string{"question", "output"}}, time.Now(), true)
+		if !decision.Allow || len(decision.Withheld) > 0 {
+			return nil, nil, fmt.Errorf("conversation history is not readable")
+		}
 		row := et.rows[id]
 		if row == nil {
 			return nil, nil, fmt.Errorf("conversation history is unavailable")

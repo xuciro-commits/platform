@@ -57,6 +57,7 @@ func (d *Console) BindPackageIndex(index *PackageIndex) {
 func (d *Console) MemberCount() int { d.mu.Lock(); defer d.mu.Unlock(); return len(d.members) }
 
 func (d *Console) NewSimulationIdentity(tenant string, members []platform.Member) platform.App {
+	members = append(slices.Clone(members), platform.Member{ID: "app:candidate-test", Tenant: tenant, Roles: map[string]string{PlatformApp: Admin, platform.AIApp: platform.AIAdmin}})
 	seats := make([]Seat, 0, len(members))
 	for _, member := range members {
 		member.Tenant = tenant

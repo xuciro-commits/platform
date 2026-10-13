@@ -248,8 +248,9 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	if err := t.admits(m); err != nil {
 		return ReleaseDraftClosure{}, err
 	}
-	if m.Roles[build.ID] != build.Builder {
-		return ReleaseDraftClosure{}, fmt.Errorf("builder role required")
+	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/drafts/referenced", "read", []string{build.Builder}, true)); err != nil {
+		return ReleaseDraftClosure{}, err
 	}
 	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
 	if !ok {
@@ -295,8 +296,9 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 	if err := t.admits(m); err != nil {
 		return ReleasePreview{}, err
 	}
-	if m.Roles[build.ID] != build.Builder {
-		return ReleasePreview{}, fmt.Errorf("builder role required")
+	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/preview", "read", []string{build.Builder}, true)); err != nil {
+		return ReleasePreview{}, err
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()

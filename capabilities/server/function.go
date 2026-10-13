@@ -64,9 +64,6 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	if !found {
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function is not declared")
 	}
-	if f.Check() != nil || !member.May(owner, f.Name, f.Roles).Allow {
-		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This member cannot call the AI function")
-	}
 	target := r.GetSubmission().GetTarget()
 	replyOwner := t.app(c.App)
 	if replyOwner == nil {
@@ -89,6 +86,15 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function definition cannot be bound")
 	}
 	at := r.GetRecordedTime().AsTime()
+	sources := []string{}
+	for _, field := range f.Fields {
+		sources = append(sources, sourceRef+"#"+field)
+	}
+	applicant := platform.ActingCaller(c, member, owner, false)
+	decision := t.authorizeCapability(applicant, owner, f.Name, f.Roles, f.Check() == nil, authorizationDetails{Store: store, At: at, Sources: sources, Definition: definition})
+	if refusal := authorizationRefusal(decision); refusal != nil {
+		return platform.FunctionCall{}, platform.Effect{}, refusal
+	}
 	store.mu.Lock()
 	et := store.types[f.Object]
 	if et == nil {
@@ -101,15 +107,13 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
 	}
 	input := map[string]any{}
-	sources := []string{}
 	for _, name := range f.Fields {
 		field, found := et.info.Field(name)
-		if !found || !field.ReadsAny(member.RolesIn(et.info.App)) {
+		if !found {
 			store.mu.Unlock()
 			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
 		}
 		input[name] = row.value.FieldByIndex(field.Index).Interface()
-		sources = append(sources, sourceRef+"#"+name)
 	}
 	payload, historySources, conversationErr := t.functionConversation(store, member, request, f, owner, sourceRef, definition, version, input)
 	raw, err := json.Marshal(payload)
@@ -163,11 +167,14 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	if !ok || member.Tenant != t.ID || f.Check() != nil || err != nil || hashErr != nil ||
 		definition != binding.Call.Definition || hash != binding.Call.InputHash || ask.Model != binding.Call.Model ||
 		ask.Prompt.System != f.SystemPrompt() || ask.Prompt.MaxTokens != f.MaxTokens || len(ask.Prompt.User) > f.MaxInputBytes ||
-		!sourceOK || sourceID == "" || sourceType != f.Object || !replyOK || replyID != ask.Call || t.authorityOf(replyType) != app || !member.May(owner, f.Name, f.Roles).Allow ||
+		!sourceOK || sourceID == "" || sourceType != f.Object || !replyOK || replyID != ask.Call || t.authorityOf(replyType) != app ||
 		member.Agent && t.suspended(member.ID) || len(binding.Call.Sources) < len(f.Fields) || !f.Conversation && len(binding.Call.Sources) != len(f.Fields) || f.Conversation && len(binding.Call.Sources) > len(f.Fields)+16 {
 		return false
 	}
-	may := t.mayRead(member, at, false)
+	c := platform.NewCaller(runtime{t}, member, owner, false, false)
+	if !t.authorizeCapability(c, owner, f.Name, f.Roles, true, authorizationDetails{At: at, Sources: binding.Call.Sources, Definition: definition}).Allow {
+		return false
+	}
 	t.records.mu.Lock()
 	sourceTypeInfo := t.records.types[sourceType]
 	var sourcePresent bool
@@ -181,12 +188,7 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	}
 	for i, field := range f.Fields {
 		ref := binding.Call.Source + "#" + field
-		if binding.Call.Sources[i] != ref || !may(ref) {
-			return false
-		}
-	}
-	for _, ref := range binding.Call.Sources[len(f.Fields):] {
-		if !may(ref) {
+		if binding.Call.Sources[i] != ref {
 			return false
 		}
 	}

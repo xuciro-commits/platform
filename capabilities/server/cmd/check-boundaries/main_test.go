@@ -25,6 +25,8 @@ func TestSourceBoundaryRules(t *testing.T) {
 		{"protocol forbidden concrete owner", "protocols/orders/bridge.go", "package orders\nimport \"platformserver/apps/work\"", true},
 		{"separate protocol test harness", "protocols/orders/orderstest/check.go", "package orderstest\nimport \"platformserver\"", false},
 		{"dot host avoids narrow role", "capabilities/server/apps/files/files.go", "package files\nimport . \"platformserver/internal/host\"\ntype Files struct{host Host}", true},
+		{"direct member record projection", "capabilities/server/expose.go", "package runtime\nfunc (t *Tenant) exposed(m platform.Member) any { return t.records.types[\"x\"].rows[\"id\"].value.Interface() }", true},
+		{"checked member projection", "capabilities/server/expose.go", "package runtime\nfunc (t *Tenant) exposed(m platform.Member) any { v:=t.records.types[\"x\"].rows[\"id\"].value; return t.narrowed(m, v.Interface(), now, false) }", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			set := token.NewFileSet()

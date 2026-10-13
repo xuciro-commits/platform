@@ -59,15 +59,14 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	t.opsMu.Unlock()
 	seal := declared && op.Limits.DataInputBytes > 0
 	if seal {
-		if !seated || member.Tenant != t.ID || t.quarantined() || t.admits(current) != nil || op.Check() != nil || !slices.Contains(op.Roles, current.Roles[q.App]) {
+		if !seated || member.Tenant != t.ID || t.quarantined() {
 			t.mu.Unlock()
 			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This member cannot prepare the operation input")
 		}
-		for _, source := range q.Sources {
-			if !t.mayRead(current, now, false)(source) {
-				t.mu.Unlock()
-				return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation source is not readable")
-			}
+		c := platform.NewCaller(runtime{t}, current, q.App, false, false)
+		if refusal := authorizationRefusal(t.authorizeCapability(c, q.App, op.Name, op.Roles, op.Check() == nil, authorizationDetails{At: now, Sources: q.Sources})); refusal != nil {
+			t.mu.Unlock()
+			return platform.OperationCall{}, refusal
 		}
 		// Neither the caller nor a later definition edit can mutate this plan.
 		var frozen platform.Operation

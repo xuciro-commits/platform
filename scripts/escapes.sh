@@ -15,6 +15,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# ADR-0105: the source guard checks member-facing storage reads structurally,
+# including files excluded by the current OS/build tags.
+(cd capabilities/server && go run ./cmd/check-boundaries -root ../..)
+
 known=$(cat <<'KNOWN'
 host	apps/mes/server/mes.go	1	#129 (6) the plant's own fact log beside the ledger (gateway states): judge whether the ledger owns it
 host	apps/pms/server/pms.go	1	#129 (6) the channel's own fact log beside the ledger: judge whether the ledger owns it

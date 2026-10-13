@@ -288,14 +288,14 @@ type MigrationManifest struct {
 }
 
 // rememberMigration keeps the console's own view of what moved.
-func (t *Tenant) rememberMigration(result MigrationResult, member string, now time.Time) error {
+func (t *Tenant) rememberMigration(result MigrationResult, member string, now time.Time, evidence ...authorizationEvidence) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, err := t.acceptHostControl("migration", member, result, now,
 		AuditEntry{Action: "host.migration", Target: result.Key}, func(image *hostControlImage) (SupportGrant, error) {
 			image.Migrations = append(image.Migrations, MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
 			return SupportGrant{}, nil
-		})
+		}, evidence...)
 	return err
 }
 

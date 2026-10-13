@@ -59,7 +59,7 @@ func TestHotelBuilderPreviewIsReadOnlyAndRestricted(t *testing.T) {
 		handler.ServeHTTP(rec, r)
 		return rec
 	}
-	if rec := request("desk-token"); rec.Code != http.StatusForbidden || rec.Body.Len() != 0 {
+	if rec := request("desk-token"); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "ERROR_CODE_POLICY_DENIED") || strings.Contains(rec.Body.String(), "O-PREVIEW") {
 		t.Fatalf("unprivileged preview disclosed %d: %s", rec.Code, rec.Body.String())
 	}
 	rec := request("manager-token")

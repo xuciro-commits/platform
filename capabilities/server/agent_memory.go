@@ -47,6 +47,7 @@ func memoryEntity() platform.Entity {
 		// A fact was taken from what the run read (ADR-0033).
 		Derived:  []platform.Derivation{{From: "sources", Fields: []string{"fact", "sources"}}},
 		Withheld: "withheld",
+		Scope:    platform.Scope{Participants: func(record any) []string { return []string{record.(Memory).For} }},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "proposed",
 			States: []platform.State{{Name: "proposed", Title: "Proposed", Tone: "warning"}, {Name: "active", Title: "Remembered", Tone: "success"},
 				{Name: "forgotten", Title: "Forgotten", Tone: "neutral"}},

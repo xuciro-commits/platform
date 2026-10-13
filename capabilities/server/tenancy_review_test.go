@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -198,7 +199,8 @@ func TestDomainJoinRequiresMFAAndDoesNotReadmitLeaver(t *testing.T) {
 
 func TestBoundGrantReadsUnionWithinItsStructure(t *testing.T) {
 	org := enterprise.New("grant-reads", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Kind: "site"}, {ID: "other", Kind: "site"}}, Units: []platform.Unit{{ID: "plant", Kind: "plant"}, {ID: "L1", Kind: "line"}, {ID: "L2", Kind: "line"}, {ID: "X", Kind: "line"}}, Edges: []platform.Edge{{Structure: "site", Unit: "L1", Parent: "plant"}, {Structure: "site", Unit: "L2", Parent: "plant"}, {Structure: "other", Unit: "X", Parent: "plant"}}, Memberships: []platform.Membership{{Party: "member:writer", Unit: "plant"}, {Party: "member:reader", Unit: "L1"}}})
-	tn, err := NewTenant("grant-reads", NewConsole("grant-reads", Seat{Subjects: []string{"writer"}, Member: platform.Member{ID: "writer", Roles: map[string]string{"stock": "lead"}}}), org, newStock("grant-reads"))
+	dir := NewConsole("grant-reads", seatOf("writer", "stock:lead"), seatOf("reader", "stock:lead"))
+	tn, err := NewTenant("grant-reads", dir, org, newStock("grant-reads"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,6 +226,9 @@ func TestBoundGrantReadsUnionWithinItsStructure(t *testing.T) {
 		{"unbound and bound", []platform.Grant{{App: "stock", Role: "lead"}, {App: "stock", Role: "lead", Unit: "L2", Structure: "site"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			dir.mu.Lock()
+			dir.members["reader"].Grants = slices.Clone(tc.grants)
+			dir.mu.Unlock()
 			page, err := tn.Records(platform.Member{ID: "reader", Tenant: tn.ID, Roles: map[string]string{"stock": "lead"}, Grants: tc.grants}, "stock.item", platform.Query{}, now)
 			if err != nil || page.Total != 2 {
 				t.Fatalf("reads want L1+L2, got %+v %v", page, err)

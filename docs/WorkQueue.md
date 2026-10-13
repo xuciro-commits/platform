@@ -32,7 +32,7 @@
 
 每次只推进一块；块内按实际依赖迁移。已经通过且未受影响的证据直接复用。检查按 [Testing](Testing.md) 选择，代码合入 main 后沿既有同步协议更新两宿主，保留原数据卷。
 
-ADR-0105 当前仍在施工：归属引擎、逐层解释、声明集合与接受依据已接通；余项及严格停止条件归其 [As built](ADR/0105-one-authorization-engine.md#as-built) 与 §4。不得因主路径检查通过而跳过九类入口核对。
+ADR-0105 当前仍在施工：九类入口拒绝、Compute/函数/宿主管理、实体派生投影与读取守门已接通；非实体 DTO/自由 JSON 的派生自由文本闭包仍须核对。余项及严格停止条件归其 [As built](ADR/0105-one-authorization-engine.md#as-built) 与 §4。
 
 ## 收口规则
 

@@ -189,7 +189,7 @@ func agentEntities() []platform.Entity {
 			{From: "citations.document", Element: true},
 			{From: "draft.type/target", Element: true},
 			{From: "*", Fields: []string{"result"}}},
-		Withheld: "withheld"},
+		Withheld: "withheld", Scope: platform.Scope{Participants: func(record any) []string { return []string{record.(AgentRunRecord).OnBehalf} }}},
 		{Type: EvaluationType, Title: "Agent evaluation", Model: Evaluation{}, Display: "model"}, memoryEntity(),
 		{Type: SwitchType, Title: "Agent switch", Model: Switch{}, Description: "An agent's off switch: suspended by an administrator, or working."}}
 }

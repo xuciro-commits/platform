@@ -83,7 +83,7 @@ type Explanation struct {
 func (t *Tenant) ExplainOperation(request platform.AuthzRequest, at time.Time) (platform.AuthzDecision, *kernel.Error) {
 	m, known := t.member(request.Principal)
 	if !known {
-		return platform.AuthzDecision{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The operation principal is unavailable")
+		m = platform.Member{ID: request.Principal, Tenant: request.Tenant}
 	}
 	app := ""
 	if info, exists := t.entity(request.Type); exists {

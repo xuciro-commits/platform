@@ -471,8 +471,9 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 	if t.ai == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
 	}
-	if m.Roles[platform.AIApp] != platform.AIAdmin {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}, nil
+	caller := platform.NewCaller(runtime{t}, m, platform.AIApp, false, false)
+	if refusal := authorizationRefusal(t.authorizeNative(caller, "GET /v1/ai/providers/{provider}/models", "read", []string{platform.AIAdmin}, true)); refusal != nil {
+		return nil, refusal, nil
 	}
 	pv, ok := t.ai.Provider(provider)
 	if !ok {
@@ -620,6 +621,11 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 	t.mu.Unlock()
 	if err != nil {
 		out.Result, out.Detail = "rejected", "the model "+model+" is not enabled"
+		return out, nil
+	}
+	c := platform.NewCaller(runtime{t}, m, x.App, false, true)
+	if refusal := authorizationRefusal(t.authorizeNative(c, "model:"+model, "action", nil, true)); refusal != nil {
+		out.Result, out.Detail = "rejected", refusal.Message
 		return out, nil
 	}
 	if ask.Evaluation {

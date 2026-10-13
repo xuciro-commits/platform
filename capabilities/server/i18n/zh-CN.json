@@ -1804,5 +1804,6 @@
   "The owning record is unavailable or exceeds 16 segments": "所属记录不可用或来源链超过 16 段",
   "The enterprise source is unavailable": "企业模型来源不可用",
   "The declared source traversal exceeds 16 segments or contains a cycle": "声明的来源遍历超过 16 段或包含循环",
-  "The typed owner action declares its accepted input fields": "类型化归属方动作声明可接收的输入字段"
+  "The typed owner action declares its accepted input fields": "类型化归属方动作声明可接收的输入字段",
+  "The explicit host management boundary": "显式宿主管理边界"
 }

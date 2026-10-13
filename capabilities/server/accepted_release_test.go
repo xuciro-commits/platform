@@ -173,7 +173,7 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 		handler.ServeHTTP(rec, req)
 		return rec
 	}
-	if rec := post("reader", preview.CandidateID); rec.Code != http.StatusForbidden || rec.Body.Len() != 0 {
+	if rec := post("reader", preview.CandidateID); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "ERROR_CODE_POLICY_DENIED") || strings.Contains(rec.Body.String(), preview.CandidateID) {
 		t.Fatalf("non-builder learned about a private candidate: %d %s", rec.Code, rec.Body.String())
 	}
 	if rec := post("builder", "sha256-v1:stale"); rec.Code != http.StatusConflict || len(tenant.releases.candidates) != 0 {
@@ -192,7 +192,7 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 		return rec
 	}
 	for _, path := range []string{"/v1/releases/candidates", "/v1/releases/candidates/" + preview.CandidateID} {
-		if rec := get("reader", path); rec.Code != http.StatusForbidden || rec.Body.Len() != 0 {
+		if rec := get("reader", path); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "ERROR_CODE_POLICY_DENIED") || strings.Contains(rec.Body.String(), preview.CandidateID) {
 			t.Fatalf("non-builder read private release metadata: %d %s", rec.Code, rec.Body.String())
 		}
 	}

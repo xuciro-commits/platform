@@ -98,7 +98,11 @@ func stockTenant(t testing.TB, extra ...platform.App) *Tenant {
 		Edges: []platform.Edge{{Structure: "site", Unit: "L1", Parent: "plant"}, {Structure: "site", Unit: "L2", Parent: "plant"}},
 		Memberships: []platform.Membership{{Party: "member:lead", Unit: "plant", Role: "lead"}, {Party: "member:op", Unit: "L1", Role: "op"},
 			{Party: "member:boss", Unit: "plant", Role: "lead"}}})
-	apps := []platform.App{NewConsole("t-1", seat("ana", "clerk"), seat("bo", "clerk"), seat("lead", "lead"), seat("op", "line"), seat("boss", "line")), org, newStock("t-1")}
+	seats := []Seat{seat("ana", "clerk"), seat("bo", "clerk"), seat("lead", "lead"), seat("op", "line"), seat("boss", "line")}
+	if slices.ContainsFunc(extra, func(app platform.App) bool { return app.Manifest().ID == AgentApp }) {
+		seats = append(seats, seatOf("admin", "agent:admin"), seatOf("audit", "agent:admin"))
+	}
+	apps := []platform.App{NewConsole("t-1", seats...), org, newStock("t-1")}
 	apps = append(apps, extra...)
 	tn, err := NewTenant("t-1", apps...)
 	if err != nil {

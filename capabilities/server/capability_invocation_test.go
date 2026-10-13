@@ -70,7 +70,7 @@ func TestCapabilityActionPreservesApprovalReceipt(t *testing.T) {
 func TestNativeAIFunctionUsesOwnerGrantsWithoutBuildRole(t *testing.T) {
 	at := time.Date(2026, 9, 30, 15, 0, 0, 0, time.UTC)
 	native := newSampleOwner("native-ai", platform.Manifest{ID: "source", Title: "Source", Version: "1", Actions: platform.NewCatalog(), Roles: []string{"viewer", "reader"}, Entities: []platform.Entity{{Type: "source.item", Title: "Item", Model: querySampleRow{}, Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{"viewer": platform.ScopeTenant, "reader": platform.ScopeTenant}}, Seed: []any{querySampleRow{Record: platform.Record{ID: "S"}, Label: "Synthetic"}}}}, Functions: []platform.AIFunction{platform.RecordAdviceFunction("source.item", []string{"label"}, []string{"viewer"})}})
-	tenant, err := NewTenant("native-ai", NewConsole("native-ai", Seat{Subjects: []string{"viewer"}, Member: platform.Member{ID: "viewer", Roles: map[string]string{"source": "viewer"}}}, Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{"source": "reader"}}}), ai.New("native-ai"), native, build.New("native-ai"))
+	tenant, err := NewTenant("native-ai", NewConsole("native-ai", Seat{Subjects: []string{"viewer"}, Member: platform.Member{ID: "viewer", Roles: map[string]string{"source": "viewer"}}}, Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{"source": "reader"}}}, seatOf("app:candidate-test", "platform:admin", "ai:admin")), ai.New("native-ai"), native, build.New("native-ai"))
 	if err != nil {
 		t.Fatal(err)
 	}

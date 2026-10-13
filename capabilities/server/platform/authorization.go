@@ -35,6 +35,19 @@ type AuthorizationRuntime interface {
 	Authorize(Caller, AuthzRequest, time.Time) AuthzDecision
 }
 
+// AuthorizationRecorder belongs to the same private accepted decision as Caller.
+// Capability planners use it to retain a fully resolved owner decision.
+type AuthorizationRecorder interface {
+	RecordAuthorization(Caller, AuthzRequest, AuthzDecision)
+}
+
+func (c Caller) AuthorizationRecorder() AuthorizationRecorder {
+	if recorder, ok := c.rt.(AuthorizationRecorder); ok {
+		return recorder
+	}
+	return nil
+}
+
 func (c Caller) Authorize(request AuthzRequest, at time.Time) AuthzDecision {
 	if r, ok := c.rt.(AuthorizationRuntime); ok {
 		return r.Authorize(c, request, at)

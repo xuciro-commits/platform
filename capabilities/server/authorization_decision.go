@@ -43,6 +43,11 @@ type authorizationEvidence struct {
 	Roles    []string               `json:"roles"`
 }
 
+func (d *stagedDecision) RecordAuthorization(c platform.Caller, q platform.AuthzRequest, decision platform.AuthzDecision) {
+	c.Member = d.tenant.authorizationMember(c.Member)
+	d.authorizations = append(d.authorizations, authorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesHere())})
+}
+
 // Recovery checks the saved shape, never current grants or policies. Missing
 // evidence remains valid for historical results written before ADR-0105.
 func validateAuthorizationEvidence(tenant string, evidence []authorizationEvidence) error {
@@ -67,7 +72,14 @@ func validateAuthorizationEvidence(tenant string, evidence []authorizationEviden
 
 // Native entry facts are host declarations, not an authorization bypass.
 // They retain the same deny precedence and nine layers as record operations.
-func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool) platform.AuthzDecision {
+type authorizationDetails struct {
+	Store      *recordStore
+	At         time.Time
+	Sources    []string
+	Definition string
+}
+
+func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool, details ...authorizationDetails) platform.AuthzDecision {
 	c.Member = t.authorizationMember(c.Member)
 	pass := authorizationPass("not restricted by this owner")
 	context := &authz.Context{Tenant: authz.Gate{Allowed: c.Tenant == t.ID, Reason: "The operation belongs to another tenant"}, Principal: authz.Gate{Allowed: c.ID != "" && c.Active(), Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass}
@@ -86,7 +98,52 @@ func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, all
 		policies = owner.Manifest().Actions.AuthorizationPolicies()
 		context.Definition, _ = canonicalDigest([]any{c.App, owner.Manifest().Version, permission, allowed})
 	}
+	if len(details) > 0 {
+		detail := details[0]
+		if detail.Definition != "" {
+			context.Definition = detail.Definition
+		}
+		store := detail.Store
+		if store == nil {
+			store = t.records
+		}
+		at := detail.At
+		if at.IsZero() {
+			at = Now()
+		}
+		walk := newAuthorizationWalk()
+		for _, source := range detail.Sources {
+			if name, named := strings.CutPrefix(source, "read:"); named {
+				if !t.mayCallRead(c.Member, name) {
+					context.Derived = authz.Gate{Reason: "The original source is outside the caller's permissions"}
+					break
+				}
+				continue
+			}
+			ref, field, _ := strings.Cut(source, "#")
+			typ, id, valid := strings.Cut(ref, "/")
+			fields := []string{}
+			if field != "" {
+				fields = append(fields, field)
+			}
+			decision := t.authorizeDepth(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Type: typ, Record: id, Fields: fields}, at, false, 0, walk)
+			if !valid || id == "" || !decision.Allow || len(decision.Withheld) > 0 {
+				context.Derived = authz.Gate{Reason: "The original source is outside the caller's permissions"}
+				break
+			}
+		}
+	}
 	return authz.Decide(authz.Request{Kind: kind, Subject: authz.Subject{ID: c.ID, App: c.App, Roles: c.RolesHere(), Agent: c.Agent, Automation: c.Automation}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": c.ID, "app": c.App}, Context: context}, policies...)
+}
+
+func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string, allowed []string, declared bool, detail authorizationDetails) platform.AuthzDecision {
+	c = platform.RouteCaller(c, owner)
+	c.Automation = false // a saved applicant's roles authorize this computation
+	decision := t.authorizeNative(c, permission, "action", allowed, declared, detail)
+	if draft := c.AuthorizationRecorder(); draft != nil {
+		draft.RecordAuthorization(c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "action", Action: permission}, decision)
+	}
+	return decision
 }
 
 func (d *stagedDecision) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool) *kernel.Error {
@@ -141,6 +198,16 @@ func (t *Tenant) authorizeEntry(m platform.Member, app, permission, kind string,
 func (t *Tenant) authorizationMember(m platform.Member) platform.Member {
 	current, known := t.member(m.ID)
 	if !known {
+		declared := t.identity == nil || m.ID == "host:maintenance"
+		if app, service := strings.CutPrefix(m.ID, "app:"); service {
+			declared = t.app(app) != nil
+		}
+		if agent, generated := strings.CutPrefix(m.ID, "agent:"); generated && t.agents != nil {
+			_, declared = t.agents.AgentDeclaration(agent)
+		}
+		if !declared {
+			m.Roles, m.Grants, m.Status = map[string]string{}, nil, platform.MemberLeft
+		}
 		return m
 	}
 	roles := map[string]string{}

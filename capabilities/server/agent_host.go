@@ -113,6 +113,10 @@ func (h hostView) AgentProviderAvailable(provider string, now time.Time) bool {
 	return h.t.breakers.allow("ai:"+provider, now)
 }
 func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AIModel, member platform.Member, request platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError) {
+	c := platform.NewCaller(runtime{h.t}, member, AgentApp, false, false)
+	if refusal := authorizationRefusal(h.t.authorizeNative(c, "model:"+request.Model, "action", []string{platform.AnyMember}, true)); refusal != nil {
+		return platform.ChatAnswer{}, &platform.AIError{Status: 403, Detail: refusal.Message}
+	}
 	return h.t.call(provider, model, member, request, now)
 }
 func (h hostView) MeterAgentUsage(member platform.Member, usage platform.AIUsage) *kernel.Error {

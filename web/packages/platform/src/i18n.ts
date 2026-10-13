@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "The explicit host management boundary": "显式宿主管理边界",
   "The typed owner action declares its accepted input fields": "类型化归属方动作声明可接收的输入字段",
   "Tenant isolation": "租户隔离",
   "Principal validity": "主体有效性",

@@ -23,6 +23,10 @@ import (
 var (
 	t0    = time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	seats = []platformserver.Seat{
+		{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin-1", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}},
+		{Subjects: []string{"ops"}, Member: platform.Member{ID: "ops", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin, "ai": "admin"}}},
+		{Subjects: []string{"x"}, Member: platform.Member{ID: "x", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin, "flow": "admin", platformserver.AgentApp: platformserver.AgentAdmin}}},
+		{Subjects: []string{"flows"}, Member: platform.Member{ID: "flows", Roles: map[string]string{"flow": "admin"}}},
 		{Subjects: []string{"sales"}, Member: platform.Member{ID: "sales-1", Roles: map[string]string{"crm": "sales", "pms": "front-desk", "memstay": lodging.Keeper}}},
 		{Subjects: []string{"sales-only"}, Member: platform.Member{ID: "sales-2", Roles: map[string]string{"crm": "sales"}}},
 		{Subjects: []string{"desk"}, Member: platform.Member{ID: "desk-1", Roles: map[string]string{"pms": "front-desk", "csm": "desk", build.ID: build.User}}},

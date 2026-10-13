@@ -124,12 +124,18 @@ ADR-0104 D4 决定反向引用必须**声明**。本 ADR 明确：**不实现 Re
 
 `platform.AuthzRequest`、`AuthzDecision`、`AuthzLayer` 已由应用 API 公开。决定直接复用 `authz.Verdict` 的 `allow` 字段，避免与既有解释 API 同时维护 `allowed`/`allow` 两种结果。`authz.Decide` 固定执行九层；允许策略只能补足动词授权，不能恢复被行范围、字段、出处或标记收窄的权限。旧日志解码保留原恢复分支，新接受结果恢复不调用授权引擎。
 
-宿主事实解析归 `authorization_decision.go`：原 `Scope` 谓词仍由记录 owner 提供，记录可见性、来源字段与 CSV 标记检查经过同一决定点。`Catalog.DecideSubmission` 将普通 create/edit 的输入字段和事务逐步字段带入决定；不可变字段的结构错误仍归输入校验。命名读取、连接器入口、作业/订阅入口、效果回调和直接模型调用接入引擎。连接器的声明提供受控输入资格，实际数据类别/游标仍由 K8 校验；宿主服务以声明 owner 的范围执行，经过显式 deny，保留其与人的单位范围不同的既有语义。已知成员的过期角色快照会与当前目录取交集，令牌和调用者限制保留。
+宿主事实解析归 `authorization_decision.go`：原 `Scope` 谓词仍由记录 owner 提供，记录可见性、来源字段与 CSV 标记检查经过同一决定点。`Catalog.DecideSubmission` 将普通 create/edit 的输入字段和事务逐步字段带入决定；不可变字段的结构错误仍归输入校验，原生类型化动作保留显式接收盲写输入的资格。命名读取、连接器入口、作业/订阅入口、效果回调和模型调用接入引擎。连接器的声明提供受控输入资格，实际数据类别/游标仍由 K8 校验；宿主服务以声明 owner 的范围执行，经过显式 deny，保留其与人的单位范围不同的既有语义。当前目录与过期角色快照取交集；有目录的租户拒绝不存在的主体，应用服务与内置 agent 由注册 owner 声明，维护索引使用单独的宿主维护主体。无身份目录的编译期 owner 测试不提供认证 HTTP 入口。
+
+Compute 的输入准备、接受前计划、执行前检查、锁外输入读取后复核和结果读取共用 `authorizeCapability`；函数调用与会话历史也使用同一来源判定和全部有效角色。定义指纹与来源授权随私有接受结果保存。发布/预览/仿真路由不再维护第二套角色条件；宿主路由把部署显式授予的 `host-admin` 作为独立管理资格送入同一引擎，HTTP 管理结果保存真实 host 主体与层级。宿主管理资格不转成客户数据角色，支援与迁移仍沿原受控成员/会话路径。
 
 声明记录集返回 `authorization`：外层决定、可见元素决定与一份匿名的过滤原因。过滤结果不返回隐藏记录的 ID 或数量；原可见 count、部分不可见与 `all` 的严格语义保留。来源遍历有 16 段边界、循环拒绝和请求内缓存；公式/集合保存的自身记录见证只复用已经判定的所属行，不能使外部来源取得权限。
 
 `FieldInfo.SourceType` 与原生 `source` 标签、Build 字段配置提供 `record` / `user-input` / `external-input` / `generated`。命名/派生读取遮蔽未声明的自由文本；生成文本还须有记录出处。普通原始记录读取保留其权威数据。任务 title/body 声明来自任务 ref，并提供 `withheld`；审批引用/动作等固有元数据与用户拒绝备注显式声明类型。旧发布与已保存记录不重写。
 
-record / batch / input / work / effect / usage 接受结果保存可选 `authorizations`，包含原请求、有效角色、定义指纹与命中层。解码只检验身份、层级顺序和结果一致性；旧结果没有该字段仍可恢复。私有 savepoint 克隆依据；被拒的子尝试随其私有状态丢弃。原 ledger 的拒绝原因不再重新求值一次。治理页支持对象/记录/字段解释并展示后端层级，英中翻译随现有 API 生成。
+record / batch / input / work / effect / usage / host 接受结果保存可选 `authorizations`，包含原请求、有效角色、定义指纹与命中层。解码只检验身份、层级顺序和结果一致性；旧结果没有该字段仍可恢复。私有 savepoint 克隆依据；被拒的子尝试随其私有状态丢弃。原 ledger 的拒绝原因不再重新求值一次。治理页支持对象/记录/字段解释并展示后端层级，英中翻译随现有 API 生成。
 
-**本 ADR 仍在实施。** 上述归属引擎和主路径已接通；尚需把独立 Compute/函数的资格判定、宿主级控制入口及全部非记录派生表面核对成九类入口的完整拒绝证据，并补齐“直接读记录不经判定”的入口守门。不能把这些主路径检查当作 §4 九类入口全部通过；完成前 WorkQueue 保留 ADR-0105，不转入下一能力块。
+具名读取中的实体记录逐行判定后投影；直接返回一批 owner 记录不能跳过行范围。Agent run 和 memory 的原受益人声明为参与者，保留其既有读取资格；记录详情的评论列表属于派生投影，未声明自由文本被遮蔽，原始评论记录及历史字节保留。隔离仿真的配置主体在沙箱身份 owner 里显式登记，不靠虚构成员取得管理资格。`check-boundaries` 的 AST 检查经 `scripts/escapes.sh` 拦截新增的成员存储投影；namespace 内部存储、私有写入和授权事实解析仍是各自 owner。
+
+`TestAuthorizationNineEntryFamilies` 覆盖 Submit、Input、协议、作业、效果回调、Agent 步骤、模型计量、Compute 和发布路由的显式拒绝；`TestHostHTTPRetainsItsExplicitAuthorityAndRecoversWithoutAuthorization` 覆盖宿主角色隔离、HTTP 管理接受依据和纯恢复。成员/来源与集合的反例另归 `authorization_decision_test.go` 和记录集测试。
+
+**本 ADR 仍在实施。** 九类入口已有实际拒绝用例，Compute/函数与宿主控制的重复条件已替换，成员读取守门已接通。仍须核对任意非实体 DTO/自由 JSON 的派生自由文本声明与完整读时闭包，不能以实体投影和入口用例通过代替全部读取表面完成。完成前 WorkQueue 保留 ADR-0105，不转入下一能力块。

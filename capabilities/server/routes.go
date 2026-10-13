@@ -46,6 +46,24 @@ func (rt *routes) handle(route Route, f func(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+// Restricted HTTP surfaces resolve declared owner grants through the same
+// engine as an operation, instead of maintaining another role predicate.
+func (rt *routes) authorized(route Route, app string, roles []string, f func(http.ResponseWriter, *http.Request, platform.Member, *Tenant)) {
+	rt.handle(route, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		kind := "action"
+		if r.Method == http.MethodGet {
+			kind = "read"
+		}
+		c := platform.NewCaller(runtime{t}, m, app, false, false)
+		decision := t.authorizeNative(c, route.Pattern, kind, roles, true)
+		if refusal := authorizationRefusal(decision); refusal != nil {
+			Reply(w, nil, t.i18n.said(refusal, t.Language(m, r)))
+			return
+		}
+		f(w, r, m, t)
+	})
+}
+
 func (rt *routes) metadata(route Route, f func(http.ResponseWriter, *http.Request, platform.Member, *Tenant)) {
 	rt.handle(route, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		t.mu.Lock()
