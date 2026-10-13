@@ -23,12 +23,13 @@ import (
 // A projection into PostgreSQL (stage 3) will serve the same reads.
 
 type recordStore struct {
-	mu           sync.Mutex
-	liveVersions map[string]uint64
-	uniqueLinks  map[string]platform.LinkType
-	archiveLinks map[string]platform.LinkType
-	types        map[string]*entityType
-	byGo         map[reflect.Type]*entityType
+	mu               sync.Mutex
+	referenceIndexes map[string]referenceIndex
+	liveVersions     map[string]uint64
+	uniqueLinks      map[string]platform.LinkType
+	archiveLinks     map[string]platform.LinkType
+	types            map[string]*entityType
+	byGo             map[reflect.Type]*entityType
 	// A private 19a decision view has no projection callback. It may replace
 	// its parent only if no direct write reached that parent in the meantime.
 	parent         *recordStore
@@ -705,12 +706,24 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	var out []reflect.Value
-	for _, r := range et.rows {
+	visit := func(r *row) {
+		if r == nil {
+			return
+		}
 		v := r.value
 		if !q.Archived && recordOf(v).Archived || visible != nil && !visible(v) || !match(v) {
-			continue
+			return
 		}
 		out = append(out, v)
+	}
+	if ids, indexed := s.indexedRecordCandidates(et, q); indexed {
+		for _, id := range ids {
+			visit(et.rows[id])
+		}
+	} else {
+		for _, r := range et.rows {
+			visit(r)
+		}
 	}
 	return out, nil
 }

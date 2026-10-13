@@ -143,6 +143,7 @@ export type Aggregate = {
 };
 
 export type AggregateQuery = {
+  collection?: RecordSetRef;
   window?: AggregateWindowQuery;
   histogram?: HistogramQuery;
   maxRows?: number;
@@ -2200,6 +2201,7 @@ export type Pin = {
 };
 
 export type PlatformserverAggregate = {
+  partial?: boolean;
   window?: AggregateWindowResult;
   histogram?: HistogramResult;
   columns: Column[];
@@ -2475,6 +2477,12 @@ export type RecordSetPredicate = {
   domain?: unknown;
   search?: string;
   set?: QuerySet;
+};
+
+export type RecordSetRef = {
+  object: string;
+  id: string;
+  name: string;
 };
 
 export type RecordSetResult = {

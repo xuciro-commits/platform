@@ -42,8 +42,8 @@ func (p *Program) EvalFrozenFormula(c Context) (Result, error) {
 }
 func (p *Program) Eval(c Context) (Result, error) {
 	raw, encodeErr := json.Marshal(c)
-	if encodeErr != nil || len(raw) > 4*MaxBytes {
-		return Result{}, fail("budget", "$", "captured rule context exceeds 256 KiB")
+	if encodeErr != nil || len(raw) > MaxContextBytes {
+		return Result{}, fail("budget", "$", fmt.Sprintf("captured rule context is %d bytes; limit is %d", len(raw), MaxContextBytes))
 	}
 	reasons := []Issue{}
 	v, err := p.eval(p.expr, c, "$", &reasons)
@@ -398,14 +398,14 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 	if set.Status != "" && set.Status != "value" {
 		return Value{}, fail(set.Status, at, "declared collection is "+set.Status)
 	}
-	if !set.Complete || len(set.Items) > MaxSet {
-		return Value{}, fail("incomplete", at, "collection is incomplete or exceeds its budget")
+	if !set.Complete {
+		return Value{}, fail("incomplete", at, "collection is incomplete")
 	}
-	if decl.Policy == "complete" && set.Withheld {
-		return Value{}, fail("withheld", at, "collection contains withheld fields")
+	if len(set.Items) > MaxSet {
+		return Value{}, fail("budget", at, fmt.Sprintf("collection has %d items; limit is %d", len(set.Items), MaxSet))
 	}
-	if set.Withheld && (e.Op == "all" || e.Op == "none") {
-		return Value{}, fail("withheld", at, "quantifier needs the complete collection")
+	if decl.Policy == "complete" && set.Withheld || set.Withheld && (e.Op == "all" || e.Op == "none") {
+		return Value{}, fail("withheld", at, "quantifier or complete policy needs the full collection")
 	}
 	if decl.Policy == "visible" {
 		*reasons = append(*reasons, Issue{"scope", at, "evaluated caller-visible collection"})
@@ -419,64 +419,68 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 		}
 		seen[item.ID] = true
 	}
-	if e.Op == "count" {
-		return Present("integer", IntText(len(items))), nil
-	}
-	if len(items) == 0 {
-		switch e.Op {
-		case "all", "none":
-			return Present("boolean", true), nil
-		case "any":
-			return Present("boolean", false), nil
-		case "sum":
-			t := decl.Element
-			for _, part := range e.Agg.Field {
-				t = t.Fields[part]
-			}
-			if e.In != nil {
-				if e.In.Ref != "" {
-					t = decl.Element.Fields[strings.TrimPrefix(e.In.Ref, "item.")]
-				} else if e.In.Lit != nil {
-					v, _ := validateValue(PresentRaw(e.In.Kind, e.In.Lit.Value), at)
-					if m, ok := v.(money); ok {
-						t.Currency = m.currency
-					}
+	quantifier := e.Op == "all" || e.Op == "any" || e.Op == "none"
+	var fold *NumericAggregate
+	if !quantifier {
+		currency := ""
+		typ := decl.Element
+		for _, part := range e.Agg.Field {
+			typ = typ.Fields[part]
+		}
+		if e.In != nil && e.In.Ref != "" {
+			typ = decl.Element.Fields[strings.TrimPrefix(e.In.Ref, "item.")]
+		}
+		currency = typ.Currency
+		if e.In != nil && e.In.Lit != nil {
+			if value, err := validateValue(PresentRaw(e.In.Kind, e.In.Lit.Value), at); err == nil {
+				if money, ok := value.(money); ok {
+					currency = money.currency
 				}
 			}
-			return numericValue(e.Kind, new(big.Rat), t.Currency, at)
-		default:
-			return Value{}, fail("empty", at, "numeric aggregate has no operands")
+		}
+		var err error
+		fold, err = NewNumericAggregate(e.Op, e.Kind, currency)
+		if err != nil {
+			return Value{}, err
 		}
 	}
-	var total *big.Rat
-	currency := ""
 	for i, item := range items {
+		if e.Op == "count" {
+			_ = fold.Add(Value{})
+			continue
+		}
 		child := c
 		child.Refs = map[string]Value{}
-		for k, v := range c.Refs {
-			child.Refs[k] = v
+		for key, value := range c.Refs {
+			child.Refs[key] = value
 		}
-		for k, v := range item.Fields {
-			child.Refs["item."+k] = v
+		for key, value := range item.Fields {
+			child.Refs["item."+key] = value
 		}
-		var v Value
+		var value Value
 		var err error
 		if e.In != nil {
-			v, err = p.eval(*e.In, child, fmt.Sprintf("%s.items[%d]", at, i), reasons)
+			value, err = p.eval(*e.In, child, fmt.Sprintf("%s.items[%d]", at, i), reasons)
 		} else {
-			v = item.Fields[strings.Join(e.Agg.Field, ".")]
-			if v.Kind == "" {
-				v = Missing(e.Kind)
+			value = item.Fields[strings.Join(e.Agg.Field, ".")]
+			if value.Kind == "" {
+				value = Missing(e.Kind)
 			}
 		}
 		if err != nil {
 			return Value{}, err
 		}
-		x, err := validateValue(v, at)
+		if !quantifier {
+			if err := fold.Add(value); err != nil {
+				return Value{}, err
+			}
+			continue
+		}
+		x, err := validateValue(value, at)
 		if err != nil {
 			return Value{}, err
 		}
-		if x == nil || v.Status == "missing" {
+		if x == nil {
 			return Value{}, fail("missing", at, "aggregate operand is missing")
 		}
 		switch e.Op {
@@ -484,58 +488,26 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 			if !x.(bool) {
 				return Present("boolean", false), nil
 			}
-			continue
 		case "any":
 			if x.(bool) {
 				return Present("boolean", true), nil
 			}
-			continue
 		case "none":
 			if x.(bool) {
 				return Present("boolean", false), nil
 			}
-			continue
-		}
-		n, other := numericParts(x)
-		if total == nil {
-			total = new(big.Rat).Set(n)
-			currency = other
-		} else {
-			if currency != other {
-				return Value{}, fail("currency", at, "aggregate currencies differ")
-			}
-			switch e.Op {
-			case "sum", "avg":
-				total.Add(total, n)
-				if total.Num().BitLen() > 256 || total.Denom().BitLen() > 256 {
-					return Value{}, fail("budget", at, "aggregate numeric budget exceeded")
-				}
-			case "min":
-				if total.Cmp(n) > 0 {
-					total.Set(n)
-				}
-			case "max":
-				if total.Cmp(n) < 0 {
-					total.Set(n)
-				}
-			}
 		}
 	}
-	switch e.Op {
-	case "all", "none":
-		return Present("boolean", true), nil
-	case "any":
-		return Present("boolean", false), nil
-	case "avg":
-		total.Quo(total, new(big.Rat).SetInt64(int64(len(items))))
+	if quantifier {
+		return Present("boolean", e.Op != "any"), nil
 	}
-	return numericValue(e.Kind, total, currency, at)
+	return fold.Result()
 }
 
 // EvalJSON is the identical boundary used by the host and the compiled browser
 // module. No browser-specific implementation of rule semantics exists.
 func EvalJSON(raw []byte) ([]byte, error) {
-	if len(raw) > 4*MaxBytes {
+	if len(raw) > MaxContextBytes+2*MaxBytes {
 		return nil, fail("budget", "$", "evaluation request budget exceeded")
 	}
 	var req struct {

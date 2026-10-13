@@ -94,8 +94,14 @@ func TestKnowledgeAndContextScope(t *testing.T) {
 	if err := tn.automation(work.ID, true).PutAt(now, "test.task", work.WorkTask{Record: platform.Record{ID: "T1"}, Ref: "stock.item/I1", Title: "Private task", Answer: "private answer", Candidates: []string{"lead"}, State: "open"}); err != nil {
 		t.Fatal(err)
 	}
-	ref := func(id string) *pb.EntityRef { return &pb.EntityRef{Type: "stock.item", Id: id} }
-	if err := tn.caller(member("lead"), tn.app(relations.ID), false).Link(ref("I1"), ref("I2"), "private-link", now); err != nil {
+	// Preserve the historical same-authority graph as a read fixture. New
+	// same-authority writes now require an owner declaration and transaction.
+	legacy := tn.app(relations.ID).(*relations.Relations)
+	raw, _ := legacy.Snapshot()
+	var saved map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &saved)
+	saved["own"] = platform.Raw(map[string]any{"links": []platform.RelationLink{{From: "stock.item/I1", To: "stock.item/I2", By: "lead", At: now}}, "notes": []platform.RelationNote{}})
+	if err := legacy.Restore(platform.Raw(saved)); err != nil {
 		t.Fatal(err)
 	}
 	for _, x := range []struct {

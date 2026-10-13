@@ -23,7 +23,7 @@ func TestAggregateSetsCountCompleteAuthorizedMembership(t *testing.T) {
 		sum    float64
 	}{{lead, 620, 191890}, {ana, 310, 95790}} {
 		out, err := tn.Aggregate(tc.member, "stock.item", AggregateQuery{Set: set, Measures: []string{"count", "sum:qty"}}, now)
-		if err != nil || len(out.Rows) != 1 || out.Rows[0]["count"] != tc.count || out.Rows[0]["sum:qty"] != tc.sum {
+		if err != nil || len(out.Rows) != 1 || out.Rows[0]["count"] != tc.count || string(platform.Raw(out.Rows[0]["sum:qty"])) != string(platform.Raw(tc.sum)) {
 			t.Fatal(out, err)
 		}
 	}

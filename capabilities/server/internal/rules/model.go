@@ -15,7 +15,8 @@ const Version = "platform.expr.v1"
 const MaxNodes = 512
 const MaxDepth = 32
 const MaxBytes = 64 << 10
-const MaxSet = 1000
+const MaxSet = 10000
+const MaxContextBytes = 8 << 20
 const MaxText = 4096
 
 type Expr struct {

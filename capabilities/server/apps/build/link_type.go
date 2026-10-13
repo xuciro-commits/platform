@@ -29,7 +29,7 @@ type LinkType struct {
 	Via          string   `json:"via,omitempty"`
 	Forward      string   `json:"forward" field:"required"`
 	Reverse      string   `json:"reverse" field:"required"`
-	Required     bool     `json:"required" field:"readonly"`
+	Required     bool     `json:"required" title:"Parent relationship required"`
 	State        string   `json:"state" field:"readonly" choices:"draft,published"`
 	Version      int      `json:"version,omitempty" field:"readonly"`
 	Published    string   `json:"published,omitempty" field:"readonly" type:"longtext"`
@@ -101,7 +101,7 @@ func (b *Build) checkLinkType(f *LinkType) error {
 			return fmt.Errorf("Link type %s is already declared", f.Name)
 		}
 	}
-	if old, ok := wasPublished[LinkType](f.Published); ok && (old.Name != f.Name || old.Parent != f.Parent || old.Child != f.Child || old.Via != f.Via || old.Required != f.Required || !linkKeepsGuarantees(old, *f)) {
+	if old, ok := wasPublished[LinkType](f.Published); ok && (old.Name != f.Name || old.Parent != f.Parent || old.Child != f.Child || old.Via != f.Via || old.Definition().Storage == "reference" && old.Required != f.Required || !linkKeepsGuarantees(old, *f)) {
 		return fmt.Errorf("A published link keeps its identity, objects, reference shape and retained constraints")
 	}
 	return nil
@@ -141,7 +141,7 @@ func linkTypeImage(image []byte) (LinkType, error) {
 	var latest LinkType
 	for i, raw := range record.Versions {
 		f, ok := wasPublished[LinkType](raw)
-		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Parent != latest.Parent || f.Child != latest.Child || f.Via != latest.Via || f.Required != latest.Required || !linkKeepsGuarantees(latest, f)) {
+		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Parent != latest.Parent || f.Child != latest.Child || f.Via != latest.Via || f.Definition().Storage == "reference" && f.Required != latest.Required || !linkKeepsGuarantees(latest, f)) {
 			return LinkType{}, fmt.Errorf("accepted link type has a malformed version %d", i+1)
 		}
 		latest = f
@@ -206,7 +206,7 @@ func (b *Build) linkTypeDeclarations() []platform.LinkType {
 
 func linkKeepsGuarantees(old, next LinkType) bool {
 	before, after := old.Definition(), next.Definition()
-	return before.Storage == after.Storage && !(before.Cardinality != "many-to-many" && after.Cardinality == "many-to-many" || before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
+	return before.Storage == after.Storage && !(before.Required && !after.Required || before.Cardinality != "many-to-many" && after.Cardinality == "many-to-many" || before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
 }
 
 func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {

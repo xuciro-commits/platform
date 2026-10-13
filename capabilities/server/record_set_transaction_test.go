@@ -64,6 +64,19 @@ func TestRecordSetTransactionSplitConstraintsAndRecovery(t *testing.T) {
 		return entry.Body, nil
 	}
 	setTxnSetup(t, tn)
+	caller := tn.caller(memberOf(t, tn, "user"), tn.app(build.ID), false)
+	initial, readErr := caller.ReadRecordSet("build.batch", "root", "lines", txnAt)
+	if readErr != nil || len(initial.Records) != 4 {
+		t.Fatalf("initial inverse: %v", readErr)
+	}
+	decide(t, tn, "user", build.ID, "build.batch.create", "build.batch", "other", map[string]any{"label": "Other", "consumed": false}, txnAt)
+	decide(t, tn, "user", build.ID, "build.line.edit", "build.line", "A", map[string]any{"batch": "other"}, txnAt)
+	old, oldErr := caller.ReadRecordSet("build.batch", "root", "lines", txnAt)
+	next, nextErr := caller.ReadRecordSet("build.batch", "other", "lines", txnAt)
+	if oldErr != nil || nextErr != nil || len(old.Records) != 3 || len(next.Records) != 1 {
+		t.Fatal("reference owner index did not update both inverse views")
+	}
+	decide(t, tn, "user", build.ID, "build.line.edit", "build.line", "A", map[string]any{"batch": "root"}, txnAt)
 	decide(t, tn, "user", build.ID, "build.batch.seal", "build.batch", "root", nil, txnAt)
 	if got := refuse(t, tn, "user", build.ID, "build.line.edit", "build.line", "C", map[string]any{"done": false}, txnAt); !strings.Contains(got, "Constraint complete") {
 		t.Fatalf("child write bypassed parent set constraint: %s", got)

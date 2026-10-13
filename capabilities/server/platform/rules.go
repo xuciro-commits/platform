@@ -20,8 +20,15 @@ type ExprCollection = rules.Collection
 type ExprResult = rules.Result
 type ExprIssue = rules.Issue
 type ExprProgram = rules.Program
+type ExprNumericAggregate = rules.NumericAggregate
 
 const ExprVersion = rules.Version
+const ExprMaxSet = rules.MaxSet
+const ExprMaxContextBytes = rules.MaxContextBytes
+
+func NewExprNumericAggregate(op, kind, currency string) (*ExprNumericAggregate, error) {
+	return rules.NewNumericAggregate(op, kind, currency)
+}
 
 func CompileExpr(expr Expr, schema ExprSchema) (*ExprProgram, error) {
 	return rules.Compile(expr, schema)

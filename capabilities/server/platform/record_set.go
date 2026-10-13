@@ -11,7 +11,7 @@ import (
 	"platformkernel/kernel"
 )
 
-const RecordSetMaxRows = 10000
+const RecordSetMaxRows = ExprMaxSet
 const RecordSetMaxDeclarations = 64
 
 // RecordSet is an object's bounded collection. From is a declared reference /
@@ -38,6 +38,12 @@ type RecordSetResult struct {
 	Partial    bool              `json:"partial"`
 	Sources    []string          `json:"sources,omitempty"`
 	Definition string            `json:"definition"`
+}
+
+type RecordSetRef struct {
+	Object string `json:"object"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
 }
 
 type RecordSetRuntime interface {

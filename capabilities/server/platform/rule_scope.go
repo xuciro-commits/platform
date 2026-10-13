@@ -308,6 +308,13 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 		return ctx, err
 	}
 	used := map[string][]Expr{}
+	needed := map[string]map[string]bool{}
+	need := func(source, field string) {
+		if needed[source] == nil {
+			needed[source] = map[string]bool{}
+		}
+		needed[source][field] = true
+	}
 	var collect func(Expr, string)
 	collect = func(e Expr, scope string) {
 		if e.Agg != nil {
@@ -318,6 +325,12 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 			if len(e.Agg.Field) > 1 {
 				used[scope] = append(used[scope], Expr{Op: "path", Kind: e.Kind, Args: []Expr{ExprReference("reference", "item."+e.Agg.Field[0])}, Path: e.Agg.Field[1:]})
 			}
+			if len(e.Agg.Field) > 0 {
+				need(scope, e.Agg.Field[0])
+			}
+		}
+		if strings.HasPrefix(e.Ref, "item.") {
+			need(scope, strings.TrimPrefix(e.Ref, "item."))
 		}
 		if e.Op == "path" && len(e.Args) == 1 && strings.HasPrefix(e.Args[0].Ref, "item.") {
 			used[scope] = append(used[scope], e)
@@ -362,6 +375,9 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 			raw, readErr = c.readRuleQuery(set, Raw(queryInputs), now)
 		}
 		if readErr != nil {
+			if readErr.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED && readErr.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+				return ctx, fmt.Errorf("collection %s: %s", name, readErr.Message)
+			}
 			ctx.Sets[name] = ExprCollection{Status: "withheld"}
 			continue
 		}
@@ -385,6 +401,9 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 			_ = json.Unmarshal(row["id"], &id)
 			item := ExprItem{ID: id, Fields: map[string]ExprValue{}}
 			for _, field := range object.Fields {
+				if !needed[name][field.Name] {
+					continue
+				}
 				v := ExprValue{Kind: RuleFieldKind(field.Type), Status: "missing"}
 				if !field.ReadsAny(c.RolesIn(object.App)) {
 					v.Status = "withheld"
@@ -423,8 +442,8 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 		}
 		ctx.Sets[name] = collection
 		raw, budgetErr := json.Marshal(ctx)
-		if budgetErr != nil || len(raw) > 256<<10 {
-			return ctx, fmt.Errorf("captured rule context exceeds 256 KiB")
+		if budgetErr != nil || len(raw) > ExprMaxContextBytes {
+			return ctx, fmt.Errorf("captured rule context is %d bytes; limit is %d", len(raw), ExprMaxContextBytes)
 		}
 	}
 	return ctx, nil

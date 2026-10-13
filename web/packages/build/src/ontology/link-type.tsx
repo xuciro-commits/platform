@@ -4,11 +4,11 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useReadQuery, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
-import { Button, Input, Select, PageHeader, Panel, Textarea, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Checkbox, Input, Select, PageHeader, Panel, Textarea, t, useUnsavedChanges } from "@platform/ui";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { useDirectInstall } from "../releases/release-profile";
 
-type Draft = {id:string;revision:number;name:string;title:string;description:string;parent:string;child:string;via:string;forward:string;reverse:string;cardinality:string;deletePolicy:string;storage?:string;roles?:string[];published?:string;version?:number};
+type Draft = {id:string;revision:number;name:string;title:string;description:string;parent:string;child:string;via:string;forward:string;reverse:string;cardinality:string;deletePolicy:string;storage?:string;roles?:string[];required?:boolean;published?:string;version?:number};
 const empty=():Draft=>({id:"",revision:0,name:"",title:"",description:"",parent:"",child:"",via:"",forward:"children",reverse:"parent",cardinality:"one-to-many",deletePolicy:"owner",storage:"edge",roles:["builder","user"]});
 const hydrate=(record:Draft):Draft=>({...empty(),...record,storage:record.storage||"reference"});
 
@@ -35,8 +35,8 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  const save=async():Promise<{id:string;revision:number}|undefined>=>{
   if(inputs?.invalid)return;
   const submitted=structuredClone(draft),target=submitted.id||createID,expected=submitted.id?baseRevision.current:0;
-  const {name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles}=submitted;
-  if(!await decide(`build.linktype.${submitted.id?"edit":"create"}`,{type:"build.linktype",id:target},{name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles},{expectedRevision:submitted.id?expected:0,quiet:true,onRefused:setError}))return;
+  const {name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles,required}=submitted;
+  if(!await decide(`build.linktype.${submitted.id?"edit":"create"}`,{type:"build.linktype",id:target},{name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles,required},{expectedRevision:submitted.id?expected:0,quiet:true,onRefused:setError}))return;
   const revision=expected+1;load({...submitted,id:target,revision});markSaved();setDirty(false);
   if(!submitted.id){open({view:"link-type",params:{id:target}});close({view:"link-type",params:{id}});}
   else {try{const fresh=await query.refetch();if(fresh.isSuccess&&fresh.data?.record?.revision===revision)load(fresh.data.record);else setError(t("The resource was saved, but its current record could not be reloaded."));}catch{setError(t("The resource was saved, but its current record could not be reloaded."));}}
@@ -67,6 +67,7 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Parent object")}<SemanticObjectSelect value={draft.parent} label={t("Parent object")} filter={d=>d.source==="tenant"&&d.ref.app==="build"} disabled={!!draft.published} onChange={ref=>{if(ref)patch({parent:ref.name,via:""})}}/></label>
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Child object")}<SemanticObjectSelect value={draft.child} label={t("Child object")} filter={d=>d.source==="tenant"&&d.ref.app==="build"} disabled={!!draft.published} onChange={ref=>{if(ref)patch({child:ref.name,via:""})}}/></label>
  <label className="grid gap-1 text-xs">{t("Relationship storage")}<Select value={draft.storage||"reference"} disabled={!!draft.published} onChange={event=>patch({storage:event.target.value,via:"",cardinality:"one-to-many"})}><option value="edge">{t("Owned relationship records")}</option><option value="reference">{t("Original reference field")}</option></Select></label>
+ {draft.storage==="edge"&&<label className="flex items-center gap-2 text-xs"><Checkbox checked={!!draft.required} disabled={!!draft.published&&JSON.parse(draft.published).required===true} onChange={checked=>patch({required:checked})}/>{t("Parent relationship required")}</label>}
  {draft.storage==="edge"&&<label className="grid gap-1 text-xs">{t("Relationship writer roles")}<Input value={draft.roles?.join(", ")??""} onChange={event=>patch({roles:event.target.value.split(",").map(role=>role.trim()).filter(Boolean)})}/></label>}
  {draft.storage!=="edge"&&<label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Reference field")}<SemanticPropertySelect object={object} value={draft.via} label={t("Reference field")} disabled={!!draft.published} filter={f=>f.type==="reference"&&f.ref===draft.parent} onChange={ref=>{if(!draft.published)patch({via:ref?.field??""})}}/></label>}
  </Panel>

@@ -77,11 +77,11 @@ W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Play
 
 ### 记录集与关联（ADR-0104）
 
-`make test-go PKG='./internal/rules ./platform ./apps/build ./apps/relations .'` 检查来源/排序/路径和步骤边界、当前草稿绑定、条件/计算/约束一致、封存后改行拒绝、有序 ForEach 分组及格式 5 保存结果重放；关系与记录共同接受、父/子基数拒绝、归档、解除关系、旧关系迁移失败无残留、原 owner-state 字节保持与当前唯一读取。partial、顺序和 Limit 拒绝仍由 owner 回归覆盖。
+`make test-go PKG='./internal/rules ./platform ./apps/build ./apps/relations .'` 检查来源/排序/路径和步骤边界、当前草稿绑定、条件/计算/约束一致、封存后改行拒绝、有序 ForEach 分组及格式 5 保存结果重放；关系与记录共同接受、父/子基数和 Required 最终检查、归档、解除最后父关系拒绝、修改引用后两端 inverse 更新、旧关系迁移失败无残留、原 owner-state 字节保持与当前唯一读取。`TestAggregateUsesTheExactRuleFold` 核对 HTTP / Expr 聚合精度一致；`TestDeclaredAggregateAndTenThousandRuleMembers` 核对同集合聚合、10000 元素及 10001 拒绝；`TestDeclaredSetVisibility` 核对 HTTP 聚合可见 count 和 partial，`TestSameAuthorityAdHocRelationshipIsFrozen` 守旧写入冻结。
 
-`make e2e SPEC=record-sets` 走构建者配置有序 inverse 集合 → 不可变候选激活 → 动作 Transaction 的非法 JSON 保留/修正 → 配置拆批迭代 → 再激活 → 操作员拆四行到两批。`make e2e SPEC=rule-language` 保留规则与约束路线。
+`make e2e SPEC=record-sets` 走构建者配置有序 inverse 集合 → 不可变候选激活 → 动作 Transaction 的非法 JSON 保留/修正 → 配置拆批迭代 → 再激活 → 操作员拆四行到两批，并检查同集合的 HTTP count / sum。`make e2e SPEC=rule-language` 保留规则与约束路线，使用实际 Go/Wasm 验证 10000 元素求值与 10001 元素拒绝。
 
-手测：选择固定版本的查询/关系或 inverse，配置 Where / Order、英中约束原因和事务；撤去某行/字段权限，核对 partial、量词和整批拒绝。历史关系先预览再迁移，核对原始历史可读且当前没有重复边；新关系和迁移共用所属宿主。聚合统一、原生 owner 剩余迁移与 Required edge 仍未作为通过证据。
+手测：选择固定版本的查询/关系或 inverse，配置 Where / Order、英中约束原因和事务；撤去某行/字段权限，核对 partial、量词和整批拒绝。关系启用 Parent relationship required，确认孤立子记录创建和解除最后父关系被拒绝，同批创建并建立关系可以接受。历史关系先预览再迁移，核对原始历史可读且当前没有重复边；新关系和迁移共用所属宿主。客户数据未执行显式迁移时不得报告已迁移，截图不代替负责人体验认可。
 
 ### 业务约束（ADR-0102）
 

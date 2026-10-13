@@ -178,6 +178,22 @@ func (s *recordStore) ownedRelationViolations(link platform.LinkType) ([]ownedRe
 			violations = append(violations, ownedRelationViolation{value.id, value.parent, value.child, invalid})
 		}
 	}
+	if link.Required {
+		child := s.types[link.Child.Name]
+		if child == nil {
+			return nil, fmt.Errorf("required relationship child is unavailable")
+		}
+		ids := []string{}
+		for id, row := range child.rows {
+			if !recordOf(row.value).Archived && children[child.info.Type+"/"+id] == 0 {
+				ids = append(ids, id)
+			}
+		}
+		slices.Sort(ids)
+		for _, id := range ids {
+			violations = append(violations, ownedRelationViolation{child: child.info.Type + "/" + id, reason: "required"})
+		}
+	}
 	return violations, nil
 }
 
@@ -193,7 +209,29 @@ func (d *stagedDecision) checkOwnedRelationConstraints() *kernel.Error {
 		}
 		for _, violation := range violations {
 			ref := platform.OwnedRelationType(link.Child.App) + "/" + violation.id
+			if violation.reason == "required" {
+				ref = violation.child
+			}
 			write, changed := d.constraintWrites[ref]
+			if !changed && violation.reason == "required" {
+				for edgeRef, candidate := range d.constraintWrites {
+					if !strings.HasPrefix(edgeRef, platform.OwnedRelationType(link.Child.App)+"/") {
+						continue
+					}
+					id := strings.TrimPrefix(edgeRef, platform.OwnedRelationType(link.Child.App)+"/")
+					et := d.records.types[platform.OwnedRelationType(link.Child.App)]
+					for _, row := range []*row{candidate.before, et.rows[id]} {
+						image := relationImage(row)
+						if image.Binding == link.Name && image.Child == violation.child {
+							write, changed = candidate, true
+							break
+						}
+					}
+					if changed {
+						break
+					}
+				}
+			}
 			if !changed {
 				for _, endpoint := range []string{violation.parent, violation.child} {
 					if prior, ok := d.constraintWrites[endpoint]; ok {

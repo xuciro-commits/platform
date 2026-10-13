@@ -32,7 +32,7 @@ type LinkType struct {
 
 func (l LinkType) Check() error {
 	if l.Storage == "edge" {
-		if !pageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || l.Required || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Parent.App != l.Child.App || l.Via != "" || !pageNodeID.MatchString(l.Forward) || !pageNodeID.MatchString(l.Reverse) || !slices.Contains([]string{"one-to-many", "one-to-one", "many-to-many"}, l.Cardinality) || !slices.Contains([]string{"owner", "restrict-active"}, l.DeletePolicy) || len(l.Roles) == 0 || len(l.Roles) > 16 {
+		if !pageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Parent.App != l.Child.App || l.Via != "" || !pageNodeID.MatchString(l.Forward) || !pageNodeID.MatchString(l.Reverse) || !slices.Contains([]string{"one-to-many", "one-to-one", "many-to-many"}, l.Cardinality) || !slices.Contains([]string{"owner", "restrict-active"}, l.DeletePolicy) || len(l.Roles) == 0 || len(l.Roles) > 16 {
 			return fmt.Errorf("owned edge needs same-owner objects, explicit roles and supported cardinality")
 		}
 		seen := map[string]bool{}

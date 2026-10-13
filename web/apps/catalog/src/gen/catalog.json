@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:969cccc9106e233f",
+  "revision": "sha256:09fd941aa3774f1a",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12463,6 +12463,7 @@
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/connection.tsx",
       "web/packages/build/src/ontology/data-source.tsx",
+      "web/packages/build/src/ontology/link-type.tsx",
       "web/packages/build/src/ontology/pipeline.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/query.tsx",

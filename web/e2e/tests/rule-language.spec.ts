@@ -37,6 +37,17 @@ test("published Expr controls visibility through the shared rule engine", async 
   await toggle.click();
   await expect(notice).toBeVisible();
   expect(await tab.evaluate(() => ({ version: (globalThis as any).platformRuleVersion, eval: typeof (globalThis as any).platformRuleEval }))).toEqual({ version: "platform.expr.v1", eval: "function" });
+  const budget=await tab.evaluate(()=>{
+    const run=(globalThis as any).platformRuleEval as (raw:string)=>string;
+    const request={expr:{op:"sum",kind:"integer",agg:{source:"rows",field:["qty"]}},schema:{sets:{rows:{policy:"complete",element:{kind:"reference",fields:{qty:{kind:"integer"}}}}}},context:{sets:{rows:{complete:true,items:Array.from({length:10000},(_,i)=>({id:`row-${i}`,fields:{qty:{kind:"integer",status:"value",value:1}}}))}}}};
+    const full=JSON.parse(run(JSON.stringify(request)));
+    request.context.sets.rows.items.push({id:"overflow",fields:{qty:{kind:"integer",status:"value",value:1}}});
+    const overflow=JSON.parse(run(JSON.stringify(request)));
+    return {full,overflow};
+  });
+  expect(budget.full.value).toMatchObject({kind:"integer",status:"value",value:"10000"});
+  expect(budget.overflow.error).toMatchObject({code:"budget"});
+  expect(budget.overflow.error.message).toContain("10001");
 });
 
 test("builder publishes a model invariant and a rejected form keeps its values", async ({ page, builder, operator, editor }) => {

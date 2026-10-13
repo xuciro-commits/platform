@@ -131,6 +131,10 @@ func TestDeclaredSetVisibilityOrderAndLimit(t *testing.T) {
 	if err != nil || !visible.Partial || len(visible.Records) != 1 || strings.Contains(string(platform.Raw(visible)), "invariants.entry/a") {
 		t.Fatalf("visibility: %+v %v", visible, err)
 	}
+	aggregate, aggregateErr := tn.Aggregate(memberOf(t, tn, "viewer"), owner.entity.Type, AggregateQuery{Collection: &platform.RecordSetRef{Object: owner.entity.Type, ID: "root", Name: "children"}, Measures: []string{"count"}}, at)
+	if aggregateErr != nil || !aggregate.Partial || len(aggregate.Rows) != 1 || aggregate.Rows[0]["count"] != 1 {
+		t.Fatalf("aggregate leaked hidden membership: %v %v", aggregate, aggregateErr)
+	}
 	writer := tn.caller(memberOf(t, tn, "writer"), owner, false)
 	all, err := writer.ReadRecordSet(owner.entity.Type, "root", "children", at)
 	if err != nil || all.Partial || len(all.Records) != 2 || !strings.Contains(string(all.Records[0]), `"id":"a"`) {

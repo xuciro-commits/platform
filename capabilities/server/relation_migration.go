@@ -207,7 +207,7 @@ func (t *Tenant) legacyRelationWritable(store *recordStore, from, to string) boo
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	a, b := store.types[fromType], store.types[toType]
-	return !fromOK || !toOK || a == nil || b == nil || a.info.App != b.info.App || store.types[platform.OwnedRelationType(a.info.App)] == nil
+	return !fromOK || !toOK || a == nil || b == nil || a.info.App != b.info.App
 }
 
 func (r runtime) OwnedRelations(c platform.Caller, entity string) []platform.RelationLink {

@@ -1734,5 +1734,6 @@
   "Legacy": "历史来源",
   "Migration": "迁移",
   "Migrate relationships": "迁移关系",
-  "Move historical links into the endpoint owner's accepted records": "将历史关系迁入端点所有者的接受记录"
+  "Move historical links into the endpoint owner's accepted records": "将历史关系迁入端点所有者的接受记录",
+  "Parent relationship required": "必须关联父记录"
 }

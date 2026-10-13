@@ -43,4 +43,11 @@ test("builder publishes an ordered set and an operator splits its records atomic
   const groups=new Map<string,number[]>();
   for(const row of rows)groups.set(row.batch,[...groups.get(row.batch)??[],row.ordinal]);
   expect([...groups.values()].map(values=>values.sort()).sort((a,b)=>a[0]!-b[0]!)).toEqual([[1,2],[3,4]]);
+  for(const [batchID,ordinals] of groups) {
+    const response=await operator.request.post(`/v1/aggregates/${line.type}/query`,{headers:operator.headers,data:{collection:{object:batch.type,id:batchID,name:"lines"},measures:["count","sum:ordinal"]}});
+    expect(response.ok()).toBe(true);
+    const aggregate=await response.json();
+    expect(aggregate.rows[0]).toMatchObject({count:2,"sum:ordinal":ordinals.reduce((sum,value)=>sum+value,0)});
+    expect(aggregate.partial??false).toBe(false);
+  }
 });

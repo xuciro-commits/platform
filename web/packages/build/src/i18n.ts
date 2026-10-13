@@ -3918,4 +3918,5 @@ register("zh-CN", {
   "{n} visible relationships": "{n} 条可见关系",
   "Migration contains hidden relationships and cannot proceed.": "迁移包含不可见关系，无法继续。",
   "Preview historical links, then move them in one accepted decision. Original history remains readable.": "先预览历史关系，再通过一次接受决策迁移。原始历史仍可读取。",
+  "Parent relationship required": "必须关联父记录",
 });
