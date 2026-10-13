@@ -1833,5 +1833,8 @@
   "The migration identity is already used": "迁移标识已被使用",
   "Migration not found": "未找到迁移",
   "Migration requires a private accepted decision": "迁移需要私有的接受决定",
-  "This object is frozen by migration {migration}; finish its reviewed definition transition": "对象已被迁移 {migration} 冻结；请完成已审阅的定义切换"
+  "This object is frozen by migration {migration}; finish its reviewed definition transition": "对象已被迁移 {migration} 冻结；请完成已审阅的定义切换",
+  "Read only": "只读",
+  "Read alias of": "只读别名目标",
+  "The retained old name reads this field; it cannot be written directly": "保留的旧字段名读取此字段；不可直接写入旧名"
 }

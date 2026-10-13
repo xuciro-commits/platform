@@ -412,7 +412,7 @@ func (w *narrower) record(et *entityType, v reflect.Value) (reflect.Value, bool)
 	if len(hidden) > 0 {
 		out, changed = reflect.ValueOf(masked(et, v, hidden)), true
 	}
-	if len(et.info.Derived) == 0 && len(et.info.VersionPins) == 0 && !w.derivedContext {
+	if !et.info.HasReadSources() && len(et.info.VersionPins) == 0 && !w.derivedContext {
 		return out, changed
 	}
 	derived, narrowed := w.derive(et, out)
@@ -477,6 +477,12 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 		return true
 	}
 	withheld, every := false, []string{}
+	for _, field := range et.info.Fields {
+		if field.AliasOf != "" && !w.may(self+"#"+field.AliasOf) {
+			out.FieldByIndex(field.Index).SetZero()
+			withheld = true
+		}
+	}
 	if w.derivedContext {
 		for _, field := range et.info.Fields {
 			if field.Type != "text" && field.Type != "longtext" {

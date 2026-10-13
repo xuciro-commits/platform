@@ -95,6 +95,12 @@ func CompileMigrationPlan(plan MigrationPlan, sources, targets map[string]Entity
 				if step.Kind == "rename" && (from.Type != to.Type || from.Ref != to.Ref) {
 					return nil, fmt.Errorf("rename cannot silently convert values or references")
 				}
+				if step.Kind == "rename" {
+					retained, _ := target.Field(change.From)
+					if retained.AliasOf != change.To {
+						return nil, fmt.Errorf("rename needs a retained read alias from %s to %s", change.From, change.To)
+					}
+				}
 				if step.Kind == "rebind" && (from.Type != "reference" || to.Type != "reference" || from.Ref == to.Ref || from.Ref == "" || to.Ref == "") {
 					return nil, fmt.Errorf("rebind needs two explicit reference target types")
 				}

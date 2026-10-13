@@ -71,6 +71,8 @@ type Field struct {
 	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
 	Required bool   `json:"required,omitempty"`
 	Search   bool   `json:"search,omitempty" title:"Searchable"`
+	ReadOnly bool   `json:"readOnly,omitempty" title:"Read only"`
+	AliasOf  string `json:"aliasOf,omitempty" title:"Read alias of" help:"The retained old name reads this field; it cannot be written directly"`
 	// When bounds the field to another field's value (WorkQueue #138/#132):
 	// "kind=refund,return" or "urgent=true". The field is asked for, and
 	// required if marked so, only while the condition holds; otherwise it

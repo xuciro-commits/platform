@@ -283,6 +283,7 @@ type FieldInfo struct {
 	Required    bool              `json:"required,omitempty"`
 	Search      bool              `json:"search,omitempty"`
 	ReadOnly    bool              `json:"readOnly,omitempty"`
+	AliasOf     string            `json:"aliasOf,omitempty"`
 	// Aside marks a field a purpose-built surface writes — a page's sections in
 	// the composer (ADR-0035) — so generated forms do not ask for it. Its
 	// actions still take it, and it is read and shown like any other field.
@@ -529,7 +530,31 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if err := describeDerived(&info, e); err != nil {
 		return EntityInfo{}, err
 	}
+	for _, alias := range info.Fields {
+		if alias.AliasOf == "" {
+			continue
+		}
+		target, found := info.Field(alias.AliasOf)
+		if !found || target.Name == alias.Name || target.AliasOf != "" || !alias.ReadOnly || alias.Type != target.Type || alias.Ref != target.Ref || alias.Required != target.Required || !slices.Equal(alias.Choices, target.Choices) || info.Go.FieldByIndex(alias.Index).Type != info.Go.FieldByIndex(target.Index).Type {
+			return EntityInfo{}, fmt.Errorf("field %s needs one compatible direct read alias target", alias.Name)
+		}
+	}
 	return info, nil
+}
+
+// ApplyFieldAliases copies only declared compatible fields. Owners use the
+// same projection before validation and accepted writes; aliases have no input.
+func ApplyFieldAliases(info EntityInfo, value reflect.Value) {
+	for _, field := range info.Fields {
+		if field.AliasOf != "" {
+			target, _ := info.Field(field.AliasOf)
+			value.FieldByIndex(field.Index).Set(value.FieldByIndex(target.Index))
+		}
+	}
+}
+
+func (info EntityInfo) HasReadSources() bool {
+	return len(info.Derived) > 0 || slices.ContainsFunc(info.Fields, func(field FieldInfo) bool { return field.AliasOf != "" })
 }
 
 // EntityActions are the catalog entries an entity type's declaration
@@ -721,6 +746,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		f := FieldInfo{Name: name, Title: sf.Tag.Get("title"), Index: sf.Index, Knowledge: sf.Tag.Get("knowledge") == "true",
 			Help: sf.Tag.Get("help"), Synonyms: sf.Tag.Get("synonyms"), Example: sf.Tag.Get("example"), Personal: sf.Tag.Get("personal")}
 		f.SourceType = sf.Tag.Get("source")
+		f.AliasOf = sf.Tag.Get("alias")
 		if f.SourceType != "" && !slices.Contains([]string{"record", "user-input", "external-input", "generated"}, f.SourceType) {
 			return nil, fmt.Errorf("field %s has an unknown source type", name)
 		}

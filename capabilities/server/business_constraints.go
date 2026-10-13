@@ -40,7 +40,7 @@ func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.F
 			issues[i].Values = nil
 			continue
 		}
-		if current := et.rows[id]; current != nil && len(et.info.Derived) > 0 {
+		if current := et.rows[id]; current != nil && et.info.HasReadSources() {
 			narrowed, _ := t.narrowerIn(t.records, member, at, true).derive(et, current.value)
 			for _, derivation := range et.info.Derived {
 				paths := derivation.Fields

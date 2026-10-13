@@ -259,6 +259,11 @@ function FieldProperties({ field, others, onChange, onRemove }: { field: Field; 
     {(field.formula||field.formulaExpr) && <p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
     <Checkbox checked={!!field.search} onChange={(search) => onChange({ search })}>{t("Searchable")}</Checkbox>
+    <Checkbox disabled={!!field.aliasOf} checked={!!field.readOnly || !!field.aliasOf} onChange={(readOnly) => onChange({ readOnly })}>{t("Read only")}</Checkbox>
+    <Label text={t("Read alias of")}><Select aria-label={t("Read alias of")} value={field.aliasOf ?? ""} onChange={(event) => onChange({ aliasOf: event.target.value || undefined, readOnly: !!event.target.value || field.readOnly })}>
+      <option value="">{t("No read alias")}</option>
+      {others.filter(other => !other.aliasOf && other.type === field.type && (other.ref ?? "") === (field.ref ?? "") && !!other.required === !!field.required).map(other => <option key={other.name} value={other.name}>{other.title} · {other.name}</option>)}
+    </Select><span className="text-xs text-muted">{t("Keep an old field name readable after migration. It follows the selected field and cannot be edited directly.")}</span></Label>
 	{["text","longtext"].includes(field.type)&&<Label text={t("Text source type")}><Select value={field.sourceType??""} onChange={event=>onChange({sourceType:event.target.value||undefined})}><option value="">{t("Undeclared source")}</option><option value="record">{t("Original record")}</option><option value="user-input">{t("User input")}</option><option value="external-input">{t("External input")}</option><option value="generated">{t("Generated from declared sources")}</option></Select><p className="text-xs text-muted">{t("Undeclared text is withheld from derived reads. Generated text also requires record provenance.")}</p></Label>}
     {conditions.length > 0 && <Label text={t("Only when")}>
       <Select value={on?.name ?? ""} onChange={(e) => onChange({ when: e.target.value ? `${e.target.value}=` : undefined })}>

@@ -89,6 +89,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 			if err := json.Unmarshal(decode, v.Addr().Interface()); err != nil {
 				return err
 			}
+			platform.ApplyFieldAliases(info, v)
 			emptyLists(v)
 			et.rows[id] = &row{value: v, history: copyHistory(r.history), projection: cloneRecordProjection(r.projection)}
 			et.rows[id].retainOriginal(raw)

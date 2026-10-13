@@ -13,6 +13,7 @@ func migrationFixture() (MigrationPlan, map[string]EntityInfo, map[string]Entity
 	to := from
 	to.Fields = append([]FieldInfo{}, from.Fields...)
 	to.Fields[0].ReadOnly, to.Fields[2].ReadOnly = true, true
+	to.Fields[0].AliasOf = "title"
 	to.Fields = append(to.Fields, FieldInfo{Name: "title", Type: "text"}, FieldInfo{Name: "amount", Type: "decimal"}, FieldInfo{Name: "enabled", Type: "boolean", Required: true}, FieldInfo{Name: "public", Type: "text"}, FieldInfo{Name: "private", Type: "text"}, FieldInfo{Name: "replacement", Type: "reference", Ref: "build.new-target"})
 	parse := Expr{Kind: "decimal", Op: "parse-decimal", Args: []Expr{ExprReference("text", "quantity")}}
 	literal := ExprLiteralValue("boolean", true)

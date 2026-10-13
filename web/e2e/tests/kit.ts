@@ -43,6 +43,21 @@ export type ObjectSpec = { name?: string; title: string; fields: unknown[]; stat
 
 /** The builder's hands: objects, records, pages, releases. */
 export class Builder extends Member {
+  /** Seals an existing object through its original release owner. */
+  async candidate(id: string): Promise<string> {
+    const response = await this.request.post("/v1/releases/preview", { headers: this.headers, data: { kind: "object", id } });
+    const preview = await response.json();
+    if (!response.ok() || preview.diagnostic || !preview.candidateId) throw Error(`Candidate preview: ${JSON.stringify(preview)}`);
+    const saved = await this.request.post("/v1/releases/candidates", { headers: this.headers, data: { kind: "object", id, candidateId: preview.candidateId, key: fresh("CANDIDATE") } });
+    const answer = await saved.json();
+    if (!saved.ok() || answer.id !== preview.candidateId) throw Error(`Candidate save: ${JSON.stringify(answer)}`);
+    return answer.id;
+  }
+  /** Activates a sealed candidate through the original release owner. */
+  async activate(candidateId: string): Promise<void> {
+    const response = await this.request.post("/v1/releases/active", { headers: this.headers, data: { candidateId, key: fresh("ACTIVATE") } });
+    if (!response.ok()) throw Error(`Candidate activation: ${await response.text()}`);
+  }
   /** Creates and publishes an object; resolves to its type (`build.<name>`). */
   async object(spec: ObjectSpec): Promise<{ type: string; name: string; id: string }> {
     const name = spec.name ?? slug("obj"), id = fresh("OBJ");

@@ -101,8 +101,18 @@ type entityType struct {
 // reach them; the rows are shared. hidden are those fields.
 func viewOf(m platform.Member, et *entityType) (view *entityType, hidden []platform.FieldInfo) {
 	roles := m.RolesIn(et.info.App)
-	for _, f := range et.info.Fields {
+	readable := func(f platform.FieldInfo) bool {
 		if !f.ReadsAny(roles) {
+			return false
+		}
+		if f.AliasOf != "" {
+			target, found := et.info.Field(f.AliasOf)
+			return found && target.ReadsAny(roles)
+		}
+		return true
+	}
+	for _, f := range et.info.Fields {
+		if !readable(f) {
 			hidden = append(hidden, f)
 		}
 	}
@@ -110,7 +120,7 @@ func viewOf(m platform.Member, et *entityType) (view *entityType, hidden []platf
 		return et, nil
 	}
 	info := et.info
-	info.Fields = slices.DeleteFunc(slices.Clone(info.Fields), func(f platform.FieldInfo) bool { return !f.ReadsAny(roles) })
+	info.Fields = slices.DeleteFunc(slices.Clone(info.Fields), func(f platform.FieldInfo) bool { return !readable(f) })
 	return &entityType{info: info, rows: et.rows}, hidden
 }
 
@@ -429,6 +439,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 		return err
 	}
 	v := copyOf(et.info.Go, entity)
+	platform.ApplyFieldAliases(et.info, v)
 	emptyLists(v)
 	rec := recordOf(v)
 	if rec.ID == "" {
@@ -516,7 +527,8 @@ func (s *recordStore) check(c platform.Caller, entity any, now time.Time) *kerne
 	if et == nil {
 		return invalid
 	}
-	v := reflect.ValueOf(entity)
+	v := copyOf(et.info.Go, entity)
+	platform.ApplyFieldAliases(et.info, v)
 	if err := checkEnterpriseReferences(c, et.info.Fields, v, now); err != nil {
 		return err
 	}
@@ -1298,7 +1310,7 @@ func (t *Tenant) recordsFrom(s *recordStore, m platform.Member, typ string, q pl
 	w := t.narrowerIn(s, m, now, true)
 	for i, v := range page {
 		out.Records[i] = masked(et, v, hidden)
-		if len(et.info.Derived) > 0 || len(et.info.VersionPins) > 0 { // checked against its sources again (ADR-0033)
+		if et.info.HasReadSources() || len(et.info.VersionPins) > 0 { // checked against its sources again (ADR-0033)
 			narrowed, _ := w.derive(et, reflect.ValueOf(out.Records[i]))
 			out.Records[i] = narrowed.Interface()
 		}
@@ -1584,7 +1596,7 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	}
 	seen, hidden := viewOf(m, et)
 	record := masked(et, r.value, hidden)
-	if len(et.info.Derived) > 0 || len(et.info.VersionPins) > 0 {
+	if et.info.HasReadSources() || len(et.info.VersionPins) > 0 {
 		narrowed, _ := t.narrower(m, now, false).derive(et, reflect.ValueOf(record))
 		record = narrowed.Interface()
 	}

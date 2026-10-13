@@ -244,7 +244,7 @@ func (t *Tenant) liveVersion(query string) string {
 			t.records.mu.Lock()
 			defer t.records.mu.Unlock()
 			version := t.records.liveVersions[typ]
-			if et := t.records.types[typ]; et != nil && (et.info.Scope.Through != nil || len(et.info.Derived) > 0 || (tail != "" && tail != "query") || strings.Contains(body, `"set"`) || strings.Contains(body, `"traversal"`)) {
+			if et := t.records.types[typ]; et != nil && (et.info.Scope.Through != nil || et.info.HasReadSources() || (tail != "" && tail != "query") || strings.Contains(body, `"set"`) || strings.Contains(body, `"traversal"`)) {
 				version = t.records.generation
 			}
 			return fmt.Sprintf("%d/%d/%d", global, meta, version)

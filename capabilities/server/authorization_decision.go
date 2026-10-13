@@ -427,6 +427,16 @@ func (t *Tenant) sourceWithheld(store *recordStore, c platform.Caller, et *entit
 		}
 	}
 	withheld := []string{}
+	for _, alias := range et.info.Fields {
+		if alias.AliasOf == "" || len(fields) > 0 && !slices.Contains(fields, alias.Name) {
+			continue
+		}
+		request := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Type: et.info.Type, Record: recordOf(value).ID, Fields: []string{alias.AliasOf}}
+		grant := t.authorizeDepth(store, c, request, at, true, depth+1, walk)
+		if !grant.Allow || len(grant.Withheld) > 0 {
+			withheld = append(withheld, alias.Name)
+		}
+	}
 	for _, d := range et.info.Derived {
 		names := []string{}
 		if len(d.List) > 0 {

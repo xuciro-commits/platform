@@ -968,6 +968,7 @@ export type FieldInfo = {
   required?: boolean;
   search?: boolean;
   readOnly?: boolean;
+  aliasOf?: string;
   aside?: boolean;
   choices?: string[];
   choiceTitles?: string[];

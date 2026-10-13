@@ -847,6 +847,8 @@ func checkFields(fields []Field, known func(string) bool) error {
 			return fmt.Errorf("the field %q names how it is seen from elsewhere but refers to nothing", f.Name)
 		case f.Inverse != "" && !named(f.Inverse):
 			return fmt.Errorf("the relation name %q of field %q is not lower-case letters and digits", f.Inverse, f.Name)
+		case f.AliasOf != "" && (!named(f.AliasOf) || f.AliasOf == f.Name || f.Formula != "" || f.FormulaExpr != nil):
+			return fmt.Errorf("the field %q needs a direct read alias without a formula", f.Name)
 		}
 		seen[f.Name] = true
 	}
@@ -1186,7 +1188,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		if f.Search {
 			marks = append(marks, "search")
 		}
-		if f.Formula != "" || f.FormulaExpr != nil {
+		if f.Formula != "" || f.FormulaExpr != nil || f.ReadOnly || f.AliasOf != "" {
 			marks = append(marks, "readonly")
 		}
 		if slices.ContainsFunc(o.VersionPins, func(pin platform.VersionPinBinding) bool { return pin.Version == f.Name }) && !slices.Contains(marks, "readonly") {
@@ -1194,6 +1196,9 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		}
 		if len(marks) > 0 {
 			tag += fmt.Sprintf(` field:"%s"`, strings.Join(marks, ","))
+		}
+		if f.AliasOf != "" {
+			tag += fmt.Sprintf(` alias:"%s"`, f.AliasOf)
 		}
 		if f.When != "" {
 			tag += fmt.Sprintf(` when:"%s"`, f.When)

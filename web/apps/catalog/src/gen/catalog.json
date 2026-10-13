@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:c58c2020db2828a9",
+  "revision": "sha256:fcadb91ec9bb845b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12184,6 +12184,7 @@
       "web/packages/build/src/projects/project-runs.tsx",
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/releases/changes.tsx",
+      "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/HeaderEditor.tsx",
@@ -12331,6 +12332,7 @@
       "web/packages/build/src/ontology/writeback.tsx",
       "web/packages/build/src/projects/project-roles.tsx",
       "web/packages/build/src/projects/project.tsx",
+      "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/HeaderEditor.tsx",
@@ -12592,6 +12594,7 @@
       "web/packages/build/src/ontology/query.tsx",
       "web/packages/build/src/ontology/record-sets.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
+      "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/editor.tsx",
@@ -12700,6 +12703,7 @@
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/functions/code.tsx",
+      "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
@@ -13191,7 +13195,8 @@
       "web/packages/platform/src/enterprise/index.tsx"
     ],
     "app/record-row-actions": [
-      "web/packages/app/src/widgets/RecordWork.tsx"
+      "web/packages/app/src/widgets/RecordWork.tsx",
+      "web/packages/build/src/releases/migration.tsx"
     ],
     "ui/record-action-grid": [
       "web/packages/app/src/widgets/RecordWork.tsx",
