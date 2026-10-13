@@ -66,9 +66,9 @@ Flow/Automation 的发布审阅先确认当前草稿，再进入原候选审阅�
 
 重命名在对象字段编辑器保留旧名，选择“Read alias of / 只读别名目标”指向新名；旧名不可直接写，读取权限跟随目标。退役保留旧字段并勾选“Read only / 只读”，新建不再要求该字段时取消其必填；迁移步骤声明 `retire`。动作退役从目标对象草稿撤下动作，封存目标后声明 `retire-action`、原完整 `action` schema、`types` 与 `batch`；每批拒绝该动作的待审批请求、关闭任务并退出原待审批状态，再激活目标。已记账的审批拒绝不会因取消后续迁移而恢复；要求重新发起。不能按单行筛选退役一个定义。
 
-对象变更影响 Flow 时，在原联合候选中同时选择目标对象与目标流程，先封存，再审阅迁移和激活。已绑定封存发布的等待实例保留原动作与依赖，收件箱任务仍可继续；原字段的别名写入会落到当前新字段。未封存依赖的开发实例须先完成。旧写入跨字段类型或引用目标变化、新开旧版本审批等完整边界见 ADR-0106 As built。
+对象变更影响 Flow 时，在原联合候选中同时选择目标对象与目标流程，先封存，再审阅迁移和激活。已绑定封存发布的等待实例保留原动作与依赖，收件箱任务仍可继续；原字段的别名写入会落到当前新字段。未封存依赖的开发实例须先完成。旧写入跨字段类型或引用目标变化复用完成的显式迁移；旧 Flow 新开的审批绑定原动作。完整边界见 ADR-0106 As built。
 
-步骤编辑使用共享 JSON 草稿控件，转换复用已有 Expr；当前限 build 自有对象，`extract` 在开始时拒绝，审批 `redirect` 在审阅时拒绝，完整验收边界见 ADR。API 等价路径仍为 `/v1/releases/migrations/review` 与 `build.migration.start/advance/cancel`，开始载荷为 `plan`、审阅返回的 `review=id`、`reviewedAt=at`。
+步骤编辑使用共享 JSON 草稿控件，转换复用已有 Expr；当前限 build 自有对象，`extract` 在开始时拒绝。审批重定向在 `retire-action` 声明 `redirect` 为目标完整动作名；目标须是同一对象/权威的审批动作。批次关闭旧任务并保留原请求，目标激活后重新检查请求人权限、创建目标版本的新审批；关联与结果显示在审批记录，失败会保存拒绝原因。完整验收边界见 ADR。API 等价路径仍为 `/v1/releases/migrations/review` 与 `build.migration.start/advance/cancel`，开始载荷为 `plan`、审阅返回的 `review=id`、`reviewedAt=at`。
 
 完整 Workshop 模块导入：在已保存、已发布的应用编辑器点击“Import complete Workshop module / 导入完整 Workshop 模块”，选择原 JSON，为所有来源页选择新页面或现有页面。通过“Edit shared platform bindings / 编辑共同平台绑定”配置原对象/字段/动作和应用端口；来源页选择只切换专属配置，共同映射保留。也可加载与原文一致的已下载映射报告，所有绑定重新检查。查询、模型函数、Go/Wasm 和嵌入分析页先由其原编辑器真实发布，再在此显式选择固定版本。审查各页诊断、四浮层/库存及呈现差异后保存并发布页面；完成后关闭窗口，Save application，再进入原应用候选审查。失败可查看已保存/发布进度并继续，未确认提交先沿原 Pending changes 重新发送；离开编辑器前下载原文和报告。边界归 [ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-格式与导入)。
 

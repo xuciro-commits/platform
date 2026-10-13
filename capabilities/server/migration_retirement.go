@@ -12,8 +12,8 @@ import (
 )
 
 type migrationRetirement struct {
-	caller                platform.Caller
-	run, action, approval string
+	caller                                   platform.Caller
+	run, action, approval, redirect, release string
 }
 
 func (d *stagedDecision) stageActionRetirement(c platform.Caller, run platform.MigrationRun, step platform.MigrateStep) (platform.MigrationRun, *kernel.Error) {
@@ -28,7 +28,7 @@ func (d *stagedDecision) stageActionRetirement(c platform.Caller, run platform.M
 	}
 	slices.Sort(pending)
 	for _, id := range pending[:min(len(pending), step.Batch)] {
-		d.retirements = append(d.retirements, migrationRetirement{caller: c, run: run.ID, action: step.Action, approval: id})
+		d.retirements = append(d.retirements, migrationRetirement{caller: c, run: run.ID, action: step.Action, approval: id, redirect: step.Redirect, release: run.Plan.To})
 		run.Cursor, run.Processed = id, run.Processed+1
 	}
 	run.State = "running"
@@ -42,13 +42,13 @@ func (d *stagedDecision) stageActionRetirement(c platform.Caller, run platform.M
 	return run, nil
 }
 
-func (d *stagedDecision) CheckApprovalRetirement(c platform.Caller, migration, approval string) (string, *kernel.Error) {
+func (d *stagedDecision) CheckApprovalRetirement(c platform.Caller, migration, approval string) (platform.ApprovalRetirement, *kernel.Error) {
 	for _, directive := range d.retirements {
 		if directive.run == migration && directive.approval == approval && c.App == platform.WorkApp && c.Automation && c.ID == "app:"+platform.WorkApp {
-			return directive.caller.ID, nil
+			return platform.ApprovalRetirement{Actor: directive.caller.ID, Redirect: directive.redirect, Release: directive.release}, nil
 		}
 	}
-	return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval retirement has no matching private migration directive")
+	return platform.ApprovalRetirement{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval retirement has no matching private migration directive")
 }
 
 // Parent ledgers have been released. Work owns each rejection; the held
@@ -72,10 +72,10 @@ func (d *stagedDecision) finishMigrationRetirements(at time.Time) *kernel.Error 
 
 func (s *recordStore) retiredApprovalReturnLocked(info platform.EntityInfo, schema string) bool {
 	runs := s.types[platform.MigrationRunType]
-	if runs == nil || !strings.HasSuffix(schema, platform.ApprovalRejected) {
+	if runs == nil || !strings.HasSuffix(schema, platform.ApprovalRejected) && !strings.HasSuffix(schema, platform.ApprovalReturned) {
 		return false
 	}
-	action := strings.TrimSuffix(schema, platform.ApprovalRejected)
+	action := strings.TrimSuffix(strings.TrimSuffix(schema, platform.ApprovalRejected), platform.ApprovalReturned)
 	for _, value := range runs.rows {
 		run := value.value.Interface().(platform.MigrationRun)
 		if run.State != "cancelled" && run.Plan.From == s.readRelease && slices.ContainsFunc(run.Plan.Steps, func(step platform.MigrateStep) bool {

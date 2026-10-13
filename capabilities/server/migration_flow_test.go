@@ -17,11 +17,15 @@ func TestMigrationKeepsWaitingFlowOnItsStartingObjectAndAction(t *testing.T) {
 		if retired {
 			name = "retired-action"
 		}
-		t.Run(name, func(t *testing.T) { testWaitingFlowMigration(t, retired) })
+		t.Run(name, func(t *testing.T) { testWaitingFlowMigration(t, retired, false) })
 	}
 }
 
-func testWaitingFlowMigration(t *testing.T, retired bool) {
+func TestMigrationWaitingFlowOpensItsOriginalApproval(t *testing.T) {
+	testWaitingFlowMigration(t, true, true)
+}
+
+func testWaitingFlowMigration(t *testing.T, retired, approval bool) {
 	compose := func() *Tenant {
 		return builderTenant(t, "migration-flow", work.New("migration-flow"), flow.New("migration-flow"))
 	}
@@ -31,7 +35,13 @@ func testWaitingFlowMigration(t *testing.T, retired bool) {
 	at := txnAt
 	fields := []map[string]any{{"name": "guest", "title": "Guest", "type": "text", "sourceType": "user-input"}}
 	actions := []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}, {Name: "reject", Title: "Reject", From: []string{"open"}, To: "rejected"}}
+	if approval {
+		actions[0].Approval = &build.ActionApproval{Pending: "pending", Rejected: "rejected", Levels: []build.ApproverLevel{{Title: "Builder", Role: build.Builder}}}
+	}
 	states := []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}, {Name: "rejected", Title: "Rejected"}}
+	if approval {
+		states = append(states, build.State{Name: "pending", Title: "Pending"})
+	}
 	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "O", map[string]any{"name": "visit", "title": "Visit", "fields": fields, "states": states, "actions": actions}, at)
 	decide(t, tn, "builder", build.ID, build.SchemaPublish, build.ObjectType, "O", map[string]any{}, at)
 	steps := []build.ProcessStep{
@@ -131,6 +141,15 @@ func testWaitingFlowMigration(t *testing.T, retired bool) {
 	decide(t, tn, "user", work.ID, "work.task.complete", work.TaskType, tasks[0].ID, map[string]any{"answer": "yes"}, at)
 	at = at.Add(2 * time.Second)
 	tn.Work(at)
+	if approval {
+		requests, _, refusal := platform.Find[platform.ApprovalRequest](tn.automation(work.ID, false), platform.Query{Domain: platform.Raw([]any{[]any{"state", "=", "pending"}})})
+		if refusal != nil || len(requests) != 1 || requests[0].Action != "build.visit.close" || requests[0].Release != from {
+			t.Fatalf("old flow did not retain its approval: %+v %v", requests, refusal)
+		}
+		decide(t, tn, "builder", work.ID, "work.approval.approve", work.ApprovalType, requests[0].ID, map[string]any{}, at)
+		at = at.Add(2 * time.Second)
+		tn.Work(at)
+	}
 	info := tn.records.types["build.visit"].info
 	row := tn.records.types["build.visit"].rows["A"]
 	if businessField(info, row.value, "state") != "done" || businessField(info, row.value, "name") != "Flow updated" || businessField(info, row.value, "enabled") != "true" {

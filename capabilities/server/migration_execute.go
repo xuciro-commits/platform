@@ -220,7 +220,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 				return before, nil // No row in this failed batch has been put.
 			}
 			run.Failures = append(run.Failures, failure)
-		} else if result.Changed {
+		} else if result.Changed || run.Plan.Scope.Where == nil && (step.Kind == "retype" || step.Kind == "rebind") && run.SourceShapes[typ] != run.TargetShapes[typ] {
 			writeFields := []string{}
 			for _, f := range step.Fields {
 				writeFields = append(writeFields, f.To)

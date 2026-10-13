@@ -10,9 +10,19 @@ import (
 	"platformserver/apps/build"
 	"platformserver/apps/work"
 	"platformserver/platform"
+	"platformserver/platform/authz"
 )
 
 func TestMigrationRetiresActionAndRejectsItsPendingApproval(t *testing.T) {
+	testActionRetirement(t, false, false)
+}
+func TestMigrationRedirectsApprovalAfterTargetActivation(t *testing.T) {
+	testActionRetirement(t, true, false)
+}
+
+func TestMigrationRedirectReauthorizesRequester(t *testing.T) { testActionRetirement(t, true, true) }
+
+func testActionRetirement(t *testing.T, redirect, deny bool) {
 	compose := func() *Tenant {
 		return builderTenant(t, "migration-retire-action", work.New("migration-retire-action"))
 	}
@@ -56,9 +66,17 @@ func TestMigrationRetiresActionAndRejectsItsPendingApproval(t *testing.T) {
 		t.Fatalf("pending approval: %+v %v", requests, refusal)
 	}
 	original := bytes.Clone([]byte(requests[0].Submission))
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "asset", map[string]any{"actions": []any{}}, txnAt)
+	targetActions := []any{}
+	if redirect {
+		newAction := map[string]any{"name": "finishnew", "title": "New finish", "from": []string{"open"}, "to": "done", "roles": []string{build.User}, "approval": map[string]any{"pending": "pending", "rejected": "rejected", "levels": []map[string]any{{"title": "Builder", "role": build.Builder}}}}
+		targetActions = append(targetActions, newAction)
+	}
+	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "asset", map[string]any{"actions": targetActions}, txnAt)
 	to := save("target")
 	plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.asset"}, Steps: []platform.MigrateStep{{Kind: "retire-action", Types: []string{"build.asset"}, Action: "build.asset.finish", Batch: 1}}}
+	if redirect {
+		plan.Steps[0].Redirect = "build.asset.finishnew"
+	}
 	review, err := tn.ReviewMigrationPlan(builder, plan, txnAt)
 	if err != nil {
 		t.Fatal(err)
@@ -88,10 +106,22 @@ func TestMigrationRetiresActionAndRejectsItsPendingApproval(t *testing.T) {
 	}
 	decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(2*time.Hour))
 	a, found := platform.Get[platform.ApprovalRequest](tn.automation(work.ID, false), requests[0].ID)
-	if !found || a.State != "rejected" || a.RejectedBy != "builder" || !bytes.Equal(original, []byte(a.Submission)) {
+	wantState := "rejected"
+	if redirect {
+		wantState = "redirected"
+	}
+	actor := a.RejectedBy
+	if redirect {
+		actor = a.RedirectedBy
+	}
+	if !found || a.State != wantState || actor != "builder" || !bytes.Equal(original, []byte(a.Submission)) {
 		t.Fatalf("retirement did not reject the original held request: %+v", a)
 	}
-	if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows["A"].value, "state"); got != "rejected" {
+	wantBusinessState := "rejected"
+	if redirect {
+		wantBusinessState = "open"
+	}
+	if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows["A"].value, "state"); got != wantBusinessState {
 		t.Fatalf("held business state was not released: %s", got)
 	}
 	for _, request := range requests {
@@ -102,6 +132,15 @@ func TestMigrationRetiresActionAndRejectsItsPendingApproval(t *testing.T) {
 	}
 	if got := refuse(t, tn, "builder", work.ID, "work.approval.retire", work.ApprovalType, requests[0].ID, map[string]any{"migration": "M"}, txnAt); got == "ok" {
 		t.Fatal("a public submission forged the private retirement directive")
+	}
+	if redirect {
+		tn.Work(txnAt.Add(3 * time.Hour))
+		for _, old := range requests {
+			queued, _ := platform.Get[platform.ApprovalRequest](tn.automation(work.ID, false), old.ID)
+			if queued.RedirectTo != "" {
+				t.Fatal("redirect opened before its target was active")
+			}
+		}
 	}
 	if _, err := tn.ActivateRelease(builder, to, "target-activate", txnAt.Add(time.Hour)); err != nil {
 		t.Fatal(err)
@@ -114,12 +153,54 @@ func TestMigrationRetiresActionAndRejectsItsPendingApproval(t *testing.T) {
 	if got := refuse(t, tn, "user", build.ID, "build.asset.finish", "build.asset", "A", map[string]any{}, txnAt); got == "ok" {
 		t.Fatal("retired action accepted a new submission")
 	}
+	if redirect && deny {
+		tn.app(build.ID).Manifest().Actions.UsePolicies(func() []authz.Policy {
+			return []authz.Policy{{ID: "redirect-denied", Effect: "deny", Permission: "build.asset.finishnew"}}
+		})
+		tn.Work(txnAt.Add(4 * time.Hour))
+		for _, old := range requests {
+			failed, _ := platform.Get[platform.ApprovalRequest](tn.automation(work.ID, false), old.ID)
+			if failed.State != "refused" || failed.RedirectTo != "" || failed.Outcome == "" || failed.Submission != old.Submission {
+				t.Fatalf("redirect ignored the current policy: %+v", failed)
+			}
+		}
+		all, _, _ := platform.Find[platform.ApprovalRequest](tn.automation(work.ID, false), platform.Query{})
+		if len(all) != 2 {
+			t.Fatal("denied redirect created a target request")
+		}
+		wantState = "refused"
+		a, _ = platform.Get[platform.ApprovalRequest](tn.automation(work.ID, false), requests[0].ID)
+	}
+	if redirect && !deny {
+		tn.Work(txnAt.Add(4 * time.Hour))
+		for _, old := range requests {
+			queued, _ := platform.Get[platform.ApprovalRequest](tn.automation(work.ID, false), old.ID)
+			if queued.RedirectTo == "" {
+				t.Fatalf("target activation lost the queued redirect: %+v", queued)
+			}
+			newRequest, exists := platform.Get[platform.ApprovalRequest](tn.automation(work.ID, false), queued.RedirectTo)
+			if !exists || newRequest.State != "pending" || newRequest.Action != "build.asset.finishnew" || newRequest.Release != to || newRequest.Requester != old.Requester {
+				t.Fatalf("redirect was not a new fixed target request: %+v", newRequest)
+			}
+			decide(t, tn, "builder", work.ID, "work.approval.approve", work.ApprovalType, newRequest.ID, map[string]any{}, txnAt.Add(5*time.Hour))
+		}
+		if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows["A"].value, "state"); got != "done" {
+			t.Fatalf("target approval did not execute: %s", got)
+		}
+		a, _ = platform.Get[platform.ApprovalRequest](tn.automation(work.ID, false), requests[0].ID)
+		count := len(entries)
+		tn.Work(txnAt.Add(6 * time.Hour))
+		all, _, _ := platform.Find[platform.ApprovalRequest](tn.automation(work.ID, false), platform.Query{})
+		if len(all) != 4 || len(entries) < count {
+			t.Fatal("redirect duplicated or rewrote accepted requests")
+		}
+	}
 	restored := compose()
 	if err := restored.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
 	after, ok := platform.Get[platform.ApprovalRequest](restored.automation(work.ID, false), requests[0].ID)
-	if !ok || after.State != "rejected" || !bytes.Equal(original, []byte(after.Submission)) {
+	if !ok || after.State != wantState || !bytes.Equal(original, []byte(after.Submission)) {
 		t.Fatal("recovery lost the retired request's saved outcome or original bytes")
 	}
 	live, _ := json.Marshal(a)

@@ -301,10 +301,14 @@ export type ApprovalRequest = {
   submission: string;
   level: number;
   levels: ApprovalStep[];
-  state: "pending" | "approved" | "rejected" | "refused" | "withdrawn";
+  state: "pending" | "approved" | "rejected" | "refused" | "withdrawn" | "redirected";
   outcome?: string;
   rejectedBy?: string;
   release?: string;
+  redirectAction?: string;
+  redirectRelease?: string;
+  redirectTo?: string;
+  redirectedBy?: string;
 };
 
 export type ApprovalStep = {

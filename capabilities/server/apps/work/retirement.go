@@ -31,7 +31,7 @@ func (w *Work) retireApproval(c platform.Caller, s *pb.Submission, at time.Time)
 	if json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Migration == "" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A reviewed migration is required")
 	}
-	actor, refusal := c.CheckApprovalRetirement(payload.Migration, s.GetTarget().GetId())
+	directive, refusal := c.CheckApprovalRetirement(payload.Migration, s.GetTarget().GetId())
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -40,10 +40,17 @@ func (w *Work) retireApproval(c platform.Caller, s *pb.Submission, at time.Time)
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The approval is no longer pending")
 	}
 	return func(r *pb.ChangeRecord) {
-		a.State, a.RejectedBy = "rejected", actor
+		a.State, a.RejectedBy = "rejected", directive.Actor
 		a.Outcome = "The held action was retired; start a new request under the current definition"
 		w.close(c, r, a, a.Level, "canceled")
-		w.move(c, a, platform.ApprovalRejected, at)
+		if directive.Redirect != "" {
+			a.RejectedBy, a.RedirectedBy = "", directive.Actor
+			a.State, a.RedirectAction, a.RedirectRelease = "redirected", directive.Redirect, directive.Release
+			a.Outcome = "The held action will be requested under the declared target release after activation"
+			w.move(c, a, platform.ApprovalReturned, at)
+		} else {
+			w.move(c, a, platform.ApprovalRejected, at)
+		}
 		if err := c.Put(r, a); err != nil {
 			c.FailDecision(err)
 			return

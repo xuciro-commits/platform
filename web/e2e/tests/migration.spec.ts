@@ -149,7 +149,8 @@ test("a waiting flow finishes its retired action under the starting release afte
   } finally { await context.close(); }
 });
 
-test("action retirement rejects the pending request through its owner before activation", async ({ page, builder, operator }) => {
+for (const redirect of [false, true]) {
+test(redirect ? "a declared redirect opens and executes a new approval after target activation" : "action retirement rejects the pending request through its owner before activation", async ({ page, builder, operator }) => {
   test.setTimeout(90_000);
   const object = await builder.object({ name: slug("retire"), title: "Retirement records", fields: [{ name: "name", title: "Name", type: "text", sourceType: "user-input" }], states: [
     { name: "open", title: "Open" }, { name: "pending", title: "Pending" }, { name: "done", title: "Done" }, { name: "rejected", title: "Rejected" },
@@ -162,21 +163,47 @@ test("action retirement rejects the pending request through its owner before act
   expect((await operator.record(object.type, recordID)).state).toBe("pending");
 
   // The target removes the action; a reviewed retirement releases old work.
-  await builder.decide("build.object.edit", { type: "build.object", id: object.id }, { actions: [] });
+  const requests = await operator.read<any[]>("requests");
+  const original = requests.find(request => request.target === `${object.type}/${recordID}`);
+  expect(original.state).toBe("pending");
+  const targetActions = redirect ? [{ name: "finishnew", title: "New finish", from: ["open"], to: "done", roles: ["user"], approval: { pending: "pending", rejected: "rejected", levels: [{ title: "Builder", role: "builder" }] } }] : [];
+  await builder.decide("build.object.edit", { type: "build.object", id: object.id }, { actions: targetActions });
   const to = await builder.candidate(object.id);
   await builder.open(page, "/release-review");
   await page.getByRole("combobox", { name: "Saved candidate", exact: true }).selectOption(to);
   const migration = page.getByRole("region", { name: "Data migration", exact: true });
   await migration.getByRole("combobox", { name: "Migration object", exact: true }).selectOption(object.type);
   await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(JSON.stringify([
-    { kind: "retire-action", types: [object.type], action: `${object.type}.finish`, batch: 1 },
+    { kind: "retire-action", types: [object.type], action: `${object.type}.finish`, batch: 1, ...(redirect ? { redirect: `${object.type}.finishnew` } : {}) },
   ]));
   await migration.getByRole("button", { name: "Review migration", exact: true }).click();
   await migration.getByRole("button", { name: "Start reviewed migration", exact: true }).click();
   await migration.getByRole("button", { name: "Run next migration batch", exact: true }).click();
   await expect(migration.getByRole("region", { name: "Migration progress", exact: true })).toContainText("complete");
-  expect((await operator.record(object.type, recordID)).state).toBe("rejected");
+  expect((await operator.record(object.type, recordID)).state).toBe(redirect ? "open" : "rejected");
+  if (redirect) {
+    const queued = (await operator.read<any[]>("requests")).find(request => request.id === original.id);
+    expect(queued.state).toBe("redirected");
+    expect(queued.submission).toBe(original.submission);
+    expect(queued.redirectTo ?? "").toBe("");
+  }
   await page.getByRole("button", { name: "Activate release", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toContainText(to);
   expect((await operator.definitions()).some((definition: any) => definition.ref.kind === "action" && definition.ref.name === `${object.type}.finish`)).toBe(false);
+  if (redirect) {
+    await expect.poll(async () => (await operator.read<any[]>("requests")).find(request => request.id === original.id)?.redirectTo).toBeTruthy();
+    const after = await operator.read<any[]>("requests");
+    const queued = after.find(request => request.id === original.id);
+    const next = after.find(request => request.id === queued.redirectTo);
+    expect(next.release).toBe(to);
+    expect(next.action).toBe(`${object.type}.finishnew`);
+    expect(next.state).toBe("pending");
+    await builder.open(page, "/inbox");
+    await page.getByRole("listitem").filter({ hasText: recordID }).getByRole("button", { name: "Approve", exact: true }).click();
+    await expect.poll(async () => (await operator.record(object.type, recordID)).state).toBe("done");
+    const complete = await operator.read<any[]>("requests");
+    expect(complete.find(request => request.id === next.id).state).toBe("approved");
+    expect(complete.find(request => request.id === original.id).submission).toBe(original.submission);
+  }
 });
+}

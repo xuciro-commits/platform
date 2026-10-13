@@ -57,7 +57,7 @@ func (t *Tenant) assetReleaseContextLocked(registry *platform.AssetRegistry, ass
 
 // Missing drafts are real owner create decisions, but remain private until
 // their enclosing release and definition images have all been accepted.
-func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext) (*stagedDecision, json.RawMessage, error) {
+func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly ...bool) (*stagedDecision, json.RawMessage, error) {
 	registry, err := t.assetRegistryLocked()
 	if err != nil {
 		return nil, nil, err
@@ -70,6 +70,17 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 	view, err := t.assetInstallationView(decision.records)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(definitionOnly) > 0 && definitionOnly[0] {
+		shapes, err := t.releaseAssetShapes(candidate.Assets)
+		if err != nil {
+			return nil, nil, err
+		}
+		for typ, shape := range shapes {
+			if old := view.records.types[typ]; old != nil && old.info.Go != shape.Go {
+				old.rows = map[string]*row{}
+			}
+		}
 	}
 	decision.tenant, decision.records = view, view.records
 	decision.records.readRelease = candidate.ID
@@ -225,7 +236,7 @@ func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCand
 	if err != nil {
 		return nil, nil, err
 	}
-	decision, bootstrap, err := t.releaseBootstrapLocked(candidate, context)
+	decision, bootstrap, err := t.releaseBootstrapLocked(candidate, context, !activating)
 	if err != nil {
 		return nil, nil, err
 	}

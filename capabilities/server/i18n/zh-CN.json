@@ -1844,5 +1844,21 @@
   "A reviewed migration is required": "必须提供已审阅的迁移",
   "The approval is no longer pending": "审批请求已不再等待处理",
   "Approval retired": "审批已退役",
-  "The held action was retired; start a new request under the current definition": "待审批动作已退役，请按当前定义重新发起请求"
+  "The held action was retired; start a new request under the current definition": "待审批动作已退役，请按当前定义重新发起请求",
+  "Redirected": "已重定向",
+  "Redirect action": "重定向目标动作",
+  "Redirect release": "重定向目标发布",
+  "Redirect to": "新审批请求",
+  "Start redirected approval": "开始重定向审批",
+  "Reauthorize the original requester and open the declared target-version approval": "重新授权原请求人，并打开已声明目标版本的审批",
+  "Start redirected approvals after release activation": "发布激活后开始重定向审批",
+  "The held action will be requested under the declared target release after activation": "目标发布激活后，将为所声明的动作重新发起审批",
+  "The approval has no active declared redirect": "该审批没有已激活的重定向声明",
+  "The original approval submission cannot be decoded": "无法解析原审批提交",
+  "The original approval requester is no longer active": "原审批请求人已停用",
+  "The target approval submission cannot be encoded": "无法编码目标审批提交",
+  "The declared target action has a new approval request": "已为声明的目标动作创建新的审批请求",
+  "Approval redirect": "审批重定向",
+  "The held action has no retained owner": "该持有的动作没有保留版本的归属方",
+  "Redirected by": "重定向操作人"
 }

@@ -107,6 +107,7 @@ func New(tenant string) *Work {
 	w := &Work{}
 	var actions []platform.Action
 	actions = append(actions, retirementAction())
+	actions = append(actions, redirectAction())
 	for _, e := range w.entities() {
 		actions = append(actions, platform.EntityActions(e)...)
 	}
@@ -145,7 +146,7 @@ func (w *Work) entities() []platform.Entity {
 			Lifecycle: &platform.Lifecycle{Field: "state", Initial: "pending",
 				States: []platform.State{{Name: "pending", Title: "Pending", Tone: "warning"}, {Name: "approved", Title: "Approved", Tone: "success"},
 					{Name: "rejected", Title: "Rejected", Tone: "danger"}, {Name: "refused", Title: "Refused when run", Tone: "danger"},
-					{Name: "withdrawn", Title: "Withdrawn", Tone: "neutral"}},
+					{Name: "withdrawn", Title: "Withdrawn", Tone: "neutral"}, {Name: "redirected", Title: "Redirected", Tone: "info"}},
 				Transitions: []platform.Transition{
 					{Name: "approve", Title: "Approve", From: []string{"pending"}, To: []string{"pending", "approved", "refused"}, Roles: everyone, Capability: "approvals",
 						Description: "Approve at the level you are an approver of; the last approval runs the held action with the rules of that moment.",
@@ -189,7 +190,7 @@ func (w *Work) Restore(raw json.RawMessage) error { return w.ledger.Restore(raw)
 func (w *Work) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: "Work", Version: "1", Actions: w.ledger.Catalog, Entities: w.entities(),
 		Reads: []string{"inbox", "requests", "views"}, Everyone: []string{"inbox", "requests", "views"},
-		Jobs: []platform.Job{{Name: "overdue", Title: "Tell people about overdue tasks", Every: time.Minute}}}
+		Jobs: []platform.Job{{Name: "overdue", Title: "Tell people about overdue tasks", Every: time.Minute}, {Name: "redirects", Title: "Start redirected approvals after release activation", Every: time.Second}}}
 }
 
 func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Declarations() }
@@ -210,6 +211,8 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 		switch s.GetSchema().GetName() {
 		case schemaRetireApproval:
 			return w.retireApproval(c, s, now)
+		case schemaRedirectApproval:
+			return w.redirectApproval(c, s, now)
 		case SchemaDelegate, SchemaUndelegate:
 			return w.delegate(c, s)
 		case SchemaViewSave, SchemaViewRemove:
@@ -396,8 +399,11 @@ func (w *Work) run(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, now
 	// the approval itself moved the record (its pending state), so the held
 	// submission runs by the rules of now, not that revision (D3).
 	held.ExpectedRevision = nil
-	requester, _ := w.host.Member(a.Requester)
-	_, err := w.host.Attempt(w.host.Caller(c, requester, a.App), held, now)
+	execution, err := w.host.ApprovalExecution(c, a)
+	if err == nil {
+		requester, _ := execution.Member(a.Requester)
+		_, err = execution.Attempt(execution.Caller(c, requester, a.App), held, now)
+	}
 	if err != nil {
 		a.State, a.Outcome = "refused", err.Error()
 		w.move(c, a, platform.ApprovalReturned, now)
@@ -449,11 +455,16 @@ func (w *Work) move(c platform.Caller, a ApprovalRequest, suffix string, now tim
 	held := &pb.Submission{}
 	protojson.Unmarshal([]byte(a.Submission), held)
 	schema := a.Action + suffix
-	if _, _, known := w.host.Action(schema); !known {
+	execution, err := w.host.ApprovalExecution(c, a)
+	if err != nil {
+		c.FailDecision(err)
 		return
 	}
-	automation := w.host.Automation(c, a.App)
-	w.host.Submit(automation, &pb.Submission{TenantId: held.GetTenantId(), PrincipalId: automation.ID, Authority: a.App, IdempotencyKey: "approval:" + a.ID + suffix,
+	if _, _, known := execution.Action(schema); !known {
+		return
+	}
+	automation := execution.Automation(c, a.App)
+	execution.Submit(automation, &pb.Submission{TenantId: held.GetTenantId(), PrincipalId: automation.ID, Authority: a.App, IdempotencyKey: "approval:" + a.ID + suffix,
 		Target: held.GetTarget(), Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte("{}")}, now)
 }
 
@@ -549,7 +560,10 @@ func (w *Work) Read(c platform.Caller, name string) (any, *kernel.Error) {
 }
 
 // Run tells the people of each overdue task, once.
-func (w *Work) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
+func (w *Work) Run(c platform.Caller, name string, now time.Time) *kernel.Error {
+	if name == "redirects" {
+		return w.runRedirects(c, now)
+	}
 	open, _ := json.Marshal([]any{[]any{"state", "=", "open"}})
 	tasks, _, _ := platform.Find[WorkTask](c, platform.Query{Domain: open})
 	for _, t := range tasks {

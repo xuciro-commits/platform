@@ -888,6 +888,7 @@ export default {
   "Approved": "已批准",
   "Refused when run": "执行时被拒绝",
   "Withdrawn": "已撤回",
+	"Redirected": "已重定向",
   "Outcome": "结果",
   "asked": "提交",
   "End": "结束",

@@ -228,9 +228,6 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 		if step.Kind != "retire-action" {
 			continue
 		}
-		if step.Redirect != "" {
-			return nil, fmt.Errorf("approval redirect requires an explicit target-version handoff; it is not yet supported")
-		}
 		action := slices.IndexFunc(from.Assets, func(asset platform.ReleaseAsset) bool {
 			return asset.Ref.Kind == platform.AssetAction && asset.Ref.Name == step.Action
 		})
@@ -242,6 +239,25 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 		var source platform.Action
 		if json.Unmarshal(from.Assets[action].Body, &source) != nil || !slices.Contains(step.Types, source.Target) {
 			return nil, fmt.Errorf("retired action is outside its declared object scope")
+		}
+		if step.Redirect != "" {
+			var target *platform.Action
+			for _, asset := range to.Assets {
+				if asset.Ref.Kind == platform.AssetAction && asset.Ref.Name == step.Redirect && asset.Ref.App == from.Assets[action].Ref.App {
+					var descriptor struct {
+						Action platform.Action `json:"action"`
+					}
+					if json.Unmarshal(asset.Body, &descriptor) == nil {
+						target = &descriptor.Action
+					}
+				}
+			}
+			installed := slices.IndexFunc(trial.definitions, func(def platform.Definition) bool {
+				return def.Ref.App == from.Assets[action].Ref.App && def.Ref.Kind == platform.AssetAction && def.Ref.Name == step.Redirect
+			})
+			if target == nil || target.Target != source.Target || target.Automation || installed < 0 || trial.definitions[installed].Action == nil || trial.definitions[installed].Action.Approval == nil {
+				return nil, fmt.Errorf("approval redirect needs a sealed approval action of the same object and authority")
+			}
 		}
 	}
 	if err := t.validateAssetStorage(trial, true, plan); err != nil {

@@ -38,15 +38,19 @@ func (h hostView) FlowExecution(c platform.Caller, app, name string, version int
 	if err != nil {
 		return nil, err
 	}
+	return h.retainedExecution(c, binding.Release, closed.Assets)
+}
+
+func (h hostView) retainedExecution(c platform.Caller, release string, assets []platform.ReleaseAsset) (host.FlowHost, error) {
 	if h.decision == nil || !c.Staging() {
 		return nil, fmt.Errorf("retained flow execution requires its private decision")
 	}
 	view := h.installationDraft()
 	view.apps = slices.Clone(h.t.apps)
-	rt := &flowExecutionRuntime{stagedDecision: h.decision, view: view, release: binding.Release, shapes: map[string]platform.EntityInfo{}}
+	rt := &flowExecutionRuntime{stagedDecision: h.decision, view: view, release: release, shapes: map[string]platform.EntityInfo{}}
 	for i, owner := range view.apps {
 		selected := []platform.ReleaseAsset{}
-		for _, asset := range closed.Assets {
+		for _, asset := range assets {
 			if asset.Ref.App == owner.Manifest().ID {
 				selected = append(selected, asset)
 			}
@@ -98,7 +102,7 @@ func (h hostView) FlowExecution(c platform.Caller, app, name string, version int
 	}
 	view.definitions = slices.Clone(view.definitions)
 	for i, definition := range view.definitions {
-		for _, asset := range closed.Assets {
+		for _, asset := range assets {
 			if asset.Ref != definition.Ref {
 				continue
 			}
@@ -129,6 +133,18 @@ func (h flowExecution) Automation(parent platform.Caller, app string) platform.C
 func (h flowExecution) Caller(parent platform.Caller, m platform.Member, app string) platform.Caller {
 	return platform.NewCaller(h.rt, m, app, parent.Replaying, false)
 }
+
+func (h flowExecution) ActiveRelease() string { return h.rt.release }
+
+func (h flowExecution) Attempt(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
+		owner := h.rt.view.owner["action:"+s.GetSchema().GetName()]
+		if owner == nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The held action has no retained owner")
+		}
+		return platform.Decide(c, owner, s, at)
+	})
+}
 func (h flowExecution) Action(schema string) (string, platform.Action, bool) {
 	owner := h.rt.view.owner["action:"+schema]
 	if owner == nil {
@@ -157,6 +173,13 @@ func (r *flowExecutionRuntime) DecisionCatalog(ledger *platform.Ledger) *platfor
 	return nil
 }
 func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if app.Manifest().ID == platform.WorkApp {
+		private := r.stateApp(r.tenant.app(platform.WorkApp))
+		if work, ok := private.(host.AttachedWork); ok {
+			work.AttachWork(flowExecution{hostView: hostView{t: r.tenant, app: private, decision: r.stagedDecision}, rt: r})
+		}
+		return r.decideApp(c, private, s, at)
+	}
 	if bound := r.view.app(app.Manifest().ID); bound != nil {
 		if bound != r.tenant.app(app.Manifest().ID) {
 			return r.decideApp(c, bound, s, at)
@@ -336,6 +359,9 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if old == nil {
 		return r.stagedDecision.Put(c, receipt, entity)
 	}
+	if _, retained := r.shapes[old.info.Type]; !retained {
+		return r.stagedDecision.Put(c, receipt, entity)
+	}
 	current := r.records.types[old.info.Type]
 	id := recordOf(copyOf(old.info.Go, entity)).ID
 	var input, before, result map[string]json.RawMessage
@@ -345,29 +371,30 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if prior := old.rows[id]; prior != nil {
 		_ = json.Unmarshal(jsonOf(prior.value.Interface()), &before)
 	}
+	mappedBefore, mappedInput, mappingErr := r.mapRetainedWrite(c.ID, old.info.Type, before, input)
+	if mappingErr != nil {
+		return migrationRefusal(mappingErr)
+	}
 	if prior := current.rows[id]; prior != nil {
 		raw, _ := prior.image()
 		_ = json.Unmarshal(raw, &result)
 	} else {
-		result = maps.Clone(input)
+		result = maps.Clone(mappedInput)
 	}
 	fields := []string{}
-	for _, field := range old.info.Fields {
-		if string(input[field.Name]) == string(before[field.Name]) {
+	for _, target := range current.info.Fields {
+		if string(mappedInput[target.Name]) == string(mappedBefore[target.Name]) {
 			continue
 		}
-		target, found := current.info.Field(field.Name)
-		if !found {
-			return migrationRefusal(fmt.Errorf("retained action writes a physically removed field %s", field.Name))
-		}
+		name := target.Name
 		if target.AliasOf != "" {
-			target, found = current.info.Field(target.AliasOf)
+			target, _ = current.info.Field(target.AliasOf)
 		}
 		lifecycle := current.info.Lifecycle != nil && current.info.Lifecycle.Field == target.Name
-		if !found || target.ReadOnly && !lifecycle || target.Type != field.Type || target.Ref != field.Ref {
-			return migrationRefusal(fmt.Errorf("retained action write %s requires an explicit compatible field mapping", field.Name))
+		if target.ReadOnly && !lifecycle {
+			return migrationRefusal(fmt.Errorf("retained action writes a retired field %s", target.Name))
 		}
-		result[target.Name] = input[field.Name]
+		result[target.Name] = mappedInput[name]
 		fields = append(fields, target.Name)
 	}
 	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: current.info.Type, Record: id, Fields: fields}
@@ -388,5 +415,15 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if refusal := r.stagedDecision.Check(c, decoded.Elem().Interface()); refusal != nil {
 		return refusal
 	}
-	return r.stagedDecision.Put(c, receipt, decoded.Elem().Interface())
+	if refusal := r.stagedDecision.Put(c, receipt, decoded.Elem().Interface()); refusal != nil {
+		return refusal
+	}
+	// Keep the newly accepted source values for another old-version step.
+	if source := projectionFor(current.rows[id].projection, r.release); source != nil {
+		source.Value = jsonOf(input)
+		if refusal := refreshRecordProjection(current.rows[id].projection, current.rows[id].value.Interface()); refusal != nil {
+			return refusal
+		}
+	}
+	return nil
 }

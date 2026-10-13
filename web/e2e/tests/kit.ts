@@ -35,6 +35,11 @@ export class Member {
   async definitions<T = any>(): Promise<T[]> {
     return (await this.request.get("/v1/definitions", { headers: this.headers })).json();
   }
+  async read<T = any>(name: string): Promise<T> {
+    const response = await this.request.get(`/v1/${name}`, { headers: this.headers });
+    if (!response.ok()) throw Error(`Read ${name}: ${await response.text()}`);
+    return response.json();
+  }
   /** Opens the workspace at a route as this member. */
   open(page: Page, route: string) { return open(page, this.token, route); }
 }

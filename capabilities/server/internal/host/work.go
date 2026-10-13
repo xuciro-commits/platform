@@ -21,6 +21,7 @@ type WorkHost interface {
 	Attempt(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
 	Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
 	ActiveRelease() string
+	ApprovalExecution(platform.Caller, platform.ApprovalRequest) (WorkHost, *kernel.Error)
 	Seen(platform.Caller, ...string)
 }
 
