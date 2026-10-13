@@ -263,6 +263,7 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 			return nil, err
 		}
 		requires := ruleRequirements(saved.Reads)
+		requires = append(requires, platform.RecordSetDependencies(platform.EntityInfo{Type: ref.Name, Sets: saved.Sets})...)
 		for _, constraint := range saved.Constraints {
 			requires = append(requires, ruleRequirements(constraint.Reads)...)
 		}

@@ -18,7 +18,7 @@ func (b *Build) checkConstraints(o Object) error {
 		return err
 	}
 	for _, constraint := range o.Constraints {
-		if err := b.checkRuleCollections(platform.ConstraintSpec(info, constraint), "constraint "+constraint.Name); err != nil {
+		if err := b.checkRuleCollections(platform.ConstraintSpec(info, constraint), "constraint "+constraint.Name, lookup); err != nil {
 			return err
 		}
 	}

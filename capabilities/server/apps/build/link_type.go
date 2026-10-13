@@ -16,14 +16,16 @@ import (
 // edits never replace what callers use until the publication result commits.
 type LinkType struct {
 	platform.Record
+	Storage      string   `json:"storage,omitempty" choices:"reference,edge"`
+	Roles        []string `json:"roles,omitempty" field:"aside"`
 	DeletePolicy string   `json:"deletePolicy,omitempty" choices:"owner,restrict-active" title:"Relationship archive policy"`
-	Cardinality  string   `json:"cardinality,omitempty" choices:"one-to-many,one-to-one" title:"Relationship cardinality"`
+	Cardinality  string   `json:"cardinality,omitempty" choices:"one-to-many,one-to-one,many-to-many" title:"Relationship cardinality"`
 	Name         string   `json:"name" field:"required,search"`
 	Title        string   `json:"title" field:"required,search"`
 	Description  string   `json:"description" field:"required" type:"longtext"`
 	Parent       string   `json:"parent" field:"required"`
 	Child        string   `json:"child" field:"required"`
-	Via          string   `json:"via" field:"required"`
+	Via          string   `json:"via,omitempty"`
 	Forward      string   `json:"forward" field:"required"`
 	Reverse      string   `json:"reverse" field:"required"`
 	Required     bool     `json:"required" field:"readonly"`
@@ -34,6 +36,14 @@ type LinkType struct {
 }
 
 func (f LinkType) Definition() platform.LinkType {
+	storage := f.Storage
+	if storage == "" {
+		storage = "reference"
+	}
+	roles := f.Roles
+	if storage == "edge" && len(roles) == 0 {
+		roles = []string{Builder, User}
+	}
 	policy := f.DeletePolicy
 	if policy == "" {
 		policy = "owner"
@@ -42,7 +52,7 @@ func (f LinkType) Definition() platform.LinkType {
 	if cardinality == "" {
 		cardinality = "one-to-many"
 	}
-	return platform.LinkType{Name: f.Name, Title: f.Title, Description: f.Description, Parent: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Parent}, Child: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Child}, Via: f.Via, Forward: f.Forward, Reverse: f.Reverse, Required: f.Required, Storage: "reference", Cardinality: cardinality, DeletePolicy: policy}
+	return platform.LinkType{Name: f.Name, Title: f.Title, Description: f.Description, Parent: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Parent}, Child: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Child}, Via: f.Via, Forward: f.Forward, Reverse: f.Reverse, Required: f.Required, Storage: storage, Cardinality: cardinality, DeletePolicy: policy, Roles: roles}
 }
 
 func (f LinkType) Declaration() platform.LinkType { return f.Definition() }
@@ -70,11 +80,13 @@ func (b *Build) checkLinkType(f *LinkType) error {
 	if !ok {
 		return fmt.Errorf("Link child is unavailable")
 	}
-	field, ok := info.Field(f.Via)
-	if !ok {
-		return fmt.Errorf("Link reference is unavailable")
+	if f.Storage != "edge" {
+		field, ok := info.Field(f.Via)
+		if !ok {
+			return fmt.Errorf("Link reference is unavailable")
+		}
+		f.Required = field.Required
 	}
-	f.Required = field.Required
 	if err := b.host.ValidateInstallLinkType(f.Definition()); err != nil {
 		return err
 	}
@@ -193,7 +205,7 @@ func (b *Build) linkTypeDeclarations() []platform.LinkType {
 
 func linkKeepsGuarantees(old, next LinkType) bool {
 	before, after := old.Definition(), next.Definition()
-	return !(before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
+	return before.Storage == after.Storage && !(before.Cardinality != "many-to-many" && after.Cardinality == "many-to-many" || before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
 }
 
 // LinkPublication decodes the original accepted owner image without a

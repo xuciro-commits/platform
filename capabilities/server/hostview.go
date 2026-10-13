@@ -48,6 +48,9 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 		return err
 	}
 	for _, et := range draft.records.sortedTypes() {
+		if err := draft.checkRecordSetDeclarations(et.info); err != nil {
+			return err
+		}
 		if err := platform.CheckConstraints(et.info, draft.entity, true); err != nil {
 			return err
 		}

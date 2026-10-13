@@ -6,6 +6,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 )
@@ -18,6 +19,7 @@ type RuleReadSpec struct {
 	Collections map[string]RuleCollection `json:"collections,omitempty"`
 }
 type RuleCollection struct {
+	Set     string `json:"set,omitempty"`
 	App     string `json:"app"`
 	Query   string `json:"query"`
 	Version int    `json:"version"`
@@ -64,8 +66,13 @@ func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, b
 		}
 	}
 	for name, set := range spec.Collections {
-		if set.App == "" || set.Query == "" || set.Version < 0 || set.Policy != "visible" && set.Policy != "complete" {
+		if set.App == "" || set.Query == "" && set.Set == "" || set.Set != "" && set.Query != "" || set.Version < 0 || set.Policy != "visible" && set.Policy != "complete" {
 			return schema, fmt.Errorf("rule collection %s needs a declared query/version and scope policy", name)
+		}
+		if set.Set != "" && (set.App != record.App || set.Version != 0 || set.Of != "" && set.Of != "$subject" || !slices.ContainsFunc(record.Sets, func(declaration RecordSet) bool {
+			return declaration.Name == set.Set && declaration.Object == set.Object
+		})) {
+			return schema, fmt.Errorf("rule collection %s must bind its object's declared set", name)
 		}
 		info, ok := lookup(set.Object)
 		if !ok {
@@ -337,8 +344,20 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 		if of != "" {
 			queryInputs["for"] = of
 		}
-		raw, err := c.readRuleQuery(set, Raw(queryInputs), now)
-		if err != nil {
+		var raw json.RawMessage
+		var readErr *kernel.Error
+		if set.Set != "" {
+			var subjectID string
+			_ = json.Unmarshal(values["id"], &subjectID)
+			page, err := c.ReadRecordSet(spec.Object, subjectID, set.Set, now)
+			readErr = err
+			if err == nil {
+				raw = Raw(map[string]any{"records": page.Records, "total": len(page.Records), "sources": page.Sources, "partial": page.Partial})
+			}
+		} else {
+			raw, readErr = c.readRuleQuery(set, Raw(queryInputs), now)
+		}
+		if readErr != nil {
 			ctx.Sets[name] = ExprCollection{Status: "withheld"}
 			continue
 		}
@@ -346,12 +365,13 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 			Records []map[string]json.RawMessage `json:"records"`
 			Total   int                          `json:"total"`
 			Sources []string                     `json:"sources"`
+			Partial bool                         `json:"partial"`
 		}
 		if json.Unmarshal(raw, &page) != nil {
 			return ctx, fmt.Errorf("collection %s returned an invalid record page", name)
 		}
 		ctx.Sources = append(ctx.Sources, page.Sources...)
-		collection := ExprCollection{Complete: page.Total == len(page.Records), Items: []ExprItem{}}
+		collection := ExprCollection{Complete: page.Total == len(page.Records), Withheld: page.Partial, Items: []ExprItem{}}
 		object, ok := lookup(set.Object)
 		if !ok {
 			return ctx, fmt.Errorf("collection object is unavailable")

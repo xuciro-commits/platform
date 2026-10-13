@@ -328,6 +328,10 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 	if d.failure != nil {
 		return d.failure
 	}
+	if err := d.checkOwnedRelationConstraints(); err != nil {
+		d.failure = err
+		return err
+	}
 	refs := make([]string, 0, len(d.constraintWrites))
 	for ref := range d.constraintWrites {
 		refs = append(refs, ref)

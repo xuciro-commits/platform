@@ -39,6 +39,10 @@ type BuildHost interface {
 	ValidateInstallQuery(q platform.NamedQuery) error
 }
 
+type RecordSetHost interface {
+	ValidateRecordSet(platform.EntityInfo, platform.RecordSet) error
+}
+
 type FileHost interface {
 	Readable(m platform.Member, ref string, now time.Time) bool
 	Stored(tenant, hash string) bool

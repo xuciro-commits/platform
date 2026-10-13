@@ -25,6 +25,18 @@ func (h hostView) ValidateInstallLinkType(l platform.LinkType) error {
 	if err := l.CheckSchema(parent, child); err != nil {
 		return err
 	}
+	if l.Storage == "edge" {
+		h.t.records.mu.Lock()
+		defer h.t.records.mu.Unlock()
+		violations, err := h.t.records.ownedRelationViolations(l)
+		if err != nil {
+			return err
+		}
+		if len(violations) > 0 {
+			return fmt.Errorf("owned relationship %s violates %s", l.Name, violations[0].reason)
+		}
+		return nil
+	}
 	h.t.records.mu.Lock()
 	defer h.t.records.mu.Unlock()
 	if l.Cardinality == "one-to-one" {
@@ -110,6 +122,15 @@ func (t *Tenant) linkTraversalDomain(m platform.Member, typ string, edge platfor
 	var domain []any
 	if len(raw) > 0 && json.Unmarshal(raw, &domain) != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid link query")
+	}
+	if link.Storage == "edge" {
+		caller := platform.NewCaller(runtime{t}, m, link.Child.App, false, false)
+		ids, _, err := t.ownedRelationTargets(t.records, caller, *link, edge.Direction, edge.ID, now)
+		if err != nil {
+			return nil, err
+		}
+		domain = append(domain, []any{"id", "in", ids})
+		return platform.Raw(domain), nil
 	}
 	if edge.Direction == "forward" {
 		if _, err := t.RecordOf(m, link.Parent.Name, edge.ID, now); err != nil {

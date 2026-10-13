@@ -108,6 +108,25 @@ func TestRuleMissingWithheldAndShortCircuit(t *testing.T) {
 		t.Fatal("unknown operator hidden in short circuit")
 	}
 }
+func TestPartialCollectionCannotProveAllOrNone(t *testing.T) {
+	schema := Schema{Sets: map[string]SetType{"items": {Element: Type{Kind: "reference", Fields: map[string]Type{"enabled": {Kind: "boolean"}}}, Policy: "visible"}}}
+	context := Context{Sets: map[string]Collection{"items": {Complete: true, Withheld: true, Items: []Item{{ID: "visible", Fields: map[string]Value{"enabled": Present("boolean", true)}}}}}}
+	for _, which := range []string{"all", "none"} {
+		expr := Expr{Op: which, Kind: "boolean", Agg: &Aggregate{Source: "items"}, In: ptr(RefOf("boolean", "item.enabled"))}
+		program, err := Compile(expr, schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := program.Eval(context); err == nil || !strings.Contains(err.Error(), "withheld") {
+			t.Fatalf("%s proved a partial collection: %v", which, err)
+		}
+	}
+	count := run(t, Expr{Op: "count", Kind: "integer", Agg: &Aggregate{Source: "items"}}, schema, context)
+	if string(count.Value.Data) != `"1"` {
+		t.Fatalf("count included hidden rows: %+v", count)
+	}
+}
+
 func TestRuleDeclaredCollectionsAndPaths(t *testing.T) {
 	s := Schema{Refs: map[string]Type{"parent": {Kind: "reference", Fields: map[string]Type{"enabled": {Kind: "boolean"}}}}, Sets: map[string]SetType{"items": {Element: Type{Kind: "reference", Fields: map[string]Type{"enabled": {Kind: "boolean"}, "amount": {Kind: "integer"}}}, Policy: "visible"}}}
 	c := Context{

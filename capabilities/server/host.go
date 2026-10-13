@@ -269,6 +269,9 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
 	for _, et := range t.records.sortedTypes() {
+		if err := t.checkRecordSetDeclarations(et.info); err != nil {
+			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.info.Type, err)
+		}
 		if err := platform.CheckConstraints(et.info, t.entity, true); err != nil {
 			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.info.Type, err)
 		}

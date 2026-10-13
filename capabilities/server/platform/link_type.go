@@ -3,6 +3,7 @@ package platform
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 type LinkTraversal struct {
@@ -11,9 +12,10 @@ type LinkTraversal struct {
 	ID        string       `json:"id"`
 }
 
-// LinkType names a reference-backed relationship. Its instances remain in the
-// child object's scalar field; this declaration grants no extra write rights.
+// LinkType names a typed relationship stored in a scalar reference or in the
+// endpoint owner's ledger. A declaration confers no endpoint read grants.
 type LinkType struct {
+	Roles        []string `json:"roles,omitempty"`
 	Name         string   `json:"name"`
 	Title        string   `json:"title"`
 	Description  string   `json:"description"`
@@ -29,12 +31,28 @@ type LinkType struct {
 }
 
 func (l LinkType) Check() error {
+	if l.Storage == "edge" {
+		if !pageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || l.Required || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Parent.App != l.Child.App || l.Via != "" || !pageNodeID.MatchString(l.Forward) || !pageNodeID.MatchString(l.Reverse) || !slices.Contains([]string{"one-to-many", "one-to-one", "many-to-many"}, l.Cardinality) || !slices.Contains([]string{"owner", "restrict-active"}, l.DeletePolicy) || len(l.Roles) == 0 || len(l.Roles) > 16 {
+			return fmt.Errorf("owned edge needs same-owner objects, explicit roles and supported cardinality")
+		}
+		seen := map[string]bool{}
+		for _, role := range l.Roles {
+			if role == "" || len(role) > 64 || strings.TrimSpace(role) != role || seen[role] {
+				return fmt.Errorf("owned edge roles must be unique nonempty names")
+			}
+			seen[role] = true
+		}
+		return nil
+	}
 	if !pageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || !pageNodeID.MatchString(l.Via) || !pageNodeID.MatchString(l.Forward) || !pageNodeID.MatchString(l.Reverse) || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Storage != "reference" || !slices.Contains([]string{"one-to-many", "one-to-one"}, l.Cardinality) || !slices.Contains([]string{"owner", "restrict-active"}, l.DeletePolicy) || l.DeletePolicy == "restrict-active" && l.Parent.App != l.Child.App {
 		return fmt.Errorf("link type needs typed objects, two names and a supported reference cardinality profile")
 	}
 	return nil
 }
 func (l LinkType) Contract() int {
+	if l.Storage == "edge" {
+		return 4
+	}
 	if l.DeletePolicy == "restrict-active" {
 		return 3
 	}
@@ -47,6 +65,12 @@ func (l LinkType) Contract() int {
 func (l LinkType) CheckSchema(parent, child EntityInfo) error {
 	if err := l.Check(); err != nil {
 		return err
+	}
+	if l.Storage == "edge" {
+		if l.Parent.Name != parent.Type || l.Child.Name != child.Type || l.Parent.App != parent.App || l.Child.App != child.App {
+			return fmt.Errorf("owned edge endpoint types differ")
+		}
+		return nil
 	}
 	f, ok := child.Field(l.Via)
 	if l.Parent.Name != parent.Type || l.Parent.App != parent.App || l.Child.Name != child.Type || l.Child.App != child.App || !ok || f.Type != "reference" || f.Ref != parent.Type || f.Required != l.Required {

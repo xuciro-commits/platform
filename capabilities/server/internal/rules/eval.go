@@ -404,6 +404,9 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 	if decl.Policy == "complete" && set.Withheld {
 		return Value{}, fail("withheld", at, "collection contains withheld fields")
 	}
+	if set.Withheld && (e.Op == "all" || e.Op == "none") {
+		return Value{}, fail("withheld", at, "quantifier needs the complete collection")
+	}
 	if decl.Policy == "visible" {
 		*reasons = append(*reasons, Issue{"scope", at, "evaluated caller-visible collection"})
 	}

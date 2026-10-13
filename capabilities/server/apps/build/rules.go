@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,7 +20,7 @@ func ruleLookup(o Object, lookup func(string) (platform.EntityInfo, bool)) func(
 			}
 			return lookup(typ)
 		}
-		info := platform.EntityInfo{Type: typ, App: ID}
+		info := platform.EntityInfo{Type: typ, App: ID, Sets: o.Sets}
 		for _, f := range o.Fields {
 			read := f.Read
 			if len(read) > 0 {
@@ -306,7 +307,7 @@ func (b *Build) checkObjectRules(o Object) error {
 		}
 	}
 	check := func(e platform.Expr, s platform.RuleReadSpec, where string) error {
-		if err := b.checkRuleCollections(s, where); err != nil {
+		if err := b.checkRuleCollections(s, where, lookup); err != nil {
 			return err
 		}
 		_, err := platform.RuleSchema(e, s, lookup)
@@ -364,6 +365,9 @@ func ruleRequirements(reads *platform.RuleReadSpec) []platform.AssetRef {
 	}
 	refs := []platform.AssetRef{}
 	for _, set := range reads.Collections {
+		if set.Set != "" {
+			continue // The owning object's set declaration carries its dependencies.
+		}
 		refs = append(refs, platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query})
 		if app, _, ok := strings.Cut(set.Object, "."); ok {
 			refs = append(refs, platform.AssetRef{App: app, Kind: platform.AssetObject, Name: set.Object})
@@ -372,8 +376,21 @@ func ruleRequirements(reads *platform.RuleReadSpec) []platform.AssetRef {
 	return refs
 }
 
-func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string) error {
+func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, lookups ...func(string) (platform.EntityInfo, bool)) error {
+	lookup := b.conditionLookup
+	if len(lookups) > 0 {
+		lookup = lookups[0]
+	}
 	for name, set := range s.Collections {
+		if set.Set != "" {
+			info, ok := lookup(s.Object)
+			if !ok || set.App != info.App || set.Query != "" || set.Of != "" && set.Of != "$subject" || !slices.ContainsFunc(info.Sets, func(declaration platform.RecordSet) bool {
+				return declaration.Name == set.Set && declaration.Object == set.Object
+			}) {
+				return fmt.Errorf("%s collection %s must bind a declared set of its object", where, name)
+			}
+			continue
+		}
 		if b.host == nil {
 			return fmt.Errorf("%s collection %s is unavailable", where, name)
 		}

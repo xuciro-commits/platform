@@ -33,6 +33,9 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 	if err := t.checkObjectProperties(info); err != nil {
 		return err
 	}
+	if err := t.checkRecordSetDeclarations(info); err != nil {
+		return err
+	}
 	if err := platform.CheckConstraints(info, t.entity, true); err != nil {
 		return err
 	}
@@ -99,7 +102,7 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 	}
 	object := platform.AssetRef{App: app, Kind: platform.AssetObject, Name: info.Type}
 	entity := info
-	requires := platform.ConstraintDependencies(info)
+	requires := append(platform.ConstraintDependencies(info), platform.RecordSetDependencies(info)...)
 	for _, f := range info.Fields {
 		if f.Property != nil {
 			requires = append(requires, f.Property.Ref)

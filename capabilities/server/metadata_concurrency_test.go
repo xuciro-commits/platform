@@ -21,6 +21,7 @@ func TestMetadataConcurrentPublication(t *testing.T) {
 		t.Fatal(err)
 	}
 	m, _ := tn.Member("builder")
+	visibleBaseline := len(tn.Entities(m))
 	handler := NewHost(Tokens(map[string]string{"builder": "builder"}), tn).Handler()
 	routes := []string{"/v1/actions", "/v1/apps", "/v1/me", "/v1/declarations", "/v1/protocols", "/v1/entities", "/v1/definitions", "/v1/capabilities", "/v1/capabilities/build/action/build.object.create", "/v1/openapi.json"}
 	start := make(chan struct{})
@@ -67,7 +68,7 @@ func TestMetadataConcurrentPublication(t *testing.T) {
 	for err := range failures {
 		t.Error(err)
 	}
-	if len(tn.Entities(m)) != 12+len(build.New("metadata").Manifest().Entities) {
+	if len(tn.Entities(m)) != 12+visibleBaseline {
 		t.Fatal("discovery did not retain every published object")
 	}
 }

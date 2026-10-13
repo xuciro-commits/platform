@@ -116,3 +116,13 @@ type RecordSet struct {
 7. 反例：未声明的关系名、缺 `Order` 的迭代、超出 16 段的路径 → 发布期拒绝。
 
 测试归宿主、relations 与 build owner 包；`docs/Testing.md` 增"记录集与关联"手测行。
+
+## As built
+
+当前已实现记录集与同权威关系的基础层，尚未完成本 ADR 的整块验收。对象的 `sets` 声明支持固定版本的 NamedQuery、LinkType 正反向、单记录引用与声明的 inverse；发布、安装和依赖重验共用校验。`Where` / `Order` 使用 ADR-0101 求值器，排序以 ID 作稳定末级键，显式 Limit 为 1–10000，超限拒绝。过滤引用路径目前须写在 `Where` Expr 内；非空独立 `Path` 明确拒绝，避免声明被静默忽略。
+
+`RuleCollection.Set` 绑定当前对象的声明集合，复用动作、计算与约束的规则上下文。读取沿调用者行范围、字段与派生来源权限，仅返回可见记录和 `partial` 布尔标记。`all` / `none` 对部分不可见集合拒绝，`count` 只计可见元素。规则上下文仍沿 ADR-0101 的 1000 元素和 256 KiB 预算；声明集合的 10000 行上限不等于聚合或事务已支持同样规模。
+
+`LinkType.Storage=edge`（contract 4）将关系行存入端点所属应用的 `<app>.__relation` 类，Build 已声明该类；其他代码 owner 须显式声明同一实体与账本类。`Caller.PutOwnedRelation` 只接受私有决策、同权威端点、保留的关系声明和获准角色。关系行与业务行复用 accepted-result，基数与 restrict-active 在最终状态检查，发布也复用相同检查；存储身份不得随版本改变，基数和删除保证不得放宽。`Required` 的 edge 声明暂不接受。历史 reference 类型的存储与已发布字节保持原形。
+
+宿主回归覆盖新建端点与关系共同接受、父/子基数冲突整批拒绝、归档拒绝、解除关系、已接受结果重放、可见范围、排序与 Limit 拒绝。尚未实现事务 DTO 的 `link` / `unlink` / `ForEach`、迭代顺序进入接受结果、独立过滤 Path、关系专用编辑体验、旧 relations owner-state 的显式迁移与职责收窄，以及 HTTP aggregates 与声明集合聚合的完整统一。未声明浏览器验收或完成 §4 全部判据；继续沿本 ADR 收口。

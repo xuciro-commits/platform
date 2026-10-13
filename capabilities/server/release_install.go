@@ -162,6 +162,9 @@ func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool) error {
 
 func (t *Tenant) validateAssetSet() error {
 	for _, et := range t.records.sortedTypes() {
+		if err := t.checkRecordSetDeclarations(et.info); err != nil {
+			return err
+		}
 		if err := platform.CheckConstraints(et.info, t.entity, true); err != nil {
 			return err
 		}

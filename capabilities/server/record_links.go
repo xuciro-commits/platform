@@ -57,6 +57,9 @@ func (s *recordStore) validateLinkConstraints() error {
 	return s.validateLinkConstraintsLocked()
 }
 func (s *recordStore) installLinkConstraint(l platform.LinkType) error {
+	if l.Storage == "edge" {
+		return nil
+	}
 	if l.Cardinality != "one-to-one" && l.DeletePolicy != "restrict-active" {
 		return nil
 	}

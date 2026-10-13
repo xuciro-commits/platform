@@ -1720,5 +1720,15 @@
   "Reads": "声明读取",
   "Business constraints": "业务约束",
   "Constraint {name}: {message}": "约束 {name}：{message}",
-  "A new record write requires a private runtime": "新记录写入需要私有运行时"
+  "A new record write requires a private runtime": "新记录写入需要私有运行时",
+  "An immutable typed relation instance of this application's authority": "由本应用权威持久化的类型化关系实例",
+  "Binding": "绑定",
+  "Declared record sets": "声明记录集",
+  "Owned relationship": "所属关系",
+  "Owned relationships": "所属关系",
+  "Relationship cardinality (one-to-many, one-to-one, many-to-many)": "关系基数（一对多、一对一、多对多）",
+  "Storage": "存储",
+  "Storage (reference, edge)": "存储（引用、关系实例）",
+  "edge": "关系实例",
+  "many-to-many": "多对多"
 }

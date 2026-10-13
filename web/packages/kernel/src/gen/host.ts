@@ -831,6 +831,7 @@ export type EnterpriseReferenceGroup = {
 };
 
 export type EntityInfo = {
+  sets?: RecordSet[];
   constraints?: Constraint[];
   type: string;
   title: string;
@@ -1267,6 +1268,7 @@ export type LinkTraversal = {
 };
 
 export type LinkType = {
+  roles?: string[];
   name: string;
   title: string;
   description: string;
@@ -2449,10 +2451,27 @@ export type RecordPage = {
   total: number;
 };
 
+export type RecordSet = {
+  name: string;
+  from: string;
+  binding?: AssetBinding;
+  direction?: string;
+  object: string;
+  path?: string[];
+  where?: Expr[];
+  order: RecordSetSort[];
+  limit: number;
+};
+
 export type RecordSetPredicate = {
   domain?: unknown;
   search?: string;
   set?: QuerySet;
+};
+
+export type RecordSetSort = {
+  expr: Expr;
+  desc?: boolean;
 };
 
 export type RecordView = {
@@ -2604,6 +2623,7 @@ export type RolePermissions = {
 };
 
 export type RuleCollection = {
+  set?: string;
   app: string;
   query: string;
   version: number;

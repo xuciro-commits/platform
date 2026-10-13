@@ -30,6 +30,8 @@ func ExprLiteralValue(kind string, value any) Expr { return rules.LiteralOf(kind
 func ExprReference(kind, name string) Expr         { return rules.RefOf(kind, name) }
 func ExprPresent(kind string, value any) ExprValue { return rules.Present(kind, value) }
 
+func CompareExprValues(a, b ExprValue) (int, error) { return rules.CompareValues(a, b) }
+
 func LowerPageExpr(raw json.RawMessage, kind string, schema ExprSchema) (Expr, error) {
 	return rules.LowerPage(raw, kind, schema)
 }

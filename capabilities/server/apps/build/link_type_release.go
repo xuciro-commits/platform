@@ -164,5 +164,5 @@ func linkTypeRequires(l platform.LinkType) []platform.AssetRef {
 	return []platform.AssetRef{l.Parent, l.Child}
 }
 func linkTypeFromDeclaration(l platform.LinkType) LinkType {
-	return LinkType{Name: l.Name, Title: l.Title, Description: l.Description, Parent: l.Parent.Name, Child: l.Child.Name, Via: l.Via, Forward: l.Forward, Reverse: l.Reverse, Required: l.Required, Cardinality: l.Cardinality, DeletePolicy: l.DeletePolicy}
+	return LinkType{Name: l.Name, Title: l.Title, Description: l.Description, Parent: l.Parent.Name, Child: l.Child.Name, Via: l.Via, Forward: l.Forward, Reverse: l.Reverse, Required: l.Required, Storage: l.Storage, Roles: slices.Clone(l.Roles), Cardinality: l.Cardinality, DeletePolicy: l.DeletePolicy}
 }
