@@ -369,6 +369,9 @@ func (p MigrationPlan) Check() error {
 			seenTypes[typ] = true
 		}
 		if step.Kind == "retire-action" {
+			if p.Scope.Where != nil {
+				return fail("action retirement changes a definition and cannot select individual rows")
+			}
 			if step.Action == "" || len(step.Fields) > 0 || step.Expr != nil || len(step.Mapping) > 0 || step.Target != "" {
 				return fail("action retirement names an action and an optional redirect only")
 			}

@@ -6,6 +6,7 @@ register("zh-CN", {
   "No read alias": "不设置读取别名",
   "Keep an old field name readable after migration. It follows the selected field and cannot be edited directly.": "迁移后保留旧字段名的读取；其值跟随所选字段，不可直接编辑。",
   "Data migration": "数据迁移",
+  "Already rejected approval requests remain rejected if this migration is cancelled.": "取消后续迁移不会把已拒绝的审批请求恢复为待审批。",
   "Declare the changes between these sealed releases. Each accepted batch saves its data and progress; the source remains read only until activation or cancellation.": "声明两个封存版本之间的变更。每批保存数据与进度；激活或取消前，源对象保持只读。",
   "Source release": "源发布版本",
   "Target release": "目标发布版本",

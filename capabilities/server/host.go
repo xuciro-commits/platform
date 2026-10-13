@@ -581,6 +581,9 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 		record, refusal = platform.Decide(platform.NewCaller(draft, m, a.Manifest().ID, false, automation), a, s, now)
 	}
 	if refusal == nil {
+		refusal = draft.finishMigrationRetirements(now)
+	}
+	if refusal == nil {
 		refusal = draft.answerRequests(now)
 	}
 	if refusal == nil {

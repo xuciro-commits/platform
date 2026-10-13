@@ -106,6 +106,7 @@ func (w *Work) RequestApproval(c platform.Caller, held *pb.Submission, now time.
 func New(tenant string) *Work {
 	w := &Work{}
 	var actions []platform.Action
+	actions = append(actions, retirementAction())
 	for _, e := range w.entities() {
 		actions = append(actions, platform.EntityActions(e)...)
 	}
@@ -207,6 +208,8 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 	}
 	return w.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		switch s.GetSchema().GetName() {
+		case schemaRetireApproval:
+			return w.retireApproval(c, s, now)
 		case SchemaDelegate, SchemaUndelegate:
 			return w.delegate(c, s)
 		case SchemaViewSave, SchemaViewRemove:

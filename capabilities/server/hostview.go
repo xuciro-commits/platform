@@ -34,7 +34,7 @@ func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platfo
 // record store; a failed or refused publication cannot change live metadata.
 func (h hostView) installationDraft() *Tenant {
 	draft := &Tenant{ID: h.t.ID, apps: h.t.apps, owner: maps.Clone(h.t.owner),
-		identity: h.t.identity, records: h.t.records.forkRecords(), definitions: slices.Clone(h.t.definitions), Files: h.t.files(), procs: h.t.procs}
+		identity: h.t.identity, records: h.t.records.forkRecords(), definitions: slices.Clone(h.t.definitions), Files: h.t.files(), procs: h.t.procs, releases: h.t.releases}
 	return draft
 }
 
@@ -101,11 +101,6 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 		return owned && !slices.ContainsFunc(actions, func(a platform.Action) bool { return a.Schema == ref.Name })
 	}
 	for _, def := range h.t.definitions {
-		if def.Ref.App == h.app.Manifest().ID && def.Ref.Kind == platform.AssetAction &&
-			def.Action != nil && def.Action.Target == e.Type &&
-			!slices.ContainsFunc(actions, func(a platform.Action) bool { return a.Schema == def.Ref.Name }) {
-			return fmt.Errorf("published action %s would remain routed after removal", def.Ref.Name)
-		}
 		if def.Ref.Kind != platform.AssetPage || def.Page == nil ||
 			def.Ref.App == h.app.Manifest().ID && def.Ref.Name == generatedPage {
 			continue

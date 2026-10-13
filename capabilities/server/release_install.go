@@ -142,19 +142,37 @@ func (t *Tenant) assetInstallationView(records *recordStore) (*Tenant, error) {
 	return draft, nil
 }
 
-func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool) error {
+func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool, reviewed ...platform.MigrationPlan) error {
+	declared := func(typ, action string) bool {
+		for _, plan := range reviewed {
+			for _, step := range plan.Steps {
+				if action == "" && slices.Contains(step.Types, typ) || action != "" && step.Kind == "retire-action" && step.Action == action && slices.Contains(step.Types, typ) {
+					return true
+				}
+			}
+		}
+		return false
+	}
 	for typ, old := range t.records.types {
 		next := draft.records.types[typ]
 		if next == nil || len(old.rows) == 0 {
 			continue
 		}
-		if !sameStoredFields(old.info, next.info) && (!upgrade || optionalStoredAddition(old.info, next.info) == nil && !t.migratedStorageLocked(old.info, next.info)) {
+		if !sameStoredFields(old.info, next.info) && !declared(typ, "") && (!upgrade || optionalStoredAddition(old.info, next.info) == nil && !t.migratedStorageLocked(old.info, next.info)) {
 			return fmt.Errorf("object %s has records; changing their storage shape needs a supported upgrade plan", typ)
 		}
 	}
 	for _, definition := range t.definitions {
 		if definition.Action != nil && definition.Source != "code" && !slices.ContainsFunc(draft.definitions, func(next platform.Definition) bool { return next.Ref == definition.Ref }) {
-			return fmt.Errorf("retiring action %s needs an upgrade plan", definition.Ref.Name)
+			action := definition.Ref.Name
+			if definition.Action.Automation {
+				for _, suffix := range []string{platform.ApprovalHeld, platform.ApprovalRejected, platform.ApprovalReturned} {
+					action = strings.TrimSuffix(action, suffix)
+				}
+			}
+			if !declared(definition.Action.Target, action) && !t.completedActionRetirement(action) {
+				return fmt.Errorf("retiring action %s needs an upgrade plan", definition.Ref.Name)
+			}
 		}
 	}
 	return nil

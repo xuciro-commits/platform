@@ -68,3 +68,35 @@ test("a builder reviews a rename, resumes its data batches and activates the sea
   expect(record.name).toBe("Changed after migration");
   expect(record.title).toBe("Changed after migration");
 });
+
+test("action retirement rejects the pending request through its owner before activation", async ({ page, builder, operator }) => {
+  test.setTimeout(90_000);
+  const object = await builder.object({ name: slug("retire"), title: "Retirement records", fields: [{ name: "name", title: "Name", type: "text", sourceType: "user-input" }], states: [
+    { name: "open", title: "Open" }, { name: "pending", title: "Pending" }, { name: "done", title: "Done" }, { name: "rejected", title: "Rejected" },
+  ], actions: [{ name: "finish", title: "Finish", from: ["open"], to: "done", roles: ["user"], approval: { pending: "pending", rejected: "rejected", levels: [{ title: "Builder", role: "builder" }] } }] });
+  const from = await builder.candidate(object.id);
+  await builder.activate(from);
+  const recordID = slug("waiting");
+  await operator.decide(`${object.type}.create`, { type: object.type, id: recordID }, { name: "Waiting for approval" });
+  await operator.decide(`${object.type}.finish`, { type: object.type, id: recordID }, {});
+  expect((await operator.record(object.type, recordID)).state).toBe("pending");
+
+  // The target removes the action; a reviewed retirement releases old work.
+  await builder.decide("build.object.edit", { type: "build.object", id: object.id }, { actions: [] });
+  const to = await builder.candidate(object.id);
+  await builder.open(page, "/release-review");
+  await page.getByRole("combobox", { name: "Saved candidate", exact: true }).selectOption(to);
+  const migration = page.getByRole("region", { name: "Data migration", exact: true });
+  await migration.getByRole("combobox", { name: "Migration object", exact: true }).selectOption(object.type);
+  await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(JSON.stringify([
+    { kind: "retire-action", types: [object.type], action: `${object.type}.finish`, batch: 1 },
+  ]));
+  await migration.getByRole("button", { name: "Review migration", exact: true }).click();
+  await migration.getByRole("button", { name: "Start reviewed migration", exact: true }).click();
+  await migration.getByRole("button", { name: "Run next migration batch", exact: true }).click();
+  await expect(migration.getByRole("region", { name: "Migration progress", exact: true })).toContainText("complete");
+  expect((await operator.record(object.type, recordID)).state).toBe("rejected");
+  await page.getByRole("button", { name: "Activate release", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toContainText(to);
+  expect((await operator.definitions()).some((definition: any) => definition.ref.kind === "action" && definition.ref.name === `${object.type}.finish`)).toBe(false);
+});

@@ -21,6 +21,25 @@ type ApprovalOwner interface {
 	RequestApproval(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
 }
 
+// ApprovalRetirementOwner handles the original pending request through Work's
+// own ledger. The host validates the exact private migration directive first.
+type ApprovalRetirementOwner interface {
+	App
+	RetireApproval(Caller, string, string, time.Time) *kernel.Error
+}
+
+type ApprovalRetirementRuntime interface {
+	CheckApprovalRetirement(Caller, string, string) (string, *kernel.Error)
+}
+
+func (c Caller) CheckApprovalRetirement(migration, approval string) (string, *kernel.Error) {
+	runtime, ok := c.rt.(ApprovalRetirementRuntime)
+	if !ok || !c.Staging() || c.Replaying {
+		return "", Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Approval retirement requires a private migration")
+	}
+	return runtime.CheckApprovalRetirement(c, migration, approval)
+}
+
 type ApprovalRequest struct {
 	Record
 	Action     string         `json:"action" field:"readonly,search" source:"record"`

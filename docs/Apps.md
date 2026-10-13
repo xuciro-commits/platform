@@ -64,7 +64,9 @@ Flow/Automation 的发布审阅先确认当前草稿，再进入原候选审阅�
 
 真实数据迁移（[ADR-0106 As built](ADR/0106-data-and-definition-evolution.md#as-built)，实施中）：源候选先激活，目标草稿保存为封存候选。在原发布工作台选目标候选，展开“Data migration / 数据迁移”，选择对象并填写显式步骤与可选筛选表达式。点击“Review migration / 审阅迁移”核对记录量与问题，再“Start reviewed migration / 开始已审阅的迁移”；每次“Run next migration batch / 运行下一迁移批次”保存数据与进度，刷新或重开后继续。回复丢失时“Retry original migration decision / 重试原迁移决定”复用原 key，避免重新执行。来源对象在迁移期间只读；完成且无失败后，沿下方原按钮激活目标，目标值/引用/约束仍须通过。“Cancel migration and restore source / 取消迁移并恢复源数据”按批写补偿事实；继续取消直到 `cancelled`，历史保留，可审阅修正后的计划。
 
-重命名在对象字段编辑器保留旧名，选择“Read alias of / 只读别名目标”指向新名；旧名不可直接写，读取权限跟随目标。退役保留旧字段并勾选“Read only / 只读”，新建不再要求该字段时取消其必填；迁移步骤声明 `retire`。步骤编辑使用共享 JSON 草稿控件，转换复用已有 Expr；仅执行 build 自有对象的字段步骤，`extract` 和 `retire-action` 在开始时拒绝，完整验收边界见 ADR。API 等价路径仍为 `/v1/releases/migrations/review` 与 `build.migration.start/advance/cancel`，开始载荷为 `plan`、审阅返回的 `review=id`、`reviewedAt=at`。
+重命名在对象字段编辑器保留旧名，选择“Read alias of / 只读别名目标”指向新名；旧名不可直接写，读取权限跟随目标。退役保留旧字段并勾选“Read only / 只读”，新建不再要求该字段时取消其必填；迁移步骤声明 `retire`。动作退役从目标对象草稿撤下动作，封存目标后声明 `retire-action`、原完整 `action` schema、`types` 与 `batch`；每批拒绝该动作的待审批请求、关闭任务并退出原待审批状态，再激活目标。已记账的审批拒绝不会因取消后续迁移而恢复；要求重新发起。不能按单行筛选退役一个定义。
+
+步骤编辑使用共享 JSON 草稿控件，转换复用已有 Expr；当前限 build 自有对象，`extract` 在开始时拒绝，审批 `redirect` 在审阅时拒绝，完整验收边界见 ADR。API 等价路径仍为 `/v1/releases/migrations/review` 与 `build.migration.start/advance/cancel`，开始载荷为 `plan`、审阅返回的 `review=id`、`reviewedAt=at`。
 
 完整 Workshop 模块导入：在已保存、已发布的应用编辑器点击“Import complete Workshop module / 导入完整 Workshop 模块”，选择原 JSON，为所有来源页选择新页面或现有页面。通过“Edit shared platform bindings / 编辑共同平台绑定”配置原对象/字段/动作和应用端口；来源页选择只切换专属配置，共同映射保留。也可加载与原文一致的已下载映射报告，所有绑定重新检查。查询、模型函数、Go/Wasm 和嵌入分析页先由其原编辑器真实发布，再在此显式选择固定版本。审查各页诊断、四浮层/库存及呈现差异后保存并发布页面；完成后关闭窗口，Save application，再进入原应用候选审查。失败可查看已保存/发布进度并继续，未确认提交先沿原 Pending changes 重新发送；离开编辑器前下载原文和报告。边界归 [ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-格式与导入)。
 

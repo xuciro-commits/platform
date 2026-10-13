@@ -20,6 +20,7 @@ import (
 // stagedDecision owns the private record, ledger and intent views for supported
 // ADR-0038 transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
+	retirements      []migrationRetirement
 	authorizations   []authorizationEvidence
 	iterations       []platform.TxnIteration
 	constraintWrites map[string]constraintWrite

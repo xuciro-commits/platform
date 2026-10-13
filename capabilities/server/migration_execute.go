@@ -44,6 +44,9 @@ func (s *recordStore) migrationWriteLocked(info platform.EntityInfo, r *pb.Chang
 			continue // The target definition has been installed.
 		}
 		sub := r.GetSubmission()
+		if sub.GetPrincipalId() == "app:"+info.App && s.retiredApprovalReturnLocked(info, sub.GetSchema().GetName()) {
+			continue
+		}
 		if sub.GetAuthority() == info.App && slices.Contains([]string{platform.MigrationRunType + ".advance", platform.MigrationRunType + ".cancel"}, sub.GetSchema().GetName()) && sub.GetTarget().GetType() == platform.MigrationRunType && sub.GetTarget().GetId() == run.ID {
 			continue
 		}
@@ -86,7 +89,7 @@ func (d *stagedDecision) BeginMigration(c platform.Caller, r *pb.ChangeRecord, p
 		return platform.MigrationRun{}, migrationRefusal(err)
 	}
 	for _, step := range plan.Steps {
-		if step.Kind == "retire-action" || step.Kind == "extract" {
+		if step.Kind == "extract" {
 			return platform.MigrationRun{}, migrationRefusal(fmt.Errorf("this migration step requires its definition transition"))
 		}
 	}
@@ -168,6 +171,9 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 		return run, nil
 	}
 	step := run.Plan.Steps[run.Step]
+	if step.Kind == "retire-action" {
+		return d.stageActionRetirement(c, run, step)
+	}
 	run.State = "running"
 	before := run
 	type migrationWrite struct {
@@ -280,6 +286,20 @@ func (t *Tenant) migrationActivationLocked(candidate string) (bool, error) {
 		migrated = true
 	}
 	return migrated, nil
+}
+
+func (t *Tenant) completedActionRetirement(action string) bool {
+	progress := t.records.types[platform.MigrationRunType]
+	if progress == nil {
+		return false
+	}
+	for _, value := range progress.rows {
+		run := value.value.Interface().(platform.MigrationRun)
+		if run.Plan.From == t.releases.active && run.State == "complete" && len(run.Failures) == 0 && slices.ContainsFunc(run.Plan.Steps, func(step platform.MigrateStep) bool { return step.Kind == "retire-action" && step.Action == action }) {
+			return true
+		}
+	}
+	return false
 }
 
 // Cancellation writes compensating facts; it never erases accepted history.

@@ -104,6 +104,9 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 // installDefinitions puts the installed object, its actions and its pages in
 // the asset registry, so code and builder discover one set of assets (ADR-0032).
 func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page) {
+	t.definitions = slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
+		return def.Ref.App == app && def.Source == "tenant" && def.Action != nil && def.Action.Target == info.Type && !slices.ContainsFunc(actions, func(action platform.Action) bool { return action.Schema == def.Ref.Name })
+	})
 	put := func(def platform.Definition) {
 		if i := slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }); i >= 0 {
 			t.definitions[i] = def

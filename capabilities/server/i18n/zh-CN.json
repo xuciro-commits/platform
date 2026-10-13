@@ -1836,5 +1836,13 @@
   "This object is frozen by migration {migration}; finish its reviewed definition transition": "对象已被迁移 {migration} 冻结；请完成已审阅的定义切换",
   "Read only": "只读",
   "Read alias of": "只读别名目标",
-  "The retained old name reads this field; it cannot be written directly": "保留的旧字段名读取此字段；不可直接写入旧名"
+  "The retained old name reads this field; it cannot be written directly": "保留的旧字段名读取此字段；不可直接写入旧名",
+  "Retire pending approval": "退役待审批请求",
+  "Reject a held action retired by a reviewed migration and close its tasks": "拒绝已审阅迁移所退役的动作，并关闭其审批任务",
+  "Approval retirement requires a private migration": "审批退役需要私有迁移",
+  "The approval retirement has no matching private migration directive": "审批退役没有匹配的私有迁移声明",
+  "A reviewed migration is required": "必须提供已审阅的迁移",
+  "The approval is no longer pending": "审批请求已不再等待处理",
+  "Approval retired": "审批已退役",
+  "The held action was retired; start a new request under the current definition": "待审批动作已退役，请按当前定义重新发起请求"
 }

@@ -238,6 +238,26 @@ func (c *Catalog) Add(actions ...Action) {
 	}
 }
 
+// ReplaceTarget installs one owner's complete object action set. Retired
+// schemas stay in the ledger's historical registry, outside the live catalog.
+func (c *Catalog) ReplaceTarget(target string, actions []Action) {
+	for _, action := range actions {
+		if action.Target != target {
+			panic("replacement action belongs to another target")
+		}
+		if err := CheckInputs(action.Payload); err != nil {
+			panic(err)
+		}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.actions = slices.DeleteFunc(c.actions, func(action Action) bool { return action.Target == target })
+	for _, action := range actions {
+		action.NeedsApproval = action.Approval != nil
+		c.actions = append(c.actions, action)
+	}
+}
+
 // All are the declared actions, active or not.
 func (c *Catalog) All() []Action {
 	c.mu.RLock()

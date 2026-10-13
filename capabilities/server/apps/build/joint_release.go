@@ -1,6 +1,7 @@
 package build
 
 import (
+	"encoding/json"
 	"fmt"
 	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
@@ -157,6 +158,17 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 		}
 		if removed[asset.Ref] || rebuilt[asset.Ref] {
 			continue
+		}
+		if asset.Ref.Kind == platform.AssetAction {
+			var action struct {
+				Target string `json:"target"`
+			}
+			if json.Unmarshal(asset.Body, &action) != nil {
+				return result, fmt.Errorf("installed action %s has no valid target", asset.Ref)
+			}
+			if rebuilt[platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetObject, Name: action.Target}] {
+				continue // The rebuilt object owns its complete generated catalog.
+			}
 		}
 		after = append(after, asset)
 	}

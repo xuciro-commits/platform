@@ -210,7 +210,7 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 		installation.Schema, installation.Image = plan.Schema, plan.Image
 		installations = append(installations, installation)
 	}
-	trial, err := view.stageReleaseInstallationLocked(installations, true, true)
+	trial, err := view.stageReleaseInstallationLocked(installations, false, true)
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +222,29 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 	}
 	program, err := platform.CompileMigrationPlan(plan, sources, targets)
 	if err != nil {
+		return nil, err
+	}
+	for _, step := range plan.Steps {
+		if step.Kind != "retire-action" {
+			continue
+		}
+		if step.Redirect != "" {
+			return nil, fmt.Errorf("approval redirect requires an explicit target-version handoff; it is not yet supported")
+		}
+		action := slices.IndexFunc(from.Assets, func(asset platform.ReleaseAsset) bool {
+			return asset.Ref.Kind == platform.AssetAction && asset.Ref.Name == step.Action
+		})
+		if action < 0 || slices.ContainsFunc(to.Assets, func(asset platform.ReleaseAsset) bool {
+			return asset.Ref.Kind == platform.AssetAction && asset.Ref.Name == step.Action
+		}) {
+			return nil, fmt.Errorf("action retirement must remove its named sealed source action")
+		}
+		var source platform.Action
+		if json.Unmarshal(from.Assets[action].Body, &source) != nil || !slices.Contains(step.Types, source.Target) {
+			return nil, fmt.Errorf("retired action is outside its declared object scope")
+		}
+	}
+	if err := t.validateAssetStorage(trial, true, plan); err != nil {
 		return nil, err
 	}
 	return &preparedMigration{program: program, sources: sources, targets: targets, types: types, trial: trial, installations: installations}, nil
